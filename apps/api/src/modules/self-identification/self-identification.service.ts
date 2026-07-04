@@ -9,6 +9,7 @@ import type { Prisma } from '@prisma/client';
 import type {
   DevoteeVerificationStatus,
   MentorVerificationSubmit,
+  PortalUseStage,
   SelfIdentificationAnswers,
   SelfIdentificationState,
   SelfIdentificationSubmitResult,
@@ -132,6 +133,68 @@ export class SelfIdentificationService {
     };
   }
 
+  async usePortalStage(
+    userId: string,
+    stage: PortalUseStage,
+  ): Promise<SelfIdentificationState> {
+    if (!['seeker', 'practitioner', 'yogi'].includes(stage)) {
+      throw new BadRequestException(
+        'Для временного доступа можно выбрать только ищущего, практикующего или йога',
+      );
+    }
+
+    const [user, activeMentorRequest] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId } }),
+      this.prisma.mentorVerificationRequest.findFirst({
+        where: {
+          userId,
+          status: {
+            in: ['awaiting_mentor', 'mentor_submitted', 'awaiting_admin'],
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    if (!user) throw new NotFoundException('Пользователь не найден');
+    if (!activeMentorRequest) {
+      throw new BadRequestException(
+        'Нет активной проверки статуса преданного',
+      );
+    }
+
+    const stageChanged = user.spiritualStage !== stage;
+    const statusChanged =
+      user.devoteeVerificationStatus !== activeMentorRequest.status;
+
+    if (stageChanged || statusChanged) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          spiritualStage: stage,
+          devoteeVerificationStatus: activeMentorRequest.status,
+        },
+      });
+    }
+
+    if (stageChanged) {
+      await this.prisma.stageHistory.create({
+        data: {
+          userId,
+          oldStage: user.spiritualStage,
+          newStage: stage,
+          actor: 'user',
+          reason:
+            'Пользователь выбрал временный тип аккаунта на время проверки куратором',
+          verificationStatus: activeMentorRequest.status,
+          mentorRequestId: activeMentorRequest.id,
+        },
+      });
+    }
+
+    return this.getState(userId);
+  }
+
   async getHistory(userId: string): Promise<StageHistoryItem[]> {
     const rows = await this.prisma.stageHistory.findMany({
       where: { userId },
@@ -252,8 +315,17 @@ export class SelfIdentificationService {
 
     const request = await this.prisma.mentorVerificationRequest.findUnique({
       where: { id: requestId },
+      include: { user: true },
     });
     if (!request) throw new NotFoundException('Заявка не найдена');
+
+    const previousStage = request.user.spiritualStage;
+    const nextStage =
+      data.status === 'confirmed'
+        ? 'devotee'
+        : previousStage && previousStage !== 'devotee'
+          ? previousStage
+          : 'yogi';
 
     await this.prisma.mentorVerificationRequest.update({
       where: { id: requestId },
@@ -267,7 +339,7 @@ export class SelfIdentificationService {
     await this.prisma.user.update({
       where: { id: request.userId },
       data: {
-        spiritualStage: 'devotee',
+        spiritualStage: nextStage,
         devoteeVerificationStatus: data.status,
       },
     });
@@ -275,8 +347,8 @@ export class SelfIdentificationService {
     await this.prisma.stageHistory.create({
       data: {
         userId: request.userId,
-        oldStage: 'devotee',
-        newStage: 'devotee',
+        oldStage: previousStage,
+        newStage: nextStage,
         actor: 'admin',
         reason:
           data.adminNote ?? 'Решение администратора по статусу преданного',
@@ -324,6 +396,14 @@ export class SelfIdentificationService {
     wasConfirmedDevotee: boolean,
   ): DevoteeVerificationStatus | null {
     if (wasConfirmedDevotee) return 'confirmed';
+    if (
+      currentStatus &&
+      ['awaiting_mentor', 'mentor_submitted', 'awaiting_admin'].includes(
+        currentStatus,
+      )
+    ) {
+      return currentStatus;
+    }
     if (detectedStage !== 'devotee') return null;
     if (
       currentStatus &&

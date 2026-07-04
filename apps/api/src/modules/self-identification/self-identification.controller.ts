@@ -13,6 +13,7 @@ import type {
   AccessTokenPayload,
   DevoteeVerificationStatus,
   MentorVerificationSubmit,
+  PortalUseStageRequest,
   SelfIdentificationAnswers,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
@@ -35,6 +36,15 @@ export class SelfIdentificationController {
     @Body() answers: SelfIdentificationAnswers,
   ) {
     return this.service.submit(user.sub, answers);
+  }
+
+  @Post('self-identification/use-stage')
+  @UseGuards(AuthGuard)
+  useStage(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: PortalUseStageRequest,
+  ) {
+    return this.service.usePortalStage(user.sub, body.stage);
   }
 
   @Get('self-identification/history')

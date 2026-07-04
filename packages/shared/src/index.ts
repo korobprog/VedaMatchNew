@@ -4,6 +4,8 @@ export type ServiceStatus = 'active' | 'coming_soon' | 'disabled';
 
 export type SpiritualStage = 'seeker' | 'practitioner' | 'yogi' | 'devotee';
 
+export type PortalUseStage = Exclude<SpiritualStage, 'devotee'>;
+
 export type DevoteeVerificationStatus =
   | 'self_identified'
   | 'awaiting_mentor'
@@ -71,6 +73,10 @@ export interface SelfIdentificationState {
 export interface SelfIdentificationSubmitResult extends SelfIdentificationState {
   detectedStage: SpiritualStage;
   mentorLinkPath: string | null;
+}
+
+export interface PortalUseStageRequest {
+  stage: PortalUseStage;
 }
 
 export interface StageHistoryItem {
