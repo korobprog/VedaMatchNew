@@ -1,66 +1,44 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-vedamatch}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
-      POSTGRES_DB: ${POSTGRES_DB:-vedamatch}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    ports:
-      - '5432:5432'
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   api:
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
-    env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-vedamatch}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-vedamatch}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    ports:
-      - '4000:4000'
+      NODE_ENV: production
+      API_PORT: ${API_PORT}
+      WEB_ORIGIN: ${WEB_ORIGIN}
+      API_PUBLIC_URL: ${API_PUBLIC_URL}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      JWT_PRIVATE_KEY_BASE64: ${JWT_PRIVATE_KEY_BASE64}
+      ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS}
+      DATABASE_URL: ${DATABASE_URL}
+    networks:
+      - dokploy-network
+    expose:
+      - "4000"
 
   web:
     build:
       context: ..
       dockerfile: apps/web/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     restart: unless-stopped
-    env_file: .env
     environment:
-      API_INTERNAL_URL: http://api:4000
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      API_INTERNAL_URL: ${API_INTERNAL_URL}
     depends_on:
       - api
-    ports:
-      - '3000:3000'
+    networks:
+      - dokploy-network
+    expose:
+      - "3000"
 
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    profiles: ['prod']
-    ports:
-      - '80:80'
-      - '443:443'
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - web
-      - api
-
-volumes:
-  pgdata:
-  caddy_data:
-  caddy_config:
+networks:
+  dokploy-network:
+    external: true
