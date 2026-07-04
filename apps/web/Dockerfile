@@ -11,7 +11,7 @@ COPY packages/shared/package.json packages/shared/
 RUN pnpm install --frozen-lockfile
 COPY packages/shared packages/shared
 COPY apps/web apps/web
-RUN cd apps/web && pnpm build
+RUN pnpm --filter @vedamatch/web build
 
 FROM base AS runtime
 ENV NODE_ENV=production

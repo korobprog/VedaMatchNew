@@ -9,8 +9,8 @@ COPY packages/shared/package.json packages/shared/
 RUN pnpm install --frozen-lockfile
 COPY packages/shared packages/shared
 COPY apps/api apps/api
-RUN cd apps/api && pnpm prisma generate && pnpm build
-RUN pnpm --filter @vedamatch/api deploy --prod /out
+RUN pnpm --filter @vedamatch/api prisma:generate && pnpm --filter @vedamatch/api build
+RUN pnpm --filter @vedamatch/api deploy --legacy --prod /out
 
 FROM base AS runtime
 ENV NODE_ENV=production
