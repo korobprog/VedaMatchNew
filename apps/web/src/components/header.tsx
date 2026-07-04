@@ -24,9 +24,10 @@ export function Header({ user }: { user: UserProfile }) {
         <div className="flex items-center gap-3">
           <Link
             href="/self-identification"
-            className="hidden rounded-full border border-amber-200 px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-50 sm:inline-block dark:border-amber-900 dark:text-amber-200 dark:hover:bg-amber-950"
+            className="rounded-full border border-amber-200 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50 sm:text-sm dark:border-amber-900 dark:text-amber-200 dark:hover:bg-amber-950"
           >
-            Самоидентификация
+            <span className="sm:hidden">Опрос</span>
+            <span className="hidden sm:inline">Самоидентификация</span>
           </Link>
           <Link href="/profile" className="flex items-center gap-2">
             {user.avatarUrl ? (
