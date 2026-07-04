@@ -18,6 +18,8 @@ services:
       DATABASE_URL: ${DATABASE_URL}
     networks:
       - dokploy-network
+    extra_hosts:
+      - "postgres:10.0.1.185"
     expose:
       - "4000"
 
