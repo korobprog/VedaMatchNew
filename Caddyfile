@@ -1,0 +1,8 @@
+﻿# Production reverse proxy. Caddy obtains HTTPS certificates automatically.
+vedamatch.ru {
+	reverse_proxy web:3000
+}
+
+api.vedamatch.ru {
+	reverse_proxy api:4000
+}

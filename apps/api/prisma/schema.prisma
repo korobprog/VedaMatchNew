@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  user
+  admin
+  service_admin
+}
+
+enum ServiceStatus {
+  active
+  coming_soon
+  disabled
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  avatarUrl String?
+  role      Role     @default(user)
+  googleId  String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  refreshTokens RefreshToken[]
+  serviceAccess ServiceAccess[]
+  loginAudits   LoginAudit[]
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Service {
+  id          String        @id @default(uuid())
+  slug        String        @unique
+  name        String
+  description String
+  iconUrl     String?
+  url         String
+  status      ServiceStatus @default(coming_soon)
+  category    String
+  // null = сервис доступен всем авторизованным; иначе доступ через ServiceAccess/роль
+  public      Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  access ServiceAccess[]
+}
+
+model ServiceAccess {
+  userId    String
+  serviceId String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, serviceId])
+}
+
+model LoginAudit {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider  String
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
