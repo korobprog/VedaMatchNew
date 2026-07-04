@@ -1,4 +1,4 @@
-import { SilentRefresh } from "@/components/silent-refresh";
+﻿import { SilentRefresh } from "@/components/silent-refresh";
 import Image from "next/image";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";

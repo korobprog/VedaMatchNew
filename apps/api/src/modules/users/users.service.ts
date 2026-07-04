@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+﻿import { Injectable, NotFoundException } from '@nestjs/common';
 import type { UserProfile } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toRole } from '../auth/auth.service';
@@ -16,6 +16,10 @@ export class UsersService {
       name: user.name,
       avatarUrl: user.avatarUrl,
       role: toRole(user.role),
+      spiritualStage: user.spiritualStage,
+      devoteeVerificationStatus: user.devoteeVerificationStatus,
+      lastSelfIdentificationAt:
+        user.lastSelfIdentificationAt?.toISOString() ?? null,
     };
   }
 }

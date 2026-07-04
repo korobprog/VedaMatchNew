@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import { getProfile, getServices } from "@/lib/api";
 import { Header } from "@/components/header";
 import { ServiceCard } from "@/components/service-card";
@@ -6,6 +6,7 @@ import { ServiceCard } from "@/components/service-card";
 export default async function Home() {
   const [user, services] = await Promise.all([getProfile(), getServices()]);
   if (!user || !services) redirect("/login");
+  if (!user.spiritualStage) redirect("/self-identification");
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">

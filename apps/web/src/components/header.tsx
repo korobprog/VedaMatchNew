@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import Image from "next/image";
 import type { UserProfile } from "@vedamatch/shared";
 import { LogoutButton } from "./logout-button";
@@ -22,6 +22,12 @@ export function Header({ user }: { user: UserProfile }) {
           />
         </Link>
         <div className="flex items-center gap-3">
+          <Link
+            href="/self-identification"
+            className="hidden rounded-full border border-amber-200 px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-50 sm:inline-block dark:border-amber-900 dark:text-amber-200 dark:hover:bg-amber-950"
+          >
+            Самоидентификация
+          </Link>
           <Link href="/profile" className="flex items-center gap-2">
             {user.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element

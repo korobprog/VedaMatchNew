@@ -2,12 +2,28 @@ export type Role = 'user' | 'admin' | 'service-admin';
 
 export type ServiceStatus = 'active' | 'coming_soon' | 'disabled';
 
+export type SpiritualStage = 'seeker' | 'practitioner' | 'yogi' | 'devotee';
+
+export type DevoteeVerificationStatus =
+  | 'self_identified'
+  | 'awaiting_mentor'
+  | 'mentor_submitted'
+  | 'awaiting_admin'
+  | 'confirmed'
+  | 'rejected'
+  | 'needs_clarification';
+
+export type StageChangeActor = 'system' | 'user' | 'admin';
+
 export interface UserProfile {
   id: string;
   email: string;
   name: string;
   avatarUrl: string | null;
   role: Role;
+  spiritualStage: SpiritualStage | null;
+  devoteeVerificationStatus: DevoteeVerificationStatus | null;
+  lastSelfIdentificationAt: string | null;
 }
 
 export interface ServiceCard {
@@ -25,4 +41,91 @@ export interface AccessTokenPayload {
   sub: string;
   email: string;
   role: Role;
+}
+
+export interface SelfIdentificationAnswers {
+  interest: 'beginning' | 'learning' | 'deepening' | 'devotional_service';
+  regularPractice: 'none' | 'sometimes' | 'daily' | 'strict_daily';
+  currentFocus: 'curiosity' | 'basic_practice' | 'deep_practice' | 'service_community';
+  hasMentor: boolean;
+  hasCommunity: boolean;
+  hasSpiritualName: boolean;
+  participatesInService: boolean;
+  wantsRecommendations: boolean;
+}
+
+export interface SelfIdentificationState {
+  spiritualStage: SpiritualStage | null;
+  devoteeVerificationStatus: DevoteeVerificationStatus | null;
+  lastSelfIdentificationAt: string | null;
+  latestAnswers: SelfIdentificationAnswers | null;
+  activeMentorRequest: {
+    id: string;
+    token: string;
+    status: DevoteeVerificationStatus;
+    mentorSubmittedAt: string | null;
+    createdAt: string;
+  } | null;
+}
+
+export interface SelfIdentificationSubmitResult extends SelfIdentificationState {
+  detectedStage: SpiritualStage;
+  mentorLinkPath: string | null;
+}
+
+export interface StageHistoryItem {
+  id: string;
+  oldStage: SpiritualStage | null;
+  newStage: SpiritualStage;
+  actor: StageChangeActor;
+  reason: string | null;
+  verificationStatus: DevoteeVerificationStatus | null;
+  createdAt: string;
+}
+
+export interface MentorVerificationPublicRequest {
+  userName: string;
+  userStage: SpiritualStage;
+  status: DevoteeVerificationStatus;
+  submittedAt: string | null;
+}
+
+export interface MentorVerificationSubmit {
+  mentorName: string;
+  phone: string;
+  email: string;
+  cityOrCommunity: string;
+  knownDuration: string;
+  knowsPersonally: boolean;
+  confirmsRegularPractice: boolean;
+  confirmsService: boolean;
+  confirmsSpiritualName: boolean;
+  confirmsCommunityConnection: boolean;
+  userCharacterReference: string;
+  recommendsDevoteeStatus: boolean;
+  truthConsent: boolean;
+}
+
+export interface AdminVerificationRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  status: DevoteeVerificationStatus;
+  mentorName: string | null;
+  mentorPhone: string | null;
+  mentorEmail: string | null;
+  cityOrCommunity: string | null;
+  knownDuration: string | null;
+  knowsPersonally: boolean | null;
+  confirmsRegularPractice: boolean | null;
+  confirmsService: boolean | null;
+  confirmsSpiritualName: boolean | null;
+  confirmsCommunityConnection: boolean | null;
+  recommendsDevoteeStatus: boolean | null;
+  userCharacterReference: string | null;
+  adminNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+  mentorSubmittedAt: string | null;
 }

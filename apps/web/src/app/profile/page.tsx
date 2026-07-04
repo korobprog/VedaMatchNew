@@ -1,3 +1,4 @@
+﻿import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getProfile } from "@/lib/api";
 import { Header } from "@/components/header";
@@ -6,6 +7,23 @@ const roleLabels: Record<string, string> = {
   user: "Пользователь",
   admin: "Администратор",
   "service-admin": "Администратор сервисов",
+};
+
+const stageLabels: Record<string, string> = {
+  seeker: "Ищущий",
+  practitioner: "Практикующий основы",
+  yogi: "Йог",
+  devotee: "Преданный",
+};
+
+const verificationLabels: Record<string, string> = {
+  self_identified: "Самоопределен",
+  awaiting_mentor: "Ожидает наставника",
+  mentor_submitted: "Наставник заполнил форму",
+  awaiting_admin: "Ожидает администратора",
+  confirmed: "Подтвержден",
+  rejected: "Отклонен",
+  needs_clarification: "Требует уточнения",
 };
 
 export default async function ProfilePage() {
@@ -41,14 +59,44 @@ export default async function ProfilePage() {
               <p className="text-sm text-zinc-500">{user.email}</p>
             </div>
           </div>
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between">
+          <dl className="space-y-3 text-sm">
+            <div className="flex justify-between gap-4">
               <dt className="text-zinc-500">Роль</dt>
               <dd className="font-medium text-zinc-900 dark:text-zinc-100">
                 {roleLabels[user.role] ?? user.role}
               </dd>
             </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-zinc-500">Текущий этап</dt>
+              <dd className="font-medium text-zinc-900 dark:text-zinc-100">
+                {user.spiritualStage
+                  ? stageLabels[user.spiritualStage]
+                  : "Не определен"}
+              </dd>
+            </div>
+            {user.devoteeVerificationStatus && (
+              <div className="flex justify-between gap-4">
+                <dt className="text-zinc-500">Статус подтверждения</dt>
+                <dd className="font-medium text-zinc-900 dark:text-zinc-100">
+                  {verificationLabels[user.devoteeVerificationStatus]}
+                </dd>
+              </div>
+            )}
+            <div className="flex justify-between gap-4">
+              <dt className="text-zinc-500">Последняя анкета</dt>
+              <dd className="font-medium text-zinc-900 dark:text-zinc-100">
+                {user.lastSelfIdentificationAt
+                  ? new Date(user.lastSelfIdentificationAt).toLocaleString("ru-RU")
+                  : "Еще не проходили"}
+              </dd>
+            </div>
           </dl>
+          <Link
+            href="/self-identification"
+            className="mt-6 block rounded-xl bg-amber-600 px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-amber-700"
+          >
+            Пройти самоидентификацию заново
+          </Link>
         </div>
       </main>
     </div>

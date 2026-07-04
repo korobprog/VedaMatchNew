@@ -1,4 +1,4 @@
-import type { ServiceCard as ServiceCardType } from "@vedamatch/shared";
+﻿import type { ServiceCard as ServiceCardType } from "@vedamatch/shared";
 
 const categoryEmoji: Record<string, string> = {
   community: "🤝",

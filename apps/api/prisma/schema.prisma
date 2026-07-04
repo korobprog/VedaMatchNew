@@ -19,19 +19,48 @@ enum ServiceStatus {
   disabled
 }
 
-model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String
-  avatarUrl String?
-  role      Role     @default(user)
-  googleId  String?  @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum SpiritualStage {
+  seeker
+  practitioner
+  yogi
+  devotee
+}
 
-  refreshTokens RefreshToken[]
-  serviceAccess ServiceAccess[]
-  loginAudits   LoginAudit[]
+enum DevoteeVerificationStatus {
+  self_identified
+  awaiting_mentor
+  mentor_submitted
+  awaiting_admin
+  confirmed
+  rejected
+  needs_clarification
+}
+
+enum StageChangeActor {
+  system
+  user
+  admin
+}
+
+model User {
+  id                         String                      @id @default(uuid())
+  email                      String                      @unique
+  name                       String
+  avatarUrl                  String?
+  role                       Role                        @default(user)
+  googleId                   String?                     @unique
+  spiritualStage             SpiritualStage?
+  devoteeVerificationStatus  DevoteeVerificationStatus?
+  lastSelfIdentificationAt   DateTime?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+
+  refreshTokens              RefreshToken[]
+  serviceAccess              ServiceAccess[]
+  loginAudits                LoginAudit[]
+  selfIdentificationResponses SelfIdentificationResponse[]
+  stageHistory               StageHistory[]
+  mentorVerificationRequests MentorVerificationRequest[]
 }
 
 model RefreshToken {
@@ -47,18 +76,23 @@ model RefreshToken {
 }
 
 model Service {
-  id          String        @id @default(uuid())
-  slug        String        @unique
-  name        String
-  description String
-  iconUrl     String?
-  url         String
-  status      ServiceStatus @default(coming_soon)
-  category    String
-  // null = сервис доступен всем авторизованным; иначе доступ через ServiceAccess/роль
-  public      Boolean       @default(true)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                           String        @id @default(uuid())
+  slug                         String        @unique
+  name                         String
+  description                  String
+  iconUrl                      String?
+  url                          String
+  status                       ServiceStatus @default(coming_soon)
+  category                     String
+  // null/true = СЃРµСЂРІРёСЃ РґРѕСЃС‚СѓРїРµРЅ РІСЃРµРј Р°РІС‚РѕСЂРёР·РѕРІР°РЅРЅС‹Рј; РёРЅР°С‡Рµ РґРѕСЃС‚СѓРї С‡РµСЂРµР· ServiceAccess/СЂРѕР»СЊ/СЌС‚Р°Рї РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
+  public                       Boolean       @default(true)
+  seekerVisible                Boolean       @default(true)
+  practitionerVisible          Boolean       @default(true)
+  yogiVisible                  Boolean       @default(true)
+  devoteeSelfIdentifiedVisible Boolean       @default(false)
+  devoteeVerifiedVisible       Boolean       @default(false)
+  createdAt                    DateTime      @default(now())
+  updatedAt                    DateTime      @updatedAt
 
   access ServiceAccess[]
 }
@@ -82,4 +116,60 @@ model LoginAudit {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+model SelfIdentificationResponse {
+  id                 String                      @id @default(uuid())
+  userId             String
+  user               User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers            Json
+  detectedStage      SpiritualStage
+  verificationStatus DevoteeVerificationStatus?
+  createdAt          DateTime                    @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model StageHistory {
+  id                 String                     @id @default(uuid())
+  userId             String
+  user               User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  oldStage           SpiritualStage?
+  newStage           SpiritualStage
+  actor              StageChangeActor
+  reason             String?
+  answers            Json?
+  verificationStatus DevoteeVerificationStatus?
+  mentorRequestId    String?
+  createdAt          DateTime                   @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model MentorVerificationRequest {
+  id                                  String                      @id @default(uuid())
+  token                               String                      @unique
+  userId                              String
+  user                                User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status                              DevoteeVerificationStatus   @default(awaiting_mentor)
+  mentorName                          String?
+  phone                               String?
+  email                               String?
+  cityOrCommunity                     String?
+  knownDuration                       String?
+  knowsPersonally                     Boolean?
+  confirmsRegularPractice             Boolean?
+  confirmsService                     Boolean?
+  confirmsSpiritualName               Boolean?
+  confirmsCommunityConnection         Boolean?
+  userCharacterReference              String?
+  recommendsDevoteeStatus             Boolean?
+  truthConsent                        Boolean?
+  mentorSubmittedAt                   DateTime?
+  adminNote                           String?
+  adminReviewedAt                     DateTime?
+  createdAt                           DateTime                    @default(now())
+  updatedAt                           DateTime                    @updatedAt
+
+  @@index([userId, status])
 }
