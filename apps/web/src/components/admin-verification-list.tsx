@@ -7,11 +7,11 @@ import { useRouter } from "next/navigation";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 const statusLabels: Record<DevoteeVerificationStatus, string> = {
-  self_identified: "Самоопределен",
-  awaiting_mentor: "Ожидает наставника",
-  mentor_submitted: "Наставник заполнил форму",
-  awaiting_admin: "Ожидает администратора",
-  confirmed: "Подтверждено",
+  self_identified: "Преданный, не подтвержден",
+  awaiting_mentor: "Преданный, не подтвержден · ожидает наставника",
+  mentor_submitted: "Преданный, не подтвержден · наставник заполнил форму",
+  awaiting_admin: "Преданный, не подтвержден · ожидает администратора",
+  confirmed: "Преданный, подтвержден",
   rejected: "Отклонено",
   needs_clarification: "Требует уточнения",
 };

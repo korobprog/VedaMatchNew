@@ -22,7 +22,7 @@ const verificationLabels: Record<string, string> = {
   awaiting_mentor: "Ожидает наставника",
   mentor_submitted: "Наставник заполнил форму",
   awaiting_admin: "Ожидает администратора",
-  confirmed: "Подтвержден",
+  confirmed: "Подтвержденный преданный",
   rejected: "Отклонен",
   needs_clarification: "Требует уточнения",
 };
@@ -71,15 +71,23 @@ export default async function ProfilePage() {
               <dt className="text-zinc-500">Текущий этап</dt>
               <dd className="font-medium text-zinc-900 dark:text-zinc-100">
                 {user.spiritualStage
-                  ? stageLabels[user.spiritualStage]
+                  ? getStageDisplayName(
+                      user.spiritualStage,
+                      user.devoteeVerificationStatus,
+                    )
                   : "Не определен"}
               </dd>
             </div>
             {user.devoteeVerificationStatus && (
               <div className="flex justify-between gap-4">
-                <dt className="text-zinc-500">Статус подтверждения</dt>
+                <dt className="text-zinc-500">Статус преданного</dt>
                 <dd className="font-medium text-zinc-900 dark:text-zinc-100">
-                  {verificationLabels[user.devoteeVerificationStatus]}
+                  {user.spiritualStage === "devotee"
+                    ? getStageDisplayName(
+                        user.spiritualStage,
+                        user.devoteeVerificationStatus,
+                      )
+                    : verificationLabels[user.devoteeVerificationStatus]}
                 </dd>
               </div>
             )}
@@ -103,4 +111,14 @@ export default async function ProfilePage() {
       </main>
     </div>
   );
+}
+
+function getStageDisplayName(
+  stage: string,
+  status: string | null | undefined,
+) {
+  if (stage !== "devotee") return stageLabels[stage] ?? stage;
+  return status === "confirmed"
+    ? "Преданный, подтвержден"
+    : "Преданный, не подтвержден";
 }

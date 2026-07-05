@@ -1,4 +1,5 @@
 import type { UnionCompatibilityCriterion, UnionRecommendation } from "@vedamatch/shared";
+import { ConnectionActions } from "./connection-actions";
 import { intentionLabels } from "./labels";
 
 const criterionLabels: Record<UnionCompatibilityCriterion, string> = {
@@ -71,6 +72,28 @@ export function RecommendationCard({ item }: { item: UnionRecommendation }) {
         </div>
       )}
 
+      {user.contacts && (
+        <div className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
+          <p className="mb-2 font-medium">РљРѕРЅС‚Р°РєС‚С‹ РѕС‚РєСЂС‹С‚С‹</p>
+          <div className="space-y-1">
+            {Object.entries(user.contacts.messengers).map(([key, value]) =>
+              value ? (
+                <p key={key}>
+                  <span className="font-medium">{key}:</span> {value}
+                </p>
+              ) : null,
+            )}
+            {Object.entries(user.contacts.socialLinks).map(([key, value]) =>
+              value ? (
+                <p key={key}>
+                  <span className="font-medium">{key}:</span> {value}
+                </p>
+              ) : null,
+            )}
+          </div>
+        </div>
+      )}
+
       <details className="text-sm">
         <summary className="cursor-pointer text-amber-700 dark:text-amber-400">
           Почему {compatibility.total}%?
@@ -96,6 +119,10 @@ export function RecommendationCard({ item }: { item: UnionRecommendation }) {
           ))}
         </dl>
       </details>
+
+      <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+        <ConnectionActions userId={user.id} connection={item.connection} />
+      </div>
     </div>
   );
 }

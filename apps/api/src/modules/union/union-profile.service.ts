@@ -4,9 +4,17 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { UnionIntention, UnionProfile, User } from '@prisma/client';
+import type {
+  UnionConnectionRequest,
+  UnionIntention,
+  UnionProfile,
+  User,
+} from '@prisma/client';
 import type {
   ProfileLocation,
+  ProfileMessengers,
+  ProfileSocialLinks,
+  UnionConnectionSummary,
   UnionIntentionDto,
   UnionIntentionType,
   UnionPrivacySettings,
@@ -33,6 +41,16 @@ const MAX_LIST_ITEMS = 30;
 const MAX_ITEM_LENGTH = 100;
 
 type ProfileWithIntentions = UnionProfile & { intentions: UnionIntention[] };
+type ConnectionForUser = Pick<
+  UnionConnectionRequest,
+  | 'id'
+  | 'fromUserId'
+  | 'toUserId'
+  | 'status'
+  | 'message'
+  | 'createdAt'
+  | 'respondedAt'
+>;
 
 @Injectable()
 export class UnionProfileService {
@@ -93,9 +111,18 @@ export class UnionProfileService {
       include: { intentions: true, user: true },
     });
 
+    const connections = await this.connectionMap(userId);
     const myInput = this.toMatchInput(me, me.user);
     return others
-      .map((other) => this.toRecommendation(myInput, other, other.user))
+      .map((other) =>
+        this.toRecommendation(
+          userId,
+          myInput,
+          other,
+          other.user,
+          connections.get(other.userId) ?? null,
+        ),
+      )
       .sort((a, b) => b.compatibility.total - a.compatibility.total);
   }
 
@@ -116,26 +143,37 @@ export class UnionProfileService {
     if (!other || !other.isActive)
       throw new NotFoundException('Профиль не найден');
 
+    const connection = await this.connectionBetween(userId, targetUserId);
     return this.toRecommendation(
+      userId,
       this.toMatchInput(me, me.user),
       other,
       other.user,
+      connection,
     );
   }
 
   private toRecommendation(
+    currentUserId: string,
     myInput: UnionMatchInput,
     other: ProfileWithIntentions,
     otherUser: User,
+    connection: ConnectionForUser | null,
   ): UnionRecommendation {
     const location = this.location(otherUser);
+    const privacy = (other.privacy as UnionPrivacySettings | null) ?? null;
+    const matched = connection?.status === 'accepted';
+    const cityVisible = this.isVisible(privacy?.city, matched);
     const summary: UnionUserSummary = {
       id: otherUser.id,
       name: otherUser.name,
-      avatarUrl: otherUser.avatarUrl,
-      city: location?.city ?? null,
-      country: location?.country ?? null,
+      avatarUrl: this.isVisible(privacy?.photo, matched)
+        ? otherUser.avatarUrl
+        : null,
+      city: cityVisible ? (location?.city ?? null) : null,
+      country: cityVisible ? (location?.country ?? null) : null,
       spiritualStage: otherUser.spiritualStage,
+      contacts: this.visibleContacts(otherUser, privacy, matched),
     };
     return {
       user: summary,
@@ -156,7 +194,76 @@ export class UnionProfileService {
         myInput,
         this.toMatchInput(other, otherUser),
       ),
+      connection: connection
+        ? this.toConnectionSummary(connection, currentUserId)
+        : null,
     };
+  }
+
+  private async connectionMap(
+    userId: string,
+  ): Promise<Map<string, ConnectionForUser>> {
+    const rows = await this.prisma.unionConnectionRequest.findMany({
+      where: { OR: [{ fromUserId: userId }, { toUserId: userId }] },
+      orderBy: { createdAt: 'desc' },
+    });
+    const map = new Map<string, ConnectionForUser>();
+    for (const row of rows) {
+      const otherUserId =
+        row.fromUserId === userId ? row.toUserId : row.fromUserId;
+      if (!map.has(otherUserId) || row.status === 'accepted') {
+        map.set(otherUserId, row);
+      }
+    }
+    return map;
+  }
+
+  private connectionBetween(userId: string, targetUserId: string) {
+    return this.prisma.unionConnectionRequest.findFirst({
+      where: {
+        OR: [
+          { fromUserId: userId, toUserId: targetUserId },
+          { fromUserId: targetUserId, toUserId: userId },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  private toConnectionSummary(
+    connection: ConnectionForUser,
+    currentUserId: string,
+  ): UnionConnectionSummary {
+    return {
+      id: connection.id,
+      status: connection.status,
+      direction:
+        connection.fromUserId === currentUserId ? 'outgoing' : 'incoming',
+      message: connection.message,
+      createdAt: connection.createdAt.toISOString(),
+      respondedAt: connection.respondedAt?.toISOString() ?? null,
+    };
+  }
+
+  private visibleContacts(
+    user: User,
+    privacy: UnionPrivacySettings | null,
+    matched: boolean,
+  ) {
+    if (!matched || privacy?.contacts === 'hidden') return null;
+    return {
+      socialLinks: (user.socialLinks as ProfileSocialLinks | null) ?? {},
+      messengers: (user.messengers as ProfileMessengers | null) ?? {},
+    };
+  }
+
+  private isVisible(
+    level: UnionPrivacySettings[keyof UnionPrivacySettings] | undefined,
+    matched: boolean,
+  ): boolean {
+    if (level === 'hidden') return false;
+    if (level === 'after_match') return matched;
+    return true;
   }
 
   private toMatchInput(

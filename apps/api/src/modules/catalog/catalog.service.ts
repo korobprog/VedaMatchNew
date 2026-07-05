@@ -40,6 +40,8 @@ export class CatalogService {
       url: s.url,
       status: s.status,
       category: s.category,
+      requiresDevoteeVerification:
+        s.devoteeVerifiedVisible && !s.devoteeSelfIdentifiedVisible,
     }));
   }
 

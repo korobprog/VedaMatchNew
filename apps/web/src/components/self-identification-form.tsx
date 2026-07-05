@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
-  PortalUseStage,
   SelfIdentificationAnswers,
   SelfIdentificationState,
   SelfIdentificationSubmitResult,
@@ -24,30 +23,10 @@ const verificationLabels: Record<string, string> = {
   awaiting_mentor: "Ожидает наставника",
   mentor_submitted: "Наставник заполнил форму",
   awaiting_admin: "Ожидает администратора",
-  confirmed: "Подтвержден",
+  confirmed: "Подтвержденный преданный",
   rejected: "Отклонен",
   needs_clarification: "Требует уточнения",
 };
-
-const temporaryStageOptions: Array<[PortalUseStage, string, string]> = [
-  [
-    "seeker",
-    "Ищущий",
-    "Открыть базовые материалы и начать знакомство с порталом.",
-  ],
-  [
-    "practitioner",
-    "Практикующий",
-    "Продолжить с сервисами для базовой регулярной практики.",
-  ],
-  ["yogi", "Йог", "Получить доступ к материалам для углубленной практики."],
-];
-
-const pendingVerificationStatuses = new Set([
-  "awaiting_mentor",
-  "mentor_submitted",
-  "awaiting_admin",
-]);
 
 const defaultAnswers: SelfIdentificationAnswers = {
   interest: "beginning",
@@ -75,7 +54,6 @@ export function SelfIdentificationForm({
     state?.latestAnswers ?? defaultAnswers,
   );
   const [pending, setPending] = useState(false);
-  const [stagePending, setStagePending] = useState<PortalUseStage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copiedMentorLink, setCopiedMentorLink] = useState(false);
 
@@ -113,34 +91,9 @@ export function SelfIdentificationForm({
 
   const currentStage = visibleState?.spiritualStage;
   const currentStatus = visibleState?.devoteeVerificationStatus;
-  const canSelectTemporaryStage =
-    Boolean(currentStatus) &&
-    pendingVerificationStatuses.has(currentStatus as string);
-
-  async function selectTemporaryStage(stage: PortalUseStage) {
-    setStagePending(stage);
-    setError(null);
-    try {
-      const res = await fetch(`${API_URL}/self-identification/use-stage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ stage }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const json = (await res.json()) as SelfIdentificationState;
-      setLocalState(json);
-      router.refresh();
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "Не удалось изменить тип аккаунта",
-      );
-    } finally {
-      setStagePending(null);
-    }
-  }
+  const displayedStage = currentStage
+    ? getStageDisplayName(currentStage, currentStatus)
+    : null;
 
   async function copyMentorLink() {
     if (!mentorLink) return;
@@ -256,7 +209,7 @@ export function SelfIdentificationForm({
             Текущий этап
           </p>
           <p className="text-2xl font-bold text-amber-950 dark:text-amber-100">
-            {stageLabels[currentStage]}
+            {displayedStage}
           </p>
           {currentStatus && (
             <p className="mt-2 text-sm text-amber-900 dark:text-amber-200">
@@ -286,49 +239,15 @@ export function SelfIdentificationForm({
               <p className="mt-2 text-zinc-500">
                 Отправьте эту ссылку наставнику. Он сможет заполнить форму без регистрации.
               </p>
+              <button
+                type="button"
+                onClick={() => router.push("/")}
+                className="mt-4 w-full rounded-lg bg-amber-600 px-4 py-2 font-medium text-white transition hover:bg-amber-700 sm:w-auto"
+              >
+                На главную страницу портала
+              </button>
             </div>
           )}
-        </div>
-      )}
-
-      {canSelectTemporaryStage && (
-        <div className="rounded-2xl border border-sky-200 bg-sky-50 p-6 dark:border-sky-900 dark:bg-sky-950/40">
-          <h2 className="mb-2 text-lg font-semibold text-sky-950 dark:text-sky-100">
-            Проверка продолжается — портал доступен
-          </h2>
-          <p className="mb-4 text-sm text-sky-900 dark:text-sky-200">
-            Пока куратор подтверждает статус преданного, вы можете пользоваться
-            порталом в другом типе аккаунта. Проверка не отменится: после
-            подтверждения система автоматически откроет доступ преданного.
-          </p>
-          <div className="grid gap-3 md:grid-cols-3">
-            {temporaryStageOptions.map(([stage, label, description]) => {
-              const selected = currentStage === stage;
-              return (
-                <button
-                  key={stage}
-                  type="button"
-                  onClick={() => selectTemporaryStage(stage)}
-                  disabled={selected || stagePending !== null}
-                  className="rounded-xl border border-sky-200 bg-white p-4 text-left transition hover:border-sky-400 hover:shadow-sm disabled:cursor-not-allowed disabled:border-sky-300 disabled:bg-sky-100 dark:border-sky-800 dark:bg-zinc-900 dark:hover:border-sky-600 dark:disabled:bg-sky-950"
-                >
-                  <span className="block font-medium text-zinc-900 dark:text-zinc-100">
-                    {label}
-                  </span>
-                  <span className="mt-1 block text-sm text-zinc-600 dark:text-zinc-400">
-                    {selected
-                      ? "Сейчас выбран для доступа к порталу."
-                      : description}
-                  </span>
-                  {!selected && (
-                    <span className="mt-3 block text-sm font-medium text-sky-700 dark:text-sky-300">
-                      {stagePending === stage ? "Переключаем..." : "Выбрать"}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
         </div>
       )}
 
@@ -377,7 +296,8 @@ function NextStep({
     if (status === "confirmed") {
       return (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          Статус подтвержден. Закрытые сервисы, доступные подтвержденным преданным, будут отображаться в каталоге.
+          Вы отображаетесь как “Преданный, подтвержден”. Закрытые сервисы,
+          доступные подтвержденным преданным, будут отображаться в каталоге.
         </p>
       );
     }
@@ -385,16 +305,17 @@ function NextStep({
     return (
       <div className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
         <p>
-          Следующий шаг — подтверждение наставником и проверка администратором.
+          Вы указали этап “Преданный”. Сейчас статус подтверждения: не
+          подтвержден / ожидает наставника.
         </p>
         <ol className="list-inside list-decimal space-y-1">
           <li>{hasMentorLink ? "Скопируйте ссылку выше и отправьте ее наставнику." : "Дождитесь генерации ссылки наставника."}</li>
           <li>После заполнения формы заявка попадет администратору.</li>
           <li>
-            Пока идет проверка, выберите другой тип аккаунта выше и пользуйтесь
-            доступными сервисами портала.
+            Вы можете продолжить пользоваться порталом уже сейчас: обычные
+            доступные сервисы останутся открыты.
           </li>
-          <li>После подтверждения откроется доступ к закрытым сервисам.</li>
+          <li>Закрытые сервисы для подтвержденных преданных откроются после проверки.</li>
         </ol>
       </div>
     );
@@ -405,6 +326,16 @@ function NextStep({
       Откройте каталог сервисов на главной странице: портал покажет материалы и приложения, подходящие вашему текущему этапу. Анкету можно пройти повторно в профиле, когда ваш путь изменится.
     </p>
   );
+}
+
+function getStageDisplayName(
+  stage: string,
+  status: string | null | undefined,
+) {
+  if (stage !== "devotee") return stageLabels[stage];
+  return status === "confirmed"
+    ? "Преданный, подтвержден"
+    : "Преданный, не подтвержден";
 }
 
 function SelectField<T extends string>({
