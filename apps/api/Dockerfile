@@ -17,4 +17,4 @@ ENV NODE_ENV=production
 COPY --from=build /out /app
 COPY --from=build /app/apps/api/dist /app/dist
 EXPOSE 4000
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "npx prisma migrate resolve --rolled-back 20260705090000_extend_profile || true; npx prisma migrate deploy && node dist/main.js"]
