@@ -7,9 +7,9 @@ import { AdminVerificationList } from "@/components/admin-verification-list";
 
 const statusFilters: Array<{ value: DevoteeVerificationStatus | "all"; label: string }> = [
   { value: "all", label: "Все" },
-  { value: "awaiting_mentor", label: "Ожидает наставника" },
-  { value: "awaiting_admin", label: "Ожидает администратора" },
-  { value: "confirmed", label: "Подтверждено" },
+  { value: "awaiting_mentor", label: "Не подтвержден · наставник" },
+  { value: "awaiting_admin", label: "Не подтвержден · админ" },
+  { value: "confirmed", label: "Преданный, подтвержден" },
   { value: "rejected", label: "Отклонено" },
   { value: "needs_clarification", label: "Требует уточнения" },
 ];

@@ -1,9 +1,12 @@
 // Типы сервиса VedaMatch Union. См. docs/service-module-contract.md
 import type { SpiritualStage } from './index';
+import type { ProfileMessengers, ProfileSocialLinks } from './index';
 
 export type UnionIntentionType = 'family' | 'business' | 'friendship' | 'service';
 
 export type UnionFormat = 'online' | 'offline' | 'any';
+
+export type UnionConnectionStatus = 'pending' | 'accepted' | 'declined' | 'cancelled';
 
 export type UnionVisibilityLevel = 'everyone' | 'after_match' | 'hidden';
 
@@ -85,6 +88,12 @@ export interface UnionUserSummary {
   city: string | null;
   country: string | null;
   spiritualStage: SpiritualStage | null;
+  contacts: UnionVisibleContacts | null;
+}
+
+export interface UnionVisibleContacts {
+  socialLinks: ProfileSocialLinks;
+  messengers: ProfileMessengers;
 }
 
 export interface UnionRecommendation {
@@ -94,4 +103,28 @@ export interface UnionRecommendation {
     'about' | 'format' | 'relocationReady' | 'languages' | 'skills' | 'interests' | 'values'
   > & { intentions: UnionIntentionDto[] };
   compatibility: UnionCompatibility;
+  connection: UnionConnectionSummary | null;
+}
+
+export interface UnionConnectionSummary {
+  id: string;
+  status: UnionConnectionStatus;
+  direction: 'incoming' | 'outgoing';
+  message: string | null;
+  createdAt: string;
+  respondedAt: string | null;
+}
+
+export interface UnionConnectionRequestDto extends UnionConnectionSummary {
+  user: UnionUserSummary;
+}
+
+export interface UnionConnectionRequestsState {
+  incoming: UnionConnectionRequestDto[];
+  outgoing: UnionConnectionRequestDto[];
+}
+
+export interface UnionCreateConnectionRequest {
+  toUserId: string;
+  message?: string | null;
 }

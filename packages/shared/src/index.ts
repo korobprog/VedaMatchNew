@@ -80,6 +80,7 @@ export interface ServiceCard {
   url: string;
   status: ServiceStatus;
   category: string;
+  requiresDevoteeVerification: boolean;
 }
 
 export interface AccessTokenPayload {

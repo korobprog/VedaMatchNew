@@ -1,6 +1,10 @@
 // API-клиент сервиса Union. См. docs/service-module-contract.md
 import { cookies } from "next/headers";
-import type { UnionProfileState, UnionRecommendation } from "@vedamatch/shared";
+import type {
+  UnionConnectionRequestsState,
+  UnionProfileState,
+  UnionRecommendation,
+} from "@vedamatch/shared";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -26,3 +30,5 @@ export const getUnionRecommendations = () =>
   unionGet<UnionRecommendation[]>("/union/recommendations");
 export const getUnionUserCard = (id: string) =>
   unionGet<UnionRecommendation>(`/union/users/${encodeURIComponent(id)}`);
+export const getUnionConnectionRequests = () =>
+  unionGet<UnionConnectionRequestsState>("/union/connection-requests");
