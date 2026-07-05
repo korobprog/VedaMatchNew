@@ -1,3 +1,5 @@
+export * from './union';
+
 export type Role = 'user' | 'admin' | 'service-admin';
 
 export type ServiceStatus = 'active' | 'coming_soon' | 'disabled';
