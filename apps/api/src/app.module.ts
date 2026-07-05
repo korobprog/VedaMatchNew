@@ -7,6 +7,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { SelfIdentificationModule } from './modules/self-identification/self-identification.module';
+import { UnionModule } from './modules/union/union.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { SelfIdentificationModule } from './modules/self-identification/self-ide
     UsersModule,
     CatalogModule,
     SelfIdentificationModule,
+    UnionModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

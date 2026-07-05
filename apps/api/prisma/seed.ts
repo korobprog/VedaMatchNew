@@ -6,9 +6,9 @@ const services = [
   {
     slug: 'union',
     name: 'VedaMatch Union',
-    description: 'Сообщество и знакомства по духовным ценностям',
-    url: 'https://union.vedamatch.ru',
-    status: 'coming_soon' as const,
+    description: 'Осознанные знакомства и сотрудничество: семья, дружба, служение, проекты',
+    url: '/union',
+    status: 'active' as const,
     category: 'community',
     public: true,
     seekerVisible: true,

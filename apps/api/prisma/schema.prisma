@@ -65,6 +65,9 @@ model User {
   selfIdentificationResponses SelfIdentificationResponse[]
   stageHistory               StageHistory[]
   mentorVerificationRequests MentorVerificationRequest[]
+  unionProfile               UnionProfile?
+  unionRequestsSent          UnionConnectionRequest[]    @relation("UnionRequestsSent")
+  unionRequestsReceived      UnionConnectionRequest[]    @relation("UnionRequestsReceived")
 }
 
 model RefreshToken {
@@ -176,4 +179,76 @@ model MentorVerificationRequest {
   updatedAt                           DateTime                    @updatedAt
 
   @@index([userId, status])
+}
+
+// ===== Union service =====
+// Модели сервиса VedaMatch Union. Связи только с User (read-only портальные данные).
+// См. docs/service-module-contract.md
+
+enum UnionIntentionType {
+  family
+  business
+  friendship
+  service
+}
+
+enum UnionConnectionStatus {
+  pending
+  accepted
+  declined
+  cancelled
+}
+
+enum UnionFormat {
+  online
+  offline
+  any
+}
+
+model UnionProfile {
+  id              String             @id @default(uuid())
+  userId          String             @unique
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  about           String?
+  relocationReady Boolean            @default(false)
+  format          UnionFormat        @default(any)
+  languages       String[]           @default([])
+  skills          String[]           @default([])
+  interests       String[]           @default([])
+  values          String[]           @default([])
+  familyStatus    String?
+  // { photo, age, city, contacts: 'everyone' | 'after_match' | 'hidden' }
+  privacy         Json?
+  // скрыть из рекомендаций без удаления профиля
+  isActive        Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  intentions      UnionIntention[]
+}
+
+model UnionIntention {
+  id        String             @id @default(uuid())
+  profileId String
+  profile   UnionProfile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  type      UnionIntentionType
+  // 0..100, сумма по профилю = 100 (валидируется в сервисе)
+  weight    Int
+
+  @@unique([profileId, type])
+}
+
+model UnionConnectionRequest {
+  id          String                @id @default(uuid())
+  fromUserId  String
+  fromUser    User                  @relation("UnionRequestsSent", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId    String
+  toUser      User                  @relation("UnionRequestsReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+  status      UnionConnectionStatus @default(pending)
+  message     String?
+  createdAt   DateTime              @default(now())
+  respondedAt DateTime?
+
+  @@unique([fromUserId, toUserId])
+  @@index([toUserId, status])
 }
