@@ -22,10 +22,51 @@ export interface UserProfile {
   email: string;
   name: string;
   avatarUrl: string | null;
+  avatarKey: string | null;
+  homeLocation: ProfileLocation | null;
+  socialLinks: ProfileSocialLinks;
+  messengers: ProfileMessengers;
   role: Role;
   spiritualStage: SpiritualStage | null;
   devoteeVerificationStatus: DevoteeVerificationStatus | null;
   lastSelfIdentificationAt: string | null;
+}
+
+export interface ProfileLocation {
+  city: string;
+  country?: string;
+  lat: number;
+  lon: number;
+  displayName?: string;
+}
+
+export interface ProfileSocialLinks {
+  instagram?: string;
+  telegram?: string;
+  x?: string;
+  facebook?: string;
+  linkedin?: string;
+  vk?: string;
+  tiktok?: string;
+  youtube?: string;
+  website?: string;
+}
+
+export interface ProfileMessengers {
+  telegram?: string;
+  whatsapp?: string;
+  mx?: string;
+  phone?: string;
+}
+
+export interface ProfileUpdateRequest {
+  homeLocation?: ProfileLocation | null;
+  socialLinks?: ProfileSocialLinks;
+  messengers?: ProfileMessengers;
+}
+
+export interface GeoSearchResult extends ProfileLocation {
+  type?: string;
 }
 
 export interface ServiceCard {

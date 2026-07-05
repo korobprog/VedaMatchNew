@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import { getProfile } from "@/lib/api";
 import { Header } from "@/components/header";
+import { ProfileEditor } from "@/components/profile-editor";
 
 const roleLabels: Record<string, string> = {
   user: "Пользователь",
@@ -33,7 +34,7 @@ export default async function ProfilePage() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <Header user={user} />
-      <main className="mx-auto max-w-2xl px-4 py-8">
+      <main className="mx-auto max-w-4xl px-4 py-8">
         <h1 className="mb-6 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
           Профиль
         </h1>
@@ -98,6 +99,7 @@ export default async function ProfilePage() {
             Пройти самоидентификацию заново
           </Link>
         </div>
+        <ProfileEditor user={user} />
       </main>
     </div>
   );

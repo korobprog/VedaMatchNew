@@ -47,6 +47,10 @@ model User {
   email                      String                      @unique
   name                       String
   avatarUrl                  String?
+  avatarKey                  String?
+  homeLocation               Json?
+  socialLinks                Json?
+  messengers                 Json?
   role                       Role                        @default(user)
   googleId                   String?                     @unique
   spiritualStage             SpiritualStage?
