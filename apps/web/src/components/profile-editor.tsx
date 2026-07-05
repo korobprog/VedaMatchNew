@@ -25,11 +25,13 @@ const socialFields: Array<[keyof ProfileSocialLinks, string, string]> = [
   ["website", "Личный сайт", "https://..."],
 ];
 
-const messengerFields: Array<[keyof ProfileMessengers, string, string]> = [
-  ["telegram", "Telegram", "@username или https://t.me/..."],
-  ["whatsapp", "WhatsApp", "+79990000000 или https://wa.me/..."],
-  ["mx", "MX", "username или ссылка"],
-  ["phone", "Телефон", "+79990000000"],
+const messengerFields: Array<
+  [keyof ProfileMessengers, string, string, "text" | "tel"]
+> = [
+  ["telegram", "Telegram", "@username или https://t.me/...", "text"],
+  ["whatsapp", "WhatsApp", "+79990000000 или https://wa.me/...", "text"],
+  ["mx", "MAX", "+79990000000", "tel"],
+  ["phone", "Телефон", "+79990000000", "tel"],
 ];
 
 export function ProfileEditor({ user }: { user: UserProfile }) {
@@ -393,11 +395,12 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
           Мессенджеры и контакты
         </h2>
         <div className="grid gap-4 md:grid-cols-2">
-          {messengerFields.map(([key, label, placeholder]) => (
+          {messengerFields.map(([key, label, placeholder, type]) => (
             <TextField
               key={key}
               label={label}
               placeholder={placeholder}
+              type={type}
               value={messengers[key] ?? ""}
               onChange={(value) => setMessengers({ ...messengers, [key]: value })}
             />
@@ -430,11 +433,13 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
 function TextField({
   label,
   placeholder,
+  type = "text",
   value,
   onChange,
 }: {
   label: string;
   placeholder: string;
+  type?: "text" | "tel";
   value: string;
   onChange: (value: string) => void;
 }) {
@@ -444,7 +449,8 @@ function TextField({
         {label}
       </span>
       <input
-        type="text"
+        type={type}
+        inputMode={type === "tel" ? "tel" : undefined}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}

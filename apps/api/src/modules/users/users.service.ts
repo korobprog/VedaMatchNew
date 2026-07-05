@@ -256,7 +256,10 @@ function sanitizeKeyValueMap<T extends object>(
   for (const key of keys) {
     const sanitized = sanitizeString(source[key], 300);
     if (!sanitized) continue;
-    if (key === 'phone' && !/^\+[1-9]\d{6,14}$/.test(sanitized)) {
+    if (
+      (key === 'phone' || key === 'mx') &&
+      !/^\+[1-9]\d{6,14}$/.test(sanitized)
+    ) {
       throw new BadRequestException(
         'Телефон должен быть в международном формате',
       );

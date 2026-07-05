@@ -158,9 +158,7 @@ export class SelfIdentificationService {
 
     if (!user) throw new NotFoundException('Пользователь не найден');
     if (!activeMentorRequest) {
-      throw new BadRequestException(
-        'Нет активной проверки статуса преданного',
-      );
+      throw new BadRequestException('Нет активной проверки статуса преданного');
     }
 
     const stageChanged = user.spiritualStage !== stage;
