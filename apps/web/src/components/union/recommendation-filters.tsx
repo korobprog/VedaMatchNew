@@ -11,16 +11,16 @@ import { intentionLabels, intentionTypes } from "./labels";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 const stageLabels: Record<SpiritualStage, string> = {
-  seeker: "РС‰СѓС‰РёР№",
-  practitioner: "РџСЂР°РєС‚РёРєСѓСЋС‰РёР№ РѕСЃРЅРѕРІС‹",
-  yogi: "Р™РѕРі",
-  devotee: "РџСЂРµРґР°РЅРЅС‹Р№",
+  seeker: "Ищущий",
+  practitioner: "Практикующий основы",
+  yogi: "Йог",
+  devotee: "Преданный",
 };
 
 const formatLabels: Record<UnionFormat, string> = {
-  online: "РћРЅР»Р°Р№РЅ",
-  offline: "РћС„Р»Р°Р№РЅ",
-  any: "Р›СЋР±РѕР№",
+  online: "Онлайн",
+  offline: "Офлайн",
+  any: "Любой",
 };
 
 const radiusOptions = [25, 50, 100, 250, 500, 1000, 3000];
@@ -93,10 +93,10 @@ export function RecommendationFilters({
       <div className="grid gap-3 md:grid-cols-3">
         <Select
           name="intention"
-          label="Р¦РµР»СЊ"
+          label="Цель"
           defaultValue={first(params.intention)}
           options={[
-            ["", "Р›СЋР±Р°СЏ"],
+            ["", "Любая"],
             ...intentionTypes.map(
               (type): [string, string] => [type, intentionLabels[type]],
             ),
@@ -104,16 +104,16 @@ export function RecommendationFilters({
         />
         <Select
           name="stage"
-          label="Р­С‚Р°Рї"
+          label="Этап"
           defaultValue={first(params.stage)}
           options={[
-            ["", "Р›СЋР±РѕР№"],
+            ["", "Любой"],
             ...(Object.entries(stageLabels) as Array<[string, string]>),
           ]}
         />
         <Select
           name="format"
-          label="Р¤РѕСЂРјР°С‚"
+          label="Формат"
           defaultValue={first(params.format)}
           options={Object.entries(formatLabels) as Array<[string, string]>}
         />
@@ -122,7 +122,7 @@ export function RecommendationFilters({
       <div className="mt-3 grid gap-3 md:grid-cols-[1fr_180px_1fr]">
         <div className="relative">
           <label className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
-            Р“РѕСЂРѕРґ
+            Город
           </label>
           <input
             name="city"
@@ -133,7 +133,7 @@ export function RecommendationFilters({
               setSelectedCity(null);
               setResults([]);
             }}
-            placeholder="РќР°С‡РЅРёС‚Рµ РІРІРѕРґРёС‚СЊ РіРѕСЂРѕРґ"
+            placeholder="Начните вводить город"
             className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
           />
           {results.length > 0 && (
@@ -165,10 +165,10 @@ export function RecommendationFilters({
         </div>
         <Select
           name="radiusKm"
-          label="Р Р°РґРёСѓСЃ"
+          label="Радиус"
           defaultValue={first(params.radiusKm)}
           options={[
-            ["", "Р‘РµР· СЂР°РґРёСѓСЃР°"],
+            ["", "Без радиуса"],
             ...radiusOptions.map(
               (radius): [string, string] => [String(radius), `${radius} км`],
             ),
@@ -176,13 +176,13 @@ export function RecommendationFilters({
         />
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
-            РЇР·С‹Рє
+            Язык
           </span>
           <input
             name="language"
             type="text"
             defaultValue={first(params.language)}
-            placeholder="РЅР°РїСЂРёРјРµСЂ: СЂСѓСЃСЃРєРёР№"
+            placeholder="например: русский"
             className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
           />
         </label>
@@ -193,16 +193,16 @@ export function RecommendationFilters({
           type="submit"
           className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
         >
-          {pending ? "РС‰РµРј РіРѕСЂРѕРґ..." : "РџСЂРёРјРµРЅРёС‚СЊ С„РёР»СЊС‚СЂС‹"}
+          {pending ? "Ищем город..." : "Применить фильтры"}
         </button>
         <a
           href="/union/recommendations"
           className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
         >
-          РЎР±СЂРѕСЃРёС‚СЊ
+          Сбросить
         </a>
         <span className="text-xs text-zinc-400">
-          Р“РµРѕРїРѕРёСЃРє: В©{" "}
+          Геопоиск: ©{" "}
           <a
             href="https://www.openstreetmap.org/copyright"
             target="_blank"

@@ -259,7 +259,17 @@ export function UnionProfileForm({ profile }: { profile: UnionProfileDto | null 
         </div>
       </fieldset>
 
-      {message && <p className="text-sm text-emerald-600">{message}</p>}
+      {message && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
+          <p>{message}</p>
+          <a
+            href="/union/recommendations"
+            className="mt-3 inline-flex rounded-xl bg-amber-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-700"
+          >
+            Смотреть рекомендации
+          </a>
+        </div>
+      )}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <button
