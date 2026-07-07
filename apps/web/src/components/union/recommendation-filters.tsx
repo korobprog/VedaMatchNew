@@ -6,6 +6,7 @@ import type {
   SpiritualStage,
   UnionFormat,
 } from "@vedamatch/shared";
+import { unionLanguageOptions } from "./dictionaries";
 import { intentionLabels, intentionTypes } from "./labels";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -174,18 +175,17 @@ export function RecommendationFilters({
             ),
           ]}
         />
-        <label className="block">
-          <span className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
-            Язык
-          </span>
-          <input
-            name="language"
-            type="text"
-            defaultValue={first(params.language)}
-            placeholder="например: русский"
-            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-          />
-        </label>
+        <Select
+          name="language"
+          label="Язык"
+          defaultValue={first(params.language)}
+          options={[
+            ["", "Любой"],
+            ...unionLanguageOptions.map(
+              (language): [string, string] => [language.value, language.label],
+            ),
+          ]}
+        />
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
