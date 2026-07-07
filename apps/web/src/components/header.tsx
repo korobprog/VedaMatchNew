@@ -22,6 +22,14 @@ export function Header({ user }: { user: UserProfile }) {
           />
         </Link>
         <div className="flex items-center gap-3">
+          {user.role === "admin" && (
+            <Link
+              href="/admin/users"
+              className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 sm:text-sm dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            >
+              Админ
+            </Link>
+          )}
           <Link
             href="/self-identification"
             className="rounded-full border border-amber-200 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50 sm:text-sm dark:border-amber-900 dark:text-amber-200 dark:hover:bg-amber-950"

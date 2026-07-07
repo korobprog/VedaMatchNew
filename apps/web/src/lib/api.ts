@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import type {
   AdminVerificationRequest,
+  AdminUserDetail,
+  AdminUserListResponse,
   MentorVerificationPublicRequest,
   DevoteeVerificationStatus,
   SelfIdentificationState,
@@ -43,5 +45,15 @@ export const getAdminVerificationRequests = (status?: DevoteeVerificationStatus)
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
   return apiGet<AdminVerificationRequest[]>(`/admin/verification-requests${query}`);
 };
+export const getAdminUsers = (query: Record<string, string | undefined>) => {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value) params.set(key, value);
+  }
+  const qs = params.toString();
+  return apiGet<AdminUserListResponse>(`/admin/users${qs ? `?${qs}` : ""}`);
+};
+export const getAdminUser = (id: string) =>
+  apiGet<AdminUserDetail>(`/admin/users/${id}`);
 export const getMentorVerificationRequest = (token: string) =>
   apiGetPublic<MentorVerificationPublicRequest>(`/mentor-verifications/${token}`);

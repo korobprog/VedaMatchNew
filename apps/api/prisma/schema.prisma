@@ -68,6 +68,7 @@ model User {
   unionProfile               UnionProfile?
   unionRequestsSent          UnionConnectionRequest[]    @relation("UnionRequestsSent")
   unionRequestsReceived      UnionConnectionRequest[]    @relation("UnionRequestsReceived")
+  unionChatMessagesSent      UnionChatMessage[]          @relation("UnionChatMessagesSent")
 }
 
 model RefreshToken {
@@ -249,6 +250,21 @@ model UnionConnectionRequest {
   createdAt   DateTime              @default(now())
   respondedAt DateTime?
 
+  messages    UnionChatMessage[]
+
   @@unique([fromUserId, toUserId])
   @@index([toUserId, status])
+}
+
+model UnionChatMessage {
+  id        String                 @id @default(uuid())
+  requestId String
+  request   UnionConnectionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  fromUserId String
+  fromUser   User                  @relation("UnionChatMessagesSent", fields: [fromUserId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime               @default(now())
+
+  @@index([requestId, createdAt])
+  @@index([fromUserId])
 }

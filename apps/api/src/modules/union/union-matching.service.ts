@@ -15,6 +15,8 @@ export interface UnionMatchInput {
   values: string[];
   city: string | null;
   country: string | null;
+  lat: number | null;
+  lon: number | null;
   relocationReady: boolean;
   format: UnionFormat;
 }

@@ -1,9 +1,11 @@
 // API-клиент сервиса Union. См. docs/service-module-contract.md
 import { cookies } from "next/headers";
 import type {
+  UnionChatState,
   UnionConnectionRequestsState,
   UnionProfileState,
   UnionRecommendation,
+  UnionRecommendationsResponse,
 } from "@vedamatch/shared";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
@@ -26,9 +28,27 @@ async function unionGet<T>(path: string): Promise<T | null> {
 
 export const getUnionProfileState = () =>
   unionGet<UnionProfileState>("/union/profile");
-export const getUnionRecommendations = () =>
-  unionGet<UnionRecommendation[]>("/union/recommendations");
+export const getUnionRecommendations = (
+  params?: Record<string, string | string[] | undefined>,
+) => {
+  const query = toQueryString(params);
+  return unionGet<UnionRecommendationsResponse>(
+    `/union/recommendations${query}`,
+  );
+};
 export const getUnionUserCard = (id: string) =>
   unionGet<UnionRecommendation>(`/union/users/${encodeURIComponent(id)}`);
 export const getUnionConnectionRequests = () =>
   unionGet<UnionConnectionRequestsState>("/union/connection-requests");
+export const getUnionChat = (id: string) =>
+  unionGet<UnionChatState>(`/union/chats/${encodeURIComponent(id)}`);
+
+function toQueryString(params?: Record<string, string | string[] | undefined>) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params ?? {})) {
+    const first = Array.isArray(value) ? value[0] : value;
+    if (first) query.set(key, first);
+  }
+  const text = query.toString();
+  return text ? `?${text}` : "";
+}

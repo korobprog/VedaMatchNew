@@ -1,4 +1,4 @@
-﻿import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import type { GeoSearchResult } from '@vedamatch/shared';
 
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org';
@@ -34,7 +34,7 @@ export class GeoController {
       format: 'jsonv2',
       addressdetails: '1',
       limit: '6',
-      featuretype: 'city',
+      featureType: 'city',
     });
 
     const places = await requestNominatim<NominatimPlace[]>(

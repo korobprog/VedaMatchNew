@@ -22,6 +22,8 @@ import type {
   UnionProfileState,
   UnionProfileUpdateRequest,
   UnionRecommendation,
+  UnionRecommendationFilters,
+  UnionRecommendationsResponse,
   UnionUserSummary,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -39,6 +41,8 @@ const INTENTION_TYPES: UnionIntentionType[] = [
 const MAX_ABOUT_LENGTH = 2000;
 const MAX_LIST_ITEMS = 30;
 const MAX_ITEM_LENGTH = 100;
+const DEFAULT_PAGE_SIZE = 12;
+const MAX_PAGE_SIZE = 50;
 
 type ProfileWithIntentions = UnionProfile & { intentions: UnionIntention[] };
 type ConnectionForUser = Pick<
@@ -97,7 +101,10 @@ export class UnionProfileService {
     return { profile: this.toDto(profile) };
   }
 
-  async getRecommendations(userId: string): Promise<UnionRecommendation[]> {
+  async getRecommendations(
+    userId: string,
+    filters: UnionRecommendationFilters = {},
+  ): Promise<UnionRecommendationsResponse> {
     const me = await this.prisma.unionProfile.findUnique({
       where: { userId },
       include: { intentions: true, user: true },
@@ -113,7 +120,11 @@ export class UnionProfileService {
 
     const connections = await this.connectionMap(userId);
     const myInput = this.toMatchInput(me, me.user);
-    return others
+    const normalizedFilters = this.normalizeFilters(filters);
+    const recommendations = others
+      .filter((other) =>
+        this.matchesFilters(other, other.user, normalizedFilters, myInput),
+      )
       .map((other) =>
         this.toRecommendation(
           userId,
@@ -124,6 +135,21 @@ export class UnionProfileService {
         ),
       )
       .sort((a, b) => b.compatibility.total - a.compatibility.total);
+
+    const page = normalizedFilters.page ?? 1;
+    const pageSize = normalizedFilters.pageSize ?? DEFAULT_PAGE_SIZE;
+    const total = recommendations.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const start = (safePage - 1) * pageSize;
+
+    return {
+      items: recommendations.slice(start, start + pageSize),
+      total,
+      page: safePage,
+      pageSize,
+      totalPages,
+    };
   }
 
   async getRecommendationForUser(
@@ -245,6 +271,93 @@ export class UnionProfileService {
     };
   }
 
+  private normalizeFilters(
+    filters: UnionRecommendationFilters,
+  ): UnionRecommendationFilters {
+    const page = clampInteger(filters.page, 1, 10_000) ?? 1;
+    const pageSize =
+      clampInteger(filters.pageSize, 1, MAX_PAGE_SIZE) ?? DEFAULT_PAGE_SIZE;
+    return {
+      intention: INTENTION_TYPES.includes(
+        filters.intention as UnionIntentionType,
+      )
+        ? filters.intention
+        : undefined,
+      city: cleanFilterText(filters.city),
+      country: cleanFilterText(filters.country),
+      lat: validLat(filters.lat) ? filters.lat : undefined,
+      lon: validLon(filters.lon) ? filters.lon : undefined,
+      radiusKm: clampNumber(filters.radiusKm, 1, 20_000),
+      stage: ['seeker', 'practitioner', 'yogi', 'devotee'].includes(
+        String(filters.stage),
+      )
+        ? filters.stage
+        : undefined,
+      format: ['online', 'offline', 'any'].includes(String(filters.format))
+        ? filters.format
+        : undefined,
+      language: cleanFilterText(filters.language),
+      page,
+      pageSize,
+    };
+  }
+
+  private matchesFilters(
+    profile: ProfileWithIntentions,
+    user: User,
+    filters: UnionRecommendationFilters,
+    myInput: UnionMatchInput,
+  ): boolean {
+    if (
+      filters.intention &&
+      !profile.intentions.some((i) => i.type === filters.intention)
+    ) {
+      return false;
+    }
+    if (filters.stage && user.spiritualStage !== filters.stage) return false;
+    if (
+      filters.format &&
+      filters.format !== 'any' &&
+      profile.format !== 'any' &&
+      profile.format !== filters.format
+    ) {
+      return false;
+    }
+    if (filters.language) {
+      const needle = normalizeText(filters.language);
+      const hasLanguage = profile.languages.some((language) =>
+        normalizeText(language).includes(needle),
+      );
+      if (!hasLanguage) return false;
+    }
+
+    const location = this.location(user);
+    if (filters.city) {
+      const candidateCity = normalizeText(location?.city);
+      const candidateCountry = normalizeText(location?.country);
+      const filterCity = normalizeText(filters.city);
+      const filterCountry = normalizeText(filters.country);
+      if (!candidateCity.includes(filterCity)) return false;
+      if (filterCountry && candidateCountry !== filterCountry) return false;
+    }
+
+    if (filters.radiusKm) {
+      const centerLat = filters.lat ?? myInput.lat;
+      const centerLon = filters.lon ?? myInput.lon;
+      const otherLat = location?.lat;
+      const otherLon = location?.lon;
+      if (!validLat(centerLat) || !validLon(centerLon)) return false;
+      if (!validLat(otherLat) || !validLon(otherLon)) return false;
+      if (
+        haversineKm(centerLat, centerLon, otherLat, otherLon) > filters.radiusKm
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   private visibleContacts(
     user: User,
     privacy: UnionPrivacySettings | null,
@@ -281,6 +394,8 @@ export class UnionProfileService {
       values: profile.values,
       city: location?.city ?? null,
       country: location?.country ?? null,
+      lat: location?.lat ?? null,
+      lon: location?.lon ?? null,
       relocationReady: profile.relocationReady,
       format: profile.format,
     };
@@ -294,19 +409,21 @@ export class UnionProfileService {
     intentions: UnionIntentionDto[] | undefined,
   ): UnionIntentionDto[] {
     if (!Array.isArray(intentions) || intentions.length === 0) {
-      throw new BadRequestException('Укажите хотя бы одно намерение');
+      throw new BadRequestException(
+        'РЈРєР°Р¶РёС‚Рµ С…РѕС‚СЏ Р±С‹ РѕРґРЅРѕ РЅР°РјРµСЂРµРЅРёРµ',
+      );
     }
     const seen = new Set<string>();
     let sum = 0;
     for (const intention of intentions) {
       if (!INTENTION_TYPES.includes(intention.type)) {
         throw new BadRequestException(
-          `Неизвестный тип намерения: ${String(intention.type)}`,
+          `РќРµРёР·РІРµСЃС‚РЅС‹Р№ С‚РёРї РЅР°РјРµСЂРµРЅРёСЏ: ${String(intention.type)}`,
         );
       }
       if (seen.has(intention.type)) {
         throw new BadRequestException(
-          `Тип намерения указан дважды: ${intention.type}`,
+          `РўРёРї РЅР°РјРµСЂРµРЅРёСЏ СѓРєР°Р·Р°РЅ РґРІР°Р¶РґС‹: ${intention.type}`,
         );
       }
       seen.add(intention.type);
@@ -316,14 +433,14 @@ export class UnionProfileService {
         intention.weight > 100
       ) {
         throw new BadRequestException(
-          'Вес намерения должен быть целым числом от 0 до 100',
+          'Р’РµСЃ РЅР°РјРµСЂРµРЅРёСЏ РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ С†РµР»С‹Рј С‡РёСЃР»РѕРј РѕС‚ 0 РґРѕ 100',
         );
       }
       sum += intention.weight;
     }
     if (sum !== 100) {
       throw new BadRequestException(
-        `Сумма весов намерений должна быть 100, сейчас ${sum}`,
+        `РЎСѓРјРјР° РІРµСЃРѕРІ РЅР°РјРµСЂРµРЅРёР№ РґРѕР»Р¶РЅР° Р±С‹С‚СЊ 100, СЃРµР№С‡Р°СЃ ${sum}`,
       );
     }
     return intentions.filter((i) => i.weight > 0);
@@ -334,23 +451,25 @@ export class UnionProfileService {
   ): Omit<Prisma.UnionProfileUncheckedCreateInput, 'userId'> {
     if (body.about != null && body.about.length > MAX_ABOUT_LENGTH) {
       throw new BadRequestException(
-        `Поле «О себе» не длиннее ${MAX_ABOUT_LENGTH} символов`,
+        `РџРѕР»Рµ В«Рћ СЃРµР±РµВ» РЅРµ РґР»РёРЅРЅРµРµ ${MAX_ABOUT_LENGTH} СЃРёРјРІРѕР»РѕРІ`,
       );
     }
     if (
       body.format != null &&
       !['online', 'offline', 'any'].includes(body.format)
     ) {
-      throw new BadRequestException('Недопустимый формат общения');
+      throw new BadRequestException(
+        'РќРµРґРѕРїСѓСЃС‚РёРјС‹Р№ С„РѕСЂРјР°С‚ РѕР±С‰РµРЅРёСЏ',
+      );
     }
     return {
       about: body.about?.trim() || null,
       relocationReady: body.relocationReady ?? false,
       format: body.format ?? 'any',
-      languages: this.cleanList(body.languages, 'Языки'),
-      skills: this.cleanList(body.skills, 'Навыки'),
-      interests: this.cleanList(body.interests, 'Интересы'),
-      values: this.cleanList(body.values, 'Ценности'),
+      languages: this.cleanList(body.languages, 'РЇР·С‹РєРё'),
+      skills: this.cleanList(body.skills, 'РќР°РІС‹РєРё'),
+      interests: this.cleanList(body.interests, 'РРЅС‚РµСЂРµСЃС‹'),
+      values: this.cleanList(body.values, 'Р¦РµРЅРЅРѕСЃС‚Рё'),
       familyStatus: body.familyStatus?.trim() || null,
       privacy: this.validatePrivacy(body.privacy),
       isActive: body.isActive ?? true,
@@ -361,7 +480,7 @@ export class UnionProfileService {
     if (!list) return [];
     if (!Array.isArray(list) || list.length > MAX_LIST_ITEMS) {
       throw new BadRequestException(
-        `${label}: не более ${MAX_LIST_ITEMS} значений`,
+        `${label}: РЅРµ Р±РѕР»РµРµ ${MAX_LIST_ITEMS} Р·РЅР°С‡РµРЅРёР№`,
       );
     }
     const items = list
@@ -381,7 +500,7 @@ export class UnionProfileService {
       if (value == null) continue;
       if (!levels.includes(value)) {
         throw new BadRequestException(
-          `Недопустимое значение приватности: ${key}`,
+          `РќРµРґРѕРїСѓСЃС‚РёРјРѕРµ Р·РЅР°С‡РµРЅРёРµ РїСЂРёРІР°С‚РЅРѕСЃС‚Рё: ${key}`,
         );
       }
       result[key] = value;
@@ -411,4 +530,72 @@ export class UnionProfileService {
       updatedAt: profile.updatedAt.toISOString(),
     };
   }
+}
+
+function cleanFilterText(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const cleaned = value.trim().slice(0, 120);
+  return cleaned || undefined;
+}
+
+function normalizeText(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
+
+function clampInteger(
+  value: unknown,
+  min: number,
+  max: number,
+): number | undefined {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return undefined;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function clampNumber(
+  value: unknown,
+  min: number,
+  max: number,
+): number | undefined {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function validLat(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= -90 &&
+    value <= 90
+  );
+}
+
+function validLon(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= -180 &&
+    value <= 180
+  );
+}
+
+function haversineKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const earthRadiusKm = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function toRad(value: number): number {
+  return (value * Math.PI) / 180;
 }

@@ -106,6 +106,28 @@ export interface UnionRecommendation {
   connection: UnionConnectionSummary | null;
 }
 
+export interface UnionRecommendationFilters {
+  intention?: UnionIntentionType;
+  city?: string;
+  country?: string;
+  lat?: number;
+  lon?: number;
+  radiusKm?: number;
+  stage?: SpiritualStage;
+  format?: UnionFormat;
+  language?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface UnionRecommendationsResponse {
+  items: UnionRecommendation[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface UnionConnectionSummary {
   id: string;
   status: UnionConnectionStatus;
@@ -127,4 +149,23 @@ export interface UnionConnectionRequestsState {
 export interface UnionCreateConnectionRequest {
   toUserId: string;
   message?: string | null;
+}
+
+export interface UnionChatMessageDto {
+  id: string;
+  requestId: string;
+  fromUserId: string;
+  body: string;
+  mine: boolean;
+  createdAt: string;
+}
+
+export interface UnionChatState {
+  connection: UnionConnectionSummary;
+  otherUser: UnionUserSummary;
+  messages: UnionChatMessageDto[];
+}
+
+export interface UnionSendChatMessageRequest {
+  body: string;
 }

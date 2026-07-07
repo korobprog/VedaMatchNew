@@ -14,6 +14,15 @@ import {
   IntentionWeights,
   intentionSum,
 } from "./intention-constructor";
+import {
+  unionFamilyStatusOptions,
+  unionInterestOptions,
+  unionLanguageOptions,
+  unionSkillCategories,
+  unionSkillOptions,
+  unionValueOptions,
+} from "./dictionaries";
+import { UnionTagPicker } from "./union-tag-picker";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -36,14 +45,7 @@ const privacyFields: Array<[keyof UnionPrivacySettings, string]> = [
   ["contacts", "Контакты"],
 ];
 
-const listFields = [
-  ["languages", "Языки общения", "русский, английский"],
-  ["skills", "Навыки", "дизайн, кулинария, организация событий"],
-  ["interests", "Интересы", "йога, философия, киртан"],
-  ["values", "Ценности", "семья, служение, простота"],
-] as const;
-
-type ListFieldKey = (typeof listFields)[number][0];
+type ListFieldKey = "languages" | "skills" | "interests" | "values";
 
 function toWeights(profile: UnionProfileDto | null): IntentionWeights {
   const weights: IntentionWeights = { family: 0, business: 0, friendship: 0, service: 0 };
@@ -54,12 +56,12 @@ function toWeights(profile: UnionProfileDto | null): IntentionWeights {
   return weights;
 }
 
-function toListText(profile: UnionProfileDto | null): Record<ListFieldKey, string> {
+function toListValues(profile: UnionProfileDto | null): Record<ListFieldKey, string[]> {
   return {
-    languages: profile?.languages.join(", ") ?? "",
-    skills: profile?.skills.join(", ") ?? "",
-    interests: profile?.interests.join(", ") ?? "",
-    values: profile?.values.join(", ") ?? "",
+    languages: profile?.languages ?? [],
+    skills: profile?.skills ?? [],
+    interests: profile?.interests ?? [],
+    values: profile?.values ?? [],
   };
 }
 
@@ -70,13 +72,21 @@ export function UnionProfileForm({ profile }: { profile: UnionProfileDto | null 
   const [familyStatus, setFamilyStatus] = useState(profile?.familyStatus ?? "");
   const [format, setFormat] = useState<UnionFormat>(profile?.format ?? "any");
   const [relocationReady, setRelocationReady] = useState(profile?.relocationReady ?? false);
-  const [lists, setLists] = useState(toListText(profile));
+  const [lists, setLists] = useState(toListValues(profile));
   const [privacy, setPrivacy] = useState<UnionPrivacySettings>(profile?.privacy ?? {});
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const sumOk = intentionSum(weights) === 100;
+  const familyStatusOptions = unionFamilyStatusOptions.some(
+    (option) => option.value === familyStatus,
+  )
+    ? unionFamilyStatusOptions
+    : [
+        ...unionFamilyStatusOptions,
+        { value: familyStatus, label: `${familyStatus} (сохранённый вариант)` },
+      ];
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -90,10 +100,10 @@ export function UnionProfileForm({ profile }: { profile: UnionProfileDto | null 
         familyStatus: familyStatus.trim() || null,
         format,
         relocationReady,
-        languages: splitList(lists.languages),
-        skills: splitList(lists.skills),
-        interests: splitList(lists.interests),
-        values: splitList(lists.values),
+        languages: lists.languages,
+        skills: lists.skills,
+        interests: lists.interests,
+        values: lists.values,
         privacy,
         intentions: (Object.entries(weights) as Array<[keyof IntentionWeights, number]>)
           .filter(([, weight]) => weight > 0)
@@ -137,34 +147,59 @@ export function UnionProfileForm({ profile }: { profile: UnionProfileDto | null 
         />
       </div>
 
-      {listFields.map(([key, label, placeholder]) => (
-        <div key={key}>
-          <label htmlFor={`union-${key}`} className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
-            {label} <span className="text-zinc-400">(через запятую)</span>
-          </label>
-          <input
-            id={`union-${key}`}
-            type="text"
-            value={lists[key]}
-            onChange={(e) => setLists({ ...lists, [key]: e.target.value })}
-            placeholder={placeholder}
-            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-          />
-        </div>
-      ))}
+      <UnionTagPicker
+        label="Языки общения"
+        selected={lists.languages}
+        options={unionLanguageOptions}
+        onChange={(languages) => setLists({ ...lists, languages })}
+        placeholder="Например: русский, английский"
+        helperText="Выберите один или несколько языков. Если нужного нет — добавьте свой вариант."
+      />
+
+      <UnionTagPicker
+        label="Навыки"
+        selected={lists.skills}
+        options={unionSkillOptions}
+        onChange={(skills) => setLists({ ...lists, skills })}
+        placeholder="Например: программирование, киртан, кулинария"
+        helperText={`Категории: ${unionSkillCategories.map((category) => category.title).join(", ")}.`}
+      />
+
+      <UnionTagPicker
+        label="Интересы"
+        selected={lists.interests}
+        options={unionInterestOptions}
+        onChange={(interests) => setLists({ ...lists, interests })}
+        placeholder="Например: йога, философия, служение"
+        helperText="Интересы участвуют в расчёте совместимости."
+      />
+
+      <UnionTagPicker
+        label="Ценности"
+        selected={lists.values}
+        options={unionValueOptions}
+        onChange={(values) => setLists({ ...lists, values })}
+        placeholder="Например: семья, честность, совместная практика"
+        helperText="Ценности участвуют в расчёте совместимости."
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="union-family-status" className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
             Семейный статус <span className="text-zinc-400">(по желанию)</span>
           </label>
-          <input
+          <select
             id="union-family-status"
-            type="text"
             value={familyStatus}
             onChange={(e) => setFamilyStatus(e.target.value)}
             className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-          />
+          >
+            {familyStatusOptions.map((option) => (
+              <option key={option.label} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label htmlFor="union-format" className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
@@ -236,11 +271,4 @@ export function UnionProfileForm({ profile }: { profile: UnionProfileDto | null 
       </button>
     </form>
   );
-}
-
-function splitList(text: string): string[] {
-  return text
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
 }

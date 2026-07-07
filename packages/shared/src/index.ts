@@ -179,3 +179,60 @@ export interface AdminVerificationRequest {
   updatedAt: string;
   mentorSubmittedAt: string | null;
 }
+
+export interface AdminUserListItem {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+  role: Role;
+  spiritualStage: SpiritualStage | null;
+  devoteeVerificationStatus: DevoteeVerificationStatus | null;
+  lastSelfIdentificationAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  hasMentorRequest: boolean;
+  mentorRequestStatus: DevoteeVerificationStatus | null;
+}
+
+export interface AdminUserListResponse {
+  items: AdminUserListItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface AdminUserProfile extends UserProfile {
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminSelfIdentificationResponse {
+  id: string;
+  answers: SelfIdentificationAnswers;
+  detectedStage: SpiritualStage;
+  verificationStatus: DevoteeVerificationStatus | null;
+  createdAt: string;
+}
+
+export interface AdminMentorVerificationRequest extends AdminVerificationRequest {
+  token: string;
+  adminReviewedAt: string | null;
+}
+
+export interface AdminUserDetail {
+  profile: AdminUserProfile;
+  availableServices: ServiceCard[];
+  stageHistory: StageHistoryItem[];
+  latestSelfIdentificationResponse: AdminSelfIdentificationResponse | null;
+  mentorRequest: AdminMentorVerificationRequest | null;
+}
+
+export interface AdminManualStageUpdateRequest {
+  spiritualStage: SpiritualStage;
+  devoteeVerificationStatus?: DevoteeVerificationStatus | null;
+  reason: string;
+  confirmSelfChange?: boolean;
+  confirmStatusDowngrade?: boolean;
+}
