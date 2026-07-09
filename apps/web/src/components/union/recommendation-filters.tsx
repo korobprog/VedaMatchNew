@@ -116,7 +116,11 @@ export function RecommendationFilters({
           name="format"
           label="Формат"
           defaultValue={first(params.format)}
-          options={Object.entries(formatLabels) as Array<[string, string]>}
+          options={[
+            ["", "Любой"],
+            ["online", formatLabels.online],
+            ["offline", formatLabels.offline],
+          ]}
         />
       </div>
 
