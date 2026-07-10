@@ -74,7 +74,7 @@ export function RecommendationCard({ item }: { item: UnionRecommendation }) {
 
       {user.contacts && (
         <div className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
-          <p className="mb-2 font-medium">РљРѕРЅС‚Р°РєС‚С‹ РѕС‚РєСЂС‹С‚С‹</p>
+          <p className="mb-2 font-medium">Контакты открыты</p>
           <div className="space-y-1">
             {Object.entries(user.contacts.messengers).map(([key, value]) =>
               value ? (

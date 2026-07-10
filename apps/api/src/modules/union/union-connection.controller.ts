@@ -24,6 +24,11 @@ export class UnionConnectionController {
     return this.connections.list(user.sub);
   }
 
+  @Get('counts')
+  counts(@CurrentUser() user: AccessTokenPayload) {
+    return this.connections.counts(user.sub);
+  }
+
   @Post()
   create(
     @CurrentUser() user: AccessTokenPayload,

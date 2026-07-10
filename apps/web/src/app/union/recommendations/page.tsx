@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getProfile } from "@/lib/api";
-import { getUnionRecommendations } from "@/lib/union-api";
 import { Header } from "@/components/header";
 import { RecommendationCard } from "@/components/union/recommendation-card";
 import { RecommendationFilters } from "@/components/union/recommendation-filters";
+import { UnionNav } from "@/components/union/union-nav";
+import { getProfile } from "@/lib/api";
+import {
+  getUnionConnectionCounts,
+  getUnionRecommendations,
+} from "@/lib/union-api";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -17,25 +21,20 @@ export default async function UnionRecommendationsPage({
   if (!user) redirect("/login");
 
   const params = await searchParams;
-  const recommendations = await getUnionRecommendations(params);
-  // null — профиль Union ещё не заполнен (API вернул 404)
+  const [recommendations, counts] = await Promise.all([
+    getUnionRecommendations(params),
+    getUnionConnectionCounts().catch(() => null),
+  ]);
   if (recommendations === null) redirect("/union");
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <Header user={user} />
       <main className="mx-auto max-w-4xl px-4 py-8">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-            Рекомендации
-          </h1>
-          <Link
-            href="/union"
-            className="text-sm font-medium text-amber-700 hover:underline dark:text-amber-400"
-          >
-            ← Мой профиль Union
-          </Link>
-        </div>
+        <h1 className="mb-6 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+          Рекомендации
+        </h1>
+        <UnionNav incomingPending={counts?.incomingPending ?? 0} />
 
         <RecommendationFilters params={params} />
 

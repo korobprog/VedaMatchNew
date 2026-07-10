@@ -6,7 +6,13 @@ const categoryEmoji: Record<string, string> = {
   lifestyle: "🌱",
 };
 
-export function ServiceCard({ service }: { service: ServiceCardType }) {
+export function ServiceCard({
+  service,
+  badgeCount,
+}: {
+  service: ServiceCardType;
+  badgeCount?: number;
+}) {
   const comingSoon = service.status === "coming_soon";
 
   return (
@@ -20,7 +26,7 @@ export function ServiceCard({ service }: { service: ServiceCardType }) {
             (categoryEmoji[service.category] ?? "✨")
           )}
         </span>
-        <div>
+        <div className="min-w-0 flex-1">
           <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">
             {service.name}
           </h3>
@@ -35,6 +41,14 @@ export function ServiceCard({ service }: { service: ServiceCardType }) {
             </span>
           )}
         </div>
+        {(badgeCount ?? 0) > 0 && (
+          <span
+            aria-label={`Входящих заявок: ${badgeCount}`}
+            className="self-start rounded-full bg-red-600 px-2.5 py-1 text-xs font-semibold text-white"
+          >
+            {badgeCount}
+          </span>
+        )}
       </div>
       <p className="mb-6 flex-1 text-sm text-zinc-600 dark:text-zinc-400">
         {service.description}
