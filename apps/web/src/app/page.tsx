@@ -2,9 +2,14 @@
 import { getProfile, getServices } from "@/lib/api";
 import { Header } from "@/components/header";
 import { ServiceCard } from "@/components/service-card";
+import { getUnionConnectionCounts } from "@/lib/union-api";
 
 export default async function Home() {
-  const [user, services] = await Promise.all([getProfile(), getServices()]);
+  const [user, services, unionCounts] = await Promise.all([
+    getProfile(),
+    getServices(),
+    getUnionConnectionCounts().catch(() => null),
+  ]);
   if (!user || !services) redirect("/login");
   if (!user.spiritualStage) redirect("/self-identification");
 
@@ -21,8 +26,16 @@ export default async function Home() {
           </p>
         </section>
         <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {services.map((s) => (
-            <ServiceCard key={s.id} service={s} />
+          {services.map((service) => (
+            <ServiceCard
+              key={service.id}
+              service={service}
+              badgeCount={
+                service.url === "/union"
+                  ? unionCounts?.incomingPending
+                  : undefined
+              }
+            />
           ))}
         </section>
       </main>

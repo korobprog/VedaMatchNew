@@ -9,6 +9,7 @@ import type {
   ProfileLocation,
   ProfileMessengers,
   ProfileSocialLinks,
+  UnionConnectionCounts,
   UnionConnectionRequestDto,
   UnionConnectionRequestsState,
   UnionConnectionSummary,
@@ -23,6 +24,13 @@ const MAX_MESSAGE_LENGTH = 500;
 @Injectable()
 export class UnionConnectionService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async counts(userId: string): Promise<UnionConnectionCounts> {
+    const incomingPending = await this.prisma.unionConnectionRequest.count({
+      where: { toUserId: userId, status: 'pending' },
+    });
+    return { incomingPending };
+  }
 
   async list(userId: string): Promise<UnionConnectionRequestsState> {
     const [incoming, outgoing] = await Promise.all([

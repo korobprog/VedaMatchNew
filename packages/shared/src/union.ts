@@ -146,6 +146,10 @@ export interface UnionConnectionRequestsState {
   outgoing: UnionConnectionRequestDto[];
 }
 
+export interface UnionConnectionCounts {
+  incomingPending: number;
+}
+
 export interface UnionCreateConnectionRequest {
   toUserId: string;
   message?: string | null;

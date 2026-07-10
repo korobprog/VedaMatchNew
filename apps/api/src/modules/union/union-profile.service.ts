@@ -166,10 +166,11 @@ export class UnionProfileService {
       where: { userId: targetUserId },
       include: { intentions: true, user: true },
     });
-    if (!other || !other.isActive)
-      throw new NotFoundException('Профиль не найден');
-
     const connection = await this.connectionBetween(userId, targetUserId);
+    if (!other || (!other.isActive && connection?.status !== 'accepted')) {
+      throw new NotFoundException('Профиль не найден');
+    }
+
     return this.toRecommendation(
       userId,
       this.toMatchInput(me, me.user),
@@ -409,21 +410,19 @@ export class UnionProfileService {
     intentions: UnionIntentionDto[] | undefined,
   ): UnionIntentionDto[] {
     if (!Array.isArray(intentions) || intentions.length === 0) {
-      throw new BadRequestException(
-        'РЈРєР°Р¶РёС‚Рµ С…РѕС‚СЏ Р±С‹ РѕРґРЅРѕ РЅР°РјРµСЂРµРЅРёРµ',
-      );
+      throw new BadRequestException('Укажите хотя бы одно намерение');
     }
     const seen = new Set<string>();
     let sum = 0;
     for (const intention of intentions) {
       if (!INTENTION_TYPES.includes(intention.type)) {
         throw new BadRequestException(
-          `РќРµРёР·РІРµСЃС‚РЅС‹Р№ С‚РёРї РЅР°РјРµСЂРµРЅРёСЏ: ${String(intention.type)}`,
+          `Неизвестный тип намерения: ${String(intention.type)}`,
         );
       }
       if (seen.has(intention.type)) {
         throw new BadRequestException(
-          `РўРёРї РЅР°РјРµСЂРµРЅРёСЏ СѓРєР°Р·Р°РЅ РґРІР°Р¶РґС‹: ${intention.type}`,
+          `Тип намерения указан дважды: ${intention.type}`,
         );
       }
       seen.add(intention.type);
@@ -433,14 +432,14 @@ export class UnionProfileService {
         intention.weight > 100
       ) {
         throw new BadRequestException(
-          'Р’РµСЃ РЅР°РјРµСЂРµРЅРёСЏ РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ С†РµР»С‹Рј С‡РёСЃР»РѕРј РѕС‚ 0 РґРѕ 100',
+          'Вес намерения должен быть целым числом от 0 до 100',
         );
       }
       sum += intention.weight;
     }
     if (sum !== 100) {
       throw new BadRequestException(
-        `РЎСѓРјРјР° РІРµСЃРѕРІ РЅР°РјРµСЂРµРЅРёР№ РґРѕР»Р¶РЅР° Р±С‹С‚СЊ 100, СЃРµР№С‡Р°СЃ ${sum}`,
+        `Сумма весов намерений должна быть 100, сейчас ${sum}`,
       );
     }
     return intentions.filter((i) => i.weight > 0);
@@ -451,36 +450,35 @@ export class UnionProfileService {
   ): Omit<Prisma.UnionProfileUncheckedCreateInput, 'userId'> {
     if (body.about != null && body.about.length > MAX_ABOUT_LENGTH) {
       throw new BadRequestException(
-        `РџРѕР»Рµ В«Рћ СЃРµР±РµВ» РЅРµ РґР»РёРЅРЅРµРµ ${MAX_ABOUT_LENGTH} СЃРёРјРІРѕР»РѕРІ`,
+        `Поле «О себе» не длиннее ${MAX_ABOUT_LENGTH} символов`,
       );
     }
     if (
       body.format != null &&
       !['online', 'offline', 'any'].includes(body.format)
     ) {
-      throw new BadRequestException(
-        'РќРµРґРѕРїСѓСЃС‚РёРјС‹Р№ С„РѕСЂРјР°С‚ РѕР±С‰РµРЅРёСЏ',
-      );
+      throw new BadRequestException('Недопустимый формат общения');
     }
-    return {
+    const data: Omit<Prisma.UnionProfileUncheckedCreateInput, 'userId'> = {
       about: body.about?.trim() || null,
       relocationReady: body.relocationReady ?? false,
       format: body.format ?? 'any',
-      languages: this.cleanList(body.languages, 'РЇР·С‹РєРё'),
-      skills: this.cleanList(body.skills, 'РќР°РІС‹РєРё'),
-      interests: this.cleanList(body.interests, 'РРЅС‚РµСЂРµСЃС‹'),
-      values: this.cleanList(body.values, 'Р¦РµРЅРЅРѕСЃС‚Рё'),
+      languages: this.cleanList(body.languages, 'Языки'),
+      skills: this.cleanList(body.skills, 'Навыки'),
+      interests: this.cleanList(body.interests, 'Интересы'),
+      values: this.cleanList(body.values, 'Ценности'),
       familyStatus: body.familyStatus?.trim() || null,
       privacy: this.validatePrivacy(body.privacy),
-      isActive: body.isActive ?? true,
     };
+    if (body.isActive !== undefined) data.isActive = body.isActive;
+    return data;
   }
 
   private cleanList(list: string[] | undefined, label: string): string[] {
     if (!list) return [];
     if (!Array.isArray(list) || list.length > MAX_LIST_ITEMS) {
       throw new BadRequestException(
-        `${label}: РЅРµ Р±РѕР»РµРµ ${MAX_LIST_ITEMS} Р·РЅР°С‡РµРЅРёР№`,
+        `${label}: не более ${MAX_LIST_ITEMS} значений`,
       );
     }
     const items = list
@@ -500,7 +498,7 @@ export class UnionProfileService {
       if (value == null) continue;
       if (!levels.includes(value)) {
         throw new BadRequestException(
-          `РќРµРґРѕРїСѓСЃС‚РёРјРѕРµ Р·РЅР°С‡РµРЅРёРµ РїСЂРёРІР°С‚РЅРѕСЃС‚Рё: ${key}`,
+          `Недопустимое значение приватности: ${key}`,
         );
       }
       result[key] = value;
