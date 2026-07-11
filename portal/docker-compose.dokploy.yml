@@ -4,6 +4,12 @@ services:
       context: ..
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
+    command:
+      - sh
+      - -lc
+      - >-
+        export DATABASE_URL="$$(printf '%s' "$$DATABASE_URL" | sed 's/@postgres:/@vedamatch-portal-db-scqe9y:/')" &&
+        pnpm prisma migrate deploy && pnpm prisma db seed && node dist/main.js
     environment:
       NODE_ENV: production
       API_PORT: ${API_PORT}
@@ -25,8 +31,6 @@ services:
       NOMINATIM_USER_AGENT: ${NOMINATIM_USER_AGENT}
     networks:
       - dokploy-network
-    extra_hosts:
-      - "postgres:10.0.1.203"
     expose:
       - "4000"
 
