@@ -1,0 +1,25 @@
+{
+  "name": "@vedamatch/vedabase-importer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "node --import tsx --test test/**/*.spec.ts",
+    "import": "tsx src/cli.ts",
+    "migrate:legacy": "tsx src/migrate-legacy.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.0",
+    "@vedamatch/shared": "workspace:*",
+    "cheerio": "^1.2.0",
+    "sanitize-html": "^2.17.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/sanitize-html": "^2.16.1",
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.0"
+  }
+}

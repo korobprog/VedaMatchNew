@@ -1,0 +1,13 @@
+export type {
+  VedabasePackageFile as GitabasePackageFile,
+  VedabaseLocator as GitabaseLocator,
+  VedabaseReadingUnit as GitabaseReadingUnit,
+  VedabaseChapter as GitabaseChapterDocument,
+  VedabaseBookManifest as GitabaseBookManifest,
+  VedabaseLibraryManifest as GitabaseLibraryManifest,
+  VedabaseMutationEntity as GitabaseMutationEntity,
+  VedabaseClientMutation as GitabaseClientMutation,
+  VedabaseSyncPushRequest as GitabaseSyncPushRequest,
+  VedabaseSyncPushResponse as GitabaseSyncPushResponse,
+  VedabaseSyncPullResponse as GitabaseSyncPullResponse,
+} from "./vedabase";

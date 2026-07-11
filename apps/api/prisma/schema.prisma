@@ -42,6 +42,18 @@ enum StageChangeActor {
   admin
 }
 
+enum GitabaseAnnotationKind {
+  highlight
+  note
+}
+
+enum VedabaseImportStatus {
+  staging
+  validated
+  active
+  failed
+}
+
 model User {
   id                         String                      @id @default(uuid())
   email                      String                      @unique
@@ -69,6 +81,10 @@ model User {
   unionRequestsSent          UnionConnectionRequest[]    @relation("UnionRequestsSent")
   unionRequestsReceived      UnionConnectionRequest[]    @relation("UnionRequestsReceived")
   unionChatMessagesSent      UnionChatMessage[]          @relation("UnionChatMessagesSent")
+  gitabaseReadingProgress    GitabaseReadingProgress[]
+  gitabaseBookmarks          GitabaseBookmark[]
+  gitabaseAnnotations        GitabaseAnnotation[]
+  gitabaseSyncMutations      GitabaseSyncMutation[]
 }
 
 model RefreshToken {
@@ -180,6 +196,160 @@ model MentorVerificationRequest {
   updatedAt                           DateTime                    @updatedAt
 
   @@index([userId, status])
+}
+
+// ===== Gitabase user state =====
+
+model GitabaseReadingProgress {
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookSlug   String
+  locator    Json
+  percentage Int
+  lastReadAt DateTime @default(now())
+  revision   Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@id([userId, bookSlug])
+  @@index([userId, updatedAt])
+}
+
+model GitabaseBookmark {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookSlug  String
+  locator   Json
+  label     String?
+  revision  Int      @default(1)
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, bookSlug])
+  @@index([userId, updatedAt])
+}
+
+model GitabaseAnnotation {
+  id        String                 @id
+  userId    String
+  user      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookSlug  String
+  kind      GitabaseAnnotationKind
+  locator   Json
+  range     Json
+  color     String?
+  noteText  String?
+  revision  Int                    @default(1)
+  deletedAt DateTime?
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
+
+  revisions GitabaseAnnotationRevision[]
+
+  @@index([userId, bookSlug])
+  @@index([userId, updatedAt])
+}
+
+model GitabaseAnnotationRevision {
+  id           String              @id @default(uuid())
+  annotationId String
+  annotation   GitabaseAnnotation  @relation(fields: [annotationId], references: [id], onDelete: Cascade)
+  revision     Int
+  noteText     String?
+  createdAt    DateTime            @default(now())
+
+  @@unique([annotationId, revision])
+}
+
+model GitabaseSyncMutation {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientMutationId String
+  entity           String
+  entityId         String
+  revision         Int
+  payload          Json
+  createdAt        DateTime @default(now())
+
+  @@unique([userId, clientMutationId])
+  @@index([userId, createdAt, id])
+}
+
+// ===== Vedabase canonical content =====
+
+model VedabaseBook {
+  id              String               @id @default(uuid())
+  slug            String               @unique
+  title           String
+  author          String?
+  language        String
+  cover           Json?
+  sourceUrl       String
+  attribution     String
+  activeVersionId String?              @unique
+  activeVersion   VedabaseBookVersion? @relation("ActiveVedabaseVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+  versions        VedabaseBookVersion[] @relation("VedabaseBookVersions")
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+}
+
+model VedabaseBookVersion {
+  id                  String                 @id @default(uuid())
+  bookId              String
+  book                VedabaseBook           @relation("VedabaseBookVersions", fields: [bookId], references: [id], onDelete: Cascade)
+  activeFor           VedabaseBook?          @relation("ActiveVedabaseVersion")
+  contentVersion      String
+  formatVersion       Int
+  status              VedabaseImportStatus   @default(staging)
+  permissionRef       String
+  attribution         String
+  importedAt          DateTime
+  sizeBytes           BigInt
+  packageChecksum     String
+  chapterCount        Int
+  searchableUnitCount Int
+  searchIndexBytes    Int
+  searchIndexSha256   String
+  coverBytes          Int?
+  coverSha256         String?
+  errorMessage        String?
+  chapters            VedabaseChapter[]
+  searchUnits         VedabaseSearchUnit[]
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  @@unique([bookId, contentVersion])
+  @@index([status, updatedAt])
+}
+
+model VedabaseChapter {
+  id        String               @id @default(uuid())
+  versionId String
+  version   VedabaseBookVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  slug      String
+  title     String
+  order     Int
+  payload   Json
+  bytes     Int
+  sha256    String
+
+  @@unique([versionId, slug])
+  @@unique([versionId, order])
+}
+
+model VedabaseSearchUnit {
+  id          String               @id @default(uuid())
+  versionId   String
+  version     VedabaseBookVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  chapterSlug String
+  locator     Json
+  title       String
+  text        String
+
+  @@index([versionId, chapterSlug])
 }
 
 // ===== Union service =====

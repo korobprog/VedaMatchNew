@@ -1,6 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { deleteVedabaseDb } from "@/lib/vedabase/local-db";
+import {
+  clearVedabaseOfflineData,
+  vedabaseActiveUserKey,
+} from "@/lib/vedabase/register-service-worker";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -8,10 +13,17 @@ export function LogoutButton() {
   const router = useRouter();
 
   async function logout() {
-    await fetch(`${API_URL}/auth/logout`, {
-      method: "POST",
-      credentials: "include",
-    });
+    try {
+      await fetch(`${API_URL}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } finally {
+      const activeUserId = localStorage.getItem(vedabaseActiveUserKey);
+      await clearVedabaseOfflineData();
+      if (activeUserId) await deleteVedabaseDb(activeUserId);
+      localStorage.removeItem(vedabaseActiveUserKey);
+    }
     router.push("/login");
     router.refresh();
   }

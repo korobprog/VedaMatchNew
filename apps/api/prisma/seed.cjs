@@ -19,10 +19,10 @@ const services = [
     devoteeVerifiedVisible: true,
   },
   {
-    slug: 'gitabase',
-    name: 'VedaMatch Union Gitabase',
+    slug: 'vedabase',
+    name: 'Vedabase',
     description: 'База знаний по Бхагавад-гите и ведическим текстам',
-    url: 'https://gitabase.vedamatch.ru',
+    url: '/vedabase',
     status: 'coming_soon',
     category: 'knowledge',
     public: true,

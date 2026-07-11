@@ -1,0 +1,18 @@
+{
+  "name": "Vedabase",
+  "short_name": "Vedabase",
+  "description": "Офлайн-библиотека ведических книг VedaMatch",
+  "start_url": "/vedabase",
+  "scope": "/vedabase/",
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#d97706",
+  "icons": [
+    {
+      "src": "/logo_tilak.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-﻿import { Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -8,6 +8,7 @@ import { UsersModule } from './modules/users/users.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { SelfIdentificationModule } from './modules/self-identification/self-identification.module';
 import { UnionModule } from './modules/union/union.module';
+import { VedabaseModule } from './modules/vedabase/vedabase.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { UnionModule } from './modules/union/union.module';
     CatalogModule,
     SelfIdentificationModule,
     UnionModule,
+    VedabaseModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
