@@ -263,6 +263,13 @@ describe("ReaderScreen", () => {
     );
     await screen.findByRole("heading", { name: "Chapter One" });
 
+    await user.selectOptions(screen.getByLabelText("Theme"), "dark");
+    expect(document.querySelector('[data-reader-theme="dark"]')).toHaveClass(
+      "dark",
+      "bg-zinc-950",
+      "text-zinc-100",
+    );
+
     await user.selectOptions(screen.getByLabelText("Theme"), "sepia");
     await user.click(screen.getByRole("button", { name: "Increase font size" }));
     await user.selectOptions(screen.getByLabelText("Line width"), "wide");

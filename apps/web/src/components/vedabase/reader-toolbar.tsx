@@ -59,7 +59,7 @@ export function ReaderToolbar({
               theme: event.target.value as ReaderTheme,
             })
           }
-          className="rounded-lg border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700"
+          className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
         >
           <option value="light">Light</option>
           <option value="dark">Dark</option>
@@ -86,7 +86,7 @@ export function ReaderToolbar({
               lineWidth: event.target.value as ReaderLineWidth,
             })
           }
-          className="rounded-lg border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700"
+          className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
         >
           <option value="narrow">Narrow</option>
           <option value="medium">Medium</option>
