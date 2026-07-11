@@ -31,7 +31,7 @@ function VedabaseLibraryShell({
     <main className="mx-auto max-w-6xl px-4 py-8" data-vedabase-user={userId}>
       <section className="mb-8">
         <p className="text-sm font-semibold tracking-wide text-amber-700 uppercase dark:text-amber-300">
-          Union Vedabase
+          Vedabase
         </p>
         <h1 className="mt-2 text-3xl font-bold text-zinc-900 dark:text-zinc-100">
           Библиотека

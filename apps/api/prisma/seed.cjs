@@ -23,7 +23,7 @@ const services = [
     name: 'Vedabase',
     description: 'База знаний по Бхагавад-гите и ведическим текстам',
     url: '/vedabase',
-    status: 'coming_soon',
+    status: 'active',
     category: 'knowledge',
     public: true,
     seekerVisible: true,
@@ -63,13 +63,23 @@ const services = [
 ];
 
 async function main() {
-  for (const service of services) {
-    await prisma.service.upsert({
-      where: { slug: service.slug },
-      update: service,
-      create: service,
+  await prisma.$transaction(async (transaction) => {
+    await transaction.service.deleteMany({
+      where: {
+        OR: [
+          { slug: 'gitabase' },
+          { name: 'VedaMatch Union Gitabase' },
+        ],
+      },
     });
-  }
+    for (const service of services) {
+      await transaction.service.upsert({
+        where: { slug: service.slug },
+        update: service,
+        create: service,
+      });
+    }
+  });
   console.log(`Seeded ${services.length} services`);
 }
 
