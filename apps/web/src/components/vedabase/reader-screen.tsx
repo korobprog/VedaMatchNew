@@ -22,6 +22,10 @@ import {
 } from "@/lib/vedabase/locators";
 import type { VedabaseSearchResult } from "@/lib/vedabase/search-index";
 import {
+  fetchVedabaseBookManifest,
+  fetchVedabaseChapter,
+} from "@/lib/vedabase-client-api";
+import {
   AnnotationToolbar,
   type ReaderAnnotationView,
 } from "./annotation-toolbar";
@@ -77,11 +81,24 @@ export class VedabaseReaderRepository {
   }
 
   async loadBook(bookSlug: string): Promise<VedabaseBookManifest | null> {
-    return (await (await this.database).get("library", bookSlug))?.manifest ?? null;
+    const local = (await (await this.database).get("library", bookSlug))?.manifest;
+    if (local) return local;
+    try {
+      return await fetchVedabaseBookManifest(bookSlug);
+    } catch {
+      return null;
+    }
   }
 
-  loadChapter(bookSlug: string, chapterSlug: string): Promise<VedabaseChapterDocument | null> {
-    return this.books.getChapter(bookSlug, chapterSlug);
+  async loadChapter(bookSlug: string, chapterSlug: string): Promise<VedabaseChapterDocument | null> {
+    const local = await this.books.getChapter(bookSlug, chapterSlug);
+    if (local) return local;
+    try {
+      const response = await fetchVedabaseChapter(bookSlug, chapterSlug);
+      return JSON.parse(await response.text()) as VedabaseChapterDocument;
+    } catch {
+      return null;
+    }
   }
 
   async loadPreferences(): Promise<ReaderPreferences> {
