@@ -28,11 +28,29 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
       S3_PUBLIC_URL: ${S3_PUBLIC_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_DB: ${REDIS_DB}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      MOTIVATION_AI_BASE_URL: ${MOTIVATION_AI_BASE_URL}
+      MOTIVATION_AI_API_KEY: ${MOTIVATION_AI_API_KEY}
+      MOTIVATION_TEXT_MODEL: ${MOTIVATION_TEXT_MODEL:-deepseek-v4-flash}
+      MOTIVATION_IMAGE_CONTROLLER_MODEL: ${MOTIVATION_IMAGE_CONTROLLER_MODEL:-gpt-5.5}
+      MOTIVATION_LANGUAGES: ${MOTIVATION_LANGUAGES:-ru,en,hi}
+      MOTIVATION_DAILY_CRON: ${MOTIVATION_DAILY_CRON:-0 4 * * *}
       NOMINATIM_USER_AGENT: ${NOMINATIM_USER_AGENT}
     networks:
       - dokploy-network
     expose:
       - "4000"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "fetch('http://127.0.0.1:4000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
 
   web:
     build:
@@ -46,7 +64,8 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       API_INTERNAL_URL: ${API_INTERNAL_URL}
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     networks:
       - dokploy-network
     expose:

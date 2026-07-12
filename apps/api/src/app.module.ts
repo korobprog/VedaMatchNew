@@ -9,6 +9,7 @@ import { CatalogModule } from './modules/catalog/catalog.module';
 import { SelfIdentificationModule } from './modules/self-identification/self-identification.module';
 import { UnionModule } from './modules/union/union.module';
 import { VedabaseModule } from './modules/vedabase/vedabase.module';
+import { MotivationModule } from './modules/motivation/motivation.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { VedabaseModule } from './modules/vedabase/vedabase.module';
     SelfIdentificationModule,
     UnionModule,
     VedabaseModule,
+    MotivationModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

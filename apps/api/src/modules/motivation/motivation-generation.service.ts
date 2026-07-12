@@ -1,0 +1,64 @@
+import { BadGatewayException, BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+
+@Injectable()
+export class MotivationGenerationService {
+  private readonly s3: S3Client | null;
+  constructor(private readonly config: ConfigService) {
+    const region = config.get<string>('S3_REGION'), accessKeyId = config.get<string>('S3_ACCESS_KEY'), secretAccessKey = config.get<string>('S3_SECRET_KEY');
+    this.s3 = region && accessKeyId && secretAccessKey ? new S3Client({ region, endpoint: config.get<string>('S3_ENDPOINT') || undefined, forcePathStyle: Boolean(config.get('S3_ENDPOINT')), credentials: { accessKeyId, secretAccessKey } }) : null;
+  }
+
+  async generateCopy(input: { profileType: string; audienceTrack: string; category: string }) {
+    const apiKey = this.config.get<string>('MOTIVATION_AI_API_KEY');
+    const baseUrl = this.config.get<string>('MOTIVATION_AI_BASE_URL')?.replace(/\/$/, '');
+    const model = this.config.get<string>('MOTIVATION_TEXT_MODEL') || 'deepseek-v4-flash';
+    if (!apiKey || !baseUrl) throw new ServiceUnavailableException('Motivation AI is not configured');
+    const prompt = `Create one original motivational reflection for VedaMatch. Profile: ${input.profileType}. Stream: ${input.audienceTrack}. Category: ${input.category}. Never invent or quote a source. Return only JSON with translations ru, en, hi; each has title, text (2-4 short paragraphs), storyText (max 8 words). Vaishnava content must be respectful and non-sectarian.`;
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' } }),
+    });
+    if (!response.ok) throw new BadGatewayException(`Text provider error ${response.status}`);
+    const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const content = payload.choices?.[0]?.message?.content;
+    if (!content) throw new BadGatewayException('Text provider returned no content');
+    let parsed: unknown;
+    try { parsed = JSON.parse(content); } catch { throw new BadGatewayException('Text provider returned invalid JSON'); }
+    return this.validateCopy(parsed);
+  }
+
+  async generateImage(prompt: string): Promise<Buffer> {
+    const apiKey = this.config.get<string>('MOTIVATION_AI_API_KEY');
+    const baseUrl = this.config.get<string>('MOTIVATION_AI_BASE_URL')?.replace(/\/$/, '');
+    const model = this.config.get<string>('MOTIVATION_IMAGE_CONTROLLER_MODEL') || 'gpt-5.5';
+    if (model.startsWith('gpt-image-')) throw new BadRequestException('Image controller model must be a Responses-capable language model');
+    if (!apiKey || !baseUrl) throw new ServiceUnavailableException('Motivation AI is not configured');
+    const response = await fetch(`${baseUrl}/responses`, { method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, body: JSON.stringify({ model, input: `${prompt}\nVertical 9:16 illustration, no text, respectful non-photorealistic spiritual art.`, tools: [{ type: 'image_generation', size: '1024x1792', output_format: 'png' }] }) });
+    if (!response.ok) throw new BadGatewayException(`Image provider error ${response.status}`);
+    const payload = await response.json() as { output?: Array<{ type?: string; result?: string; content?: Array<{ type?: string; image_base64?: string }> }> };
+    const encoded = payload.output?.flatMap((item) => [item.result, ...(item.content?.map((part) => part.image_base64) ?? [])]).find(Boolean);
+    if (!encoded) throw new BadGatewayException('Image provider returned no image');
+    return Buffer.from(encoded, 'base64');
+  }
+
+  async uploadStory(key: string, bytes: Buffer): Promise<string> {
+    const bucket = this.config.get<string>('S3_BUCKET_NAME'), publicUrl = this.config.get<string>('S3_PUBLIC_URL');
+    if (!this.s3 || !bucket || !publicUrl) throw new ServiceUnavailableException('S3 is not configured');
+    await this.s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes, ContentType: 'image/png', CacheControl: 'public, max-age=31536000, immutable' }));
+    return `${publicUrl.replace(/\/$/, '')}/${key}`;
+  }
+
+  private validateCopy(value: unknown) {
+    if (!value || typeof value !== 'object') throw new BadGatewayException('Text provider returned invalid copy');
+    const result = value as Record<string, unknown>;
+    const translations = (result.translations && typeof result.translations === 'object' ? result.translations : result) as Record<string, unknown>;
+    return ['ru', 'en', 'hi'].map((language) => {
+      const item = translations[language] as Record<string, unknown> | undefined;
+      if (!item || typeof item.title !== 'string' || typeof item.text !== 'string' || typeof item.storyText !== 'string') throw new BadGatewayException(`Text provider omitted ${language}`);
+      return { language, title: item.title.trim().slice(0, 160), text: item.text.trim().slice(0, 4000), storyText: item.storyText.trim().slice(0, 120) };
+    });
+  }
+}

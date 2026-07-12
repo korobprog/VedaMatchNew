@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const publicPrefixes = ["/login", "/mentor-verification"];
+const publicPrefixes = ["/login", "/mentor-verification", "/motivation/posts/"];
 const publicFiles = new Set([
   "/gitabase",
   "/vedabase/sw.js",

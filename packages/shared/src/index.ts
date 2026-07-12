@@ -1,6 +1,7 @@
 export * from './vedabase';
 export * from './gitabase';
 export * from './union';
+export * from './motivation';
 
 export type Role = 'user' | 'admin' | 'service-admin';
 

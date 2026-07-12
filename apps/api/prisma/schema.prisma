@@ -54,6 +54,32 @@ enum VedabaseImportStatus {
   failed
 }
 
+enum MotivationProfileType {
+  user
+  in_goodness
+  yogi
+  devotee
+}
+
+enum MotivationAudienceTrack {
+  universal
+  vaishnava
+}
+
+enum MotivationPostStatus {
+  draft
+  generating
+  published
+  failed
+  hidden
+}
+
+enum MotivationAttributionKind {
+  exact_quote
+  faithful_paraphrase
+  ai_reflection
+}
+
 model User {
   id                         String                      @id @default(uuid())
   email                      String                      @unique
@@ -85,6 +111,90 @@ model User {
   gitabaseBookmarks          GitabaseBookmark[]
   gitabaseAnnotations        GitabaseAnnotation[]
   gitabaseSyncMutations      GitabaseSyncMutation[]
+  motivationPreference       MotivationPreference?
+  motivationFavorites        MotivationFavorite[]
+  motivationViews            MotivationView[]
+}
+
+model MotivationPost {
+  id                String                    @id @default(uuid())
+  contentDate       DateTime                  @db.Date
+  profileType       MotivationProfileType
+  audienceTrack     MotivationAudienceTrack
+  slug              String                    @unique
+  category          String
+  status            MotivationPostStatus      @default(draft)
+  imageUrl           String?
+  storyImageUrl      String?
+  attributionKind   MotivationAttributionKind @default(ai_reflection)
+  attributionSpeaker String?
+  attributionWork   String?
+  attributionLocator String?
+  attributionSourceUrl String?
+  sourceVerified    Boolean                   @default(false)
+  generationStage   String?
+  generationErrorCode String?
+  promptVersion     String?
+  modelVersion      String?
+  attemptCount      Int                       @default(0)
+  estimatedCostUsd  Decimal                   @default(0) @db.Decimal(12, 6)
+  publishedAt       DateTime?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  translations MotivationPostTranslation[]
+  favorites    MotivationFavorite[]
+  views        MotivationView[]
+
+  @@unique([contentDate, profileType, audienceTrack])
+  @@index([profileType, audienceTrack, status, publishedAt])
+  @@index([category, status, publishedAt])
+}
+
+model MotivationPostTranslation {
+  id        String         @id @default(uuid())
+  postId    String
+  post      MotivationPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  language  String         @db.VarChar(8)
+  title     String
+  text      String
+  storyText String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([postId, language])
+  @@index([language])
+}
+
+model MotivationPreference {
+  userId            String @id
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vaishnavaPercent  Int    @default(50)
+  language          String @default("ru") @db.VarChar(8)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model MotivationFavorite {
+  userId    String
+  postId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      MotivationPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  @@id([userId, postId])
+  @@index([userId, createdAt])
+}
+
+model MotivationView {
+  userId    String
+  postId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      MotivationPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  viewedAt  DateTime       @default(now())
+
+  @@id([userId, postId])
+  @@index([userId, viewedAt])
 }
 
 model RefreshToken {
