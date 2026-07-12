@@ -37,7 +37,7 @@ export class MotivationGenerationService {
     const model = this.config.get<string>('MOTIVATION_IMAGE_CONTROLLER_MODEL') || 'gpt-5.5';
     if (model.startsWith('gpt-image-')) throw new BadRequestException('Image controller model must be a Responses-capable language model');
     if (!apiKey || !baseUrl) throw new ServiceUnavailableException('Motivation AI is not configured');
-    const response = await fetch(`${baseUrl}/responses`, { method: 'POST', signal: AbortSignal.timeout(60_000), headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, body: JSON.stringify({ model, input: `${prompt}\nVertical 9:16 illustration, no text, respectful non-photorealistic spiritual art.`, tools: [{ type: 'image_generation', size: '1024x1792', output_format: 'png' }] }) });
+    const response = await fetch(`${baseUrl}/responses`, { method: 'POST', signal: AbortSignal.timeout(60_000), headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, body: JSON.stringify({ model, input: `${prompt}\nVertical 9:16 illustration, no text, respectful non-photorealistic spiritual art.`, tools: [{ type: 'image_generation' }] }) });
     if (!response.ok) throw new BadGatewayException(`Image provider error ${response.status}`);
     const payload = await response.json() as { output?: Array<{ type?: string; result?: string; content?: Array<{ type?: string; image_base64?: string }> }> };
     const encoded = payload.output?.flatMap((item) => [item.result, ...(item.content?.map((part) => part.image_base64) ?? [])]).find(Boolean);

@@ -1,4 +1,18 @@
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - motivation-redis:/data
+    networks:
+      - dokploy-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   api:
     build:
       context: ..
@@ -6,6 +20,9 @@ services:
       args:
         MOTIVATION_BUILD_VERSION: d1c9eac
     restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
     command:
       - sh
       - -lc
@@ -76,3 +93,6 @@ services:
 networks:
   dokploy-network:
     external: true
+
+volumes:
+  motivation-redis:
