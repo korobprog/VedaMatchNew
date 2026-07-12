@@ -38,7 +38,7 @@ export class MotivationGenerationService {
     if (model.startsWith('gpt-image-')) throw new BadRequestException('Image controller model must be a Responses-capable language model');
     if (!apiKey || !baseUrl) throw new ServiceUnavailableException('Motivation AI is not configured');
     const imagePrompt = `${prompt}\nVertical 9:16 illustration, no text, respectful non-photorealistic spiritual art.`;
-    const response = await fetch(`${baseUrl}/responses`, { method: 'POST', signal: AbortSignal.timeout(60_000), headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, body: JSON.stringify({ model, stream: true, input: [{ role: 'user', content: [{ type: 'input_text', text: imagePrompt }] }], tools: [{ type: 'image_generation' }] }) });
+    const response = await fetch(`${baseUrl}/responses`, { method: 'POST', signal: AbortSignal.timeout(180_000), headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, body: JSON.stringify({ model, stream: true, input: [{ role: 'user', content: [{ type: 'input_text', text: imagePrompt }] }], tools: [{ type: 'image_generation' }] }) });
     if (!response.ok) throw new BadGatewayException(`Image provider error ${response.status}: ${(await response.text()).slice(0, 300)}`);
     const raw = await response.text();
     const events = raw.split(/\r?\n/).filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim()).filter((line) => line && line !== '[DONE]').flatMap((line) => { try { return [JSON.parse(line) as unknown]; } catch { return []; } });
