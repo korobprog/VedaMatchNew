@@ -12,7 +12,7 @@ describe('MotivationWorkerService', () => {
     await (worker as unknown as { retryTodaysFailedJobs(): Promise<void> }).retryTodaysFailedJobs();
 
     expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ status: { in: ['failed', 'generating'] } }),
+      where: expect.objectContaining({ status: { not: 'published' } }),
       data: expect.objectContaining({ status: 'draft', generationStage: 'queued', attemptCount: 0 }),
     }));
   });

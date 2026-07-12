@@ -29,7 +29,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
   private async retryTodaysFailedJobs() {
     const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
     await this.prisma.motivationPost.updateMany({
-      where: { contentDate: today, status: { in: ['failed', 'generating'] } },
+      where: { contentDate: today, status: { not: 'published' } },
       data: { status: 'draft', generationStage: 'queued', generationErrorCode: null, attemptCount: 0 },
     });
   }
