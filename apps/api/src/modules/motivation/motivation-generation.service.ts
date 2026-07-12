@@ -20,15 +20,35 @@ export class MotivationGenerationService {
       method: 'POST',
       signal: AbortSignal.timeout(60_000),
       headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json', 'user-agent': 'OpenAI-Python/1.0' },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' } }),
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' }, stream: true }),
     });
     if (!response.ok) throw new BadGatewayException(`Text provider error ${response.status}: ${(await response.text()).slice(0, 300)}`);
-    const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const content = payload.choices?.[0]?.message?.content;
+    const raw = await response.text();
+    const content = this.extractChatContent(raw);
     if (!content) throw new BadGatewayException('Text provider returned no content');
     let parsed: unknown;
     try { parsed = JSON.parse(content); } catch { throw new BadGatewayException('Text provider returned invalid JSON'); }
     return this.validateCopy(parsed);
+  }
+
+  private extractChatContent(raw: string): string | undefined {
+    try {
+      const payload = JSON.parse(raw) as { choices?: Array<{ message?: { content?: string } }> };
+      return payload.choices?.[0]?.message?.content;
+    } catch {
+      const chunks: string[] = [];
+      for (const line of raw.split(/\r?\n/)) {
+        if (!line.startsWith('data:')) continue;
+        const data = line.slice(5).trim();
+        if (!data || data === '[DONE]') continue;
+        try {
+          const event = JSON.parse(data) as { choices?: Array<{ delta?: { content?: string }, message?: { content?: string } }> };
+          const content = event.choices?.[0]?.delta?.content ?? event.choices?.[0]?.message?.content;
+          if (content) chunks.push(content);
+        } catch { continue; }
+      }
+      return chunks.join('') || undefined;
+    }
   }
 
   async generateImage(prompt: string): Promise<Buffer> {

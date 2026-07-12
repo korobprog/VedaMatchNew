@@ -23,6 +23,7 @@ describe('MotivationGenerationService', () => {
 
     const chatOptions = fetchMock.mock.calls[0][1] as RequestInit;
     expect(chatOptions.headers).toMatchObject({ 'user-agent': 'OpenAI-Python/1.0' });
+    expect(JSON.parse(String(chatOptions.body))).toMatchObject({ model: 'deepseek-v4-flash', stream: true });
     const imageOptions = fetchMock.mock.calls[1][1] as RequestInit;
     expect(imageOptions.headers).toMatchObject({ 'user-agent': 'OpenAI-Python/1.0' });
     expect(JSON.parse(String(imageOptions.body))).toMatchObject({
@@ -32,6 +33,21 @@ describe('MotivationGenerationService', () => {
       tools: [{ type: 'image_generation', action: 'generate', output_format: 'png' }],
       tool_choice: { type: 'image_generation' },
     });
+  });
+
+  it('parses streamed chat completion content', async () => {
+    const config = { get: (key: string) => ({ MOTIVATION_AI_API_KEY: 'test', MOTIVATION_AI_BASE_URL: 'https://example.test/v1', MOTIVATION_TEXT_MODEL: 'gpt-5.5' })[key] } as ConfigService;
+    const service = new MotivationGenerationService(config);
+    const copy = JSON.stringify({ ru: { title: 'ru', text: 'ru', storyText: 'ru' }, en: { title: 'en', text: 'en', storyText: 'en' }, hi: { title: 'hi', text: 'hi', storyText: 'hi' } });
+    const midpoint = Math.floor(copy.length / 2);
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(
+      `data: ${JSON.stringify({ choices: [{ delta: { content: copy.slice(0, midpoint) } }] })}\n\n` +
+      `data: ${JSON.stringify({ choices: [{ delta: { content: copy.slice(midpoint) } }] })}\n\n` +
+      'data: [DONE]\n\n',
+      { status: 200, headers: { 'content-type': 'text/event-stream' } },
+    ));
+
+    await expect(service.generateCopy({ profileType: 'seeker', audienceTrack: 'universal', category: 'daily' })).resolves.toHaveLength(3);
   });
 
   it('rejects decoded image data without a PNG signature', async () => {
