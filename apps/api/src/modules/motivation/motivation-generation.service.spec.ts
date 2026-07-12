@@ -40,4 +40,13 @@ describe('MotivationGenerationService', () => {
     jest.spyOn(global, 'fetch').mockResolvedValue(new Response(`data: ${JSON.stringify({ type: 'image_generation_call', result: Buffer.alloc(1200).toString('base64') })}\n\n`, { status: 200 }));
     await expect(service.generateImage('test')).rejects.toThrow('valid PNG');
   });
+
+  it('aborts when the image response stream does not finish', async () => {
+    const config = { get: (key: string) => ({ MOTIVATION_AI_API_KEY: 'test', MOTIVATION_AI_BASE_URL: 'https://example.test/v1', MOTIVATION_IMAGE_CONTROLLER_MODEL: 'gpt-5.5', MOTIVATION_IMAGE_TIMEOUT_MS: '20' })[key] } as ConfigService;
+    const service = new MotivationGenerationService(config);
+    const stream = new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('data: {"type":"response.created"}\n\n')); } });
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(stream, { status: 200 }));
+
+    await expect(service.generateImage('test')).rejects.toThrow('timed out');
+  });
 });

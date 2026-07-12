@@ -38,22 +38,30 @@ export class MotivationGenerationService {
     if (model.startsWith('gpt-image-')) throw new BadRequestException('Image controller model must be a Responses-capable language model');
     if (!apiKey || !baseUrl) throw new ServiceUnavailableException('Motivation AI is not configured');
     const imagePrompt = `${prompt}\nVertical 9:16 illustration, no text, respectful non-photorealistic spiritual art.`;
-    const response = await fetch(`${baseUrl}/responses`, {
-      method: 'POST',
-      signal: AbortSignal.timeout(180_000),
-      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json', 'user-agent': 'OpenAI-Python/1.0' },
-      body: JSON.stringify({
-        model,
-        instructions: 'You are an image generation assistant. Use the image_generation tool to create exactly one image that matches the user request.',
-        input: [{ role: 'user', content: [{ type: 'input_text', text: imagePrompt }] }],
-        tools: [{ type: 'image_generation', action: 'generate', output_format: 'png' }],
-        tool_choice: { type: 'image_generation' },
-        store: false,
-        stream: true,
-      }),
-    });
-    if (!response.ok) throw new BadGatewayException(`Image provider error ${response.status}: ${(await response.text()).slice(0, 300)}`);
-    const raw = await response.text();
+    const timeoutMs = Number(this.config.get<string>('MOTIVATION_IMAGE_TIMEOUT_MS') || 180_000);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(new Error('Image generation timed out')), timeoutMs);
+    let raw: string;
+    try {
+      const response = await fetch(`${baseUrl}/responses`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json', 'user-agent': 'OpenAI-Python/1.0' },
+        body: JSON.stringify({
+          model,
+          instructions: 'You are an image generation assistant. Use the image_generation tool to create exactly one image that matches the user request.',
+          input: [{ role: 'user', content: [{ type: 'input_text', text: imagePrompt }] }],
+          tools: [{ type: 'image_generation', action: 'generate', output_format: 'png' }],
+          tool_choice: { type: 'image_generation' },
+          store: false,
+          stream: true,
+        }),
+      });
+      if (!response.ok) throw new BadGatewayException(`Image provider error ${response.status}: ${(await response.text()).slice(0, 300)}`);
+      raw = await this.readResponseText(response, controller.signal);
+    } finally {
+      clearTimeout(timeout);
+    }
     const events = raw.split(/\r?\n\r?\n/).flatMap((block) => {
       const data = block.split(/\r?\n/).filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim()).join('\n');
       if (!data || data === '[DONE]') return [];
@@ -64,6 +72,23 @@ export class MotivationGenerationService {
     const bytes = Buffer.from(encoded, 'base64');
     if (bytes.length < 8 || !bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) throw new BadGatewayException('Image provider returned no valid PNG');
     return bytes;
+  }
+
+  private async readResponseText(response: Response, signal: AbortSignal): Promise<string> {
+    if (!response.body) return '';
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let raw = '';
+    const abort = new Promise<never>((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+    try {
+      while (true) {
+        const result = await Promise.race([reader.read(), abort]);
+        if (result.done) return raw + decoder.decode();
+        raw += decoder.decode(result.value, { stream: true });
+      }
+    } finally {
+      await reader.cancel().catch(() => undefined);
+    }
   }
 
   async uploadStory(key: string, bytes: Buffer): Promise<string> {
