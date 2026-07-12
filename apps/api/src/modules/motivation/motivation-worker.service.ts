@@ -10,6 +10,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MotivationWorkerService.name);
   private readonly redis: Redis | null;
   private timer?: NodeJS.Timeout;
+  private running = false;
 
   constructor(private readonly prisma: PrismaService, private readonly generation: MotivationGenerationService, config: ConfigService) {
     const host = config.get<string>('REDIS_HOST');
@@ -35,11 +36,13 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   async tick() {
+    if (this.running) return;
+    this.running = true;
     const lockKey = 'motivation:worker:lease';
     const token = crypto.randomUUID();
     if (this.redis?.status === 'ready') {
-      const acquired = await this.redis.set(lockKey, token, 'PX', 25_000, 'NX').catch(() => null);
-      if (!acquired) return;
+      const acquired = await this.redis.set(lockKey, token, 'PX', 300_000, 'NX').catch(() => null);
+      if (!acquired) { this.running = false; return; }
     }
     try {
       await this.recoverExpiredJobs();
@@ -51,6 +54,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
       await this.process(post.id);
     } finally {
       if (this.redis?.status === 'ready') await this.redis.eval("if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end", 1, lockKey, token).catch(() => undefined);
+      this.running = false;
     }
   }
 
