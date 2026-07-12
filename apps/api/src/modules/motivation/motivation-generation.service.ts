@@ -114,7 +114,7 @@ export class MotivationGenerationService {
   async uploadStory(key: string, bytes: Buffer): Promise<string> {
     const bucket = this.config.get<string>('S3_BUCKET_NAME'), publicUrl = this.config.get<string>('S3_PUBLIC_URL');
     if (!this.s3 || !bucket || !publicUrl) throw new ServiceUnavailableException('S3 is not configured');
-    await this.s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes, ContentType: 'image/png', CacheControl: 'public, max-age=31536000, immutable' }));
+    await this.s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes, ContentType: 'image/png', CacheControl: 'public, max-age=31536000, immutable', ACL: 'public-read' }));
     return `${publicUrl.replace(/\/$/, '')}/${key}`;
   }
 

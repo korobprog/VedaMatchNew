@@ -29,7 +29,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
   private async retryTodaysFailedJobs() {
     const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
     await this.prisma.motivationPost.updateMany({
-      where: { contentDate: today, status: { not: 'published' } },
+      where: { contentDate: today, OR: [{ status: { not: 'published' } }, { promptVersion: { not: 'motivation-v2-public' } }] },
       data: { status: 'draft', generationStage: 'queued', generationErrorCode: null, attemptCount: 0 },
     });
   }
@@ -86,7 +86,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
       const imageUrl = await this.generation.uploadStory(`${baseKey}.png`, image);
       await this.prisma.$transaction([
         ...translations.map((translation) => this.prisma.motivationPostTranslation.upsert({ where: { postId_language: { postId: id, language: translation.language } }, create: { postId: id, ...translation }, update: translation })),
-        this.prisma.motivationPost.update({ where: { id }, data: { status: 'published', generationStage: 'published', generationErrorCode: null, imageUrl, storyImageUrl: imageUrl, attributionKind: 'ai_reflection', sourceVerified: false, modelVersion: 'responses:image_generation', promptVersion: 'motivation-v1', publishedAt: new Date() } }),
+        this.prisma.motivationPost.update({ where: { id }, data: { status: 'published', generationStage: 'published', generationErrorCode: null, imageUrl, storyImageUrl: imageUrl, attributionKind: 'ai_reflection', sourceVerified: false, modelVersion: 'responses:image_generation', promptVersion: 'motivation-v2-public', publishedAt: new Date() } }),
       ]);
     } catch (error) {
       const current = await this.prisma.motivationPost.findUnique({ where: { id }, select: { attemptCount: true } });
