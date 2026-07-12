@@ -38,10 +38,11 @@ export class MotivationGenerationService {
     if (model.startsWith('gpt-image-')) throw new BadRequestException('Image controller model must be a Responses-capable language model');
     if (!apiKey || !baseUrl) throw new ServiceUnavailableException('Motivation AI is not configured');
     const imagePrompt = `${prompt}\nVertical 9:16 illustration, no text, respectful non-photorealistic spiritual art.`;
-    const response = await fetch(`${baseUrl}/responses`, { method: 'POST', signal: AbortSignal.timeout(60_000), headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, body: JSON.stringify({ model, input: [{ role: 'user', content: [{ type: 'input_text', text: imagePrompt }] }], tools: [{ type: 'image_generation' }] }) });
+    const response = await fetch(`${baseUrl}/responses`, { method: 'POST', signal: AbortSignal.timeout(60_000), headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, body: JSON.stringify({ model, stream: true, input: [{ role: 'user', content: [{ type: 'input_text', text: imagePrompt }] }], tools: [{ type: 'image_generation' }] }) });
     if (!response.ok) throw new BadGatewayException(`Image provider error ${response.status}: ${(await response.text()).slice(0, 300)}`);
-    const payload = await response.json() as { output?: Array<{ type?: string; result?: string; content?: Array<{ type?: string; image_base64?: string }> }> };
-    const encoded = payload.output?.flatMap((item) => [item.result, ...(item.content?.map((part) => part.image_base64) ?? [])]).find(Boolean);
+    const raw = await response.text();
+    const events = raw.split(/\r?\n/).filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim()).filter((line) => line && line !== '[DONE]').flatMap((line) => { try { return [JSON.parse(line) as unknown]; } catch { return []; } });
+    const encoded = events.map((event) => this.findImageResult(event)).find(Boolean);
     if (!encoded) throw new BadGatewayException('Image provider returned no image');
     return Buffer.from(encoded, 'base64');
   }
@@ -62,5 +63,19 @@ export class MotivationGenerationService {
       if (!item || typeof item.title !== 'string' || typeof item.text !== 'string' || typeof item.storyText !== 'string') throw new BadGatewayException(`Text provider omitted ${language}`);
       return { language, title: item.title.trim().slice(0, 160), text: item.text.trim().slice(0, 4000), storyText: item.storyText.trim().slice(0, 120) };
     });
+  }
+
+  private findImageResult(value: unknown): string | undefined {
+    if (!value || typeof value !== 'object') return undefined;
+    const item = value as Record<string, unknown>;
+    if (typeof item.result === 'string' && item.result.length > 1000) return item.result;
+    for (const child of Object.values(item)) {
+      if (Array.isArray(child)) {
+        for (const entry of child) { const found = this.findImageResult(entry); if (found) return found; }
+      } else if (child && typeof child === 'object') {
+        const found = this.findImageResult(child); if (found) return found;
+      }
+    }
+    return undefined;
   }
 }
