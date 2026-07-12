@@ -22,7 +22,7 @@ export class MotivationGenerationService {
       headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
       body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' } }),
     });
-    if (!response.ok) throw new BadGatewayException(`Text provider error ${response.status}`);
+    if (!response.ok) throw new BadGatewayException(`Text provider error ${response.status}: ${(await response.text()).slice(0, 300)}`);
     const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
     const content = payload.choices?.[0]?.message?.content;
     if (!content) throw new BadGatewayException('Text provider returned no content');
@@ -38,7 +38,7 @@ export class MotivationGenerationService {
     if (model.startsWith('gpt-image-')) throw new BadRequestException('Image controller model must be a Responses-capable language model');
     if (!apiKey || !baseUrl) throw new ServiceUnavailableException('Motivation AI is not configured');
     const response = await fetch(`${baseUrl}/responses`, { method: 'POST', signal: AbortSignal.timeout(60_000), headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, body: JSON.stringify({ model, input: `${prompt}\nVertical 9:16 illustration, no text, respectful non-photorealistic spiritual art.`, tools: [{ type: 'image_generation' }] }) });
-    if (!response.ok) throw new BadGatewayException(`Image provider error ${response.status}`);
+    if (!response.ok) throw new BadGatewayException(`Image provider error ${response.status}: ${(await response.text()).slice(0, 300)}`);
     const payload = await response.json() as { output?: Array<{ type?: string; result?: string; content?: Array<{ type?: string; image_base64?: string }> }> };
     const encoded = payload.output?.flatMap((item) => [item.result, ...(item.content?.map((part) => part.image_base64) ?? [])]).find(Boolean);
     if (!encoded) throw new BadGatewayException('Image provider returned no image');
