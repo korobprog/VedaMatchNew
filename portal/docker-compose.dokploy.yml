@@ -3,6 +3,8 @@ services:
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
+      args:
+        MOTIVATION_BUILD_VERSION: d1c9eac
     restart: unless-stopped
     command:
       - sh

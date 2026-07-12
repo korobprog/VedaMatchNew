@@ -3,6 +3,8 @@ RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 WORKDIR /app
 
 FROM base AS build
+ARG MOTIVATION_BUILD_VERSION=dev
+RUN echo "Motivation build: ${MOTIVATION_BUILD_VERSION}"
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
 COPY apps/api/package.json apps/api/
 COPY packages/shared/package.json packages/shared/
