@@ -19,7 +19,7 @@ export class MotivationGenerationService {
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       signal: AbortSignal.timeout(60_000),
-      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json', 'user-agent': 'OpenAI-Python/1.0' },
       body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' } }),
     });
     if (!response.ok) throw new BadGatewayException(`Text provider error ${response.status}: ${(await response.text()).slice(0, 300)}`);
@@ -38,13 +38,32 @@ export class MotivationGenerationService {
     if (model.startsWith('gpt-image-')) throw new BadRequestException('Image controller model must be a Responses-capable language model');
     if (!apiKey || !baseUrl) throw new ServiceUnavailableException('Motivation AI is not configured');
     const imagePrompt = `${prompt}\nVertical 9:16 illustration, no text, respectful non-photorealistic spiritual art.`;
-    const response = await fetch(`${baseUrl}/responses`, { method: 'POST', signal: AbortSignal.timeout(180_000), headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, body: JSON.stringify({ model, stream: true, input: [{ role: 'user', content: [{ type: 'input_text', text: imagePrompt }] }], tools: [{ type: 'image_generation' }] }) });
+    const response = await fetch(`${baseUrl}/responses`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(180_000),
+      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json', 'user-agent': 'OpenAI-Python/1.0' },
+      body: JSON.stringify({
+        model,
+        instructions: 'You are an image generation assistant. Use the image_generation tool to create exactly one image that matches the user request.',
+        input: [{ role: 'user', content: [{ type: 'input_text', text: imagePrompt }] }],
+        tools: [{ type: 'image_generation', action: 'generate', output_format: 'png' }],
+        tool_choice: { type: 'image_generation' },
+        store: false,
+        stream: true,
+      }),
+    });
     if (!response.ok) throw new BadGatewayException(`Image provider error ${response.status}: ${(await response.text()).slice(0, 300)}`);
     const raw = await response.text();
-    const events = raw.split(/\r?\n/).filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim()).filter((line) => line && line !== '[DONE]').flatMap((line) => { try { return [JSON.parse(line) as unknown]; } catch { return []; } });
+    const events = raw.split(/\r?\n\r?\n/).flatMap((block) => {
+      const data = block.split(/\r?\n/).filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim()).join('\n');
+      if (!data || data === '[DONE]') return [];
+      try { return [JSON.parse(data) as unknown]; } catch { return []; }
+    });
     const encoded = events.map((event) => this.findImageResult(event)).find(Boolean);
     if (!encoded) throw new BadGatewayException('Image provider returned no image');
-    return Buffer.from(encoded, 'base64');
+    const bytes = Buffer.from(encoded, 'base64');
+    if (bytes.length < 8 || !bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) throw new BadGatewayException('Image provider returned no valid PNG');
+    return bytes;
   }
 
   async uploadStory(key: string, bytes: Buffer): Promise<string> {
@@ -68,7 +87,10 @@ export class MotivationGenerationService {
   private findImageResult(value: unknown): string | undefined {
     if (!value || typeof value !== 'object') return undefined;
     const item = value as Record<string, unknown>;
-    if (typeof item.result === 'string' && item.result.length > 1000) return item.result;
+    if ((item.type === 'image_generation_call' && typeof item.result === 'string') || typeof item.b64_json === 'string') {
+      const encoded = typeof item.result === 'string' ? item.result : item.b64_json as string;
+      if (encoded.length > 1000) return encoded;
+    }
     for (const child of Object.values(item)) {
       if (Array.isArray(child)) {
         for (const entry of child) { const found = this.findImageResult(entry); if (found) return found; }

@@ -55,7 +55,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async recoverExpiredJobs() {
-    const expiredAt = new Date(Date.now() - 2 * 60_000);
+    const expiredAt = new Date(Date.now() - 5 * 60_000);
     await this.prisma.motivationPost.updateMany({
       where: { status: 'generating', updatedAt: { lt: expiredAt }, attemptCount: { lt: 3 } },
       data: { status: 'draft', generationStage: 'queued', generationErrorCode: 'lease_expired' },
