@@ -18,12 +18,21 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     if (this.redis) await this.redis.connect().catch((error) => this.logger.warn(`Redis unavailable: ${String(error)}`));
+    await this.retryTodaysFailedJobs();
     this.timer = setInterval(() => void this.tick(), 30_000);
     this.timer.unref();
     void this.tick();
   }
 
   async onModuleDestroy() { if (this.timer) clearInterval(this.timer); if (this.redis?.status === 'ready') await this.redis.quit(); }
+
+  private async retryTodaysFailedJobs() {
+    const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+    await this.prisma.motivationPost.updateMany({
+      where: { contentDate: today, status: 'failed' },
+      data: { status: 'draft', generationStage: 'queued', generationErrorCode: null, attemptCount: 0 },
+    });
+  }
 
   async tick() {
     const lockKey = 'motivation:worker:lease';
