@@ -33,6 +33,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
       if (!acquired) return;
     }
     try {
+      await this.recoverExpiredJobs();
       await this.ensureDailyBatch();
       const post = await this.prisma.motivationPost.findFirst({ where: { status: 'draft', generationStage: 'queued', attemptCount: { lt: 3 } }, orderBy: { createdAt: 'asc' } });
       if (!post) return;
@@ -42,6 +43,14 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
     } finally {
       if (this.redis?.status === 'ready') await this.redis.eval("if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end", 1, lockKey, token).catch(() => undefined);
     }
+  }
+
+  private async recoverExpiredJobs() {
+    const expiredAt = new Date(Date.now() - 2 * 60_000);
+    await this.prisma.motivationPost.updateMany({
+      where: { status: 'generating', updatedAt: { lt: expiredAt }, attemptCount: { lt: 3 } },
+      data: { status: 'draft', generationStage: 'queued', generationErrorCode: 'lease_expired' },
+    });
   }
 
   private async ensureDailyBatch() {
@@ -59,6 +68,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
     const post = await this.prisma.motivationPost.findUnique({ where: { id } });
     if (!post) return;
     try {
+      this.logger.log(`Generating Motivation post ${post.slug}`);
       const translations = await this.generation.generateCopy(post);
       await this.prisma.motivationPost.update({ where: { id }, data: { generationStage: 'image' } });
       const image = await this.generation.generateImage(`${translations[0].title}. ${translations[0].text}`);
