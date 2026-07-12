@@ -30,6 +30,9 @@ export function Header({ user }: { user: UserProfile }) {
               Админ
             </Link>
           )}
+          {(user.role === "admin" || user.role === "service-admin") && (
+            <Link href="/admin/motivation" className="rounded-full border border-amber-200 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50 sm:text-sm dark:border-amber-900 dark:text-amber-200 dark:hover:bg-amber-950">Motivation</Link>
+          )}
           <Link
             href="/self-identification"
             className="rounded-full border border-amber-200 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50 sm:text-sm dark:border-amber-900 dark:text-amber-200 dark:hover:bg-amber-950"

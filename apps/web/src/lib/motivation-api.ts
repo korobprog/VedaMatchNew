@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import type {
   MotivationFeedResponse,
+  MotivationAdminPostDto,
   MotivationPostDto,
   MotivationPreferenceDto,
 } from "@vedamatch/shared";
@@ -42,4 +43,4 @@ export const getPublicMotivationPost = (slug: string) =>
   );
 
 export const getAdminMotivationPosts = () =>
-  motivationGet<MotivationPostDto[]>("/admin/motivation/posts");
+  motivationGet<MotivationAdminPostDto[]>("/admin/motivation/posts");

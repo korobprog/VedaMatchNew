@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { MotivationAudienceTrack, MotivationPostStatus, MotivationProfileType, SpiritualStage } from '@prisma/client';
-import type { MotivationAdminUpdate, MotivationLanguage, MotivationPostDto, MotivationPreferenceUpdate, Role } from '@vedamatch/shared';
+import type { MotivationAdminPostDto, MotivationAdminUpdate, MotivationLanguage, MotivationPostDto, MotivationPreferenceUpdate, Role } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { decodeMotivationCursor, encodeMotivationCursor, weightedPage } from './motivation-feed';
 import { MotivationGenerationService } from './motivation-generation.service';
@@ -40,7 +40,7 @@ export class MotivationService {
   }
   async favorite(userId: string, postId: string, favorite: boolean) { await this.ensurePublished(postId); if (favorite) await this.prisma.motivationFavorite.upsert({ where: { userId_postId: { userId, postId } }, create: { userId, postId }, update: {} }); else await this.prisma.motivationFavorite.deleteMany({ where: { userId, postId } }); }
   async view(userId: string, postId: string) { await this.ensurePublished(postId); await this.prisma.motivationView.upsert({ where: { userId_postId: { userId, postId } }, create: { userId, postId }, update: { viewedAt: new Date() } }); }
-  async adminList(role: Role) { this.admin(role); const posts = await this.prisma.motivationPost.findMany({ include: { translations: { where: { language: 'ru' } }, favorites: false, views: false }, orderBy: { createdAt: 'desc' } }); return posts.map((post) => this.dto({ ...post, favorites: [], views: [] })); }
+  async adminList(role: Role): Promise<MotivationAdminPostDto[]> { this.admin(role); const posts = await this.prisma.motivationPost.findMany({ include: { translations: { where: { language: 'ru' } }, favorites: false, views: false }, orderBy: { createdAt: 'desc' } }); return posts.map((post) => ({ ...this.dto({ ...post, favorites: [], views: [] }), status: post.status, generationStage: post.generationStage, generationErrorCode: post.generationErrorCode, attemptCount: post.attemptCount })); }
   async adminUpdate(role: Role, id: string, input: MotivationAdminUpdate) { this.admin(role); return this.prisma.motivationPost.update({ where: { id }, data: { ...(input.hidden !== undefined ? { status: input.hidden ? 'hidden' : 'published' } : {}), ...(input.category ? { category: input.category.trim() } : {}) } }); }
   async regenerate(role: Role, id: string) { this.admin(role); const post = await this.prisma.motivationPost.findUnique({ where: { id } }); if (!post) throw new NotFoundException(); return this.prisma.motivationPost.update({ where: { id }, data: { status: 'draft', generationStage: 'queued', generationErrorCode: null, attemptCount: 0 } }); }
   async generateDaily(date: Date) {

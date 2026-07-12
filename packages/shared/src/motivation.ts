@@ -27,6 +27,13 @@ export interface MotivationPostDto {
 }
 
 export interface MotivationFeedResponse { items: MotivationPostDto[]; nextCursor: string | null }
+export type MotivationPostStatus = 'draft' | 'generating' | 'published' | 'failed' | 'hidden';
+export interface MotivationAdminPostDto extends MotivationPostDto {
+  status: MotivationPostStatus;
+  generationStage: string | null;
+  generationErrorCode: string | null;
+  attemptCount: number;
+}
 export interface MotivationPreferenceDto { vaishnavaPercent: number; language: MotivationLanguage }
 export interface MotivationPreferenceUpdate { vaishnavaPercent: number; language?: MotivationLanguage }
 export interface MotivationAdminUpdate { hidden?: boolean; category?: string; translations?: Partial<Record<MotivationLanguage, { title: string; text: string; storyText: string }>> }
