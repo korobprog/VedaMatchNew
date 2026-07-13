@@ -80,75 +80,183 @@ enum MotivationAttributionKind {
   ai_reflection
 }
 
-model User {
-  id                         String                      @id @default(uuid())
-  email                      String                      @unique
-  name                       String
-  avatarUrl                  String?
-  avatarKey                  String?
-  homeLocation               Json?
-  socialLinks                Json?
-  messengers                 Json?
-  role                       Role                        @default(user)
-  googleId                   String?                     @unique
-  spiritualStage             SpiritualStage?
-  devoteeVerificationStatus  DevoteeVerificationStatus?
-  lastSelfIdentificationAt   DateTime?
-  createdAt                  DateTime                    @default(now())
-  updatedAt                  DateTime                    @updatedAt
+enum MotivationReviewStatus {
+  discovered
+  source_verified
+  text_review
+  image_queued
+  image_review
+  published
+  rejected
+  failed
+}
 
-  refreshTokens              RefreshToken[]
-  serviceAccess              ServiceAccess[]
-  loginAudits                LoginAudit[]
+enum MotivationQuoteSourceType {
+  vedamatch_library
+  approved_web
+}
+
+enum MotivationTranslationKind {
+  official
+  vedamatch
+}
+
+enum MotivationVisualStyle {
+  spiritual_watercolor
+  cinematic_nature
+  indian_miniature
+  sacred_architecture
+  minimal_symbolism
+  warm_documentary
+  cosmic_contemplation
+  historical_editorial
+}
+
+model User {
+  id                        String                     @id @default(uuid())
+  email                     String                     @unique
+  name                      String
+  avatarUrl                 String?
+  avatarKey                 String?
+  homeLocation              Json?
+  socialLinks               Json?
+  messengers                Json?
+  role                      Role                       @default(user)
+  googleId                  String?                    @unique
+  spiritualStage            SpiritualStage?
+  devoteeVerificationStatus DevoteeVerificationStatus?
+  lastSelfIdentificationAt  DateTime?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+
+  refreshTokens               RefreshToken[]
+  serviceAccess               ServiceAccess[]
+  loginAudits                 LoginAudit[]
   selfIdentificationResponses SelfIdentificationResponse[]
-  stageHistory               StageHistory[]
-  mentorVerificationRequests MentorVerificationRequest[]
-  unionProfile               UnionProfile?
-  unionRequestsSent          UnionConnectionRequest[]    @relation("UnionRequestsSent")
-  unionRequestsReceived      UnionConnectionRequest[]    @relation("UnionRequestsReceived")
-  unionChatMessagesSent      UnionChatMessage[]          @relation("UnionChatMessagesSent")
-  gitabaseReadingProgress    GitabaseReadingProgress[]
-  gitabaseBookmarks          GitabaseBookmark[]
-  gitabaseAnnotations        GitabaseAnnotation[]
-  gitabaseSyncMutations      GitabaseSyncMutation[]
-  motivationPreference       MotivationPreference?
-  motivationFavorites        MotivationFavorite[]
-  motivationViews            MotivationView[]
+  stageHistory                StageHistory[]
+  mentorVerificationRequests  MentorVerificationRequest[]
+  unionProfile                UnionProfile?
+  unionRequestsSent           UnionConnectionRequest[]     @relation("UnionRequestsSent")
+  unionRequestsReceived       UnionConnectionRequest[]     @relation("UnionRequestsReceived")
+  unionChatMessagesSent       UnionChatMessage[]           @relation("UnionChatMessagesSent")
+  gitabaseReadingProgress     GitabaseReadingProgress[]
+  gitabaseBookmarks           GitabaseBookmark[]
+  gitabaseAnnotations         GitabaseAnnotation[]
+  gitabaseSyncMutations       GitabaseSyncMutation[]
+  motivationPreference        MotivationPreference?
+  motivationFavorites         MotivationFavorite[]
+  motivationViews             MotivationView[]
+  motivationModerationAudits  MotivationModerationAudit[]
+}
+
+model MotivationQuote {
+  id                  String                       @id @default(uuid())
+  originalText        String
+  normalizedHash      String                       @unique
+  originalLanguage    String                       @db.VarChar(8)
+  author              String
+  work                String
+  locator             String
+  sourceType          MotivationQuoteSourceType
+  sourceUrl           String?
+  vedabaseBookSlug    String?
+  vedabaseChapterSlug String?
+  contextExcerpt      String
+  verified            Boolean                      @default(false)
+  verifiedAt          DateTime?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  translations        MotivationQuoteTranslation[]
+  profiles            MotivationQuoteProfile[]
+  posts               MotivationPost[]
+
+  @@index([verified, createdAt])
+  @@index([sourceType, verified])
+}
+
+model MotivationQuoteTranslation {
+  id              String                    @id @default(uuid())
+  quoteId         String
+  quote           MotivationQuote           @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  language        String                    @db.VarChar(8)
+  quoteText       String
+  translationKind MotivationTranslationKind
+  label           String?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@unique([quoteId, language])
+  @@index([language])
+}
+
+model MotivationQuoteProfile {
+  quoteId     String
+  quote       MotivationQuote       @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  profileType MotivationProfileType
+  createdAt   DateTime              @default(now())
+
+  @@id([quoteId, profileType])
+  @@index([profileType])
 }
 
 model MotivationPost {
-  id                String                    @id @default(uuid())
-  contentDate       DateTime                  @db.Date
-  profileType       MotivationProfileType
-  audienceTrack     MotivationAudienceTrack
-  slug              String                    @unique
-  category          String
-  status            MotivationPostStatus      @default(draft)
-  imageUrl           String?
-  storyImageUrl      String?
-  attributionKind   MotivationAttributionKind @default(ai_reflection)
-  attributionSpeaker String?
-  attributionWork   String?
-  attributionLocator String?
+  id                   String                    @id @default(uuid())
+  contentDate          DateTime                  @db.Date
+  profileType          MotivationProfileType
+  audienceTrack        MotivationAudienceTrack
+  slug                 String                    @unique
+  category             String
+  quoteId              String?
+  quote                MotivationQuote?          @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  status               MotivationPostStatus      @default(draft)
+  reviewStatus         MotivationReviewStatus    @default(discovered)
+  visualStyle          MotivationVisualStyle?
+  imagePrompt          String?
+  textApprovedAt       DateTime?
+  imageApprovedAt      DateTime?
+  imageUrl             String?
+  storyImageUrl        String?
+  attributionKind      MotivationAttributionKind @default(ai_reflection)
+  attributionSpeaker   String?
+  attributionWork      String?
+  attributionLocator   String?
   attributionSourceUrl String?
-  sourceVerified    Boolean                   @default(false)
-  generationStage   String?
-  generationErrorCode String?
-  promptVersion     String?
-  modelVersion      String?
-  attemptCount      Int                       @default(0)
-  estimatedCostUsd  Decimal                   @default(0) @db.Decimal(12, 6)
-  publishedAt       DateTime?
-  createdAt         DateTime                  @default(now())
-  updatedAt         DateTime                  @updatedAt
+  sourceVerified       Boolean                   @default(false)
+  generationStage      String?
+  generationErrorCode  String?
+  promptVersion        String?
+  modelVersion         String?
+  attemptCount         Int                       @default(0)
+  estimatedCostUsd     Decimal                   @default(0) @db.Decimal(12, 6)
+  publishedAt          DateTime?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
 
-  translations MotivationPostTranslation[]
-  favorites    MotivationFavorite[]
-  views        MotivationView[]
+  translations     MotivationPostTranslation[]
+  favorites        MotivationFavorite[]
+  views            MotivationView[]
+  moderationAudits MotivationModerationAudit[]
 
   @@unique([contentDate, profileType, audienceTrack])
   @@index([profileType, audienceTrack, status, publishedAt])
   @@index([category, status, publishedAt])
+  @@index([reviewStatus, createdAt])
+  @@index([quoteId])
+}
+
+model MotivationModerationAudit {
+  id        String         @id @default(uuid())
+  postId    String
+  post      MotivationPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  actorId   String
+  actor     User           @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  action    String
+  reason    String?
+  metadata  Json?
+  createdAt DateTime       @default(now())
+
+  @@index([postId, createdAt])
+  @@index([actorId, createdAt])
 }
 
 model MotivationPostTranslation {
@@ -167,12 +275,12 @@ model MotivationPostTranslation {
 }
 
 model MotivationPreference {
-  userId            String @id
-  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  vaishnavaPercent  Int    @default(50)
-  language          String @default("ru") @db.VarChar(8)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  userId           String   @id
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vaishnavaPercent Int      @default(50)
+  language         String   @default("ru") @db.VarChar(8)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model MotivationFavorite {
@@ -187,11 +295,11 @@ model MotivationFavorite {
 }
 
 model MotivationView {
-  userId    String
-  postId    String
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  post      MotivationPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  viewedAt  DateTime       @default(now())
+  userId   String
+  postId   String
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post     MotivationPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  viewedAt DateTime       @default(now())
 
   @@id([userId, postId])
   @@index([userId, viewedAt])
@@ -253,13 +361,13 @@ model LoginAudit {
 }
 
 model SelfIdentificationResponse {
-  id                 String                      @id @default(uuid())
+  id                 String                     @id @default(uuid())
   userId             String
-  user               User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   answers            Json
   detectedStage      SpiritualStage
   verificationStatus DevoteeVerificationStatus?
-  createdAt          DateTime                    @default(now())
+  createdAt          DateTime                   @default(now())
 
   @@index([userId, createdAt])
 }
@@ -281,29 +389,29 @@ model StageHistory {
 }
 
 model MentorVerificationRequest {
-  id                                  String                      @id @default(uuid())
-  token                               String                      @unique
-  userId                              String
-  user                                User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status                              DevoteeVerificationStatus   @default(awaiting_mentor)
-  mentorName                          String?
-  phone                               String?
-  email                               String?
-  cityOrCommunity                     String?
-  knownDuration                       String?
-  knowsPersonally                     Boolean?
-  confirmsRegularPractice             Boolean?
-  confirmsService                     Boolean?
-  confirmsSpiritualName               Boolean?
-  confirmsCommunityConnection         Boolean?
-  userCharacterReference              String?
-  recommendsDevoteeStatus             Boolean?
-  truthConsent                        Boolean?
-  mentorSubmittedAt                   DateTime?
-  adminNote                           String?
-  adminReviewedAt                     DateTime?
-  createdAt                           DateTime                    @default(now())
-  updatedAt                           DateTime                    @updatedAt
+  id                          String                    @id @default(uuid())
+  token                       String                    @unique
+  userId                      String
+  user                        User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status                      DevoteeVerificationStatus @default(awaiting_mentor)
+  mentorName                  String?
+  phone                       String?
+  email                       String?
+  cityOrCommunity             String?
+  knownDuration               String?
+  knowsPersonally             Boolean?
+  confirmsRegularPractice     Boolean?
+  confirmsService             Boolean?
+  confirmsSpiritualName       Boolean?
+  confirmsCommunityConnection Boolean?
+  userCharacterReference      String?
+  recommendsDevoteeStatus     Boolean?
+  truthConsent                Boolean?
+  mentorSubmittedAt           DateTime?
+  adminNote                   String?
+  adminReviewedAt             DateTime?
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
 
   @@index([userId, status])
 }
@@ -326,16 +434,16 @@ model GitabaseReadingProgress {
 }
 
 model GitabaseBookmark {
-  id        String   @id
+  id        String    @id
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   bookSlug  String
   locator   Json
   label     String?
-  revision  Int      @default(1)
+  revision  Int       @default(1)
   deletedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([userId, bookSlug])
   @@index([userId, updatedAt])
@@ -363,12 +471,12 @@ model GitabaseAnnotation {
 }
 
 model GitabaseAnnotationRevision {
-  id           String              @id @default(uuid())
+  id           String             @id @default(uuid())
   annotationId String
-  annotation   GitabaseAnnotation  @relation(fields: [annotationId], references: [id], onDelete: Cascade)
+  annotation   GitabaseAnnotation @relation(fields: [annotationId], references: [id], onDelete: Cascade)
   revision     Int
   noteText     String?
-  createdAt    DateTime            @default(now())
+  createdAt    DateTime           @default(now())
 
   @@unique([annotationId, revision])
 }
@@ -391,29 +499,29 @@ model GitabaseSyncMutation {
 // ===== Vedabase canonical content =====
 
 model VedabaseBook {
-  id              String               @id @default(uuid())
-  slug            String               @unique
+  id              String                @id @default(uuid())
+  slug            String                @unique
   title           String
   author          String?
   language        String
   cover           Json?
   sourceUrl       String
   attribution     String
-  activeVersionId String?              @unique
-  activeVersion   VedabaseBookVersion? @relation("ActiveVedabaseVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+  activeVersionId String?               @unique
+  activeVersion   VedabaseBookVersion?  @relation("ActiveVedabaseVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
   versions        VedabaseBookVersion[] @relation("VedabaseBookVersions")
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
 }
 
 model VedabaseBookVersion {
-  id                  String                 @id @default(uuid())
+  id                  String               @id @default(uuid())
   bookId              String
-  book                VedabaseBook           @relation("VedabaseBookVersions", fields: [bookId], references: [id], onDelete: Cascade)
-  activeFor           VedabaseBook?          @relation("ActiveVedabaseVersion")
+  book                VedabaseBook         @relation("VedabaseBookVersions", fields: [bookId], references: [id], onDelete: Cascade)
+  activeFor           VedabaseBook?        @relation("ActiveVedabaseVersion")
   contentVersion      String
   formatVersion       Int
-  status              VedabaseImportStatus   @default(staging)
+  status              VedabaseImportStatus @default(staging)
   permissionRef       String
   attribution         String
   importedAt          DateTime
@@ -428,17 +536,17 @@ model VedabaseBookVersion {
   errorMessage        String?
   chapters            VedabaseChapter[]
   searchUnits         VedabaseSearchUnit[]
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@unique([bookId, contentVersion])
   @@index([status, updatedAt])
 }
 
 model VedabaseChapter {
-  id        String               @id @default(uuid())
+  id        String              @id @default(uuid())
   versionId String
-  version   VedabaseBookVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  version   VedabaseBookVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
   slug      String
   title     String
   order     Int
@@ -451,9 +559,9 @@ model VedabaseChapter {
 }
 
 model VedabaseSearchUnit {
-  id          String               @id @default(uuid())
+  id          String              @id @default(uuid())
   versionId   String
-  version     VedabaseBookVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  version     VedabaseBookVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
   chapterSlug String
   locator     Json
   title       String
@@ -487,25 +595,25 @@ enum UnionFormat {
 }
 
 model UnionProfile {
-  id              String             @id @default(uuid())
-  userId          String             @unique
-  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String      @id @default(uuid())
+  userId          String      @unique
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   about           String?
-  relocationReady Boolean            @default(false)
-  format          UnionFormat        @default(any)
-  languages       String[]           @default([])
-  skills          String[]           @default([])
-  interests       String[]           @default([])
-  values          String[]           @default([])
+  relocationReady Boolean     @default(false)
+  format          UnionFormat @default(any)
+  languages       String[]    @default([])
+  skills          String[]    @default([])
+  interests       String[]    @default([])
+  values          String[]    @default([])
   familyStatus    String?
   // { photo, age, city, contacts: 'everyone' | 'after_match' | 'hidden' }
   privacy         Json?
   // скрыть из рекомендаций без удаления профиля
-  isActive        Boolean            @default(true)
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
-  intentions      UnionIntention[]
+  intentions UnionIntention[]
 }
 
 model UnionIntention {
@@ -530,20 +638,20 @@ model UnionConnectionRequest {
   createdAt   DateTime              @default(now())
   respondedAt DateTime?
 
-  messages    UnionChatMessage[]
+  messages UnionChatMessage[]
 
   @@unique([fromUserId, toUserId])
   @@index([toUserId, status])
 }
 
 model UnionChatMessage {
-  id        String                 @id @default(uuid())
-  requestId String
-  request   UnionConnectionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  id         String                 @id @default(uuid())
+  requestId  String
+  request    UnionConnectionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   fromUserId String
-  fromUser   User                  @relation("UnionChatMessagesSent", fields: [fromUserId], references: [id], onDelete: Cascade)
-  body      String
-  createdAt DateTime               @default(now())
+  fromUser   User                   @relation("UnionChatMessagesSent", fields: [fromUserId], references: [id], onDelete: Cascade)
+  body       String
+  createdAt  DateTime               @default(now())
 
   @@index([requestId, createdAt])
   @@index([fromUserId])

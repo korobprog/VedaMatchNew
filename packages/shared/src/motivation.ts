@@ -2,6 +2,31 @@ export type MotivationProfileType = 'user' | 'in_goodness' | 'yogi' | 'devotee';
 export type MotivationAudienceTrack = 'universal' | 'vaishnava';
 export type MotivationAttributionKind = 'exact_quote' | 'faithful_paraphrase' | 'ai_reflection';
 export type MotivationLanguage = 'ru' | 'en' | 'hi';
+export type MotivationReviewStatus = 'discovered' | 'source_verified' | 'text_review' | 'image_queued' | 'image_review' | 'published' | 'rejected' | 'failed';
+export type MotivationQuoteSourceType = 'vedamatch_library' | 'approved_web';
+export type MotivationTranslationKind = 'official' | 'vedamatch';
+export type MotivationVisualStyle = 'spiritual_watercolor' | 'cinematic_nature' | 'indian_miniature' | 'sacred_architecture' | 'minimal_symbolism' | 'warm_documentary' | 'cosmic_contemplation' | 'historical_editorial';
+
+export interface MotivationQuoteTranslationDto {
+  language: MotivationLanguage;
+  quoteText: string;
+  translationKind: MotivationTranslationKind;
+  label: string | null;
+}
+
+export interface MotivationQuoteDto {
+  id: string;
+  originalText: string;
+  originalLanguage: string;
+  author: string;
+  work: string;
+  locator: string;
+  sourceType: MotivationQuoteSourceType;
+  sourceUrl: string | null;
+  contextExcerpt: string;
+  verified: boolean;
+  translations: MotivationQuoteTranslationDto[];
+}
 
 export interface MotivationPostDto {
   id: string;
@@ -33,6 +58,15 @@ export interface MotivationAdminPostDto extends MotivationPostDto {
   generationStage: string | null;
   generationErrorCode: string | null;
   attemptCount: number;
+}
+export interface MotivationAdminCandidateDto extends MotivationAdminPostDto {
+  reviewStatus: MotivationReviewStatus;
+  quote: MotivationQuoteDto | null;
+  profileTypes: MotivationProfileType[];
+  visualStyle: MotivationVisualStyle | null;
+  imagePrompt: string | null;
+  textApprovedAt: string | null;
+  imageApprovedAt: string | null;
 }
 export interface MotivationPreferenceDto { vaishnavaPercent: number; language: MotivationLanguage }
 export interface MotivationPreferenceUpdate { vaishnavaPercent: number; language?: MotivationLanguage }
