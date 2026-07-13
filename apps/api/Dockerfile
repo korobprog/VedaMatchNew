@@ -17,6 +17,7 @@ RUN pnpm --filter @vedamatch/api deploy --prod /out
 FROM base AS runtime
 ENV NODE_ENV=production
 COPY --from=build /out /app
+COPY --from=build /app/packages/shared /app/packages/shared
 COPY --from=build /app/apps/api/dist /app/dist
 EXPOSE 4000
 CMD ["sh", "-c", "npx prisma migrate resolve --rolled-back 20260705090000_extend_profile || true; npx prisma migrate deploy && npx prisma db seed && node dist/main.js"]
