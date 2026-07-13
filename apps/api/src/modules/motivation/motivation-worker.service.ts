@@ -93,6 +93,8 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
       });
       if (!claimed.count) return;
       await this.process(post.id);
+    } catch (error) {
+      this.logger.error('Motivation worker tick failed', error instanceof Error ? error.stack : undefined);
     } finally {
       if (this.redis?.status === 'ready') await this.redis.eval("if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end", 1, lockKey, token).catch(() => undefined);
       this.running = false;
