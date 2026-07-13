@@ -2,6 +2,20 @@ import { BadGatewayException, BadRequestException, Injectable, ServiceUnavailabl
 import { ConfigService } from '@nestjs/config';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
+export type VerifiedQuoteCopy = {
+  originalText: string;
+  profileTypes: string[];
+  explanation: string;
+  translations: Record<'ru' | 'en' | 'hi', {
+    quoteText: string;
+    translationKind: string;
+    label: string | null;
+    title: string;
+    explanation: string;
+    storyText: string;
+  }>;
+};
+
 @Injectable()
 export class MotivationGenerationService {
   private readonly s3: S3Client | null;
@@ -29,6 +43,40 @@ export class MotivationGenerationService {
     let parsed: unknown;
     try { parsed = JSON.parse(content); } catch { throw new BadGatewayException('Text provider returned invalid JSON'); }
     return this.validateCopy(parsed);
+  }
+
+  async generateVerifiedQuoteCopy(input: { originalText: string; originalLanguage: string; author: string; work: string; locator: string; contextExcerpt: string }): Promise<VerifiedQuoteCopy> {
+    const prompt = [
+      'Prepare explanatory copy and translations for a verified quotation.',
+      'Never alter originalText. Never add claims attributed to the speaker.',
+      'Return profileTypes using only: user, in_goodness, yogi, devotee.',
+      'Return explanation as one or two paragraphs. It must explain relevance without inventing facts.',
+      'Return translations for ru, en, hi. The original language must repeat the exact originalText with translationKind "official".',
+      'Every non-original translation must use translationKind "vedamatch" and label "Перевод VedaMatch".',
+      'Return strict JSON: {originalText,profileTypes,explanation,translations:{ru,en,hi}}.',
+      `Verified originalText: ${JSON.stringify(input.originalText)}`,
+      `Original language: ${input.originalLanguage}`,
+      `Attribution: ${input.author}; ${input.work}; ${input.locator}`,
+      `Verified context: ${input.contextExcerpt}`,
+    ].join('\n');
+    return this.requestStructuredChat(prompt) as Promise<VerifiedQuoteCopy>;
+  }
+
+  private async requestStructuredChat(prompt: string): Promise<unknown> {
+    const apiKey = this.config.get<string>('MOTIVATION_AI_API_KEY');
+    const baseUrl = this.config.get<string>('MOTIVATION_AI_BASE_URL')?.replace(/\/$/, '');
+    const model = this.config.get<string>('MOTIVATION_TEXT_MODEL') || 'deepseek-v4-flash';
+    if (!apiKey || !baseUrl) throw new ServiceUnavailableException('Motivation AI is not configured');
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(60_000),
+      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json', 'user-agent': 'OpenAI-Python/1.0' },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' }, stream: true }),
+    });
+    if (!response.ok) throw new BadGatewayException(`Text provider error ${response.status}: ${(await response.text()).slice(0, 300)}`);
+    const content = this.extractChatContent(await response.text());
+    if (!content) throw new BadGatewayException('Text provider returned no content');
+    try { return JSON.parse(content); } catch { throw new BadGatewayException('Text provider returned invalid JSON'); }
   }
 
   private extractChatContent(raw: string): string | undefined {

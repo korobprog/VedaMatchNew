@@ -50,6 +50,26 @@ describe('MotivationGenerationService', () => {
     await expect(service.generateCopy({ profileType: 'seeker', audienceTrack: 'universal', category: 'daily' })).resolves.toHaveLength(3);
   });
 
+  it('requests strict sourced-quote copy without invoking image generation', async () => {
+    const config = { get: (key: string) => ({ MOTIVATION_AI_API_KEY: 'test', MOTIVATION_AI_BASE_URL: 'https://example.test/v1', MOTIVATION_TEXT_MODEL: 'gpt-5.5' })[key] } as ConfigService;
+    const service = new MotivationGenerationService(config);
+    const payload = { originalText: 'Exact quote', profileTypes: ['user'], explanation: 'A sufficiently detailed explanation of the exact quote.', translations: {} };
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(
+      `data: ${JSON.stringify({ choices: [{ delta: { content: JSON.stringify(payload) } }] })}\n\ndata: [DONE]\n\n`,
+      { status: 200, headers: { 'content-type': 'text/event-stream' } },
+    ));
+
+    await expect(service.generateVerifiedQuoteCopy({
+      originalText: 'Exact quote', originalLanguage: 'en', author: 'Author', work: 'Work', locator: '1', contextExcerpt: 'Exact quote in context',
+    })).resolves.toMatchObject({ originalText: 'Exact quote' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(body).toMatchObject({ model: 'gpt-5.5', response_format: { type: 'json_object' }, stream: true });
+    expect(body.messages[0].content).toContain('Never alter originalText');
+    expect(body.messages[0].content).toContain('user, in_goodness, yogi, devotee');
+  });
+
   it('rejects decoded image data without a PNG signature', async () => {
     const config = { get: (key: string) => ({ MOTIVATION_AI_API_KEY: 'test', MOTIVATION_AI_BASE_URL: 'https://example.test/v1', MOTIVATION_IMAGE_CONTROLLER_MODEL: 'gpt-5.5' })[key] } as ConfigService;
     const service = new MotivationGenerationService(config);
