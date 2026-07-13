@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { MotivationQuote } from '@prisma/client';
+import { Prisma, type MotivationQuote } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VedabaseContentRepository } from '../vedabase/vedabase-content.repository';
 import { ApprovedWebSourceService, type WebQuoteCandidate } from './approved-web-source.service';
@@ -17,12 +17,21 @@ export class QuoteDiscoveryService {
     private readonly web: ApprovedWebSourceService,
   ) {}
 
-  async discoverDaily(_date: Date, count = 8): Promise<MotivationQuote[]> {
+  async discoverDaily(date: Date, count = 8): Promise<MotivationQuote[]> {
     if (count < 1) return [];
+    const discoveryDate = new Date(`${date.toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const dailyQuotes = await this.prisma.motivationQuote.findMany({
+      where: { discoveryDate, verified: true },
+      orderBy: { createdAt: 'asc' },
+      take: count,
+    });
+    if (dailyQuotes.length >= count) return dailyQuotes;
+
+    const missingCount = count - dailyQuotes.length;
     const candidates = new Map<string, VerifiedQuote | ReturnType<typeof this.verifyWebCandidate>>();
 
     for (const query of DISCOVERY_QUERIES) {
-      const units = await this.repository.findQuoteCandidates(query, count * 4);
+      const units = await this.repository.findQuoteCandidates(query, missingCount * 4);
       for (const unit of units) {
         const originalText = this.extractQuote(unit.text);
         if (!originalText) continue;
@@ -39,12 +48,12 @@ export class QuoteDiscoveryService {
 
     const internalExisting = await this.findExistingHashes([...candidates.keys()]);
     const freshInternalCount = [...candidates.keys()].filter((hash) => !internalExisting.has(hash)).length;
-    if (freshInternalCount < count) {
-      const webResults = await this.web.search(DISCOVERY_QUERIES.join(' '), (count - freshInternalCount) * 4);
+    if (freshInternalCount < missingCount) {
+      const webResults = await this.web.search(DISCOVERY_QUERIES.join(' '), (missingCount - freshInternalCount) * 4);
       for (const result of webResults) {
         const verified = this.verifyWebCandidate(result);
         if (verified) candidates.set(verified.normalizedHash, verified);
-        if (candidates.size >= count) break;
+        if (candidates.size >= missingCount) break;
       }
     }
 
@@ -52,16 +61,31 @@ export class QuoteDiscoveryService {
     const selected = [...candidates.entries()]
       .filter(([hash, candidate]) => candidate && !existingHashes.has(hash))
       .map(([, candidate]) => candidate)
-      .slice(0, count) as Array<VerifiedQuote | NonNullable<ReturnType<typeof this.verifyWebCandidate>>>;
-    if (selected.length !== count) throw new Error('insufficient_verified_quotes');
+      .slice(0, missingCount) as Array<VerifiedQuote | NonNullable<ReturnType<typeof this.verifyWebCandidate>>>;
+    if (selected.length !== missingCount) throw new Error('insufficient_verified_quotes');
 
     return this.prisma.$transaction(async (transaction) => {
-      const hashes = selected.map((candidate) => candidate.normalizedHash);
-      await transaction.motivationQuote.createMany({ data: selected, skipDuplicates: true });
-      const saved = await transaction.motivationQuote.findMany({ where: { normalizedHash: { in: hashes }, verified: true } });
-      if (saved.length !== count) throw new Error('insufficient_verified_quotes');
-      return saved;
-    });
+      const currentBatch = await transaction.motivationQuote.findMany({
+        where: { discoveryDate, verified: true },
+        orderBy: { createdAt: 'asc' },
+        take: count,
+      });
+      const stillMissing = count - currentBatch.length;
+      if (stillMissing <= 0) return currentBatch;
+      if (selected.length < stillMissing) throw new Error('insufficient_verified_quotes');
+
+      await transaction.motivationQuote.createMany({
+        data: selected.slice(0, stillMissing).map((candidate) => ({ ...candidate, discoveryDate })),
+        skipDuplicates: true,
+      });
+      const batch = await transaction.motivationQuote.findMany({
+        where: { discoveryDate, verified: true },
+        orderBy: { createdAt: 'asc' },
+        take: count,
+      });
+      if (batch.length !== count) throw new Error('insufficient_verified_quotes');
+      return batch;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
   private async findExistingHashes(hashes: string[]): Promise<Set<string>> {

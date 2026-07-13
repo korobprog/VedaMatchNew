@@ -4,6 +4,7 @@ import { MotivationReviewStatus } from '@prisma/client';
 import Redis from 'ioredis';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MotivationGenerationService } from './motivation-generation.service';
+import { MotivationCopyService } from './motivation-copy.service';
 import { QuoteDiscoveryService } from './quote-discovery.service';
 
 @Injectable()
@@ -18,6 +19,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly generation: MotivationGenerationService,
     private readonly config: ConfigService,
+    private readonly copy: MotivationCopyService,
     @Optional() private readonly discovery?: QuoteDiscoveryService,
   ) {
     const host = config.get<string>('REDIS_HOST');
@@ -134,7 +136,8 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
 
     const count = Number(this.config.get('MOTIVATION_DAILY_CANDIDATE_COUNT') || 8);
     const today = new Date(`${dateKey}T00:00:00.000Z`);
-    await this.discovery.discoverDaily(today, count);
+    const quotes = await this.discovery.discoverDaily(today, count);
+    for (const quote of quotes) await this.copy.prepareCandidate(quote.id);
     if (this.redis?.status === 'ready') {
       await this.redis.set(idempotencyKey, 'done', 'EX', 8 * 24 * 60 * 60).catch((error) => {
         this.logger.warn(`Unable to store Motivation discovery idempotency key: ${String(error)}`);

@@ -29,6 +29,7 @@ describe('MotivationCopyService', () => {
       motivationPost: { create: jest.fn().mockResolvedValue({ id: 'post-1', reviewStatus: 'text_review' }) },
     };
     const prisma = {
+      motivationPost: { findUnique: jest.fn().mockResolvedValue(null) },
       motivationQuote: { findUnique: jest.fn().mockResolvedValue(quote) },
       $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) => callback(transaction)),
     };
@@ -52,6 +53,18 @@ describe('MotivationCopyService', () => {
       quoteId: 'quote-1', reviewStatus: 'text_review', sourceVerified: true, imageUrl: null, storyImageUrl: null, imagePrompt: null,
     }) });
     expect(generation.generateImage).not.toHaveBeenCalled();
+  });
+
+  it('returns an existing post for the quote without calling AI', async () => {
+    const { service, prisma, generation } = setup();
+    const existing = { id: 'post-existing', quoteId: 'quote-1', reviewStatus: 'text_review' };
+    prisma.motivationPost = { findUnique: jest.fn().mockResolvedValue(existing) };
+
+    await expect(service.prepareCandidate('quote-1')).resolves.toEqual(existing);
+
+    expect(generation.generateVerifiedQuoteCopy).not.toHaveBeenCalled();
+    expect(prisma.motivationQuote.findUnique).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it.each([

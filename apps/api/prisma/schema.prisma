@@ -164,6 +164,7 @@ model MotivationQuote {
   contextExcerpt      String
   verified            Boolean                      @default(false)
   verifiedAt          DateTime?
+  discoveryDate       DateTime?                    @db.Date
   createdAt           DateTime                     @default(now())
   updatedAt           DateTime                     @updatedAt
   translations        MotivationQuoteTranslation[]
@@ -172,6 +173,7 @@ model MotivationQuote {
 
   @@index([verified, createdAt])
   @@index([sourceType, verified])
+  @@index([discoveryDate, verified])
 }
 
 model MotivationQuoteTranslation {

@@ -11,6 +11,9 @@ export class MotivationCopyService {
   constructor(private readonly prisma: PrismaService, private readonly generation: MotivationGenerationService) {}
 
   async prepareCandidate(quoteId: string) {
+    const existingPost = await this.prisma.motivationPost.findUnique({ where: { quoteId } });
+    if (existingPost) return existingPost;
+
     const quote = await this.prisma.motivationQuote.findUnique({ where: { id: quoteId } });
     if (!quote) throw new NotFoundException('Verified quote not found');
     if (!quote.verified) throw new BadGatewayException('Quote source is not verified');
@@ -27,7 +30,7 @@ export class MotivationCopyService {
 
     const profileTypes = [...new Set(copy.profileTypes)] as MotivationProfileType[];
     const profileType = profileTypes[0];
-    const contentDate = new Date(new Date().toISOString().slice(0, 10));
+    const contentDate = quote.discoveryDate ?? new Date(new Date().toISOString().slice(0, 10));
     const audienceTrack = quote.sourceType === 'vedamatch_library' ? MotivationAudienceTrack.vaishnava : MotivationAudienceTrack.universal;
 
     return this.prisma.$transaction(async (transaction) => {
