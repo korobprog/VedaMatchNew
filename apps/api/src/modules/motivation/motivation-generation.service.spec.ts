@@ -10,6 +10,16 @@ describe('MotivationGenerationService', () => {
     await expect(service.generateImage('test')).rejects.toThrow('Responses-capable');
   });
 
+  it('does not call the image API without approved text and a stored image prompt', async () => {
+    const config = { get: (key: string) => ({ MOTIVATION_AI_API_KEY: 'test', MOTIVATION_AI_BASE_URL: 'https://example.test/v1' })[key] } as ConfigService;
+    const service = new MotivationGenerationService(config);
+    const fetchMock = jest.spyOn(global, 'fetch');
+
+    await expect(service.generateApprovedImage({ imagePrompt: 'unapproved', textApprovedAt: null })).rejects.toThrow('approved');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('sends the provider-compatible chat and image request contract', async () => {
     const config = { get: (key: string) => ({ MOTIVATION_AI_API_KEY: 'test', MOTIVATION_AI_BASE_URL: 'https://example.test/v1', MOTIVATION_IMAGE_CONTROLLER_MODEL: 'gpt-5.5' })[key] } as ConfigService;
     const service = new MotivationGenerationService(config);

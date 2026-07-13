@@ -142,6 +142,13 @@ export class MotivationGenerationService {
     return bytes;
   }
 
+  async generateApprovedImage(input: { imagePrompt: string | null; textApprovedAt: Date | null }): Promise<Buffer> {
+    if (!input.textApprovedAt || Number.isNaN(input.textApprovedAt.getTime()) || !input.imagePrompt?.trim()) {
+      throw new BadRequestException('Image generation requires approved text and a stored image prompt');
+    }
+    return this.generateImage(input.imagePrompt);
+  }
+
   private async readResponseText(response: Response, signal: AbortSignal): Promise<string> {
     if (!response.body) return '';
     const reader = response.body.getReader();

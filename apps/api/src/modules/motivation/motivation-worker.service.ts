@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { MotivationReviewStatus } from '@prisma/client';
 import Redis from 'ioredis';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MotivationGenerationService } from './motivation-generation.service';
@@ -36,8 +37,20 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
   private async retryTodaysFailedJobs() {
     const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
     await this.prisma.motivationPost.updateMany({
-      where: { contentDate: today, OR: [{ status: { not: 'published' } }, { promptVersion: { not: 'motivation-v2-public' } }] },
-      data: { status: 'draft', generationStage: 'queued', generationErrorCode: null, attemptCount: 0 },
+      where: {
+        contentDate: today,
+        reviewStatus: MotivationReviewStatus.failed,
+        generationStage: 'image',
+        textApprovedAt: { not: null },
+        imagePrompt: { not: null },
+      },
+      data: {
+        reviewStatus: MotivationReviewStatus.image_queued,
+        status: 'draft',
+        generationStage: 'image_queued',
+        generationErrorCode: null,
+        attemptCount: 0,
+      },
     });
   }
 
@@ -53,9 +66,29 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.recoverExpiredJobs();
       await this.ensureDailyDiscovery();
-      const post = await this.prisma.motivationPost.findFirst({ where: { status: 'draft', generationStage: 'queued', attemptCount: { lt: 3 } }, orderBy: { createdAt: 'asc' } });
+      const post = await this.prisma.motivationPost.findFirst({
+        where: {
+          reviewStatus: MotivationReviewStatus.image_queued,
+          status: 'draft',
+          generationStage: 'image_queued',
+          textApprovedAt: { not: null },
+          imagePrompt: { not: null },
+          attemptCount: { lt: 3 },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
       if (!post) return;
-      const claimed = await this.prisma.motivationPost.updateMany({ where: { id: post.id, status: 'draft', generationStage: 'queued' }, data: { status: 'generating', generationStage: 'copy', attemptCount: { increment: 1 } } });
+      const claimed = await this.prisma.motivationPost.updateMany({
+        where: {
+          id: post.id,
+          reviewStatus: MotivationReviewStatus.image_queued,
+          status: 'draft',
+          generationStage: 'image_queued',
+          textApprovedAt: { not: null },
+          imagePrompt: { not: null },
+        },
+        data: { status: 'generating', generationStage: 'image', attemptCount: { increment: 1 } },
+      });
       if (!claimed.count) return;
       await this.process(post.id);
     } finally {
@@ -67,8 +100,28 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
   private async recoverExpiredJobs() {
     const expiredAt = new Date(Date.now() - 5 * 60_000);
     await this.prisma.motivationPost.updateMany({
-      where: { status: 'generating', updatedAt: { lt: expiredAt }, attemptCount: { lt: 3 } },
-      data: { status: 'draft', generationStage: 'queued', generationErrorCode: 'lease_expired' },
+      where: {
+        reviewStatus: MotivationReviewStatus.image_queued,
+        status: 'generating',
+        generationStage: 'image',
+        textApprovedAt: { not: null },
+        imagePrompt: { not: null },
+        updatedAt: { lt: expiredAt },
+        attemptCount: { lt: 3 },
+      },
+      data: { status: 'draft', generationStage: 'image_queued', generationErrorCode: 'lease_expired' },
+    });
+    await this.prisma.motivationPost.updateMany({
+      where: {
+        reviewStatus: MotivationReviewStatus.image_queued,
+        status: 'generating',
+        generationStage: 'image',
+        textApprovedAt: { not: null },
+        imagePrompt: { not: null },
+        updatedAt: { lt: expiredAt },
+        attemptCount: { gte: 3 },
+      },
+      data: { reviewStatus: MotivationReviewStatus.failed, status: 'failed', generationErrorCode: 'lease_expired' },
     });
   }
 
@@ -92,23 +145,40 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
 
   private async process(id: string) {
     const post = await this.prisma.motivationPost.findUnique({ where: { id } });
-    if (!post) return;
+    if (!post || post.reviewStatus !== MotivationReviewStatus.image_queued || !post.textApprovedAt || !post.imagePrompt) return;
     try {
-      this.logger.log(`Generating Motivation post ${post.slug}`);
-      const translations = await this.generation.generateCopy(post);
-      await this.prisma.motivationPost.update({ where: { id }, data: { generationStage: 'image' } });
-      const image = await this.generation.generateImage(`${translations[0].title}. ${translations[0].text}`);
+      this.logger.log(`Generating Motivation image ${post.slug}`);
+      const image = await this.generation.generateApprovedImage({ imagePrompt: post.imagePrompt, textApprovedAt: post.textApprovedAt });
       const version = Date.now();
-      const baseKey = `motivation/${post.contentDate.toISOString().slice(0, 10)}/${post.profileType}/${post.audienceTrack}/v${version}`;
+      const baseKey = `motivation/${post.contentDate.toISOString().slice(0, 10)}/${post.id}/v${version}`;
       const imageUrl = await this.generation.uploadStory(`${baseKey}.png`, image);
-      await this.prisma.$transaction([
-        ...translations.map((translation) => this.prisma.motivationPostTranslation.upsert({ where: { postId_language: { postId: id, language: translation.language } }, create: { postId: id, ...translation }, update: translation })),
-        this.prisma.motivationPost.update({ where: { id }, data: { status: 'published', generationStage: 'published', generationErrorCode: null, imageUrl, storyImageUrl: imageUrl, attributionKind: 'ai_reflection', sourceVerified: false, modelVersion: 'responses:image_generation', promptVersion: 'motivation-v2-public', publishedAt: new Date() } }),
-      ]);
+      await this.prisma.motivationPost.updateMany({
+        where: { id, reviewStatus: MotivationReviewStatus.image_queued, status: 'generating', generationStage: 'image' },
+        data: {
+          reviewStatus: MotivationReviewStatus.image_review,
+          status: 'draft',
+          generationStage: 'image_review',
+          generationErrorCode: null,
+          imageUrl,
+          storyImageUrl: imageUrl,
+          modelVersion: 'responses:image_generation',
+        },
+      });
     } catch (error) {
-      const current = await this.prisma.motivationPost.findUnique({ where: { id }, select: { attemptCount: true } });
-      await this.prisma.motivationPost.update({ where: { id }, data: { status: current && current.attemptCount < 3 ? 'draft' : 'failed', generationStage: current && current.attemptCount < 3 ? 'queued' : 'failed', generationErrorCode: error instanceof Error ? error.message.slice(0, 200) : 'generation_failed' } });
-      this.logger.error(`Motivation generation failed for ${id}`, error instanceof Error ? error.stack : undefined);
+      const current = await this.prisma.motivationPost.findUnique({ where: { id }, select: { attemptCount: true, reviewStatus: true, status: true } });
+      if (current?.reviewStatus === MotivationReviewStatus.image_queued && current.status === 'generating') {
+        const retryable = current.attemptCount < 3;
+        await this.prisma.motivationPost.updateMany({
+          where: { id, reviewStatus: MotivationReviewStatus.image_queued, status: 'generating', generationStage: 'image' },
+          data: {
+            reviewStatus: retryable ? MotivationReviewStatus.image_queued : MotivationReviewStatus.failed,
+            status: retryable ? 'draft' : 'failed',
+            generationStage: retryable ? 'image_queued' : 'image',
+            generationErrorCode: error instanceof Error ? error.message.slice(0, 200) : 'generation_failed',
+          },
+        });
+      }
+      this.logger.error(`Motivation image generation failed for ${id}`, error instanceof Error ? error.stack : undefined);
     }
   }
 }
