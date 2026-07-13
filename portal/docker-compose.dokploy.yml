@@ -18,7 +18,7 @@ services:
       context: ..
       dockerfile: apps/api/Dockerfile
       args:
-        MOTIVATION_BUILD_VERSION: d1c9eac
+        MOTIVATION_BUILD_VERSION: 6d91528
     restart: unless-stopped
     depends_on:
       redis:
