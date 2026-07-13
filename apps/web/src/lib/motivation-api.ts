@@ -1,9 +1,11 @@
 import { cookies } from "next/headers";
 import type {
+  MotivationAuthorWatchDto,
   MotivationFeedResponse,
   MotivationAdminCandidateDto,
   MotivationPostDto,
   MotivationPreferenceDto,
+  MotivationSourceWatchDto,
 } from "@vedamatch/shared";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
@@ -44,3 +46,9 @@ export const getPublicMotivationPost = (slug: string) =>
 
 export const getAdminMotivationPosts = () =>
   motivationGet<MotivationAdminCandidateDto[]>("/admin/motivation/posts");
+
+export const getAdminMotivationAuthorWatches = () =>
+  motivationGet<MotivationAuthorWatchDto[]>("/admin/motivation/authors");
+
+export const getAdminMotivationSourceWatches = () =>
+  motivationGet<MotivationSourceWatchDto[]>("/admin/motivation/sources");

@@ -74,3 +74,27 @@ export interface MotivationAdminUpdate { hidden?: boolean; category?: string; tr
 export interface MotivationApproveTextInput { visualStyle?: MotivationVisualStyle }
 export interface MotivationRejectInput { reason: string }
 export interface MotivationRegenerateImageInput { visualStyle?: MotivationVisualStyle }
+
+export interface MotivationAuthorWatchDto {
+  id: string;
+  name: string;
+  language: string | null;
+  enabled: boolean;
+  createdAt: string;
+  lastSearchedAt: string | null;
+  lastResultCount: number;
+}
+export interface MotivationAuthorWatchInput { name: string; language?: string }
+
+export interface MotivationSourceWatchDto {
+  id: string;
+  url: string;
+  label: string | null;
+  enabled: boolean;
+  createdAt: string;
+  lastFetchedAt: string | null;
+  lastResultCount: number;
+}
+export interface MotivationSourceWatchInput { url: string; label?: string }
+
+export interface MotivationSearchResult { foundCount: number }

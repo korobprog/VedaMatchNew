@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import type { AccessTokenPayload, MotivationAdminUpdate, MotivationApproveTextInput, MotivationLanguage, MotivationPreferenceUpdate, MotivationRegenerateImageInput, MotivationRejectInput } from '@vedamatch/shared';
+import type { AccessTokenPayload, MotivationAdminUpdate, MotivationApproveTextInput, MotivationAuthorWatchInput, MotivationLanguage, MotivationPreferenceUpdate, MotivationRegenerateImageInput, MotivationRejectInput, MotivationSourceWatchInput } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { MotivationService } from './motivation.service';
 
@@ -41,4 +41,22 @@ export class MotivationController {
   regenerateImage(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Body() input: MotivationRegenerateImageInput = {}) { return this.service.regenerateModerationImage(user.role, user.sub, id, input.visualStyle); }
   @Post('admin/motivation/generate') @UseGuards(AuthGuard)
   generate(@CurrentUser() user: AccessTokenPayload, @Body() input: { date?: string }) { return this.service.enqueueDaily(user.role, input.date); }
+
+  @Get('admin/motivation/authors') @UseGuards(AuthGuard)
+  listAuthorWatches(@CurrentUser() user: AccessTokenPayload) { return this.service.listAuthorWatches(user.role); }
+  @Post('admin/motivation/authors') @UseGuards(AuthGuard)
+  addAuthorWatch(@CurrentUser() user: AccessTokenPayload, @Body() input: MotivationAuthorWatchInput) { return this.service.addAuthorWatch(user.role, user.sub, input); }
+  @Delete('admin/motivation/authors/:id') @UseGuards(AuthGuard)
+  deleteAuthorWatch(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.deleteAuthorWatch(user.role, id); }
+  @Post('admin/motivation/authors/:id/search') @UseGuards(AuthGuard)
+  searchAuthorWatch(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.searchAuthorWatch(user.role, id); }
+
+  @Get('admin/motivation/sources') @UseGuards(AuthGuard)
+  listSourceWatches(@CurrentUser() user: AccessTokenPayload) { return this.service.listSourceWatches(user.role); }
+  @Post('admin/motivation/sources') @UseGuards(AuthGuard)
+  addSourceWatch(@CurrentUser() user: AccessTokenPayload, @Body() input: MotivationSourceWatchInput) { return this.service.addSourceWatch(user.role, user.sub, input); }
+  @Delete('admin/motivation/sources/:id') @UseGuards(AuthGuard)
+  deleteSourceWatch(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.deleteSourceWatch(user.role, id); }
+  @Post('admin/motivation/sources/:id/search') @UseGuards(AuthGuard)
+  searchSourceWatch(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.searchSourceWatch(user.role, id); }
 }

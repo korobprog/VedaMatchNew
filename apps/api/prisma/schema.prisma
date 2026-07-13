@@ -147,6 +147,8 @@ model User {
   motivationFavorites         MotivationFavorite[]
   motivationViews             MotivationView[]
   motivationModerationAudits  MotivationModerationAudit[]
+  motivationAuthorWatches     MotivationAuthorWatch[]
+  motivationSourceWatches     MotivationSourceWatch[]
 }
 
 model MotivationQuote {
@@ -304,6 +306,34 @@ model MotivationView {
 
   @@id([userId, postId])
   @@index([userId, viewedAt])
+}
+
+model MotivationAuthorWatch {
+  id              String    @id @default(uuid())
+  name            String
+  language        String?   @db.VarChar(8)
+  enabled         Boolean   @default(true)
+  createdById     String
+  createdBy       User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt       DateTime  @default(now())
+  lastSearchedAt  DateTime?
+  lastResultCount Int       @default(0)
+
+  @@unique([name])
+}
+
+model MotivationSourceWatch {
+  id              String    @id @default(uuid())
+  url             String
+  label           String?
+  enabled         Boolean   @default(true)
+  createdById     String
+  createdBy       User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt       DateTime  @default(now())
+  lastFetchedAt   DateTime?
+  lastResultCount Int       @default(0)
+
+  @@unique([url])
 }
 
 model RefreshToken {

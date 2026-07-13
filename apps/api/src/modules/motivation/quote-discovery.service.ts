@@ -3,10 +3,12 @@ import { Prisma, type MotivationQuote } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VedabaseContentRepository } from '../vedabase/vedabase-content.repository';
 import { ApprovedWebSourceService, type WebQuoteCandidate } from './approved-web-source.service';
-import { quoteFingerprint } from './quote-normalizer';
+import { extractQuoteSentence, quoteFingerprint } from './quote-normalizer';
 import { QuoteVerificationService, type VerifiedQuote } from './quote-verification.service';
 
 const DISCOVERY_QUERIES = ['life wisdom purpose service compassion courage peace truth'];
+
+export type IngestableQuoteCandidate = VerifiedQuote | NonNullable<ReturnType<QuoteDiscoveryService['verifyWebCandidate']>>;
 
 @Injectable()
 export class QuoteDiscoveryService {
@@ -33,7 +35,7 @@ export class QuoteDiscoveryService {
     for (const query of DISCOVERY_QUERIES) {
       const units = await this.repository.findQuoteCandidates(query, missingCount * 4);
       for (const unit of units) {
-        const originalText = this.extractQuote(unit.text);
+        const originalText = extractQuoteSentence(unit.text);
         if (!originalText) continue;
         try {
           const verified = await this.verifier.verifyVedabaseCandidate({
@@ -97,12 +99,13 @@ export class QuoteDiscoveryService {
     return new Set(existing.map((quote) => quote.normalizedHash));
   }
 
-  private extractQuote(text: string): string | null {
-    const sentence = text.split(/(?<=[.!?])\s+/u).map((part) => part.trim()).find((part) => part.length >= 20 && part.length <= 500);
-    return sentence ?? (text.length > 0 && text.length <= 500 ? text.trim() : null);
+  async ingestCandidate(candidate: IngestableQuoteCandidate): Promise<MotivationQuote | null> {
+    const existing = await this.prisma.motivationQuote.findUnique({ where: { normalizedHash: candidate.normalizedHash } });
+    if (existing) return null;
+    return this.prisma.motivationQuote.create({ data: { ...candidate, discoveryDate: null } });
   }
 
-  private verifyWebCandidate(candidate: WebQuoteCandidate) {
+  verifyWebCandidate(candidate: WebQuoteCandidate) {
     if (!candidate.verified || !candidate.sourceUrl || !candidate.author) return null;
     if (!candidate.contextExcerpt.includes(candidate.originalText)) return null;
     return {
