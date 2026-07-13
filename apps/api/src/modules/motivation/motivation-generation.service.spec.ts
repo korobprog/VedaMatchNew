@@ -78,6 +78,8 @@ describe('MotivationGenerationService', () => {
     expect(body).toMatchObject({ model: 'gpt-5.5', response_format: { type: 'json_object' }, stream: true });
     expect(body.messages[0].content).toContain('Never alter originalText');
     expect(body.messages[0].content).toContain('user, in_goodness, yogi, devotee');
+    expect(body.messages[0].content).toContain('Every language key is mandatory');
+    expect(body.messages[0].content).toContain('Перевод VedaMatch');
   });
 
   it('rejects decoded image data without a PNG signature', async () => {
