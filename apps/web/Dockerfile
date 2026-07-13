@@ -15,6 +15,11 @@ RUN pnpm --filter @vedamatch/web build
 
 FROM base AS runtime
 ENV NODE_ENV=production
+# Next.js standalone server.js binds to process.env.HOSTNAME if set. Docker auto-sets
+# HOSTNAME to the container ID, which resolves to a single internal network IP and makes
+# the server unreachable from other Docker networks (e.g. the Traefik/dokploy network).
+# Force it to 0.0.0.0 so the server listens on all interfaces.
+ENV HOSTNAME=0.0.0.0
 COPY --from=build /app/apps/web/.next/standalone /app
 COPY --from=build /app/apps/web/.next/static /app/apps/web/.next/static
 COPY --from=build /app/apps/web/public /app/apps/web/public
