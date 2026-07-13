@@ -9,6 +9,7 @@ import { QuoteVerificationService } from './quote-verification.service';
 import { ApprovedWebSourceService } from './approved-web-source.service';
 import { QuoteDiscoveryService } from './quote-discovery.service';
 import { MotivationCopyService } from './motivation-copy.service';
+import { MotivationModerationService } from './motivation-moderation.service';
 
-@Module({ imports: [AuthModule, VedabaseModule], controllers: [MotivationController], providers: [MotivationService, MotivationGenerationService, MotivationWorkerService, QuoteVerificationService, ApprovedWebSourceService, QuoteDiscoveryService, MotivationCopyService], exports: [MotivationService, QuoteVerificationService, QuoteDiscoveryService, MotivationCopyService] })
+@Module({ imports: [AuthModule, VedabaseModule], controllers: [MotivationController], providers: [MotivationService, MotivationGenerationService, MotivationWorkerService, QuoteVerificationService, ApprovedWebSourceService, QuoteDiscoveryService, MotivationCopyService, MotivationModerationService], exports: [MotivationService, QuoteVerificationService, QuoteDiscoveryService, MotivationCopyService, MotivationModerationService] })
 export class MotivationModule {}

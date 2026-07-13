@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import type { AccessTokenPayload, MotivationAdminUpdate, MotivationLanguage, MotivationPreferenceUpdate } from '@vedamatch/shared';
+import type { AccessTokenPayload, MotivationAdminUpdate, MotivationApproveTextInput, MotivationLanguage, MotivationPreferenceUpdate, MotivationRegenerateImageInput, MotivationRejectInput } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { MotivationService } from './motivation.service';
 
@@ -30,7 +30,15 @@ export class MotivationController {
   @Patch('admin/motivation/posts/:id') @UseGuards(AuthGuard)
   adminUpdate(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Body() input: MotivationAdminUpdate) { return this.service.adminUpdate(user.role, id, input); }
   @Post('admin/motivation/posts/:id/regenerate') @UseGuards(AuthGuard)
-  regenerate(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.regenerate(user.role, id); }
+  regenerate(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.regenerate(user.role, user.sub, id); }
+  @Post('admin/motivation/posts/:id/approve-text') @UseGuards(AuthGuard)
+  approveText(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Body() input: MotivationApproveTextInput = {}) { return this.service.approveText(user.role, user.sub, id, input.visualStyle); }
+  @Post('admin/motivation/posts/:id/approve-image') @UseGuards(AuthGuard)
+  approveImage(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.approveImage(user.role, user.sub, id); }
+  @Post('admin/motivation/posts/:id/reject') @UseGuards(AuthGuard)
+  reject(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Body() input: MotivationRejectInput) { return this.service.rejectModeration(user.role, user.sub, id, input.reason); }
+  @Post('admin/motivation/posts/:id/regenerate-image') @UseGuards(AuthGuard)
+  regenerateImage(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Body() input: MotivationRegenerateImageInput = {}) { return this.service.regenerateModerationImage(user.role, user.sub, id, input.visualStyle); }
   @Post('admin/motivation/generate') @UseGuards(AuthGuard)
   generate(@CurrentUser() user: AccessTokenPayload, @Body() input: { date?: string }) { return this.service.enqueueDaily(user.role, input.date); }
 }

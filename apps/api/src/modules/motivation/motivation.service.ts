@@ -1,10 +1,11 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { MotivationAudienceTrack, MotivationPostStatus, MotivationProfileType, SpiritualStage } from '@prisma/client';
-import type { MotivationAdminCandidateDto, MotivationAdminUpdate, MotivationLanguage, MotivationPostDto, MotivationPreferenceUpdate, Role } from '@vedamatch/shared';
+import type { MotivationAdminCandidateDto, MotivationAdminUpdate, MotivationLanguage, MotivationPostDto, MotivationPreferenceUpdate, MotivationVisualStyle, Role } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { decodeMotivationCursor, encodeMotivationCursor, weightedPage } from './motivation-feed';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { QuoteDiscoveryService } from './quote-discovery.service';
+import { MotivationModerationService } from './motivation-moderation.service';
 
 const stageProfiles: Record<SpiritualStage, MotivationProfileType> = { seeker: 'user', practitioner: 'in_goodness', yogi: 'yogi', devotee: 'devotee' };
 const languages = new Set<MotivationLanguage>(['ru', 'en', 'hi']);
@@ -15,6 +16,7 @@ export class MotivationService {
     private readonly prisma: PrismaService,
     private readonly generation: MotivationGenerationService,
     private readonly discovery: QuoteDiscoveryService,
+    private readonly moderation: MotivationModerationService,
   ) {}
 
   async preference(userId: string) { return (await this.prisma.motivationPreference.findUnique({ where: { userId } })) ?? { vaishnavaPercent: 50, language: 'ru' }; }
@@ -47,7 +49,11 @@ export class MotivationService {
   async view(userId: string, postId: string) { await this.ensurePublished(postId); await this.prisma.motivationView.upsert({ where: { userId_postId: { userId, postId } }, create: { userId, postId }, update: { viewedAt: new Date() } }); }
   async adminList(role: Role): Promise<MotivationAdminCandidateDto[]> { this.admin(role); const posts = await this.prisma.motivationPost.findMany({ include: { translations: { where: { language: 'ru' } }, quote: { include: { translations: true, profiles: true } }, favorites: false, views: false }, orderBy: { createdAt: 'desc' } }); return posts.map((post) => ({ ...this.dto({ ...post, favorites: [], views: [] }), status: post.status, generationStage: post.generationStage, generationErrorCode: post.generationErrorCode, attemptCount: post.attemptCount, reviewStatus: post.reviewStatus, quote: post.quote ? { id: post.quote.id, originalText: post.quote.originalText, originalLanguage: post.quote.originalLanguage, author: post.quote.author, work: post.quote.work, locator: post.quote.locator, sourceType: post.quote.sourceType, sourceUrl: post.quote.sourceUrl, contextExcerpt: post.quote.contextExcerpt, verified: post.quote.verified, translations: post.quote.translations.map((translation) => ({ language: translation.language as MotivationLanguage, quoteText: translation.quoteText, translationKind: translation.translationKind, label: translation.label })) } : null, profileTypes: post.quote?.profiles.map((profile) => profile.profileType) ?? [post.profileType], visualStyle: post.visualStyle, imagePrompt: post.imagePrompt, textApprovedAt: post.textApprovedAt?.toISOString() ?? null, imageApprovedAt: post.imageApprovedAt?.toISOString() ?? null })); }
   async adminUpdate(role: Role, id: string, input: MotivationAdminUpdate) { this.admin(role); return this.prisma.motivationPost.update({ where: { id }, data: { ...(input.hidden !== undefined ? { status: input.hidden ? 'hidden' : 'published' } : {}), ...(input.category ? { category: input.category.trim() } : {}) } }); }
-  async regenerate(role: Role, id: string) { this.admin(role); const post = await this.prisma.motivationPost.findUnique({ where: { id } }); if (!post) throw new NotFoundException(); return this.prisma.motivationPost.update({ where: { id }, data: { status: 'draft', generationStage: 'queued', generationErrorCode: null, attemptCount: 0 } }); }
+  regenerate(role: Role, actorId: string, id: string) { return this.moderation.regenerateImage(role, actorId, id); }
+  approveText(role: Role, actorId: string, id: string, visualStyle?: MotivationVisualStyle) { return this.moderation.approveText(role, actorId, id, visualStyle); }
+  approveImage(role: Role, actorId: string, id: string) { return this.moderation.approveImage(role, actorId, id); }
+  rejectModeration(role: Role, actorId: string, id: string, reason: string) { return this.moderation.reject(role, actorId, id, reason); }
+  regenerateModerationImage(role: Role, actorId: string, id: string, visualStyle?: MotivationVisualStyle) { return this.moderation.regenerateImage(role, actorId, id, visualStyle); }
   async generateDaily(date: Date) {
     return this.discovery.discoverDaily(date, 8);
   }

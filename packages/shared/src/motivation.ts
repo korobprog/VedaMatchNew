@@ -71,3 +71,6 @@ export interface MotivationAdminCandidateDto extends MotivationAdminPostDto {
 export interface MotivationPreferenceDto { vaishnavaPercent: number; language: MotivationLanguage }
 export interface MotivationPreferenceUpdate { vaishnavaPercent: number; language?: MotivationLanguage }
 export interface MotivationAdminUpdate { hidden?: boolean; category?: string; translations?: Partial<Record<MotivationLanguage, { title: string; text: string; storyText: string }>> }
+export interface MotivationApproveTextInput { visualStyle?: MotivationVisualStyle }
+export interface MotivationRejectInput { reason: string }
+export interface MotivationRegenerateImageInput { visualStyle?: MotivationVisualStyle }
