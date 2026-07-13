@@ -83,19 +83,30 @@ describe('MotivationWorkerService', () => {
     expect((worker as unknown as { lastDiscoveryDate?: string }).lastDiscoveryDate).toBe(new Date().toISOString().slice(0, 10));
   });
 
-  it('keeps the worker alive when daily copy preparation fails', async () => {
+  it('continues approved image generation when daily copy preparation fails', async () => {
     const discovery = { discoverDaily: jest.fn().mockResolvedValue([{ id: 'quote-1' }]) };
     const copy = { prepareCandidate: jest.fn().mockRejectedValue(new Error('invalid provider response')) };
     const { prisma, generation, motivationPost } = createWorker();
-    motivationPost.findFirst.mockResolvedValue(null);
     const worker = new MotivationWorkerService(prisma as never, generation as never, new ConfigService(), copy as never, discovery as never);
 
     await expect(worker.tick()).resolves.toBeUndefined();
-    await expect(worker.tick()).resolves.toBeUndefined();
 
-    expect(discovery.discoverDaily).toHaveBeenCalledTimes(2);
-    expect(copy.prepareCandidate).toHaveBeenCalledTimes(2);
-    expect(motivationPost.findFirst).not.toHaveBeenCalled();
+    expect(discovery.discoverDaily).toHaveBeenCalledTimes(1);
+    expect(copy.prepareCandidate).toHaveBeenCalledTimes(1);
+    expect(motivationPost.findFirst).toHaveBeenCalled();
+    expect(generation.generateApprovedImage).toHaveBeenCalledWith({
+      imagePrompt: approvedPost.imagePrompt,
+      textApprovedAt: approvedPost.textApprovedAt,
+    });
+    expect(motivationPost.updateMany).toHaveBeenCalledWith({
+      where: { id: approvedPost.id, reviewStatus: 'image_queued', status: 'generating', generationStage: 'image' },
+      data: expect.objectContaining({
+        reviewStatus: 'image_review',
+        status: 'draft',
+        generationStage: 'image_review',
+        imageUrl: 'https://cdn.test/motivation/post.png',
+      }),
+    });
     expect((worker as unknown as { running: boolean }).running).toBe(false);
   });
 

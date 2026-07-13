@@ -67,7 +67,11 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       await this.recoverExpiredJobs();
-      await this.ensureDailyDiscovery();
+      try {
+        await this.ensureDailyDiscovery();
+      } catch (error) {
+        this.logger.error('Motivation daily discovery failed', error instanceof Error ? error.stack : undefined);
+      }
       const post = await this.prisma.motivationPost.findFirst({
         where: {
           reviewStatus: MotivationReviewStatus.image_queued,
