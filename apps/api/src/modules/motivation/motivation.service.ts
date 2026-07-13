@@ -4,13 +4,18 @@ import type { MotivationAdminCandidateDto, MotivationAdminUpdate, MotivationLang
 import { PrismaService } from '../../prisma/prisma.service';
 import { decodeMotivationCursor, encodeMotivationCursor, weightedPage } from './motivation-feed';
 import { MotivationGenerationService } from './motivation-generation.service';
+import { QuoteDiscoveryService } from './quote-discovery.service';
 
 const stageProfiles: Record<SpiritualStage, MotivationProfileType> = { seeker: 'user', practitioner: 'in_goodness', yogi: 'yogi', devotee: 'devotee' };
 const languages = new Set<MotivationLanguage>(['ru', 'en', 'hi']);
 
 @Injectable()
 export class MotivationService {
-  constructor(private readonly prisma: PrismaService, private readonly generation: MotivationGenerationService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly generation: MotivationGenerationService,
+    private readonly discovery: QuoteDiscoveryService,
+  ) {}
 
   async preference(userId: string) { return (await this.prisma.motivationPreference.findUnique({ where: { userId } })) ?? { vaishnavaPercent: 50, language: 'ru' }; }
   async savePreference(userId: string, input: MotivationPreferenceUpdate) {
@@ -44,8 +49,7 @@ export class MotivationService {
   async adminUpdate(role: Role, id: string, input: MotivationAdminUpdate) { this.admin(role); return this.prisma.motivationPost.update({ where: { id }, data: { ...(input.hidden !== undefined ? { status: input.hidden ? 'hidden' : 'published' } : {}), ...(input.category ? { category: input.category.trim() } : {}) } }); }
   async regenerate(role: Role, id: string) { this.admin(role); const post = await this.prisma.motivationPost.findUnique({ where: { id } }); if (!post) throw new NotFoundException(); return this.prisma.motivationPost.update({ where: { id }, data: { status: 'draft', generationStage: 'queued', generationErrorCode: null, attemptCount: 0 } }); }
   async generateDaily(date: Date) {
-    const profiles = Object.values(MotivationProfileType), tracks = Object.values(MotivationAudienceTrack);
-    return this.prisma.$transaction(profiles.flatMap((profileType) => tracks.map((audienceTrack) => this.prisma.motivationPost.upsert({ where: { contentDate_profileType_audienceTrack: { contentDate: date, profileType, audienceTrack } }, create: { contentDate: date, profileType, audienceTrack, slug: `${date.toISOString().slice(0,10)}-${profileType}-${audienceTrack}`, category: 'daily', generationStage: 'queued' }, update: {} }))));
+    return this.discovery.discoverDaily(date, 8);
   }
   async enqueueDaily(role: Role, rawDate?: string) { this.admin(role); const date = rawDate ? new Date(`${rawDate}T00:00:00.000Z`) : new Date(new Date().toISOString().slice(0, 10)); if (Number.isNaN(date.getTime())) throw new BadRequestException('Invalid date'); return this.generateDaily(date); }
   private admin(role: Role) { if (role !== 'admin' && role !== 'service-admin') throw new ForbiddenException(); }

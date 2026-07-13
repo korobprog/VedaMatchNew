@@ -206,7 +206,7 @@ model MotivationPost {
   audienceTrack        MotivationAudienceTrack
   slug                 String                    @unique
   category             String
-  quoteId              String?
+  quoteId              String?                    @unique
   quote                MotivationQuote?          @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   status               MotivationPostStatus      @default(draft)
   reviewStatus         MotivationReviewStatus    @default(discovered)
@@ -237,7 +237,6 @@ model MotivationPost {
   views            MotivationView[]
   moderationAudits MotivationModerationAudit[]
 
-  @@unique([contentDate, profileType, audienceTrack])
   @@index([profileType, audienceTrack, status, publishedAt])
   @@index([category, status, publishedAt])
   @@index([reviewStatus, createdAt])
