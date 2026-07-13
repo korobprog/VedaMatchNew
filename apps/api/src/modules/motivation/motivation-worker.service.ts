@@ -1,9 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
-import { MotivationAudienceTrack, MotivationProfileType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MotivationGenerationService } from './motivation-generation.service';
+import { QuoteDiscoveryService } from './quote-discovery.service';
 
 @Injectable()
 export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
@@ -11,8 +11,14 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly redis: Redis | null;
   private timer?: NodeJS.Timeout;
   private running = false;
+  private lastDiscoveryDate?: string;
 
-  constructor(private readonly prisma: PrismaService, private readonly generation: MotivationGenerationService, config: ConfigService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly generation: MotivationGenerationService,
+    private readonly config: ConfigService,
+    @Optional() private readonly discovery?: QuoteDiscoveryService,
+  ) {
     const host = config.get<string>('REDIS_HOST');
     this.redis = host ? new Redis({ host, port: Number(config.get('REDIS_PORT') || 6379), db: Number(config.get('REDIS_DB') || 0), password: config.get<string>('REDIS_PASSWORD') || undefined, lazyConnect: true, maxRetriesPerRequest: 1 }) : null;
   }
@@ -46,7 +52,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       await this.recoverExpiredJobs();
-      await this.ensureDailyBatch();
+      await this.ensureDailyDiscovery();
       const post = await this.prisma.motivationPost.findFirst({ where: { status: 'draft', generationStage: 'queued', attemptCount: { lt: 3 } }, orderBy: { createdAt: 'asc' } });
       if (!post) return;
       const claimed = await this.prisma.motivationPost.updateMany({ where: { id: post.id, status: 'draft', generationStage: 'queued' }, data: { status: 'generating', generationStage: 'copy', attemptCount: { increment: 1 } } });
@@ -66,15 +72,22 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private async ensureDailyBatch() {
-    const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
-    const profiles = Object.values(MotivationProfileType);
-    const tracks = Object.values(MotivationAudienceTrack);
-    await this.prisma.$transaction(profiles.flatMap((profileType) => tracks.map((audienceTrack) => this.prisma.motivationPost.upsert({
-      where: { contentDate_profileType_audienceTrack: { contentDate: today, profileType, audienceTrack } },
-      create: { contentDate: today, profileType, audienceTrack, slug: `${today.toISOString().slice(0, 10)}-${profileType}-${audienceTrack}`, category: 'daily', generationStage: 'queued' },
-      update: {},
-    }))));
+  private async ensureDailyDiscovery() {
+    if (!this.discovery) return;
+    const dateKey = new Date().toISOString().slice(0, 10);
+    const idempotencyKey = `motivation:discovery:${dateKey}`;
+    if (this.lastDiscoveryDate === dateKey) return;
+    if (this.redis?.status === 'ready' && await this.redis.get(idempotencyKey).catch(() => null)) return;
+
+    const count = Number(this.config.get('MOTIVATION_DAILY_CANDIDATE_COUNT') || 8);
+    const today = new Date(`${dateKey}T00:00:00.000Z`);
+    await this.discovery.discoverDaily(today, count);
+    if (this.redis?.status === 'ready') {
+      await this.redis.set(idempotencyKey, 'done', 'EX', 8 * 24 * 60 * 60).catch((error) => {
+        this.logger.warn(`Unable to store Motivation discovery idempotency key: ${String(error)}`);
+      });
+    }
+    this.lastDiscoveryDate = dateKey;
   }
 
   private async process(id: string) {

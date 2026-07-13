@@ -6,6 +6,8 @@ import { MotivationGenerationService } from './motivation-generation.service';
 import { MotivationService } from './motivation.service';
 import { MotivationWorkerService } from './motivation-worker.service';
 import { QuoteVerificationService } from './quote-verification.service';
+import { ApprovedWebSourceService } from './approved-web-source.service';
+import { QuoteDiscoveryService } from './quote-discovery.service';
 
-@Module({ imports: [AuthModule, VedabaseModule], controllers: [MotivationController], providers: [MotivationService, MotivationGenerationService, MotivationWorkerService, QuoteVerificationService], exports: [MotivationService, QuoteVerificationService] })
+@Module({ imports: [AuthModule, VedabaseModule], controllers: [MotivationController], providers: [MotivationService, MotivationGenerationService, MotivationWorkerService, QuoteVerificationService, ApprovedWebSourceService, QuoteDiscoveryService], exports: [MotivationService, QuoteVerificationService, QuoteDiscoveryService] })
 export class MotivationModule {}
