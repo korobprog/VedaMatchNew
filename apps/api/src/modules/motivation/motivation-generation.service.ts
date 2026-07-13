@@ -64,6 +64,56 @@ export class MotivationGenerationService {
     return this.requestStructuredChat(prompt) as Promise<VerifiedQuoteCopy>;
   }
 
+  async extractQuotesFromSource(text: string, sourceUrl: string): Promise<Array<{
+    originalText: string;
+    author: string;
+    work: string;
+    locator: string;
+    originalLanguage: string;
+    contextExcerpt: string;
+  }>> {
+    const trimmed = text.slice(0, 12_000);
+    const prompt = [
+      'Extract verbatim quotations with clear author attribution from the following web page text.',
+      'Only extract text that is explicitly present in the source; never invent, paraphrase, or translate.',
+      'Skip any passage without a clearly named author.',
+      'Return strict JSON with this shape: {"quotes":[{"originalText":"...","author":"...","work":"...","locator":"...","originalLanguage":"en","contextExcerpt":"..."}]}.',
+      'contextExcerpt must contain originalText verbatim. Return at most 10 items. If nothing qualifies, return {"quotes":[]}.',
+      `Source URL: ${sourceUrl}`,
+      `Source text: ${JSON.stringify(trimmed)}`,
+    ].join('\n');
+    const parsed = await this.requestStructuredChat(prompt);
+    return this.validateExtractedQuotes(parsed);
+  }
+
+  private validateExtractedQuotes(value: unknown): Array<{
+    originalText: string;
+    author: string;
+    work: string;
+    locator: string;
+    originalLanguage: string;
+    contextExcerpt: string;
+  }> {
+    if (!value || typeof value !== 'object') throw new BadGatewayException('Text provider returned invalid quotes payload');
+    const quotes = (value as { quotes?: unknown }).quotes;
+    if (!Array.isArray(quotes)) throw new BadGatewayException('Text provider returned no quotes array');
+    return quotes.flatMap((item) => {
+      if (!item || typeof item !== 'object') return [];
+      const record = item as Record<string, unknown>;
+      const originalText = typeof record.originalText === 'string' ? record.originalText.trim() : '';
+      const author = typeof record.author === 'string' ? record.author.trim() : '';
+      if (!originalText || !author) return [];
+      return [{
+        originalText,
+        author,
+        work: typeof record.work === 'string' ? record.work.trim() : '',
+        locator: typeof record.locator === 'string' ? record.locator.trim() : '',
+        originalLanguage: typeof record.originalLanguage === 'string' && record.originalLanguage.trim() ? record.originalLanguage.trim() : 'en',
+        contextExcerpt: typeof record.contextExcerpt === 'string' && record.contextExcerpt.trim() ? record.contextExcerpt.trim() : originalText,
+      }];
+    }).slice(0, 10);
+  }
+
   private async requestStructuredChat(prompt: string): Promise<unknown> {
     const apiKey = this.config.get<string>('MOTIVATION_AI_API_KEY');
     const baseUrl = this.config.get<string>('MOTIVATION_AI_BASE_URL')?.replace(/\/$/, '');

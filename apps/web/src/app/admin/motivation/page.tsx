@@ -1,11 +1,21 @@
 import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
 import { MotivationAdminControls } from "@/components/motivation/motivation-admin-controls";
+import { MotivationAdminWatchlists } from "@/components/motivation/motivation-admin-watchlists";
 import { getProfile } from "@/lib/api";
-import { getAdminMotivationPosts } from "@/lib/motivation-api";
+import {
+  getAdminMotivationAuthorWatches,
+  getAdminMotivationPosts,
+  getAdminMotivationSourceWatches,
+} from "@/lib/motivation-api";
 
 export default async function AdminMotivationPage() {
-  const [user, posts] = await Promise.all([getProfile(), getAdminMotivationPosts()]);
+  const [user, posts, authors, sources] = await Promise.all([
+    getProfile(),
+    getAdminMotivationPosts(),
+    getAdminMotivationAuthorWatches(),
+    getAdminMotivationSourceWatches(),
+  ]);
   if (!user) redirect("/login");
   if (user.role !== "admin" && user.role !== "service-admin") redirect("/");
 
@@ -17,6 +27,7 @@ export default async function AdminMotivationPage() {
         <p className="mt-2 max-w-3xl text-zinc-600 dark:text-zinc-400">
           Сначала проверьте точную цитату и пояснение. Изображение создаётся только после одобрения текста и требует отдельного подтверждения перед публикацией.
         </p>
+        <MotivationAdminWatchlists authors={authors} sources={sources} />
         <MotivationAdminControls posts={posts} />
       </main>
     </div>
