@@ -2,6 +2,29 @@ import { MotivationService } from './motivation.service';
 import type { MotivationAdminCandidateDto } from '@vedamatch/shared';
 
 describe('MotivationService admin list', () => {
+  it('includes verified quotes assigned to the user profile', async () => {
+    const motivationPost = { findMany: jest.fn().mockResolvedValue([]) };
+    const prisma = {
+      user: { findUnique: jest.fn().mockResolvedValue({ spiritualStage: 'devotee' }) },
+      motivationPreference: { findUnique: jest.fn().mockResolvedValue({ vaishnavaPercent: 50, language: 'ru' }) },
+      motivationPost,
+    };
+    const service = new MotivationService(prisma as never, {} as never, {} as never, {} as never);
+
+    await service.feed('user-1', {});
+
+    expect(motivationPost.findMany).toHaveBeenCalledTimes(2);
+    for (const [input] of motivationPost.findMany.mock.calls) {
+      expect(input.where).toMatchObject({
+        status: 'published',
+        OR: [
+          { profileType: 'devotee' },
+          { quote: { profiles: { some: { profileType: 'devotee' } } } },
+        ],
+      });
+    }
+  });
+
   it('returns generation diagnostics for administrators', async () => {
     const post = { id: 'post-1', slug: 'daily-post', contentDate: new Date('2026-07-12T00:00:00.000Z'), profileType: 'devotee', audienceTrack: 'universal', category: 'daily', imageUrl: null, storyImageUrl: null, attributionKind: 'ai_reflection', attributionSpeaker: null, attributionWork: null, attributionLocator: null, attributionSourceUrl: null, sourceVerified: false, publishedAt: null, status: 'failed', generationStage: 'failed', generationErrorCode: 'provider_error', attemptCount: 3, translations: [], favorites: [], views: [] };
     const prisma = { motivationPost: { findMany: jest.fn().mockResolvedValue([post]) } };

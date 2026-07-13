@@ -30,7 +30,8 @@ export class MotivationService {
     if (!user?.spiritualStage) throw new BadRequestException('Сначала пройдите самоидентификацию');
     const preference = await this.preference(userId), language = languages.has(preference.language as MotivationLanguage) ? preference.language : 'ru';
     const cursor = decodeMotivationCursor(query.cursor), limit = Math.max(1, Math.min(50, query.limit ?? 20));
-    const where = { profileType: stageProfiles[user.spiritualStage], status: MotivationPostStatus.published, ...(query.category ? { category: query.category } : {}), ...(query.favorites ? { favorites: { some: { userId } } } : {}) };
+    const profileType = stageProfiles[user.spiritualStage];
+    const where = { OR: [{ profileType }, { quote: { profiles: { some: { profileType } } } }], status: MotivationPostStatus.published, ...(query.category ? { category: query.category } : {}), ...(query.favorites ? { favorites: { some: { userId } } } : {}) };
     const include = { translations: { where: { language } }, favorites: { where: { userId }, select: { userId: true } }, views: { where: { userId }, select: { userId: true } } } as const;
     const [universal, vaishnava] = await Promise.all([
       this.prisma.motivationPost.findMany({ where: { ...where, audienceTrack: MotivationAudienceTrack.universal }, include, orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }], take: 200 }),
