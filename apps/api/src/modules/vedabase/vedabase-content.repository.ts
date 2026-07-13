@@ -13,6 +13,18 @@ type ActiveBook = Prisma.VedabaseBookGetPayload<{
   include: { activeVersion: { include: { chapters: true } } };
 }>;
 
+export interface VedabaseQuoteSearchUnit {
+  bookSlug: string;
+  bookTitle: string;
+  bookAuthor: string | null;
+  bookLanguage: string;
+  chapterSlug: string;
+  locator: unknown;
+  title: string;
+  text: string;
+  rank: number;
+}
+
 @Injectable()
 export class VedabaseContentRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -70,6 +82,20 @@ export class VedabaseContentRepository {
       JOIN "VedabaseBook" b ON b."activeVersionId" = v.id
       WHERE to_tsvector('russian', u.text) @@ plainto_tsquery('russian', ${query})
       ORDER BY rank DESC, b.slug, u."chapterSlug"
+      LIMIT ${limit}
+    `);
+  }
+
+  async findQuoteCandidates(query: string, limit: number): Promise<VedabaseQuoteSearchUnit[]> {
+    return this.prisma.$queryRaw<VedabaseQuoteSearchUnit[]>(Prisma.sql`
+      SELECT b.slug AS "bookSlug", b.title AS "bookTitle", b.author AS "bookAuthor",
+        b.language AS "bookLanguage", u."chapterSlug", u.locator, u.title, u.text,
+        ts_rank(to_tsvector('russian', u.text), plainto_tsquery('russian', ${query}))::float AS rank
+      FROM "VedabaseSearchUnit" u
+      JOIN "VedabaseBookVersion" v ON v.id = u."versionId"
+      JOIN "VedabaseBook" b ON b."activeVersionId" = v.id
+      WHERE to_tsvector('russian', u.text) @@ plainto_tsquery('russian', ${query})
+      ORDER BY rank DESC, b.slug, u."chapterSlug", u.id
       LIMIT ${limit}
     `);
   }
