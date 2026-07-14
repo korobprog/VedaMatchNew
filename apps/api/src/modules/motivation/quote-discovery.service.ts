@@ -6,7 +6,7 @@ import { ApprovedWebSourceService, type WebQuoteCandidate } from './approved-web
 import { extractQuoteSentence, quoteFingerprint } from './quote-normalizer';
 import { QuoteVerificationService, type VerifiedQuote } from './quote-verification.service';
 
-const DISCOVERY_QUERIES = ['life wisdom purpose service compassion courage peace truth'];
+const DISCOVERY_QUERIES = ['жизнь мудрость цель служение сострадание мужество покой истина'];
 
 export type IngestableQuoteCandidate = VerifiedQuote | NonNullable<ReturnType<QuoteDiscoveryService['verifyWebCandidate']>>;
 
