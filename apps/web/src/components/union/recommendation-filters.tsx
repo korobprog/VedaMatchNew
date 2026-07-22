@@ -32,15 +32,16 @@ export function RecommendationFilters({
   params: Record<string, string | string[] | undefined>;
 }) {
   const initialCity = first(params.city) ?? "";
+  const initialCountry = first(params.country) ?? "";
   const [cityQuery, setCityQuery] = useState(initialCity);
+  const [countryQuery, setCountryQuery] = useState(initialCountry);
   const [selectedCity, setSelectedCity] = useState<GeoSearchResult | null>(
     initialCity
       ? {
           city: initialCity,
-          country: first(params.country),
+          country: initialCountry || undefined,
           lat: Number(first(params.lat) ?? NaN),
           lon: Number(first(params.lon) ?? NaN),
-          displayName: initialCity,
         }
       : null,
   );
@@ -49,14 +50,17 @@ export function RecommendationFilters({
 
   useEffect(() => {
     const query = cityQuery.trim();
-    if (query.length < 2 || query === selectedCity?.displayName) return;
+    if (query.length < 2 || query === selectedCity?.city) return;
 
     const controller = new AbortController();
     const timeout = window.setTimeout(async () => {
       setPending(true);
       try {
+        const searchParams = new URLSearchParams({ q: query });
+        const country = countryQuery.trim();
+        if (country) searchParams.set("country", country);
         const res = await fetch(
-          `${API_URL}/geo/search?q=${encodeURIComponent(query)}`,
+          `${API_URL}/geo/search?${searchParams.toString()}`,
           { signal: controller.signal },
         );
         if (!res.ok) throw new Error(await res.text());
@@ -73,7 +77,7 @@ export function RecommendationFilters({
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [cityQuery, selectedCity?.displayName]);
+  }, [cityQuery, countryQuery, selectedCity?.city]);
 
   return (
     <form
@@ -81,9 +85,6 @@ export function RecommendationFilters({
       className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
     >
       <input type="hidden" name="page" value="1" />
-      {selectedCity?.country && (
-        <input type="hidden" name="country" value={selectedCity.country} />
-      )}
       {Number.isFinite(selectedCity?.lat) && (
         <input type="hidden" name="lat" value={String(selectedCity?.lat)} />
       )}
@@ -124,12 +125,33 @@ export function RecommendationFilters({
         />
       </div>
 
-      <div className="mt-3 grid gap-3 md:grid-cols-[1fr_180px_1fr]">
+      <div className="mt-3 grid gap-3 md:grid-cols-[0.8fr_1.2fr_180px_1fr]">
+        <label className="block">
+          <span className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
+            Страна
+          </span>
+          <input
+            name="country"
+            type="text"
+            value={countryQuery}
+            onChange={(event) => {
+              setCountryQuery(event.target.value);
+              setSelectedCity(null);
+              setResults([]);
+            }}
+            placeholder="Например, Россия"
+            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          />
+        </label>
         <div className="relative">
-          <label className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
+          <label
+            htmlFor="recommendation-city"
+            className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300"
+          >
             Город
           </label>
           <input
+            id="recommendation-city"
             name="city"
             type="text"
             value={cityQuery}
@@ -150,6 +172,7 @@ export function RecommendationFilters({
                   onClick={() => {
                     setSelectedCity(item);
                     setCityQuery(item.city);
+                    setCountryQuery(item.country ?? "");
                     setResults([]);
                   }}
                   className="block w-full px-4 py-3 text-left text-sm hover:bg-amber-50 dark:hover:bg-zinc-800"
@@ -158,9 +181,9 @@ export function RecommendationFilters({
                     {item.city}
                     {item.country ? `, ${item.country}` : ""}
                   </span>
-                  {item.displayName && (
+                  {locationDetails(item) && (
                     <span className="block text-xs text-zinc-500">
-                      {item.displayName}
+                      {locationDetails(item)}
                     </span>
                   )}
                 </button>
@@ -255,5 +278,25 @@ function Select({
 
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function locationDetails(item: GeoSearchResult): string {
+  const excluded = new Set(
+    [item.city, item.country]
+      .filter((value): value is string => Boolean(value))
+      .map((value) => value.trim().toLocaleLowerCase()),
+  );
+  const seen = new Set<string>();
+
+  return (item.displayName ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => {
+      const normalized = part.toLocaleLowerCase();
+      if (!part || excluded.has(normalized) || seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    })
+    .join(", ");
 }
 
