@@ -7,12 +7,14 @@ import {
   getUnionConnectionCounts,
   getUnionUserCard,
 } from "@/lib/union-api";
+import { hasCompleteUnionLocation } from "@/lib/union-location";
 
 type Params = Promise<{ id: string }>;
 
 export default async function UnionUserPage({ params }: { params: Params }) {
   const user = await getProfile();
   if (!user) redirect("/login");
+  if (!hasCompleteUnionLocation(user)) redirect("/union/location");
 
   const { id } = await params;
   const [card, counts] = await Promise.all([

@@ -8,14 +8,21 @@ import { UnionProfileService } from './union-profile.service';
 
 const createdAt = new Date('2026-07-10T10:00:00.000Z');
 
-function user(id: string) {
+const defaultLocation = {
+  city: 'Москва',
+  country: 'Россия',
+  lat: 55.7558,
+  lon: 37.6176,
+};
+
+function user(id: string, homeLocation: unknown = defaultLocation) {
   return {
     id,
     email: `${id}@example.com`,
     name: id,
     avatarUrl: null,
     avatarKey: null,
-    homeLocation: null,
+    homeLocation,
     socialLinks: { website: `https://${id}.example.com` },
     messengers: { telegram: `@${id}` },
     role: 'user',
@@ -30,7 +37,11 @@ function user(id: string) {
 
 function profile(
   userId: string,
-  options: { isActive?: boolean; contacts?: string } = {},
+  options: {
+    isActive?: boolean;
+    contacts?: string;
+    homeLocation?: unknown;
+  } = {},
 ) {
   return {
     id: `profile-${userId}`,
@@ -55,7 +66,12 @@ function profile(
         weight: 100,
       },
     ],
-    user: user(userId),
+    user: user(
+      userId,
+      options.homeLocation === undefined
+        ? defaultLocation
+        : options.homeLocation,
+    ),
   };
 }
 
@@ -89,6 +105,9 @@ describe('UnionProfileService', () => {
     },
   };
   const prisma = {
+    user: {
+      findUnique: jest.fn(),
+    },
     unionProfile: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
@@ -111,6 +130,41 @@ describe('UnionProfileService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.user.findUnique.mockResolvedValue(user('me'));
+  });
+
+  it('requires a complete location before creating a Union profile', async () => {
+    prisma.user.findUnique.mockResolvedValue(user('me', null));
+
+    await expect(service.upsertProfile('me', validProfileBody)).rejects.toThrow(
+      'Укажите страну и город перед использованием Union',
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('requires a complete location before loading recommendations', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue({
+      ...profile('me'),
+      user: user('me', null),
+    });
+
+    await expect(service.getRecommendations('me')).rejects.toThrow(
+      'Укажите страну и город перед использованием Union',
+    );
+    expect(prisma.unionProfile.findMany).not.toHaveBeenCalled();
+  });
+
+  it('excludes profiles without a complete location from recommendations', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([
+      profile('other', { homeLocation: null }),
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me');
+
+    expect(result.items).toEqual([]);
+    expect(result.total).toBe(0);
   });
 
   it('queries only active recommendation profiles', async () => {

@@ -9,6 +9,7 @@ import {
   getUnionConnectionCounts,
   getUnionRecommendations,
 } from "@/lib/union-api";
+import { hasCompleteUnionLocation } from "@/lib/union-location";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -19,6 +20,7 @@ export default async function UnionRecommendationsPage({
 }) {
   const user = await getProfile();
   if (!user) redirect("/login");
+  if (!hasCompleteUnionLocation(user)) redirect("/union/location");
 
   const params = await searchParams;
   const [recommendations, counts] = await Promise.all([

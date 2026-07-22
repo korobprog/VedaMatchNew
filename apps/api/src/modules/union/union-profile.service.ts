@@ -45,6 +45,7 @@ const DEFAULT_PAGE_SIZE = 12;
 const MAX_PAGE_SIZE = 50;
 
 type ProfileWithIntentions = UnionProfile & { intentions: UnionIntention[] };
+type UserWithLocation = Pick<User, 'homeLocation'>;
 type ConnectionForUser = Pick<
   UnionConnectionRequest,
   | 'id'
@@ -75,6 +76,7 @@ export class UnionProfileService {
     userId: string,
     body: UnionProfileUpdateRequest,
   ): Promise<UnionProfileState> {
+    await this.requireUserLocation(userId);
     const intentions = this.validateIntentions(body.intentions);
     const data = this.validateProfileFields(body);
 
@@ -112,6 +114,7 @@ export class UnionProfileService {
     if (!me) {
       throw new NotFoundException('Сначала заполните профиль Union');
     }
+    this.requireLocation(me.user);
 
     const others = await this.prisma.unionProfile.findMany({
       where: { isActive: true, userId: { not: userId } },
@@ -122,6 +125,7 @@ export class UnionProfileService {
     const myInput = this.toMatchInput(me, me.user);
     const normalizedFilters = this.normalizeFilters(filters);
     const recommendations = others
+      .filter((other) => this.hasCompleteLocation(other.user))
       .filter((other) =>
         this.matchesFilters(other, other.user, normalizedFilters, myInput),
       )
@@ -161,6 +165,7 @@ export class UnionProfileService {
       include: { intentions: true, user: true },
     });
     if (!me) throw new NotFoundException('Сначала заполните профиль Union');
+    this.requireLocation(me.user);
 
     const other = await this.prisma.unionProfile.findUnique({
       where: { userId: targetUserId },
@@ -402,8 +407,34 @@ export class UnionProfileService {
     };
   }
 
-  private location(user: User): ProfileLocation | null {
+  private location(user: UserWithLocation): ProfileLocation | null {
     return (user.homeLocation as ProfileLocation | null) ?? null;
+  }
+
+  private async requireUserLocation(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { homeLocation: true },
+    });
+    this.requireLocation(user);
+  }
+
+  private requireLocation(user: UserWithLocation | null): void {
+    if (!user || !this.hasCompleteLocation(user)) {
+      throw new BadRequestException(
+        'Укажите страну и город перед использованием Union',
+      );
+    }
+  }
+
+  private hasCompleteLocation(user: UserWithLocation): boolean {
+    const location = this.location(user);
+    return Boolean(
+      location?.city?.trim() &&
+      location.country?.trim() &&
+      Number.isFinite(location.lat) &&
+      Number.isFinite(location.lon),
+    );
   }
 
   private validateIntentions(

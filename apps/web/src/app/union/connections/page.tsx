@@ -7,6 +7,7 @@ import {
   getUnionConnectionCounts,
   getUnionConnectionRequests,
 } from "@/lib/union-api";
+import { hasCompleteUnionLocation } from "@/lib/union-location";
 
 const connectionsLoadError =
   "Не удалось загрузить связи. Обновите страницу и попробуйте снова.";
@@ -14,6 +15,7 @@ const connectionsLoadError =
 export default async function UnionConnectionsPage() {
   const user = await getProfile();
   if (!user) redirect("/login");
+  if (!hasCompleteUnionLocation(user)) redirect("/union/location");
 
   const [requests, counts] = await Promise.all([
     getUnionConnectionRequests().catch(() => null),

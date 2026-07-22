@@ -4,12 +4,14 @@ import { UnionChatPanel } from "@/components/union/union-chat-panel";
 import { UnionNav } from "@/components/union/union-nav";
 import { getProfile } from "@/lib/api";
 import { getUnionChat, getUnionConnectionCounts } from "@/lib/union-api";
+import { hasCompleteUnionLocation } from "@/lib/union-location";
 
 type Params = Promise<{ id: string }>;
 
 export default async function UnionChatPage({ params }: { params: Params }) {
   const user = await getProfile();
   if (!user) redirect("/login");
+  if (!hasCompleteUnionLocation(user)) redirect("/union/location");
 
   const { id } = await params;
   const [chat, counts] = await Promise.all([
