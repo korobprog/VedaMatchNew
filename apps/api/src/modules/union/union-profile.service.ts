@@ -9,6 +9,7 @@ import type {
   UnionIntention,
   UnionProfile,
   User,
+  UserPhoto,
 } from '@prisma/client';
 import type {
   ProfileLocation,
@@ -27,6 +28,7 @@ import type {
   UnionUserSummary,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UserGalleryService } from '../users/user-gallery.service';
 import {
   UnionMatchingService,
   UnionMatchInput,
@@ -46,6 +48,9 @@ const MAX_PAGE_SIZE = 50;
 
 type ProfileWithIntentions = UnionProfile & { intentions: UnionIntention[] };
 type UserWithLocation = Pick<User, 'homeLocation'>;
+type UserWithPublicPhotos = User & {
+  photos: Array<Pick<UserPhoto, 'id' | 'storageKey' | 'width' | 'height'>>;
+};
 type ConnectionForUser = Pick<
   UnionConnectionRequest,
   | 'id'
@@ -62,6 +67,7 @@ export class UnionProfileService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly matching: UnionMatchingService,
+    private readonly gallery: UserGalleryService,
   ) {}
 
   async getState(userId: string): Promise<UnionProfileState> {
@@ -118,7 +124,23 @@ export class UnionProfileService {
 
     const others = await this.prisma.unionProfile.findMany({
       where: { isActive: true, userId: { not: userId } },
-      include: { intentions: true, user: true },
+      include: {
+        intentions: true,
+        user: {
+          include: {
+            photos: {
+              where: { isPublic: true },
+              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+              select: {
+                id: true,
+                storageKey: true,
+                width: true,
+                height: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     const connections = await this.connectionMap(userId);
@@ -129,16 +151,21 @@ export class UnionProfileService {
       .filter((other) =>
         this.matchesFilters(other, other.user, normalizedFilters, myInput),
       )
-      .map((other) =>
-        this.toRecommendation(
+      .map((other) => ({
+        other,
+        recommendation: this.toRecommendation(
           userId,
           myInput,
           other,
           other.user,
           connections.get(other.userId) ?? null,
         ),
-      )
-      .sort((a, b) => b.compatibility.total - a.compatibility.total);
+      }))
+      .sort(
+        (a, b) =>
+          b.recommendation.compatibility.total -
+          a.recommendation.compatibility.total,
+      );
 
     const page = normalizedFilters.page ?? 1;
     const pageSize = normalizedFilters.pageSize ?? DEFAULT_PAGE_SIZE;
@@ -147,8 +174,14 @@ export class UnionProfileService {
     const safePage = Math.min(page, totalPages);
     const start = (safePage - 1) * pageSize;
 
+    const pageItems = recommendations.slice(start, start + pageSize);
+
     return {
-      items: recommendations.slice(start, start + pageSize),
+      items: await Promise.all(
+        pageItems.map(({ recommendation, other }) =>
+          this.withPublicPhotos(recommendation, other, other.user),
+        ),
+      ),
       total,
       page: safePage,
       pageSize,
@@ -169,20 +202,55 @@ export class UnionProfileService {
 
     const other = await this.prisma.unionProfile.findUnique({
       where: { userId: targetUserId },
-      include: { intentions: true, user: true },
+      include: {
+        intentions: true,
+        user: {
+          include: {
+            photos: {
+              where: { isPublic: true },
+              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+              select: {
+                id: true,
+                storageKey: true,
+                width: true,
+                height: true,
+              },
+            },
+          },
+        },
+      },
     });
     const connection = await this.connectionBetween(userId, targetUserId);
     if (!other || (!other.isActive && connection?.status !== 'accepted')) {
       throw new NotFoundException('Профиль не найден');
     }
 
-    return this.toRecommendation(
+    const recommendation = this.toRecommendation(
       userId,
       this.toMatchInput(me, me.user),
       other,
       other.user,
       connection,
     );
+    return this.withPublicPhotos(recommendation, other, other.user);
+  }
+
+  private async withPublicPhotos(
+    recommendation: UnionRecommendation,
+    profile: ProfileWithIntentions,
+    user: UserWithPublicPhotos,
+  ): Promise<UnionRecommendation> {
+    const privacy = (profile.privacy as UnionPrivacySettings | null) ?? null;
+    const matched = recommendation.connection?.status === 'accepted';
+    if (!this.isVisible(privacy?.photo, matched) || user.photos.length === 0) {
+      return recommendation;
+    }
+
+    recommendation.user.photos = await this.gallery.signPublicPhotos(
+      user.photos,
+    );
+    recommendation.user.avatarUrl = null;
+    return recommendation;
   }
 
   private toRecommendation(
@@ -205,6 +273,7 @@ export class UnionProfileService {
       city: cityVisible ? (location?.city ?? null) : null,
       country: cityVisible ? (location?.country ?? null) : null,
       spiritualStage: otherUser.spiritualStage,
+      photos: [],
       contacts: this.visibleContacts(otherUser, privacy, matched),
     };
     return {

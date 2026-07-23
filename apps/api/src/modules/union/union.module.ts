@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { UsersModule } from '../users/users.module';
 import { UnionChatController } from './union-chat.controller';
 import { UnionChatService } from './union-chat.service';
 import { UnionConnectionController } from './union-connection.controller';
@@ -10,7 +11,7 @@ import { UnionProfileService } from './union-profile.service';
 import { UnionRecommendationsController } from './union-recommendations.controller';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, UsersModule],
   controllers: [
     UnionProfileController,
     UnionRecommendationsController,

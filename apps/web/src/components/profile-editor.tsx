@@ -9,6 +9,7 @@ import type {
   ProfileSocialLinks,
   UserProfile,
 } from "@vedamatch/shared";
+import { UserGalleryEditor } from "./user-gallery-editor";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
@@ -291,6 +292,8 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
           </div>
         </div>
       </section>
+
+      <UserGalleryEditor />
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">

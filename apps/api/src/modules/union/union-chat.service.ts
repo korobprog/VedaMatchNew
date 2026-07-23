@@ -129,6 +129,7 @@ export class UnionChatService {
       city: privacy?.city === 'hidden' ? null : (location?.city ?? null),
       country: privacy?.city === 'hidden' ? null : (location?.country ?? null),
       spiritualStage: user.spiritualStage,
+      photos: [],
       contacts:
         privacy?.contacts === 'hidden'
           ? null

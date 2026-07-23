@@ -1,8 +1,10 @@
 import type {
+  UnionPhoto,
   UnionProfileUpdateRequest,
   UnionRecommendation,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UserGalleryService } from '../users/user-gallery.service';
 import { UnionMatchingService } from './union-matching.service';
 import { UnionProfileService } from './union-profile.service';
 
@@ -15,12 +17,39 @@ const defaultLocation = {
   lon: 37.6176,
 };
 
-function user(id: string, homeLocation: unknown = defaultLocation) {
+function photo(
+  id: string,
+  sortOrder = 0,
+  isPublic = true,
+  photoCreatedAt = createdAt,
+) {
+  return {
+    id,
+    userId: 'other',
+    storageKey: `${id}.webp`,
+    sizeBytes: 1024,
+    width: id === 'photo-2' ? 800 : 1200,
+    height: id === 'photo-2' ? 1200 : 800,
+    isPublic,
+    sortOrder,
+    createdAt: photoCreatedAt,
+    updatedAt: photoCreatedAt,
+  };
+}
+
+function user(
+  id: string,
+  homeLocation: unknown = defaultLocation,
+  options: {
+    avatarUrl?: string | null;
+    photos?: ReturnType<typeof photo>[];
+  } = {},
+) {
   return {
     id,
     email: `${id}@example.com`,
     name: id,
-    avatarUrl: null,
+    avatarUrl: options.avatarUrl ?? null,
     avatarKey: null,
     homeLocation,
     socialLinks: { website: `https://${id}.example.com` },
@@ -32,6 +61,7 @@ function user(id: string, homeLocation: unknown = defaultLocation) {
     lastSelfIdentificationAt: null,
     createdAt,
     updatedAt: createdAt,
+    photos: options.photos ?? [],
   };
 }
 
@@ -41,6 +71,9 @@ function profile(
     isActive?: boolean;
     contacts?: string;
     homeLocation?: unknown;
+    photoPrivacy?: string;
+    avatarUrl?: string | null;
+    photos?: ReturnType<typeof photo>[];
   } = {},
 ) {
   return {
@@ -54,7 +87,13 @@ function profile(
     interests: [],
     values: [],
     familyStatus: null,
-    privacy: options.contacts ? { contacts: options.contacts } : null,
+    privacy:
+      options.contacts || options.photoPrivacy
+        ? {
+            ...(options.contacts ? { contacts: options.contacts } : {}),
+            ...(options.photoPrivacy ? { photo: options.photoPrivacy } : {}),
+          }
+        : null,
     isActive: options.isActive ?? true,
     createdAt,
     updatedAt: createdAt,
@@ -71,6 +110,7 @@ function profile(
       options.homeLocation === undefined
         ? defaultLocation
         : options.homeLocation,
+      { avatarUrl: options.avatarUrl, photos: options.photos },
     ),
   };
 }
@@ -123,9 +163,30 @@ describe('UnionProfileService', () => {
   const matching = {
     computeCompatibility: jest.fn(() => ({ total: 50, breakdown: [] })),
   };
+  const gallery = {
+    signPublicPhotos: jest.fn(
+      (
+        photos: Array<{
+          id: string;
+          storageKey: string;
+          width: number;
+          height: number;
+        }>,
+      ): Promise<UnionPhoto[]> =>
+        Promise.resolve(
+          photos.map(({ id, width, height }) => ({
+            id,
+            url: `signed-${id.replace('photo-', '')}`,
+            width,
+            height,
+          })),
+        ),
+    ),
+  };
   const service = new UnionProfileService(
     prisma as unknown as PrismaService,
     matching as unknown as UnionMatchingService,
+    gallery as unknown as UserGalleryService,
   );
 
   beforeEach(() => {
@@ -266,4 +327,162 @@ describe('UnionProfileService', () => {
       expect(result.user.contacts).toEqual(expectedContacts);
     },
   );
+
+  it('hides gallery photos and the avatar when photo privacy is hidden', async () => {
+    prisma.unionProfile.findUnique
+      .mockResolvedValueOnce(profile('me'))
+      .mockResolvedValueOnce(
+        profile('other', {
+          photoPrivacy: 'hidden',
+          avatarUrl: 'https://example.com/avatar.webp',
+          photos: [photo('photo-1')],
+        }),
+      );
+    prisma.unionConnectionRequest.findFirst.mockResolvedValue(connection());
+
+    const result = await service.getRecommendationForUser('me', 'other');
+
+    expect(result.user).toMatchObject({ photos: [], avatarUrl: null });
+    expect(gallery.signPublicPhotos).not.toHaveBeenCalled();
+  });
+
+  it('does not sign after-match photos before a connection is accepted', async () => {
+    prisma.unionProfile.findUnique
+      .mockResolvedValueOnce(profile('me'))
+      .mockResolvedValueOnce(
+        profile('other', {
+          photoPrivacy: 'after_match',
+          avatarUrl: 'https://example.com/avatar.webp',
+          photos: [photo('photo-1')],
+        }),
+      );
+    prisma.unionConnectionRequest.findFirst.mockResolvedValue(
+      connection('pending'),
+    );
+
+    const result = await service.getRecommendationForUser('me', 'other');
+
+    expect(result.user).toMatchObject({ photos: [], avatarUrl: null });
+    expect(gallery.signPublicPhotos).not.toHaveBeenCalled();
+  });
+
+  it('signs after-match photos after a connection is accepted', async () => {
+    prisma.unionProfile.findUnique
+      .mockResolvedValueOnce(profile('me'))
+      .mockResolvedValueOnce(
+        profile('other', {
+          photoPrivacy: 'after_match',
+          avatarUrl: 'https://example.com/avatar.webp',
+          photos: [photo('photo-1')],
+        }),
+      );
+    prisma.unionConnectionRequest.findFirst.mockResolvedValue(connection());
+
+    const result = await service.getRecommendationForUser('me', 'other');
+
+    expect(result.user.photos).toEqual([
+      { id: 'photo-1', url: 'signed-1', width: 1200, height: 800 },
+    ]);
+    expect(result.user.avatarUrl).toBeNull();
+    expect(gallery.signPublicPhotos).toHaveBeenCalledWith([photo('photo-1')]);
+  });
+
+  it('selects ordered public photo metadata and exposes it to everyone', async () => {
+    const photos = [photo('photo-1', 0), photo('photo-2', 1)];
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([
+      profile('other', {
+        photoPrivacy: 'everyone',
+        avatarUrl: 'https://example.com/avatar.webp',
+        photos,
+      }),
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me');
+
+    expect(prisma.unionProfile.findMany).toHaveBeenCalledWith({
+      where: { isActive: true, userId: { not: 'me' } },
+      include: {
+        intentions: true,
+        user: {
+          include: {
+            photos: {
+              where: { isPublic: true },
+              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+              select: {
+                id: true,
+                storageKey: true,
+                width: true,
+                height: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(result.items[0]?.user.photos).toEqual([
+      { id: 'photo-1', url: 'signed-1', width: 1200, height: 800 },
+      { id: 'photo-2', url: 'signed-2', width: 800, height: 1200 },
+    ]);
+    expect(result.items[0]?.user.avatarUrl).toBeNull();
+    expect(gallery.signPublicPhotos).toHaveBeenCalledWith(photos);
+  });
+
+  it('preserves the visible avatar fallback when no public photos exist', async () => {
+    prisma.unionProfile.findUnique
+      .mockResolvedValueOnce(profile('me'))
+      .mockResolvedValueOnce(
+        profile('other', {
+          photoPrivacy: 'everyone',
+          avatarUrl: 'https://example.com/avatar.webp',
+        }),
+      );
+    prisma.unionConnectionRequest.findFirst.mockResolvedValue(null);
+
+    const result = await service.getRecommendationForUser('me', 'other');
+
+    expect(result.user).toMatchObject({
+      photos: [],
+      avatarUrl: 'https://example.com/avatar.webp',
+    });
+    expect(gallery.signPublicPhotos).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty gallery and null avatar when no image exists', async () => {
+    prisma.unionProfile.findUnique
+      .mockResolvedValueOnce(profile('me'))
+      .mockResolvedValueOnce(
+        profile('other', { photoPrivacy: 'everyone', photos: [] }),
+      );
+    prisma.unionConnectionRequest.findFirst.mockResolvedValue(null);
+
+    const result = await service.getRecommendationForUser('me', 'other');
+
+    expect(result.user).toMatchObject({ photos: [], avatarUrl: null });
+    expect(gallery.signPublicPhotos).not.toHaveBeenCalled();
+  });
+
+  it('signs photos only for final paginated recommendations', async () => {
+    const firstPhotos = [photo('first-photo')];
+    const secondPhotos = [photo('second-photo')];
+    const thirdPhotos = [photo('third-photo')];
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([
+      profile('first', { photos: firstPhotos }),
+      profile('second', { photos: secondPhotos }),
+      profile('third', { photos: thirdPhotos }),
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me', {
+      page: 2,
+      pageSize: 1,
+    });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.user.id).toBe('second');
+    expect(gallery.signPublicPhotos).toHaveBeenCalledTimes(1);
+    expect(gallery.signPublicPhotos).toHaveBeenCalledWith(secondPhotos);
+  });
 });

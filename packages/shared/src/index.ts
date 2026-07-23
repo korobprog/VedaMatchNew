@@ -37,6 +37,58 @@ export interface UserProfile {
   lastSelfIdentificationAt: string | null;
 }
 
+export interface UserPhotoDto {
+  id: string;
+  url: string;
+  sizeBytes: number;
+  width: number;
+  height: number;
+  isPublic: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserGalleryState {
+  photos: UserPhotoDto[];
+  usedBytes: number;
+  quotaBytes: number;
+}
+
+export type UserPhotoUploadFailureCode =
+  | 'unsupported_type'
+  | 'file_too_large'
+  | 'invalid_image'
+  | 'quota_exceeded'
+  | 'processing_failed'
+  | 'storage_error';
+
+export interface UserPhotoUploadFailure {
+  fileName: string;
+  code: UserPhotoUploadFailureCode;
+  message: string;
+}
+
+export interface UserPhotoUploadSuccess {
+  fileName: string;
+  photo: UserPhotoDto;
+}
+
+export interface UserPhotoUploadResponse {
+  uploaded: UserPhotoUploadSuccess[];
+  failed: UserPhotoUploadFailure[];
+  usedBytes: number;
+  quotaBytes: number;
+}
+
+export interface UpdateUserPhotoRequest {
+  isPublic: boolean;
+}
+
+export interface ReorderUserPhotosRequest {
+  photoIds: string[];
+}
+
 export interface ProfileLocation {
   city: string;
   country?: string;

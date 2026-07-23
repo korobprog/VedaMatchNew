@@ -220,6 +220,7 @@ export class UnionConnectionService {
         ? (location?.country ?? null)
         : null,
       spiritualStage: user.spiritualStage,
+      photos: [],
       contacts:
         matched && privacy?.contacts !== 'hidden'
           ? {

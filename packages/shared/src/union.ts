@@ -81,10 +81,18 @@ export interface UnionCompatibility {
   breakdown: UnionCompatibilityBreakdownItem[];
 }
 
+export interface UnionPhoto {
+  id: string;
+  url: string;
+  width: number;
+  height: number;
+}
+
 export interface UnionUserSummary {
   id: string;
   name: string;
   avatarUrl: string | null;
+  photos: UnionPhoto[];
   city: string | null;
   country: string | null;
   spiritualStage: SpiritualStage | null;

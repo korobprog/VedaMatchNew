@@ -1,6 +1,7 @@
 import type { UnionCompatibilityCriterion, UnionRecommendation } from "@vedamatch/shared";
 import { ConnectionActions } from "./connection-actions";
 import { intentionLabels } from "./labels";
+import { RecommendationPhotoCarousel } from "./recommendation-photo-carousel";
 
 const criterionLabels: Record<UnionCompatibilityCriterion, string> = {
   intentions: "Цели знакомства",
@@ -24,7 +25,9 @@ export function RecommendationCard({ item }: { item: UnionRecommendation }) {
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="mb-4 flex items-center gap-4">
-        {user.avatarUrl ? (
+        {user.photos.length > 0 ? (
+          <RecommendationPhotoCarousel photos={user.photos} userName={user.name} />
+        ) : user.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={user.avatarUrl}
@@ -33,7 +36,10 @@ export function RecommendationCard({ item }: { item: UnionRecommendation }) {
             referrerPolicy="no-referrer"
           />
         ) : (
-          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-xl font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+          <span
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xl font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+            data-testid="recommendation-initials"
+          >
             {user.name.charAt(0).toUpperCase()}
           </span>
         )}
