@@ -376,7 +376,7 @@ export class UserGalleryService {
     if (!this.s3Client || !this.bucket) {
       throw new BadRequestException('S3-хранилище галереи не настроено');
     }
-    return getSignedUrl(
+    const signed = await getSignedUrl(
       this.s3Client as unknown as Parameters<typeof getSignedUrl>[0],
       new GetObjectCommand({
         Bucket: this.bucket,
@@ -384,6 +384,15 @@ export class UserGalleryService {
       }),
       { expiresIn: SIGNED_URL_TTL_SECONDS },
     );
+    const endpoint = this.config.get<string>('S3_ENDPOINT');
+    const publicUrl = this.config.get<string>('S3_PUBLIC_URL');
+    if (endpoint && publicUrl) {
+      return signed.replace(
+        endpoint.replace(/\/+$/, ''),
+        publicUrl.replace(/\/+$/, ''),
+      );
+    }
+    return signed;
   }
 
   private async ensureUser(userId: string): Promise<void> {

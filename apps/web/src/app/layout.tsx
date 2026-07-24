@@ -1,5 +1,27 @@
 ﻿import type { Metadata } from "next";
+import { Unbounded, Manrope, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+
+const unbounded = Unbounded({
+  subsets: ["cyrillic", "latin"],
+  weight: ["700", "800", "900"],
+  variable: "--font-unbounded",
+  display: "swap",
+});
+
+const manrope = Manrope({
+  subsets: ["cyrillic", "latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-manrope",
+  display: "swap",
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["cyrillic", "latin"],
+  weight: ["400", "500"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "VedaMatch Portal",
@@ -12,8 +34,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ru" className="h-full antialiased">
-      <body className="flex min-h-full flex-col">{children}</body>
+    <html lang="ru" className={`${unbounded.variable} ${manrope.variable} ${ibmPlexMono.variable} h-full antialiased`}>
+      <body className="flex min-h-full flex-col font-body">
+        {children}
+      </body>
     </html>
   );
 }
