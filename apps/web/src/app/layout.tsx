@@ -7,6 +7,7 @@ const unbounded = Unbounded({
   weight: ["700", "800", "900"],
   variable: "--font-unbounded",
   display: "swap",
+  preload: false,
 });
 
 const manrope = Manrope({
@@ -14,6 +15,7 @@ const manrope = Manrope({
   weight: ["400", "500", "600", "700"],
   variable: "--font-manrope",
   display: "swap",
+  preload: false,
 });
 
 const ibmPlexMono = IBM_Plex_Mono({
@@ -21,6 +23,7 @@ const ibmPlexMono = IBM_Plex_Mono({
   weight: ["400", "500"],
   variable: "--font-mono",
   display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {

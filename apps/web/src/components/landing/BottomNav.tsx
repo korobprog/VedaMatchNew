@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { 
-  Sparkles, 
+  LayoutGrid, 
   Search, 
   Heart, 
   MessageCircle, 
-  User 
+  User,
+  Sparkles 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,9 +19,16 @@ interface NavItem {
   icon: React.ReactNode;
   iconFilled?: React.ReactNode;
   badge?: number;
+  isCenter?: boolean;
 }
 
 const navItems: NavItem[] = [
+  { 
+    href: "/", 
+    label: "Главная", 
+    icon: <LayoutGrid size={24} />,
+    iconFilled: <LayoutGrid size={24} className="fill-current" />,
+  },
   { 
     href: "/union/recommendations", 
     label: "Лента", 
@@ -28,15 +36,10 @@ const navItems: NavItem[] = [
     iconFilled: <Sparkles size={24} className="fill-current" />,
   },
   { 
-    href: "/union/location", 
-    label: "Поиск", 
-    icon: <Search size={24} />,
-    iconFilled: <Search size={24} className="fill-current" />,
-  },
-  { 
     href: "/union/connections", 
-    label: "Совпадения", 
-    icon: <Heart size={28} />,
+    label: "Любовь", 
+    icon: <Heart size={32} />,
+    isCenter: true,
   },
   { 
     href: "/union/chats", 
@@ -57,8 +60,8 @@ export function BottomNav() {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
-    if (href === "/union/recommendations") {
-      return pathname === "/union" || pathname === "/union/recommendations";
+    if (href === "/" || href === "/union/recommendations") {
+      return pathname === "/" || pathname === "/union" || pathname === "/union/recommendations";
     }
     return pathname.startsWith(href);
   };
@@ -66,90 +69,112 @@ export function BottomNav() {
   return (
     <nav 
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-50",
-        "flex md:hidden items-center justify-around",
-        "glass-light",
-        "border-t border-glass-brd",
+        "fixed bottom-3 left-3 right-3 z-50",
+        "md:hidden",
         "safe-bottom"
       )}
-      style={{ 
-        paddingBottom: "env(safe-area-inset-bottom, 0px)",
-        borderRadius: "20px 20px 0 0",
-      }}
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
-      {navItems.map((item, index) => {
-        const active = isActive(item.href);
-        const isCenter = index === 2;
+      {/* Floating bar */}
+      <div 
+        className={cn(
+          "relative flex items-center justify-around",
+          "bg-bg-1/80 backdrop-blur-xl",
+          "border border-glass-brd",
+          "rounded-3xl",
+          "py-2 px-2",
+          "shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)]"
+        )}
+      >
+        {navItems.map((item, index) => {
+          const active = isActive(item.href);
+          const isCenter = item.isCenter;
 
-        if (isCenter) {
+          if (isCenter) {
+            return (
+              <div key={item.href} className="relative flex items-center justify-center -mt-8">
+                {/* Glow ring behind button */}
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-magenta to-purple-600 blur-lg opacity-60 animate-pulse" />
+                
+                {/* Main button */}
+                <Link
+                  href={item.href}
+                  className={cn(
+                    "relative w-16 h-16 rounded-full",
+                    "bg-gradient-to-br from-magenta to-purple-600",
+                    "flex items-center justify-center",
+                    "text-white",
+                    "shadow-[0_4px_20px_rgba(255,62,158,0.6)]",
+                    "border-[3px] border-white/30",
+                    "hover:scale-105 active:scale-95",
+                    "transition-transform duration-200"
+                  )}
+                >
+                  <motion.div
+                    whileTap={{ scale: 0.9 }}
+                    className="flex items-center justify-center"
+                  >
+                    {item.icon}
+                  </motion.div>
+                </Link>
+                
+                {/* Label above */}
+                <span className="absolute -top-6 text-[10px] font-medium text-magenta whitespace-nowrap">
+                  {item.label}
+                </span>
+              </div>
+            );
+          }
+
           return (
             <Link
               key={item.href}
               href={item.href}
-              className="relative flex flex-col items-center -mt-6"
-            >
-              <motion.div
-                whileTap={{ scale: 0.9 }}
-                className={cn(
-                  "w-14 h-14 rounded-full",
-                  "bg-gradient-to-br from-magenta to-[#B23EFF]",
-                  "flex items-center justify-center",
-                  "text-white",
-                  "shadow-[0_0_24px_rgba(255,62,158,0.5)]",
-                  "border-2 border-white/20"
-                )}
-              >
-                {item.icon}
-              </motion.div>
-            </Link>
-          );
-        }
-
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex flex-col items-center gap-1 py-3 px-4",
-              "min-w-[64px] min-h-[56px]",
-              "transition-colors duration-200"
-            )}
-          >
-            {active && (
-              <motion.div
-                layoutId="activeIndicator"
-                className="absolute -top-0.5 w-1 h-1 rounded-full bg-magenta"
-                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              />
-            )}
-            <motion.div
-              animate={{ scale: active ? 1.1 : 1 }}
-              transition={{ type: "spring", stiffness: 400, damping: 20 }}
               className={cn(
+                "relative flex flex-col items-center justify-center",
+                "w-16 h-16 rounded-2xl",
                 "transition-all duration-200",
                 active 
-                  ? "text-magenta drop-shadow-[0_0_8px_rgba(255,62,158,0.5)]" 
-                  : "text-text-2"
+                  ? "text-magenta" 
+                  : "text-text-2 hover:text-text-1"
               )}
             >
-              {active && item.iconFilled ? item.iconFilled : item.icon}
-            </motion.div>
-            <span 
-              className={cn(
-                "text-xs font-medium transition-colors duration-200",
-                active ? "text-magenta" : "text-text-2"
+              {active && (
+                <motion.div
+                  layoutId="activeIndicator"
+                  className="absolute inset-0 rounded-2xl bg-magenta/10"
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
               )}
-            >
-              {item.label}
-            </span>
-            {item.badge && (
-              <span className="absolute top-2 right-2 min-w-[18px] h-[18px] flex items-center justify-center bg-magenta text-white text-[10px] font-bold rounded-full px-1">
-                {item.badge}
+              
+              <div className="relative z-10">
+                <motion.div
+                  animate={{ scale: active ? 1.15 : 1 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                  className="flex items-center justify-center"
+                >
+                  {active && item.iconFilled ? item.iconFilled : item.icon}
+                </motion.div>
+              </div>
+              
+              <span 
+                className={cn(
+                  "text-[10px] font-medium mt-0.5 transition-colors duration-200",
+                  active ? "text-magenta" : "text-text-2"
+                )}
+              >
+                {item.label}
               </span>
-            )}
-          </Link>
-        );
-      })}
+              
+              {item.badge && (
+                <span className="absolute top-1 right-1 min-w-[16px] h-4 flex items-center justify-center bg-magenta text-white text-[9px] font-bold rounded-full px-1 shadow-[0_2px_8px_rgba(255,62,158,0.5)]">
+                  {item.badge}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }
