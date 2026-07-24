@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
-import { Iris } from "./Iris";
 import { cn } from "@/lib/utils";
 
 interface NavbarProps {
@@ -59,7 +59,14 @@ export function Navbar({ className }: NavbarProps) {
             href="/" 
             className="flex items-center gap-3 transition-transform hover:scale-105 focus-visible:outline-none"
           >
-            <Iris size={36} glow className="drop-shadow-[0_0_8px_rgba(255,62,158,0.5)]" />
+            <Image
+              src="/logo_tilak.png"
+              alt="VedaMatch"
+              width={48}
+              height={48}
+              priority
+              className="h-12 w-12 object-contain"
+            />
             <span className="font-display text-lg md:text-xl font-bold text-text-0 hidden sm:block">
               VedaMatch
             </span>

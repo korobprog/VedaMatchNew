@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Image from "next/image";
 import { SwipeCard } from "./SwipeCard";
-import { Iris } from "./Iris";
 import { cn } from "@/lib/utils";
 
 interface PhoneMockupProps {
@@ -18,7 +17,7 @@ const demoProfiles = [
     age: 28,
     location: "Москва, Россия",
     description: "Йогиня с 8-летним опытом. Люблю медитацию на рассвете и киртаны по вечерам. Ищу единомышленников для совместной практики и служения.",
-    imageUrl: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&h=800&fit=crop",
+    imageUrl: "/landing/profiles/alexandra.jpg",
     compatibility: 94,
     tags: ["Йога", "Медитация", "Киртан"],
   },
@@ -28,7 +27,7 @@ const demoProfiles = [
     age: 32,
     location: "Санкт-Петербург, Россия",
     description: "Практикую крийи и пранаяму каждый день. Интересуюсь ведической философией и аюрведой. Открыта к новым знакомствам.",
-    imageUrl: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&h=800&fit=crop",
+    imageUrl: "/landing/profiles/maria.jpg",
     compatibility: 87,
     tags: ["Крия", "Аюрведа", "Философия"],
   },
@@ -38,7 +37,7 @@ const demoProfiles = [
     age: 26,
     location: "Казань, Россия",
     description: "На пути йоги уже 5 лет. Веду группу по субботам, организую ретриты. Ищу партнёра для духовных проектов и семейной жизни.",
-    imageUrl: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600&h=800&fit=crop",
+    imageUrl: "/landing/profiles/ekaterina.jpg",
     compatibility: 91,
     tags: ["Ретриты", "Служение", "Групповая практика"],
   },
@@ -48,7 +47,7 @@ export function PhoneMockup({ className }: PhoneMockupProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
 
-  const handleSwipe = (dir: "left" | "right") => {
+  const handleSwipe = () => {
     if (isAnimating) return;
     setIsAnimating(true);
     
@@ -95,7 +94,13 @@ export function PhoneMockup({ className }: PhoneMockupProps) {
             {/* App header */}
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-2">
-                <Iris size={28} />
+                <Image
+                  src="/logo_tilak.png"
+                  alt="VedaMatch"
+                  width={36}
+                  height={36}
+                  className="h-9 w-9 object-contain"
+                />
                 <span className="font-display text-sm font-bold text-text-0">VedaMatch</span>
               </div>
               <div className="flex items-center gap-2">
@@ -117,6 +122,7 @@ export function PhoneMockup({ className }: PhoneMockupProps) {
                   alt={nextProfile.name}
                   fill
                   className="object-cover"
+                  sizes="(max-width: 768px) 276px, 296px"
                 />
               </div>
 
@@ -124,9 +130,9 @@ export function PhoneMockup({ className }: PhoneMockupProps) {
               <div className="relative w-full h-full">
                 <SwipeCard
                   {...currentProfile}
-                  onSwipeLeft={() => handleSwipe("left")}
-                  onSwipeRight={() => handleSwipe("right")}
-                  onLike={() => handleSwipe("right")}
+                  onSwipeLeft={handleSwipe}
+                  onSwipeRight={handleSwipe}
+                  onLike={handleSwipe}
                 />
               </div>
             </div>
