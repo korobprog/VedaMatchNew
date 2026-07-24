@@ -4,6 +4,8 @@ import { Header } from "@/components/header";
 import { UnionLocationOnboarding } from "@/components/union/union-location-onboarding";
 import { getProfile } from "@/lib/api";
 import { hasCompleteUnionLocation } from "@/lib/union-location";
+import { BackgroundOrbs } from "@/components/landing/Orb";
+import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 export default async function UnionLocationPage() {
   const user = await getProfile();
@@ -11,19 +13,21 @@ export default async function UnionLocationPage() {
   if (hasCompleteUnionLocation(user)) redirect("/union");
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="relative min-h-screen bg-bg-0">
+      <BackgroundOrbs />
+      <NoiseOverlay />
       <Header user={user} />
-      <main className="mx-auto max-w-2xl px-4 py-8">
+      <main className="mx-auto max-w-2xl px-4 py-8 pb-24">
         <Link
           href="/"
-          className="mb-5 inline-flex text-sm font-medium text-amber-700 hover:text-amber-800 dark:text-amber-300"
+          className="mb-5 inline-flex text-sm font-medium text-text-1 hover:text-magenta"
         >
           ← На главную
         </Link>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+        <h1 className="font-display text-2xl font-bold text-text-0">
           Укажите страну и город
         </h1>
-        <p className="mb-6 mt-2 text-zinc-600 dark:text-zinc-400">
+        <p className="mb-6 mt-2 text-text-1">
           Локация нужна для подбора людей рядом и корректной работы фильтров
           VedaMatch Union.
         </p>

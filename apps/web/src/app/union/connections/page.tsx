@@ -8,6 +8,8 @@ import {
   getUnionConnectionRequests,
 } from "@/lib/union-api";
 import { hasCompleteUnionLocation } from "@/lib/union-location";
+import { BackgroundOrbs } from "@/components/landing/Orb";
+import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 const connectionsLoadError =
   "Не удалось загрузить связи. Обновите страницу и попробуйте снова.";
@@ -23,10 +25,12 @@ export default async function UnionConnectionsPage() {
   ]);
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="relative min-h-screen bg-bg-0">
+      <BackgroundOrbs />
+      <NoiseOverlay />
       <Header user={user} />
-      <main className="mx-auto max-w-4xl px-4 py-8">
-        <h1 className="mb-6 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+      <main className="mx-auto max-w-4xl px-4 py-8 pb-24">
+        <h1 className="mb-6 font-display text-2xl font-bold text-text-0">
           Связи Union
         </h1>
         <UnionNav incomingPending={counts?.incomingPending ?? 0} />

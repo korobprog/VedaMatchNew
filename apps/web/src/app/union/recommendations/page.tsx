@@ -10,6 +10,8 @@ import {
   getUnionRecommendations,
 } from "@/lib/union-api";
 import { hasCompleteUnionLocation } from "@/lib/union-location";
+import { BackgroundOrbs } from "@/components/landing/Orb";
+import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -30,10 +32,12 @@ export default async function UnionRecommendationsPage({
   if (recommendations === null) redirect("/union");
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="relative min-h-screen bg-bg-0">
+      <BackgroundOrbs />
+      <NoiseOverlay />
       <Header user={user} />
-      <main className="mx-auto max-w-4xl px-4 py-8">
-        <h1 className="mb-6 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+      <main className="mx-auto max-w-4xl px-4 py-8 pb-24">
+        <h1 className="mb-6 font-display text-2xl font-bold text-text-0">
           Рекомендации
         </h1>
         <UnionNav incomingPending={counts?.incomingPending ?? 0} />
@@ -41,13 +45,13 @@ export default async function UnionRecommendationsPage({
         <RecommendationFilters params={params} />
 
         {recommendations.items.length === 0 ? (
-          <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="glass rounded-2xl border border-glass-brd p-8 text-center text-sm text-text-1">
             Пока нет подходящих людей по выбранным фильтрам. Попробуйте расширить
             радиус или сбросить часть условий.
           </div>
         ) : (
           <>
-            <div className="mb-3 text-sm text-zinc-500">
+            <div className="mb-3 text-sm text-text-2">
               Найдено: {recommendations.total}. Страница {recommendations.page} из{" "}
               {recommendations.totalPages}.
             </div>
@@ -83,7 +87,7 @@ function Pagination({
       {page > 1 && (
         <Link
           href={`/union/recommendations?${withPage(params, page - 1)}`}
-          className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          className="rounded-xl glass border border-glass-brd px-4 py-2 text-sm font-medium text-text-1 hover:text-text-0"
         >
           ← Назад
         </Link>
@@ -91,7 +95,7 @@ function Pagination({
       {page < totalPages && (
         <Link
           href={`/union/recommendations?${withPage(params, page + 1)}`}
-          className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+          className="rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-4 py-2 text-sm font-medium text-white hover:shadow-[0_0_20px_rgba(255,62,158,0.4)]"
         >
           Далее →
         </Link>

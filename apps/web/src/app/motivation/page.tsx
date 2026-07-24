@@ -4,6 +4,8 @@ import { MotivationFeed } from "@/components/motivation/motivation-feed";
 import { MotivationNav } from "@/components/motivation/motivation-nav";
 import { getProfile } from "@/lib/api";
 import { getMotivationFeed } from "@/lib/motivation-api";
+import { BackgroundOrbs } from "@/components/landing/Orb";
+import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 export default async function MotivationPage() {
   const [user, feed] = await Promise.all([getProfile(), getMotivationFeed()]);
@@ -11,11 +13,13 @@ export default async function MotivationPage() {
   if (!user.spiritualStage) redirect("/self-identification");
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="relative min-h-screen bg-bg-0">
+      <BackgroundOrbs />
+      <NoiseOverlay />
       <Header user={user} />
-      <main className="mx-auto max-w-3xl px-4 py-8">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">VedaMatch Motivation</h1>
-        <p className="mt-2 text-zinc-600 dark:text-zinc-400">Ежедневная мотивация с учётом вашего духовного профиля.</p>
+      <main className="mx-auto max-w-3xl px-4 py-8 pb-24">
+        <h1 className="font-display text-3xl font-bold text-text-0">VedaMatch Motivation</h1>
+        <p className="mt-2 text-text-1">Ежедневная мотивация с учётом вашего духовного профиля.</p>
         <MotivationNav active="feed" />
         <MotivationFeed initial={feed ?? { items: [], nextCursor: null }} />
       </main>

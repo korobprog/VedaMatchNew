@@ -1,29 +1,34 @@
-﻿import { SilentRefresh } from "@/components/silent-refresh";
-import Image from "next/image";
+﻿"use client";
+
+import { BackgroundOrbs } from "@/components/landing/Orb";
+import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
+import { Iris } from "@/components/landing/Iris";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
-      <SilentRefresh />
-      <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <Image
-          src="/logo_tilak.png"
-          alt="VedaMatch"
-          width={128}
-          height={128}
-          priority
-          className="mx-auto mb-4 h-20 w-20 rounded-2xl object-contain sm:h-24 sm:w-24"
-        />
-        <p className="mb-8 text-sm text-zinc-600 dark:text-zinc-400">
+    <div className="relative flex min-h-screen items-center justify-center bg-bg-0">
+      <BackgroundOrbs />
+      <NoiseOverlay />
+      
+      <div className="glass relative z-10 w-full max-w-sm rounded-3xl border border-glass-brd p-8 text-center">
+        <div className="mx-auto mb-6 w-20 h-20 rounded-2xl bg-bg-2 flex items-center justify-center">
+          <Iris size={64} glow />
+        </div>
+        
+        <h1 className="font-display text-2xl font-bold text-text-0 mb-2">
+          VedaMatch
+        </h1>
+        <p className="mb-8 text-sm text-text-1">
           Единый вход во все сервисы экосистемы
         </p>
+        
         <a
           href={`${API_URL}/auth/google`}
-          className="flex w-full items-center justify-center gap-3 rounded-xl border border-zinc-300 bg-white py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          className="flex w-full items-center justify-center gap-3 rounded-xl bg-white/10 border border-glass-brd py-3 text-sm font-medium text-text-0 transition hover:bg-white/20 hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
             <path
               fill="#4285F4"
               d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1Z"

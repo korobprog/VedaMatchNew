@@ -4,6 +4,9 @@ import { Header } from "@/components/header";
 import { AdminUserStageForm } from "@/components/admin-user-stage-form";
 import { getAdminUser, getProfile } from "@/lib/api";
 import { actorLabels, formatBool, formatDate, roleLabels, stageLabels, verificationLabels } from "@/lib/admin-labels";
+import { BackgroundOrbs } from "@/components/landing/Orb";
+import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
+import { cn } from "@/lib/utils";
 
 export default async function AdminUserDetailPage({
   params,
@@ -21,26 +24,28 @@ export default async function AdminUserDetailPage({
   const profile = detail.profile;
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="relative min-h-screen bg-bg-0">
+      <BackgroundOrbs />
+      <NoiseOverlay />
       <Header user={currentUser} />
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <Link href="/admin/users" className="mb-4 inline-flex text-sm font-medium text-amber-700 hover:text-amber-800 dark:text-amber-300">
+      <main className="mx-auto max-w-6xl px-4 py-8 pb-24">
+        <Link href="/admin/users" className="mb-4 inline-flex text-sm font-medium text-text-1 hover:text-magenta">
           ← К списку пользователей
         </Link>
 
-        <div className="mb-6 rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="glass rounded-2xl border border-glass-brd p-6 mb-6">
           <div className="flex flex-wrap items-start gap-4">
             {profile.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={profile.avatarUrl} alt={profile.name} className="h-16 w-16 rounded-full" referrerPolicy="no-referrer" />
             ) : (
-              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-xl font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-glass text-xl font-semibold text-text-0">
                 {profile.name.charAt(0).toUpperCase()}
               </span>
             )}
             <div className="min-w-0 flex-1">
-              <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{profile.name}</h1>
-              <p className="text-zinc-600 dark:text-zinc-400">{profile.email}</p>
+              <h1 className="font-display text-2xl font-bold text-text-0">{profile.name}</h1>
+              <p className="text-text-1">{profile.email}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Badge>{roleLabels[profile.role]}</Badge>
                 {profile.spiritualStage && <Badge>{stageLabels[profile.spiritualStage]}</Badge>}
@@ -125,17 +130,17 @@ export default async function AdminUserDetailPage({
               {detail.stageHistory.length > 0 ? (
                 <div className="space-y-3">
                   {detail.stageHistory.map((item) => (
-                    <div key={item.id} className="rounded-xl bg-zinc-50 p-4 dark:bg-zinc-800">
+                    <div key={item.id} className="glass rounded-xl p-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="font-medium text-zinc-900 dark:text-zinc-100">
+                        <p className="font-medium text-text-0">
                           {item.oldStage ? stageLabels[item.oldStage] : "—"} → {stageLabels[item.newStage]}
                         </p>
-                        <span className="text-xs text-zinc-500">{formatDate(item.createdAt)}</span>
+                        <span className="text-xs text-text-2">{formatDate(item.createdAt)}</span>
                       </div>
-                      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                      <p className="mt-1 text-sm text-text-1">
                         {actorLabels[item.actor]} · {item.verificationStatus ? verificationLabels[item.verificationStatus] : "без статуса"}
                       </p>
-                      {item.reason && <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{item.reason}</p>}
+                      {item.reason && <p className="mt-2 text-sm text-text-1">{item.reason}</p>}
                     </div>
                   ))}
                 </div>
@@ -148,15 +153,15 @@ export default async function AdminUserDetailPage({
               {detail.availableServices.length > 0 ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {detail.availableServices.map((service) => (
-                    <div key={service.id} className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+                    <div key={service.id} className="glass rounded-xl border border-glass-brd p-4">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">{service.name}</h3>
-                          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{service.description}</p>
+                          <h3 className="font-semibold text-text-0">{service.name}</h3>
+                          <p className="mt-1 text-sm text-text-1">{service.description}</p>
                         </div>
                         <Badge tone={service.status === "active" ? "green" : "amber"}>{service.status}</Badge>
                       </div>
-                      {service.requiresDevoteeVerification && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">Требует подтверждённого статуса преданного</p>}
+                      {service.requiresDevoteeVerification && <p className="mt-2 text-xs text-magenta">Требует подтверждённого статуса преданного</p>}
                     </div>
                   ))}
                 </div>
@@ -173,8 +178,8 @@ export default async function AdminUserDetailPage({
               initialStage={profile.spiritualStage}
               initialStatus={profile.devoteeVerificationStatus}
             />
-            <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-              <p className="font-medium text-zinc-900 dark:text-zinc-100">Безопасность</p>
+            <div className="glass rounded-2xl border border-glass-brd p-4 text-sm text-text-1">
+              <p className="font-medium text-text-0">Безопасность</p>
               <p className="mt-2">При изменении этапа создаётся запись в истории. Сброс подтверждённого статуса требует отдельного подтверждения.</p>
             </div>
           </aside>
@@ -186,8 +191,8 @@ export default async function AdminUserDetailPage({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-      <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
+    <section className="glass rounded-2xl border border-glass-brd p-6">
+      <h2 className="mb-4 font-display text-lg font-semibold text-text-0">{title}</h2>
       {children}
     </section>
   );
@@ -196,17 +201,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Info({ label, value }: { label: string; value: unknown }) {
   return (
     <div>
-      <dt className="text-sm text-zinc-500">{label}</dt>
-      <dd className="break-words font-medium text-zinc-900 dark:text-zinc-100">{value ? String(value) : "—"}</dd>
+      <dt className="text-sm text-text-2">{label}</dt>
+      <dd className="break-words font-medium text-text-0">{value ? String(value) : "—"}</dd>
     </div>
   );
 }
 
 function JsonBlock({ title, value }: { title: string; value: unknown }) {
   return (
-    <details className="mt-4 rounded-xl bg-zinc-50 p-4 text-sm dark:bg-zinc-800">
-      <summary className="cursor-pointer font-medium text-zinc-900 dark:text-zinc-100">{title}</summary>
-      <pre className="mt-3 overflow-x-auto whitespace-pre-wrap text-xs text-zinc-700 dark:text-zinc-300">{JSON.stringify(value, null, 2)}</pre>
+    <details className="mt-4 glass rounded-xl p-4 text-sm">
+      <summary className="cursor-pointer font-medium text-text-0">{title}</summary>
+      <pre className="mt-3 overflow-x-auto whitespace-pre-wrap text-xs text-text-1">{JSON.stringify(value, null, 2)}</pre>
     </details>
   );
 }
@@ -214,20 +219,20 @@ function JsonBlock({ title, value }: { title: string; value: unknown }) {
 function TextBlock({ title, value }: { title: string; value: string | null }) {
   return (
     <div>
-      <p className="mb-1 text-sm text-zinc-500">{title}</p>
-      <p className="rounded-xl bg-zinc-50 p-3 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">{value || "—"}</p>
+      <p className="mb-1 text-sm text-text-2">{title}</p>
+      <p className="glass rounded-xl p-3 text-sm text-text-1">{value || "—"}</p>
     </div>
   );
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">{children}</div>;
+  return <div className="glass rounded-xl p-4 text-sm text-text-1">{children}</div>;
 }
 
 function Badge({ children, tone = "amber" }: { children: React.ReactNode; tone?: "amber" | "green" }) {
   const classes = {
-    amber: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-    green: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+    amber: "bg-gold/20 text-gold border border-gold/30",
+    green: "bg-cyan/20 text-cyan border border-cyan/30",
   }[tone];
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${classes}`}>{children}</span>;
+  return <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-medium", classes)}>{children}</span>;
 }

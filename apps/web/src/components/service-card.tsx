@@ -16,9 +16,9 @@ export function ServiceCard({
   const comingSoon = service.status === "coming_soon";
 
   return (
-    <div className="flex flex-col rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="group flex flex-col rounded-2xl glass border border-glass-brd p-6 transition-all duration-300 hover:-translate-y-1 hover:border-magenta/30 hover:shadow-[0_0_20px_rgba(255,62,158,0.15)]">
       <div className="mb-4 flex items-center gap-3">
-        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-2xl dark:bg-amber-950">
+        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-glass text-2xl border border-glass-brd">
           {service.iconUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={service.iconUrl} alt="" className="h-8 w-8" />
@@ -27,16 +27,16 @@ export function ServiceCard({
           )}
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">
+          <h3 className="font-semibold text-text-0">
             {service.name}
           </h3>
           {comingSoon && (
-            <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+            <span className="inline-block rounded-full bg-glass px-2 py-0.5 text-xs font-medium text-text-1 mt-1">
               Скоро
             </span>
           )}
           {service.requiresDevoteeVerification && (
-            <span className="mt-1 inline-block rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800 dark:bg-violet-950 dark:text-violet-200">
+            <span className="mt-1 inline-block rounded-full bg-magenta/20 px-2 py-0.5 text-xs font-medium text-magenta border border-magenta/30">
               Подтвержденный преданный
             </span>
           )}
@@ -44,26 +44,26 @@ export function ServiceCard({
         {(badgeCount ?? 0) > 0 && (
           <span
             aria-label={`Входящих заявок: ${badgeCount}`}
-            className="self-start rounded-full bg-red-600 px-2.5 py-1 text-xs font-semibold text-white"
+            className="self-start rounded-full bg-magenta px-2.5 py-1 text-xs font-semibold text-white"
           >
             {badgeCount}
           </span>
         )}
       </div>
-      <p className="mb-6 flex-1 text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mb-6 flex-1 text-sm text-text-1">
         {service.description}
       </p>
       {comingSoon ? (
         <button
           disabled
-          className="w-full cursor-not-allowed rounded-xl bg-zinc-100 py-3 text-sm font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-600"
+          className="w-full cursor-not-allowed rounded-xl bg-glass px-4 py-3 text-sm font-medium text-text-2"
         >
           В разработке
         </button>
       ) : (
         <a
           href={service.url}
-          className="w-full rounded-xl bg-amber-600 py-3 text-center text-sm font-medium text-white transition hover:bg-amber-700"
+          className="w-full rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] py-3 text-center text-sm font-medium text-white transition hover:shadow-[0_0_20px_rgba(255,62,158,0.4)]"
         >
           Открыть
         </a>

@@ -53,18 +53,21 @@ export function SwipeCard({
   };
 
   return (
-    <motion.div
-      ref={constraintsRef}
-      className="absolute inset-0 cursor-grab active:cursor-grabbing"
-      drag={!isDragging}
-      dragConstraints={{ left: -200, right: 200, top: -200, bottom: 200 }}
-      dragElastic={0.7}
-      onDragStart={() => setIsDragging(true)}
-      onDragEnd={handleDragEnd}
-      style={{ x, rotate, opacity: opacityX }}
-      whileTap={{ cursor: "grabbing" }}
+    <div
+      className="relative w-full h-full rounded-3xl overflow-hidden bg-gradient-to-br from-white/10 to-white/[0.02] border border-glass-brd"
     >
-      <div className="relative w-full h-full rounded-3xl overflow-hidden bg-gradient-to-br from-white/10 to-white/[0.02] border border-glass-brd">
+      {/* Draggable wrapper */}
+      <motion.div
+        ref={constraintsRef}
+        className="absolute inset-0 cursor-grab active:cursor-grabbing"
+        drag={!isDragging}
+        dragConstraints={{ left: -200, right: 200, top: -200, bottom: 200 }}
+        dragElastic={0.7}
+        onDragStart={() => setIsDragging(true)}
+        onDragEnd={handleDragEnd}
+        style={{ x, rotate, opacity: opacityX }}
+        whileTap={{ cursor: "grabbing" }}
+      >
         {/* Image */}
         <div className="relative w-full h-[65%]">
           <Image
@@ -133,40 +136,40 @@ export function SwipeCard({
             </div>
           )}
         </div>
+      </motion.div>
 
-        {/* Action buttons */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4">
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => onSwipeLeft?.()}
-            className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-sm border border-glass-brd flex items-center justify-center text-text-1 hover:text-red-500 hover:border-red-500/50 transition-colors"
-            aria-label="Не нравится"
-          >
-            <X size={28} />
-          </motion.button>
-          
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => onLike?.()}
-            className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm border border-glass-brd flex items-center justify-center text-text-1 hover:text-cyan hover:border-cyan/50 transition-colors"
-            aria-label="Нравится"
-          >
-            <Star size={24} />
-          </motion.button>
-          
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => onSwipeRight?.()}
-            className="w-14 h-14 rounded-full bg-gradient-to-br from-magenta to-[#B23EFF] flex items-center justify-center text-white shadow-[0_0_24px_rgba(255,62,158,0.45)]"
-            aria-label="Люблю"
-          >
-            <Heart size={28} />
-          </motion.button>
-        </div>
+      {/* Action buttons */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 z-20">
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => onSwipeLeft?.()}
+          className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-sm border border-glass-brd flex items-center justify-center text-text-1 hover:text-red-500 hover:border-red-500/50 transition-colors"
+          aria-label="Не нравится"
+        >
+          <X size={28} />
+        </motion.button>
+        
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => onLike?.()}
+          className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm border border-glass-brd flex items-center justify-center text-text-1 hover:text-cyan hover:border-cyan/50 transition-colors"
+          aria-label="Нравится"
+        >
+          <Star size={24} />
+        </motion.button>
+        
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => onSwipeRight?.()}
+          className="w-14 h-14 rounded-full bg-gradient-to-br from-magenta to-[#B23EFF] flex items-center justify-center text-white shadow-[0_0_24px_rgba(255,62,158,0.45)]"
+          aria-label="Люблю"
+        >
+          <Heart size={28} />
+        </motion.button>
       </div>
-    </motion.div>
+    </div>
   );
 }

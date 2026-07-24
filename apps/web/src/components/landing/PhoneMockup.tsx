@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
+import Image from "next/image";
 import { SwipeCard } from "./SwipeCard";
 import { Iris } from "./Iris";
 import { cn } from "@/lib/utils";
@@ -46,17 +46,14 @@ const demoProfiles = [
 
 export function PhoneMockup({ className }: PhoneMockupProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [direction, setDirection] = useState<"left" | "right" | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
 
   const handleSwipe = (dir: "left" | "right") => {
     if (isAnimating) return;
-    setDirection(dir);
     setIsAnimating(true);
     
     setTimeout(() => {
       setCurrentIndex((prev) => (prev + 1) % demoProfiles.length);
-      setDirection(null);
       setIsAnimating(false);
     }, 300);
   };
@@ -115,29 +112,23 @@ export function PhoneMockup({ className }: PhoneMockupProps) {
             <div className="relative h-[420px] mx-3 mb-3">
               {/* Next card (behind) */}
               <div className="absolute inset-0 scale-[0.95] translate-y-2 rounded-3xl overflow-hidden opacity-50">
-                <img
+                <Image
                   src={nextProfile.imageUrl}
                   alt={nextProfile.name}
-                  className="w-full h-full object-cover"
+                  fill
+                  className="object-cover"
                 />
               </div>
 
               {/* Current card */}
-              <motion.div
-                key={currentProfile.id}
-                initial={{ x: direction === "right" ? 300 : direction === "left" ? -300 : 0, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: direction === "right" ? -300 : direction === "left" ? 300 : 0, opacity: 0 }}
-                transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                className="relative w-full h-full"
-              >
+              <div className="relative w-full h-full">
                 <SwipeCard
                   {...currentProfile}
                   onSwipeLeft={() => handleSwipe("left")}
                   onSwipeRight={() => handleSwipe("right")}
                   onLike={() => handleSwipe("right")}
                 />
-              </motion.div>
+              </div>
             </div>
 
             {/* Bottom tab indicator */}

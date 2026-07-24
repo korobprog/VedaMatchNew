@@ -8,6 +8,8 @@ import {
   getAdminMotivationPosts,
   getAdminMotivationSourceWatches,
 } from "@/lib/motivation-api";
+import { BackgroundOrbs } from "@/components/landing/Orb";
+import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 export default async function AdminMotivationPage() {
   const [user, posts, authors, sources] = await Promise.all([
@@ -20,11 +22,13 @@ export default async function AdminMotivationPage() {
   if (user.role !== "admin" && user.role !== "service-admin") redirect("/");
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="relative min-h-screen bg-bg-0">
+      <BackgroundOrbs />
+      <NoiseOverlay />
       <Header user={user} />
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">Управление Motivation</h1>
-        <p className="mt-2 max-w-3xl text-zinc-600 dark:text-zinc-400">
+      <main className="mx-auto max-w-6xl px-4 py-8 pb-24">
+        <h1 className="font-display text-3xl font-bold text-text-0">Управление motivation</h1>
+        <p className="mt-2 max-w-3xl text-text-1">
           Сначала проверьте точную цитату и пояснение. Изображение создаётся только после одобрения текста и требует отдельного подтверждения перед публикацией.
         </p>
         <MotivationAdminWatchlists authors={authors} sources={sources} />

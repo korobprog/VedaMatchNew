@@ -8,6 +8,8 @@ import {
   getUnionProfileState,
 } from "@/lib/union-api";
 import { hasCompleteUnionLocation } from "@/lib/union-location";
+import { BackgroundOrbs } from "@/components/landing/Orb";
+import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 export default async function UnionPage() {
   const user = await getProfile();
@@ -21,14 +23,16 @@ export default async function UnionPage() {
   const profile = state?.profile ?? null;
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="relative min-h-screen bg-bg-0">
+      <BackgroundOrbs />
+      <NoiseOverlay />
       <Header user={user} />
-      <main className="mx-auto max-w-4xl px-4 py-8">
+      <main className="mx-auto max-w-4xl px-4 py-8 pb-24">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+          <h1 className="font-display text-2xl font-bold text-text-0">
             VedaMatch Union
           </h1>
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-sm text-text-1">
             Осознанные знакомства и сотрудничество: семья, дружба, служение,
             проекты
           </p>
@@ -37,7 +41,7 @@ export default async function UnionPage() {
         <UnionNav incomingPending={counts?.incomingPending ?? 0} />
 
         {!profile && (
-          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+          <div className="mb-6 glass rounded-2xl border border-glass-brd p-4 text-sm text-text-1">
             Добро пожаловать! Чтобы увидеть подходящих людей, заполните профиль
             Union: распределите приоритеты и расскажите о себе.
           </div>

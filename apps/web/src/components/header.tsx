@@ -1,41 +1,36 @@
 ﻿import Link from "next/link";
-import Image from "next/image";
 import type { UserProfile } from "@vedamatch/shared";
 import { LogoutButton } from "./logout-button";
+import { Iris } from "./landing/Iris";
 
 export function Header({ user }: { user: UserProfile }) {
   return (
-    <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
+    <header className="sticky top-0 z-50 glass border-b border-glass-brd safe-top">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <Link
           href="/"
           className="flex shrink-0 items-center"
           aria-label="VedaMatch"
         >
-          <Image
-            src="/logo_tilak.png"
-            alt="VedaMatch"
-            width={64}
-            height={64}
-            priority
-            className="h-10 w-10 rounded-xl object-contain sm:h-12 sm:w-12"
-          />
+          <div className="w-10 h-10 flex items-center justify-center sm:h-12 sm:w-12">
+            <Iris size={40} />
+          </div>
         </Link>
         <div className="flex items-center gap-3">
           {user.role === "admin" && (
             <Link
               href="/admin/users"
-              className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 sm:text-sm dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              className="rounded-full border border-glass-brd px-3 py-1.5 text-xs font-medium text-text-1 hover:text-text-0 hover:border-magenta/50 transition-colors"
             >
               Админ
             </Link>
           )}
           {(user.role === "admin" || user.role === "service-admin") && (
-            <Link href="/admin/motivation" className="rounded-full border border-amber-200 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50 sm:text-sm dark:border-amber-900 dark:text-amber-200 dark:hover:bg-amber-950">Motivation</Link>
+            <Link href="/admin/motivation" className="rounded-full border border-glass-brd px-3 py-1.5 text-xs font-medium text-text-1 hover:text-text-0 hover:border-cyan/50 transition-colors">Motivation</Link>
           )}
           <Link
             href="/self-identification"
-            className="rounded-full border border-amber-200 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50 sm:text-sm dark:border-amber-900 dark:text-amber-200 dark:hover:bg-amber-950"
+            className="rounded-full border border-glass-brd px-3 py-1.5 text-xs font-medium text-text-1 hover:text-text-0 hover:border-gold/50 transition-colors"
           >
             <span className="sm:hidden">Опрос</span>
             <span className="hidden sm:inline">Самоидентификация</span>
@@ -50,11 +45,11 @@ export function Header({ user }: { user: UserProfile }) {
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-glass text-sm font-semibold text-text-0">
                 {user.name.charAt(0).toUpperCase()}
               </span>
             )}
-            <span className="hidden text-sm font-medium text-zinc-700 sm:inline dark:text-zinc-300">
+            <span className="hidden text-sm font-medium text-text-1 sm:inline">
               {user.name}
             </span>
           </Link>

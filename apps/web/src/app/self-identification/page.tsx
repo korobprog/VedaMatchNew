@@ -6,6 +6,8 @@ import {
 } from "@/lib/api";
 import { Header } from "@/components/header";
 import { SelfIdentificationForm } from "@/components/self-identification-form";
+import { BackgroundOrbs } from "@/components/landing/Orb";
+import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 export default async function SelfIdentificationPage() {
   const [user, state, history] = await Promise.all([
@@ -16,13 +18,15 @@ export default async function SelfIdentificationPage() {
   if (!user) redirect("/login");
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="relative min-h-screen bg-bg-0">
+      <BackgroundOrbs />
+      <NoiseOverlay />
       <Header user={user} />
-      <main className="mx-auto max-w-3xl px-4 py-8">
-        <h1 className="mb-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+      <main className="mx-auto max-w-3xl px-4 py-8 pb-24">
+        <h1 className="mb-2 font-display text-2xl font-bold text-text-0">
           Самоидентификация пользователя
         </h1>
-        <p className="mb-6 text-zinc-600 dark:text-zinc-400">
+        <p className="mb-6 text-text-1">
           Ответьте на несколько вопросов, чтобы VedaMatch мог подобрать подходящие сервисы и материалы.
         </p>
         <SelfIdentificationForm state={state} history={history ?? []} />
