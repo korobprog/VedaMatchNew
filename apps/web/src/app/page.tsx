@@ -5,14 +5,21 @@ import { ServiceCard } from "@/components/service-card";
 import { getUnionConnectionCounts } from "@/lib/union-api";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
+import { LandingPage } from "@/components/landing";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ returnTo?: string | string[] }>;
+}) {
+  const { returnTo: rawReturnTo } = await searchParams;
+  const returnTo = Array.isArray(rawReturnTo) ? rawReturnTo[0] : rawReturnTo;
   const [user, services, unionCounts] = await Promise.all([
     getProfile(),
     getServices(),
     getUnionConnectionCounts().catch(() => null),
   ]);
-  if (!user || !services) redirect("/login");
+  if (!user || !services) return <LandingPage returnTo={returnTo} />;
   if (!user.spiritualStage) redirect("/self-identification");
 
   return (

@@ -5,8 +5,17 @@ import { useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
-/** На /login: если жив refresh-токен — тихо обновляем сессию и уходим на главную */
-export function SilentRefresh() {
+function getSafeReturnTo(returnTo?: string): string {
+  if (!returnTo?.startsWith("/")) return "/";
+
+  const baseUrl = "https://vedamatch.local";
+  const destination = new URL(returnTo, baseUrl);
+  return destination.origin === baseUrl
+    ? `${destination.pathname}${destination.search}${destination.hash}`
+    : "/";
+}
+
+export function SilentRefresh({ returnTo }: { returnTo?: string }) {
   const router = useRouter();
 
   useEffect(() => {
@@ -16,12 +25,12 @@ export function SilentRefresh() {
     })
       .then((res) => {
         if (res.ok) {
-          router.push("/");
+          router.replace(getSafeReturnTo(returnTo));
           router.refresh();
         }
       })
       .catch(() => {});
-  }, [router]);
+  }, [returnTo, router]);
 
   return null;
 }

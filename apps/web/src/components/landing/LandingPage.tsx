@@ -12,10 +12,12 @@ import { PhoneMockup } from "./PhoneMockup";
 import { HowItWorks } from "./HowItWorks";
 import { Features } from "./Features";
 import { cn } from "@/lib/utils";
+import { SilentRefresh } from "@/components/silent-refresh";
 
-export function LandingPage() {
+export function LandingPage({ returnTo }: { returnTo?: string }) {
   return (
     <div className="relative min-h-screen bg-bg-0">
+      <SilentRefresh returnTo={returnTo} />
       {/* Background elements */}
       <BackgroundOrbs />
       <NoiseOverlay />
