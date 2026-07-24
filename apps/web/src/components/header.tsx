@@ -5,7 +5,8 @@ import Image from "next/image";
 import type { UserProfile } from "@vedamatch/shared";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Home, Users, BookOpen, Sparkles } from "lucide-react";
+import { Menu, X, Home } from "lucide-react";
+import { ServiceIcon } from "@/components/icons/service-icons";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -16,9 +17,9 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: "/", label: "Главная", icon: <Home size={20} /> },
-  { href: "/union", label: "Union", icon: <Users size={20} /> },
-  { href: "/motivation", label: "Motivation", icon: <Sparkles size={20} /> },
-  { href: "/vedabase", label: "Vedabase", icon: <BookOpen size={20} /> },
+  { href: "/union", label: "Union", icon: <ServiceIcon slug="union" className="h-5 w-5" /> },
+  { href: "/motivation", label: "Motivation", icon: <ServiceIcon slug="motivation" className="h-5 w-5" /> },
+  { href: "/vedabase", label: "Vedabase", icon: <ServiceIcon slug="vedabase" className="h-5 w-5" /> },
 ];
 
 function LogoutItem() {
