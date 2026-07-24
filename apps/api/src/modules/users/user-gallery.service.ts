@@ -384,14 +384,6 @@ export class UserGalleryService {
       }),
       { expiresIn: SIGNED_URL_TTL_SECONDS },
     );
-    const endpoint = this.config.get<string>('S3_ENDPOINT');
-    const publicUrl = this.config.get<string>('S3_PUBLIC_URL');
-    if (endpoint && publicUrl) {
-      return signed.replace(
-        endpoint.replace(/\/+$/, ''),
-        publicUrl.replace(/\/+$/, ''),
-      );
-    }
     return signed;
   }
 

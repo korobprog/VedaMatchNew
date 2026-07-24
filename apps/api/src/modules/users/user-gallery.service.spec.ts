@@ -237,16 +237,19 @@ describe('UserGalleryService', () => {
     prisma.userPhoto.findMany.mockResolvedValueOnce([
       photo({ storageKey: 'users/user-id/gallery/photo.webp' }),
     ]);
+    signedUrl.mockResolvedValueOnce(
+      'https://s3.test/bucket/users/user-id/gallery/photo.webp?X-Amz-Signature=signature',
+    );
     service = createService(prisma, {
-      S3_PUBLIC_URL: 'https://public.invalid',
+      S3_PUBLIC_URL: 'https://s3.test/bucket',
     });
 
     const result = await service.getGallery(USER_ID);
 
     expect(result.photos[0].url).toBe(
-      'https://signed.test/users/user-id/gallery/photo.webp',
+      'https://s3.test/bucket/users/user-id/gallery/photo.webp?X-Amz-Signature=signature',
     );
-    expect(result.photos[0].url).not.toContain('public.invalid');
+    expect(result.photos[0].url).not.toContain('/bucket/bucket/');
     expect(signedUrl).toHaveBeenCalledWith(
       expect.any(S3Client),
       expect.objectContaining({
