@@ -7,7 +7,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Home } from "lucide-react";
 import { ServiceIcon } from "@/components/icons/service-icons";
-import { cn } from "@/lib/utils";
+import { LogoutButton } from "@/components/logout-button";
 
 interface NavItem {
   href: string;
@@ -24,19 +24,14 @@ const navItems: NavItem[] = [
 
 function LogoutItem() {
   return (
-    <form action="/api/auth/signout" method="post">
-      <button
-        type="submit"
-        className="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-red-400 hover:bg-red-400/10 transition-colors"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-          <polyline points="16,17 21,12 16,7" />
-          <line x1="21" y1="12" x2="9" y2="12" />
-        </svg>
-        <span className="text-sm">Выйти</span>
-      </button>
-    </form>
+    <LogoutButton className="flex w-full items-center gap-3 rounded-xl border-0 px-4 py-3 text-text-1 hover:bg-red-400/10 hover:text-red-400 dark:border-0 dark:text-text-1">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+        <polyline points="16,17 21,12 16,7" />
+        <line x1="21" y1="12" x2="9" y2="12" />
+      </svg>
+      <span className="text-sm">Выйти</span>
+    </LogoutButton>
   );
 }
 
