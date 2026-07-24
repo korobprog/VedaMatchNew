@@ -1,7 +1,7 @@
 ﻿import Link from "next/link";
+import Image from "next/image";
 import type { UserProfile } from "@vedamatch/shared";
 import { LogoutButton } from "./logout-button";
-import { Iris } from "./landing/Iris";
 
 export function Header({ user }: { user: UserProfile }) {
   return (
@@ -12,9 +12,14 @@ export function Header({ user }: { user: UserProfile }) {
           className="flex shrink-0 items-center"
           aria-label="VedaMatch"
         >
-          <div className="w-10 h-10 flex items-center justify-center sm:h-12 sm:w-12">
-            <Iris size={40} />
-          </div>
+          <Image
+            src="/logo_tilak.png"
+            alt="VedaMatch"
+            width={48}
+            height={48}
+            priority
+            className="h-10 w-10 rounded-xl object-contain sm:h-12 sm:w-12"
+          />
         </Link>
         <div className="flex items-center gap-3">
           {user.role === "admin" && (

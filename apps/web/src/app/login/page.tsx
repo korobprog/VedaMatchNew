@@ -1,8 +1,8 @@
 ﻿"use client";
 
+import Image from "next/image";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
-import { Iris } from "@/components/landing/Iris";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -13,9 +13,14 @@ export default function LoginPage() {
       <NoiseOverlay />
       
       <div className="glass relative z-10 w-full max-w-sm rounded-3xl border border-glass-brd p-8 text-center">
-        <div className="mx-auto mb-6 w-20 h-20 rounded-2xl bg-bg-2 flex items-center justify-center">
-          <Iris size={64} glow />
-        </div>
+        <Image
+          src="/logo_tilak.png"
+          alt="VedaMatch"
+          width={96}
+          height={96}
+          priority
+          className="mx-auto mb-6 h-20 w-20 rounded-2xl object-contain"
+        />
         
         <h1 className="font-display text-2xl font-bold text-text-0 mb-2">
           VedaMatch
