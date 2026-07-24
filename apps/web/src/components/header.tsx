@@ -3,7 +3,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { UserProfile } from "@vedamatch/shared";
-import { LogoutButton } from "./logout-button";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Home, Users, BookOpen, Sparkles } from "lucide-react";
@@ -21,6 +20,24 @@ const navItems: NavItem[] = [
   { href: "/motivation", label: "Motivation", icon: <Sparkles size={20} /> },
   { href: "/vedabase", label: "Vedabase", icon: <BookOpen size={20} /> },
 ];
+
+function LogoutItem() {
+  return (
+    <form action="/api/auth/signout" method="post">
+      <button
+        type="submit"
+        className="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16,17 21,12 16,7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+        <span className="text-sm">Выйти</span>
+      </button>
+    </form>
+  );
+}
 
 export function Header({ user }: { user: UserProfile }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -83,8 +100,6 @@ export function Header({ user }: { user: UserProfile }) {
               )}
             </Link>
             
-            <LogoutButton />
-
             {/* Mobile menu button */}
             <button
               onClick={() => setIsOpen(!isOpen)}
@@ -118,7 +133,7 @@ export function Header({ user }: { user: UserProfile }) {
               className="fixed top-0 right-0 bottom-0 z-50 w-72 bg-bg-1 border-l border-glass-brd md:hidden"
             >
               <div className="flex flex-col h-full p-6 pt-20">
-                <nav className="flex flex-col gap-2">
+                <nav className="flex flex-col gap-1">
                   {navItems.map((item, index) => (
                     <motion.div
                       key={item.href}
@@ -155,14 +170,19 @@ export function Header({ user }: { user: UserProfile }) {
                   </motion.div>
                 )}
 
-                <div className="mt-auto pt-4 border-t border-glass-brd">
+                <div className="mt-auto pt-4 border-t border-glass-brd space-y-1">
                   <Link
                     href="/self-identification"
                     onClick={() => setIsOpen(false)}
                     className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-gold hover:bg-glass transition-colors"
                   >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 11l3 3L22 4" />
+                      <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+                    </svg>
                     <span className="text-sm">Самоидентификация</span>
                   </Link>
+                  <LogoutItem />
                 </div>
               </div>
             </motion.div>
