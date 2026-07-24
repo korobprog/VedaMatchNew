@@ -1,10 +1,5 @@
 ﻿import type { ServiceCard as ServiceCardType } from "@vedamatch/shared";
-
-const categoryEmoji: Record<string, string> = {
-  community: "🤝",
-  knowledge: "📖",
-  lifestyle: "🌱",
-};
+import { ServiceIcon } from "@/components/icons/service-icons";
 
 export function ServiceCard({
   service,
@@ -18,12 +13,12 @@ export function ServiceCard({
   return (
     <div className="group flex flex-col rounded-2xl glass border border-glass-brd p-6 transition-all duration-300 hover:-translate-y-1 hover:border-magenta/30 hover:shadow-[0_0_20px_rgba(255,62,158,0.15)]">
       <div className="mb-4 flex items-center gap-3">
-        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-glass text-2xl border border-glass-brd">
+        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-glass border border-glass-brd">
           {service.iconUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={service.iconUrl} alt="" className="h-8 w-8" />
           ) : (
-            (categoryEmoji[service.category] ?? "✨")
+            <ServiceIcon slug={service.slug} category={service.category} className="h-8 w-8" />
           )}
         </span>
         <div className="min-w-0 flex-1">
