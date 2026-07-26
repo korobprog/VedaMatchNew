@@ -6,6 +6,7 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface NavbarProps {
   className?: string;
@@ -87,6 +88,7 @@ export function Navbar({ className }: NavbarProps) {
 
           {/* Desktop CTA */}
           <div className="hidden lg:flex items-center gap-4">
+            <ThemeToggle />
             <Link
               href="/login"
               className="px-5 py-2.5 rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] text-white font-semibold transition-all duration-200 hover:shadow-[0_0_24px_rgba(255,62,158,0.45)] hover:-translate-y-0.5"
@@ -167,8 +169,16 @@ export function Navbar({ className }: NavbarProps) {
                   ))}
                 </nav>
 
+                {/* Theme */}
+                <div className="mt-10">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-2">
+                    Тема
+                  </p>
+                  <ThemeToggle variant="full" />
+                </div>
+
                 {/* CTA Button */}
-                <div className="mt-auto">
+                <div className="mt-auto pb-24">
                   <Link
                     href="/login"
                     onClick={() => setIsOpen(false)}

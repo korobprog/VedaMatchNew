@@ -1,6 +1,7 @@
 import { createElement, type ImgHTMLAttributes } from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { ThemeProvider } from "@/components/theme-provider";
 import { Navbar } from "./Navbar";
 import { PhoneMockup } from "./PhoneMockup";
 
@@ -18,7 +19,11 @@ vi.mock("next/image", () => ({
 
 describe("landing branding", () => {
   it("uses the product logo in the landing navigation", () => {
-    render(<Navbar />);
+    render(
+      <ThemeProvider>
+        <Navbar />
+      </ThemeProvider>,
+    );
 
     expect(screen.getByAltText("VedaMatch")).toHaveAttribute(
       "src",

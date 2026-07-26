@@ -13,12 +13,12 @@ export default async function VedabaseReaderPage({ params }: { params: Params })
   const { bookSlug, chapterSlug } = await params;
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="min-h-screen bg-bg-0">
       <Header user={user} />
       <div className="mx-auto max-w-6xl px-4 pt-6">
         <Link
           href="/vedabase"
-          className="text-sm font-medium text-amber-700 hover:text-amber-800 dark:text-amber-300"
+          className="text-sm font-medium text-gold transition-colors hover:text-magenta"
         >
           ← К библиотеке
         </Link>

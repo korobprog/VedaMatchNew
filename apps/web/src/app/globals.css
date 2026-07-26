@@ -1,35 +1,160 @@
 @import "tailwindcss";
 
-@theme {
+/*
+ * The `dark:` variant follows the `data-theme` attribute that the theme
+ * provider writes on <html>, not the raw OS preference. Without this the
+ * variant tracks `prefers-color-scheme` only and light/dark pairs such as
+ * `bg-white dark:bg-zinc-900` fight the chosen theme.
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
   /* Background colors */
-  --color-bg-0: #0A0614;
-  --color-bg-1: #150C24;
-  --color-bg-2: #1B0F2E;
-  
+  --color-bg-0: var(--vm-bg-0);
+  --color-bg-1: var(--vm-bg-1);
+  --color-bg-2: var(--vm-bg-2);
+
   /* Glass colors */
-  --color-glass: rgba(255, 255, 255, 0.06);
-  --color-glass-brd: rgba(255, 255, 255, 0.12);
-  
+  --color-glass: var(--vm-glass);
+  --color-glass-brd: var(--vm-glass-brd);
+
   /* Accent colors */
-  --color-magenta: #FF3E9E;
-  --color-cyan: #23F0C7;
-  --color-gold: #FFC85C;
-  
+  --color-magenta: var(--vm-magenta);
+  --color-cyan: var(--vm-cyan);
+  --color-gold: var(--vm-gold);
+
   /* Text colors */
-  --color-text-0: #F6F1FF;
-  --color-text-1: #B8A9D9;
-  --color-text-2: #7C6D9C;
-  
+  --color-text-0: var(--vm-text-0);
+  --color-text-1: var(--vm-text-1);
+  --color-text-2: var(--vm-text-2);
+
   /* Font families */
   --font-display: var(--font-unbounded);
   --font-body: var(--font-manrope);
   --font-mono: var(--font-mono);
-  
+
   /* Animations */
   --animate-drift: drift 25s ease-in-out infinite;
   --animate-drift-reverse: drift-reverse 30s ease-in-out infinite;
   --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
   --animate-float: float 6s ease-in-out infinite;
+}
+
+/* ---------------------------------------------------------------- *
+ * Theme tokens                                                     *
+ * ---------------------------------------------------------------- */
+
+:root {
+  --font-unbounded: "Unbounded", system-ui, sans-serif;
+  --font-manrope: "Manrope", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+/* Light theme (also the no-JavaScript default on light devices) */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --vm-bg-0: #FBF9FF;
+  --vm-bg-1: #F3EEFC;
+  --vm-bg-2: #EAE2F8;
+
+  --vm-glass: rgba(255, 255, 255, 0.72);
+  --vm-glass-brd: rgba(74, 44, 122, 0.14);
+  --vm-glass-from: rgba(255, 255, 255, 0.9);
+  --vm-glass-to: rgba(255, 255, 255, 0.55);
+  --vm-glass-light-from: rgba(255, 255, 255, 0.7);
+  --vm-glass-light-to: rgba(255, 255, 255, 0.35);
+  --vm-glass-light-brd: rgba(74, 44, 122, 0.1);
+
+  --vm-magenta: #DB1B84;
+  --vm-cyan: #0C917C;
+  --vm-gold: #B0770E;
+
+  --vm-text-0: #180F2C;
+  --vm-text-1: #4B3B6C;
+  --vm-text-2: #766591;
+
+  --vm-glow-magenta: rgba(219, 27, 132, 0.28);
+  --vm-glow-cyan: rgba(12, 145, 124, 0.28);
+  --vm-glow-gold: rgba(176, 119, 14, 0.28);
+  --vm-glow-text-magenta: rgba(219, 27, 132, 0.25);
+  --vm-glow-text-cyan: rgba(12, 145, 124, 0.25);
+
+  --vm-orb-opacity: 0.2;
+  --vm-noise-opacity: 0.02;
+  --vm-scrollbar-track: rgba(74, 44, 122, 0.06);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --vm-bg-0: #0A0614;
+  --vm-bg-1: #150C24;
+  --vm-bg-2: #1B0F2E;
+
+  --vm-glass: rgba(255, 255, 255, 0.06);
+  --vm-glass-brd: rgba(255, 255, 255, 0.12);
+  --vm-glass-from: rgba(255, 255, 255, 0.1);
+  --vm-glass-to: rgba(255, 255, 255, 0.02);
+  --vm-glass-light-from: rgba(255, 255, 255, 0.05);
+  --vm-glass-light-to: rgba(255, 255, 255, 0.01);
+  --vm-glass-light-brd: rgba(255, 255, 255, 0.08);
+
+  --vm-magenta: #FF3E9E;
+  --vm-cyan: #23F0C7;
+  --vm-gold: #FFC85C;
+
+  --vm-text-0: #F6F1FF;
+  --vm-text-1: #B8A9D9;
+  --vm-text-2: #7C6D9C;
+
+  --vm-glow-magenta: rgba(255, 62, 158, 0.45);
+  --vm-glow-cyan: rgba(35, 240, 199, 0.45);
+  --vm-glow-gold: rgba(255, 200, 92, 0.45);
+  --vm-glow-text-magenta: rgba(255, 62, 158, 0.7);
+  --vm-glow-text-cyan: rgba(35, 240, 199, 0.7);
+
+  --vm-orb-opacity: 0.4;
+  --vm-noise-opacity: 0.03;
+  --vm-scrollbar-track: var(--vm-bg-1);
+}
+
+/* Devices that prefer dark get the dark palette before the theme script runs */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+
+    --vm-bg-0: #0A0614;
+    --vm-bg-1: #150C24;
+    --vm-bg-2: #1B0F2E;
+
+    --vm-glass: rgba(255, 255, 255, 0.06);
+    --vm-glass-brd: rgba(255, 255, 255, 0.12);
+    --vm-glass-from: rgba(255, 255, 255, 0.1);
+    --vm-glass-to: rgba(255, 255, 255, 0.02);
+    --vm-glass-light-from: rgba(255, 255, 255, 0.05);
+    --vm-glass-light-to: rgba(255, 255, 255, 0.01);
+    --vm-glass-light-brd: rgba(255, 255, 255, 0.08);
+
+    --vm-magenta: #FF3E9E;
+    --vm-cyan: #23F0C7;
+    --vm-gold: #FFC85C;
+
+    --vm-text-0: #F6F1FF;
+    --vm-text-1: #B8A9D9;
+    --vm-text-2: #7C6D9C;
+
+    --vm-glow-magenta: rgba(255, 62, 158, 0.45);
+    --vm-glow-cyan: rgba(35, 240, 199, 0.45);
+    --vm-glow-gold: rgba(255, 200, 92, 0.45);
+    --vm-glow-text-magenta: rgba(255, 62, 158, 0.7);
+    --vm-glow-text-cyan: rgba(35, 240, 199, 0.7);
+
+    --vm-orb-opacity: 0.4;
+    --vm-noise-opacity: 0.03;
+    --vm-scrollbar-track: #150C24;
+  }
 }
 
 @keyframes drift {
@@ -101,23 +226,30 @@
   }
 }
 
-:root {
-  --font-unbounded: "Unbounded", system-ui, sans-serif;
-  --font-manrope: "Manrope", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
-}
-
 body {
   font-family: var(--font-manrope);
-  background: var(--color-bg-0);
-  color: var(--color-text-0);
+  background: var(--vm-bg-0);
+  color: var(--vm-text-0);
   min-height: 100vh;
   overflow-x: hidden;
 }
 
+/* Cross-fade the palette while a theme switch is in flight */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-theme-switching] body,
+  html[data-theme-switching] body *:not(svg *) {
+    transition:
+      background-color 260ms ease,
+      border-color 260ms ease,
+      color 260ms ease,
+      fill 260ms ease,
+      box-shadow 260ms ease;
+  }
+}
+
 /* Focus visible styles */
 *:focus-visible {
-  outline: 2px solid var(--color-magenta);
+  outline: 2px solid var(--vm-magenta);
   outline-offset: 2px;
 }
 
@@ -128,52 +260,61 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-bg-1);
+  background: var(--vm-scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-text-2);
+  background: var(--vm-text-2);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-1);
+  background: var(--vm-text-1);
 }
 
 /* Glass effect utility */
 .glass {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
+  background: linear-gradient(135deg, var(--vm-glass-from) 0%, var(--vm-glass-to) 100%);
   backdrop-filter: blur(24px) saturate(150%);
   -webkit-backdrop-filter: blur(24px) saturate(150%);
-  border: 1px solid var(--color-glass-brd);
+  border: 1px solid var(--vm-glass-brd);
 }
 
 .glass-light {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+  background: linear-gradient(135deg, var(--vm-glass-light-from) 0%, var(--vm-glass-light-to) 100%);
   backdrop-filter: blur(16px) saturate(120%);
   -webkit-backdrop-filter: blur(16px) saturate(120%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--vm-glass-light-brd);
 }
 
 /* Neon glow utilities */
 .glow-magenta {
-  box-shadow: 0 0 24px rgba(255, 62, 158, 0.45);
+  box-shadow: 0 0 24px var(--vm-glow-magenta);
 }
 
 .glow-cyan {
-  box-shadow: 0 0 24px rgba(35, 240, 199, 0.45);
+  box-shadow: 0 0 24px var(--vm-glow-cyan);
 }
 
 .glow-gold {
-  box-shadow: 0 0 24px rgba(255, 200, 92, 0.45);
+  box-shadow: 0 0 24px var(--vm-glow-gold);
 }
 
 .text-glow-magenta {
-  text-shadow: 0 0 20px rgba(255, 62, 158, 0.7);
+  text-shadow: 0 0 20px var(--vm-glow-text-magenta);
 }
 
 .text-glow-cyan {
-  text-shadow: 0 0 20px rgba(35, 240, 199, 0.7);
+  text-shadow: 0 0 20px var(--vm-glow-text-cyan);
+}
+
+/* Ambient background layers read their strength from the active theme */
+.orb-layer {
+  opacity: var(--vm-orb-opacity);
+}
+
+.noise-layer {
+  opacity: var(--vm-noise-opacity);
 }
 
 /* Safe area padding for iOS */
@@ -183,4 +324,119 @@ body {
 
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ---------------------------------------------------------------- *
+ * Vedabase reader themes                                           *
+ *                                                                  *
+ * The reader keeps its own light/dark/sepia palette, independent of *
+ * the app theme, so its colours must not come from `dark:` pairs —  *
+ * those follow <html> and would leave dark text on dark paper.      *
+ * ---------------------------------------------------------------- */
+
+[data-reader-theme="light"] {
+  color-scheme: light;
+  --reader-bg: #FAFAFA;
+  --reader-surface: #FFFFFF;
+  --reader-surface-2: #F1F1F4;
+  --reader-text: #18181B;
+  --reader-muted: #55555F;
+  --reader-border: #E2E2E7;
+  --reader-accent: #A45309;
+  --reader-link: #1D4ED8;
+  --reader-mark: #FDE68A;
+  --reader-mark-text: #422006;
+  --reader-danger: #B91C1C;
+}
+
+[data-reader-theme="dark"] {
+  color-scheme: dark;
+  --reader-bg: #0B0A10;
+  --reader-surface: #17161D;
+  --reader-surface-2: #24232C;
+  --reader-text: #F2F1F6;
+  --reader-muted: #A9A6B6;
+  --reader-border: #35333F;
+  --reader-accent: #FBCF6A;
+  --reader-link: #93C5FD;
+  --reader-mark: #7A5B12;
+  --reader-mark-text: #FDF6E3;
+  --reader-danger: #FCA5A5;
+}
+
+[data-reader-theme="sepia"] {
+  color-scheme: light;
+  --reader-bg: #F3E9D6;
+  --reader-surface: #FBF4E4;
+  --reader-surface-2: #EDE0C4;
+  --reader-text: #3A2D1D;
+  --reader-muted: #6B5A41;
+  --reader-border: #DECDA9;
+  --reader-accent: #8A4B10;
+  --reader-link: #1E4F8A;
+  --reader-mark: #E9CF8B;
+  --reader-mark-text: #402C0C;
+  --reader-danger: #9B2C2C;
+}
+
+.reader-shell {
+  background: var(--reader-bg);
+  color: var(--reader-text);
+}
+
+.reader-surface {
+  background: var(--reader-surface);
+  border-color: var(--reader-border);
+  color: var(--reader-text);
+}
+
+.reader-subtle {
+  background: var(--reader-surface-2);
+  color: var(--reader-text);
+}
+
+.reader-muted {
+  color: var(--reader-muted);
+}
+
+.reader-accent {
+  color: var(--reader-accent);
+}
+
+.reader-bordered {
+  border-color: var(--reader-border);
+}
+
+.reader-danger {
+  color: var(--reader-danger);
+}
+
+.reader-mark {
+  background: var(--reader-mark);
+  color: var(--reader-mark-text);
+}
+
+.reader-hover:hover:not(:disabled) {
+  background: var(--reader-surface-2);
+}
+
+.reader-field {
+  background: var(--reader-surface);
+  border-color: var(--reader-border);
+  color: var(--reader-text);
+}
+
+.reader-field::placeholder {
+  color: var(--reader-muted);
+}
+
+/* Sanitised chapter markup only carries text nodes and links */
+[data-vedabase-block] a {
+  color: var(--reader-link);
+  text-decoration: underline;
+}
+
+[data-reader-theme] mark {
+  background: var(--reader-mark);
+  color: var(--reader-mark-text);
 }

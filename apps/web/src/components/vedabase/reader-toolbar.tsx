@@ -35,17 +35,35 @@ export function ReaderToolbar({
     });
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <button type="button" disabled={!hasPrevious} onClick={onPrevious} className="rounded-lg px-3 py-2 text-sm disabled:opacity-40">
+    <div className="reader-surface flex flex-wrap items-center gap-2 rounded-2xl border p-3 shadow-sm">
+      <button
+        type="button"
+        disabled={!hasPrevious}
+        onClick={onPrevious}
+        className="reader-hover rounded-lg px-3 py-2 text-sm transition-colors disabled:opacity-40"
+      >
         Previous chapter
       </button>
-      <button type="button" disabled={!hasNext} onClick={onNext} className="rounded-lg px-3 py-2 text-sm disabled:opacity-40">
+      <button
+        type="button"
+        disabled={!hasNext}
+        onClick={onNext}
+        className="reader-hover rounded-lg px-3 py-2 text-sm transition-colors disabled:opacity-40"
+      >
         Next chapter
       </button>
-      <button type="button" onClick={onToggleBookmark} className="rounded-lg px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-300">
+      <button
+        type="button"
+        onClick={onToggleBookmark}
+        className="reader-accent reader-hover rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+      >
         {bookmarked ? "Remove bookmark" : "Add bookmark"}
       </button>
-      <button type="button" onClick={onOpenSearch} className="rounded-lg px-3 py-2 text-sm">
+      <button
+        type="button"
+        onClick={onOpenSearch}
+        className="reader-hover rounded-lg px-3 py-2 text-sm transition-colors"
+      >
         Search downloaded books
       </button>
       <label className="ml-auto flex items-center gap-2 text-sm">
@@ -59,20 +77,30 @@ export function ReaderToolbar({
               theme: event.target.value as ReaderTheme,
             })
           }
-          className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+          className="reader-field rounded-lg border px-2 py-1"
         >
           <option value="light">Light</option>
           <option value="dark">Dark</option>
           <option value="sepia">Sepia</option>
         </select>
       </label>
-      <button type="button" aria-label="Decrease font size" onClick={() => fontSize(-1)} className="rounded-lg px-2 py-1">
+      <button
+        type="button"
+        aria-label="Decrease font size"
+        onClick={() => fontSize(-1)}
+        className="reader-hover rounded-lg px-2 py-1 transition-colors"
+      >
         A−
       </button>
       <span className="min-w-10 text-center text-sm" aria-label="Font size">
         {preferences.fontSize}px
       </span>
-      <button type="button" aria-label="Increase font size" onClick={() => fontSize(1)} className="rounded-lg px-2 py-1">
+      <button
+        type="button"
+        aria-label="Increase font size"
+        onClick={() => fontSize(1)}
+        className="reader-hover rounded-lg px-2 py-1 transition-colors"
+      >
         A+
       </button>
       <label className="flex items-center gap-2 text-sm">
@@ -86,7 +114,7 @@ export function ReaderToolbar({
               lineWidth: event.target.value as ReaderLineWidth,
             })
           }
-          className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+          className="reader-field rounded-lg border px-2 py-1"
         >
           <option value="narrow">Narrow</option>
           <option value="medium">Medium</option>

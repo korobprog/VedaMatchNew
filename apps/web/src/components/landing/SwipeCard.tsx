@@ -54,7 +54,7 @@ export function SwipeCard({
 
   return (
     <div
-      className="relative w-full h-full rounded-3xl overflow-hidden bg-gradient-to-br from-white/10 to-white/[0.02] border border-glass-brd"
+      className="relative w-full h-full rounded-3xl overflow-hidden bg-glass border border-glass-brd"
     >
       {/* Draggable wrapper */}
       <motion.div
@@ -104,8 +104,8 @@ export function SwipeCard({
           </motion.div>
         </div>
 
-        {/* Info section */}
-        <div className="absolute bottom-0 left-0 right-0 p-5">
+        {/* Info section — its own scrim keeps the text legible in both themes */}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-bg-0 via-bg-0/90 to-transparent p-5 pt-10">
           <div className="flex items-start justify-between mb-2">
             <div>
               <h3 className="font-display text-xl font-bold text-text-0">
@@ -144,7 +144,7 @@ export function SwipeCard({
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={() => onSwipeLeft?.()}
-          className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-sm border border-glass-brd flex items-center justify-center text-text-1 hover:text-red-500 hover:border-red-500/50 transition-colors"
+          className="w-14 h-14 rounded-full bg-glass backdrop-blur-sm border border-glass-brd flex items-center justify-center text-text-1 hover:text-red-500 hover:border-red-500/50 transition-colors"
           aria-label="Не нравится"
         >
           <X size={28} />
@@ -154,7 +154,7 @@ export function SwipeCard({
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={() => onLike?.()}
-          className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm border border-glass-brd flex items-center justify-center text-text-1 hover:text-cyan hover:border-cyan/50 transition-colors"
+          className="w-12 h-12 rounded-full bg-glass backdrop-blur-sm border border-glass-brd flex items-center justify-center text-text-1 hover:text-cyan hover:border-cyan/50 transition-colors"
           aria-label="Нравится"
         >
           <Star size={24} />

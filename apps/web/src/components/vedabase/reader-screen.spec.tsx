@@ -265,9 +265,7 @@ describe("ReaderScreen", () => {
 
     await user.selectOptions(screen.getByLabelText("Theme"), "dark");
     expect(document.querySelector('[data-reader-theme="dark"]')).toHaveClass(
-      "dark",
-      "bg-zinc-950",
-      "text-zinc-100",
+      "reader-shell",
     );
 
     await user.selectOptions(screen.getByLabelText("Theme"), "sepia");

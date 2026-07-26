@@ -52,7 +52,7 @@ export const ChapterContent = forwardRef<
           tabIndex={0}
           onClick={() => onUnitActivate(unit.id)}
           onFocus={() => onUnitActivate(unit.id)}
-          className="scroll-mt-24 rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
+          className="reader-surface scroll-mt-24 rounded-2xl border p-5"
         >
           <h2 className="text-xl font-semibold">{unit.title}</h2>
           {fields.map(({ key, label }) => {
@@ -60,7 +60,7 @@ export const ChapterContent = forwardRef<
             if (!html) return null;
             return (
               <section key={key} className="mt-5">
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                <h3 className="reader-muted mb-2 text-xs font-semibold uppercase tracking-wide">
                   {label}
                 </h3>
                 <div

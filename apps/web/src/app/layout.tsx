@@ -1,5 +1,6 @@
-﻿import type { Metadata } from "next";
+﻿import type { Metadata, Viewport } from "next";
 import { Unbounded, Manrope, IBM_Plex_Mono } from "next/font/google";
+import { ThemeProvider, themeInitScript } from "@/components/theme-provider";
 import "./globals.css";
 
 const unbounded = Unbounded({
@@ -31,15 +32,29 @@ export const metadata: Metadata = {
   description: "Единый вход во все сервисы VedaMatch",
 };
 
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FBF9FF" },
+    { media: "(prefers-color-scheme: dark)", color: "#0A0614" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ru" className={`${unbounded.variable} ${manrope.variable} ${ibmPlexMono.variable} h-full antialiased`}>
+    <html
+      lang="ru"
+      suppressHydrationWarning
+      className={`${unbounded.variable} ${manrope.variable} ${ibmPlexMono.variable} h-full antialiased`}
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className="flex min-h-full flex-col font-body">
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

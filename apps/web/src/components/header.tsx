@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Home } from "lucide-react";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { LogoutButton } from "@/components/logout-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface NavItem {
   href: string;
@@ -71,6 +72,8 @@ export function Header({ user }: { user: UserProfile }) {
 
           {/* Right side */}
           <div className="flex items-center gap-2">
+            <ThemeToggle className="hidden sm:flex" />
+
             {user.role === "admin" && (
               <Link
                 href="/admin/users"
@@ -167,6 +170,12 @@ export function Header({ user }: { user: UserProfile }) {
                 )}
 
                 <div className="mt-auto pt-4 border-t border-glass-brd space-y-1">
+                  <div className="px-1 pb-3">
+                    <p className="mb-2 px-3 text-xs font-medium uppercase tracking-wide text-text-2">
+                      Тема
+                    </p>
+                    <ThemeToggle variant="full" />
+                  </div>
                   <Link
                     href="/self-identification"
                     onClick={() => setIsOpen(false)}
