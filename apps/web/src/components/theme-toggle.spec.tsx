@@ -1,0 +1,57 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ThemeProvider, THEME_STORAGE_KEY } from "./theme-provider";
+import { ThemeToggle } from "./theme-toggle";
+
+function mockSystemTheme(prefersDark: boolean) {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn((query: string) => ({
+      matches: prefersDark,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+}
+
+describe("theme toggle", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    document.documentElement.removeAttribute("data-theme");
+    document.documentElement.removeAttribute("data-theme-preference");
+  });
+
+  it("follows the device preference until the reader picks a theme", async () => {
+    mockSystemTheme(true);
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider>
+        <ThemeToggle />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByRole("radio", { name: "Как в системе" })).toBeChecked();
+    expect(document.documentElement.dataset.theme).toBe("dark");
+
+    await user.click(screen.getByRole("radio", { name: "Светлая" }));
+
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(document.documentElement.dataset.themePreference).toBe("light");
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
+  });
+
+  it("restores the stored preference over the device preference", () => {
+    mockSystemTheme(true);
+    localStorage.setItem(THEME_STORAGE_KEY, "light");
+    render(
+      <ThemeProvider>
+        <ThemeToggle />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByRole("radio", { name: "Светлая" })).toBeChecked();
+    expect(document.documentElement.dataset.theme).toBe("light");
+  });
+});

@@ -10,7 +10,7 @@ export function TableOfContents({
   onNavigate(chapterSlug: string): void;
 }) {
   return (
-    <details className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <details className="reader-surface rounded-2xl border p-4">
       <summary className="cursor-pointer font-semibold">Table of contents</summary>
       <ol className="mt-3 space-y-1">
         {[...chapters]
@@ -21,7 +21,7 @@ export function TableOfContents({
                 type="button"
                 aria-current={chapter.slug === currentChapterSlug ? "page" : undefined}
                 onClick={() => onNavigate(chapter.slug)}
-                className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="reader-hover w-full rounded-lg px-3 py-2 text-left text-sm transition-colors"
               >
                 {chapter.title}
               </button>

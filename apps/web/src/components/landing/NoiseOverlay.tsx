@@ -3,7 +3,7 @@
 export function NoiseOverlay() {
   return (
     <div 
-      className="fixed inset-0 -z-[100] pointer-events-none opacity-[0.03]"
+      className="noise-layer fixed inset-0 -z-[100] pointer-events-none"
       aria-hidden="true"
     >
       <svg 

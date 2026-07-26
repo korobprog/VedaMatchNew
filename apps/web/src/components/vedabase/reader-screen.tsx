@@ -390,11 +390,16 @@ export function ReaderScreen({
     }
   };
 
-  if (loading) return <p className="p-6 text-sm text-zinc-500">Loading local chapter…</p>;
-  if (error && !chapter) return <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-800">{error}</p>;
+  if (loading) return <p className="p-6 text-sm text-text-2">Loading local chapter…</p>;
+  if (error && !chapter)
+    return (
+      <p role="alert" className="mx-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-700 dark:text-red-300">
+        {error}
+      </p>
+    );
   if (!manifest || !chapter) {
     return (
-      <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
+      <p role="alert" className="mx-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-800 dark:text-amber-200">
         This chapter is not available offline. Download the complete book while online and try again.
       </p>
     );
@@ -406,15 +411,9 @@ export function ReaderScreen({
     noteText: annotation.payload.noteText,
     deletedAt: annotation.payload.deletedAt,
   }));
-  const themeClass =
-    preferences.theme === "sepia"
-      ? "bg-amber-50 text-stone-900"
-      : preferences.theme === "dark"
-        ? "dark bg-zinc-950 text-zinc-100"
-        : "bg-zinc-50 text-zinc-900";
 
   return (
-    <main data-reader-theme={preferences.theme} className={`min-h-screen ${themeClass}`}>
+    <main data-reader-theme={preferences.theme} className="reader-shell min-h-screen">
       <div className="mx-auto space-y-4 px-4 py-6" style={{ maxWidth: lineWidth, fontSize: preferences.fontSize }}>
         <ReaderToolbar
           preferences={preferences}
@@ -428,9 +427,13 @@ export function ReaderScreen({
           onOpenSearch={() => setSearchOpen(true)}
         />
         <TableOfContents chapters={orderedChapters} currentChapterSlug={chapterSlug} onNavigate={navigate} />
-        {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+        {error && (
+          <p role="alert" className="reader-danger reader-subtle rounded-xl p-3 text-sm">
+            {error}
+          </p>
+        )}
         <header className="py-4">
-          <p className="text-sm text-zinc-500">{manifest.title}</p>
+          <p className="reader-muted text-sm">{manifest.title}</p>
           <h1 className="mt-1 text-3xl font-bold">{chapter.title}</h1>
         </header>
         <AnnotationToolbar

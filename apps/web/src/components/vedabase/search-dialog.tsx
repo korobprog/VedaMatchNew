@@ -42,7 +42,7 @@ export function SearchDialog({
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Search downloaded books" className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
-      <div className="max-h-[80vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-5 shadow-xl dark:bg-zinc-900">
+      <div className="reader-surface max-h-[80vh] w-full max-w-2xl overflow-auto rounded-2xl border p-5 shadow-xl">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Search downloaded books</h2>
           <button type="button" onClick={onClose} aria-label="Close search">×</button>
@@ -59,7 +59,7 @@ export function SearchDialog({
             aria-label="Search query"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            className="min-w-0 flex-1 rounded-xl border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
+            className="reader-field min-w-0 flex-1 rounded-xl border px-3 py-2"
           />
           <button type="submit" disabled={searching || !query.trim()} className="rounded-xl bg-amber-600 px-4 py-2 text-white disabled:opacity-50">
             Search
@@ -69,19 +69,19 @@ export function SearchDialog({
           <input type="checkbox" checked={onlyThisBook} onChange={(event) => setOnlyThisBook(event.target.checked)} />
           Search only this book
         </label>
-        {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
+        {error && <p role="alert" className="reader-danger mt-3 text-sm">{error}</p>}
         <div className="mt-4 space-y-2">
-          {!searching && query.trim() && results.length === 0 && <p className="text-sm text-zinc-500">No local results</p>}
+          {!searching && query.trim() && results.length === 0 && <p className="reader-muted text-sm">No local results</p>}
           {results.map((result) => (
             <button
               key={`${result.bookSlug}:${result.chapterSlug}:${result.unitId}`}
               type="button"
               onClick={() => onSelect(result)}
-              className="block w-full rounded-xl border border-zinc-200 p-3 text-left hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800"
+              className="reader-bordered reader-hover block w-full rounded-xl border p-3 text-left transition-colors"
             >
-              <span className="block text-xs text-zinc-500">{result.bookTitle} · {result.chapterTitle}</span>
+              <span className="reader-muted block text-xs">{result.bookTitle} · {result.chapterTitle}</span>
               <strong className="mt-1 block">{result.unitTitle}</strong>
-              <span className="mt-1 block text-sm text-zinc-600 dark:text-zinc-300">{result.snippet}</span>
+              <span className="reader-muted mt-1 block text-sm">{result.snippet}</span>
             </button>
           ))}
         </div>

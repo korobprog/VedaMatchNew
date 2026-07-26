@@ -65,7 +65,7 @@ export function AnnotationToolbar({
   };
 
   return (
-    <aside className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <aside className="reader-surface rounded-2xl border p-4">
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -74,7 +74,7 @@ export function AnnotationToolbar({
             const range = currentSelection();
             if (range) onCreateHighlight(range);
           }}
-          className="rounded-lg bg-yellow-200 px-3 py-2 text-sm text-yellow-950"
+          className="reader-mark rounded-lg px-3 py-2 text-sm"
         >
           Highlight selection
         </button>
@@ -89,12 +89,12 @@ export function AnnotationToolbar({
               setNoteText("");
             }
           }}
-          className="rounded-lg bg-zinc-100 px-3 py-2 text-sm dark:bg-zinc-800"
+          className="reader-subtle rounded-lg px-3 py-2 text-sm"
         >
           Add note to selection
         </button>
       </div>
-      {selectionError && <p role="alert" className="mt-2 text-sm text-red-700">{selectionError}</p>}
+      {selectionError && <p role="alert" className="reader-danger mt-2 text-sm">{selectionError}</p>}
       {(pendingRange || editingId) && (
         <div className="mt-3 space-y-2">
           <textarea
@@ -102,7 +102,7 @@ export function AnnotationToolbar({
             value={noteText}
             maxLength={20_000}
             onChange={(event) => setNoteText(event.target.value)}
-            className="min-h-24 w-full rounded-xl border border-zinc-300 p-3 dark:border-zinc-700 dark:bg-zinc-950"
+            className="reader-field min-h-24 w-full rounded-xl border p-3"
           />
           <button type="button" onClick={saveNote} disabled={!noteText.trim()} className="rounded-lg bg-amber-600 px-3 py-2 text-sm text-white disabled:opacity-50">
             Save note
@@ -113,7 +113,7 @@ export function AnnotationToolbar({
         {annotations
           .filter((annotation) => annotation.kind === "note" && !annotation.deletedAt && annotation.noteText)
           .map((annotation) => (
-            <li key={annotation.id} className="flex items-center justify-between gap-3 rounded-xl bg-zinc-50 p-3 text-sm dark:bg-zinc-800">
+            <li key={annotation.id} className="reader-subtle flex items-center justify-between gap-3 rounded-xl p-3 text-sm">
               <span>{annotation.noteText}</span>
               <button
                 type="button"

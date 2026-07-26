@@ -31,7 +31,7 @@ export function Orb({
   return (
     <div
       className={cn(
-        "absolute rounded-full blur-[90px] opacity-40",
+        "orb-layer absolute rounded-full blur-[90px]",
         colorMap[color],
         sizeMap[size],
         animate && "animate-drift",
@@ -63,7 +63,7 @@ export function BackgroundOrbs() {
       <Orb 
         color="purple" 
         size="lg" 
-        className="top-[40%] left-[30%] animate-drift opacity-30"
+        className="top-[40%] left-[30%] animate-drift"
       />
       
       {/* Gold orb - bottom */}
