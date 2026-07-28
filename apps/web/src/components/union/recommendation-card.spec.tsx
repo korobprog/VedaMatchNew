@@ -7,6 +7,10 @@ vi.mock("./connection-actions", () => ({
   ConnectionActions: () => <div data-testid="connection-actions" />,
 }));
 
+vi.mock("./report-block-menu", () => ({
+  ReportBlockMenu: () => <div data-testid="report-block-menu" />,
+}));
+
 function recommendation(
   user: Partial<UnionRecommendation["user"]> = {},
 ): UnionRecommendation {
@@ -19,6 +23,10 @@ function recommendation(
       city: "Москва",
       country: "Россия",
       spiritualStage: "seeker",
+      age: 28,
+      activity: "online",
+      isVerifiedDevotee: false,
+      isPhotoVerified: false,
       contacts: null,
       ...user,
     },
@@ -36,6 +44,20 @@ function recommendation(
     connection: null,
   };
 }
+
+describe("RecommendationCard verified devotee badge", () => {
+  it("shows the badge only for administration-confirmed devotees", () => {
+    const { rerender } = render(
+      <RecommendationCard item={recommendation({ isVerifiedDevotee: false })} />,
+    );
+    expect(screen.queryByTestId("verified-devotee-badge")).not.toBeInTheDocument();
+
+    rerender(
+      <RecommendationCard item={recommendation({ isVerifiedDevotee: true })} />,
+    );
+    expect(screen.getByTestId("verified-devotee-badge")).toBeInTheDocument();
+  });
+});
 
 describe("RecommendationCard photo fallback", () => {
   it("shows the gallery exclusively when public photos exist", () => {

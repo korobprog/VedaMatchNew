@@ -52,4 +52,19 @@ describe("RecommendationFilters", () => {
     await new Promise((resolve) => window.setTimeout(resolve, 450));
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("submits verifiedOnly only while the box is checked", async () => {
+    const user = userEvent.setup();
+    render(<RecommendationFilters params={{ verifiedOnly: "true" }} />);
+
+    const checkbox = screen.getByRole("checkbox", {
+      name: /подтверждённые администрацией/i,
+    });
+    expect(checkbox).toBeChecked();
+    expect(checkbox).toHaveAttribute("name", "verifiedOnly");
+    expect(checkbox).toHaveAttribute("value", "true");
+
+    await user.click(checkbox);
+    expect(checkbox).not.toBeChecked();
+  });
 });

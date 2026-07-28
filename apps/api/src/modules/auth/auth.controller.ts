@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type { AccessTokenPayload } from '@vedamatch/shared';
@@ -19,6 +27,22 @@ export class AuthController {
   @Get('google/callback')
   googleCallback(@Req() req: Request, @Res() res: Response) {
     return this.auth.handleGoogleCallback(req, res);
+  }
+
+  // Только для локальной разработки: включается DEV_AUTH_ENABLED=true.
+  @Post('dev-login')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  devLogin(
+    @Body() body: { email?: string; password?: string },
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.auth.devLogin(body, req, res);
+  }
+
+  @Get('dev-accounts')
+  devAccounts() {
+    return this.auth.devAccounts();
   }
 
   @Post('refresh')

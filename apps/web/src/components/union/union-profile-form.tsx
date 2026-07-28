@@ -73,6 +73,9 @@ export function UnionProfileForm({ profile }: { profile: UnionProfileDto | null 
   const [format, setFormat] = useState<UnionFormat>(profile?.format ?? "any");
   const [relocationReady, setRelocationReady] = useState(profile?.relocationReady ?? false);
   const [isActive, setIsActive] = useState(profile?.isActive ?? true);
+  const [requestsFromVerifiedOnly, setRequestsFromVerifiedOnly] = useState(
+    profile?.requestsFromVerifiedOnly ?? false,
+  );
   const [lists, setLists] = useState(toListValues(profile));
   const [privacy, setPrivacy] = useState<UnionPrivacySettings>(profile?.privacy ?? {});
   const [pending, setPending] = useState(false);
@@ -107,6 +110,7 @@ export function UnionProfileForm({ profile }: { profile: UnionProfileDto | null 
         values: lists.values,
         privacy,
         isActive,
+        requestsFromVerifiedOnly,
         intentions: (Object.entries(weights) as Array<[keyof IntentionWeights, number]>)
           .filter(([, weight]) => weight > 0)
           .map(([type, weight]) => ({ type, weight })),
@@ -120,6 +124,8 @@ export function UnionProfileForm({ profile }: { profile: UnionProfileDto | null 
       if (!res.ok) throw new Error(await res.text());
       setMessage("Профиль Union сохранён");
       router.refresh();
+      // Первое сохранение анкеты — это конец онбординга: сразу ведём к поиску.
+      if (!profile) router.push("/union/recommendations");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось сохранить профиль");
     } finally {
@@ -247,6 +253,25 @@ export function UnionProfileForm({ profile }: { profile: UnionProfileDto | null 
             Профиль исчезнет из рекомендаций, но существующие связи и чаты останутся доступными.
           </p>
         )}
+      </div>
+
+      <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
+        <label className="flex items-center gap-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          <input
+            type="checkbox"
+            checked={requestsFromVerifiedOnly}
+            onChange={(event) =>
+              setRequestsFromVerifiedOnly(event.target.checked)
+            }
+            className="h-4 w-4 accent-amber-600"
+          />
+          Принимать запросы только от подтверждённых преданных
+        </label>
+        <p className="mt-2 text-sm text-zinc-500">
+          Остальные увидят ваш профиль в поиске, но отправить запрос на
+          знакомство смогут только те, чей статус преданного подтвердила
+          администрация.
+        </p>
       </div>
 
       <fieldset>

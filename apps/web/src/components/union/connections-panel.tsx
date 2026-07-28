@@ -7,6 +7,7 @@ import type {
   UnionConnectionRequestDto,
   UnionConnectionRequestsState,
 } from "@vedamatch/shared";
+import { VerifiedBadge } from "./verified-badge";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -188,12 +189,15 @@ function ConnectionCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <Link
-                href={`/union/users/${request.user.id}`}
-                className="font-semibold text-zinc-900 hover:text-amber-700 hover:underline dark:text-zinc-100 dark:hover:text-amber-400"
-              >
-                {request.user.name}
-              </Link>
+              <span className="flex flex-wrap items-center gap-2">
+                <Link
+                  href={`/union/users/${request.user.id}`}
+                  className="font-semibold text-zinc-900 hover:text-amber-700 hover:underline dark:text-zinc-100 dark:hover:text-amber-400"
+                >
+                  {request.user.name}
+                </Link>
+                {request.user.isVerifiedDevotee && <VerifiedBadge />}
+              </span>
               <p className="text-sm text-zinc-500">
                 {[request.user.city, request.user.country]
                   .filter(Boolean)

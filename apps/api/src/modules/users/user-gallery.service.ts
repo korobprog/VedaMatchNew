@@ -27,6 +27,7 @@ import type {
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RESET_PHOTO_VERIFICATION } from './photo-verification';
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const DEFAULT_QUOTA_MB = 250;
@@ -156,6 +157,7 @@ export class UserGalleryService {
           });
         });
 
+        await this.resetPhotoVerification(userId);
         uploaded.push({
           fileName: file.originalname,
           photo: await this.toDto(photo),
@@ -196,6 +198,7 @@ export class UserGalleryService {
       where: { id: photoId },
       data: { isPublic: body.isPublic },
     });
+    await this.resetPhotoVerification(userId);
     return this.toDto(photo);
   }
 
@@ -254,6 +257,7 @@ export class UserGalleryService {
       return photo;
     });
 
+    await this.resetPhotoVerification(userId);
     await this.deleteObject(deleted.storageKey, 'удаления фотографии');
   }
 
@@ -268,6 +272,23 @@ export class UserGalleryService {
         height: photo.height,
       })),
     );
+  }
+
+  /**
+   * Значок «Фото проверено» подтверждает конкретный набор снимков, поэтому
+   * любое изменение галереи снимает его и требует повторной проверки.
+   */
+  private async resetPhotoVerification(userId: string): Promise<void> {
+    await this.prisma.user.updateMany({
+      where: {
+        id: userId,
+        OR: [
+          { photoVerifiedAt: { not: null } },
+          { photoVerificationRequestedAt: { not: null } },
+        ],
+      },
+      data: RESET_PHOTO_VERIFICATION,
+    });
   }
 
   private validateFile(
@@ -373,6 +394,8 @@ export class UserGalleryService {
   }
 
   private async signStorageKey(storageKey: string): Promise<string> {
+    // Демо-аккаунты из dev-сида хранят готовый URL вместо ключа объекта S3.
+    if (isDirectUrl(storageKey)) return storageKey;
     if (!this.s3Client || !this.bucket) {
       throw new BadRequestException('S3-хранилище галереи не настроено');
     }
@@ -422,6 +445,7 @@ export class UserGalleryService {
     storageKey: string,
     context: string,
   ): Promise<void> {
+    if (isDirectUrl(storageKey)) return;
     if (!this.s3Client || !this.bucket) return;
     try {
       await this.s3Client.send(
@@ -438,6 +462,15 @@ export class UserGalleryService {
       );
     }
   }
+}
+
+/** Ключи загруженных файлов всегда относительные (`users/...`), URL — только у демо-данных. */
+function isDirectUrl(storageKey: string): boolean {
+  return (
+    storageKey.startsWith('/') ||
+    storageKey.startsWith('http://') ||
+    storageKey.startsWith('https://')
+  );
 }
 
 function resolveQuotaBytes(value: string | undefined): number {

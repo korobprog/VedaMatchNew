@@ -13,6 +13,7 @@ import * as oidc from 'openid-client';
 import type { Role } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtSignService } from './jwt.service';
+import { verifyPassword } from './password';
 
 const OIDC_COOKIE = 'oidc_flow';
 const ACCESS_COOKIE = 'access_token';
@@ -148,6 +149,66 @@ export class AuthService implements OnModuleInit {
     res.clearCookie(OIDC_COOKIE, { path: '/auth', domain: this.cookieDomain });
     await this.issueTokens(user.id, user.email, toRole(user.role), res);
     res.redirect(this.webOrigin);
+  }
+
+  /** Включён ли вход по логину и паролю. В production недоступен никогда. */
+  get devAuthEnabled(): boolean {
+    return (
+      !this.isProd &&
+      this.config.get<string>('DEV_AUTH_ENABLED', 'false') === 'true'
+    );
+  }
+
+  /**
+   * Вход по email и паролю для локальной отладки: Google OAuth требует реального
+   * аккаунта и внешнего редиректа, что мешает тестировать демо-профили Union.
+   */
+  async devLogin(
+    body: { email?: string; password?: string },
+    req: Request,
+    res: Response,
+  ) {
+    if (!this.devAuthEnabled) {
+      throw new ServiceUnavailableException('Dev-вход отключён');
+    }
+    const email = body?.email?.trim().toLowerCase();
+    const password = body?.password;
+    if (!email || !password) {
+      throw new BadRequestException('Укажите email и пароль');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    const invalid = new UnauthorizedException('Неверный email или пароль');
+    if (!user?.passwordHash) throw invalid;
+    if (!(await verifyPassword(password, user.passwordHash))) throw invalid;
+
+    await this.prisma.loginAudit.create({
+      data: {
+        userId: user.id,
+        provider: 'dev-password',
+        ip: req.ip,
+        userAgent: req.headers['user-agent'] ?? null,
+      },
+    });
+
+    await this.issueTokens(user.id, user.email, toRole(user.role), res);
+    return {
+      ok: true,
+      user: { id: user.id, email: user.email, name: user.name },
+    };
+  }
+
+  /** Список демо-аккаунтов для формы dev-входа. */
+  async devAccounts() {
+    if (!this.devAuthEnabled) {
+      throw new ServiceUnavailableException('Dev-вход отключён');
+    }
+    const users = await this.prisma.user.findMany({
+      where: { isDemo: true, passwordHash: { not: null } },
+      select: { email: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    return { accounts: users };
   }
 
   private async issueTokens(

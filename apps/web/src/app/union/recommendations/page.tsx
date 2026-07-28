@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
-import { RecommendationCard } from "@/components/union/recommendation-card";
+import { RecommendationsView } from "@/components/union/recommendations-view";
 import { RecommendationFilters } from "@/components/union/recommendation-filters";
 import { UnionNav } from "@/components/union/union-nav";
 import { getProfile } from "@/lib/api";
@@ -29,37 +29,38 @@ export default async function UnionRecommendationsPage({
     getUnionRecommendations(params),
     getUnionConnectionCounts().catch(() => null),
   ]);
-  if (recommendations === null) redirect("/union");
+  if (recommendations === null) redirect("/union/profile");
 
   return (
     <div className="relative min-h-screen bg-bg-0">
       <BackgroundOrbs />
       <NoiseOverlay />
       <Header user={user} />
-      <main className="mx-auto max-w-4xl px-4 py-8 pb-24">
-        <h1 className="mb-6 font-display text-2xl font-bold text-text-0">
-          Рекомендации
-        </h1>
+      <main className="mx-auto max-w-6xl px-4 py-8 pb-24">
+        <div className="mb-6">
+          <h1 className="font-display text-2xl font-bold text-text-0 sm:text-3xl">
+            Знакомства
+          </h1>
+          <p className="mt-1 text-sm text-text-1">
+            Люди, которые ближе всего вам по целям, ценностям и пути.
+          </p>
+        </div>
         <UnionNav incomingPending={counts?.incomingPending ?? 0} />
 
         <RecommendationFilters params={params} />
 
         {recommendations.items.length === 0 ? (
-          <div className="glass rounded-2xl border border-glass-brd p-8 text-center text-sm text-text-1">
+          <div className="glass rounded-3xl border border-glass-brd p-10 text-center text-sm text-text-1">
             Пока нет подходящих людей по выбранным фильтрам. Попробуйте расширить
             радиус или сбросить часть условий.
           </div>
         ) : (
           <>
-            <div className="mb-3 text-sm text-text-2">
+            <div className="mb-4 text-sm text-text-2">
               Найдено: {recommendations.total}. Страница {recommendations.page} из{" "}
               {recommendations.totalPages}.
             </div>
-            <div className="space-y-4">
-              {recommendations.items.map((item) => (
-                <RecommendationCard key={item.user.id} item={item} />
-              ))}
-            </div>
+            <RecommendationsView items={recommendations.items} />
             <Pagination
               params={params}
               page={recommendations.page}

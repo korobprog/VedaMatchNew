@@ -48,9 +48,14 @@ export default async function AdminUsersPage({
               Поиск, фильтры, этапы, заявки наставников и доступность сервисов.
             </p>
           </div>
-          <Link href="/admin/verification-requests" className="rounded-xl glass border border-glass-brd px-4 py-2 text-sm font-medium text-text-1 hover:text-text-0 hover:border-magenta/30">
-            Заявки на подтверждение
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/admin/verification-requests" className="rounded-xl glass border border-glass-brd px-4 py-2 text-sm font-medium text-text-1 hover:text-text-0 hover:border-magenta/30">
+              Заявки на подтверждение
+            </Link>
+            <Link href="/admin/reports" className="rounded-xl glass border border-glass-brd px-4 py-2 text-sm font-medium text-text-1 hover:text-text-0 hover:border-magenta/30">
+              Жалобы
+            </Link>
+          </div>
         </div>
 
         <form className="mb-6 grid gap-3 glass rounded-2xl border border-glass-brd p-4 sm:grid-cols-2 lg:grid-cols-4">

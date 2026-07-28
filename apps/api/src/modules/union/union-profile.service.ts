@@ -27,6 +27,10 @@ import type {
   UnionRecommendationsResponse,
   UnionUserSummary,
 } from '@vedamatch/shared';
+import { calculateAge, MAX_PROFILE_AGE, MIN_PROFILE_AGE } from '../users/age';
+import { ModerationService } from '../moderation/moderation.service';
+import { toActivityLevel } from './union-activity';
+import { isVerifiedDevotee } from './union-verification';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserGalleryService } from '../users/user-gallery.service';
 import {
@@ -68,6 +72,7 @@ export class UnionProfileService {
     private readonly prisma: PrismaService,
     private readonly matching: UnionMatchingService,
     private readonly gallery: UserGalleryService,
+    private readonly moderation: ModerationService,
   ) {}
 
   async getState(userId: string): Promise<UnionProfileState> {
@@ -144,9 +149,11 @@ export class UnionProfileService {
     });
 
     const connections = await this.connectionMap(userId);
+    const hidden = await this.moderation.hiddenUserIds(userId);
     const myInput = this.toMatchInput(me, me.user);
     const normalizedFilters = this.normalizeFilters(filters);
     const recommendations = others
+      .filter((other) => !hidden.has(other.userId))
       .filter((other) => this.hasCompleteLocation(other.user))
       .filter((other) =>
         this.matchesFilters(other, other.user, normalizedFilters, myInput),
@@ -161,11 +168,17 @@ export class UnionProfileService {
           connections.get(other.userId) ?? null,
         ),
       }))
-      .sort(
-        (a, b) =>
+      .sort((a, b) => {
+        const byScore =
           b.recommendation.compatibility.total -
-          a.recommendation.compatibility.total,
-      );
+          a.recommendation.compatibility.total;
+        if (byScore !== 0) return byScore;
+        // При равной совместимости выше идут подтверждённые администрацией.
+        return (
+          Number(b.recommendation.user.isVerifiedDevotee) -
+          Number(a.recommendation.user.isVerifiedDevotee)
+        );
+      });
 
     const page = normalizedFilters.page ?? 1;
     const pageSize = normalizedFilters.pageSize ?? DEFAULT_PAGE_SIZE;
@@ -224,6 +237,10 @@ export class UnionProfileService {
     if (!other || (!other.isActive && connection?.status !== 'accepted')) {
       throw new NotFoundException('Профиль не найден');
     }
+    // Заблокированный профиль не должен открываться и по прямой ссылке.
+    if (await this.moderation.isHidden(userId, targetUserId)) {
+      throw new NotFoundException('Профиль не найден');
+    }
 
     const recommendation = this.toRecommendation(
       userId,
@@ -273,6 +290,12 @@ export class UnionProfileService {
       city: cityVisible ? (location?.city ?? null) : null,
       country: cityVisible ? (location?.country ?? null) : null,
       spiritualStage: otherUser.spiritualStage,
+      age: this.isVisible(privacy?.age, matched)
+        ? calculateAge(otherUser.birthDate)
+        : null,
+      activity: toActivityLevel(otherUser.lastSeenAt),
+      isVerifiedDevotee: isVerifiedDevotee(otherUser),
+      isPhotoVerified: otherUser.photoVerifiedAt !== null,
       photos: [],
       contacts: this.visibleContacts(otherUser, privacy, matched),
     };
@@ -368,6 +391,10 @@ export class UnionProfileService {
       )
         ? filters.stage
         : undefined,
+      ageMin: clampInteger(filters.ageMin, MIN_PROFILE_AGE, MAX_PROFILE_AGE),
+      ageMax: clampInteger(filters.ageMax, MIN_PROFILE_AGE, MAX_PROFILE_AGE),
+      verifiedOnly: filters.verifiedOnly === true,
+      photoVerifiedOnly: filters.photoVerifiedOnly === true,
       format: ['online', 'offline', 'any'].includes(String(filters.format))
         ? filters.format
         : undefined,
@@ -390,6 +417,17 @@ export class UnionProfileService {
       return false;
     }
     if (filters.stage && user.spiritualStage !== filters.stage) return false;
+    if (filters.verifiedOnly && !isVerifiedDevotee(user)) return false;
+    if (filters.photoVerifiedOnly && user.photoVerifiedAt === null)
+      return false;
+
+    if (filters.ageMin != null || filters.ageMax != null) {
+      // Возраст не указан — профиль не проходит явно заданный диапазон.
+      const age = calculateAge(user.birthDate);
+      if (age === null) return false;
+      if (filters.ageMin != null && age < filters.ageMin) return false;
+      if (filters.ageMax != null && age > filters.ageMax) return false;
+    }
     if (
       filters.format &&
       filters.format !== 'any' &&
@@ -571,6 +609,9 @@ export class UnionProfileService {
       privacy: this.validatePrivacy(body.privacy),
     };
     if (body.isActive !== undefined) data.isActive = body.isActive;
+    if (body.requestsFromVerifiedOnly !== undefined) {
+      data.requestsFromVerifiedOnly = body.requestsFromVerifiedOnly;
+    }
     return data;
   }
 
@@ -620,6 +661,7 @@ export class UnionProfileService {
       familyStatus: profile.familyStatus,
       privacy: (profile.privacy as UnionPrivacySettings | null) ?? null,
       isActive: profile.isActive,
+      requestsFromVerifiedOnly: profile.requestsFromVerifiedOnly,
       intentions: profile.intentions.map((i) => ({
         type: i.type,
         weight: i.weight,

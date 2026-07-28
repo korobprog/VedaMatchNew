@@ -10,6 +10,9 @@ export type UnionConnectionStatus = 'pending' | 'accepted' | 'declined' | 'cance
 
 export type UnionVisibilityLevel = 'everyone' | 'after_match' | 'hidden';
 
+/** Огрублённая активность: точное время последнего визита наружу не отдаём. */
+export type UnionActivityLevel = 'online' | 'today' | 'week' | 'long_ago';
+
 export interface UnionPrivacySettings {
   photo?: UnionVisibilityLevel;
   age?: UnionVisibilityLevel;
@@ -36,6 +39,8 @@ export interface UnionProfileDto {
   familyStatus: string | null;
   privacy: UnionPrivacySettings | null;
   isActive: boolean;
+  /** Принимать запросы только от преданных, подтверждённых администрацией */
+  requestsFromVerifiedOnly: boolean;
   intentions: UnionIntentionDto[];
   createdAt: string;
   updatedAt: string;
@@ -56,6 +61,7 @@ export interface UnionProfileUpdateRequest {
   familyStatus?: string | null;
   privacy?: UnionPrivacySettings | null;
   isActive?: boolean;
+  requestsFromVerifiedOnly?: boolean;
   intentions: UnionIntentionDto[];
 }
 
@@ -96,6 +102,14 @@ export interface UnionUserSummary {
   city: string | null;
   country: string | null;
   spiritualStage: SpiritualStage | null;
+  /** Полных лет; null, если возраст не указан или скрыт приватностью. */
+  age: number | null;
+  /** Активность профиля; null, если человек ни разу не заходил. */
+  activity: UnionActivityLevel | null;
+  /** Преданный, чей статус подтвердила администрация. */
+  isVerifiedDevotee: boolean;
+  /** Администрация сверила публичные фото с живым человеком. */
+  isPhotoVerified: boolean;
   contacts: UnionVisibleContacts | null;
 }
 
@@ -122,6 +136,12 @@ export interface UnionRecommendationFilters {
   lon?: number;
   radiusKm?: number;
   stage?: SpiritualStage;
+  ageMin?: number;
+  ageMax?: number;
+  /** Показывать только преданных, подтверждённых администрацией. */
+  verifiedOnly?: boolean;
+  /** Показывать только профили с проверенными фото. */
+  photoVerifiedOnly?: boolean;
   format?: UnionFormat;
   language?: string;
   page?: number;

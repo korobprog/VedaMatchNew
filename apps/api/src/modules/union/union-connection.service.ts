@@ -17,13 +17,20 @@ import type {
   UnionPrivacySettings,
   UnionUserSummary,
 } from '@vedamatch/shared';
+import { calculateAge } from '../users/age';
+import { ModerationService } from '../moderation/moderation.service';
+import { toActivityLevel } from './union-activity';
+import { isVerifiedDevotee } from './union-verification';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const MAX_MESSAGE_LENGTH = 500;
 
 @Injectable()
 export class UnionConnectionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly moderation: ModerationService,
+  ) {}
 
   async counts(userId: string): Promise<UnionConnectionCounts> {
     const incomingPending = await this.prisma.unionConnectionRequest.count({
@@ -78,7 +85,10 @@ export class UnionConnectionService {
     const message = this.cleanMessage(body.message);
 
     const [fromProfile, toProfile] = await Promise.all([
-      this.prisma.unionProfile.findUnique({ where: { userId: fromUserId } }),
+      this.prisma.unionProfile.findUnique({
+        where: { userId: fromUserId },
+        include: { user: true },
+      }),
       this.prisma.unionProfile.findUnique({
         where: { userId: toUserId },
         include: { user: true },
@@ -87,6 +97,19 @@ export class UnionConnectionService {
     if (!fromProfile) throw new NotFoundException('Fill Union profile first');
     if (!toProfile || !toProfile.isActive) {
       throw new NotFoundException('Union profile not found');
+    }
+    if (await this.moderation.isHidden(fromUserId, toUserId)) {
+      throw new ForbiddenException(
+        'Отправка запроса этому человеку недоступна',
+      );
+    }
+    if (
+      toProfile.requestsFromVerifiedOnly &&
+      !isVerifiedDevotee(fromProfile.user)
+    ) {
+      throw new ForbiddenException(
+        'Этот человек принимает запросы только от преданных, подтверждённых администрацией',
+      );
     }
 
     const reverse = await this.prisma.unionConnectionRequest.findUnique({
@@ -220,6 +243,12 @@ export class UnionConnectionService {
         ? (location?.country ?? null)
         : null,
       spiritualStage: user.spiritualStage,
+      age: this.isVisible(privacy?.age, matched)
+        ? calculateAge(user.birthDate)
+        : null,
+      activity: toActivityLevel(user.lastSeenAt),
+      isVerifiedDevotee: isVerifiedDevotee(user),
+      isPhotoVerified: user.photoVerifiedAt !== null,
       photos: [],
       contacts:
         matched && privacy?.contacts !== 'hidden'

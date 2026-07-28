@@ -16,6 +16,9 @@ import type {
   UnionSendChatMessageRequest,
   UnionUserSummary,
 } from '@vedamatch/shared';
+import { calculateAge } from '../users/age';
+import { toActivityLevel } from './union-activity';
+import { isVerifiedDevotee } from './union-verification';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const MAX_CHAT_MESSAGE_LENGTH = 2000;
@@ -129,6 +132,10 @@ export class UnionChatService {
       city: privacy?.city === 'hidden' ? null : (location?.city ?? null),
       country: privacy?.city === 'hidden' ? null : (location?.country ?? null),
       spiritualStage: user.spiritualStage,
+      age: privacy?.age === 'hidden' ? null : calculateAge(user.birthDate),
+      activity: toActivityLevel(user.lastSeenAt),
+      isVerifiedDevotee: isVerifiedDevotee(user),
+      isPhotoVerified: user.photoVerifiedAt !== null,
       photos: [],
       contacts:
         privacy?.contacts === 'hidden'

@@ -40,6 +40,9 @@ const user: UserProfile = {
   role: "user",
   spiritualStage: "seeker",
   devoteeVerificationStatus: null,
+  birthDate: null,
+  age: null,
+  photoVerification: { status: "none" as const, requestedAt: null, verifiedAt: null },
   lastSelfIdentificationAt: null,
 };
 

@@ -7,6 +7,7 @@ import type {
   UnionProfileState,
   UnionRecommendation,
   UnionRecommendationsResponse,
+  UserBlocksState,
 } from "@vedamatch/shared";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
@@ -43,6 +44,7 @@ export const getUnionConnectionRequests = () =>
   unionGet<UnionConnectionRequestsState>("/union/connection-requests");
 export const getUnionConnectionCounts = () =>
   unionGet<UnionConnectionCounts>("/union/connection-requests/counts");
+export const getUnionBlocks = () => unionGet<UserBlocksState>("/union/blocks");
 export const getUnionChat = (id: string) =>
   unionGet<UnionChatState>(`/union/chats/${encodeURIComponent(id)}`);
 

@@ -118,14 +118,25 @@ model User {
   name                      String
   avatarUrl                 String?
   avatarKey                 String?
+  // Дата рождения; наружу отдаётся только вычисленный возраст
+  birthDate                 DateTime?                  @db.Date
   homeLocation              Json?
   socialLinks               Json?
   messengers                Json?
   role                      Role                       @default(user)
   googleId                  String?                    @unique
+  // scrypt-хеш пароля. Используется только dev-входом (DEV_AUTH_ENABLED).
+  passwordHash              String?
+  // Помечает демо-аккаунты из dev-сида, чтобы их можно было пересоздать.
+  isDemo                    Boolean                    @default(false)
   spiritualStage            SpiritualStage?
   devoteeVerificationStatus DevoteeVerificationStatus?
   lastSelfIdentificationAt  DateTime?
+  // Последняя активность; наружу отдаётся огрублённой (UnionActivityLevel)
+  lastSeenAt                DateTime?
+  // Администрация сверила публичные фото с живым человеком
+  photoVerifiedAt           DateTime?
+  photoVerificationRequestedAt DateTime?
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
 
@@ -140,6 +151,11 @@ model User {
   unionRequestsReceived       UnionConnectionRequest[]     @relation("UnionRequestsReceived")
   unionChatMessagesSent       UnionChatMessage[]           @relation("UnionChatMessagesSent")
   photos                      UserPhoto[]
+  blocksMade                  UserBlock[]                  @relation("UserBlocksMade")
+  blocksReceived              UserBlock[]                  @relation("UserBlocksReceived")
+  reportsMade                 UserReport[]                 @relation("UserReportsMade")
+  reportsReceived             UserReport[]                 @relation("UserReportsReceived")
+  reportsReviewed             UserReport[]                 @relation("UserReportsReviewed")
   gitabaseReadingProgress     GitabaseReadingProgress[]
   gitabaseBookmarks           GitabaseBookmark[]
   gitabaseAnnotations         GitabaseAnnotation[]
@@ -659,6 +675,8 @@ model UnionProfile {
   privacy         Json?
   // скрыть из рекомендаций без удаления профиля
   isActive        Boolean     @default(true)
+  // принимать запросы на знакомство только от подтверждённых преданных
+  requestsFromVerifiedOnly Boolean @default(false)
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -691,6 +709,52 @@ model UnionConnectionRequest {
 
   @@unique([fromUserId, toUserId])
   @@index([toUserId, status])
+}
+
+enum UserReportReason {
+  spam
+  harassment
+  fake_profile
+  inappropriate_content
+  offline_safety
+  other
+}
+
+enum UserReportStatus {
+  open
+  reviewed
+  dismissed
+}
+
+model UserBlock {
+  id        String   @id @default(uuid())
+  blockerId String
+  blocker   User     @relation("UserBlocksMade", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String
+  blocked   User     @relation("UserBlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+model UserReport {
+  id           String           @id @default(uuid())
+  reporterId   String
+  reporter     User             @relation("UserReportsMade", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetId     String
+  target       User             @relation("UserReportsReceived", fields: [targetId], references: [id], onDelete: Cascade)
+  reason       UserReportReason
+  comment      String?
+  status       UserReportStatus @default(open)
+  createdAt    DateTime         @default(now())
+  reviewedAt   DateTime?
+  reviewedById String?
+  reviewedBy   User?            @relation("UserReportsReviewed", fields: [reviewedById], references: [id], onDelete: SetNull)
+  moderatorNote String?
+
+  @@index([status, createdAt])
+  @@index([targetId])
 }
 
 model UnionChatMessage {

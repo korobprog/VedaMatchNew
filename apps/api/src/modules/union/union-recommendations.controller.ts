@@ -36,6 +36,11 @@ function toFilters(
     lon: toNumber(query.lon),
     radiusKm: toNumber(query.radiusKm),
     stage: query.stage as UnionRecommendationFilters['stage'],
+    ageMin: toNumber(query.ageMin),
+    ageMax: toNumber(query.ageMax),
+    verifiedOnly: query.verifiedOnly === 'true' || query.verifiedOnly === '1',
+    photoVerifiedOnly:
+      query.photoVerifiedOnly === 'true' || query.photoVerifiedOnly === '1',
     format: query.format as UnionRecommendationFilters['format'],
     language: query.language,
     page: toNumber(query.page),

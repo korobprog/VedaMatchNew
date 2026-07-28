@@ -7,15 +7,24 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import type { AccessTokenPayload } from '@vedamatch/shared';
+import { PrismaService } from '../../prisma/prisma.service';
 import { JwtSignService } from './jwt.service';
 
 export interface AuthenticatedRequest extends Request {
   user: AccessTokenPayload;
 }
 
+/** Реже пишем «был(а) в сети», чем приходят запросы: точность до 5 минут. */
+export const LAST_SEEN_THROTTLE_MS = 5 * 60 * 1000;
+
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private readonly jwt: JwtSignService) {}
+  private readonly lastSeenWrites = new Map<string, number>();
+
+  constructor(
+    private readonly jwt: JwtSignService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
@@ -26,10 +35,26 @@ export class AuthGuard implements CanActivate {
     if (!token) throw new UnauthorizedException('Требуется авторизация');
     try {
       req.user = await this.jwt.verifyAccessToken(token);
-      return true;
     } catch {
       throw new UnauthorizedException('Токен недействителен или истёк');
     }
+    this.touchLastSeen(req.user.sub);
+    return true;
+  }
+
+  /** Обновление активности не должно задерживать или ронять сам запрос. */
+  private touchLastSeen(userId: string): void {
+    const now = Date.now();
+    const written = this.lastSeenWrites.get(userId) ?? 0;
+    if (now - written < LAST_SEEN_THROTTLE_MS) return;
+    this.lastSeenWrites.set(userId, now);
+
+    void this.prisma.user
+      .update({
+        where: { id: userId },
+        data: { lastSeenAt: new Date(now) },
+      })
+      .catch(() => this.lastSeenWrites.delete(userId));
   }
 }
 

@@ -1,7 +1,14 @@
-import type { UnionCompatibilityCriterion, UnionRecommendation } from "@vedamatch/shared";
+import Link from "next/link";
+import type {
+  UnionCompatibilityCriterion,
+  UnionRecommendation,
+} from "@vedamatch/shared";
+import { ActivityBadge } from "./activity-badge";
 import { ConnectionActions } from "./connection-actions";
-import { intentionLabels } from "./labels";
+import { intentionLabels, yearsSuffix } from "./labels";
 import { RecommendationPhotoCarousel } from "./recommendation-photo-carousel";
+import { ReportBlockMenu } from "./report-block-menu";
+import { PhotoVerifiedBadge, VerifiedBadge } from "./verified-badge";
 
 const criterionLabels: Record<UnionCompatibilityCriterion, string> = {
   intentions: "Цели знакомства",
@@ -19,116 +26,143 @@ const stageLabels: Record<string, string> = {
   devotee: "Преданный",
 };
 
+/** Карточка человека в ленте знакомств: фото во всю ширину, поверх — имя и матч. */
 export function RecommendationCard({ item }: { item: UnionRecommendation }) {
   const { user, profile, compatibility } = item;
+  const subtitle =
+    [
+      user.age != null ? `${user.age} ${yearsSuffix(user.age)}` : null,
+      user.city,
+      user.spiritualStage ? stageLabels[user.spiritualStage] : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || "—";
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="mb-4 flex items-center gap-4">
+    <article className="glass flex flex-col overflow-hidden rounded-3xl border border-glass-brd transition hover:border-magenta/40">
+      <div className="relative aspect-[4/5] w-full overflow-hidden bg-bg-2">
         {user.photos.length > 0 ? (
-          <RecommendationPhotoCarousel photos={user.photos} userName={user.name} />
+          <RecommendationPhotoCarousel
+            photos={user.photos}
+            userName={user.name}
+            variant="cover"
+          />
         ) : user.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={user.avatarUrl}
             alt={user.name}
-            className="h-14 w-14 rounded-full"
+            className="h-full w-full object-cover"
             referrerPolicy="no-referrer"
           />
         ) : (
           <span
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xl font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+            className="flex h-full w-full items-center justify-center bg-gradient-to-br from-magenta/25 to-[#B23EFF]/25 font-display text-6xl font-bold text-text-0"
             data-testid="recommendation-initials"
           >
             {user.name.charAt(0).toUpperCase()}
           </span>
         )}
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold text-zinc-900 dark:text-zinc-100">
+
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/90 via-black/55 to-transparent" />
+
+        {/* top-7 — ниже полосок-индикаторов карусели фото */}
+        <div className="absolute right-3 top-7 flex flex-col items-end gap-2">
+          <span className="rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] px-3 py-1 text-sm font-bold text-white shadow-[0_0_16px_var(--vm-glow-magenta)]">
+            {compatibility.total}%
+          </span>
+          {user.isVerifiedDevotee && <VerifiedBadge variant="overlay" />}
+          {user.isPhotoVerified && <PhotoVerifiedBadge variant="overlay" />}
+        </div>
+
+        <div className="absolute left-3 top-7">
+          <ActivityBadge activity={user.activity} variant="overlay" />
+        </div>
+
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 p-4">
+          <Link
+            href={`/union/users/${user.id}`}
+            className="pointer-events-auto block truncate font-display text-lg font-bold text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] hover:underline"
+          >
             {user.name}
-          </p>
-          <p className="text-sm text-zinc-500">
-            {[
-              user.city,
-              user.spiritualStage ? stageLabels[user.spiritualStage] : null,
-            ]
-              .filter(Boolean)
-              .join(" · ") || "—"}
+          </Link>
+          <p className="truncate text-sm text-white/85 drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
+            {subtitle}
           </p>
         </div>
-        <span className="rounded-full bg-amber-600 px-3 py-1 text-sm font-semibold text-white">
-          {compatibility.total}%
-        </span>
       </div>
 
-      {profile.about && (
-        <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">{profile.about}</p>
-      )}
-
-      {profile.intentions.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2">
-          {profile.intentions.map((intention) => (
-            <span
-              key={intention.type}
-              className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-            >
-              {intentionLabels[intention.type]} {intention.weight}%
-            </span>
-          ))}
-        </div>
-      )}
-
-      {user.contacts && (
-        <div className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
-          <p className="mb-2 font-medium">Контакты открыты</p>
-          <div className="space-y-1">
-            {Object.entries(user.contacts.messengers).map(([key, value]) =>
-              value ? (
-                <p key={key}>
-                  <span className="font-medium">{key}:</span> {value}
-                </p>
-              ) : null,
-            )}
-            {Object.entries(user.contacts.socialLinks).map(([key, value]) =>
-              value ? (
-                <p key={key}>
-                  <span className="font-medium">{key}:</span> {value}
-                </p>
-              ) : null,
-            )}
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        {profile.intentions.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {profile.intentions.map((intention) => (
+              <span
+                key={intention.type}
+                className="rounded-full border border-glass-brd bg-bg-1 px-2.5 py-1 text-xs text-text-1"
+              >
+                {intentionLabels[intention.type]} {intention.weight}%
+              </span>
+            ))}
           </div>
-        </div>
-      )}
+        )}
 
-      <details className="text-sm">
-        <summary className="cursor-pointer text-amber-700 dark:text-amber-400">
-          Почему {compatibility.total}%?
-        </summary>
-        <dl className="mt-3 space-y-2">
-          {compatibility.breakdown.map((row) => (
-            <div key={row.criterion} className="flex items-center gap-3">
-              <dt className="w-40 shrink-0 text-zinc-500">
-                {criterionLabels[row.criterion]}
-              </dt>
-              <dd className="flex flex-1 items-center gap-2">
-                <span className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                  <span
-                    className="block h-full rounded-full bg-amber-500"
-                    style={{ width: `${row.score}%` }}
-                  />
-                </span>
-                <span className="w-10 text-right font-medium text-zinc-900 dark:text-zinc-100">
-                  {row.score}%
-                </span>
-              </dd>
+        {profile.about && (
+          <p className="line-clamp-3 text-sm text-text-1">{profile.about}</p>
+        )}
+
+        {user.contacts && (
+          <div className="rounded-xl border border-cyan/30 bg-cyan/10 p-3 text-sm text-text-0">
+            <p className="mb-2 font-medium">Контакты открыты</p>
+            <div className="space-y-1">
+              {Object.entries(user.contacts.messengers).map(([key, value]) =>
+                value ? (
+                  <p key={key} className="truncate">
+                    <span className="font-medium">{key}:</span> {value}
+                  </p>
+                ) : null,
+              )}
+              {Object.entries(user.contacts.socialLinks).map(([key, value]) =>
+                value ? (
+                  <p key={key} className="truncate">
+                    <span className="font-medium">{key}:</span> {value}
+                  </p>
+                ) : null,
+              )}
             </div>
-          ))}
-        </dl>
-      </details>
+          </div>
+        )}
 
-      <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
-        <ConnectionActions userId={user.id} connection={item.connection} />
+        <details className="text-sm">
+          <summary className="cursor-pointer text-magenta">
+            Почему {compatibility.total}%?
+          </summary>
+          <dl className="mt-3 space-y-2">
+            {compatibility.breakdown.map((row) => (
+              <div key={row.criterion} className="flex items-center gap-3">
+                <dt className="w-32 shrink-0 text-xs text-text-2">
+                  {criterionLabels[row.criterion]}
+                </dt>
+                <dd className="flex flex-1 items-center gap-2">
+                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-bg-2">
+                    <span
+                      className="block h-full rounded-full bg-gradient-to-r from-magenta to-[#B23EFF]"
+                      style={{ width: `${row.score}%` }}
+                    />
+                  </span>
+                  <span className="w-9 text-right text-xs font-medium text-text-0">
+                    {row.score}%
+                  </span>
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+
+        <div className="mt-auto space-y-3 pt-1">
+          <ConnectionActions userId={user.id} connection={item.connection} />
+          <ReportBlockMenu userId={user.id} userName={user.name} />
+        </div>
       </div>
-    </div>
+    </article>
   );
 }

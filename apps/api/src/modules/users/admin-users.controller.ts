@@ -13,11 +13,15 @@ import type {
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { AdminUsersService } from './admin-users.service';
+import { UsersService } from './users.service';
 
 @Controller('admin/users')
 @UseGuards(AuthGuard)
 export class AdminUsersController {
-  constructor(private readonly adminUsers: AdminUsersService) {}
+  constructor(
+    private readonly adminUsers: AdminUsersService,
+    private readonly users: UsersService,
+  ) {}
 
   @Get()
   list(
@@ -30,6 +34,19 @@ export class AdminUsersController {
   @Get(':id')
   detail(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.adminUsers.getUser(user.role, id);
+  }
+
+  @Patch(':id/photo-verification')
+  setPhotoVerification(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: { verified?: boolean },
+  ) {
+    return this.users.setPhotoVerification(
+      user.role,
+      id,
+      body?.verified === true,
+    );
   }
 
   @Patch(':id/stage')

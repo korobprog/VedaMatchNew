@@ -1,4 +1,5 @@
 import { PrismaService } from '../../prisma/prisma.service';
+import { ModerationService } from '../moderation/moderation.service';
 import { UnionConnectionService } from './union-connection.service';
 
 const createdAt = new Date('2026-07-10T10:00:00.000Z');
@@ -15,8 +16,8 @@ function user(id: string) {
     messengers: {},
     role: 'user',
     googleId: null,
-    spiritualStage: null,
-    devoteeVerificationStatus: null,
+    spiritualStage: null as string | null,
+    devoteeVerificationStatus: null as string | null,
     lastSelfIdentificationAt: null,
     createdAt,
     updatedAt: createdAt,
@@ -29,6 +30,7 @@ function profile(userId: string) {
     id: `profile-${userId}`,
     userId,
     isActive: true,
+    requestsFromVerifiedOnly: false,
     user: user(userId),
   };
 }
@@ -70,12 +72,15 @@ describe('UnionConnectionService', () => {
       upsert: jest.fn(),
     },
   };
+  const moderation = { isHidden: jest.fn().mockResolvedValue(false) };
   const service = new UnionConnectionService(
     prisma as unknown as PrismaService,
+    moderation as unknown as ModerationService,
   );
 
   beforeEach(() => {
     jest.resetAllMocks();
+    moderation.isHidden.mockResolvedValue(false);
     jest.useFakeTimers().setSystemTime(createdAt);
   });
 
@@ -99,6 +104,38 @@ describe('UnionConnectionService', () => {
       service.create('user-1', { toUserId: 'user-1' }),
     ).rejects.toThrow('Cannot send a request to yourself');
     expect(prisma.unionProfile.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('blocks a request when the recipient accepts only confirmed devotees', async () => {
+    const recipient = profile('user-2');
+    recipient.requestsFromVerifiedOnly = true;
+    prisma.unionProfile.findUnique
+      .mockResolvedValueOnce(profile('user-1'))
+      .mockResolvedValueOnce(recipient);
+
+    await expect(
+      service.create('user-1', { toUserId: 'user-2' }),
+    ).rejects.toThrow('принимает запросы только от преданных');
+    expect(prisma.unionConnectionRequest.upsert).not.toHaveBeenCalled();
+  });
+
+  it('allows a confirmed devotee through the verified-only gate', async () => {
+    const sender = profile('user-1');
+    sender.user.spiritualStage = 'devotee';
+    sender.user.devoteeVerificationStatus = 'confirmed';
+    const recipient = profile('user-2');
+    recipient.requestsFromVerifiedOnly = true;
+    prisma.unionProfile.findUnique
+      .mockResolvedValueOnce(sender)
+      .mockResolvedValueOnce(recipient);
+    prisma.unionConnectionRequest.findUnique.mockResolvedValue(null);
+    prisma.unionConnectionRequest.upsert.mockResolvedValue(
+      connection({ fromUserId: 'user-1', toUserId: 'user-2' }),
+    );
+
+    await expect(
+      service.create('user-1', { toUserId: 'user-2' }),
+    ).resolves.toEqual(expect.objectContaining({ direction: 'outgoing' }));
   });
 
   it('accepts a reverse pending request instead of creating a duplicate', async () => {

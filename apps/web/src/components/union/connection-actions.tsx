@@ -7,6 +7,11 @@ import type { UnionConnectionSummary } from "@vedamatch/shared";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
+const primaryButton =
+  "flex-1 rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-4 py-2.5 text-sm font-semibold text-white transition hover:shadow-[0_0_20px_var(--vm-glow-magenta)] disabled:opacity-50 disabled:shadow-none";
+const secondaryButton =
+  "flex-1 rounded-xl glass border border-glass-brd px-4 py-2.5 text-sm font-medium text-text-1 transition hover:text-text-0 disabled:opacity-50";
+
 export function ConnectionActions({
   userId,
   connection,
@@ -41,13 +46,13 @@ export function ConnectionActions({
 
   if (connection?.status === "accepted") {
     return (
-      <div className="flex flex-wrap items-center gap-3">
-        <p className="text-sm font-medium text-emerald-600">
-          Матч подтверждён: контакты открыты, если позволяет приватность.
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-cyan">
+          Матч подтверждён — контакты открыты.
         </p>
         <Link
           href={`/union/chats/${connection.id}`}
-          className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+          className="flex justify-center rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-4 py-2.5 text-sm font-semibold text-white transition hover:shadow-[0_0_20px_var(--vm-glow-magenta)]"
         >
           Открыть чат
         </Link>
@@ -56,7 +61,7 @@ export function ConnectionActions({
   }
 
   if (connection?.status === "pending" && connection.direction === "outgoing") {
-    return <p className="text-sm text-zinc-500">Запрос на знакомство отправлен.</p>;
+    return <p className="text-sm text-text-2">Запрос на знакомство отправлен.</p>;
   }
 
   if (connection?.status === "pending" && connection.direction === "incoming") {
@@ -71,7 +76,7 @@ export function ConnectionActions({
                 method: "PATCH",
               })
             }
-            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:bg-zinc-300"
+            className={primaryButton}
           >
             Принять
           </button>
@@ -83,12 +88,12 @@ export function ConnectionActions({
                 method: "PATCH",
               })
             }
-            className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:text-zinc-400 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            className={secondaryButton}
           >
             Отклонить
           </button>
         </div>
-        {error && <p className="text-xs text-red-600">{error}</p>}
+        {error && <p className="text-xs text-red-500">{error}</p>}
       </div>
     );
   }
@@ -104,11 +109,11 @@ export function ConnectionActions({
             body: JSON.stringify({ toUserId: userId }),
           })
         }
-        className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:bg-zinc-300"
+        className={`w-full ${primaryButton}`}
       >
-        {pending ? "Отправка..." : "Отправить запрос"}
+        {pending ? "Отправка..." : "Познакомиться"}
       </button>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
   );
 }

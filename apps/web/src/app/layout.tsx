@@ -1,6 +1,8 @@
 ﻿import type { Metadata, Viewport } from "next";
 import { Unbounded, Manrope, IBM_Plex_Mono } from "next/font/google";
-import { ThemeProvider, themeInitScript } from "@/components/theme-provider";
+import { cookies } from "next/headers";
+import { ThemeProvider } from "@/components/theme-provider";
+import { isThemePreference, THEME_COOKIE_NAME } from "@/lib/theme";
 import "./globals.css";
 
 const unbounded = Unbounded({
@@ -39,22 +41,30 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Тема приходит из cookie прямо в разметке: инлайн-скрипт до первой отрисовки
+  // не нужен, а React больше не встречает <script> внутри дерева компонентов.
+  const cookieStore = await cookies();
+  const stored = cookieStore.get(THEME_COOKIE_NAME)?.value;
+  const preference = isThemePreference(stored) ? stored : "system";
+  // Для «как в системе» атрибут не ставим — тему подхватит prefers-color-scheme.
+  const resolved = preference === "system" ? null : preference;
+
   return (
     <html
       lang="ru"
       suppressHydrationWarning
+      data-theme={resolved ?? undefined}
+      data-theme-preference={preference}
+      style={resolved ? { colorScheme: resolved } : undefined}
       className={`${unbounded.variable} ${manrope.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-      </head>
       <body className="flex min-h-full flex-col font-body">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider initialPreference={preference}>{children}</ThemeProvider>
       </body>
     </html>
   );
