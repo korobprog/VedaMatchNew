@@ -1,0 +1,127 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - navigation [ref=e4]:
+      - link "VedaMatch VedaMatch" [ref=e5] [cursor=pointer]:
+        - /url: /
+        - img "VedaMatch" [ref=e6]
+        - generic [ref=e7]: VedaMatch
+      - generic [ref=e8]:
+        - link "Возможности" [ref=e9] [cursor=pointer]:
+          - /url: /#features
+        - link "Как это работает" [ref=e10] [cursor=pointer]:
+          - /url: /#how-it-works
+        - link "Union" [ref=e11] [cursor=pointer]:
+          - /url: /union
+      - link "Начать" [ref=e13] [cursor=pointer]:
+        - /url: /login
+  - generic [ref=e14]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e18]: Новое в VedaMatch
+        - heading "Осознанные знакомства и единство" [level=1] [ref=e21]:
+          - text: Осознанные
+          - generic [ref=e22]: знакомства
+          - text: и единство
+        - paragraph [ref=e23]: Находите единомышленников для семьи, дружбы, служения и духовного развития. На основе общих ценностей и намерений.
+        - generic [ref=e24]:
+          - link "Начать бесплатно" [ref=e25] [cursor=pointer]:
+            - /url: /login
+          - button "Узнать больше" [ref=e28]
+        - generic [ref=e31]:
+          - generic [ref=e32]:
+            - generic [ref=e33]: 10K+
+            - generic [ref=e34]: Пользователей
+          - generic [ref=e36]:
+            - generic [ref=e37]: 500+
+            - generic [ref=e38]: Совпадений
+          - generic [ref=e40]:
+            - generic [ref=e41]: 98%
+            - generic [ref=e42]: Довольных
+      - generic [ref=e48]:
+        - generic [ref=e49]: 9:41
+        - generic [ref=e60]:
+          - img "VedaMatch" [ref=e61]
+          - generic [ref=e62]: VedaMatch
+        - generic [ref=e68]:
+          - img "Мария" [ref=e70]
+          - generic [ref=e72]:
+            - generic [ref=e73]:
+              - generic [ref=e74]:
+                - img "Александра" [ref=e75]
+                - generic [ref=e77]: LIKE
+                - generic [ref=e78]: NOPE
+                - generic [ref=e79]: SUPER LIKE
+              - generic [ref=e80]:
+                - generic [ref=e81]:
+                  - generic [ref=e82]:
+                    - heading "Александра, 28" [level=3] [ref=e83]
+                    - paragraph [ref=e84]: Москва, Россия
+                  - generic [ref=e85]: 94%
+                - paragraph [ref=e87]: Йогиня с 8-летним опытом. Люблю медитацию на рассвете и киртаны по вечерам. Ищу единомышленников для совместной практики и служения.
+                - generic [ref=e88]:
+                  - generic [ref=e89]: Йога
+                  - generic [ref=e90]: Медитация
+                  - generic [ref=e91]: Киртан
+            - generic [ref=e92]:
+              - button "Не нравится" [ref=e93]
+              - button "Нравится" [ref=e97]
+              - button "Люблю" [ref=e100]
+    - generic [ref=e108]: Листайте вниз
+  - generic [ref=e114]:
+    - generic [ref=e115]:
+      - heading "Как это работает" [level=2] [ref=e116]
+      - paragraph [ref=e117]: Три простых шага к осознанным знакомствам и объединению
+    - generic [ref=e118]:
+      - generic [ref=e121]:
+        - generic [ref=e122]: "1"
+        - heading "Создайте профиль" [level=3] [ref=e130]
+        - paragraph [ref=e131]: Расскажите о себе, своих интересах, ценностях и том, что вы ищете в отношениях и общении.
+      - generic [ref=e134]:
+        - generic [ref=e135]: "2"
+        - heading "Найдите совпадения" [level=3] [ref=e142]
+        - paragraph [ref=e143]: Система анализирует ваши данные и предлагает людей с похожими интересами и намерениями.
+      - generic [ref=e145]:
+        - generic [ref=e146]: "3"
+        - heading "Начните общение" [level=3] [ref=e154]
+        - paragraph [ref=e155]: После взаимной симпатии откроется чат. Общайтесь, делитесь практиками, создавайте проекты.
+  - generic [ref=e157]:
+    - generic [ref=e158]:
+      - heading "Возможности" [level=2] [ref=e159]
+      - paragraph [ref=e160]: Всё для осознанных знакомств и объединения единомышленников
+    - generic [ref=e161]:
+      - generic [ref=e162]:
+        - heading "Осознанный матчинг" [level=3] [ref=e166]
+        - paragraph [ref=e167]: Система сравнивает ваши намерения, интересы и ценности, чтобы найти по-настоящему совместимых людей.
+      - generic [ref=e169]:
+        - heading "Духовные этапы" [level=3] [ref=e174]
+        - paragraph [ref=e175]: Учитываем ваш этап пути — от ищущего до преданного — для более точных рекомендаций.
+      - generic [ref=e177]:
+        - heading "Все типы связей" [level=3] [ref=e184]
+        - paragraph [ref=e185]: Семья, дружба, служение, проекты или духовное общение — выбирайте то, что вам нужно.
+      - generic [ref=e187]:
+        - heading "Приватность под контролем" [level=3] [ref=e191]
+        - paragraph [ref=e192]: Вы решаете, что видно другим. Контакты и локация открываются только после взаимного согласия.
+      - generic [ref=e194]:
+        - heading "Умный поиск" [level=3] [ref=e199]
+        - paragraph [ref=e200]: Фильтруйте по городу, радиусу, интересам и типу отношений, которые вы ищете.
+      - generic [ref=e202]:
+        - heading "Встроенный чат" [level=3] [ref=e206]
+        - paragraph [ref=e207]: Общайтесь с совпадениями сразу в приложении. Без перехода в мессенджеры.
+  - generic [ref=e220]:
+    - heading "Готовы начать?" [level=2] [ref=e221]
+    - paragraph [ref=e222]: Присоединяйтесь к тысячам людей, которые уже нашли единомышленников через VedaMatch Union.
+    - link "Создать аккаунт" [ref=e223] [cursor=pointer]:
+      - /url: /login
+  - contentinfo [ref=e226]:
+    - generic [ref=e228]:
+      - generic [ref=e229]: VedaMatch
+      - navigation [ref=e237]:
+        - link "Union" [ref=e238] [cursor=pointer]:
+          - /url: /union
+        - link "Motivation" [ref=e239] [cursor=pointer]:
+          - /url: /motivation
+        - link "Vedabase" [ref=e240] [cursor=pointer]:
+          - /url: /vedabase
+        - link "Gitabase" [ref=e241] [cursor=pointer]:
+          - /url: /gitabase
+      - paragraph [ref=e242]: © 2024 VedaMatch. Все права защищены.

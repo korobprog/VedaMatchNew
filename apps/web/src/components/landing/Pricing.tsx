@@ -18,7 +18,7 @@ export function Pricing() {
           className="mb-12 text-center"
         >
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-text-0 mb-4">
-            Простой тариф
+            Тариф 108
           </h2>
           <p className="text-text-1 text-lg md:text-xl">
             Один тариф на всю платформу. Первый месяц — бесплатно, без карты.

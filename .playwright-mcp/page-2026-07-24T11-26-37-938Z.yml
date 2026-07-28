@@ -1,0 +1,130 @@
+- generic [ref=f2e1]:
+  - generic [ref=f2e2]:
+    - banner [ref=f2e3]:
+      - navigation [ref=f2e4]:
+        - link "VedaMatch VedaMatch" [ref=f2e5] [cursor=pointer]:
+          - /url: /
+          - img "VedaMatch" [ref=f2e6]
+          - generic [ref=f2e7]: VedaMatch
+        - generic [ref=f2e8]:
+          - link "Возможности" [ref=f2e9] [cursor=pointer]:
+            - /url: /#features
+          - link "Как это работает" [ref=f2e10] [cursor=pointer]:
+            - /url: /#how-it-works
+          - link "Union" [ref=f2e11] [cursor=pointer]:
+            - /url: /union
+        - link "Начать" [ref=f2e13] [cursor=pointer]:
+          - /url: /login
+    - generic [ref=f2e14]:
+      - generic [ref=f2e16]:
+        - generic [ref=f2e17]:
+          - generic [ref=f2e18]: Новое в VedaMatch
+          - heading "Осознанные знакомства и единство" [level=1] [ref=f2e21]:
+            - text: Осознанные
+            - generic [ref=f2e22]: знакомства
+            - text: и единство
+          - paragraph [ref=f2e23]: Находите единомышленников для семьи, дружбы, служения и духовного развития. На основе общих ценностей и намерений.
+          - generic [ref=f2e24]:
+            - link "Начать бесплатно" [ref=f2e25] [cursor=pointer]:
+              - /url: /login
+            - button "Узнать больше" [ref=f2e28]
+          - generic [ref=f2e31]:
+            - generic [ref=f2e32]:
+              - generic [ref=f2e33]: 10K+
+              - generic [ref=f2e34]: Пользователей
+            - generic [ref=f2e36]:
+              - generic [ref=f2e37]: 500+
+              - generic [ref=f2e38]: Совпадений
+            - generic [ref=f2e40]:
+              - generic [ref=f2e41]: 98%
+              - generic [ref=f2e42]: Довольных
+        - generic [ref=f2e48]:
+          - generic [ref=f2e49]: 9:41
+          - generic [ref=f2e60]:
+            - img "VedaMatch" [ref=f2e61]
+            - generic [ref=f2e62]: VedaMatch
+          - generic [ref=f2e68]:
+            - img "Мария" [ref=f2e70]
+            - generic [ref=f2e72]:
+              - generic [ref=f2e73]:
+                - generic [ref=f2e74]:
+                  - img "Александра" [ref=f2e75]
+                  - generic [ref=f2e77]: LIKE
+                  - generic [ref=f2e78]: NOPE
+                  - generic [ref=f2e79]: SUPER LIKE
+                - generic [ref=f2e80]:
+                  - generic [ref=f2e81]:
+                    - generic [ref=f2e82]:
+                      - heading "Александра, 28" [level=3] [ref=f2e83]
+                      - paragraph [ref=f2e84]: Москва, Россия
+                    - generic [ref=f2e85]: 94%
+                  - paragraph [ref=f2e87]: Йогиня с 8-летним опытом. Люблю медитацию на рассвете и киртаны по вечерам. Ищу единомышленников для совместной практики и служения.
+                  - generic [ref=f2e88]:
+                    - generic [ref=f2e253]: Йога
+                    - generic [ref=f2e254]: Медитация
+                    - generic [ref=f2e255]: Киртан
+              - generic [ref=f2e92]:
+                - button "Не нравится" [active] [ref=f2e93]
+                - button "Нравится" [ref=f2e97]
+                - button "Люблю" [ref=f2e100]
+      - generic [ref=f2e108]: Листайте вниз
+    - generic [ref=f2e114]:
+      - generic [ref=f2e115]:
+        - heading "Как это работает" [level=2] [ref=f2e116]
+        - paragraph [ref=f2e117]: Три простых шага к осознанным знакомствам и объединению
+      - generic [ref=f2e118]:
+        - generic [ref=f2e121]:
+          - generic [ref=f2e122]: "1"
+          - heading "Создайте профиль" [level=3] [ref=f2e130]
+          - paragraph [ref=f2e131]: Расскажите о себе, своих интересах, ценностях и том, что вы ищете в отношениях и общении.
+        - generic [ref=f2e134]:
+          - generic [ref=f2e135]: "2"
+          - heading "Найдите совпадения" [level=3] [ref=f2e142]
+          - paragraph [ref=f2e143]: Система анализирует ваши данные и предлагает людей с похожими интересами и намерениями.
+        - generic [ref=f2e145]:
+          - generic [ref=f2e146]: "3"
+          - heading "Начните общение" [level=3] [ref=f2e154]
+          - paragraph [ref=f2e155]: После взаимной симпатии откроется чат. Общайтесь, делитесь практиками, создавайте проекты.
+    - generic [ref=f2e157]:
+      - generic [ref=f2e158]:
+        - heading "Возможности" [level=2] [ref=f2e159]
+        - paragraph [ref=f2e160]: Всё для осознанных знакомств и объединения единомышленников
+      - generic [ref=f2e161]:
+        - generic [ref=f2e162]:
+          - heading "Осознанный матчинг" [level=3] [ref=f2e166]
+          - paragraph [ref=f2e167]: Система сравнивает ваши намерения, интересы и ценности, чтобы найти по-настоящему совместимых людей.
+        - generic [ref=f2e169]:
+          - heading "Духовные этапы" [level=3] [ref=f2e174]
+          - paragraph [ref=f2e175]: Учитываем ваш этап пути — от ищущего до преданного — для более точных рекомендаций.
+        - generic [ref=f2e177]:
+          - heading "Все типы связей" [level=3] [ref=f2e184]
+          - paragraph [ref=f2e185]: Семья, дружба, служение, проекты или духовное общение — выбирайте то, что вам нужно.
+        - generic [ref=f2e187]:
+          - heading "Приватность под контролем" [level=3] [ref=f2e191]
+          - paragraph [ref=f2e192]: Вы решаете, что видно другим. Контакты и локация открываются только после взаимного согласия.
+        - generic [ref=f2e194]:
+          - heading "Умный поиск" [level=3] [ref=f2e199]
+          - paragraph [ref=f2e200]: Фильтруйте по городу, радиусу, интересам и типу отношений, которые вы ищете.
+        - generic [ref=f2e202]:
+          - heading "Встроенный чат" [level=3] [ref=f2e206]
+          - paragraph [ref=f2e207]: Общайтесь с совпадениями сразу в приложении. Без перехода в мессенджеры.
+    - generic [ref=f2e220]:
+      - heading "Готовы начать?" [level=2] [ref=f2e221]
+      - paragraph [ref=f2e222]: Присоединяйтесь к тысячам людей, которые уже нашли единомышленников через VedaMatch Union.
+      - link "Создать аккаунт" [ref=f2e223] [cursor=pointer]:
+        - /url: /login
+    - contentinfo [ref=f2e226]:
+      - generic [ref=f2e228]:
+        - generic [ref=f2e229]: VedaMatch
+        - navigation [ref=f2e237]:
+          - link "Union" [ref=f2e238] [cursor=pointer]:
+            - /url: /union
+          - link "Motivation" [ref=f2e239] [cursor=pointer]:
+            - /url: /motivation
+          - link "Vedabase" [ref=f2e240] [cursor=pointer]:
+            - /url: /vedabase
+          - link "Gitabase" [ref=f2e241] [cursor=pointer]:
+            - /url: /gitabase
+        - paragraph [ref=f2e242]: © 2024 VedaMatch. Все права защищены.
+  - button "Open Next.js Dev Tools" [ref=f2e248] [cursor=pointer]
+  - alert [ref=f2e252]
