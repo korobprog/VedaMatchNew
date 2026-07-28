@@ -15,6 +15,8 @@ interface NavbarProps {
 const navLinks = [
   { href: "/#features", label: "Возможности" },
   { href: "/#how-it-works", label: "Как это работает" },
+  { href: "/#pricing", label: "Тариф" },
+  { href: "/support", label: "Поддержка" },
 ];
 
 export function Navbar({ className }: NavbarProps) {

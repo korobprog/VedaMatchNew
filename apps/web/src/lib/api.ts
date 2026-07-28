@@ -1,5 +1,9 @@
 import { cookies } from "next/headers";
 import type {
+  AdminSupportTicketDto,
+  AdminSupportTicketListResponse,
+  SupportTicketDto,
+  SupportTicketListResponse,
   AdminVerificationRequest,
   AdminUserDetail,
   AdminUserListResponse,
@@ -62,3 +66,15 @@ export const getAdminUser = (id: string) =>
   apiGet<AdminUserDetail>(`/admin/users/${id}`);
 export const getMentorVerificationRequest = (token: string) =>
   apiGetPublic<MentorVerificationPublicRequest>(`/mentor-verifications/${token}`);
+export const getMySupportTickets = () =>
+  apiGet<SupportTicketListResponse>("/support/my/tickets");
+export const getMySupportTicket = (id: string) =>
+  apiGet<SupportTicketDto>(`/support/my/tickets/${id}`);
+export const getSupportTicketByToken = (token: string) =>
+  apiGetPublic<SupportTicketDto>(`/support/tickets/track/${token}`);
+export const getAdminSupportTickets = (status?: string) => {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return apiGet<AdminSupportTicketListResponse>(`/admin/support/tickets${query}`);
+};
+export const getAdminSupportTicket = (id: string) =>
+  apiGet<AdminSupportTicketDto>(`/admin/support/tickets/${id}`);

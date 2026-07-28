@@ -26,6 +26,7 @@ import {
 } from './profile-parsers';
 import { calculateAge, toBirthDateInput } from './age';
 import { toPhotoVerificationState } from './photo-verification';
+import { toSubscriptionState } from '../billing/subscription';
 
 const ROLES: Role[] = ['user', 'admin', 'service-admin'];
 const STAGES: SpiritualStage[] = ['seeker', 'practitioner', 'yogi', 'devotee'];
@@ -153,6 +154,7 @@ export class AdminUsersService {
         devoteeVerificationStatus: user.devoteeVerificationStatus,
         lastSelfIdentificationAt:
           user.lastSelfIdentificationAt?.toISOString() ?? null,
+        subscription: toSubscriptionState(user),
         createdAt: user.createdAt.toISOString(),
         updatedAt: user.updatedAt.toISOString(),
       },

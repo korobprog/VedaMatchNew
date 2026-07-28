@@ -7,4 +7,5 @@ export { SwipeCard } from "./SwipeCard";
 export { PhoneMockup } from "./PhoneMockup";
 export { HowItWorks } from "./HowItWorks";
 export { Features } from "./Features";
+export { Pricing } from "./Pricing";
 export { LandingPage } from "./LandingPage";

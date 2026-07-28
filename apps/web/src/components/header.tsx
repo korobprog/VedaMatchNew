@@ -5,7 +5,7 @@ import Image from "next/image";
 import type { UserProfile } from "@vedamatch/shared";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Home } from "lucide-react";
+import { Menu, X, Home, LifeBuoy } from "lucide-react";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { LogoutButton } from "@/components/logout-button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -166,6 +166,13 @@ export function Header({ user }: { user: UserProfile }) {
                     >
                       <span className="text-sm font-medium">Админ панель</span>
                     </Link>
+                    <Link
+                      href="/admin/tickets"
+                      onClick={() => setIsOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
+                    >
+                      <span className="text-sm font-medium">Обращения</span>
+                    </Link>
                   </motion.div>
                 )}
 
@@ -186,6 +193,14 @@ export function Header({ user }: { user: UserProfile }) {
                       <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
                     </svg>
                     <span className="text-sm">Самоидентификация</span>
+                  </Link>
+                  <Link
+                    href="/support"
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-cyan hover:bg-glass transition-colors"
+                  >
+                    <LifeBuoy size={20} />
+                    <span className="text-sm">Поддержка</span>
                   </Link>
                   <LogoutItem />
                 </div>

@@ -58,6 +58,38 @@ export class AuthGuard implements CanActivate {
   }
 }
 
+/**
+ * Пропускает и гостей, и авторизованных: тикет можно создать без входа, но если
+ * токен есть — обращение привязывается к аккаунту и видно в кабинете.
+ */
+@Injectable()
+export class OptionalAuthGuard implements CanActivate {
+  constructor(private readonly jwt: JwtSignService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const req = context
+      .switchToHttp()
+      .getRequest<Request & { user?: AccessTokenPayload }>();
+    const header = req.headers.authorization;
+    const token = header?.startsWith('Bearer ')
+      ? header.slice(7)
+      : (req.cookies as Record<string, string> | undefined)?.access_token;
+    if (!token) return true;
+    try {
+      req.user = await this.jwt.verifyAccessToken(token);
+    } catch {
+      // Просроченный токен не должен мешать гостю отправить обращение.
+    }
+    return true;
+  }
+}
+
+/** Как CurrentUser, но для маршрутов с OptionalAuthGuard: undefined у гостя. */
+export const OptionalUser = createParamDecorator(
+  (_data: unknown, context: ExecutionContext): AccessTokenPayload | undefined =>
+    context.switchToHttp().getRequest<{ user?: AccessTokenPayload }>().user,
+);
+
 export const CurrentUser = createParamDecorator(
   (_data: unknown, context: ExecutionContext): AccessTokenPayload =>
     context.switchToHttp().getRequest<AuthenticatedRequest>().user,

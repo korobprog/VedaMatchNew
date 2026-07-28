@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const publicPrefixes = ["/login", "/mentor-verification", "/m/"];
+// Поддержка и правовые документы обязаны открываться без входа: форма тикета
+// нужна как раз тем, кто не может войти.
+const publicPrefixes = [
+  "/login",
+  "/mentor-verification",
+  "/m/",
+  "/support",
+  "/legal",
+];
 const publicFiles = new Set([
   "/gitabase",
   "/vedabase/sw.js",

@@ -44,6 +44,14 @@ const user: UserProfile = {
   age: null,
   photoVerification: { status: "none" as const, requestedAt: null, verifiedAt: null },
   lastSelfIdentificationAt: null,
+  subscription: {
+    status: "trial",
+    trialEndsAt: "2026-08-27T00:00:00.000Z",
+    paidUntil: null,
+    accessUntil: "2026-08-27T00:00:00.000Z",
+    daysLeft: 30,
+    note: null,
+  },
 };
 
 describe("ProfilePage", () => {

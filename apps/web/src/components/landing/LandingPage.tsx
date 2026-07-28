@@ -11,6 +11,7 @@ import { Iris } from "./Iris";
 import { PhoneMockup } from "./PhoneMockup";
 import { HowItWorks } from "./HowItWorks";
 import { Features } from "./Features";
+import { Pricing } from "./Pricing";
 import { cn } from "@/lib/utils";
 import { SilentRefresh } from "@/components/silent-refresh";
 
@@ -157,6 +158,9 @@ export function LandingPage({ returnTo }: { returnTo?: string }) {
       {/* Features Section */}
       <Features />
 
+      {/* Pricing Section */}
+      <Pricing />
+
       {/* CTA Section */}
       <section className="relative py-20 md:py-32">
         <div className="mx-auto max-w-4xl px-4 md:px-6 text-center">
@@ -216,7 +220,7 @@ export function LandingPage({ returnTo }: { returnTo?: string }) {
             </div>
 
             {/* Links */}
-            <nav className="flex flex-wrap justify-center gap-6 text-text-1 text-sm">
+            <nav className="flex flex-wrap justify-center gap-x-6 gap-y-3 text-text-1 text-sm">
               <Link href="/union" className="hover:text-text-0 transition-colors">
                 Union
               </Link>
@@ -229,11 +233,20 @@ export function LandingPage({ returnTo }: { returnTo?: string }) {
               <Link href="/gitabase" className="hover:text-text-0 transition-colors">
                 Gitabase
               </Link>
+              <Link href="/support" className="hover:text-text-0 transition-colors">
+                Поддержка
+              </Link>
+              <Link href="/legal/privacy" className="hover:text-text-0 transition-colors">
+                Политика конфиденциальности
+              </Link>
+              <Link href="/legal/terms" className="hover:text-text-0 transition-colors">
+                Пользовательское соглашение
+              </Link>
             </nav>
 
             {/* Copyright */}
             <p className="text-text-2 text-sm">
-              © 2024 VedaMatch. Все права защищены.
+              © 2026 VedaMatch. Все права защищены.
             </p>
           </div>
         </div>

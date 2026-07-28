@@ -3,6 +3,9 @@ export * from './gitabase';
 export * from './union';
 export * from './motivation';
 export * from './moderation';
+export * from './support';
+
+import type { SubscriptionState } from './support';
 
 export type Role = 'user' | 'admin' | 'service-admin';
 
@@ -40,6 +43,7 @@ export interface UserProfile {
   spiritualStage: SpiritualStage | null;
   devoteeVerificationStatus: DevoteeVerificationStatus | null;
   lastSelfIdentificationAt: string | null;
+  subscription: SubscriptionState;
 }
 
 /** Состояние проверки фото: заявка пользователя и решение администрации. */

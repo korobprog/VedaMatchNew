@@ -42,6 +42,29 @@ enum StageChangeActor {
   admin
 }
 
+enum SupportTicketStatus {
+  open
+  in_progress
+  waiting_user
+  resolved
+  closed
+}
+
+enum SupportTicketCategory {
+  billing
+  account
+  technical
+  moderation
+  partnership
+  other
+}
+
+enum SupportTicketAuthor {
+  user
+  guest
+  admin
+}
+
 enum GitabaseAnnotationKind {
   highlight
   note
@@ -137,6 +160,11 @@ model User {
   // Администрация сверила публичные фото с живым человеком
   photoVerifiedAt           DateTime?
   photoVerificationRequestedAt DateTime?
+  // Подписка: пробный период считается от trialEndsAt (бэкфилл createdAt + 30 дней),
+  // платный доступ — от subscriptionPaidUntil, который проставляет администратор.
+  trialEndsAt               DateTime?
+  subscriptionPaidUntil     DateTime?
+  subscriptionNote          String?
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
 
@@ -166,6 +194,9 @@ model User {
   motivationModerationAudits  MotivationModerationAudit[]
   motivationAuthorWatches     MotivationAuthorWatch[]
   motivationSourceWatches     MotivationSourceWatch[]
+  supportTickets              SupportTicket[]              @relation("SupportTicketsOwned")
+  supportTicketsAssigned      SupportTicket[]              @relation("SupportTicketsAssigned")
+  supportTicketMessages       SupportTicketMessage[]       @relation("SupportTicketMessagesAuthored")
 }
 
 model UserPhoto {
@@ -755,6 +786,51 @@ model UserReport {
 
   @@index([status, createdAt])
   @@index([targetId])
+}
+
+/// Обращение в поддержку. userId пуст у гостевых тикетов с лендинга — связь
+/// с автором держится на contactEmail/contactTelegram и trackToken.
+model SupportTicket {
+  id              String                @id @default(uuid())
+  number          Int                   @unique @default(autoincrement())
+  /// Секретная ссылка для гостя: единственный способ посмотреть свой тикет без входа.
+  trackToken      String                @unique
+  userId          String?
+  user            User?                 @relation("SupportTicketsOwned", fields: [userId], references: [id], onDelete: SetNull)
+  contactName     String?
+  contactEmail    String?
+  contactTelegram String?
+  subject         String
+  category        SupportTicketCategory @default(other)
+  status          SupportTicketStatus   @default(open)
+  assignedToId    String?
+  assignedTo      User?                 @relation("SupportTicketsAssigned", fields: [assignedToId], references: [id], onDelete: SetNull)
+  adminNote       String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  firstResponseAt DateTime?
+  closedAt        DateTime?
+  lastMessageAt   DateTime              @default(now())
+
+  messages SupportTicketMessage[]
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+}
+
+model SupportTicketMessage {
+  id           String              @id @default(uuid())
+  ticketId     String
+  ticket       SupportTicket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorType   SupportTicketAuthor
+  authorUserId String?
+  authorUser   User?               @relation("SupportTicketMessagesAuthored", fields: [authorUserId], references: [id], onDelete: SetNull)
+  body         String
+  /// Внутренняя заметка видна только администраторам.
+  isInternal   Boolean             @default(false)
+  createdAt    DateTime            @default(now())
+
+  @@index([ticketId, createdAt])
 }
 
 model UnionChatMessage {

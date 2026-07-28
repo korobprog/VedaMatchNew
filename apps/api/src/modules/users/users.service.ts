@@ -22,6 +22,7 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toRole } from '../auth/auth.service';
+import { toSubscriptionState } from '../billing/subscription';
 import { calculateAge, parseBirthDate, toBirthDateInput } from './age';
 import {
   RESET_PHOTO_VERIFICATION,
@@ -104,6 +105,7 @@ export class UsersService {
       devoteeVerificationStatus: user.devoteeVerificationStatus,
       lastSelfIdentificationAt:
         user.lastSelfIdentificationAt?.toISOString() ?? null,
+      subscription: toSubscriptionState(user),
     };
   }
 

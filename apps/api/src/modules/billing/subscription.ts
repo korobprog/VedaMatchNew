@@ -1,0 +1,88 @@
+import type {
+  PricingPlan,
+  SubscriptionState,
+  SubscriptionStatus,
+} from '@vedamatch/shared';
+
+export const TRIAL_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Единственный тариф платформы. Цены дублируются на лендинге через /billing/plan. */
+export const VEDAMATCH_PLAN: PricingPlan = {
+  id: 'vedamatch-basic',
+  name: 'VedaMatch',
+  priceRub: 108,
+  priceUsdt: 2,
+  period: 'month',
+  trialDays: TRIAL_DAYS,
+  features: [
+    'Полный доступ к Union: анкеты, рекомендации, чаты',
+    'Motivation: ежедневные материалы и избранное',
+    'Vedabase и Gitabase без ограничений',
+    'Проверка фото и подтверждение статуса преданного',
+    'Поддержка через тикеты в кабинете',
+  ],
+};
+
+export interface SubscriptionSource {
+  createdAt: Date;
+  trialEndsAt: Date | null;
+  subscriptionPaidUntil: Date | null;
+  subscriptionNote: string | null;
+}
+
+/**
+ * Конец пробного месяца. У аккаунтов, созданных до появления подписки, поле
+ * пустое — считаем от даты регистрации, чтобы не выдавать триал повторно.
+ */
+export function trialEndsAt(user: SubscriptionSource): Date {
+  return (
+    user.trialEndsAt ?? new Date(user.createdAt.getTime() + TRIAL_DAYS * DAY_MS)
+  );
+}
+
+export function toSubscriptionState(
+  user: SubscriptionSource,
+  now: Date = new Date(),
+): SubscriptionState {
+  const trialEnd = trialEndsAt(user);
+  const paidUntil = user.subscriptionPaidUntil;
+  const paidActive = paidUntil !== null && paidUntil.getTime() > now.getTime();
+  const trialActive = trialEnd.getTime() > now.getTime();
+
+  const status: SubscriptionStatus = paidActive
+    ? 'active'
+    : trialActive
+      ? 'trial'
+      : 'expired';
+  const accessUntil = paidActive ? paidUntil : trialActive ? trialEnd : null;
+
+  return {
+    status,
+    trialEndsAt: trialEnd.toISOString(),
+    paidUntil: paidUntil?.toISOString() ?? null,
+    accessUntil: accessUntil?.toISOString() ?? null,
+    daysLeft: accessUntil
+      ? Math.max(0, Math.ceil((accessUntil.getTime() - now.getTime()) / DAY_MS))
+      : 0,
+    note: user.subscriptionNote,
+  };
+}
+
+/**
+ * Продление на N месяцев: от текущего конца платного периода, если он ещё не
+ * прошёл, иначе от сегодняшнего дня — иначе оплата «сгорала» бы задним числом.
+ */
+export function extendPaidUntil(
+  current: Date | null,
+  months: number,
+  now: Date = new Date(),
+): Date {
+  const base =
+    current && current.getTime() > now.getTime()
+      ? new Date(current)
+      : new Date(now);
+  const extended = new Date(base);
+  extended.setMonth(extended.getMonth() + months);
+  return extended;
+}

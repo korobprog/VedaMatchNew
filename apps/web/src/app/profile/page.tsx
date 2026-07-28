@@ -1,6 +1,9 @@
 ﻿import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { SubscriptionState } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
+import { PLAN } from "@/lib/plan";
+import { formatDate, subscriptionStatusLabels } from "@/lib/support-labels";
 import { Header } from "@/components/header";
 import { ProfileEditor } from "@/components/profile-editor";
 import { BackgroundOrbs } from "@/components/landing/Orb";
@@ -109,8 +112,70 @@ export default async function ProfilePage() {
             Выйти из аккаунта
           </LogoutButton>
         </div>
+        <SubscriptionCard subscription={user.subscription} />
         <ProfileEditor user={user} />
       </main>
+    </div>
+  );
+}
+
+/** Подписка и вход в поддержку: оба вопроса пользователи ищут в профиле. */
+function SubscriptionCard({ subscription }: { subscription: SubscriptionState }) {
+  const accent =
+    subscription.status === "expired"
+      ? "border-red-400/30"
+      : subscription.status === "trial"
+        ? "border-cyan/30"
+        : "border-glass-brd";
+
+  return (
+    <div className={`glass mb-6 rounded-2xl border p-6 ${accent}`}>
+      <h2 className="mb-4 font-display text-lg font-semibold text-text-0">
+        Подписка
+      </h2>
+      <dl className="space-y-3 text-sm">
+        <div className="flex justify-between gap-4">
+          <dt className="text-text-2">Статус</dt>
+          <dd className="font-medium text-text-0">
+            {subscriptionStatusLabels[subscription.status]}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt className="text-text-2">Тариф</dt>
+          <dd className="font-medium text-text-0">
+            {PLAN.priceRub} ₽ / мес · {PLAN.priceUsdt} USDT
+          </dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt className="text-text-2">
+            {subscription.status === "trial" ? "Пробный период до" : "Доступ до"}
+          </dt>
+          <dd className="font-medium text-text-0">
+            {subscription.accessUntil
+              ? `${formatDate(subscription.accessUntil)} (осталось дней: ${subscription.daysLeft})`
+              : "Доступ закончился"}
+          </dd>
+        </div>
+        {subscription.note && (
+          <div className="flex justify-between gap-4">
+            <dt className="text-text-2">Комментарий</dt>
+            <dd className="text-right text-text-1">{subscription.note}</dd>
+          </div>
+        )}
+      </dl>
+
+      <p className="mt-4 text-sm text-text-1">
+        {subscription.status === "expired"
+          ? "Чтобы продлить доступ, напишите в поддержку — подскажем реквизиты для оплаты в рублях или USDT."
+          : "Оплата продлевается через поддержку: рубли или USDT на выбор."}
+      </p>
+
+      <Link
+        href="/support"
+        className="mt-4 block rounded-xl border border-glass-brd px-4 py-3 text-center text-sm font-medium text-text-1 transition hover:text-text-0"
+      >
+        Связь с поддержкой
+      </Link>
     </div>
   );
 }

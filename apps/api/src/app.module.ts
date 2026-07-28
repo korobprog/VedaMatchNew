@@ -11,6 +11,8 @@ import { UnionModule } from './modules/union/union.module';
 import { VedabaseModule } from './modules/vedabase/vedabase.module';
 import { MotivationModule } from './modules/motivation/motivation.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
+import { SupportModule } from './modules/support/support.module';
+import { BillingModule } from './modules/billing/billing.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { ModerationModule } from './modules/moderation/moderation.module';
     VedabaseModule,
     MotivationModule,
     ModerationModule,
+    SupportModule,
+    BillingModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
