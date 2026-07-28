@@ -5,6 +5,7 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserGalleryService } from '../users/user-gallery.service';
+import { ModerationService } from '../moderation/moderation.service';
 import { UnionMatchingService } from './union-matching.service';
 import { UnionProfileService } from './union-profile.service';
 
@@ -115,6 +116,17 @@ function profile(
   };
 }
 
+function withStage(
+  source: ReturnType<typeof profile>,
+  spiritualStage: string,
+  devoteeVerificationStatus: string,
+) {
+  return {
+    ...source,
+    user: { ...source.user, spiritualStage, devoteeVerificationStatus },
+  };
+}
+
 function connection(status: 'pending' | 'accepted' = 'accepted') {
   return {
     id: 'connection-1',
@@ -183,15 +195,22 @@ describe('UnionProfileService', () => {
         ),
     ),
   };
+  const moderation = {
+    hiddenUserIds: jest.fn().mockResolvedValue(new Set<string>()),
+    isHidden: jest.fn().mockResolvedValue(false),
+  };
   const service = new UnionProfileService(
     prisma as unknown as PrismaService,
     matching as unknown as UnionMatchingService,
     gallery as unknown as UserGalleryService,
+    moderation as unknown as ModerationService,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.user.findUnique.mockResolvedValue(user('me'));
+    moderation.hiddenUserIds.mockResolvedValue(new Set<string>());
+    moderation.isHidden.mockResolvedValue(false);
   });
 
   it('requires a complete location before creating a Union profile', async () => {
@@ -240,6 +259,47 @@ describe('UnionProfileService', () => {
         where: { isActive: true, userId: { not: 'me' } },
       }),
     );
+  });
+
+  it('marks only administration-confirmed devotees and can filter to them', async () => {
+    const confirmed = withStage(profile('confirmed'), 'devotee', 'confirmed');
+    const awaiting = withStage(
+      profile('awaiting'),
+      'devotee',
+      'awaiting_admin',
+    );
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([confirmed, awaiting]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const all = await service.getRecommendations('me');
+    expect(
+      all.items.map((item) => [item.user.id, item.user.isVerifiedDevotee]),
+    ).toEqual([
+      ['confirmed', true],
+      ['awaiting', false],
+    ]);
+
+    const verified = await service.getRecommendations('me', {
+      verifiedOnly: true,
+    });
+    expect(verified.items.map((item) => item.user.id)).toEqual(['confirmed']);
+  });
+
+  it('ranks a confirmed devotee above an equally compatible profile', async () => {
+    const plain = profile('plain');
+    const confirmed = withStage(profile('confirmed'), 'devotee', 'confirmed');
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    // Порядок из БД обратный ожидаемому: сортировка обязана его перестроить.
+    prisma.unionProfile.findMany.mockResolvedValue([plain, confirmed]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me');
+
+    expect(result.items.map((item) => item.user.id)).toEqual([
+      'confirmed',
+      'plain',
+    ]);
   });
 
   it('does not update isActive when the field is omitted', async () => {

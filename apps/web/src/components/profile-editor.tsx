@@ -10,6 +10,7 @@ import type {
   UserProfile,
 } from "@vedamatch/shared";
 import { UserGalleryEditor } from "./user-gallery-editor";
+import { PhotoVerificationPanel } from "./photo-verification-panel";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
@@ -52,6 +53,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
   );
   const [locationResults, setLocationResults] = useState<GeoSearchResult[]>([]);
   const [locationPending, setLocationPending] = useState(false);
+  const [birthDate, setBirthDate] = useState(user.birthDate ?? "");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [pending, setPending] = useState(false);
   const [avatarPending, setAvatarPending] = useState(false);
@@ -190,11 +192,17 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ homeLocation, socialLinks, messengers }),
+        body: JSON.stringify({
+          birthDate: birthDate || null,
+          homeLocation,
+          socialLinks,
+          messengers,
+        }),
       });
       if (!res.ok) throw new Error(await res.text());
       const updated = (await res.json()) as UserProfile;
       setProfile(updated);
+      setBirthDate(updated.birthDate ?? "");
       setHomeLocation(updated.homeLocation);
       setSocialLinks(updated.socialLinks ?? {});
       setMessengers(updated.messengers ?? {});
@@ -294,6 +302,34 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
       </section>
 
       <UserGalleryEditor />
+
+      <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          Дата рождения
+        </h2>
+        <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+          В знакомствах показывается только возраст — саму дату видите лишь вы.
+          Видимость возраста настраивается в анкете Union.
+        </p>
+        <label className="block max-w-xs">
+          <span className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
+            Дата рождения
+          </span>
+          <input
+            type="date"
+            value={birthDate}
+            onChange={(event) => setBirthDate(event.target.value)}
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          />
+        </label>
+        {profile.age != null && (
+          <p className="mt-2 text-sm text-zinc-500">
+            Возраст в карточке: {profile.age}
+          </p>
+        )}
+      </section>
+
+      <PhotoVerificationPanel profile={profile} onUpdated={setProfile} />
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">

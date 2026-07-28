@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type {
   GeoSearchResult,
   SpiritualStage,
@@ -26,6 +26,24 @@ const formatLabels: Record<UnionFormat, string> = {
 
 const radiusOptions = [25, 50, 100, 250, 500, 1000, 3000];
 
+// Совпадает с MIN_PROFILE_AGE / MAX_PROFILE_AGE на стороне API.
+const MIN_AGE = 18;
+const MAX_AGE = 120;
+
+const DESKTOP_QUERY = "(min-width: 1024px)";
+
+const desktopQuery = () => window.matchMedia(DESKTOP_QUERY);
+
+function subscribeToDesktopQuery(onChange: () => void): () => void {
+  const query = desktopQuery();
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+const fieldClass =
+  "w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0 outline-none transition focus:border-magenta/50";
+const labelClass = "mb-1 block text-xs font-medium uppercase tracking-wide text-text-2";
+
 export function RecommendationFilters({
   params,
 }: {
@@ -47,6 +65,16 @@ export function RecommendationFilters({
   );
   const [results, setResults] = useState<GeoSearchResult[]>([]);
   const [pending, setPending] = useState(false);
+  // На узких экранах панель фильтров занимала бы весь первый экран, поэтому по
+  // умолчанию она раскрыта только на десктопе; клик пользователя это перекрывает.
+  const isDesktop = useSyncExternalStore(
+    subscribeToDesktopQuery,
+    () => desktopQuery().matches,
+    () => true,
+  );
+  const [expandedOverride, setExpandedOverride] = useState<boolean | null>(null);
+  const expanded = expandedOverride ?? isDesktop;
+  const activeFilterCount = countActiveFilters(params);
 
   useEffect(() => {
     const query = cityQuery.trim();
@@ -82,7 +110,7 @@ export function RecommendationFilters({
   return (
     <form
       action="/union/recommendations"
-      className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+      className="glass mb-6 rounded-3xl border border-glass-brd p-4 sm:p-5"
     >
       <input type="hidden" name="page" value="1" />
       {Number.isFinite(selectedCity?.lat) && (
@@ -92,6 +120,24 @@ export function RecommendationFilters({
         <input type="hidden" name="lon" value={String(selectedCity?.lon)} />
       )}
 
+      <button
+        type="button"
+        onClick={() => setExpandedOverride(!expanded)}
+        aria-expanded={expanded}
+        className="flex w-full items-center justify-between text-sm font-semibold text-text-0 lg:hidden"
+      >
+        Фильтры
+        {activeFilterCount > 0 && (
+          <span className="ml-2 mr-auto rounded-full bg-magenta px-2 py-0.5 text-xs font-semibold text-white">
+            {activeFilterCount}
+          </span>
+        )}
+        <span aria-hidden="true" className="text-text-2">
+          {expanded ? "▲" : "▼"}
+        </span>
+      </button>
+
+      <div className={expanded ? "mt-3 lg:mt-0" : "hidden lg:block"}>
       <div className="grid gap-3 md:grid-cols-3">
         <Select
           name="intention"
@@ -127,9 +173,7 @@ export function RecommendationFilters({
 
       <div className="mt-3 grid gap-3 md:grid-cols-[0.8fr_1.2fr_180px_1fr]">
         <label className="block">
-          <span className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
-            Страна
-          </span>
+          <span className={labelClass}>Страна</span>
           <input
             name="country"
             type="text"
@@ -140,14 +184,11 @@ export function RecommendationFilters({
               setResults([]);
             }}
             placeholder="Например, Россия"
-            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className={fieldClass}
           />
         </label>
         <div className="relative">
-          <label
-            htmlFor="recommendation-city"
-            className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300"
-          >
+          <label htmlFor="recommendation-city" className={labelClass}>
             Город
           </label>
           <input
@@ -161,10 +202,10 @@ export function RecommendationFilters({
               setResults([]);
             }}
             placeholder="Начните вводить город"
-            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className={fieldClass}
           />
           {results.length > 0 && (
-            <div className="absolute z-10 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="absolute z-10 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-glass-brd bg-bg-1 shadow-lg">
               {results.map((item) => (
                 <button
                   key={`${item.lat}-${item.lon}-${item.displayName}`}
@@ -175,14 +216,14 @@ export function RecommendationFilters({
                     setCountryQuery(item.country ?? "");
                     setResults([]);
                   }}
-                  className="block w-full px-4 py-3 text-left text-sm hover:bg-amber-50 dark:hover:bg-zinc-800"
+                  className="block w-full px-4 py-3 text-left text-sm hover:bg-bg-2"
                 >
-                  <span className="block font-medium text-zinc-900 dark:text-zinc-100">
+                  <span className="block font-medium text-text-0">
                     {item.city}
                     {item.country ? `, ${item.country}` : ""}
                   </span>
                   {locationDetails(item) && (
-                    <span className="block text-xs text-zinc-500">
+                    <span className="block text-xs text-text-2">
                       {locationDetails(item)}
                     </span>
                   )}
@@ -215,20 +256,71 @@ export function RecommendationFilters({
         />
       </div>
 
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 md:max-w-md">
+        <label className="block">
+          <span className={labelClass}>Возраст от</span>
+          <input
+            name="ageMin"
+            type="number"
+            min={MIN_AGE}
+            max={MAX_AGE}
+            inputMode="numeric"
+            defaultValue={first(params.ageMin) ?? ""}
+            placeholder={String(MIN_AGE)}
+            className={fieldClass}
+          />
+        </label>
+        <label className="block">
+          <span className={labelClass}>Возраст до</span>
+          <input
+            name="ageMax"
+            type="number"
+            min={MIN_AGE}
+            max={MAX_AGE}
+            inputMode="numeric"
+            defaultValue={first(params.ageMax) ?? ""}
+            placeholder="без ограничения"
+            className={fieldClass}
+          />
+        </label>
+      </div>
+
+      <label className="mt-3 flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-1">
+        <input
+          type="checkbox"
+          name="verifiedOnly"
+          value="true"
+          defaultChecked={first(params.verifiedOnly) === "true"}
+          className="h-4 w-4 accent-cyan"
+        />
+        Только преданные, подтверждённые администрацией
+      </label>
+
+      <label className="mt-2 flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-1">
+        <input
+          type="checkbox"
+          name="photoVerifiedOnly"
+          value="true"
+          defaultChecked={first(params.photoVerifiedOnly) === "true"}
+          className="h-4 w-4 accent-gold"
+        />
+        Только профили с проверенными фото
+      </label>
+
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button
           type="submit"
-          className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+          className="rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-5 py-2.5 text-sm font-semibold text-white transition hover:shadow-[0_0_20px_var(--vm-glow-magenta)]"
         >
           {pending ? "Ищем город..." : "Применить фильтры"}
         </button>
         <a
           href="/union/recommendations"
-          className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+          className="text-sm font-medium text-text-2 transition hover:text-text-0"
         >
           Сбросить
         </a>
-        <span className="text-xs text-zinc-400">
+        <span className="text-xs text-text-2">
           Геопоиск: ©{" "}
           <a
             href="https://www.openstreetmap.org/copyright"
@@ -240,6 +332,7 @@ export function RecommendationFilters({
           </a>{" "}
           contributors
         </span>
+      </div>
       </div>
     </form>
   );
@@ -258,13 +351,11 @@ function Select({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
-        {label}
-      </span>
+      <span className={labelClass}>{label}</span>
       <select
         name={name}
         defaultValue={defaultValue ?? ""}
-        className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+        className={fieldClass}
       >
         {options.map(([value, text]) => (
           <option key={value} value={value}>
@@ -274,6 +365,26 @@ function Select({
       </select>
     </label>
   );
+}
+
+const filterKeys = [
+  "intention",
+  "stage",
+  "format",
+  "country",
+  "city",
+  "radiusKm",
+  "language",
+  "ageMin",
+  "ageMax",
+  "verifiedOnly",
+  "photoVerifiedOnly",
+] as const;
+
+function countActiveFilters(
+  params: Record<string, string | string[] | undefined>,
+): number {
+  return filterKeys.filter((key) => Boolean(first(params[key]))).length;
 }
 
 function first(value: string | string[] | undefined): string | undefined {

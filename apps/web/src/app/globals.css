@@ -1,12 +1,26 @@
 @import "tailwindcss";
 
 /*
- * The `dark:` variant follows the `data-theme` attribute that the theme
- * provider writes on <html>, not the raw OS preference. Without this the
- * variant tracks `prefers-color-scheme` only and light/dark pairs such as
- * `bg-white dark:bg-zinc-900` fight the chosen theme.
+ * The `dark:` variant follows the `data-theme` attribute that the server (from
+ * the theme cookie) or the theme provider writes on <html>, not the raw OS
+ * preference — otherwise light/dark pairs such as `bg-white dark:bg-zinc-900`
+ * fight the chosen theme.
+ *
+ * The second rule covers the first visit, when no cookie exists yet and the
+ * attribute is absent: it keeps `dark:` in sync with the CSS variables below,
+ * which already fall back to `prefers-color-scheme`.
  */
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme]), :root:not([data-theme]) *) {
+      @slot;
+    }
+  }
+}
 
 @theme inline {
   /* Background colors */

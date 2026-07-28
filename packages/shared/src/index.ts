@@ -2,6 +2,7 @@ export * from './vedabase';
 export * from './gitabase';
 export * from './union';
 export * from './motivation';
+export * from './moderation';
 
 export type Role = 'user' | 'admin' | 'service-admin';
 
@@ -28,6 +29,10 @@ export interface UserProfile {
   name: string;
   avatarUrl: string | null;
   avatarKey: string | null;
+  /** `YYYY-MM-DD`; отдаётся только владельцу профиля */
+  birthDate: string | null;
+  age: number | null;
+  photoVerification: PhotoVerificationState;
   homeLocation: ProfileLocation | null;
   socialLinks: ProfileSocialLinks;
   messengers: ProfileMessengers;
@@ -35,6 +40,13 @@ export interface UserProfile {
   spiritualStage: SpiritualStage | null;
   devoteeVerificationStatus: DevoteeVerificationStatus | null;
   lastSelfIdentificationAt: string | null;
+}
+
+/** Состояние проверки фото: заявка пользователя и решение администрации. */
+export interface PhotoVerificationState {
+  status: 'none' | 'requested' | 'verified';
+  requestedAt: string | null;
+  verifiedAt: string | null;
 }
 
 export interface UserPhotoDto {
@@ -117,6 +129,7 @@ export interface ProfileMessengers {
 }
 
 export interface ProfileUpdateRequest {
+  birthDate?: string | null;
   homeLocation?: ProfileLocation | null;
   socialLinks?: ProfileSocialLinks;
   messengers?: ProfileMessengers;

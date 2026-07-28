@@ -1,5 +1,6 @@
 ﻿import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -16,10 +17,16 @@ import type {
   ProfileMessengers,
   ProfileSocialLinks,
   ProfileUpdateRequest,
+  Role,
   UserProfile,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toRole } from '../auth/auth.service';
+import { calculateAge, parseBirthDate, toBirthDateInput } from './age';
+import {
+  RESET_PHOTO_VERIFICATION,
+  toPhotoVerificationState,
+} from './photo-verification';
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 const AVATAR_MIME_EXTENSIONS: Record<string, string> = {
@@ -86,6 +93,9 @@ export class UsersService {
       name: user.name,
       avatarUrl: user.avatarUrl,
       avatarKey: user.avatarKey,
+      birthDate: toBirthDateInput(user.birthDate),
+      age: calculateAge(user.birthDate),
+      photoVerification: toPhotoVerificationState(user),
       homeLocation: parseLocation(user.homeLocation),
       socialLinks: parseSocialLinks(user.socialLinks),
       messengers: parseMessengers(user.messengers),
@@ -105,6 +115,13 @@ export class UsersService {
 
     const data: Prisma.UserUpdateInput = {};
 
+    if ('birthDate' in payload) {
+      const birthDate = parseBirthDate(payload.birthDate);
+      if (birthDate && 'error' in birthDate) {
+        throw new BadRequestException(birthDate.error);
+      }
+      data.birthDate = birthDate;
+    }
     if ('homeLocation' in payload) {
       data.homeLocation = payload.homeLocation
         ? (sanitizeLocation(
@@ -126,6 +143,44 @@ export class UsersService {
     }
 
     await this.prisma.user.update({ where: { id: userId }, data });
+    return this.getProfile(userId);
+  }
+
+  /** Заявка на проверку фото: подтверждать может только администрация. */
+  async requestPhotoVerification(userId: string): Promise<UserProfile> {
+    await this.ensureUser(userId);
+    const publicPhotos = await this.prisma.userPhoto.count({
+      where: { userId, isPublic: true },
+    });
+    if (publicPhotos === 0) {
+      throw new BadRequestException(
+        'Откройте хотя бы одно фото в галерее — проверять нечего',
+      );
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { photoVerificationRequestedAt: new Date(), photoVerifiedAt: null },
+    });
+    return this.getProfile(userId);
+  }
+
+  async setPhotoVerification(
+    role: Role,
+    userId: string,
+    verified: boolean,
+  ): Promise<UserProfile> {
+    if (role !== 'admin') {
+      throw new ForbiddenException('Доступ только для администратора');
+    }
+    await this.ensureUser(userId);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: verified
+        ? { photoVerifiedAt: new Date(), photoVerificationRequestedAt: null }
+        : RESET_PHOTO_VERIFICATION,
+    });
     return this.getProfile(userId);
   }
 

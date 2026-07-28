@@ -9,17 +9,22 @@ import {
   useState,
 } from "react";
 
-export type ThemePreference = "light" | "dark" | "system";
-export type ResolvedTheme = "light" | "dark";
+import {
+  DARK_QUERY,
+  isThemePreference,
+  THEME_COOKIE_MAX_AGE,
+  THEME_COOKIE_NAME,
+  THEME_STORAGE_KEY,
+  type ResolvedTheme,
+  type ThemePreference,
+} from "@/lib/theme";
 
-export const THEME_STORAGE_KEY = "vedamatch-theme";
-const DARK_QUERY = "(prefers-color-scheme: dark)";
-
-/**
- * Runs before the first paint so the stored theme is applied without a flash.
- * Keep it in sync with `applyTheme` below.
- */
-export const themeInitScript = `(function(){try{var d=document.documentElement;var s=localStorage.getItem("${THEME_STORAGE_KEY}");var p=s==="light"||s==="dark"||s==="system"?s:"system";var r=p==="system"?(window.matchMedia("${DARK_QUERY}").matches?"dark":"light"):p;d.dataset.theme=r;d.dataset.themePreference=p;d.style.colorScheme=r;}catch(e){}})();`;
+export {
+  THEME_COOKIE_NAME,
+  THEME_STORAGE_KEY,
+  type ResolvedTheme,
+  type ThemePreference,
+};
 
 interface ThemeContextValue {
   preference: ThemePreference;
@@ -30,9 +35,18 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [preference, setPreferenceState] = useState<ThemePreference>(readStoredPreference);
-  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(readSystemTheme);
+export function ThemeProvider({
+  children,
+  initialPreference,
+}: {
+  children: React.ReactNode;
+  /** Preference resolved from the cookie on the server, kept identical for the first client render to avoid hydration mismatches. */
+  initialPreference?: ThemePreference;
+}) {
+  const [preference, setPreferenceState] = useState<ThemePreference>(
+    initialPreference ?? "system",
+  );
+  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>("dark");
   const resolved = preference === "system" ? systemTheme : preference;
 
   useEffect(() => {
@@ -45,7 +59,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Переносим выбор старых посетителей из localStorage в cookie: если cookie
+    // ещё нет (сервер отдал дефолт), но в localStorage лежит старое значение,
+    // подхватываем его уже после гидратации, чтобы не спорить с разметкой сервера.
+    if (document.cookie.includes(`${THEME_COOKIE_NAME}=`)) return;
+    try {
+      const stored = localStorage.getItem(THEME_STORAGE_KEY);
+      if (isThemePreference(stored)) setPreferenceState(stored);
+    } catch {
+      // Private browsing modes can reject storage; the theme still applies.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     applyTheme(preference, resolved);
+    // Переносим выбор старых посетителей из localStorage в cookie, чтобы
+    // следующий заход сервер отрисовал уже в нужной теме.
+    writeThemeCookie(preference);
   }, [preference, resolved]);
 
   const setPreference = useCallback((next: ThemePreference) => {
@@ -54,6 +85,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Private browsing modes can reject storage; the theme still applies.
     }
+    writeThemeCookie(next);
     startThemeTransition();
     setPreferenceState(next);
   }, []);
@@ -72,20 +104,8 @@ export function useTheme(): ThemeContextValue {
   return context;
 }
 
-function readStoredPreference(): ThemePreference {
-  if (typeof window === "undefined") return "system";
-  try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === "light" || stored === "dark" || stored === "system") return stored;
-  } catch {
-    // Ignore unreadable storage and fall back to the device preference.
-  }
-  return "system";
-}
-
-function readSystemTheme(): ResolvedTheme {
-  if (typeof window === "undefined" || !window.matchMedia) return "dark";
-  return window.matchMedia(DARK_QUERY).matches ? "dark" : "light";
+function writeThemeCookie(preference: ThemePreference): void {
+  document.cookie = `${THEME_COOKIE_NAME}=${preference}; path=/; max-age=${THEME_COOKIE_MAX_AGE}; samesite=lax`;
 }
 
 function applyTheme(preference: ThemePreference, resolved: ResolvedTheme): void {

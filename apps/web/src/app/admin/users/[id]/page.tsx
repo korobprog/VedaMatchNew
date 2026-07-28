@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
 import { AdminUserStageForm } from "@/components/admin-user-stage-form";
+import { AdminPhotoVerification } from "@/components/admin-photo-verification";
 import { getAdminUser, getProfile } from "@/lib/api";
 import { actorLabels, formatBool, formatDate, roleLabels, stageLabels, verificationLabels } from "@/lib/admin-labels";
 import { BackgroundOrbs } from "@/components/landing/Orb";
@@ -74,6 +75,13 @@ export default async function AdminUserDetailPage({
               </dl>
               <JsonBlock title="Соцсети" value={profile.socialLinks} />
               <JsonBlock title="Мессенджеры" value={profile.messengers} />
+            </Section>
+
+            <Section title="Проверка фото">
+              <AdminPhotoVerification
+                userId={profile.id}
+                state={profile.photoVerification}
+              />
             </Section>
 
             <Section title="Духовный этап">

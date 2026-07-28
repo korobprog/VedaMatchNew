@@ -24,6 +24,8 @@ import {
   parseSocialLinks,
   parseLocation,
 } from './profile-parsers';
+import { calculateAge, toBirthDateInput } from './age';
+import { toPhotoVerificationState } from './photo-verification';
 
 const ROLES: Role[] = ['user', 'admin', 'service-admin'];
 const STAGES: SpiritualStage[] = ['seeker', 'practitioner', 'yogi', 'devotee'];
@@ -140,6 +142,9 @@ export class AdminUsersService {
         name: user.name,
         avatarUrl: user.avatarUrl,
         avatarKey: user.avatarKey,
+        birthDate: toBirthDateInput(user.birthDate),
+        age: calculateAge(user.birthDate),
+        photoVerification: toPhotoVerificationState(user),
         homeLocation: parseLocation(user.homeLocation),
         socialLinks: parseSocialLinks(user.socialLinks),
         messengers: parseMessengers(user.messengers),

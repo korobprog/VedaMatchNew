@@ -15,7 +15,6 @@ interface NavbarProps {
 const navLinks = [
   { href: "/#features", label: "Возможности" },
   { href: "/#how-it-works", label: "Как это работает" },
-  { href: "/union", label: "Union" },
 ];
 
 export function Navbar({ className }: NavbarProps) {

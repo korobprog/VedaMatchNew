@@ -3,8 +3,10 @@
 import Image from "next/image";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
+import { DevLoginForm } from "@/components/dev-login-form";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const DEV_AUTH = process.env.NEXT_PUBLIC_DEV_AUTH === "true";
 
 export default function LoginPage() {
   return (
@@ -53,6 +55,8 @@ export default function LoginPage() {
           </svg>
           Войти через Google
         </a>
+
+        {DEV_AUTH && <DevLoginForm />}
       </div>
     </div>
   );

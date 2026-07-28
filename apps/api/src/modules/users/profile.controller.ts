@@ -29,6 +29,11 @@ export class ProfileController {
     return this.users.updateProfile(user.sub, body);
   }
 
+  @Post('photo-verification')
+  requestPhotoVerification(@CurrentUser() user: AccessTokenPayload) {
+    return this.users.requestPhotoVerification(user.sub);
+  }
+
   @Post('avatar')
   @UseInterceptors(
     FileInterceptor('file', {

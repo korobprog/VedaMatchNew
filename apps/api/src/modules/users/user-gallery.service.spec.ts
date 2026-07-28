@@ -284,6 +284,49 @@ describe('UserGalleryService', () => {
     ]);
   });
 
+  it('drops photo verification whenever the gallery changes', async () => {
+    prisma.userPhoto.findFirst.mockResolvedValueOnce({
+      id: 'photo-id',
+      userId: USER_ID,
+    });
+    prisma.userPhoto.update.mockResolvedValueOnce({
+      id: 'photo-id',
+      userId: USER_ID,
+      storageKey: 'photo.webp',
+      sizeBytes: 10,
+      width: 10,
+      height: 10,
+      isPublic: true,
+      sortOrder: 0,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+
+    await service.updateVisibility(USER_ID, 'photo-id', { isPublic: true });
+
+    expect(prisma.user.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { photoVerifiedAt: null, photoVerificationRequestedAt: null },
+      }),
+    );
+  });
+
+  it('passes demo photo URLs through without signing them', async () => {
+    const result = await service.signPublicPhotos([
+      {
+        id: 'demo',
+        storageKey: '/mock/union/radha-1.svg',
+        width: 600,
+        height: 750,
+      },
+    ]);
+
+    expect(result).toEqual([
+      { id: 'demo', url: '/mock/union/radha-1.svg', width: 600, height: 750 },
+    ]);
+    expect(signedUrl).not.toHaveBeenCalled();
+  });
+
   it('rejects non-boolean visibility and enforces ownership', async () => {
     await expect(
       service.updateVisibility(USER_ID, 'photo-id', {
@@ -445,6 +488,7 @@ function prismaMock() {
   const prisma = {
     user: {
       findUnique: jest.fn().mockResolvedValue({ id: USER_ID }),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     userPhoto,
     $queryRaw: jest.fn().mockResolvedValue([{ id: USER_ID }]),

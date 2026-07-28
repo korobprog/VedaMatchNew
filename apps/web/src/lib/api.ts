@@ -3,6 +3,7 @@ import type {
   AdminVerificationRequest,
   AdminUserDetail,
   AdminUserListResponse,
+  AdminUserReportsResponse,
   MentorVerificationPublicRequest,
   DevoteeVerificationStatus,
   SelfIdentificationState,
@@ -52,6 +53,10 @@ export const getAdminUsers = (query: Record<string, string | undefined>) => {
   }
   const qs = params.toString();
   return apiGet<AdminUserListResponse>(`/admin/users${qs ? `?${qs}` : ""}`);
+};
+export const getAdminUserReports = (status?: string) => {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return apiGet<AdminUserReportsResponse>(`/admin/reports${query}`);
 };
 export const getAdminUser = (id: string) =>
   apiGet<AdminUserDetail>(`/admin/users/${id}`);

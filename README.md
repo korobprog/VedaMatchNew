@@ -21,10 +21,27 @@ docker compose up -d postgres
 cd apps/api
 pnpm prisma migrate dev                    # миграции
 pnpm seed                                  # каталог сервисов
+pnpm seed:dev                              # демо-аккаунты Union (только dev)
 cd ../..
 
 pnpm dev                                   # web:3000 + api:4000
 ```
+
+### Вход по логину и паролю (только dev)
+
+Google OAuth требует реального аккаунта и внешнего редиректа, что мешает
+проверять сценарии Union. Для локальной отладки есть вход по паролю:
+
+1. В `.env`: `DEV_AUTH_ENABLED=true` и `NEXT_PUBLIC_DEV_AUTH=true`.
+2. `pnpm --filter @vedamatch/api seed:dev` — создаёт 12 демо-профилей Union
+   с анкетами, возрастом, активностью и публичными фото
+   (`apps/web/public/mock/union`), плюс демо-администратора
+   `admin@demo.vedamatch.local` для разбора жалоб и проверки фото.
+3. На `/login` появится форма с email демо-аккаунтов; пароль у всех —
+   `DEMO_PASSWORD` (по умолчанию `vedamatch`).
+
+API отвергает `POST /auth/dev-login` при `NODE_ENV=production` независимо от
+значения `DEV_AUTH_ENABLED`, поэтому прод-образы этот вход не открывают.
 
 ### Google OAuth
 
@@ -46,9 +63,15 @@ docker compose --profile prod up -d --build
 |---|---|---|
 | GET | `/auth/google` | Старт входа через Google |
 | GET | `/auth/google/callback` | OAuth callback |
+| POST | `/auth/dev-login` | Вход по email и паролю (только dev) |
+| GET | `/auth/dev-accounts` | Список демо-аккаунтов для формы dev-входа |
 | POST | `/auth/refresh` | Ротация refresh-токена |
 | POST | `/auth/logout` | Выход (отзыв refresh) |
 | POST | `/auth/logout-everywhere` | Выход на всех устройствах |
 | GET | `/users/me` | Профиль текущего пользователя |
 | GET | `/services` | Доступные сервисы каталога |
+| POST | `/profile/photo-verification` | Заявка на проверку фото |
+| POST | `/union/users/:id/block` | Заблокировать пользователя |
+| POST | `/union/users/:id/report` | Пожаловаться на пользователя |
+| GET | `/admin/reports` | Очередь жалоб (только admin) |
 | GET | `/.well-known/jwks.json` | Публичные ключи для валидации JWT другими сервисами |
