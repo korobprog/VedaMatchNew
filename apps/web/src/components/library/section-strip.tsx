@@ -1,7 +1,11 @@
 import Link from "next/link";
 import type { LibraryLocale, LibrarySectionDto } from "@vedamatch/shared";
-import { pickLocalized } from "./i18n";
+import { pickLocalized, t } from "./i18n";
 
+/**
+ * Разделы показываем сеткой, а не горизонтальной лентой: их фиксированные
+ * восемь, и все должны быть видны сразу — без прокрутки и скрытых элементов.
+ */
 export function SectionStrip({
   sections,
   locale,
@@ -12,26 +16,32 @@ export function SectionStrip({
   activeSlug?: string;
 }) {
   return (
-    <nav className="mb-6 flex gap-2 overflow-x-auto pb-1">
+    <nav
+      aria-label={t(locale, "nav.sections")}
+      className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
+    >
       {sections.map((section) => {
         const active = section.slug === activeSlug;
         return (
           <Link
             key={section.id}
             href={`/library/${section.slug}`}
-            className={`glass shrink-0 rounded-xl border px-3 py-2 text-sm ${
+            aria-current={active ? "page" : undefined}
+            className={`glass flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm transition-colors ${
               active
                 ? "border-glass-brd text-text-0"
                 : "border-transparent text-text-1 hover:text-text-0"
             }`}
           >
-            <span className="block font-medium">
+            <span className="font-medium">
               {pickLocalized(locale, {
                 ru: section.titleRu,
                 en: section.titleEn,
               })}
             </span>
-            <span className="text-xs text-text-2">{section.entriesCount}</span>
+            <span className="shrink-0 text-xs text-text-2">
+              {section.entriesCount}
+            </span>
           </Link>
         );
       })}
