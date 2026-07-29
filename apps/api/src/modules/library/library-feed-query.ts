@@ -15,7 +15,8 @@ export function resolveSort(sort: string | undefined): LibraryFeedSort {
  * оставлен, чтобы фаза B добавила ветки `actual`/`popular` без правки вызовов.
  */
 export function feedOrderBy(
-  _sort: LibraryFeedSort,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  sort: LibraryFeedSort,
 ): Prisma.LibraryEntryOrderByWithRelationInput[] {
   return [{ publishedAt: 'desc' }, { id: 'desc' }];
 }

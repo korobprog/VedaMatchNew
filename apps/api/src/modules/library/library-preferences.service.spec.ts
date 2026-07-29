@@ -8,7 +8,11 @@ function prismaMock() {
       upsert: jest
         .fn()
         .mockImplementation(({ create }: { create: Record<string, unknown> }) =>
-          Promise.resolve({ uiLanguage: 'en', contentLanguages: [], ...create }),
+          Promise.resolve({
+            uiLanguage: 'en',
+            contentLanguages: [],
+            ...create,
+          }),
         ),
     },
   };

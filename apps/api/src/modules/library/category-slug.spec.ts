@@ -7,7 +7,10 @@ import {
 describe('buildCategorySlug', () => {
   it('prefers the english title', () => {
     expect(
-      buildCategorySlug({ titleRu: 'Лекции по Гите', titleEn: 'Gita Lectures' }),
+      buildCategorySlug({
+        titleRu: 'Лекции по Гите',
+        titleEn: 'Gita Lectures',
+      }),
     ).toBe('gita-lectures');
   });
 

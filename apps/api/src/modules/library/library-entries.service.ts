@@ -188,7 +188,10 @@ export class LibraryEntriesService {
     const cursor = decodeCursor(filters.cursor);
     const where: Prisma.LibraryEntryWhereInput = { status: 'published' };
 
-    if (filters.type && ENTRY_TYPES.includes(filters.type as LibraryEntryType)) {
+    if (
+      filters.type &&
+      ENTRY_TYPES.includes(filters.type as LibraryEntryType)
+    ) {
       where.type = filters.type as LibraryEntryType;
     }
     if (filters.language) {

@@ -21,7 +21,7 @@ describe('feed cursor', () => {
   it.each([undefined, '', 'garbage', 'eyJ4IjoxfQ=='])(
     'returns null for %s instead of throwing',
     (cursor) => {
-      expect(decodeCursor(cursor as string | undefined)).toBeNull();
+      expect(decodeCursor(cursor)).toBeNull();
     },
   );
 });
@@ -37,6 +37,9 @@ describe('resolveSort', () => {
 
 describe('feedOrderBy', () => {
   it('always adds id as a tie-breaker for stable pagination', () => {
-    expect(feedOrderBy('new')).toEqual([{ publishedAt: 'desc' }, { id: 'desc' }]);
+    expect(feedOrderBy('new')).toEqual([
+      { publishedAt: 'desc' },
+      { id: 'desc' },
+    ]);
   });
 });

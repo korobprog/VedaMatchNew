@@ -101,9 +101,10 @@ describe('LibraryCategoriesService.create', () => {
       titleEn: 'Gita Lectures',
     });
 
-    const { data } = prisma.libraryCategory.create.mock.calls[0][0] as {
-      data: Record<string, unknown>;
-    };
+    const createCalls = prisma.libraryCategory.create.mock.calls as Array<
+      [{ data: Record<string, unknown> }]
+    >;
+    const { data } = createCalls[0][0];
     expect(data.normalizedRu).toBe('лекции по гите');
     expect(data.normalizedEn).toBe('gita lectures');
     expect(data.createdById).toBe('user-1');

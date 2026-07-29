@@ -42,17 +42,16 @@ function prismaMock(overrides: Record<string, unknown> = {}) {
     libraryEntryCategory: {
       createMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
-    $transaction: jest.fn(
-      (callback: (tx: unknown) => unknown) =>
-        callback({
-          libraryEntry,
-          libraryEntryCategory: {
-            createMany: jest.fn().mockResolvedValue({ count: 1 }),
-          },
-          libraryCategory: {
-            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-          },
-        }) as unknown,
+    $transaction: jest.fn((callback: (tx: unknown) => unknown) =>
+      callback({
+        libraryEntry,
+        libraryEntryCategory: {
+          createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        libraryCategory: {
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+      }),
     ),
     $queryRaw: jest.fn().mockResolvedValue([]),
     ...overrides,
@@ -124,7 +123,7 @@ describe('LibraryEntriesService.create', () => {
       status: 409,
       response: {
         code: 'entry_already_exists',
-        entry: expect.objectContaining({ id: 'existing' }),
+        entry: expect.objectContaining({ id: 'existing' }) as object,
       },
     });
   });
@@ -138,9 +137,10 @@ describe('LibraryEntriesService.create', () => {
       validBody({ url: 'https://WWW.Example.com/a/?utm_source=x' }),
     );
 
-    const { data } = prisma.libraryEntry.create.mock.calls[0][0] as {
-      data: Record<string, unknown>;
-    };
+    const createCalls = prisma.libraryEntry.create.mock.calls as Array<
+      [{ data: Record<string, unknown> }]
+    >;
+    const { data } = createCalls[0][0];
     expect(data.urlNormalized).toBe('https://example.com/a');
     expect(data.domain).toBe('example.com');
     expect(data.url).toBe('https://WWW.Example.com/a/?utm_source=x');
@@ -166,10 +166,10 @@ describe('LibraryEntriesService.feed', () => {
 
     await service.feed({ type: 'video', language: 'en' });
 
-    const args = prisma.libraryEntry.findMany.mock.calls[0][0] as {
-      where: Record<string, unknown>;
-      take: number;
-    };
+    const findManyCalls = prisma.libraryEntry.findMany.mock.calls as Array<
+      [{ where: Record<string, unknown>; take: number }]
+    >;
+    const args = findManyCalls[0][0];
     expect(args.where).toMatchObject({
       status: 'published',
       type: 'video',

@@ -1,14 +1,13 @@
-/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
-const {
-  librarySections,
-} = require('../../../prisma/library-sections-data.js') as {
-  librarySections: Array<{
-    slug: string;
-    titleRu: string;
-    titleEn: string;
-    position: number;
-  }>;
-};
+/* eslint-disable @typescript-eslint/no-require-imports */
+const { librarySections } =
+  require('../../../prisma/library-sections-data.js') as {
+    librarySections: Array<{
+      slug: string;
+      titleRu: string;
+      titleEn: string;
+      position: number;
+    }>;
+  };
 
 describe('library seed sections', () => {
   it('defines eight starter sections', () => {
