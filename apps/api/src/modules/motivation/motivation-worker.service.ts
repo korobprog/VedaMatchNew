@@ -1,4 +1,10 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MotivationReviewStatus } from '@prisma/client';
 import Redis from 'ioredis';
@@ -23,21 +29,40 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
     @Optional() private readonly discovery?: QuoteDiscoveryService,
   ) {
     const host = config.get<string>('REDIS_HOST');
-    this.redis = host ? new Redis({ host, port: Number(config.get('REDIS_PORT') || 6379), db: Number(config.get('REDIS_DB') || 0), password: config.get<string>('REDIS_PASSWORD') || undefined, lazyConnect: true, maxRetriesPerRequest: 1 }) : null;
+    this.redis = host
+      ? new Redis({
+          host,
+          port: Number(config.get('REDIS_PORT') || 6379),
+          db: Number(config.get('REDIS_DB') || 0),
+          password: config.get<string>('REDIS_PASSWORD') || undefined,
+          lazyConnect: true,
+          maxRetriesPerRequest: 1,
+        })
+      : null;
   }
 
   async onModuleInit() {
-    if (this.redis) await this.redis.connect().catch((error) => this.logger.warn(`Redis unavailable: ${String(error)}`));
+    if (this.redis)
+      await this.redis
+        .connect()
+        .catch((error) =>
+          this.logger.warn(`Redis unavailable: ${String(error)}`),
+        );
     await this.retryTodaysFailedJobs();
     this.timer = setInterval(() => void this.tick(), 30_000);
     this.timer.unref();
     void this.tick();
   }
 
-  async onModuleDestroy() { if (this.timer) clearInterval(this.timer); if (this.redis?.status === 'ready') await this.redis.quit(); }
+  async onModuleDestroy() {
+    if (this.timer) clearInterval(this.timer);
+    if (this.redis?.status === 'ready') await this.redis.quit();
+  }
 
   private async retryTodaysFailedJobs() {
-    const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const today = new Date(
+      `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
+    );
     await this.prisma.motivationPost.updateMany({
       where: {
         contentDate: today,
@@ -62,15 +87,23 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
     const lockKey = 'motivation:worker:lease';
     const token = crypto.randomUUID();
     if (this.redis?.status === 'ready') {
-      const acquired = await this.redis.set(lockKey, token, 'PX', 300_000, 'NX').catch(() => null);
-      if (!acquired) { this.running = false; return; }
+      const acquired = await this.redis
+        .set(lockKey, token, 'PX', 300_000, 'NX')
+        .catch(() => null);
+      if (!acquired) {
+        this.running = false;
+        return;
+      }
     }
     try {
       await this.recoverExpiredJobs();
       try {
         await this.ensureDailyDiscovery();
       } catch (error) {
-        this.logger.error('Motivation daily discovery failed', error instanceof Error ? error.stack : undefined);
+        this.logger.error(
+          'Motivation daily discovery failed',
+          error instanceof Error ? error.stack : undefined,
+        );
       }
       const post = await this.prisma.motivationPost.findFirst({
         where: {
@@ -93,14 +126,29 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
           textApprovedAt: { not: null },
           imagePrompt: { not: null },
         },
-        data: { status: 'generating', generationStage: 'image', attemptCount: { increment: 1 } },
+        data: {
+          status: 'generating',
+          generationStage: 'image',
+          attemptCount: { increment: 1 },
+        },
       });
       if (!claimed.count) return;
       await this.process(post.id);
     } catch (error) {
-      this.logger.error('Motivation worker tick failed', error instanceof Error ? error.stack : undefined);
+      this.logger.error(
+        'Motivation worker tick failed',
+        error instanceof Error ? error.stack : undefined,
+      );
     } finally {
-      if (this.redis?.status === 'ready') await this.redis.eval("if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end", 1, lockKey, token).catch(() => undefined);
+      if (this.redis?.status === 'ready')
+        await this.redis
+          .eval(
+            "if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end",
+            1,
+            lockKey,
+            token,
+          )
+          .catch(() => undefined);
       this.running = false;
     }
   }
@@ -117,7 +165,11 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
         updatedAt: { lt: expiredAt },
         attemptCount: { lt: 3 },
       },
-      data: { status: 'draft', generationStage: 'image_queued', generationErrorCode: 'lease_expired' },
+      data: {
+        status: 'draft',
+        generationStage: 'image_queued',
+        generationErrorCode: 'lease_expired',
+      },
     });
     await this.prisma.motivationPost.updateMany({
       where: {
@@ -129,7 +181,11 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
         updatedAt: { lt: expiredAt },
         attemptCount: { gte: 3 },
       },
-      data: { reviewStatus: MotivationReviewStatus.failed, status: 'failed', generationErrorCode: 'lease_expired' },
+      data: {
+        reviewStatus: MotivationReviewStatus.failed,
+        status: 'failed',
+        generationErrorCode: 'lease_expired',
+      },
     });
   }
 
@@ -138,31 +194,58 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
     const dateKey = new Date().toISOString().slice(0, 10);
     const idempotencyKey = `motivation:discovery:${dateKey}`;
     if (this.lastDiscoveryDate === dateKey) return;
-    if (this.redis?.status === 'ready' && await this.redis.get(idempotencyKey).catch(() => null)) return;
+    if (
+      this.redis?.status === 'ready' &&
+      (await this.redis.get(idempotencyKey).catch(() => null))
+    )
+      return;
 
-    const count = Number(this.config.get('MOTIVATION_DAILY_CANDIDATE_COUNT') || 8);
+    const count = Number(
+      this.config.get('MOTIVATION_DAILY_CANDIDATE_COUNT') || 8,
+    );
     const today = new Date(`${dateKey}T00:00:00.000Z`);
     const quotes = await this.discovery.discoverDaily(today, count);
     for (const quote of quotes) await this.copy.prepareCandidate(quote.id);
     if (this.redis?.status === 'ready') {
-      await this.redis.set(idempotencyKey, 'done', 'EX', 8 * 24 * 60 * 60).catch((error) => {
-        this.logger.warn(`Unable to store Motivation discovery idempotency key: ${String(error)}`);
-      });
+      await this.redis
+        .set(idempotencyKey, 'done', 'EX', 8 * 24 * 60 * 60)
+        .catch((error) => {
+          this.logger.warn(
+            `Unable to store Motivation discovery idempotency key: ${String(error)}`,
+          );
+        });
     }
     this.lastDiscoveryDate = dateKey;
   }
 
   private async process(id: string) {
     const post = await this.prisma.motivationPost.findUnique({ where: { id } });
-    if (!post || post.reviewStatus !== MotivationReviewStatus.image_queued || !post.textApprovedAt || !post.imagePrompt) return;
+    if (
+      !post ||
+      post.reviewStatus !== MotivationReviewStatus.image_queued ||
+      !post.textApprovedAt ||
+      !post.imagePrompt
+    )
+      return;
     try {
       this.logger.log(`Generating Motivation image ${post.slug}`);
-      const image = await this.generation.generateApprovedImage({ imagePrompt: post.imagePrompt, textApprovedAt: post.textApprovedAt });
+      const image = await this.generation.generateApprovedImage({
+        imagePrompt: post.imagePrompt,
+        textApprovedAt: post.textApprovedAt,
+      });
       const version = Date.now();
       const baseKey = `motivation/${post.contentDate.toISOString().slice(0, 10)}/${post.id}/v${version}`;
-      const imageUrl = await this.generation.uploadStory(`${baseKey}.png`, image);
+      const imageUrl = await this.generation.uploadStory(
+        `${baseKey}.png`,
+        image,
+      );
       await this.prisma.motivationPost.updateMany({
-        where: { id, reviewStatus: MotivationReviewStatus.image_queued, status: 'generating', generationStage: 'image' },
+        where: {
+          id,
+          reviewStatus: MotivationReviewStatus.image_queued,
+          status: 'generating',
+          generationStage: 'image',
+        },
         data: {
           reviewStatus: MotivationReviewStatus.image_review,
           status: 'draft',
@@ -174,20 +257,39 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
         },
       });
     } catch (error) {
-      const current = await this.prisma.motivationPost.findUnique({ where: { id }, select: { attemptCount: true, reviewStatus: true, status: true } });
-      if (current?.reviewStatus === MotivationReviewStatus.image_queued && current.status === 'generating') {
+      const current = await this.prisma.motivationPost.findUnique({
+        where: { id },
+        select: { attemptCount: true, reviewStatus: true, status: true },
+      });
+      if (
+        current?.reviewStatus === MotivationReviewStatus.image_queued &&
+        current.status === 'generating'
+      ) {
         const retryable = current.attemptCount < 3;
         await this.prisma.motivationPost.updateMany({
-          where: { id, reviewStatus: MotivationReviewStatus.image_queued, status: 'generating', generationStage: 'image' },
+          where: {
+            id,
+            reviewStatus: MotivationReviewStatus.image_queued,
+            status: 'generating',
+            generationStage: 'image',
+          },
           data: {
-            reviewStatus: retryable ? MotivationReviewStatus.image_queued : MotivationReviewStatus.failed,
+            reviewStatus: retryable
+              ? MotivationReviewStatus.image_queued
+              : MotivationReviewStatus.failed,
             status: retryable ? 'draft' : 'failed',
             generationStage: retryable ? 'image_queued' : 'image',
-            generationErrorCode: error instanceof Error ? error.message.slice(0, 200) : 'generation_failed',
+            generationErrorCode:
+              error instanceof Error
+                ? error.message.slice(0, 200)
+                : 'generation_failed',
           },
         });
       }
-      this.logger.error(`Motivation image generation failed for ${id}`, error instanceof Error ? error.stack : undefined);
+      this.logger.error(
+        `Motivation image generation failed for ${id}`,
+        error instanceof Error ? error.stack : undefined,
+      );
     }
   }
 }

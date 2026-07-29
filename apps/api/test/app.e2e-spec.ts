@@ -11,23 +11,20 @@ describe('Gitabase API (e2e)', () => {
     await request(apiURL).get('/gitabase/library').expect(401);
   });
 
-  it(
-    'returns the Gitabase library for TEST_ACCESS_TOKEN',
-    async () => {
-      const response = await request(apiURL)
-        .get('/gitabase/library')
-        .set('Authorization', `Bearer ${testAccessToken}`)
-        .expect(200);
+  it('returns the Gitabase library for TEST_ACCESS_TOKEN', async () => {
+    const response = await request(apiURL)
+      .get('/gitabase/library')
+      .set('Authorization', `Bearer ${testAccessToken}`)
+      .expect(200);
 
-      const body: unknown = response.body;
-      expect(isRecord(body)).toBe(true);
-      if (!isRecord(body)) {
-        throw new Error('Gitabase library must be an object');
-      }
-      expect(typeof body.formatVersion).toBe('number');
-      expect(Array.isArray(body.books)).toBe(true);
-    },
-  );
+    const body: unknown = response.body;
+    expect(isRecord(body)).toBe(true);
+    if (!isRecord(body)) {
+      throw new Error('Gitabase library must be an object');
+    }
+    expect(typeof body.formatVersion).toBe('number');
+    expect(Array.isArray(body.books)).toBe(true);
+  });
 });
 
 function requiredEnvironmentVariable(name: 'TEST_ACCESS_TOKEN'): string {

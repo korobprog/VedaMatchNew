@@ -1,4 +1,8 @@
-import { BadGatewayException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import * as cheerio from 'cheerio';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MotivationCopyService } from './motivation-copy.service';
@@ -19,11 +23,16 @@ export class MotivationSourceFetchService {
   ) {}
 
   async fetchByWatchId(watchId: string): Promise<number> {
-    const watch = await this.prisma.motivationSourceWatch.findUnique({ where: { id: watchId } });
+    const watch = await this.prisma.motivationSourceWatch.findUnique({
+      where: { id: watchId },
+    });
     if (!watch) throw new NotFoundException('Source watch not found');
 
     const text = await this.fetchPageText(watch.url);
-    const extracted = await this.generation.extractQuotesFromSource(text, watch.url);
+    const extracted = await this.generation.extractQuotesFromSource(
+      text,
+      watch.url,
+    );
 
     let ingestedCount = 0;
     for (const item of extracted) {
@@ -58,12 +67,17 @@ export class MotivationSourceFetchService {
       headers: { 'user-agent': 'VedaMatch-Motivation/1.0' },
       signal: AbortSignal.timeout(20_000),
     });
-    if (!response.ok) throw new BadGatewayException(`Source request failed: ${response.status}`);
+    if (!response.ok)
+      throw new BadGatewayException(
+        `Source request failed: ${response.status}`,
+      );
     assertSafeFetchUrl(response.url || url);
     const declaredLength = Number(response.headers.get('content-length') || 0);
-    if (declaredLength > MAX_RESPONSE_BYTES) throw new BadGatewayException('Source response exceeds 2 MB');
+    if (declaredLength > MAX_RESPONSE_BYTES)
+      throw new BadGatewayException('Source response exceeds 2 MB');
     const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > MAX_RESPONSE_BYTES) throw new BadGatewayException('Source response exceeds 2 MB');
+    if (bytes.byteLength > MAX_RESPONSE_BYTES)
+      throw new BadGatewayException('Source response exceeds 2 MB');
     const html = new TextDecoder().decode(bytes);
     const $ = cheerio.load(html);
     $('script, style, noscript').remove();

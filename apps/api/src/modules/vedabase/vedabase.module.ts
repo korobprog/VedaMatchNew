@@ -10,7 +10,12 @@ import { VedabaseContentService } from './vedabase-content.service';
 @Module({
   imports: [AuthModule],
   controllers: [VedabaseContentController, GitabaseSyncController],
-  providers: [VedabaseContentRepository, VedabaseContentService, GitabaseSyncService, GitabaseUserStateService],
+  providers: [
+    VedabaseContentRepository,
+    VedabaseContentService,
+    GitabaseSyncService,
+    GitabaseUserStateService,
+  ],
   exports: [VedabaseContentRepository],
 })
 export class VedabaseModule {}

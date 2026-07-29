@@ -127,6 +127,13 @@ function withStage(
   };
 }
 
+function withGender(
+  source: ReturnType<typeof profile>,
+  gender: 'male' | 'female' | null,
+) {
+  return { ...source, user: { ...source.user, gender } };
+}
+
 function connection(status: 'pending' | 'accepted' = 'accepted') {
   return {
     id: 'connection-1',
@@ -284,6 +291,43 @@ describe('UnionProfileService', () => {
       verifiedOnly: true,
     });
     expect(verified.items.map((item) => item.user.id)).toEqual(['confirmed']);
+  });
+
+  it('filters recommendations by gender and hides profiles without one', async () => {
+    const man = withGender(profile('man'), 'male');
+    const woman = withGender(profile('woman'), 'female');
+    const unset = withGender(profile('unset'), null);
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([man, woman, unset]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const all = await service.getRecommendations('me');
+    expect(all.items.map((item) => item.user.id)).toEqual([
+      'man',
+      'woman',
+      'unset',
+    ]);
+
+    const females = await service.getRecommendations('me', {
+      gender: 'female',
+    });
+    expect(females.items.map((item) => item.user.id)).toEqual(['woman']);
+
+    const males = await service.getRecommendations('me', { gender: 'male' });
+    expect(males.items.map((item) => item.user.id)).toEqual(['man']);
+  });
+
+  it('ignores an unsupported gender value instead of returning nothing', async () => {
+    const man = withGender(profile('man'), 'male');
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([man]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me', {
+      gender: 'other' as never,
+    });
+
+    expect(result.items.map((item) => item.user.id)).toEqual(['man']);
   });
 
   it('ranks a confirmed devotee above an equally compatible profile', async () => {

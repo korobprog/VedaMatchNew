@@ -13,6 +13,11 @@ enum Role {
   service_admin
 }
 
+enum Gender {
+  male
+  female
+}
+
 enum ServiceStatus {
   active
   coming_soon
@@ -143,6 +148,8 @@ model User {
   avatarKey                 String?
   // Дата рождения; наружу отдаётся только вычисленный возраст
   birthDate                 DateTime?                  @db.Date
+  // Пол. Необязателен: у существующих аккаунтов его нет, и указывать никто не обязан.
+  gender                    Gender?
   homeLocation              Json?
   socialLinks               Json?
   messengers                Json?

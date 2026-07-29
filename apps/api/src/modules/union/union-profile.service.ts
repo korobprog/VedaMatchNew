@@ -391,6 +391,9 @@ export class UnionProfileService {
       )
         ? filters.stage
         : undefined,
+      gender: ['male', 'female'].includes(String(filters.gender))
+        ? filters.gender
+        : undefined,
       ageMin: clampInteger(filters.ageMin, MIN_PROFILE_AGE, MAX_PROFILE_AGE),
       ageMax: clampInteger(filters.ageMax, MIN_PROFILE_AGE, MAX_PROFILE_AGE),
       verifiedOnly: filters.verifiedOnly === true,
@@ -417,6 +420,8 @@ export class UnionProfileService {
       return false;
     }
     if (filters.stage && user.spiritualStage !== filters.stage) return false;
+    // Пол не указан — профиль не проходит явно заданный фильтр, как и с возрастом.
+    if (filters.gender && user.gender !== filters.gender) return false;
     if (filters.verifiedOnly && !isVerifiedDevotee(user)) return false;
     if (filters.photoVerifiedOnly && user.photoVerifiedAt === null)
       return false;

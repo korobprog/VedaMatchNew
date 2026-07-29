@@ -28,6 +28,12 @@ import { MotivationSourceFetchService } from './motivation-source-fetch.service'
     MotivationAuthorSearchService,
     MotivationSourceFetchService,
   ],
-  exports: [MotivationService, QuoteVerificationService, QuoteDiscoveryService, MotivationCopyService, MotivationModerationService],
+  exports: [
+    MotivationService,
+    QuoteVerificationService,
+    QuoteDiscoveryService,
+    MotivationCopyService,
+    MotivationModerationService,
+  ],
 })
 export class MotivationModule {}

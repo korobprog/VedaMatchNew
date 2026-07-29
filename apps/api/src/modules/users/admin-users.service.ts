@@ -145,6 +145,7 @@ export class AdminUsersService {
         avatarKey: user.avatarKey,
         birthDate: toBirthDateInput(user.birthDate),
         age: calculateAge(user.birthDate),
+        gender: user.gender,
         photoVerification: toPhotoVerificationState(user),
         homeLocation: parseLocation(user.homeLocation),
         socialLinks: parseSocialLinks(user.socialLinks),
