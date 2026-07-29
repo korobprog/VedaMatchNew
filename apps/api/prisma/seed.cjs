@@ -68,7 +68,7 @@ const services = [
     description:
       'Общая база полезных материалов: статьи, видео, книги, курсы и каналы',
     url: '/library',
-    status: 'coming_soon',
+    status: 'active',
     category: 'knowledge',
     public: true,
     seekerVisible: true,
