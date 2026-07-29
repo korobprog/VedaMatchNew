@@ -197,6 +197,9 @@ model User {
   supportTickets              SupportTicket[]              @relation("SupportTicketsOwned")
   supportTicketsAssigned      SupportTicket[]              @relation("SupportTicketsAssigned")
   supportTicketMessages       SupportTicketMessage[]       @relation("SupportTicketMessagesAuthored")
+  libraryCategories           LibraryCategory[]            @relation("LibraryCategoryAuthor")
+  libraryEntries              LibraryEntry[]               @relation("LibraryEntryAuthor")
+  libraryPreference           LibraryPreference?
 }
 
 model UserPhoto {
@@ -844,4 +847,157 @@ model UnionChatMessage {
 
   @@index([requestId, createdAt])
   @@index([fromUserId])
+}
+
+// ===== Library service =====
+
+enum LibraryEntryType {
+  website
+  article
+  video
+  audio
+  book
+  course
+  app
+  telegram_channel
+  community
+  other
+}
+
+enum LibraryEntryStatus {
+  published
+  hidden_by_reports
+  removed_by_admin
+}
+
+enum LibraryEnrichmentStatus {
+  pending
+  queued
+  ready
+  failed
+}
+
+enum LibraryCategoryStatus {
+  active
+  hidden_by_reports
+  merged
+  removed
+}
+
+model LibrarySection {
+  id            String   @id @default(uuid())
+  slug          String   @unique
+  titleRu       String
+  titleEn       String
+  descriptionRu String?
+  descriptionEn String?
+  iconKey       String?
+  position      Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  categories LibraryCategory[]
+
+  @@index([position])
+}
+
+model LibraryCategory {
+  id               String                @id @default(uuid())
+  sectionId        String
+  section          LibrarySection        @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  slug             String
+  titleRu          String?
+  titleEn          String?
+  descriptionRu    String?
+  descriptionEn    String?
+  normalizedRu     String                @default("")
+  normalizedEn     String                @default("")
+  createdById      String?
+  createdBy        User?                 @relation("LibraryCategoryAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  status           LibraryCategoryStatus @default(active)
+  mergedIntoId     String?
+  mergedInto       LibraryCategory?      @relation("LibraryCategoryMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom       LibraryCategory[]     @relation("LibraryCategoryMerge")
+  entriesCount     Int                   @default(0)
+  followersCount   Int                   @default(0)
+  openReportsCount Int                   @default(0)
+  needsReview      Boolean               @default(false)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  entries LibraryEntryCategory[]
+
+  @@unique([sectionId, slug])
+  @@index([sectionId, status])
+  @@index([status, entriesCount])
+}
+
+model LibraryEntry {
+  id               String                  @id @default(uuid())
+  url              String
+  urlNormalized    String                  @unique
+  canonicalUrl     String?
+  domain           String
+  type             LibraryEntryType
+  contentLanguage  String                  @default("ru") @db.VarChar(8)
+  titleRu          String?
+  titleEn          String?
+  descriptionRu    String?
+  descriptionEn    String?
+  ogTitle          String?
+  ogDescription    String?
+  ogSiteName       String?
+  faviconUrl       String?
+  previewKey       String?
+  previewUrl       String?
+  enrichmentStatus LibraryEnrichmentStatus @default(pending)
+  enrichmentError  String?
+  enrichedAt       DateTime?
+  httpStatus       Int?
+  lastCheckedAt    DateTime?
+  addedById        String?
+  addedBy          User?                   @relation("LibraryEntryAuthor", fields: [addedById], references: [id], onDelete: SetNull)
+  status           LibraryEntryStatus      @default(published)
+  needsReview      Boolean                 @default(false)
+  usefulCount      Int                     @default(0)
+  notUsefulCount   Int                     @default(0)
+  uniqueClickCount Int                     @default(0)
+  bookmarkCount    Int                     @default(0)
+  openReportsCount Int                     @default(0)
+  rankScore        Float                   @default(0)
+  /// Generated column, создаётся SQL-миграцией. Prisma её не пишет.
+  searchVector     Unsupported("tsvector")?
+  publishedAt      DateTime                @default(now())
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  categories LibraryEntryCategory[]
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([status, rankScore(sort: Desc)])
+  @@index([type])
+  @@index([contentLanguage])
+  @@index([domain])
+  @@index([addedById])
+}
+
+model LibraryEntryCategory {
+  entryId    String
+  entry      LibraryEntry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   LibraryCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  addedById  String?
+  createdAt  DateTime        @default(now())
+
+  @@id([entryId, categoryId])
+  @@index([categoryId])
+}
+
+model LibraryPreference {
+  userId           String   @id
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  uiLanguage       String   @default("ru") @db.VarChar(8)
+  contentLanguages String[] @default([])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }

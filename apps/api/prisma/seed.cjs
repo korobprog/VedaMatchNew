@@ -2,6 +2,8 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
+const { librarySections } = require('./library-sections-data.js');
+
 const services = [
   {
     slug: 'union',
@@ -60,6 +62,21 @@ const services = [
     devoteeSelfIdentifiedVisible: false,
     devoteeVerifiedVisible: true,
   },
+  {
+    slug: 'library',
+    name: 'Библиотека ссылок',
+    description:
+      'Общая база полезных материалов: статьи, видео, книги, курсы и каналы',
+    url: '/library',
+    status: 'active',
+    category: 'knowledge',
+    public: true,
+    seekerVisible: true,
+    practitionerVisible: true,
+    yogiVisible: true,
+    devoteeSelfIdentifiedVisible: true,
+    devoteeVerifiedVisible: true,
+  },
 ];
 
 async function main() {
@@ -79,8 +96,17 @@ async function main() {
         create: service,
       });
     }
+    for (const section of librarySections) {
+      await transaction.librarySection.upsert({
+        where: { slug: section.slug },
+        update: section,
+        create: section,
+      });
+    }
   });
-  console.log(`Seeded ${services.length} services`);
+  console.log(
+    `Seeded ${services.length} services and ${librarySections.length} library sections`,
+  );
 }
 
 main()

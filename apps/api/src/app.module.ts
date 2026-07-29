@@ -13,6 +13,7 @@ import { MotivationModule } from './modules/motivation/motivation.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
 import { SupportModule } from './modules/support/support.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { LibraryModule } from './modules/library/library.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { BillingModule } from './modules/billing/billing.module';
     ModerationModule,
     SupportModule,
     BillingModule,
+    LibraryModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

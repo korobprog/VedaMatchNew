@@ -1,0 +1,58 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import type { LibraryEntryDto } from "@vedamatch/shared";
+import { EntryCard } from "./entry-card";
+
+const entry: LibraryEntryDto = {
+  id: "entry-1",
+  url: "https://example.com/a",
+  domain: "example.com",
+  type: "video",
+  contentLanguage: "ru",
+  titleRu: "Лекция по Гите",
+  titleEn: null,
+  descriptionRu: "Разбор второй главы",
+  descriptionEn: null,
+  faviconUrl: null,
+  previewUrl: null,
+  status: "published",
+  usefulCount: 4,
+  uniqueClickCount: 11,
+  publishedAt: "2026-07-29T10:00:00.000Z",
+  categories: [
+    {
+      id: "category-1",
+      slug: "gita",
+      sectionSlug: "philosophy",
+      titleRu: "Гита",
+      titleEn: null,
+    },
+  ],
+  addedBy: { id: "user-1", name: "Тест" },
+};
+
+describe("EntryCard", () => {
+  it("renders the localized title, domain and type badge", () => {
+    render(<EntryCard entry={entry} locale="ru" />);
+
+    expect(screen.getByText("Лекция по Гите")).toBeDefined();
+    expect(screen.getByText("example.com")).toBeDefined();
+    expect(screen.getByText("Видео")).toBeDefined();
+  });
+
+  it("falls back to the russian title in english locale", () => {
+    render(<EntryCard entry={entry} locale="en" />);
+
+    expect(screen.getByText("Лекция по Гите")).toBeDefined();
+    expect(screen.getByText("Video")).toBeDefined();
+  });
+
+  it("opens the external url in a new tab", () => {
+    render(<EntryCard entry={entry} locale="ru" />);
+    const link = screen.getByRole("link", { name: /Лекция по Гите/ });
+
+    expect(link.getAttribute("href")).toBe("https://example.com/a");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+  });
+});
