@@ -1,0 +1,164 @@
+import type { LibraryEntryType, LibraryLocale } from "@vedamatch/shared";
+
+const ui = {
+  ru: {
+    "service.title": "Библиотека ссылок",
+    "service.subtitle":
+      "Общая база полезных материалов: пополняйте её и находите нужное быстрее",
+    "nav.sections": "Разделы",
+    "nav.add": "Добавить ссылку",
+    "filters.title": "Фильтры",
+    "filters.section": "Раздел",
+    "filters.category": "Категория",
+    "filters.type": "Тип материала",
+    "filters.language": "Язык материала",
+    "filters.sort": "Сортировка",
+    "filters.search": "Поиск",
+    "filters.reset": "Сбросить",
+    "filters.all": "Все",
+    "sort.new": "Новое",
+    "sort.actual": "Актуальное",
+    "sort.popular": "Популярное",
+    "feed.empty": "Пока ничего не добавлено",
+    "feed.more": "Показать ещё",
+    "feed.loading": "Загружаем…",
+    "entry.open": "Открыть",
+    "entry.addedBy": "Добавил",
+    "entry.categories": "Категории",
+    "entry.useful": "Полезно",
+    "entry.clicks": "Переходов",
+    "entry.notFound": "Ссылка не найдена",
+    "add.title": "Добавить ссылку",
+    "add.url": "Адрес ссылки",
+    "add.type": "Тип материала",
+    "add.language": "Язык материала",
+    "add.titleRu": "Заголовок по-русски",
+    "add.titleEn": "Заголовок по-английски",
+    "add.descriptionRu": "Описание по-русски",
+    "add.descriptionEn": "Описание по-английски",
+    "add.categories": "Категории",
+    "add.submit": "Добавить",
+    "add.titleRequired": "Заполните заголовок хотя бы на одном языке",
+    "add.categoryRequired": "Выберите хотя бы одну категорию",
+    "add.duplicate": "Такая ссылка уже есть в библиотеке",
+    "add.duplicateOpen": "Открыть существующую запись",
+    "add.unsupportedUrl": "Ссылка должна начинаться с http:// или https://",
+    "add.failed": "Не удалось добавить ссылку, попробуйте позже",
+    "category.create": "Создать категорию",
+    "category.titleRu": "Название по-русски",
+    "category.titleEn": "Название по-английски",
+    "category.similar": "Похожие категории уже есть",
+    "category.similarHint":
+      "Проверьте список: возможно, нужная категория уже создана",
+    "category.forceCreate": "Всё равно создать новую",
+    "category.empty": "В этом разделе ещё нет категорий",
+    "category.entries": "материалов",
+    "locale.switch": "Язык интерфейса",
+  },
+  en: {
+    "service.title": "Links library",
+    "service.subtitle":
+      "A shared base of useful materials: contribute and find things faster",
+    "nav.sections": "Sections",
+    "nav.add": "Add a link",
+    "filters.title": "Filters",
+    "filters.section": "Section",
+    "filters.category": "Category",
+    "filters.type": "Material type",
+    "filters.language": "Material language",
+    "filters.sort": "Sorting",
+    "filters.search": "Search",
+    "filters.reset": "Reset",
+    "filters.all": "All",
+    "sort.new": "Newest",
+    "sort.actual": "Trending",
+    "sort.popular": "Popular",
+    "feed.empty": "Nothing here yet",
+    "feed.more": "Show more",
+    "feed.loading": "Loading…",
+    "entry.open": "Open",
+    "entry.addedBy": "Added by",
+    "entry.categories": "Categories",
+    "entry.useful": "Useful",
+    "entry.clicks": "Clicks",
+    "entry.notFound": "Link not found",
+    "add.title": "Add a link",
+    "add.url": "Link address",
+    "add.type": "Material type",
+    "add.language": "Material language",
+    "add.titleRu": "Russian title",
+    "add.titleEn": "English title",
+    "add.descriptionRu": "Russian description",
+    "add.descriptionEn": "English description",
+    "add.categories": "Categories",
+    "add.submit": "Add",
+    "add.titleRequired": "Fill in the title in at least one language",
+    "add.categoryRequired": "Pick at least one category",
+    "add.duplicate": "This link is already in the library",
+    "add.duplicateOpen": "Open the existing entry",
+    "add.unsupportedUrl": "The link must start with http:// or https://",
+    "add.failed": "Could not add the link, please try again later",
+    "category.create": "Create a category",
+    "category.titleRu": "Russian name",
+    "category.titleEn": "English name",
+    "category.similar": "Similar categories already exist",
+    "category.similarHint":
+      "Check the list: the category you need may already be there",
+    "category.forceCreate": "Create a new one anyway",
+    "category.empty": "This section has no categories yet",
+    "category.entries": "materials",
+    "locale.switch": "Interface language",
+  },
+} as const;
+
+export type LibraryTextKey = keyof (typeof ui)["ru"];
+
+const entryTypes: Record<LibraryLocale, Record<LibraryEntryType, string>> = {
+  ru: {
+    website: "Сайт",
+    article: "Статья",
+    video: "Видео",
+    audio: "Аудио",
+    book: "Книга",
+    course: "Курс",
+    app: "Приложение",
+    telegram_channel: "Telegram-канал",
+    community: "Община",
+    other: "Другое",
+  },
+  en: {
+    website: "Website",
+    article: "Article",
+    video: "Video",
+    audio: "Audio",
+    book: "Book",
+    course: "Course",
+    app: "App",
+    telegram_channel: "Telegram channel",
+    community: "Community",
+    other: "Other",
+  },
+};
+
+export const libraryDictionary = ui;
+
+export function t(locale: LibraryLocale, key: LibraryTextKey): string {
+  return ui[locale][key] ?? key;
+}
+
+/** Контент показываем на текущем языке, но пустоту не показываем никогда. */
+export function pickLocalized(
+  locale: LibraryLocale,
+  value: { ru: string | null; en: string | null },
+): string {
+  const primary = locale === "en" ? value.en : value.ru;
+  const fallback = locale === "en" ? value.ru : value.en;
+  return primary?.trim() || fallback?.trim() || "";
+}
+
+export function entryTypeLabel(
+  locale: LibraryLocale,
+  type: LibraryEntryType,
+): string {
+  return entryTypes[locale][type];
+}
