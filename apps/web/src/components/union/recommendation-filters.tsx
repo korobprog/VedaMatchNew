@@ -160,6 +160,16 @@ export function RecommendationFilters({
           ]}
         />
         <Select
+          name="gender"
+          label="Пол"
+          defaultValue={first(params.gender)}
+          options={[
+            ["", "Любой"],
+            ["male", "Мужской"],
+            ["female", "Женский"],
+          ]}
+        />
+        <Select
           name="format"
           label="Формат"
           defaultValue={first(params.format)}
@@ -370,6 +380,7 @@ function Select({
 const filterKeys = [
   "intention",
   "stage",
+  "gender",
   "format",
   "country",
   "city",

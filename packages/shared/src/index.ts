@@ -27,6 +27,9 @@ export type DevoteeVerificationStatus =
 
 export type StageChangeActor = 'system' | 'user' | 'admin';
 
+/** Пол. Необязателен: у части аккаунтов он не заполнен. */
+export type Gender = 'male' | 'female';
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -36,6 +39,7 @@ export interface UserProfile {
   /** `YYYY-MM-DD`; отдаётся только владельцу профиля */
   birthDate: string | null;
   age: number | null;
+  gender: Gender | null;
   photoVerification: PhotoVerificationState;
   homeLocation: ProfileLocation | null;
   socialLinks: ProfileSocialLinks;
@@ -135,6 +139,7 @@ export interface ProfileMessengers {
 
 export interface ProfileUpdateRequest {
   birthDate?: string | null;
+  gender?: Gender | null;
   homeLocation?: ProfileLocation | null;
   socialLinks?: ProfileSocialLinks;
   messengers?: ProfileMessengers;

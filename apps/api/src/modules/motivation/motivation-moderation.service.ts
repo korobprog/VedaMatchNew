@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { MotivationReviewStatus, MotivationVisualStyle } from '@prisma/client';
 import type { Role } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -18,18 +24,33 @@ const approvedStyles = new Set<string>(Object.values(MotivationVisualStyle));
 export class MotivationModerationService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async approveText(role: Role, actorId: string, postId: string, styleOverride?: MotivationVisualStyle) {
+  async approveText(
+    role: Role,
+    actorId: string,
+    postId: string,
+    styleOverride?: MotivationVisualStyle,
+  ) {
     this.assertAdmin(role);
     this.assertApprovedStyle(styleOverride);
     const post = await this.loadPost(postId);
-    if (post.reviewStatus !== MotivationReviewStatus.text_review) throw new ConflictException('Text is not ready for review');
-    const direction = createImageDirection({
-      meaning: post.translations[0]?.text ?? post.quote?.contextExcerpt ?? post.quote?.originalText ?? post.category,
-      category: post.category,
-      author: post.quote?.author ?? post.attributionSpeaker,
-      work: post.quote?.work ?? post.attributionWork,
-      profileTypes: post.quote?.profiles.map((profile) => profile.profileType) ?? [post.profileType],
-    }, styleOverride);
+    if (post.reviewStatus !== MotivationReviewStatus.text_review)
+      throw new ConflictException('Text is not ready for review');
+    const direction = createImageDirection(
+      {
+        meaning:
+          post.translations[0]?.text ??
+          post.quote?.contextExcerpt ??
+          post.quote?.originalText ??
+          post.category,
+        category: post.category,
+        author: post.quote?.author ?? post.attributionSpeaker,
+        work: post.quote?.work ?? post.attributionWork,
+        profileTypes: post.quote?.profiles.map(
+          (profile) => profile.profileType,
+        ) ?? [post.profileType],
+      },
+      styleOverride,
+    );
     const now = new Date();
     return this.transition({
       postId,
@@ -53,8 +74,10 @@ export class MotivationModerationService {
   async approveImage(role: Role, actorId: string, postId: string) {
     this.assertAdmin(role);
     const post = await this.loadPost(postId);
-    if (post.reviewStatus !== MotivationReviewStatus.image_review) throw new ConflictException('Image is not ready for review');
-    if (!post.imageUrl) throw new ConflictException('Image is not ready for review');
+    if (post.reviewStatus !== MotivationReviewStatus.image_review)
+      throw new ConflictException('Image is not ready for review');
+    if (!post.imageUrl)
+      throw new ConflictException('Image is not ready for review');
     const now = new Date();
     return this.transition({
       postId,
@@ -78,9 +101,11 @@ export class MotivationModerationService {
   async reject(role: Role, actorId: string, postId: string, reason: string) {
     this.assertAdmin(role);
     const normalizedReason = reason?.trim();
-    if (!normalizedReason) throw new BadRequestException('Rejection reason is required');
+    if (!normalizedReason)
+      throw new BadRequestException('Rejection reason is required');
     const post = await this.loadPost(postId);
-    if (!reviewableStatuses.has(post.reviewStatus)) throw new ConflictException('Post can no longer be rejected');
+    if (!reviewableStatuses.has(post.reviewStatus))
+      throw new ConflictException('Post can no longer be rejected');
     return this.transition({
       postId,
       actorId,
@@ -98,18 +123,33 @@ export class MotivationModerationService {
     });
   }
 
-  async regenerateImage(role: Role, actorId: string, postId: string, styleOverride?: MotivationVisualStyle) {
+  async regenerateImage(
+    role: Role,
+    actorId: string,
+    postId: string,
+    styleOverride?: MotivationVisualStyle,
+  ) {
     this.assertAdmin(role);
     this.assertApprovedStyle(styleOverride);
     const post = await this.loadPost(postId);
-    if (post.reviewStatus !== MotivationReviewStatus.image_review) throw new ConflictException('Image is not ready for regeneration');
-    const direction = createImageDirection({
-      meaning: post.translations[0]?.text ?? post.quote?.contextExcerpt ?? post.quote?.originalText ?? post.category,
-      category: post.category,
-      author: post.quote?.author ?? post.attributionSpeaker,
-      work: post.quote?.work ?? post.attributionWork,
-      profileTypes: post.quote?.profiles.map((profile) => profile.profileType) ?? [post.profileType],
-    }, styleOverride ?? post.visualStyle ?? undefined);
+    if (post.reviewStatus !== MotivationReviewStatus.image_review)
+      throw new ConflictException('Image is not ready for regeneration');
+    const direction = createImageDirection(
+      {
+        meaning:
+          post.translations[0]?.text ??
+          post.quote?.contextExcerpt ??
+          post.quote?.originalText ??
+          post.category,
+        category: post.category,
+        author: post.quote?.author ?? post.attributionSpeaker,
+        work: post.quote?.work ?? post.attributionWork,
+        profileTypes: post.quote?.profiles.map(
+          (profile) => profile.profileType,
+        ) ?? [post.profileType],
+      },
+      styleOverride ?? post.visualStyle ?? undefined,
+    );
     return this.transition({
       postId,
       actorId,
@@ -135,16 +175,18 @@ export class MotivationModerationService {
   }
 
   private loadPost(postId: string) {
-    return this.prisma.motivationPost.findUnique({
-      where: { id: postId },
-      include: {
-        translations: { where: { language: 'ru' }, take: 1 },
-        quote: { include: { profiles: true } },
-      },
-    }).then((post) => {
-      if (!post) throw new NotFoundException('Motivation post not found');
-      return post;
-    });
+    return this.prisma.motivationPost
+      .findUnique({
+        where: { id: postId },
+        include: {
+          translations: { where: { language: 'ru' }, take: 1 },
+          quote: { include: { profiles: true } },
+        },
+      })
+      .then((post) => {
+        if (!post) throw new NotFoundException('Motivation post not found');
+        return post;
+      });
   }
 
   private transition(input: {
@@ -162,7 +204,10 @@ export class MotivationModerationService {
         where: { id: input.postId, reviewStatus: input.expected },
         data: input.data,
       });
-      if (updated.count !== 1) throw new ConflictException('Moderation state changed; reload the post');
+      if (updated.count !== 1)
+        throw new ConflictException(
+          'Moderation state changed; reload the post',
+        );
       await transaction.motivationModerationAudit.create({
         data: {
           postId: input.postId,
@@ -182,10 +227,12 @@ export class MotivationModerationService {
   }
 
   private assertAdmin(role: Role) {
-    if (role !== 'admin' && role !== 'service-admin') throw new ForbiddenException();
+    if (role !== 'admin' && role !== 'service-admin')
+      throw new ForbiddenException();
   }
 
   private assertApprovedStyle(style?: MotivationVisualStyle) {
-    if (style && !approvedStyles.has(style)) throw new BadRequestException('Visual style is not approved');
+    if (style && !approvedStyles.has(style))
+      throw new BadRequestException('Visual style is not approved');
   }
 }

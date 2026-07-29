@@ -1,4 +1,7 @@
-import { createImageDirection, selectVisualStyle } from './motivation-image-director';
+import {
+  createImageDirection,
+  selectVisualStyle,
+} from './motivation-image-director';
 
 describe('motivation image director', () => {
   it.each([
@@ -16,21 +19,28 @@ describe('motivation image director', () => {
   });
 
   it('honors an approved override and builds a safe image prompt', () => {
-    const direction = createImageDirection({
-      meaning: 'Quiet service offered with compassion.',
-      category: 'verified_quote',
-      author: 'A real person',
-      profileTypes: ['devotee'],
-    }, 'warm_documentary');
+    const direction = createImageDirection(
+      {
+        meaning: 'Quiet service offered with compassion.',
+        category: 'verified_quote',
+        author: 'A real person',
+        profileTypes: ['devotee'],
+      },
+      'warm_documentary',
+    );
 
     expect(direction.style).toBe('warm_documentary');
     expect(direction.prompt).toContain('vertical 9:16');
     expect(direction.prompt).toContain('no text');
     expect(direction.prompt).toContain('no logos');
-    expect(direction.prompt).toContain('Do not depict a recognizable real author');
+    expect(direction.prompt).toContain(
+      'Do not depict a recognizable real author',
+    );
   });
 
   it('rejects a style outside the approved library', () => {
-    expect(() => createImageDirection({ meaning: 'Hope' }, 'neon_advertising' as never)).toThrow('Visual style is not approved');
+    expect(() =>
+      createImageDirection({ meaning: 'Hope' }, 'neon_advertising' as never),
+    ).toThrow('Visual style is not approved');
   });
 });

@@ -54,6 +54,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
   const [locationResults, setLocationResults] = useState<GeoSearchResult[]>([]);
   const [locationPending, setLocationPending] = useState(false);
   const [birthDate, setBirthDate] = useState(user.birthDate ?? "");
+  const [gender, setGender] = useState<string>(user.gender ?? "");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [pending, setPending] = useState(false);
   const [avatarPending, setAvatarPending] = useState(false);
@@ -194,6 +195,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
         credentials: "include",
         body: JSON.stringify({
           birthDate: birthDate || null,
+          gender: gender || null,
           homeLocation,
           socialLinks,
           messengers,
@@ -203,6 +205,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
       const updated = (await res.json()) as UserProfile;
       setProfile(updated);
       setBirthDate(updated.birthDate ?? "");
+      setGender(updated.gender ?? "");
       setHomeLocation(updated.homeLocation);
       setSocialLinks(updated.socialLinks ?? {});
       setMessengers(updated.messengers ?? {});
@@ -327,6 +330,24 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
             Возраст в карточке: {profile.age}
           </p>
         )}
+        <label className="mt-4 block max-w-xs">
+          <span className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
+            Пол
+          </span>
+          <select
+            value={gender}
+            onChange={(event) => setGender(event.target.value)}
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          >
+            <option value="">Не указан</option>
+            <option value="male">Мужской</option>
+            <option value="female">Женский</option>
+          </select>
+        </label>
+        <p className="mt-2 text-sm text-zinc-500">
+          Используется в фильтре знакомств. Если не указан, вы не попадёте в
+          выдачу тех, кто ищет по полу.
+        </p>
       </section>
 
       <PhotoVerificationPanel profile={profile} onUpdated={setProfile} />

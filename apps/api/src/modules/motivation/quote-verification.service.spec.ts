@@ -26,11 +26,13 @@ describe('QuoteVerificationService', () => {
   it('verifies an exact quote and preserves complete attribution', async () => {
     const service = new QuoteVerificationService(repository as never);
 
-    await expect(service.verifyVedabaseCandidate({
-      bookSlug: 'bg',
-      chapterSlug: '2',
-      originalText: exact,
-    })).resolves.toMatchObject({
+    await expect(
+      service.verifyVedabaseCandidate({
+        bookSlug: 'bg',
+        chapterSlug: '2',
+        originalText: exact,
+      }),
+    ).resolves.toMatchObject({
       originalText: exact,
       originalLanguage: 'en',
       author: searchUnit.bookAuthor,
@@ -47,18 +49,22 @@ describe('QuoteVerificationService', () => {
   it('rejects text that is not present verbatim after normalization', async () => {
     const service = new QuoteVerificationService(repository as never);
 
-    await expect(service.verifyVedabaseCandidate({
-      bookSlug: 'bg',
-      chapterSlug: '2',
-      originalText: 'invented',
-    })).rejects.toThrow('Quote not found verbatim');
+    await expect(
+      service.verifyVedabaseCandidate({
+        bookSlug: 'bg',
+        chapterSlug: '2',
+        originalText: 'invented',
+      }),
+    ).rejects.toThrow('Quote not found verbatim');
   });
 
   it('bounds the context excerpt to 1,000 characters', async () => {
-    repository.findQuoteCandidates.mockResolvedValue([{
-      ...searchUnit,
-      text: `${'a'.repeat(700)} ${exact} ${'b'.repeat(700)}`,
-    }]);
+    repository.findQuoteCandidates.mockResolvedValue([
+      {
+        ...searchUnit,
+        text: `${'a'.repeat(700)} ${exact} ${'b'.repeat(700)}`,
+      },
+    ]);
     const service = new QuoteVerificationService(repository as never);
 
     const verified = await service.verifyVedabaseCandidate({

@@ -19,7 +19,9 @@ export interface ApprovedWebSearchProvider {
 }
 
 interface WikiquoteSearchResponse {
-  query?: { search?: Array<{ title?: string; snippet?: string; pageid?: number }> };
+  query?: {
+    search?: Array<{ title?: string; snippet?: string; pageid?: number }>;
+  };
 }
 
 interface WikiquoteParseResponse {
@@ -33,8 +35,12 @@ export class ApprovedWebSourceService implements ApprovedWebSearchProvider {
   async search(query: string, limit: number): Promise<WebQuoteCandidate[]> {
     const url = new URL('https://en.wikiquote.org/w/api.php');
     url.search = new URLSearchParams({
-      action: 'query', list: 'search', format: 'json', origin: '*',
-      srsearch: query, srlimit: String(Math.max(1, Math.min(limit, 50))),
+      action: 'query',
+      list: 'search',
+      format: 'json',
+      origin: '*',
+      srsearch: query,
+      srlimit: String(Math.max(1, Math.min(limit, 50))),
     }).toString();
     assertApprovedSource(url.toString());
 
@@ -44,13 +50,21 @@ export class ApprovedWebSourceService implements ApprovedWebSearchProvider {
       if (!result.pageid) continue;
       const parseUrl = new URL('https://en.wikiquote.org/w/api.php');
       parseUrl.search = new URLSearchParams({
-        action: 'parse', pageid: String(result.pageid), prop: 'wikitext', format: 'json', origin: '*',
+        action: 'parse',
+        pageid: String(result.pageid),
+        prop: 'wikitext',
+        format: 'json',
+        origin: '*',
       }).toString();
       const parsed = await this.fetchJson<WikiquoteParseResponse>(parseUrl);
-      const author = this.decodeEntities(parsed.parse?.title ?? result.title ?? '').trim();
+      const author = this.decodeEntities(
+        parsed.parse?.title ?? result.title ?? '',
+      ).trim();
       if (!author) continue;
       const sourceUrl = `https://en.wikiquote.org/wiki/${encodeURIComponent(author.replace(/ /g, '_'))}`;
-      for (const quote of this.extractQuoteEntries(parsed.parse?.wikitext?.['*'] ?? '')) {
+      for (const quote of this.extractQuoteEntries(
+        parsed.parse?.wikitext?.['*'] ?? '',
+      )) {
         candidates.push({
           originalText: quote,
           normalizedHash: quoteFingerprint(quote),
@@ -74,18 +88,26 @@ export class ApprovedWebSourceService implements ApprovedWebSearchProvider {
       headers: { 'User-Agent': 'VedaMatch-Motivation/1.0' },
       signal: AbortSignal.timeout(20_000),
     });
-    if (!response.ok) throw new Error(`Approved source request failed: ${response.status}`);
+    if (!response.ok)
+      throw new Error(`Approved source request failed: ${response.status}`);
     assertApprovedSource(response.url || url.toString());
     const declaredLength = Number(response.headers.get('content-length') || 0);
-    if (declaredLength > MAX_RESPONSE_BYTES) throw new Error('Approved source response exceeds 2 MB');
+    if (declaredLength > MAX_RESPONSE_BYTES)
+      throw new Error('Approved source response exceeds 2 MB');
     const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > MAX_RESPONSE_BYTES) throw new Error('Approved source response exceeds 2 MB');
+    if (bytes.byteLength > MAX_RESPONSE_BYTES)
+      throw new Error('Approved source response exceeds 2 MB');
     return JSON.parse(new TextDecoder().decode(bytes)) as T;
   }
 
   private extractQuoteEntries(wikitext: string): string[] {
-    return wikitext.split(/\r?\n/u)
-      .filter((line) => line.startsWith('* ') && !/^\*\s*(?:category:|file:|image:|isbn|source:)/iu.test(line))
+    return wikitext
+      .split(/\r?\n/u)
+      .filter(
+        (line) =>
+          line.startsWith('* ') &&
+          !/^\*\s*(?:category:|file:|image:|isbn|source:)/iu.test(line),
+      )
       .map((line) => this.cleanWikiMarkup(line.slice(2)))
       .filter((line) => line.length >= 20 && line.length <= 2_000);
   }
@@ -105,8 +127,13 @@ export class ApprovedWebSourceService implements ApprovedWebSearchProvider {
 
   private decodeEntities(value: string): string {
     return value
-      .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
-      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-      .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)));
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;|&apos;/g, "'")
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&#(\d+);/g, (_, code: string) =>
+        String.fromCodePoint(Number(code)),
+      );
   }
 }

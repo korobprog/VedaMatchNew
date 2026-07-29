@@ -13,6 +13,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import type {
+  Gender,
   ProfileLocation,
   ProfileMessengers,
   ProfileSocialLinks,
@@ -28,6 +29,8 @@ import {
   RESET_PHOTO_VERIFICATION,
   toPhotoVerificationState,
 } from './photo-verification';
+
+const GENDERS: Gender[] = ['male', 'female'];
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 const AVATAR_MIME_EXTENSIONS: Record<string, string> = {
@@ -96,6 +99,7 @@ export class UsersService {
       avatarKey: user.avatarKey,
       birthDate: toBirthDateInput(user.birthDate),
       age: calculateAge(user.birthDate),
+      gender: user.gender,
       photoVerification: toPhotoVerificationState(user),
       homeLocation: parseLocation(user.homeLocation),
       socialLinks: parseSocialLinks(user.socialLinks),
@@ -123,6 +127,12 @@ export class UsersService {
         throw new BadRequestException(birthDate.error);
       }
       data.birthDate = birthDate;
+    }
+    if ('gender' in payload) {
+      if (payload.gender != null && !GENDERS.includes(payload.gender)) {
+        throw new BadRequestException('Недопустимое значение пола');
+      }
+      data.gender = payload.gender ?? null;
     }
     if ('homeLocation' in payload) {
       data.homeLocation = payload.homeLocation

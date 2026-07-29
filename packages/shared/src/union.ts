@@ -1,5 +1,5 @@
 // Типы сервиса VedaMatch Union. См. docs/service-module-contract.md
-import type { SpiritualStage } from './index';
+import type { Gender, SpiritualStage } from './index';
 import type { ProfileMessengers, ProfileSocialLinks } from './index';
 
 export type UnionIntentionType = 'family' | 'business' | 'friendship' | 'service';
@@ -136,6 +136,8 @@ export interface UnionRecommendationFilters {
   lon?: number;
   radiusKm?: number;
   stage?: SpiritualStage;
+  /** Профили без указанного пола не проходят явно заданный фильтр. */
+  gender?: Gender;
   ageMin?: number;
   ageMax?: number;
   /** Показывать только преданных, подтверждённых администрацией. */
