@@ -57,20 +57,6 @@ const services = [
     devoteeVerifiedVisible: true,
   },
   {
-    slug: 'devotee-space',
-    name: 'VedaMatch Devotee Space',
-    description: 'Закрытые материалы и сервисы для подтвержденных преданных',
-    url: 'https://devotee.vedamatch.ru',
-    status: 'coming_soon' as const,
-    category: 'community',
-    public: false,
-    seekerVisible: false,
-    practitionerVisible: false,
-    yogiVisible: false,
-    devoteeSelfIdentifiedVisible: false,
-    devoteeVerifiedVisible: true,
-  },
-  {
     slug: 'library',
     name: 'Библиотека ссылок',
     description:
@@ -94,6 +80,7 @@ async function main() {
         OR: [
           { slug: 'gitabase' },
           { name: 'VedaMatch Union Gitabase' },
+          { slug: 'devotee-space' },
         ],
       },
     });

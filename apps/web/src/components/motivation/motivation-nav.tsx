@@ -1,10 +1,17 @@
 import Link from "next/link";
 
-export function MotivationNav({ active }: { active: "feed" | "favorites" | "settings" }) {
+export function MotivationNav({
+  active,
+  isAdmin,
+}: {
+  active: "feed" | "favorites" | "settings" | "admin";
+  isAdmin?: boolean;
+}) {
   const links = [
     ["feed", "/motivation", "Лента"],
     ["favorites", "/motivation/favorites", "Избранное"],
     ["settings", "/motivation/settings", "Настройки"],
+    ...(isAdmin ? ([["admin", "/admin/motivation", "Админ"]] as const) : []),
   ] as const;
 
   return (
