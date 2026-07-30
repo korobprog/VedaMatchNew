@@ -20,7 +20,7 @@ export default async function MotivationPage() {
       <main className="mx-auto max-w-3xl px-4 py-8 pb-24">
         <h1 className="font-display text-3xl font-bold text-text-0">VedaMatch Motivation</h1>
         <p className="mt-2 text-text-1">Ежедневная мотивация с учётом вашего духовного профиля.</p>
-        <MotivationNav active="feed" />
+        <MotivationNav active="feed" isAdmin={user.role === "admin" || user.role === "service-admin"} />
         <MotivationFeed initial={feed ?? { items: [], nextCursor: null }} />
       </main>
     </div>

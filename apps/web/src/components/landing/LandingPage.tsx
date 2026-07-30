@@ -54,7 +54,7 @@ export function LandingPage({ returnTo }: { returnTo?: string }) {
                 <span className="block bg-gradient-to-r from-magenta via-cyan to-gold bg-clip-text text-transparent">
                   знакомства
                 </span>
-                и единство
+                в благости
               </h1>
 
               {/* Description */}
@@ -184,7 +184,7 @@ export function LandingPage({ returnTo }: { returnTo?: string }) {
                 Готовы начать?
               </h2>
               <p className="text-text-1 text-lg md:text-xl mb-8 max-w-xl mx-auto">
-                Присоединяйтесь к тысячам людей, которые уже нашли единомышленников через VedaMatch Union.
+                Присоединяйтесь к тысячам людей, которые уже нашли единомышленников через VedaMatch «Знакомства в Благости».
               </p>
               
               <Link
