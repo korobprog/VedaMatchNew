@@ -56,12 +56,12 @@ export function ServiceCard({
           В разработке
         </button>
       ) : (
-        <a
-          href={service.url}
-          className="w-full rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] py-3 text-center text-sm font-medium text-white transition hover:shadow-[0_0_20px_rgba(255,62,158,0.4)]"
-        >
-          Открыть
-        </a>
+<a
+  href={service.url}
+  className="w-full rounded-xl py-3 text-center text-sm font-medium text-white transition bg-[linear-gradient(to_right,#33CCCC,#5CCCCC)] hover:brightness-110"
+>
+  Открыть
+</a>
       )}
     </div>
   );

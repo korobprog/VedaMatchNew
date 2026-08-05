@@ -44,6 +44,10 @@ function toFilters(
       query.photoVerifiedOnly === 'true' || query.photoVerifiedOnly === '1',
     format: query.format as UnionRecommendationFilters['format'],
     language: query.language,
+    diet: query.diet as UnionRecommendationFilters['diet'],
+    principlesMin: toNumber(query.principlesMin),
+    childrenStatus:
+      query.childrenStatus as UnionRecommendationFilters['childrenStatus'],
     page: toNumber(query.page),
     pageSize: toNumber(query.pageSize),
   };

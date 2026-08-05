@@ -50,7 +50,17 @@ export default async function UnionProfilePage() {
           </div>
         )}
 
-        <UnionProfileForm profile={profile} />
+        <UnionProfileForm
+          profile={profile}
+          completeness={
+            state?.completeness ?? {
+              percent: 0,
+              items: [],
+              missing: [],
+              next: null,
+            }
+          }
+        />
 
         <div className="mt-6">
           <BlockedUsersPanel blocked={blocks?.blocked ?? []} />

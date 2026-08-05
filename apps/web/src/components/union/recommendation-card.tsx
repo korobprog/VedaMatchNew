@@ -4,6 +4,7 @@ import type {
   UnionRecommendation,
 } from "@vedamatch/shared";
 import { ActivityBadge } from "./activity-badge";
+import { ProfileDetailsList } from "./profile-details-list";
 import { ConnectionActions } from "./connection-actions";
 import { intentionLabels, yearsSuffix } from "./labels";
 import { RecommendationPhotoCarousel } from "./recommendation-photo-carousel";
@@ -13,6 +14,7 @@ import { PhotoVerifiedBadge, VerifiedBadge } from "./verified-badge";
 const criterionLabels: Record<UnionCompatibilityCriterion, string> = {
   intentions: "Цели знакомства",
   stage: "Духовный этап",
+  lifestyle: "Образ жизни",
   interests: "Интересы",
   values: "Ценности",
   location: "Локация",
@@ -106,9 +108,15 @@ export function RecommendationCard({ item }: { item: UnionRecommendation }) {
           </div>
         )}
 
+        {profile.status && (
+          <p className="text-sm font-medium text-text-0">“{profile.status}”</p>
+        )}
+
         {profile.about && (
           <p className="line-clamp-3 text-sm text-text-1">{profile.about}</p>
         )}
+
+        <ProfileDetailsList details={profile} />
 
         {user.contacts && (
           <div className="rounded-xl border border-cyan/30 bg-cyan/10 p-3 text-sm text-text-0">

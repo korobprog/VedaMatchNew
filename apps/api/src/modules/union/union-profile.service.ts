@@ -15,7 +15,12 @@ import type {
   ProfileLocation,
   ProfileMessengers,
   ProfileSocialLinks,
+  UnionChildrenStatus,
   UnionConnectionSummary,
+  UnionDiet,
+  UnionEducationLevel,
+  UnionHousing,
+  UnionIncomeLevel,
   UnionIntentionDto,
   UnionIntentionType,
   UnionPrivacySettings,
@@ -25,9 +30,12 @@ import type {
   UnionRecommendation,
   UnionRecommendationFilters,
   UnionRecommendationsResponse,
+  UnionRegulativePrinciple,
+  UnionSpiritualEducation,
   UnionUserSummary,
 } from '@vedamatch/shared';
 import { calculateAge, MAX_PROFILE_AGE, MIN_PROFILE_AGE } from '../users/age';
+import { computeCompleteness } from './union-completeness';
 import { ModerationService } from '../moderation/moderation.service';
 import { toActivityLevel } from './union-activity';
 import { isVerifiedDevotee } from './union-verification';
@@ -47,10 +55,70 @@ const INTENTION_TYPES: UnionIntentionType[] = [
 const MAX_ABOUT_LENGTH = 2000;
 const MAX_LIST_ITEMS = 30;
 const MAX_ITEM_LENGTH = 100;
+// Лимиты полей анкеты; веб дублирует их у себя в union-profile-form.tsx.
+export const UNION_MIN_HEIGHT_CM = 120;
+export const UNION_MAX_HEIGHT_CM = 230;
+export const UNION_MAX_STATUS_LENGTH = 120;
+const DIET_VALUES: UnionDiet[] = [
+  'vegetarian',
+  'vegan',
+  'prasadam_only',
+  'transitioning',
+  'not_vegetarian',
+];
+const REGULATIVE_PRINCIPLE_VALUES: UnionRegulativePrinciple[] = [
+  'no_meat',
+  'no_intoxicants',
+  'no_gambling',
+  'no_illicit_sex',
+];
+const CHILDREN_STATUS_VALUES: UnionChildrenStatus[] = [
+  'none_want',
+  'none_not_want',
+  'none_undecided',
+  'have_living_with',
+  'have_living_apart',
+];
+const EDUCATION_VALUES: UnionEducationLevel[] = [
+  'school',
+  'vocational',
+  'incomplete_higher',
+  'higher',
+  'academic_degree',
+];
+const SPIRITUAL_EDUCATION_VALUES: UnionSpiritualEducation[] = [
+  'none',
+  'temple_courses',
+  'bhakti_shastri',
+  'bhakti_vaibhava',
+  'bhakti_vedanta',
+  'other',
+];
+const HOUSING_VALUES: UnionHousing[] = [
+  'own_place',
+  'rent',
+  'with_parents',
+  'with_relatives',
+  'community',
+  'temple_ashram',
+];
+const INCOME_VALUES: UnionIncomeLevel[] = [
+  'basic_needs_hard',
+  'basic_needs',
+  'basic_and_rest',
+  'comfortable',
+  'prefer_not_say',
+];
 const DEFAULT_PAGE_SIZE = 12;
 const MAX_PAGE_SIZE = 50;
 
 type ProfileWithIntentions = UnionProfile & { intentions: UnionIntention[] };
+/** Возраст смотрящего и его пожелания к возрасту партнёра. */
+interface MyAgePreference {
+  age: number | null;
+  ageRangeMin: number | null;
+  ageRangeMax: number | null;
+}
 type UserWithLocation = Pick<User, 'homeLocation'>;
 type UserWithPublicPhotos = User & {
   photos: Array<Pick<UserPhoto, 'id' | 'storageKey' | 'width' | 'height'>>;
@@ -80,7 +148,22 @@ export class UnionProfileService {
       where: { userId },
       include: { intentions: true },
     });
-    return { profile: profile ? this.toDto(profile) : null };
+    return this.toState(userId, profile);
+  }
+
+  /** Собирает ответ вместе с прогрессом заполнения: фото лежат вне UnionProfile. */
+  private async toState(
+    userId: string,
+    profile: ProfileWithIntentions | null,
+  ): Promise<UnionProfileState> {
+    const dto = profile ? this.toDto(profile) : null;
+    const publicPhotoCount = await this.prisma.userPhoto.count({
+      where: { userId, isPublic: true },
+    });
+    return {
+      profile: dto,
+      completeness: computeCompleteness(dto, { publicPhotoCount }),
+    };
   }
 
   async upsertProfile(
@@ -111,7 +194,7 @@ export class UnionProfileService {
       });
     });
 
-    return { profile: this.toDto(profile) };
+    return this.toState(userId, profile);
   }
 
   async getRecommendations(
@@ -156,7 +239,11 @@ export class UnionProfileService {
       .filter((other) => !hidden.has(other.userId))
       .filter((other) => this.hasCompleteLocation(other.user))
       .filter((other) =>
-        this.matchesFilters(other, other.user, normalizedFilters, myInput),
+        this.matchesFilters(other, other.user, normalizedFilters, myInput, {
+          age: calculateAge(me.user.birthDate),
+          ageRangeMin: me.ageRangeMin,
+          ageRangeMax: me.ageRangeMax,
+        }),
       )
       .map((other) => ({
         other,
@@ -309,6 +396,18 @@ export class UnionProfileService {
         skills: other.skills,
         interests: other.interests,
         values: other.values,
+        status: other.status,
+        heightCm: other.heightCm,
+        diet: other.diet,
+        regulativePrinciples: other.regulativePrinciples,
+        childrenStatus: other.childrenStatus,
+        education: other.education,
+        spiritualEducation: other.spiritualEducation,
+        housing: other.housing,
+        income: other.income,
+        pets: other.pets,
+        ageRangeMin: other.ageRangeMin,
+        ageRangeMax: other.ageRangeMax,
         intentions: other.intentions.map((i) => ({
           type: i.type,
           weight: i.weight,
@@ -396,6 +495,15 @@ export class UnionProfileService {
         : undefined,
       ageMin: clampInteger(filters.ageMin, MIN_PROFILE_AGE, MAX_PROFILE_AGE),
       ageMax: clampInteger(filters.ageMax, MIN_PROFILE_AGE, MAX_PROFILE_AGE),
+      diet: DIET_VALUES.includes(filters.diet as UnionDiet)
+        ? filters.diet
+        : undefined,
+      principlesMin: clampInteger(filters.principlesMin, 1, 4),
+      childrenStatus: CHILDREN_STATUS_VALUES.includes(
+        filters.childrenStatus as UnionChildrenStatus,
+      )
+        ? filters.childrenStatus
+        : undefined,
       verifiedOnly: filters.verifiedOnly === true,
       photoVerifiedOnly: filters.photoVerifiedOnly === true,
       format: ['online', 'offline', 'any'].includes(String(filters.format))
@@ -412,6 +520,7 @@ export class UnionProfileService {
     user: User,
     filters: UnionRecommendationFilters,
     myInput: UnionMatchInput,
+    myAge: MyAgePreference,
   ): boolean {
     if (
       filters.intention &&
@@ -426,12 +535,50 @@ export class UnionProfileService {
     if (filters.photoVerifiedOnly && user.photoVerifiedAt === null)
       return false;
 
+    const candidateAge = calculateAge(user.birthDate);
     if (filters.ageMin != null || filters.ageMax != null) {
       // Возраст не указан — профиль не проходит явно заданный диапазон.
-      const age = calculateAge(user.birthDate);
-      if (age === null) return false;
-      if (filters.ageMin != null && age < filters.ageMin) return false;
-      if (filters.ageMax != null && age > filters.ageMax) return false;
+      if (candidateAge === null) return false;
+      if (filters.ageMin != null && candidateAge < filters.ageMin) return false;
+      if (filters.ageMax != null && candidateAge > filters.ageMax) return false;
+    }
+
+    // Желаемый возраст партнёра из анкет работает в обе стороны: и мой, и его.
+    if (myAge.ageRangeMin != null || myAge.ageRangeMax != null) {
+      if (candidateAge === null) return false;
+      if (myAge.ageRangeMin != null && candidateAge < myAge.ageRangeMin) {
+        return false;
+      }
+      if (myAge.ageRangeMax != null && candidateAge > myAge.ageRangeMax) {
+        return false;
+      }
+    }
+    // Свой возраст неизвестен — судить о чужих предпочтениях не по чему.
+    if (
+      myAge.age !== null &&
+      (profile.ageRangeMin != null || profile.ageRangeMax != null)
+    ) {
+      if (profile.ageRangeMin != null && myAge.age < profile.ageRangeMin) {
+        return false;
+      }
+      if (profile.ageRangeMax != null && myAge.age > profile.ageRangeMax) {
+        return false;
+      }
+    }
+
+    // Питание не указано — профиль не проходит явно заданный фильтр.
+    if (filters.diet && profile.diet !== filters.diet) return false;
+    if (
+      filters.principlesMin != null &&
+      profile.regulativePrinciples.length < filters.principlesMin
+    ) {
+      return false;
+    }
+    if (
+      filters.childrenStatus &&
+      profile.childrenStatus !== filters.childrenStatus
+    ) {
+      return false;
     }
     if (
       filters.format &&
@@ -516,6 +663,8 @@ export class UnionProfileService {
       lon: location?.lon ?? null,
       relocationReady: profile.relocationReady,
       format: profile.format,
+      diet: profile.diet,
+      regulativePrinciples: profile.regulativePrinciples,
     };
   }
 
@@ -602,22 +751,180 @@ export class UnionProfileService {
     ) {
       throw new BadRequestException('Недопустимый формат общения');
     }
-    const data: Omit<Prisma.UnionProfileUncheckedCreateInput, 'userId'> = {
-      about: body.about?.trim() || null,
-      relocationReady: body.relocationReady ?? false,
-      format: body.format ?? 'any',
-      languages: this.cleanList(body.languages, 'Языки'),
-      skills: this.cleanList(body.skills, 'Навыки'),
-      interests: this.cleanList(body.interests, 'Интересы'),
-      values: this.cleanList(body.values, 'Ценности'),
-      familyStatus: body.familyStatus?.trim() || null,
-      privacy: this.validatePrivacy(body.privacy),
-    };
+    // Затираем только то, что клиент прислал явно: анкета сохраняется
+    // по одному полю за раз. Незаполненные поля берут default из схемы.
+    const data: Omit<Prisma.UnionProfileUncheckedCreateInput, 'userId'> = {};
+    if (body.about !== undefined) data.about = body.about?.trim() || null;
+    if (body.relocationReady !== undefined) {
+      data.relocationReady = body.relocationReady;
+    }
+    if (body.format !== undefined) data.format = body.format;
+    if (body.languages !== undefined) {
+      data.languages = this.cleanList(body.languages, 'Языки');
+    }
+    if (body.skills !== undefined) {
+      data.skills = this.cleanList(body.skills, 'Навыки');
+    }
+    if (body.interests !== undefined) {
+      data.interests = this.cleanList(body.interests, 'Интересы');
+    }
+    if (body.values !== undefined) {
+      data.values = this.cleanList(body.values, 'Ценности');
+    }
+    if (body.familyStatus !== undefined) {
+      data.familyStatus = body.familyStatus?.trim() || null;
+    }
+    if (body.privacy !== undefined) {
+      data.privacy = this.validatePrivacy(body.privacy);
+    }
     if (body.isActive !== undefined) data.isActive = body.isActive;
     if (body.requestsFromVerifiedOnly !== undefined) {
       data.requestsFromVerifiedOnly = body.requestsFromVerifiedOnly;
     }
+    Object.assign(data, this.validateDetails(body));
     return data;
+  }
+
+  /**
+   * Поля блока «О себе». В отличие от старых полей затираются только те,
+   * что клиент прислал явно: анкета сохраняется по одному полю за раз.
+   */
+  private validateDetails(
+    body: UnionProfileUpdateRequest,
+  ): Partial<Prisma.UnionProfileUncheckedCreateInput> {
+    const data: Partial<Prisma.UnionProfileUncheckedCreateInput> = {};
+
+    if (body.status !== undefined) {
+      const status = body.status?.trim() || null;
+      if (status && status.length > UNION_MAX_STATUS_LENGTH) {
+        throw new BadRequestException(
+          `Статус не длиннее ${UNION_MAX_STATUS_LENGTH} символов`,
+        );
+      }
+      data.status = status;
+    }
+    if (body.heightCm !== undefined) {
+      data.heightCm = this.validateHeight(body.heightCm);
+    }
+    if (body.diet !== undefined) {
+      data.diet = this.validateEnum(body.diet, DIET_VALUES, 'Питание');
+    }
+    if (body.regulativePrinciples !== undefined) {
+      data.regulativePrinciples = this.validateEnumList(
+        body.regulativePrinciples,
+        REGULATIVE_PRINCIPLE_VALUES,
+        'Регулирующие принципы',
+      );
+    }
+    if (body.childrenStatus !== undefined) {
+      data.childrenStatus = this.validateEnum(
+        body.childrenStatus,
+        CHILDREN_STATUS_VALUES,
+        'Дети',
+      );
+    }
+    if (body.education !== undefined) {
+      data.education = this.validateEnum(
+        body.education,
+        EDUCATION_VALUES,
+        'Образование',
+      );
+    }
+    if (body.spiritualEducation !== undefined) {
+      data.spiritualEducation = this.validateEnum(
+        body.spiritualEducation,
+        SPIRITUAL_EDUCATION_VALUES,
+        'Духовное образование',
+      );
+    }
+    if (body.housing !== undefined) {
+      data.housing = this.validateEnum(body.housing, HOUSING_VALUES, 'Уклад');
+    }
+    if (body.income !== undefined) {
+      data.income = this.validateEnum(
+        body.income,
+        INCOME_VALUES,
+        'Обеспеченность',
+      );
+    }
+    if (body.pets !== undefined) {
+      data.pets = this.cleanList(body.pets, 'Домашние животные');
+    }
+    if (body.ageRangeMin !== undefined || body.ageRangeMax !== undefined) {
+      const range = this.validateAgeRange(body.ageRangeMin, body.ageRangeMax);
+      data.ageRangeMin = range.min;
+      data.ageRangeMax = range.max;
+    }
+
+    return data;
+  }
+
+  private validateHeight(value: number | null | undefined): number | null {
+    if (value == null) return null;
+    if (
+      !Number.isInteger(value) ||
+      value < UNION_MIN_HEIGHT_CM ||
+      value > UNION_MAX_HEIGHT_CM
+    ) {
+      throw new BadRequestException(
+        `Рост должен быть целым числом от ${UNION_MIN_HEIGHT_CM} до ${UNION_MAX_HEIGHT_CM} см`,
+      );
+    }
+    return value;
+  }
+
+  private validateAgeRange(
+    min: number | null | undefined,
+    max: number | null | undefined,
+  ): { min: number | null; max: number | null } {
+    const clean = (value: number | null | undefined): number | null => {
+      if (value == null) return null;
+      if (
+        !Number.isInteger(value) ||
+        value < MIN_PROFILE_AGE ||
+        value > MAX_PROFILE_AGE
+      ) {
+        throw new BadRequestException(
+          `Возраст партнёра должен быть от ${MIN_PROFILE_AGE} до ${MAX_PROFILE_AGE} лет`,
+        );
+      }
+      return value;
+    };
+    const cleanMin = clean(min);
+    const cleanMax = clean(max);
+    if (cleanMin != null && cleanMax != null && cleanMin > cleanMax) {
+      throw new BadRequestException('Нижняя граница возраста больше верхней');
+    }
+    return { min: cleanMin, max: cleanMax };
+  }
+
+  private validateEnum<T extends string>(
+    value: T | null | undefined,
+    allowed: T[],
+    label: string,
+  ): T | null {
+    if (value == null) return null;
+    if (!allowed.includes(value)) {
+      throw new BadRequestException(`${label}: недопустимое значение`);
+    }
+    return value;
+  }
+
+  private validateEnumList<T extends string>(
+    values: T[] | null | undefined,
+    allowed: T[],
+    label: string,
+  ): T[] {
+    if (values == null) return [];
+    if (!Array.isArray(values)) {
+      throw new BadRequestException(`${label}: ожидается список`);
+    }
+    for (const value of values) {
+      if (!allowed.includes(value)) {
+        throw new BadRequestException(`${label}: недопустимое значение`);
+      }
+    }
+    return [...new Set(values)];
   }
 
   private cleanList(list: string[] | undefined, label: string): string[] {
@@ -664,6 +971,18 @@ export class UnionProfileService {
       interests: profile.interests,
       values: profile.values,
       familyStatus: profile.familyStatus,
+      status: profile.status,
+      heightCm: profile.heightCm,
+      diet: profile.diet,
+      regulativePrinciples: profile.regulativePrinciples,
+      childrenStatus: profile.childrenStatus,
+      education: profile.education,
+      spiritualEducation: profile.spiritualEducation,
+      housing: profile.housing,
+      income: profile.income,
+      pets: profile.pets,
+      ageRangeMin: profile.ageRangeMin,
+      ageRangeMax: profile.ageRangeMax,
       privacy: (profile.privacy as UnionPrivacySettings | null) ?? null,
       isActive: profile.isActive,
       requestsFromVerifiedOnly: profile.requestsFromVerifiedOnly,

@@ -6,7 +6,11 @@ import type {
   SpiritualStage,
   UnionFormat,
 } from "@vedamatch/shared";
-import { unionLanguageOptions } from "./dictionaries";
+import {
+  unionChildrenStatusLabels,
+  unionDietLabels,
+  unionLanguageOptions,
+} from "./dictionaries";
 import { intentionLabels, intentionTypes } from "./labels";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -266,6 +270,41 @@ export function RecommendationFilters({
         />
       </div>
 
+      <div className="mt-3 grid gap-3 md:grid-cols-3">
+        <Select
+          name="diet"
+          label="Питание"
+          defaultValue={first(params.diet)}
+          options={[
+            ["", "Любое"],
+            ...(Object.entries(unionDietLabels) as Array<[string, string]>),
+          ]}
+        />
+        <Select
+          name="principlesMin"
+          label="Регулирующие принципы"
+          defaultValue={first(params.principlesMin)}
+          options={[
+            ["", "Неважно"],
+            ["1", "хотя бы 1"],
+            ["2", "хотя бы 2"],
+            ["3", "хотя бы 3"],
+            ["4", "все 4"],
+          ]}
+        />
+        <Select
+          name="childrenStatus"
+          label="Дети"
+          defaultValue={first(params.childrenStatus)}
+          options={[
+            ["", "Неважно"],
+            ...(Object.entries(unionChildrenStatusLabels) as Array<
+              [string, string]
+            >),
+          ]}
+        />
+      </div>
+
       <div className="mt-3 grid gap-3 sm:grid-cols-2 md:max-w-md">
         <label className="block">
           <span className={labelClass}>Возраст от</span>
@@ -388,6 +427,9 @@ const filterKeys = [
   "language",
   "ageMin",
   "ageMax",
+  "diet",
+  "principlesMin",
+  "childrenStatus",
   "verifiedOnly",
   "photoVerifiedOnly",
 ] as const;

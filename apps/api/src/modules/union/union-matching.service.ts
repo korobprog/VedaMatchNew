@@ -3,8 +3,10 @@ import type {
   SpiritualStage,
   UnionCompatibility,
   UnionCompatibilityBreakdownItem,
+  UnionDiet,
   UnionFormat,
   UnionIntentionDto,
+  UnionRegulativePrinciple,
 } from '@vedamatch/shared';
 
 /** Входные данные одного участника для расчёта совместимости. */
@@ -19,17 +21,31 @@ export interface UnionMatchInput {
   lon: number | null;
   relocationReady: boolean;
   format: UnionFormat;
+  diet: UnionDiet | null;
+  regulativePrinciples: UnionRegulativePrinciple[];
 }
 
-// Веса критериев из PLAN.md п.15.5, сумма = 100
+// Веса критериев, сумма = 100. Образ жизни (питание и регулирующие принципы)
+// добавлен за счёт долей намерений и духовного этапа.
 const WEIGHTS = {
-  intentions: 30,
-  stage: 20,
-  interests: 15,
-  values: 15,
+  intentions: 25,
+  stage: 15,
+  lifestyle: 15,
+  values: 13,
+  interests: 12,
   location: 10,
   format: 10,
 } as const;
+
+/** Диеты без мяса: между собой считаются близкими, но не тождественными. */
+const MEATLESS_DIETS: UnionDiet[] = [
+  'vegetarian',
+  'vegan',
+  'prasadam_only',
+  'transitioning',
+];
+
+const TOTAL_PRINCIPLES = 4;
 
 const STAGE_ORDER: SpiritualStage[] = [
   'seeker',
@@ -57,6 +73,11 @@ export class UnionMatchingService {
         criterion: 'stage',
         weight: WEIGHTS.stage,
         score: this.stageScore(me, other),
+      },
+      {
+        criterion: 'lifestyle',
+        weight: WEIGHTS.lifestyle,
+        score: this.lifestyleScore(me, other),
       },
       {
         criterion: 'interests',
@@ -115,6 +136,51 @@ export class UnionMatchingService {
         STAGE_ORDER.indexOf(other.spiritualStage),
     );
     return Math.round(100 - (distance / (STAGE_ORDER.length - 1)) * 100);
+  }
+
+  /**
+   * Образ жизни: питание и регулирующие принципы с равным вкладом.
+   * Каждая половина нейтральна, если хотя бы один участник её не заполнил.
+   */
+  private lifestyleScore(me: UnionMatchInput, other: UnionMatchInput): number {
+    return Math.round(
+      (this.dietScore(me.diet, other.diet) +
+        this.principlesScore(
+          me.regulativePrinciples,
+          other.regulativePrinciples,
+        )) /
+        2,
+    );
+  }
+
+  private dietScore(me: UnionDiet | null, other: UnionDiet | null): number {
+    if (!me || !other) return NEUTRAL_SCORE;
+    if (me === other) return 100;
+    const bothMeatless =
+      MEATLESS_DIETS.includes(me) && MEATLESS_DIETS.includes(other);
+    // Разное отношение к мясу — самое существенное расхождение в быту.
+    return bothMeatless ? 80 : 20;
+  }
+
+  /**
+   * Доля совпавших принципов от большего из двух наборов: одинаковые наборы
+   * дают 100, а «четыре против одного» заметно снижает оценку.
+   */
+  private principlesScore(
+    me: UnionRegulativePrinciple[],
+    other: UnionRegulativePrinciple[],
+  ): number {
+    if (me.length === 0 || other.length === 0) return NEUTRAL_SCORE;
+    const mine = new Set(me);
+    let shared = 0;
+    for (const principle of new Set(other)) {
+      if (mine.has(principle)) shared += 1;
+    }
+    const widest = Math.min(
+      TOTAL_PRINCIPLES,
+      Math.max(mine.size, new Set(other).size),
+    );
+    return Math.round((shared / widest) * 100);
   }
 
   /** Jaccard по строковым массивам; нейтрально, если у кого-то данных нет. */

@@ -3,6 +3,7 @@ import type {
   UnionProfileUpdateRequest,
   UnionRecommendation,
 } from '@vedamatch/shared';
+import { BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserGalleryService } from '../users/user-gallery.service';
 import { ModerationService } from '../moderation/moderation.service';
@@ -88,6 +89,18 @@ function profile(
     interests: [],
     values: [],
     familyStatus: null,
+    status: null,
+    heightCm: null,
+    diet: null,
+    regulativePrinciples: [],
+    childrenStatus: null,
+    education: null,
+    spiritualEducation: null,
+    housing: null,
+    income: null,
+    pets: [],
+    ageRangeMin: null,
+    ageRangeMax: null,
     privacy:
       options.contacts || options.photoPrivacy
         ? {
@@ -134,6 +147,22 @@ function withGender(
   return { ...source, user: { ...source.user, gender } };
 }
 
+function withBirthYear(source: ReturnType<typeof profile>, year: number) {
+  return {
+    ...source,
+    user: { ...source.user, birthDate: new Date(`${year}-01-01T00:00:00Z`) },
+  };
+}
+
+// Фикстура профиля выводится с литеральными типами (diet: null и т.п.),
+// поэтому переопределения принимаем как свободный набор полей.
+function withDetails(
+  source: ReturnType<typeof profile>,
+  details: Record<string, unknown>,
+) {
+  return { ...source, ...details };
+}
+
 function connection(status: 'pending' | 'accepted' = 'accepted') {
   return {
     id: 'connection-1',
@@ -170,6 +199,9 @@ describe('UnionProfileService', () => {
     unionProfile: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
+    },
+    userPhoto: {
+      count: jest.fn(() => Promise.resolve(0)),
     },
     unionConnectionRequest: {
       findMany: jest.fn(),
@@ -215,6 +247,7 @@ describe('UnionProfileService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.userPhoto.count.mockResolvedValue(0);
     prisma.user.findUnique.mockResolvedValue(user('me'));
     moderation.hiddenUserIds.mockResolvedValue(new Set<string>());
     moderation.isHidden.mockResolvedValue(false);
@@ -330,6 +363,77 @@ describe('UnionProfileService', () => {
     expect(result.items.map((item) => item.user.id)).toEqual(['man']);
   });
 
+  it('фильтрует по питанию, отсекая профили без указанного значения', async () => {
+    const vegan = withDetails(profile('vegan'), { diet: 'vegan' });
+    const unknown = profile('unknown');
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([vegan, unknown]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me', { diet: 'vegan' });
+
+    expect(result.items.map((item) => item.user.id)).toEqual(['vegan']);
+  });
+
+  it('фильтрует по минимальному числу регулирующих принципов', async () => {
+    const strict = withDetails(profile('strict'), {
+      regulativePrinciples: ['no_meat', 'no_intoxicants', 'no_gambling'],
+    });
+    const relaxed = withDetails(profile('relaxed'), {
+      regulativePrinciples: ['no_meat'],
+    });
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([strict, relaxed]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me', {
+      principlesMin: 3,
+    });
+
+    expect(result.items.map((item) => item.user.id)).toEqual(['strict']);
+  });
+
+  it('применяет желаемый возраст партнёра из моей анкеты', async () => {
+    const young = withBirthYear(profile('young'), 2004);
+    const older = withBirthYear(profile('older'), 1990);
+    prisma.unionProfile.findUnique.mockResolvedValue(
+      withDetails(profile('me'), { ageRangeMin: 30, ageRangeMax: 45 }),
+    );
+    prisma.unionProfile.findMany.mockResolvedValue([young, older]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me');
+
+    expect(result.items.map((item) => item.user.id)).toEqual(['older']);
+  });
+
+  it('уважает возрастные пожелания кандидата, когда мой возраст известен', async () => {
+    const picky = withDetails(withBirthYear(profile('picky'), 1990), {
+      ageRangeMin: 40,
+    });
+    const open = withBirthYear(profile('open'), 1990);
+    prisma.unionProfile.findUnique.mockResolvedValue(
+      withBirthYear(profile('me'), 2000),
+    );
+    prisma.unionProfile.findMany.mockResolvedValue([picky, open]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me');
+
+    expect(result.items.map((item) => item.user.id)).toEqual(['open']);
+  });
+
+  it('не отсекает по чужим пожеланиям, если свой возраст не указан', async () => {
+    const picky = withDetails(profile('picky'), { ageRangeMin: 40 });
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([picky]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me');
+
+    expect(result.items.map((item) => item.user.id)).toEqual(['picky']);
+  });
+
   it('ranks a confirmed devotee above an equally compatible profile', async () => {
     const plain = profile('plain');
     const confirmed = withStage(profile('confirmed'), 'devotee', 'confirmed');
@@ -358,6 +462,83 @@ describe('UnionProfileService', () => {
       { update: Record<string, unknown> },
     ];
     expect(upsertCall[0].update).not.toHaveProperty('isActive');
+  });
+
+  it('does not touch «О себе» fields that were not sent', async () => {
+    profileUpsert.mockResolvedValue(profile('me'));
+    findSavedProfile.mockResolvedValue(profile('me'));
+
+    await service.upsertProfile('me', validProfileBody);
+
+    const upsertCall = profileUpsert.mock.calls[0] as unknown as [
+      { update: Record<string, unknown> },
+    ];
+    for (const field of ['status', 'heightCm', 'diet', 'pets']) {
+      expect(upsertCall[0].update).not.toHaveProperty(field);
+    }
+  });
+
+  it('saves «О себе» fields that were sent', async () => {
+    profileUpsert.mockResolvedValue(profile('me'));
+    findSavedProfile.mockResolvedValue(profile('me'));
+
+    await service.upsertProfile('me', {
+      ...validProfileBody,
+      status: '  Харе Кришна  ',
+      heightCm: 180,
+      diet: 'vegetarian',
+      regulativePrinciples: ['no_meat', 'no_meat', 'no_gambling'],
+      ageRangeMin: 30,
+      ageRangeMax: 45,
+    });
+
+    const upsertCall = profileUpsert.mock.calls[0] as unknown as [
+      { update: Record<string, unknown> },
+    ];
+    expect(upsertCall[0].update).toMatchObject({
+      status: 'Харе Кришна',
+      heightCm: 180,
+      diet: 'vegetarian',
+      regulativePrinciples: ['no_meat', 'no_gambling'],
+      ageRangeMin: 30,
+      ageRangeMax: 45,
+    });
+  });
+
+  it('rejects an inverted desired age range', async () => {
+    await expect(
+      service.upsertProfile('me', {
+        ...validProfileBody,
+        ageRangeMin: 45,
+        ageRangeMax: 30,
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects an out-of-range height', async () => {
+    await expect(
+      service.upsertProfile('me', { ...validProfileBody, heightCm: 300 }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects an unknown diet value', async () => {
+    await expect(
+      service.upsertProfile('me', {
+        ...validProfileBody,
+        diet: 'pizza' as never,
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('returns completeness together with the profile', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.userPhoto.count.mockResolvedValue(2);
+
+    const state = await service.getState('me');
+
+    // Заполнены только фото (12) и намерения (10) из фикстуры.
+    expect(state.completeness.percent).toBe(22);
+    expect(state.completeness.next).toBe('about');
   });
 
   it('allows an inactive profile card for an accepted connection', async () => {
