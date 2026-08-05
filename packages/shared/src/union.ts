@@ -26,7 +26,80 @@ export interface UnionIntentionDto {
   weight: number;
 }
 
-export interface UnionProfileDto {
+/** Питание. Заменяет вопросы «алкоголь/курение» из массовых анкет. */
+export type UnionDiet =
+  | 'vegetarian'
+  | 'vegan'
+  | 'prasadam_only'
+  | 'transitioning'
+  | 'not_vegetarian';
+
+/**
+ * Четыре регулирующих принципа. Пустой список означает «не указано»,
+ * а не «не соблюдаю ничего».
+ */
+export type UnionRegulativePrinciple =
+  | 'no_meat'
+  | 'no_intoxicants'
+  | 'no_gambling'
+  | 'no_illicit_sex';
+
+export type UnionChildrenStatus =
+  | 'none_want'
+  | 'none_not_want'
+  | 'none_undecided'
+  | 'have_living_with'
+  | 'have_living_apart';
+
+export type UnionEducationLevel =
+  | 'school'
+  | 'vocational'
+  | 'incomplete_higher'
+  | 'higher'
+  | 'academic_degree';
+
+export type UnionSpiritualEducation =
+  | 'none'
+  | 'temple_courses'
+  | 'bhakti_shastri'
+  | 'bhakti_vaibhava'
+  | 'bhakti_vedanta'
+  | 'other';
+
+export type UnionHousing =
+  | 'own_place'
+  | 'rent'
+  | 'with_parents'
+  | 'with_relatives'
+  | 'community'
+  | 'temple_ashram';
+
+/** Материальная обеспеченность: опционально и закрывается приватностью. */
+export type UnionIncomeLevel =
+  | 'basic_needs_hard'
+  | 'basic_needs'
+  | 'basic_and_rest'
+  | 'comfortable'
+  | 'prefer_not_say';
+
+/** Блок «О себе»: все поля опциональны и заполняются постепенно. */
+export interface UnionProfileDetails {
+  status: string | null;
+  heightCm: number | null;
+  diet: UnionDiet | null;
+  regulativePrinciples: UnionRegulativePrinciple[];
+  childrenStatus: UnionChildrenStatus | null;
+  education: UnionEducationLevel | null;
+  spiritualEducation: UnionSpiritualEducation | null;
+  housing: UnionHousing | null;
+  income: UnionIncomeLevel | null;
+  pets: string[];
+  /** Желаемый возраст партнёра */
+  ageRangeMin: number | null;
+  ageRangeMax: number | null;
+}
+
+export interface UnionProfileDto extends UnionProfileDetails {
   id: string;
   userId: string;
   about: string | null;
@@ -46,11 +119,51 @@ export interface UnionProfileDto {
   updatedAt: string;
 }
 
-export interface UnionProfileState {
-  profile: UnionProfileDto | null;
+/** Ключи полей, из которых складывается прогресс заполнения анкеты. */
+export type UnionProfileFieldKey =
+  | 'photos'
+  | 'about'
+  | 'status'
+  | 'intentions'
+  | 'languages'
+  | 'interests'
+  | 'values'
+  | 'skills'
+  | 'familyStatus'
+  | 'childrenStatus'
+  | 'diet'
+  | 'regulativePrinciples'
+  | 'ageRange'
+  | 'heightCm'
+  | 'education'
+  | 'spiritualEducation'
+  | 'housing'
+  | 'income'
+  | 'pets';
+
+export interface UnionProfileCompletenessItem {
+  key: UnionProfileFieldKey;
+  /** Вклад поля в итоговый процент */
+  weight: number;
+  filled: boolean;
 }
 
-export interface UnionProfileUpdateRequest {
+export interface UnionProfileCompleteness {
+  /** 0..100 */
+  percent: number;
+  items: UnionProfileCompletenessItem[];
+  /** Незаполненные поля, от самого весомого к наименее весомому */
+  missing: UnionProfileFieldKey[];
+  /** Что предложить заполнить следующим; null — анкета заполнена */
+  next: UnionProfileFieldKey | null;
+}
+
+export interface UnionProfileState {
+  profile: UnionProfileDto | null;
+  completeness: UnionProfileCompleteness;
+}
+
+export interface UnionProfileUpdateRequest extends Partial<UnionProfileDetails> {
   about?: string | null;
   relocationReady?: boolean;
   format?: UnionFormat;
@@ -68,6 +181,8 @@ export interface UnionProfileUpdateRequest {
 export type UnionCompatibilityCriterion =
   | 'intentions'
   | 'stage'
+  /** Питание и регулирующие принципы */
+  | 'lifestyle'
   | 'interests'
   | 'values'
   | 'location'
@@ -123,7 +238,8 @@ export interface UnionRecommendation {
   profile: Pick<
     UnionProfileDto,
     'about' | 'format' | 'relocationReady' | 'languages' | 'skills' | 'interests' | 'values'
-  > & { intentions: UnionIntentionDto[] };
+  > &
+    UnionProfileDetails & { intentions: UnionIntentionDto[] };
   compatibility: UnionCompatibility;
   connection: UnionConnectionSummary | null;
 }
@@ -140,6 +256,11 @@ export interface UnionRecommendationFilters {
   gender?: Gender;
   ageMin?: number;
   ageMax?: number;
+  /** Профили без указанного питания не проходят явно заданный фильтр. */
+  diet?: UnionDiet;
+  /** Сколько регулирующих принципов человек соблюдает как минимум, 1..4. */
+  principlesMin?: number;
+  childrenStatus?: UnionChildrenStatus;
   /** Показывать только преданных, подтверждённых администрацией. */
   verifiedOnly?: boolean;
   /** Показывать только профили с проверенными фото. */

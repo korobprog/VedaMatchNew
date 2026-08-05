@@ -18,9 +18,9 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: "/", label: "Главная", icon: <Home size={20} /> },
-  { href: "/union", label: "Union", icon: <ServiceIcon slug="union" className="h-5 w-5" /> },
-  { href: "/motivation", label: "Motivation", icon: <ServiceIcon slug="motivation" className="h-5 w-5" /> },
-  { href: "/vedabase", label: "Vedabase", icon: <ServiceIcon slug="vedabase" className="h-5 w-5" /> },
+  { href: "/union", label: "Знакомства", icon: <ServiceIcon slug="union" className="h-5 w-5" /> },
+  { href: "/motivation", label: "Мотивация", icon: <ServiceIcon slug="motivation" className="h-5 w-5" /> },
+  { href: "/vedabase", label: "Книги", icon: <ServiceIcon slug="vedabase" className="h-5 w-5" /> },
 ];
 
 function LogoutItem() {

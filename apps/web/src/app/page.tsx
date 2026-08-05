@@ -33,7 +33,7 @@ export default async function Home({
             Добро пожаловать в VedaMatch
           </h1>
           <p className="text-text-1">
-            Один аккаунт — один вход — доступ ко всем сервисам VedaMatch.
+         {user.gender === 'female' ? 'Дорогая' : 'Дорогой'} {user.name}, Вы находитесь на Портале у вас доступ к этим сервисам:
           </p>
         </section>
         <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">

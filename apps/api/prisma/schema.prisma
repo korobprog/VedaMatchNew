@@ -700,11 +700,75 @@ enum UnionFormat {
   any
 }
 
+/// Питание. Для вайшнавского контекста заменяет вопросы «алкоголь/курение» из массовых анкет.
+enum UnionDiet {
+  vegetarian
+  vegan
+  prasadam_only
+  transitioning
+  not_vegetarian
+}
+
+/// Четыре регулирующих принципа. Хранятся как набор соблюдаемых — «ничего не выбрано»
+/// означает «не указано», а не «не соблюдаю ничего».
+enum UnionRegulativePrinciple {
+  no_meat
+  no_intoxicants
+  no_gambling
+  no_illicit_sex
+}
+
+enum UnionChildrenStatus {
+  none_want
+  none_not_want
+  none_undecided
+  have_living_with
+  have_living_apart
+}
+
+enum UnionEducationLevel {
+  school
+  vocational
+  incomplete_higher
+  higher
+  academic_degree
+}
+
+enum UnionSpiritualEducation {
+  none
+  temple_courses
+  bhakti_shastri
+  bhakti_vaibhava
+  bhakti_vedanta
+  other
+}
+
+enum UnionHousing {
+  own_place
+  rent
+  with_parents
+  with_relatives
+  community
+  temple_ashram
+}
+
+/// Материальная обеспеченность. Формулировки намеренно мягкие, поле опционально
+/// и закрывается настройками приватности.
+enum UnionIncomeLevel {
+  basic_needs_hard
+  basic_needs
+  basic_and_rest
+  comfortable
+  prefer_not_say
+}
+
 model UnionProfile {
   id              String      @id @default(uuid())
   userId          String      @unique
   user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   about           String?
+  /// Короткая строка-статус поверх анкеты
+  status          String?
   relocationReady Boolean     @default(false)
   format          UnionFormat @default(any)
   languages       String[]    @default([])
@@ -712,6 +776,19 @@ model UnionProfile {
   interests       String[]    @default([])
   values          String[]    @default([])
   familyStatus    String?
+  // Блок «О себе»: все поля опциональны
+  heightCm             Int?
+  diet                 UnionDiet?
+  regulativePrinciples UnionRegulativePrinciple[] @default([])
+  childrenStatus       UnionChildrenStatus?
+  education            UnionEducationLevel?
+  spiritualEducation   UnionSpiritualEducation?
+  housing              UnionHousing?
+  income               UnionIncomeLevel?
+  pets                 String[]                   @default([])
+  // Желаемый возраст партнёра; используется как фильтр рекомендаций
+  ageRangeMin          Int?
+  ageRangeMax          Int?
   // { photo, age, city, contacts: 'everyone' | 'after_match' | 'hidden' }
   privacy         Json?
   // скрыть из рекомендаций без удаления профиля

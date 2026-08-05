@@ -7,7 +7,7 @@ const { librarySections } = require('./library-sections-data.js');
 const services = [
   {
     slug: 'union',
-    name: 'VedaMatch Union',
+    name: 'Знакомства В Благости',
     description:
       'Осознанные знакомства и сотрудничество: семья, дружба, служение, проекты',
     url: '/union',
@@ -36,7 +36,7 @@ const services = [
   },
   {
     slug: 'motivation',
-    name: 'VedaMatch Motivation',
+    name: 'Мотивация',
     description: 'Ежедневная мотивация и практики саморазвития',
     url: '/motivation',
     status: 'active',
