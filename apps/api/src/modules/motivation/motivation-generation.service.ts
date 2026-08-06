@@ -88,6 +88,55 @@ export class MotivationGenerationService {
     return this.validateCopy(parsed);
   }
 
+  /**
+   * Простой одноязычный текст без JSON-схемы: короткие пользовательские поля
+   * (например статус профиля), а не структурированные посты Motivation.
+   */
+  async generatePlainText(prompt: string, maxLength: number): Promise<string> {
+    const apiKey = this.config.get<string>('MOTIVATION_AI_API_KEY');
+    const baseUrl = this.config
+      .get<string>('MOTIVATION_AI_BASE_URL')
+      ?.replace(/\/$/, '');
+    const model =
+      this.config.get<string>('MOTIVATION_TEXT_MODEL') || 'deepseek-v4-flash';
+    if (!apiKey || !baseUrl)
+      throw new ServiceUnavailableException('Motivation AI is not configured');
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(new Error('timeout')),
+      60_000,
+    );
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          'content-type': 'application/json',
+          'user-agent': 'OpenAI-Python/1.0',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!response.ok)
+      throw new BadGatewayException(
+        `Text provider error ${response.status}: ${(await response.text()).slice(0, 300)}`,
+      );
+    const content = this.extractChatContent(await response.text());
+    if (!content)
+      throw new BadGatewayException('Text provider returned no content');
+    return content
+      .trim()
+      .replace(/^["'«]|["'»]$/g, '')
+      .slice(0, maxLength);
+  }
+
   async generateVerifiedQuoteCopy(input: {
     originalText: string;
     originalLanguage: string;

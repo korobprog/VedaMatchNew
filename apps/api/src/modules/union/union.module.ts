@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
 import { ModerationModule } from '../moderation/moderation.module';
+import { MotivationModule } from '../motivation/motivation.module';
 import { UnionChatController } from './union-chat.controller';
 import { UnionChatService } from './union-chat.service';
 import { UnionConnectionController } from './union-connection.controller';
@@ -12,7 +13,7 @@ import { UnionProfileService } from './union-profile.service';
 import { UnionRecommendationsController } from './union-recommendations.controller';
 
 @Module({
-  imports: [AuthModule, UsersModule, ModerationModule],
+  imports: [AuthModule, UsersModule, ModerationModule, MotivationModule],
   controllers: [
     UnionProfileController,
     UnionRecommendationsController,

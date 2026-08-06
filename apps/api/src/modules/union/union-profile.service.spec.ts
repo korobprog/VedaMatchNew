@@ -7,6 +7,7 @@ import { BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserGalleryService } from '../users/user-gallery.service';
 import { ModerationService } from '../moderation/moderation.service';
+import { MotivationGenerationService } from '../motivation/motivation-generation.service';
 import { UnionMatchingService } from './union-matching.service';
 import { UnionProfileService } from './union-profile.service';
 
@@ -238,11 +239,15 @@ describe('UnionProfileService', () => {
     hiddenUserIds: jest.fn().mockResolvedValue(new Set<string>()),
     isHidden: jest.fn().mockResolvedValue(false),
   };
+  const generation = {
+    generatePlainText: jest.fn().mockResolvedValue('generated text'),
+  };
   const service = new UnionProfileService(
     prisma as unknown as PrismaService,
     matching as unknown as UnionMatchingService,
     gallery as unknown as UserGalleryService,
     moderation as unknown as ModerationService,
+    generation as unknown as MotivationGenerationService,
   );
 
   beforeEach(() => {
@@ -539,6 +544,53 @@ describe('UnionProfileService', () => {
     // Заполнены только фото (12) и намерения (10) из фикстуры.
     expect(state.completeness.percent).toBe(22);
     expect(state.completeness.next).toBe('about');
+  });
+
+  it('generates a status from the filled-in profile fields', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.user.findUnique.mockResolvedValue({ spiritualStage: 'devotee' });
+
+    const result = await service.generateText('me', 'status');
+
+    expect(result).toEqual({ text: 'generated text' });
+    expect(generation.generatePlainText).toHaveBeenCalledTimes(1);
+    const [prompt, maxLength] = generation.generatePlainText.mock.calls[0] as [
+      string,
+      number,
+    ];
+    expect(maxLength).toBe(120);
+    expect(prompt).toContain('Духовный этап: devotee');
+    expect(prompt).toContain('friendship (100%)');
+  });
+
+  it('generates an about text with a longer soft limit', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.user.findUnique.mockResolvedValue({ spiritualStage: null });
+
+    await service.generateText('me', 'about');
+
+    const [, maxLength] = generation.generatePlainText.mock.calls[0] as [
+      string,
+      number,
+    ];
+    expect(maxLength).toBe(500);
+  });
+
+  it('generates a generic prompt when the profile has no data yet', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({ spiritualStage: null });
+
+    await service.generateText('me', 'status');
+
+    const [prompt] = generation.generatePlainText.mock.calls[0] as [string];
+    expect(prompt).toContain('Данных пока нет');
+  });
+
+  it('rejects an unsupported field to generate', async () => {
+    await expect(
+      service.generateText('me', 'nickname' as never),
+    ).rejects.toThrow(BadRequestException);
+    expect(generation.generatePlainText).not.toHaveBeenCalled();
   });
 
   it('allows an inactive profile card for an accepted connection', async () => {

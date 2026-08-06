@@ -30,6 +30,7 @@ import { MotivationSourceFetchService } from './motivation-source-fetch.service'
   ],
   exports: [
     MotivationService,
+    MotivationGenerationService,
     QuoteVerificationService,
     QuoteDiscoveryService,
     MotivationCopyService,
