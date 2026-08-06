@@ -163,6 +163,17 @@ export interface UnionProfileState {
   completeness: UnionProfileCompleteness;
 }
 
+/** Поля анкеты, которые можно сгенерировать нейросетью по данным профиля. */
+export type UnionGenerableField = 'status' | 'about';
+
+export interface UnionGenerateTextRequest {
+  field: UnionGenerableField;
+}
+
+export interface UnionGenerateTextResponse {
+  text: string;
+}
+
 export interface UnionProfileUpdateRequest extends Partial<UnionProfileDetails> {
   about?: string | null;
   relocationReady?: boolean;

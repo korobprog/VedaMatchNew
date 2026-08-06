@@ -1,6 +1,9 @@
 "use client";
 
 import { ReactNode, useEffect, useId, useState } from "react";
+import type { UnionGenerableField } from "@vedamatch/shared";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 /**
  * Строка анкеты в стиле «поле → значение / Указать». Значение редактируется
@@ -350,6 +353,59 @@ export function UnionTextEditor({
       >
         Готово
       </button>
+    </div>
+  );
+}
+
+/**
+ * Кнопка «сгенерировать нейросетью» для поля статуса/описания: один клик —
+ * запрос к API по уже заполненным данным анкеты, результат сразу в поле.
+ * Без модерации и без лимита — пользователь сам решает, оставлять текст.
+ */
+export function UnionGenerateButton({
+  field,
+  label,
+  onGenerated,
+}: {
+  field: UnionGenerableField;
+  label: string;
+  onGenerated: (text: string) => void;
+}) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function generate() {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_URL}/union/profile/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ field }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const { text } = (await res.json()) as { text: string };
+      onGenerated(text);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось сгенерировать");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="mt-1.5 flex items-center gap-2 px-1">
+      <button
+        type="button"
+        onClick={() => void generate()}
+        disabled={pending}
+        className="inline-flex items-center gap-1.5 rounded-full border border-glass-brd px-3 py-1 text-xs font-medium text-cyan transition hover:border-cyan disabled:opacity-50"
+      >
+        <span aria-hidden="true">✨</span>
+        {pending ? "Генерирую…" : label}
+      </button>
+      {error && <span className="text-xs text-magenta">{error}</span>}
     </div>
   );
 }

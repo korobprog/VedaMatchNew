@@ -44,6 +44,7 @@ import { UnionProfileProgress } from "./union-profile-progress";
 import {
   UnionChoiceEditor,
   UnionFieldRow,
+  UnionGenerateButton,
   UnionMultiChoiceEditor,
   UnionNumberEditor,
   UnionRangeEditor,
@@ -267,6 +268,11 @@ export function UnionProfileForm({
             />
           )}
         </UnionFieldRow>
+        <UnionGenerateButton
+          field="status"
+          label="Сгенерировать статус"
+          onGenerated={(text) => update("status", text)}
+        />
         <UnionFieldRow
           label="О себе"
           value={draft.about ?? null}
@@ -283,6 +289,11 @@ export function UnionProfileForm({
             />
           )}
         </UnionFieldRow>
+        <UnionGenerateButton
+          field="about"
+          label="Сгенерировать описание"
+          onGenerated={(text) => update("about", text)}
+        />
       </section>
 
       <section className={sectionClass}>

@@ -19,6 +19,8 @@ import type {
   UnionConnectionSummary,
   UnionDiet,
   UnionEducationLevel,
+  UnionGenerableField,
+  UnionGenerateTextResponse,
   UnionHousing,
   UnionIncomeLevel,
   UnionIntentionDto,
@@ -36,6 +38,7 @@ import type {
 } from '@vedamatch/shared';
 import { calculateAge, MAX_PROFILE_AGE, MIN_PROFILE_AGE } from '../users/age';
 import { computeCompleteness } from './union-completeness';
+import { MotivationGenerationService } from '../motivation/motivation-generation.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { toActivityLevel } from './union-activity';
 import { isVerifiedDevotee } from './union-verification';
@@ -59,6 +62,9 @@ const MAX_ITEM_LENGTH = 100;
 export const UNION_MIN_HEIGHT_CM = 120;
 export const UNION_MAX_HEIGHT_CM = 230;
 export const UNION_MAX_STATUS_LENGTH = 120;
+// Мягкий предел для сгенерированного «О себе»: короче MAX_ABOUT_LENGTH,
+// чтобы черновик не разрастался в стену текста.
+const ABOUT_GENERATION_TARGET = 500;
 const DIET_VALUES: UnionDiet[] = [
   'vegetarian',
   'vegan',
@@ -141,6 +147,7 @@ export class UnionProfileService {
     private readonly matching: UnionMatchingService,
     private readonly gallery: UserGalleryService,
     private readonly moderation: ModerationService,
+    private readonly generation: MotivationGenerationService,
   ) {}
 
   async getState(userId: string): Promise<UnionProfileState> {
@@ -195,6 +202,86 @@ export class UnionProfileService {
     });
 
     return this.toState(userId, profile);
+  }
+
+  /**
+   * Черновик статуса/описания по уже заполненным полям анкеты. Без модерации
+   * и без сохранения — пользователь сам решает, оставлять ли результат.
+   */
+  async generateText(
+    userId: string,
+    field: UnionGenerableField,
+  ): Promise<UnionGenerateTextResponse> {
+    if (field !== 'status' && field !== 'about') {
+      throw new BadRequestException('Недопустимое поле для генерации');
+    }
+    const [profile, user] = await Promise.all([
+      this.prisma.unionProfile.findUnique({
+        where: { userId },
+        include: { intentions: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { spiritualStage: true },
+      }),
+    ]);
+    const context = this.buildGenerationContext(profile, user);
+    const maxLength =
+      field === 'status' ? UNION_MAX_STATUS_LENGTH : ABOUT_GENERATION_TARGET;
+    const instruction =
+      field === 'status'
+        ? `Напиши короткий статус для профиля знакомств (максимум ${maxLength} символов, одна фраза, без кавычек и хэштегов).`
+        : `Напиши тёплый рассказ о себе для профиля знакомств (2-4 коротких предложения, максимум ${maxLength} символов, без списков и хэштегов).`;
+    const prompt = [
+      'Ты помогаешь человеку заполнить анкету в приложении знакомств для практикующих вайшнавов.',
+      'Пиши от первого лица, по-русски, искренне и без клише.',
+      'Никогда не выдумывай факты, которых нет в данных ниже — если данных мало, пиши обобщённо.',
+      instruction,
+      'Данные о человеке:',
+      context,
+    ].join('\n');
+    const text = await this.generation.generatePlainText(prompt, maxLength);
+    return { text };
+  }
+
+  private buildGenerationContext(
+    profile: ProfileWithIntentions | null,
+    user: Pick<User, 'spiritualStage'> | null,
+  ): string {
+    const lines: string[] = [];
+    if (user?.spiritualStage)
+      lines.push(`Духовный этап: ${user.spiritualStage}`);
+    if (profile) {
+      if (profile.intentions.length > 0) {
+        lines.push(
+          `Цель знакомства: ${profile.intentions
+            .map((i) => `${i.type} (${i.weight}%)`)
+            .join(', ')}`,
+        );
+      }
+      if (profile.interests.length > 0) {
+        lines.push(`Интересы: ${profile.interests.join(', ')}`);
+      }
+      if (profile.values.length > 0) {
+        lines.push(`Ценности: ${profile.values.join(', ')}`);
+      }
+      if (profile.skills.length > 0) {
+        lines.push(`Навыки: ${profile.skills.join(', ')}`);
+      }
+      if (profile.familyStatus) {
+        lines.push(`Семейный статус: ${profile.familyStatus}`);
+      }
+      if (profile.diet) lines.push(`Питание: ${profile.diet}`);
+      if (profile.childrenStatus) {
+        lines.push(`Дети: ${profile.childrenStatus}`);
+      }
+      if (profile.housing) lines.push(`Жилищные условия: ${profile.housing}`);
+      if (profile.about) lines.push(`Уже написано о себе: ${profile.about}`);
+      if (profile.status) lines.push(`Текущий статус: ${profile.status}`);
+    }
+    return lines.length > 0
+      ? lines.join('\n')
+      : 'Данных пока нет — напиши что-то универсальное и доброжелательное.';
   }
 
   async getRecommendations(

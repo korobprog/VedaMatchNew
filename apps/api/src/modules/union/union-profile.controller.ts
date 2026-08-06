@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Put, UseGuards } from '@nestjs/common';
 import type {
   AccessTokenPayload,
+  UnionGenerateTextRequest,
   UnionProfileUpdateRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
@@ -22,5 +23,13 @@ export class UnionProfileController {
     @Body() body: UnionProfileUpdateRequest,
   ) {
     return this.profiles.upsertProfile(user.sub, body);
+  }
+
+  @Post('generate')
+  generate(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: UnionGenerateTextRequest,
+  ) {
+    return this.profiles.generateText(user.sub, body.field);
   }
 }
