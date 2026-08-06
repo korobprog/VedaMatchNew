@@ -265,11 +265,7 @@ export class MotivationGenerationService {
       .get<string>('MOTIVATION_AI_BASE_URL')
       ?.replace(/\/$/, '');
     const model =
-      this.config.get<string>('MOTIVATION_IMAGE_CONTROLLER_MODEL') || 'gpt-5.5';
-    if (model.startsWith('gpt-image-'))
-      throw new BadRequestException(
-        'Image controller model must be a Responses-capable language model',
-      );
+      this.config.get<string>('MOTIVATION_IMAGE_MODEL') || 'gpt-image-2';
     if (!apiKey || !baseUrl)
       throw new ServiceUnavailableException('Motivation AI is not configured');
     const imagePrompt = `${prompt}\nVertical 9:16 illustration, no text, respectful non-photorealistic spiritual art.`;
@@ -281,9 +277,13 @@ export class MotivationGenerationService {
       () => controller.abort(new Error('Image generation timed out')),
       timeoutMs,
     );
-    let raw: string;
+    let response: Response;
     try {
-      const response = await fetch(`${baseUrl}/responses`, {
+      // Стандартный OpenAI Images API. Раньше здесь была генерация через
+      // /responses + инструмент image_generation — трюк для провайдера, у
+      // которого не было прямого доступа к картиночной модели. relay.fast
+      // отдаёт gpt-image-2 напрямую этим эндпоинтом, tool-call он игнорирует.
+      response = await fetch(`${baseUrl}/images/generations`, {
         method: 'POST',
         signal: controller.signal,
         headers: {
@@ -293,50 +293,25 @@ export class MotivationGenerationService {
         },
         body: JSON.stringify({
           model,
-          instructions:
-            'You are an image generation assistant. Use the image_generation tool to create exactly one image that matches the user request.',
-          input: [
-            {
-              role: 'user',
-              content: [{ type: 'input_text', text: imagePrompt }],
-            },
-          ],
-          tools: [
-            {
-              type: 'image_generation',
-              action: 'generate',
-              output_format: 'png',
-            },
-          ],
-          tool_choice: { type: 'image_generation' },
-          store: false,
-          stream: true,
+          prompt: imagePrompt,
+          size: '1024x1536',
         }),
       });
-      if (!response.ok)
-        throw new BadGatewayException(
-          `Image provider error ${response.status}: ${(await response.text()).slice(0, 300)}`,
-        );
-      raw = await this.readResponseText(response, controller.signal);
     } finally {
       clearTimeout(timeout);
     }
-    const events = raw.split(/\r?\n\r?\n/).flatMap((block) => {
-      const data = block
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice(5).trim())
-        .join('\n');
-      if (!data || data === '[DONE]') return [];
-      try {
-        return [JSON.parse(data) as unknown];
-      } catch {
-        return [];
-      }
-    });
-    const encoded = events
-      .map((event) => this.findImageResult(event))
-      .find(Boolean);
+    if (!response.ok)
+      throw new BadGatewayException(
+        `Image provider error ${response.status}: ${(await response.text()).slice(0, 300)}`,
+      );
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new BadGatewayException('Image provider returned invalid JSON');
+    }
+    const encoded = (payload as { data?: Array<{ b64_json?: string }> })
+      .data?.[0]?.b64_json;
     if (!encoded)
       throw new BadGatewayException('Image provider returned no image');
     const bytes = Buffer.from(encoded, 'base64');
@@ -364,30 +339,6 @@ export class MotivationGenerationService {
       );
     }
     return this.generateImage(input.imagePrompt);
-  }
-
-  private async readResponseText(
-    response: Response,
-    signal: AbortSignal,
-  ): Promise<string> {
-    if (!response.body) return '';
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let raw = '';
-    const abort = new Promise<never>((_, reject) =>
-      signal.addEventListener('abort', () => reject(signal.reason), {
-        once: true,
-      }),
-    );
-    try {
-      while (true) {
-        const result = await Promise.race([reader.read(), abort]);
-        if (result.done) return raw + decoder.decode();
-        raw += decoder.decode(result.value, { stream: true });
-      }
-    } finally {
-      await reader.cancel().catch(() => undefined);
-    }
   }
 
   async uploadStory(key: string, bytes: Buffer): Promise<string> {
@@ -434,33 +385,5 @@ export class MotivationGenerationService {
         storyText: item.storyText.trim().slice(0, 120),
       };
     });
-  }
-
-  private findImageResult(value: unknown): string | undefined {
-    if (!value || typeof value !== 'object') return undefined;
-    const item = value as Record<string, unknown>;
-    if (
-      (item.type === 'image_generation_call' &&
-        typeof item.result === 'string') ||
-      typeof item.b64_json === 'string'
-    ) {
-      const encoded =
-        typeof item.result === 'string'
-          ? item.result
-          : (item.b64_json as string);
-      if (encoded.length > 1000) return encoded;
-    }
-    for (const child of Object.values(item)) {
-      if (Array.isArray(child)) {
-        for (const entry of child) {
-          const found = this.findImageResult(entry);
-          if (found) return found;
-        }
-      } else if (child && typeof child === 'object') {
-        const found = this.findImageResult(child);
-        if (found) return found;
-      }
-    }
-    return undefined;
   }
 }
