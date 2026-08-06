@@ -4,21 +4,6 @@ import { MotivationGenerationService } from './motivation-generation.service';
 describe('MotivationGenerationService', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it('rejects image models as controller models', async () => {
-    const config = {
-      get: (key: string) =>
-        ({
-          MOTIVATION_AI_API_KEY: 'test',
-          MOTIVATION_AI_BASE_URL: 'https://example.test/v1',
-          MOTIVATION_IMAGE_CONTROLLER_MODEL: 'gpt-image-1',
-        })[key],
-    } as ConfigService;
-    const service = new MotivationGenerationService(config);
-    await expect(service.generateImage('test')).rejects.toThrow(
-      'Responses-capable',
-    );
-  });
-
   it('does not call the image API without approved text and a stored image prompt', async () => {
     const config = {
       get: (key: string) =>
@@ -46,7 +31,7 @@ describe('MotivationGenerationService', () => {
         ({
           MOTIVATION_AI_API_KEY: 'test',
           MOTIVATION_AI_BASE_URL: 'https://example.test/v1',
-          MOTIVATION_IMAGE_CONTROLLER_MODEL: 'gpt-5.5',
+          MOTIVATION_IMAGE_MODEL: 'gpt-image-2',
         })[key],
     } as ConfigService;
     const service = new MotivationGenerationService(config);
@@ -75,11 +60,9 @@ describe('MotivationGenerationService', () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          `data: {"type":"response.output_item.done","item":{"type":"image_generation_call",\n` +
-            `data: "result":"${png}"}}\n\ndata: [DONE]\n\n`,
-          { status: 200 },
-        ),
+        new Response(JSON.stringify({ data: [{ b64_json: png }] }), {
+          status: 200,
+        }),
       );
 
     await service.generateCopy({
@@ -104,13 +87,8 @@ describe('MotivationGenerationService', () => {
       'user-agent': 'OpenAI-Python/1.0',
     });
     expect(JSON.parse(String(imageOptions.body))).toMatchObject({
-      model: 'gpt-5.5',
-      stream: true,
-      store: false,
-      tools: [
-        { type: 'image_generation', action: 'generate', output_format: 'png' },
-      ],
-      tool_choice: { type: 'image_generation' },
+      model: 'gpt-image-2',
+      size: '1024x1536',
     });
   });
 
@@ -211,42 +189,39 @@ describe('MotivationGenerationService', () => {
         ({
           MOTIVATION_AI_API_KEY: 'test',
           MOTIVATION_AI_BASE_URL: 'https://example.test/v1',
-          MOTIVATION_IMAGE_CONTROLLER_MODEL: 'gpt-5.5',
         })[key],
     } as ConfigService;
     const service = new MotivationGenerationService(config);
-    jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValue(
-        new Response(
-          `data: ${JSON.stringify({ type: 'image_generation_call', result: Buffer.alloc(1200).toString('base64') })}\n\n`,
-          { status: 200 },
-        ),
-      );
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [{ b64_json: Buffer.alloc(1200).toString('base64') }],
+        }),
+        { status: 200 },
+      ),
+    );
     await expect(service.generateImage('test')).rejects.toThrow('valid PNG');
   });
 
-  it('aborts when the image response stream does not finish', async () => {
+  it('aborts when the image request does not finish in time', async () => {
     const config = {
       get: (key: string) =>
         ({
           MOTIVATION_AI_API_KEY: 'test',
           MOTIVATION_AI_BASE_URL: 'https://example.test/v1',
-          MOTIVATION_IMAGE_CONTROLLER_MODEL: 'gpt-5.5',
           MOTIVATION_IMAGE_TIMEOUT_MS: '20',
         })[key],
     } as ConfigService;
     const service = new MotivationGenerationService(config);
-    const stream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(
-          new TextEncoder().encode('data: {"type":"response.created"}\n\n'),
-        );
-      },
-    });
-    jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValue(new Response(stream, { status: 200 }));
+    jest.spyOn(global, 'fetch').mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          const signal = (init as RequestInit).signal;
+          signal?.addEventListener('abort', () =>
+            reject(signal.reason as Error),
+          );
+        }),
+    );
 
     await expect(service.generateImage('test')).rejects.toThrow('timed out');
   });

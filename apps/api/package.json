@@ -23,7 +23,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "seed": "node prisma/seed.cjs",
-    "seed:dev": "node prisma/seed-dev.cjs"
+    "seed:dev": "node prisma/seed-dev.cjs",
+    "test:ai": "node scripts/test-motivation-ai.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.cjs"
