@@ -208,6 +208,12 @@ describe('UnionProfileService', () => {
       findMany: jest.fn(),
       findFirst: jest.fn(),
     },
+    unionSwipe: {
+      findMany: jest.fn(() => Promise.resolve([] as { toUserId: string }[])),
+    },
+    unionBoost: {
+      findMany: jest.fn(() => Promise.resolve([] as { userId: string }[])),
+    },
     $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) =>
       callback(transaction),
     ),
@@ -290,6 +296,78 @@ describe('UnionProfileService', () => {
 
     expect(result.items).toEqual([]);
     expect(result.total).toBe(0);
+  });
+
+  it('keeps swiped profiles out of the deck', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([
+      profile('seen'),
+      profile('fresh'),
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+    prisma.unionSwipe.findMany.mockResolvedValue([{ toUserId: 'seen' }]);
+
+    const result = await service.getRecommendations('me');
+
+    expect(result.items.map((item) => item.user.id)).toEqual(['fresh']);
+  });
+
+  it('lifts a boosted profile above a better matching one', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([
+      profile('ordinary'),
+      profile('boosted'),
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+    prisma.unionBoost.findMany.mockResolvedValue([{ userId: 'boosted' }]);
+    matching.computeCompatibility
+      .mockReturnValueOnce({ total: 90, breakdown: [] })
+      .mockReturnValueOnce({ total: 10, breakdown: [] });
+
+    const result = await service.getRecommendations('me');
+
+    expect(result.items.map((item) => item.user.id)).toEqual([
+      'boosted',
+      'ordinary',
+    ]);
+  });
+
+  it('sorts by profile freshness when the collection asks for new ones', async () => {
+    const older = profile('older');
+    const newer = {
+      ...profile('newer'),
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+    };
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([older, newer]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+    matching.computeCompatibility
+      .mockReturnValueOnce({ total: 95, breakdown: [] })
+      .mockReturnValueOnce({ total: 20, breakdown: [] });
+
+    const result = await service.getRecommendations('me', { sort: 'new' });
+
+    expect(result.items.map((item) => item.user.id)).toEqual([
+      'newer',
+      'older',
+    ]);
+  });
+
+  it('drops profiles below the requested compatibility threshold', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([
+      profile('weak'),
+      profile('strong'),
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+    matching.computeCompatibility
+      .mockReturnValueOnce({ total: 40, breakdown: [] })
+      .mockReturnValueOnce({ total: 80, breakdown: [] });
+
+    const result = await service.getRecommendations('me', { minScore: 70 });
+
+    expect(result.items.map((item) => item.user.id)).toEqual(['strong']);
+    expect(result.total).toBe(1);
   });
 
   it('queries only active recommendation profiles', async () => {

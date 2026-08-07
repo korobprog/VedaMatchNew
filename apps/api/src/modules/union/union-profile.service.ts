@@ -135,6 +135,7 @@ type ConnectionForUser = Pick<
   | 'fromUserId'
   | 'toUserId'
   | 'status'
+  | 'isSuperlike'
   | 'message'
   | 'createdAt'
   | 'respondedAt'
@@ -320,10 +321,13 @@ export class UnionProfileService {
 
     const connections = await this.connectionMap(userId);
     const hidden = await this.moderation.hiddenUserIds(userId);
+    const swiped = await this.swipedUserIds(userId);
+    const boosted = await this.boostedUserIds();
     const myInput = this.toMatchInput(me, me.user);
     const normalizedFilters = this.normalizeFilters(filters);
     const recommendations = others
       .filter((other) => !hidden.has(other.userId))
+      .filter((other) => !swiped.has(other.userId))
       .filter((other) => this.hasCompleteLocation(other.user))
       .filter((other) =>
         this.matchesFilters(other, other.user, normalizedFilters, myInput, {
@@ -342,7 +346,22 @@ export class UnionProfileService {
           connections.get(other.userId) ?? null,
         ),
       }))
+      .filter(
+        ({ recommendation }) =>
+          normalizedFilters.minScore == null ||
+          recommendation.compatibility.total >= normalizedFilters.minScore,
+      )
       .sort((a, b) => {
+        // Активное «Внимание» поднимает анкету над остальными.
+        const byBoost =
+          Number(boosted.has(b.other.userId)) -
+          Number(boosted.has(a.other.userId));
+        if (byBoost !== 0) return byBoost;
+        if (normalizedFilters.sort === 'new') {
+          const byFresh =
+            b.other.createdAt.getTime() - a.other.createdAt.getTime();
+          if (byFresh !== 0) return byFresh;
+        }
         const byScore =
           b.recommendation.compatibility.total -
           a.recommendation.compatibility.total;
@@ -510,6 +529,27 @@ export class UnionProfileService {
     };
   }
 
+  /**
+   * Кого человек уже отсмотрел в колоде. Откатанные свайпы (`undoneAt`)
+   * не учитываются — такие анкеты сознательно возвращают в выдачу.
+   */
+  private async swipedUserIds(userId: string): Promise<Set<string>> {
+    const rows = await this.prisma.unionSwipe.findMany({
+      where: { fromUserId: userId, undoneAt: null },
+      select: { toUserId: true },
+    });
+    return new Set(rows.map((row) => row.toUserId));
+  }
+
+  /** Чьи анкеты сейчас подняты бустом «Внимание». */
+  private async boostedUserIds(): Promise<Set<string>> {
+    const rows = await this.prisma.unionBoost.findMany({
+      where: { expiresAt: { gt: new Date() } },
+      select: { userId: true },
+    });
+    return new Set(rows.map((row) => row.userId));
+  }
+
   private async connectionMap(
     userId: string,
   ): Promise<Map<string, ConnectionForUser>> {
@@ -549,6 +589,7 @@ export class UnionProfileService {
       status: connection.status,
       direction:
         connection.fromUserId === currentUserId ? 'outgoing' : 'incoming',
+      isSuperlike: connection.isSuperlike,
       message: connection.message,
       createdAt: connection.createdAt.toISOString(),
       respondedAt: connection.respondedAt?.toISOString() ?? null,
@@ -597,6 +638,8 @@ export class UnionProfileService {
         ? filters.format
         : undefined,
       language: cleanFilterText(filters.language),
+      sort: filters.sort === 'new' ? 'new' : 'match',
+      minScore: clampInteger(filters.minScore, 1, 100),
       page,
       pageSize,
     };
@@ -868,6 +911,15 @@ export class UnionProfileService {
     if (body.requestsFromVerifiedOnly !== undefined) {
       data.requestsFromVerifiedOnly = body.requestsFromVerifiedOnly;
     }
+    if (body.contactMode !== undefined) {
+      if (
+        body.contactMode !== 'requests' &&
+        body.contactMode !== 'mutual_only'
+      ) {
+        throw new BadRequestException('Неизвестный режим знакомства');
+      }
+      data.contactMode = body.contactMode;
+    }
     Object.assign(data, this.validateDetails(body));
     return data;
   }
@@ -1073,6 +1125,7 @@ export class UnionProfileService {
       privacy: (profile.privacy as UnionPrivacySettings | null) ?? null,
       isActive: profile.isActive,
       requestsFromVerifiedOnly: profile.requestsFromVerifiedOnly,
+      contactMode: profile.contactMode,
       intentions: profile.intentions.map((i) => ({
         type: i.type,
         weight: i.weight,

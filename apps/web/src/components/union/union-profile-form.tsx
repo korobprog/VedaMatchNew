@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
   UnionChildrenStatus,
+  UnionContactMode,
   UnionDiet,
   UnionEducationLevel,
   UnionFormat,
@@ -84,11 +85,16 @@ const privacyFields: Array<[keyof UnionPrivacySettings, string]> = [
 /** Редактируемая часть анкеты; интенции хранятся отдельно в виде весов. */
 type Draft = Omit<
   UnionProfileUpdateRequest,
-  "intentions" | "privacy" | "isActive" | "requestsFromVerifiedOnly"
+  | "intentions"
+  | "privacy"
+  | "isActive"
+  | "requestsFromVerifiedOnly"
+  | "contactMode"
 > & {
   privacy: UnionPrivacySettings;
   isActive: boolean;
   requestsFromVerifiedOnly: boolean;
+  contactMode: UnionContactMode;
 };
 
 function toDraft(profile: UnionProfileDto | null): Draft {
@@ -116,6 +122,7 @@ function toDraft(profile: UnionProfileDto | null): Draft {
     privacy: profile?.privacy ?? {},
     isActive: profile?.isActive ?? true,
     requestsFromVerifiedOnly: profile?.requestsFromVerifiedOnly ?? false,
+    contactMode: profile?.contactMode ?? "requests",
   };
 }
 
@@ -649,6 +656,31 @@ export function UnionProfileForm({
           знакомство смогут только те, чей статус преданного подтвердила
           администрация.
         </p>
+
+        <div className="mt-4">
+          <label
+            htmlFor="union-contact-mode"
+            className="mb-1 block text-sm font-medium text-text-0"
+          >
+            Кто может со мной связаться
+          </label>
+          <select
+            id="union-contact-mode"
+            value={draft.contactMode}
+            onChange={(event) =>
+              update("contactMode", event.target.value as UnionContactMode)
+            }
+            className={selectClass}
+          >
+            <option value="requests">Заявки от всех</option>
+            <option value="mutual_only">Только взаимные лайки</option>
+          </select>
+          <p className="mt-1 text-xs text-text-2">
+            {draft.contactMode === "mutual_only"
+              ? "Односторонние заявки вам не приходят: общение открывается, только когда лайк взаимный."
+              : "Понравившийся человек может написать вам заявку, а вы ответите взаимностью или откажете."}
+          </p>
+        </div>
 
         <fieldset className="mt-4">
           <legend className="mb-2 text-sm font-medium text-text-0">

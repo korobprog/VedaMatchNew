@@ -11,6 +11,11 @@ import { UnionChatService } from './union-chat.service';
 export class UnionChatController {
   constructor(private readonly chats: UnionChatService) {}
 
+  @Get()
+  listChats(@CurrentUser() user: AccessTokenPayload) {
+    return this.chats.listChats(user.sub);
+  }
+
   @Get(':id')
   getChat(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.chats.getChat(user.sub, id);

@@ -28,6 +28,7 @@ function request(
     id,
     status,
     direction,
+    isSuperlike: false,
     message: `${name}: сообщение`,
     createdAt,
     respondedAt,

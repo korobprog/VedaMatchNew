@@ -4,8 +4,11 @@ import { Header } from "@/components/header";
 import { RecommendationsView } from "@/components/union/recommendations-view";
 import { RecommendationFilters } from "@/components/union/recommendation-filters";
 import { UnionNav } from "@/components/union/union-nav";
+import { UnionTabBar } from "@/components/union/union-tabbar";
+import { UnionTopBar } from "@/components/union/union-top-bar";
 import { getProfile } from "@/lib/api";
 import {
+  getUnionChats,
   getUnionConnectionCounts,
   getUnionRecommendations,
 } from "@/lib/union-api";
@@ -25,9 +28,10 @@ export default async function UnionRecommendationsPage({
   if (!hasCompleteUnionLocation(user)) redirect("/union/location");
 
   const params = await searchParams;
-  const [recommendations, counts] = await Promise.all([
+  const [recommendations, counts, chats] = await Promise.all([
     getUnionRecommendations(params),
     getUnionConnectionCounts().catch(() => null),
+    getUnionChats().catch(() => null),
   ]);
   if (recommendations === null) redirect("/union/profile");
 
@@ -36,8 +40,9 @@ export default async function UnionRecommendationsPage({
       <BackgroundOrbs />
       <NoiseOverlay />
       <Header user={user} />
-      <main className="mx-auto max-w-6xl px-4 py-8 pb-24">
-        <div className="mb-6">
+      <main className="mx-auto max-w-6xl px-4 py-8 pb-28">
+        <UnionTopBar title="Знакомства" />
+        <div className="mb-6 hidden md:block">
           <h1 className="font-display text-2xl font-bold text-text-0 sm:text-3xl">
             Знакомства
           </h1>
@@ -69,6 +74,10 @@ export default async function UnionRecommendationsPage({
           </>
         )}
       </main>
+      <UnionTabBar
+        incomingPending={counts?.incomingPending ?? 0}
+        hasUnreadChats={(chats?.unreadTotal ?? 0) > 0}
+      />
     </div>
   );
 }

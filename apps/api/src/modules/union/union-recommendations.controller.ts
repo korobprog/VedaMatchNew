@@ -48,6 +48,8 @@ function toFilters(
     principlesMin: toNumber(query.principlesMin),
     childrenStatus:
       query.childrenStatus as UnionRecommendationFilters['childrenStatus'],
+    sort: query.sort as UnionRecommendationFilters['sort'],
+    minScore: toNumber(query.minScore),
     page: toNumber(query.page),
     pageSize: toNumber(query.pageSize),
   };

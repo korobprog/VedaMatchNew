@@ -44,7 +44,7 @@ export class UnionConnectionService {
       this.prisma.unionConnectionRequest.findMany({
         where: { toUserId: userId },
         include: { fromUser: { include: { unionProfile: true } } },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ isSuperlike: 'desc' }, { createdAt: 'desc' }],
       }),
       this.prisma.unionConnectionRequest.findMany({
         where: { fromUserId: userId },
@@ -83,6 +83,7 @@ export class UnionConnectionService {
       throw new BadRequestException('Cannot send a request to yourself');
     }
     const message = this.cleanMessage(body.message);
+    const isSuperlike = body.isSuperlike === true;
 
     const [fromProfile, toProfile] = await Promise.all([
       this.prisma.unionProfile.findUnique({
@@ -112,6 +113,16 @@ export class UnionConnectionService {
       );
     }
 
+    // Строгий режим: заявка допустима только когда интерес взаимный.
+    if (
+      toProfile.contactMode === 'mutual_only' &&
+      !(await this.likedBy(toUserId, fromUserId))
+    ) {
+      throw new ForbiddenException(
+        'Этот человек знакомится только по взаимным лайкам',
+      );
+    }
+
     const reverse = await this.prisma.unionConnectionRequest.findUnique({
       where: {
         fromUserId_toUserId: { fromUserId: toUserId, toUserId: fromUserId },
@@ -132,8 +143,8 @@ export class UnionConnectionService {
 
     const request = await this.prisma.unionConnectionRequest.upsert({
       where: { fromUserId_toUserId: { fromUserId, toUserId } },
-      create: { fromUserId, toUserId, message },
-      update: { status: 'pending', message, respondedAt: null },
+      create: { fromUserId, toUserId, message, isSuperlike },
+      update: { status: 'pending', message, isSuperlike, respondedAt: null },
       include: { toUser: { include: { unionProfile: true } } },
     });
     return this.toRequestDto(request, request.toUser, 'outgoing', false);
@@ -185,6 +196,18 @@ export class UnionConnectionService {
     return this.toRequestDto(declined, declined.fromUser, 'incoming', false);
   }
 
+  /** Лайкнул ли `userId` человека `otherUserId` — без учёта откатанных свайпов. */
+  private async likedBy(userId: string, otherUserId: string): Promise<boolean> {
+    const swipe = await this.prisma.unionSwipe.findUnique({
+      where: {
+        fromUserId_toUserId: { fromUserId: userId, toUserId: otherUserId },
+      },
+    });
+    return (
+      swipe !== null && swipe.undoneAt === null && swipe.decision !== 'pass'
+    );
+  }
+
   private cleanMessage(message: string | null | undefined): string | null {
     if (message == null) return null;
     const cleaned = String(message).trim();
@@ -217,6 +240,7 @@ export class UnionConnectionService {
       id: request.id,
       status: request.status,
       direction,
+      isSuperlike: request.isSuperlike,
       message: request.message,
       createdAt: request.createdAt.toISOString(),
       respondedAt: request.respondedAt?.toISOString() ?? null,

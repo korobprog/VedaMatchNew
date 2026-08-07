@@ -1,0 +1,275 @@
+import { PrismaService } from '../../prisma/prisma.service';
+import { UnionConnectionService } from './union-connection.service';
+import { SUPERLIKES_PER_DAY, UNDO_PER_DAY } from './union-limits';
+import { UnionSwipeService } from './union-swipe.service';
+
+const now = new Date('2026-08-07T10:00:00.000Z');
+
+function swipe(
+  options: {
+    id?: string;
+    fromUserId?: string;
+    toUserId?: string;
+    decision?: 'like' | 'superlike' | 'pass';
+    undoneAt?: Date | null;
+  } = {},
+) {
+  return {
+    id: options.id ?? 'swipe-1',
+    fromUserId: options.fromUserId ?? 'user-1',
+    toUserId: options.toUserId ?? 'user-2',
+    decision: options.decision ?? 'like',
+    createdAt: now,
+    undoneAt: options.undoneAt ?? null,
+  };
+}
+
+describe('UnionSwipeService', () => {
+  const prisma = {
+    unionProfile: { findUnique: jest.fn() },
+    unionSwipe: {
+      count: jest.fn(() => Promise.resolve(0)),
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      upsert: jest.fn(),
+      update: jest.fn(),
+    },
+    unionConnectionRequest: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+  };
+  const connections = { create: jest.fn() };
+  const service = new UnionSwipeService(
+    prisma as unknown as PrismaService,
+    connections as unknown as UnionConnectionService,
+  );
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+    jest.useFakeTimers().setSystemTime(now);
+    prisma.unionProfile.findUnique.mockResolvedValue({
+      userId: 'user-2',
+      contactMode: 'requests',
+    });
+    prisma.unionSwipe.count.mockResolvedValue(0);
+  });
+
+  afterEach(() => jest.useRealTimers());
+
+  it('rejects a swipe on yourself', async () => {
+    await expect(
+      service.decide('user-1', { toUserId: 'user-1', decision: 'like' }),
+    ).rejects.toThrow('Cannot swipe on yourself');
+    expect(prisma.unionSwipe.upsert).not.toHaveBeenCalled();
+  });
+
+  it('stores a pass without creating a connection request', async () => {
+    await expect(
+      service.decide('user-1', { toUserId: 'user-2', decision: 'pass' }),
+    ).resolves.toEqual({
+      toUserId: 'user-2',
+      decision: 'pass',
+      matched: false,
+      connection: null,
+    });
+    expect(prisma.unionSwipe.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: { fromUserId: 'user-1', toUserId: 'user-2', decision: 'pass' },
+      }),
+    );
+    expect(connections.create).not.toHaveBeenCalled();
+  });
+
+  it('reports a match when the connection request comes back accepted', async () => {
+    prisma.unionSwipe.findUnique.mockResolvedValue(
+      swipe({ fromUserId: 'user-2', toUserId: 'user-1' }),
+    );
+    prisma.unionConnectionRequest.findUnique.mockResolvedValue({
+      id: 'request-1',
+    });
+    connections.create.mockResolvedValue({
+      id: 'request-1',
+      status: 'accepted',
+    });
+
+    await expect(
+      service.decide('user-1', { toUserId: 'user-2', decision: 'like' }),
+    ).resolves.toEqual(
+      expect.objectContaining({ matched: true, decision: 'like' }),
+    );
+  });
+
+  it('keeps a one-sided like private when the other person wants mutual only', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue({
+      userId: 'user-2',
+      contactMode: 'mutual_only',
+    });
+    prisma.unionSwipe.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.decide('user-1', { toUserId: 'user-2', decision: 'like' }),
+    ).resolves.toEqual(
+      expect.objectContaining({ matched: false, connection: null }),
+    );
+    expect(prisma.unionSwipe.upsert).toHaveBeenCalled();
+    expect(connections.create).not.toHaveBeenCalled();
+  });
+
+  it('creates the missing counter-request so a mutual like opens a chat', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue({
+      userId: 'user-2',
+      contactMode: 'mutual_only',
+    });
+    prisma.unionSwipe.findUnique.mockResolvedValue(
+      swipe({ fromUserId: 'user-2', toUserId: 'user-1' }),
+    );
+    prisma.unionConnectionRequest.findUnique.mockResolvedValue(null);
+    connections.create
+      .mockResolvedValueOnce({ id: 'request-1', status: 'pending' })
+      .mockResolvedValueOnce({ id: 'request-1', status: 'accepted' });
+
+    await expect(
+      service.decide('user-1', { toUserId: 'user-2', decision: 'like' }),
+    ).resolves.toEqual(expect.objectContaining({ matched: true }));
+    expect(connections.create).toHaveBeenNthCalledWith(1, 'user-2', {
+      toUserId: 'user-1',
+    });
+    expect(connections.create).toHaveBeenNthCalledWith(2, 'user-1', {
+      toUserId: 'user-2',
+      message: null,
+      isSuperlike: false,
+    });
+  });
+
+  it('ignores an undone like of the other person when deciding on a match', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue({
+      userId: 'user-2',
+      contactMode: 'mutual_only',
+    });
+    prisma.unionSwipe.findUnique.mockResolvedValue(
+      swipe({ fromUserId: 'user-2', toUserId: 'user-1', undoneAt: now }),
+    );
+
+    await expect(
+      service.decide('user-1', { toUserId: 'user-2', decision: 'like' }),
+    ).resolves.toEqual(expect.objectContaining({ connection: null }));
+    expect(connections.create).not.toHaveBeenCalled();
+  });
+
+  it('marks the connection request as a superlike', async () => {
+    prisma.unionSwipe.findUnique.mockResolvedValue(null);
+    connections.create.mockResolvedValue({
+      id: 'request-1',
+      status: 'pending',
+    });
+
+    await expect(
+      service.decide('user-1', { toUserId: 'user-2', decision: 'superlike' }),
+    ).resolves.toEqual(expect.objectContaining({ decision: 'superlike' }));
+    expect(connections.create).toHaveBeenCalledWith('user-1', {
+      toUserId: 'user-2',
+      message: null,
+      isSuperlike: true,
+    });
+  });
+
+  it('refuses a superlike once the daily quota is spent', async () => {
+    prisma.unionSwipe.count.mockResolvedValue(SUPERLIKES_PER_DAY);
+
+    await expect(
+      service.decide('user-1', { toUserId: 'user-2', decision: 'superlike' }),
+    ).rejects.toThrow('Суперлайки на сегодня закончились');
+    expect(prisma.unionSwipe.upsert).not.toHaveBeenCalled();
+  });
+
+  it('leaves an ordinary like out of the superlike quota', async () => {
+    prisma.unionSwipe.count.mockResolvedValue(SUPERLIKES_PER_DAY);
+    prisma.unionSwipe.findUnique.mockResolvedValue(null);
+    connections.create.mockResolvedValue({
+      id: 'request-1',
+      status: 'pending',
+    });
+
+    await expect(
+      service.decide('user-1', { toUserId: 'user-2', decision: 'like' }),
+    ).resolves.toEqual(expect.objectContaining({ decision: 'like' }));
+  });
+
+  it('refuses an undo once the daily quota is spent', async () => {
+    prisma.unionSwipe.count.mockResolvedValue(UNDO_PER_DAY);
+
+    await expect(service.undoLast('user-1')).rejects.toThrow(
+      'Откаты на сегодня закончились',
+    );
+    expect(prisma.unionSwipe.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('undoes the last swipe and cancels the pending request', async () => {
+    prisma.unionSwipe.findFirst.mockResolvedValue(swipe());
+    prisma.unionConnectionRequest.findUnique.mockResolvedValue({
+      id: 'request-1',
+      status: 'pending',
+    });
+
+    await expect(service.undoLast('user-1')).resolves.toEqual({
+      toUserId: 'user-2',
+      decision: 'like',
+    });
+    expect(prisma.unionConnectionRequest.update).toHaveBeenCalledWith({
+      where: { id: 'request-1' },
+      data: { status: 'cancelled', respondedAt: now },
+    });
+    expect(prisma.unionSwipe.update).toHaveBeenCalledWith({
+      where: { id: 'swipe-1' },
+      data: { undoneAt: now },
+    });
+  });
+
+  it('refuses to undo a swipe that already turned into a match', async () => {
+    prisma.unionSwipe.findFirst.mockResolvedValue(swipe());
+    prisma.unionConnectionRequest.findUnique.mockResolvedValue({
+      id: 'request-1',
+      status: 'accepted',
+    });
+
+    await expect(service.undoLast('user-1')).rejects.toThrow(
+      'Знакомство уже состоялось',
+    );
+    expect(prisma.unionSwipe.update).not.toHaveBeenCalled();
+  });
+
+  it('undoes a pass without touching connection requests', async () => {
+    prisma.unionSwipe.findFirst.mockResolvedValue(swipe({ decision: 'pass' }));
+
+    await expect(service.undoLast('user-1')).resolves.toEqual({
+      toUserId: 'user-2',
+      decision: 'pass',
+    });
+    expect(prisma.unionConnectionRequest.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('fails when there is nothing to undo', async () => {
+    prisma.unionSwipe.findFirst.mockResolvedValue(null);
+
+    await expect(service.undoLast('user-1')).rejects.toThrow(
+      'Откатывать нечего',
+    );
+  });
+
+  it('lists swiped users without the undone ones', async () => {
+    prisma.unionSwipe.findMany.mockResolvedValue([
+      { toUserId: 'user-2' },
+      { toUserId: 'user-3' },
+    ]);
+
+    await expect(service.swipedUserIds('user-1')).resolves.toEqual(
+      new Set(['user-2', 'user-3']),
+    );
+    expect(prisma.unionSwipe.findMany).toHaveBeenCalledWith({
+      where: { fromUserId: 'user-1', undoneAt: null },
+      select: { toUserId: true },
+    });
+  });
+});

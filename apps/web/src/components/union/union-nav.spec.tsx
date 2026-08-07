@@ -10,7 +10,7 @@ describe("UnionNav", () => {
     expect(screen.queryByLabelText(/Входящих заявок/)).not.toBeInTheDocument();
   });
 
-  it("shows the incoming request badge beside connections", () => {
+  it("shows the incoming request badge beside likes", () => {
     render(<UnionNav incomingPending={4} />);
 
     expect(screen.getByLabelText("Входящих заявок: 4")).toHaveTextContent("4");
