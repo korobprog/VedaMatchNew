@@ -220,7 +220,7 @@ function QuoteReviewCard({
       {error && <p role="alert" className="mt-4 text-sm font-medium text-red-700 dark:text-red-300">{error}</p>}
 
       {canReview && (
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <div className="sticky bottom-0 -mx-5 -mb-5 mt-5 grid gap-4 rounded-b-2xl border-t border-zinc-200 bg-white/95 p-5 backdrop-blur sm:grid-cols-2 dark:border-zinc-800 dark:bg-zinc-900/95">
           <StyleSelect post={post} value={style} disabled={disabled} onChange={setStyle} />
           <div className="flex flex-wrap items-end gap-2">
             <button
@@ -260,11 +260,11 @@ function ImageReviewCard({
   const canReview = post.reviewStatus === "image_review";
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <article className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       {post.imageUrl ? (
-        <img src={post.imageUrl} alt={post.title || post.slug} className="aspect-[9/16] w-full object-cover" />
+        <img src={post.imageUrl} alt={post.title || post.slug} className="aspect-[9/16] w-full rounded-t-2xl object-cover" />
       ) : (
-        <div className="flex aspect-[9/16] items-center justify-center bg-zinc-100 text-sm text-zinc-500 dark:bg-zinc-950">
+        <div className="flex aspect-[9/16] items-center justify-center rounded-t-2xl bg-zinc-100 text-sm text-zinc-500 dark:bg-zinc-950">
           {post.reviewStatus === "image_queued" ? "Изображение создаётся…" : "Изображение недоступно"}
         </div>
       )}
@@ -295,7 +295,7 @@ function ImageReviewCard({
         {error && <p role="alert" className="mt-4 text-sm font-medium text-red-700 dark:text-red-300">{error}</p>}
 
         {canReview && (
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <div className="sticky bottom-0 -mx-5 -mb-5 mt-5 grid gap-4 rounded-b-2xl border-t border-zinc-200 bg-white/95 p-5 backdrop-blur sm:grid-cols-2 dark:border-zinc-800 dark:bg-zinc-900/95">
             <StyleSelect post={post} value={style} disabled={disabled} onChange={setStyle} />
             <div className="flex flex-wrap items-end gap-2">
               <button
