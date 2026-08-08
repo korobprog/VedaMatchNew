@@ -10,6 +10,7 @@
 import type {
   AccessTokenPayload,
   AdminManualStageUpdateRequest,
+  AdminRoleUpdateRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { AdminUsersService } from './admin-users.service';
@@ -56,5 +57,14 @@ export class AdminUsersController {
     @Body() body: AdminManualStageUpdateRequest,
   ) {
     return this.adminUsers.updateStage(user, id, body);
+  }
+
+  @Patch(':id/role')
+  updateRole(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: AdminRoleUpdateRequest,
+  ) {
+    return this.adminUsers.updateRole(user, id, body);
   }
 }

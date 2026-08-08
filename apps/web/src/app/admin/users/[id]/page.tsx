@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
 import { AdminUserStageForm } from "@/components/admin-user-stage-form";
+import { AdminUserRoleForm } from "@/components/admin-user-role-form";
 import { AdminPhotoVerification } from "@/components/admin-photo-verification";
 import { AdminSubscriptionForm } from "@/components/admin-subscription-form";
 import { getAdminUser, getProfile } from "@/lib/api";
@@ -188,6 +189,11 @@ export default async function AdminUserDetailPage({
           </div>
 
           <aside className="space-y-6">
+            <AdminUserRoleForm
+              userId={profile.id}
+              isSelf={currentUser.id === profile.id}
+              initialRole={profile.role}
+            />
             <AdminUserStageForm
               userId={profile.id}
               isSelf={currentUser.id === profile.id}
