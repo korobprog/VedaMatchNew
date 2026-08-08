@@ -253,6 +253,15 @@ export interface UnionSwipeUndoResult {
   decision: UnionSwipeDecision;
 }
 
+/**
+ * Результат полного сброса истории показов — отдельного действия от сброса
+ * фильтров: фильтры сужают выдачу, а история решает, кто уже был отсмотрен.
+ */
+export interface UnionSwipeResetResult {
+  /** Сколько анкет вернулось в колоду. Уже состоявшиеся мэтчи не считаются. */
+  restoredCount: number;
+}
+
 export type UnionCompatibilityCriterion =
   | 'intentions'
   | 'stage'

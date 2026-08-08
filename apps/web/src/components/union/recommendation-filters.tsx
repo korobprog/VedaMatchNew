@@ -69,6 +69,8 @@ export function RecommendationFilters({
   );
   const [results, setResults] = useState<GeoSearchResult[]>([]);
   const [pending, setPending] = useState(false);
+  const [resettingHistory, setResettingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   // На узких экранах панель фильтров занимала бы весь первый экран, поэтому по
   // умолчанию она раскрыта только на десктопе; клик пользователя это перекрывает.
   const isDesktop = useSyncExternalStore(
@@ -110,6 +112,31 @@ export function RecommendationFilters({
       controller.abort();
     };
   }, [cityQuery, countryQuery, selectedCity?.city]);
+
+  /**
+   * Отдельно от «Сбросить»: та кнопка только чистит фильтры, а уже
+   * отсмотренные анкеты (лайк/пропуск) не показываются повторно независимо
+   * от фильтров — это своя история, и её нужно сбрасывать явно.
+   */
+  async function handleResetHistory() {
+    setHistoryError(null);
+    setResettingHistory(true);
+    try {
+      const res = await fetch(`${API_URL}/union/swipes/history`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      window.location.href = window.location.pathname + window.location.search;
+    } catch (error) {
+      setHistoryError(
+        error instanceof Error
+          ? error.message
+          : "Не удалось сбросить историю показов",
+      );
+      setResettingHistory(false);
+    }
+  }
 
   return (
     <form
@@ -376,6 +403,15 @@ export function RecommendationFilters({
         >
           Сбросить
         </a>
+        <button
+          type="button"
+          onClick={handleResetHistory}
+          disabled={resettingHistory}
+          title="Уже отсмотренные вами анкеты вернутся в колоду. Состоявшиеся знакомства не затрагиваются."
+          className="text-sm font-medium text-text-2 transition hover:text-text-0 disabled:opacity-50"
+        >
+          {resettingHistory ? "Показываем заново…" : "Показать всех заново"}
+        </button>
         <span className="text-xs text-text-2">
           Геопоиск: ©{" "}
           <a
@@ -389,6 +425,9 @@ export function RecommendationFilters({
           contributors
         </span>
       </div>
+      {historyError && (
+        <p className="mt-2 text-xs text-rose-400">{historyError}</p>
+      )}
       </div>
     </form>
   );

@@ -258,6 +258,38 @@ describe('UnionSwipeService', () => {
     );
   });
 
+  it('restores every swiped profile except accepted matches', async () => {
+    prisma.unionSwipe.findMany.mockResolvedValue([
+      swipe({ id: 'swipe-1', toUserId: 'user-2', decision: 'pass' }),
+      swipe({ id: 'swipe-2', toUserId: 'user-3', decision: 'like' }),
+      swipe({ id: 'swipe-3', toUserId: 'user-4', decision: 'like' }),
+    ]);
+    prisma.unionConnectionRequest.findUnique
+      .mockResolvedValueOnce({ id: 'request-3', status: 'pending' })
+      .mockResolvedValueOnce({ id: 'request-4', status: 'accepted' });
+
+    await expect(service.resetHistory('user-1')).resolves.toEqual({
+      restoredCount: 2,
+    });
+
+    expect(prisma.unionConnectionRequest.update).toHaveBeenCalledWith({
+      where: { id: 'request-3' },
+      data: { status: 'cancelled', respondedAt: now },
+    });
+    expect(prisma.unionSwipe.update).toHaveBeenCalledWith({
+      where: { id: 'swipe-1' },
+      data: { undoneAt: now },
+    });
+    expect(prisma.unionSwipe.update).toHaveBeenCalledWith({
+      where: { id: 'swipe-2' },
+      data: { undoneAt: now },
+    });
+    expect(prisma.unionSwipe.update).not.toHaveBeenCalledWith({
+      where: { id: 'swipe-3' },
+      data: expect.anything(),
+    });
+  });
+
   it('lists swiped users without the undone ones', async () => {
     prisma.unionSwipe.findMany.mockResolvedValue([
       { toUserId: 'user-2' },
