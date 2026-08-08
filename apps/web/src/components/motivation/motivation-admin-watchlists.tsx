@@ -6,19 +6,8 @@ import type {
   MotivationAuthorWatchDto,
   MotivationSourceWatchDto,
 } from "@vedamatch/shared";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-
-async function apiRequest(path: string, method: string, body?: unknown) {
-  const response = await fetch(`${API_URL}${path}`, {
-    method,
-    credentials: "include",
-    headers: body === undefined ? undefined : { "content-type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (!response.ok) throw new Error((await response.text()) || `Ошибка API ${response.status}`);
-  return response.status === 204 ? null : response.json();
-}
+import { apiRequest } from "./motivation-admin-api";
+import { ManualQuoteForm } from "./manual-quote-form";
 
 function formatDate(value: string | null): string {
   if (!value) return "ещё не запускался";
@@ -282,6 +271,7 @@ export function MotivationAdminWatchlists({
       <div className="mt-4">
         <AuthorWatchList authors={authors ?? []} />
         <SourceWatchList sources={sources ?? []} />
+        <ManualQuoteForm />
       </div>
     </section>
   );

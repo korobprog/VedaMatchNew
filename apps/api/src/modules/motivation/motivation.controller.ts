@@ -15,6 +15,7 @@ import type {
   MotivationApproveTextInput,
   MotivationAuthorWatchInput,
   MotivationLanguage,
+  MotivationManualQuoteInput,
   MotivationPreferenceUpdate,
   MotivationRegenerateImageInput,
   MotivationRejectInput,
@@ -154,6 +155,15 @@ export class MotivationController {
     @Body() input: { date?: string },
   ) {
     return this.service.enqueueDaily(user.role, input.date);
+  }
+
+  @Post('admin/motivation/quotes')
+  @UseGuards(AuthGuard)
+  addManualQuote(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() input: MotivationManualQuoteInput,
+  ) {
+    return this.service.addManualQuote(user.role, input);
   }
 
   @Get('admin/motivation/authors')

@@ -16,6 +16,8 @@ import type {
   MotivationAuthorWatchDto,
   MotivationAuthorWatchInput,
   MotivationLanguage,
+  MotivationManualQuoteInput,
+  MotivationManualQuoteResult,
   MotivationPostDto,
   MotivationPreferenceUpdate,
   MotivationSourceWatchDto,
@@ -30,10 +32,12 @@ import {
   weightedPage,
 } from './motivation-feed';
 import { MotivationAuthorSearchService } from './motivation-author-search.service';
+import { MotivationCopyService } from './motivation-copy.service';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { MotivationSourceFetchService } from './motivation-source-fetch.service';
 import { QuoteDiscoveryService } from './quote-discovery.service';
 import { assertSafeFetchUrl } from './quote-source-policy';
+import { quoteFingerprint } from './quote-normalizer';
 import { MotivationModerationService } from './motivation-moderation.service';
 
 const stageProfiles: Record<SpiritualStage, MotivationProfileType> = {
@@ -53,6 +57,7 @@ export class MotivationService {
     private readonly moderation: MotivationModerationService,
     private readonly authorSearch: MotivationAuthorSearchService,
     private readonly sourceFetch: MotivationSourceFetchService,
+    private readonly copy: MotivationCopyService,
   ) {}
 
   async preference(userId: string) {
@@ -343,6 +348,56 @@ export class MotivationService {
       data: { url, label: input.label?.trim() || null, createdById: actorId },
     });
     return this.sourceWatchDto(watch);
+  }
+  async addManualQuote(
+    role: Role,
+    input: MotivationManualQuoteInput,
+  ): Promise<MotivationManualQuoteResult> {
+    this.admin(role);
+    const originalText = input.originalText?.trim();
+    const originalLanguage = input.originalLanguage?.trim();
+    const author = input.author?.trim();
+    const work = input.work?.trim();
+    const locator = input.locator?.trim();
+    const contextExcerpt = input.contextExcerpt?.trim();
+    if (
+      !originalText ||
+      !originalLanguage ||
+      !author ||
+      !work ||
+      !locator ||
+      !contextExcerpt
+    ) {
+      throw new BadRequestException(
+        'All quote fields except source URL are required',
+      );
+    }
+    const normalizedHash = quoteFingerprint(originalText);
+    const existing = await this.prisma.motivationQuote.findUnique({
+      where: { normalizedHash },
+    });
+    if (existing)
+      throw new BadRequestException('This quote has already been added');
+    const quote = await this.prisma.motivationQuote.create({
+      data: {
+        originalText,
+        normalizedHash,
+        originalLanguage,
+        author,
+        work,
+        locator,
+        sourceType: 'manual',
+        sourceUrl: input.sourceUrl?.trim() || null,
+        vedabaseBookSlug: null,
+        vedabaseChapterSlug: null,
+        contextExcerpt,
+        verified: true,
+        verifiedAt: new Date(),
+        discoveryDate: null,
+      },
+    });
+    const post = await this.copy.prepareCandidate(quote.id);
+    return { quoteId: quote.id, postId: post.id };
   }
   async deleteSourceWatch(role: Role, id: string): Promise<void> {
     this.admin(role);

@@ -3,7 +3,7 @@ export type MotivationAudienceTrack = 'universal' | 'vaishnava';
 export type MotivationAttributionKind = 'exact_quote' | 'faithful_paraphrase' | 'ai_reflection';
 export type MotivationLanguage = 'ru' | 'en' | 'hi';
 export type MotivationReviewStatus = 'discovered' | 'source_verified' | 'text_review' | 'image_queued' | 'image_review' | 'published' | 'rejected' | 'failed';
-export type MotivationQuoteSourceType = 'vedamatch_library' | 'approved_web';
+export type MotivationQuoteSourceType = 'vedamatch_library' | 'approved_web' | 'manual';
 export type MotivationTranslationKind = 'official' | 'vedamatch';
 export type MotivationVisualStyle = 'spiritual_watercolor' | 'cinematic_nature' | 'indian_miniature' | 'sacred_architecture' | 'minimal_symbolism' | 'warm_documentary' | 'cosmic_contemplation' | 'historical_editorial';
 
@@ -96,5 +96,19 @@ export interface MotivationSourceWatchDto {
   lastResultCount: number;
 }
 export interface MotivationSourceWatchInput { url: string; label?: string }
+
+export interface MotivationManualQuoteInput {
+  originalText: string;
+  originalLanguage: string;
+  author: string;
+  work: string;
+  locator: string;
+  sourceUrl?: string;
+  contextExcerpt: string;
+}
+export interface MotivationManualQuoteResult {
+  quoteId: string;
+  postId: string;
+}
 
 export interface MotivationSearchResult { foundCount: number }
