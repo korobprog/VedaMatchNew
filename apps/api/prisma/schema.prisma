@@ -122,6 +122,7 @@ enum MotivationReviewStatus {
 enum MotivationQuoteSourceType {
   vedamatch_library
   approved_web
+  manual
 }
 
 enum MotivationTranslationKind {
