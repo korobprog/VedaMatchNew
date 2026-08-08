@@ -1,5 +1,4 @@
 export { Navbar } from "./Navbar";
-export { BottomNav } from "./BottomNav";
 export { BackgroundOrbs, Orb } from "./Orb";
 export { NoiseOverlay } from "./NoiseOverlay";
 export { Iris, IrisIcon } from "./Iris";

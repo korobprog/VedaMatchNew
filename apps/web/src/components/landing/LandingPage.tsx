@@ -4,7 +4,6 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, Play } from "lucide-react";
 import { Navbar } from "./Navbar";
-import { BottomNav } from "./BottomNav";
 import { BackgroundOrbs } from "./Orb";
 import { NoiseOverlay } from "./NoiseOverlay";
 import { Iris } from "./Iris";
@@ -35,7 +34,7 @@ export function LandingPage({ returnTo }: { returnTo?: string }) {
               initial={{ opacity: 0, x: -30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8, delay: 0.2 }}
-              className="text-center lg:text-left"
+              className="min-w-0 text-center lg:text-left"
             >
               {/* Badge */}
               <motion.div
@@ -69,29 +68,29 @@ export function LandingPage({ returnTo }: { returnTo?: string }) {
                   href="/login"
                   className={cn(
                     "group inline-flex items-center justify-center gap-2",
-                    "px-8 py-4 rounded-full",
+                    "px-5 py-2.5 rounded-full sm:px-8 sm:py-4",
                     "bg-gradient-to-r from-magenta to-[#B23EFF]",
-                    "text-white font-semibold text-lg",
+                    "text-white font-semibold text-base sm:text-lg",
                     "transition-all duration-300",
                     "hover:shadow-[0_0_30px_rgba(255,62,158,0.5)]",
                     "hover:-translate-y-0.5"
                   )}
                 >
                   Начать бесплатно
-                  <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
+                  <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 transition-transform group-hover:translate-x-1" />
                 </Link>
-                
+
                 <button
                   className={cn(
                     "group inline-flex items-center justify-center gap-2",
-                    "px-8 py-4 rounded-full",
+                    "px-5 py-2.5 rounded-full sm:px-8 sm:py-4",
                     "glass border border-glass-brd",
-                    "text-text-0 font-semibold text-lg",
+                    "text-text-0 font-semibold text-base sm:text-lg",
                     "transition-all duration-300",
                     "hover:border-cyan/50 hover:shadow-[0_0_20px_rgba(35,240,199,0.2)]"
                   )}
                 >
-                  <Play className="w-5 h-5" />
+                  <Play className="w-4 h-4 sm:w-5 sm:h-5" />
                   Узнать больше
                 </button>
               </div>
@@ -125,7 +124,7 @@ export function LandingPage({ returnTo }: { returnTo?: string }) {
               initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8, delay: 0.4 }}
-              className="relative flex justify-center lg:justify-end"
+              className="relative flex min-w-0 justify-center lg:justify-end"
             >
               <PhoneMockup />
             </motion.div>
@@ -251,9 +250,6 @@ export function LandingPage({ returnTo }: { returnTo?: string }) {
           </div>
         </div>
       </footer>
-
-      {/* Mobile Bottom Nav */}
-      <BottomNav />
     </div>
   );
 }
