@@ -20,4 +20,9 @@ export class UnionSwipeController {
   undoLast(@CurrentUser() user: AccessTokenPayload) {
     return this.swipes.undoLast(user.sub);
   }
+
+  @Delete('history')
+  resetHistory(@CurrentUser() user: AccessTokenPayload) {
+    return this.swipes.resetHistory(user.sub);
+  }
 }

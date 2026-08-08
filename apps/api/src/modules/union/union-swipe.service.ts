@@ -6,6 +6,7 @@ import {
 import type {
   UnionSwipeDecision,
   UnionSwipeRequest,
+  UnionSwipeResetResult,
   UnionSwipeResult,
   UnionSwipeUndoResult,
 } from '@vedamatch/shared';
@@ -130,6 +131,44 @@ export class UnionSwipeService {
     });
 
     return { toUserId: last.toUserId, decision: last.decision };
+  }
+
+  /**
+   * Сброс истории показов: возвращает в колоду все отсмотренные анкеты, кроме
+   * уже состоявшихся знакомств (мэтч необратим — второй человек его видел).
+   * Отдельное действие от сброса фильтров: фильтры сужают выдачу, а история
+   * решает, кто уже был отсмотрен, и «Сбросить фильтры» её не трогает.
+   */
+  async resetHistory(fromUserId: string): Promise<UnionSwipeResetResult> {
+    const rows = await this.prisma.unionSwipe.findMany({
+      where: { fromUserId, undoneAt: null },
+    });
+
+    let restoredCount = 0;
+    for (const row of rows) {
+      if (row.decision !== 'pass') {
+        const request = await this.prisma.unionConnectionRequest.findUnique({
+          where: {
+            fromUserId_toUserId: { fromUserId, toUserId: row.toUserId },
+          },
+        });
+        if (request && request.status !== 'pending') continue;
+        if (request) {
+          await this.prisma.unionConnectionRequest.update({
+            where: { id: request.id },
+            data: { status: 'cancelled', respondedAt: new Date() },
+          });
+        }
+      }
+
+      await this.prisma.unionSwipe.update({
+        where: { id: row.id },
+        data: { undoneAt: new Date() },
+      });
+      restoredCount += 1;
+    }
+
+    return { restoredCount };
   }
 
   /** Кого уже отсмотрели: эти анкеты не должны возвращаться в колоду. */
