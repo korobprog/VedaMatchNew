@@ -8,6 +8,7 @@ import type { Prisma } from '@prisma/client';
 import type {
   AdminManualStageUpdateRequest,
   AdminMentorVerificationRequest,
+  AdminRoleUpdateRequest,
   AdminUserDetail,
   AdminUserListResponse,
   DevoteeVerificationStatus,
@@ -234,6 +235,36 @@ export class AdminUsersService {
         },
       }),
     ]);
+
+    return this.getUser(admin.role, userId);
+  }
+
+  async updateRole(
+    admin: { sub: string; role: Role },
+    userId: string,
+    body: AdminRoleUpdateRequest,
+  ): Promise<AdminUserDetail> {
+    this.ensureAdmin(admin.role);
+
+    if (!body.role || !ROLES.includes(body.role)) {
+      throw new BadRequestException('Некорректная роль');
+    }
+
+    if (admin.sub === userId && !body.confirmSelfChange) {
+      throw new BadRequestException(
+        'Для изменения собственной роли нужно явное подтверждение',
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Пользователь не найден');
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        role: body.role.replace('-', '_') as Prisma.UserUpdateInput['role'],
+      },
+    });
 
     return this.getUser(admin.role, userId);
   }

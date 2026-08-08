@@ -314,3 +314,8 @@ export interface AdminManualStageUpdateRequest {
   confirmSelfChange?: boolean;
   confirmStatusDowngrade?: boolean;
 }
+
+export interface AdminRoleUpdateRequest {
+  role: Role;
+  confirmSelfChange?: boolean;
+}
