@@ -166,3 +166,116 @@ describe('MotivationService admin list', () => {
     expect(discovery.discoverDaily).toHaveBeenCalledWith(date, 8);
   });
 });
+
+describe('MotivationService.addManualQuote', () => {
+  const validInput = {
+    originalText: 'Exact quote text here.',
+    originalLanguage: 'en',
+    author: 'Author Name',
+    work: 'Work Title',
+    locator: '1.1',
+    contextExcerpt: 'Context around the quote.',
+  };
+
+  function buildService(overrides: { prisma?: unknown; copy?: unknown } = {}) {
+    const prisma =
+      overrides.prisma ??
+      {
+        motivationQuote: {
+          findUnique: jest.fn().mockResolvedValue(null),
+          create: jest.fn().mockResolvedValue({ id: 'quote-1' }),
+        },
+      };
+    const copy =
+      overrides.copy ?? { prepareCandidate: jest.fn().mockResolvedValue({ id: 'post-1' }) };
+    const service = new MotivationService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      copy as never,
+    );
+    return { service, prisma: prisma as never, copy: copy as never };
+  }
+
+  it('creates a verified manual quote and hands it to the copy pipeline', async () => {
+    const { service, prisma, copy } = buildService();
+
+    await expect(service.addManualQuote('admin', validInput)).resolves.toEqual({
+      quoteId: 'quote-1',
+      postId: 'post-1',
+    });
+
+    expect(
+      (prisma as { motivationQuote: { create: jest.Mock } }).motivationQuote.create,
+    ).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        originalText: validInput.originalText,
+        originalLanguage: validInput.originalLanguage,
+        author: validInput.author,
+        work: validInput.work,
+        locator: validInput.locator,
+        contextExcerpt: validInput.contextExcerpt,
+        sourceType: 'manual',
+        sourceUrl: null,
+        verified: true,
+        discoveryDate: null,
+      }),
+    });
+    expect(
+      (copy as { prepareCandidate: jest.Mock }).prepareCandidate,
+    ).toHaveBeenCalledWith('quote-1');
+  });
+
+  it('trims input and stores an optional source URL', async () => {
+    const { service, prisma } = buildService();
+
+    await service.addManualQuote('admin', {
+      ...validInput,
+      originalText: `  ${validInput.originalText}  `,
+      sourceUrl: '  https://example.com/source  ',
+    });
+
+    expect(
+      (prisma as { motivationQuote: { create: jest.Mock } }).motivationQuote.create,
+    ).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        originalText: validInput.originalText,
+        sourceUrl: 'https://example.com/source',
+      }),
+    });
+  });
+
+  it('rejects a duplicate quote without touching the copy pipeline', async () => {
+    const prisma = {
+      motivationQuote: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'existing' }),
+        create: jest.fn(),
+      },
+    };
+    const copy = { prepareCandidate: jest.fn() };
+    const { service } = buildService({ prisma, copy });
+
+    await expect(service.addManualQuote('admin', validInput)).rejects.toThrow(
+      'This quote has already been added',
+    );
+    expect(prisma.motivationQuote.create).not.toHaveBeenCalled();
+    expect(copy.prepareCandidate).not.toHaveBeenCalled();
+  });
+
+  it('rejects missing required fields', async () => {
+    const { service } = buildService();
+
+    await expect(
+      service.addManualQuote('admin', { ...validInput, author: '   ' }),
+    ).rejects.toThrow('All quote fields except source URL are required');
+  });
+
+  it('requires an admin or service-admin role', async () => {
+    const { service } = buildService();
+
+    await expect(service.addManualQuote('user', validInput)).rejects.toThrow();
+  });
+});
