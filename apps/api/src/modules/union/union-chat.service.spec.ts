@@ -55,7 +55,16 @@ describe('UnionChatService', () => {
       updateMany: jest.fn(),
     },
   };
-  const service = new UnionChatService(prisma as unknown as PrismaService);
+  const users = {
+    resolveAvatarUrl: jest.fn(
+      async (u: { avatarKey: string | null; avatarUrl: string | null }) =>
+        u.avatarKey ? 'https://signed.example/avatar' : u.avatarUrl,
+    ),
+  };
+  const service = new UnionChatService(
+    prisma as unknown as PrismaService,
+    users as never,
+  );
 
   beforeEach(() => {
     jest.resetAllMocks();

@@ -44,6 +44,7 @@ import { toActivityLevel } from './union-activity';
 import { isVerifiedDevotee } from './union-verification';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserGalleryService } from '../users/user-gallery.service';
+import { UsersService } from '../users/users.service';
 import {
   UnionMatchingService,
   UnionMatchInput,
@@ -149,6 +150,7 @@ export class UnionProfileService {
     private readonly gallery: UserGalleryService,
     private readonly moderation: ModerationService,
     private readonly generation: MotivationGenerationService,
+    private readonly users: UsersService,
   ) {}
 
   async getState(userId: string): Promise<UnionProfileState> {
@@ -452,14 +454,18 @@ export class UnionProfileService {
   ): Promise<UnionRecommendation> {
     const privacy = (profile.privacy as UnionPrivacySettings | null) ?? null;
     const matched = recommendation.connection?.status === 'accepted';
-    if (!this.isVisible(privacy?.photo, matched) || user.photos.length === 0) {
-      return recommendation;
-    }
+    if (!this.isVisible(privacy?.photo, matched)) return recommendation;
 
-    recommendation.user.photos = await this.gallery.signPublicPhotos(
-      user.photos,
-    );
-    recommendation.user.avatarUrl = null;
+    if (user.photos.length > 0) {
+      recommendation.user.photos = await this.gallery.signPublicPhotos(
+        user.photos,
+      );
+      recommendation.user.avatarUrl = null;
+    } else {
+      // Публичной галереи нет — остаётся аватар, а он может быть загружен в
+      // приватный бакет (см. UsersService.resolveAvatarUrl) и требует подписи.
+      recommendation.user.avatarUrl = await this.users.resolveAvatarUrl(user);
+    }
     return recommendation;
   }
 

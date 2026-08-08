@@ -73,9 +73,16 @@ describe('UnionConnectionService', () => {
     },
   };
   const moderation = { isHidden: jest.fn().mockResolvedValue(false) };
+  const users = {
+    resolveAvatarUrl: jest.fn(
+      async (u: { avatarKey: string | null; avatarUrl: string | null }) =>
+        u.avatarKey ? 'https://signed.example/avatar' : u.avatarUrl,
+    ),
+  };
   const service = new UnionConnectionService(
     prisma as unknown as PrismaService,
     moderation as unknown as ModerationService,
+    users as never,
   );
 
   beforeEach(() => {

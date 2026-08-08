@@ -22,12 +22,16 @@ import { calculateAge } from '../users/age';
 import { toActivityLevel } from './union-activity';
 import { isVerifiedDevotee } from './union-verification';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UsersService } from '../users/users.service';
 
 const MAX_CHAT_MESSAGE_LENGTH = 2000;
 
 @Injectable()
 export class UnionChatService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly users: UsersService,
+  ) {}
 
   /**
    * Список диалогов: принятые заявки плюс последнее сообщение и счётчик
@@ -62,23 +66,25 @@ export class UnionChatService {
       unreadRows.map((row) => [row.requestId, row._count._all]),
     );
 
-    const chats: UnionChatSummary[] = connections
-      .map((connection) => {
-        const otherUser =
-          connection.fromUserId === userId
-            ? connection.toUser
-            : connection.fromUser;
-        const last = connection.messages[0] ?? null;
-        return {
-          requestId: connection.id,
-          user: this.toUserSummary(otherUser),
-          lastMessage: last?.body ?? null,
-          lastMessageAt: last?.createdAt.toISOString() ?? null,
-          lastMessageMine: last?.fromUserId === userId,
-          unreadCount: unreadByRequest.get(connection.id) ?? 0,
-        };
-      })
-      .sort((left, right) => this.chatOrder(right) - this.chatOrder(left));
+    const chats: UnionChatSummary[] = (
+      await Promise.all(
+        connections.map(async (connection) => {
+          const otherUser =
+            connection.fromUserId === userId
+              ? connection.toUser
+              : connection.fromUser;
+          const last = connection.messages[0] ?? null;
+          return {
+            requestId: connection.id,
+            user: await this.toUserSummary(otherUser),
+            lastMessage: last?.body ?? null,
+            lastMessageAt: last?.createdAt.toISOString() ?? null,
+            lastMessageMine: last?.fromUserId === userId,
+            unreadCount: unreadByRequest.get(connection.id) ?? 0,
+          };
+        }),
+      )
+    ).sort((left, right) => this.chatOrder(right) - this.chatOrder(left));
 
     return {
       chats,
@@ -111,7 +117,7 @@ export class UnionChatService {
 
     return {
       connection: this.toConnectionSummary(connection, userId),
-      otherUser: this.toUserSummary(otherUser),
+      otherUser: await this.toUserSummary(otherUser),
       messages: messages.map((message) => ({
         id: message.id,
         requestId: message.requestId,
@@ -194,16 +200,19 @@ export class UnionChatService {
     };
   }
 
-  private toUserSummary(
+  private async toUserSummary(
     user: User & { unionProfile?: { privacy: unknown } | null },
-  ): UnionUserSummary {
+  ): Promise<UnionUserSummary> {
     const privacy =
       (user.unionProfile?.privacy as UnionPrivacySettings | null) ?? null;
     const location = this.location(user);
     return {
       id: user.id,
       name: user.name,
-      avatarUrl: privacy?.photo === 'hidden' ? null : user.avatarUrl,
+      avatarUrl:
+        privacy?.photo === 'hidden'
+          ? null
+          : await this.users.resolveAvatarUrl(user),
       city: privacy?.city === 'hidden' ? null : (location?.city ?? null),
       country: privacy?.city === 'hidden' ? null : (location?.country ?? null),
       spiritualStage: user.spiritualStage,

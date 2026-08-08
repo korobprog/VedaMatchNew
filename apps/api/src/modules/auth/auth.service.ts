@@ -14,15 +14,13 @@ import type { Role } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtSignService } from './jwt.service';
 import { verifyPassword } from './password';
+import { toRole } from './role';
+
+export { toRole } from './role';
 
 const OIDC_COOKIE = 'oidc_flow';
 const ACCESS_COOKIE = 'access_token';
 const REFRESH_COOKIE = 'refresh_token';
-
-/** Prisma enum → внешняя роль ('service_admin' → 'service-admin') */
-export function toRole(dbRole: string): Role {
-  return dbRole.replace('_', '-') as Role;
-}
 
 @Injectable()
 export class AuthService implements OnModuleInit {

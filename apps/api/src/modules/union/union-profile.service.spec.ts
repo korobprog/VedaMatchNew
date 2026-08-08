@@ -248,12 +248,19 @@ describe('UnionProfileService', () => {
   const generation = {
     generatePlainText: jest.fn().mockResolvedValue('generated text'),
   };
+  const users = {
+    resolveAvatarUrl: jest.fn(
+      async (u: { avatarKey: string | null; avatarUrl: string | null }) =>
+        u.avatarKey ? 'https://signed.example/avatar' : u.avatarUrl,
+    ),
+  };
   const service = new UnionProfileService(
     prisma as unknown as PrismaService,
     matching as unknown as UnionMatchingService,
     gallery as unknown as UserGalleryService,
     moderation as unknown as ModerationService,
     generation as unknown as MotivationGenerationService,
+    users as never,
   );
 
   beforeEach(() => {

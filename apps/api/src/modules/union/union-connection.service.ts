@@ -22,6 +22,7 @@ import { ModerationService } from '../moderation/moderation.service';
 import { toActivityLevel } from './union-activity';
 import { isVerifiedDevotee } from './union-verification';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UsersService } from '../users/users.service';
 
 const MAX_MESSAGE_LENGTH = 500;
 
@@ -30,6 +31,7 @@ export class UnionConnectionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly moderation: ModerationService,
+    private readonly users: UsersService,
   ) {}
 
   async counts(userId: string): Promise<UnionConnectionCounts> {
@@ -54,20 +56,24 @@ export class UnionConnectionService {
     ]);
 
     return {
-      incoming: incoming.map((request) =>
-        this.toRequestDto(
-          request,
-          request.fromUser,
-          'incoming',
-          request.status === 'accepted',
+      incoming: await Promise.all(
+        incoming.map((request) =>
+          this.toRequestDto(
+            request,
+            request.fromUser,
+            'incoming',
+            request.status === 'accepted',
+          ),
         ),
       ),
-      outgoing: outgoing.map((request) =>
-        this.toRequestDto(
-          request,
-          request.toUser,
-          'outgoing',
-          request.status === 'accepted',
+      outgoing: await Promise.all(
+        outgoing.map((request) =>
+          this.toRequestDto(
+            request,
+            request.toUser,
+            'outgoing',
+            request.status === 'accepted',
+          ),
         ),
       ),
     };
@@ -220,15 +226,15 @@ export class UnionConnectionService {
     return cleaned;
   }
 
-  private toRequestDto(
+  private async toRequestDto(
     request: UnionConnectionRequest,
     user: User & { unionProfile?: { privacy: unknown } | null },
     direction: 'incoming' | 'outgoing',
     matched: boolean,
-  ): UnionConnectionRequestDto {
+  ): Promise<UnionConnectionRequestDto> {
     return {
       ...this.toSummary(request, direction),
-      user: this.toUserSummary(user, matched),
+      user: await this.toUserSummary(user, matched),
     };
   }
 
@@ -247,10 +253,10 @@ export class UnionConnectionService {
     };
   }
 
-  private toUserSummary(
+  private async toUserSummary(
     user: User & { unionProfile?: { privacy: unknown } | null },
     matched: boolean,
-  ): UnionUserSummary {
+  ): Promise<UnionUserSummary> {
     const privacy =
       (user.unionProfile?.privacy as UnionPrivacySettings | null) ?? null;
     const location = this.location(user);
@@ -258,7 +264,7 @@ export class UnionConnectionService {
       id: user.id,
       name: user.name,
       avatarUrl: this.isVisible(privacy?.photo, matched)
-        ? user.avatarUrl
+        ? await this.users.resolveAvatarUrl(user)
         : null,
       city: this.isVisible(privacy?.city, matched)
         ? (location?.city ?? null)

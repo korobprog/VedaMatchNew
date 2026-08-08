@@ -19,7 +19,7 @@ import type {
   StageHistoryItem,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import { toRole } from '../auth/auth.service';
+import { toRole } from '../auth/role';
 import {
   parseMessengers,
   parseSocialLinks,
@@ -28,6 +28,7 @@ import {
 import { calculateAge, toBirthDateInput } from './age';
 import { toPhotoVerificationState } from './photo-verification';
 import { toSubscriptionState } from '../billing/subscription';
+import { UsersService } from './users.service';
 
 const ROLES: Role[] = ['user', 'admin', 'service-admin'];
 const STAGES: SpiritualStage[] = ['seeker', 'practitioner', 'yogi', 'devotee'];
@@ -55,7 +56,10 @@ interface ListUsersQuery {
 
 @Injectable()
 export class AdminUsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly users: UsersService,
+  ) {}
 
   async listUsers(
     adminRole: Role,
@@ -85,13 +89,13 @@ export class AdminUsersService {
     ]);
 
     return {
-      items: users.map((user) => {
+      items: await Promise.all(users.map(async (user) => {
         const mentorRequest = user.mentorVerificationRequests[0] ?? null;
         return {
           id: user.id,
           email: user.email,
           name: user.name,
-          avatarUrl: user.avatarUrl,
+          avatarUrl: await this.users.resolveAvatarUrl(user),
           role: toRole(user.role),
           spiritualStage: user.spiritualStage,
           devoteeVerificationStatus: user.devoteeVerificationStatus,
@@ -102,7 +106,7 @@ export class AdminUsersService {
           hasMentorRequest: Boolean(mentorRequest),
           mentorRequestStatus: mentorRequest?.status ?? null,
         };
-      }),
+      })),
       page,
       pageSize,
       total,
@@ -142,7 +146,7 @@ export class AdminUsersService {
         id: user.id,
         email: user.email,
         name: user.name,
-        avatarUrl: user.avatarUrl,
+        avatarUrl: await this.users.resolveAvatarUrl(user),
         avatarKey: user.avatarKey,
         birthDate: toBirthDateInput(user.birthDate),
         age: calculateAge(user.birthDate),

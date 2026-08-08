@@ -9,9 +9,11 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type {
   Gender,
   ProfileLocation,
@@ -22,7 +24,7 @@ import type {
   UserProfile,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import { toRole } from '../auth/auth.service';
+import { toRole } from '../auth/role';
 import { toSubscriptionState } from '../billing/subscription';
 import { calculateAge, parseBirthDate, toBirthDateInput } from './age';
 import {
@@ -33,6 +35,8 @@ import {
 const GENDERS: Gender[] = ['male', 'female'];
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
+/** Аватар кэшируется как immutable, поэтому подписываем надолго — до недели, максимум для SigV4. */
+const AVATAR_SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
 const AVATAR_MIME_EXTENSIONS: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -88,6 +92,25 @@ export class UsersService {
         : null;
   }
 
+  /**
+   * Аватар из Google OAuth — уже публичный URL, отдаём как есть. Загруженный
+   * пользователем аватар лежит в приватном бакете (как и галерея), поэтому
+   * его нужно каждый раз подписывать заново, а не отдавать сохранённый URL.
+   */
+  async resolveAvatarUrl(user: {
+    avatarKey: string | null;
+    avatarUrl: string | null;
+  }): Promise<string | null> {
+    if (!user.avatarKey) return user.avatarUrl;
+    const bucket = this.config.get<string>('S3_BUCKET_NAME');
+    if (!this.s3Client || !bucket) return null;
+    return getSignedUrl(
+      this.s3Client as unknown as Parameters<typeof getSignedUrl>[0],
+      new GetObjectCommand({ Bucket: bucket, Key: user.avatarKey }),
+      { expiresIn: AVATAR_SIGNED_URL_TTL_SECONDS },
+    );
+  }
+
   async getProfile(userId: string): Promise<UserProfile> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('Пользователь не найден');
@@ -95,7 +118,7 @@ export class UsersService {
       id: user.id,
       email: user.email,
       name: user.name,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: await this.resolveAvatarUrl(user),
       avatarKey: user.avatarKey,
       birthDate: toBirthDateInput(user.birthDate),
       age: calculateAge(user.birthDate),
@@ -231,12 +254,11 @@ export class UsersService {
       await this.deleteAvatarObject(user.avatarKey);
     }
 
+    // avatarUrl остаётся null для загруженных аватаров: бакет приватный, и
+    // рабочую ссылку можно получить только подписью (см. resolveAvatarUrl).
     await this.prisma.user.update({
       where: { id: userId },
-      data: {
-        avatarKey: key,
-        avatarUrl: buildPublicUrl(publicUrl, key),
-      },
+      data: { avatarKey: key, avatarUrl: null },
     });
 
     return this.getProfile(userId);
@@ -344,11 +366,4 @@ function sanitizeString(value: unknown, maxLength: number): string {
 
 function roundCoordinate(value: number): number {
   return Math.round(value * 10000) / 10000;
-}
-
-function buildPublicUrl(publicUrl: string, key: string): string {
-  return `${publicUrl.replace(/\/+$/, '')}/${key
-    .split('/')
-    .map(encodeURIComponent)
-    .join('/')}`;
 }

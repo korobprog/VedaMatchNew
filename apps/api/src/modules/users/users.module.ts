@@ -19,6 +19,6 @@ import { UsersService } from './users.service';
     AdminUsersController,
   ],
   providers: [UsersService, UserGalleryService, AdminUsersService],
-  exports: [UserGalleryService],
+  exports: [UsersService, UserGalleryService],
 })
 export class UsersModule {}
