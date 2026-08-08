@@ -7,6 +7,7 @@ import type {
   MotivationSourceWatchDto,
 } from "@vedamatch/shared";
 import { apiRequest } from "./motivation-admin-api";
+import { ManualQuoteForm } from "./manual-quote-form";
 
 function formatDate(value: string | null): string {
   if (!value) return "ещё не запускался";
@@ -270,6 +271,7 @@ export function MotivationAdminWatchlists({
       <div className="mt-4">
         <AuthorWatchList authors={authors ?? []} />
         <SourceWatchList sources={sources ?? []} />
+        <ManualQuoteForm />
       </div>
     </section>
   );
