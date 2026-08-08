@@ -290,6 +290,67 @@ describe('QuoteDiscoveryService', () => {
     );
   });
 
+  it('extracts several candidate quotes from a single long unit instead of only the first', async () => {
+    const discoveryDate = new Date('2026-07-13T00:00:00.000Z');
+    const chapterText = [
+      'This first sentence is long enough to be a proper quote candidate.',
+      'This second sentence is also long enough to be a proper quote candidate.',
+      'This third sentence is also long enough to be a proper quote candidate.',
+    ].join(' ');
+    const units = [{ bookSlug: 'bg', chapterSlug: '1', text: chapterText }];
+    const repository = {
+      findQuoteCandidates: jest.fn().mockResolvedValue(units),
+    };
+    const verifier = {
+      verifyVedabaseCandidate: jest.fn(async (candidate) => ({
+        ...candidate,
+        normalizedHash: quoteFingerprint(candidate.originalText),
+        originalLanguage: 'en',
+        author: 'Author',
+        work: 'Work',
+        locator: candidate.chapterSlug,
+        sourceType: 'vedamatch_library',
+        sourceUrl: null,
+        vedabaseBookSlug: candidate.bookSlug,
+        vedabaseChapterSlug: candidate.chapterSlug,
+        contextExcerpt: candidate.originalText,
+        verified: true,
+        verifiedAt: new Date(),
+      })),
+    };
+    const web = { search: jest.fn().mockResolvedValue([]) };
+    const saved: any[] = [];
+    const transaction = {
+      motivationQuote: {
+        createMany: jest.fn(async ({ data }) => {
+          saved.push(...data);
+          return { count: data.length };
+        }),
+        findMany: jest.fn(async () => saved),
+      },
+    };
+    const prisma = {
+      motivationQuote: { findMany: jest.fn().mockResolvedValue([]) },
+      $transaction: jest.fn(async (callback) => callback(transaction)),
+    };
+    const service = new QuoteDiscoveryService(
+      prisma as never,
+      repository as never,
+      verifier as never,
+      web as never,
+    );
+
+    const result = await service.discoverDaily(discoveryDate, 3);
+
+    expect(result).toHaveLength(3);
+    expect(verifier.verifyVedabaseCandidate).toHaveBeenCalledTimes(3);
+    expect(saved.map((quote) => quote.originalText)).toEqual([
+      'This first sentence is long enough to be a proper quote candidate.',
+      'This second sentence is also long enough to be a proper quote candidate.',
+      'This third sentence is also long enough to be a proper quote candidate.',
+    ]);
+  });
+
   it('fails when eight unique verified quotes cannot be found', async () => {
     const prisma = {
       motivationQuote: { findMany: jest.fn().mockResolvedValue([]) },

@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { VedabaseContentRepository } from '../vedabase/vedabase-content.repository';
 import { ApprovedWebSourceService } from './approved-web-source.service';
 import { MotivationCopyService } from './motivation-copy.service';
-import { extractQuoteSentence } from './quote-normalizer';
+import { extractQuoteSentences } from './quote-normalizer';
 import { QuoteDiscoveryService } from './quote-discovery.service';
 import { QuoteVerificationService } from './quote-verification.service';
 
@@ -38,17 +38,19 @@ export class MotivationAuthorSearchService {
     for (const unit of units) {
       if (!unit.bookAuthor?.toLocaleLowerCase().includes(normalizedAuthor))
         continue;
-      const originalText = extractQuoteSentence(unit.text);
-      if (!originalText) continue;
-      try {
-        const verified = await this.verifier.verifyVedabaseCandidate({
-          bookSlug: unit.bookSlug,
-          chapterSlug: unit.chapterSlug,
-          originalText,
-        });
-        if (await this.ingest(verified)) ingestedCount += 1;
-      } catch {
-        continue;
+      // A single unit (e.g. a whole chapter) can hold many quotable
+      // sentences — pull them all instead of stopping at the first.
+      for (const originalText of extractQuoteSentences(unit.text)) {
+        try {
+          const verified = await this.verifier.verifyVedabaseCandidate({
+            bookSlug: unit.bookSlug,
+            chapterSlug: unit.chapterSlug,
+            originalText,
+          });
+          if (await this.ingest(verified)) ingestedCount += 1;
+        } catch {
+          continue;
+        }
       }
     }
 

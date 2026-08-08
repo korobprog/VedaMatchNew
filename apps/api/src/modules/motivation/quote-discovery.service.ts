@@ -6,7 +6,7 @@ import {
   ApprovedWebSourceService,
   type WebQuoteCandidate,
 } from './approved-web-source.service';
-import { extractQuoteSentence, quoteFingerprint } from './quote-normalizer';
+import { extractQuoteSentences, quoteFingerprint } from './quote-normalizer';
 import {
   QuoteVerificationService,
   type VerifiedQuote,
@@ -53,17 +53,21 @@ export class QuoteDiscoveryService {
         missingCount * 4,
       );
       for (const unit of units) {
-        const originalText = extractQuoteSentence(unit.text);
-        if (!originalText) continue;
-        try {
-          const verified = await this.verifier.verifyVedabaseCandidate({
-            bookSlug: unit.bookSlug,
-            chapterSlug: unit.chapterSlug,
-            originalText,
-          });
-          candidates.set(verified.normalizedHash, verified);
-        } catch {
-          continue;
+        if (candidates.size >= missingCount * 4) break;
+        // A single unit (e.g. a whole chapter) can hold many quotable
+        // sentences — pull them all instead of stopping at the first.
+        for (const originalText of extractQuoteSentences(unit.text)) {
+          if (candidates.size >= missingCount * 4) break;
+          try {
+            const verified = await this.verifier.verifyVedabaseCandidate({
+              bookSlug: unit.bookSlug,
+              chapterSlug: unit.chapterSlug,
+              originalText,
+            });
+            candidates.set(verified.normalizedHash, verified);
+          } catch {
+            continue;
+          }
         }
       }
     }
