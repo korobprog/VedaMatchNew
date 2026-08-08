@@ -3,8 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+/** Десктопная навигация Union. На телефоне её заменяет нижний UnionTabBar. */
 const links = [
   { href: "/union/recommendations", label: "Знакомства" },
+  { href: "/union/collections", label: "Подборки" },
+  { href: "/union/likes", label: "Лайки" },
+  { href: "/union/chats", label: "Чаты" },
   { href: "/union/connections", label: "Связи" },
   { href: "/union/profile", label: "Профиль" },
 ];
@@ -13,7 +17,10 @@ export function UnionNav({ incomingPending }: { incomingPending: number }) {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Навигация Union" className="mb-6 flex flex-wrap gap-2">
+    <nav
+      aria-label="Навигация Union"
+      className="mb-6 hidden flex-wrap gap-2 md:flex"
+    >
       {links.map((link) => {
         const active = pathname === link.href;
         return (
@@ -28,7 +35,7 @@ export function UnionNav({ incomingPending }: { incomingPending: number }) {
             }`}
           >
             {link.label}
-            {link.href === "/union/connections" && incomingPending > 0 && (
+            {link.href === "/union/likes" && incomingPending > 0 && (
               <span
                 aria-label={`Входящих заявок: ${incomingPending}`}
                 className="rounded-full bg-magenta px-2 py-0.5 text-xs font-semibold text-white"

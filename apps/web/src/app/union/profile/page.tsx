@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
 import { UnionNav } from "@/components/union/union-nav";
+import { UnionTabBar } from "@/components/union/union-tabbar";
 import { UnionProfileForm } from "@/components/union/union-profile-form";
 import { getProfile } from "@/lib/api";
 import { BlockedUsersPanel } from "@/components/union/blocked-users-panel";
 import {
+  getUnionChats,
   getUnionBlocks,
   getUnionConnectionCounts,
   getUnionProfileState,
@@ -18,10 +20,11 @@ export default async function UnionProfilePage() {
   if (!user) redirect("/login");
   if (!hasCompleteUnionLocation(user)) redirect("/union/location");
 
-  const [state, counts, blocks] = await Promise.all([
+  const [state, counts, blocks, chats] = await Promise.all([
     getUnionProfileState(),
     getUnionConnectionCounts().catch(() => null),
     getUnionBlocks().catch(() => null),
+    getUnionChats().catch(() => null),
   ]);
   const profile = state?.profile ?? null;
 
@@ -30,7 +33,7 @@ export default async function UnionProfilePage() {
       <BackgroundOrbs />
       <NoiseOverlay />
       <Header user={user} />
-      <main className="mx-auto max-w-4xl px-4 py-8 pb-24">
+      <main className="mx-auto max-w-4xl px-4 py-8 pb-28">
         <div className="mb-6">
           <h1 className="font-display text-2xl font-bold text-text-0">
             VedaMatch Union
@@ -66,6 +69,10 @@ export default async function UnionProfilePage() {
           <BlockedUsersPanel blocked={blocks?.blocked ?? []} />
         </div>
       </main>
+      <UnionTabBar
+        incomingPending={counts?.incomingPending ?? 0}
+        hasUnreadChats={(chats?.unreadTotal ?? 0) > 0}
+      />
     </div>
   );
 }

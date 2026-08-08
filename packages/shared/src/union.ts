@@ -114,6 +114,8 @@ export interface UnionProfileDto extends UnionProfileDetails {
   isActive: boolean;
   /** Принимать запросы только от преданных, подтверждённых администрацией */
   requestsFromVerifiedOnly: boolean;
+  /** Кто может начать общение: заявки от всех или только взаимные лайки */
+  contactMode: UnionContactMode;
   intentions: UnionIntentionDto[];
   createdAt: string;
   updatedAt: string;
@@ -186,7 +188,69 @@ export interface UnionProfileUpdateRequest extends Partial<UnionProfileDetails> 
   privacy?: UnionPrivacySettings | null;
   isActive?: boolean;
   requestsFromVerifiedOnly?: boolean;
+  contactMode?: UnionContactMode;
   intentions: UnionIntentionDto[];
+}
+
+/**
+ * Режим знакомства. `requests` — односторонний лайк приходит человеку заявкой,
+ * он отвечает вручную. `mutual_only` — заявка появляется только при взаимном
+ * лайке, односторонние интересующиеся не показываются.
+ */
+export type UnionContactMode = 'requests' | 'mutual_only';
+
+export type UnionSwipeDecision = 'like' | 'superlike' | 'pass';
+
+export interface UnionSwipeRequest {
+  toUserId: string;
+  decision: UnionSwipeDecision;
+  /** Сопроводительное сообщение к заявке; для `pass` игнорируется. */
+  message?: string | null;
+}
+
+export interface UnionSwipeResult {
+  toUserId: string;
+  decision: UnionSwipeDecision;
+  /** Лайк оказался взаимным — чат уже открыт. */
+  matched: boolean;
+  /** Заявка, если она создана. У `pass` и у `mutual_only` без взаимности — null. */
+  connection: UnionConnectionRequestDto | null;
+}
+
+/** Строка в списке диалогов. */
+export interface UnionChatSummary {
+  /** id принятой заявки — он же id чата. */
+  requestId: string;
+  user: UnionUserSummary;
+  /** Последнее сообщение или null, если ещё не переписывались. */
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+  /** Последнее сообщение отправил я. */
+  lastMessageMine: boolean;
+  unreadCount: number;
+}
+
+export interface UnionChatsState {
+  chats: UnionChatSummary[];
+  /** Сумма непрочитанных по всем диалогам — для точки на вкладке. */
+  unreadTotal: number;
+}
+
+/** Состояние буста «Внимание». */
+export interface UnionBoostStatus {
+  active: boolean;
+  /** Когда закончится; null — буст не активен. */
+  expiresAt: string | null;
+  /** Сколько секунд осталось; 0 — буст не активен. */
+  secondsLeft: number;
+  /** Сколько минут длится буст — для текста в интерфейсе. */
+  durationMinutes: number;
+}
+
+export interface UnionSwipeUndoResult {
+  /** Кого вернули в колоду. */
+  toUserId: string;
+  decision: UnionSwipeDecision;
 }
 
 export type UnionCompatibilityCriterion =
@@ -278,9 +342,15 @@ export interface UnionRecommendationFilters {
   photoVerifiedOnly?: boolean;
   format?: UnionFormat;
   language?: string;
+  /** Порядок выдачи: по совместимости (по умолчанию) или сначала новые анкеты. */
+  sort?: UnionRecommendationSort;
+  /** Нижняя граница совместимости в процентах, 1..100. */
+  minScore?: number;
   page?: number;
   pageSize?: number;
 }
+
+export type UnionRecommendationSort = 'match' | 'new';
 
 export interface UnionRecommendationsResponse {
   items: UnionRecommendation[];
@@ -294,6 +364,8 @@ export interface UnionConnectionSummary {
   id: string;
   status: UnionConnectionStatus;
   direction: 'incoming' | 'outgoing';
+  /** Заявка отправлена суперлайком. */
+  isSuperlike: boolean;
   message: string | null;
   createdAt: string;
   respondedAt: string | null;
@@ -315,6 +387,8 @@ export interface UnionConnectionCounts {
 export interface UnionCreateConnectionRequest {
   toUserId: string;
   message?: string | null;
+  /** Отправить суперлайком; расходует суточную квоту. */
+  isSuperlike?: boolean;
 }
 
 export interface UnionChatMessageDto {

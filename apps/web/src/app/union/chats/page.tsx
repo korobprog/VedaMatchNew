@@ -1,30 +1,23 @@
 import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
-import { ConnectionsPanel } from "@/components/union/connections-panel";
+import { UnionChatsList } from "@/components/union/union-chats-list";
 import { UnionNav } from "@/components/union/union-nav";
 import { UnionTabBar } from "@/components/union/union-tabbar";
+import { UnionTopBar } from "@/components/union/union-top-bar";
 import { getProfile } from "@/lib/api";
-import {
-  getUnionChats,
-  getUnionConnectionCounts,
-  getUnionConnectionRequests,
-} from "@/lib/union-api";
+import { getUnionChats, getUnionConnectionCounts } from "@/lib/union-api";
 import { hasCompleteUnionLocation } from "@/lib/union-location";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
-const connectionsLoadError =
-  "Не удалось загрузить связи. Обновите страницу и попробуйте снова.";
-
-export default async function UnionConnectionsPage() {
+export default async function UnionChatsPage() {
   const user = await getProfile();
   if (!user) redirect("/login");
   if (!hasCompleteUnionLocation(user)) redirect("/union/location");
 
-  const [requests, counts, chats] = await Promise.all([
-    getUnionConnectionRequests().catch(() => null),
-    getUnionConnectionCounts().catch(() => null),
+  const [chats, counts] = await Promise.all([
     getUnionChats().catch(() => null),
+    getUnionConnectionCounts().catch(() => null),
   ]);
 
   return (
@@ -32,15 +25,16 @@ export default async function UnionConnectionsPage() {
       <BackgroundOrbs />
       <NoiseOverlay />
       <Header user={user} />
-      <main className="mx-auto max-w-4xl px-4 py-8 pb-28">
-        <h1 className="mb-6 font-display text-2xl font-bold text-text-0">
-          Связи Union
-        </h1>
+      <main className="mx-auto max-w-3xl px-4 py-8 pb-28">
+        <UnionTopBar title="Чаты" />
+        <div className="mb-6 hidden md:block">
+          <h1 className="font-display text-2xl font-bold text-text-0">Чаты</h1>
+          <p className="mt-1 text-sm text-text-1">
+            Диалоги с теми, с кем знакомство стало взаимным.
+          </p>
+        </div>
         <UnionNav incomingPending={counts?.incomingPending ?? 0} />
-        <ConnectionsPanel
-          requests={requests}
-          loadError={requests ? null : connectionsLoadError}
-        />
+        <UnionChatsList state={chats} />
       </main>
       <UnionTabBar
         incomingPending={counts?.incomingPending ?? 0}

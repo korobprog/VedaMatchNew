@@ -11,6 +11,8 @@ import type {
   ProfileSocialLinks,
   UnionChatMessageDto,
   UnionChatState,
+  UnionChatsState,
+  UnionChatSummary,
   UnionConnectionSummary,
   UnionPrivacySettings,
   UnionSendChatMessageRequest,
@@ -27,8 +29,75 @@ const MAX_CHAT_MESSAGE_LENGTH = 2000;
 export class UnionChatService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Список диалогов: принятые заявки плюс последнее сообщение и счётчик
+   * непрочитанного. Непрочитанное — входящие сообщения без `readAt`.
+   */
+  async listChats(userId: string): Promise<UnionChatsState> {
+    const connections = await this.prisma.unionConnectionRequest.findMany({
+      where: {
+        status: 'accepted',
+        OR: [{ fromUserId: userId }, { toUserId: userId }],
+      },
+      include: {
+        fromUser: { include: { unionProfile: true } },
+        toUser: { include: { unionProfile: true } },
+        messages: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+    });
+
+    const unreadRows = await this.prisma.unionChatMessage.groupBy({
+      by: ['requestId'],
+      where: {
+        readAt: null,
+        fromUserId: { not: userId },
+        request: {
+          status: 'accepted',
+          OR: [{ fromUserId: userId }, { toUserId: userId }],
+        },
+      },
+      _count: { _all: true },
+    });
+    const unreadByRequest = new Map(
+      unreadRows.map((row) => [row.requestId, row._count._all]),
+    );
+
+    const chats: UnionChatSummary[] = connections
+      .map((connection) => {
+        const otherUser =
+          connection.fromUserId === userId
+            ? connection.toUser
+            : connection.fromUser;
+        const last = connection.messages[0] ?? null;
+        return {
+          requestId: connection.id,
+          user: this.toUserSummary(otherUser),
+          lastMessage: last?.body ?? null,
+          lastMessageAt: last?.createdAt.toISOString() ?? null,
+          lastMessageMine: last?.fromUserId === userId,
+          unreadCount: unreadByRequest.get(connection.id) ?? 0,
+        };
+      })
+      .sort((left, right) => this.chatOrder(right) - this.chatOrder(left));
+
+    return {
+      chats,
+      unreadTotal: chats.reduce((sum, chat) => sum + chat.unreadCount, 0),
+    };
+  }
+
   async getChat(userId: string, requestId: string): Promise<UnionChatState> {
     const connection = await this.getAcceptedConnection(userId, requestId);
+
+    // Открыли чат — входящие считаются прочитанными.
+    await this.prisma.unionChatMessage.updateMany({
+      where: {
+        requestId: connection.id,
+        fromUserId: { not: userId },
+        readAt: null,
+      },
+      data: { readAt: new Date() },
+    });
     const otherUser =
       connection.fromUserId === userId
         ? connection.toUser
@@ -86,6 +155,11 @@ export class UnionChatService {
     };
   }
 
+  /** Свежие переписки выше; диалоги без сообщений уходят в конец списка. */
+  private chatOrder(chat: UnionChatSummary): number {
+    return chat.lastMessageAt ? Date.parse(chat.lastMessageAt) : 0;
+  }
+
   private async getAcceptedConnection(userId: string, requestId: string) {
     const connection = await this.prisma.unionConnectionRequest.findUnique({
       where: { id: requestId },
@@ -113,6 +187,7 @@ export class UnionChatService {
       status: connection.status,
       direction:
         connection.fromUserId === currentUserId ? 'outgoing' : 'incoming',
+      isSuperlike: connection.isSuperlike,
       message: connection.message,
       createdAt: connection.createdAt.toISOString(),
       respondedAt: connection.respondedAt?.toISOString() ?? null,

@@ -2,6 +2,7 @@
 import { cookies } from "next/headers";
 import type {
   UnionChatState,
+  UnionChatsState,
   UnionConnectionCounts,
   UnionConnectionRequestsState,
   UnionProfileState,
@@ -45,6 +46,7 @@ export const getUnionConnectionRequests = () =>
 export const getUnionConnectionCounts = () =>
   unionGet<UnionConnectionCounts>("/union/connection-requests/counts");
 export const getUnionBlocks = () => unionGet<UserBlocksState>("/union/blocks");
+export const getUnionChats = () => unionGet<UnionChatsState>("/union/chats");
 export const getUnionChat = (id: string) =>
   unionGet<UnionChatState>(`/union/chats/${encodeURIComponent(id)}`);
 

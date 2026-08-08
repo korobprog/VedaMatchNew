@@ -42,16 +42,102 @@ describe('UnionChatService', () => {
   const prisma = {
     unionConnectionRequest: {
       findUnique: jest.fn(),
+      findMany: jest.fn(),
     },
     unionChatMessage: {
       findMany: jest.fn(),
       create: jest.fn(),
+      groupBy: jest.fn(() =>
+        Promise.resolve(
+          [] as Array<{ requestId: string; _count: { _all: number } }>,
+        ),
+      ),
+      updateMany: jest.fn(),
     },
   };
   const service = new UnionChatService(prisma as unknown as PrismaService);
 
   beforeEach(() => {
     jest.resetAllMocks();
+    prisma.unionChatMessage.groupBy.mockResolvedValue([]);
+  });
+
+  it('lists chats with a preview and unread counter, freshest first', async () => {
+    const stale = {
+      ...connection(),
+      id: 'request-stale',
+      messages: [
+        {
+          id: 'm-1',
+          fromUserId: 'recipient',
+          body: 'Старое',
+          createdAt: new Date('2026-07-10T09:00:00.000Z'),
+        },
+      ],
+    };
+    const fresh = {
+      ...connection(),
+      id: 'request-fresh',
+      messages: [
+        {
+          id: 'm-2',
+          fromUserId: 'sender',
+          body: 'Свежее',
+          createdAt: new Date('2026-07-10T12:00:00.000Z'),
+        },
+      ],
+    };
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([stale, fresh]);
+    prisma.unionChatMessage.groupBy.mockResolvedValue([
+      { requestId: 'request-stale', _count: { _all: 3 } },
+    ]);
+
+    const result = await service.listChats('sender');
+
+    expect(result.chats.map((chat) => chat.requestId)).toEqual([
+      'request-fresh',
+      'request-stale',
+    ]);
+    expect(result.chats[0]).toEqual(
+      expect.objectContaining({
+        lastMessage: 'Свежее',
+        lastMessageMine: true,
+        unreadCount: 0,
+      }),
+    );
+    expect(result.unreadTotal).toBe(3);
+  });
+
+  it('marks a chat without messages as ready to start', async () => {
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([
+      { ...connection(), messages: [] },
+    ]);
+
+    const result = await service.listChats('sender');
+
+    expect(result.chats[0]).toEqual(
+      expect.objectContaining({
+        lastMessage: null,
+        lastMessageAt: null,
+        unreadCount: 0,
+      }),
+    );
+  });
+
+  it('marks incoming messages as read when the chat is opened', async () => {
+    prisma.unionConnectionRequest.findUnique.mockResolvedValue(connection());
+    prisma.unionChatMessage.findMany.mockResolvedValue([]);
+
+    await service.getChat('sender', 'request-1');
+
+    expect(prisma.unionChatMessage.updateMany).toHaveBeenCalledWith({
+      where: {
+        requestId: 'request-1',
+        fromUserId: { not: 'sender' },
+        readAt: null,
+      },
+      data: { readAt: expect.any(Date) as Date },
+    });
   });
 
   it('rejects chat access for a user outside the connection', async () => {

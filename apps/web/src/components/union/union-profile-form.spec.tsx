@@ -46,6 +46,7 @@ const profile: UnionProfileDto = {
   privacy: null,
   isActive: true,
   requestsFromVerifiedOnly: false,
+  contactMode: "requests",
   intentions: [{ type: "family", weight: 100 }],
   createdAt: "2026-08-05T00:00:00.000Z",
   updatedAt: "2026-08-05T00:00:00.000Z",

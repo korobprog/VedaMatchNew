@@ -117,6 +117,13 @@ export function RecommendationFilters({
       className="glass mb-6 rounded-3xl border border-glass-brd p-4 sm:p-5"
     >
       <input type="hidden" name="page" value="1" />
+      {/* Подборка задаёт порядок и порог совместимости — форма их не теряет. */}
+      {first(params.sort) && (
+        <input type="hidden" name="sort" value={first(params.sort)} />
+      )}
+      {first(params.minScore) && (
+        <input type="hidden" name="minScore" value={first(params.minScore)} />
+      )}
       {Number.isFinite(selectedCity?.lat) && (
         <input type="hidden" name="lat" value={String(selectedCity?.lat)} />
       )}
