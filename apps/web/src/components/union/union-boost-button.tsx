@@ -74,7 +74,7 @@ export function UnionBoostButton() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label={active ? "Внимание активно" : "Включить внимание"}
-        className={`absolute right-3 top-3 z-10 flex h-11 items-center justify-center gap-1.5 rounded-full px-3 text-lg backdrop-blur transition ${
+        className={`absolute right-3 top-8 z-10 flex h-11 items-center justify-center gap-1.5 rounded-full px-3 text-lg backdrop-blur transition ${
           active
             ? "bg-gradient-to-r from-[#FFB020] to-[#FF7A00] text-white shadow-[0_0_20px_rgba(255,140,0,0.45)]"
             : "bg-white/90 text-[#FF9500] hover:bg-white"

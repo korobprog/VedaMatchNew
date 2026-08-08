@@ -147,7 +147,7 @@ export function SwipeDeck({ items }: { items: UnionRecommendation[] }) {
           onClick={() => void undo()}
           disabled={!canUndo || index === 0 || undoing}
           aria-label="Вернуть предыдущую анкету"
-          className="absolute left-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-xl text-white backdrop-blur transition hover:bg-black/60 disabled:opacity-40"
+          className="absolute left-3 top-8 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-xl text-white backdrop-blur transition hover:bg-black/60 disabled:opacity-40"
         >
           ↺
         </button>
@@ -274,7 +274,7 @@ function SwipeCard({
 
         <motion.span
           style={{ opacity: likeOpacity }}
-          className="absolute left-4 top-4 rounded-xl border-2 border-cyan px-3 py-1 font-display text-lg font-bold text-cyan"
+          className="absolute left-4 top-24 rounded-xl border-2 border-cyan px-3 py-1 font-display text-lg font-bold text-cyan"
         >
           ЗНАКОМИМСЯ
         </motion.span>
@@ -286,20 +286,12 @@ function SwipeCard({
         </motion.span>
         <motion.span
           style={{ opacity: skipOpacity }}
-          className="absolute right-4 top-4 rounded-xl border-2 border-text-2 px-3 py-1 font-display text-lg font-bold text-text-2"
+          className="absolute right-4 top-24 rounded-xl border-2 border-text-2 px-3 py-1 font-display text-lg font-bold text-text-2"
         >
           ПРОПУСК
         </motion.span>
 
         <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
-
-        <div className="absolute right-3 top-3 flex flex-col items-end gap-2">
-          <span className="rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] px-3 py-1 text-sm font-bold text-white">
-            {compatibility.total}%
-          </span>
-          {user.isVerifiedDevotee && <VerifiedBadge variant="overlay" />}
-          {user.isPhotoVerified && <PhotoVerifiedBadge variant="overlay" />}
-        </div>
 
         <div className="absolute left-3 bottom-20">
           <ActivityBadge activity={user.activity} variant="overlay" />
@@ -308,14 +300,21 @@ function SwipeCard({
         <div className="absolute inset-x-0 bottom-0 p-4">
           <div className="flex items-end justify-between gap-2">
             <div className="min-w-0">
-              <Link
-                href={`/union/users/${user.id}`}
-                className="block truncate font-display text-xl font-bold text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
-              >
-                {user.name}
-              </Link>
-              <p className="truncate text-sm text-white/85 drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
-                {subtitle}
+              <div className="flex items-center gap-2">
+                <Link
+                  href={`/union/users/${user.id}`}
+                  className="truncate font-display text-xl font-bold text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
+                >
+                  {user.name}
+                </Link>
+                {user.isVerifiedDevotee && <VerifiedBadge variant="overlay" />}
+                {user.isPhotoVerified && <PhotoVerifiedBadge variant="overlay" />}
+              </div>
+              <p className="mt-0.5 flex items-center gap-2 truncate text-sm text-white/85 drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
+                <span className="shrink-0 rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] px-2 py-0.5 text-xs font-bold text-white">
+                  {compatibility.total}%
+                </span>
+                <span className="truncate">{subtitle}</span>
               </p>
             </div>
             <button
