@@ -293,11 +293,8 @@ function SwipeCard({
 
         <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
 
-        <div className="absolute left-3 bottom-20">
+        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 p-4">
           <ActivityBadge activity={user.activity} variant="overlay" />
-        </div>
-
-        <div className="absolute inset-x-0 bottom-0 p-4">
           <div className="flex items-end justify-between gap-2">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
