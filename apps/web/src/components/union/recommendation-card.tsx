@@ -4,6 +4,7 @@ import type {
   UnionRecommendation,
 } from "@vedamatch/shared";
 import { ActivityBadge } from "./activity-badge";
+import { ContactList } from "./contact-list";
 import { ProfileDetailsList } from "./profile-details-list";
 import { ConnectionActions } from "./connection-actions";
 import { intentionLabels, yearsSuffix } from "./labels";
@@ -118,27 +119,7 @@ export function RecommendationCard({ item }: { item: UnionRecommendation }) {
 
         <ProfileDetailsList details={profile} />
 
-        {user.contacts && (
-          <div className="rounded-xl border border-cyan/30 bg-cyan/10 p-3 text-sm text-text-0">
-            <p className="mb-2 font-medium">Контакты открыты</p>
-            <div className="space-y-1">
-              {Object.entries(user.contacts.messengers).map(([key, value]) =>
-                value ? (
-                  <p key={key} className="truncate">
-                    <span className="font-medium">{key}:</span> {value}
-                  </p>
-                ) : null,
-              )}
-              {Object.entries(user.contacts.socialLinks).map(([key, value]) =>
-                value ? (
-                  <p key={key} className="truncate">
-                    <span className="font-medium">{key}:</span> {value}
-                  </p>
-                ) : null,
-              )}
-            </div>
-          </div>
-        )}
+        {user.contacts && <ContactList contacts={user.contacts} />}
 
         <details className="text-sm">
           <summary className="cursor-pointer text-magenta">
