@@ -1,7 +1,9 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import type {
   AccessTokenPayload,
+  UnionEditChatMessageRequest,
   UnionSendChatMessageRequest,
+  UnionSetReactionRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { UnionChatService } from './union-chat.service';
@@ -28,5 +30,25 @@ export class UnionChatController {
     @Body() body: UnionSendChatMessageRequest,
   ) {
     return this.chats.sendMessage(user.sub, id, body);
+  }
+
+  @Patch(':id/messages/:messageId')
+  editMessage(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Body() body: UnionEditChatMessageRequest,
+  ) {
+    return this.chats.editMessage(user.sub, id, messageId, body);
+  }
+
+  @Put(':id/messages/:messageId/reaction')
+  setReaction(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Body() body: UnionSetReactionRequest,
+  ) {
+    return this.chats.setReaction(user.sub, id, messageId, body);
   }
 }

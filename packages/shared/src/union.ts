@@ -400,6 +400,13 @@ export interface UnionCreateConnectionRequest {
   isSuperlike?: boolean;
 }
 
+/** Сгруппированная реакция на сообщение: эмодзи + сколько раз и ставил ли я. */
+export interface UnionMessageReactionSummary {
+  emoji: string;
+  count: number;
+  mine: boolean;
+}
+
 export interface UnionChatMessageDto {
   id: string;
   requestId: string;
@@ -407,6 +414,9 @@ export interface UnionChatMessageDto {
   body: string;
   mine: boolean;
   createdAt: string;
+  /** Когда сообщение было отредактировано; null — не редактировалось. */
+  editedAt: string | null;
+  reactions: UnionMessageReactionSummary[];
 }
 
 export interface UnionChatState {
@@ -417,4 +427,12 @@ export interface UnionChatState {
 
 export interface UnionSendChatMessageRequest {
   body: string;
+}
+
+export interface UnionEditChatMessageRequest {
+  body: string;
+}
+
+export interface UnionSetReactionRequest {
+  emoji: string;
 }

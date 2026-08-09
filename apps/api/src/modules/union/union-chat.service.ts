@@ -14,8 +14,11 @@ import type {
   UnionChatsState,
   UnionChatSummary,
   UnionConnectionSummary,
+  UnionEditChatMessageRequest,
+  UnionMessageReactionSummary,
   UnionPrivacySettings,
   UnionSendChatMessageRequest,
+  UnionSetReactionRequest,
   UnionUserSummary,
 } from '@vedamatch/shared';
 import { calculateAge } from '../users/age';
@@ -25,6 +28,18 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 
 const MAX_CHAT_MESSAGE_LENGTH = 2000;
+
+/** Разрешённые эмодзи для реакций — узкий белый список вместо любых строк. */
+export const ALLOWED_REACTION_EMOJIS = [
+  '❤️',
+  '🙏',
+  '😂',
+  '😍',
+  '👍',
+  '🔥',
+  '🌸',
+  '🙌',
+] as const;
 
 @Injectable()
 export class UnionChatService {
@@ -114,6 +129,10 @@ export class UnionChatService {
       orderBy: { createdAt: 'asc' },
       take: 200,
     });
+    const reactionsByMessage = await this.loadReactions(
+      messages.map((message) => message.id),
+      userId,
+    );
 
     return {
       connection: this.toConnectionSummary(connection, userId),
@@ -125,6 +144,8 @@ export class UnionChatService {
         body: message.body,
         mine: message.fromUserId === userId,
         createdAt: message.createdAt.toISOString(),
+        editedAt: message.editedAt?.toISOString() ?? null,
+        reactions: reactionsByMessage.get(message.id) ?? [],
       })),
     };
   }
@@ -158,7 +179,127 @@ export class UnionChatService {
       body: message.body,
       mine: true,
       createdAt: message.createdAt.toISOString(),
+      editedAt: null,
+      reactions: [],
     };
+  }
+
+  async editMessage(
+    userId: string,
+    requestId: string,
+    messageId: string,
+    body: UnionEditChatMessageRequest,
+  ): Promise<UnionChatMessageDto> {
+    const text = String(body.body ?? '').trim();
+    if (!text) throw new BadRequestException('Message is required');
+    if (text.length > MAX_CHAT_MESSAGE_LENGTH) {
+      throw new BadRequestException(
+        `Message must be ${MAX_CHAT_MESSAGE_LENGTH} characters or shorter`,
+      );
+    }
+
+    const connection = await this.getAcceptedConnection(userId, requestId);
+    const existing = await this.prisma.unionChatMessage.findUnique({
+      where: { id: messageId },
+    });
+    if (!existing || existing.requestId !== connection.id) {
+      throw new NotFoundException('Message not found');
+    }
+    if (existing.fromUserId !== userId) {
+      throw new ForbiddenException('Not your message');
+    }
+
+    const message = await this.prisma.unionChatMessage.update({
+      where: { id: messageId },
+      data: { body: text, editedAt: new Date() },
+    });
+    const reactions =
+      (await this.loadReactions([message.id], userId)).get(message.id) ?? [];
+
+    return {
+      id: message.id,
+      requestId: message.requestId,
+      fromUserId: message.fromUserId,
+      body: message.body,
+      mine: true,
+      createdAt: message.createdAt.toISOString(),
+      editedAt: message.editedAt?.toISOString() ?? null,
+      reactions,
+    };
+  }
+
+  /**
+   * Ставит реакцию пользователя на сообщение. Тот же эмодзи повторно —
+   * снимает реакцию, другой — заменяет прежний (одна реакция на человека).
+   */
+  async setReaction(
+    userId: string,
+    requestId: string,
+    messageId: string,
+    body: UnionSetReactionRequest,
+  ): Promise<UnionMessageReactionSummary[]> {
+    const emoji = String(body.emoji ?? '');
+    if (!(ALLOWED_REACTION_EMOJIS as readonly string[]).includes(emoji)) {
+      throw new BadRequestException('Unsupported emoji');
+    }
+
+    const connection = await this.getAcceptedConnection(userId, requestId);
+    const message = await this.prisma.unionChatMessage.findUnique({
+      where: { id: messageId },
+    });
+    if (!message || message.requestId !== connection.id) {
+      throw new NotFoundException('Message not found');
+    }
+
+    const existing = await this.prisma.unionMessageReaction.findUnique({
+      where: { messageId_userId: { messageId, userId } },
+    });
+    if (existing && existing.emoji === emoji) {
+      await this.prisma.unionMessageReaction.delete({
+        where: { id: existing.id },
+      });
+    } else {
+      await this.prisma.unionMessageReaction.upsert({
+        where: { messageId_userId: { messageId, userId } },
+        update: { emoji },
+        create: { messageId, userId, emoji },
+      });
+    }
+
+    return (await this.loadReactions([messageId], userId)).get(messageId) ?? [];
+  }
+
+  private async loadReactions(
+    messageIds: string[],
+    userId: string,
+  ): Promise<Map<string, UnionMessageReactionSummary[]>> {
+    if (messageIds.length === 0) return new Map();
+    const reactions = await this.prisma.unionMessageReaction.findMany({
+      where: { messageId: { in: messageIds } },
+    });
+
+    const byMessage = new Map<
+      string,
+      Map<string, UnionMessageReactionSummary>
+    >();
+    for (const reaction of reactions) {
+      const forMessage = byMessage.get(reaction.messageId) ?? new Map();
+      const entry = forMessage.get(reaction.emoji) ?? {
+        emoji: reaction.emoji,
+        count: 0,
+        mine: false,
+      };
+      entry.count += 1;
+      if (reaction.userId === userId) entry.mine = true;
+      forMessage.set(reaction.emoji, entry);
+      byMessage.set(reaction.messageId, forMessage);
+    }
+
+    const result = new Map<string, UnionMessageReactionSummary[]>();
+    for (const [messageId, forMessage] of byMessage) {
+      result.set(messageId, [...forMessage.values()]);
+    }
+    return result;
   }
 
   /** Свежие переписки выше; диалоги без сообщений уходят в конец списка. */

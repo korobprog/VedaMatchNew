@@ -189,6 +189,7 @@ model User {
   unionSwipesMade             UnionSwipe[]                 @relation("UnionSwipesMade")
   unionSwipesReceived         UnionSwipe[]                 @relation("UnionSwipesReceived")
   unionChatMessagesSent       UnionChatMessage[]           @relation("UnionChatMessagesSent")
+  unionMessageReactions       UnionMessageReaction[]       @relation("UnionMessageReactionsMade")
   photos                      UserPhoto[]
   blocksMade                  UserBlock[]                  @relation("UserBlocksMade")
   blocksReceived              UserBlock[]                  @relation("UserBlocksReceived")
@@ -981,11 +982,29 @@ model UnionChatMessage {
   body       String
   /// Когда собеседник прочитал сообщение; null — ещё не прочитано.
   readAt     DateTime?
+  /// Когда сообщение было отредактировано; null — не редактировалось.
+  editedAt   DateTime?
   createdAt  DateTime               @default(now())
+  reactions  UnionMessageReaction[]
 
   @@index([requestId, createdAt])
   @@index([fromUserId])
   @@index([requestId, readAt])
+}
+
+/// Реакция на сообщение чата. Одна реакция на пользователя на сообщение —
+/// повторный выбор того же эмодзи снимает реакцию, другого — заменяет.
+model UnionMessageReaction {
+  id        String           @id @default(uuid())
+  messageId String
+  message   UnionChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User             @relation("UnionMessageReactionsMade", fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime         @default(now())
+
+  @@unique([messageId, userId])
+  @@index([messageId])
 }
 
 // ===== Library service =====
