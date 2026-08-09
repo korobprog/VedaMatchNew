@@ -27,6 +27,27 @@ describe("proxy", () => {
     }
   });
 
+  it("serves the worker, manifest and offline shells to guests", () => {
+    for (const path of [
+      "/sw.js",
+      "/manifest.webmanifest",
+      "/offline",
+      "/vedabase/offline",
+    ]) {
+      const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));
+
+      expect(response.headers.get("location"), path).toBeNull();
+    }
+  });
+
+  it("still guards the library itself", () => {
+    const response = proxy(new NextRequest("https://vedamatch.ru/vedabase"));
+
+    expect(response.headers.get("location")).toBe(
+      "https://vedamatch.ru/?returnTo=%2Fvedabase",
+    );
+  });
+
   it("keeps authenticated users away from the login page", () => {
     const response = proxy(
       new NextRequest("https://vedamatch.ru/login", {

@@ -9,10 +9,14 @@ const publicPrefixes = [
   "/support",
   "/legal",
 ];
+// Воркер, манифест и офлайн-оболочки обязаны отдаваться и гостю: без них
+// приложение не устанавливается и не кэшируется при первом визите.
 const publicFiles = new Set([
   "/gitabase",
-  "/vedabase/sw.js",
-  "/vedabase.webmanifest",
+  "/sw.js",
+  "/manifest.webmanifest",
+  "/offline",
+  "/vedabase/offline",
 ]);
 
 export function proxy(req: NextRequest) {
