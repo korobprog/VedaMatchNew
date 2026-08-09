@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { UnionConnectionRequest, User } from '@prisma/client';
 import type {
   ProfileLocation,
@@ -20,6 +21,10 @@ import type {
   UnionSendChatMessageRequest,
   UnionSetReactionRequest,
   UnionUserSummary,
+} from '@vedamatch/shared';
+import {
+  notificationEventNames,
+  toNotificationExcerpt,
 } from '@vedamatch/shared';
 import { calculateAge } from '../users/age';
 import { toActivityLevel } from './union-activity';
@@ -46,6 +51,7 @@ export class UnionChatService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly users: UsersService,
+    private readonly events: EventEmitter2,
   ) {}
 
   /**
@@ -170,6 +176,19 @@ export class UnionChatService {
         fromUserId: userId,
         body: text,
       },
+    });
+
+    // Получатель — вторая сторона связи. Имена уже загружены в
+    // getAcceptedConnection, дополнительный запрос не нужен.
+    const isSender = connection.fromUserId === userId;
+    const recipientId = isSender ? connection.toUserId : connection.fromUserId;
+    const sender = isSender ? connection.fromUser : connection.toUser;
+    this.events.emit(notificationEventNames.chatMessageSent, {
+      name: notificationEventNames.chatMessageSent,
+      recipientId,
+      senderName: sender.name,
+      excerpt: toNotificationExcerpt(text),
+      requestId: connection.id,
     });
 
     return {

@@ -83,6 +83,7 @@ describe('UnionConnectionService', () => {
     prisma as unknown as PrismaService,
     moderation as unknown as ModerationService,
     users as never,
+    { emit: jest.fn() } as never,
   );
 
   beforeEach(() => {
@@ -227,7 +228,12 @@ describe('UnionConnectionService', () => {
       expect(prisma.unionConnectionRequest.update).toHaveBeenCalledWith({
         where: { id: 'request-1' },
         data: { status: savedStatus, respondedAt: createdAt },
-        include: { fromUser: { include: { unionProfile: true } } },
+        // accept дополнительно грузит toUser: его имя уходит в уведомление
+        // отправителю заявки. Отказ никого не уведомляет.
+        include:
+          method === 'accept'
+            ? { fromUser: { include: { unionProfile: true } }, toUser: true }
+            : { fromUser: { include: { unionProfile: true } } },
       });
     },
   );

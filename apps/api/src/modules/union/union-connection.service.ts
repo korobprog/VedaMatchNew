@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { UnionConnectionRequest, User } from '@prisma/client';
 import type {
   ProfileLocation,
@@ -17,6 +18,7 @@ import type {
   UnionPrivacySettings,
   UnionUserSummary,
 } from '@vedamatch/shared';
+import { notificationEventNames } from '@vedamatch/shared';
 import { calculateAge } from '../users/age';
 import { ModerationService } from '../moderation/moderation.service';
 import { toActivityLevel } from './union-activity';
@@ -32,6 +34,7 @@ export class UnionConnectionService {
     private readonly prisma: PrismaService,
     private readonly moderation: ModerationService,
     private readonly users: UsersService,
+    private readonly events: EventEmitter2,
   ) {}
 
   async counts(userId: string): Promise<UnionConnectionCounts> {
@@ -141,6 +144,13 @@ export class UnionConnectionService {
         data: { status: 'accepted', respondedAt: new Date() },
         include: { fromUser: { include: { unionProfile: true } } },
       });
+      // Взаимный лайк: заявка того, кто написал первым, принята.
+      this.events.emit(notificationEventNames.connectionAccepted, {
+        name: notificationEventNames.connectionAccepted,
+        recipientId: toUserId,
+        senderName: accepted.fromUser.name,
+        requestId: accepted.id,
+      });
       return this.toRequestDto(accepted, accepted.fromUser, 'incoming', true);
     }
     if (reverse?.status === 'accepted') {
@@ -151,7 +161,14 @@ export class UnionConnectionService {
       where: { fromUserId_toUserId: { fromUserId, toUserId } },
       create: { fromUserId, toUserId, message, isSuperlike },
       update: { status: 'pending', message, isSuperlike, respondedAt: null },
-      include: { toUser: { include: { unionProfile: true } } },
+      // fromUser берём тем же запросом: лайки — горячий путь, отдельный
+      // поход в базу за одним именем здесь не нужен.
+      include: { toUser: { include: { unionProfile: true } }, fromUser: true },
+    });
+    this.events.emit(notificationEventNames.connectionRequested, {
+      name: notificationEventNames.connectionRequested,
+      recipientId: toUserId,
+      senderName: request.fromUser.name,
     });
     return this.toRequestDto(request, request.toUser, 'outgoing', false);
   }
@@ -174,7 +191,14 @@ export class UnionConnectionService {
     const accepted = await this.prisma.unionConnectionRequest.update({
       where: { id: request.id },
       data: { status: 'accepted', respondedAt: new Date() },
-      include: { fromUser: { include: { unionProfile: true } } },
+      // toUser — тот, кто принимает заявку; его имя увидит отправитель.
+      include: { fromUser: { include: { unionProfile: true } }, toUser: true },
+    });
+    this.events.emit(notificationEventNames.connectionAccepted, {
+      name: notificationEventNames.connectionAccepted,
+      recipientId: accepted.fromUserId,
+      senderName: accepted.toUser.name,
+      requestId: accepted.id,
     });
     return this.toRequestDto(accepted, accepted.fromUser, 'incoming', true);
   }
