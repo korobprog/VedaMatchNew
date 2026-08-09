@@ -53,8 +53,11 @@ export default async function Home({
       <Header user={user} />
       <main className="mx-auto max-w-6xl px-4 py-8 pb-24">
         <section className="mb-10">
-          <h1 className="mb-2 font-display text-2xl font-bold text-text-0 sm:text-3xl">
+          <h1 className="mb-2 flex flex-wrap items-center gap-3 font-display text-2xl font-bold text-text-0 sm:text-3xl">
             Добро пожаловать в VedaMatch
+            <span className="inline-flex items-center rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] px-3 py-1 text-xs font-bold uppercase tracking-wider text-white shadow-[0_0_20px_rgba(255,62,158,0.5)] animate-pulse">
+              Beta
+            </span>
           </h1>
           <p className="text-text-1">
          {user.gender === 'female' ? 'Дорогая' : 'Дорогой'} {user.name}, Вы находитесь на Портале у вас доступ к этим сервисам:
