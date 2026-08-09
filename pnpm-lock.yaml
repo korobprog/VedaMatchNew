@@ -203,6 +203,9 @@ importers:
       jsdom:
         specifier: ^27.4.0
         version: 27.4.0(@noble/hashes@1.8.0)
+      sharp:
+        specifier: 0.34.5
+        version: 0.34.5
       tailwindcss:
         specifier: ^4
         version: 4.3.2

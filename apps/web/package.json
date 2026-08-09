@@ -33,6 +33,7 @@
     "eslint-config-next": "16.2.10",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^27.4.0",
+    "sharp": "0.34.5",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"
