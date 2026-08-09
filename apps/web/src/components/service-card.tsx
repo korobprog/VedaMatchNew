@@ -1,12 +1,15 @@
-﻿import type { ServiceCard as ServiceCardType } from "@vedamatch/shared";
+﻿import type { ReactNode } from "react";
+import type { ServiceCard as ServiceCardType } from "@vedamatch/shared";
 import { ServiceIcon } from "@/components/icons/service-icons";
 
 export function ServiceCard({
   service,
   badgeCount,
+  extra,
 }: {
   service: ServiceCardType;
   badgeCount?: number;
+  extra?: ReactNode;
 }) {
   const comingSoon = service.status === "coming_soon";
 
@@ -48,6 +51,7 @@ export function ServiceCard({
       <p className="mb-6 flex-1 text-sm text-text-1">
         {service.description}
       </p>
+      {extra}
       {comingSoon ? (
         <button
           disabled

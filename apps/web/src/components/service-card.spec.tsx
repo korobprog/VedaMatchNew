@@ -27,4 +27,21 @@ describe("ServiceCard", () => {
 
     expect(screen.getByLabelText("Входящих заявок: 2")).toHaveTextContent("2");
   });
+
+  it("renders extra content between the description and the button", () => {
+    render(
+      <ServiceCard
+        service={service}
+        extra={<div data-testid="quick-access">widget</div>}
+      />,
+    );
+
+    expect(screen.getByTestId("quick-access")).toBeInTheDocument();
+  });
+
+  it("renders no extra content when the prop is omitted", () => {
+    render(<ServiceCard service={service} />);
+
+    expect(screen.queryByTestId("quick-access")).not.toBeInTheDocument();
+  });
 });
