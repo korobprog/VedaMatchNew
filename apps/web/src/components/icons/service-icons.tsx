@@ -1,4 +1,6 @@
-import React from "react";
+"use client";
+
+import React, { useId } from "react";
 
 interface ServiceIconProps {
   slug?: string;
@@ -8,8 +10,19 @@ interface ServiceIconProps {
 
 /**
  * Custom SVG icons themed for VedaMatch services (hand-drawn / custom vector aesthetic).
+ *
+ * Gradient ids are namespaced per instance via `useId`. SVG paint references are
+ * resolved document-wide, so a hardcoded id would let one instance hijack another:
+ * the header nav renders the same icons as the dashboard cards, and on narrow
+ * screens that nav is `display:none`, which left the cards referencing a
+ * zero-sized gradient and painting nothing.
  */
 export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIconProps) {
+  // Strip the colons React puts in generated ids — they are legal in an id but
+  // awkward inside `url(#…)` references.
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const gid = (name: string) => `${slug ?? "service"}-${name}-${uid}`;
+
   switch (slug) {
     case "motivation":
       // Sprouts / Lotus sprout with glowing aura - Meditation & Daily growth
@@ -22,14 +35,14 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
         >
           <path
             d="M16 28V15"
-            stroke="url(#motivation-grad-stem)"
+            stroke={`url(#${gid("stem")})`}
             strokeWidth="2.2"
             strokeLinecap="round"
           />
           {/* Left leaf */}
           <path
             d="M16 22C11 22 7 17 8 11C13 11 16 16 16 22Z"
-            fill="url(#motivation-grad-leaf-l)"
+            fill={`url(#${gid("leaf-l")})`}
             stroke="#10B981"
             strokeWidth="1.2"
             strokeLinejoin="round"
@@ -37,7 +50,7 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
           {/* Right leaf */}
           <path
             d="M16 18C21 18 25 13 24 7C19 7 16 12 16 18Z"
-            fill="url(#motivation-grad-leaf-r)"
+            fill={`url(#${gid("leaf-r")})`}
             stroke="#34D399"
             strokeWidth="1.2"
             strokeLinejoin="round"
@@ -51,15 +64,15 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
             strokeLinecap="round"
           />
           <defs>
-            <linearGradient id="motivation-grad-stem" x1="16" y1="28" x2="16" y2="15" gradientUnits="userSpaceOnUse">
+            <linearGradient id={gid("stem")} x1="16" y1="28" x2="16" y2="15" gradientUnits="userSpaceOnUse">
               <stop stopColor="#059669" />
               <stop offset="1" stopColor="#34D399" />
             </linearGradient>
-            <linearGradient id="motivation-grad-leaf-l" x1="8" y1="11" x2="16" y2="22" gradientUnits="userSpaceOnUse">
+            <linearGradient id={gid("leaf-l")} x1="8" y1="11" x2="16" y2="22" gradientUnits="userSpaceOnUse">
               <stop stopColor="#10B981" stopOpacity="0.8" />
               <stop offset="1" stopColor="#059669" stopOpacity="0.9" />
             </linearGradient>
-            <linearGradient id="motivation-grad-leaf-r" x1="24" y1="7" x2="16" y2="18" gradientUnits="userSpaceOnUse">
+            <linearGradient id={gid("leaf-r")} x1="24" y1="7" x2="16" y2="18" gradientUnits="userSpaceOnUse">
               <stop stopColor="#6EE7B7" stopOpacity="0.9" />
               <stop offset="1" stopColor="#10B981" stopOpacity="0.8" />
             </linearGradient>
@@ -79,8 +92,8 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
           {/* Heart/Lotus outline made of two interlocking hands */}
           <path
             d="M16 27C16 27 6 20 6 13C6 9.5 8.8 7 12 7C14.2 7 15.4 8.2 16 9.2C16.6 8.2 17.8 7 20 7C23.2 7 26 9.5 26 13C26 20 16 27 16 27Z"
-            fill="url(#union-grad-bg)"
-            stroke="url(#union-grad-stroke)"
+            fill={`url(#${gid("bg")})`}
+            stroke={`url(#${gid("stroke")})`}
             strokeWidth="1.8"
             strokeLinejoin="round"
           />
@@ -101,11 +114,11 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
           {/* Sparkle */}
           <circle cx="16" cy="5" r="1.5" fill="#FFE500" />
           <defs>
-            <linearGradient id="union-grad-bg" x1="6" y1="7" x2="26" y2="27" gradientUnits="userSpaceOnUse">
+            <linearGradient id={gid("bg")} x1="6" y1="7" x2="26" y2="27" gradientUnits="userSpaceOnUse">
               <stop stopColor="#FF3E9E" stopOpacity="0.75" />
               <stop offset="1" stopColor="#B23EFF" stopOpacity="0.85" />
             </linearGradient>
-            <linearGradient id="union-grad-stroke" x1="6" y1="7" x2="26" y2="27" gradientUnits="userSpaceOnUse">
+            <linearGradient id={gid("stroke")} x1="6" y1="7" x2="26" y2="27" gradientUnits="userSpaceOnUse">
               <stop stopColor="#FF85C0" />
               <stop offset="1" stopColor="#D896FF" />
             </linearGradient>
@@ -125,8 +138,8 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
           {/* Book pages shadow */}
           <path
             d="M5 24.5C9.5 22.5 14 23.5 16 24.5C18 23.5 22.5 22.5 27 24.5V9.5C22.5 7.5 18 8.5 16 9.5C14 8.5 9.5 7.5 5 9.5V24.5Z"
-            fill="url(#vedabase-grad-bg)"
-            stroke="url(#vedabase-grad-stroke)"
+            fill={`url(#${gid("bg")})`}
+            stroke={`url(#${gid("stroke")})`}
             strokeWidth="1.8"
             strokeLinejoin="round"
           />
@@ -144,11 +157,11 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
           />
           <circle cx="19" cy="4.5" r="1" fill="#F59E0B" />
           <defs>
-            <linearGradient id="vedabase-grad-bg" x1="5" y1="7.5" x2="27" y2="24.5" gradientUnits="userSpaceOnUse">
+            <linearGradient id={gid("bg")} x1="5" y1="7.5" x2="27" y2="24.5" gradientUnits="userSpaceOnUse">
               <stop stopColor="#1E3A8A" stopOpacity="0.8" />
               <stop offset="1" stopColor="#3B82F6" stopOpacity="0.7" />
             </linearGradient>
-            <linearGradient id="vedabase-grad-stroke" x1="5" y1="7.5" x2="27" y2="24.5" gradientUnits="userSpaceOnUse">
+            <linearGradient id={gid("stroke")} x1="5" y1="7.5" x2="27" y2="24.5" gradientUnits="userSpaceOnUse">
               <stop stopColor="#60A5FA" />
               <stop offset="1" stopColor="#93C5FD" />
             </linearGradient>
@@ -169,8 +182,8 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
           {/* Lotus base petals */}
           <path
             d="M16 6C13 10 10 14 10 19C10 23.5 12.7 26 16 26C19.3 26 22 23.5 22 19C22 14 19 10 16 6Z"
-            fill="url(#devotee-grad-bg)"
-            stroke="url(#devotee-grad-stroke)"
+            fill={`url(#${gid("bg")})`}
+            stroke={`url(#${gid("stroke")})`}
             strokeWidth="1.8"
             strokeLinejoin="round"
           />
@@ -196,11 +209,11 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
           />
           <circle cx="16" cy="21" r="1" fill="#FACC15" />
           <defs>
-            <linearGradient id="devotee-grad-bg" x1="10" y1="6" x2="22" y2="26" gradientUnits="userSpaceOnUse">
+            <linearGradient id={gid("bg")} x1="10" y1="6" x2="22" y2="26" gradientUnits="userSpaceOnUse">
               <stop stopColor="#831843" stopOpacity="0.8" />
               <stop offset="1" stopColor="#DB2777" stopOpacity="0.75" />
             </linearGradient>
-            <linearGradient id="devotee-grad-stroke" x1="10" y1="6" x2="22" y2="26" gradientUnits="userSpaceOnUse">
+            <linearGradient id={gid("stroke")} x1="10" y1="6" x2="22" y2="26" gradientUnits="userSpaceOnUse">
               <stop stopColor="#F472B6" />
               <stop offset="1" stopColor="#FBCFE8" />
             </linearGradient>
