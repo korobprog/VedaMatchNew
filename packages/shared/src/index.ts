@@ -5,6 +5,7 @@ export * from './library';
 export * from './motivation';
 export * from './moderation';
 export * from './support';
+export * from './notifications';
 
 import type { SubscriptionState } from './support';
 
