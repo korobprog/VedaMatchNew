@@ -1,6 +1,24 @@
-import type { NotificationEvent } from '@vedamatch/shared';
+import type { NotificationEvent, NotificationEventName } from '@vedamatch/shared';
 
 export type NotificationCategory = 'chat' | 'connections' | 'support';
+
+/** Имена событий литералами: @vedamatch/shared не собирается, и импорт
+ *  значения оттуда уронил бы API при старте. Тип сверяет литералы с контрактом. */
+export const notificationEventNames = {
+  chatMessageSent: 'union.chat.message-sent',
+  connectionRequested: 'union.connection.requested',
+  connectionAccepted: 'union.connection.accepted',
+  supportReplied: 'support.ticket.replied',
+} as const satisfies Record<string, NotificationEventName>;
+
+/** Payload веб-пуша ограничен ~4 КБ, да и на экране длинный текст не поместится. */
+const excerptLength = 120;
+
+export function toExcerpt(body: string): string {
+  const text = body.trim().replace(/\s+/g, ' ');
+  if (text.length <= excerptLength) return text;
+  return `${text.slice(0, excerptLength - 1)}…`;
+}
 
 export interface NotificationContent {
   title: string;
@@ -22,7 +40,7 @@ export function buildNotification(
     case 'union.chat.message-sent':
       return {
         title: event.senderName,
-        body: event.excerpt,
+        body: toExcerpt(event.body),
         url: `/union/chats/${event.requestId}`,
         tag: `chat:${event.requestId}`,
         category: 'chat',

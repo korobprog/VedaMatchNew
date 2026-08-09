@@ -275,7 +275,7 @@ describe('UnionChatService.sendMessage — уведомления', () => {
       name: 'union.chat.message-sent',
       recipientId: 'user-2',
       senderName: 'Арджуна',
-      excerpt: 'Харе Кришна',
+      body: 'Харе Кришна',
       requestId: 'r1',
     });
   });

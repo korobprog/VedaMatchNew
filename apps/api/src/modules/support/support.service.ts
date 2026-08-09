@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { notificationEventNames } from '@vedamatch/shared';
+import type { NotificationEvent } from '@vedamatch/shared';
 import type {
   AddSupportMessageRequest,
   AdminSupportTicketDto,
@@ -374,11 +374,12 @@ export class SupportService {
     // Гостевые обращения не имеют аккаунта, а внутренняя заметка адресована
     // администраторам, а не автору тикета.
     if (ticket.userId && body?.isInternal !== true) {
-      this.events.emit(notificationEventNames.supportReplied, {
-        name: notificationEventNames.supportReplied,
+      const event = {
+        name: 'support.ticket.replied',
         recipientId: ticket.userId,
         ticketId: ticket.id,
-      });
+      } satisfies NotificationEvent;
+      this.events.emit(event.name, event);
     }
     return this.adminGet(admin.role, ticketId);
   }

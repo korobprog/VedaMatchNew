@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import type { NotificationEvent } from '@vedamatch/shared';
-import { notificationEventNames } from '@vedamatch/shared';
-import { buildNotification } from './notification-copy';
+import { buildNotification, notificationEventNames } from './notification-copy';
 import { NotificationsService } from './notifications.service';
 import { PushSenderService } from './push-sender.service';
 

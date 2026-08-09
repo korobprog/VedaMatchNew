@@ -5,7 +5,8 @@ export type NotificationEvent =
       name: 'union.chat.message-sent';
       recipientId: string;
       senderName: string;
-      excerpt: string;
+      /** Полный текст: обрезает его модуль уведомлений, а не издатель. */
+      body: string;
       requestId: string;
     }
   | {
@@ -21,21 +22,13 @@ export type NotificationEvent =
     }
   | { name: 'support.ticket.replied'; recipientId: string; ticketId: string };
 
-export const notificationEventNames = {
-  chatMessageSent: 'union.chat.message-sent',
-  connectionRequested: 'union.connection.requested',
-  connectionAccepted: 'union.connection.accepted',
-  supportReplied: 'support.ticket.replied',
-} as const;
-
-/** Payload веб-пуша ограничен ~4 КБ, да и на экране длинный текст не поместится. */
-export const notificationExcerptLength = 120;
-
-export function toNotificationExcerpt(body: string): string {
-  const text = body.trim().replace(/\s+/g, ' ');
-  if (text.length <= notificationExcerptLength) return text;
-  return `${text.slice(0, notificationExcerptLength - 1)}…`;
-}
+/**
+ * Пакет не собирается (`main: src/index.ts`), поэтому API импортирует отсюда
+ * ТОЛЬКО типы: они стираются при компиляции. Значение, вывезенное сюда,
+ * заставит Node грузить сырой TypeScript и уронит сервис при старте.
+ * Имена событий поэтому — строковые литералы, проверяемые типом выше.
+ */
+export type NotificationEventName = NotificationEvent['name'];
 
 export interface NotificationPreferencesDto {
   enabled: boolean;

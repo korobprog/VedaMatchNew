@@ -18,7 +18,7 @@ import type {
   UnionPrivacySettings,
   UnionUserSummary,
 } from '@vedamatch/shared';
-import { notificationEventNames } from '@vedamatch/shared';
+import type { NotificationEvent } from '@vedamatch/shared';
 import { calculateAge } from '../users/age';
 import { ModerationService } from '../moderation/moderation.service';
 import { toActivityLevel } from './union-activity';
@@ -145,12 +145,13 @@ export class UnionConnectionService {
         include: { fromUser: { include: { unionProfile: true } } },
       });
       // Взаимный лайк: заявка того, кто написал первым, принята.
-      this.events.emit(notificationEventNames.connectionAccepted, {
-        name: notificationEventNames.connectionAccepted,
+      const matched = {
+        name: 'union.connection.accepted',
         recipientId: toUserId,
         senderName: accepted.fromUser.name,
         requestId: accepted.id,
-      });
+      } satisfies NotificationEvent;
+      this.events.emit(matched.name, matched);
       return this.toRequestDto(accepted, accepted.fromUser, 'incoming', true);
     }
     if (reverse?.status === 'accepted') {
@@ -165,11 +166,12 @@ export class UnionConnectionService {
       // поход в базу за одним именем здесь не нужен.
       include: { toUser: { include: { unionProfile: true } }, fromUser: true },
     });
-    this.events.emit(notificationEventNames.connectionRequested, {
-      name: notificationEventNames.connectionRequested,
+    const requested = {
+      name: 'union.connection.requested',
       recipientId: toUserId,
       senderName: request.fromUser.name,
-    });
+    } satisfies NotificationEvent;
+    this.events.emit(requested.name, requested);
     return this.toRequestDto(request, request.toUser, 'outgoing', false);
   }
 
@@ -194,12 +196,13 @@ export class UnionConnectionService {
       // toUser — тот, кто принимает заявку; его имя увидит отправитель.
       include: { fromUser: { include: { unionProfile: true } }, toUser: true },
     });
-    this.events.emit(notificationEventNames.connectionAccepted, {
-      name: notificationEventNames.connectionAccepted,
+    const event = {
+      name: 'union.connection.accepted',
       recipientId: accepted.fromUserId,
       senderName: accepted.toUser.name,
       requestId: accepted.id,
-    });
+    } satisfies NotificationEvent;
+    this.events.emit(event.name, event);
     return this.toRequestDto(accepted, accepted.fromUser, 'incoming', true);
   }
 

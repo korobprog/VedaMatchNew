@@ -22,10 +22,7 @@ import type {
   UnionSetReactionRequest,
   UnionUserSummary,
 } from '@vedamatch/shared';
-import {
-  notificationEventNames,
-  toNotificationExcerpt,
-} from '@vedamatch/shared';
+import type { NotificationEvent } from '@vedamatch/shared';
 import { calculateAge } from '../users/age';
 import { toActivityLevel } from './union-activity';
 import { isVerifiedDevotee } from './union-verification';
@@ -183,13 +180,14 @@ export class UnionChatService {
     const isSender = connection.fromUserId === userId;
     const recipientId = isSender ? connection.toUserId : connection.fromUserId;
     const sender = isSender ? connection.fromUser : connection.toUser;
-    this.events.emit(notificationEventNames.chatMessageSent, {
-      name: notificationEventNames.chatMessageSent,
+    const event = {
+      name: 'union.chat.message-sent',
       recipientId,
       senderName: sender.name,
-      excerpt: toNotificationExcerpt(text),
+      body: text,
       requestId: connection.id,
-    });
+    } satisfies NotificationEvent;
+    this.events.emit(event.name, event);
 
     return {
       id: message.id,

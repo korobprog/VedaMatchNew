@@ -1,5 +1,4 @@
-import { toNotificationExcerpt } from '@vedamatch/shared';
-import { buildNotification } from './notification-copy';
+import { buildNotification, toExcerpt } from './notification-copy';
 
 describe('buildNotification', () => {
   it('показывает имя отправителя и начало сообщения', () => {
@@ -8,7 +7,7 @@ describe('buildNotification', () => {
         name: 'union.chat.message-sent',
         recipientId: 'u1',
         senderName: 'Вринда',
-        excerpt: 'Харе Кришна, как ваша садхана?',
+        body: 'Харе Кришна, как ваша садхана?',
         requestId: 'r1',
       }),
     ).toEqual({
@@ -25,14 +24,14 @@ describe('buildNotification', () => {
       name: 'union.chat.message-sent',
       recipientId: 'u1',
       senderName: 'Вринда',
-      excerpt: 'раз',
+      body: 'раз',
       requestId: 'r1',
     });
     const second = buildNotification({
       name: 'union.chat.message-sent',
       recipientId: 'u1',
       senderName: 'Вринда',
-      excerpt: 'два',
+      body: 'два',
       requestId: 'r1',
     });
 
@@ -85,13 +84,13 @@ describe('buildNotification', () => {
   });
 });
 
-describe('toNotificationExcerpt', () => {
+describe('toExcerpt', () => {
   it('оставляет короткое сообщение как есть и схлопывает пробелы', () => {
-    expect(toNotificationExcerpt('  Харе   Кришна  ')).toBe('Харе Кришна');
+    expect(toExcerpt('  Харе   Кришна  ')).toBe('Харе Кришна');
   });
 
   it('обрезает длинное сообщение до 120 символов с многоточием', () => {
-    const excerpt = toNotificationExcerpt('я'.repeat(200));
+    const excerpt = toExcerpt('я'.repeat(200));
 
     expect(excerpt).toHaveLength(120);
     expect(excerpt.endsWith('…')).toBe(true);

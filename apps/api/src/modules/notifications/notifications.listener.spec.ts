@@ -6,7 +6,7 @@ const chatEvent = {
   name: 'union.chat.message-sent',
   recipientId: 'user-1',
   senderName: 'Вринда',
-  excerpt: 'Харе Кришна',
+  body: 'Харе Кришна',
   requestId: 'r1',
 } as const;
 
