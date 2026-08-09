@@ -16,7 +16,7 @@ export function ServiceCard({
   return (
     <div className="group flex flex-col rounded-2xl glass border border-glass-brd p-6 transition-all duration-300 hover:-translate-y-1 hover:border-magenta/30 hover:shadow-[0_0_20px_rgba(255,62,158,0.15)]">
       <div className="mb-4 flex items-center gap-3">
-        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-glass border border-glass-brd">
+        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-glass border-2 border-text-2/35 transition-colors group-hover:border-magenta/50">
           {service.iconUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={service.iconUrl} alt="" className="h-8 w-8" />
