@@ -39,6 +39,27 @@ export function detectPushSupport(): PushSupport {
   return Notification.permission as PushSupport;
 }
 
+// Разрешение браузера — внешнее состояние: читаем его через
+// useSyncExternalStore, а не setState в эффекте. События об изменении браузер
+// не шлёт, поэтому подписку дёргает сам код после requestPermission.
+let listeners: Array<() => void> = [];
+
+export function subscribePushSupport(listener: () => void): () => void {
+  listeners.push(listener);
+  return () => {
+    listeners = listeners.filter((item) => item !== listener);
+  };
+}
+
+export function notifyPushSupportChanged(): void {
+  for (const listener of listeners) listener();
+}
+
+/** На сервере разрешения нет и быть не может. */
+export function getPushSupportServerSnapshot(): PushSupport {
+  return "unsupported";
+}
+
 export async function currentSubscription(): Promise<PushSubscription | null> {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
     return null;
