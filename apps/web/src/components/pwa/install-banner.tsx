@@ -24,31 +24,38 @@ export function InstallBanner() {
   return (
     <>
       <div className="fixed inset-x-0 bottom-0 z-40 p-3 sm:hidden">
-        <div className="glass flex items-center gap-3 rounded-2xl border border-glass-brd p-3">
-          <Download className="h-5 w-5 shrink-0 text-text-2" aria-hidden="true" />
-          <p className="min-w-0 flex-1 text-sm text-text-1">
-            Установите VedaMatch на телефон — открывается как приложение.
-          </p>
+        <div className="glass rounded-2xl border border-glass-brd p-4">
+          {/* Текст занимает всю ширину: в одну строку с кнопкой он на 375px
+              разваливается на четыре строки. */}
+          <div className="flex items-start gap-3">
+            <Download
+              className="mt-0.5 h-5 w-5 shrink-0 text-text-2"
+              aria-hidden="true"
+            />
+            <p className="min-w-0 flex-1 text-sm text-text-1">
+              Установите VedaMatch на телефон — открывается как приложение.
+            </p>
+            <button
+              type="button"
+              aria-label="Закрыть"
+              onClick={() => {
+                rememberInstallDismissal(window.localStorage);
+                setDismissed(true);
+              }}
+              className="-mt-1 shrink-0 p-1 text-text-2 transition hover:text-text-0"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => {
               if (mode === "ios-manual") setShowInstructions(true);
               else void promptInstall();
             }}
-            className="shrink-0 rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-3 py-2 text-sm font-medium text-white"
+            className="mt-3 w-full rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-4 py-3 text-sm font-medium text-white"
           >
             Установить
-          </button>
-          <button
-            type="button"
-            aria-label="Закрыть"
-            onClick={() => {
-              rememberInstallDismissal(window.localStorage);
-              setDismissed(true);
-            }}
-            className="shrink-0 text-text-2 transition hover:text-text-0"
-          >
-            <X className="h-5 w-5" />
           </button>
         </div>
       </div>
