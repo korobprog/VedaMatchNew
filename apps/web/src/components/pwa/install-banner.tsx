@@ -1,23 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Download, X } from "lucide-react";
 import {
-  isInstallBannerDismissed,
+  getInstallDismissalServerSnapshot,
+  getInstallDismissalSnapshot,
   rememberInstallDismissal,
+  subscribeInstallDismissal,
 } from "@/lib/pwa/install-dismissal";
 import { useInstallPrompt } from "./use-install-prompt";
 import { IosInstallInstructions } from "./ios-install-instructions";
 
 export function InstallBanner() {
   const { mode, promptInstall } = useInstallPrompt();
-  // Считаем закрытым до проверки хранилища: так баннер не мигает при загрузке.
-  const [dismissed, setDismissed] = useState(true);
+  // Считаем закрытым до гидратации: так баннер не мигает при загрузке.
+  const dismissed = useSyncExternalStore(
+    subscribeInstallDismissal,
+    getInstallDismissalSnapshot,
+    getInstallDismissalServerSnapshot,
+  );
   const [showInstructions, setShowInstructions] = useState(false);
-
-  useEffect(() => {
-    setDismissed(isInstallBannerDismissed(window.localStorage));
-  }, []);
 
   if (dismissed || mode === "installed" || mode === "unsupported") return null;
 
@@ -38,10 +40,7 @@ export function InstallBanner() {
             <button
               type="button"
               aria-label="Закрыть"
-              onClick={() => {
-                rememberInstallDismissal(window.localStorage);
-                setDismissed(true);
-              }}
+              onClick={() => rememberInstallDismissal(window.localStorage)}
               className="-mt-1 shrink-0 p-1 text-text-2 transition hover:text-text-0"
             >
               <X className="h-5 w-5" />

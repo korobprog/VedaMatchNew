@@ -5,6 +5,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { deleteVedabaseDb } from "@/lib/vedabase/local-db";
 import { activeUserKey, clearOfflineCaches } from "@/lib/pwa/service-worker";
+import { currentSubscription } from "@/lib/pwa/push-subscription";
+import { removeSubscription } from "@/lib/notifications-api";
 import { cn } from "@/lib/utils";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -29,6 +31,13 @@ export function LogoutButton({
         credentials: "include",
       });
       if (!response.ok) throw new Error("Logout failed");
+
+      // На общем устройстве иначе следующий вошедший получал бы чужие пуши.
+      const subscription = await currentSubscription().catch(() => null);
+      if (subscription) {
+        await removeSubscription(subscription.endpoint).catch(() => undefined);
+        await subscription.unsubscribe().catch(() => undefined);
+      }
 
       const activeUserId = localStorage.getItem(activeUserKey);
       const cleanupTasks = [clearOfflineCaches()];

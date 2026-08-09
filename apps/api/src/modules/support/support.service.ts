@@ -5,6 +5,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import type { NotificationEvent } from '@vedamatch/shared';
 import type {
   AddSupportMessageRequest,
   AdminSupportTicketDto,
@@ -55,7 +57,10 @@ const ticketInclude = {
 
 @Injectable()
 export class SupportService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   /**
    * Создание обращения. Гость обязан оставить email или telegram, иначе ответить
@@ -356,7 +361,7 @@ export class SupportService {
     ensureAdmin(admin.role);
     const ticket = await this.prisma.supportTicket.findUnique({
       where: { id: ticketId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, userId: true },
     });
     if (!ticket) throw new NotFoundException('Обращение не найдено');
 
@@ -366,6 +371,16 @@ export class SupportService {
       body: requireText(body?.body, MAX_MESSAGE_LENGTH, 'ответ'),
       isInternal: body?.isInternal === true,
     });
+    // Гостевые обращения не имеют аккаунта, а внутренняя заметка адресована
+    // администраторам, а не автору тикета.
+    if (ticket.userId && body?.isInternal !== true) {
+      const event = {
+        name: 'support.ticket.replied',
+        recipientId: ticket.userId,
+        ticketId: ticket.id,
+      } satisfies NotificationEvent;
+      this.events.emit(event.name, event);
+    }
     return this.adminGet(admin.role, ticketId);
   }
 

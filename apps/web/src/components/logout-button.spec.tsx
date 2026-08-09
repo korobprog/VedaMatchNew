@@ -15,6 +15,19 @@ vi.mock("@/lib/vedabase/local-db", () => ({
   deleteVedabaseDb: vi.fn(),
 }));
 
+const unsubscribe = vi.fn(async () => true);
+
+vi.mock("@/lib/pwa/push-subscription", () => ({
+  currentSubscription: vi.fn(async () => ({
+    endpoint: "https://push.example/a",
+    unsubscribe,
+  })),
+}));
+
+vi.mock("@/lib/notifications-api", () => ({
+  removeSubscription: vi.fn(async () => undefined),
+}));
+
 vi.mock("@/lib/pwa/service-worker", () => ({
   clearOfflineCaches: vi.fn(),
   activeUserKey: "vedabase:activeUserId",
@@ -50,6 +63,21 @@ describe("LogoutButton", () => {
       expect(refresh).toHaveBeenCalledOnce();
     });
     expect(localStorage.getItem("vedabase:activeUserId")).toBeNull();
+  });
+
+  it("снимает пуш-подписку устройства при выходе", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { status: 200 }),
+    );
+    const { removeSubscription } = await import("@/lib/notifications-api");
+
+    render(<LogoutButton />);
+    fireEvent.click(screen.getByRole("button", { name: "Выйти" }));
+
+    await waitFor(() => {
+      expect(removeSubscription).toHaveBeenCalledWith("https://push.example/a");
+      expect(unsubscribe).toHaveBeenCalledOnce();
+    });
   });
 
   it("shows an error and stays on the page when logout fails", async () => {

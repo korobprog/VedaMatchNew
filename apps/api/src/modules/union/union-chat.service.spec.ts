@@ -64,6 +64,7 @@ describe('UnionChatService', () => {
   const service = new UnionChatService(
     prisma as unknown as PrismaService,
     users as never,
+    { emit: jest.fn() } as never,
   );
 
   beforeEach(() => {
@@ -217,6 +218,65 @@ describe('UnionChatService', () => {
         fromUserId: 'sender',
         body: 'Namaste',
       },
+    });
+  });
+});
+
+describe('UnionChatService.sendMessage — уведомления', () => {
+  function createChatService() {
+    const emitted: Array<{ name: string; payload: unknown }> = [];
+    const chatConnection = {
+      id: 'r1',
+      status: 'accepted',
+      fromUserId: 'user-1',
+      toUserId: 'user-2',
+      fromUser: { id: 'user-1', name: 'Арджуна', unionProfile: null },
+      toUser: { id: 'user-2', name: 'Вринда', unionProfile: null },
+    };
+    const prisma = {
+      unionConnectionRequest: {
+        findUnique: jest.fn(() => Promise.resolve(chatConnection)),
+      },
+      unionChatMessage: {
+        create: jest.fn(({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({
+            id: 'm1',
+            requestId: data.requestId,
+            fromUserId: data.fromUserId,
+            body: data.body,
+            createdAt: new Date('2026-08-09T10:00:00.000Z'),
+          }),
+        ),
+      },
+    };
+    const events = {
+      emit: jest.fn((name: string, payload: unknown) => {
+        emitted.push({ name, payload });
+        return true;
+      }),
+    };
+
+    return { prisma, events, emitted };
+  }
+
+  it('публикует событие второй стороне, а не себе', async () => {
+    const { prisma, events, emitted } = createChatService();
+    const service = new UnionChatService(
+      prisma as never,
+      { resolveAvatarUrl: jest.fn() } as never,
+      events as never,
+    );
+
+    await service.sendMessage('user-1', 'r1', { body: 'Харе Кришна' });
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].name).toBe('union.chat.message-sent');
+    expect(emitted[0].payload).toEqual({
+      name: 'union.chat.message-sent',
+      recipientId: 'user-2',
+      senderName: 'Арджуна',
+      body: 'Харе Кришна',
+      requestId: 'r1',
     });
   });
 });
