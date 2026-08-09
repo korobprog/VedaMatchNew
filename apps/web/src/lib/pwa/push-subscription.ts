@@ -4,7 +4,7 @@ export type PushSupport = "unsupported" | "denied" | "default" | "granted";
 
 /** applicationServerKey принимает байты, а VAPID-ключ приходит строкой
  *  в url-safe base64 — со своим алфавитом и без паддинга. */
-export function urlBase64ToUint8Array(base64: string): Uint8Array {
+export function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
   const normalized = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(normalized);
