@@ -65,7 +65,7 @@ this.events.emit('union.chat.message-sent', payload);
 ```
 
 **Events are self-contained.** The payload carries everything needed to build
-the notification: recipient id, sender display name, the message excerpt, and
+the notification: recipient id, sender display name, the message body, and
 the target URL. The notifications module **never queries Union or Support
 tables**. It reads only `User` (allowed to every module, read-only) and its own
 two models. Without this rule the contract would be violated in substance even
@@ -92,7 +92,7 @@ export type NotificationEvent =
       name: "union.chat.message-sent";
       recipientId: string;
       senderName: string;
-      excerpt: string;
+      body: string;
       requestId: string;
     }
   | {
@@ -109,9 +109,17 @@ export type NotificationEvent =
   | { name: "support.ticket.replied"; recipientId: string; ticketId: string };
 ```
 
-`excerpt` is the message body truncated by the emitter to 120 characters —
-the raw body can be far longer than a notification can show, and a web push
-payload is capped near 4 KB.
+The chat event carries the **full** message body; truncation to 120 characters
+happens in the notifications module when the notification is composed. The
+4 KB web-push payload cap is a delivery concern, not Union's.
+
+There is a hard constraint behind this. `@vedamatch/shared` has no build step
+(`main: "src/index.ts"`), so the API may import **only types** from it — types
+are erased at compile time, while a value import makes Node load raw
+TypeScript and the service dies at startup with `ERR_MODULE_NOT_FOUND`. Event
+names are therefore string literals in the emitters, checked against the shared
+union with `satisfies NotificationEvent`, and every runtime helper lives inside
+`apps/api`.
 
 The notifications module maps each event to what the browser displays, and
 derives the preference category from the event name. The emitter never learns
@@ -119,7 +127,7 @@ that preference categories exist.
 
 | Event | Title | Body | URL | Tag |
 |---|---|---|---|---|
-| `union.chat.message-sent` | sender name | excerpt | `/union/chats/<requestId>` | `chat:<requestId>` |
+| `union.chat.message-sent` | sender name | body, truncated to 120 chars | `/union/chats/<requestId>` | `chat:<requestId>` |
 | `union.connection.requested` | «Новая заявка» | «<name> хочет познакомиться» | `/union/connections` | `connections` |
 | `union.connection.accepted` | «Заявка принята» | «Теперь вы можете общаться с <name>» | `/union/chats/<requestId>` | `connections` |
 | `support.ticket.replied` | «Ответ поддержки» | «Поддержка ответила на ваше обращение» | `/support/<ticketId>` | `support:<ticketId>` |
@@ -140,16 +148,15 @@ Two models with no service prefix, consistent with `RefreshToken` and
 
 ```prisma
 model PushSubscription {
-  id         String    @id @default(uuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Естественный ключ подписки: браузер выдаёт уникальный URL на устройство.
-  endpoint   String    @unique
-  p256dh     String
-  auth       String
-  userAgent  String?
-  createdAt  DateTime  @default(now())
-  lastUsedAt DateTime?
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
 
   @@index([userId])
 }
