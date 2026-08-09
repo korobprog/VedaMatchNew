@@ -1,8 +1,8 @@
 ﻿import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { SubscriptionState } from "@vedamatch/shared";
-import { getProfile } from "@/lib/api";
-import { PLAN } from "@/lib/plan";
+import type { PricingPlan, SubscriptionState } from "@vedamatch/shared";
+import { getBillingPlan, getProfile } from "@/lib/api";
+import { PLAN as DEFAULT_PLAN } from "@/lib/plan";
 import { formatDate, subscriptionStatusLabels } from "@/lib/support-labels";
 import { Header } from "@/components/header";
 import { ProfileEditor } from "@/components/profile-editor";
@@ -29,8 +29,18 @@ const verificationLabels: Record<string, string> = {
 };
 
 export default async function ProfilePage() {
-  const user = await getProfile();
+  const [user, fetchedPlan] = await Promise.all([
+    getProfile(),
+    getBillingPlan().catch(() => null),
+  ]);
   if (!user) redirect("/login");
+  const plan: PricingPlan = fetchedPlan ?? {
+    ...DEFAULT_PLAN,
+    id: "vedamatch-basic",
+    name: "VedaMatch",
+    period: "month",
+    mode: "business",
+  };
 
   return (
     <div className="relative min-h-screen bg-bg-0">
@@ -114,7 +124,7 @@ export default async function ProfilePage() {
             Выйти из аккаунта
           </LogoutButton>
         </div>
-        <SubscriptionCard subscription={user.subscription} />
+        <SubscriptionCard subscription={user.subscription} plan={plan} />
         <ProfileEditor user={user} />
       </main>
     </div>
@@ -122,7 +132,13 @@ export default async function ProfilePage() {
 }
 
 /** Подписка и вход в поддержку: оба вопроса пользователи ищут в профиле. */
-function SubscriptionCard({ subscription }: { subscription: SubscriptionState }) {
+function SubscriptionCard({
+  subscription,
+  plan,
+}: {
+  subscription: SubscriptionState;
+  plan: PricingPlan;
+}) {
   const accent =
     subscription.status === "expired"
       ? "border-red-400/30"
@@ -145,7 +161,14 @@ function SubscriptionCard({ subscription }: { subscription: SubscriptionState })
         <div className="flex justify-between gap-4">
           <dt className="text-text-2">Тариф</dt>
           <dd className="font-medium text-text-0">
-            {PLAN.priceRub} ₽ / мес · {PLAN.priceUsdt} USDT
+            {plan.mode === "beta" ? (
+              <>
+                <span className="text-text-2 line-through">{plan.priceRub} ₽</span>{" "}
+                Бесплатно (бета)
+              </>
+            ) : (
+              `${plan.priceRub} ₽ / мес · ${plan.priceUsdt} USDT`
+            )}
           </dd>
         </div>
         <div className="flex justify-between gap-4">

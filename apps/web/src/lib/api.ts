@@ -8,8 +8,10 @@ import type {
   AdminUserDetail,
   AdminUserListResponse,
   AdminUserReportsResponse,
+  AdminBillingModeResponse,
   MentorVerificationPublicRequest,
   DevoteeVerificationStatus,
+  PricingPlan,
   SelfIdentificationState,
   ServiceCard,
   StageHistoryItem,
@@ -78,3 +80,7 @@ export const getAdminSupportTickets = (status?: string) => {
 };
 export const getAdminSupportTicket = (id: string) =>
   apiGet<AdminSupportTicketDto>(`/admin/support/tickets/${id}`);
+/** Публичный тариф, включает текущий режим биллинга (beta/business). */
+export const getBillingPlan = () => apiGetPublic<PricingPlan>("/billing/plan");
+export const getAdminBillingMode = () =>
+  apiGet<AdminBillingModeResponse>("/admin/billing/mode");

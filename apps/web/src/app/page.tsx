@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getProfile, getServices } from "@/lib/api";
+import { getBillingPlan, getProfile, getServices } from "@/lib/api";
 import { Header } from "@/components/header";
 import { ServiceCard } from "@/components/service-card";
 import {
@@ -29,6 +29,7 @@ export default async function Home({
     unionChats,
     unionProfile,
     unionRecommendations,
+    plan,
   ] = await Promise.all([
     getProfile(),
     getServices(),
@@ -36,8 +37,10 @@ export default async function Home({
     getUnionChats().catch(() => null),
     getUnionProfileState().catch(() => null),
     getUnionRecommendations({ sort: "new", pageSize: "3" }).catch(() => null),
+    getBillingPlan().catch(() => null),
   ]);
-  if (!user || !services) return <LandingPage returnTo={returnTo} />;
+  if (!user || !services)
+    return <LandingPage returnTo={returnTo} plan={plan ?? undefined} />;
   if (!user.spiritualStage) redirect("/self-identification");
 
   const unionQuickAccess = buildUnionQuickAccessData(

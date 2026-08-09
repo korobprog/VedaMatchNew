@@ -121,6 +121,9 @@ export interface AdminUpdateSupportTicketRequest {
 
 export type SubscriptionStatus = 'trial' | 'active' | 'expired';
 
+/** beta — доступ бесплатный для всех, business — обычная логика тарифа с оплатой. */
+export type BillingMode = 'beta' | 'business';
+
 export interface SubscriptionState {
   status: SubscriptionStatus;
   /** Конец пробного месяца. */
@@ -141,6 +144,16 @@ export interface PricingPlan {
   period: 'month';
   trialDays: number;
   features: string[];
+  /** Текущий режим биллинга платформы. */
+  mode: BillingMode;
+}
+
+export interface AdminBillingModeResponse {
+  mode: BillingMode;
+}
+
+export interface AdminUpdateBillingModeRequest {
+  mode: BillingMode;
 }
 
 export interface AdminUpdateSubscriptionRequest {

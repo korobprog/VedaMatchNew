@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, Play } from "lucide-react";
+import type { PricingPlan } from "@vedamatch/shared";
 import { Navbar } from "./Navbar";
 import { BackgroundOrbs } from "./Orb";
 import { NoiseOverlay } from "./NoiseOverlay";
@@ -15,7 +16,13 @@ import { cn } from "@/lib/utils";
 import { SilentRefresh } from "@/components/silent-refresh";
 import { InstallBanner } from "@/components/pwa/install-banner";
 
-export function LandingPage({ returnTo }: { returnTo?: string }) {
+export function LandingPage({
+  returnTo,
+  plan,
+}: {
+  returnTo?: string;
+  plan?: PricingPlan;
+}) {
   return (
     <div className="relative min-h-screen bg-bg-0">
       <SilentRefresh returnTo={returnTo} />
@@ -159,7 +166,7 @@ export function LandingPage({ returnTo }: { returnTo?: string }) {
       <Features />
 
       {/* Pricing Section */}
-      <Pricing />
+      <Pricing plan={plan} />
 
       {/* CTA Section */}
       <section className="relative py-20 md:py-32">

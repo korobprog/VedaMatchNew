@@ -13,6 +13,7 @@ import {
 vi.mock("@/lib/api", () => ({
   getProfile: vi.fn(),
   getServices: vi.fn(),
+  getBillingPlan: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("@/lib/union-api", () => ({

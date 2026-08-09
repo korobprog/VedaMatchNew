@@ -18,6 +18,12 @@ enum Gender {
   female
 }
 
+// Режим биллинга платформы. beta — доступ бесплатный для всех, business — обычная логика тарифа.
+enum BillingMode {
+  beta
+  business
+}
+
 enum ServiceStatus {
   active
   coming_soon
@@ -212,6 +218,13 @@ model User {
   libraryCategories           LibraryCategory[]            @relation("LibraryCategoryAuthor")
   libraryEntries              LibraryEntry[]               @relation("LibraryEntryAuthor")
   libraryPreference           LibraryPreference?
+}
+
+// Единственная строка глобальных настроек платформы (id всегда "global").
+model AppSettings {
+  id          String      @id @default("global")
+  billingMode BillingMode @default(business)
+  updatedAt   DateTime    @updatedAt
 }
 
 model UserPhoto {

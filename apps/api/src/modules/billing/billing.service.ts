@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type {
   AdminUpdateSubscriptionRequest,
+  BillingMode,
   PricingPlan,
   Role,
   SubscriptionState,
@@ -16,6 +17,8 @@ import {
   toSubscriptionState,
   VEDAMATCH_PLAN,
 } from './subscription';
+
+const SETTINGS_ID = 'global';
 
 const SUBSCRIPTION_FIELDS = {
   createdAt: true,
@@ -31,17 +34,42 @@ const MAX_ADD_MONTHS = 36;
 export class BillingService {
   constructor(private readonly prisma: PrismaService) {}
 
-  plan(): PricingPlan {
-    return VEDAMATCH_PLAN;
+  /** Текущий режим биллинга; при отсутствии строки настроек — обычная бизнес-логика. */
+  async billingMode(): Promise<BillingMode> {
+    const settings = await this.prisma.appSettings.findUnique({
+      where: { id: SETTINGS_ID },
+      select: { billingMode: true },
+    });
+    return settings?.billingMode ?? 'business';
+  }
+
+  async setBillingMode(role: Role, mode: BillingMode): Promise<BillingMode> {
+    if (role !== 'admin') {
+      throw new ForbiddenException('Доступ только для администратора');
+    }
+    const updated = await this.prisma.appSettings.upsert({
+      where: { id: SETTINGS_ID },
+      create: { id: SETTINGS_ID, billingMode: mode },
+      update: { billingMode: mode },
+      select: { billingMode: true },
+    });
+    return updated.billingMode;
+  }
+
+  async plan(): Promise<PricingPlan> {
+    return { ...VEDAMATCH_PLAN, mode: await this.billingMode() };
   }
 
   async state(userId: string): Promise<SubscriptionState> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: SUBSCRIPTION_FIELDS,
-    });
+    const [user, mode] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: SUBSCRIPTION_FIELDS,
+      }),
+      this.billingMode(),
+    ]);
     if (!user) throw new NotFoundException('Пользователь не найден');
-    return toSubscriptionState(user);
+    return toSubscriptionState(user, new Date(), mode);
   }
 
   async adminUpdate(
@@ -102,11 +130,14 @@ export class BillingService {
       throw new BadRequestException('Нечего обновлять');
     }
 
-    const updated = await this.prisma.user.update({
-      where: { id: userId },
-      data,
-      select: SUBSCRIPTION_FIELDS,
-    });
-    return toSubscriptionState(updated);
+    const [updated, mode] = await Promise.all([
+      this.prisma.user.update({
+        where: { id: userId },
+        data,
+        select: SUBSCRIPTION_FIELDS,
+      }),
+      this.billingMode(),
+    ]);
+    return toSubscriptionState(updated, new Date(), mode);
   }
 }

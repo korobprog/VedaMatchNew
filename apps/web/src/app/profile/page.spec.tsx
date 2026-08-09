@@ -6,6 +6,7 @@ import { getProfile } from "@/lib/api";
 
 vi.mock("@/lib/api", () => ({
   getProfile: vi.fn(),
+  getBillingPlan: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("@/components/header", () => ({

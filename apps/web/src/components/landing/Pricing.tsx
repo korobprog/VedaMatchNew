@@ -3,10 +3,14 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, Check, Gift } from "lucide-react";
+import type { PricingPlan } from "@vedamatch/shared";
 import { cn } from "@/lib/utils";
-import { PLAN } from "@/lib/plan";
+import { PLAN as DEFAULT_PLAN } from "@/lib/plan";
 
-export function Pricing() {
+export function Pricing({ plan }: { plan?: PricingPlan }) {
+  const PLAN = plan ?? { ...DEFAULT_PLAN, mode: "business" as const };
+  const isBeta = PLAN.mode === "beta";
+
   return (
     <section id="pricing" className="relative py-20 md:py-32">
       <div className="mx-auto max-w-4xl px-4 md:px-6">
@@ -38,26 +42,48 @@ export function Pricing() {
             <div>
               <span className="inline-flex items-center gap-2 rounded-full border border-cyan/40 bg-cyan/10 px-3 py-1 text-sm font-medium text-text-0">
                 <Gift className="h-4 w-4 text-cyan" />
-                {PLAN.trialDays} дней бесплатно
+                {isBeta ? "Бета-доступ бесплатно" : `${PLAN.trialDays} дней бесплатно`}
               </span>
 
-              <div className="mt-6 flex items-end gap-2">
-                <span className="font-display text-5xl md:text-6xl font-bold text-text-0">
-                  {PLAN.priceRub} ₽
-                </span>
-                <span className="pb-2 text-text-1 text-lg">/ месяц</span>
-              </div>
-              <p className="mt-2 text-text-1">
-                или{" "}
-                <span className="font-semibold text-text-0">
-                  {PLAN.priceUsdt} USDT
-                </span>{" "}
-                в месяц
-              </p>
-              <p className="mt-4 text-sm text-text-2">
-                Пробный месяц включается автоматически при регистрации. Оплата —
-                после него, отказаться можно в любой момент.
-              </p>
+              {isBeta ? (
+                <>
+                  <div className="mt-6 flex items-end gap-3">
+                    <span className="font-display text-2xl md:text-3xl font-medium text-text-2 line-through decoration-2">
+                      {PLAN.priceRub} ₽
+                    </span>
+                    <span className="font-display text-5xl md:text-6xl font-bold text-text-0">
+                      Бесплатно
+                    </span>
+                  </div>
+                  <p className="mt-2 text-text-1">
+                    Пока платформа в бета-тесте — платить не нужно
+                  </p>
+                  <p className="mt-4 text-sm text-text-2">
+                    Доступ ко всем разделам открыт бесплатно на время беты.
+                    Когда мы включим оплату, заранее предупредим.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="mt-6 flex items-end gap-2">
+                    <span className="font-display text-5xl md:text-6xl font-bold text-text-0">
+                      {PLAN.priceRub} ₽
+                    </span>
+                    <span className="pb-2 text-text-1 text-lg">/ месяц</span>
+                  </div>
+                  <p className="mt-2 text-text-1">
+                    или{" "}
+                    <span className="font-semibold text-text-0">
+                      {PLAN.priceUsdt} USDT
+                    </span>{" "}
+                    в месяц
+                  </p>
+                  <p className="mt-4 text-sm text-text-2">
+                    Пробный месяц включается автоматически при регистрации. Оплата —
+                    после него, отказаться можно в любой момент.
+                  </p>
+                </>
+              )}
 
               <Link
                 href="/login"

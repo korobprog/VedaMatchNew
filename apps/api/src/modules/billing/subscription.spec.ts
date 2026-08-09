@@ -65,6 +65,22 @@ describe('toSubscriptionState', () => {
   });
 });
 
+describe('toSubscriptionState в режиме beta', () => {
+  it('доступ активен и не истекает, даже если триал и оплата давно закончились', () => {
+    const state = toSubscriptionState(
+      source({
+        createdAt: new Date('2020-01-01T00:00:00.000Z'),
+      }),
+      NOW,
+      'beta',
+    );
+    expect(state.status).toBe('active');
+    expect(state.paidUntil).toBeNull();
+    expect(state.accessUntil).not.toBeNull();
+    expect(state.daysLeft).toBeGreaterThan(0);
+  });
+});
+
 describe('extendPaidUntil', () => {
   it('продлевает от текущего конца, если он в будущем', () => {
     const current = new Date('2026-09-10T00:00:00.000Z');

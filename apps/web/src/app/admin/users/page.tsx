@@ -55,6 +55,9 @@ export default async function AdminUsersPage({
             <Link href="/admin/reports" className="rounded-xl glass border border-glass-brd px-4 py-2 text-sm font-medium text-text-1 hover:text-text-0 hover:border-magenta/30">
               Жалобы
             </Link>
+            <Link href="/admin/settings" className="rounded-xl glass border border-glass-brd px-4 py-2 text-sm font-medium text-text-1 hover:text-text-0 hover:border-magenta/30">
+              Настройки
+            </Link>
           </div>
         </div>
 

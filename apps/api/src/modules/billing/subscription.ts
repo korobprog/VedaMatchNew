@@ -1,4 +1,5 @@
 import type {
+  BillingMode,
   PricingPlan,
   SubscriptionState,
   SubscriptionStatus,
@@ -8,7 +9,7 @@ export const TRIAL_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Единственный тариф платформы. Цены дублируются на лендинге через /billing/plan. */
-export const VEDAMATCH_PLAN: PricingPlan = {
+export const VEDAMATCH_PLAN: Omit<PricingPlan, 'mode'> = {
   id: 'vedamatch-basic',
   name: 'VedaMatch',
   priceRub: 108,
@@ -23,6 +24,9 @@ export const VEDAMATCH_PLAN: PricingPlan = {
     'Поддержка через тикеты в кабинете',
   ],
 };
+
+/** Условный «конец света» для беты — доступ не истекает, пока режим не переключат на business. */
+const BETA_ACCESS_UNTIL = new Date('2099-01-01T00:00:00.000Z');
 
 export interface SubscriptionSource {
   createdAt: Date;
@@ -44,7 +48,21 @@ export function trialEndsAt(user: SubscriptionSource): Date {
 export function toSubscriptionState(
   user: SubscriptionSource,
   now: Date = new Date(),
+  billingMode: BillingMode = 'business',
 ): SubscriptionState {
+  if (billingMode === 'beta') {
+    return {
+      status: 'active',
+      trialEndsAt: trialEndsAt(user).toISOString(),
+      paidUntil: null,
+      accessUntil: BETA_ACCESS_UNTIL.toISOString(),
+      daysLeft: Math.ceil(
+        (BETA_ACCESS_UNTIL.getTime() - now.getTime()) / DAY_MS,
+      ),
+      note: user.subscriptionNote,
+    };
+  }
+
   const trialEnd = trialEndsAt(user);
   const paidUntil = user.subscriptionPaidUntil;
   const paidActive = paidUntil !== null && paidUntil.getTime() > now.getTime();
