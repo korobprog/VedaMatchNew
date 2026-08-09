@@ -3,7 +3,7 @@
 import type { VedabaseLibraryManifest } from "@vedamatch/shared";
 import { useEffect, useState } from "react";
 import { openVedabaseDb } from "@/lib/vedabase/local-db";
-import { vedabaseActiveUserKey } from "@/lib/vedabase/register-service-worker";
+import { activeUserKey } from "@/lib/pwa/service-worker";
 import { VedabaseProvider } from "./vedabase-provider";
 import { LibraryScreen } from "./library-screen";
 import { ReaderScreen } from "./reader-screen";
@@ -25,7 +25,7 @@ export function OfflineRouter() {
   );
 
   useEffect(() => {
-    const userId = localStorage.getItem(vedabaseActiveUserKey)?.trim();
+    const userId = localStorage.getItem(activeUserKey)?.trim();
     let cancelled = false;
     const loading = userId
       ? loadOfflineState(userId, window.location.pathname)

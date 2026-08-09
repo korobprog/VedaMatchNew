@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LogoutButton } from "./logout-button";
 import { deleteVedabaseDb } from "@/lib/vedabase/local-db";
-import { clearVedabaseOfflineData } from "@/lib/vedabase/register-service-worker";
+import { clearOfflineCaches } from "@/lib/pwa/service-worker";
 
 const replace = vi.fn();
 const refresh = vi.fn();
@@ -15,9 +15,9 @@ vi.mock("@/lib/vedabase/local-db", () => ({
   deleteVedabaseDb: vi.fn(),
 }));
 
-vi.mock("@/lib/vedabase/register-service-worker", () => ({
-  clearVedabaseOfflineData: vi.fn(),
-  vedabaseActiveUserKey: "vedabase-active-user",
+vi.mock("@/lib/pwa/service-worker", () => ({
+  clearOfflineCaches: vi.fn(),
+  activeUserKey: "vedabase:activeUserId",
 }));
 
 describe("LogoutButton", () => {
@@ -26,7 +26,7 @@ describe("LogoutButton", () => {
     refresh.mockReset();
     vi.restoreAllMocks();
     vi.mocked(deleteVedabaseDb).mockReset();
-    vi.mocked(clearVedabaseOfflineData).mockReset();
+    vi.mocked(clearOfflineCaches).mockReset();
     localStorage.clear();
   });
 
@@ -34,7 +34,7 @@ describe("LogoutButton", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(null, { status: 200 }),
     );
-    localStorage.setItem("vedabase-active-user", "user-1");
+    localStorage.setItem("vedabase:activeUserId", "user-1");
 
     render(<LogoutButton>Выйти из аккаунта</LogoutButton>);
     fireEvent.click(screen.getByRole("button", { name: "Выйти из аккаунта" }));
@@ -44,12 +44,12 @@ describe("LogoutButton", () => {
         "http://localhost:4000/auth/logout",
         { method: "POST", credentials: "include" },
       );
-      expect(clearVedabaseOfflineData).toHaveBeenCalledOnce();
+      expect(clearOfflineCaches).toHaveBeenCalledOnce();
       expect(deleteVedabaseDb).toHaveBeenCalledWith("user-1");
       expect(replace).toHaveBeenCalledWith("/");
       expect(refresh).toHaveBeenCalledOnce();
     });
-    expect(localStorage.getItem("vedabase-active-user")).toBeNull();
+    expect(localStorage.getItem("vedabase:activeUserId")).toBeNull();
   });
 
   it("shows an error and stays on the page when logout fails", async () => {

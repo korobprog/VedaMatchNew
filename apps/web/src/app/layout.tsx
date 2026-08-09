@@ -1,7 +1,10 @@
 ﻿import type { Metadata, Viewport } from "next";
 import { Unbounded, Manrope, IBM_Plex_Mono } from "next/font/google";
 import { cookies } from "next/headers";
+import Script from "next/script";
+import { installPromptCaptureScript } from "@/lib/pwa/prompt-capture";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import { isThemePreference, THEME_COOKIE_NAME } from "@/lib/theme";
 import "./globals.css";
 
@@ -64,6 +67,13 @@ export default async function RootLayout({
       className={`${unbounded.variable} ${manrope.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col font-body">
+        <Script
+          id="pwa-install-prompt"
+          strategy="beforeInteractive"
+          // Скрипт-строка, а не компонент: событие приходит до гидратации.
+          dangerouslySetInnerHTML={{ __html: installPromptCaptureScript }}
+        />
+        <ServiceWorkerRegistrar />
         <ThemeProvider initialPreference={preference}>{children}</ThemeProvider>
       </body>
     </html>

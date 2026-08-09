@@ -13,6 +13,7 @@ import { Features } from "./Features";
 import { Pricing } from "./Pricing";
 import { cn } from "@/lib/utils";
 import { SilentRefresh } from "@/components/silent-refresh";
+import { InstallBanner } from "@/components/pwa/install-banner";
 
 export function LandingPage({ returnTo }: { returnTo?: string }) {
   return (
@@ -250,6 +251,7 @@ export function LandingPage({ returnTo }: { returnTo?: string }) {
           </div>
         </div>
       </footer>
+      <InstallBanner />
     </div>
   );
 }

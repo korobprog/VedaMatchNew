@@ -13,6 +13,7 @@ import { UnionQuickAccessWidget } from "@/components/union/union-quick-access-wi
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { LandingPage } from "@/components/landing";
+import { InstallBanner } from "@/components/pwa/install-banner";
 
 export default async function Home({
   searchParams,
@@ -82,6 +83,7 @@ export default async function Home({
           ))}
         </section>
       </main>
+      <InstallBanner />
     </div>
   );
 }
