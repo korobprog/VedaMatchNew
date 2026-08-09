@@ -13,6 +13,11 @@
 # testing
 /coverage
 
+# playwright: артефакты прогонов и файл сессии с реальным токеном
+/test-results/
+/playwright-report/
+/e2e/.auth/
+
 # next.js
 /.next/
 /out/
