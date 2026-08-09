@@ -10,6 +10,7 @@ import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { LogoutButton } from "@/components/logout-button";
 import { InstallButton } from "@/components/pwa/install-button";
+import { NotificationSettings } from "@/components/pwa/notification-settings";
 
 const stageLabels: Record<string, string> = {
   seeker: "Ищущий",
@@ -125,6 +126,9 @@ export default async function ProfilePage() {
           </LogoutButton>
         </div>
         <SubscriptionCard subscription={user.subscription} plan={plan} />
+        <div className="mb-6">
+          <NotificationSettings />
+        </div>
         <ProfileEditor user={user} />
       </main>
     </div>

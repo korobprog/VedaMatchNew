@@ -185,6 +185,8 @@ model User {
   refreshTokens               RefreshToken[]
   serviceAccess               ServiceAccess[]
   loginAudits                 LoginAudit[]
+  pushSubscriptions           PushSubscription[]
+  notificationPreference      NotificationPreference?
   selfIdentificationResponses SelfIdentificationResponse[]
   stageHistory                StageHistory[]
   mentorVerificationRequests  MentorVerificationRequest[]
@@ -1171,4 +1173,33 @@ model LibraryPreference {
   contentLanguages String[] @default([])
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+// ===== Notifications (портальная инфраструктура) =====
+
+/// Подписка браузера на веб-пуши. У одного пользователя их несколько:
+/// телефон, ноутбук, планшет. Ключ подписки — endpoint, его выдаёт браузер.
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// Настройки уведомлений. Отсутствие строки означает «включено всё»,
+/// поэтому при регистрации её создавать не нужно.
+model NotificationPreference {
+  userId      String   @id
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled     Boolean  @default(true)
+  chat        Boolean  @default(true)
+  connections Boolean  @default(true)
+  support     Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
 }
