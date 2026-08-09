@@ -1,8 +1,14 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ServiceCard as ServiceCardType, UserProfile } from "@vedamatch/shared";
 import Home from "./page";
 import { getProfile, getServices } from "@/lib/api";
-import { getUnionConnectionCounts } from "@/lib/union-api";
+import {
+  getUnionChats,
+  getUnionConnectionCounts,
+  getUnionProfileState,
+  getUnionRecommendations,
+} from "@/lib/union-api";
 
 vi.mock("@/lib/api", () => ({
   getProfile: vi.fn(),
@@ -11,6 +17,9 @@ vi.mock("@/lib/api", () => ({
 
 vi.mock("@/lib/union-api", () => ({
   getUnionConnectionCounts: vi.fn(),
+  getUnionChats: vi.fn(),
+  getUnionProfileState: vi.fn(),
+  getUnionRecommendations: vi.fn(),
 }));
 
 vi.mock("@/components/landing", () => ({
@@ -19,11 +28,59 @@ vi.mock("@/components/landing", () => ({
   ),
 }));
 
+vi.mock("@/components/header", () => ({
+  Header: () => null,
+}));
+
+const user: UserProfile = {
+  id: "user-1",
+  email: "radha@example.com",
+  name: "Радха",
+  avatarUrl: null,
+  avatarKey: null,
+  homeLocation: null,
+  socialLinks: {},
+  messengers: {},
+  role: "user",
+  gender: "female",
+  spiritualStage: "seeker",
+  devoteeVerificationStatus: null,
+  birthDate: null,
+  age: null,
+  photoVerification: { status: "none", requestedAt: null, verifiedAt: null },
+  lastSelfIdentificationAt: null,
+  subscription: {
+    status: "trial",
+    trialEndsAt: "2026-08-27T00:00:00.000Z",
+    paidUntil: null,
+    accessUntil: "2026-08-27T00:00:00.000Z",
+    daysLeft: 30,
+    note: null,
+  },
+};
+
+const services: ServiceCardType[] = [
+  {
+    id: "union",
+    slug: "union",
+    name: "Знакомства",
+    description: "Осознанные знакомства и сотрудничество",
+    iconUrl: null,
+    url: "/union",
+    status: "active",
+    category: "community",
+    requiresDevoteeVerification: false,
+  },
+];
+
 describe("Home", () => {
   beforeEach(() => {
     vi.mocked(getProfile).mockResolvedValue(null);
     vi.mocked(getServices).mockResolvedValue(null);
     vi.mocked(getUnionConnectionCounts).mockResolvedValue(null);
+    vi.mocked(getUnionChats).mockResolvedValue(null);
+    vi.mocked(getUnionProfileState).mockResolvedValue(null);
+    vi.mocked(getUnionRecommendations).mockResolvedValue(null);
   });
 
   it("renders the landing page for a guest", async () => {
@@ -43,5 +100,28 @@ describe("Home", () => {
       "data-return-to",
       "/union?tab=matches",
     );
+  });
+
+  it("shows quick-access chips on the Union card when there is activity", async () => {
+    vi.mocked(getProfile).mockResolvedValue(user);
+    vi.mocked(getServices).mockResolvedValue(services);
+    vi.mocked(getUnionConnectionCounts).mockResolvedValue({ incomingPending: 2 });
+    vi.mocked(getUnionChats).mockResolvedValue({ chats: [], unreadTotal: 3 });
+
+    render(await Home({ searchParams: Promise.resolve({}) }));
+
+    expect(screen.getByText("💬 3")).toBeInTheDocument();
+    expect(screen.getByText("❤️ 2")).toBeInTheDocument();
+  });
+
+  it("hides the quick-access widget when there is nothing to show", async () => {
+    vi.mocked(getProfile).mockResolvedValue(user);
+    vi.mocked(getServices).mockResolvedValue(services);
+
+    render(await Home({ searchParams: Promise.resolve({}) }));
+
+    expect(screen.queryByText(/💬/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/❤️/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 });

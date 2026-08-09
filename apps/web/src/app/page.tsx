@@ -1,8 +1,15 @@
-﻿import { redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getProfile, getServices } from "@/lib/api";
 import { Header } from "@/components/header";
 import { ServiceCard } from "@/components/service-card";
-import { getUnionConnectionCounts } from "@/lib/union-api";
+import {
+  getUnionChats,
+  getUnionConnectionCounts,
+  getUnionProfileState,
+  getUnionRecommendations,
+} from "@/lib/union-api";
+import { buildUnionQuickAccessData } from "@/lib/union-quick-access";
+import { UnionQuickAccessWidget } from "@/components/union/union-quick-access-widget";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { LandingPage } from "@/components/landing";
@@ -14,13 +21,30 @@ export default async function Home({
 }) {
   const { returnTo: rawReturnTo } = await searchParams;
   const returnTo = Array.isArray(rawReturnTo) ? rawReturnTo[0] : rawReturnTo;
-  const [user, services, unionCounts] = await Promise.all([
+  const [
+    user,
+    services,
+    unionCounts,
+    unionChats,
+    unionProfile,
+    unionRecommendations,
+  ] = await Promise.all([
     getProfile(),
     getServices(),
     getUnionConnectionCounts().catch(() => null),
+    getUnionChats().catch(() => null),
+    getUnionProfileState().catch(() => null),
+    getUnionRecommendations({ sort: "new", pageSize: "3" }).catch(() => null),
   ]);
   if (!user || !services) return <LandingPage returnTo={returnTo} />;
   if (!user.spiritualStage) redirect("/self-identification");
+
+  const unionQuickAccess = buildUnionQuickAccessData(
+    unionChats,
+    unionCounts,
+    unionProfile,
+    unionRecommendations,
+  );
 
   return (
     <div className="relative min-h-screen bg-bg-0">
@@ -45,6 +69,11 @@ export default async function Home({
                 service.url === "/union"
                   ? unionCounts?.incomingPending
                   : undefined
+              }
+              extra={
+                service.url === "/union" ? (
+                  <UnionQuickAccessWidget {...unionQuickAccess} />
+                ) : undefined
               }
             />
           ))}
