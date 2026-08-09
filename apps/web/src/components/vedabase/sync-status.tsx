@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import { registerVedabaseServiceWorker } from "@/lib/vedabase/register-service-worker";
+import { registerAppServiceWorker } from "@/lib/pwa/service-worker";
 import {
   VedabaseSyncEngine,
   type VedabaseSyncSnapshot,
@@ -38,7 +38,7 @@ export function SyncStatus({
   );
 
   useEffect(() => {
-    void registerVedabaseServiceWorker(userId);
+    void registerAppServiceWorker(userId);
     void engine.start();
     return () => {
       if (!providedEngine) engine.dispose();

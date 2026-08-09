@@ -4,10 +4,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { deleteVedabaseDb } from "@/lib/vedabase/local-db";
-import {
-  clearVedabaseOfflineData,
-  vedabaseActiveUserKey,
-} from "@/lib/vedabase/register-service-worker";
+import { activeUserKey, clearOfflineCaches } from "@/lib/pwa/service-worker";
 import { cn } from "@/lib/utils";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -33,11 +30,11 @@ export function LogoutButton({
       });
       if (!response.ok) throw new Error("Logout failed");
 
-      const activeUserId = localStorage.getItem(vedabaseActiveUserKey);
-      const cleanupTasks = [clearVedabaseOfflineData()];
+      const activeUserId = localStorage.getItem(activeUserKey);
+      const cleanupTasks = [clearOfflineCaches()];
       if (activeUserId) cleanupTasks.push(deleteVedabaseDb(activeUserId));
       await Promise.allSettled(cleanupTasks);
-      localStorage.removeItem(vedabaseActiveUserKey);
+      localStorage.removeItem(activeUserKey);
 
       router.replace("/");
       router.refresh();
