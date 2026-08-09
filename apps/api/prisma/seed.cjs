@@ -7,7 +7,7 @@ const { librarySections } = require('./library-sections-data.js');
 const services = [
   {
     slug: 'union',
-    name: 'Знакомства В Благости',
+    name: 'Знакомства',
     description:
       'Осознанные знакомства и сотрудничество: семья, дружба, служение, проекты',
     url: '/union',
@@ -22,7 +22,7 @@ const services = [
   },
   {
     slug: 'vedabase',
-    name: 'Vedabase',
+    name: 'Книги',
     description: 'База знаний по Бхагавад-гите и ведическим текстам',
     url: '/vedabase',
     status: 'active',
