@@ -55,24 +55,17 @@ export class GeoController {
       throw new BadRequestException('Слишком длинное название страны');
 
     try {
-      const combined = await nominatimSettlements(
-        [query, country].filter(Boolean).join(', '),
-      );
-      if (combined.length > 0 || !country) return combined;
-
-      // Некоторые сочетания «город, страна» не находятся полнотекстовым
-      // поиском Nominatim, хотя сам город находится без страны — воспроизведено
-      // на проде для «Минск, Беларусь» при рабочем «Минск». Переспрашиваем
-      // только по городу и, если получится, сужаем по стране; иначе отдаём
-      // как есть — лучше нерелевантная страна, чем пустой список подсказок.
-      const cityOnly = await nominatimSettlements(query);
-      const byCountry = cityOnly.filter((place) =>
-        matchesCountry(place, country),
-      );
-      return byCountry.length > 0 ? byCountry : cityOnly;
+      return await searchWithCityFallback(query, country, async (q, isRetry) => {
+        // Nominatim's usage policy caps this at 1 req/sec; without a pause the
+        // immediate retry below routinely gets a 429 on the same connection.
+        if (isRetry) await sleep(1100);
+        return nominatimSettlements(q);
+      });
     } catch (error) {
       if (!shouldUseFallback(error)) throw error;
-      return searchPhoton(query, country);
+      // Тот же провал «город, страна» воспроизводится и у Photon — применяем
+      // ту же стратегию ретрая, а не просто пересылаем туда исходный запрос.
+      return searchWithCityFallback(query, country, (q) => searchPhoton(q));
     }
   }
 
@@ -103,6 +96,31 @@ export class GeoController {
     if (!result) throw new BadRequestException('Город не найден');
     return result;
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Некоторые сочетания «город, страна» не находятся полнотекстовым поиском
+// (и у Nominatim, и у Photon), хотя сам город находится без страны —
+// воспроизведено на проде для «Минск, Беларусь» при рабочем «Минск».
+// Переспрашиваем только по городу и, если получится, сужаем по стране;
+// иначе отдаём как есть — лучше нерелевантная страна, чем пустой список.
+async function searchWithCityFallback(
+  query: string,
+  country: string,
+  fetchPlaces: (q: string, isRetry: boolean) => Promise<GeoSearchResult[]>,
+): Promise<GeoSearchResult[]> {
+  const combined = await fetchPlaces(
+    [query, country].filter(Boolean).join(', '),
+    false,
+  );
+  if (combined.length > 0 || !country) return combined;
+
+  const cityOnly = await fetchPlaces(query, true);
+  const byCountry = cityOnly.filter((place) => matchesCountry(place, country));
+  return byCountry.length > 0 ? byCountry : cityOnly;
 }
 
 async function nominatimSettlements(q: string): Promise<GeoSearchResult[]> {
@@ -140,14 +158,8 @@ async function requestNominatim<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-async function searchPhoton(
-  query: string,
-  country: string,
-): Promise<GeoSearchResult[]> {
-  const params = new URLSearchParams({
-    q: [query, country].filter(Boolean).join(', '),
-    limit: '6',
-  });
+async function searchPhoton(q: string): Promise<GeoSearchResult[]> {
+  const params = new URLSearchParams({ q, limit: '6' });
   const res = await fetch(`${PHOTON_URL}/api/?${params}`, {
     headers: {
       Accept: 'application/json',

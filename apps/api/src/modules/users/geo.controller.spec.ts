@@ -91,7 +91,7 @@ describe('GeoController', () => {
     const [secondUrl] = fetchMock.mock.calls[1] as unknown as [string];
     expect(firstUrl).toContain('q=%D0%9C%D0%B8%D0%BD%D1%81%D0%BA%2C');
     expect(secondUrl).toContain('q=%D0%9C%D0%B8%D0%BD%D1%81%D0%BA&');
-  });
+  }, 10000);
 
   it('returns city-only results unfiltered when none of them match the requested country', async () => {
     fetchMock
@@ -113,7 +113,7 @@ describe('GeoController', () => {
     expect(result).toEqual([
       expect.objectContaining({ city: 'Springfield', country: 'США' }),
     ]);
-  });
+  }, 10000);
 
   it('falls back to Photon when Nominatim rejects the server', async () => {
     fetchMock.mockResolvedValueOnce(response(null, 403)).mockResolvedValueOnce(
@@ -155,6 +155,37 @@ describe('GeoController', () => {
     ];
     expect(fallbackUrl).toContain('photon.komoot.io/api/');
   });
+
+  it('retries city-only against Photon too when Nominatim rate-limits the retry', async () => {
+    // Combined query comes back empty (no exception), then the city-only
+    // retry against Nominatim itself gets rate-limited (429) — the fallback
+    // to Photon must not just resend the broken combined query.
+    fetchMock
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(response(null, 429))
+      .mockResolvedValueOnce(response({ features: [] }))
+      .mockResolvedValueOnce(
+        response({
+          features: [
+            {
+              properties: { type: 'city', name: 'Мінск', country: 'Беларусь' },
+              geometry: { coordinates: [27.5618, 53.9025] },
+            },
+          ],
+        }),
+      );
+
+    const result = await new GeoController().search('Минск', 'Беларусь');
+
+    expect(result).toEqual([
+      expect.objectContaining({ city: 'Мінск', country: 'Беларусь' }),
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    const [photonCombinedUrl] = fetchMock.mock.calls[2] as unknown as [string];
+    const [photonCityUrl] = fetchMock.mock.calls[3] as unknown as [string];
+    expect(photonCombinedUrl).toContain('q=%D0%9C%D0%B8%D0%BD%D1%81%D0%BA%2C');
+    expect(photonCityUrl).toContain('q=%D0%9C%D0%B8%D0%BD%D1%81%D0%BA&');
+  }, 10000);
 });
 
 function response(body: unknown, status = 200): Response {
