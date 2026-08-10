@@ -16,6 +16,9 @@ import { AstroCompatibilityController } from './compatibility/astro-compatibilit
 import { AstroCompatibilityService } from './compatibility/astro-compatibility.service';
 import { AstronomiaEphemerisProvider } from './ephemeris/astronomia-provider';
 import { EPHEMERIS_PROVIDER } from './ephemeris/ephemeris.token';
+import { AstroTransitController } from './transits/astro-transit.controller';
+import { AstroTransitService } from './transits/astro-transit.service';
+import { AstroTransitWorkerService } from './transits/astro-transit-worker.service';
 
 @Module({
   // UsersModule — как и в Union, для read-only доступа к профилю (имя, аватар)
@@ -27,6 +30,7 @@ import { EPHEMERIS_PROVIDER } from './ephemeris/ephemeris.token';
     AstroReadingController,
     AstroAdminController,
     AstroCompatibilityController,
+    AstroTransitController,
   ],
   providers: [
     AstroAdminService,
@@ -37,6 +41,8 @@ import { EPHEMERIS_PROVIDER } from './ephemeris/ephemeris.token';
     AstroQuotaService,
     AstroReadingService,
     AstroSettingsService,
+    AstroTransitService,
+    AstroTransitWorkerService,
     { provide: EPHEMERIS_PROVIDER, useClass: AstronomiaEphemerisProvider },
   ],
   exports: [EPHEMERIS_PROVIDER],

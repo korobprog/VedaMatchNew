@@ -187,4 +187,32 @@ describe('AstroGenerationService', () => {
       expect(user).not.toContain('бхава');
     });
   });
+
+  describe('фраза дня по транзиту', () => {
+    beforeEach(() => fetchMock.mockReturnValue(okResponse('{"text":"ок"}')));
+
+    it('передаёт только номер дома, ни карты, ни человека', async () => {
+      await service.generateTransitPhrase(7);
+      const user = sentBody().messages[1].content;
+      expect(user).toContain('7-й дом');
+      expect(user).not.toMatch(/[Мм]еша|[Ву]ришабха|градус/);
+    });
+
+    it('запрещает модели предсказывать конкретные события', async () => {
+      await service.generateTransitPhrase(1);
+      const system = sentBody().messages[0].content;
+      expect(system).toMatch(/[Нн]е выдумывай/);
+      expect(system).toMatch(/[Нн]е давай предсказаний/);
+    });
+
+    it('разные дома дают разный текст запроса', async () => {
+      await service.generateTransitPhrase(3);
+      const first = sentBody().messages[1].content;
+      fetchMock.mockClear();
+      fetchMock.mockReturnValue(okResponse('{"text":"ок"}'));
+      await service.generateTransitPhrase(9);
+      const second = sentBody().messages[1].content;
+      expect(first).not.toBe(second);
+    });
+  });
 });

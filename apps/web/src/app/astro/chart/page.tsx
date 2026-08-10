@@ -6,11 +6,12 @@ import {
   RASHI_NAMES,
 } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
-import { getAstroChart, getAstroReadings } from "@/lib/astro-api";
+import { getAstroChart, getAstroReadings, getAstroToday } from "@/lib/astro-api";
 import { ChartWheel, formatDegrees } from "@/components/astro/chart-wheel";
 import { DashaPanel } from "@/components/astro/dasha-panel";
 import { GrahaTable } from "@/components/astro/graha-table";
 import { ReadingsAccordion } from "@/components/astro/readings-accordion";
+import { TodayCard } from "@/components/astro/today-card";
 
 export const metadata = {
   title: "Карта рождения — VedaMatch",
@@ -21,9 +22,10 @@ export default async function AstroChartPage() {
   const user = await getProfile();
   if (!user) redirect("/login");
 
-  const [chart, readings] = await Promise.all([
+  const [chart, readings, today] = await Promise.all([
     getAstroChart(),
     getAstroReadings(),
+    getAstroToday(),
   ]);
   if (!chart) redirect("/astro");
 
@@ -40,6 +42,12 @@ export default async function AstroChartPage() {
           Изменить данные
         </Link>
       </div>
+
+      {today && (
+        <div className="mt-6">
+          <TodayCard today={today} />
+        </div>
+      )}
 
       {chart.timeAccuracy === "unknown" && (
         <p className="mt-4 rounded-xl bg-amber-500/10 px-4 py-3 text-sm">

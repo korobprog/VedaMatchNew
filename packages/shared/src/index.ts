@@ -11,6 +11,7 @@ export * from './astro-chart';
 export * from './astro-reading';
 export * from './astro-admin';
 export * from './astro-compatibility';
+export * from './astro-transit';
 
 import type { SubscriptionState } from './support';
 

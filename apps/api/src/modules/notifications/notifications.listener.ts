@@ -35,6 +35,11 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.astroTransitDigestReady)
+  onAstroTransitDigestReady(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   /**
    * Всегда резолвится. Необработанное отклонение в слушателе EventEmitter'а
    * роняет процесс, а недоступный пуш-сервис — не повод ронять API.

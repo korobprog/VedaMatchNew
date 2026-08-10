@@ -82,6 +82,39 @@ describe('buildNotification', () => {
       category: 'support',
     });
   });
+
+  it('показывает готовую фразу дня транзитов', () => {
+    expect(
+      buildNotification({
+        name: 'astro.transit.digest-ready',
+        recipientId: 'u1',
+        excerpt: 'Луна сегодня проходит вашу седьмую бхаву.',
+      }),
+    ).toEqual({
+      title: 'Персональный день',
+      body: 'Луна сегодня проходит вашу седьмую бхаву.',
+      url: '/astro/chart',
+      tag: 'astro-transit',
+      category: 'transits',
+    });
+  });
+
+  it('схлопывает дайджесты одного дня общим тегом', () => {
+    // Один тег на пользователя: пересчёт того же дня заменяет уведомление,
+    // а не плодит второе рядом со старым.
+    const first = buildNotification({
+      name: 'astro.transit.digest-ready',
+      recipientId: 'u1',
+      excerpt: 'Вариант A',
+    });
+    const second = buildNotification({
+      name: 'astro.transit.digest-ready',
+      recipientId: 'u1',
+      excerpt: 'Вариант B',
+    });
+
+    expect(first.tag).toBe(second.tag);
+  });
 });
 
 describe('toExcerpt', () => {

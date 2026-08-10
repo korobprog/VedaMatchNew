@@ -1,6 +1,10 @@
-import type { NotificationEvent, NotificationEventName } from '@vedamatch/shared';
+import type {
+  NotificationEvent,
+  NotificationEventName,
+} from '@vedamatch/shared';
 
-export type NotificationCategory = 'chat' | 'connections' | 'support';
+export type NotificationCategory =
+  'chat' | 'connections' | 'support' | 'transits';
 
 /** Имена событий литералами: @vedamatch/shared не собирается, и импорт
  *  значения оттуда уронил бы API при старте. Тип сверяет литералы с контрактом. */
@@ -9,6 +13,7 @@ export const notificationEventNames = {
   connectionRequested: 'union.connection.requested',
   connectionAccepted: 'union.connection.accepted',
   supportReplied: 'support.ticket.replied',
+  astroTransitDigestReady: 'astro.transit.digest-ready',
 } as const satisfies Record<string, NotificationEventName>;
 
 /** Payload веб-пуша ограничен ~4 КБ, да и на экране длинный текст не поместится. */
@@ -68,6 +73,16 @@ export function buildNotification(
         url: `/support/${event.ticketId}`,
         tag: `support:${event.ticketId}`,
         category: 'support',
+      };
+    case 'astro.transit.digest-ready':
+      return {
+        title: 'Персональный день',
+        body: toExcerpt(event.excerpt),
+        url: '/astro/chart',
+        // Один тег на пользователя в сутки: повторный расчёт того же дня
+        // заменяет прежнее уведомление, а не плодит второе.
+        tag: 'astro-transit',
+        category: 'transits',
       };
   }
 }

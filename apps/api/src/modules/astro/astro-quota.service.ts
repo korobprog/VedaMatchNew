@@ -162,6 +162,64 @@ export class AstroQuotaService {
     }
   }
 
+  /**
+   * Доступен ли ИИ прямо сейчас, без привязки к конкретному пользователю.
+   * Для расходов, которые не принадлежат одному человеку — общая фраза дня
+   * генерируется один раз на бхаву и разделяется между всеми, у кого она
+   * сегодня совпала, поэтому у неё нет персональной квоты, только общий
+   * выключатель и бюджет.
+   */
+  async aiAvailable(now: Date = new Date()): Promise<boolean> {
+    const settings = await this.settings.get();
+    if (!settings.aiEnabled) return false;
+    const budget = await this.prisma.astroBudgetDay.findUnique({
+      where: { day: usageDay(now) },
+    });
+    return !this.isHalted(settings, budget);
+  }
+
+  /**
+   * Расход, не принадлежащий одному пользователю. Идёт в общий дневной бюджет
+   * и может сработать как kill-switch наравне с обычными разборами, но
+   * НЕ пишется в AstroUsage — иначе случайный человек, чья бхава совпала с
+   * ещё не сгенерированной фразой, выглядел бы в админке так, будто это он
+   * потратил чужую квоту.
+   */
+  async recordSystemUsage(
+    usage: TokenUsage,
+    now: Date = new Date(),
+  ): Promise<void> {
+    const settings = await this.settings.get();
+    const day = usageDay(now);
+    const costUsdCents = this.costOf(usage);
+
+    const budget = await this.prisma.astroBudgetDay.upsert({
+      where: { day },
+      create: {
+        day,
+        tokensIn: usage.tokensIn,
+        tokensOut: usage.tokensOut,
+        costUsdCents,
+      },
+      update: {
+        tokensIn: { increment: usage.tokensIn },
+        tokensOut: { increment: usage.tokensOut },
+        costUsdCents: { increment: costUsdCents },
+      },
+    });
+
+    if (!budget.haltedAt && this.overLimit(settings, budget)) {
+      await this.prisma.astroBudgetDay.update({
+        where: { day },
+        data: { haltedAt: now },
+      });
+      this.logger.warn(
+        `Дневной бюджет astro исчерпан (${budget.tokensIn + budget.tokensOut} токенов, ` +
+          `${budget.costUsdCents} центов) — генерация остановлена до конца суток`,
+      );
+    }
+  }
+
   /** Снятие аварийной остановки вручную из админки. */
   async resume(now: Date = new Date()): Promise<void> {
     await this.prisma.astroBudgetDay.updateMany({

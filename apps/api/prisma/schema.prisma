@@ -224,6 +224,7 @@ model User {
   libraryCategories                  LibraryCategory[]            @relation("LibraryCategoryAuthor")
   libraryEntries                     LibraryEntry[]               @relation("LibraryEntryAuthor")
   libraryPreference                  LibraryPreference?
+  astroTransitDigests                AstroTransitDigest[]
 }
 
 // Единственная строка глобальных настроек платформы (id всегда "global").
@@ -1205,6 +1206,8 @@ model NotificationPreference {
   chat        Boolean  @default(true)
   connections Boolean  @default(true)
   support     Boolean  @default(true)
+  /// Ежедневный персональный день по транзитам (сервис astro).
+  transits    Boolean  @default(true)
   updatedAt   DateTime @updatedAt
 }
 
@@ -1354,4 +1357,34 @@ model AstroCompatibilityReading {
   createdAt     DateTime @default(now())
 
   @@unique([pairKey, locale, promptVersion])
+}
+
+/// Дневной дайджест транзитов пользователя. Данные — детерминированный расчёт,
+/// хранятся всегда; текст и pushedAt заполняются только если дошло до отправки.
+model AstroTransitDigest {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  forDate   DateTime  @db.Date
+  data      Json
+  text      String?
+  pushedAt  DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, forDate])
+}
+
+/// Готовая фраза под транзитный паттерн, общая на весь портал. Ключевая
+/// экономия дня: паттерн — это бхава транзитной Луны относительно лагны
+/// человека (1..12), а не сам человек, поэтому вариантов конечное малое число
+/// независимо от размера базы пользователей.
+model AstroTransitPhrase {
+  id            String   @id @default(uuid())
+  patternKey    String
+  locale        String
+  promptVersion String
+  text          String
+  createdAt     DateTime @default(now())
+
+  @@unique([patternKey, locale, promptVersion])
 }

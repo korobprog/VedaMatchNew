@@ -27,6 +27,7 @@ const categories = [
   { key: "chat", label: "Сообщения" },
   { key: "connections", label: "Заявки и совпадения" },
   { key: "support", label: "Поддержка" },
+  { key: "transits", label: "Персональный день (астрология)" },
 ] as const;
 
 export function NotificationSettings() {

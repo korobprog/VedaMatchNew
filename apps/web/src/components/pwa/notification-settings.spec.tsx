@@ -27,12 +27,14 @@ vi.mock("@/lib/notifications-api", () => ({
     chat: true,
     connections: true,
     support: true,
+    transits: true,
   })),
   savePreferences: vi.fn(async (patch) => ({
     enabled: true,
     chat: true,
     connections: true,
     support: true,
+    transits: true,
     ...patch,
   })),
 }));

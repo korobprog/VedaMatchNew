@@ -71,6 +71,7 @@ describe('NotificationsService.getPreferences', () => {
       chat: true,
       connections: true,
       support: true,
+      transits: true,
     });
   });
 
@@ -81,6 +82,7 @@ describe('NotificationsService.getPreferences', () => {
       chat: false,
       connections: true,
       support: false,
+      transits: false,
     };
 
     await expect(service.getPreferences('user-1')).resolves.toEqual({
@@ -88,6 +90,7 @@ describe('NotificationsService.getPreferences', () => {
       chat: false,
       connections: true,
       support: false,
+      transits: false,
     });
   });
 });
@@ -103,6 +106,7 @@ describe('NotificationsService.updatePreferences', () => {
       chat: false,
       connections: true,
       support: true,
+      transits: true,
     });
   });
 });

@@ -20,7 +20,13 @@ export type NotificationEvent =
       senderName: string;
       requestId: string;
     }
-  | { name: 'support.ticket.replied'; recipientId: string; ticketId: string };
+  | { name: 'support.ticket.replied'; recipientId: string; ticketId: string }
+  | {
+      name: 'astro.transit.digest-ready';
+      recipientId: string;
+      /** Готовая фраза дня — самодостаточна, подписчик её не переписывает. */
+      excerpt: string;
+    };
 
 /**
  * Пакет не собирается (`main: src/index.ts`), поэтому API импортирует отсюда
@@ -35,6 +41,8 @@ export interface NotificationPreferencesDto {
   chat: boolean;
   connections: boolean;
   support: boolean;
+  /** Ежедневный персональный день по транзитам (сервис astro). */
+  transits: boolean;
 }
 
 export type UpdateNotificationPreferencesRequest =

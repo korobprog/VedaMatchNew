@@ -11,6 +11,7 @@ const defaults: NotificationPreferencesDto = {
   chat: true,
   connections: true,
   support: true,
+  transits: true,
 };
 
 export interface StoredSubscription {
@@ -66,6 +67,7 @@ export class NotificationsService {
       chat: row.chat,
       connections: row.connections,
       support: row.support,
+      transits: row.transits,
     };
   }
 
@@ -79,6 +81,7 @@ export class NotificationsService {
       chat: patch.chat ?? current.chat,
       connections: patch.connections ?? current.connections,
       support: patch.support ?? current.support,
+      transits: patch.transits ?? current.transits,
     };
     await this.prisma.notificationPreference.upsert({
       where: { userId },

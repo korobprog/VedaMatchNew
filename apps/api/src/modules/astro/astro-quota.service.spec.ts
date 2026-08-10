@@ -213,4 +213,54 @@ describe('AstroQuotaService', () => {
       data: { haltedAt: null },
     });
   });
+
+  describe('расход, не принадлежащий пользователю (фраза дня)', () => {
+    it('aiAvailable недоступен при выключенном ИИ', async () => {
+      withSettings({ aiEnabled: false });
+      await expect(service.aiAvailable(NOW)).resolves.toBe(false);
+    });
+
+    it('aiAvailable недоступен при остановленном бюджете', async () => {
+      prisma.astroBudgetDay.findUnique.mockResolvedValue({
+        haltedAt: NOW,
+        tokensIn: 0,
+        tokensOut: 0,
+        costUsdCents: 0,
+      });
+      await expect(service.aiAvailable(NOW)).resolves.toBe(false);
+    });
+
+    it('aiAvailable доступен по умолчанию', async () => {
+      await expect(service.aiAvailable(NOW)).resolves.toBe(true);
+    });
+
+    it('recordSystemUsage не трогает AstroUsage', async () => {
+      prisma.astroBudgetDay.upsert.mockResolvedValue({
+        haltedAt: null,
+        tokensIn: 10,
+        tokensOut: 5,
+        costUsdCents: 0,
+      });
+
+      await service.recordSystemUsage({ tokensIn: 10, tokensOut: 5 }, NOW);
+
+      expect(prisma.astroUsage.upsert).not.toHaveBeenCalled();
+      expect(prisma.astroBudgetDay.upsert).toHaveBeenCalled();
+    });
+
+    it('recordSystemUsage тоже может остановить общий бюджет', async () => {
+      prisma.astroBudgetDay.upsert.mockResolvedValue({
+        haltedAt: null,
+        tokensIn: 2_000_000,
+        tokensOut: 1_000,
+        costUsdCents: 0,
+      });
+
+      await service.recordSystemUsage({ tokensIn: 10, tokensOut: 10 }, NOW);
+
+      expect(prisma.astroBudgetDay.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { haltedAt: NOW } }),
+      );
+    });
+  });
 });

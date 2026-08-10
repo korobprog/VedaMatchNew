@@ -5,6 +5,7 @@ import type {
   AstroReadingsDto,
   AstroSettingsDto,
   AstroStateDto,
+  AstroTodayDto,
   VedicChart,
 } from "@vedamatch/shared";
 
@@ -44,6 +45,10 @@ export const getAstroChart = () =>
 /** Разборы: готовые тексты из кэша плюс состояние квоты. */
 export const getAstroReadings = () =>
   astroGet<AstroReadingsDto>("/astro/readings", { emptyOn404: true });
+
+/** Персональный день. null — нет точного времени и места рождения. */
+export const getAstroToday = () =>
+  astroGet<AstroTodayDto>("/astro/today", { emptyOn404: true });
 
 /** Лимиты сервиса. Только для роли admin — иначе API ответит 403. */
 export const getAdminAstroSettings = () =>
