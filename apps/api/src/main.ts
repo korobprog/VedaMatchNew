@@ -1,4 +1,5 @@
 ﻿import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
@@ -16,7 +17,12 @@ function corsOrigins() {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // За Traefik (единственный хоп на dokploy-network) req.ip иначе всегда
+  // резолвится в адрес прокси — все клиенты делят один и тот же бакет
+  // ThrottlerModule (100 запросов/мин), и любой всплеск трафика от одного
+  // пользователя роняет лимит для всех остальных.
+  app.set('trust proxy', 1);
   app.use(cookieParser());
   app.enableCors({
     origin: corsOrigins(),
