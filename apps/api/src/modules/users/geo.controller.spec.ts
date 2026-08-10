@@ -59,6 +59,62 @@ describe('GeoController', () => {
     );
   });
 
+  it('retries with a city-only query when Nominatim finds nothing for "city, country"', async () => {
+    fetchMock
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(
+        response([
+          {
+            lat: '53.9025',
+            lon: '27.5618',
+            display_name: 'Мінск, Беларусь',
+            type: 'administrative',
+            address: { city: 'Мінск', country: 'Беларусь' },
+          },
+        ]),
+      );
+
+    const result = await new GeoController().search('Минск', 'Беларусь');
+
+    expect(result).toEqual([
+      {
+        city: 'Мінск',
+        country: 'Беларусь',
+        lat: 53.9025,
+        lon: 27.5618,
+        displayName: 'Мінск, Беларусь',
+        type: 'administrative',
+      },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [firstUrl] = fetchMock.mock.calls[0] as unknown as [string];
+    const [secondUrl] = fetchMock.mock.calls[1] as unknown as [string];
+    expect(firstUrl).toContain('q=%D0%9C%D0%B8%D0%BD%D1%81%D0%BA%2C');
+    expect(secondUrl).toContain('q=%D0%9C%D0%B8%D0%BD%D1%81%D0%BA&');
+  });
+
+  it('returns city-only results unfiltered when none of them match the requested country', async () => {
+    fetchMock
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(
+        response([
+          {
+            lat: '53.9025',
+            lon: '27.5618',
+            display_name: 'Springfield, USA',
+            type: 'city',
+            address: { city: 'Springfield', country: 'США' },
+          },
+        ]),
+      );
+
+    const result = await new GeoController().search('Springfield', 'Narnia');
+
+    expect(result).toEqual([
+      expect.objectContaining({ city: 'Springfield', country: 'США' }),
+    ]);
+  });
+
   it('falls back to Photon when Nominatim rejects the server', async () => {
     fetchMock.mockResolvedValueOnce(response(null, 403)).mockResolvedValueOnce(
       response({

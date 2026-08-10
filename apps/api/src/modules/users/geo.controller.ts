@@ -54,23 +54,22 @@ export class GeoController {
     if (country.length > 100)
       throw new BadRequestException('Слишком длинное название страны');
 
-    const params = new URLSearchParams({
-      q: [query, country].filter(Boolean).join(', '),
-      format: 'jsonv2',
-      addressdetails: '1',
-      limit: '6',
-    });
-
     try {
-      const places = await requestNominatim<NominatimPlace[]>(
-        `/search?${params}`,
+      const combined = await nominatimSettlements(
+        [query, country].filter(Boolean).join(', '),
       );
-      return uniqueLocations(
-        places
-          .filter(isNominatimSettlement)
-          .map(toGeoSearchResult)
-          .filter(Boolean) as GeoSearchResult[],
+      if (combined.length > 0 || !country) return combined;
+
+      // Некоторые сочетания «город, страна» не находятся полнотекстовым
+      // поиском Nominatim, хотя сам город находится без страны — воспроизведено
+      // на проде для «Минск, Беларусь» при рабочем «Минск». Переспрашиваем
+      // только по городу и, если получится, сужаем по стране; иначе отдаём
+      // как есть — лучше нерелевантная страна, чем пустой список подсказок.
+      const cityOnly = await nominatimSettlements(query);
+      const byCountry = cityOnly.filter((place) =>
+        matchesCountry(place, country),
       );
+      return byCountry.length > 0 ? byCountry : cityOnly;
     } catch (error) {
       if (!shouldUseFallback(error)) throw error;
       return searchPhoton(query, country);
@@ -104,6 +103,27 @@ export class GeoController {
     if (!result) throw new BadRequestException('Город не найден');
     return result;
   }
+}
+
+async function nominatimSettlements(q: string): Promise<GeoSearchResult[]> {
+  const params = new URLSearchParams({
+    q,
+    format: 'jsonv2',
+    addressdetails: '1',
+    limit: '6',
+  });
+  const places = await requestNominatim<NominatimPlace[]>(`/search?${params}`);
+  return uniqueLocations(
+    places
+      .filter(isNominatimSettlement)
+      .map(toGeoSearchResult)
+      .filter(Boolean) as GeoSearchResult[],
+  );
+}
+
+function matchesCountry(place: GeoSearchResult, country: string): boolean {
+  const needle = country.trim().toLocaleLowerCase();
+  return (place.country ?? '').trim().toLocaleLowerCase().includes(needle);
 }
 
 async function requestNominatim<T>(path: string): Promise<T> {
