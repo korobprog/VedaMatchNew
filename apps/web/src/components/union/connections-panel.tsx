@@ -247,12 +247,20 @@ function ConnectionCard({
                 </>
               )}
             {request.status === "accepted" && (
-              <Link
-                href={`/union/chats/${request.id}`}
-                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-              >
-                Открыть чат
-              </Link>
+              <>
+                <Link
+                  href={`/union/chats/${request.id}`}
+                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                >
+                  Открыть чат
+                </Link>
+                <Link
+                  href={`/astro/compatibility?with=${request.user.id}`}
+                  className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  Совместимость по звёздам
+                </Link>
+              </>
             )}
           </div>
         </div>
