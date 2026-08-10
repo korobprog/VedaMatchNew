@@ -127,7 +127,13 @@ export function RecommendationFilters({
         credentials: "include",
       });
       if (!res.ok) throw new Error(await res.text());
-      window.location.href = window.location.pathname + window.location.search;
+      const { restoredCount } = (await res.json()) as { restoredCount: number };
+      // Показываем результат явно: без этого «0 анкет» неотличимо от сломанной
+      // кнопки — пользователь видит тот же пустой список и решает, что ничего
+      // не произошло.
+      const query = new URLSearchParams(window.location.search);
+      query.set("historyReset", String(restoredCount));
+      window.location.href = `${window.location.pathname}?${query.toString()}`;
     } catch (error) {
       setHistoryError(
         error instanceof Error

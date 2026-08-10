@@ -54,10 +54,20 @@ export default async function UnionRecommendationsPage({
 
         <RecommendationFilters params={params} />
 
+        <HistoryResetBanner restoredCount={first(params.historyReset)} />
+
         {recommendations.items.length === 0 ? (
           <div className="glass rounded-3xl border border-glass-brd p-10 text-center text-sm text-text-1">
             Пока нет подходящих людей по выбранным фильтрам. Попробуйте расширить
             радиус или сбросить часть условий.
+            <br />
+            Учтите: «Сбросить» очищает только видимые фильтры. Уже
+            отсмотренные анкеты возвращаются отдельной кнопкой «Показать всех
+            заново» выше, а желаемый возраст партнёра задаётся в{" "}
+            <Link href="/union/profile" className="underline hover:text-text-0">
+              настройках профиля
+            </Link>{" "}
+            и тоже сужает выдачу.
           </div>
         ) : (
           <>
@@ -125,4 +135,26 @@ function withPage(
   }
   query.set("page", String(page));
   return query.toString();
+}
+
+function first(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function HistoryResetBanner({
+  restoredCount,
+}: {
+  restoredCount: string | undefined;
+}) {
+  if (restoredCount === undefined) return null;
+  const count = Number(restoredCount);
+  if (!Number.isFinite(count)) return null;
+
+  return (
+    <div className="mb-4 rounded-2xl border border-glass-brd bg-bg-1 px-4 py-3 text-sm text-text-1">
+      {count > 0
+        ? `Возвращено в колоду: ${count}. Смотрите заново ниже.`
+        : "Возвращать пока некого — вы ещё не отсмотрели никого из доступных анкет. Если список пуст, дело не в истории показов: попробуйте расширить фильтры или радиус поиска."}
+    </div>
+  );
 }

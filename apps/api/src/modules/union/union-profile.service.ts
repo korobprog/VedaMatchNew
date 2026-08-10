@@ -680,8 +680,13 @@ export class UnionProfileService {
     }
 
     // Желаемый возраст партнёра из анкет работает в обе стороны: и мой, и его.
-    if (myAge.ageRangeMin != null || myAge.ageRangeMax != null) {
-      if (candidateAge === null) return false;
+    // Возраст кандидата неизвестен — это неявный, не выбранный им самим
+    // фильтр, поэтому не отсеиваем: явное несоответствие возраста ловится
+    // только когда обе стороны его указали.
+    if (
+      candidateAge !== null &&
+      (myAge.ageRangeMin != null || myAge.ageRangeMax != null)
+    ) {
       if (myAge.ageRangeMin != null && candidateAge < myAge.ageRangeMin) {
         return false;
       }
