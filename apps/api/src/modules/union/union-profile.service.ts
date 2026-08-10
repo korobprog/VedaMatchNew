@@ -744,7 +744,8 @@ export class UnionProfileService {
       const filterCity = normalizeText(filters.city);
       const filterCountry = normalizeText(filters.country);
       if (!candidateCity.includes(filterCity)) return false;
-      if (filterCountry && candidateCountry !== filterCountry) return false;
+      if (filterCountry && !candidateCountry.includes(filterCountry))
+        return false;
     }
 
     if (filters.radiusKm) {

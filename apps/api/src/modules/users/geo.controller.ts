@@ -55,12 +55,11 @@ export class GeoController {
       throw new BadRequestException('Слишком длинное название страны');
 
     try {
-      return await searchWithCityFallback(query, country, async (q, isRetry) => {
-        // Nominatim's usage policy caps this at 1 req/sec; without a pause the
-        // immediate retry below routinely gets a 429 on the same connection.
-        if (isRetry) await sleep(1100);
-        return nominatimSettlements(q);
-      });
+      // requestNominatim() already serializes and paces every outgoing call
+      // (see scheduleNominatimCall), so the retry below is naturally spaced.
+      return await searchWithCityFallback(query, country, (q) =>
+        nominatimSettlements(q),
+      );
     } catch (error) {
       if (!shouldUseFallback(error)) throw error;
       // Тот же провал «город, страна» воспроизводится и у Photon — применяем
@@ -100,6 +99,21 @@ export class GeoController {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Nominatim's usage policy allows only 1 req/sec total. The per-request retry
+// delay above only spaces out a single request's own retry; concurrent users
+// hitting /geo/search still collectively exceed that limit and get 403/429,
+// forcing the weaker Photon fallback. Serialize all outgoing Nominatim calls
+// through one queue so the whole process honors the limit, not just one call.
+let nominatimQueueTail: Promise<void> = Promise.resolve();
+function scheduleNominatimCall<T>(fn: () => Promise<T>): Promise<T> {
+  const result = nominatimQueueTail.then(fn);
+  nominatimQueueTail = result.then(
+    () => sleep(1100),
+    () => sleep(1100),
+  );
+  return result;
 }
 
 // Некоторые сочетания «город, страна» не находятся полнотекстовым поиском
@@ -145,18 +159,29 @@ function matchesCountry(place: GeoSearchResult, country: string): boolean {
 }
 
 async function requestNominatim<T>(path: string): Promise<T> {
-  const res = await fetch(`${NOMINATIM_URL}${path}`, {
-    headers: {
-      Accept: 'application/json',
-      'User-Agent': process.env.NOMINATIM_USER_AGENT ?? DEFAULT_USER_AGENT,
-      Referer: 'https://vedamatch.ru/',
-    },
+  return scheduleNominatimCall(async () => {
+    const res = await fetch(`${NOMINATIM_URL}${path}`, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': process.env.NOMINATIM_USER_AGENT ?? DEFAULT_USER_AGENT,
+        Referer: 'https://vedamatch.ru/',
+      },
+    });
+    if (!res.ok) {
+      throw new GeocoderRequestError(res.status);
+    }
+    return (await res.json()) as T;
   });
-  if (!res.ok) {
-    throw new GeocoderRequestError(res.status);
-  }
-  return (await res.json()) as T;
 }
+
+const PHOTON_SETTLEMENT_TYPES = new Set([
+  'city',
+  'town',
+  'village',
+  'hamlet',
+  'district',
+  'state',
+]);
 
 async function searchPhoton(q: string): Promise<GeoSearchResult[]> {
   const params = new URLSearchParams({ q, limit: '6' });
@@ -172,7 +197,9 @@ async function searchPhoton(q: string): Promise<GeoSearchResult[]> {
   const payload = (await res.json()) as PhotonResponse;
   return uniqueLocations(
     (payload.features ?? [])
-      .filter((feature) => feature.properties?.type === 'city')
+      .filter((feature) =>
+        PHOTON_SETTLEMENT_TYPES.has(feature.properties?.type ?? ''),
+      )
       .map(toPhotonGeoSearchResult)
       .filter(Boolean) as GeoSearchResult[],
   );
@@ -193,19 +220,27 @@ class GeocoderRequestError extends BadRequestException {
   }
 }
 
+// Nominatim's `address.city` for Russian regional-capital "urban okrug"
+// boundaries (e.g. Kazan, Ufa) comes back as "городской округ Казань"
+// rather than just "Казань" — the admin-division label is baked into the
+// name field itself. Stored profiles use the plain city name, so an
+// unstripped prefix silently breaks the filter's substring match.
+const ADMIN_DIVISION_PREFIX = /^(городской округ|муниципальный округ)\s+/i;
+
 function toGeoSearchResult(place: NominatimPlace): GeoSearchResult | null {
   const lat = Number(place.lat);
   const lon = Number(place.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
 
-  const city =
+  const rawCity =
     place.address?.city ??
     place.address?.town ??
     place.address?.village ??
     place.address?.municipality ??
     place.address?.county ??
     place.address?.state;
-  if (!city) return null;
+  if (!rawCity) return null;
+  const city = rawCity.replace(ADMIN_DIVISION_PREFIX, '').trim() || rawCity;
 
   return {
     city,
@@ -233,10 +268,16 @@ function toPhotonGeoSearchResult(
 ): GeoSearchResult | null {
   const [lon, lat] = feature.geometry?.coordinates ?? [];
   const properties = feature.properties;
-  const city = properties?.city ?? properties?.name;
-  if (!city || !Number.isFinite(lat) || !Number.isFinite(lon) || !properties) {
+  const rawCity = properties?.city ?? properties?.name;
+  if (
+    !rawCity ||
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lon) ||
+    !properties
+  ) {
     return null;
   }
+  const city = rawCity.replace(ADMIN_DIVISION_PREFIX, '').trim() || rawCity;
 
   const displayName = [
     city,
