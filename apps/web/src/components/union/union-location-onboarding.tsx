@@ -184,7 +184,7 @@ export function UnionLocationOnboarding() {
 
       <button
         type="submit"
-        disabled={!selectedLocation || savePending}
+        disabled={savePending}
         className="mt-4 rounded-xl bg-amber-600 px-5 py-3 font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {savePending ? "Сохраняем..." : "Сохранить и продолжить"}

@@ -48,7 +48,7 @@ describe("UnionLocationOnboarding", () => {
     const submit = screen.getByRole("button", {
       name: "Сохранить и продолжить",
     });
-    expect(submit).toBeDisabled();
+    expect(submit).toBeEnabled();
 
     await user.type(screen.getByRole("textbox", { name: "Страна" }), "Россия");
     await user.type(
@@ -73,5 +73,30 @@ describe("UnionLocationOnboarding", () => {
     );
     expect(push).toHaveBeenCalledWith("/union");
     expect(refresh).toHaveBeenCalled();
+  });
+
+  it("shows an error instead of silently doing nothing when submitted without picking a suggestion", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify([]), { status: 200 })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<UnionLocationOnboarding />);
+
+    await user.type(screen.getByRole("textbox", { name: "Страна" }), "Беларусь");
+    await user.type(screen.getByRole("textbox", { name: "Город" }), "Минск");
+    await user.click(
+      screen.getByRole("button", { name: "Сохранить и продолжить" }),
+    );
+
+    expect(
+      await screen.findByText("Выберите город из списка подсказок."),
+    ).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringMatching(/\/profile$/),
+      expect.anything(),
+    );
+    expect(push).not.toHaveBeenCalled();
   });
 });
