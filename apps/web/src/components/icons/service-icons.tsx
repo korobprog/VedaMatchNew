@@ -169,6 +169,107 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
         </svg>
       );
 
+    case "astro":
+      // Natal chart wheel with crescent moon and stars - Vedic astrology
+      return (
+        <svg
+          viewBox="0 0 32 32"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className={className}
+        >
+          {/* Chart wheel rim */}
+          <circle
+            cx="15"
+            cy="18"
+            r="9.5"
+            fill={`url(#${gid("bg")})`}
+            stroke={`url(#${gid("stroke")})`}
+            strokeWidth="1.6"
+          />
+          {/* House spokes, 12 divisions collapsed to 4 for legibility at small size */}
+          <path
+            d="M15 8.5V27.5M5.5 18H24.5M8.4 11.4L21.6 24.6M21.6 11.4L8.4 24.6"
+            stroke="#C4B5FD"
+            strokeWidth="1"
+            strokeOpacity="0.65"
+            strokeLinecap="round"
+          />
+          <circle cx="15" cy="18" r="2.4" fill="#FDE047" fillOpacity="0.9" />
+          {/* Crescent moon accent, overlapping the rim */}
+          <path
+            d="M24 6.5C24 9.26 21.76 11.5 19 11.5C18.5 11.5 18.02 11.43 17.57 11.29C19.5 10.4 20.8 8.46 20.8 6.5C20.8 4.54 19.5 2.6 17.57 1.71C18.02 1.57 18.5 1.5 19 1.5C21.76 1.5 24 3.74 24 6.5Z"
+            fill="#FBBF24"
+          />
+          {/* Sparkle stars */}
+          <path d="M6 6L6.7 7.8L8.5 8.5L6.7 9.2L6 11L5.3 9.2L3.5 8.5L5.3 7.8L6 6Z" fill="#F0ABFC" />
+          <circle cx="26" cy="20" r="1.1" fill="#93C5FD" />
+          <defs>
+            <linearGradient id={gid("bg")} x1="5.5" y1="8.5" x2="24.5" y2="27.5" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#4C1D95" stopOpacity="0.85" />
+              <stop offset="1" stopColor="#7C3AED" stopOpacity="0.75" />
+            </linearGradient>
+            <linearGradient id={gid("stroke")} x1="5.5" y1="8.5" x2="24.5" y2="27.5" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#C4B5FD" />
+              <stop offset="1" stopColor="#A78BFA" />
+            </linearGradient>
+          </defs>
+        </svg>
+      );
+
+    case "library":
+      // Bookmark ribbon with a chain link - curated library of external materials
+      return (
+        <svg
+          viewBox="0 0 32 32"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className={className}
+        >
+          {/* Bookmark ribbon */}
+          <path
+            d="M8 4H24C24.8 4 25.5 4.7 25.5 5.5V28L16 22.5L6.5 28V5.5C6.5 4.7 7.2 4 8 4Z"
+            fill={`url(#${gid("bg")})`}
+            stroke={`url(#${gid("stroke")})`}
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+          />
+          {/* Chain link, symbolising outbound links to external materials */}
+          <rect
+            x="11.2"
+            y="10.5"
+            width="6.4"
+            height="4.4"
+            rx="2.2"
+            transform="rotate(-28 11.2 10.5)"
+            stroke="#FDE68A"
+            strokeWidth="1.6"
+          />
+          <rect
+            x="14.4"
+            y="13.3"
+            width="6.4"
+            height="4.4"
+            rx="2.2"
+            transform="rotate(-28 14.4 13.3)"
+            stroke="#FDE68A"
+            strokeWidth="1.6"
+          />
+          {/* Sparkle accent */}
+          <circle cx="21.5" cy="9" r="1.2" fill="#FEF3C7" />
+          <defs>
+            <linearGradient id={gid("bg")} x1="6.5" y1="4" x2="25.5" y2="28" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#92400E" stopOpacity="0.85" />
+              <stop offset="1" stopColor="#D97706" stopOpacity="0.75" />
+            </linearGradient>
+            <linearGradient id={gid("stroke")} x1="6.5" y1="4" x2="25.5" y2="28" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#FBBF24" />
+              <stop offset="1" stopColor="#FCD34D" />
+            </linearGradient>
+          </defs>
+        </svg>
+      );
+
     case "devotee-space":
     default:
       // Sacred Temple / Lotus flower with Crown / Lock emblem - Restricted Space
