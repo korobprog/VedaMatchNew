@@ -51,7 +51,14 @@ export function UnionProfileProgress({
         />
       </div>
 
-      {next ? (
+      {next === "photos" ? (
+        <a
+          href="#gallery-heading"
+          className="mt-2 block text-xs text-magenta underline underline-offset-2"
+        >
+          Дальше: {unionProfileFieldLabels[next]} — загрузите фото ниже
+        </a>
+      ) : next ? (
         <p className="mt-2 text-xs text-text-2">
           Дальше: {unionProfileFieldLabels[next]}
         </p>

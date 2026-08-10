@@ -144,6 +144,8 @@ export class UserGalleryService {
             throw new GalleryQuotaError();
           }
 
+          const existingCount = await tx.userPhoto.count({ where: { userId } });
+
           return tx.userPhoto.create({
             data: {
               userId,
@@ -151,7 +153,7 @@ export class UserGalleryService {
               sizeBytes: processed.data.length,
               width: processed.width,
               height: processed.height,
-              isPublic: false,
+              isPublic: existingCount === 0,
               sortOrder: (totals._max.sortOrder ?? -1) + 1,
             },
           });

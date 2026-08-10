@@ -164,7 +164,12 @@ export function UserGalleryEditor(): React.ReactNode {
       }));
 
       for (const uploaded of result.uploaded) {
-        addNotice("success", `${uploaded.fileName}: фото загружено как приватное`);
+        addNotice(
+          "success",
+          uploaded.photo.isPublic
+            ? `${uploaded.fileName}: фото загружено и уже видно в Знакомствах`
+            : `${uploaded.fileName}: фото загружено как приватное`,
+        );
       }
       for (const failed of result.failed) {
         addNotice("error", `${failed.fileName}: ${failed.message}`);

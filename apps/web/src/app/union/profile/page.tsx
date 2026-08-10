@@ -3,6 +3,7 @@ import { Header } from "@/components/header";
 import { UnionNav } from "@/components/union/union-nav";
 import { UnionTabBar } from "@/components/union/union-tabbar";
 import { UnionProfileForm } from "@/components/union/union-profile-form";
+import { UserGalleryEditor } from "@/components/user-gallery-editor";
 import { getProfile } from "@/lib/api";
 import { BlockedUsersPanel } from "@/components/union/blocked-users-panel";
 import {
@@ -64,6 +65,10 @@ export default async function UnionProfilePage() {
             }
           }
         />
+
+        <div className="mt-6">
+          <UserGalleryEditor />
+        </div>
 
         <div className="mt-6">
           <BlockedUsersPanel blocked={blocks?.blocked ?? []} />
