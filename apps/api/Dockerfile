@@ -11,7 +11,13 @@ COPY packages/shared/package.json packages/shared/
 RUN pnpm install --frozen-lockfile
 COPY packages/shared packages/shared
 COPY apps/api apps/api
-RUN pnpm --filter @vedamatch/api prisma:generate && pnpm --filter @vedamatch/api build
+# @vedamatch/shared собирается в CommonJS-JS (см. packages/shared/tsconfig.build.json):
+# на Node 24 голый `require()` сырого .ts из node_modules падает с
+# ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING — раньше это не проявлялось только
+# потому, что dev-запуск шёл через ts-node/ts-jest, перехватывающие require ДО
+# нативного загрузчика Node; в проде такого перехвата нет. turbo сам построит
+# shared раньше api благодаря "dependsOn": ["^build"] в turbo.json.
+RUN pnpm --filter @vedamatch/api prisma:generate && pnpm turbo run build --filter=@vedamatch/api
 RUN pnpm --filter @vedamatch/api deploy --prod /out
 
 FROM base AS runtime

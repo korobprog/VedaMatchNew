@@ -11,7 +11,10 @@ COPY packages/shared/package.json packages/shared/
 RUN pnpm install --frozen-lockfile
 COPY packages/shared packages/shared
 COPY apps/web apps/web
-RUN pnpm --filter @vedamatch/web build
+# @vedamatch/shared собирается в JS (packages/shared/tsconfig.build.json): package.json
+# теперь указывает main на dist/index.js, поэтому без сборки его тут webpack/Turbopack
+# не найдёт вовсе. turbo строит shared раньше web через "dependsOn": ["^build"].
+RUN pnpm turbo run build --filter=@vedamatch/web
 
 FROM base AS runtime
 ENV NODE_ENV=production
