@@ -376,7 +376,7 @@ export function RecommendationFilters({
           defaultChecked={first(params.verifiedOnly) === "true"}
           className="h-4 w-4 accent-cyan"
         />
-        Только преданные, подтверждённые администрацией
+       Подтверждённые администрацией
       </label>
 
       <label className="mt-2 flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-1">

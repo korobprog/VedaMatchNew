@@ -211,6 +211,8 @@ describe('UnionChatService', () => {
       body: 'Namaste',
       mine: true,
       createdAt: createdAt.toISOString(),
+      editedAt: null,
+      reactions: [],
     });
     expect(prisma.unionChatMessage.create).toHaveBeenCalledWith({
       data: {
