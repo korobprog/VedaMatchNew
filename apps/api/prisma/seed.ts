@@ -71,6 +71,24 @@ const services = [
     devoteeSelfIdentifiedVisible: true,
     devoteeVerifiedVisible: true,
   },
+  {
+    slug: 'astro',
+    name: 'Джйотиш',
+    description:
+      'Ведическая карта рождения с разбором и совместимость по звёздам',
+    url: '/astro',
+    // active: карта, разборы и совместимость (гуна-милан) работают и покрыты
+    // тестами. Ежедневный персональный день по транзитам (Э6) ещё не готов —
+    // когда появится, стоит дополнить описание, а не менять статус повторно.
+    status: 'active' as const,
+    category: 'knowledge',
+    public: true,
+    seekerVisible: true,
+    practitionerVisible: true,
+    yogiVisible: true,
+    devoteeSelfIdentifiedVisible: true,
+    devoteeVerifiedVisible: true,
+  },
 ];
 
 async function main() {

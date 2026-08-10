@@ -174,6 +174,13 @@ export function Header({ user }: { user: UserProfile }) {
                       <span className="text-sm font-medium">Обращения</span>
                     </Link>
                     <Link
+                      href="/admin/astro"
+                      onClick={() => setIsOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
+                    >
+                      <span className="text-sm font-medium">Астрология</span>
+                    </Link>
+                    <Link
                       href="/admin/settings"
                       onClick={() => setIsOpen(false)}
                       className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"

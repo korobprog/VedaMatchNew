@@ -149,6 +149,12 @@ export function RecommendationCard({ item }: { item: UnionRecommendation }) {
 
         <div className="mt-auto space-y-3 pt-1">
           <ConnectionActions userId={user.id} connection={item.connection} />
+          <Link
+            href={`/astro/compatibility?with=${user.id}`}
+            className="block text-center text-xs text-text-2 underline underline-offset-4 hover:text-text-1"
+          >
+            Проверить совместимость по звёздам
+          </Link>
           <ReportBlockMenu userId={user.id} userName={user.name} />
         </div>
       </div>

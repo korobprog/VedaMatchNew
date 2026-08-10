@@ -6,6 +6,11 @@ export * from './motivation';
 export * from './moderation';
 export * from './support';
 export * from './notifications';
+export * from './astro';
+export * from './astro-chart';
+export * from './astro-reading';
+export * from './astro-admin';
+export * from './astro-compatibility';
 
 import type { SubscriptionState } from './support';
 

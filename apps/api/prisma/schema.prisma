@@ -148,78 +148,82 @@ enum MotivationVisualStyle {
 }
 
 model User {
-  id                        String                     @id @default(uuid())
-  email                     String                     @unique
-  name                      String
-  avatarUrl                 String?
-  avatarKey                 String?
+  id                           String                     @id @default(uuid())
+  email                        String                     @unique
+  name                         String
+  avatarUrl                    String?
+  avatarKey                    String?
   // Дата рождения; наружу отдаётся только вычисленный возраст
-  birthDate                 DateTime?                  @db.Date
+  birthDate                    DateTime?                  @db.Date
   // Пол. Необязателен: у существующих аккаунтов его нет, и указывать никто не обязан.
-  gender                    Gender?
-  homeLocation              Json?
-  socialLinks               Json?
-  messengers                Json?
-  role                      Role                       @default(user)
-  googleId                  String?                    @unique
+  gender                       Gender?
+  homeLocation                 Json?
+  socialLinks                  Json?
+  messengers                   Json?
+  role                         Role                       @default(user)
+  googleId                     String?                    @unique
   // scrypt-хеш пароля. Используется только dev-входом (DEV_AUTH_ENABLED).
-  passwordHash              String?
+  passwordHash                 String?
   // Помечает демо-аккаунты из dev-сида, чтобы их можно было пересоздать.
-  isDemo                    Boolean                    @default(false)
-  spiritualStage            SpiritualStage?
-  devoteeVerificationStatus DevoteeVerificationStatus?
-  lastSelfIdentificationAt  DateTime?
+  isDemo                       Boolean                    @default(false)
+  spiritualStage               SpiritualStage?
+  devoteeVerificationStatus    DevoteeVerificationStatus?
+  lastSelfIdentificationAt     DateTime?
   // Последняя активность; наружу отдаётся огрублённой (UnionActivityLevel)
-  lastSeenAt                DateTime?
+  lastSeenAt                   DateTime?
   // Администрация сверила публичные фото с живым человеком
-  photoVerifiedAt           DateTime?
+  photoVerifiedAt              DateTime?
   photoVerificationRequestedAt DateTime?
   // Подписка: пробный период считается от trialEndsAt (бэкфилл createdAt + 30 дней),
   // платный доступ — от subscriptionPaidUntil, который проставляет администратор.
-  trialEndsAt               DateTime?
-  subscriptionPaidUntil     DateTime?
-  subscriptionNote          String?
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
+  trialEndsAt                  DateTime?
+  subscriptionPaidUntil        DateTime?
+  subscriptionNote             String?
+  createdAt                    DateTime                   @default(now())
+  updatedAt                    DateTime                   @updatedAt
 
-  refreshTokens               RefreshToken[]
-  serviceAccess               ServiceAccess[]
-  loginAudits                 LoginAudit[]
-  pushSubscriptions           PushSubscription[]
-  notificationPreference      NotificationPreference?
-  selfIdentificationResponses SelfIdentificationResponse[]
-  stageHistory                StageHistory[]
-  mentorVerificationRequests  MentorVerificationRequest[]
-  unionProfile                UnionProfile?
-  unionRequestsSent           UnionConnectionRequest[]     @relation("UnionRequestsSent")
-  unionRequestsReceived       UnionConnectionRequest[]     @relation("UnionRequestsReceived")
-  unionBoosts                 UnionBoost[]                 @relation("UnionBoosts")
-  unionSwipesMade             UnionSwipe[]                 @relation("UnionSwipesMade")
-  unionSwipesReceived         UnionSwipe[]                 @relation("UnionSwipesReceived")
-  unionChatMessagesSent       UnionChatMessage[]           @relation("UnionChatMessagesSent")
-  unionMessageReactions       UnionMessageReaction[]       @relation("UnionMessageReactionsMade")
-  photos                      UserPhoto[]
-  blocksMade                  UserBlock[]                  @relation("UserBlocksMade")
-  blocksReceived              UserBlock[]                  @relation("UserBlocksReceived")
-  reportsMade                 UserReport[]                 @relation("UserReportsMade")
-  reportsReceived             UserReport[]                 @relation("UserReportsReceived")
-  reportsReviewed             UserReport[]                 @relation("UserReportsReviewed")
-  gitabaseReadingProgress     GitabaseReadingProgress[]
-  gitabaseBookmarks           GitabaseBookmark[]
-  gitabaseAnnotations         GitabaseAnnotation[]
-  gitabaseSyncMutations       GitabaseSyncMutation[]
-  motivationPreference        MotivationPreference?
-  motivationFavorites         MotivationFavorite[]
-  motivationViews             MotivationView[]
-  motivationModerationAudits  MotivationModerationAudit[]
-  motivationAuthorWatches     MotivationAuthorWatch[]
-  motivationSourceWatches     MotivationSourceWatch[]
-  supportTickets              SupportTicket[]              @relation("SupportTicketsOwned")
-  supportTicketsAssigned      SupportTicket[]              @relation("SupportTicketsAssigned")
-  supportTicketMessages       SupportTicketMessage[]       @relation("SupportTicketMessagesAuthored")
-  libraryCategories           LibraryCategory[]            @relation("LibraryCategoryAuthor")
-  libraryEntries              LibraryEntry[]               @relation("LibraryEntryAuthor")
-  libraryPreference           LibraryPreference?
+  refreshTokens                      RefreshToken[]
+  serviceAccess                      ServiceAccess[]
+  loginAudits                        LoginAudit[]
+  pushSubscriptions                  PushSubscription[]
+  astroBirthData                     AstroBirthData?
+  astroUsage                         AstroUsage[]
+  astroCompatibilityRequestsSent     AstroCompatibilityRequest[]  @relation("AstroCompatibilityRequester")
+  astroCompatibilityRequestsReceived AstroCompatibilityRequest[]  @relation("AstroCompatibilityTarget")
+  notificationPreference             NotificationPreference?
+  selfIdentificationResponses        SelfIdentificationResponse[]
+  stageHistory                       StageHistory[]
+  mentorVerificationRequests         MentorVerificationRequest[]
+  unionProfile                       UnionProfile?
+  unionRequestsSent                  UnionConnectionRequest[]     @relation("UnionRequestsSent")
+  unionRequestsReceived              UnionConnectionRequest[]     @relation("UnionRequestsReceived")
+  unionBoosts                        UnionBoost[]                 @relation("UnionBoosts")
+  unionSwipesMade                    UnionSwipe[]                 @relation("UnionSwipesMade")
+  unionSwipesReceived                UnionSwipe[]                 @relation("UnionSwipesReceived")
+  unionChatMessagesSent              UnionChatMessage[]           @relation("UnionChatMessagesSent")
+  unionMessageReactions              UnionMessageReaction[]       @relation("UnionMessageReactionsMade")
+  photos                             UserPhoto[]
+  blocksMade                         UserBlock[]                  @relation("UserBlocksMade")
+  blocksReceived                     UserBlock[]                  @relation("UserBlocksReceived")
+  reportsMade                        UserReport[]                 @relation("UserReportsMade")
+  reportsReceived                    UserReport[]                 @relation("UserReportsReceived")
+  reportsReviewed                    UserReport[]                 @relation("UserReportsReviewed")
+  gitabaseReadingProgress            GitabaseReadingProgress[]
+  gitabaseBookmarks                  GitabaseBookmark[]
+  gitabaseAnnotations                GitabaseAnnotation[]
+  gitabaseSyncMutations              GitabaseSyncMutation[]
+  motivationPreference               MotivationPreference?
+  motivationFavorites                MotivationFavorite[]
+  motivationViews                    MotivationView[]
+  motivationModerationAudits         MotivationModerationAudit[]
+  motivationAuthorWatches            MotivationAuthorWatch[]
+  motivationSourceWatches            MotivationSourceWatch[]
+  supportTickets                     SupportTicket[]              @relation("SupportTicketsOwned")
+  supportTicketsAssigned             SupportTicket[]              @relation("SupportTicketsAssigned")
+  supportTicketMessages              SupportTicketMessage[]       @relation("SupportTicketMessagesAuthored")
+  libraryCategories                  LibraryCategory[]            @relation("LibraryCategoryAuthor")
+  libraryEntries                     LibraryEntry[]               @relation("LibraryEntryAuthor")
+  libraryPreference                  LibraryPreference?
 }
 
 // Единственная строка глобальных настроек платформы (id всегда "global").
@@ -305,7 +309,7 @@ model MotivationPost {
   audienceTrack        MotivationAudienceTrack
   slug                 String                    @unique
   category             String
-  quoteId              String?                    @unique
+  quoteId              String?                   @unique
   quote                MotivationQuote?          @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   status               MotivationPostStatus      @default(draft)
   reviewStatus         MotivationReviewStatus    @default(discovered)
@@ -783,42 +787,42 @@ enum UnionIncomeLevel {
 }
 
 model UnionProfile {
-  id              String      @id @default(uuid())
-  userId          String      @unique
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  about           String?
+  id                       String                     @id @default(uuid())
+  userId                   String                     @unique
+  user                     User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  about                    String?
   /// Короткая строка-статус поверх анкеты
-  status          String?
-  relocationReady Boolean     @default(false)
-  format          UnionFormat @default(any)
-  languages       String[]    @default([])
-  skills          String[]    @default([])
-  interests       String[]    @default([])
-  values          String[]    @default([])
-  familyStatus    String?
+  status                   String?
+  relocationReady          Boolean                    @default(false)
+  format                   UnionFormat                @default(any)
+  languages                String[]                   @default([])
+  skills                   String[]                   @default([])
+  interests                String[]                   @default([])
+  values                   String[]                   @default([])
+  familyStatus             String?
   // Блок «О себе»: все поля опциональны
-  heightCm             Int?
-  diet                 UnionDiet?
-  regulativePrinciples UnionRegulativePrinciple[] @default([])
-  childrenStatus       UnionChildrenStatus?
-  education            UnionEducationLevel?
-  spiritualEducation   UnionSpiritualEducation?
-  housing              UnionHousing?
-  income               UnionIncomeLevel?
-  pets                 String[]                   @default([])
+  heightCm                 Int?
+  diet                     UnionDiet?
+  regulativePrinciples     UnionRegulativePrinciple[] @default([])
+  childrenStatus           UnionChildrenStatus?
+  education                UnionEducationLevel?
+  spiritualEducation       UnionSpiritualEducation?
+  housing                  UnionHousing?
+  income                   UnionIncomeLevel?
+  pets                     String[]                   @default([])
   // Желаемый возраст партнёра; используется как фильтр рекомендаций
-  ageRangeMin          Int?
-  ageRangeMax          Int?
+  ageRangeMin              Int?
+  ageRangeMax              Int?
   // { photo, age, city, contacts: 'everyone' | 'after_match' | 'hidden' }
-  privacy         Json?
+  privacy                  Json?
   // скрыть из рекомендаций без удаления профиля
-  isActive        Boolean     @default(true)
+  isActive                 Boolean                    @default(true)
   // принимать запросы на знакомство только от подтверждённых преданных
-  requestsFromVerifiedOnly Boolean @default(false)
+  requestsFromVerifiedOnly Boolean                    @default(false)
   /// Кто может начать общение: заявки от всех или только взаимные лайки
-  contactMode     UnionContactMode @default(requests)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  contactMode              UnionContactMode           @default(requests)
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
 
   intentions UnionIntention[]
 }
@@ -839,11 +843,11 @@ enum UnionSwipeDecision {
 
 /// Буст «Внимание»: пока не истёк, анкета идёт первой в чужих рекомендациях.
 model UnionBoost {
-  id         String   @id @default(uuid())
-  userId     String
-  user       User     @relation("UnionBoosts", fields: [userId], references: [id], onDelete: Cascade)
-  startedAt  DateTime @default(now())
-  expiresAt  DateTime
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation("UnionBoosts", fields: [userId], references: [id], onDelete: Cascade)
+  startedAt DateTime @default(now())
+  expiresAt DateTime
 
   @@index([userId, expiresAt])
   @@index([expiresAt])
@@ -925,18 +929,18 @@ model UserBlock {
 }
 
 model UserReport {
-  id           String           @id @default(uuid())
-  reporterId   String
-  reporter     User             @relation("UserReportsMade", fields: [reporterId], references: [id], onDelete: Cascade)
-  targetId     String
-  target       User             @relation("UserReportsReceived", fields: [targetId], references: [id], onDelete: Cascade)
-  reason       UserReportReason
-  comment      String?
-  status       UserReportStatus @default(open)
-  createdAt    DateTime         @default(now())
-  reviewedAt   DateTime?
-  reviewedById String?
-  reviewedBy   User?            @relation("UserReportsReviewed", fields: [reviewedById], references: [id], onDelete: SetNull)
+  id            String           @id @default(uuid())
+  reporterId    String
+  reporter      User             @relation("UserReportsMade", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetId      String
+  target        User             @relation("UserReportsReceived", fields: [targetId], references: [id], onDelete: Cascade)
+  reason        UserReportReason
+  comment       String?
+  status        UserReportStatus @default(open)
+  createdAt     DateTime         @default(now())
+  reviewedAt    DateTime?
+  reviewedById  String?
+  reviewedBy    User?            @relation("UserReportsReviewed", fields: [reviewedById], references: [id], onDelete: SetNull)
   moderatorNote String?
 
   @@index([status, createdAt])
@@ -1106,13 +1110,13 @@ model LibraryCategory {
 }
 
 model LibraryEntry {
-  id               String                  @id @default(uuid())
+  id               String                   @id @default(uuid())
   url              String
-  urlNormalized    String                  @unique
+  urlNormalized    String                   @unique
   canonicalUrl     String?
   domain           String
   type             LibraryEntryType
-  contentLanguage  String                  @default("ru") @db.VarChar(8)
+  contentLanguage  String                   @default("ru") @db.VarChar(8)
   titleRu          String?
   titleEn          String?
   descriptionRu    String?
@@ -1123,26 +1127,26 @@ model LibraryEntry {
   faviconUrl       String?
   previewKey       String?
   previewUrl       String?
-  enrichmentStatus LibraryEnrichmentStatus @default(pending)
+  enrichmentStatus LibraryEnrichmentStatus  @default(pending)
   enrichmentError  String?
   enrichedAt       DateTime?
   httpStatus       Int?
   lastCheckedAt    DateTime?
   addedById        String?
-  addedBy          User?                   @relation("LibraryEntryAuthor", fields: [addedById], references: [id], onDelete: SetNull)
-  status           LibraryEntryStatus      @default(published)
-  needsReview      Boolean                 @default(false)
-  usefulCount      Int                     @default(0)
-  notUsefulCount   Int                     @default(0)
-  uniqueClickCount Int                     @default(0)
-  bookmarkCount    Int                     @default(0)
-  openReportsCount Int                     @default(0)
-  rankScore        Float                   @default(0)
+  addedBy          User?                    @relation("LibraryEntryAuthor", fields: [addedById], references: [id], onDelete: SetNull)
+  status           LibraryEntryStatus       @default(published)
+  needsReview      Boolean                  @default(false)
+  usefulCount      Int                      @default(0)
+  notUsefulCount   Int                      @default(0)
+  uniqueClickCount Int                      @default(0)
+  bookmarkCount    Int                      @default(0)
+  openReportsCount Int                      @default(0)
+  rankScore        Float                    @default(0)
   /// Generated column, создаётся SQL-миграцией. Prisma её не пишет.
   searchVector     Unsupported("tsvector")?
-  publishedAt      DateTime                @default(now())
-  createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
+  publishedAt      DateTime                 @default(now())
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
 
   categories LibraryEntryCategory[]
 
@@ -1202,4 +1206,152 @@ model NotificationPreference {
   connections Boolean  @default(true)
   support     Boolean  @default(true)
   updatedAt   DateTime @updatedAt
+}
+
+// ===== Astro service =====
+
+/// Насколько точно известно время рождения. `unknown` — карта считается на полдень,
+/// а лагна и дома не показываются: асцендент по выдуманному времени хуже, чем его
+/// отсутствие.
+enum AstroTimeAccuracy {
+  exact
+  approximate
+  unknown
+}
+
+/// Данные рождения. Отдельно от `User`: у портала есть только дата, а карте нужны
+/// ещё время, место и часовой пояс.
+model AstroBirthData {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Момент рождения в UTC — единственный источник истины для расчёта карты.
+  bornAtUtc      DateTime
+  /// Дата и время так, как их ввёл человек, по месту рождения. Хранятся отдельно,
+  /// чтобы показать их обратно без обратного пересчёта и чтобы правка часового
+  /// пояса не требовала догадываться, что было введено изначально.
+  birthDateLocal DateTime          @db.Date
+  birthTimeLocal String?
+  timeAccuracy   AstroTimeAccuracy @default(exact)
+
+  placeLabel String
+  latitude   Float
+  longitude  Float
+  /// Идентификатор зоны IANA. Определяется по координатам, но может быть
+  /// переопределён вручную для приграничных мест.
+  timezone   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Раздел ИИ-разбора карты.
+enum AstroSection {
+  overview
+  lagna
+  moon_nakshatra
+  dasha_current
+  career
+  relationships
+  strengths
+  practice
+}
+
+/// Интерпретация раздела. Ключуется отпечатком карты, а не пользователем: карта
+/// детерминирована, поэтому таблицу самих карт держать не нужно, а текст про
+/// одинаковые карты одинаков (у близнецов кэш общий — это верно по существу).
+/// Версия промпта входит в ключ: правка промпта инвалидирует кэш без миграций.
+model AstroReading {
+  id               String       @id @default(uuid())
+  chartFingerprint String
+  section          AstroSection
+  locale           String
+  promptVersion    String
+  text             String
+  model            String
+  tokensIn         Int
+  tokensOut        Int
+  createdAt        DateTime     @default(now())
+
+  @@unique([chartFingerprint, section, locale, promptVersion])
+}
+
+/// Расход пользователя за сутки. Ключ по дню — сброс квоты не требует джоба.
+model AstroUsage {
+  userId    String
+  day       DateTime @db.Date
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readings  Int      @default(0)
+  tokensIn  Int      @default(0)
+  tokensOut Int      @default(0)
+
+  @@id([userId, day])
+}
+
+/// Расход всего сервиса за сутки. `haltedAt` не null — сработал kill-switch.
+model AstroBudgetDay {
+  day          DateTime  @id @db.Date
+  tokensIn     Int       @default(0)
+  tokensOut    Int       @default(0)
+  costUsdCents Int       @default(0)
+  haltedAt     DateTime?
+}
+
+/// Единственная строка настроек сервиса (id всегда "global"). Правится из админки,
+/// чтобы менять лимиты без передеплоя.
+model AstroSettings {
+  id                     String   @id @default("global")
+  enabled                Boolean  @default(true)
+  /// Аварийный выключатель ИИ: карта считается и показывается, тексты — только из кэша.
+  aiEnabled              Boolean  @default(true)
+  dailyReadingsPerUser   Int      @default(3)
+  dailyTokensPerUser     Int      @default(20000)
+  dailyTokenBudget       Int      @default(2000000)
+  dailyCostLimitUsdCents Int      @default(1000)
+  transitPushEnabled     Boolean  @default(true)
+  updatedAt              DateTime @updatedAt
+}
+
+/// Статус запроса на сопоставление карт. Согласие — свой процесс внутри astro,
+/// не зависящий от статуса анкет в Union: инициатор может быть кем угодно из
+/// пользователей портала, а не только участником взаимного мэтча.
+enum AstroCompatibilityStatus {
+  pending
+  accepted
+  declined
+}
+
+/// Запрос на сопоставление карт двух пользователей. Обе карты закрыты, пока
+/// получатель не примет запрос явно — точка входа из Union передаёт только id
+/// человека, дальнейшее согласие целиком в astro.
+model AstroCompatibilityRequest {
+  id          String                   @id @default(uuid())
+  requesterId String
+  requester   User                     @relation("AstroCompatibilityRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  targetId    String
+  target      User                     @relation("AstroCompatibilityTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  status      AstroCompatibilityStatus @default(pending)
+  createdAt   DateTime                 @default(now())
+  respondedAt DateTime?
+
+  @@unique([requesterId, targetId])
+  @@index([targetId, status])
+}
+
+/// ИИ-разбор сопоставления. Ключ — отсортированная пара отпечатков карт, поэтому
+/// не важно, кто из двоих инициатор: разбор одной и той же пары карт один.
+model AstroCompatibilityReading {
+  id            String   @id @default(uuid())
+  /// `${меньший отпечаток}:${больший отпечаток}` — сортировка убирает направление.
+  pairKey       String
+  locale        String
+  promptVersion String
+  text          String
+  model         String
+  tokensIn      Int
+  tokensOut     Int
+  createdAt     DateTime @default(now())
+
+  @@unique([pairKey, locale, promptVersion])
 }

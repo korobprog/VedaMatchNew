@@ -16,6 +16,7 @@ import { SupportModule } from './modules/support/support.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { LibraryModule } from './modules/library/library.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AstroModule } from './modules/astro/astro.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     BillingModule,
     LibraryModule,
     NotificationsModule,
+    AstroModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
