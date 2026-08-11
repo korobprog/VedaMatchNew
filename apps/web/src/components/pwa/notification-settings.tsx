@@ -10,14 +10,12 @@ import {
   currentSubscription,
   detectPushSupport,
   getPushSupportServerSnapshot,
-  notifyPushSupportChanged,
   subscribePushSupport,
-  subscribeToPush,
   toSubscriptionRequest,
 } from "@/lib/pwa/push-subscription";
+import { enablePush } from "@/lib/pwa/enable-push";
 import {
   fetchPreferences,
-  fetchVapidKey,
   saveSubscription,
   savePreferences,
 } from "@/lib/notifications-api";
@@ -40,6 +38,7 @@ export function NotificationSettings() {
   const [preferences, setPreferences] =
     useState<NotificationPreferencesDto | null>(null);
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     if (support !== "granted") return;
@@ -72,14 +71,9 @@ export function NotificationSettings() {
 
   const enable = useCallback(async () => {
     setBusy(true);
+    setFailed(false);
     try {
-      // Спросить можно только по жесту пользователя и только один раз.
-      const permission = await Notification.requestPermission();
-      notifyPushSupportChanged();
-      if (permission !== "granted") return;
-      const key = await fetchVapidKey();
-      const subscription = await subscribeToPush(key);
-      await saveSubscription(toSubscriptionRequest(subscription));
+      setFailed((await enablePush()) === "failed");
     } finally {
       setBusy(false);
     }
@@ -113,6 +107,12 @@ export function NotificationSettings() {
         <p className="mt-3 text-sm text-text-1">
           Вы запретили уведомления для сайта. Вернуть разрешение можно только в
           настройках браузера — из приложения спросить повторно нельзя.
+        </p>
+      )}
+
+      {failed && (
+        <p className="mt-3 text-sm text-magenta">
+          Не удалось включить уведомления. Попробуйте ещё раз позже.
         </p>
       )}
 

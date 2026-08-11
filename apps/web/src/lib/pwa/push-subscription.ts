@@ -72,8 +72,24 @@ export async function subscribeToPush(
   vapidPublicKey: string,
 ): Promise<PushSubscription> {
   const registration = await navigator.serviceWorker.ready;
+  const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
+  // Пока жива подписка с другим ключом сервера, subscribe() бросает
+  // InvalidStateError. Так бывает после ротации VAPID — снимаем старую.
+  const existing = await registration.pushManager.getSubscription();
+  if (existing && !usesKey(existing, applicationServerKey)) {
+    await existing.unsubscribe();
+  }
   return registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+    applicationServerKey,
   });
+}
+
+function usesKey(subscription: PushSubscription, key: Uint8Array): boolean {
+  const current = subscription.options?.applicationServerKey;
+  if (!current) return false;
+  const bytes = new Uint8Array(current as ArrayBuffer);
+  return (
+    bytes.length === key.length && bytes.every((byte, i) => byte === key[i])
+  );
 }

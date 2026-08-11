@@ -23,6 +23,9 @@ export async function fetchVapidKey(): Promise<string> {
   const { publicKey } = await request<VapidKeyResponse>(
     "/notifications/vapid-key",
   );
+  // Пустой ключ отдаёт API без VAPID в окружении. Молча продолжать нельзя:
+  // subscribe() с пустым ключом падает невнятной ошибкой браузера.
+  if (!publicKey) throw new Error("VAPID public key is not configured");
   return publicKey;
 }
 
