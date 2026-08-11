@@ -52,7 +52,10 @@ export default async function UnionRecommendationsPage({
         </div>
         <UnionNav incomingPending={counts?.incomingPending ?? 0} />
 
-        <RecommendationFilters params={params} />
+        <RecommendationFilters
+          params={params}
+          intentionCounts={recommendations.intentionCounts}
+        />
 
         <HistoryResetBanner restoredCount={first(params.historyReset)} />
 

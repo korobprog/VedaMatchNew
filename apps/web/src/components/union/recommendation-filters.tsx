@@ -5,13 +5,16 @@ import type {
   GeoSearchResult,
   SpiritualStage,
   UnionFormat,
+  UnionIntentionCounts,
+  UnionIntentionType,
 } from "@vedamatch/shared";
 import {
   unionChildrenStatusLabels,
   unionDietLabels,
   unionLanguageOptions,
 } from "./dictionaries";
-import { intentionLabels, intentionTypes } from "./labels";
+import { IntentionChips } from "./intention-chips";
+import { intentionTypes } from "./labels";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -50,8 +53,10 @@ const labelClass = "mb-1 block text-xs font-medium uppercase tracking-wide text-
 
 export function RecommendationFilters({
   params,
+  intentionCounts,
 }: {
   params: Record<string, string | string[] | undefined>;
+  intentionCounts?: UnionIntentionCounts;
 }) {
   const initialCity = first(params.city) ?? "";
   const initialCountry = first(params.country) ?? "";
@@ -182,18 +187,13 @@ export function RecommendationFilters({
       </button>
 
       <div className={expanded ? "mt-3 lg:mt-0" : "hidden lg:block"}>
-      <div className="grid gap-3 md:grid-cols-3">
-        <Select
-          name="intention"
-          label="Цель"
-          defaultValue={first(params.intention)}
-          options={[
-            ["", "Любая"],
-            ...intentionTypes.map(
-              (type): [string, string] => [type, intentionLabels[type]],
-            ),
-          ]}
+      {intentionCounts && (
+        <IntentionChips
+          counts={intentionCounts}
+          selected={selectedIntentions(params)}
         />
+      )}
+      <div className="grid gap-3 md:grid-cols-3">
         <Select
           name="stage"
           label="Этап"
@@ -463,6 +463,8 @@ function Select({
 }
 
 const filterKeys = [
+  "intentions",
+  // Старая ссылка с `intention=` тоже должна зажигать бейдж на мобильном.
   "intention",
   "stage",
   "gender",
@@ -488,6 +490,15 @@ function countActiveFilters(
 
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+/** Старая ссылка с `intention=` продолжает открываться выбранным чипом. */
+function selectedIntentions(
+  params: Record<string, string | string[] | undefined>,
+): UnionIntentionType[] {
+  const raw = params.intentions ?? params.intention;
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return intentionTypes.filter((type) => list.includes(type));
 }
 
 function locationDetails(item: GeoSearchResult): string {
