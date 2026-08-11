@@ -90,11 +90,13 @@ type Draft = Omit<
   | "isActive"
   | "requestsFromVerifiedOnly"
   | "contactMode"
+  | "disableFamilyGenderFilter"
 > & {
   privacy: UnionPrivacySettings;
   isActive: boolean;
   requestsFromVerifiedOnly: boolean;
   contactMode: UnionContactMode;
+  disableFamilyGenderFilter: boolean;
 };
 
 function toDraft(profile: UnionProfileDto | null): Draft {
@@ -123,6 +125,7 @@ function toDraft(profile: UnionProfileDto | null): Draft {
     isActive: profile?.isActive ?? true,
     requestsFromVerifiedOnly: profile?.requestsFromVerifiedOnly ?? false,
     contactMode: profile?.contactMode ?? "requests",
+    disableFamilyGenderFilter: profile?.disableFamilyGenderFilter ?? false,
   };
 }
 
@@ -655,6 +658,23 @@ export function UnionProfileForm({
           Остальные увидят ваш профиль в поиске, но отправить запрос на
           знакомство смогут только те, чей статус преданного подтвердила
           администрация.
+        </p>
+
+        <label className="mt-3 flex items-center gap-2 text-sm text-text-1">
+          <input
+            type="checkbox"
+            checked={draft.disableFamilyGenderFilter}
+            onChange={(event) =>
+              update("disableFamilyGenderFilter", event.target.checked)
+            }
+            className="h-4 w-4 accent-magenta"
+          />
+          Показывать анкеты всех полов
+        </label>
+        <p className="mt-1 pl-6 text-xs text-text-2">
+          Если цель «Создание семьи» указана на 50% и больше, лента по
+          умолчанию сужается до противоположного пола. Включите, чтобы видеть
+          и быть видимым(ой) всем, независимо от пола.
         </p>
 
         <div className="mt-4">

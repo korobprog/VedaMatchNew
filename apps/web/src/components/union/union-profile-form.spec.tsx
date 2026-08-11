@@ -47,6 +47,7 @@ const profile: UnionProfileDto = {
   isActive: true,
   requestsFromVerifiedOnly: false,
   contactMode: "requests",
+  disableFamilyGenderFilter: false,
   intentions: [{ type: "family", weight: 100 }],
   createdAt: "2026-08-05T00:00:00.000Z",
   updatedAt: "2026-08-05T00:00:00.000Z",
@@ -105,6 +106,20 @@ describe("UnionProfileForm", () => {
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(bodyOf(0).isActive).toBe(false);
+  });
+
+  it("сохраняет отключение фильтра по полу", async () => {
+    const user = userEvent.setup();
+    render(<UnionProfileForm profile={profile} completeness={completeness} />);
+
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: "Показывать анкеты всех полов",
+      }),
+    );
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(bodyOf(0).disableFamilyGenderFilter).toBe(true);
   });
 
   it("обновляет прогресс ответом сервера", async () => {
