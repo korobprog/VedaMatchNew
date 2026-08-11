@@ -2,6 +2,7 @@
 import { cookies } from "next/headers";
 import type {
   LibraryCategoryDto,
+  LibraryCommentsResponse,
   LibraryEntryDto,
   LibraryFeedResponse,
   LibraryPreferencesDto,
@@ -42,6 +43,11 @@ export const getLibraryFeed = (
 
 export const getLibraryEntry = (id: string) =>
   libraryGet<LibraryEntryDto>(`/library/entries/${encodeURIComponent(id)}`);
+
+export const getLibraryComments = (entryId: string) =>
+  libraryGet<LibraryCommentsResponse>(
+    `/library/entries/${encodeURIComponent(entryId)}/comments`,
+  );
 
 export const getLibraryPreferences = () =>
   libraryGet<LibraryPreferencesDto>("/library/me/preferences");

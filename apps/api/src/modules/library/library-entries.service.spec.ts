@@ -19,6 +19,8 @@ function entryRecord(overrides: Record<string, unknown> = {}) {
     status: 'published',
     usefulCount: 0,
     uniqueClickCount: 0,
+    bookmarkCount: 0,
+    commentsCount: 0,
     publishedAt: NOW,
     addedBy: { id: 'user-1', name: 'Тест' },
     categories: [],
@@ -58,6 +60,21 @@ function prismaMock(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function bookmarksMock() {
+  return {
+    markedAmong: jest.fn().mockResolvedValue(new Set<string>()),
+    entryIds: jest.fn().mockResolvedValue([]),
+  };
+}
+
+function previewsMock() {
+  return {
+    configured: true,
+    capture: jest.fn().mockResolvedValue(undefined),
+    captureInBackground: jest.fn(),
+  };
+}
+
 function validBody(overrides: Record<string, unknown> = {}) {
   return {
     url: 'https://example.com/a',
@@ -72,7 +89,11 @@ function validBody(overrides: Record<string, unknown> = {}) {
 describe('LibraryEntriesService.create', () => {
   it('rejects an overlong url before database access', async () => {
     const prisma = prismaMock();
-    const service = new LibraryEntriesService(prisma as never);
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
 
     await expect(
       service.create(
@@ -84,7 +105,11 @@ describe('LibraryEntriesService.create', () => {
   });
 
   it('rejects an unsupported url', async () => {
-    const service = new LibraryEntriesService(prismaMock() as never);
+    const service = new LibraryEntriesService(
+      prismaMock() as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
 
     await expect(
       service.create('user-1', validBody({ url: 'ftp://example.com' })),
@@ -92,7 +117,11 @@ describe('LibraryEntriesService.create', () => {
   });
 
   it('requires at least one title', async () => {
-    const service = new LibraryEntriesService(prismaMock() as never);
+    const service = new LibraryEntriesService(
+      prismaMock() as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
 
     await expect(
       service.create('user-1', validBody({ titleRu: null, titleEn: null })),
@@ -100,7 +129,11 @@ describe('LibraryEntriesService.create', () => {
   });
 
   it('requires at least one category', async () => {
-    const service = new LibraryEntriesService(prismaMock() as never);
+    const service = new LibraryEntriesService(
+      prismaMock() as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
 
     await expect(
       service.create('user-1', validBody({ categoryIds: [] })),
@@ -112,7 +145,11 @@ describe('LibraryEntriesService.create', () => {
     prisma.libraryEntry.findUnique = jest
       .fn()
       .mockResolvedValue(entryRecord({ id: 'existing' }));
-    const service = new LibraryEntriesService(prisma as never);
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
 
     await expect(
       service.create(
@@ -130,7 +167,11 @@ describe('LibraryEntriesService.create', () => {
 
   it('stores the normalized url and domain', async () => {
     const prisma = prismaMock();
-    const service = new LibraryEntriesService(prisma as never);
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
 
     await service.create(
       'user-1',
@@ -150,7 +191,11 @@ describe('LibraryEntriesService.create', () => {
 
   it('stores a youtube cover taken from the link itself', async () => {
     const prisma = prismaMock();
-    const service = new LibraryEntriesService(prisma as never);
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
 
     await service.create(
       'user-1',
@@ -168,10 +213,51 @@ describe('LibraryEntriesService.create', () => {
     );
   });
 
+  it('hands the cover over to S3 after the entry is stored', async () => {
+    const prisma = prismaMock();
+    const previews = previewsMock();
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previews as never,
+      bookmarksMock() as never,
+    );
+
+    await service.create(
+      'user-1',
+      validBody({
+        url: 'https://www.youtube.com/watch?v=OXDrvBwIHLg',
+        type: 'video' as const,
+      }),
+    );
+
+    expect(previews.captureInBackground).toHaveBeenCalledWith(
+      'entry-1',
+      'https://www.youtube.com/watch?v=OXDrvBwIHLg',
+      'https://i.ytimg.com/vi/OXDrvBwIHLg/hqdefault.jpg',
+    );
+  });
+
+  it('leaves S3 alone when the link has no cover', async () => {
+    const previews = previewsMock();
+    const service = new LibraryEntriesService(
+      prismaMock() as never,
+      previews as never,
+      bookmarksMock() as never,
+    );
+
+    await service.create('user-1', validBody());
+
+    expect(previews.captureInBackground).not.toHaveBeenCalled();
+  });
+
   it('rejects category ids that do not exist', async () => {
     const prisma = prismaMock();
     prisma.libraryCategory.findMany = jest.fn().mockResolvedValue([]);
-    const service = new LibraryEntriesService(prisma as never);
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
 
     await expect(service.create('user-1', validBody())).rejects.toBeInstanceOf(
       BadRequestException,
@@ -182,7 +268,11 @@ describe('LibraryEntriesService.create', () => {
 describe('LibraryEntriesService.feed', () => {
   it('filters published entries by type and language', async () => {
     const prisma = prismaMock();
-    const service = new LibraryEntriesService(prisma as never);
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
 
     await service.feed({ type: 'video', language: 'en' });
 
@@ -207,7 +297,11 @@ describe('LibraryEntriesService.feed', () => {
           entryRecord({ id: `entry-${index}` }),
         ),
       );
-    const service = new LibraryEntriesService(prisma as never);
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
 
     const result = await service.feed({});
 
@@ -217,7 +311,11 @@ describe('LibraryEntriesService.feed', () => {
 
   it('ignores a broken cursor instead of failing', async () => {
     const prisma = prismaMock();
-    const service = new LibraryEntriesService(prisma as never);
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
 
     const result = await service.feed({ cursor: 'garbage' });
 

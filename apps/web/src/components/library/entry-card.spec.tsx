@@ -18,6 +18,9 @@ const entry: LibraryEntryDto = {
   status: "published",
   usefulCount: 4,
   uniqueClickCount: 11,
+  bookmarkCount: 2,
+  commentsCount: 3,
+  bookmarked: false,
   publishedAt: "2026-07-29T10:00:00.000Z",
   categories: [
     {
@@ -45,6 +48,38 @@ describe("EntryCard", () => {
 
     expect(screen.getByText("Лекция по Гите")).toBeDefined();
     expect(screen.getByText("Video")).toBeDefined();
+  });
+
+  it("sends a video cover to our own player page", () => {
+    render(
+      <EntryCard
+        entry={{
+          ...entry,
+          url: "https://www.youtube.com/watch?v=OXDrvBwIHLg",
+          previewUrl: "https://cdn.vedamatch.ru/library/previews/entry-1.webp",
+        }}
+        locale="ru"
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Смотреть здесь" }).getAttribute("href"),
+    ).toBe("/library/entry/entry-1");
+  });
+
+  it("keeps a non-video cover pointing at the source", () => {
+    render(
+      <EntryCard
+        entry={{
+          ...entry,
+          previewUrl: "https://cdn.vedamatch.ru/library/previews/entry-1.webp",
+        }}
+        locale="ru"
+      />,
+    );
+
+    const cover = screen.getByAltText("Обложка материала").closest("a");
+    expect(cover?.getAttribute("href")).toBe("https://example.com/a");
   });
 
   it("opens the external url in a new tab", () => {

@@ -19,6 +19,8 @@ import {
   feedOrderBy,
   resolveSort,
 } from './library-feed-query';
+import { LibraryBookmarksService } from './library-bookmarks.service';
+import { LibraryPreviewsService } from './library-previews.service';
 import { resolvePreviewUrl } from './preview-url';
 import { normalizeUrl } from './url-normalize';
 
@@ -47,6 +49,8 @@ export interface LibraryFeedFilters {
   sort?: string;
   q?: string;
   cursor?: string;
+  /** `'true'` — только избранное текущего пользователя. */
+  bookmarked?: string;
 }
 
 const ENTRY_SELECT = {
@@ -64,6 +68,8 @@ const ENTRY_SELECT = {
   status: true,
   usefulCount: true,
   uniqueClickCount: true,
+  bookmarkCount: true,
+  commentsCount: true,
   publishedAt: true,
   addedBy: { select: { id: true, name: true } },
   categories: {
@@ -83,7 +89,11 @@ const ENTRY_SELECT = {
 
 @Injectable()
 export class LibraryEntriesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly previews: LibraryPreviewsService,
+    private readonly bookmarks: LibraryBookmarksService,
+  ) {}
 
   async create(
     userId: string,
@@ -183,10 +193,19 @@ export class LibraryEntriesService {
       return entry;
     });
 
+    // Копию обложки кладём в S3 уже после ответа: пользователю незачем ждать
+    // скачивание и сжатие картинки, а ссылка на источник у записи уже есть.
+    if (previewUrl) {
+      this.previews.captureInBackground(created.id, normalized.url, previewUrl);
+    }
+
     return toEntryDto(created);
   }
 
-  async feed(filters: LibraryFeedFilters): Promise<LibraryFeedResponse> {
+  async feed(
+    filters: LibraryFeedFilters,
+    viewerId?: string,
+  ): Promise<LibraryFeedResponse> {
     const sort = resolveSort(filters.sort);
     const cursor = decodeCursor(filters.cursor);
     const where: Prisma.LibraryEntryWhereInput = { status: 'published' };
@@ -214,12 +233,19 @@ export class LibraryEntriesService {
       ];
     }
 
+    // Избранное и поиск оба ограничивают набор id, поэтому пересекаем их,
+    // а не перетираем: иначе поиск по избранному нашёл бы всю библиотеку.
+    const bookmarkIds =
+      filters.bookmarked === 'true' && viewerId
+        ? await this.bookmarks.entryIds(viewerId)
+        : null;
     const searchIds = await this.searchIds(filters.q);
-    if (searchIds) {
-      if (searchIds.length === 0) {
+    const idFilter = intersectIds(bookmarkIds, searchIds);
+    if (idFilter) {
+      if (idFilter.length === 0) {
         return { items: [], nextCursor: null, total: 0 };
       }
-      where.id = { in: searchIds };
+      where.id = { in: idFilter };
     }
 
     const [rows, total] = await Promise.all([
@@ -236,8 +262,15 @@ export class LibraryEntriesService {
     const page = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
     const last = page.at(-1);
 
+    const marked = viewerId
+      ? await this.bookmarks.markedAmong(
+          viewerId,
+          page.map((row) => row.id),
+        )
+      : new Set<string>();
+
     return {
-      items: page.map(toEntryDto),
+      items: page.map((row) => toEntryDto(row, marked.has(row.id))),
       nextCursor:
         hasMore && last
           ? encodeCursor({ publishedAt: last.publishedAt, id: last.id })
@@ -246,7 +279,7 @@ export class LibraryEntriesService {
     };
   }
 
-  async byId(id: string): Promise<LibraryEntryDto> {
+  async byId(id: string, viewerId?: string): Promise<LibraryEntryDto> {
     const entry = await this.prisma.libraryEntry.findUnique({
       where: { id },
       select: ENTRY_SELECT,
@@ -254,7 +287,10 @@ export class LibraryEntriesService {
     if (!entry || entry.status !== 'published') {
       throw new NotFoundException('entry_not_found');
     }
-    return toEntryDto(entry);
+    const marked = viewerId
+      ? await this.bookmarks.markedAmong(viewerId, [entry.id])
+      : new Set<string>();
+    return toEntryDto(entry, marked.has(entry.id));
   }
 
   /** `null` — поиска нет; массив — найденные id в порядке релевантности. */
@@ -280,6 +316,17 @@ export class LibraryEntriesService {
   }
 }
 
+/** `null` — ограничений по id нет; массив — итоговый набор. */
+function intersectIds(
+  left: string[] | null,
+  right: string[] | null,
+): string[] | null {
+  if (!left) return right;
+  if (!right) return left;
+  const known = new Set(right);
+  return left.filter((id) => known.has(id));
+}
+
 function trimOrNull(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
@@ -292,7 +339,7 @@ function normalizeLanguage(value: string | undefined): string {
 
 type EntryRow = Prisma.LibraryEntryGetPayload<{ select: typeof ENTRY_SELECT }>;
 
-function toEntryDto(entry: EntryRow): LibraryEntryDto {
+function toEntryDto(entry: EntryRow, bookmarked = false): LibraryEntryDto {
   return {
     id: entry.id,
     url: entry.url,
@@ -308,6 +355,9 @@ function toEntryDto(entry: EntryRow): LibraryEntryDto {
     status: entry.status,
     usefulCount: entry.usefulCount,
     uniqueClickCount: entry.uniqueClickCount,
+    bookmarkCount: entry.bookmarkCount,
+    commentsCount: entry.commentsCount,
+    bookmarked,
     publishedAt: entry.publishedAt.toISOString(),
     categories: entry.categories.map((link) => ({
       id: link.category.id,

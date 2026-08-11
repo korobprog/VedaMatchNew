@@ -47,12 +47,20 @@ export default async function LibraryPage({
             </h1>
             <p className="text-text-1">{t(locale, "service.subtitle")}</p>
           </div>
-          <Link
-            href="/library/add"
-            className="rounded-xl bg-glass-brd/40 px-4 py-2 text-sm text-text-0 hover:bg-glass-brd/60"
-          >
-            {t(locale, "nav.add")}
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/library/favorites"
+              className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-2 hover:text-text-0"
+            >
+              {t(locale, "bookmark.title")}
+            </Link>
+            <Link
+              href="/library/add"
+              className="rounded-xl bg-glass-brd/40 px-4 py-2 text-sm text-text-0 hover:bg-glass-brd/60"
+            >
+              {t(locale, "nav.add")}
+            </Link>
+          </div>
         </div>
 
         <div className="mb-4 flex justify-end">

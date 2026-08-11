@@ -7,20 +7,32 @@
  * Файл лежит в src, а не в scripts/, именно чтобы попадать в dist: в рантайм-образ
  * копируется только dist и прод-зависимости, ts-node там нет.
  *
- * Идём порциями и по одной ссылке за раз: Rutube отвечает через oEmbed,
- * и заваливать его параллельными запросами незачем. YouTube сетевых
- * обращений вообще не требует — обложка выводится из адреса.
+ * Берём записи без своей копии в S3 (previewKey пуст) — в том числе те, у
+ * которых уже стоит адрес чужого CDN. Идём порциями и по одной ссылке за раз:
+ * это скачивание и сжатие картинок, распараллеливать их незачем.
  */
+import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
+import { LibraryPreviewsService } from './library-previews.service';
 import { resolvePreviewUrl } from './preview-url';
 
 const BATCH_SIZE = 200;
 
 export async function backfillPreviews(argv: string[] = []) {
   const prisma = new PrismaClient();
+  const previews = new LibraryPreviewsService(
+    prisma as never,
+    new ConfigService(),
+  );
   const dryRun = argv.includes('--dry-run');
   const limitArg = argv.find((arg) => arg.startsWith('--limit='));
   const limit = limitArg ? Number(limitArg.split('=')[1]) : Infinity;
+
+  if (!previews.configured) {
+    console.warn(
+      'S3 не настроен — обложки будут записаны ссылками на источник, без своей копии',
+    );
+  }
 
   let cursor: string | undefined;
   let scanned = 0;
@@ -29,7 +41,7 @@ export async function backfillPreviews(argv: string[] = []) {
   try {
     for (;;) {
       const entries = await prisma.libraryEntry.findMany({
-        where: { previewUrl: null },
+        where: { previewKey: null },
         orderBy: { id: 'asc' },
         take: BATCH_SIZE,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -42,17 +54,20 @@ export async function backfillPreviews(argv: string[] = []) {
         if (scanned >= limit) break;
         scanned += 1;
 
-        const previewUrl = await resolvePreviewUrl(entry.url);
-        if (!previewUrl) continue;
+        const remote = await resolvePreviewUrl(entry.url);
+        if (!remote) continue;
 
         updated += 1;
-        console.log(
-          `${dryRun ? '[dry-run] ' : ''}${entry.url} → ${previewUrl}`,
-        );
+        console.log(`${dryRun ? '[dry-run] ' : ''}${entry.url} → ${remote}`);
         if (dryRun) continue;
+
+        if (previews.configured) {
+          await previews.capture(entry.id, entry.url, remote);
+          continue;
+        }
         await prisma.libraryEntry.update({
           where: { id: entry.id },
-          data: { previewUrl },
+          data: { previewUrl: remote },
         });
       }
 

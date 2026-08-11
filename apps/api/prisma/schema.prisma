@@ -224,6 +224,8 @@ model User {
   libraryCategories                  LibraryCategory[]            @relation("LibraryCategoryAuthor")
   libraryEntries                     LibraryEntry[]               @relation("LibraryEntryAuthor")
   libraryPreference                  LibraryPreference?
+  libraryBookmarks                   LibraryBookmark[]
+  libraryComments                    LibraryComment[]
   astroTransitDigests                AstroTransitDigest[]
 }
 
@@ -1144,6 +1146,7 @@ model LibraryEntry {
   notUsefulCount   Int                      @default(0)
   uniqueClickCount Int                      @default(0)
   bookmarkCount    Int                      @default(0)
+  commentsCount    Int                      @default(0)
   openReportsCount Int                      @default(0)
   rankScore        Float                    @default(0)
   /// Generated column, создаётся SQL-миграцией. Prisma её не пишет.
@@ -1153,6 +1156,8 @@ model LibraryEntry {
   updatedAt        DateTime                 @updatedAt
 
   categories LibraryEntryCategory[]
+  bookmarks  LibraryBookmark[]
+  comments   LibraryComment[]
 
   @@index([status, publishedAt(sort: Desc)])
   @@index([status, rankScore(sort: Desc)])
@@ -1172,6 +1177,43 @@ model LibraryEntryCategory {
 
   @@id([entryId, categoryId])
   @@index([categoryId])
+}
+
+/// Избранное: у пары «пользователь + ссылка» запись одна, счётчик на
+/// LibraryEntry.bookmarkCount держим денормализованным для ленты.
+model LibraryBookmark {
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entryId   String
+  entry     LibraryEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@id([userId, entryId])
+  @@index([entryId])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+enum LibraryCommentStatus {
+  published
+  removed_by_author
+  removed_by_admin
+}
+
+/// Комментарии под ссылкой. Плоские: ветки в библиотеке ссылок избыточны,
+/// а удалённые оставляем строкой со статусом, чтобы не рвать нумерацию.
+model LibraryComment {
+  id        String               @id @default(uuid())
+  entryId   String
+  entry     LibraryEntry         @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  body      String
+  status    LibraryCommentStatus @default(published)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([entryId, createdAt])
+  @@index([userId])
 }
 
 model LibraryPreference {

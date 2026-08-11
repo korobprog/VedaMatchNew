@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ExternalLink, ThumbsUp } from "lucide-react";
+import { Bookmark, ExternalLink, MessageSquare, Play } from "lucide-react";
 import type { LibraryEntryDto, LibraryLocale } from "@vedamatch/shared";
+import { videoEmbedUrl } from "@vedamatch/shared";
 import { entryTypeLabel, pickLocalized, t } from "./i18n";
 
 export function EntryCard({
@@ -18,25 +19,35 @@ export function EntryCard({
     ru: entry.descriptionRu,
     en: entry.descriptionEn,
   });
+  // Видео открываем у себя — там плеер; для остального ведём к источнику.
+  const playable = videoEmbedUrl(entry.url) !== null;
 
   return (
     <article className="glass rounded-2xl border border-glass-brd p-4">
-      {entry.previewUrl && (
-        <a
-          href={entry.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mb-3 block overflow-hidden rounded-xl border border-glass-brd"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element -- обложка приходит с внешнего CDN */}
-          <img
-            src={entry.previewUrl}
-            alt={t(locale, "entry.preview")}
-            loading="lazy"
-            className="aspect-video w-full object-cover"
-          />
-        </a>
-      )}
+      {entry.previewUrl &&
+        (playable ? (
+          <Link
+            href={`/library/entry/${entry.id}`}
+            aria-label={t(locale, "entry.play")}
+            className="relative mb-3 block overflow-hidden rounded-xl border border-glass-brd"
+          >
+            <PreviewImage locale={locale} src={entry.previewUrl} />
+            <span className="absolute inset-0 flex items-center justify-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-bg-0/70 text-text-0">
+                <Play aria-hidden className="ml-0.5 h-5 w-5" />
+              </span>
+            </span>
+          </Link>
+        ) : (
+          <a
+            href={entry.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mb-3 block overflow-hidden rounded-xl border border-glass-brd"
+          >
+            <PreviewImage locale={locale} src={entry.previewUrl} />
+          </a>
+        ))}
 
       <div className="mb-2 flex items-center gap-2 text-xs text-text-2">
         <span>{entry.domain}</span>
@@ -65,8 +76,15 @@ export function EntryCard({
 
       <div className="flex flex-wrap items-center gap-3 text-xs text-text-2">
         <span className="inline-flex items-center gap-1">
-          <ThumbsUp aria-hidden className="h-3.5 w-3.5" />
-          {entry.usefulCount}
+          <Bookmark
+            aria-hidden
+            className={`h-3.5 w-3.5 ${entry.bookmarked ? "fill-current" : ""}`}
+          />
+          {entry.bookmarkCount}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <MessageSquare aria-hidden className="h-3.5 w-3.5" />
+          {entry.commentsCount}
         </span>
         <span>
           {t(locale, "entry.clicks")}: {entry.uniqueClickCount}
@@ -91,5 +109,23 @@ export function EntryCard({
         </Link>
       </div>
     </article>
+  );
+}
+
+function PreviewImage({
+  locale,
+  src,
+}: {
+  locale: LibraryLocale;
+  src: string;
+}) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- обложка лежит в нашем S3
+    <img
+      src={src}
+      alt={t(locale, "entry.preview")}
+      loading="lazy"
+      className="aspect-video w-full object-cover"
+    />
   );
 }

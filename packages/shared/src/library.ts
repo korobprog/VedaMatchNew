@@ -71,6 +71,10 @@ export interface LibraryEntryDto {
   status: LibraryEntryStatus;
   usefulCount: number;
   uniqueClickCount: number;
+  bookmarkCount: number;
+  commentsCount: number;
+  /** `true` — текущий пользователь добавил ссылку в избранное. */
+  bookmarked: boolean;
   publishedAt: string;
   categories: Array<
     Pick<
@@ -113,6 +117,31 @@ export interface CreateLibraryEntryRequest {
   descriptionRu?: string | null;
   descriptionEn?: string | null;
   categoryIds: string[];
+}
+
+export type LibraryCommentStatus =
+  | 'published'
+  | 'removed_by_author'
+  | 'removed_by_admin';
+
+export interface LibraryCommentDto {
+  id: string;
+  entryId: string;
+  body: string;
+  status: LibraryCommentStatus;
+  createdAt: string;
+  author: { id: string; name: string } | null;
+  /** `true` — комментарий можно удалить текущим пользователем. */
+  canDelete: boolean;
+}
+
+export interface LibraryCommentsResponse {
+  items: LibraryCommentDto[];
+  total: number;
+}
+
+export interface CreateLibraryCommentRequest {
+  body: string;
 }
 
 /** Тело ответа `409` при уже существующем URL. */
