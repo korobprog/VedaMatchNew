@@ -576,6 +576,29 @@ describe('UnionProfileService', () => {
     expect(result.items.map((item) => item.user.id)).toEqual(['woman']);
   });
 
+  it('applies the explicit gender filter and the family-intent restriction together', async () => {
+    const me = withIntentions(withGender(profile('me'), 'male'), [
+      { type: 'family', weight: 60 },
+      { type: 'friendship', weight: 40 },
+    ]);
+    const woman = withGender(profile('woman'), 'female');
+    const otherWoman = withGender(profile('woman2'), 'female');
+    prisma.unionProfile.findUnique.mockResolvedValue(me);
+    prisma.unionProfile.findMany.mockResolvedValue([woman, otherWoman]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    // Explicit filter narrows further to a specific candidate; the implicit
+    // family-gender restriction (male -> female) is already satisfied by both.
+    const result = await service.getRecommendations('me', {
+      gender: 'female',
+    });
+
+    expect(result.items.map((item) => item.user.id).sort()).toEqual([
+      'woman',
+      'woman2',
+    ]);
+  });
+
   it('фильтрует по питанию, отсекая профили без указанного значения', async () => {
     const vegan = withDetails(profile('vegan'), { diet: 'vegan' });
     const unknown = profile('unknown');
