@@ -50,12 +50,24 @@ export class NotificationsListener {
       const preferences = await this.notifications.getPreferences(
         event.recipientId,
       );
-      if (!preferences.enabled) return;
-      if (!preferences[content.category]) return;
+      // Молчание — самый частый повод для жалобы «уведомление не пришло», и
+      // раньше его причину из логов было не достать: доставка ничего не писала.
+      if (!preferences.enabled || !preferences[content.category]) {
+        this.logger.log(
+          `${event.name} для ${event.recipientId} пропущено: категория ${content.category} выключена`,
+        );
+        return;
+      }
 
       const subscriptions = await this.notifications.listSubscriptions(
         event.recipientId,
       );
+      if (subscriptions.length === 0) {
+        this.logger.log(
+          `${event.name} для ${event.recipientId} пропущено: нет подписок`,
+        );
+        return;
+      }
       const payload = {
         title: content.title,
         body: content.body,
@@ -63,12 +75,17 @@ export class NotificationsListener {
         tag: content.tag,
       };
 
+      let delivered = 0;
       for (const subscription of subscriptions) {
         const failure = await this.sender.send(subscription, payload);
+        if (failure === null) delivered += 1;
         if (failure === 'gone') {
           await this.notifications.deleteSubscription(subscription.endpoint);
         }
       }
+      this.logger.log(
+        `${event.name} для ${event.recipientId}: доставлено ${delivered} из ${subscriptions.length}`,
+      );
     } catch (error) {
       this.logger.error(
         `Не удалось доставить уведомление ${event.name}`,

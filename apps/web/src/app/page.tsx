@@ -15,6 +15,7 @@ import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { LandingPage } from "@/components/landing";
 import { InstallBanner } from "@/components/pwa/install-banner";
 import { NotificationPermissionPrompt } from "@/components/pwa/notification-permission-prompt";
+import { PushSubscriptionSync } from "@/components/pwa/push-subscription-sync";
 
 export default async function Home({
   searchParams,
@@ -89,6 +90,7 @@ export default async function Home({
       </main>
       <InstallBanner />
       <NotificationPermissionPrompt />
+      <PushSubscriptionSync />
     </div>
   );
 }

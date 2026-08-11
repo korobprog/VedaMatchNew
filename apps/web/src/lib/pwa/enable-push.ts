@@ -1,5 +1,6 @@
 import { fetchVapidKey, saveSubscription } from "@/lib/notifications-api";
 import {
+  currentSubscription,
   notifyPushSupportChanged,
   subscribeToPush,
   toSubscriptionRequest,
@@ -24,5 +25,26 @@ export async function enablePush(): Promise<EnablePushResult> {
     // Разрешение уже выдано, но подписку сохранить не вышло: ключей нет на
     // сервере или сеть отвалилась. Пуши не пойдут — надо сказать об этом.
     return "failed";
+  }
+}
+
+/**
+ * Приводит подписку в порядок у того, кто разрешение уже выдал. Два случая:
+ * подписки нет вовсе (разрешение выдали, когда сервер был без VAPID-ключей —
+ * тогда subscribe() падал, и человек навсегда оставался без пушей: спросить
+ * повторно браузер не даст, а окно ему больше не показывается) и подписка
+ * есть, но сервер о ней не знает — браузер меняет её молча.
+ *
+ * Жест пользователя здесь не нужен: разрешение уже есть. Не бросает.
+ */
+export async function syncPushSubscription(): Promise<void> {
+  if (typeof Notification === "undefined") return;
+  if (Notification.permission !== "granted") return;
+  try {
+    const existing = await currentSubscription();
+    const subscription = existing ?? (await subscribeToPush(await fetchVapidKey()));
+    await saveSubscription(toSubscriptionRequest(subscription));
+  } catch {
+    // Сеть или пуш-сервис недоступны — повторим при следующей загрузке.
   }
 }

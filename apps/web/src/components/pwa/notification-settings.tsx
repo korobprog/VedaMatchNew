@@ -7,18 +7,12 @@ import type {
   UpdateNotificationPreferencesRequest,
 } from "@vedamatch/shared";
 import {
-  currentSubscription,
   detectPushSupport,
   getPushSupportServerSnapshot,
   subscribePushSupport,
-  toSubscriptionRequest,
 } from "@/lib/pwa/push-subscription";
-import { enablePush } from "@/lib/pwa/enable-push";
-import {
-  fetchPreferences,
-  saveSubscription,
-  savePreferences,
-} from "@/lib/notifications-api";
+import { enablePush, syncPushSubscription } from "@/lib/pwa/enable-push";
+import { fetchPreferences, savePreferences } from "@/lib/notifications-api";
 import { useInstallPrompt } from "./use-install-prompt";
 
 const categories = [
@@ -55,18 +49,11 @@ export function NotificationSettings() {
     };
   }, [support]);
 
-  // Подписка могла смениться на стороне браузера; сверяем её при каждой
-  // загрузке — воркер отправить новую сам не может.
+  // Подписка могла смениться на стороне браузера или не создаться вовсе;
+  // сверяем её при каждой загрузке — воркер отправить новую сам не может.
   useEffect(() => {
     if (support !== "granted") return;
-    void (async () => {
-      const subscription = await currentSubscription();
-      if (subscription) {
-        await saveSubscription(toSubscriptionRequest(subscription)).catch(
-          () => undefined,
-        );
-      }
-    })();
+    void syncPushSubscription();
   }, [support]);
 
   const enable = useCallback(async () => {
