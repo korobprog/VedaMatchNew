@@ -124,14 +124,17 @@ function Pagination({
   );
 }
 
-function withPage(
+export function withPage(
   params: Record<string, string | string[] | undefined>,
   page: number,
 ) {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    const first = Array.isArray(value) ? value[0] : value;
-    if (first && key !== "page") query.set(key, first);
+    if (key === "page") continue;
+    // Целей может быть несколько — иначе на второй странице осталась бы одна.
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item) query.append(key, item);
+    }
   }
   query.set("page", String(page));
   return query.toString();

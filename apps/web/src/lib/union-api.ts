@@ -50,11 +50,15 @@ export const getUnionChats = () => unionGet<UnionChatsState>("/union/chats");
 export const getUnionChat = (id: string) =>
   unionGet<UnionChatState>(`/union/chats/${encodeURIComponent(id)}`);
 
-function toQueryString(params?: Record<string, string | string[] | undefined>) {
+export function toQueryString(
+  params?: Record<string, string | string[] | undefined>,
+) {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params ?? {})) {
-    const first = Array.isArray(value) ? value[0] : value;
-    if (first) query.set(key, first);
+    // Цели приходят повторяющимся параметром: `set` оставил бы одну.
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item) query.append(key, item);
+    }
   }
   const text = query.toString();
   return text ? `?${text}` : "";
