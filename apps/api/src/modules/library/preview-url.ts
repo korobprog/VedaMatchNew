@@ -6,31 +6,16 @@
  * или таймаут означают «превью нет», добавление ссылки от этого не падает.
  */
 
+import { videoSource } from '@vedamatch/shared';
+
 const RUTUBE_OEMBED = 'https://rutube.ru/api/oembed/';
 const OEMBED_TIMEOUT_MS = 3000;
 const RUTUBE_IMAGE_HOSTS = /(^|\.)(rutube\.ru|rutubelist\.ru)$/;
 
 export function youtubePreviewUrl(input: string): string | null {
-  let parsed: URL;
-  try {
-    parsed = new URL(input);
-  } catch {
-    return null;
-  }
-
-  const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-  const id = youtubeVideoId(host, parsed);
-  if (!id || !/^[\w-]{6,20}$/.test(id)) return null;
-  return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
-}
-
-function youtubeVideoId(host: string, parsed: URL): string | null {
-  if (host === 'youtu.be')
-    return parsed.pathname.slice(1).split('/')[0] || null;
-  if (host !== 'youtube.com' && host !== 'm.youtube.com') return null;
-  if (parsed.pathname === '/watch') return parsed.searchParams.get('v');
-  const match = /^\/(?:shorts|embed|live)\/([^/]+)/.exec(parsed.pathname);
-  return match?.[1] ?? null;
+  const source = videoSource(input);
+  if (source?.provider !== 'youtube') return null;
+  return `https://i.ytimg.com/vi/${source.id}/hqdefault.jpg`;
 }
 
 export function isRutubeUrl(input: string): boolean {

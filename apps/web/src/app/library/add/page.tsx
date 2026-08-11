@@ -6,6 +6,7 @@ import {
   getLibrarySections,
 } from "@/lib/library-api";
 import { Header } from "@/components/header";
+import { BackLink } from "@/components/library/back-link";
 import { AddEntryForm } from "@/components/library/add-entry-form";
 import { t } from "@/components/library/i18n";
 
@@ -32,6 +33,7 @@ export default async function LibraryAddPage({
     <div className="relative min-h-screen bg-bg-0">
       <Header user={user} />
       <main className="mx-auto max-w-3xl px-4 py-8 pb-24">
+        <BackLink locale={locale} fallbackHref="/library" />
         <h1 className="mb-6 font-display text-2xl font-bold text-text-0">
           {t(locale, "add.title")}
         </h1>

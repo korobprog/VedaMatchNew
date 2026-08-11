@@ -7,6 +7,7 @@ import {
   getLibrarySections,
 } from "@/lib/library-api";
 import { Header } from "@/components/header";
+import { BackLink } from "@/components/library/back-link";
 import { EntryFilters } from "@/components/library/entry-filters";
 import { EntryList } from "@/components/library/entry-list";
 import { SectionStrip } from "@/components/library/section-strip";
@@ -40,6 +41,7 @@ export default async function LibraryCategoryPage({
     <div className="relative min-h-screen bg-bg-0">
       <Header user={user} />
       <main className="mx-auto max-w-5xl px-4 py-8 pb-24">
+        <BackLink locale={locale} fallbackHref="/library" />
         <SectionStrip
           sections={sections ?? []}
           locale={locale}
