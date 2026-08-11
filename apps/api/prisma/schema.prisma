@@ -824,9 +824,9 @@ model UnionProfile {
   requestsFromVerifiedOnly Boolean                    @default(false)
   /// Кто может начать общение: заявки от всех или только взаимные лайки
   contactMode              UnionContactMode           @default(requests)
-  /// Не сужать рекомендации до противоположного пола, даже если цель
-  /// «Создание семьи» ≥50%
-  disableFamilyGenderFilter Boolean                   @default(false)
+  /// Кого искать при цели «Создание семьи». null — пол не важен. Работает
+  /// в обе стороны и только пока цель «Создание семьи» отмечена.
+  familySeeksGender        Gender?
   createdAt                DateTime                   @default(now())
   updatedAt                DateTime                   @updatedAt
 

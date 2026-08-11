@@ -117,10 +117,10 @@ export interface UnionProfileDto extends UnionProfileDetails {
   /** Кто может начать общение: заявки от всех или только взаимные лайки */
   contactMode: UnionContactMode;
   /**
-   * Не сужать рекомендации до противоположного пола, даже если цель
-   * «Создание семьи» ≥50% (по умолчанию `false` — сужение включено).
+   * Кого искать при цели «Создание семьи». `null` — пол не важен. Сужение
+   * работает в обе стороны и только пока цель «Создание семьи» отмечена.
    */
-  disableFamilyGenderFilter: boolean;
+  familySeeksGender: Gender | null;
   intentions: UnionIntentionDto[];
   createdAt: string;
   updatedAt: string;
@@ -194,7 +194,7 @@ export interface UnionProfileUpdateRequest extends Partial<UnionProfileDetails> 
   isActive?: boolean;
   requestsFromVerifiedOnly?: boolean;
   contactMode?: UnionContactMode;
-  disableFamilyGenderFilter?: boolean;
+  familySeeksGender?: Gender | null;
   intentions: UnionIntentionDto[];
 }
 

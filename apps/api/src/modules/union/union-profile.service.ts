@@ -130,11 +130,11 @@ interface MyAgePreference {
   ageRangeMin: number | null;
   ageRangeMax: number | null;
 }
-/** Пол-контекст пользователя для авто-ограничения по цели «Создание семьи». */
+/** Пол-контекст пользователя для ограничения по цели «Создание семьи». */
 interface FamilyGenderContext {
   gender: Gender | null;
-  familyWeight: number;
-  disableFamilyGenderFilter: boolean;
+  hasFamilyGoal: boolean;
+  seeksGender: Gender | null;
 }
 type UserWithLocation = Pick<User, 'homeLocation'>;
 type UserWithPublicPhotos = User & {
@@ -976,8 +976,15 @@ export class UnionProfileService {
     if (body.requestsFromVerifiedOnly !== undefined) {
       data.requestsFromVerifiedOnly = body.requestsFromVerifiedOnly;
     }
-    if (body.disableFamilyGenderFilter !== undefined) {
-      data.disableFamilyGenderFilter = body.disableFamilyGenderFilter;
+    if (body.familySeeksGender !== undefined) {
+      if (
+        body.familySeeksGender !== null &&
+        body.familySeeksGender !== 'male' &&
+        body.familySeeksGender !== 'female'
+      ) {
+        throw new BadRequestException('Неизвестный пол в цели знакомства');
+      }
+      data.familySeeksGender = body.familySeeksGender;
     }
     if (body.contactMode !== undefined) {
       if (
@@ -1194,7 +1201,7 @@ export class UnionProfileService {
       isActive: profile.isActive,
       requestsFromVerifiedOnly: profile.requestsFromVerifiedOnly,
       contactMode: profile.contactMode,
-      disableFamilyGenderFilter: profile.disableFamilyGenderFilter,
+      familySeeksGender: profile.familySeeksGender,
       intentions: profile.intentions.map((i) => ({
         type: i.type,
         weight: i.weight,
@@ -1205,59 +1212,50 @@ export class UnionProfileService {
   }
 }
 
-function familyIntentionWeight(
+function hasFamilyIntention(
   intentions: Array<Pick<UnionIntention, 'type' | 'weight'>>,
-): number {
-  return intentions.find((intention) => intention.type === 'family')
-    ?.weight ?? 0;
+): boolean {
+  return intentions.some(
+    (intention) => intention.type === 'family' && intention.weight > 0,
+  );
 }
 
 function familyGenderContext(
   profile: {
     intentions: Array<Pick<UnionIntention, 'type' | 'weight'>>;
-    disableFamilyGenderFilter: boolean;
+    familySeeksGender: Gender | null;
   },
   gender: Gender | null,
 ): FamilyGenderContext {
   return {
     gender,
-    familyWeight: familyIntentionWeight(profile.intentions),
-    disableFamilyGenderFilter: profile.disableFamilyGenderFilter,
+    hasFamilyGoal: hasFamilyIntention(profile.intentions),
+    seeksGender: profile.familySeeksGender,
   };
 }
 
+/** Пол ищут только вместе с целью «Создание семьи»: снял цель — снял и
+ *  ограничение, отдельно его выключать не нужно. */
 function isFamilyGenderRestricted(context: FamilyGenderContext): boolean {
-  return (
-    context.gender !== null &&
-    context.familyWeight >= FAMILY_GENDER_RESTRICTION_THRESHOLD &&
-    !context.disableFamilyGenderFilter
-  );
-}
-
-function oppositeGender(gender: Gender): Gender {
-  return gender === 'male' ? 'female' : 'male';
+  return context.hasFamilyGoal && context.seeksGender != null;
 }
 
 /**
- * Односторонняя проверка на пару «зритель, кандидат»: активная цель
- * «Создание семьи» ≥50% у ЛЮБОЙ из сторон сужает пару до противоположного
- * пола. Не требует, чтобы обе стороны были ограничены одновременно.
+ * Односторонняя проверка на пару «зритель, кандидат»: выбранный пол у ЛЮБОЙ
+ * из сторон сужает пару. Не требует, чтобы ограничение было активно у обоих —
+ * иначе ищущий семью попадал бы в ленты тех, кому он заведомо не подходит.
  */
 function passesFamilyGenderRestriction(
   viewer: FamilyGenderContext,
   candidate: FamilyGenderContext,
 ): boolean {
-  if (isFamilyGenderRestricted(viewer)) {
-    if (candidate.gender === null) return false;
-    if (candidate.gender !== oppositeGender(viewer.gender as Gender)) {
-      return false;
-    }
+  // Пол второй стороны не указан — соответствие проверить нечем, поэтому
+  // такая анкета в сужённую ленту не попадает.
+  if (isFamilyGenderRestricted(viewer) && candidate.gender !== viewer.seeksGender) {
+    return false;
   }
-  if (isFamilyGenderRestricted(candidate)) {
-    if (viewer.gender === null) return false;
-    if (viewer.gender !== oppositeGender(candidate.gender as Gender)) {
-      return false;
-    }
+  if (isFamilyGenderRestricted(candidate) && viewer.gender !== candidate.seeksGender) {
+    return false;
   }
   return true;
 }

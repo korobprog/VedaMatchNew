@@ -47,7 +47,7 @@ const profile: UnionProfileDto = {
   isActive: true,
   requestsFromVerifiedOnly: false,
   contactMode: "requests",
-  disableFamilyGenderFilter: false,
+  familySeeksGender: null,
   intentions: [{ type: "family", weight: 100 }],
   createdAt: "2026-08-05T00:00:00.000Z",
   updatedAt: "2026-08-05T00:00:00.000Z",
@@ -108,18 +108,22 @@ describe("UnionProfileForm", () => {
     expect(bodyOf(0).isActive).toBe(false);
   });
 
-  it("сохраняет отключение фильтра по полу", async () => {
+  it("сохраняет выбор пола рядом с целью «Создание семьи»", async () => {
     const user = userEvent.setup();
-    render(<UnionProfileForm profile={profile} completeness={completeness} />);
+    render(
+      <UnionProfileForm
+        profile={profile}
+        completeness={completeness}
+        viewerGender="male"
+      />,
+    );
 
     await user.click(
-      screen.getByRole("checkbox", {
-        name: "Показывать анкеты всех полов",
-      }),
+      screen.getByRole("checkbox", { name: "Искать только женщин" }),
     );
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-    expect(bodyOf(0).disableFamilyGenderFilter).toBe(true);
+    expect(bodyOf(0).familySeeksGender).toBe("female");
   });
 
   it("обновляет прогресс ответом сервера", async () => {
