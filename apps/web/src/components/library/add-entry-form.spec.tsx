@@ -1,7 +1,10 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { LibraryCategoryDto } from "@vedamatch/shared";
+import type {
+  LibraryCategoryDto,
+  LibrarySectionDto,
+} from "@vedamatch/shared";
 import { AddEntryForm } from "./add-entry-form";
 
 vi.mock("next/navigation", () => ({
@@ -20,6 +23,21 @@ const categories: LibraryCategoryDto[] = [
     descriptionEn: null,
     entriesCount: 2,
     createdAt: "2026-07-29T10:00:00.000Z",
+  },
+];
+
+const sections: LibrarySectionDto[] = [
+  {
+    id: "section-1",
+    slug: "philosophy",
+    titleRu: "Философия и писания",
+    titleEn: "Philosophy",
+    descriptionRu: null,
+    descriptionEn: null,
+    iconKey: null,
+    position: 1,
+    categoriesCount: 1,
+    entriesCount: 2,
   },
 ];
 
@@ -62,6 +80,88 @@ describe("AddEntryForm", () => {
         .getByRole("link", { name: "Открыть существующую запись" })
         .getAttribute("href"),
     ).toBe("/library/entry/existing-1");
+  });
+
+  it("names the real reason behind a 400 instead of blaming the url", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ message: "description_too_long" }),
+      }),
+    );
+
+    render(<AddEntryForm locale="ru" categories={categories} />);
+
+    await userEvent.type(
+      screen.getByLabelText("Адрес ссылки"),
+      "https://www.youtube.com/watch?v=OXDrvBwIHLg",
+    );
+    await userEvent.type(screen.getByLabelText("Заголовок по-русски"), "Видео");
+    await userEvent.click(screen.getByLabelText("Гита"));
+    await userEvent.click(screen.getByRole("button", { name: "Добавить" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Описание длиннее 1000 символов")).toBeDefined();
+    });
+  });
+
+  it("creates a category inline without losing the entered link", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: () =>
+          Promise.resolve({
+            id: "category-2",
+            sectionId: "section-1",
+            sectionSlug: "philosophy",
+            slug: "kirtan",
+            titleRu: "Киртан",
+            titleEn: null,
+            descriptionRu: null,
+            descriptionEn: null,
+            entriesCount: 0,
+            createdAt: "2026-07-29T10:00:00.000Z",
+          }),
+      }),
+    );
+
+    render(
+      <AddEntryForm
+        locale="ru"
+        categories={categories}
+        sections={sections}
+        initialSectionSlug="philosophy"
+      />,
+    );
+
+    await userEvent.type(
+      screen.getByLabelText("Адрес ссылки"),
+      "https://example.com/a",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "+ Новая категория" }),
+    );
+    await userEvent.type(
+      screen.getByLabelText("Название по-русски"),
+      "Киртан",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Создать категорию" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Категория создана и выбрана")).toBeDefined();
+    });
+    expect((screen.getByLabelText("Киртан") as HTMLInputElement).checked).toBe(
+      true,
+    );
+    expect(
+      (screen.getByLabelText("Адрес ссылки") as HTMLInputElement).value,
+    ).toBe("https://example.com/a");
   });
 
   it("blocks submit until a title and a category are filled", async () => {

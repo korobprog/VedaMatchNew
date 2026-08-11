@@ -9,10 +9,16 @@ import type {
   LibraryDuplicateEntryConflict,
   LibraryEntryType,
   LibraryLocale,
+  LibrarySectionDto,
 } from "@vedamatch/shared";
-import { entryTypeLabel, pickLocalized, t } from "./i18n";
+import { CategoryCreateForm } from "./category-create-form";
+import { entryTypeLabel, pickLocalized, t, type LibraryTextKey } from "./i18n";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const MAX_URL_LENGTH = 2000;
+const MAX_TITLE_LENGTH = 200;
+const MAX_DESCRIPTION_LENGTH = 1000;
+const MAX_CATEGORIES = 5;
 const TYPES: LibraryEntryType[] = [
   "website",
   "article",
@@ -26,12 +32,29 @@ const TYPES: LibraryEntryType[] = [
   "other",
 ];
 
+/** Коды `400` из API — показываем по ним конкретную причину, а не «ссылка плохая». */
+const ERROR_KEYS: Record<string, LibraryTextKey> = {
+  unsupported_url: "add.unsupportedUrl",
+  url_too_long: "add.urlTooLong",
+  unsupported_type: "add.unsupportedType",
+  title_required: "add.titleRequired",
+  title_too_long: "add.titleTooLong",
+  description_too_long: "add.descriptionTooLong",
+  category_required: "add.categoryRequired",
+  too_many_categories: "add.tooManyCategories",
+  category_not_found: "add.categoryNotFound",
+};
+
 export function AddEntryForm({
   locale,
   categories,
+  sections = [],
+  initialSectionSlug,
 }: {
   locale: LibraryLocale;
   categories: LibraryCategoryDto[];
+  sections?: LibrarySectionDto[];
+  initialSectionSlug?: string;
 }) {
   const router = useRouter();
   const [url, setUrl] = useState("");
@@ -41,42 +64,111 @@ export function AddEntryForm({
   const [titleEn, setTitleEn] = useState("");
   const [descriptionRu, setDescriptionRu] = useState("");
   const [descriptionEn, setDescriptionEn] = useState("");
-  const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  const [sectionSlug, setSectionSlug] = useState(
+    initialSectionSlug ?? sections[0]?.slug ?? "",
+  );
+  const [sectionCategories, setSectionCategories] = useState(categories);
+  // Выбранные держим целиком: категория из другого раздела должна остаться
+  // видимой в списке после переключения раздела.
+  const [selected, setSelected] = useState<LibraryCategoryDto[]>([]);
+  const [categoryFormOpen, setCategoryFormOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [duplicateId, setDuplicateId] = useState<string | null>(null);
 
-  function toggleCategory(id: string) {
-    setCategoryIds((current) =>
-      current.includes(id)
-        ? current.filter((value) => value !== id)
-        : [...current, id],
+  const visibleCategories = [
+    ...sectionCategories,
+    ...selected.filter(
+      (item) => !sectionCategories.some((known) => known.id === item.id),
+    ),
+  ];
+
+  function toggleCategory(category: LibraryCategoryDto) {
+    setSelected((current) =>
+      current.some((item) => item.id === category.id)
+        ? current.filter((item) => item.id !== category.id)
+        : [...current, category],
     );
+  }
+
+  async function changeSection(slug: string) {
+    setSectionSlug(slug);
+    if (!slug) return;
+    const response = await fetch(
+      `${API_URL}/library/categories/section/${encodeURIComponent(slug)}`,
+      { credentials: "include" },
+    ).catch(() => null);
+    if (!response?.ok) return;
+    setSectionCategories((await response.json()) as LibraryCategoryDto[]);
+  }
+
+  function handleCategoryCreated(category: LibraryCategoryDto) {
+    setSectionCategories((current) =>
+      current.some((item) => item.id === category.id)
+        ? current
+        : [...current, category],
+    );
+    setSelected((current) =>
+      current.some((item) => item.id === category.id)
+        ? current
+        : [...current, category],
+    );
+    setCategoryFormOpen(false);
+    setNotice(t(locale, "add.categoryCreated"));
   }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    setNotice(null);
     setDuplicateId(null);
 
+    const trimmedUrl = url.trim();
+    if (trimmedUrl.length > MAX_URL_LENGTH) {
+      setError(t(locale, "add.urlTooLong"));
+      return;
+    }
+    if (!/^https?:\/\/\S+$/i.test(trimmedUrl)) {
+      setError(t(locale, "add.unsupportedUrl"));
+      return;
+    }
     if (!titleRu.trim() && !titleEn.trim()) {
       setError(t(locale, "add.titleRequired"));
       return;
     }
-    if (categoryIds.length === 0) {
+    if (
+      titleRu.trim().length > MAX_TITLE_LENGTH ||
+      titleEn.trim().length > MAX_TITLE_LENGTH
+    ) {
+      setError(t(locale, "add.titleTooLong"));
+      return;
+    }
+    if (
+      descriptionRu.trim().length > MAX_DESCRIPTION_LENGTH ||
+      descriptionEn.trim().length > MAX_DESCRIPTION_LENGTH
+    ) {
+      setError(t(locale, "add.descriptionTooLong"));
+      return;
+    }
+    if (selected.length === 0) {
       setError(t(locale, "add.categoryRequired"));
+      return;
+    }
+    if (selected.length > MAX_CATEGORIES) {
+      setError(t(locale, "add.tooManyCategories"));
       return;
     }
 
     const body: CreateLibraryEntryRequest = {
-      url: url.trim(),
+      url: trimmedUrl,
       type,
       contentLanguage,
       titleRu: titleRu.trim() || null,
       titleEn: titleEn.trim() || null,
       descriptionRu: descriptionRu.trim() || null,
       descriptionEn: descriptionEn.trim() || null,
-      categoryIds,
+      categoryIds: selected.map((item) => item.id),
     };
 
     setPending(true);
@@ -94,8 +186,12 @@ export function AddEntryForm({
         setError(t(locale, "add.duplicate"));
         return;
       }
+      if (res.status === 429) {
+        setError(t(locale, "add.rateLimited"));
+        return;
+      }
       if (res.status === 400) {
-        setError(t(locale, "add.unsupportedUrl"));
+        setError(t(locale, await badRequestKey(res)));
         return;
       }
       if (!res.ok) {
@@ -121,6 +217,7 @@ export function AddEntryForm({
           onChange={(event) => setUrl(event.target.value)}
           className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
           placeholder="https://"
+          maxLength={MAX_URL_LENGTH}
           required
         />
       </label>
@@ -160,6 +257,7 @@ export function AddEntryForm({
           <input
             value={titleRu}
             onChange={(event) => setTitleRu(event.target.value)}
+            maxLength={MAX_TITLE_LENGTH}
             className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
           />
         </label>
@@ -168,6 +266,7 @@ export function AddEntryForm({
           <input
             value={titleEn}
             onChange={(event) => setTitleEn(event.target.value)}
+            maxLength={MAX_TITLE_LENGTH}
             className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
           />
         </label>
@@ -177,8 +276,12 @@ export function AddEntryForm({
             value={descriptionRu}
             onChange={(event) => setDescriptionRu(event.target.value)}
             rows={3}
+            maxLength={MAX_DESCRIPTION_LENGTH}
             className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
           />
+          <span className="mt-1 block text-xs text-text-2">
+            {descriptionRu.length}/{MAX_DESCRIPTION_LENGTH}
+          </span>
         </label>
         <label className="text-sm text-text-1">
           {t(locale, "add.descriptionEn")}
@@ -186,15 +289,39 @@ export function AddEntryForm({
             value={descriptionEn}
             onChange={(event) => setDescriptionEn(event.target.value)}
             rows={3}
+            maxLength={MAX_DESCRIPTION_LENGTH}
             className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
           />
+          <span className="mt-1 block text-xs text-text-2">
+            {descriptionEn.length}/{MAX_DESCRIPTION_LENGTH}
+          </span>
         </label>
       </div>
+
+      {sections.length > 0 && (
+        <label className="text-sm text-text-1">
+          {t(locale, "add.section")}
+          <select
+            value={sectionSlug}
+            onChange={(event) => void changeSection(event.target.value)}
+            className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+          >
+            {sections.map((section) => (
+              <option key={section.id} value={section.slug}>
+                {pickLocalized(locale, {
+                  ru: section.titleRu,
+                  en: section.titleEn,
+                })}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <fieldset className="text-sm text-text-1">
         <legend className="mb-2">{t(locale, "add.categories")}</legend>
         <div className="flex flex-wrap gap-3">
-          {categories.map((category) => {
+          {visibleCategories.map((category) => {
             const label = pickLocalized(locale, {
               ru: category.titleRu,
               en: category.titleEn,
@@ -204,15 +331,48 @@ export function AddEntryForm({
                 <input
                   type="checkbox"
                   aria-label={label}
-                  checked={categoryIds.includes(category.id)}
-                  onChange={() => toggleCategory(category.id)}
+                  checked={selected.some((item) => item.id === category.id)}
+                  onChange={() => toggleCategory(category)}
                 />
                 {label}
               </label>
             );
           })}
         </div>
+
+        {sections.length > 0 && (
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setCategoryFormOpen((open) => !open)}
+              className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-0 hover:bg-glass-brd/40"
+            >
+              {categoryFormOpen
+                ? t(locale, "add.categoryCancel")
+                : `+ ${t(locale, "add.categoryNew")}`}
+            </button>
+
+            {/* Форма живёт внутри карточки добавления: заполненные поля
+                ссылки при создании категории не теряются. */}
+            {categoryFormOpen && (
+              <div className="mt-3 rounded-xl border border-glass-brd p-3">
+                <CategoryCreateForm
+                  locale={locale}
+                  sections={sections}
+                  initialSectionSlug={sectionSlug}
+                  onCreated={handleCategoryCreated}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </fieldset>
+
+      {notice && (
+        <p className="glass rounded-xl border border-glass-brd p-3 text-sm text-text-1">
+          {notice}
+        </p>
+      )}
 
       {error && (
         <p className="glass rounded-xl border border-glass-brd p-3 text-sm text-text-0">
@@ -237,4 +397,14 @@ export function AddEntryForm({
       </button>
     </form>
   );
+}
+
+async function badRequestKey(response: Response): Promise<LibraryTextKey> {
+  const payload = (await response.json().catch(() => null)) as {
+    message?: unknown;
+  } | null;
+  const code = Array.isArray(payload?.message)
+    ? payload?.message[0]
+    : payload?.message;
+  return (typeof code === "string" && ERROR_KEYS[code]) || "add.failed";
 }

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getProfile } from "@/lib/api";
 import {
@@ -8,7 +7,6 @@ import {
 } from "@/lib/library-api";
 import { Header } from "@/components/header";
 import { AddEntryForm } from "@/components/library/add-entry-form";
-import { CategoryCreateForm } from "@/components/library/category-create-form";
 import { t } from "@/components/library/i18n";
 
 export default async function LibraryAddPage({
@@ -38,34 +36,13 @@ export default async function LibraryAddPage({
           {t(locale, "add.title")}
         </h1>
 
-        <nav
-          className="mb-4 flex flex-wrap gap-2"
-          aria-label={t(locale, "filters.section")}
-        >
-          {(sections ?? []).map((item) => (
-            <Link
-              key={item.id}
-              href={`/library/add?section=${encodeURIComponent(item.slug)}`}
-              className={`rounded-xl border px-3 py-2 text-sm ${
-                item.slug === activeSection
-                  ? "border-glass-brd text-text-0"
-                  : "border-transparent text-text-2 hover:text-text-0"
-              }`}
-            >
-              {item.titleRu}
-            </Link>
-          ))}
-        </nav>
-
-        <section className="glass mb-8 rounded-2xl border border-glass-brd p-4">
-          <AddEntryForm locale={locale} categories={categories ?? []} />
-        </section>
-
-        <h2 className="mb-4 font-display text-lg font-semibold text-text-0">
-          {t(locale, "category.create")}
-        </h2>
         <section className="glass rounded-2xl border border-glass-brd p-4">
-          <CategoryCreateForm locale={locale} sections={sections ?? []} />
+          <AddEntryForm
+            locale={locale}
+            categories={categories ?? []}
+            sections={sections ?? []}
+            initialSectionSlug={activeSection}
+          />
         </section>
       </main>
     </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
   CreateLibraryCategoryConflict,
+  LibraryCategoryDto,
   LibraryCategorySuggestion,
   LibraryLocale,
   LibrarySectionDto,
@@ -15,12 +16,21 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 export function CategoryCreateForm({
   locale,
   sections,
+  initialSectionSlug,
+  onCreated,
 }: {
   locale: LibraryLocale;
   sections: LibrarySectionDto[];
+  initialSectionSlug?: string;
+  /** Задан — остаёмся на странице и отдаём категорию вызывающей форме. */
+  onCreated?: (category: LibraryCategoryDto) => void;
 }) {
   const router = useRouter();
-  const [sectionId, setSectionId] = useState(sections[0]?.id ?? "");
+  const [sectionId, setSectionId] = useState(
+    sections.find((section) => section.slug === initialSectionSlug)?.id ??
+      sections[0]?.id ??
+      "",
+  );
   const [titleRu, setTitleRu] = useState("");
   const [titleEn, setTitleEn] = useState("");
   const [suggestions, setSuggestions] = useState<LibraryCategorySuggestion[]>(
@@ -82,10 +92,14 @@ export function CategoryCreateForm({
         return;
       }
 
-      const created = (await res.json()) as {
-        sectionSlug: string;
-        slug: string;
-      };
+      const created = (await res.json()) as LibraryCategoryDto;
+      if (onCreated) {
+        setTitleRu("");
+        setTitleEn("");
+        setSuggestions([]);
+        onCreated(created);
+        return;
+      }
       router.push(`/library/${created.sectionSlug}/${created.slug}`);
     } catch {
       setError(t(locale, "add.failed"));
@@ -94,14 +108,8 @@ export function CategoryCreateForm({
     }
   }
 
-  return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submit(false);
-      }}
-      className="grid gap-4"
-    >
+  const fields = (
+    <>
       <label className="text-sm text-text-1">
         {t(locale, "filters.section")}
         <select
@@ -177,12 +185,42 @@ export function CategoryCreateForm({
       )}
 
       <button
-        type="submit"
+        type={onCreated ? "button" : "submit"}
+        onClick={onCreated ? () => void submit(false) : undefined}
         disabled={pending}
         className="rounded-xl bg-glass-brd/40 px-4 py-2 text-sm text-text-0 hover:bg-glass-brd/60 disabled:opacity-50"
       >
         {t(locale, "category.create")}
       </button>
+    </>
+  );
+
+  // Внутри формы добавления ссылки вложенный <form> невалиден, поэтому там
+  // рендерим обычный контейнер и сами перехватываем Enter.
+  if (onCreated) {
+    return (
+      <div
+        className="grid gap-4"
+        onKeyDown={(event) => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          void submit(false);
+        }}
+      >
+        {fields}
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submit(false);
+      }}
+      className="grid gap-4"
+    >
+      {fields}
     </form>
   );
 }
