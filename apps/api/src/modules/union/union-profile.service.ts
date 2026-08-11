@@ -24,6 +24,7 @@ import type {
   UnionGenerateTextResponse,
   UnionHousing,
   UnionIncomeLevel,
+  UnionIntentionCounts,
   UnionIntentionDto,
   UnionIntentionType,
   UnionPrivacySettings,
@@ -337,7 +338,7 @@ export class UnionProfileService {
     const myInput = this.toMatchInput(me, me.user);
     const myFamilyGender = familyGenderContext(me, me.user.gender);
     const normalizedFilters = this.normalizeFilters(filters);
-    const recommendations = others
+    const beforeIntentions = others
       .filter((other) => !hidden.has(other.userId))
       .filter((other) => !swiped.has(other.userId))
       .filter((other) => this.hasCompleteLocation(other.user))
@@ -369,8 +370,23 @@ export class UnionProfileService {
         ({ recommendation }) =>
           normalizedFilters.minScore == null ||
           recommendation.compatibility.total >= normalizedFilters.minScore,
-      )
-      .sort((a, b) => {
+      );
+
+    // Счётчики берём до фильтра целей и после всех остальных: чип должен
+    // обещать ровно то, что человек увидит, нажав на него.
+    const intentionCounts = this.countIntentions(
+      beforeIntentions.map(({ other }) => other),
+    );
+    const selectedIntentions = normalizedFilters.intentions;
+    const recommendations = (
+      selectedIntentions
+        ? beforeIntentions.filter(({ other }) =>
+            other.intentions.some((i) =>
+              selectedIntentions.includes(i.type as UnionIntentionType),
+            ),
+          )
+        : beforeIntentions
+    ).sort((a, b) => {
         // Активное «Внимание» поднимает анкету над остальными.
         const byBoost =
           Number(boosted.has(b.other.userId)) -
@@ -411,6 +427,7 @@ export class UnionProfileService {
       page: safePage,
       pageSize,
       totalPages,
+      intentionCounts,
     };
   }
 
@@ -626,11 +643,7 @@ export class UnionProfileService {
     const pageSize =
       clampInteger(filters.pageSize, 1, MAX_PAGE_SIZE) ?? DEFAULT_PAGE_SIZE;
     return {
-      intention: INTENTION_TYPES.includes(
-        filters.intention as UnionIntentionType,
-      )
-        ? filters.intention
-        : undefined,
+      intentions: normalizeIntentions(filters),
       city: cleanFilterText(filters.city),
       country: cleanFilterText(filters.country),
       lat: validLat(filters.lat) ? filters.lat : undefined,
@@ -668,6 +681,26 @@ export class UnionProfileService {
     };
   }
 
+  /** Анкета с несколькими целями попадает в каждый счётчик: чипы работают
+   *  как ИЛИ, поэтому сумма по целям законно больше `all`. */
+  private countIntentions(
+    profiles: ProfileWithIntentions[],
+  ): UnionIntentionCounts {
+    const counts: UnionIntentionCounts = {
+      all: profiles.length,
+      family: 0,
+      business: 0,
+      friendship: 0,
+      service: 0,
+    };
+    for (const profile of profiles) {
+      for (const type of new Set(profile.intentions.map((i) => i.type))) {
+        counts[type as UnionIntentionType] += 1;
+      }
+    }
+    return counts;
+  }
+
   private matchesFilters(
     profile: ProfileWithIntentions,
     user: User,
@@ -676,12 +709,6 @@ export class UnionProfileService {
     myAge: MyAgePreference,
     myFamilyGender: FamilyGenderContext,
   ): boolean {
-    if (
-      filters.intention &&
-      !profile.intentions.some((i) => i.type === filters.intention)
-    ) {
-      return false;
-    }
     if (filters.stage && user.spiritualStage !== filters.stage) return false;
     // Пол не указан — профиль не проходит явно заданный фильтр, как и с возрастом.
     if (filters.gender && user.gender !== filters.gender) return false;
@@ -1244,6 +1271,20 @@ function cleanFilterText(value: unknown): string | undefined {
 function normalizeText(value: unknown): string {
   if (typeof value !== 'string') return '';
   return value.trim().toLowerCase();
+}
+
+/** Принимает и новый список целей, и старый одиночный параметр из
+ *  сохранённых ссылок. Пустой список — то же самое, что фильтра нет. */
+function normalizeIntentions(
+  filters: UnionRecommendationFilters,
+): UnionIntentionType[] | undefined {
+  const raw = Array.isArray(filters.intentions)
+    ? filters.intentions
+    : filters.intention
+      ? [filters.intention]
+      : [];
+  const valid = INTENTION_TYPES.filter((type) => raw.includes(type));
+  return valid.length > 0 ? valid : undefined;
 }
 
 function clampInteger(

@@ -1053,4 +1053,123 @@ describe('UnionProfileService', () => {
     expect(gallery.signPublicPhotos).toHaveBeenCalledTimes(1);
     expect(gallery.signPublicPhotos).toHaveBeenCalledWith(secondPhotos);
   });
+
+  it('counts profiles per goal ignoring the goal filter but honouring the others', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(
+      withGender(profile('me'), 'male'),
+    );
+    // Пол проставлен явно: анкета с семьёй от 50% видна только
+    // противоположному полу, иначе её отсеял бы совсем другой фильтр.
+    prisma.unionProfile.findMany.mockResolvedValue([
+      withIntentions(withGender(profile('a'), 'female'), [
+        { type: 'family', weight: 50 },
+        { type: 'service', weight: 50 },
+      ]),
+      withIntentions(withGender(profile('b'), 'female'), [
+        { type: 'family', weight: 100 },
+      ]),
+      withIntentions(withGender(profile('c'), 'female'), [
+        { type: 'business', weight: 100 },
+      ]),
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me', {
+      intentions: ['business'],
+    });
+
+    expect(result.items.map((item) => item.user.id)).toEqual(['c']);
+    // Счётчики не зависят от выбранной цели: они отвечают на вопрос
+    // «сколько будет, если нажать вот сюда».
+    expect(result.intentionCounts).toEqual({
+      all: 3,
+      family: 2,
+      business: 1,
+      friendship: 0,
+      service: 1,
+    });
+  });
+
+  it('drops profiles excluded by another filter from the goal counts', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(
+      withGender(profile('me'), 'male'),
+    );
+    prisma.unionProfile.findMany.mockResolvedValue([
+      withIntentions(withGender(profile('near'), 'female'), [
+        { type: 'family', weight: 100 },
+      ]),
+      withIntentions(
+        withGender(
+          profile('far', {
+            homeLocation: { ...defaultLocation, city: 'Казань' },
+          }),
+          'female',
+        ),
+        [{ type: 'family', weight: 100 }],
+      ),
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me', { city: 'Москва' });
+
+    expect(result.intentionCounts.all).toBe(1);
+    expect(result.intentionCounts.family).toBe(1);
+  });
+
+  it('treats several goals as OR', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(
+      withGender(profile('me'), 'male'),
+    );
+    prisma.unionProfile.findMany.mockResolvedValue([
+      withIntentions(withGender(profile('a'), 'female'), [
+        { type: 'family', weight: 100 },
+      ]),
+      withIntentions(withGender(profile('b'), 'female'), [
+        { type: 'business', weight: 100 },
+      ]),
+      withIntentions(withGender(profile('c'), 'female'), [
+        { type: 'service', weight: 100 },
+      ]),
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me', {
+      intentions: ['family', 'service'],
+    });
+
+    expect(result.items.map((item) => item.user.id).sort()).toEqual(['a', 'c']);
+  });
+
+  it('still filters by the legacy single intention parameter', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(
+      withGender(profile('me'), 'male'),
+    );
+    prisma.unionProfile.findMany.mockResolvedValue([
+      withIntentions(withGender(profile('a'), 'female'), [
+        { type: 'family', weight: 100 },
+      ]),
+      withIntentions(withGender(profile('b'), 'female'), [
+        { type: 'business', weight: 100 },
+      ]),
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me', {
+      intention: 'business',
+    });
+
+    expect(result.items.map((item) => item.user.id)).toEqual(['b']);
+  });
+
+  it('ignores an unknown goal instead of emptying the deck', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([profile('a')]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me', {
+      intentions: ['nonsense'] as never,
+    });
+
+    expect(result.items.map((item) => item.user.id)).toEqual(['a']);
+  });
 });
