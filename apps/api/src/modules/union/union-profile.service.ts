@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type {
+  Gender,
   UnionConnectionRequest,
   UnionIntention,
   UnionProfile,
@@ -118,6 +119,8 @@ const INCOME_VALUES: UnionIncomeLevel[] = [
 ];
 const DEFAULT_PAGE_SIZE = 12;
 const MAX_PAGE_SIZE = 50;
+/** Порог веса цели «Создание семьи», начиная с которого включается авто-сужение по полу. */
+const FAMILY_GENDER_RESTRICTION_THRESHOLD = 50;
 
 type ProfileWithIntentions = UnionProfile & { intentions: UnionIntention[] };
 /** Возраст смотрящего и его пожелания к возрасту партнёра. */
@@ -125,6 +128,12 @@ interface MyAgePreference {
   age: number | null;
   ageRangeMin: number | null;
   ageRangeMax: number | null;
+}
+/** Пол-контекст пользователя для авто-ограничения по цели «Создание семьи». */
+interface FamilyGenderContext {
+  gender: Gender | null;
+  familyWeight: number;
+  disableFamilyGenderFilter: boolean;
 }
 type UserWithLocation = Pick<User, 'homeLocation'>;
 type UserWithPublicPhotos = User & {
@@ -326,17 +335,25 @@ export class UnionProfileService {
     const swiped = await this.swipedUserIds(userId);
     const boosted = await this.boostedUserIds();
     const myInput = this.toMatchInput(me, me.user);
+    const myFamilyGender = familyGenderContext(me, me.user.gender);
     const normalizedFilters = this.normalizeFilters(filters);
     const recommendations = others
       .filter((other) => !hidden.has(other.userId))
       .filter((other) => !swiped.has(other.userId))
       .filter((other) => this.hasCompleteLocation(other.user))
       .filter((other) =>
-        this.matchesFilters(other, other.user, normalizedFilters, myInput, {
-          age: calculateAge(me.user.birthDate),
-          ageRangeMin: me.ageRangeMin,
-          ageRangeMax: me.ageRangeMax,
-        }),
+        this.matchesFilters(
+          other,
+          other.user,
+          normalizedFilters,
+          myInput,
+          {
+            age: calculateAge(me.user.birthDate),
+            ageRangeMin: me.ageRangeMin,
+            ageRangeMax: me.ageRangeMax,
+          },
+          myFamilyGender,
+        ),
       )
       .map((other) => ({
         other,
@@ -657,6 +674,7 @@ export class UnionProfileService {
     filters: UnionRecommendationFilters,
     myInput: UnionMatchInput,
     myAge: MyAgePreference,
+    myFamilyGender: FamilyGenderContext,
   ): boolean {
     if (
       filters.intention &&
@@ -667,6 +685,14 @@ export class UnionProfileService {
     if (filters.stage && user.spiritualStage !== filters.stage) return false;
     // Пол не указан — профиль не проходит явно заданный фильтр, как и с возрастом.
     if (filters.gender && user.gender !== filters.gender) return false;
+    if (
+      !passesFamilyGenderRestriction(
+        myFamilyGender,
+        familyGenderContext(profile, user.gender),
+      )
+    ) {
+      return false;
+    }
     if (filters.verifiedOnly && !isVerifiedDevotee(user)) return false;
     if (filters.photoVerifiedOnly && user.photoVerifiedAt === null)
       return false;
@@ -923,6 +949,9 @@ export class UnionProfileService {
     if (body.requestsFromVerifiedOnly !== undefined) {
       data.requestsFromVerifiedOnly = body.requestsFromVerifiedOnly;
     }
+    if (body.disableFamilyGenderFilter !== undefined) {
+      data.disableFamilyGenderFilter = body.disableFamilyGenderFilter;
+    }
     if (body.contactMode !== undefined) {
       if (
         body.contactMode !== 'requests' &&
@@ -1138,6 +1167,7 @@ export class UnionProfileService {
       isActive: profile.isActive,
       requestsFromVerifiedOnly: profile.requestsFromVerifiedOnly,
       contactMode: profile.contactMode,
+      disableFamilyGenderFilter: profile.disableFamilyGenderFilter,
       intentions: profile.intentions.map((i) => ({
         type: i.type,
         weight: i.weight,
@@ -1146,6 +1176,63 @@ export class UnionProfileService {
       updatedAt: profile.updatedAt.toISOString(),
     };
   }
+}
+
+function familyIntentionWeight(
+  intentions: Array<Pick<UnionIntention, 'type' | 'weight'>>,
+): number {
+  return intentions.find((intention) => intention.type === 'family')
+    ?.weight ?? 0;
+}
+
+function familyGenderContext(
+  profile: {
+    intentions: Array<Pick<UnionIntention, 'type' | 'weight'>>;
+    disableFamilyGenderFilter: boolean;
+  },
+  gender: Gender | null,
+): FamilyGenderContext {
+  return {
+    gender,
+    familyWeight: familyIntentionWeight(profile.intentions),
+    disableFamilyGenderFilter: profile.disableFamilyGenderFilter,
+  };
+}
+
+function isFamilyGenderRestricted(context: FamilyGenderContext): boolean {
+  return (
+    context.gender !== null &&
+    context.familyWeight >= FAMILY_GENDER_RESTRICTION_THRESHOLD &&
+    !context.disableFamilyGenderFilter
+  );
+}
+
+function oppositeGender(gender: Gender): Gender {
+  return gender === 'male' ? 'female' : 'male';
+}
+
+/**
+ * Односторонняя проверка на пару «зритель, кандидат»: активная цель
+ * «Создание семьи» ≥50% у ЛЮБОЙ из сторон сужает пару до противоположного
+ * пола. Не требует, чтобы обе стороны были ограничены одновременно.
+ */
+function passesFamilyGenderRestriction(
+  viewer: FamilyGenderContext,
+  candidate: FamilyGenderContext,
+): boolean {
+  if (isFamilyGenderRestricted(viewer)) {
+    if (candidate.gender === null) return false;
+    if (candidate.gender !== oppositeGender(viewer.gender as Gender)) {
+      return false;
+    }
+  }
+  if (isFamilyGenderRestricted(candidate)) {
+    if (viewer.gender === null) return false;
+    if (viewer.gender !== oppositeGender(candidate.gender as Gender)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function cleanFilterText(value: unknown): string | undefined {

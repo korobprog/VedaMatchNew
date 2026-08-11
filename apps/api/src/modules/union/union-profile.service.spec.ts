@@ -148,6 +148,21 @@ function withGender(
   return { ...source, user: { ...source.user, gender } };
 }
 
+function withIntentions(
+  source: ReturnType<typeof profile>,
+  entries: Array<{ type: 'family' | 'business' | 'friendship' | 'service'; weight: number }>,
+) {
+  return {
+    ...source,
+    intentions: entries.map((entry, index) => ({
+      id: `intention-${source.userId}-${index}`,
+      profileId: source.id,
+      type: entry.type,
+      weight: entry.weight,
+    })),
+  };
+}
+
 function withBirthYear(source: ReturnType<typeof profile>, year: number) {
   return {
     ...source,
@@ -451,6 +466,114 @@ describe('UnionProfileService', () => {
     });
 
     expect(result.items.map((item) => item.user.id)).toEqual(['man']);
+  });
+
+  it('restricts my feed to the opposite gender when my family intent is 50% or more', async () => {
+    const me = withIntentions(withGender(profile('me'), 'male'), [
+      { type: 'family', weight: 60 },
+      { type: 'friendship', weight: 40 },
+    ]);
+    const man = withGender(profile('man'), 'male');
+    const woman = withGender(profile('woman'), 'female');
+    const unset = withGender(profile('unset'), null);
+    prisma.unionProfile.findUnique.mockResolvedValue(me);
+    prisma.unionProfile.findMany.mockResolvedValue([man, woman, unset]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me');
+
+    expect(result.items.map((item) => item.user.id)).toEqual(['woman']);
+  });
+
+  it('does not restrict when my family intent is below 50%', async () => {
+    const me = withIntentions(withGender(profile('me'), 'male'), [
+      { type: 'family', weight: 40 },
+      { type: 'friendship', weight: 60 },
+    ]);
+    const man = withGender(profile('man'), 'male');
+    const woman = withGender(profile('woman'), 'female');
+    prisma.unionProfile.findUnique.mockResolvedValue(me);
+    prisma.unionProfile.findMany.mockResolvedValue([man, woman]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me');
+
+    expect(result.items.map((item) => item.user.id).sort()).toEqual([
+      'man',
+      'woman',
+    ]);
+  });
+
+  it('does not restrict when my gender is not set, regardless of family intent', async () => {
+    // profile('me') leaves user.gender as undefined (key omitted), not null —
+    // withGender(..., null) is required to match Prisma's real null semantics
+    // for an unset nullable column, which is what the service checks against.
+    const me = withIntentions(withGender(profile('me'), null), [
+      { type: 'family', weight: 80 },
+      { type: 'friendship', weight: 20 },
+    ]);
+    const man = withGender(profile('man'), 'male');
+    const woman = withGender(profile('woman'), 'female');
+    prisma.unionProfile.findUnique.mockResolvedValue(me);
+    prisma.unionProfile.findMany.mockResolvedValue([man, woman]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me');
+
+    expect(result.items.map((item) => item.user.id).sort()).toEqual([
+      'man',
+      'woman',
+    ]);
+  });
+
+  it('does not restrict when I disabled the family gender filter', async () => {
+    const me = withDetails(
+      withIntentions(withGender(profile('me'), 'male'), [
+        { type: 'family', weight: 90 },
+        { type: 'friendship', weight: 10 },
+      ]),
+      { disableFamilyGenderFilter: true },
+    );
+    const man = withGender(profile('man'), 'male');
+    const woman = withGender(profile('woman'), 'female');
+    prisma.unionProfile.findUnique.mockResolvedValue(me);
+    prisma.unionProfile.findMany.mockResolvedValue([man, woman]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me');
+
+    expect(result.items.map((item) => item.user.id).sort()).toEqual([
+      'man',
+      'woman',
+    ]);
+  });
+
+  it('excludes a candidate whose own family intent restricts them, even when I am not restricted', async () => {
+    const me = withGender(profile('me'), 'male');
+    const restrictedMan = withIntentions(withGender(profile('man'), 'male'), [
+      { type: 'family', weight: 70 },
+      { type: 'friendship', weight: 30 },
+    ]);
+    const restrictedWoman = withIntentions(
+      withGender(profile('woman'), 'female'),
+      [
+        { type: 'family', weight: 70 },
+        { type: 'friendship', weight: 30 },
+      ],
+    );
+    prisma.unionProfile.findUnique.mockResolvedValue(me);
+    prisma.unionProfile.findMany.mockResolvedValue([
+      restrictedMan,
+      restrictedWoman,
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me');
+
+    // restrictedMan requires an opposite-gender viewer (female); I'm male, so
+    // he's excluded even though *my* own restriction is inactive.
+    // restrictedWoman requires an opposite-gender viewer (male); I qualify.
+    expect(result.items.map((item) => item.user.id)).toEqual(['woman']);
   });
 
   it('фильтрует по питанию, отсекая профили без указанного значения', async () => {
