@@ -21,6 +21,23 @@ export function EntryCard({
 
   return (
     <article className="glass rounded-2xl border border-glass-brd p-4">
+      {entry.previewUrl && (
+        <a
+          href={entry.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mb-3 block overflow-hidden rounded-xl border border-glass-brd"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- обложка приходит с внешнего CDN */}
+          <img
+            src={entry.previewUrl}
+            alt={t(locale, "entry.preview")}
+            loading="lazy"
+            className="aspect-video w-full object-cover"
+          />
+        </a>
+      )}
+
       <div className="mb-2 flex items-center gap-2 text-xs text-text-2">
         <span>{entry.domain}</span>
         <span aria-hidden>·</span>

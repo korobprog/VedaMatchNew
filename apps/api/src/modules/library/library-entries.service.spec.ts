@@ -148,6 +148,26 @@ describe('LibraryEntriesService.create', () => {
     expect(data.enrichmentStatus).toBe('pending');
   });
 
+  it('stores a youtube cover taken from the link itself', async () => {
+    const prisma = prismaMock();
+    const service = new LibraryEntriesService(prisma as never);
+
+    await service.create(
+      'user-1',
+      validBody({
+        url: 'https://www.youtube.com/watch?v=OXDrvBwIHLg',
+        type: 'video' as const,
+      }),
+    );
+
+    const createCalls = prisma.libraryEntry.create.mock.calls as Array<
+      [{ data: Record<string, unknown> }]
+    >;
+    expect(createCalls[0][0].data.previewUrl).toBe(
+      'https://i.ytimg.com/vi/OXDrvBwIHLg/hqdefault.jpg',
+    );
+  });
+
   it('rejects category ids that do not exist', async () => {
     const prisma = prismaMock();
     prisma.libraryCategory.findMany = jest.fn().mockResolvedValue([]);

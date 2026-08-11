@@ -19,6 +19,7 @@ import {
   feedOrderBy,
   resolveSort,
 } from './library-feed-query';
+import { resolvePreviewUrl } from './preview-url';
 import { normalizeUrl } from './url-normalize';
 
 const PAGE_SIZE = 20;
@@ -148,6 +149,7 @@ export class LibraryEntriesService {
     }
 
     const language = normalizeLanguage(body.contentLanguage);
+    const previewUrl = await resolvePreviewUrl(normalized.url);
 
     const created = await this.prisma.$transaction(async (tx) => {
       const entry = await tx.libraryEntry.create({
@@ -161,6 +163,7 @@ export class LibraryEntriesService {
           titleEn,
           descriptionRu,
           descriptionEn,
+          previewUrl,
           addedById: userId,
           enrichmentStatus: 'pending',
         },

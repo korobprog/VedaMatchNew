@@ -41,6 +41,21 @@ export default async function LibraryEntryPage({
           {entry.domain} · {entryTypeLabel(locale, entry.type)} ·{" "}
           {entry.contentLanguage.toUpperCase()}
         </p>
+        {entry.previewUrl && (
+          <a
+            href={entry.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mb-4 block overflow-hidden rounded-2xl border border-glass-brd"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- обложка приходит с внешнего CDN */}
+            <img
+              src={entry.previewUrl}
+              alt={t(locale, "entry.preview")}
+              className="aspect-video w-full object-cover"
+            />
+          </a>
+        )}
         <h1 className="mb-3 font-display text-2xl font-bold text-text-0">
           {pickLocalized(locale, { ru: entry.titleRu, en: entry.titleEn })}
         </h1>
