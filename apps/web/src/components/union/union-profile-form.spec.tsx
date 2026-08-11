@@ -151,11 +151,12 @@ describe("UnionProfileForm", () => {
     );
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    // Новая анкета создаётся с ровными весами — это режим галочек.
     expect(bodyOf(0).intentions).toEqual([
-      { type: "family", weight: 40 },
-      { type: "business", weight: 20 },
-      { type: "friendship", weight: 20 },
-      { type: "service", weight: 20 },
+      { type: "family", weight: 25 },
+      { type: "business", weight: 25 },
+      { type: "friendship", weight: 25 },
+      { type: "service", weight: 25 },
     ]);
     // После создания вместо кнопки появляется переход к рекомендациям.
     await waitFor(() =>

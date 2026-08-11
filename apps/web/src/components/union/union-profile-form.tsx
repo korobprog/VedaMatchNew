@@ -19,11 +19,8 @@ import type {
   UnionSpiritualEducation,
   UnionVisibilityLevel,
 } from "@vedamatch/shared";
-import {
-  IntentionConstructor,
-  IntentionWeights,
-  intentionSum,
-} from "./intention-constructor";
+import { IntentionWeights, intentionSum } from "./intention-constructor";
+import { IntentionSection } from "./intention-section";
 import {
   unionChildrenStatusLabels,
   unionDietLabels,
@@ -136,7 +133,8 @@ function toWeights(profile: UnionProfileDto | null): IntentionWeights {
     friendship: 0,
     service: 0,
   };
-  if (!profile) return { family: 40, business: 20, friendship: 20, service: 20 };
+  // Ровные веса: неровный дефолт открывал бы каждому новичку режим процентов.
+  if (!profile) return { family: 25, business: 25, friendship: 25, service: 25 };
   for (const intention of profile.intentions) {
     weights[intention.type] = intention.weight;
   }
@@ -308,7 +306,7 @@ export function UnionProfileForm({
 
       <section className={sectionClass}>
         <h2 className={sectionTitleClass}>Цель знакомства</h2>
-        <IntentionConstructor weights={weights} onChange={updateWeights} />
+        <IntentionSection weights={weights} onChange={updateWeights} />
         {!sumOk && (
           <p className="mt-2 text-xs text-magenta">
             Пока сумма приоритетов не равна 100, изменения не сохраняются.
