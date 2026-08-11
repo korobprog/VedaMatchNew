@@ -335,7 +335,10 @@ export interface UnionRecommendation {
 }
 
 export interface UnionRecommendationFilters {
+  /** @deprecated Одна цель. Оставлено ради сохранённых ссылок на выдачу. */
   intention?: UnionIntentionType;
+  /** Цели через ИЛИ: анкета проходит, если несёт хотя бы одну из них. */
+  intentions?: UnionIntentionType[];
   city?: string;
   country?: string;
   lat?: number;
@@ -367,12 +370,22 @@ export interface UnionRecommendationFilters {
 
 export type UnionRecommendationSort = 'match' | 'new';
 
+/**
+ * Сколько анкет вернулось бы по каждой цели при тех же остальных фильтрах.
+ * `all` — размер выдачи без фильтра целей. Анкета с тремя целями попадает в
+ * три счётчика, поэтому сумма по целям больше `all` — это верно для ИЛИ.
+ */
+export type UnionIntentionCounts = Record<UnionIntentionType, number> & {
+  all: number;
+};
+
 export interface UnionRecommendationsResponse {
   items: UnionRecommendation[];
   total: number;
   page: number;
   pageSize: number;
   totalPages: number;
+  intentionCounts: UnionIntentionCounts;
 }
 
 export interface UnionConnectionSummary {
