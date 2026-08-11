@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { RecommendationFilters } from "./recommendation-filters";
 
 describe("RecommendationFilters", () => {
-  it("searches by city and country without repeating the selected city", async () => {
+  it("searches by city and fills the hidden country field from the selected result", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => [
@@ -21,9 +21,10 @@ describe("RecommendationFilters", () => {
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
 
-    render(<RecommendationFilters params={{}} />);
+    const { container } = render(<RecommendationFilters params={{}} />);
 
-    await user.type(screen.getByRole("textbox", { name: "Страна" }), "Россия");
+    // Страна больше не вводится вручную — только город, страна подставляется
+    // из выбранного результата подсказки и уходит скрытым полем формы.
     await user.type(
       screen.getByRole("textbox", { name: "Город" }),
       "Хабаровск",
@@ -32,23 +33,17 @@ describe("RecommendationFilters", () => {
     const option = await screen.findByRole("button", {
       name: /Хабаровск.*Россия/,
     });
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /\/geo\/search\?q=.*&country=%D0%A0%D0%BE%D1%81%D1%81%D0%B8%D1%8F/,
-      ),
-      expect.any(Object),
-    );
     expect(option.textContent?.match(/Хабаровск(?=,|$)/g)).toHaveLength(1);
     expect(within(option).getByText("Хабаровский край")).toBeInTheDocument();
 
     await user.click(option);
 
-    expect(screen.getByRole("textbox", { name: "Страна" })).toHaveValue(
-      "Россия",
-    );
     expect(screen.getByRole("textbox", { name: "Город" })).toHaveValue(
       "Хабаровск",
     );
+    expect(
+      container.querySelector<HTMLInputElement>('input[name="country"]'),
+    ).toHaveValue("Россия");
     await new Promise((resolve) => window.setTimeout(resolve, 450));
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

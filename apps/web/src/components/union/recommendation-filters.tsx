@@ -225,22 +225,12 @@ export function RecommendationFilters({
         />
       </div>
 
-      <div className="mt-3 grid gap-3 md:grid-cols-[0.8fr_1.2fr_180px_1fr]">
-        <label className="block">
-          <span className={labelClass}>Страна</span>
-          <input
-            name="country"
-            type="text"
-            value={countryQuery}
-            onChange={(event) => {
-              setCountryQuery(event.target.value);
-              setSelectedCity(null);
-              setResults([]);
-            }}
-            placeholder="Например, Россия"
-            className={fieldClass}
-          />
-        </label>
+      <div className="mt-3 grid gap-3 md:grid-cols-[1.4fr_180px_1fr]">
+        {/* Страна больше не редактируется вручную — подставляется из выбранного
+            города и уходит на сервер как есть, чтобы бэкенд-фильтр по стране
+            (внутри условия `filters.city`, см. union-profile.service.ts) не
+            терял точность без лишнего поля в UI. */}
+        <input type="hidden" name="country" value={countryQuery} />
         <div className="relative">
           <label htmlFor="recommendation-city" className={labelClass}>
             Город
@@ -254,6 +244,10 @@ export function RecommendationFilters({
               setCityQuery(event.target.value);
               setSelectedCity(null);
               setResults([]);
+              // Страна больше не редактируется вручную: без сброса тут
+              // подставленное ранее значение молча продолжило бы сужать
+              // поиск, даже когда пользователь печатает совсем другой город.
+              setCountryQuery("");
             }}
             placeholder="Начните вводить город"
             className={fieldClass}
