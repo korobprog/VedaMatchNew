@@ -15,13 +15,16 @@ import { Pricing } from "./Pricing";
 import { cn } from "@/lib/utils";
 import { SilentRefresh } from "@/components/silent-refresh";
 import { InstallBanner } from "@/components/pwa/install-banner";
+import { MemberCounter } from "@/components/member-counter";
 
 export function LandingPage({
   returnTo,
   plan,
+  totalMembers,
 }: {
   returnTo?: string;
   plan?: PricingPlan;
+  totalMembers?: number;
 }) {
   return (
     <div className="relative min-h-screen bg-bg-0">
@@ -111,7 +114,11 @@ export function LandingPage({
                 className="flex gap-8 mt-12 justify-center lg:justify-start"
               >
                 <div>
-                  <div className="font-display text-2xl md:text-3xl font-bold text-text-0">10K+</div>
+                  {totalMembers != null && (
+                    <div className="font-display text-2xl md:text-3xl font-bold text-text-0">
+                      <MemberCounter total={totalMembers} />
+                    </div>
+                  )}
                   <div className="text-text-2 text-sm">Пользователей</div>
                 </div>
                 <div className="w-px bg-glass-brd" />

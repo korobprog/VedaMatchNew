@@ -9,6 +9,7 @@ import type {
   AdminUserListResponse,
   AdminUserReportsResponse,
   AdminBillingModeResponse,
+  CommunityStats,
   MentorVerificationPublicRequest,
   DevoteeVerificationStatus,
   PricingPlan,
@@ -82,5 +83,7 @@ export const getAdminSupportTicket = (id: string) =>
   apiGet<AdminSupportTicketDto>(`/admin/support/tickets/${id}`);
 /** Публичный тариф, включает текущий режим биллинга (beta/business). */
 export const getBillingPlan = () => apiGetPublic<PricingPlan>("/billing/plan");
+export const getCommunityStats = () =>
+  apiGetPublic<CommunityStats>("/stats/community");
 export const getAdminBillingMode = () =>
   apiGet<AdminBillingModeResponse>("/admin/billing/mode");
