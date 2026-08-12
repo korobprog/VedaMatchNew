@@ -45,7 +45,13 @@ export default async function Home({
     getCommunityStats().catch(() => null),
   ]);
   if (!user || !services)
-    return <LandingPage returnTo={returnTo} plan={plan ?? undefined} />;
+    return (
+      <LandingPage
+        returnTo={returnTo}
+        plan={plan ?? undefined}
+        totalMembers={communityStats?.totalMembers}
+      />
+    );
   if (!user.spiritualStage) redirect("/self-identification");
 
   const unionQuickAccess = buildUnionQuickAccessData(
