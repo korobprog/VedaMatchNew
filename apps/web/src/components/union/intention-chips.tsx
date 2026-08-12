@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { UnionIntentionCounts, UnionIntentionType } from "@vedamatch/shared";
 import { intentionLabels, intentionTypes } from "./labels";
 
@@ -21,6 +21,18 @@ export function IntentionChips({
   selected: UnionIntentionType[];
 }) {
   const [chosen, setChosen] = useState<UnionIntentionType[]>(selected);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isFirstRender = useRef(true);
+
+  // Клик по чипу должен фильтровать карточки сразу, без отдельного нажатия
+  // «Применить фильтры» — сабмитим форму автоматически при изменении выбора.
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    containerRef.current?.closest("form")?.requestSubmit();
+  }, [chosen]);
 
   function toggle(type: UnionIntentionType) {
     setChosen((current) =>
@@ -33,7 +45,7 @@ export function IntentionChips({
   }
 
   return (
-    <div className="mb-3">
+    <div className="mb-3" ref={containerRef}>
       <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-text-2">
         Цель
       </span>
