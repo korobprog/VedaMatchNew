@@ -327,3 +327,7 @@ export interface AdminRoleUpdateRequest {
   role: Role;
   confirmSelfChange?: boolean;
 }
+
+export interface CommunityStats {
+  totalMembers: number;
+}
