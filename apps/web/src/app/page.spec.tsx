@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServiceCard as ServiceCardType, UserProfile } from "@vedamatch/shared";
 import Home from "./page";
-import { getProfile, getServices } from "@/lib/api";
+import { getCommunityStats, getProfile, getServices } from "@/lib/api";
 import {
   getUnionChats,
   getUnionConnectionCounts,
@@ -14,6 +14,7 @@ vi.mock("@/lib/api", () => ({
   getProfile: vi.fn(),
   getServices: vi.fn(),
   getBillingPlan: vi.fn().mockResolvedValue(null),
+  getCommunityStats: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("@/lib/union-api", () => ({
@@ -31,6 +32,12 @@ vi.mock("@/components/landing", () => ({
 
 vi.mock("@/components/header", () => ({
   Header: () => null,
+}));
+
+// Анимация числа уже покрыта отдельным тестом MemberCounter — здесь важно
+// только то, что портал передаёт в компонент правильное значение.
+vi.mock("@/components/member-counter", () => ({
+  MemberCounter: ({ total }: { total: number }) => <span>{total}</span>,
 }));
 
 const user: UserProfile = {
@@ -82,6 +89,7 @@ describe("Home", () => {
     vi.mocked(getUnionChats).mockResolvedValue(null);
     vi.mocked(getUnionProfileState).mockResolvedValue(null);
     vi.mocked(getUnionRecommendations).mockResolvedValue(null);
+    vi.mocked(getCommunityStats).mockResolvedValue(null);
   });
 
   it("renders the landing page for a guest", async () => {
@@ -124,5 +132,26 @@ describe("Home", () => {
     expect(screen.queryByText(/💬/)).not.toBeInTheDocument();
     expect(screen.queryByText(/❤️/)).not.toBeInTheDocument();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  });
+
+  it("shows the live member count under the welcome message", async () => {
+    vi.mocked(getProfile).mockResolvedValue(user);
+    vi.mocked(getServices).mockResolvedValue(services);
+    vi.mocked(getCommunityStats).mockResolvedValue({ totalMembers: 1234 });
+
+    render(await Home({ searchParams: Promise.resolve({}) }));
+
+    expect(screen.getByText("Вместе нас:")).toBeInTheDocument();
+    expect(screen.getByText("1234")).toBeInTheDocument();
+  });
+
+  it("hides the member count line when the stats request fails", async () => {
+    vi.mocked(getProfile).mockResolvedValue(user);
+    vi.mocked(getServices).mockResolvedValue(services);
+    vi.mocked(getCommunityStats).mockResolvedValue(null);
+
+    render(await Home({ searchParams: Promise.resolve({}) }));
+
+    expect(screen.queryByText("Вместе нас:")).not.toBeInTheDocument();
   });
 });

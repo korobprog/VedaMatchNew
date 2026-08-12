@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
-import { getBillingPlan, getProfile, getServices } from "@/lib/api";
+import { getBillingPlan, getCommunityStats, getProfile, getServices } from "@/lib/api";
 import { Header } from "@/components/header";
 import { ServiceCard } from "@/components/service-card";
+import { MemberCounter } from "@/components/member-counter";
 import {
   getUnionChats,
   getUnionConnectionCounts,
@@ -32,6 +33,7 @@ export default async function Home({
     unionProfile,
     unionRecommendations,
     plan,
+    communityStats,
   ] = await Promise.all([
     getProfile(),
     getServices(),
@@ -40,6 +42,7 @@ export default async function Home({
     getUnionProfileState().catch(() => null),
     getUnionRecommendations({ sort: "new", pageSize: "3" }).catch(() => null),
     getBillingPlan().catch(() => null),
+    getCommunityStats().catch(() => null),
   ]);
   if (!user || !services)
     return <LandingPage returnTo={returnTo} plan={plan ?? undefined} />;
@@ -68,6 +71,15 @@ export default async function Home({
           <p className="text-text-1">
          {user.gender === 'female' ? 'Дорогая' : 'Дорогой'} {user.name}, Вы находитесь на Портале у вас доступ к этим сервисам:
           </p>
+          {communityStats && (
+            <p className="mt-1 text-sm text-text-2">
+              Вместе нас:{" "}
+              <MemberCounter
+                total={communityStats.totalMembers}
+                className="font-semibold text-text-0"
+              />
+            </p>
+          )}
         </section>
         <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {services.map((service) => (
