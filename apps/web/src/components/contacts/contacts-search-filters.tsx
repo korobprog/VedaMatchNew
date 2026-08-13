@@ -1,0 +1,334 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import type {
+  ContactsAshram,
+  ContactsFormat,
+  ContactsSearchFacet,
+  ContactsSearchFilters,
+  ContactsTagDto,
+  SpiritualStage,
+} from "@vedamatch/shared";
+import {
+  CONTACTS_ASHRAMS,
+  CONTACTS_SEARCH_FORMATS,
+  CONTACTS_STAGES,
+} from "@/lib/contacts-api";
+import {
+  contactsAshramLabels,
+  contactsFormatLabels,
+  contactsLanguageOptions,
+  contactsRadiusOptions,
+  contactsStageLabels,
+  contactsTagKindLabels,
+  contactsTagKindOrder,
+} from "./labels";
+
+const fieldClass =
+  "w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0 outline-none transition focus:border-magenta/50";
+const labelClass =
+  "mb-1 block text-xs font-medium uppercase tracking-wide text-text-2";
+const hintClass = "mt-1 text-xs text-text-2";
+const legendClass = "mb-2 text-xs font-medium uppercase tracking-wide text-text-2";
+
+function toggle<T>(values: T[], value: T): T[] {
+  return values.includes(value)
+    ? values.filter((item) => item !== value)
+    : [...values, value];
+}
+
+/**
+ * Панель фильтров справочника. Значения копятся в черновике и уходят в URL
+ * одной кнопкой: иначе каждый щелчок по тегу перезагружал бы выдачу.
+ * Родитель пересоздаёт компонент при смене URL, поэтому черновик всегда
+ * согласован с применёнными фильтрами (в том числе после снятия чипа).
+ */
+export function ContactsSearchFiltersPanel({
+  filters,
+  tags,
+  facets,
+  onApply,
+  onReset,
+}: {
+  filters: ContactsSearchFilters;
+  tags: ContactsTagDto[];
+  facets: ContactsSearchFacet[];
+  onApply: (filters: ContactsSearchFilters) => void;
+  onReset: () => void;
+}) {
+  const [draft, setDraft] = useState<ContactsSearchFilters>(filters);
+
+  const counts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const facet of facets) map.set(facet.tagId, facet.count);
+    return map;
+  }, [facets]);
+
+  const groupedTags = useMemo(
+    () =>
+      contactsTagKindOrder
+        .map((kind) => ({
+          kind,
+          items: tags.filter((tag) => tag.kind === kind),
+        }))
+        .filter((group) => group.items.length > 0),
+    [tags],
+  );
+
+  // Язык, вписанный в карточку вручную, тоже должен остаться в списке выбора.
+  const languageOptions = useMemo(() => {
+    const extra = (draft.languages ?? []).filter(
+      (language) => !contactsLanguageOptions.includes(language),
+    );
+    return [...contactsLanguageOptions, ...extra];
+  }, [draft.languages]);
+
+  function update<K extends keyof ContactsSearchFilters>(
+    key: K,
+    value: ContactsSearchFilters[K],
+  ) {
+    setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        onApply(draft);
+      }}
+      className="glass mb-6 rounded-3xl border border-glass-brd p-4 sm:p-5"
+    >
+      <div className="grid gap-3 md:grid-cols-3">
+        <label className="block md:col-span-2">
+          <span className={labelClass}>Поиск</span>
+          <input
+            type="search"
+            value={draft.q ?? ""}
+            onChange={(event) => update("q", event.target.value)}
+            placeholder="Имя, заголовок или описание"
+            className={fieldClass}
+          />
+        </label>
+        <label className="block">
+          <span className={labelClass}>Формат</span>
+          <select
+            value={draft.format ?? ""}
+            onChange={(event) =>
+              update(
+                "format",
+                event.target.value === ""
+                  ? undefined
+                  : (event.target.value as ContactsFormat),
+              )
+            }
+            className={fieldClass}
+          >
+            <option value="">Любой</option>
+            {CONTACTS_SEARCH_FORMATS.map((format) => (
+              <option key={format} value={format}>
+                {contactsFormatLabels[format]}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-3">
+        <label className="block">
+          <span className={labelClass}>Город</span>
+          <input
+            type="text"
+            value={draft.city ?? ""}
+            onChange={(event) => update("city", event.target.value)}
+            placeholder="Например: Москва"
+            className={fieldClass}
+          />
+        </label>
+        <label className="block">
+          <span className={labelClass}>Страна</span>
+          <input
+            type="text"
+            value={draft.country ?? ""}
+            onChange={(event) => update("country", event.target.value)}
+            placeholder="Например: Россия"
+            className={fieldClass}
+          />
+        </label>
+        <div>
+          <label className="block">
+            <span className={labelClass}>Радиус</span>
+            <select
+              value={draft.radiusKm ? String(draft.radiusKm) : ""}
+              onChange={(event) =>
+                update(
+                  "radiusKm",
+                  event.target.value === ""
+                    ? undefined
+                    : Number(event.target.value),
+                )
+              }
+              className={fieldClass}
+            >
+              <option value="">Без радиуса</option>
+              {contactsRadiusOptions.map((radius) => (
+                <option key={radius} value={radius}>
+                  {radius} км
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className={hintClass}>
+            Радиус считается от вашего города из портального профиля. Если
+            локация не заполнена — ни у вас, ни у человека, — этот фильтр
+            ничего не найдёт.
+          </p>
+        </div>
+      </div>
+
+      <fieldset className="mt-4">
+        <legend className={legendClass}>Духовный этап</legend>
+        <div className="flex flex-wrap gap-2">
+          {CONTACTS_STAGES.map((stage) => (
+            <ChipToggle
+              key={stage}
+              label={contactsStageLabels[stage]}
+              selected={(draft.stages ?? []).includes(stage)}
+              onToggle={() =>
+                update("stages", toggle(draft.stages ?? [], stage) as SpiritualStage[])
+              }
+            />
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="mt-4">
+        <legend className={legendClass}>Ашрам</legend>
+        <div className="flex flex-wrap gap-2">
+          {CONTACTS_ASHRAMS.map((ashram) => (
+            <ChipToggle
+              key={ashram}
+              label={contactsAshramLabels[ashram]}
+              selected={(draft.ashram ?? []).includes(ashram)}
+              onToggle={() =>
+                update(
+                  "ashram",
+                  toggle(draft.ashram ?? [], ashram) as ContactsAshram[],
+                )
+              }
+            />
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="mt-4">
+        <legend className={legendClass}>Языки</legend>
+        <div className="flex flex-wrap gap-2">
+          {languageOptions.map((language) => (
+            <ChipToggle
+              key={language}
+              label={language}
+              selected={(draft.languages ?? []).includes(language)}
+              onToggle={() =>
+                update("languages", toggle(draft.languages ?? [], language))
+              }
+            />
+          ))}
+        </div>
+      </fieldset>
+
+      {groupedTags.map((group) => (
+        <fieldset key={group.kind} className="mt-4">
+          <legend className={legendClass}>
+            {contactsTagKindLabels[group.kind]}
+          </legend>
+          <div className="flex flex-wrap gap-2">
+            {group.items.map((tag) => {
+              const count = counts.get(tag.id);
+              return (
+                <ChipToggle
+                  key={tag.id}
+                  label={tag.nameRu}
+                  // Счётчик есть не всегда: бэкенд отдаёт его только по тем
+                  // тегам, что встречаются в текущей выдаче.
+                  count={count}
+                  selected={(draft.tagIds ?? []).includes(tag.id)}
+                  onToggle={() =>
+                    update("tagIds", toggle(draft.tagIds ?? [], tag.id))
+                  }
+                />
+              );
+            })}
+          </div>
+        </fieldset>
+      ))}
+
+      <label className="mt-4 flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-1">
+        <input
+          type="checkbox"
+          checked={draft.verifiedDevoteeOnly ?? false}
+          onChange={(event) =>
+            update("verifiedDevoteeOnly", event.target.checked)
+          }
+          className="h-4 w-4 accent-cyan"
+        />
+        Только подтверждённые преданные
+      </label>
+
+      <label className="mt-2 flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-1">
+        <input
+          type="checkbox"
+          checked={draft.photoVerifiedOnly ?? false}
+          onChange={(event) => update("photoVerifiedOnly", event.target.checked)}
+          className="h-4 w-4 accent-gold"
+        />
+        Только с проверенным фото
+      </label>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          type="submit"
+          className="rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-5 py-2.5 text-sm font-semibold text-white transition hover:shadow-[0_0_20px_var(--vm-glow-magenta)]"
+        >
+          Применить фильтры
+        </button>
+        <button
+          type="button"
+          onClick={onReset}
+          className="text-sm font-medium text-text-2 transition hover:text-text-0"
+        >
+          Сбросить всё
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ChipToggle({
+  label,
+  count,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  count?: number;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onToggle}
+      className={`rounded-full border px-3 py-1.5 text-sm transition ${
+        selected
+          ? "border-magenta bg-magenta/15 text-text-0"
+          : "border-glass-brd text-text-1 hover:text-text-0"
+      }`}
+    >
+      {label}
+      {count !== undefined && (
+        <span className="ml-1.5 text-xs text-text-2">{count}</span>
+      )}
+    </button>
+  );
+}
