@@ -72,7 +72,10 @@ describe('UnionConnectionService', () => {
       upsert: jest.fn(),
     },
   };
-  const moderation = { isHidden: jest.fn().mockResolvedValue(false) };
+  const moderation = {
+    isHidden: jest.fn().mockResolvedValue(false),
+    hideFrom: jest.fn().mockResolvedValue(undefined),
+  };
   const users = {
     resolveAvatarUrl: jest.fn(
       async (u: { avatarKey: string | null; avatarUrl: string | null }) =>
@@ -89,6 +92,7 @@ describe('UnionConnectionService', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     moderation.isHidden.mockResolvedValue(false);
+    moderation.hideFrom.mockResolvedValue(undefined);
     jest.useFakeTimers().setSystemTime(createdAt);
   });
 
@@ -237,4 +241,42 @@ describe('UnionConnectionService', () => {
       });
     },
   );
+
+  it('hides the person who declined from the sender', async () => {
+    prisma.unionConnectionRequest.findUnique.mockResolvedValue(connection());
+    prisma.unionConnectionRequest.update.mockResolvedValue(
+      connection({ status: 'declined' }),
+    );
+
+    await service.decline('recipient', 'request-1');
+
+    expect(moderation.hideFrom).toHaveBeenCalledWith({
+      ownerId: 'recipient',
+      viewerId: 'sender',
+      source: 'union_declined',
+    });
+  });
+
+  it('does not hide anyone when a request is accepted', async () => {
+    prisma.unionConnectionRequest.findUnique.mockResolvedValue(connection());
+    prisma.unionConnectionRequest.update.mockResolvedValue(
+      connection({ status: 'accepted' }),
+    );
+
+    await service.accept('recipient', 'request-1');
+
+    expect(moderation.hideFrom).not.toHaveBeenCalled();
+  });
+
+  it('leaves the request pending when the hide fails', async () => {
+    prisma.unionConnectionRequest.findUnique.mockResolvedValue(connection());
+    moderation.hideFrom.mockRejectedValue(new Error('db down'));
+
+    await expect(service.decline('recipient', 'request-1')).rejects.toThrow(
+      'db down',
+    );
+    // Отказ без скрытия хуже, чем неудавшийся отказ: повторить можно только
+    // пока заявка pending.
+    expect(prisma.unionConnectionRequest.update).not.toHaveBeenCalled();
+  });
 });

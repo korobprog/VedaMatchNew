@@ -11,6 +11,9 @@ import type {
   AdminUserReportsResponse,
   CreateUserReportRequest,
   UserBlocksState,
+  UserHiddenState,
+  UserHideScope,
+  UserHideSource,
   UserReportReason,
   UserReportStatus,
 } from '@vedamatch/shared';
@@ -32,32 +35,138 @@ export class ModerationService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Идентификаторы, которых нельзя показывать пользователю: он заблокировал их
-   * либо они заблокировали его. Блокировка симметрична по видимости.
+   * Идентификаторы, которых нельзя показывать пользователю: симметричные
+   * блокировки плюс односторонние скрытия, где он выступает зрителем.
+   * `scope` — сервис, который спрашивает; записи `all` действуют везде.
    */
-  async hiddenUserIds(userId: string): Promise<Set<string>> {
-    const blocks = await this.prisma.userBlock.findMany({
-      where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
-      select: { blockerId: true, blockedId: true },
-    });
-    return new Set(
-      blocks.map((block) =>
+  async hiddenUserIds(
+    userId: string,
+    scope: UserHideScope = 'all',
+  ): Promise<Set<string>> {
+    const [blocks, hidden] = await Promise.all([
+      this.prisma.userBlock.findMany({
+        where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
+        select: { blockerId: true, blockedId: true },
+      }),
+      this.prisma.userHiddenFrom.findMany({
+        where: this.hiddenWhere(userId, scope),
+        select: { ownerId: true },
+      }),
+    ]);
+    return new Set([
+      ...blocks.map((block) =>
         block.blockerId === userId ? block.blockedId : block.blockerId,
       ),
-    );
+      ...hidden.map((row) => row.ownerId),
+    ]);
   }
 
-  async isHidden(userId: string, otherUserId: string): Promise<boolean> {
-    const block = await this.prisma.userBlock.findFirst({
-      where: {
-        OR: [
-          { blockerId: userId, blockedId: otherUserId },
-          { blockerId: otherUserId, blockedId: userId },
-        ],
-      },
-      select: { id: true },
+  async isHidden(
+    userId: string,
+    otherUserId: string,
+    scope: UserHideScope = 'all',
+  ): Promise<boolean> {
+    const [block, hidden] = await Promise.all([
+      this.prisma.userBlock.findFirst({
+        where: {
+          OR: [
+            { blockerId: userId, blockedId: otherUserId },
+            { blockerId: otherUserId, blockedId: userId },
+          ],
+        },
+        select: { id: true },
+      }),
+      this.prisma.userHiddenFrom.findFirst({
+        where: { ...this.hiddenWhere(userId, scope), ownerId: otherUserId },
+        select: { id: true },
+      }),
+    ]);
+    return block !== null || hidden !== null;
+  }
+
+  /**
+   * Скрыть `ownerId` от `viewerId`. Направление одностороннее: отказ по заявке
+   * прячет отказавшего от отправителя, но не наоборот — отказавший может
+   * передумать и найти человека сам.
+   */
+  async hideFrom(params: {
+    ownerId: string;
+    viewerId: string;
+    source: UserHideSource;
+    scope?: UserHideScope;
+    expiresAt?: Date | null;
+  }): Promise<void> {
+    const { ownerId, viewerId, source } = params;
+    if (ownerId === viewerId) {
+      throw new BadRequestException('Нельзя скрыть человека от самого себя');
+    }
+    const scope = params.scope ?? 'all';
+    const expiresAt = params.expiresAt ?? null;
+
+    await this.prisma.userHiddenFrom.upsert({
+      where: { ownerId_viewerId_scope: { ownerId, viewerId, scope } },
+      create: { ownerId, viewerId, scope, source, expiresAt },
+      // Повторное скрытие продлевает запись: истёкшая не должна оставаться истёкшей.
+      update: { source, expiresAt },
     });
-    return block !== null;
+  }
+
+  async unhideFrom(
+    ownerId: string,
+    viewerId: string,
+    scope: UserHideScope = 'all',
+  ): Promise<void> {
+    await this.prisma.userHiddenFrom.deleteMany({
+      where: { ownerId, viewerId, scope },
+    });
+  }
+
+  /** Кого текущий пользователь сам убрал из своей выдачи. */
+  async listHidden(viewerId: string): Promise<UserHiddenState> {
+    const rows = await this.prisma.userHiddenFrom.findMany({
+      where: { viewerId, source: 'manual' },
+      include: { owner: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return {
+      hidden: rows.map((row) => ({
+        userId: row.owner.id,
+        name: row.owner.name,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  /** Человек убирает кого-то из своей выдачи — мягкая альтернатива блокировке. */
+  async hide(viewerId: string, targetId: string): Promise<UserHiddenState> {
+    if (viewerId === targetId) {
+      throw new BadRequestException('Нельзя скрыть самого себя');
+    }
+    await this.requireUser(targetId);
+    await this.hideFrom({
+      ownerId: targetId,
+      viewerId,
+      source: 'manual',
+    });
+    return this.listHidden(viewerId);
+  }
+
+  async unhide(viewerId: string, targetId: string): Promise<UserHiddenState> {
+    await this.unhideFrom(targetId, viewerId);
+    return this.listHidden(viewerId);
+  }
+
+  /**
+   * Условие выборки действующих скрытий: записи своего скоупа и `all`,
+   * у которых не вышел срок.
+   */
+  private hiddenWhere(viewerId: string, scope: UserHideScope) {
+    const scopes: UserHideScope[] = scope === 'all' ? ['all'] : ['all', scope];
+    return {
+      viewerId,
+      scope: { in: scopes },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    };
   }
 
   async listBlocks(userId: string): Promise<UserBlocksState> {

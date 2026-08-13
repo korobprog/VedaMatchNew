@@ -18,6 +18,7 @@ import { LibraryModule } from './modules/library/library.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AstroModule } from './modules/astro/astro.module';
 import { StatsModule } from './modules/stats/stats.module';
+import { ContactsModule } from './modules/contacts/contacts.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { StatsModule } from './modules/stats/stats.module';
     NotificationsModule,
     AstroModule,
     StatsModule,
+    ContactsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

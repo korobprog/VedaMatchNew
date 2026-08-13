@@ -205,6 +205,13 @@ model User {
   photos                             UserPhoto[]
   blocksMade                         UserBlock[]                  @relation("UserBlocksMade")
   blocksReceived                     UserBlock[]                  @relation("UserBlocksReceived")
+  hiddenFromOthers                   UserHiddenFrom[]             @relation("UserHiddenOwner")
+  hiddenOthers                       UserHiddenFrom[]             @relation("UserHiddenViewer")
+  contactsProfile                    ContactsProfile?
+  contactsRequestsSent               ContactsRequest[]            @relation("ContactsRequestsSent")
+  contactsRequestsReceived           ContactsRequest[]            @relation("ContactsRequestsReceived")
+  contactsDisclosuresGranted         ContactsDisclosure[]         @relation("ContactsDisclosuresGranted")
+  contactsDisclosuresReceived        ContactsDisclosure[]         @relation("ContactsDisclosuresReceived")
   reportsMade                        UserReport[]                 @relation("UserReportsMade")
   reportsReceived                    UserReport[]                 @relation("UserReportsReceived")
   reportsReviewed                    UserReport[]                 @relation("UserReportsReviewed")
@@ -934,6 +941,44 @@ model UserBlock {
   @@index([blockedId])
 }
 
+/// Где действует скрытие. Отдельный сервис спрашивает свой скоуп и `all`.
+enum UserHideScope {
+  all
+  union
+  contacts
+}
+
+/// Откуда взялась запись. `manual` — человек сам убрал кого-то из своей выдачи,
+/// `union_declined` — автоматика отказа по заявке знакомства.
+enum UserHideSource {
+  manual
+  union_declined
+  moderation
+}
+
+/// Односторонняя невидимость: `ownerId` не показывается `viewerId`.
+/// В отличие от `UserBlock` работает в одну сторону и заводится автоматикой:
+/// отказ по заявке в Union прячет отказавшего от того, кому отказали, во всех
+/// сервисах-справочниках. Обратное направление не создаётся — отказавший
+/// может передумать и найти человека сам.
+model UserHiddenFrom {
+  id        String         @id @default(uuid())
+  /// Кого скрываем.
+  ownerId   String
+  owner     User           @relation("UserHiddenOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  /// От кого скрываем.
+  viewerId  String
+  viewer    User           @relation("UserHiddenViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  scope     UserHideScope  @default(all)
+  source    UserHideSource
+  createdAt DateTime       @default(now())
+  /// Срок, после которого скрытие перестаёт действовать. null — бессрочно.
+  expiresAt DateTime?
+
+  @@unique([ownerId, viewerId, scope])
+  @@index([viewerId, scope, expiresAt])
+}
+
 model UserReport {
   id            String           @id @default(uuid())
   reporterId    String
@@ -1432,4 +1477,148 @@ model AstroTransitPhrase {
   createdAt     DateTime @default(now())
 
   @@unique([patternKey, locale, promptVersion])
+}
+
+// ===== Contacts service =====
+
+/// Кто видит карточку в справочнике. `by_link` — карточки нет в выдаче,
+/// но она открывается по прямой ссылке, которую человек дал сам.
+enum ContactsVisibility {
+  everyone
+  verified_only
+  same_city
+  by_link
+  hidden
+}
+
+/// Состояние карточки. Справочник услуг притягивает спам, поэтому карточка
+/// с коммерческими тегами проходит через `pending`.
+enum ContactsProfileStatus {
+  draft
+  pending
+  active
+}
+
+/// Ашрам — закрытый и стабильный набор, поэтому enum, а не тег.
+enum ContactsAshram {
+  brahmachari
+  grihastha
+  vanaprastha
+  sannyasi
+}
+
+enum ContactsFormat {
+  online
+  offline
+  any
+}
+
+/// Виды тегов справочника. Растут постоянно, поэтому значения живут
+/// в таблице `ContactsTag`, а enum описывает только разделы.
+enum ContactsTagKind {
+  service
+  profession
+  skill
+  interest
+}
+
+/// Карточка в справочнике. Создаётся явным действием человека: справочник
+/// opt-in, портальный профиль сам по себе в него не попадает.
+model ContactsProfile {
+  id                       String                @id @default(uuid())
+  userId                   String                @unique
+  user                     User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Короткая строка «чем полезен» — заголовок карточки в выдаче.
+  headline                 String?
+  about                    String?
+  /// Что человек предлагает и с чем готов помочь.
+  offers                   String?
+  languages                String[]              @default([])
+  ashram                   ContactsAshram?
+  format                   ContactsFormat        @default(any)
+  visibility               ContactsVisibility    @default(hidden)
+  status                   ContactsProfileStatus @default(draft)
+  /// Пауза: до этой даты карточка не показывается и возвращается сама.
+  pausedUntil              DateTime?
+  /// Видимость отдельных полей: { city, photo, age } со значениями
+  /// 'everyone' | 'hidden'. Не связана с приватностью Union — в справочнике
+  /// человек может открыть то, что закрыл в знакомствах.
+  fieldPrivacy             Json?
+  /// Обращения только от подтверждённых преданных.
+  requestsFromVerifiedOnly Boolean               @default(false)
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+
+  tags ContactsProfileTag[]
+
+  @@index([status, visibility])
+}
+
+/// Справочник тегов. Системные приезжают сидом, пользовательские — через
+/// модерацию, поэтому новый вид служения не требует миграции БД.
+model ContactsTag {
+  id        String          @id @default(uuid())
+  slug      String          @unique
+  kind      ContactsTagKind
+  nameRu    String
+  isSystem  Boolean         @default(true)
+  sortOrder Int             @default(0)
+
+  profiles ContactsProfileTag[]
+
+  @@index([kind, sortOrder])
+}
+
+model ContactsProfileTag {
+  profileId String
+  profile   ContactsProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       ContactsTag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([profileId, tagId])
+  @@index([tagId])
+}
+
+/// Запрос контакта. В отличие от заявки в Union это не про отношения,
+/// а про один конкретный вопрос: можно ли получить способ связаться.
+enum ContactsRequestStatus {
+  pending
+  accepted
+  declined
+  cancelled
+}
+
+model ContactsRequest {
+  id          String                @id @default(uuid())
+  fromUserId  String
+  fromUser    User                  @relation("ContactsRequestsSent", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId    String
+  toUser      User                  @relation("ContactsRequestsReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+  message     String?
+  status      ContactsRequestStatus @default(pending)
+  createdAt   DateTime              @default(now())
+  respondedAt DateTime?
+
+  disclosure ContactsDisclosure?
+
+  @@unique([fromUserId, toUserId])
+  @@index([toUserId, status])
+  @@index([fromUserId, createdAt])
+}
+
+/// Журнал раскрытий: кому владелец открыл свои контакты и когда закрыл обратно.
+/// Отзыв не удаляет строку — человек должен видеть историю, а не чистый лист.
+model ContactsDisclosure {
+  id        String           @id @default(uuid())
+  ownerId   String
+  owner     User             @relation("ContactsDisclosuresGranted", fields: [ownerId], references: [id], onDelete: Cascade)
+  viewerId  String
+  viewer    User             @relation("ContactsDisclosuresReceived", fields: [viewerId], references: [id], onDelete: Cascade)
+  requestId String?          @unique
+  request   ContactsRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  grantedAt DateTime         @default(now())
+  revokedAt DateTime?
+
+  @@unique([ownerId, viewerId])
+  @@index([viewerId, revokedAt])
 }

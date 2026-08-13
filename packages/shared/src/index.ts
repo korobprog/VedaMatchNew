@@ -5,6 +5,7 @@ export * from './library';
 export * from './video-embed';
 export * from './motivation';
 export * from './moderation';
+export * from './contacts';
 export * from './support';
 export * from './notifications';
 export * from './astro';

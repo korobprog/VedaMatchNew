@@ -20,6 +20,19 @@ export type NotificationEvent =
       senderName: string;
       requestId: string;
     }
+  | {
+      name: 'contacts.request.received';
+      recipientId: string;
+      senderName: string;
+    }
+  | {
+      name: 'contacts.request.accepted';
+      recipientId: string;
+      /** Имя того, кто открыл контакты. */
+      senderName: string;
+      /** Карточка, на которой теперь видны способы связи. */
+      ownerUserId: string;
+    }
   | { name: 'support.ticket.replied'; recipientId: string; ticketId: string }
   | {
       name: 'astro.transit.digest-ready';

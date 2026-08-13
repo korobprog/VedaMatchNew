@@ -108,7 +108,7 @@ export class UnionConnectionService {
     if (!toProfile || !toProfile.isActive) {
       throw new NotFoundException('Union profile not found');
     }
-    if (await this.moderation.isHidden(fromUserId, toUserId)) {
+    if (await this.moderation.isHidden(fromUserId, toUserId, 'union')) {
       throw new ForbiddenException(
         'Отправка запроса этому человеку недоступна',
       );
@@ -220,6 +220,14 @@ export class UnionConnectionService {
     if (request.status !== 'pending') {
       throw new BadRequestException('Only pending requests can be declined');
     }
+
+    // Скрываем до смены статуса: если скрытие упадёт, заявка останется pending
+    // и отказ можно повторить. Обратный порядок оставил бы отказ без защиты.
+    await this.moderation.hideFrom({
+      ownerId: userId,
+      viewerId: request.fromUserId,
+      source: 'union_declined',
+    });
 
     const declined = await this.prisma.unionConnectionRequest.update({
       where: { id: request.id },

@@ -19,6 +19,12 @@ describe('ModerationService', () => {
       count: jest.fn(),
       groupBy: jest.fn(),
     },
+    userHiddenFrom: {
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      upsert: jest.fn(),
+      deleteMany: jest.fn(),
+    },
     unionConnectionRequest: { updateMany: jest.fn() },
     user: { findUnique: jest.fn() },
     $transaction: jest.fn().mockResolvedValue([]),
@@ -29,6 +35,9 @@ describe('ModerationService', () => {
     jest.clearAllMocks();
     prisma.user.findUnique.mockResolvedValue({ id: 'target' });
     prisma.userBlock.findMany.mockResolvedValue([]);
+    prisma.userBlock.findFirst.mockResolvedValue(null);
+    prisma.userHiddenFrom.findMany.mockResolvedValue([]);
+    prisma.userHiddenFrom.findFirst.mockResolvedValue(null);
   });
 
   it('hides both directions of a block', async () => {
@@ -39,6 +48,101 @@ describe('ModerationService', () => {
 
     await expect(service.hiddenUserIds('me')).resolves.toEqual(
       new Set(['blocked-by-me', 'blocked-me']),
+    );
+  });
+
+  it('adds one-way hides to the blocked set', async () => {
+    prisma.userBlock.findMany.mockResolvedValue([
+      { blockerId: 'me', blockedId: 'blocked-by-me' },
+    ]);
+    prisma.userHiddenFrom.findMany.mockResolvedValue([
+      { ownerId: 'declined-me' },
+    ]);
+
+    await expect(service.hiddenUserIds('me', 'contacts')).resolves.toEqual(
+      new Set(['blocked-by-me', 'declined-me']),
+    );
+  });
+
+  it('asks a service scope for its own records and the global ones', async () => {
+    await service.hiddenUserIds('me', 'contacts');
+
+    expect(prisma.userHiddenFrom.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          viewerId: 'me',
+          scope: { in: ['all', 'contacts'] },
+        }),
+      }),
+    );
+  });
+
+  it('does not apply a service-scoped hide to the global scope', async () => {
+    await service.hiddenUserIds('me');
+
+    expect(prisma.userHiddenFrom.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ scope: { in: ['all'] } }),
+      }),
+    );
+  });
+
+  it('ignores hides whose term has run out', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-13T10:00:00.000Z'));
+
+    await service.hiddenUserIds('me');
+
+    expect(prisma.userHiddenFrom.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date('2026-08-13T10:00:00.000Z') } },
+          ],
+        }),
+      }),
+    );
+    jest.useRealTimers();
+  });
+
+  it('treats a one-way hide as hidden even without a block', async () => {
+    prisma.userHiddenFrom.findFirst.mockResolvedValue({ id: 'hide-1' });
+
+    await expect(service.isHidden('me', 'other')).resolves.toBe(true);
+  });
+
+  it('hides the target from the viewer, not the other way round', async () => {
+    prisma.userHiddenFrom.findMany.mockResolvedValue([]);
+
+    await service.hide('me', 'target');
+
+    expect(prisma.userHiddenFrom.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: {
+          ownerId: 'target',
+          viewerId: 'me',
+          scope: 'all',
+          source: 'manual',
+          expiresAt: null,
+        },
+      }),
+    );
+  });
+
+  it('rejects hiding yourself', async () => {
+    await expect(service.hide('me', 'me')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(prisma.userHiddenFrom.upsert).not.toHaveBeenCalled();
+  });
+
+  it('lists only the hides a person made by hand', async () => {
+    prisma.userHiddenFrom.findMany.mockResolvedValue([]);
+
+    await service.listHidden('me');
+
+    expect(prisma.userHiddenFrom.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { viewerId: 'me', source: 'manual' } }),
     );
   });
 

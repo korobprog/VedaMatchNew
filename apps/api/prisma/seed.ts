@@ -13,6 +13,17 @@ const { librarySections } = require('./library-sections-data.js') as {
   }>;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { contactsTags } = require('./contacts-tags-data.js') as {
+  contactsTags: Array<{
+    slug: string;
+    kind: 'service' | 'profession' | 'skill' | 'interest';
+    nameRu: string;
+    isSystem: boolean;
+    sortOrder: number;
+  }>;
+};
+
 const services = [
   {
     slug: 'union',
@@ -89,6 +100,23 @@ const services = [
     devoteeSelfIdentifiedVisible: true,
     devoteeVerifiedVisible: true,
   },
+  {
+    slug: 'contacts',
+    name: 'Контакты',
+    description:
+      'Справочник общины: преподаватели, служения, профессии и навыки рядом',
+    url: '/contacts',
+    // active: карточка, поиск с фильтрами и запросы контакта работают.
+    // Модерация карточек и «кто смотрел» — отдельный этап, статуса не меняют.
+    status: 'active' as const,
+    category: 'community',
+    public: true,
+    seekerVisible: true,
+    practitionerVisible: true,
+    yogiVisible: true,
+    devoteeSelfIdentifiedVisible: true,
+    devoteeVerifiedVisible: true,
+  },
 ];
 
 async function main() {
@@ -116,9 +144,19 @@ async function main() {
         create: section,
       });
     }
+    // Пользовательские теги сюда не попадают: upsert идёт по slug, а список
+    // системных фиксирован, поэтому повторный прогон только освежает названия
+    // и порядок и никогда не удаляет то, что завели через модерацию.
+    for (const tag of contactsTags) {
+      await transaction.contactsTag.upsert({
+        where: { slug: tag.slug },
+        update: tag,
+        create: tag,
+      });
+    }
   });
   console.log(
-    `Seeded ${services.length} services and ${librarySections.length} library sections`,
+    `Seeded ${services.length} services, ${librarySections.length} library sections and ${contactsTags.length} contacts tags`,
   );
 }
 
