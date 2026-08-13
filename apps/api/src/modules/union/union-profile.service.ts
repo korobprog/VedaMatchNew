@@ -332,7 +332,7 @@ export class UnionProfileService {
     });
 
     const connections = await this.connectionMap(userId);
-    const hidden = await this.moderation.hiddenUserIds(userId);
+    const hidden = await this.moderation.hiddenUserIds(userId, 'union');
     const swiped = await this.swipedUserIds(userId);
     const boosted = await this.boostedUserIds();
     const myInput = this.toMatchInput(me, me.user);
@@ -466,8 +466,9 @@ export class UnionProfileService {
     if (!other || (!other.isActive && connection?.status !== 'accepted')) {
       throw new NotFoundException('Профиль не найден');
     }
-    // Заблокированный профиль не должен открываться и по прямой ссылке.
-    if (await this.moderation.isHidden(userId, targetUserId)) {
+    // Скрытый профиль не должен открываться и по прямой ссылке. Отвечаем 404,
+    // а не 403: 403 подтвердил бы, что человек существует и просто избегает.
+    if (await this.moderation.isHidden(userId, targetUserId, 'union')) {
       throw new NotFoundException('Профиль не найден');
     }
 

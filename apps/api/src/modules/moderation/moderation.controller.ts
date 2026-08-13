@@ -38,6 +38,23 @@ export class ModerationController {
     return this.moderation.unblock(user.sub, id);
   }
 
+  // Мягкая альтернатива блокировке: человек просто убирает кого-то из своей
+  // выдачи. Порог ниже, чем у блокировки, поэтому пользоваться будут чаще.
+  @Get('hidden')
+  hidden(@CurrentUser() user: AccessTokenPayload) {
+    return this.moderation.listHidden(user.sub);
+  }
+
+  @Post('users/:id/hide')
+  hide(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.moderation.hide(user.sub, id);
+  }
+
+  @Delete('users/:id/hide')
+  unhide(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.moderation.unhide(user.sub, id);
+  }
+
   // Жалобы дешевле спамить, чем разбирать: ограничиваем частоту отправки.
   @Post('users/:id/report')
   @Throttle({ default: { limit: 10, ttl: 60 * 60_000 } })

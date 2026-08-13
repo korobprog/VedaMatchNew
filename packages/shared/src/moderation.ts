@@ -1,4 +1,22 @@
-// Типы модерации Union: блокировки и жалобы. См. docs/service-module-contract.md
+// Типы модерации: блокировки, скрытия и жалобы. См. docs/service-module-contract.md
+
+/** Где действует скрытие. Сервис спрашивает свой скоуп и `all`. */
+export type UserHideScope = 'all' | 'union' | 'contacts';
+
+/** Откуда взялась запись о скрытии. */
+export type UserHideSource = 'manual' | 'union_declined' | 'moderation';
+
+/** Человек, которого текущий пользователь убрал из своей выдачи. */
+export interface UserHiddenDto {
+  userId: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface UserHiddenState {
+  hidden: UserHiddenDto[];
+}
+
 
 export type UserReportReason =
   | 'spam'
