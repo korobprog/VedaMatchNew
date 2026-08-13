@@ -4,6 +4,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import type { NotificationEvent } from '@vedamatch/shared';
 import type {
   ContactsCreateRequestBody,
   ContactsDisclosureDto,
@@ -71,6 +73,7 @@ export class ContactsRequestsService {
     private readonly contacts: ContactsService,
     private readonly moderation: ModerationService,
     private readonly users: UsersService,
+    private readonly events: EventEmitter2,
   ) {}
 
   /**
@@ -141,6 +144,14 @@ export class ContactsRequestsService {
         createdAt: now,
         respondedAt: null,
       },
+    });
+
+    // Без уведомления запрос лежит молча, пока получатель сам не зайдёт
+    // в раздел, — а весь сценарий держится на том, что он его увидел.
+    this.emit({
+      name: 'contacts.request.received',
+      recipientId: toUserId,
+      senderName: await this.displayName(userId),
     });
 
     return this.list(userId, now);
@@ -238,6 +249,15 @@ export class ContactsRequestsService {
           },
           update: { requestId: request.id, grantedAt: now, revokedAt: null },
         });
+      });
+
+      // Событие несёт всё, что нужно подписчику: он не имеет права дочитывать
+      // недостающее из таблиц справочника. Формулировку собирает он же.
+      this.emit({
+        name: 'contacts.request.accepted',
+        recipientId: request.fromUserId,
+        senderName: await this.displayName(userId),
+        ownerUserId: userId,
       });
       return this.list(userId, now);
     }
@@ -374,6 +394,23 @@ export class ContactsRequestsService {
         },
       ]),
     );
+  }
+
+  /**
+   * Событие уведомления. Payload самодостаточен: подписчик не имеет права
+   * дочитывать недостающее из таблиц справочника, а формулировку собирает сам.
+   */
+  private emit(event: NotificationEvent): void {
+    this.events.emit(event.name, event);
+  }
+
+  /** Имя для уведомления. Пустое — не повод ронять запрос. */
+  private async displayName(userId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true },
+    });
+    return user?.name ?? 'Участник';
   }
 
   private async isVerified(userId: string): Promise<boolean> {

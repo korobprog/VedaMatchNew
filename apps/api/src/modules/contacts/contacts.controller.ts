@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type {
   AccessTokenPayload,
   ContactsCreateRequestBody,
@@ -22,6 +23,11 @@ import { ContactsService } from './contacts.service';
 /**
  * Справочник доступен только авторизованным: каталог вайшнавов с городами
  * не должен быть открыт наружу.
+ *
+ * Чтения ограничены по частоте: справочник — это база живых людей, и без
+ * лимита его можно вычерпать постранично. Троттлинг поднимает цену выгрузки,
+ * но не отменяет её: полноценная защита — учёт просмотров карточек, он
+ * отдельным этапом. Пороги подобраны так, чтобы живой человек их не заметил.
  */
 @Controller('contacts')
 @UseGuards(AuthGuard)
@@ -55,6 +61,7 @@ export class ContactsController {
    * и через запятую (`?tagIds=a,b`) — разбор один и тот же.
    */
   @Get('search')
+  @Throttle({ default: { limit: 120, ttl: 60 * 60_000 } })
   search(
     @CurrentUser() user: AccessTokenPayload,
     @Query() query: Record<string, unknown>,
@@ -63,6 +70,7 @@ export class ContactsController {
   }
 
   @Get('users/:id')
+  @Throttle({ default: { limit: 300, ttl: 60 * 60_000 } })
   card(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.contacts.getCard(user.sub, id);
   }
@@ -72,7 +80,10 @@ export class ContactsController {
     return this.requests.list(user.sub);
   }
 
+  // Суточный лимит на запросы считает сервис; здесь — защита от долбёжки,
+  // чтобы отбитые ошибки не стоили базе ничего.
   @Post('requests')
+  @Throttle({ default: { limit: 30, ttl: 60 * 60_000 } })
   createRequest(
     @CurrentUser() user: AccessTokenPayload,
     @Body() body: ContactsCreateRequestBody,

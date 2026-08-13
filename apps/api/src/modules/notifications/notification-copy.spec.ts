@@ -38,6 +38,35 @@ describe('buildNotification', () => {
     expect(first.tag).toBe(second.tag);
   });
 
+  it('ведёт запрос контакта в раздел запросов справочника', () => {
+    expect(
+      buildNotification({
+        name: 'contacts.request.received',
+        recipientId: 'u1',
+        senderName: 'Вринда',
+      }),
+    ).toEqual({
+      title: 'Запрос контакта',
+      body: 'Вринда просит способ связаться',
+      url: '/contacts/requests',
+      tag: 'contacts-requests',
+      category: 'connections',
+    });
+  });
+
+  it('ведёт открытые контакты на карточку того, кто их открыл', () => {
+    const content = buildNotification({
+      name: 'contacts.request.accepted',
+      recipientId: 'u1',
+      senderName: 'Вринда',
+      ownerUserId: 'owner-1',
+    });
+
+    expect(content.url).toBe('/contacts/users/owner-1');
+    // Формулировки без рода: User.gender необязателен.
+    expect(content.body).toBe('Теперь вы видите способы связи с Вринда');
+  });
+
   it('ведёт входящую заявку в список заявок', () => {
     expect(
       buildNotification({

@@ -12,6 +12,8 @@ export const notificationEventNames = {
   chatMessageSent: 'union.chat.message-sent',
   connectionRequested: 'union.connection.requested',
   connectionAccepted: 'union.connection.accepted',
+  contactsRequestReceived: 'contacts.request.received',
+  contactsRequestAccepted: 'contacts.request.accepted',
   supportReplied: 'support.ticket.replied',
   astroTransitDigestReady: 'astro.transit.digest-ready',
 } as const satisfies Record<string, NotificationEventName>;
@@ -64,6 +66,25 @@ export function buildNotification(
         body: `Теперь вы можете общаться с ${event.senderName}`,
         url: `/union/chats/${event.requestId}`,
         tag: 'connections',
+        category: 'connections',
+      };
+    // Справочник переиспользует категорию «connections»: отдельного тумблера
+    // в настройках нет, и заводить его — это колонка в БД и миграция.
+    // Если понадобится разделить знакомства и справочник, добавлять здесь.
+    case 'contacts.request.received':
+      return {
+        title: 'Запрос контакта',
+        body: `${event.senderName} просит способ связаться`,
+        url: '/contacts/requests',
+        tag: 'contacts-requests',
+        category: 'connections',
+      };
+    case 'contacts.request.accepted':
+      return {
+        title: 'Контакты открыты',
+        body: `Теперь вы видите способы связи с ${event.senderName}`,
+        url: `/contacts/users/${event.ownerUserId}`,
+        tag: 'contacts-requests',
         category: 'connections',
       };
     case 'support.ticket.replied':

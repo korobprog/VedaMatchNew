@@ -75,11 +75,13 @@ describe('ContactsRequestsService', () => {
   const contacts = { getCard: jest.fn() };
   const moderation = { hideFrom: jest.fn() };
   const users = { resolveAvatarUrl: jest.fn() };
+  const events = { emit: jest.fn() };
   const service = new ContactsRequestsService(
     prisma as unknown as PrismaService,
     contacts as unknown as ContactsService,
     moderation as unknown as ModerationService,
     users as unknown as UsersService,
+    events as never,
   );
 
   beforeEach(() => {
@@ -97,6 +99,8 @@ describe('ContactsRequestsService', () => {
     prisma.contactsDisclosure.findMany.mockResolvedValue([]);
     prisma.contactsDisclosure.upsert.mockResolvedValue({ id: 'disc-1' });
     prisma.user.findUnique.mockResolvedValue({
+      // name читается для уведомления, стадии — для requestsFromVerifiedOnly.
+      name: 'Кришна',
       spiritualStage: 'practitioner',
       devoteeVerificationStatus: null,
     });
@@ -169,6 +173,18 @@ describe('ContactsRequestsService', () => {
       expect(upsertArg(prisma.contactsRequest.upsert).create).toEqual(
         expect.objectContaining({ message: null }),
       );
+    });
+
+    it('уведомляет получателя о новом запросе', async () => {
+      // Без события запрос лежит молча, пока получатель сам не зайдёт
+      // в раздел, — а весь сценарий держится на том, что он его увидел.
+      await service.create('viewer', { toUserId: 'owner' }, now);
+
+      expect(events.emit).toHaveBeenCalledWith('contacts.request.received', {
+        name: 'contacts.request.received',
+        recipientId: 'owner',
+        senderName: 'Кришна',
+      });
     });
 
     it('отклоняет сообщение длиннее 500 символов', async () => {
@@ -398,6 +414,17 @@ describe('ContactsRequestsService', () => {
         );
       });
 
+      it('уведомляет отправителя, что контакты открыты', async () => {
+        await service.respond('owner', 'req-1', { accept: true }, now);
+
+        expect(events.emit).toHaveBeenCalledWith('contacts.request.accepted', {
+          name: 'contacts.request.accepted',
+          recipientId: 'viewer',
+          senderName: 'Кришна',
+          ownerUserId: 'owner',
+        });
+      });
+
       it('повторное согласие после отзыва переоткрывает ту же строку журнала', async () => {
         await service.respond('owner', 'req-1', { accept: true }, now);
 
@@ -406,6 +433,14 @@ describe('ContactsRequestsService', () => {
         expect(upsertArg(prisma.contactsDisclosure.upsert).update).toEqual(
           expect.objectContaining({ revokedAt: null, requestId: 'req-1' }),
         );
+      });
+
+      it('отказ никого не уведомляет', async () => {
+        // Отказ — не новость, о которой стоит присылать пуш: он только
+        // подчеркнул бы его. Человек увидит статус, когда зайдёт сам.
+        await service.respond('owner', 'req-1', { accept: false }, now);
+
+        expect(events.emit).not.toHaveBeenCalled();
       });
 
       it('ОТКАЗ БЕЗ ГАЛОЧКИ НИКОГО НЕ СКРЫВАЕТ', async () => {
