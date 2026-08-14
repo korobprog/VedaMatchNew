@@ -9,6 +9,7 @@ import type {
   ContactsFieldPrivacy,
   ContactsFieldVisibility,
   ContactsFormat,
+  ContactsMapResponse,
   ContactsProfileDto,
   ContactsProfileState,
   ContactsRequestsState,
@@ -127,6 +128,23 @@ function appendList(
   for (const value of values ?? []) appendText(query, key, value);
 }
 
+/**
+ * Центр радиуса уходит только парой и только вместе с радиусом: точка без
+ * радиуса ничего не сужает, а половина пары — ошибка запроса на бэкенде.
+ * Ноль здесь допустим (экватор и Гринвич), поэтому `appendNumber` не годится.
+ */
+function appendCoordinates(
+  query: URLSearchParams,
+  filters: ContactsSearchFilters,
+): void {
+  const { lat, lon, radiusKm } = filters;
+  if (!radiusKm) return;
+  if (typeof lat !== "number" || !Number.isFinite(lat)) return;
+  if (typeof lon !== "number" || !Number.isFinite(lon)) return;
+  query.append("lat", String(lat));
+  query.append("lon", String(lon));
+}
+
 /** Ложный флаг равен отсутствию фильтра, поэтому в запрос он не попадает. */
 function appendFlag(
   query: URLSearchParams,
@@ -149,6 +167,7 @@ export function buildContactsSearchQuery(
   appendText(query, "city", filters.city);
   appendText(query, "country", filters.country);
   appendNumber(query, "radiusKm", filters.radiusKm);
+  appendCoordinates(query, filters);
   appendList(query, "stages", filters.stages);
   appendList(query, "ashram", filters.ashram);
   appendList(query, "tagIds", filters.tagIds);
@@ -193,6 +212,21 @@ function parseNumber(
   return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
+/** Координата может быть нулём и отрицательной, поэтому проверка своя. */
+function parseCoordinate(
+  params: ContactsQueryParams,
+  key: string,
+  limit: number,
+): number | undefined {
+  const raw = params.get(key);
+  if (raw === null || raw.trim() === "") return undefined;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < -limit || value > limit) {
+    return undefined;
+  }
+  return value;
+}
+
 /**
  * Фильтры из адресной строки страницы. Ключи URL совпадают с параметрами API,
  * поэтому ссылкой на поиск можно поделиться, а «назад» возвращает прошлую выдачу.
@@ -204,11 +238,19 @@ export function parseContactsSearchFilters(
     (value) => value === params.get("format"),
   );
 
+  // Координаты берём только парой: одна половина центра для бэкенда — ошибка,
+  // и достраивать её из адресной строки нечем.
+  const lat = parseCoordinate(params, "lat", 90);
+  const lon = parseCoordinate(params, "lon", 180);
+  const hasCenter = lat !== undefined && lon !== undefined;
+
   return {
     q: parseText(params, "q"),
     city: parseText(params, "city"),
     country: parseText(params, "country"),
     radiusKm: parseNumber(params, "radiusKm"),
+    lat: hasCenter ? lat : undefined,
+    lon: hasCenter ? lon : undefined,
     stages: parseList(params, "stages", CONTACTS_STAGES),
     ashram: parseList(params, "ashram", CONTACTS_ASHRAMS),
     tagIds: params.getAll("tagIds").filter(Boolean),
@@ -227,6 +269,25 @@ export const searchContacts = (
   const query = buildContactsSearchQuery(filters);
   return requestJson<ContactsSearchResponse>(
     query ? `/contacts/search?${query}` : "/contacts/search",
+    { method: "GET", signal },
+  );
+};
+
+/**
+ * Города для карты по тем же фильтрам, что и выдача. Страница и её размер
+ * карте не нужны: ей нужны все совпадения сразу, а не текущий срез.
+ */
+export const getContactsMapPoints = (
+  filters: ContactsSearchFilters,
+  signal?: AbortSignal,
+) => {
+  const query = buildContactsSearchQuery({
+    ...filters,
+    page: undefined,
+    pageSize: undefined,
+  });
+  return requestJson<ContactsMapResponse>(
+    query ? `/contacts/map?${query}` : "/contacts/map",
     { method: "GET", signal },
   );
 };

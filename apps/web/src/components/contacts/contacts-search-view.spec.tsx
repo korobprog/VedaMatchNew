@@ -128,12 +128,38 @@ describe("ContactsSearchView", () => {
     stubApi(response());
     render(<ContactsSearchView />);
 
+    // Группы тегов свёрнуты по умолчанию — до чипов надо раскрыть «Служение».
+    await userEvent.click(await screen.findByRole("button", { name: /Служение/ }));
+
     const withCount = await screen.findByRole("button", { name: /Пуджари/ });
     expect(withCount).toHaveTextContent("7");
     // По этому тегу счётчика не пришло — придумывать ноль нельзя.
     expect(
       screen.getByRole("button", { name: "Повар-прасадарий" }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps tag groups collapsed until they are opened", async () => {
+    // Групп семь, а тегов под сотню: развёрнутыми они отодвигали кнопку
+    // «Применить» на несколько экранов вниз.
+    stubApi(response());
+    render(<ContactsSearchView />);
+
+    const section = await screen.findByRole("button", { name: /Служение/ });
+    expect(section).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.queryByRole("button", { name: /Пуджари/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens a tag group that already has a selection", async () => {
+    // Иначе применённое условие пряталось бы от собственного автора.
+    currentQuery = "tagIds=tag-pujari";
+    stubApi(response());
+    render(<ContactsSearchView />);
+
+    const section = await screen.findByRole("button", { name: /Служение/ });
+    expect(section).toHaveAttribute("aria-expanded", "true");
   });
 
   it("removes a single tag when its chip is dismissed and keeps the rest", async () => {

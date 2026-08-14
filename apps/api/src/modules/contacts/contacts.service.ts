@@ -10,6 +10,7 @@ import type {
   ContactsFieldPrivacy,
   ContactsFieldVisibility,
   ContactsFormat,
+  ContactsMapResponse,
   ContactsProfileDto,
   ContactsProfileState,
   ContactsProfileStatus,
@@ -399,6 +400,97 @@ export class ContactsService {
       // строятся по одному и тому же условию видимости.
       total: total < CONTACTS_COUNT_THRESHOLD ? null : total,
       facets: this.toFacets(facets),
+    };
+  }
+
+  /**
+   * Точки для карты справочника: те же люди, что и в выдаче, свёрнутые по
+   * городам. Условие берётся из того же `buildSearchWhere` — карта не имеет
+   * права показать город, которого не покажет поиск.
+   *
+   * Города, а не люди: в профиле хранится город, и его координаты — центр
+   * города из геокодера. Отдавать «человека в точке» значило бы обещать
+   * точность, которой в данных нет.
+   *
+   * Приватность города здесь приходится проверять в SQL, а не в DTO: скрытый
+   * город не должен попадать даже в агрегат, иначе метка «Омск · 3» выдала бы
+   * ровно то, что человек спрятал. Значение `'hidden'` — константа кода,
+   * поэтому записано литералом.
+   */
+  async mapPoints(
+    viewerId: string,
+    query: Record<string, unknown> | undefined,
+    now: Date = new Date(),
+  ): Promise<ContactsMapResponse> {
+    const filters = normalizeSearchFilters(query);
+    const viewerRow = await this.loadViewer(viewerId);
+    if (!viewerRow) throw new NotFoundException('Пользователь не найден');
+
+    const location = this.location(viewerRow.homeLocation);
+    const viewer: SearchViewer = {
+      id: viewerId,
+      isVerifiedDevotee: isVerifiedDevotee(viewerRow),
+      cityKey: normalizeLocationKey(location?.city),
+      lat: typeof location?.lat === 'number' ? location.lat : null,
+      lon: typeof location?.lon === 'number' ? location.lon : null,
+    };
+    const hiddenUserIds = await this.moderation.hiddenUserIds(
+      viewerId,
+      'contacts',
+    );
+    const where = buildSearchWhere({ filters, viewer, hiddenUserIds, now });
+
+    const cityShown = Prisma.sql`
+      COALESCE(p."fieldPrivacy"->>'city', 'everyone') <> 'hidden'
+      AND u."homeLocation"->>'city' IS NOT NULL
+      AND jsonb_typeof(u."homeLocation"->'lat') = 'number'
+      AND jsonb_typeof(u."homeLocation"->'lon') = 'number'
+    `;
+    const from = Prisma.sql`
+      FROM "ContactsProfile" p
+      JOIN "User" u ON u."id" = p."userId"
+    `;
+
+    // Координаты усредняются внутри города: у одного города они у всех
+    // одинаковые, но подстраховка от разных написаний одного места дешевле,
+    // чем метка, уехавшая на пару километров от собственной подписи.
+    const [rows, missing] = await Promise.all([
+      this.prisma.$queryRaw<
+        Array<{
+          city: string;
+          country: string | null;
+          lat: number;
+          lon: number;
+          count: number;
+        }>
+      >(Prisma.sql`
+        SELECT
+          MIN(trim(u."homeLocation"->>'city')) AS city,
+          MIN(trim(u."homeLocation"->>'country')) AS country,
+          AVG((u."homeLocation"->>'lat')::double precision) AS lat,
+          AVG((u."homeLocation"->>'lon')::double precision) AS lon,
+          COUNT(*)::int AS count
+        ${from}
+        WHERE ${where} AND ${cityShown}
+        GROUP BY lower(trim(u."homeLocation"->>'city')),
+                 lower(trim(coalesce(u."homeLocation"->>'country', '')))
+        ORDER BY count DESC, city ASC
+      `),
+      this.prisma.$queryRaw<Array<{ count: number }>>(Prisma.sql`
+        SELECT COUNT(*)::int AS count ${from}
+        WHERE ${where} AND NOT (${cityShown})
+      `),
+    ]);
+
+    return {
+      points: rows.map((row) => ({
+        city: row.city,
+        country: row.country || null,
+        lat: Number(row.lat),
+        lon: Number(row.lon),
+        count: Number(row.count),
+      })),
+      withoutLocation: Number(missing[0]?.count ?? 0),
     };
   }
 

@@ -14,6 +14,7 @@ import {
   parseContactsSearchFilters,
   searchContacts,
 } from "@/lib/contacts-api";
+import { ContactsMapPanel } from "./contacts-map-panel";
 import { ContactsSearchCard } from "./contacts-search-card";
 import { ContactsSearchFiltersPanel } from "./contacts-search-filters";
 import {
@@ -62,10 +63,20 @@ export function activeFilterChips(
     });
   }
   if (filters.radiusKm) {
+    // Центр с карты снимается вместе с радиусом: точка без радиуса ничего
+    // не сужает и осталась бы висеть в адресной строке мусором.
+    const fromMap = filters.lat !== undefined && filters.lon !== undefined;
     chips.push({
       id: "radiusKm",
-      label: `Радиус: ${filters.radiusKm} км`,
-      next: { ...filters, radiusKm: undefined },
+      label: fromMap
+        ? `Область на карте: ${filters.radiusKm} км`
+        : `Радиус: ${filters.radiusKm} км`,
+      next: {
+        ...filters,
+        radiusKm: undefined,
+        lat: undefined,
+        lon: undefined,
+      },
     });
   }
   for (const stage of filters.stages ?? []) {
@@ -207,6 +218,8 @@ export function ContactsSearchView() {
 
   return (
     <div>
+      <ContactsMapPanel filters={filters} onApply={pushFilters} />
+
       <ContactsSearchFiltersPanel
         // Черновик панели пересобирается, когда фильтры меняются извне:
         // например, после снятия чипа или перехода «назад» в браузере.

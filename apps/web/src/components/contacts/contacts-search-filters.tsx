@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type {
   ContactsAshram,
   ContactsFormat,
@@ -178,88 +178,87 @@ export function ContactsSearchFiltersPanel({
             </select>
           </label>
           <p className={hintClass}>
-            Радиус считается от вашего города из портального профиля. Если
-            локация не заполнена — ни у вас, ни у человека, — этот фильтр
-            ничего не найдёт.
+            Радиус считается от точки, выбранной на карте, а если её нет — от
+            вашего города из портального профиля. Человек без заполненной
+            локации в такую выдачу не попадёт.
           </p>
         </div>
       </div>
 
-      <fieldset className="mt-4">
-        <legend className={legendClass}>Духовный этап</legend>
-        <div className="flex flex-wrap gap-2">
-          {CONTACTS_STAGES.map((stage) => (
-            <ChipToggle
-              key={stage}
-              label={contactsStageLabels[stage]}
-              selected={(draft.stages ?? []).includes(stage)}
-              onToggle={() =>
-                update("stages", toggle(draft.stages ?? [], stage) as SpiritualStage[])
-              }
-            />
-          ))}
-        </div>
-      </fieldset>
+      <ChipSection
+        title="Духовный этап"
+        selectedCount={(draft.stages ?? []).length}
+      >
+        {CONTACTS_STAGES.map((stage) => (
+          <ChipToggle
+            key={stage}
+            label={contactsStageLabels[stage]}
+            selected={(draft.stages ?? []).includes(stage)}
+            onToggle={() =>
+              update("stages", toggle(draft.stages ?? [], stage) as SpiritualStage[])
+            }
+          />
+        ))}
+      </ChipSection>
 
-      <fieldset className="mt-4">
-        <legend className={legendClass}>Ашрам</legend>
-        <div className="flex flex-wrap gap-2">
-          {CONTACTS_ASHRAMS.map((ashram) => (
-            <ChipToggle
-              key={ashram}
-              label={contactsAshramLabels[ashram]}
-              selected={(draft.ashram ?? []).includes(ashram)}
-              onToggle={() =>
-                update(
-                  "ashram",
-                  toggle(draft.ashram ?? [], ashram) as ContactsAshram[],
-                )
-              }
-            />
-          ))}
-        </div>
-      </fieldset>
+      <ChipSection title="Ашрам" selectedCount={(draft.ashram ?? []).length}>
+        {CONTACTS_ASHRAMS.map((ashram) => (
+          <ChipToggle
+            key={ashram}
+            label={contactsAshramLabels[ashram]}
+            selected={(draft.ashram ?? []).includes(ashram)}
+            onToggle={() =>
+              update(
+                "ashram",
+                toggle(draft.ashram ?? [], ashram) as ContactsAshram[],
+              )
+            }
+          />
+        ))}
+      </ChipSection>
 
-      <fieldset className="mt-4">
-        <legend className={legendClass}>Языки</legend>
-        <div className="flex flex-wrap gap-2">
-          {languageOptions.map((language) => (
-            <ChipToggle
-              key={language}
-              label={language}
-              selected={(draft.languages ?? []).includes(language)}
-              onToggle={() =>
-                update("languages", toggle(draft.languages ?? [], language))
-              }
-            />
-          ))}
-        </div>
-      </fieldset>
+      <ChipSection
+        title="Языки"
+        selectedCount={(draft.languages ?? []).length}
+      >
+        {languageOptions.map((language) => (
+          <ChipToggle
+            key={language}
+            label={language}
+            selected={(draft.languages ?? []).includes(language)}
+            onToggle={() =>
+              update("languages", toggle(draft.languages ?? [], language))
+            }
+          />
+        ))}
+      </ChipSection>
 
       {groupedTags.map((group) => (
-        <fieldset key={group.kind} className="mt-4">
-          <legend className={legendClass}>
-            {contactsTagKindLabels[group.kind]}
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            {group.items.map((tag) => {
-              const count = counts.get(tag.id);
-              return (
-                <ChipToggle
-                  key={tag.id}
-                  label={tag.nameRu}
-                  // Счётчик есть не всегда: бэкенд отдаёт его только по тем
-                  // тегам, что встречаются в текущей выдаче.
-                  count={count}
-                  selected={(draft.tagIds ?? []).includes(tag.id)}
-                  onToggle={() =>
-                    update("tagIds", toggle(draft.tagIds ?? [], tag.id))
-                  }
-                />
-              );
-            })}
-          </div>
-        </fieldset>
+        <ChipSection
+          key={group.kind}
+          title={contactsTagKindLabels[group.kind]}
+          selectedCount={
+            group.items.filter((tag) => (draft.tagIds ?? []).includes(tag.id))
+              .length
+          }
+        >
+          {group.items.map((tag) => {
+            const count = counts.get(tag.id);
+            return (
+              <ChipToggle
+                key={tag.id}
+                label={tag.nameRu}
+                // Счётчик есть не всегда: бэкенд отдаёт его только по тем
+                // тегам, что встречаются в текущей выдаче.
+                count={count}
+                selected={(draft.tagIds ?? []).includes(tag.id)}
+                onToggle={() =>
+                  update("tagIds", toggle(draft.tagIds ?? [], tag.id))
+                }
+              />
+            );
+          })}
+        </ChipSection>
       ))}
 
       <label className="mt-4 flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-1">
@@ -300,6 +299,59 @@ export function ContactsSearchFiltersPanel({
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Свёрнутая по умолчанию группа чипов.
+ *
+ * Групп семь, а тегов под сотню: развёрнутыми они занимали несколько экранов,
+ * и до кнопки «Применить» приходилось листать мимо всего справочника профессий.
+ * Свёрнутой группа остаётся, только пока в ней ничего не выбрано — иначе
+ * применённое условие пряталось бы от собственного автора.
+ *
+ * Начальное состояние берётся один раз при монтировании: панель пересоздаётся
+ * по `key={query}` на каждую смену фильтров, так что «развернул и выбрал» не
+ * схлопнется обратно от собственного же щелчка.
+ */
+function ChipSection({
+  title,
+  selectedCount,
+  children,
+}: {
+  title: string;
+  selectedCount: number;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(selectedCount > 0);
+
+  return (
+    // Группу называет кнопка-раскрывашка, поэтому <legend> здесь нет:
+    // со скрытым дубликатом скринридер объявлял бы название дважды.
+    <fieldset className="mt-4 border-t border-glass-brd/60 pt-3">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center gap-2 text-left"
+      >
+        <span className={`${legendClass} mb-0 flex-1`}>{title}</span>
+        {selectedCount > 0 && (
+          <span className="rounded-full bg-magenta/15 px-2 py-0.5 text-xs font-medium text-text-0">
+            {selectedCount}
+          </span>
+        )}
+        <span
+          aria-hidden="true"
+          className={`text-xs text-text-2 transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+        >
+          ▾
+        </span>
+      </button>
+      {open && <div className="mt-2 flex flex-wrap gap-2">{children}</div>}
+    </fieldset>
   );
 }
 

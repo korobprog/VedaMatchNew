@@ -190,6 +190,30 @@ describe("buildContactsSearchQuery", () => {
     expect(params.has("photoVerifiedOnly")).toBe(false);
     expect(params.get("page")).toBe("2");
   });
+
+  it("sends the map centre only together with a radius", () => {
+    const withRadius = new URLSearchParams(
+      buildContactsSearchQuery({ lat: 48.4813, lon: 135.0763, radiusKm: 200 }),
+    );
+    expect(withRadius.get("lat")).toBe("48.4813");
+    expect(withRadius.get("lon")).toBe("135.0763");
+
+    // Точка без радиуса ничего не сужает — отправлять её незачем.
+    const withoutRadius = new URLSearchParams(
+      buildContactsSearchQuery({ lat: 48.4813, lon: 135.0763 }),
+    );
+    expect(withoutRadius.has("lat")).toBe(false);
+    expect(withoutRadius.has("lon")).toBe(false);
+  });
+
+  it("keeps a zero coordinate: it is the equator, not an empty value", () => {
+    const params = new URLSearchParams(
+      buildContactsSearchQuery({ lat: 0, lon: 0, radiusKm: 50 }),
+    );
+
+    expect(params.get("lat")).toBe("0");
+    expect(params.get("lon")).toBe("0");
+  });
 });
 
 describe("parseContactsSearchFilters", () => {
@@ -213,6 +237,26 @@ describe("parseContactsSearchFilters", () => {
     expect(filters.verifiedDevoteeOnly).toBe(false);
     expect(filters.photoVerifiedOnly).toBe(false);
     expect(filters.q).toBeUndefined();
+  });
+
+  it("reads the map centre back from the address bar", () => {
+    const filters = parseContactsSearchFilters(
+      new URLSearchParams("lat=48.4813&lon=135.0763&radiusKm=200"),
+    );
+
+    expect(filters).toEqual(
+      expect.objectContaining({ lat: 48.4813, lon: 135.0763, radiusKm: 200 }),
+    );
+  });
+
+  it("ignores half a centre and coordinates out of range", () => {
+    // Достроить вторую половину нечем, а бэкенд на неполной паре ответит 400.
+    expect(
+      parseContactsSearchFilters(new URLSearchParams("lat=48.4813")),
+    ).toEqual(expect.objectContaining({ lat: undefined, lon: undefined }));
+    expect(
+      parseContactsSearchFilters(new URLSearchParams("lat=91&lon=200")),
+    ).toEqual(expect.objectContaining({ lat: undefined, lon: undefined }));
   });
 });
 

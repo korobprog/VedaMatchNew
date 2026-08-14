@@ -241,14 +241,60 @@ describe('buildSearchWhere: радиус', () => {
     expect(sql).toContain('<= 100');
   });
 
-  it('требует координаты у смотрящего', () => {
+  it('требует координаты у смотрящего, когда точка на карте не выбрана', () => {
     expect(() =>
       where({ filters: { radiusKm: 50 }, viewer: { lat: null, lon: null } }),
     ).toThrow(BadRequestException);
     expect(() =>
       where({ filters: { radiusKm: 50 }, viewer: { lat: 55.75, lon: null } }),
-    ).toThrow(
-      'Поиск по радиусу требует указанного города с координатами в вашем профиле',
+    ).toThrow('Поиск по радиусу требует указанного города');
+  });
+
+  it('считает от точки на карте, а не от города смотрящего', () => {
+    // Карту увели в другой город — искать надо там, куда её увели.
+    const sql = where({
+      filters: { radiusKm: 100, lat: 48.4813, lon: 135.0763 },
+      viewer: { lat: 55.75, lon: 37.62 },
+    });
+    expect(sql).toContain('48.4813');
+    expect(sql).not.toContain('55.75');
+  });
+
+  it('пускает поиск по карте, когда у смотрящего города нет', () => {
+    expect(() =>
+      where({
+        filters: { radiusKm: 100, lat: 48.4813, lon: 135.0763 },
+        viewer: { lat: null, lon: null },
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe('normalizeSearchFilters: центр карты', () => {
+  it('разбирает пару координат', () => {
+    expect(normalizeSearchFilters({ lat: '48.4813', lon: '135.0763' })).toEqual(
+      expect.objectContaining({ lat: 48.4813, lon: 135.0763 }),
+    );
+  });
+
+  it('без координат оставляет центр пустым', () => {
+    expect(normalizeSearchFilters({})).toEqual(
+      expect.objectContaining({ lat: null, lon: null }),
+    );
+  });
+
+  it('не принимает половину центра', () => {
+    expect(() => normalizeSearchFilters({ lat: '48.4813' })).toThrow(
+      'Центр поиска задаётся широтой и долготой вместе',
+    );
+  });
+
+  it('не принимает координаты вне диапазона', () => {
+    expect(() => normalizeSearchFilters({ lat: '91', lon: '0' })).toThrow(
+      BadRequestException,
+    );
+    expect(() => normalizeSearchFilters({ lat: '0', lon: '181' })).toThrow(
+      BadRequestException,
     );
   });
 });

@@ -69,6 +69,21 @@ export class ContactsController {
     return this.contacts.search(user.sub, query);
   }
 
+  /**
+   * Точки карты по тем же фильтрам, что и `search`. Отдельный маршрут, а не
+   * поле в выдаче: карте нужны все совпадения сразу, а не текущая страница.
+   * Лимит мягче поискового — карту дёргают при каждом сдвиге области, но
+   * ответ агрегированный и по людям ничего сверх выдачи не сообщает.
+   */
+  @Get('map')
+  @Throttle({ default: { limit: 240, ttl: 60 * 60_000 } })
+  map(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query() query: Record<string, unknown>,
+  ) {
+    return this.contacts.mapPoints(user.sub, query);
+  }
+
   @Get('users/:id')
   @Throttle({ default: { limit: 300, ttl: 60 * 60_000 } })
   card(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {

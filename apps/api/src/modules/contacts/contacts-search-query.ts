@@ -41,6 +41,9 @@ export interface NormalizedSearchFilters {
   city: string | null;
   country: string | null;
   radiusKm: number | null;
+  /** Центр радиуса с карты. null — считаем от города смотрящего. */
+  lat: number | null;
+  lon: number | null;
   stages: SpiritualStage[];
   ashram: ContactsAshram[];
   tagIds: string[];
@@ -133,6 +136,22 @@ function toInt(value: unknown, label: string): number | null {
   return Math.trunc(parsed);
 }
 
+/** Дробное число в границах: для координат `toInt` не годится. */
+function toFloat(
+  value: unknown,
+  label: string,
+  min: number,
+  max: number,
+): number | null {
+  const raw = toSingle(value, label);
+  if (raw === null) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+    throw new BadRequestException(`${label}: число от ${min} до ${max}`);
+  }
+  return parsed;
+}
+
 /** Query-параметры → фильтры. Всё опционально, всё нормализуется здесь. */
 export function normalizeSearchFilters(
   query: Record<string, unknown> | undefined,
@@ -156,11 +175,23 @@ export function normalizeSearchFilters(
   const page = toInt(source.page, 'Страница');
   const pageSize = toInt(source.pageSize, 'Размер страницы');
 
+  // Координаты имеют смысл только парой: одна половина центра — это опечатка
+  // клиента, и молча достроить её нечем.
+  const lat = toFloat(source.lat, 'Широта', -90, 90);
+  const lon = toFloat(source.lon, 'Долгота', -180, 180);
+  if ((lat === null) !== (lon === null)) {
+    throw new BadRequestException(
+      'Центр поиска задаётся широтой и долготой вместе',
+    );
+  }
+
   return {
     q,
     city: toSingle(source.city, 'Город'),
     country: toSingle(source.country, 'Страна'),
     radiusKm,
+    lat,
+    lon,
     stages: toEnumList(source.stages, STAGES, 'Духовный этап'),
     ashram: toEnumList(source.ashram, ASHRAMS, 'Ашрам'),
     tagIds: toStringList(source.tagIds, 'Теги'),
@@ -276,7 +307,7 @@ export function buildFilterConditions(
   if (country) conditions.push(Prisma.sql`${OWNER_COUNTRY} = ${country}`);
 
   if (filters.radiusKm !== null) {
-    conditions.push(buildRadiusCondition(filters.radiusKm, viewer));
+    conditions.push(buildRadiusCondition(filters, viewer));
   }
 
   if (filters.stages.length > 0) {
@@ -332,23 +363,28 @@ export function buildFilterConditions(
 }
 
 /**
- * Радиус от локации смотрящего. Сначала грубая рамка по широте и долготе
+ * Радиус вокруг точки. Центр — то, что выбрано на карте, иначе город
+ * смотрящего: карта должна уметь искать там, куда её увели, а не только
+ * вокруг дома автора запроса. Сначала грубая рамка по широте и долготе
  * (она отсекает подавляющее большинство строк дёшево), потом точный
  * гаверсинус на том, что осталось.
  */
 function buildRadiusCondition(
-  radiusKm: number,
+  filters: Pick<NormalizedSearchFilters, 'radiusKm' | 'lat' | 'lon'>,
   viewer: SearchViewer,
 ): Prisma.Sql {
-  if (viewer.lat === null || viewer.lon === null) {
+  const radiusKm = filters.radiusKm ?? 0;
+  const centerLat = filters.lat ?? viewer.lat;
+  const centerLon = filters.lon ?? viewer.lon;
+  if (centerLat === null || centerLon === null) {
     throw new BadRequestException(
-      'Поиск по радиусу требует указанного города с координатами в вашем профиле',
+      'Поиск по радиусу требует указанного города с координатами в вашем профиле или точки на карте',
     );
   }
 
   const latDelta = radiusKm / KM_PER_DEGREE;
-  const minLat = viewer.lat - latDelta;
-  const maxLat = viewer.lat + latDelta;
+  const minLat = centerLat - latDelta;
+  const maxLat = centerLat + latDelta;
 
   const parts: Prisma.Sql[] = [
     // jsonb_typeof вместо простого IS NOT NULL: приведение к double precision
@@ -361,11 +397,11 @@ function buildRadiusCondition(
   // Возле полюсов градус долготы вырождается, а у самого меридиана ±180
   // рамка распадается на два интервала. В обоих случаях рамку по долготе
   // просто не ставим — гаверсинус ниже всё равно даёт верный ответ.
-  const cosLat = Math.cos((viewer.lat * Math.PI) / 180);
+  const cosLat = Math.cos((centerLat * Math.PI) / 180);
   if (Math.abs(cosLat) > 1e-6) {
     const lonDelta = radiusKm / (KM_PER_DEGREE * Math.abs(cosLat));
-    const minLon = viewer.lon - lonDelta;
-    const maxLon = viewer.lon + lonDelta;
+    const minLon = centerLon - lonDelta;
+    const maxLon = centerLon + lonDelta;
     if (lonDelta < 180 && minLon >= -180 && maxLon <= 180) {
       parts.push(Prisma.sql`${OWNER_LON} BETWEEN ${minLon} AND ${maxLon}`);
     }
@@ -373,9 +409,9 @@ function buildRadiusCondition(
 
   parts.push(Prisma.sql`(
     ${EARTH_RADIUS_KM} * 2 * asin(least(1, sqrt(
-      power(sin(radians(${OWNER_LAT} - ${viewer.lat}) / 2), 2)
-      + cos(radians(${viewer.lat})) * cos(radians(${OWNER_LAT}))
-        * power(sin(radians(${OWNER_LON} - ${viewer.lon}) / 2), 2)
+      power(sin(radians(${OWNER_LAT} - ${centerLat}) / 2), 2)
+      + cos(radians(${centerLat})) * cos(radians(${OWNER_LAT}))
+        * power(sin(radians(${OWNER_LON} - ${centerLon}) / 2), 2)
     )))
   ) <= ${radiusKm}`);
 

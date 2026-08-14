@@ -910,4 +910,89 @@ describe('ContactsService', () => {
       ]);
     });
   });
+
+  describe('mapPoints', () => {
+    function stubMap(
+      points: unknown[] = [],
+      withoutLocation = 0,
+    ): void {
+      prisma.user.findUnique.mockResolvedValue(viewer());
+      prisma.$queryRaw
+        .mockResolvedValueOnce(points)
+        .mockResolvedValueOnce([{ count: withoutLocation }]);
+    }
+
+    function mapSql(callIndex: number): Prisma.Sql {
+      const calls = prisma.$queryRaw.mock.calls as unknown as Prisma.Sql[][];
+      return calls[callIndex][0];
+    }
+
+    it('сворачивает людей в города со счётчиком', async () => {
+      stubMap([
+        {
+          city: 'Хабаровск',
+          country: 'Россия',
+          lat: 48.4813,
+          lon: 135.0763,
+          count: 4,
+        },
+      ]);
+
+      await expect(service.mapPoints('viewer', {}, now)).resolves.toEqual({
+        points: [
+          {
+            city: 'Хабаровск',
+            country: 'Россия',
+            lat: 48.4813,
+            lon: 135.0763,
+            count: 4,
+          },
+        ],
+        withoutLocation: 0,
+      });
+      expect(mapSql(0).text).toContain('GROUP BY');
+    });
+
+    it('строит точки по тому же условию видимости, что и выдача', async () => {
+      moderation.hiddenUserIds.mockResolvedValue(new Set(['declined']));
+      stubMap();
+
+      await service.mapPoints('viewer', {}, now);
+
+      const sql = mapSql(0);
+      expect(sql.text).toContain(`p."status" = 'active'`);
+      expect(sql.text).toContain(`p."userId" <> `);
+      expect(sql.text).toContain(`p."userId" NOT IN `);
+      expect(sql.text).not.toContain('by_link');
+      expect(sql.values).toEqual(expect.arrayContaining(['viewer', 'declined']));
+    });
+
+    it('не выводит на карту тех, кто скрыл город', async () => {
+      // Иначе метка «Омск · 3» показала бы ровно то, что человек спрятал.
+      stubMap([], 3);
+
+      const result = await service.mapPoints('viewer', {}, now);
+
+      expect(mapSql(0).text).toContain(
+        `COALESCE(p."fieldPrivacy"->>'city', 'everyone') <> 'hidden'`,
+      );
+      // Их не теряем молча — карта должна суметь сказать «ещё 3 без города».
+      expect(result.withoutLocation).toBe(3);
+      expect(mapSql(1).text).toContain('NOT (');
+    });
+
+    it('принимает центр с карты вместо города смотрящего', async () => {
+      stubMap();
+
+      await service.mapPoints(
+        'viewer',
+        { radiusKm: '200', lat: '48.4813', lon: '135.0763' },
+        now,
+      );
+
+      expect(mapSql(0).values).toEqual(
+        expect.arrayContaining([48.4813, 135.0763]),
+      );
+    });
+  });
 });

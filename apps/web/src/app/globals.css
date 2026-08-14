@@ -454,3 +454,35 @@ body {
   background: var(--reader-mark);
   color: var(--reader-mark-text);
 }
+
+/* Карта справочника «Контакты». Leaflet рисует свои панели с z-index до 800 и
+   перекрыл бы шапку портала — придавливаем весь контейнер к нулю.
+
+   Фона здесь нет намеренно: стили Leaflet приходят импортом из компонента и
+   встают в документе ПОСЛЕ этого файла, поэтому его собственный `#ddd` побил
+   бы наш селектор той же специфичности. Фон задан инлайном в contacts-map.tsx.
+   z-index конфликта не имеет — на контейнере Leaflet его не ставит. */
+.leaflet-container {
+  z-index: 0;
+  font: inherit;
+}
+
+/* Метка города: подпись вместо булавки. Точных адресов в справочнике нет,
+   и остроконечный пин обещал бы точность, которой в данных не существует. */
+.contacts-map-pin {
+  display: inline-block;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  border-radius: 9999px;
+  border: 1px solid var(--vm-magenta, #ff3e9e);
+  background: rgba(18, 18, 26, 0.92);
+  padding: 0.15rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.leaflet-marker-icon:hover .contacts-map-pin,
+.leaflet-marker-icon:focus-visible .contacts-map-pin {
+  background: var(--vm-magenta, #ff3e9e);
+}

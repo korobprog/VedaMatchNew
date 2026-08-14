@@ -158,8 +158,19 @@ export interface ContactsSearchFilters {
   q?: string;
   city?: string;
   country?: string;
-  /** Радиус от города смотрящего. Требует заполненной локации у обоих. */
+  /**
+   * Радиус в километрах. Центр — точка `lat`/`lon`, если она задана, иначе
+   * город смотрящего из портального профиля. Требует заполненной локации
+   * у человека в выдаче: без координат в выдачу он не попадёт.
+   */
   radiusKm?: number;
+  /**
+   * Центр радиуса, выбранный на карте. Без `radiusKm` не действует: точка
+   * без радиуса ничего не сужает. Приходит парой — одна координата без
+   * второй игнорируется.
+   */
+  lat?: number;
+  lon?: number;
   stages?: SpiritualStage[];
   ashram?: ContactsAshram[];
   tagIds?: string[];
@@ -185,6 +196,32 @@ export interface ContactsSearchResponse {
   /** Всего совпадений. null — их меньше CONTACTS_COUNT_THRESHOLD. */
   total: number | null;
   facets: ContactsSearchFacet[];
+}
+
+/**
+ * Город на карте справочника, а не человек.
+ *
+ * В профиле хранится город, и его координаты — центр города из геокодера:
+ * у всех хабаровчан они совпадают до знака. Поэтому точка на карте
+ * принципиально городская, со счётчиком людей, и сверх названия города,
+ * которое и так есть в карточке, ничего не сообщает.
+ */
+export interface ContactsMapPoint {
+  city: string;
+  country: string | null;
+  lat: number;
+  lon: number;
+  count: number;
+}
+
+export interface ContactsMapResponse {
+  points: ContactsMapPoint[];
+  /**
+   * Сколько подходящих людей на карту не попало: город скрыт настройкой
+   * приватности либо локация не заполнена. Нужно, чтобы карта могла честно
+   * сказать «ещё N человек без города», а не молча их потерять.
+   */
+  withoutLocation: number;
 }
 
 /**
