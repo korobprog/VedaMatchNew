@@ -486,3 +486,40 @@ body {
 .leaflet-marker-icon:focus-visible .contacts-map-pin {
   background: var(--vm-magenta, #ff3e9e);
 }
+
+/* Плашка атрибуции под тёмную карту. Штатная у Leaflet — белая, и на нашей
+   странице выглядит заплаткой.
+
+   Кредит OpenStreetMap здесь только перекрашен, но остаётся читаемым и
+   кликабельным: плитки идут с tile.openstreetmap.org, данные под ODbL, и
+   видимая атрибуция — условие использования. Прятать её нельзя. */
+/* Лишний `.leaflet-bottom` в селекторе не для красоты: у Leaflet эта плашка
+   описана ровно как `.leaflet-container .leaflet-control-attribution`, его
+   стили встают в документе позже наших, и при равной специфичности победил
+   бы белый фон. */
+.leaflet-container .leaflet-bottom .leaflet-control-attribution {
+  background: rgba(10, 6, 20, 0.72);
+  color: #cfc6de;
+  border-top-left-radius: 0.5rem;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.65rem;
+  backdrop-filter: blur(4px);
+}
+
+.leaflet-container .leaflet-bottom .leaflet-control-attribution a {
+  color: #e6dff2;
+  text-decoration: underline;
+}
+
+.contacts-map-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.contacts-map-brand img {
+  display: block;
+  border-radius: 2px;
+}

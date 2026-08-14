@@ -12,6 +12,15 @@ const DEFAULT_CENTER: [number, number] = [55.75, 60];
 const DEFAULT_ZOOM = 3;
 /** Зум, на который карта наводится по щелчку в метку города. */
 const CITY_ZOOM = 9;
+/**
+ * Наш брендинг на месте ссылки на Leaflet. Логотип берётся из той же
+ * картинки, что и в шапке портала; `next/image` здесь не годится — строка
+ * уходит в Leaflet как готовый HTML.
+ */
+const BRAND_PREFIX =
+  '<span class="contacts-map-brand">' +
+  '<img src="/logo_tilak.png" alt="" width="12" height="12" />VedaMatch' +
+  "</span>";
 
 export interface ContactsMapArea {
   lat: number;
@@ -69,11 +78,21 @@ export function ContactsMap({
         // Прокрутка страницы важнее зума: колесо над картой не должно
         // ловить страницу в ловушку. Зум остаётся кнопками и щипком.
         scrollWheelZoom: false,
-        attributionControl: true,
+        attributionControl: false,
       });
+      // Свой префикс вместо ссылки на Leaflet. Это его собственный брендинг,
+      // а не условие лицензии (BSD-2-Clause), и опция `prefix` существует
+      // ровно для такой замены.
+      L.control
+        .attribution({ position: "bottomright", prefix: BRAND_PREFIX })
+        .addTo(map);
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 18,
-        attribution: "© OpenStreetMap contributors",
+        // Атрибуция OSM обязательна и убирать её нельзя: плитки берутся с
+        // tile.openstreetmap.org, данные под ODbL, и видимый кредит — условие
+        // использования. Перекрасить под тёмную тему можно, спрятать нельзя.
+        attribution:
+          '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors',
       }).addTo(map);
 
       markersRef.current = L.layerGroup().addTo(map);
