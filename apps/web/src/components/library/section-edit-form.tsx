@@ -77,7 +77,7 @@ export function SectionEditForm({
     <form
       onSubmit={submit}
       onClick={(event) => event.preventDefault()}
-      className="glass w-72 max-w-full rounded-xl border border-glass-brd p-3 text-sm"
+      className="w-72 max-w-full rounded-xl border border-glass-brd bg-bg-1 p-3 text-sm shadow-xl"
     >
       <p className="mb-2 text-text-2">{t(locale, "section.edit")}</p>
       <div className="grid gap-2 sm:grid-cols-2">

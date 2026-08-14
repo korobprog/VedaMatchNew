@@ -77,7 +77,7 @@ export function CategoryEditForm({
     <form
       onSubmit={submit}
       onClick={(event) => event.preventDefault()}
-      className="glass mt-2 w-64 max-w-full rounded-xl border border-glass-brd p-3 text-sm"
+      className="relative z-10 mt-2 w-64 max-w-full rounded-xl border border-glass-brd bg-bg-1 p-3 text-sm shadow-xl"
     >
       <p className="mb-2 text-text-2">
         {t(locale, "category.edit")}:{" "}
