@@ -83,6 +83,14 @@ export function ContactsSearchFiltersPanel({
     return [...contactsLanguageOptions, ...extra];
   }, [draft.languages]);
 
+  // Сколько условий выбрано во всех группах чипов вместе: число на свёрнутом
+  // блоке — единственный намёк, что внутри что-то есть.
+  const totalChipSelections =
+    (draft.stages ?? []).length +
+    (draft.ashram ?? []).length +
+    (draft.languages ?? []).length +
+    (draft.tagIds ?? []).length;
+
   function update<K extends keyof ContactsSearchFilters>(
     key: K,
     value: ContactsSearchFilters[K],
@@ -185,6 +193,7 @@ export function ContactsSearchFiltersPanel({
         </div>
       </div>
 
+      <ChipGroups selectedCount={totalChipSelections}>
       <ChipSection
         title="Духовный этап"
         selectedCount={(draft.stages ?? []).length}
@@ -260,6 +269,7 @@ export function ContactsSearchFiltersPanel({
           })}
         </ChipSection>
       ))}
+      </ChipGroups>
 
       <label className="mt-4 flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-1">
         <input
@@ -299,6 +309,55 @@ export function ContactsSearchFiltersPanel({
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Все группы чипов под одним переключателем.
+ *
+ * Свернуть каждую группу по отдельности оказалось мало: семь заголовков —
+ * это всё равно экран пустых строк между полями поиска и кнопкой «Применить».
+ * Целиком свёрнутый блок оставляет от них одну строку.
+ *
+ * Раскрытым он открывается, только если внутри уже что-то выбрано: иначе
+ * применённые условия оказались бы спрятаны сразу за двумя щелчками.
+ */
+function ChipGroups({
+  selectedCount,
+  children,
+}: {
+  selectedCount: number;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(selectedCount > 0);
+
+  return (
+    <div className="mt-4 border-t border-glass-brd/60 pt-3">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-left transition hover:border-magenta/50"
+      >
+        <span className="flex-1 text-sm font-medium text-text-0">
+          Этап, ашрам, языки, служение, профессия, навыки, интересы
+        </span>
+        {selectedCount > 0 && (
+          <span className="rounded-full bg-magenta/15 px-2 py-0.5 text-xs font-medium text-text-0">
+            {selectedCount}
+          </span>
+        )}
+        <span
+          aria-hidden="true"
+          className={`text-xs text-text-2 transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+        >
+          ▾
+        </span>
+      </button>
+      {open && <div>{children}</div>}
+    </div>
   );
 }
 

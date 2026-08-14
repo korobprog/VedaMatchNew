@@ -124,12 +124,19 @@ describe("ContactsSearchView", () => {
     );
   });
 
+  /** Блок групп свёрнут целиком, внутри свёрнута ещё и каждая группа. */
+  async function openTagGroup(name: RegExp) {
+    await userEvent.click(
+      await screen.findByRole("button", { name: /Этап, ашрам, языки/ }),
+    );
+    await userEvent.click(await screen.findByRole("button", { name }));
+  }
+
   it("puts the facet count on the tag it belongs to", async () => {
     stubApi(response());
     render(<ContactsSearchView />);
 
-    // Группы тегов свёрнуты по умолчанию — до чипов надо раскрыть «Служение».
-    await userEvent.click(await screen.findByRole("button", { name: /Служение/ }));
+    await openTagGroup(/Служение/);
 
     const withCount = await screen.findByRole("button", { name: /Пуджари/ });
     expect(withCount).toHaveTextContent("7");
@@ -139,11 +146,31 @@ describe("ContactsSearchView", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps tag groups collapsed until they are opened", async () => {
-    // Групп семь, а тегов под сотню: развёрнутыми они отодвигали кнопку
-    // «Применить» на несколько экранов вниз.
+  it("hides the whole tag block until it is opened", async () => {
+    // Семь свёрнутых заголовков — это всё равно экран пустых строк между
+    // полями поиска и кнопкой «Применить», поэтому блок прячется целиком.
     stubApi(response());
     render(<ContactsSearchView />);
+
+    const block = await screen.findByRole("button", {
+      name: /Этап, ашрам, языки/,
+    });
+    expect(block).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.queryByRole("button", { name: /Служение/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Пуджари/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps a group collapsed after the block is opened", async () => {
+    stubApi(response());
+    render(<ContactsSearchView />);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /Этап, ашрам, языки/ }),
+    );
 
     const section = await screen.findByRole("button", { name: /Служение/ });
     expect(section).toHaveAttribute("aria-expanded", "false");
@@ -152,14 +179,19 @@ describe("ContactsSearchView", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("opens a tag group that already has a selection", async () => {
-    // Иначе применённое условие пряталось бы от собственного автора.
+  it("opens both levels when a tag is already selected", async () => {
+    // Иначе применённое условие пряталось бы от собственного автора,
+    // причём сразу за двумя щелчками.
     currentQuery = "tagIds=tag-pujari";
     stubApi(response());
     render(<ContactsSearchView />);
 
-    const section = await screen.findByRole("button", { name: /Служение/ });
-    expect(section).toHaveAttribute("aria-expanded", "true");
+    expect(
+      await screen.findByRole("button", { name: /Этап, ашрам, языки/ }),
+    ).toHaveAttribute("aria-expanded", "true");
+    expect(
+      await screen.findByRole("button", { name: /Служение/ }),
+    ).toHaveAttribute("aria-expanded", "true");
   });
 
   it("removes a single tag when its chip is dismissed and keeps the rest", async () => {
