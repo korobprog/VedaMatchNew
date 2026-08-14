@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { LibraryEntriesService } from './library-entries.service';
 
 const NOW = new Date('2026-07-29T10:00:00.000Z');
@@ -73,6 +77,7 @@ function previewsMock(overrides: Record<string, unknown> = {}) {
     configured: true,
     capture: jest.fn().mockResolvedValue(undefined),
     captureInBackground: jest.fn(),
+    remove: jest.fn().mockResolvedValue(undefined),
     storeBuffer: jest.fn().mockResolvedValue({
       key: 'library/previews/entry-1.webp',
       url: 'https://cdn.vedamatch.ru/library/previews/entry-1.webp',
@@ -593,5 +598,109 @@ describe('LibraryEntriesService.uploadPreview', () => {
     await expect(
       service.uploadPreview('someone-else', false, 'entry-1', makeFile()),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
+describe('LibraryEntriesService.remove', () => {
+  function removableRecord(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'entry-1',
+      addedById: 'user-1',
+      status: 'published',
+      previewKey: 'library/previews/entry-1.webp',
+      categories: [{ categoryId: 'category-1' }],
+      ...overrides,
+    };
+  }
+
+  function txMock() {
+    return {
+      libraryEntry: { delete: jest.fn().mockResolvedValue(undefined) },
+      libraryCategory: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    };
+  }
+
+  it('deletes the author’s own entry and frees its categories', async () => {
+    const tx = txMock();
+    const prisma = prismaMock({
+      $transaction: jest.fn((callback: (t: unknown) => unknown) =>
+        callback(tx),
+      ),
+    });
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValue(removableRecord());
+    const previews = previewsMock();
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previews as never,
+      bookmarksMock() as never,
+    );
+
+    await service.remove('user-1', false, 'entry-1');
+
+    expect(tx.libraryEntry.delete).toHaveBeenCalledWith({
+      where: { id: 'entry-1' },
+    });
+    expect(tx.libraryCategory.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['category-1'] } },
+      data: { entriesCount: { decrement: 1 } },
+    });
+    expect(previews.remove).toHaveBeenCalledWith(
+      'library/previews/entry-1.webp',
+    );
+  });
+
+  it('refuses to let another member delete someone else’s entry', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValue(removableRecord());
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    await expect(
+      service.remove('someone-else', false, 'entry-1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('lets an admin delete an entry they did not add', async () => {
+    const tx = txMock();
+    const prisma = prismaMock({
+      $transaction: jest.fn((callback: (t: unknown) => unknown) =>
+        callback(tx),
+      ),
+    });
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValue(removableRecord());
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    await service.remove('admin-1', true, 'entry-1');
+
+    expect(tx.libraryEntry.delete).toHaveBeenCalledWith({
+      where: { id: 'entry-1' },
+    });
+  });
+
+  it('reports a missing entry as not found', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(null);
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    await expect(
+      service.remove('user-1', true, 'entry-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

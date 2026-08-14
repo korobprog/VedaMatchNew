@@ -342,6 +342,50 @@ export class LibraryEntriesService {
   }
 
   /**
+   * Удаляют автор ссылки и админ (админ — любую). Строку убираем совсем, а не
+   * прячем статусом: на `urlNormalized` висит уникальный индекс, и скрытая
+   * запись навсегда заняла бы адрес — ни автор, ни кто-то другой не смог бы
+   * добавить эту ссылку заново. Категории, избранное и комментарии уходят
+   * каскадом по схеме, руками правим только денормализованные счётчики.
+   */
+  async remove(
+    userId: string,
+    viewerIsAdmin: boolean,
+    id: string,
+  ): Promise<void> {
+    const existing = await this.prisma.libraryEntry.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        addedById: true,
+        status: true,
+        previewKey: true,
+        categories: { select: { categoryId: true } },
+      },
+    });
+    if (!existing || existing.status !== 'published') {
+      throw new NotFoundException('entry_not_found');
+    }
+    if (existing.addedById !== userId && !viewerIsAdmin) {
+      throw new ForbiddenException('not_entry_owner');
+    }
+
+    const categoryIds = existing.categories.map((link) => link.categoryId);
+
+    await this.prisma.$transaction(async (tx) => {
+      if (categoryIds.length > 0) {
+        await tx.libraryCategory.updateMany({
+          where: { id: { in: categoryIds } },
+          data: { entriesCount: { decrement: 1 } },
+        });
+      }
+      await tx.libraryEntry.delete({ where: { id } });
+    });
+
+    await this.previews.remove(existing.previewKey);
+  }
+
+  /**
    * Ручная обложка полностью заменяет авто-превью с сайта-источника и
    * помечается `previewIsCustom`, чтобы фоновый бэкафилл её не перезаписал.
    */

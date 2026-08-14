@@ -2,14 +2,18 @@ import Link from "next/link";
 import { Bookmark, ExternalLink, MessageSquare, Play } from "lucide-react";
 import type { LibraryEntryDto, LibraryLocale } from "@vedamatch/shared";
 import { videoEmbedUrl } from "@vedamatch/shared";
+import { DeleteEntryButton } from "./delete-entry-button";
 import { entryTypeLabel, pickLocalized, t } from "./i18n";
 
 export function EntryCard({
   entry,
   locale,
+  onDeleted,
 }: {
   entry: LibraryEntryDto;
   locale: LibraryLocale;
+  /** Лента убирает карточку из уже подгруженного списка после удаления. */
+  onDeleted?: () => void;
 }) {
   const title = pickLocalized(locale, {
     ru: entry.titleRu,
@@ -113,6 +117,24 @@ export function EntryCard({
           {t(locale, "entry.open")}
         </Link>
       </div>
+
+      {/* Автору и админу правку и удаление показываем прямо в ленте: ради них
+          незачем открывать карточку. */}
+      {entry.canEdit && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-glass-brd pt-3">
+          <Link
+            href={`/library/entry/${entry.id}`}
+            className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-2 hover:text-text-0"
+          >
+            {t(locale, "entry.edit")}
+          </Link>
+          <DeleteEntryButton
+            locale={locale}
+            entryId={entry.id}
+            onDeleted={onDeleted}
+          />
+        </div>
+      )}
     </article>
   );
 }

@@ -12,6 +12,7 @@ import { videoEmbedUrl, videoProviderName, videoSource } from "@vedamatch/shared
 import { Header } from "@/components/header";
 import { BackLink } from "@/components/library/back-link";
 import { BookmarkButton } from "@/components/library/bookmark-button";
+import { DeleteEntryButton } from "@/components/library/delete-entry-button";
 import { EditEntryForm } from "@/components/library/edit-entry-form";
 import { EntryComments } from "@/components/library/entry-comments";
 import { VideoEmbed } from "@/components/library/video-embed";
@@ -158,12 +159,21 @@ export default async function LibraryEntryPage({
         </section>
 
         {entry.canEdit && (
-          <EditEntryForm
-            locale={locale}
-            entry={entry}
-            sections={sections ?? []}
-            initialCategories={editCategories ?? []}
-          />
+          <>
+            <EditEntryForm
+              locale={locale}
+              entry={entry}
+              sections={sections ?? []}
+              initialCategories={editCategories ?? []}
+            />
+            <div className="mb-6">
+              <DeleteEntryButton
+                locale={locale}
+                entryId={entry.id}
+                redirectTo="/library"
+              />
+            </div>
+          </>
         )}
 
         <EntryComments

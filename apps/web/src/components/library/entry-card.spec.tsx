@@ -1,7 +1,11 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { LibraryEntryDto } from "@vedamatch/shared";
 import { EntryCard } from "./entry-card";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
 
 const entry: LibraryEntryDto = {
   id: "entry-1",
@@ -91,5 +95,23 @@ describe("EntryCard", () => {
     expect(link.getAttribute("href")).toBe("https://example.com/a");
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toContain("noopener");
+  });
+
+  it("hides edit and delete from a reader", () => {
+    render(<EntryCard entry={entry} locale="ru" />);
+
+    expect(screen.queryByRole("button", { name: /удалить/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /редактировать/i })).toBeNull();
+  });
+
+  it("offers edit and delete to the author or an admin", () => {
+    render(<EntryCard entry={{ ...entry, canEdit: true }} locale="ru" />);
+
+    expect(screen.getByRole("button", { name: /удалить/i })).toBeDefined();
+    expect(
+      screen
+        .getByRole("link", { name: /редактировать/i })
+        .getAttribute("href"),
+    ).toBe("/library/entry/entry-1");
   });
 });

@@ -39,6 +39,18 @@ export function EntryList({
     }
   }
 
+  /**
+   * Убираем удалённую ссылку из уже подгруженного списка: router.refresh()
+   * вернул бы только первую страницу и сбросил бы всё, что дочитали дальше.
+   */
+  function dropEntry(id: string) {
+    setFeed((current) => ({
+      ...current,
+      items: current.items.filter((item) => item.id !== id),
+      total: Math.max(0, current.total - 1),
+    }));
+  }
+
   if (feed.items.length === 0) {
     return (
       <p className="glass rounded-2xl border border-glass-brd p-6 text-sm text-text-1">
@@ -51,7 +63,12 @@ export function EntryList({
     <div>
       <div className="grid gap-3">
         {feed.items.map((entry) => (
-          <EntryCard key={entry.id} entry={entry} locale={locale} />
+          <EntryCard
+            key={entry.id}
+            entry={entry}
+            locale={locale}
+            onDeleted={() => dropEntry(entry.id)}
+          />
         ))}
       </div>
       {feed.nextCursor && (

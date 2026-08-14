@@ -71,6 +71,12 @@ export class LibraryEntriesController {
     return this.entries.update(user.sub, isAdmin(user), id, body);
   }
 
+  @Delete(':id')
+  @HttpCode(204)
+  remove(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.entries.remove(user.sub, isAdmin(user), id);
+  }
+
   @Post(':id/preview')
   @Throttle({ default: { ttl: 3_600_000, limit: 20 } })
   @UseInterceptors(

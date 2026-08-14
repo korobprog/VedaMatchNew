@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolvePreviewUrl } from './preview-url';
@@ -144,6 +148,21 @@ export class LibraryPreviewsService {
     );
 
     return { key, url: `${this.publicUrl.replace(/\/$/, '')}/${key}` };
+  }
+
+  /**
+   * Убирает копию обложки из S3 после удаления записи. Ошибки только логируем:
+   * запись уже удалена, и осиротевший файл в бакете не повод падать запросу.
+   */
+  async remove(key: string | null | undefined): Promise<void> {
+    if (!key || !this.s3Client || !this.bucket) return;
+    try {
+      await this.s3Client.send(
+        new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+    } catch (error) {
+      this.logger.warn(`Не удалось удалить обложку ${key}: ${String(error)}`);
+    }
   }
 
   private async download(url: string): Promise<Buffer | null> {
