@@ -1,6 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ForbiddenException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { UsersService } from '../users/users.service';
@@ -75,6 +75,7 @@ describe('ContactsService', () => {
       findUnique: jest.fn(),
       findMany: jest.fn(),
       upsert: jest.fn(),
+      create: jest.fn(),
     },
     contactsProfileTag: { deleteMany: jest.fn(), createMany: jest.fn() },
     contactsTag: { findMany: jest.fn() },
@@ -107,12 +108,49 @@ describe('ContactsService', () => {
   });
 
   describe('getState', () => {
-    it('возвращает null, когда карточки ещё нет', async () => {
+    it('заводит активную карточку, когда её ещё нет', async () => {
       prisma.contactsProfile.findUnique.mockResolvedValue(null);
+      prisma.contactsProfile.create.mockResolvedValue(
+        profile({ headline: null, tags: [] }),
+      );
 
-      await expect(service.getState('owner')).resolves.toEqual({
-        profile: null,
-      });
+      const state = await service.getState('owner');
+
+      expect(prisma.contactsProfile.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { userId: 'owner', status: 'active', visibility: 'everyone' },
+        }),
+      );
+      expect(state.profile).toEqual(
+        expect.objectContaining({ status: 'active', visibility: 'everyone' }),
+      );
+    });
+
+    it('не пересоздаёт карточку, когда она уже есть', async () => {
+      prisma.contactsProfile.findUnique.mockResolvedValue(profile());
+
+      await service.getState('owner');
+
+      expect(prisma.contactsProfile.create).not.toHaveBeenCalled();
+    });
+
+    it('переживает гонку двух входов: P2002 отдаёт чужую созданную карточку', async () => {
+      const conflict = Object.assign(
+        new Prisma.PrismaClientKnownRequestError('duplicate', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+      prisma.contactsProfile.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(profile());
+      prisma.contactsProfile.create.mockRejectedValue(conflict);
+
+      const state = await service.getState('owner');
+
+      expect(state.profile).toEqual(
+        expect.objectContaining({ headline: 'Повар-прасадарий' }),
+      );
     });
 
     it('отдаёт свою карточку целиком, без применения приватности', async () => {
@@ -463,8 +501,8 @@ describe('ContactsService', () => {
         .mockResolvedValueOnce(saved);
     }
 
-    it('создаёт черновик, когда заголовка нет', async () => {
-      stubSave(null, profile({ headline: null, status: 'draft', tags: [] }));
+    it('оставляет карточку активной, когда заголовка нет', async () => {
+      stubSave(null, profile({ headline: null, status: 'active', tags: [] }));
 
       const dto = await service.upsertProfile(
         'owner',
@@ -472,8 +510,10 @@ describe('ContactsService', () => {
         now,
       );
 
-      expect(expectSaved().status).toBe('draft');
-      expect(dto.status).toBe('draft');
+      // Пустой заголовок раньше ронял карточку в 'draft', и человек молча
+      // пропадал из справочника. Уход из выдачи — только через visibility.
+      expect(expectSaved().status).toBe('active');
+      expect(dto.status).toBe('active');
     });
 
     it('делает карточку активной, когда заголовок заполнен', async () => {

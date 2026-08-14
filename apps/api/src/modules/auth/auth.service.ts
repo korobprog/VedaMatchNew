@@ -12,6 +12,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import * as oidc from 'openid-client';
 import type { Role } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NEW_CONTACTS_PROFILE } from '../contacts/contacts-defaults';
 import { JwtSignService } from './jwt.service';
 import { verifyPassword } from './password';
 import { toRole } from './role';
@@ -135,6 +136,8 @@ export class AuthService implements OnModuleInit {
       },
     });
 
+    await this.ensureContactsProfile(user.id);
+
     await this.prisma.loginAudit.create({
       data: {
         userId: user.id,
@@ -147,6 +150,38 @@ export class AuthService implements OnModuleInit {
     res.clearCookie(OIDC_COOKIE, { path: '/auth', domain: this.cookieDomain });
     await this.issueTokens(user.id, user.email, toRole(user.role), res);
     res.redirect(this.webOrigin);
+  }
+
+  /**
+   * Карточка справочника «Контакты» заводится вместе с пользователем: человек
+   * должен быть в списке участников сразу после регистрации, ничего не
+   * заполняя. Содержимое карточки берётся из профиля join-ом, поэтому пустых
+   * полей достаточно.
+   *
+   * Вызывается на каждом входе, а не только при создании User: так в
+   * справочник дотягиваются и те, кто зарегистрировался раньше этой правки.
+   * `createMany` со `skipDuplicates` вместо `create` — параллельный вход
+   * второй вкладкой не должен ронять авторизацию конфликтом уникального
+   * `userId`.
+   *
+   * Логика продублирована из `ContactsService.ensureProfile` намеренно:
+   * ContactsModule импортирует AuthModule, и обратная зависимость сделала бы
+   * их циклическими. Общие для обоих мест значения лежат в
+   * `contacts/contacts-defaults.ts`.
+   */
+  private async ensureContactsProfile(userId: string): Promise<void> {
+    try {
+      await this.prisma.contactsProfile.createMany({
+        data: [{ userId, ...NEW_CONTACTS_PROFILE }],
+        skipDuplicates: true,
+      });
+    } catch (error) {
+      // Справочник не должен мешать входу: логиним и идём дальше.
+      this.logger.error(
+        `Не удалось создать карточку «Контакты» для ${userId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 
   /** Включён ли вход по логину и паролю. В production недоступен никогда. */
@@ -179,6 +214,8 @@ export class AuthService implements OnModuleInit {
     const invalid = new UnauthorizedException('Неверный email или пароль');
     if (!user?.passwordHash) throw invalid;
     if (!(await verifyPassword(password, user.passwordHash))) throw invalid;
+
+    await this.ensureContactsProfile(user.id);
 
     await this.prisma.loginAudit.create({
       data: {

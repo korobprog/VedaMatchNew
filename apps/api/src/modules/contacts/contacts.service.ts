@@ -29,6 +29,7 @@ import type {
 import { CONTACTS_COUNT_THRESHOLD } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
+import { NEW_CONTACTS_PROFILE } from './contacts-defaults';
 import { calculateAge } from '../users/age';
 import { UsersService } from '../users/users.service';
 import type { SearchViewer } from './contacts-search-query';
@@ -141,11 +142,43 @@ export class ContactsService {
 
   /** Своя карточка целиком: приватность к владельцу не применяется. */
   async getState(userId: string): Promise<ContactsProfileState> {
-    const profile = await this.prisma.contactsProfile.findUnique({
+    const profile = await this.ensureProfile(userId);
+    return { profile: profile ? this.toProfileDto(profile) : null };
+  }
+
+  /**
+   * Гарантирует наличие карточки у пользователя. Вызывается при входе
+   * (`AuthService.handleGoogleCallback`) и при открытии своей карточки, так
+   * что пользователи, заведённые до бэкфилла или в обход обычного входа,
+   * попадают в справочник сами.
+   *
+   * Гонку двух параллельных входов гасим по уникальному `userId`: P2002
+   * означает, что карточку успел создать соседний запрос, и это не ошибка.
+   */
+  async ensureProfile(userId: string): Promise<ProfileRow | null> {
+    const existing = await this.prisma.contactsProfile.findUnique({
       where: { userId },
       include: PROFILE_INCLUDE,
     });
-    return { profile: profile ? this.toProfileDto(profile) : null };
+    if (existing) return existing as ProfileRow;
+
+    try {
+      return (await this.prisma.contactsProfile.create({
+        data: { userId, ...NEW_CONTACTS_PROFILE },
+        include: PROFILE_INCLUDE,
+      })) as ProfileRow;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return (await this.prisma.contactsProfile.findUnique({
+          where: { userId },
+          include: PROFILE_INCLUDE,
+        })) as ProfileRow | null;
+      }
+      throw error;
+    }
   }
 
   async upsertProfile(
@@ -160,11 +193,15 @@ export class ContactsService {
     const values = this.validate(body ?? {}, existing, now);
     const tagIds = await this.validateTagIds(body?.tagIds);
 
-    // Статус выставляет сервер: клиент им управлять не должен. Карточка без
-    // заголовка — черновик, с заголовком — активна. Значение 'pending'
-    // (премодерация коммерческих карточек) появится отдельным этапом и здесь
-    // намеренно не используется.
-    const status: ContactsProfileStatus = values.headline ? 'active' : 'draft';
+    // Статус выставляет сервер: клиент им управлять не должен. Карточка
+    // активна всегда — она заводится вместе с пользователем (см.
+    // `contacts-defaults.ts`), и пустой заголовок больше не убирает человека
+    // из справочника: раньше сохранение анкеты без заголовка молча роняло
+    // карточку в 'draft' и та исчезала из выдачи. Уход из справочника — это
+    // осознанный `visibility: 'hidden'`, а не побочный эффект пустого поля.
+    // Значение 'pending' (премодерация коммерческих карточек) появится
+    // отдельным этапом и здесь намеренно не используется.
+    const status: ContactsProfileStatus = 'active';
     const data = {
       ...values,
       status,
