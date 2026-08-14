@@ -6,6 +6,8 @@
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type {
+  AdminBlockUserRequest,
+  AdminDeleteUserRequest,
   AdminManualStageUpdateRequest,
   AdminMentorVerificationRequest,
   AdminRoleUpdateRequest,
@@ -17,6 +19,7 @@ import type {
   ServiceCard,
   SpiritualStage,
   StageHistoryItem,
+  UserAccountStatus,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toRole } from '../auth/role';
@@ -28,9 +31,11 @@ import {
 import { calculateAge, toBirthDateInput } from './age';
 import { toPhotoVerificationState } from './photo-verification';
 import { toSubscriptionState } from '../billing/subscription';
+import { deletionEligibleAt } from './account-status';
 import { UsersService } from './users.service';
 
 const ROLES: Role[] = ['user', 'admin', 'service-admin'];
+const ACCOUNT_STATUSES: UserAccountStatus[] = ['active', 'blocked', 'deleted'];
 const STAGES: SpiritualStage[] = ['seeker', 'practitioner', 'yogi', 'devotee'];
 const VERIFICATION_STATUSES: DevoteeVerificationStatus[] = [
   'self_identified',
@@ -48,6 +53,7 @@ interface ListUsersQuery {
   spiritualStage?: string;
   verificationStatus?: string;
   hasMentorRequest?: string;
+  accountStatus?: string;
   page?: string;
   pageSize?: string;
   sortBy?: string;
@@ -105,6 +111,9 @@ export class AdminUsersService {
           updatedAt: user.updatedAt.toISOString(),
           hasMentorRequest: Boolean(mentorRequest),
           mentorRequestStatus: mentorRequest?.status ?? null,
+          accountStatus: user.accountStatus,
+          blockedUntil: user.blockedUntil?.toISOString() ?? null,
+          deletedAt: user.deletedAt?.toISOString() ?? null,
         };
       })),
       page,
@@ -163,6 +172,14 @@ export class AdminUsersService {
         subscription: toSubscriptionState(user),
         createdAt: user.createdAt.toISOString(),
         updatedAt: user.updatedAt.toISOString(),
+        accountStatus: user.accountStatus,
+        pendingDeletionAt: user.pendingDeletionAt?.toISOString() ?? null,
+        deletionEligibleAt: user.pendingDeletionAt
+          ? deletionEligibleAt(user.pendingDeletionAt).toISOString()
+          : null,
+        statusReason: user.statusReason,
+        blockedUntil: user.blockedUntil?.toISOString() ?? null,
+        deletedAt: user.deletedAt?.toISOString() ?? null,
       },
       availableServices,
       stageHistory: history.map(mapStageHistory),
@@ -273,6 +290,136 @@ export class AdminUsersService {
     return this.getUser(admin.role, userId);
   }
 
+  async setBlocked(
+    admin: { sub: string; role: Role },
+    userId: string,
+    body: AdminBlockUserRequest,
+  ): Promise<AdminUserDetail> {
+    this.ensureAdmin(admin.role);
+
+    if (admin.sub === userId) {
+      throw new BadRequestException(
+        'Нельзя заблокировать собственный аккаунт',
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Пользователь не найден');
+
+    if (body.blocked) {
+      const reason = body.reason?.trim() ?? '';
+      if (reason.length < 5) {
+        throw new BadRequestException(
+          'Укажите причину блокировки минимум 5 символов',
+        );
+      }
+      const blockedUntil = body.blockedUntil
+        ? new Date(body.blockedUntil)
+        : null;
+      if (blockedUntil && Number.isNaN(blockedUntil.getTime())) {
+        throw new BadRequestException('Некорректная дата окончания блокировки');
+      }
+
+      await this.prisma.$transaction([
+        this.prisma.refreshToken.updateMany({
+          where: { userId },
+          data: { revoked: true },
+        }),
+        this.prisma.user.update({
+          where: { id: userId },
+          data: {
+            accountStatus: 'blocked',
+            statusReason: reason,
+            statusActor: 'admin',
+            statusChangedAt: new Date(),
+            blockedUntil,
+          },
+        }),
+      ]);
+    } else {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          accountStatus: 'active',
+          statusReason: null,
+          statusActor: 'admin',
+          statusChangedAt: new Date(),
+          blockedUntil: null,
+        },
+      });
+    }
+
+    return this.getUser(admin.role, userId);
+  }
+
+  async softDeleteUser(
+    admin: { sub: string; role: Role },
+    userId: string,
+    body: AdminDeleteUserRequest,
+  ): Promise<AdminUserDetail> {
+    this.ensureAdmin(admin.role);
+
+    const reason = body.reason?.trim() ?? '';
+    if (reason.length < 5) {
+      throw new BadRequestException(
+        'Укажите причину удаления минимум 5 символов',
+      );
+    }
+    if (admin.sub === userId && !body.confirmSelfDelete) {
+      throw new BadRequestException(
+        'Для удаления собственного аккаунта нужно явное подтверждение',
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Пользователь не найден');
+
+    await this.prisma.$transaction([
+      this.prisma.refreshToken.updateMany({
+        where: { userId },
+        data: { revoked: true },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          accountStatus: 'deleted',
+          deletedAt: new Date(),
+          pendingDeletionAt: null,
+          statusReason: reason,
+          statusActor: 'admin',
+          statusChangedAt: new Date(),
+        },
+      }),
+    ]);
+
+    return this.getUser(admin.role, userId);
+  }
+
+  async restoreUser(
+    admin: { sub: string; role: Role },
+    userId: string,
+  ): Promise<AdminUserDetail> {
+    this.ensureAdmin(admin.role);
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Пользователь не найден');
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        accountStatus: 'active',
+        deletedAt: null,
+        pendingDeletionAt: null,
+        blockedUntil: null,
+        statusReason: null,
+        statusActor: 'admin',
+        statusChangedAt: new Date(),
+      },
+    });
+
+    return this.getUser(admin.role, userId);
+  }
+
   private ensureAdmin(role: Role) {
     if (role !== 'admin') {
       throw new ForbiddenException('Доступ только для администратора');
@@ -319,6 +466,13 @@ export class AdminUsersService {
     }
     if (query.hasMentorRequest === 'false') {
       where.mentorVerificationRequests = { none: {} };
+    }
+
+    if (
+      query.accountStatus &&
+      ACCOUNT_STATUSES.includes(query.accountStatus as UserAccountStatus)
+    ) {
+      where.accountStatus = query.accountStatus as UserAccountStatus;
     }
 
     return where;

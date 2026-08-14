@@ -31,6 +31,7 @@ import {
   RESET_PHOTO_VERIFICATION,
   toPhotoVerificationState,
 } from './photo-verification';
+import { deletionEligibleAt } from './account-status';
 
 const GENDERS: Gender[] = ['male', 'female'];
 
@@ -133,7 +134,43 @@ export class UsersService {
       lastSelfIdentificationAt:
         user.lastSelfIdentificationAt?.toISOString() ?? null,
       subscription: toSubscriptionState(user),
+      accountStatus: user.accountStatus,
+      pendingDeletionAt: user.pendingDeletionAt?.toISOString() ?? null,
+      deletionEligibleAt: user.pendingDeletionAt
+        ? deletionEligibleAt(user.pendingDeletionAt).toISOString()
+        : null,
     };
+  }
+
+  /** Самостоятельный запрос на удаление аккаунта: не разлогинивает, даёт окно на отмену. */
+  async requestSelfDeletion(userId: string): Promise<UserProfile> {
+    const user = await this.ensureUser(userId);
+    if (!user.pendingDeletionAt) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          pendingDeletionAt: new Date(),
+          statusActor: 'user',
+          statusReason: 'Запрошено пользователем',
+          statusChangedAt: new Date(),
+        },
+      });
+    }
+    return this.getProfile(userId);
+  }
+
+  async cancelSelfDeletion(userId: string): Promise<UserProfile> {
+    await this.ensureUser(userId);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        pendingDeletionAt: null,
+        statusActor: 'user',
+        statusReason: null,
+        statusChangedAt: new Date(),
+      },
+    });
+    return this.getProfile(userId);
   }
 
   async updateProfile(

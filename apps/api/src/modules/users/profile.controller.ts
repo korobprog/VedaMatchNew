@@ -51,4 +51,14 @@ export class ProfileController {
   deleteAvatar(@CurrentUser() user: AccessTokenPayload) {
     return this.users.deleteAvatar(user.sub);
   }
+
+  @Post('delete-request')
+  requestDeletion(@CurrentUser() user: AccessTokenPayload) {
+    return this.users.requestSelfDeletion(user.sub);
+  }
+
+  @Delete('delete-request')
+  cancelDeletion(@CurrentUser() user: AccessTokenPayload) {
+    return this.users.cancelSelfDeletion(user.sub);
+  }
 }

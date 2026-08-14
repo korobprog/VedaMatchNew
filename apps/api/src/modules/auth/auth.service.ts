@@ -13,6 +13,7 @@ import * as oidc from 'openid-client';
 import type { Role } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NEW_CONTACTS_PROFILE } from '../contacts/contacts-defaults';
+import { assertAccountActive } from '../users/account-status';
 import { JwtSignService } from './jwt.service';
 import { verifyPassword } from './password';
 import { toRole } from './role';
@@ -136,6 +137,7 @@ export class AuthService implements OnModuleInit {
       },
     });
 
+    await assertAccountActive(this.prisma, user);
     await this.ensureContactsProfile(user.id);
 
     await this.prisma.loginAudit.create({
@@ -215,6 +217,7 @@ export class AuthService implements OnModuleInit {
     if (!user?.passwordHash) throw invalid;
     if (!(await verifyPassword(password, user.passwordHash))) throw invalid;
 
+    await assertAccountActive(this.prisma, user);
     await this.ensureContactsProfile(user.id);
 
     await this.prisma.loginAudit.create({
@@ -297,6 +300,7 @@ export class AuthService implements OnModuleInit {
     if (!stored || stored.revoked || stored.expiresAt < new Date()) {
       throw new UnauthorizedException('Refresh-токен недействителен');
     }
+    await assertAccountActive(this.prisma, stored.user);
 
     // Ротация: старый токен отзываем, выдаём новую пару
     await this.prisma.refreshToken.update({

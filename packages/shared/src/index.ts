@@ -37,6 +37,8 @@ export type DevoteeVerificationStatus =
 
 export type StageChangeActor = 'system' | 'user' | 'admin';
 
+export type UserAccountStatus = 'active' | 'blocked' | 'deleted';
+
 /** Пол. Необязателен: у части аккаунтов он не заполнен. */
 export type Gender = 'male' | 'female';
 
@@ -59,6 +61,11 @@ export interface UserProfile {
   devoteeVerificationStatus: DevoteeVerificationStatus | null;
   lastSelfIdentificationAt: string | null;
   subscription: SubscriptionState;
+  accountStatus: UserAccountStatus;
+  /** Задано, если пользователь сам запросил удаление аккаунта. */
+  pendingDeletionAt: string | null;
+  /** `pendingDeletionAt` + окно на отмену; после этой даты удаление финализируется. */
+  deletionEligibleAt: string | null;
 }
 
 /** Состояние проверки фото: заявка пользователя и решение администрации. */
@@ -281,6 +288,9 @@ export interface AdminUserListItem {
   updatedAt: string;
   hasMentorRequest: boolean;
   mentorRequestStatus: DevoteeVerificationStatus | null;
+  accountStatus: UserAccountStatus;
+  blockedUntil: string | null;
+  deletedAt: string | null;
 }
 
 export interface AdminUserListResponse {
@@ -294,6 +304,9 @@ export interface AdminUserListResponse {
 export interface AdminUserProfile extends UserProfile {
   createdAt: string;
   updatedAt: string;
+  statusReason: string | null;
+  blockedUntil: string | null;
+  deletedAt: string | null;
 }
 
 export interface AdminSelfIdentificationResponse {
@@ -328,6 +341,18 @@ export interface AdminManualStageUpdateRequest {
 export interface AdminRoleUpdateRequest {
   role: Role;
   confirmSelfChange?: boolean;
+}
+
+export interface AdminBlockUserRequest {
+  blocked: boolean;
+  reason?: string;
+  /** ISO-дата; `null`/не указано при блокировке = бессрочно. */
+  blockedUntil?: string | null;
+}
+
+export interface AdminDeleteUserRequest {
+  reason: string;
+  confirmSelfDelete?: boolean;
 }
 
 export interface CommunityStats {

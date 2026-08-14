@@ -8,6 +8,7 @@ import {
 import type { Request } from 'express';
 import type { AccessTokenPayload } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { assertAccountActive } from '../users/account-status';
 import { JwtSignService } from './jwt.service';
 
 export interface AuthenticatedRequest extends Request {
@@ -38,8 +39,15 @@ export class AuthGuard implements CanActivate {
     } catch {
       throw new UnauthorizedException('Токен недействителен или истёк');
     }
+    await this.ensureAccountActive(req.user.sub);
     this.touchLastSeen(req.user.sub);
     return true;
+  }
+
+  private async ensureAccountActive(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException('Токен недействителен или истёк');
+    await assertAccountActive(this.prisma, user);
   }
 
   /** Обновление активности не должно задерживать или ронять сам запрос. */

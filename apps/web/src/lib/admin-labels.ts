@@ -1,4 +1,4 @@
-﻿import type { DevoteeVerificationStatus, Role, SpiritualStage, StageChangeActor } from '@vedamatch/shared';
+﻿import type { DevoteeVerificationStatus, Role, SpiritualStage, StageChangeActor, UserAccountStatus } from '@vedamatch/shared';
 
 export const roleLabels: Record<Role, string> = {
   user: 'Пользователь',
@@ -27,6 +27,12 @@ export const actorLabels: Record<StageChangeActor, string> = {
   system: 'Система',
   user: 'Пользователь',
   admin: 'Администратор',
+};
+
+export const accountStatusLabels: Record<UserAccountStatus, string> = {
+  active: 'Активен',
+  blocked: 'Заблокирован',
+  deleted: 'Удалён',
 };
 
 export function formatDate(value: string | null | undefined) {

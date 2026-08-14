@@ -311,7 +311,11 @@ export class UnionProfileService {
     this.requireLocation(me.user);
 
     const others = await this.prisma.unionProfile.findMany({
-      where: { isActive: true, userId: { not: userId } },
+      where: {
+        isActive: true,
+        userId: { not: userId },
+        user: { accountStatus: 'active', pendingDeletionAt: null },
+      },
       include: {
         intentions: true,
         user: {

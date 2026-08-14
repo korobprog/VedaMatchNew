@@ -9,6 +9,7 @@ import { ProfileEditor } from "@/components/profile-editor";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { LogoutButton } from "@/components/logout-button";
+import { DeleteAccountSection } from "@/components/delete-account-section";
 import { InstallButton } from "@/components/pwa/install-button";
 import { NotificationSettings } from "@/components/pwa/notification-settings";
 
@@ -124,6 +125,11 @@ export default async function ProfilePage() {
           <LogoutButton className="mt-3 w-full rounded-xl border-red-400/30 px-4 py-3 text-red-400 hover:border-red-400/50 hover:bg-red-400/10 dark:border-red-400/30 dark:text-red-400 dark:hover:bg-red-400/10">
             Выйти из аккаунта
           </LogoutButton>
+          <DeleteAccountSection
+            className="mt-3"
+            pendingDeletionAt={user.pendingDeletionAt}
+            deletionEligibleAt={user.deletionEligibleAt}
+          />
         </div>
         <SubscriptionCard subscription={user.subscription} plan={plan} />
         <div className="mb-6">

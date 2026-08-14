@@ -4,11 +4,14 @@
   Get,
   Param,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import type {
   AccessTokenPayload,
+  AdminBlockUserRequest,
+  AdminDeleteUserRequest,
   AdminManualStageUpdateRequest,
   AdminRoleUpdateRequest,
 } from '@vedamatch/shared';
@@ -66,5 +69,31 @@ export class AdminUsersController {
     @Body() body: AdminRoleUpdateRequest,
   ) {
     return this.adminUsers.updateRole(user, id, body);
+  }
+
+  @Patch(':id/block')
+  setBlocked(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: AdminBlockUserRequest,
+  ) {
+    return this.adminUsers.setBlocked(user, id, body);
+  }
+
+  @Post(':id/delete')
+  softDelete(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: AdminDeleteUserRequest,
+  ) {
+    return this.adminUsers.softDeleteUser(user, id, body);
+  }
+
+  @Post(':id/restore')
+  restore(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.adminUsers.restoreUser(user, id);
   }
 }

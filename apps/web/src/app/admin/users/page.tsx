@@ -1,15 +1,16 @@
 ﻿import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { DevoteeVerificationStatus, Role, SpiritualStage } from "@vedamatch/shared";
+import type { DevoteeVerificationStatus, Role, SpiritualStage, UserAccountStatus } from "@vedamatch/shared";
 import { Header } from "@/components/header";
 import { getAdminUsers, getProfile } from "@/lib/api";
-import { formatDate, roleLabels, stageLabels, verificationLabels } from "@/lib/admin-labels";
+import { accountStatusLabels, formatDate, roleLabels, stageLabels, verificationLabels } from "@/lib/admin-labels";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { cn } from "@/lib/utils";
 
 const roles: Array<Role | "all"> = ["all", "user", "admin", "service-admin"];
 const stages: Array<SpiritualStage | "all"> = ["all", "seeker", "practitioner", "yogi", "devotee"];
+const accountStatuses: Array<UserAccountStatus | "all"> = ["all", "active", "blocked", "deleted"];
 const statuses: Array<DevoteeVerificationStatus | "all"> = [
   "all",
   "self_identified",
@@ -70,6 +71,7 @@ export default async function AdminUsersPage({
           <Select name="spiritualStage" label="Этап" value={query.spiritualStage} options={stages.map((s) => ({ value: s, label: s === "all" ? "Все" : stageLabels[s] }))} />
           <Select name="verificationStatus" label="Статус" value={query.verificationStatus} options={statuses.map((s) => ({ value: s, label: s === "all" ? "Все" : verificationLabels[s] }))} />
           <Select name="hasMentorRequest" label="Заявка наставника" value={query.hasMentorRequest} options={[{ value: "all", label: "Все" }, { value: "true", label: "Есть" }, { value: "false", label: "Нет" }]} />
+          <Select name="accountStatus" label="Статус аккаунта" value={query.accountStatus} options={accountStatuses.map((s) => ({ value: s, label: s === "all" ? "Все" : accountStatusLabels[s] }))} />
           <Select name="sortBy" label="Сортировка" value={query.sortBy} options={[{ value: "createdAt", label: "Дата регистрации" }, { value: "lastSelfIdentificationAt", label: "Последняя анкета" }, { value: "status", label: "Статус" }]} />
           <Select name="sortDir" label="Порядок" value={query.sortDir} options={[{ value: "desc", label: "Сначала новые" }, { value: "asc", label: "Сначала старые" }]} />
           <Select name="pageSize" label="На странице" value={query.pageSize} options={["10", "20", "50", "100"].map((v) => ({ value: v, label: v }))} />
@@ -96,6 +98,7 @@ export default async function AdminUsersPage({
                     <th className="px-4 py-3">Анкета</th>
                     <th className="px-4 py-3">Регистрация</th>
                     <th className="px-4 py-3">Заявка</th>
+                    <th className="px-4 py-3">Аккаунт</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-glass-brd">
@@ -113,6 +116,16 @@ export default async function AdminUsersPage({
                       <td className="px-4 py-3 text-text-2">{formatDate(item.lastSelfIdentificationAt)}</td>
                       <td className="px-4 py-3 text-text-2">{formatDate(item.createdAt)}</td>
                       <td className="px-4 py-3">{item.hasMentorRequest ? <Badge tone="blue">{item.mentorRequestStatus ? verificationLabels[item.mentorRequestStatus] : "Есть"}</Badge> : "—"}</td>
+                      <td className="px-4 py-3">
+                        {item.accountStatus === "active" ? (
+                          "—"
+                        ) : (
+                          <Badge tone="red">
+                            {accountStatusLabels[item.accountStatus]}
+                            {item.accountStatus === "blocked" && item.blockedUntil ? ` до ${formatDate(item.blockedUntil)}` : ""}
+                          </Badge>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -144,6 +157,7 @@ function normalizeQuery(raw: Record<string, string | string[] | undefined>) {
     spiritualStage: one("spiritualStage") && one("spiritualStage") !== "all" ? one("spiritualStage") : undefined,
     verificationStatus: one("verificationStatus") && one("verificationStatus") !== "all" ? one("verificationStatus") : undefined,
     hasMentorRequest: one("hasMentorRequest") && one("hasMentorRequest") !== "all" ? one("hasMentorRequest") : undefined,
+    accountStatus: one("accountStatus") && one("accountStatus") !== "all" ? one("accountStatus") : undefined,
     sortBy: one("sortBy") ?? "createdAt",
     sortDir: one("sortDir") ?? "desc",
     page: one("page") ?? "1",
@@ -162,11 +176,12 @@ function Select({ name, label, value, options }: { name: string; label: string; 
   );
 }
 
-function Badge({ children, tone = "amber" }: { children: React.ReactNode; tone?: "amber" | "green" | "blue" }) {
+function Badge({ children, tone = "amber" }: { children: React.ReactNode; tone?: "amber" | "green" | "blue" | "red" }) {
   const classes = {
     amber: "bg-gold/20 text-gold border border-gold/30",
     green: "bg-cyan/20 text-cyan border border-cyan/30",
     blue: "bg-magenta/20 text-magenta border border-magenta/30",
+    red: "bg-red-500/20 text-red-400 border border-red-500/30",
   }[tone];
   return <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-medium", classes)}>{children}</span>;
 }

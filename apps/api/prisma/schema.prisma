@@ -53,6 +53,12 @@ enum StageChangeActor {
   admin
 }
 
+enum UserAccountStatus {
+  active
+  blocked
+  deleted
+}
+
 enum SupportTicketStatus {
   open
   in_progress
@@ -179,6 +185,16 @@ model User {
   trialEndsAt                  DateTime?
   subscriptionPaidUntil        DateTime?
   subscriptionNote             String?
+  // Блокировка/удаление аккаунта. Переходы по времени (конец блокировки, истечение
+  // окна отмены удаления) финализируются лениво — см. account-status.ts.
+  accountStatus                UserAccountStatus          @default(active)
+  statusReason                 String?
+  statusActor                  StageChangeActor?
+  statusChangedAt              DateTime?
+  blockedUntil                 DateTime?
+  // Запрошено пользователем самостоятельное удаление; финализируется через SELF_DELETE_GRACE_DAYS.
+  pendingDeletionAt            DateTime?
+  deletedAt                    DateTime?
   createdAt                    DateTime                   @default(now())
   updatedAt                    DateTime                   @updatedAt
 
@@ -1529,15 +1545,15 @@ model ReleaseChange {
 }
 
 model Announcement {
-  id            String             @id @default(uuid())
-  titleRu       String
-  titleEn       String
-  bodyRu        String
-  bodyEn        String
-  status        AnnouncementStatus @default(draft)
-  publishedAt   DateTime?
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  id          String             @id @default(uuid())
+  titleRu     String
+  titleEn     String
+  bodyRu      String
+  bodyEn      String
+  status      AnnouncementStatus @default(draft)
+  publishedAt DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
   @@index([status, publishedAt(sort: Desc)])
 }

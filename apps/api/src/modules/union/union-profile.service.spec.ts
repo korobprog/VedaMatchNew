@@ -401,7 +401,11 @@ describe('UnionProfileService', () => {
 
     expect(prisma.unionProfile.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { isActive: true, userId: { not: 'me' } },
+        where: {
+          isActive: true,
+          userId: { not: 'me' },
+          user: { accountStatus: 'active', pendingDeletionAt: null },
+        },
       }),
     );
   });
@@ -987,7 +991,11 @@ describe('UnionProfileService', () => {
     const result = await service.getRecommendations('me');
 
     expect(prisma.unionProfile.findMany).toHaveBeenCalledWith({
-      where: { isActive: true, userId: { not: 'me' } },
+      where: {
+        isActive: true,
+        userId: { not: 'me' },
+        user: { accountStatus: 'active', pendingDeletionAt: null },
+      },
       include: {
         intentions: true,
         user: {
