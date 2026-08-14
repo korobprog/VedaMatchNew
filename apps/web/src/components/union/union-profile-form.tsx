@@ -163,11 +163,14 @@ export function UnionProfileForm({
   profile,
   completeness: initialCompleteness,
   viewerGender = null,
+  viewerAge = null,
 }: {
   profile: UnionProfileDto | null;
   completeness: UnionProfileCompleteness;
   /** Пол из аккаунта: по нему подставляется, кого искать при цели «семья». */
   viewerGender?: Gender | null;
+  /** Возраст из аккаунта: цель «Создание семьи» доступна только с 18 лет. */
+  viewerAge?: number | null;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft>(() => toDraft(profile));
@@ -314,6 +317,7 @@ export function UnionProfileForm({
           weights={weights}
           onChange={updateWeights}
           viewerGender={viewerGender}
+          viewerAge={viewerAge}
           seeksGender={draft.familySeeksGender}
           onSeeksGenderChange={(next) => update("familySeeksGender", next)}
         />

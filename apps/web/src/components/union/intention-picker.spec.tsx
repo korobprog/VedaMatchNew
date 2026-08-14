@@ -66,6 +66,7 @@ describe("IntentionPicker", () => {
       <IntentionPicker
         weights={{ family: 100, business: 0, friendship: 0, service: 0 }}
         onChange={onChange}
+        viewerAge={30}
       />,
     );
 
@@ -73,5 +74,69 @@ describe("IntentionPicker", () => {
 
     expect(onChange).not.toHaveBeenCalled();
     expect(screen.getByText(/хотя бы одну цель/i)).toBeInTheDocument();
+  });
+});
+
+describe("IntentionPicker family age gate", () => {
+  it("disables the family goal when age is unknown and links to the profile", () => {
+    render(
+      <IntentionPicker
+        weights={{ family: 0, business: 100, friendship: 0, service: 0 }}
+        onChange={vi.fn()}
+        viewerAge={null}
+      />,
+    );
+
+    expect(
+      screen.getByRole("checkbox", { name: "Создание семьи" }),
+    ).toBeDisabled();
+    expect(screen.getByText(/укажете дату рождения/i)).toBeInTheDocument();
+  });
+
+  it("disables the family goal when the viewer is under 18", () => {
+    render(
+      <IntentionPicker
+        weights={{ family: 0, business: 100, friendship: 0, service: 0 }}
+        onChange={vi.fn()}
+        viewerAge={17}
+      />,
+    );
+
+    expect(
+      screen.getByRole("checkbox", { name: "Создание семьи" }),
+    ).toBeDisabled();
+    expect(screen.getByText(/только с 18 лет/i)).toBeInTheDocument();
+  });
+
+  it("does not toggle the family goal while ineligible", async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <IntentionPicker
+        weights={{ family: 0, business: 100, friendship: 0, service: 0 }}
+        onChange={onChange}
+        viewerAge={null}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("checkbox", { name: "Создание семьи" }),
+    );
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("allows the family goal once the viewer is 18 or older", () => {
+    render(
+      <IntentionPicker
+        weights={{ family: 0, business: 100, friendship: 0, service: 0 }}
+        onChange={vi.fn()}
+        viewerAge={18}
+      />,
+    );
+
+    expect(
+      screen.getByRole("checkbox", { name: "Создание семьи" }),
+    ).toBeEnabled();
   });
 });

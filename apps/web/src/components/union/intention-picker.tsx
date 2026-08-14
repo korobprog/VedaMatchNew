@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { UnionIntentionType } from "@vedamatch/shared";
 import type { IntentionWeights } from "./intention-constructor";
-import { intentionLabels, intentionTypes } from "./labels";
+import { canChooseFamily, intentionLabels, intentionTypes } from "./labels";
 
 const empty: IntentionWeights = {
   family: 0,
@@ -43,14 +44,19 @@ export function isEvenSplit(weights: IntentionWeights): boolean {
 export function IntentionPicker({
   weights,
   onChange,
+  viewerAge = null,
 }: {
   weights: IntentionWeights;
   onChange: (weights: IntentionWeights) => void;
+  /** Возраст владельца анкеты — цель «Создание семьи» доступна только с 18 лет. */
+  viewerAge?: number | null;
 }) {
   const [warned, setWarned] = useState(false);
   const selected = selectedTypes(weights);
+  const familyEligible = canChooseFamily(viewerAge);
 
   function toggle(type: UnionIntentionType) {
+    if (type === "family" && !familyEligible) return;
     const next = selected.includes(type)
       ? selected.filter((item) => item !== type)
       : intentionTypes.filter((item) => item === type || selected.includes(item));
@@ -69,17 +75,40 @@ export function IntentionPicker({
       <legend className="mb-2 text-sm font-semibold text-text-0">
         Что вы ищете? Отметьте подходящее
       </legend>
-      {intentionTypes.map((type) => (
-        <label key={type} className="flex items-center gap-3 text-sm text-text-1">
-          <input
-            type="checkbox"
-            checked={selected.includes(type)}
-            onChange={() => toggle(type)}
-            className="h-5 w-5"
-          />
-          {intentionLabels[type]}
-        </label>
-      ))}
+      {intentionTypes.map((type) => {
+        const disabled = type === "family" && !familyEligible;
+        return (
+          <label
+            key={type}
+            className={`flex items-center gap-3 text-sm ${disabled ? "text-text-2" : "text-text-1"}`}
+          >
+            <input
+              type="checkbox"
+              checked={selected.includes(type)}
+              disabled={disabled}
+              onChange={() => toggle(type)}
+              className="h-5 w-5"
+            />
+            {intentionLabels[type]}
+          </label>
+        );
+      })}
+      {!familyEligible && (
+        <p className="text-xs text-text-2">
+          {viewerAge === null ? (
+            <>
+              Цель «Создание семьи» откроется, когда вы укажете дату рождения
+              в{" "}
+              <Link href="/profile" className="underline">
+                профиле
+              </Link>{" "}
+              — так мы убедимся, что вам есть 18 лет.
+            </>
+          ) : (
+            "Цель «Создание семьи» доступна только с 18 лет."
+          )}
+        </p>
+      )}
       {warned && (
         <p className="text-xs text-magenta">
           Оставьте хотя бы одну цель — без неё анкета не сохранится.

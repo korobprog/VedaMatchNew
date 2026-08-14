@@ -57,6 +57,7 @@ describe("IntentionSection", () => {
         weights={{ family: 100, business: 0, friendship: 0, service: 0 }}
         onChange={vi.fn()}
         viewerGender="female"
+        viewerAge={30}
         seeksGender="male"
         onSeeksGenderChange={vi.fn()}
       />,
@@ -89,6 +90,7 @@ describe("IntentionSection", () => {
         weights={{ family: 0, business: 100, friendship: 0, service: 0 }}
         onChange={vi.fn()}
         viewerGender="male"
+        viewerAge={30}
         seeksGender={null}
         onSeeksGenderChange={onSeeksGenderChange}
       />,
@@ -107,6 +109,7 @@ describe("IntentionSection", () => {
         weights={{ family: 50, business: 50, friendship: 0, service: 0 }}
         onChange={vi.fn()}
         viewerGender="male"
+        viewerAge={30}
         seeksGender="female"
         onSeeksGenderChange={onSeeksGenderChange}
       />,
@@ -136,5 +139,19 @@ describe("IntentionSection", () => {
     );
 
     expect(onSeeksGenderChange).toHaveBeenCalledWith("male");
+  });
+
+  it("блокирует цель «Создание семьи», пока возраст не указан", () => {
+    render(
+      <IntentionSection
+        weights={{ family: 0, business: 100, friendship: 0, service: 0 }}
+        onChange={vi.fn()}
+        viewerAge={null}
+      />,
+    );
+
+    expect(
+      screen.getByRole("checkbox", { name: "Создание семьи" }),
+    ).toBeDisabled();
   });
 });

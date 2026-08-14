@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import type { UnionIntentionType } from "@vedamatch/shared";
-import { intentionLabels, intentionTypes } from "./labels";
+import { canChooseFamily, intentionLabels, intentionTypes } from "./labels";
 
 export type IntentionWeights = Record<UnionIntentionType, number>;
 
@@ -33,42 +34,73 @@ export function normalizeWeights(weights: IntentionWeights): IntentionWeights {
 export function IntentionConstructor({
   weights,
   onChange,
+  viewerAge = null,
 }: {
   weights: IntentionWeights;
   onChange: (weights: IntentionWeights) => void;
+  /** Возраст владельца анкеты — цель «Создание семьи» доступна только с 18 лет. */
+  viewerAge?: number | null;
 }) {
   const sum = intentionSum(weights);
   const sumOk = sum === 100;
+  const familyEligible = canChooseFamily(viewerAge);
 
   return (
     <fieldset className="space-y-4">
       <legend className="mb-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
         Что вы ищете? Распределите 100% между направлениями
       </legend>
-      {intentionTypes.map((type) => (
-        <div key={type}>
-          <div className="mb-1 flex items-center justify-between text-sm">
-            <label htmlFor={`intention-${type}`} className="text-zinc-700 dark:text-zinc-300">
-              {intentionLabels[type]}
-            </label>
-            <span className="font-medium text-zinc-900 dark:text-zinc-100">
-              {weights[type]}%
-            </span>
+      {intentionTypes.map((type) => {
+        const disabled = type === "family" && !familyEligible;
+        return (
+          <div key={type}>
+            <div className="mb-1 flex items-center justify-between text-sm">
+              <label
+                htmlFor={`intention-${type}`}
+                className={
+                  disabled
+                    ? "text-zinc-400 dark:text-zinc-600"
+                    : "text-zinc-700 dark:text-zinc-300"
+                }
+              >
+                {intentionLabels[type]}
+              </label>
+              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                {weights[type]}%
+              </span>
+            </div>
+            <input
+              id={`intention-${type}`}
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={weights[type]}
+              disabled={disabled}
+              onChange={(e) =>
+                onChange({ ...weights, [type]: Number(e.target.value) })
+              }
+              className="w-full accent-amber-600 disabled:opacity-40"
+            />
           </div>
-          <input
-            id={`intention-${type}`}
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={weights[type]}
-            onChange={(e) =>
-              onChange({ ...weights, [type]: Number(e.target.value) })
-            }
-            className="w-full accent-amber-600"
-          />
-        </div>
-      ))}
+        );
+      })}
+      {!familyEligible && (
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          {viewerAge === null ? (
+            <>
+              Цель «Создание семьи» откроется, когда вы укажете дату рождения
+              в{" "}
+              <Link href="/profile" className="underline">
+                профиле
+              </Link>{" "}
+              — так мы убедимся, что вам есть 18 лет.
+            </>
+          ) : (
+            "Цель «Создание семьи» доступна только с 18 лет."
+          )}
+        </p>
+      )}
       <div className="flex items-center justify-between text-sm">
         <span className={sumOk ? "text-emerald-600" : "text-red-600"}>
           Сумма: {sum}% {sumOk ? "✓" : "(должна быть 100%)"}

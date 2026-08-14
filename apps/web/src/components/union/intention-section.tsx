@@ -32,12 +32,15 @@ export function IntentionSection({
   weights,
   onChange,
   viewerGender = null,
+  viewerAge = null,
   seeksGender = null,
   onSeeksGenderChange,
 }: {
   weights: IntentionWeights;
   onChange: (weights: IntentionWeights) => void;
   viewerGender?: Gender | null;
+  /** Возраст владельца анкеты — цель «Создание семьи» доступна только с 18 лет. */
+  viewerAge?: number | null;
   seeksGender?: Gender | null;
   onSeeksGenderChange?: (gender: Gender | null) => void;
 }) {
@@ -71,9 +74,17 @@ export function IntentionSection({
   return (
     <div className="space-y-3">
       {fineTuning ? (
-        <IntentionConstructor weights={weights} onChange={changeWeights} />
+        <IntentionConstructor
+          weights={weights}
+          onChange={changeWeights}
+          viewerAge={viewerAge}
+        />
       ) : (
-        <IntentionPicker weights={weights} onChange={changeWeights} />
+        <IntentionPicker
+          weights={weights}
+          onChange={changeWeights}
+          viewerAge={viewerAge}
+        />
       )}
 
       {familyChosen && onSeeksGenderChange && (
