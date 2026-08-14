@@ -158,7 +158,7 @@ describe("UserGalleryEditor", () => {
     expect(formData.getAll("files")).toEqual([validJpeg, validPng]);
     expect(await screen.findByText(/valid\.jpg: фото загружено как приватное/)).toBeInTheDocument();
     expect(screen.getByText(/valid\.png: фото загружено как приватное/)).toBeInTheDocument();
-    expect(screen.getAllByText("Приватное")).toHaveLength(2);
+    expect(screen.getAllByText("Сейчас видно только вам")).toHaveLength(2);
   });
 
   it("renders every server upload success and failure without suppressing successes", async () => {
@@ -240,7 +240,7 @@ describe("UserGalleryEditor", () => {
     render(<UserGalleryEditor />);
 
     const toggle = await screen.findByRole("switch", {
-      name: "Показывать фото photo-1 в Union",
+      name: "Показывать фото photo-1 в Знакомствах",
     });
     await user.click(toggle);
 
@@ -253,7 +253,30 @@ describe("UserGalleryEditor", () => {
         body: JSON.stringify({ isPublic: true }),
       },
     );
-    expect(await screen.findByText("Публичное")).toBeInTheDocument();
+    expect(await screen.findByText("Сейчас видно всем")).toBeInTheDocument();
+  });
+
+  it("warns when the gallery has photos but none of them are shown", async () => {
+    // Молчаливое «фото есть, но их никто не видит»: человек загрузил снимки
+    // и уверен, что в Знакомствах он с ними, а там показывается аватарка.
+    fetchMock.mockResolvedValueOnce(jsonResponse(gallery([photo()])));
+    render(<UserGalleryEditor />);
+
+    expect(
+      await screen.findByText(/Ни одно фото не показывается в Знакомствах/),
+    ).toBeInTheDocument();
+  });
+
+  it("drops the warning once a photo is shown", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(gallery([photo({ isPublic: true })])),
+    );
+    render(<UserGalleryEditor />);
+
+    expect(await screen.findByRole("switch")).toBeChecked();
+    expect(
+      screen.queryByText(/Ни одно фото не показывается в Знакомствах/),
+    ).not.toBeInTheDocument();
   });
 
   it("restores visibility when the request fails", async () => {
@@ -267,7 +290,7 @@ describe("UserGalleryEditor", () => {
     await user.click(toggle);
 
     await waitFor(() => expect(toggle).not.toBeChecked());
-    expect(screen.getByText("Приватное")).toBeInTheDocument();
+    expect(screen.getByText("Сейчас видно только вам")).toBeInTheDocument();
     expect(screen.getByText("Не удалось изменить видимость фото")).toBeInTheDocument();
   });
 
@@ -387,7 +410,7 @@ describe("UserGalleryEditor", () => {
     fireEvent.dragStart(first, { dataTransfer });
     fireEvent.drop(second, { dataTransfer });
 
-    expect(screen.getByRole("switch", { name: "Показывать фото one в Union" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Показывать фото one в Знакомствах" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Удалить фото one" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Переместить фото one влево" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Переместить фото one вправо" })).toBeDisabled();

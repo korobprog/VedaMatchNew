@@ -248,6 +248,16 @@ export class UserGalleryService {
     return this.loadGallery(userId);
   }
 
+  /**
+   * Удаление снимка. Если удалён был последний публичный, публичность
+   * переходит к первому оставшемуся: иначе человек молча исчезал из ленты
+   * Знакомств (там выборка идёт по `isPublic`), хотя в галерее у него
+   * оставалось ещё несколько фото и ничего «спрятать» он не просил.
+   *
+   * Повышаем только когда публичных не осталось совсем — снимок, который
+   * владелец сам держал приватным, не должен всплывать наружу, пока в
+   * галерее есть хоть одно открытое фото.
+   */
   async remove(userId: string, photoId: string): Promise<void> {
     const deleted = await this.prisma.$transaction(async (tx) => {
       await this.lockOwner(tx, userId);
@@ -256,6 +266,26 @@ export class UserGalleryService {
       });
       if (!photo) throw new NotFoundException('Фотография не найдена');
       await tx.userPhoto.delete({ where: { id: photoId } });
+
+      if (photo.isPublic) {
+        const stillPublic = await tx.userPhoto.count({
+          where: { userId, isPublic: true },
+        });
+        if (stillPublic === 0) {
+          const next = await tx.userPhoto.findFirst({
+            where: { userId },
+            orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+            select: { id: true },
+          });
+          if (next) {
+            await tx.userPhoto.update({
+              where: { id: next.id },
+              data: { isPublic: true },
+            });
+          }
+        }
+      }
+
       return photo;
     });
 

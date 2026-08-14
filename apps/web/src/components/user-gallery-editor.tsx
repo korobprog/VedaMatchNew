@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type {
   UserGalleryState,
   UserPhotoDto,
@@ -431,6 +432,19 @@ export function UserGalleryEditor(): React.ReactNode {
         </p>
       ) : gallery && gallery.photos.length > 0 ? (
         <>
+          {!gallery.photos.some((photo) => photo.isPublic) && (
+            // Молчаливое состояние «фото есть, но их никто не видит» —
+            // человек загрузил снимки и уверен, что в Знакомствах он с ними.
+            // Прогресс анкеты про это говорит только непоставленной галочкой.
+            <p
+              role="status"
+              className="mt-5 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200"
+            >
+              Ни одно фото не показывается в Знакомствах — там вас видят по
+              аватарке. Включите переключатель «Показывать в Знакомствах» у
+              нужного снимка.
+            </p>
+          )}
           <p className="mt-5 text-xs text-zinc-500">
             Перетаскивайте фото для изменения порядка. С клавиатуры используйте
             Alt + стрелки.
@@ -472,12 +486,24 @@ export function UserGalleryEditor(): React.ReactNode {
                     referrerPolicy="no-referrer"
                   />
                   <div className="space-y-3 p-3">
+                    {/* Подпись называет, ЧТО делает переключатель, а не
+                        текущее состояние: «Публичное» рядом с тумблером
+                        читается как кнопка «сделать публичным» и нажимается
+                        ровно наоборот. Само состояние видно по тумблеру и
+                        продублировано строкой ниже. */}
                     <label className="flex cursor-pointer items-center justify-between gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                      <span>{photo.isPublic ? "Публичное" : "Приватное"}</span>
+                      <span>
+                        Показывать в Знакомствах
+                        <span className="block text-xs text-zinc-500">
+                          {photo.isPublic
+                            ? "Сейчас видно всем"
+                            : "Сейчас видно только вам"}
+                        </span>
+                      </span>
                       <input
                         type="checkbox"
                         role="switch"
-                        aria-label={`Показывать фото ${photo.id} в Union`}
+                        aria-label={`Показывать фото ${photo.id} в Знакомствах`}
                         checked={photo.isPublic}
                         disabled={isMutating}
                         onChange={() => void toggleVisibility(photo)}
@@ -499,9 +525,13 @@ export function UserGalleryEditor(): React.ReactNode {
                         onClick={() => void moveWithKeyboard(photo.id, -1)}
                         disabled={isMutating || index === 0}
                         aria-label={`Переместить фото ${photo.id} влево`}
-                        className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-white disabled:cursor-not-allowed disabled:text-zinc-400 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                        title="Переместить влево"
+                        className="flex items-center justify-center rounded-lg border border-zinc-300 px-3 py-2 text-zinc-700 hover:bg-white disabled:cursor-not-allowed disabled:text-zinc-400 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
                       >
-                        Влево
+                        {/* Стрелка вместо слова: в узкой колонке галереи
+                            «Вправо» не помещалось в кнопку и вылезало за её
+                            границу. Название осталось в aria-label и title. */}
+                        <ChevronLeft aria-hidden="true" className="h-4 w-4" />
                       </button>
                       <button
                         type="button"
@@ -510,9 +540,10 @@ export function UserGalleryEditor(): React.ReactNode {
                           isMutating || index === gallery.photos.length - 1
                         }
                         aria-label={`Переместить фото ${photo.id} вправо`}
-                        className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-white disabled:cursor-not-allowed disabled:text-zinc-400 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                        title="Переместить вправо"
+                        className="flex items-center justify-center rounded-lg border border-zinc-300 px-3 py-2 text-zinc-700 hover:bg-white disabled:cursor-not-allowed disabled:text-zinc-400 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
                       >
-                        Вправо
+                        <ChevronRight aria-hidden="true" className="h-4 w-4" />
                       </button>
                     </div>
                   </div>

@@ -93,13 +93,16 @@ describe('UserGalleryService', () => {
           width: 3,
           height: 2,
           sizeBytes: (put.input.Body as Buffer).length,
-          isPublic: false,
+          // Галерея пустая, поэтому снимок открыт сразу: иначе человек
+          // загружает фото и не появляется в Знакомствах, ничего об этом
+          // не узнав.
+          isPublic: true,
         }),
       });
       expect(result.uploaded[0].photo).toMatchObject({
         width: 3,
         height: 2,
-        isPublic: false,
+        isPublic: true,
       });
     },
   );
@@ -434,6 +437,42 @@ describe('UserGalleryService', () => {
     });
   });
 
+  it('passes publicity to the next photo when the last public one is deleted', async () => {
+    // Иначе человек молча исчезает из ленты Знакомств: выборка там идёт по
+    // isPublic, а в галерее у него осталось ещё несколько фото и прятаться
+    // он не просил.
+    prisma.userPhoto.findFirst
+      .mockResolvedValueOnce(photo({ isPublic: true }))
+      .mockResolvedValueOnce({ id: 'next-photo' });
+    prisma.userPhoto.count.mockResolvedValueOnce(0);
+
+    await service.remove(USER_ID, 'photo-id');
+
+    expect(prisma.userPhoto.update).toHaveBeenCalledWith({
+      where: { id: 'next-photo' },
+      data: { isPublic: true },
+    });
+  });
+
+  it('does not promote anything while another public photo remains', async () => {
+    // Снимок, который владелец сам держал приватным, наружу не всплывает.
+    prisma.userPhoto.findFirst.mockResolvedValueOnce(photo({ isPublic: true }));
+    prisma.userPhoto.count.mockResolvedValueOnce(1);
+
+    await service.remove(USER_ID, 'photo-id');
+
+    expect(prisma.userPhoto.update).not.toHaveBeenCalled();
+  });
+
+  it('does not promote anything when the deleted photo was private', async () => {
+    prisma.userPhoto.findFirst.mockResolvedValueOnce(photo({ isPublic: false }));
+
+    await service.remove(USER_ID, 'photo-id');
+
+    expect(prisma.userPhoto.count).not.toHaveBeenCalled();
+    expect(prisma.userPhoto.update).not.toHaveBeenCalled();
+  });
+
   it('does not delete a photo owned by another user', async () => {
     prisma.userPhoto.findFirst.mockResolvedValueOnce(null);
 
@@ -484,6 +523,10 @@ function prismaMock() {
     findFirst: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
+    // Без `count` падал весь разбор загрузки: сервис считает им уже
+    // имеющиеся снимки, чтобы сделать первое фото публичным, и на
+    // `undefined is not a function` каждый файл уходил в `failed`.
+    count: jest.fn().mockResolvedValue(0),
   };
   const prisma = {
     user: {
