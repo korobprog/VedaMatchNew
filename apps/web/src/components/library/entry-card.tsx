@@ -56,6 +56,11 @@ export function EntryCard({
           {entryTypeLabel(locale, entry.type)}
         </span>
         <span className="uppercase">{entry.contentLanguage}</span>
+        {entry.hasCustomPreview && (
+          <span className="rounded-full bg-glass-brd/40 px-2 py-0.5">
+            {t(locale, "entry.customPreview")}
+          </span>
+        )}
       </div>
 
       <h3 className="mb-1 font-display text-base font-semibold text-text-0">

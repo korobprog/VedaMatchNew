@@ -103,10 +103,24 @@ export class LibraryPreviewsService {
     entryId: string,
     remoteUrl: string,
   ): Promise<StoredPreview | null> {
-    if (!this.s3Client || !this.bucket || !this.publicUrl) return null;
+    // Проверяем настройку S3 до скачивания: без бакета качать нечего сохранять.
+    if (!this.configured) return null;
 
     const source = await this.download(remoteUrl);
     if (!source) return null;
+    return this.storeBuffer(entryId, source);
+  }
+
+  /**
+   * Сжимает уже имеющиеся байты картинки и кладёт их в S3. Общий хвост для
+   * авто-обложки с сайта-источника (`store`) и ручной загрузки от автора.
+   * `null` — S3 не настроен или файл не распознан как изображение.
+   */
+  async storeBuffer(
+    entryId: string,
+    source: Buffer,
+  ): Promise<StoredPreview | null> {
+    if (!this.s3Client || !this.bucket || !this.publicUrl) return null;
 
     const webp = await sharp(source, {
       failOn: 'error',

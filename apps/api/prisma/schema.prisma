@@ -1178,6 +1178,8 @@ model LibraryEntry {
   faviconUrl       String?
   previewKey       String?
   previewUrl       String?
+  /// `true` — обложку загрузил автор/админ вручную; авто-обновление обложки такую запись не трогает.
+  previewIsCustom  Boolean                  @default(false)
   enrichmentStatus LibraryEnrichmentStatus  @default(pending)
   enrichmentError  String?
   enrichedAt       DateTime?

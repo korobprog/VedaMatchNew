@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  ForbiddenException,
+  NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { LibraryCategoriesService } from './library-categories.service';
@@ -14,6 +16,7 @@ function prismaMock(overrides: Record<string, unknown> = {}) {
     libraryCategory: {
       findMany: jest.fn().mockResolvedValue([]),
       findFirst: jest.fn().mockResolvedValue(null),
+      findUnique: jest.fn().mockResolvedValue(null),
       create: jest
         .fn()
         .mockImplementation(({ data }: { data: Record<string, unknown> }) =>
@@ -25,6 +28,7 @@ function prismaMock(overrides: Record<string, unknown> = {}) {
             section: SECTION,
           }),
         ),
+      update: jest.fn(),
     },
     $queryRaw: jest.fn().mockResolvedValue([]),
     ...overrides,
@@ -125,5 +129,96 @@ describe('LibraryCategoriesService.create', () => {
     });
 
     expect(result.slug).toBe('gita-lectures-2');
+  });
+});
+
+function categoryRecord(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'category-1',
+    sectionId: 'section-1',
+    slug: 'gita-lectures',
+    titleRu: 'Лекции по Гите',
+    titleEn: 'Gita Lectures',
+    descriptionRu: null,
+    descriptionEn: null,
+    normalizedRu: 'лекции по гите',
+    normalizedEn: 'gita lectures',
+    entriesCount: 3,
+    status: 'active',
+    createdById: 'author-1',
+    createdAt: new Date('2026-07-29T10:00:00.000Z'),
+    section: SECTION,
+    ...overrides,
+  };
+}
+
+describe('LibraryCategoriesService.update', () => {
+  it('lets the author rename their own category', async () => {
+    const prisma = prismaMock({
+      libraryCategory: {
+        findUnique: jest.fn().mockResolvedValue(categoryRecord()),
+        update: jest
+          .fn()
+          .mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+            Promise.resolve({ ...categoryRecord(), ...data }),
+          ),
+      },
+    });
+    const service = new LibraryCategoriesService(prisma as never);
+
+    const result = await service.update('author-1', false, 'category-1', {
+      titleRu: 'Лекции по Бхагавад-гите',
+    });
+
+    expect(result.titleRu).toBe('Лекции по Бхагавад-гите');
+    // Слаг не пересчитывается: на него уже могли сослаться извне.
+    expect(result.slug).toBe('gita-lectures');
+  });
+
+  it('lets an admin rename a category they did not create', async () => {
+    const prisma = prismaMock({
+      libraryCategory: {
+        findUnique: jest.fn().mockResolvedValue(categoryRecord()),
+        update: jest
+          .fn()
+          .mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+            Promise.resolve({ ...categoryRecord(), ...data }),
+          ),
+      },
+    });
+    const service = new LibraryCategoriesService(prisma as never);
+
+    await expect(
+      service.update('admin-1', true, 'category-1', { titleRu: 'Новое имя' }),
+    ).resolves.toMatchObject({ titleRu: 'Новое имя' });
+  });
+
+  it('refuses to let another member edit someone else’s category', async () => {
+    const prisma = prismaMock({
+      libraryCategory: {
+        findUnique: jest.fn().mockResolvedValue(categoryRecord()),
+        update: jest.fn(),
+      },
+    });
+    const service = new LibraryCategoriesService(prisma as never);
+
+    await expect(
+      service.update('other-user', false, 'category-1', { titleRu: 'x' }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.libraryCategory.update).not.toHaveBeenCalled();
+  });
+
+  it('404s for a missing category', async () => {
+    const prisma = prismaMock({
+      libraryCategory: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        update: jest.fn(),
+      },
+    });
+    const service = new LibraryCategoriesService(prisma as never);
+
+    await expect(
+      service.update('author-1', false, 'missing', { titleRu: 'x' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

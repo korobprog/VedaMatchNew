@@ -19,6 +19,7 @@ function section(
     position: 1,
     categoriesCount: 0,
     entriesCount: 0,
+    canEdit: false,
   };
 }
 

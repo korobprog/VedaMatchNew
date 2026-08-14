@@ -5,15 +5,20 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import type {
   AccessTokenPayload,
   CreateLibraryCommentRequest,
   CreateLibraryEntryRequest,
+  UpdateLibraryEntryRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { LibraryBookmarksService } from './library-bookmarks.service';
@@ -21,7 +26,9 @@ import { LibraryCommentsService } from './library-comments.service';
 import {
   LibraryEntriesService,
   type LibraryFeedFilters,
+  type UploadedPreviewFile,
 } from './library-entries.service';
+import { isAdmin } from './is-admin';
 
 @Controller('library/entries')
 @UseGuards(AuthGuard)
@@ -37,12 +44,12 @@ export class LibraryEntriesController {
     @CurrentUser() user: AccessTokenPayload,
     @Query() query: LibraryFeedFilters,
   ) {
-    return this.entries.feed(query, user.sub);
+    return this.entries.feed(query, user.sub, isAdmin(user));
   }
 
   @Get(':id')
   byId(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
-    return this.entries.byId(id, user.sub);
+    return this.entries.byId(id, user.sub, isAdmin(user));
   }
 
   @Post()
@@ -52,6 +59,29 @@ export class LibraryEntriesController {
     @Body() body: CreateLibraryEntryRequest,
   ) {
     return this.entries.create(user.sub, body);
+  }
+
+  @Patch(':id')
+  @Throttle({ default: { ttl: 3_600_000, limit: 60 } })
+  update(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: UpdateLibraryEntryRequest,
+  ) {
+    return this.entries.update(user.sub, isAdmin(user), id, body);
+  }
+
+  @Post(':id/preview')
+  @Throttle({ default: { ttl: 3_600_000, limit: 20 } })
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }),
+  )
+  uploadPreview(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @UploadedFile() file?: UploadedPreviewFile,
+  ) {
+    return this.entries.uploadPreview(user.sub, isAdmin(user), id, file);
   }
 
   @Post(':id/bookmark')
@@ -101,8 +131,4 @@ export class LibraryCommentsController {
   remove(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.comments.remove(id, user.sub, isAdmin(user));
   }
-}
-
-function isAdmin(user: AccessTokenPayload): boolean {
-  return user.role === 'admin' || user.role === 'service-admin';
 }

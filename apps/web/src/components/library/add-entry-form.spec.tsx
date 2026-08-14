@@ -23,6 +23,7 @@ const categories: LibraryCategoryDto[] = [
     descriptionEn: null,
     entriesCount: 2,
     createdAt: "2026-07-29T10:00:00.000Z",
+    canEdit: false,
   },
 ];
 
@@ -38,6 +39,7 @@ const sections: LibrarySectionDto[] = [
     position: 1,
     categoriesCount: 1,
     entriesCount: 2,
+    canEdit: false,
   },
 ];
 

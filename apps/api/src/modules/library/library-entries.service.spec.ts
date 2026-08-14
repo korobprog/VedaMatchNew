@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { LibraryEntriesService } from './library-entries.service';
 
 const NOW = new Date('2026-07-29T10:00:00.000Z');
@@ -34,6 +34,7 @@ function prismaMock(overrides: Record<string, unknown> = {}) {
     findMany: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue(0),
     create: jest.fn().mockResolvedValue(entryRecord()),
+    update: jest.fn().mockResolvedValue(entryRecord()),
   };
   return {
     libraryEntry,
@@ -67,11 +68,16 @@ function bookmarksMock() {
   };
 }
 
-function previewsMock() {
+function previewsMock(overrides: Record<string, unknown> = {}) {
   return {
     configured: true,
     capture: jest.fn().mockResolvedValue(undefined),
     captureInBackground: jest.fn(),
+    storeBuffer: jest.fn().mockResolvedValue({
+      key: 'library/previews/entry-1.webp',
+      url: 'https://cdn.vedamatch.ru/library/previews/entry-1.webp',
+    }),
+    ...overrides,
   };
 }
 
@@ -321,5 +327,271 @@ describe('LibraryEntriesService.feed', () => {
 
     expect(result.items).toEqual([]);
     expect(result.nextCursor).toBeNull();
+  });
+});
+
+describe('LibraryEntriesService canEdit', () => {
+  it('marks an entry as editable for its author', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValue(entryRecord({ addedBy: { id: 'user-1', name: 'X' } }));
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    const result = await service.byId('entry-1', 'user-1');
+
+    expect(result.canEdit).toBe(true);
+  });
+
+  it('marks an entry as read-only for someone else', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValue(entryRecord({ addedBy: { id: 'user-1', name: 'X' } }));
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    const result = await service.byId('entry-1', 'someone-else');
+
+    expect(result.canEdit).toBe(false);
+  });
+
+  it('marks an entry as editable for an admin regardless of author', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValue(entryRecord({ addedBy: { id: 'user-1', name: 'X' } }));
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    const result = await service.byId('entry-1', 'admin-1', true);
+
+    expect(result.canEdit).toBe(true);
+  });
+});
+
+describe('LibraryEntriesService.update', () => {
+  function txMock(updatedEntry: Record<string, unknown>) {
+    return {
+      libraryEntry: {
+        update: jest.fn().mockResolvedValue(undefined),
+        findUniqueOrThrow: jest.fn().mockResolvedValue(updatedEntry),
+      },
+      libraryEntryCategory: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      libraryCategory: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+  }
+
+  it('lets the author edit the title of their own entry', async () => {
+    const updated = entryRecord({ titleRu: 'Новый заголовок' });
+    const tx = txMock(updated);
+    const prisma = prismaMock({
+      $transaction: jest.fn((callback: (t: unknown) => unknown) =>
+        callback(tx),
+      ),
+    });
+    prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(entryRecord());
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    const result = await service.update('user-1', false, 'entry-1', {
+      titleRu: 'Новый заголовок',
+    });
+
+    expect(result.titleRu).toBe('Новый заголовок');
+    expect(tx.libraryEntry.update).toHaveBeenCalledWith({
+      where: { id: 'entry-1' },
+      data: { titleRu: 'Новый заголовок', titleEn: null },
+    });
+  });
+
+  it('refuses to let another member edit someone else’s entry', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValue(entryRecord({ addedBy: { id: 'user-1', name: 'X' } }));
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    await expect(
+      service.update('someone-else', false, 'entry-1', { titleRu: 'x' }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('lets an admin edit an entry they did not add', async () => {
+    const updated = entryRecord({ titleRu: 'Правка админа' });
+    const tx = txMock(updated);
+    const prisma = prismaMock({
+      $transaction: jest.fn((callback: (t: unknown) => unknown) =>
+        callback(tx),
+      ),
+    });
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValue(entryRecord({ addedBy: { id: 'user-1', name: 'X' } }));
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    const result = await service.update('admin-1', true, 'entry-1', {
+      titleRu: 'Правка админа',
+    });
+
+    expect(result.titleRu).toBe('Правка админа');
+  });
+
+  it('rejects clearing both titles', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(entryRecord());
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    await expect(
+      service.update('user-1', false, 'entry-1', {
+        titleRu: null,
+        titleEn: null,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('diffs categories instead of replacing them wholesale', async () => {
+    const updated = entryRecord();
+    const tx = txMock(updated);
+    const prisma = prismaMock({
+      $transaction: jest.fn((callback: (t: unknown) => unknown) =>
+        callback(tx),
+      ),
+    });
+    prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(
+      entryRecord({
+        categories: [
+          { category: { id: 'category-1', slug: 'a', titleRu: 'A', titleEn: null, section: { slug: 's' } } },
+          { category: { id: 'category-2', slug: 'b', titleRu: 'B', titleEn: null, section: { slug: 's' } } },
+        ],
+      }),
+    );
+    prisma.libraryCategory.findMany = jest
+      .fn()
+      .mockResolvedValue([{ id: 'category-1' }, { id: 'category-3' }]);
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    await service.update('user-1', false, 'entry-1', {
+      categoryIds: ['category-1', 'category-3'],
+    });
+
+    expect(tx.libraryEntryCategory.deleteMany).toHaveBeenCalledWith({
+      where: { entryId: 'entry-1', categoryId: { in: ['category-2'] } },
+    });
+    expect(tx.libraryEntryCategory.createMany).toHaveBeenCalledWith({
+      data: [{ entryId: 'entry-1', categoryId: 'category-3', addedById: 'user-1' }],
+    });
+  });
+});
+
+describe('LibraryEntriesService.uploadPreview', () => {
+  function makeFile(overrides: Record<string, unknown> = {}) {
+    return {
+      buffer: Buffer.from('fake-image-bytes'),
+      mimetype: 'image/png',
+      size: 1024,
+      ...overrides,
+    };
+  }
+
+  it('replaces the preview and marks it custom', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(entryRecord());
+    prisma.libraryEntry.update = jest
+      .fn()
+      .mockResolvedValue(entryRecord({ previewIsCustom: true }));
+    const previews = previewsMock();
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previews as never,
+      bookmarksMock() as never,
+    );
+
+    const result = await service.uploadPreview(
+      'user-1',
+      false,
+      'entry-1',
+      makeFile(),
+    );
+
+    expect(previews.storeBuffer).toHaveBeenCalledWith(
+      'entry-1',
+      expect.any(Buffer),
+    );
+    expect(prisma.libraryEntry.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ previewIsCustom: true }) as object,
+      }),
+    );
+    expect(result.hasCustomPreview).toBe(true);
+  });
+
+  it('rejects a file that is not an image', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(entryRecord());
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    await expect(
+      service.uploadPreview(
+        'user-1',
+        false,
+        'entry-1',
+        makeFile({ mimetype: 'application/pdf' }),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('refuses an upload from someone who is not the author', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValue(entryRecord({ addedBy: { id: 'user-1', name: 'X' } }));
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    await expect(
+      service.uploadPreview('someone-else', false, 'entry-1', makeFile()),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

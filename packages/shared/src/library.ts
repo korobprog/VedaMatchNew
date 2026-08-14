@@ -31,6 +31,8 @@ export interface LibrarySectionDto {
   position: number;
   categoriesCount: number;
   entriesCount: number;
+  /** `true` — текущий пользователь может переименовать раздел (только админ). */
+  canEdit: boolean;
 }
 
 export interface LibraryCategoryDto {
@@ -44,6 +46,8 @@ export interface LibraryCategoryDto {
   descriptionEn: string | null;
   entriesCount: number;
   createdAt: string;
+  /** `true` — текущий пользователь создал категорию либо является админом. */
+  canEdit: boolean;
 }
 
 export interface LibraryCategorySuggestion {
@@ -83,6 +87,10 @@ export interface LibraryEntryDto {
     >
   >;
   addedBy: { id: string; name: string } | null;
+  /** `true` — текущий пользователь добавил ссылку либо является админом. */
+  canEdit: boolean;
+  /** `true` — обложка загружена вручную, а не взята автоматически с сайта-источника. */
+  hasCustomPreview: boolean;
 }
 
 export interface LibraryFeedResponse {
@@ -102,6 +110,25 @@ export interface CreateLibraryCategoryRequest {
   force?: boolean;
 }
 
+/** Все поля необязательны — меняются только переданные. Раздел (sectionId)
+ *  можно сменить, слаг при этом не пересчитывается: ссылки на категорию не рвутся. */
+export interface UpdateLibraryCategoryRequest {
+  sectionId?: string;
+  titleRu?: string | null;
+  titleEn?: string | null;
+  descriptionRu?: string | null;
+  descriptionEn?: string | null;
+}
+
+/** Разделы правит только администрация; порядок (position) здесь не меняется. */
+export interface UpdateLibrarySectionRequest {
+  titleRu?: string;
+  titleEn?: string;
+  descriptionRu?: string | null;
+  descriptionEn?: string | null;
+  iconKey?: string | null;
+}
+
 /** Тело ответа `422` при похожей существующей категории. */
 export interface CreateLibraryCategoryConflict {
   code: 'similar_category_exists';
@@ -117,6 +144,22 @@ export interface CreateLibraryEntryRequest {
   descriptionRu?: string | null;
   descriptionEn?: string | null;
   categoryIds: string[];
+}
+
+/** Все поля необязательны — меняются только переданные. Адрес ссылки (url)
+ *  не редактируется: он завязан на дедупликацию и normalizedUrl. */
+export interface UpdateLibraryEntryRequest {
+  type?: LibraryEntryType;
+  contentLanguage?: string;
+  titleRu?: string | null;
+  titleEn?: string | null;
+  descriptionRu?: string | null;
+  descriptionEn?: string | null;
+  categoryIds?: string[];
+}
+
+export interface LibraryPreviewUploadResponse {
+  previewUrl: string;
 }
 
 export type LibraryCommentStatus =

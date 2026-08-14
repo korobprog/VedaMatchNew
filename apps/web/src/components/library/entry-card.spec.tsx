@@ -32,6 +32,8 @@ const entry: LibraryEntryDto = {
     },
   ],
   addedBy: { id: "user-1", name: "Тест" },
+  canEdit: false,
+  hasCustomPreview: false,
 };
 
 describe("EntryCard", () => {

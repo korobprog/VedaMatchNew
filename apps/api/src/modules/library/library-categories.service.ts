@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -10,6 +11,7 @@ import type {
   CreateLibraryCategoryRequest,
   LibraryCategoryDto,
   LibraryCategorySuggestion,
+  UpdateLibraryCategoryRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -40,7 +42,11 @@ interface SuggestionRow {
 export class LibraryCategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listBySection(sectionSlug: string): Promise<LibraryCategoryDto[]> {
+  async listBySection(
+    sectionSlug: string,
+    viewerId?: string,
+    viewerIsAdmin = false,
+  ): Promise<LibraryCategoryDto[]> {
     const section = await this.prisma.librarySection.findUnique({
       where: { slug: sectionSlug },
     });
@@ -51,7 +57,9 @@ export class LibraryCategoriesService {
       orderBy: [{ entriesCount: 'desc' }, { createdAt: 'asc' }],
     });
 
-    return categories.map((category) => toCategoryDto(category, section.slug));
+    return categories.map((category) =>
+      toCategoryDto(category, section.slug, viewerId, viewerIsAdmin),
+    );
   }
 
   async suggest(query: string): Promise<LibraryCategorySuggestion[]> {
@@ -129,7 +137,84 @@ export class LibraryCategoriesService {
       },
     });
 
-    return toCategoryDto(created, section.slug);
+    return toCategoryDto(created, section.slug, userId, false);
+  }
+
+  /**
+   * Автор категории и админ могут поправить название, описание и раздел.
+   * Слаг при этом не пересчитывается — на него уже могли сослаться извне
+   * (фильтр в ленте, прямая ссылка на раздел справочника).
+   */
+  async update(
+    userId: string,
+    viewerIsAdmin: boolean,
+    id: string,
+    body: UpdateLibraryCategoryRequest,
+  ): Promise<LibraryCategoryDto> {
+    const existing = await this.prisma.libraryCategory.findUnique({
+      where: { id },
+      include: { section: true },
+    });
+    if (!existing || existing.status !== 'active') {
+      throw new NotFoundException('category_not_found');
+    }
+    if (existing.createdById !== userId && !viewerIsAdmin) {
+      throw new ForbiddenException('not_category_owner');
+    }
+
+    const data: Prisma.LibraryCategoryUpdateInput = {};
+
+    if (body.titleRu !== undefined || body.titleEn !== undefined) {
+      const titleRu =
+        body.titleRu !== undefined ? trimOrNull(body.titleRu) : existing.titleRu;
+      const titleEn =
+        body.titleEn !== undefined ? trimOrNull(body.titleEn) : existing.titleEn;
+      if (!titleRu && !titleEn) throw new BadRequestException('title_required');
+      for (const title of [titleRu, titleEn]) {
+        if (title && title.length > MAX_TITLE_LENGTH) {
+          throw new BadRequestException('title_too_long');
+        }
+      }
+      data.titleRu = titleRu;
+      data.titleEn = titleEn;
+      data.normalizedRu = normalizeTitle(titleRu);
+      data.normalizedEn = normalizeTitle(titleEn);
+    }
+
+    if (body.descriptionRu !== undefined || body.descriptionEn !== undefined) {
+      const descriptionRu =
+        body.descriptionRu !== undefined
+          ? trimOrNull(body.descriptionRu)
+          : existing.descriptionRu;
+      const descriptionEn =
+        body.descriptionEn !== undefined
+          ? trimOrNull(body.descriptionEn)
+          : existing.descriptionEn;
+      for (const description of [descriptionRu, descriptionEn]) {
+        if (description && description.length > MAX_DESCRIPTION_LENGTH) {
+          throw new BadRequestException('description_too_long');
+        }
+      }
+      data.descriptionRu = descriptionRu;
+      data.descriptionEn = descriptionEn;
+    }
+
+    let sectionSlug = existing.section.slug;
+    if (body.sectionId !== undefined && body.sectionId !== existing.sectionId) {
+      const section = await this.prisma.librarySection.findUnique({
+        where: { id: body.sectionId },
+      });
+      if (!section) throw new NotFoundException('section_not_found');
+      data.section = { connect: { id: section.id } };
+      sectionSlug = section.slug;
+    }
+
+    const updated = await this.prisma.libraryCategory.update({
+      where: { id },
+      data,
+    });
+
+    return toCategoryDto(updated, sectionSlug, userId, viewerIsAdmin);
   }
 
   private async findSimilar(
@@ -202,8 +287,11 @@ function toCategoryDto(
     descriptionEn: string | null;
     entriesCount: number;
     createdAt: Date;
+    createdById?: string | null;
   },
   sectionSlug: string,
+  viewerId?: string,
+  viewerIsAdmin = false,
 ): LibraryCategoryDto {
   return {
     id: category.id,
@@ -216,5 +304,8 @@ function toCategoryDto(
     descriptionEn: category.descriptionEn,
     entriesCount: category.entriesCount,
     createdAt: category.createdAt.toISOString(),
+    canEdit:
+      viewerIsAdmin ||
+      (Boolean(viewerId) && category.createdById === viewerId),
   };
 }

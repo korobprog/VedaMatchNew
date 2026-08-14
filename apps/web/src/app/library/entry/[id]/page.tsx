@@ -2,14 +2,17 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getProfile } from "@/lib/api";
 import {
+  getLibraryCategories,
   getLibraryComments,
   getLibraryEntry,
   getLibraryPreferences,
+  getLibrarySections,
 } from "@/lib/library-api";
 import { videoEmbedUrl, videoProviderName, videoSource } from "@vedamatch/shared";
 import { Header } from "@/components/header";
 import { BackLink } from "@/components/library/back-link";
 import { BookmarkButton } from "@/components/library/bookmark-button";
+import { EditEntryForm } from "@/components/library/edit-entry-form";
 import { EntryComments } from "@/components/library/entry-comments";
 import { VideoEmbed } from "@/components/library/video-embed";
 import { entryTypeLabel, pickLocalized, t } from "@/components/library/i18n";
@@ -49,7 +52,14 @@ export default async function LibraryEntryPage({
   });
   const embedUrl = videoEmbedUrl(entry.url);
   const provider = videoSource(entry.url)?.provider;
-  const comments = await getLibraryComments(entry.id);
+  const primarySectionSlug = entry.categories[0]?.sectionSlug;
+  const [comments, sections, editCategories] = await Promise.all([
+    getLibraryComments(entry.id),
+    entry.canEdit ? getLibrarySections() : Promise.resolve(null),
+    entry.canEdit && primarySectionSlug
+      ? getLibraryCategories(primarySectionSlug)
+      : Promise.resolve(null),
+  ]);
 
   return (
     <div className="relative min-h-screen bg-bg-0">
@@ -59,6 +69,15 @@ export default async function LibraryEntryPage({
         <p className="mb-2 text-xs text-text-2">
           {entry.domain} · {entryTypeLabel(locale, entry.type)} ·{" "}
           {entry.contentLanguage.toUpperCase()}
+          {entry.hasCustomPreview && (
+            <>
+              {" "}
+              ·{" "}
+              <span className="rounded-full bg-glass-brd/40 px-2 py-0.5">
+                {t(locale, "entry.customPreview")}
+              </span>
+            </>
+          )}
         </p>
         {embedUrl ? (
           <VideoEmbed
@@ -137,6 +156,15 @@ export default async function LibraryEntryPage({
             </p>
           )}
         </section>
+
+        {entry.canEdit && (
+          <EditEntryForm
+            locale={locale}
+            entry={entry}
+            sections={sections ?? []}
+            initialCategories={editCategories ?? []}
+          />
+        )}
 
         <EntryComments
           locale={locale}

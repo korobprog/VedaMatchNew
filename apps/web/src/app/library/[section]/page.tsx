@@ -9,6 +9,7 @@ import {
 } from "@/lib/library-api";
 import { Header } from "@/components/header";
 import { BackLink } from "@/components/library/back-link";
+import { CategoryEditForm } from "@/components/library/category-edit-form";
 import { EntryFilters } from "@/components/library/entry-filters";
 import { EntryList } from "@/components/library/entry-list";
 import { SectionStrip } from "@/components/library/section-strip";
@@ -59,7 +60,7 @@ export default async function LibrarySectionPage({
         {categories && categories.length > 0 ? (
           <ul className="mb-6 flex flex-wrap gap-2">
             {categories.map((category) => (
-              <li key={category.id}>
+              <li key={category.id} className="flex flex-wrap items-center">
                 <Link
                   href={`/library/${sectionSlug}/${category.slug}`}
                   className="glass rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1 hover:text-text-0"
@@ -72,6 +73,7 @@ export default async function LibrarySectionPage({
                     {category.entriesCount}
                   </span>
                 </Link>
+                <CategoryEditForm locale={locale} category={category} />
               </li>
             ))}
           </ul>

@@ -55,7 +55,34 @@ describe('LibrarySectionsService', () => {
         position: 1,
         categoriesCount: 2,
         entriesCount: 7,
+        canEdit: false,
       },
     ]);
+  });
+
+  it('marks sections as editable for admins', async () => {
+    const prisma = {
+      librarySection: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'section-1',
+            slug: 'philosophy',
+            titleRu: 'Философия и писания',
+            titleEn: 'Philosophy and scriptures',
+            descriptionRu: null,
+            descriptionEn: null,
+            iconKey: 'book',
+            position: 1,
+          },
+        ]),
+      },
+      libraryEntry: { count: jest.fn().mockResolvedValue(0) },
+      libraryCategory: { count: jest.fn().mockResolvedValue(0) },
+    };
+    const service = new LibrarySectionsService(prisma as never);
+
+    const result = await service.list(true);
+
+    expect(result[0].canEdit).toBe(true);
   });
 });

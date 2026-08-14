@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,6 +12,7 @@ import type {
   LibraryEntryDto,
   LibraryEntryType,
   LibraryFeedResponse,
+  UpdateLibraryEntryRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -28,6 +30,8 @@ const PAGE_SIZE = 20;
 const MAX_TITLE_LENGTH = 200;
 const MAX_DESCRIPTION_LENGTH = 1000;
 const MAX_CATEGORIES = 5;
+const MAX_PREVIEW_UPLOAD_SIZE = 5 * 1024 * 1024;
+const PREVIEW_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ENTRY_TYPES: LibraryEntryType[] = [
   'website',
   'article',
@@ -40,6 +44,12 @@ const ENTRY_TYPES: LibraryEntryType[] = [
   'community',
   'other',
 ];
+
+export interface UploadedPreviewFile {
+  buffer: Buffer;
+  mimetype: string;
+  size: number;
+}
 
 export interface LibraryFeedFilters {
   sectionSlug?: string;
@@ -65,6 +75,7 @@ const ENTRY_SELECT = {
   descriptionEn: true,
   faviconUrl: true,
   previewUrl: true,
+  previewIsCustom: true,
   status: true,
   usefulCount: true,
   uniqueClickCount: true,
@@ -199,12 +210,192 @@ export class LibraryEntriesService {
       this.previews.captureInBackground(created.id, normalized.url, previewUrl);
     }
 
-    return toEntryDto(created);
+    return toEntryDto(created, false, userId, false);
+  }
+
+  /**
+   * Автор ссылки и админ могут поправить заголовок, описание, тип, язык и
+   * набор категорий. Адрес (url) не редактируется — на нём завязана
+   * дедупликация, менять его значило бы фактически создавать другую запись.
+   */
+  async update(
+    userId: string,
+    viewerIsAdmin: boolean,
+    id: string,
+    body: UpdateLibraryEntryRequest,
+  ): Promise<LibraryEntryDto> {
+    const existing = await this.prisma.libraryEntry.findUnique({
+      where: { id },
+      select: ENTRY_SELECT,
+    });
+    if (!existing || existing.status !== 'published') {
+      throw new NotFoundException('entry_not_found');
+    }
+    if (existing.addedBy?.id !== userId && !viewerIsAdmin) {
+      throw new ForbiddenException('not_entry_owner');
+    }
+
+    const data: Prisma.LibraryEntryUpdateInput = {};
+
+    if (body.type !== undefined) {
+      if (!ENTRY_TYPES.includes(body.type)) {
+        throw new BadRequestException('unsupported_type');
+      }
+      data.type = body.type;
+    }
+    if (body.contentLanguage !== undefined) {
+      data.contentLanguage = normalizeLanguage(body.contentLanguage);
+    }
+
+    if (body.titleRu !== undefined || body.titleEn !== undefined) {
+      const titleRu =
+        body.titleRu !== undefined ? trimOrNull(body.titleRu) : existing.titleRu;
+      const titleEn =
+        body.titleEn !== undefined ? trimOrNull(body.titleEn) : existing.titleEn;
+      if (!titleRu && !titleEn) throw new BadRequestException('title_required');
+      for (const title of [titleRu, titleEn]) {
+        if (title && title.length > MAX_TITLE_LENGTH) {
+          throw new BadRequestException('title_too_long');
+        }
+      }
+      data.titleRu = titleRu;
+      data.titleEn = titleEn;
+    }
+
+    if (body.descriptionRu !== undefined || body.descriptionEn !== undefined) {
+      const descriptionRu =
+        body.descriptionRu !== undefined
+          ? trimOrNull(body.descriptionRu)
+          : existing.descriptionRu;
+      const descriptionEn =
+        body.descriptionEn !== undefined
+          ? trimOrNull(body.descriptionEn)
+          : existing.descriptionEn;
+      for (const description of [descriptionRu, descriptionEn]) {
+        if (description && description.length > MAX_DESCRIPTION_LENGTH) {
+          throw new BadRequestException('description_too_long');
+        }
+      }
+      data.descriptionRu = descriptionRu;
+      data.descriptionEn = descriptionEn;
+    }
+
+    let categoryIds: string[] | null = null;
+    if (body.categoryIds !== undefined) {
+      categoryIds = [...new Set(body.categoryIds)];
+      if (categoryIds.length === 0) {
+        throw new BadRequestException('category_required');
+      }
+      if (categoryIds.length > MAX_CATEGORIES) {
+        throw new BadRequestException('too_many_categories');
+      }
+      const categories = await this.prisma.libraryCategory.findMany({
+        where: { id: { in: categoryIds }, status: 'active' },
+        select: { id: true },
+      });
+      if (categories.length !== categoryIds.length) {
+        throw new BadRequestException('category_not_found');
+      }
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (Object.keys(data).length > 0) {
+        await tx.libraryEntry.update({ where: { id }, data });
+      }
+
+      if (categoryIds) {
+        const currentIds = existing.categories.map((link) => link.category.id);
+        const toRemove = currentIds.filter((cid) => !categoryIds!.includes(cid));
+        const toAdd = categoryIds.filter((cid) => !currentIds.includes(cid));
+
+        if (toRemove.length > 0) {
+          await tx.libraryEntryCategory.deleteMany({
+            where: { entryId: id, categoryId: { in: toRemove } },
+          });
+          await tx.libraryCategory.updateMany({
+            where: { id: { in: toRemove } },
+            data: { entriesCount: { decrement: 1 } },
+          });
+        }
+        if (toAdd.length > 0) {
+          await tx.libraryEntryCategory.createMany({
+            data: toAdd.map((categoryId) => ({
+              entryId: id,
+              categoryId,
+              addedById: userId,
+            })),
+          });
+          await tx.libraryCategory.updateMany({
+            where: { id: { in: toAdd } },
+            data: { entriesCount: { increment: 1 } },
+          });
+        }
+      }
+
+      return tx.libraryEntry.findUniqueOrThrow({
+        where: { id },
+        select: ENTRY_SELECT,
+      });
+    });
+
+    return toEntryDto(updated, false, userId, viewerIsAdmin);
+  }
+
+  /**
+   * Ручная обложка полностью заменяет авто-превью с сайта-источника и
+   * помечается `previewIsCustom`, чтобы фоновый бэкафилл её не перезаписал.
+   */
+  async uploadPreview(
+    userId: string,
+    viewerIsAdmin: boolean,
+    id: string,
+    file: UploadedPreviewFile | undefined,
+  ): Promise<LibraryEntryDto> {
+    const existing = await this.prisma.libraryEntry.findUnique({
+      where: { id },
+      select: ENTRY_SELECT,
+    });
+    if (!existing || existing.status !== 'published') {
+      throw new NotFoundException('entry_not_found');
+    }
+    if (existing.addedBy?.id !== userId && !viewerIsAdmin) {
+      throw new ForbiddenException('not_entry_owner');
+    }
+    if (!this.previews.configured) {
+      throw new BadRequestException('preview_upload_unavailable');
+    }
+    if (!file || file.size === 0) {
+      throw new BadRequestException('preview_file_required');
+    }
+    if (!PREVIEW_MIME_TYPES.has(file.mimetype)) {
+      throw new BadRequestException('unsupported_image_type');
+    }
+    if (file.size > MAX_PREVIEW_UPLOAD_SIZE) {
+      throw new BadRequestException('preview_file_too_large');
+    }
+
+    const stored = await this.previews.storeBuffer(id, file.buffer);
+    if (!stored) throw new BadRequestException('preview_upload_failed');
+
+    const updated = await this.prisma.libraryEntry.update({
+      where: { id },
+      data: {
+        previewKey: stored.key,
+        previewUrl: stored.url,
+        previewIsCustom: true,
+        enrichmentStatus: 'ready',
+        enrichedAt: new Date(),
+      },
+      select: ENTRY_SELECT,
+    });
+
+    return toEntryDto(updated, false, userId, viewerIsAdmin);
   }
 
   async feed(
     filters: LibraryFeedFilters,
     viewerId?: string,
+    viewerIsAdmin = false,
   ): Promise<LibraryFeedResponse> {
     const sort = resolveSort(filters.sort);
     const cursor = decodeCursor(filters.cursor);
@@ -270,7 +461,9 @@ export class LibraryEntriesService {
       : new Set<string>();
 
     return {
-      items: page.map((row) => toEntryDto(row, marked.has(row.id))),
+      items: page.map((row) =>
+        toEntryDto(row, marked.has(row.id), viewerId, viewerIsAdmin),
+      ),
       nextCursor:
         hasMore && last
           ? encodeCursor({ publishedAt: last.publishedAt, id: last.id })
@@ -279,7 +472,11 @@ export class LibraryEntriesService {
     };
   }
 
-  async byId(id: string, viewerId?: string): Promise<LibraryEntryDto> {
+  async byId(
+    id: string,
+    viewerId?: string,
+    viewerIsAdmin = false,
+  ): Promise<LibraryEntryDto> {
     const entry = await this.prisma.libraryEntry.findUnique({
       where: { id },
       select: ENTRY_SELECT,
@@ -290,7 +487,7 @@ export class LibraryEntriesService {
     const marked = viewerId
       ? await this.bookmarks.markedAmong(viewerId, [entry.id])
       : new Set<string>();
-    return toEntryDto(entry, marked.has(entry.id));
+    return toEntryDto(entry, marked.has(entry.id), viewerId, viewerIsAdmin);
   }
 
   /** `null` — поиска нет; массив — найденные id в порядке релевантности. */
@@ -339,7 +536,12 @@ function normalizeLanguage(value: string | undefined): string {
 
 type EntryRow = Prisma.LibraryEntryGetPayload<{ select: typeof ENTRY_SELECT }>;
 
-function toEntryDto(entry: EntryRow, bookmarked = false): LibraryEntryDto {
+function toEntryDto(
+  entry: EntryRow,
+  bookmarked = false,
+  viewerId?: string,
+  viewerIsAdmin = false,
+): LibraryEntryDto {
   return {
     id: entry.id,
     url: entry.url,
@@ -369,5 +571,8 @@ function toEntryDto(entry: EntryRow, bookmarked = false): LibraryEntryDto {
     addedBy: entry.addedBy
       ? { id: entry.addedBy.id, name: entry.addedBy.name }
       : null,
+    canEdit:
+      viewerIsAdmin || (Boolean(viewerId) && entry.addedBy?.id === viewerId),
+    hasCustomPreview: entry.previewIsCustom,
   };
 }

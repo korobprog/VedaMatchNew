@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -11,9 +12,11 @@ import { Throttle } from '@nestjs/throttler';
 import type {
   AccessTokenPayload,
   CreateLibraryCategoryRequest,
+  UpdateLibraryCategoryRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { LibraryCategoriesService } from './library-categories.service';
+import { isAdmin } from './is-admin';
 
 @Controller('library/categories')
 @UseGuards(AuthGuard)
@@ -27,8 +30,11 @@ export class LibraryCategoriesController {
   }
 
   @Get('section/:sectionSlug')
-  listBySection(@Param('sectionSlug') sectionSlug: string) {
-    return this.categories.listBySection(sectionSlug);
+  listBySection(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('sectionSlug') sectionSlug: string,
+  ) {
+    return this.categories.listBySection(sectionSlug, user.sub, isAdmin(user));
   }
 
   @Post()
@@ -38,5 +44,15 @@ export class LibraryCategoriesController {
     @Body() body: CreateLibraryCategoryRequest,
   ) {
     return this.categories.create(user.sub, body);
+  }
+
+  @Patch(':id')
+  @Throttle({ default: { ttl: 3_600_000, limit: 30 } })
+  update(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: UpdateLibraryCategoryRequest,
+  ) {
+    return this.categories.update(user.sub, isAdmin(user), id, body);
   }
 }
