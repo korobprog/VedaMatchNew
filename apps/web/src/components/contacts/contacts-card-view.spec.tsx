@@ -79,7 +79,7 @@ describe("ContactsCardView", () => {
     expect(screen.getByText("Офлайн")).toBeInTheDocument();
     expect(screen.getByText("Преданный")).toBeInTheDocument();
     expect(screen.getByText("русский, хинди")).toBeInTheDocument();
-    expect(screen.getByText("Подтверждённый преданный")).toBeInTheDocument();
+    expect(screen.getByText("Подтверждён")).toBeInTheDocument();
     expect(screen.getByText("Проверенное фото")).toBeInTheDocument();
     // Теги разложены по разделам, а не свалены в один список.
     expect(screen.getByText("Служение")).toBeInTheDocument();

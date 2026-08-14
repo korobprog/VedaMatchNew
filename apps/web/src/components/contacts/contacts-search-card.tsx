@@ -60,7 +60,7 @@ export function ContactsSearchCard({ card }: { card: ContactsCardDto }) {
         <div className="flex shrink-0 flex-col items-end gap-1">
           {card.isVerifiedDevotee && (
             <span className="rounded-full border border-cyan/40 bg-cyan/10 px-2 py-0.5 text-xs text-cyan">
-              Подтверждённый преданный
+              Подтверждён
             </span>
           )}
           {card.isPhotoVerified && (
