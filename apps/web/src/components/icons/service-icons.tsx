@@ -270,6 +270,62 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
         </svg>
       );
 
+    case "contacts":
+      // Address card with a community network of people - who's who nearby
+      return (
+        <svg
+          viewBox="0 0 32 32"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className={className}
+        >
+          {/* Card outline */}
+          <rect
+            x="4"
+            y="7"
+            width="24"
+            height="18"
+            rx="3"
+            fill={`url(#${gid("bg")})`}
+            stroke={`url(#${gid("stroke")})`}
+            strokeWidth="1.8"
+          />
+          {/* Central contact avatar */}
+          <circle cx="13" cy="14.5" r="3" fill="#E0FFFB" />
+          <path
+            d="M8 21.5C8 18.7 10.2 17 13 17C15.8 17 18 18.7 18 21.5"
+            stroke="#E0FFFB"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+          {/* Linked contacts, community around the person */}
+          <circle cx="23" cy="12.5" r="1.6" fill="#A8FFF3" />
+          <path
+            d="M20 17.5C20 15.8 21.3 14.7 23 14.7C24.7 14.7 26 15.8 26 17.5"
+            stroke="#A8FFF3"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+          />
+          <path
+            d="M18.5 13.5L21 12.8"
+            stroke="#A8FFF3"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+            strokeOpacity="0.8"
+          />
+          <defs>
+            <linearGradient id={gid("bg")} x1="4" y1="7" x2="28" y2="25" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#0F766E" stopOpacity="0.85" />
+              <stop offset="1" stopColor="#33CCCC" stopOpacity="0.8" />
+            </linearGradient>
+            <linearGradient id={gid("stroke")} x1="4" y1="7" x2="28" y2="25" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#5CCCCC" />
+              <stop offset="1" stopColor="#99F6E4" />
+            </linearGradient>
+          </defs>
+        </svg>
+      );
+
     case "devotee-space":
     default:
       // Sacred Temple / Lotus flower with Crown / Lock emblem - Restricted Space
