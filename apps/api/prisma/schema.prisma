@@ -1481,6 +1481,81 @@ model AstroTransitPhrase {
   @@unique([patternKey, locale, promptVersion])
 }
 
+// ===== Changelog / product updates (публичная страница «Версия и новости») =====
+
+enum ReleaseChangeType {
+  feature
+  fix
+  improvement
+}
+
+enum RoadmapStatus {
+  planned
+  in_progress
+  done
+}
+
+enum AnnouncementStatus {
+  draft
+  published
+}
+
+model Release {
+  id         String   @id @default(uuid())
+  version    String   @unique
+  /// true только у одной записи — актуальная версия на публичной странице.
+  /// Сервис снимает флаг с прежней записи в той же транзакции.
+  isCurrent  Boolean  @default(false)
+  releasedAt DateTime @db.Date
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  changes ReleaseChange[]
+
+  @@index([isCurrent])
+  @@index([releasedAt(sort: Desc)])
+}
+
+model ReleaseChange {
+  id        String            @id @default(uuid())
+  releaseId String
+  release   Release           @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  type      ReleaseChangeType
+  titleRu   String
+  titleEn   String
+  sortOrder Int               @default(0)
+
+  @@index([releaseId, sortOrder])
+}
+
+model Announcement {
+  id            String             @id @default(uuid())
+  titleRu       String
+  titleEn       String
+  bodyRu        String
+  bodyEn        String
+  status        AnnouncementStatus @default(draft)
+  publishedAt   DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([status, publishedAt(sort: Desc)])
+}
+
+model RoadmapItem {
+  id            String        @id @default(uuid())
+  titleRu       String
+  titleEn       String
+  descriptionRu String?
+  descriptionEn String?
+  status        RoadmapStatus @default(planned)
+  sortOrder     Int           @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([status, sortOrder])
+}
+
 // ===== Contacts service =====
 
 /// Кто видит карточку в справочнике. `by_link` — карточки нет в выдаче,

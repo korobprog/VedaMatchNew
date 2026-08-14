@@ -1,0 +1,54 @@
+{
+  "Updates": {
+    "title": "Версия и новости",
+    "currentVersion": "Текущая версия",
+    "releasedAt": "Выпущена {date}",
+    "tabs": {
+      "news": "Новости",
+      "history": "История версий",
+      "roadmap": "Roadmap"
+    },
+    "changeType": {
+      "feature": "Новое",
+      "fix": "Исправление",
+      "improvement": "Улучшение"
+    },
+    "roadmapStatus": {
+      "planned": "В планах",
+      "in_progress": "В работе",
+      "done": "Готово"
+    },
+    "emptyNews": "Пока нет новостей.",
+    "emptyHistory": "История версий пуста.",
+    "emptyRoadmap": "Roadmap пока не заполнен."
+  },
+  "AdminChangelog": {
+    "title": "Версия и новости",
+    "sections": {
+      "releases": "Релизы",
+      "announcements": "Новости",
+      "roadmap": "Roadmap"
+    },
+    "addRelease": "Добавить релиз",
+    "addAnnouncement": "Добавить новость",
+    "addRoadmapItem": "Добавить пункт",
+    "makeCurrent": "Сделать текущей",
+    "current": "Текущая",
+    "edit": "Редактировать",
+    "delete": "Удалить",
+    "save": "Сохранить",
+    "cancel": "Отмена",
+    "fields": {
+      "version": "Версия",
+      "releasedAt": "Дата релиза",
+      "titleRu": "Заголовок (RU)",
+      "titleEn": "Заголовок (EN)",
+      "bodyRu": "Текст (RU)",
+      "bodyEn": "Текст (EN)",
+      "descriptionRu": "Описание (RU)",
+      "descriptionEn": "Описание (EN)",
+      "type": "Тип",
+      "status": "Статус"
+    }
+  }
+}

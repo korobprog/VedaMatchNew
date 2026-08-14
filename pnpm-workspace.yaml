@@ -13,3 +13,5 @@ allowBuilds:
   esbuild: true
   '@nestjs/core': true
   argon2: true
+  '@parcel/watcher': false
+  '@swc/core': false

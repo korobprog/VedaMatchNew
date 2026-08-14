@@ -8,16 +8,23 @@ import type {
   AdminUserDetail,
   AdminUserListResponse,
   AdminUserReportsResponse,
+  AdminAnnouncementDto,
   AdminBillingModeResponse,
+  AdminReleaseDto,
+  AdminRoadmapItemDto,
   CommunityStats,
   MentorVerificationPublicRequest,
   DevoteeVerificationStatus,
   PricingPlan,
+  PublicAnnouncementDto,
+  PublicReleaseDto,
+  PublicRoadmapItemDto,
   SelfIdentificationState,
   ServiceCard,
   StageHistoryItem,
   UserProfile,
 } from "@vedamatch/shared";
+import type { Locale } from "@/lib/locale";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -40,7 +47,10 @@ async function apiGetPublic<T>(path: string): Promise<T | null> {
   const res = await fetch(`${API_URL}${path}`, { cache: "no-store" });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`);
-  return (await res.json()) as T;
+  const text = await res.text();
+  // Nest/Express отдаёт пустое тело (Content-Length: 0) для контроллеров,
+  // вернувших null — например «текущего релиза ещё нет».
+  return text ? (JSON.parse(text) as T) : null;
 }
 
 export const getProfile = () => apiGet<UserProfile>("/users/me");
@@ -87,3 +97,21 @@ export const getCommunityStats = () =>
   apiGetPublic<CommunityStats>("/stats/community");
 export const getAdminBillingMode = () =>
   apiGet<AdminBillingModeResponse>("/admin/billing/mode");
+
+// ===== Changelog: версия и новости =====
+
+export const getReleases = (lang: Locale) =>
+  apiGetPublic<PublicReleaseDto[]>(`/changelog/releases?lang=${lang}`);
+export const getCurrentRelease = (lang: Locale) =>
+  apiGetPublic<PublicReleaseDto>(`/changelog/releases/current?lang=${lang}`);
+export const getAnnouncements = (lang: Locale) =>
+  apiGetPublic<PublicAnnouncementDto[]>(`/changelog/announcements?lang=${lang}`);
+export const getRoadmap = (lang: Locale) =>
+  apiGetPublic<PublicRoadmapItemDto[]>(`/changelog/roadmap?lang=${lang}`);
+
+export const getAdminReleases = () =>
+  apiGet<AdminReleaseDto[]>("/admin/changelog/releases");
+export const getAdminAnnouncements = () =>
+  apiGet<AdminAnnouncementDto[]>("/admin/changelog/announcements");
+export const getAdminRoadmap = () =>
+  apiGet<AdminRoadmapItemDto[]>("/admin/changelog/roadmap");

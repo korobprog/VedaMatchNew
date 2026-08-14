@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LocaleToggle } from "@/components/locale-toggle";
 
 interface NavbarProps {
   className?: string;
@@ -89,6 +90,7 @@ export function Navbar({ className }: NavbarProps) {
 
           {/* Desktop CTA */}
           <div className="hidden lg:flex items-center gap-4">
+            <LocaleToggle />
             <ThemeToggle />
             <Link
               href="/login"
@@ -170,8 +172,16 @@ export function Navbar({ className }: NavbarProps) {
                   ))}
                 </nav>
 
-                {/* Theme */}
+                {/* Language */}
                 <div className="mt-10">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-2">
+                    Язык
+                  </p>
+                  <LocaleToggle variant="full" />
+                </div>
+
+                {/* Theme */}
+                <div className="mt-4">
                   <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-2">
                     Тема
                   </p>

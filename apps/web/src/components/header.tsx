@@ -9,6 +9,7 @@ import { Menu, X, Home, LifeBuoy } from "lucide-react";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { LogoutButton } from "@/components/logout-button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LocaleToggle } from "@/components/locale-toggle";
 
 interface NavItem {
   href: string;
@@ -72,6 +73,7 @@ export function Header({ user }: { user: UserProfile }) {
 
           {/* Right side */}
           <div className="flex items-center gap-2">
+            <LocaleToggle className="hidden sm:flex" />
             <ThemeToggle className="hidden sm:flex" />
 
             {user.role === "admin" && (
@@ -187,10 +189,23 @@ export function Header({ user }: { user: UserProfile }) {
                     >
                       <span className="text-sm font-medium">Настройки</span>
                     </Link>
+                    <Link
+                      href="/admin/changelog"
+                      onClick={() => setIsOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
+                    >
+                      <span className="text-sm font-medium">Версия и новости</span>
+                    </Link>
                   </motion.div>
                 )}
 
                 <div className="mt-auto pt-4 border-t border-glass-brd space-y-1">
+                  <div className="px-1 pb-3">
+                    <p className="mb-2 px-3 text-xs font-medium uppercase tracking-wide text-text-2">
+                      Язык
+                    </p>
+                    <LocaleToggle variant="full" />
+                  </div>
                   <div className="px-1 pb-3">
                     <p className="mb-2 px-3 text-xs font-medium uppercase tracking-wide text-text-2">
                       Тема
@@ -215,6 +230,13 @@ export function Header({ user }: { user: UserProfile }) {
                   >
                     <LifeBuoy size={20} />
                     <span className="text-sm">Поддержка</span>
+                  </Link>
+                  <Link
+                    href="/updates"
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-cyan hover:bg-glass transition-colors"
+                  >
+                    <span className="text-sm">Что нового</span>
                   </Link>
                   <LogoutItem />
                 </div>

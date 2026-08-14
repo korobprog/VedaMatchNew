@@ -14,6 +14,7 @@ export * from './astro-reading';
 export * from './astro-admin';
 export * from './astro-compatibility';
 export * from './astro-transit';
+export * from './changelog';
 
 import type { SubscriptionState } from './support';
 

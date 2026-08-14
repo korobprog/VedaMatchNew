@@ -250,6 +250,9 @@ export function LandingPage({
               <Link href="/support" className="hover:text-text-0 transition-colors">
                 Поддержка
               </Link>
+              <Link href="/updates" className="hover:text-text-0 transition-colors">
+                Что нового
+              </Link>
               <Link href="/legal/privacy" className="hover:text-text-0 transition-colors">
                 Политика конфиденциальности
               </Link>

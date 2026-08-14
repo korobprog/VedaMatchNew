@@ -1,9 +1,14 @@
 import { createElement, type ImgHTMLAttributes } from "react";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
 import { describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Navbar } from "./Navbar";
 import { PhoneMockup } from "./PhoneMockup";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 
 vi.mock("next/image", () => ({
   default: (props: ImgHTMLAttributes<HTMLImageElement> & {
@@ -20,9 +25,11 @@ vi.mock("next/image", () => ({
 describe("landing branding", () => {
   it("uses the product logo in the landing navigation", () => {
     render(
-      <ThemeProvider>
-        <Navbar />
-      </ThemeProvider>,
+      <NextIntlClientProvider locale="ru" messages={{}}>
+        <ThemeProvider>
+          <Navbar />
+        </ThemeProvider>
+      </NextIntlClientProvider>,
     );
 
     expect(screen.getByAltText("VedaMatch")).toHaveAttribute(

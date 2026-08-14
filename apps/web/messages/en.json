@@ -1,0 +1,54 @@
+{
+  "Updates": {
+    "title": "Version & News",
+    "currentVersion": "Current version",
+    "releasedAt": "Released {date}",
+    "tabs": {
+      "news": "News",
+      "history": "Version history",
+      "roadmap": "Roadmap"
+    },
+    "changeType": {
+      "feature": "New",
+      "fix": "Fix",
+      "improvement": "Improvement"
+    },
+    "roadmapStatus": {
+      "planned": "Planned",
+      "in_progress": "In progress",
+      "done": "Done"
+    },
+    "emptyNews": "No news yet.",
+    "emptyHistory": "No version history yet.",
+    "emptyRoadmap": "Roadmap is empty."
+  },
+  "AdminChangelog": {
+    "title": "Version & News",
+    "sections": {
+      "releases": "Releases",
+      "announcements": "News",
+      "roadmap": "Roadmap"
+    },
+    "addRelease": "Add release",
+    "addAnnouncement": "Add news item",
+    "addRoadmapItem": "Add item",
+    "makeCurrent": "Make current",
+    "current": "Current",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "cancel": "Cancel",
+    "fields": {
+      "version": "Version",
+      "releasedAt": "Release date",
+      "titleRu": "Title (RU)",
+      "titleEn": "Title (EN)",
+      "bodyRu": "Body (RU)",
+      "bodyEn": "Body (EN)",
+      "descriptionRu": "Description (RU)",
+      "descriptionEn": "Description (EN)",
+      "type": "Type",
+      "status": "Status"
+    }
+  }
+}

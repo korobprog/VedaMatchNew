@@ -28,6 +28,9 @@ export default function LegalLayout({
           <Link href="/support" className="hover:text-text-0">
             Поддержка
           </Link>
+          <Link href="/updates" className="hover:text-text-0">
+            Что нового
+          </Link>
         </nav>
       </main>
     </div>

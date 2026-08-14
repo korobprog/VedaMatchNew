@@ -1,6 +1,8 @@
 ﻿import type { Metadata, Viewport } from "next";
 import { Unbounded, Manrope, IBM_Plex_Mono } from "next/font/google";
 import { cookies } from "next/headers";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale } from "next-intl/server";
 import Script from "next/script";
 import { installPromptCaptureScript } from "@/lib/pwa/prompt-capture";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -56,10 +58,11 @@ export default async function RootLayout({
   const preference = isThemePreference(stored) ? stored : "system";
   // Для «как в системе» атрибут не ставим — тему подхватит prefers-color-scheme.
   const resolved = preference === "system" ? null : preference;
+  const locale = await getLocale();
 
   return (
     <html
-      lang="ru"
+      lang={locale}
       suppressHydrationWarning
       data-theme={resolved ?? undefined}
       data-theme-preference={preference}
@@ -74,7 +77,9 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: installPromptCaptureScript }}
         />
         <ServiceWorkerRegistrar />
-        <ThemeProvider initialPreference={preference}>{children}</ThemeProvider>
+        <NextIntlClientProvider>
+          <ThemeProvider initialPreference={preference}>{children}</ThemeProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );
