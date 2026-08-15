@@ -3,9 +3,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { UserProfile } from "@vedamatch/shared";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Home, LifeBuoy, Bell } from "lucide-react";
+import { Menu, X, Home, LifeBuoy, Bell, MoreHorizontal } from "lucide-react";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { LogoutButton } from "@/components/logout-button";
 import { CartBadge } from "@/components/market/cart-badge";
@@ -24,8 +24,62 @@ const navItems: NavItem[] = [
   { href: "/union", label: "Знакомства", icon: <ServiceIcon slug="union" className="h-5 w-5" /> },
   { href: "/motivation", label: "Мотивация", icon: <ServiceIcon slug="motivation" className="h-5 w-5" /> },
   { href: "/vedabase", label: "Книги", icon: <ServiceIcon slug="vedabase" className="h-5 w-5" /> },
+  { href: "/library", label: "Библиотека", icon: <ServiceIcon slug="library" className="h-5 w-5" /> },
+  { href: "/astro", label: "Джйотиш", icon: <ServiceIcon slug="astro" className="h-5 w-5" /> },
   { href: "/market", label: "Рынок", icon: <ServiceIcon slug="market" className="h-5 w-5" /> },
 ];
+
+function MoreNavMenu({ items }: { items: NavItem[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center justify-center p-2 rounded-xl text-text-1 hover:text-text-0 hover:bg-glass transition-colors"
+        aria-label="Остальные сервисы"
+        aria-expanded={open}
+      >
+        <MoreHorizontal size={20} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15 }}
+            className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-glass-brd bg-bg-1 p-1.5 shadow-lg z-50"
+          >
+            {items.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-text-1 hover:text-text-0 hover:bg-glass transition-colors"
+              >
+                {item.icon}
+                {item.label}
+              </Link>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 function LogoutItem() {
   return (
@@ -60,8 +114,8 @@ export function Header({ user }: { user: UserProfile }) {
             <span className="font-display font-bold text-text-0 hidden sm:block">VedaMatch</span>
           </Link>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-1">
+          {/* Desktop Navigation: полный ряд на широких экранах, узкий переход на md/lg — иконки без подписи */}
+          <nav className="hidden xl:flex items-center gap-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -72,6 +126,18 @@ export function Header({ user }: { user: UserProfile }) {
                 {item.label}
               </Link>
             ))}
+          </nav>
+
+          {/* На md/lg не хватает места под полные подписи — показываем первый пункт и остальные под тремя точками */}
+          <nav className="hidden md:flex xl:hidden items-center gap-1">
+            <Link
+              href={navItems[0].href}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-text-1 hover:text-text-0 hover:bg-glass transition-colors"
+              title={navItems[0].label}
+            >
+              {navItems[0].icon}
+            </Link>
+            <MoreNavMenu items={navItems.slice(1)} />
           </nav>
 
           {/* Right side */}
@@ -98,11 +164,11 @@ export function Header({ user }: { user: UserProfile }) {
                 <img
                   src={user.avatarUrl}
                   alt={user.name}
-                  className="h-8 w-8 rounded-full"
+                  className="h-8 w-8 shrink-0 rounded-full object-cover"
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-glass text-sm font-semibold text-text-0">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-glass text-sm font-semibold text-text-0">
                   {user.name.charAt(0).toUpperCase()}
                 </span>
               )}

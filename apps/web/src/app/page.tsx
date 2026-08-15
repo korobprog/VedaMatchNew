@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getBillingPlan, getCommunityStats, getProfile, getServices } from "@/lib/api";
 import { Header } from "@/components/header";
-import { ServiceCard } from "@/components/service-card";
+import { ServiceGrid } from "@/components/service-grid";
 import { MemberCounter } from "@/components/member-counter";
 import {
   getUnionChats,
@@ -61,6 +61,16 @@ export default async function Home({
     unionRecommendations,
   );
 
+  const unionService = services.find((s) => s.url === "/union");
+  const serviceExtras = unionService
+    ? {
+        [unionService.id]: {
+          badgeCount: unionCounts?.incomingPending,
+          extra: <UnionQuickAccessWidget {...unionQuickAccess} />,
+        },
+      }
+    : {};
+
   return (
     <div className="relative min-h-screen bg-bg-0">
       <BackgroundOrbs />
@@ -87,24 +97,7 @@ export default async function Home({
             </p>
           )}
         </section>
-        <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {services.map((service) => (
-            <ServiceCard
-              key={service.id}
-              service={service}
-              badgeCount={
-                service.url === "/union"
-                  ? unionCounts?.incomingPending
-                  : undefined
-              }
-              extra={
-                service.url === "/union" ? (
-                  <UnionQuickAccessWidget {...unionQuickAccess} />
-                ) : undefined
-              }
-            />
-          ))}
-        </section>
+        <ServiceGrid services={services} userId={user.id} extras={serviceExtras} />
       </main>
       <InstallBanner />
       <NotificationPermissionPrompt />

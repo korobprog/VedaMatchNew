@@ -1,22 +1,44 @@
 ﻿import type { ReactNode } from "react";
 import type { ServiceCard as ServiceCardType } from "@vedamatch/shared";
 import { ServiceIcon } from "@/components/icons/service-icons";
+import { GripVertical, Pin } from "lucide-react";
 
 export function ServiceCard({
   service,
   badgeCount,
   extra,
+  isPinned,
+  onTogglePin,
+  dragHandleProps,
 }: {
   service: ServiceCardType;
   badgeCount?: number;
   extra?: ReactNode;
+  isPinned?: boolean;
+  onTogglePin?: () => void;
+  dragHandleProps?: {
+    onPointerDown: (e: React.PointerEvent<HTMLSpanElement>) => void;
+  };
 }) {
   const comingSoon = service.status === "coming_soon";
 
   return (
-    <div className="group flex flex-col rounded-2xl glass border border-glass-brd p-6 transition-all duration-300 hover:-translate-y-1 hover:border-magenta/30 hover:shadow-[0_0_20px_rgba(255,62,158,0.15)]">
+    <div
+      className={`group flex h-full flex-col rounded-2xl glass border p-6 transition-all duration-300 hover:-translate-y-1 hover:border-magenta/30 hover:shadow-[0_0_20px_rgba(255,62,158,0.15)] ${
+        isPinned ? "border-gold/50 shadow-[0_0_20px_rgba(250,204,21,0.12)]" : "border-glass-brd"
+      }`}
+    >
       <div className="mb-4 flex items-center gap-3">
-        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-glass border-2 border-text-2/35 transition-colors group-hover:border-magenta/50">
+        {dragHandleProps && (
+          <span
+            {...dragHandleProps}
+            className="hidden shrink-0 cursor-grab touch-none select-none items-center text-text-2 hover:text-text-0 active:cursor-grabbing sm:flex"
+            aria-label="Перетащить карточку"
+          >
+            <GripVertical size={16} />
+          </span>
+        )}
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-glass border-2 border-text-2/35 transition-colors group-hover:border-magenta/50">
           {service.iconUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={service.iconUrl} alt="" className="h-8 w-8" />
@@ -46,6 +68,20 @@ export function ServiceCard({
           >
             {badgeCount}
           </span>
+        )}
+        {onTogglePin && (
+          <button
+            type="button"
+            onClick={onTogglePin}
+            aria-pressed={isPinned}
+            aria-label={isPinned ? "Открепить карточку" : "Закрепить карточку сверху"}
+            title={isPinned ? "Открепить" : "Закрепить сверху"}
+            className={`shrink-0 rounded-lg p-1.5 transition-colors ${
+              isPinned ? "text-gold" : "text-text-2/60 hover:text-text-0"
+            }`}
+          >
+            <Pin size={16} fill={isPinned ? "currentColor" : "none"} />
+          </button>
         )}
       </div>
       <p className="mb-6 flex-1 text-sm text-text-1">
