@@ -9,9 +9,11 @@ import { BackgroundOrbs } from "./Orb";
 import { NoiseOverlay } from "./NoiseOverlay";
 import { Iris } from "./Iris";
 import { PhoneMockup } from "./PhoneMockup";
+import { Services } from "./Services";
 import { HowItWorks } from "./HowItWorks";
 import { Features } from "./Features";
 import { Pricing } from "./Pricing";
+import { Footer } from "./Footer";
 import { cn } from "@/lib/utils";
 import { SilentRefresh } from "@/components/silent-refresh";
 import { InstallBanner } from "@/components/pwa/install-banner";
@@ -91,7 +93,8 @@ export function LandingPage({
                   <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 transition-transform group-hover:translate-x-1" />
                 </Link>
 
-                <button
+                <a
+                  href="#services"
                   className={cn(
                     "group inline-flex items-center justify-center gap-2",
                     "px-5 py-2.5 rounded-full sm:px-8 sm:py-4",
@@ -103,33 +106,44 @@ export function LandingPage({
                 >
                   <Play className="w-4 h-4 sm:w-5 sm:h-5" />
                   Узнать больше
-                </button>
+                </a>
               </div>
+
+              {/* Подсказка про экосистему — знакомства это только один из сервисов */}
+              <a
+                href="#services"
+                className="mt-6 inline-flex items-center gap-2 text-sm text-text-2 hover:text-text-0 transition-colors"
+              >
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan/15 text-cyan text-xs font-bold">
+                  7
+                </span>
+                сервисов платформы: практика, знания, община и рынок
+              </a>
 
               {/* Stats */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
-                className="flex gap-8 mt-12 justify-center lg:justify-start"
+                className="flex gap-4 sm:gap-8 mt-12 justify-center lg:justify-start"
               >
-                <div>
+                <div className="shrink-0">
                   {totalMembers != null && (
                     <div className="font-display text-2xl md:text-3xl font-bold text-text-0">
                       <MemberCounter total={totalMembers} />
                     </div>
                   )}
-                  <div className="text-text-2 text-sm">Пользователей</div>
+                  <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">Пользователей</div>
                 </div>
-                <div className="w-px bg-glass-brd" />
-                <div>
+                <div className="w-px bg-glass-brd shrink-0" />
+                <div className="shrink-0">
                   <div className="font-display text-2xl md:text-3xl font-bold text-text-0">500+</div>
-                  <div className="text-text-2 text-sm">Совпадений</div>
+                  <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">Совпадений</div>
                 </div>
-                <div className="w-px bg-glass-brd" />
-                <div>
+                <div className="w-px bg-glass-brd shrink-0" />
+                <div className="shrink-0">
                   <div className="font-display text-2xl md:text-3xl font-bold text-text-0">98%</div>
-                  <div className="text-text-2 text-sm">Довольных</div>
+                  <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">Довольных</div>
                 </div>
               </motion.div>
             </motion.div>
@@ -165,6 +179,9 @@ export function LandingPage({
           </div>
         </motion.div>
       </section>
+
+      {/* Services Section — весь каталог из 7 сервисов платформы */}
+      <Services />
 
       {/* How It Works Section */}
       <HowItWorks />
@@ -221,53 +238,7 @@ export function LandingPage({
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="relative py-12 border-t border-glass-brd">
-        <div className="mx-auto max-w-6xl px-4 md:px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            {/* Logo */}
-            <div className="flex items-center gap-3">
-              <Iris size={32} />
-              <span className="font-display text-lg font-bold text-text-0">
-                VedaMatch
-              </span>
-            </div>
-
-            {/* Links */}
-            <nav className="flex flex-wrap justify-center gap-x-6 gap-y-3 text-text-1 text-sm">
-              <Link href="/union" className="hover:text-text-0 transition-colors">
-                Union
-              </Link>
-              <Link href="/motivation" className="hover:text-text-0 transition-colors">
-                Motivation
-              </Link>
-              <Link href="/vedabase" className="hover:text-text-0 transition-colors">
-                Vedabase
-              </Link>
-              <Link href="/gitabase" className="hover:text-text-0 transition-colors">
-                Gitabase
-              </Link>
-              <Link href="/support" className="hover:text-text-0 transition-colors">
-                Поддержка
-              </Link>
-              <Link href="/updates" className="hover:text-text-0 transition-colors">
-                Что нового
-              </Link>
-              <Link href="/legal/privacy" className="hover:text-text-0 transition-colors">
-                Политика конфиденциальности
-              </Link>
-              <Link href="/legal/terms" className="hover:text-text-0 transition-colors">
-                Пользовательское соглашение
-              </Link>
-            </nav>
-
-            {/* Copyright */}
-            <p className="text-text-2 text-sm">
-              © 2026 VedaMatch. Все права защищены.
-            </p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
       <InstallBanner />
     </div>
   );

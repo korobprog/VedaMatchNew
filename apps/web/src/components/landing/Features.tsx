@@ -114,10 +114,10 @@ export function Features() {
           className="text-center mb-16"
         >
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-text-0 mb-4">
-            Возможности
+            Возможности «Знакомств»
           </h2>
           <p className="text-text-1 text-lg max-w-2xl mx-auto">
-            Всё для осознанных знакомств и объединения единомышленников
+            Флагманский сервис платформы — осознанные знакомства и объединение единомышленников
           </p>
         </motion.div>
 

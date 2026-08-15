@@ -19,13 +19,15 @@ describe("proxy", () => {
     );
   });
 
-  it("lets guests reach support, legal and updates pages", () => {
+  it("lets guests reach support, legal, updates and service description pages", () => {
     for (const path of [
       "/support",
       "/support/track/abc",
       "/legal/privacy",
       "/updates",
       "/updates/history",
+      "/services/union",
+      "/services/astro",
     ]) {
       const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));
 

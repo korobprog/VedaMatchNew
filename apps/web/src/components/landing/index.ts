@@ -5,6 +5,8 @@ export { Iris, IrisIcon } from "./Iris";
 export { SwipeCard } from "./SwipeCard";
 export { PhoneMockup } from "./PhoneMockup";
 export { HowItWorks } from "./HowItWorks";
+export { Services } from "./Services";
 export { Features } from "./Features";
 export { Pricing } from "./Pricing";
+export { Footer } from "./Footer";
 export { LandingPage } from "./LandingPage";
