@@ -326,6 +326,64 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
         </svg>
       );
 
+    case "market":
+      // Market stall: striped awning over a basket - goods and services from devotees
+      return (
+        <svg
+          viewBox="0 0 32 32"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className={className}
+        >
+          {/* Awning */}
+          <path
+            d="M4 5H28L29.5 11H2.5L4 5Z"
+            fill={`url(#${gid("awning")})`}
+            stroke={`url(#${gid("stroke")})`}
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+          {/* Awning stripes */}
+          <path
+            d="M11 5L9.5 11M20 5L21.5 11"
+            stroke="#FFE9C7"
+            strokeWidth="1.2"
+            strokeOpacity="0.7"
+            strokeLinecap="round"
+          />
+          {/* Basket body */}
+          <path
+            d="M6 13H26L24 27H8L6 13Z"
+            fill={`url(#${gid("basket")})`}
+            stroke={`url(#${gid("stroke")})`}
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+          {/* Weave */}
+          <path
+            d="M12.5 16L13.5 24M19.5 16L18.5 24M7.2 19.5H24.8"
+            stroke="#FFE9C7"
+            strokeWidth="1.2"
+            strokeOpacity="0.65"
+            strokeLinecap="round"
+          />
+          <defs>
+            <linearGradient id={gid("awning")} x1="2.5" y1="5" x2="29.5" y2="11" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#B45309" stopOpacity="0.9" />
+              <stop offset="1" stopColor="#F59E0B" stopOpacity="0.85" />
+            </linearGradient>
+            <linearGradient id={gid("basket")} x1="6" y1="13" x2="26" y2="27" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#92400E" stopOpacity="0.85" />
+              <stop offset="1" stopColor="#D97706" stopOpacity="0.8" />
+            </linearGradient>
+            <linearGradient id={gid("stroke")} x1="2.5" y1="5" x2="29.5" y2="27" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#FCD34D" />
+              <stop offset="1" stopColor="#FDE68A" />
+            </linearGradient>
+          </defs>
+        </svg>
+      );
+
     case "devotee-space":
     default:
       // Sacred Temple / Lotus flower with Crown / Lock emblem - Restricted Space

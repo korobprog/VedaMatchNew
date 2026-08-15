@@ -50,6 +50,36 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.marketChatMessageSent)
+  onMarketChatMessageSent(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.marketOrderCreated)
+  onMarketOrderCreated(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.marketOrderStatusChanged)
+  onMarketOrderStatusChanged(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.marketListingPublished)
+  onMarketListingPublished(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.marketListingPriceDropped)
+  onMarketListingPriceDropped(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.marketReviewReceived)
+  onMarketReviewReceived(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   /**
    * Всегда резолвится. Необработанное отклонение в слушателе EventEmitter'а
    * роняет процесс, а недоступный пуш-сервис — не повод ронять API.
@@ -68,6 +98,16 @@ export class NotificationsListener {
         );
         return;
       }
+
+      // Колокольчик наполняется до пуша и независимо от него: разрешение на
+      // уведомления в браузере может быть не выдано, а список внутри портала
+      // должен работать всё равно.
+      await this.notifications.addToInbox(event.recipientId, {
+        title: content.title,
+        body: content.body,
+        url: content.url,
+        category: content.category,
+      });
 
       const subscriptions = await this.notifications.listSubscriptions(
         event.recipientId,

@@ -1,7 +1,9 @@
 // Клиентский API уведомлений: подписка создаётся в браузере, поэтому запросы
 // идут с NEXT_PUBLIC_API_URL и cookie, а не через серверные хелперы lib/api.ts.
 import type {
+  NotificationInboxResponse,
   NotificationPreferencesDto,
+  NotificationUnreadCountResponse,
   PushSubscriptionRequest,
   UpdateNotificationPreferencesRequest,
   VapidKeyResponse,
@@ -40,6 +42,22 @@ export function removeSubscription(endpoint: string): Promise<void> {
   return request("/notifications/subscriptions", {
     method: "DELETE",
     body: JSON.stringify({ endpoint }),
+  });
+}
+
+export function fetchUnreadCount(): Promise<NotificationUnreadCountResponse> {
+  return request("/notifications/unread-count");
+}
+
+export function fetchInbox(): Promise<NotificationInboxResponse> {
+  return request("/notifications/inbox");
+}
+
+/** Без `ids` помечает прочитанным всё непрочитанное. */
+export function markInboxRead(ids?: string[]): Promise<{ ok: true }> {
+  return request("/notifications/inbox/read", {
+    method: "POST",
+    body: JSON.stringify(ids ? { ids } : {}),
   });
 }
 

@@ -11,7 +11,9 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type {
   AccessTokenPayload,
+  NotificationInboxResponse,
   NotificationPreferencesDto,
+  NotificationUnreadCountResponse,
   PushSubscriptionRequest,
   UpdateNotificationPreferencesRequest,
   VapidKeyResponse,
@@ -48,6 +50,35 @@ export class NotificationsController {
   @Delete('subscriptions')
   async unsubscribe(@Body() body: { endpoint: string }): Promise<{ ok: true }> {
     await this.notifications.deleteSubscription(body.endpoint);
+    return { ok: true };
+  }
+
+  /** Счётчик для значка на колокольчике: отдельный лёгкий запрос,
+   *  его дёргает каждая страница портала. */
+  @UseGuards(AuthGuard)
+  @Get('unread-count')
+  async unreadCount(
+    @CurrentUser() user: AccessTokenPayload,
+  ): Promise<NotificationUnreadCountResponse> {
+    return { unreadCount: await this.notifications.countUnread(user.sub) };
+  }
+
+  @UseGuards(AuthGuard)
+  @Get('inbox')
+  inbox(
+    @CurrentUser() user: AccessTokenPayload,
+  ): Promise<NotificationInboxResponse> {
+    return this.notifications.listInbox(user.sub);
+  }
+
+  /** Пустой `ids` — «прочитано всё»: страница списка гасит счётчик целиком. */
+  @UseGuards(AuthGuard)
+  @Post('inbox/read')
+  async markRead(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: { ids?: string[] },
+  ): Promise<{ ok: true }> {
+    await this.notifications.markRead(user.sub, body?.ids);
     return { ok: true };
   }
 

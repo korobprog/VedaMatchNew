@@ -18,10 +18,22 @@ function createListener(options: {
     support: boolean;
   }>;
   sendResult?: 'gone' | 'rate-limited' | 'transient' | null;
+  /** Пустой массив — устройство не подписано на пуш. */
+  subscriptions?: Array<{
+    id: string;
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+  }>;
 }) {
   const deleted: string[] = [];
   const sent: Array<{ endpoint: string; payload: unknown }> = [];
+  const inbox: Array<Record<string, unknown>> = [];
   const notifications = {
+    addToInbox: jest.fn((userId: string, draft: Record<string, unknown>) => {
+      inbox.push({ userId, ...draft });
+      return Promise.resolve();
+    }),
     getPreferences: jest.fn(() =>
       Promise.resolve({
         enabled: true,
@@ -32,14 +44,16 @@ function createListener(options: {
       }),
     ),
     listSubscriptions: jest.fn(() =>
-      Promise.resolve([
-        {
-          id: 's1',
-          endpoint: 'https://push.example/a',
-          p256dh: 'p',
-          auth: 'a',
-        },
-      ]),
+      Promise.resolve(
+        options.subscriptions ?? [
+          {
+            id: 's1',
+            endpoint: 'https://push.example/a',
+            p256dh: 'p',
+            auth: 'a',
+          },
+        ],
+      ),
     ),
     deleteSubscription: jest.fn((endpoint: string) => {
       deleted.push(endpoint);
@@ -59,6 +73,7 @@ function createListener(options: {
     sender,
     deleted,
     sent,
+    inbox,
   };
 }
 
@@ -75,6 +90,41 @@ describe('NotificationsListener.deliver', () => {
       url: '/union/chats/r1',
       tag: 'chat:r1',
     });
+  });
+
+  it('кладёт уведомление в колокольчик', async () => {
+    const { listener, inbox } = createListener({});
+
+    await listener.deliver(chatEvent);
+
+    expect(inbox).toEqual([
+      {
+        userId: 'user-1',
+        title: 'Вринда',
+        body: 'Харе Кришна',
+        url: '/union/chats/r1',
+        category: 'chat',
+      },
+    ]);
+  });
+
+  it('наполняет колокольчик даже без пуш-подписок', async () => {
+    const { listener, inbox, sent } = createListener({ subscriptions: [] });
+
+    await listener.deliver(chatEvent);
+
+    expect(inbox).toHaveLength(1);
+    expect(sent).toHaveLength(0);
+  });
+
+  it('не кладёт в колокольчик то, что человек отключил в настройках', async () => {
+    const { listener, inbox } = createListener({
+      preferences: { chat: false },
+    });
+
+    await listener.deliver(chatEvent);
+
+    expect(inbox).toEqual([]);
   });
 
   it('молчит, когда уведомления выключены целиком', async () => {

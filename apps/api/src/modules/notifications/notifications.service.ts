@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type {
+  NotificationCategory,
+  NotificationInboxResponse,
+  NotificationItemDto,
   NotificationPreferencesDto,
   PushSubscriptionRequest,
   UpdateNotificationPreferencesRequest,
@@ -12,7 +15,26 @@ const defaults: NotificationPreferencesDto = {
   connections: true,
   support: true,
   transits: true,
+  market: true,
 };
+
+/**
+ * Сколько прочитанное живёт до удаления. Не ноль: иначе перезагрузка страницы
+ * сразу после открытия списка показала бы пустоту, и человек решил бы, что
+ * уведомление потерялось. Не сутки: колокольчик — список непрочитанного,
+ * а не архив.
+ */
+const readRetentionMs = 15 * 60 * 1000;
+
+/** Непрочитанное тоже не копится вечно: неактивный аккаунт иначе растит таблицу. */
+const unreadRetentionMs = 30 * 24 * 60 * 60 * 1000;
+
+export interface InboxDraft {
+  title: string;
+  body: string;
+  url: string;
+  category: NotificationCategory;
+}
 
 export interface StoredSubscription {
   id: string;
@@ -68,6 +90,7 @@ export class NotificationsService {
       connections: row.connections,
       support: row.support,
       transits: row.transits,
+      market: row.market,
     };
   }
 
@@ -82,6 +105,7 @@ export class NotificationsService {
       connections: patch.connections ?? current.connections,
       support: patch.support ?? current.support,
       transits: patch.transits ?? current.transits,
+      market: patch.market ?? current.market,
     };
     await this.prisma.notificationPreference.upsert({
       where: { userId },
@@ -89,5 +113,77 @@ export class NotificationsService {
       update: next,
     });
     return next;
+  }
+
+  // ===== Колокольчик =====
+
+  async addToInbox(userId: string, draft: InboxDraft): Promise<void> {
+    await this.prisma.notificationItem.create({
+      data: { userId, ...draft },
+    });
+  }
+
+  async countUnread(userId: string): Promise<number> {
+    return this.prisma.notificationItem.count({
+      where: { userId, readAt: null },
+    });
+  }
+
+  /**
+   * Отдаёт непрочитанное и попутно подчищает хвост: прочитанное старше
+   * `readRetentionMs` и совсем древнее непрочитанное. Чистка привязана к чтению
+   * списка, а не к крону — отдельный планировщик ради этого не нужен.
+   */
+  async listInbox(userId: string): Promise<NotificationInboxResponse> {
+    await this.purge(userId);
+    const rows = await this.prisma.notificationItem.findMany({
+      where: { userId, readAt: null },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        body: true,
+        url: true,
+        category: true,
+        createdAt: true,
+      },
+    });
+    const items: NotificationItemDto[] = rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      body: row.body,
+      url: row.url,
+      category: row.category as NotificationCategory,
+      createdAt: row.createdAt.toISOString(),
+    }));
+    return { items, unreadCount: items.length };
+  }
+
+  /**
+   * Помечает прочитанным. Без `ids` — весь непрочитанный список: колокольчик
+   * гасит счётчик целиком, когда человек открыл страницу.
+   */
+  async markRead(userId: string, ids?: string[]): Promise<void> {
+    await this.prisma.notificationItem.updateMany({
+      where: {
+        userId,
+        readAt: null,
+        ...(ids && ids.length > 0 ? { id: { in: ids } } : {}),
+      },
+      data: { readAt: new Date() },
+    });
+  }
+
+  private async purge(userId: string): Promise<void> {
+    const now = Date.now();
+    await this.prisma.notificationItem.deleteMany({
+      where: {
+        userId,
+        OR: [
+          { readAt: { lt: new Date(now - readRetentionMs) } },
+          { createdAt: { lt: new Date(now - unreadRetentionMs) } },
+        ],
+      },
+    });
   }
 }

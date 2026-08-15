@@ -24,6 +24,29 @@ const { contactsTags } = require('./contacts-tags-data.js') as {
   }>;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { marketSections } = require('./market-sections-data.js') as {
+  marketSections: Array<{
+    slug: string;
+    titleRu: string;
+    titleEn: string;
+    iconKey: string;
+    position: number;
+  }>;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { marketCategories } = require('./market-categories-data.js') as {
+  marketCategories: Array<{
+    sectionSlug: string;
+    slug: string;
+    titleRu: string;
+    titleEn: string;
+    position: number;
+    prohibited?: boolean;
+  }>;
+};
+
 const services = [
   {
     slug: 'union',
@@ -117,6 +140,23 @@ const services = [
     devoteeSelfIdentifiedVisible: true,
     devoteeVerifiedVisible: true,
   },
+  {
+    slug: 'market',
+    name: 'Рынок',
+    description:
+      'Объявления и услуги от преданных: товары, книги, мастерские и помощь',
+    url: '/market',
+    // active: витрина, каталог, фильтры, избранное и кабинет продавца готовы
+    // и покрыты тестами. Корзина, заявки и чат — фаза 2, статуса не меняют.
+    status: 'active' as const,
+    category: 'community',
+    public: true,
+    seekerVisible: true,
+    practitionerVisible: true,
+    yogiVisible: true,
+    devoteeSelfIdentifiedVisible: true,
+    devoteeVerifiedVisible: true,
+  },
 ];
 
 async function main() {
@@ -154,9 +194,35 @@ async function main() {
         create: tag,
       });
     }
+    // Каталог Рынка фиксирован: разделы и категории заводит только сид и админ,
+    // поэтому upsert по slug безопасен — он освежает названия и порядок и
+    // никогда не трогает объявления, привязанные к категории.
+    const marketSectionIdBySlug = new Map<string, string>();
+    for (const section of marketSections) {
+      const saved = await transaction.marketSection.upsert({
+        where: { slug: section.slug },
+        update: section,
+        create: section,
+      });
+      marketSectionIdBySlug.set(saved.slug, saved.id);
+    }
+    for (const category of marketCategories) {
+      const sectionId = marketSectionIdBySlug.get(category.sectionSlug);
+      if (!sectionId) {
+        throw new Error(
+          `market category "${category.slug}" references unknown section "${category.sectionSlug}"`,
+        );
+      }
+      const { sectionSlug: _sectionSlug, prohibited: _prohibited, ...fields } = category;
+      await transaction.marketCategory.upsert({
+        where: { sectionId_slug: { sectionId, slug: category.slug } },
+        update: fields,
+        create: { ...fields, sectionId },
+      });
+    }
   });
   console.log(
-    `Seeded ${services.length} services, ${librarySections.length} library sections and ${contactsTags.length} contacts tags`,
+    `Seeded ${services.length} services, ${librarySections.length} library sections, ${contactsTags.length} contacts tags, ${marketSections.length} market sections and ${marketCategories.length} market categories`,
   );
 }
 

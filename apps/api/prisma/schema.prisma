@@ -207,6 +207,7 @@ model User {
   astroCompatibilityRequestsSent     AstroCompatibilityRequest[]  @relation("AstroCompatibilityRequester")
   astroCompatibilityRequestsReceived AstroCompatibilityRequest[]  @relation("AstroCompatibilityTarget")
   notificationPreference             NotificationPreference?
+  notificationItems                  NotificationItem[]
   selfIdentificationResponses        SelfIdentificationResponse[]
   stageHistory                       StageHistory[]
   mentorVerificationRequests         MentorVerificationRequest[]
@@ -250,6 +251,18 @@ model User {
   libraryBookmarks                   LibraryBookmark[]
   libraryComments                    LibraryComment[]
   astroTransitDigests                AstroTransitDigest[]
+  marketShop                         MarketShop?                  @relation("MarketShopOwner")
+  marketFavorites                    MarketFavorite[]
+  marketPreference                   MarketPreference?
+  marketCartItems                    MarketCartItem[]
+  marketOrders                       MarketOrder[]                @relation("MarketOrdersPlaced")
+  marketConversations                MarketConversation[]         @relation("MarketConversationsAsBuyer")
+  marketMessagesSent                 MarketMessage[]              @relation("MarketMessagesSent")
+  marketReviews                      MarketReview[]               @relation("MarketReviewsWritten")
+  marketComments                     MarketListingComment[]       @relation("MarketCommentsWritten")
+  marketSubscriptions                MarketSubscription[]
+  marketReportsMade                  MarketReport[]               @relation("MarketReportsMade")
+  marketReportsReviewed              MarketReport[]               @relation("MarketReportsReviewed")
 }
 
 // Единственная строка глобальных настроек платформы (id всегда "global").
@@ -1316,7 +1329,29 @@ model NotificationPreference {
   support     Boolean  @default(true)
   /// Ежедневный персональный день по транзитам (сервис astro).
   transits    Boolean  @default(true)
+  /// Заявки и их статусы на Рынке. Сообщения чата Рынка идут под `chat`.
+  market      Boolean  @default(true)
   updatedAt   DateTime @updatedAt
+}
+
+/// Входящие уведомления портала (колокольчик). Намеренно НЕ архив: прочитанное
+/// удаляется при следующем открытии списка, см. NotificationsService.listInbox.
+/// Живёт отдельно от веб-пуша: колокольчик работает и без разрешения браузера.
+model NotificationItem {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  /// Куда ведёт клик по уведомлению — тот же путь, что и у пуша.
+  url       String
+  /// Категория из NotificationPreference: chat | connections | support | transits.
+  category  String
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
 }
 
 // ===== Astro service =====
@@ -1714,4 +1749,629 @@ model ContactsDisclosure {
 
   @@unique([ownerId, viewerId])
   @@index([viewerId, revokedAt])
+}
+
+// ===== Market service =====
+
+enum MarketListingKind {
+  product
+  service
+}
+
+enum MarketListingStatus {
+  draft
+  published
+  hidden_by_author
+  sold_out
+  hidden_by_reports
+  removed_by_admin
+}
+
+/// `new` — зарезервированное слово в слишком многих местах, поэтому `new_item`.
+enum MarketListingCondition {
+  new_item
+  like_new
+  used
+  refurbished
+}
+
+/// `negotiable` — «цена договорная», `free` — отдам даром: цена в обоих случаях
+/// null, но это разные вещи и разные подписи в карточке.
+enum MarketPriceMode {
+  fixed
+  from
+  negotiable
+  free
+}
+
+enum MarketCurrency {
+  rub
+  usd
+  eur
+  inr
+}
+
+enum MarketDeliveryOption {
+  pickup
+  courier
+  post
+  cdek
+  digital
+  shipping_worldwide
+}
+
+enum MarketServiceFormat {
+  online
+  offline
+  any
+}
+
+enum MarketShopStatus {
+  active
+  closed
+  hidden_by_reports
+  blocked_by_admin
+}
+
+/// Верхний уровень каталога: «Одежда», «Книги», «Услуги». Только сид и админ.
+model MarketSection {
+  id            String   @id @default(uuid())
+  slug          String   @unique
+  titleRu       String
+  titleEn       String
+  descriptionRu String?
+  descriptionEn String?
+  iconKey       String?
+  position      Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  categories    MarketCategory[]
+  subscriptions MarketSubscription[]
+
+  @@index([position])
+}
+
+/// Второй уровень каталога. В отличие от библиотеки — только сид и админ:
+/// на категориях висят фильтры выдачи, пользовательский дрейф их ломает.
+/// Поэтому здесь нет normalized*-колонок и pg_trgm: Рынок не добавляет
+/// ни одного объекта в docs/prisma-raw-sql-objects.md.
+model MarketCategory {
+  id            String        @id @default(uuid())
+  sectionId     String
+  section       MarketSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  slug          String
+  titleRu       String
+  titleEn       String
+  descriptionRu String?
+  descriptionEn String?
+  position      Int           @default(0)
+  /// Денормализованный счётчик опубликованных объявлений — для строки каталога.
+  listingsCount Int           @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  listings      MarketListingCategory[]
+  subscriptions MarketSubscription[]
+
+  @@unique([sectionId, slug])
+  @@index([sectionId, position])
+  @@index([listingsCount(sort: Desc)])
+}
+
+/// Магазин. Один на пользователя: второй витриной никто не пользуется, а снять
+/// @unique дешевле миграцией, чем потом чинить выбор «от чьего имени публикуем».
+/// Гео продублировано скалярными колонками рядом с `location`: JSON в Postgres
+/// не индексируется, а по городу идёт фильтр выдачи.
+model MarketShop {
+  id        String  @id @default(uuid())
+  ownerId   String  @unique
+  owner     User    @relation("MarketShopOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  slug      String  @unique
+  /// Название — имя собственное, поэтому одно поле, а не пара Ru/En.
+  name      String
+  taglineRu String?
+  taglineEn String?
+  aboutRu   String?
+  aboutEn   String?
+
+  logoKey  String?
+  logoUrl  String?
+  coverKey String?
+  coverUrl String?
+
+  /// ProfileLocation целиком — чтобы вернуть в форму без обратного пересчёта.
+  location  Json?
+  city      String?
+  country   String?
+  latitude  Float?
+  longitude Float?
+
+  /// Способы связи вне платформы: ProfileMessengers-совместимый объект.
+  messengers Json?
+
+  deliveryOptions MarketDeliveryOption[]
+  status          MarketShopStatus       @default(active)
+  /// Момент согласия с правилами Рынка. null — магазин создан до их введения.
+  rulesAcceptedAt DateTime?
+
+  listingsCount    Int   @default(0)
+  ordersCount      Int   @default(0)
+  reviewsCount     Int   @default(0)
+  /// Сумма оценок; среднее держим отдельной колонкой, чтобы сортировать
+  /// выдачу магазинов без подзапроса.
+  ratingSum        Int   @default(0)
+  ratingAvg        Float @default(0)
+  followersCount   Int   @default(0)
+  openReportsCount Int   @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  listings      MarketListing[]
+  shelves       MarketShelf[]
+  orders        MarketOrder[]
+  conversations MarketConversation[]
+  reviews       MarketReview[]
+  reports       MarketReport[]
+  subscriptions MarketSubscription[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([status, ratingAvg(sort: Desc)])
+  @@index([city])
+}
+
+/// Полка внутри магазина — навигация по своей витрине, независимая от
+/// глобального каталога.
+model MarketShelf {
+  id            String     @id @default(uuid())
+  shopId        String
+  shop          MarketShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  slug          String
+  titleRu       String?
+  titleEn       String?
+  position      Int        @default(0)
+  listingsCount Int        @default(0)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  listings MarketListingShelf[]
+
+  @@unique([shopId, slug])
+  @@index([shopId, position])
+}
+
+/// Объявление. Товар и услуга — одна модель: различий три поля, а не сущность.
+/// У товара condition/quantity, у услуги serviceFormat/длительность.
+/// Цена в минорных единицах Int: точная арифметика, прямое сравнение в
+/// диапазонном фильтре и честный JSON в DTO (Decimal не сериализуется).
+model MarketListing {
+  id     String            @id @default(uuid())
+  shopId String
+  shop   MarketShop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  kind   MarketListingKind
+
+  titleRu       String?
+  titleEn       String?
+  descriptionRu String?
+  descriptionEn String?
+
+  priceMode     MarketPriceMode @default(fixed)
+  /// Минорные единицы (копейки/центы). null у negotiable и free.
+  priceMinor    Int?
+  /// Верх «вилки» для priceMode=from; null — вилки нет.
+  priceMaxMinor Int?
+  currency      MarketCurrency  @default(rub)
+
+  /// Только товар.
+  condition  MarketListingCondition?
+  /// null — количество не отслеживается (услуга, цифровой товар, «в наличии»).
+  quantity   Int?
+  trackStock Boolean                 @default(false)
+  soldCount  Int                     @default(0)
+
+  /// Только услуга.
+  serviceFormat          MarketServiceFormat?
+  serviceDurationMinutes Int?
+
+  /// Копия геоданных магазина на момент создания; продавец может переопределить
+  /// (мастерская в другом городе), поэтому это свои колонки, а не ссылка.
+  location  Json?
+  city      String?
+  country   String?
+  latitude  Float?
+  longitude Float?
+
+  deliveryOptions MarketDeliveryOption[]
+
+  status      MarketListingStatus @default(published)
+  needsReview Boolean             @default(false)
+
+  /// Первая картинка по sortOrder — чтобы лента не тянула связь.
+  primaryImageUrl String?
+
+  viewsCount       Int @default(0)
+  favoritesCount   Int @default(0)
+  commentsCount    Int @default(0)
+  ordersCount      Int @default(0)
+  openReportsCount Int @default(0)
+
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  images        MarketListingImage[]
+  categories    MarketListingCategory[]
+  shelves       MarketListingShelf[]
+  favorites     MarketFavorite[]
+  cartItems     MarketCartItem[]
+  orderItems    MarketOrderItem[]
+  conversations MarketConversation[]
+  reviews       MarketReview[]
+  comments      MarketListingComment[]
+  reports       MarketReport[]
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([shopId, status, publishedAt(sort: Desc)])
+  @@index([status, kind, publishedAt(sort: Desc)])
+  @@index([status, currency, priceMinor])
+  @@index([status, city])
+  @@index([status, favoritesCount(sort: Desc)])
+}
+
+/// Фото объявления. Публичные объекты в S3 — витрина попадает в SSR-HTML
+/// и должна кешироваться CDN, поэтому не пресайн, как в галерее профиля.
+model MarketListingImage {
+  id         String        @id @default(uuid())
+  listingId  String
+  listing    MarketListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  storageKey String        @unique
+  url        String
+  width      Int
+  height     Int
+  sizeBytes  Int
+  sortOrder  Int
+  createdAt  DateTime      @default(now())
+
+  @@index([listingId, sortOrder])
+}
+
+/// Объявление ↔ глобальная категория.
+model MarketListingCategory {
+  listingId  String
+  listing    MarketListing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   MarketCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt  DateTime       @default(now())
+
+  @@id([listingId, categoryId])
+  @@index([categoryId])
+}
+
+/// Объявление ↔ полка магазина.
+model MarketListingShelf {
+  listingId String
+  listing   MarketListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  shelfId   String
+  shelf     MarketShelf   @relation(fields: [shelfId], references: [id], onDelete: Cascade)
+  position  Int           @default(0)
+
+  @@id([listingId, shelfId])
+  @@index([shelfId, position])
+}
+
+/// Избранное. priceAtFavorite — база для уведомления «стало дешевле»:
+/// без снимка цены на момент добавления сравнивать не с чем.
+model MarketFavorite {
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listingId       String
+  listing         MarketListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  priceAtFavorite Int?
+  createdAt       DateTime      @default(now())
+
+  @@id([userId, listingId])
+  @@index([listingId])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+/// Настройки Рынка у пользователя. Отсутствие строки = значения по умолчанию.
+model MarketPreference {
+  userId          String         @id
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  uiLanguage      String         @default("ru") @db.VarChar(8)
+  displayCurrency MarketCurrency @default(rub)
+  priceDropAlerts Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+// ===== Market service: корзина, заявки, чат (фаза 2) =====
+
+/// Оплаты на Рынке нет: заявка — это намерение купить, а деньги и доставку
+/// стороны обсуждают в чате. Отсюда и названия статусов: `new_request`,
+/// а не `new`, чтобы никто не принял её за оплаченный заказ.
+enum MarketOrderStatus {
+  new_request
+  accepted
+  in_progress
+  completed
+  declined_by_seller
+  cancelled_by_buyer
+}
+
+/// Корзина одна и глобальная, поэтому отдельной модели «корзина» нет: строки,
+/// сгруппированные по userId, и есть корзина. Разбиение по магазинам и валютам
+/// происходит только в момент оформления.
+model MarketCartItem {
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listingId String
+  listing   MarketListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  /// У услуги всегда 1: количество там бессмысленно.
+  quantity  Int           @default(1)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@id([userId, listingId])
+  @@index([listingId])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+/// Заявка продавцу. Одна заявка = один магазин и одна валюта: складывать
+/// рубли с рупиями в totalMinor нельзя, поэтому корзина при оформлении
+/// делится по паре (магазин, валюта).
+model MarketOrder {
+  id      String     @id @default(uuid())
+  /// Человекочитаемый номер — как у SupportTicket: «заявка №42» в переписке
+  /// понятнее, чем uuid.
+  number  Int        @unique @default(autoincrement())
+  buyerId String
+  buyer   User       @relation("MarketOrdersPlaced", fields: [buyerId], references: [id], onDelete: Cascade)
+  shopId  String
+  shop    MarketShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  status         MarketOrderStatus     @default(new_request)
+  /// Снимок суммы: цены объявлений после оформления меняются.
+  totalMinor     Int
+  currency       MarketCurrency
+  deliveryOption MarketDeliveryOption?
+  deliveryNote   String?
+  buyerComment   String?
+  declineReason  String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  acceptedAt  DateTime?
+  completedAt DateTime?
+  closedAt    DateTime?
+
+  items         MarketOrderItem[]
+  conversations MarketConversation[]
+  /// Один отзыв на заявку — это правило выражено @unique на MarketReview.orderId.
+  review        MarketReview?
+
+  @@index([buyerId, createdAt(sort: Desc)])
+  @@index([shopId, status, createdAt(sort: Desc)])
+}
+
+/// Позиция заявки со снимком названия и цены: объявление могут отредактировать
+/// или удалить, а заявка обязана остаться читаемой. Поэтому listingId — SetNull,
+/// а не Cascade: уборка у продавца не стирает историю покупателя.
+model MarketOrderItem {
+  id             String         @id @default(uuid())
+  orderId        String
+  order          MarketOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  listingId      String?
+  listing        MarketListing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  titleSnapshot  String
+  priceMinor     Int
+  currency       MarketCurrency
+  imageUrl       String?
+  quantity       Int            @default(1)
+  lineTotalMinor Int
+
+  @@index([orderId])
+  @@index([listingId])
+}
+
+/// Диалог покупатель ↔ магазин. Один на пару: listingId и orderId — это повод,
+/// с которого начали разговор, а не ключ диалога. Иначе у одних и тех же людей
+/// накапливались бы параллельные переписки на каждый товар.
+model MarketConversation {
+  id            String         @id @default(uuid())
+  shopId        String
+  shop          MarketShop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  buyerId       String
+  buyer         User           @relation("MarketConversationsAsBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  listingId     String?
+  listing       MarketListing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  orderId       String?
+  order         MarketOrder?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  lastMessageAt DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  messages MarketMessage[]
+
+  @@unique([shopId, buyerId])
+  @@index([buyerId, lastMessageAt(sort: Desc)])
+  @@index([shopId, lastMessageAt(sort: Desc)])
+}
+
+/// Сообщение. readAt и editedAt — как в UnionChatMessage; индекс по readAt
+/// нужен для подсчёта непрочитанного одним groupBy.
+model MarketMessage {
+  id             String             @id @default(uuid())
+  conversationId String
+  conversation   MarketConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  fromUserId     String
+  fromUser       User               @relation("MarketMessagesSent", fields: [fromUserId], references: [id], onDelete: Cascade)
+  body           String
+  readAt         DateTime?
+  editedAt       DateTime?
+  createdAt      DateTime           @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([conversationId, readAt])
+  @@index([fromUserId])
+}
+
+// ===== Market service: отзывы, подписки, модерация (фаза 3) =====
+
+enum MarketReviewStatus {
+  published
+  removed_by_author
+  removed_by_admin
+}
+
+enum MarketCommentStatus {
+  published
+  removed_by_author
+  removed_by_admin
+}
+
+enum MarketSubscriptionKind {
+  shop
+  section
+  category
+  saved_search
+}
+
+enum MarketReportTargetKind {
+  listing
+  shop
+  comment
+  review
+}
+
+enum MarketReportReason {
+  spam
+  prohibited_item
+  scam
+  wrong_category
+  inappropriate_content
+  other
+}
+
+enum MarketReportStatus {
+  open
+  reviewed
+  dismissed
+}
+
+/// Отзыв. Только по завершённой заявке и ровно один на заявку: `@unique` на
+/// orderId и есть это правило — проверять его в коде было бы дублированием.
+/// Так рейтинг нельзя накрутить, не пройдя через реальную сделку.
+model MarketReview {
+  id               String             @id @default(uuid())
+  orderId          String             @unique
+  order            MarketOrder        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  shopId           String
+  shop             MarketShop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  listingId        String?
+  listing          MarketListing?     @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  authorId         String?
+  author           User?              @relation("MarketReviewsWritten", fields: [authorId], references: [id], onDelete: SetNull)
+  /// 1..5, проверяется в сервисе: у Postgres нет дешёвого способа выразить
+  /// диапазон без CHECK-констрейнта, которого Prisma не умеет.
+  rating           Int
+  body             String?
+  status           MarketReviewStatus @default(published)
+  openReportsCount Int                @default(0)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  reports MarketReport[]
+
+  @@index([shopId, status, createdAt(sort: Desc)])
+  @@index([authorId])
+}
+
+/// Вопрос или комментарий под объявлением — без оценки и без заявки.
+/// Плоские, как LibraryComment: ветки здесь избыточны, а удалённые остаются
+/// строкой со статусом, чтобы не рвать переписку.
+model MarketListingComment {
+  id               String              @id @default(uuid())
+  listingId        String
+  listing          MarketListing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  userId           String?
+  user             User?               @relation("MarketCommentsWritten", fields: [userId], references: [id], onDelete: SetNull)
+  body             String
+  status           MarketCommentStatus @default(published)
+  openReportsCount Int                 @default(0)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  reports MarketReport[]
+
+  @@index([listingId, createdAt])
+  @@index([userId])
+}
+
+/// Подписка «сообщать о новом». Одна таблица на четыре вида: три из них —
+/// пара (пользователь, цель), четвёртый несёт фильтры поиска.
+///
+/// `targetKey` нужен потому, что уникальный индекс с NULL в Postgres не
+/// дедуплицирует: `@@unique([userId, kind, shopId, sectionId, categoryId])`
+/// пропустил бы сколько угодно одинаковых строк с NULL в неиспользуемых
+/// колонках. Здесь это id цели либо стабильный хеш фильтров.
+model MarketSubscription {
+  id             String                 @id @default(uuid())
+  userId         String
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind           MarketSubscriptionKind
+  targetKey      String
+  shopId         String?
+  shop           MarketShop?            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  sectionId      String?
+  section        MarketSection?         @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  categoryId     String?
+  category       MarketCategory?        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  /// Фильтры сохранённого поиска — тот же объект, что в query-строке ленты.
+  query          Json?
+  /// Как назвал подписку пользователь; null — подпись собирается из цели.
+  title          String?
+  lastNotifiedAt DateTime?
+  createdAt      DateTime               @default(now())
+
+  @@unique([userId, kind, targetKey])
+  @@index([kind, targetKey])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+/// Жалоба внутри Рынка. Своя таблица, а не портальный UserReport: цель —
+/// объявление или магазин, а не пользователь, и связь с моделями чужого
+/// модуля запрещена контрактом.
+///
+/// `targetKey` — по той же причине, что и в подписках: уникальность «одна
+/// жалоба от человека на объект» через колонки с NULL не выражается.
+model MarketReport {
+  id         String                 @id @default(uuid())
+  reporterId String
+  reporter   User                   @relation("MarketReportsMade", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetKind MarketReportTargetKind
+  targetKey  String
+  listingId  String?
+  listing    MarketListing?         @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  shopId     String?
+  shop       MarketShop?            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  commentId  String?
+  comment    MarketListingComment?  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  reviewId   String?
+  review     MarketReview?          @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  reason        MarketReportReason
+  note          String?
+  status        MarketReportStatus @default(open)
+  reviewedById  String?
+  reviewedBy    User?              @relation("MarketReportsReviewed", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt    DateTime?
+  moderatorNote String?
+  createdAt     DateTime           @default(now())
+
+  @@unique([reporterId, targetKey])
+  @@index([status, createdAt])
+  @@index([listingId])
+  @@index([shopId])
 }

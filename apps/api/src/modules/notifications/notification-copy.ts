@@ -1,10 +1,10 @@
 import type {
+  NotificationCategory,
   NotificationEvent,
   NotificationEventName,
 } from '@vedamatch/shared';
 
-export type NotificationCategory =
-  'chat' | 'connections' | 'support' | 'transits';
+export type { NotificationCategory };
 
 /** Имена событий литералами: @vedamatch/shared не собирается, и импорт
  *  значения оттуда уронил бы API при старте. Тип сверяет литералы с контрактом. */
@@ -16,6 +16,12 @@ export const notificationEventNames = {
   contactsRequestAccepted: 'contacts.request.accepted',
   supportReplied: 'support.ticket.replied',
   astroTransitDigestReady: 'astro.transit.digest-ready',
+  marketChatMessageSent: 'market.chat.message-sent',
+  marketOrderCreated: 'market.order.created',
+  marketOrderStatusChanged: 'market.order.status-changed',
+  marketListingPublished: 'market.listing.published',
+  marketListingPriceDropped: 'market.listing.price-dropped',
+  marketReviewReceived: 'market.review.received',
 } as const satisfies Record<string, NotificationEventName>;
 
 /** Payload веб-пуша ограничен ~4 КБ, да и на экране длинный текст не поместится. */
@@ -105,5 +111,113 @@ export function buildNotification(
         tag: 'astro-transit',
         category: 'transits',
       };
+    // Чат Рынка идёт под общим тумблером «chat»: это та же переписка, и
+    // второй переключатель на то же самое только путал бы — так же, как
+    // справочник переиспользует «connections» выше.
+    case 'market.chat.message-sent':
+      return {
+        title: event.senderName,
+        body: toExcerpt(event.body),
+        url: `/market/chats/${event.conversationId}`,
+        tag: `market-chat:${event.conversationId}`,
+        category: 'chat',
+      };
+    case 'market.order.created':
+      return {
+        title: `Заявка №${event.orderNumber}`,
+        body: `${event.buyerName} оставил заявку: ${itemsWord(event.itemsCount)}`,
+        url: `/market/orders/${event.orderId}`,
+        tag: `market-order:${event.orderId}`,
+        category: 'market',
+      };
+    case 'market.order.status-changed':
+      return {
+        title: `Заявка №${event.orderNumber}`,
+        body: `${event.shopName}: ${orderStatusPhrase(event.status)}`,
+        // Один тег на заявку: несколько смен статуса подряд заменяют друг
+        // друга, а не копятся стопкой.
+        tag: `market-order:${event.orderId}`,
+        url: `/market/orders/${event.orderId}`,
+        category: 'market',
+      };
+    case 'market.listing.published':
+      return {
+        title: event.sourceName,
+        body: `Новое объявление: ${toExcerpt(event.listingTitle)}`,
+        url: `/market/listing/${event.listingId}`,
+        // Тег на объявление: подписка на магазин и на его категорию сразу
+        // не должна давать два одинаковых пуша.
+        tag: `market-listing:${event.listingId}`,
+        category: 'market',
+      };
+    case 'market.listing.price-dropped':
+      return {
+        title: 'Цена снизилась',
+        body: `${toExcerpt(event.listingTitle)}: ${formatMinor(
+          event.previousPriceMinor,
+          event.currency,
+        )} → ${formatMinor(event.priceMinor, event.currency)}`,
+        url: `/market/listing/${event.listingId}`,
+        tag: `market-price:${event.listingId}`,
+        category: 'market',
+      };
+    case 'market.review.received':
+      return {
+        title: 'Новый отзыв',
+        // Без рода: User.gender необязателен, и «оценил(а)» здесь не нужен —
+        // достаточно назвать оценку и автора.
+        body: `${event.rating} из 5 — отзыв от ${event.authorName}`,
+        url: `/market/shops/${event.shopSlug}`,
+        tag: `market-review:${event.shopSlug}`,
+        category: 'market',
+      };
+  }
+}
+
+const CURRENCY_SYMBOL: Record<string, string> = {
+  rub: '₽',
+  usd: '$',
+  eur: '€',
+  inr: '₹',
+};
+
+/** Форматирование цены живёт здесь, в слое копирайта: издатель присылает
+ *  минорные единицы и валюту, а как это выглядит — решают тексты. */
+function formatMinor(minor: number, currency: string): string {
+  const major = Math.trunc(minor / 100);
+  const fraction = minor % 100;
+  const grouped = String(major).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  const body =
+    fraction === 0 ? grouped : `${grouped},${String(fraction).padStart(2, '0')}`;
+  return `${body} ${CURRENCY_SYMBOL[currency] ?? currency}`;
+}
+
+/** Склонение без указания рода: User.gender необязателен. */
+function itemsWord(count: number): string {
+  const tail = count % 100;
+  const last = count % 10;
+  if (tail >= 11 && tail <= 14) return `${count} позиций`;
+  if (last === 1) return `${count} позиция`;
+  if (last >= 2 && last <= 4) return `${count} позиции`;
+  return `${count} позиций`;
+}
+
+function orderStatusPhrase(
+  status: Extract<NotificationEvent, { name: 'market.order.status-changed' }>['status'],
+): string {
+  switch (status) {
+    case 'accepted':
+      return 'заявка принята';
+    case 'in_progress':
+      return 'работа начата';
+    case 'completed':
+      return 'заявка завершена';
+    case 'declined_by_seller':
+      return 'продавец отклонил заявку';
+    case 'cancelled_by_buyer':
+      return 'покупатель отменил заявку';
+    case 'new_request':
+    default:
+      return 'заявка обновлена';
   }
 }

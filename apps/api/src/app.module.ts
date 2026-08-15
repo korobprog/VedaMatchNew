@@ -15,6 +15,7 @@ import { ModerationModule } from './modules/moderation/moderation.module';
 import { SupportModule } from './modules/support/support.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { LibraryModule } from './modules/library/library.module';
+import { MarketModule } from './modules/market/market.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AstroModule } from './modules/astro/astro.module';
 import { StatsModule } from './modules/stats/stats.module';
@@ -42,6 +43,7 @@ import { ChangelogModule } from './modules/changelog/changelog.module';
     SupportModule,
     BillingModule,
     LibraryModule,
+    MarketModule,
     NotificationsModule,
     AstroModule,
     StatsModule,

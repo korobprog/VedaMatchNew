@@ -5,9 +5,11 @@ import Image from "next/image";
 import type { UserProfile } from "@vedamatch/shared";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Home, LifeBuoy } from "lucide-react";
+import { Menu, X, Home, LifeBuoy, Bell } from "lucide-react";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { LogoutButton } from "@/components/logout-button";
+import { CartBadge } from "@/components/market/cart-badge";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
 
@@ -22,6 +24,7 @@ const navItems: NavItem[] = [
   { href: "/union", label: "Знакомства", icon: <ServiceIcon slug="union" className="h-5 w-5" /> },
   { href: "/motivation", label: "Мотивация", icon: <ServiceIcon slug="motivation" className="h-5 w-5" /> },
   { href: "/vedabase", label: "Книги", icon: <ServiceIcon slug="vedabase" className="h-5 w-5" /> },
+  { href: "/market", label: "Рынок", icon: <ServiceIcon slug="market" className="h-5 w-5" /> },
 ];
 
 function LogoutItem() {
@@ -73,6 +76,10 @@ export function Header({ user }: { user: UserProfile }) {
 
           {/* Right side */}
           <div className="flex items-center gap-2">
+            {/* Виден и на мобильном: это основной вход в уведомления,
+                прятать его в бургер — значит прятать и значок. */}
+            <CartBadge />
+            <NotificationBell />
             <LocaleToggle className="hidden sm:flex" />
             <ThemeToggle className="hidden sm:flex" />
 
@@ -222,6 +229,14 @@ export function Header({ user }: { user: UserProfile }) {
                       <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
                     </svg>
                     <span className="text-sm">Самоидентификация</span>
+                  </Link>
+                  <Link
+                    href="/notifications"
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-cyan hover:bg-glass transition-colors"
+                  >
+                    <Bell size={20} />
+                    <span className="text-sm">Уведомления</span>
                   </Link>
                   <Link
                     href="/support"

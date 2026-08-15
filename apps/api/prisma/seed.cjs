@@ -4,6 +4,8 @@ const prisma = new PrismaClient();
 
 const { librarySections } = require('./library-sections-data.js');
 const { contactsTags } = require('./contacts-tags-data.js');
+const { marketSections } = require('./market-sections-data.js');
+const { marketCategories } = require('./market-categories-data.js');
 
 const services = [
   {
@@ -99,6 +101,23 @@ const services = [
     devoteeSelfIdentifiedVisible: true,
     devoteeVerifiedVisible: true,
   },
+  {
+    slug: 'market',
+    name: 'Рынок',
+    description:
+      'Объявления и услуги от преданных: товары, книги, мастерские и помощь',
+    url: '/market',
+    // active: витрина, каталог, фильтры, избранное и кабинет продавца готовы
+    // и покрыты тестами. Корзина, заявки и чат — фаза 2, статуса не меняют.
+    status: 'active',
+    category: 'community',
+    public: true,
+    seekerVisible: true,
+    practitionerVisible: true,
+    yogiVisible: true,
+    devoteeSelfIdentifiedVisible: true,
+    devoteeVerifiedVisible: true,
+  },
 ];
 
 async function main() {
@@ -136,9 +155,37 @@ async function main() {
         create: tag,
       });
     }
+    // Каталог Рынка фиксирован: разделы и категории заводит только сид и админ,
+    // поэтому upsert по slug безопасен — он освежает названия и порядок и
+    // никогда не трогает объявления, привязанные к категории.
+    const marketSectionIdBySlug = new Map();
+    for (const section of marketSections) {
+      const saved = await transaction.marketSection.upsert({
+        where: { slug: section.slug },
+        update: section,
+        create: section,
+      });
+      marketSectionIdBySlug.set(saved.slug, saved.id);
+    }
+    for (const category of marketCategories) {
+      const sectionId = marketSectionIdBySlug.get(category.sectionSlug);
+      if (!sectionId) {
+        throw new Error(
+          `market category "${category.slug}" references unknown section "${category.sectionSlug}"`,
+        );
+      }
+      const { sectionSlug, prohibited, ...fields } = category;
+      void sectionSlug;
+      void prohibited;
+      await transaction.marketCategory.upsert({
+        where: { sectionId_slug: { sectionId, slug: category.slug } },
+        update: fields,
+        create: { ...fields, sectionId },
+      });
+    }
   });
   console.log(
-    `Seeded ${services.length} services, ${librarySections.length} library sections and ${contactsTags.length} contacts tags`,
+    `Seeded ${services.length} services, ${librarySections.length} library sections, ${contactsTags.length} contacts tags, ${marketSections.length} market sections and ${marketCategories.length} market categories`,
   );
 }
 

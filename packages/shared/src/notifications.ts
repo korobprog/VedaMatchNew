@@ -39,6 +39,64 @@ export type NotificationEvent =
       recipientId: string;
       /** Готовая фраза дня — самодостаточна, подписчик её не переписывает. */
       excerpt: string;
+    }
+  | {
+      name: 'market.chat.message-sent';
+      recipientId: string;
+      senderName: string;
+      /** Полный текст: обрезает его модуль уведомлений, а не издатель. */
+      body: string;
+      conversationId: string;
+    }
+  | {
+      name: 'market.order.created';
+      recipientId: string;
+      buyerName: string;
+      orderId: string;
+      /** Человекочитаемый номер: «заявка №42» понятнее, чем uuid. */
+      orderNumber: number;
+      itemsCount: number;
+    }
+  | {
+      name: 'market.order.status-changed';
+      recipientId: string;
+      shopName: string;
+      orderId: string;
+      orderNumber: number;
+      /** Строковый литерал, а не импорт из market.ts: notifications.ts —
+       *  портальная инфраструктура и не должна зависеть от сервиса. */
+      status:
+        | 'new_request'
+        | 'accepted'
+        | 'in_progress'
+        | 'completed'
+        | 'declined_by_seller'
+        | 'cancelled_by_buyer';
+    }
+  | {
+      name: 'market.listing.published';
+      recipientId: string;
+      /** На что человек подписан: магазин, раздел или категория. */
+      sourceName: string;
+      listingTitle: string;
+      listingId: string;
+    }
+  | {
+      name: 'market.listing.price-dropped';
+      recipientId: string;
+      listingTitle: string;
+      listingId: string;
+      /** Минорные единицы: форматирование — забота слоя копирайта. */
+      priceMinor: number;
+      previousPriceMinor: number;
+      currency: 'rub' | 'usd' | 'eur' | 'inr';
+    }
+  | {
+      name: 'market.review.received';
+      recipientId: string;
+      authorName: string;
+      rating: number;
+      shopSlug: string;
     };
 
 /**
@@ -49,6 +107,36 @@ export type NotificationEvent =
  */
 export type NotificationEventName = NotificationEvent['name'];
 
+/** Категории совпадают с тумблерами в NotificationPreferencesDto. */
+export type NotificationCategory =
+  | 'chat'
+  | 'connections'
+  | 'support'
+  | 'transits'
+  | 'market';
+
+/** Уведомление в колокольчике. Живёт до прочтения, потом удаляется — это
+ *  список непрочитанного, а не архив. */
+export interface NotificationItemDto {
+  id: string;
+  title: string;
+  body: string;
+  /** Куда вести по клику. */
+  url: string;
+  category: NotificationCategory;
+  /** ISO-строка. */
+  createdAt: string;
+}
+
+export interface NotificationInboxResponse {
+  items: NotificationItemDto[];
+  unreadCount: number;
+}
+
+export interface NotificationUnreadCountResponse {
+  unreadCount: number;
+}
+
 export interface NotificationPreferencesDto {
   enabled: boolean;
   chat: boolean;
@@ -56,6 +144,10 @@ export interface NotificationPreferencesDto {
   support: boolean;
   /** Ежедневный персональный день по транзитам (сервис astro). */
   transits: boolean;
+  /** Заявки и их статусы на Рынке. Сообщения в чате Рынка сюда не входят —
+   *  они идут под общим тумблером `chat`: второй переключатель на то же
+   *  самое только путал бы. */
+  market: boolean;
 }
 
 export type UpdateNotificationPreferencesRequest =
