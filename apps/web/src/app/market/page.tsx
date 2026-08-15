@@ -15,7 +15,7 @@ import { filterLabels, navLabels } from "./labels";
 export const metadata: Metadata = {
   title: "Рынок — VedaMatch",
   description:
-    "Объявления и услуги от преданных: товары, книги, мастерские и помощь",
+    "Объявления и услуги в благости: товары, книги, мастерские и помощь",
 };
 
 export default async function MarketPage({
@@ -48,6 +48,7 @@ export default async function MarketPage({
           sections={sections ?? []}
           locale={locale}
           allLabel={t("filters.anySection")}
+          variant="tiles"
         />
         <ListingFilters labels={filterLabels(t)} categories={[]} locale={locale} />
 
