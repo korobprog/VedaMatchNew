@@ -208,7 +208,7 @@ export function ServiceGrid({
 
   return (
     <>
-      <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
         {displayed.map((service, index) => {
           const isDragged = dragId === service.id;
           return (
@@ -223,7 +223,7 @@ export function ServiceGrid({
                 isDragged ? "border-2 border-dashed border-cyan/70 bg-cyan/5" : ""
               }`}
             >
-              <div className="mb-1.5 flex items-center justify-end gap-1 px-1 sm:hidden">
+              <div className="mb-3 flex items-center justify-end gap-1 px-1 sm:hidden">
                 <button
                   type="button"
                   onClick={() => moveByStep(service.id, -1)}
