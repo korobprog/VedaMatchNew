@@ -79,7 +79,7 @@ export function MarketNav({
                   // Ужатый чип на телефоне, обычная вкладка с sm.
                   "px-2 py-1.5 text-xs sm:gap-1.5 sm:px-3 sm:py-2 sm:text-sm",
                   isActive
-                    ? "bg-glass-brd/50 text-text-0"
+                    ? "bg-glass-brd/50 font-semibold text-text-0"
                     : "text-text-2 hover:bg-glass-brd/30 hover:text-text-0",
                 ].join(" ")}
               >

@@ -15,7 +15,7 @@ import { filterLabels, navLabels } from "./labels";
 export const metadata: Metadata = {
   title: "Рынок — VedaMatch",
   description:
-    "Объявления и услуги в благости: товары, книги, мастерские и помощь",
+    "Объявления комерческие и услуги в благости: товары, книги, мастерские и помощь",
 };
 
 export default async function MarketPage({
