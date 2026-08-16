@@ -11,7 +11,11 @@ describe('MotivationService admin list', () => {
       motivationPreference: {
         findUnique: jest
           .fn()
-          .mockResolvedValue({ vaishnavaPercent: 50, language: 'ru' }),
+          .mockResolvedValue({
+            vaishnavaPercent: 50,
+            language: 'ru',
+            profileTypes: [],
+          }),
       },
       motivationPost,
     };
@@ -26,11 +30,12 @@ describe('MotivationService admin list', () => {
 
     expect(motivationPost.findMany).toHaveBeenCalledTimes(2);
     for (const [input] of motivationPost.findMany.mock.calls) {
+      // Настройки пустые, поэтому профиль берётся из самоидентификации.
       expect(input.where).toMatchObject({
         status: 'published',
         OR: [
-          { profileType: 'devotee' },
-          { quote: { profiles: { some: { profileType: 'devotee' } } } },
+          { profileType: { in: ['devotee'] } },
+          { quote: { profiles: { some: { profileType: { in: ['devotee'] } } } } },
         ],
       });
     }
@@ -164,6 +169,116 @@ describe('MotivationService admin list', () => {
       { id: 'quote-1' },
     ]);
     expect(discovery.discoverDaily).toHaveBeenCalledWith(date, 8);
+  });
+});
+
+describe('MotivationService feed profiles', () => {
+  function buildFeed(profileTypes: string[]) {
+    const motivationPost = { findMany: jest.fn().mockResolvedValue([]) };
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ spiritualStage: 'seeker' }),
+      },
+      motivationPreference: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ vaishnavaPercent: 50, language: 'ru', profileTypes }),
+      },
+      motivationPost,
+    };
+    const service = new MotivationService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    return { service, motivationPost };
+  }
+
+  it('uses the profiles picked in settings', async () => {
+    const { service, motivationPost } = buildFeed(['yogi', 'devotee']);
+
+    await service.feed('user-1', {});
+
+    for (const [input] of motivationPost.findMany.mock.calls)
+      expect(input.where.OR[0]).toEqual({
+        profileType: { in: ['yogi', 'devotee'] },
+      });
+  });
+
+  it('falls back to self-identification when nothing is picked', async () => {
+    // Пустой список — «выбора не делали», а не «показывать нечего».
+    const { service, motivationPost } = buildFeed([]);
+
+    await service.feed('user-1', {});
+
+    for (const [input] of motivationPost.findMany.mock.calls)
+      expect(input.where.OR[0]).toEqual({ profileType: { in: ['user'] } });
+  });
+});
+
+describe('MotivationService.savePreference', () => {
+  function buildService() {
+    const upsert = jest.fn().mockResolvedValue({});
+    const service = new MotivationService(
+      { motivationPreference: { upsert } } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    return { service, upsert };
+  }
+
+  it('stores the picked profiles without duplicates', async () => {
+    const { service, upsert } = buildService();
+
+    await service.savePreference('user-1', {
+      vaishnavaPercent: 40,
+      profileTypes: ['yogi', 'devotee', 'yogi'] as never,
+    });
+
+    expect(upsert.mock.calls[0][0].update.profileTypes).toEqual([
+      'yogi',
+      'devotee',
+    ]);
+  });
+
+  it('accepts an empty list as "follow my self-identification"', async () => {
+    const { service, upsert } = buildService();
+
+    await service.savePreference('user-1', {
+      vaishnavaPercent: 40,
+      profileTypes: [],
+    });
+
+    expect(upsert.mock.calls[0][0].update.profileTypes).toEqual([]);
+  });
+
+  it('rejects an unknown profile', async () => {
+    const { service } = buildService();
+
+    await expect(
+      service.savePreference('user-1', {
+        vaishnavaPercent: 40,
+        profileTypes: ['ghost'] as never,
+      }),
+    ).rejects.toThrow('Некорректные настройки');
+  });
+
+  it('leaves the profiles untouched when the field is absent', async () => {
+    const { service, upsert } = buildService();
+
+    await service.savePreference('user-1', { vaishnavaPercent: 40 });
+
+    expect(upsert.mock.calls[0][0].update).not.toHaveProperty('profileTypes');
   });
 });
 

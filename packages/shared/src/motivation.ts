@@ -68,8 +68,20 @@ export interface MotivationAdminCandidateDto extends MotivationAdminPostDto {
   textApprovedAt: string | null;
   imageApprovedAt: string | null;
 }
-export interface MotivationPreferenceDto { vaishnavaPercent: number; language: MotivationLanguage }
-export interface MotivationPreferenceUpdate { vaishnavaPercent: number; language?: MotivationLanguage }
+/**
+ * Настройки ленты. `profileTypes` — какие профили показывать; пустой список
+ * означает «как на самоидентификации», а не «ничего не показывать».
+ */
+export interface MotivationPreferenceDto {
+  vaishnavaPercent: number;
+  language: MotivationLanguage;
+  profileTypes: MotivationProfileType[];
+}
+export interface MotivationPreferenceUpdate {
+  vaishnavaPercent: number;
+  language?: MotivationLanguage;
+  profileTypes?: MotivationProfileType[];
+}
 export interface MotivationAdminUpdate { hidden?: boolean; category?: string; translations?: Partial<Record<MotivationLanguage, { title: string; text: string; storyText: string }>> }
 export interface MotivationApproveTextInput { visualStyle?: MotivationVisualStyle }
 export interface MotivationRejectInput { reason: string }

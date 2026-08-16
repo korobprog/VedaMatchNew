@@ -48,6 +48,12 @@ const stageProfiles: Record<SpiritualStage, MotivationProfileType> = {
   devotee: 'devotee',
 };
 const languages = new Set<MotivationLanguage>(['ru', 'en', 'hi']);
+const stageProfileValues: Record<MotivationProfileType, true> = {
+  user: true,
+  in_goodness: true,
+  yogi: true,
+  devotee: true,
+};
 
 @Injectable()
 export class MotivationService {
@@ -66,7 +72,7 @@ export class MotivationService {
     return (
       (await this.prisma.motivationPreference.findUnique({
         where: { userId },
-      })) ?? { vaishnavaPercent: 50, language: 'ru' }
+      })) ?? { vaishnavaPercent: 50, language: 'ru', profileTypes: [] }
     );
   }
   async savePreference(userId: string, input: MotivationPreferenceUpdate) {
@@ -77,18 +83,38 @@ export class MotivationService {
       (input.language && !languages.has(input.language))
     )
       throw new BadRequestException('Некорректные настройки');
+    const profileTypes = this.parseProfileTypes(input.profileTypes);
     return this.prisma.motivationPreference.upsert({
       where: { userId },
       create: {
         userId,
         vaishnavaPercent: input.vaishnavaPercent,
         language: input.language ?? 'ru',
+        profileTypes: profileTypes ?? [],
       },
       update: {
         vaishnavaPercent: input.vaishnavaPercent,
         ...(input.language ? { language: input.language } : {}),
+        ...(profileTypes ? { profileTypes } : {}),
       },
     });
+  }
+
+  /**
+   * Пустой список сохраняется как есть — это «как на самоидентификации».
+   * Снять все галочки и остаться без ленты нельзя: такой выбор трактуется так
+   * же, как отсутствие выбора.
+   */
+  private parseProfileTypes(
+    value: MotivationProfileType[] | undefined,
+  ): MotivationProfileType[] | undefined {
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value))
+      throw new BadRequestException('Некорректные настройки');
+    const unique = [...new Set(value)];
+    if (unique.some((profile) => !(profile in stageProfileValues)))
+      throw new BadRequestException('Некорректные настройки');
+    return unique;
   }
 
   async feed(
@@ -113,9 +139,16 @@ export class MotivationService {
         : 'ru';
     const cursor = decodeMotivationCursor(query.cursor),
       limit = Math.max(1, Math.min(50, query.limit ?? 20));
-    const profileType = stageProfiles[user.spiritualStage];
+    // Явный выбор в настройках важнее самоидентификации; пустой список
+    // означает, что выбора не делали.
+    const profileTypes = preference.profileTypes?.length
+      ? (preference.profileTypes as MotivationProfileType[])
+      : [stageProfiles[user.spiritualStage]];
     const where = {
-      OR: [{ profileType }, { quote: { profiles: { some: { profileType } } } }],
+      OR: [
+        { profileType: { in: profileTypes } },
+        { quote: { profiles: { some: { profileType: { in: profileTypes } } } } },
+      ],
       status: MotivationPostStatus.published,
       ...(query.category ? { category: query.category } : {}),
       ...(query.favorites ? { favorites: { some: { userId } } } : {}),

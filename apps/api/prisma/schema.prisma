@@ -451,6 +451,10 @@ model MotivationPreference {
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   vaishnavaPercent Int      @default(50)
   language         String   @default("ru") @db.VarChar(8)
+  /// Какие профили показывать в ленте. Пустой список — «как на
+  /// самоидентификации»: так у прежних пользователей ничего не меняется без
+  /// бэкфила, а осознанный выбор отличим от его отсутствия.
+  profileTypes     MotivationProfileType[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
