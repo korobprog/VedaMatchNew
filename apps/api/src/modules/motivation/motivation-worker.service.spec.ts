@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import sharp from 'sharp';
 import { MotivationWorkerService } from './motivation-worker.service';
 
 const approvedPost = {
@@ -13,6 +14,17 @@ const approvedPost = {
   attemptCount: 0,
   textApprovedAt: new Date('2026-07-13T10:00:00.000Z'),
   imagePrompt: 'Approved visual direction without any quoted text.',
+  attributionSpeaker: null,
+  attributionWork: null,
+  attributionLocator: null,
+  // Воркер тянет их ради подписи на сторис.
+  translations: [{ storyText: 'Не сдавайся на полпути.' }],
+  quote: {
+    originalText: 'Не сдавайся на полпути.',
+    author: 'Шрила Прабхупада',
+    work: 'Лиламрита',
+    locator: 'Глава 6',
+  },
 };
 
 function createWorker(overrides: Record<string, unknown> = {}) {
@@ -25,9 +37,10 @@ function createWorker(overrides: Record<string, unknown> = {}) {
   const prisma = { motivationPost, ...overrides };
   const generation = {
     generateApprovedImage: jest.fn().mockResolvedValue(Buffer.from('png')),
+    // URL из ключа: иначе обычная картинка и сторис неотличимы в проверках.
     uploadStory: jest
       .fn()
-      .mockResolvedValue('https://cdn.test/motivation/post.png'),
+      .mockImplementation(async (key: string) => `https://cdn.test/${key}`),
     generateCopy: jest.fn(),
     generateImage: jest.fn(),
   };
@@ -186,10 +199,57 @@ describe('MotivationWorkerService', () => {
         reviewStatus: 'image_review',
         status: 'draft',
         generationStage: 'image_review',
-        imageUrl: 'https://cdn.test/motivation/post.png',
+        imageUrl: expect.stringContaining('https://cdn.test/motivation/'),
       }),
     });
     expect((worker as unknown as { running: boolean }).running).toBe(false);
+  });
+
+  it('uploads the story frame as a separate file next to the plain image', async () => {
+    const { worker, motivationPost, generation } = createWorker();
+    // Настоящий PNG, иначе композит не соберётся и сработает откат.
+    generation.generateApprovedImage.mockResolvedValue(
+      await sharp({
+        create: {
+          width: 1024,
+          height: 1536,
+          channels: 3,
+          background: { r: 20, g: 20, b: 40 },
+        },
+      })
+        .png()
+        .toBuffer(),
+    );
+
+    await worker.tick();
+
+    const keys = generation.uploadStory.mock.calls.map(([key]) => key);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toMatch(/\/v\d+\.png$/);
+    expect(keys[1]).toMatch(/\/v\d+-story\.png$/);
+
+    const update = motivationPost.updateMany.mock.calls.find(
+      ([input]) => input.data.reviewStatus === 'image_review',
+    )?.[0];
+    expect(update.data.storyImageUrl).toMatch(/-story\.png$/);
+    expect(update.data.storyImageUrl).not.toBe(update.data.imageUrl);
+
+    // Кадр сторис вертикальнее исходных 2:3.
+    const [, storyBytes] = generation.uploadStory.mock.calls[1];
+    const meta = await sharp(storyBytes as Buffer).metadata();
+    expect(meta.width).toBe(1080);
+    expect(meta.height).toBe(1920);
+  });
+
+  it('falls back to the plain image when the story frame cannot be composed', async () => {
+    const { worker, motivationPost } = createWorker();
+
+    await worker.tick();
+
+    const update = motivationPost.updateMany.mock.calls.find(
+      ([input]) => input.data.reviewStatus === 'image_review',
+    )?.[0];
+    expect(update.data.storyImageUrl).toBe(update.data.imageUrl);
   });
 
   it('claims only approved image jobs and stops at image review', async () => {
@@ -228,8 +288,10 @@ describe('MotivationWorkerService', () => {
         reviewStatus: 'image_review',
         status: 'draft',
         generationStage: 'image_review',
-        imageUrl: 'https://cdn.test/motivation/post.png',
-        storyImageUrl: 'https://cdn.test/motivation/post.png',
+        imageUrl: expect.stringMatching(/\/v\d+\.png$/),
+        // Композит падает: `Buffer.from('png')` — не картинка. Проверяем, что
+        // пост из-за этого не срывается и кнопка получает рабочую ссылку.
+        storyImageUrl: expect.stringMatching(/\/v\d+\.png$/),
       }),
     });
     expect(imageReviewUpdate.data).not.toHaveProperty('publishedAt');

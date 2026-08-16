@@ -12,6 +12,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { MotivationCopyService } from './motivation-copy.service';
 import { QuoteDiscoveryService } from './quote-discovery.service';
+import { composeStoryImage } from './story-image';
 
 @Injectable()
 export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
@@ -219,7 +220,13 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async process(id: string) {
-    const post = await this.prisma.motivationPost.findUnique({ where: { id } });
+    const post = await this.prisma.motivationPost.findUnique({
+      where: { id },
+      include: {
+        translations: { where: { language: 'ru' }, take: 1 },
+        quote: true,
+      },
+    });
     if (
       !post ||
       post.reviewStatus !== MotivationReviewStatus.image_queued ||
@@ -239,6 +246,15 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
         `${baseKey}.png`,
         image,
       );
+      // Сторис — отдельный файл: тот же фон, докадрированный до 9:16, плюс
+      // текст и подпись. Раньше сюда клался тот же imageUrl, и «Скачать для
+      // Stories» отдавало картинку без единого слова.
+      // Если композит не удался, откатываемся на чистую картинку: кнопка
+      // «Скачать для Stories» должна остаться рабочей. Сам сбой логируется как
+      // ошибка — иначе пропавшие в образе шрифты молча вернули бы сторис без
+      // текста, ровно ту проблему, ради которой всё и делалось.
+      const storyImageUrl =
+        (await this.composeStory(post, image, baseKey)) ?? imageUrl;
       await this.prisma.motivationPost.updateMany({
         where: {
           id,
@@ -252,7 +268,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
           generationStage: 'image_review',
           generationErrorCode: null,
           imageUrl,
-          storyImageUrl: imageUrl,
+          storyImageUrl,
           modelVersion: 'responses:image_generation',
         },
       });
@@ -290,6 +306,51 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
         `Motivation image generation failed for ${id}`,
         error instanceof Error ? error.stack : undefined,
       );
+    }
+  }
+
+  /**
+   * Кадр для сторис. Если композит не удался — отдаём чистую картинку: пост
+   * из-за подписи срываться не должен, он уже сгенерирован и оплачен.
+   */
+  private async composeStory(
+    post: {
+      translations: Array<{ storyText: string }>;
+      quote: {
+        originalText: string;
+        author: string;
+        work: string;
+        locator: string;
+      } | null;
+      attributionSpeaker: string | null;
+      attributionWork: string | null;
+      attributionLocator: string | null;
+    },
+    image: Buffer,
+    baseKey: string,
+  ): Promise<string | undefined> {
+    const text =
+      post.translations[0]?.storyText?.trim() ||
+      post.quote?.originalText?.trim();
+    if (!text) return undefined;
+
+    const attribution = [
+      post.quote?.author ?? post.attributionSpeaker,
+      post.quote?.work ?? post.attributionWork,
+      post.quote?.locator ?? post.attributionLocator,
+    ]
+      .map((part) => part?.trim())
+      .filter(Boolean)
+      .join(' · ');
+
+    try {
+      const story = await composeStoryImage(image, { text, attribution });
+      return await this.generation.uploadStory(`${baseKey}-story.png`, story);
+    } catch (error) {
+      this.logger.error(
+        `Unable to compose Motivation story image: ${String(error)}`,
+      );
+      return undefined;
     }
   }
 }

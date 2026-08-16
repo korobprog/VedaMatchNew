@@ -75,7 +75,9 @@ export function MotivationPostCard({ post }: { post: MotivationPostDto }) {
             {favorite ? "★ В избранном" : "☆ В избранное"}
           </button>
           <button type="button" onClick={share} className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Поделиться</button>
-          <a href={post.storyImageUrl} download className="col-span-2 rounded-xl bg-amber-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-amber-700">Скачать для Stories</a>
+          {post.storyImageUrl && (
+            <a href={post.storyImageUrl} download className="col-span-2 rounded-xl bg-amber-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-amber-700">Скачать для Stories</a>
+          )}
           <Link href={`/m/${post.slug}`} className="col-span-2 rounded-xl px-4 py-2 text-center text-sm font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950">Открыть пост</Link>
         </div>
       </div>

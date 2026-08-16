@@ -22,6 +22,11 @@ RUN pnpm --filter @vedamatch/api deploy --prod /out
 
 FROM base AS runtime
 ENV NODE_ENV=production
+# Шрифты для подписи на сторис: sharp рисует текст через SVG, а в node:*-alpine
+# нет ни одного шрифта — кириллица вышла бы пустыми прямоугольниками. Noto взят
+# ради всех трёх языков постов сразу, включая деванагари.
+RUN apk add --no-cache fontconfig font-noto font-noto-devanagari \
+  && fc-cache -f
 COPY --from=build /out /app
 COPY --from=build /app/packages/shared /app/packages/shared
 COPY --from=build /app/apps/api/dist /app/dist
