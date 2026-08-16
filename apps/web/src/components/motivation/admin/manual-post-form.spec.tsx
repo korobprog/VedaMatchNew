@@ -109,6 +109,17 @@ describe("ManualPostForm", () => {
     });
   });
 
+  it("keeps the category field visible when the dictionary is empty", () => {
+    // Раньше поле просто исчезало, и пустой справочник было не отличить от
+    // несработавшей загрузки.
+    render(<ManualPostForm categories={[]} />);
+
+    expect(screen.getByLabelText("Категория")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Завести категорию" }),
+    ).toHaveAttribute("href", "/admin/motivation/categories");
+  });
+
   it("collects every chosen audience", async () => {
     const fetchMock = okFetch();
     const user = userEvent.setup();

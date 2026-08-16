@@ -273,16 +273,26 @@ export function ManualPostForm({
             Нейросеть здесь не участвует — что напишете, то и увидят читатели.
           </p>
           <div className="mt-3 space-y-4">
-            <label className={labelClass}>
-              <span>Заголовок</span>
-              <input
-                type="text"
-                aria-label="Заголовок"
-                value={form.title}
-                onChange={update("title")}
-                className={`mt-2 ${fieldClass}`}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className={labelClass}>
+                <span>Заголовок</span>
+                <input
+                  type="text"
+                  aria-label="Заголовок"
+                  value={form.title}
+                  onChange={update("title")}
+                  className={`mt-2 ${fieldClass}`}
+                />
+              </label>
+              {/* Категория стоит рядом с заголовком, а не в «Кому и когда»:
+                  внизу формы её не было видно без прокрутки. */}
+              <CategorySelect
+                categories={categories}
+                value={category}
+                disabled={pending}
+                onChange={setCategory}
               />
-            </label>
+            </div>
             <label className={labelClass}>
               <span>Пояснение</span>
               <textarea
@@ -410,14 +420,6 @@ export function ManualPostForm({
                   className={`mt-2 ${fieldClass}`}
                 />
               </label>
-              {categories.length > 0 && (
-                <CategorySelect
-                  categories={categories}
-                  value={category}
-                  disabled={pending}
-                  onChange={setCategory}
-                />
-              )}
               <label className={labelClass}>
                 <span>Стиль изображения</span>
                 <select

@@ -181,14 +181,12 @@ export function ManualQuoteForm({
           </label>
         </div>
 
-        {categories.length > 0 && (
-          <CategorySelect
-            categories={categories}
-            value={category}
-            disabled={pending}
-            onChange={setCategory}
-          />
-        )}
+        <CategorySelect
+          categories={categories}
+          value={category}
+          disabled={pending}
+          onChange={setCategory}
+        />
 
         <CollapsibleBlock title="Уточнить источник (необязательно)" tone="framed">
           <div className="grid gap-4 sm:grid-cols-2">

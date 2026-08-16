@@ -8,6 +8,7 @@ import type {
 } from "@vedamatch/shared";
 import { ArchiveList } from "./archive-list";
 import { ImageReviewCard } from "./image-review-card";
+import { LoadFailure } from "./load-failure";
 import { QuoteReviewCard } from "./quote-review-card";
 import {
   selectArchivedPosts,
@@ -47,13 +48,7 @@ export function QueueBoard({
     return () => window.clearInterval(timer);
   }, [posts, router]);
 
-  if (!posts) {
-    return (
-      <p className="rounded-xl border border-red-400/40 bg-red-500/10 p-4 text-red-500">
-        Не удалось загрузить публикации Motivation.
-      </p>
-    );
-  }
+  if (!posts) return <LoadFailure what="публикации Motivation" />;
 
   const textPosts = selectTextPosts(posts);
   const imagePosts = selectImagePosts(posts);

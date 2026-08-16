@@ -20,7 +20,12 @@ async function motivationGet<T>(path: string): Promise<T | null> {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
-  if (response.status === 401 || response.status === 404) return null;
+  // 403 приходит, когда роль в базе уже поднята до админской, а в выданном
+  // ранее токене она ещё старая: guard читает роль из JWT, а /profile — из БД,
+  // поэтому layout пускает на страницу, а эндпоинт отказывает. Токен
+  // перевыпустится сам, ронять при этом страницу незачем — отдаём null, и
+  // экран показывает свою заглушку.
+  if ([401, 403, 404].includes(response.status)) return null;
   if (!response.ok) throw new Error(`API ${path} failed: ${response.status}`);
   return (await response.json()) as T;
 }

@@ -159,6 +159,15 @@ describe("ManualQuoteForm", () => {
     expect(bodyOf(fetchMock).category).toBe("utro");
   });
 
+  it("keeps the category field visible when the dictionary is empty", () => {
+    render(<ManualQuoteForm />);
+
+    expect(screen.getByLabelText("Категория")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Завести категорию" }),
+    ).toHaveAttribute("href", "/admin/motivation/categories");
+  });
+
   it("shows an inline error when the API rejects the quote", async () => {
     vi.stubGlobal(
       "fetch",

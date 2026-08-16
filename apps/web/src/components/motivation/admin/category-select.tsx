@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { MotivationCategoryDto } from "@vedamatch/shared";
 import { fieldClass, labelClass } from "./ui";
 
@@ -55,6 +56,20 @@ export function CategorySelect({
           );
         })}
       </select>
+      {categories.length === 0 && (
+        // Молча прятать поле нельзя: пустой справочник и несработавшая загрузка
+        // выглядели бы одинаково — «выбора категорий просто нет».
+        <span className="mt-1 block text-xs font-normal text-text-2">
+          Справочник пуст или не загрузился.{" "}
+          <Link
+            href="/admin/motivation/categories"
+            className="text-cyan underline underline-offset-2"
+          >
+            Завести категорию
+          </Link>
+          . Без выбора цитата уйдёт в категорию по умолчанию.
+        </span>
+      )}
     </label>
   );
 }

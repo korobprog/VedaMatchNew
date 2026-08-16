@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CornerDownRight, Star } from "lucide-react";
 import type { MotivationCategoryDto } from "@vedamatch/shared";
+import { LoadFailure } from "./load-failure";
 import { useAdminCommand } from "./use-admin-command";
 import {
   cardClass,
@@ -184,13 +185,7 @@ export function CategoryManager({
   const { pending, errors, run } = useAdminCommand();
   const [openParent, setOpenParent] = useState<string | null>(null);
 
-  if (!categories) {
-    return (
-      <p className="rounded-xl border border-red-400/40 bg-red-500/10 p-4 text-red-500">
-        Не удалось загрузить категории.
-      </p>
-    );
-  }
+  if (!categories) return <LoadFailure what="категории" />;
 
   // Ключ формы подкатегории отличается от id родителя: иначе ошибка добавления
   // всплыла бы на самой строке родителя, у которой свои действия.
