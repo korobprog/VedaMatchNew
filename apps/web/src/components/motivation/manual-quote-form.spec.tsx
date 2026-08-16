@@ -74,6 +74,27 @@ describe("ManualQuoteForm", () => {
     expect(screen.getByLabelText("Текст цитаты (оригинал)")).toHaveValue("");
   });
 
+  it("confirms what happens next and links to the queue after adding", async () => {
+    okFetch();
+    const user = userEvent.setup();
+
+    render(<ManualQuoteForm />);
+    expect(screen.queryByRole("status")).toBeNull();
+
+    await user.type(screen.getByLabelText("Текст цитаты (оригинал)"), "Exact quote.");
+    await user.type(screen.getByLabelText("Автор"), "Author Name");
+    await user.click(screen.getByRole("button", { name: "Добавить в очередь" }));
+
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Цитата добавлена");
+    expect(status).toHaveTextContent("Author Name");
+    expect(status).toHaveTextContent("Нейросеть готовит пояснение и переводы.");
+    expect(screen.getByRole("link", { name: /Открыть очередь/ })).toHaveAttribute(
+      "href",
+      "/admin/motivation/queue",
+    );
+  });
+
   it("keeps the submit button disabled until text and author are present", async () => {
     const user = userEvent.setup();
     render(<ManualQuoteForm />);

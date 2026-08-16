@@ -251,6 +251,28 @@ export class MotivationService {
       },
     });
   }
+  /**
+   * Удаляет мотивацию вместе с её цитатой.
+   *
+   * Цитата уходит следом намеренно: `quoteId` у поста уникален, поэтому
+   * осиротевшая цитата ничего бы не показывала, но её `normalizedHash` и дальше
+   * блокировал бы повторное добавление того же текста — «удалил и не могу
+   * добавить заново» было бы ловушкой. Переводы, избранное, просмотры и аудит
+   * подхватываются каскадом.
+   */
+  async adminDelete(role: Role, id: string): Promise<void> {
+    this.admin(role);
+    const post = await this.prisma.motivationPost.findUnique({
+      where: { id },
+      select: { id: true, quoteId: true },
+    });
+    if (!post) throw new NotFoundException('Motivation post not found');
+    await this.prisma.$transaction(async (transaction) => {
+      await transaction.motivationPost.delete({ where: { id } });
+      if (post.quoteId)
+        await transaction.motivationQuote.delete({ where: { id: post.quoteId } });
+    });
+  }
   regenerate(role: Role, actorId: string, id: string) {
     return this.moderation.regenerateImage(role, actorId, id);
   }

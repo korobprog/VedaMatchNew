@@ -167,6 +167,71 @@ describe('MotivationService admin list', () => {
   });
 });
 
+describe('MotivationService.adminDelete', () => {
+  function buildService(post: { id: string; quoteId: string | null } | null) {
+    const transaction = {
+      motivationPost: { delete: jest.fn() },
+      motivationQuote: { delete: jest.fn() },
+    };
+    const prisma = {
+      motivationPost: { findUnique: jest.fn().mockResolvedValue(post) },
+      $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) =>
+        callback(transaction),
+      ),
+    };
+    const service = new MotivationService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    return { service, transaction };
+  }
+
+  it('removes the post together with its quote', async () => {
+    const { service, transaction } = buildService({
+      id: 'post-1',
+      quoteId: 'quote-1',
+    });
+
+    await service.adminDelete('admin', 'post-1');
+
+    expect(transaction.motivationPost.delete).toHaveBeenCalledWith({
+      where: { id: 'post-1' },
+    });
+    expect(transaction.motivationQuote.delete).toHaveBeenCalledWith({
+      where: { id: 'quote-1' },
+    });
+  });
+
+  it('removes a post that has no quote attached', async () => {
+    const { service, transaction } = buildService({ id: 'post-1', quoteId: null });
+
+    await service.adminDelete('admin', 'post-1');
+
+    expect(transaction.motivationPost.delete).toHaveBeenCalled();
+    expect(transaction.motivationQuote.delete).not.toHaveBeenCalled();
+  });
+
+  it('reports a missing post instead of deleting nothing quietly', async () => {
+    const { service } = buildService(null);
+
+    await expect(service.adminDelete('admin', 'ghost')).rejects.toThrow(
+      'Motivation post not found',
+    );
+  });
+
+  it('requires an admin or service-admin role', async () => {
+    const { service } = buildService({ id: 'post-1', quoteId: 'quote-1' });
+
+    await expect(service.adminDelete('user', 'post-1')).rejects.toThrow();
+  });
+});
+
 describe('MotivationService.addManualQuote', () => {
   const validInput = {
     originalText: 'Exact quote text here.',

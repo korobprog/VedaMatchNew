@@ -1,5 +1,6 @@
 import { MotivationAdminTabs } from "@/components/motivation/admin/admin-tabs";
 import { QueueBoard } from "@/components/motivation/admin/queue-board";
+import { countQueue } from "@/components/motivation/admin/queue-selectors";
 import {
   getAdminMotivationCategories,
   getAdminMotivationPosts,
@@ -17,7 +18,7 @@ export default async function AdminMotivationQueuePage() {
         Сначала проверьте цитату и пояснение. Изображение создаётся только после
         одобрения текста и публикуется отдельным подтверждением.
       </p>
-      <MotivationAdminTabs active="queue" queueCount={posts?.length} />
+      <MotivationAdminTabs active="queue" queueCount={posts ? countQueue(posts) : undefined} />
       <QueueBoard posts={posts} categories={categories ?? []} />
     </>
   );

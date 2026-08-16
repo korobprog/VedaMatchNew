@@ -6,28 +6,16 @@ import type {
   MotivationAdminCandidateDto,
   MotivationCategoryDto,
 } from "@vedamatch/shared";
+import { ArchiveList } from "./archive-list";
 import { ImageReviewCard } from "./image-review-card";
 import { QuoteReviewCard } from "./quote-review-card";
+import {
+  selectArchivedPosts,
+  selectImagePosts,
+  selectTextPosts,
+} from "./queue-selectors";
 import { useAdminCommand } from "./use-admin-command";
 import { cardClass, primaryButton } from "./ui";
-
-/** Ожидают проверки текста — включая упавшие до одобрения текста. */
-export function selectTextPosts(posts: MotivationAdminCandidateDto[]) {
-  return posts.filter(
-    (post) =>
-      ["discovered", "source_verified", "text_review"].includes(post.reviewStatus) ||
-      (post.reviewStatus === "failed" && !post.textApprovedAt),
-  );
-}
-
-/** Ожидают изображения — включая упавшие уже после одобрения текста. */
-export function selectImagePosts(posts: MotivationAdminCandidateDto[]) {
-  return posts.filter(
-    (post) =>
-      ["image_queued", "image_review"].includes(post.reviewStatus) ||
-      (post.reviewStatus === "failed" && Boolean(post.textApprovedAt)),
-  );
-}
 
 function StatTile({ label, value }: { label: string; value: number }) {
   return (
@@ -69,6 +57,7 @@ export function QueueBoard({
 
   const textPosts = selectTextPosts(posts);
   const imagePosts = selectImagePosts(posts);
+  const archivedPosts = selectArchivedPosts(posts);
   const failedCount = posts.filter((post) => post.reviewStatus === "failed").length;
 
   return (
@@ -149,6 +138,8 @@ export function QueueBoard({
           )}
         </div>
       </section>
+
+      <ArchiveList posts={archivedPosts} pending={pending} errors={errors} run={run} />
     </>
   );
 }

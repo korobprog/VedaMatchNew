@@ -8,6 +8,8 @@ import type {
 } from "@vedamatch/shared";
 import { CollapsibleBlock } from "../collapsible-block";
 import { CategorySelect } from "./category-select";
+import { DeletePostButton } from "./delete-post-button";
+import { PipelineStages } from "./pipeline-stages";
 import { QuoteDetails } from "./quote-details";
 import { ActionBar, RejectControl, StyleSelect } from "./review-actions";
 import { splitQuoteAndExplanation } from "../quote-text";
@@ -50,6 +52,8 @@ export function QuoteReviewCard({
           {canReview ? "Ожидает проверки текста" : post.reviewStatus}
         </span>
       </div>
+
+      <PipelineStages status={post.reviewStatus} className="mt-4" />
 
       <div className="mt-4">
         <QuoteDetails post={post} />
@@ -120,6 +124,16 @@ export function QuoteReviewCard({
           />
         </ActionBar>
       )}
+
+      <div className="mt-4 border-t border-glass-brd pt-4">
+        <DeletePostButton
+          postId={post.id}
+          title={post.title || post.slug}
+          isPublished={post.status === "published"}
+          pendingAction={pendingAction}
+          run={run}
+        />
+      </div>
     </article>
   );
 }

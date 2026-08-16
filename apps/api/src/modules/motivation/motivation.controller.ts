@@ -109,6 +109,14 @@ export class MotivationController {
   ) {
     return this.service.adminUpdate(user.role, id, input);
   }
+  @Delete('admin/motivation/posts/:id')
+  @UseGuards(AuthGuard)
+  adminDelete(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.service.adminDelete(user.role, id);
+  }
   @Post('admin/motivation/posts/:id/regenerate')
   @UseGuards(AuthGuard)
   regenerate(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {

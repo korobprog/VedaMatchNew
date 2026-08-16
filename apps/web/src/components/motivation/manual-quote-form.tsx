@@ -1,12 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
 import type { MotivationCategoryDto } from "@vedamatch/shared";
 import { apiRequest } from "./motivation-admin-api";
 import { CollapsibleBlock } from "./collapsible-block";
 import { CategorySelect } from "./admin/category-select";
-import { cardClass, fieldClass, labelClass, primaryButton } from "./admin/ui";
+import { PipelineStages } from "./admin/pipeline-stages";
+import {
+  cardClass,
+  fieldClass,
+  labelClass,
+  primaryButton,
+  secondaryButton,
+} from "./admin/ui";
 
 /**
  * Язык оригинала по алфавиту: кириллица — русский, деванагари — хинди, иначе
@@ -41,6 +50,7 @@ export function ManualQuoteForm({
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [added, setAdded] = useState<{ quote: string; author: string } | undefined>();
 
   // Обязательны только текст и автор — остальное уточняется по желанию.
   const requiredFilled = form.originalText.trim() && form.author.trim();
@@ -67,6 +77,7 @@ export function ManualQuoteForm({
   async function submit() {
     setPending(true);
     setError(undefined);
+    setAdded(undefined);
     try {
       await apiRequest("/admin/motivation/quotes", "POST", {
         originalText: form.originalText.trim(),
@@ -77,6 +88,10 @@ export function ManualQuoteForm({
         sourceUrl: form.sourceUrl.trim() || undefined,
         contextExcerpt: form.contextExcerpt.trim() || undefined,
         category: category || undefined,
+      });
+      setAdded({
+        quote: form.originalText.trim(),
+        author: form.author.trim(),
       });
       setForm(emptyForm);
       setLanguageTouched(false);
@@ -99,6 +114,29 @@ export function ManualQuoteForm({
         Достаточно текста и автора. Цитата попадёт в очередь «Цитаты и текст» — там
         нейросеть подготовит пояснение и переводы.
       </p>
+
+      {added && (
+        <div
+          role="status"
+          className="mt-4 rounded-xl border border-cyan/40 bg-cyan/10 p-4"
+        >
+          <p className="flex items-center gap-2 font-medium text-text-0">
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-cyan" />
+            Цитата добавлена
+          </p>
+          <p className="mt-1 line-clamp-2 text-sm text-text-1">
+            «{added.quote}» — {added.author}
+          </p>
+          <PipelineStages status="discovered" className="mt-3" />
+          <Link
+            href="/admin/motivation/queue"
+            className={`${secondaryButton} mt-3`}
+          >
+            Открыть очередь
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      )}
 
       <div className="mt-4 space-y-4">
         <label className={labelClass}>
