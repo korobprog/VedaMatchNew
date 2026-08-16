@@ -14,6 +14,8 @@ import type {
   MotivationAdminUpdate,
   MotivationApproveTextInput,
   MotivationAuthorWatchInput,
+  MotivationCategoryInput,
+  MotivationCategoryUpdate,
   MotivationLanguage,
   MotivationManualQuoteInput,
   MotivationPreferenceUpdate,
@@ -22,11 +24,15 @@ import type {
   MotivationSourceWatchInput,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationService } from './motivation.service';
 
 @Controller()
 export class MotivationController {
-  constructor(private readonly service: MotivationService) {}
+  constructor(
+    private readonly service: MotivationService,
+    private readonly categories: MotivationCategoriesService,
+  ) {}
 
   @Get('health') health() {
     return { status: 'ok' };
@@ -164,6 +170,37 @@ export class MotivationController {
     @Body() input: MotivationManualQuoteInput,
   ) {
     return this.service.addManualQuote(user.role, input);
+  }
+
+  @Get('admin/motivation/categories')
+  @UseGuards(AuthGuard)
+  listCategories(@CurrentUser() user: AccessTokenPayload) {
+    return this.categories.list(user.role);
+  }
+  @Post('admin/motivation/categories')
+  @UseGuards(AuthGuard)
+  createCategory(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() input: MotivationCategoryInput,
+  ) {
+    return this.categories.create(user.role, input);
+  }
+  @Patch('admin/motivation/categories/:id')
+  @UseGuards(AuthGuard)
+  updateCategory(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() input: MotivationCategoryUpdate,
+  ) {
+    return this.categories.update(user.role, id, input);
+  }
+  @Delete('admin/motivation/categories/:id')
+  @UseGuards(AuthGuard)
+  deleteCategory(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.categories.remove(user.role, id);
   }
 
   @Get('admin/motivation/authors')

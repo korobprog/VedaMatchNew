@@ -188,6 +188,9 @@ describe('MotivationService.addManualQuote', () => {
       };
     const copy =
       overrides.copy ?? { prepareCandidate: jest.fn().mockResolvedValue({ id: 'post-1' }) };
+    const categories = {
+      resolveSlug: jest.fn().mockResolvedValue('verified_quote'),
+    };
     const service = new MotivationService(
       prisma as never,
       {} as never,
@@ -196,8 +199,14 @@ describe('MotivationService.addManualQuote', () => {
       {} as never,
       {} as never,
       copy as never,
+      categories as never,
     );
-    return { service, prisma: prisma as never, copy: copy as never };
+    return {
+      service,
+      prisma: prisma as never,
+      copy: copy as never,
+      categories,
+    };
   }
 
   it('creates a verified manual quote and hands it to the copy pipeline', async () => {
@@ -226,7 +235,46 @@ describe('MotivationService.addManualQuote', () => {
     });
     expect(
       (copy as { prepareCandidate: jest.Mock }).prepareCandidate,
-    ).toHaveBeenCalledWith('quote-1');
+    ).toHaveBeenCalledWith('quote-1', 'verified_quote');
+  });
+
+  it('stores empty strings for the optional attribution fields', async () => {
+    const { service, prisma, copy } = buildService();
+
+    await service.addManualQuote('admin', {
+      originalText: 'Only the essentials.',
+      originalLanguage: 'ru',
+      author: 'Author Name',
+    });
+
+    expect(
+      (prisma as { motivationQuote: { create: jest.Mock } }).motivationQuote.create,
+    ).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        work: '',
+        locator: '',
+        contextExcerpt: '',
+        sourceUrl: null,
+      }),
+    });
+    expect(
+      (copy as { prepareCandidate: jest.Mock }).prepareCandidate,
+    ).toHaveBeenCalled();
+  });
+
+  it('routes the chosen category through the dictionary', async () => {
+    const { service, categories, copy } = buildService();
+    categories.resolveSlug.mockResolvedValue('smirenie');
+
+    await service.addManualQuote('admin', {
+      ...validInput,
+      category: 'smirenie',
+    });
+
+    expect(categories.resolveSlug).toHaveBeenCalledWith('smirenie');
+    expect(
+      (copy as { prepareCandidate: jest.Mock }).prepareCandidate,
+    ).toHaveBeenCalledWith('quote-1', 'smirenie');
   });
 
   it('trims input and stores an optional source URL', async () => {
@@ -270,7 +318,7 @@ describe('MotivationService.addManualQuote', () => {
 
     await expect(
       service.addManualQuote('admin', { ...validInput, author: '   ' }),
-    ).rejects.toThrow('All quote fields except source URL are required');
+    ).rejects.toThrow('Quote text, language and author are required');
   });
 
   it('requires an admin or service-admin role', async () => {

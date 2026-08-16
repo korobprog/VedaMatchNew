@@ -18,7 +18,7 @@ describe('MotivationController moderation endpoints', () => {
       regenerateModerationImage: jest.fn(),
       regenerate: jest.fn(),
     };
-    const controller = new MotivationController(service as never);
+    const controller = new MotivationController(service as never, {} as never);
 
     await controller.approveText(user, 'post-1', {
       visualStyle: 'warm_documentary',

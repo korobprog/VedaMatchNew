@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import type {
   MotivationAuthorWatchDto,
+  MotivationCategoryDto,
   MotivationFeedResponse,
   MotivationAdminCandidateDto,
   MotivationPostDto,
@@ -52,3 +53,6 @@ export const getAdminMotivationAuthorWatches = () =>
 
 export const getAdminMotivationSourceWatches = () =>
   motivationGet<MotivationSourceWatchDto[]>("/admin/motivation/sources");
+
+export const getAdminMotivationCategories = () =>
+  motivationGet<MotivationCategoryDto[]>("/admin/motivation/categories");

@@ -157,8 +157,14 @@ export class MotivationGenerationService {
       'Return strict JSON with this shape: {"originalText":"...","profileTypes":["user"],"explanation":"...","translations":{"ru":{"quoteText":"...","translationKind":"official|vedamatch","label":null,"title":"...","explanation":"...","storyText":"..."},"en":{"quoteText":"...","translationKind":"official|vedamatch","label":"Перевод VedaMatch","title":"...","explanation":"...","storyText":"..."},"hi":{"quoteText":"...","translationKind":"official|vedamatch","label":"Перевод VedaMatch","title":"...","explanation":"...","storyText":"..."}}}.',
       `Verified originalText: ${JSON.stringify(input.originalText)}`,
       `Original language: ${input.originalLanguage}`,
-      `Attribution: ${input.author}; ${input.work}; ${input.locator}`,
-      `Verified context: ${input.contextExcerpt}`,
+      // Произведение, локатор и контекст необязательны при ручном вводе.
+      // Пустые части выбрасываются, иначе модель получает "Attribution: X; ; ".
+      `Attribution: ${[input.author, input.work, input.locator]
+        .filter((part) => part.trim())
+        .join('; ')}`,
+      input.contextExcerpt.trim()
+        ? `Verified context: ${input.contextExcerpt}`
+        : 'No surrounding context was supplied. Base the explanation only on the quotation itself.',
     ].join('\n');
     return this.requestStructuredChat(prompt) as Promise<VerifiedQuoteCopy>;
   }

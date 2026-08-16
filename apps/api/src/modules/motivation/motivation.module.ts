@@ -8,6 +8,7 @@ import { MotivationWorkerService } from './motivation-worker.service';
 import { QuoteVerificationService } from './quote-verification.service';
 import { ApprovedWebSourceService } from './approved-web-source.service';
 import { QuoteDiscoveryService } from './quote-discovery.service';
+import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationCopyService } from './motivation-copy.service';
 import { MotivationModerationService } from './motivation-moderation.service';
 import { MotivationAuthorSearchService } from './motivation-author-search.service';
@@ -23,6 +24,7 @@ import { MotivationSourceFetchService } from './motivation-source-fetch.service'
     QuoteVerificationService,
     ApprovedWebSourceService,
     QuoteDiscoveryService,
+    MotivationCategoriesService,
     MotivationCopyService,
     MotivationModerationService,
     MotivationAuthorSearchService,
@@ -33,6 +35,7 @@ import { MotivationSourceFetchService } from './motivation-source-fetch.service'
     MotivationGenerationService,
     QuoteVerificationService,
     QuoteDiscoveryService,
+    MotivationCategoriesService,
     MotivationCopyService,
     MotivationModerationService,
   ],

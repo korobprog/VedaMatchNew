@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { MotivationPostDto } from "@vedamatch/shared";
+import { CollapsibleBlock } from "./collapsible-block";
+import { splitQuoteAndExplanation } from "./quote-text";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -11,6 +13,7 @@ const trackLabels = { universal: "Мудрость мира", vaishnava: "Вай
 export function MotivationPostCard({ post }: { post: MotivationPostDto }) {
   const [favorite, setFavorite] = useState(post.isFavorite);
   const [pending, setPending] = useState(false);
+  const { quote, explanation } = splitQuoteAndExplanation(post.text);
 
   async function toggleFavorite() {
     setPending(true);
@@ -50,7 +53,16 @@ export function MotivationPostCard({ post }: { post: MotivationPostDto }) {
           <span className="text-zinc-500">{post.category}</span>
         </div>
         <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{post.title}</h2>
-        <p className="mt-3 whitespace-pre-line leading-7 text-zinc-700 dark:text-zinc-300">{post.text}</p>
+        <p className="mt-3 whitespace-pre-line leading-7 text-zinc-700 dark:text-zinc-300">{quote}</p>
+        {explanation && (
+          <div className="mt-3">
+            <CollapsibleBlock title="Пояснение">
+              <p className="whitespace-pre-line leading-7 text-zinc-700 dark:text-zinc-300">
+                {explanation}
+              </p>
+            </CollapsibleBlock>
+          </div>
+        )}
         {post.attributionSpeaker && (
           <p className="mt-4 border-l-2 border-amber-400 pl-3 text-sm text-zinc-500">
             {post.attributionSpeaker}

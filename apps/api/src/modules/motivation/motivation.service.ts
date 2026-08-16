@@ -32,6 +32,7 @@ import {
   weightedPage,
 } from './motivation-feed';
 import { MotivationAuthorSearchService } from './motivation-author-search.service';
+import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationCopyService } from './motivation-copy.service';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { MotivationSourceFetchService } from './motivation-source-fetch.service';
@@ -58,6 +59,7 @@ export class MotivationService {
     private readonly authorSearch: MotivationAuthorSearchService,
     private readonly sourceFetch: MotivationSourceFetchService,
     private readonly copy: MotivationCopyService,
+    private readonly categories: MotivationCategoriesService,
   ) {}
 
   async preference(userId: string) {
@@ -243,7 +245,9 @@ export class MotivationService {
         ...(input.hidden !== undefined
           ? { status: input.hidden ? 'hidden' : 'published' }
           : {}),
-        ...(input.category ? { category: input.category.trim() } : {}),
+        ...(input.category
+          ? { category: await this.categories.resolveSlug(input.category) }
+          : {}),
       },
     });
   }
@@ -357,21 +361,17 @@ export class MotivationService {
     const originalText = input.originalText?.trim();
     const originalLanguage = input.originalLanguage?.trim();
     const author = input.author?.trim();
-    const work = input.work?.trim();
-    const locator = input.locator?.trim();
-    const contextExcerpt = input.contextExcerpt?.trim();
-    if (
-      !originalText ||
-      !originalLanguage ||
-      !author ||
-      !work ||
-      !locator ||
-      !contextExcerpt
-    ) {
+    if (!originalText || !originalLanguage || !author) {
       throw new BadRequestException(
-        'All quote fields except source URL are required',
+        'Quote text, language and author are required',
       );
     }
+    // Произведение, глава/стих и контекст необязательны: колонки в БД
+    // остаются NOT NULL, недостающее пишется пустой строкой.
+    const work = input.work?.trim() ?? '';
+    const locator = input.locator?.trim() ?? '';
+    const contextExcerpt = input.contextExcerpt?.trim() ?? '';
+    const category = await this.categories.resolveSlug(input.category);
     const normalizedHash = quoteFingerprint(originalText);
     const existing = await this.prisma.motivationQuote.findUnique({
       where: { normalizedHash },
@@ -396,7 +396,7 @@ export class MotivationService {
         discoveryDate: null,
       },
     });
-    const post = await this.copy.prepareCandidate(quote.id);
+    const post = await this.copy.prepareCandidate(quote.id, category);
     return { quoteId: quote.id, postId: post.id };
   }
   async deleteSourceWatch(role: Role, id: string): Promise<void> {

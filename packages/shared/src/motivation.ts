@@ -97,14 +97,37 @@ export interface MotivationSourceWatchDto {
 }
 export interface MotivationSourceWatchInput { url: string; label?: string }
 
+/**
+ * Категория справочника. Вложенность ровно в два уровня: у категории верхнего
+ * уровня `parentId === null`, у подкатегории он указывает на неё.
+ */
+export interface MotivationCategoryDto {
+  id: string;
+  slug: string;
+  title: string;
+  sortOrder: number;
+  isDefault: boolean;
+  parentId: string | null;
+  postCount: number;
+}
+export interface MotivationCategoryInput { title: string; parentId?: string | null }
+export interface MotivationCategoryUpdate {
+  title?: string;
+  sortOrder?: number;
+  isDefault?: boolean;
+  parentId?: string | null;
+}
+
+/** Обязательны только текст и автор — остальное уточняется по желанию. */
 export interface MotivationManualQuoteInput {
   originalText: string;
   originalLanguage: string;
   author: string;
-  work: string;
-  locator: string;
+  work?: string;
+  locator?: string;
   sourceUrl?: string;
-  contextExcerpt: string;
+  contextExcerpt?: string;
+  category?: string;
 }
 export interface MotivationManualQuoteResult {
   quoteId: string;

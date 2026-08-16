@@ -9,6 +9,7 @@ import {
   MotivationTranslationKind,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MotivationCategoriesService } from './motivation-categories.service';
 import {
   MotivationGenerationService,
   type VerifiedQuoteCopy,
@@ -22,9 +23,11 @@ export class MotivationCopyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly generation: MotivationGenerationService,
+    private readonly categories: MotivationCategoriesService,
   ) {}
 
-  async prepareCandidate(quoteId: string) {
+  /** @param category слаг из справочника; без него берётся дефолтная категория. */
+  async prepareCandidate(quoteId: string, category?: string) {
     const existingPost = await this.prisma.motivationPost.findUnique({
       where: { quoteId },
     });
@@ -57,6 +60,7 @@ export class MotivationCopyService {
       quote.sourceType === 'vedamatch_library'
         ? MotivationAudienceTrack.vaishnava
         : MotivationAudienceTrack.universal;
+    const categorySlug = category ?? (await this.categories.defaultSlug());
 
     return this.prisma.$transaction(async (transaction) => {
       await transaction.motivationQuoteTranslation.deleteMany({
@@ -91,7 +95,7 @@ export class MotivationCopyService {
           profileType,
           audienceTrack,
           slug: `quote-${quoteId}`,
-          category: 'verified_quote',
+          category: categorySlug,
           status: 'draft',
           reviewStatus: 'text_review',
           sourceVerified: true,

@@ -76,11 +76,19 @@ describe('MotivationCopyService', () => {
       generateVerifiedQuoteCopy: jest.fn().mockResolvedValue(copy),
       generateImage: jest.fn(),
     };
+    const categories = {
+      defaultSlug: jest.fn().mockResolvedValue('verified_quote'),
+    };
     return {
-      service: new MotivationCopyService(prisma as never, generation as never),
+      service: new MotivationCopyService(
+        prisma as never,
+        generation as never,
+        categories as never,
+      ),
       prisma,
       transaction,
       generation,
+      categories,
     };
   }
 

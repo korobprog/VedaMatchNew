@@ -390,6 +390,29 @@ model MotivationPost {
   @@index([quoteId])
 }
 
+/// Справочник категорий Motivation. `MotivationPost.category` хранит `slug`
+/// строкой, а не FK: так сохраняются индекс `[category, status, publishedAt]`
+/// и фильтр ленты `?category=`, а удаление категории не трогает посты.
+///
+/// Вложенность ровно в два уровня: у подкатегории `parentId` указывает на
+/// категорию верхнего уровня, у которой `parentId` всегда null. Глубже нельзя —
+/// правило держит `MotivationCategoriesService`.
+model MotivationCategory {
+  id        String               @id @default(uuid())
+  slug      String               @unique
+  title     String
+  sortOrder Int                  @default(0)
+  isDefault Boolean              @default(false)
+  parentId  String?
+  parent    MotivationCategory?  @relation("MotivationCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  MotivationCategory[] @relation("MotivationCategoryTree")
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([sortOrder])
+  @@index([parentId])
+}
+
 model MotivationModerationAudit {
   id        String         @id @default(uuid())
   postId    String
