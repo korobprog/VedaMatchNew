@@ -8,5 +8,12 @@ export async function apiRequest(path: string, method: string, body?: unknown) {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) throw new Error((await response.text()) || `Ошибка API ${response.status}`);
-  return response.status === 204 ? null : response.json();
+
+  // Nest на хендлере, возвращающем void (удаление поста, автора, источника,
+  // категории), отвечает 200 с пустым телом, а не 204 — поэтому смотрим на само
+  // тело, а не на код. Иначе `.json()` падает с «Unexpected end of JSON input»,
+  // хотя запрос уже отработал.
+  const text = await response.text();
+  if (!text) return null;
+  return JSON.parse(text);
 }

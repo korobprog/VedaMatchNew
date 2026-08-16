@@ -26,10 +26,12 @@ const child: MotivationCategoryDto = {
   postCount: 0,
 };
 
+// Пустое тело, как у Nest на void-хендлере: стаб с готовым json() скрывал
+// падение .json() на удалении.
 function okFetch() {
   const fetchMock = vi
     .fn()
-    .mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    .mockResolvedValue({ ok: true, status: 200, text: async () => "" });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }

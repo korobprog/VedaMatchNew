@@ -32,7 +32,7 @@ function okFetch() {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
-    json: async () => ({ quoteId: "quote-1", postId: "post-1" }),
+    text: async () => JSON.stringify({ quoteId: "quote-1", postId: "post-1" }),
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
