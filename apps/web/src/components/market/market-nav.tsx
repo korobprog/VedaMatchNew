@@ -75,11 +75,11 @@ export function MarketNav({
                 aria-label={label}
                 title={label}
                 className={[
-                  "inline-flex items-center gap-1 rounded-xl border transition-colors",
+                  "inline-flex items-center gap-1 rounded-xl border font-semibold transition-colors",
                   // Ужатый чип на телефоне, обычная вкладка с sm.
                   "px-2 py-1.5 text-xs sm:gap-1.5 sm:px-3 sm:py-2 sm:text-sm",
                   isActive
-                    ? "border-magenta/40 bg-magenta/10 font-semibold text-magenta"
+                    ? "border-transparent bg-gradient-to-r from-magenta to-[#B23EFF] text-white shadow-[0_0_16px_rgba(219,27,132,0.35)]"
                     : "border-transparent text-text-2 hover:bg-glass-brd/30 hover:text-text-0",
                 ].join(" ")}
               >
