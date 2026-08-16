@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import type { UserProfile } from "@vedamatch/shared";
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -96,6 +97,10 @@ function LogoutItem() {
 
 export function Header({ user }: { user: UserProfile }) {
   const [isOpen, setIsOpen] = useState(false);
+  // Корзина принадлежит «Рынку»: на Джйотише или в Книгах она сбивает с толку,
+  // да и опрашивать счётчик там незачем.
+  const pathname = usePathname();
+  const inMarket = pathname === "/market" || pathname.startsWith("/market/");
 
   return (
     <>
@@ -144,7 +149,7 @@ export function Header({ user }: { user: UserProfile }) {
           <div className="flex items-center gap-2">
             {/* Виден и на мобильном: это основной вход в уведомления,
                 прятать его в бургер — значит прятать и значок. */}
-            <CartBadge />
+            {inMarket && <CartBadge />}
             <NotificationBell />
             <LocaleToggle className="hidden sm:flex" />
             <ThemeToggle className="hidden sm:flex" />

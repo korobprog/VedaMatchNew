@@ -97,6 +97,9 @@
 
   --vm-orb-opacity: 0.2;
   --vm-noise-opacity: 0.02;
+  /* На светлом фоне те же акценты темнее и читаются сильнее — кромка тише. */
+  --vm-edge-opacity: 0.28;
+  --vm-edge-opacity-hover: 0.7;
   --vm-scrollbar-track: rgba(74, 44, 122, 0.06);
 }
 
@@ -131,6 +134,8 @@
 
   --vm-orb-opacity: 0.4;
   --vm-noise-opacity: 0.03;
+  --vm-edge-opacity: 0.45;
+  --vm-edge-opacity-hover: 0.9;
   --vm-scrollbar-track: var(--vm-bg-1);
 }
 
@@ -167,6 +172,8 @@
 
     --vm-orb-opacity: 0.4;
     --vm-noise-opacity: 0.03;
+    --vm-edge-opacity: 0.45;
+    --vm-edge-opacity-hover: 0.9;
     --vm-scrollbar-track: #150C24;
   }
 }
@@ -299,6 +306,47 @@ body {
   backdrop-filter: blur(16px) saturate(120%);
   -webkit-backdrop-filter: blur(16px) saturate(120%);
   border: 1px solid var(--vm-glass-light-brd);
+}
+
+/**
+ * Градиентная кромка в фирменных цветах.
+ *
+ * Псевдоэлемент с mask-composite, а не border-image: рамка должна повторять
+ * border-radius карточки и не закрашивать стекло под собой. Собственную рамку
+ * гасим до прозрачной, но не убираем — она держит те же 1px в раскладке.
+ */
+.glass-edge {
+  position: relative;
+  border-color: transparent;
+}
+
+.glass-edge::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    var(--vm-magenta) 0%,
+    #b23eff 45%,
+    var(--vm-cyan) 100%
+  );
+  opacity: var(--vm-edge-opacity, 0.4);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.glass-edge:hover::before {
+  opacity: var(--vm-edge-opacity-hover, 0.85);
 }
 
 /* Neon glow utilities */

@@ -24,8 +24,10 @@ export function ServiceCard({
 
   return (
     <div
-      className={`group flex h-full flex-col rounded-2xl glass border p-4 transition-all duration-300 hover:-translate-y-1 hover:border-magenta/30 hover:shadow-[0_0_20px_rgba(255,62,158,0.15)] sm:p-5 ${
-        isPinned ? "border-gold/50 shadow-[0_0_20px_rgba(250,204,21,0.12)]" : "border-glass-brd"
+      className={`group flex h-full flex-col rounded-2xl glass border p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_24px_rgba(255,62,158,0.18)] sm:p-5 ${
+        isPinned
+          ? "border-gold/50 shadow-[0_0_20px_rgba(250,204,21,0.12)]"
+          : "glass-edge"
       }`}
     >
       <div className="mb-3 flex items-center gap-3">
