@@ -24,11 +24,11 @@ export function ServiceCard({
 
   return (
     <div
-      className={`group flex h-full flex-col rounded-2xl glass border p-6 transition-all duration-300 hover:-translate-y-1 hover:border-magenta/30 hover:shadow-[0_0_20px_rgba(255,62,158,0.15)] ${
+      className={`group flex h-full flex-col rounded-2xl glass border p-4 transition-all duration-300 hover:-translate-y-1 hover:border-magenta/30 hover:shadow-[0_0_20px_rgba(255,62,158,0.15)] sm:p-5 ${
         isPinned ? "border-gold/50 shadow-[0_0_20px_rgba(250,204,21,0.12)]" : "border-glass-brd"
       }`}
     >
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-3 flex items-center gap-3">
         {dragHandleProps && (
           <span
             {...dragHandleProps}
@@ -84,7 +84,7 @@ export function ServiceCard({
           </button>
         )}
       </div>
-      <p className="mb-6 flex-1 text-sm text-text-1">
+      <p className="mb-4 flex-1 text-sm text-text-1">
         {service.description}
       </p>
       {extra}

@@ -63,6 +63,13 @@ export function ServiceGrid({
   const [pinnedId, setPinnedId] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [visual, setVisual] = useState<DragVisual | null>(null);
+  /**
+   * Режим перестановки. Стрелки на телефоне занимают по 44px над каждой
+   * карточкой, а нужны они раз в сто заходов — поэтому они не висят всегда,
+   * а включаются кнопкой и рендерятся условно: спрятать их через `hidden`
+   * значило бы оставить место занятым.
+   */
+  const [reordering, setReordering] = useState(false);
 
   const slotRefs = useRef(new Map<string, HTMLDivElement | null>());
   // Порядок читается из обработчиков окна, которые живут дольше одного рендера.
@@ -208,7 +215,24 @@ export function ServiceGrid({
 
   return (
     <>
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
+      {/* Перестановка нужна редко, поэтому переключатель тихий и только там,
+          где нет перетаскивания мышью. */}
+      <div className="mb-3 flex justify-end sm:hidden">
+        <button
+          type="button"
+          onClick={() => setReordering((on) => !on)}
+          aria-pressed={reordering}
+          className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${
+            reordering
+              ? "border-cyan/40 bg-cyan/10 text-cyan"
+              : "border-glass-brd text-text-2 hover:text-text-0"
+          }`}
+        >
+          {reordering ? "Готово" : "Изменить порядок"}
+        </button>
+      </div>
+
+      <section className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 lg:gap-4">
         {displayed.map((service, index) => {
           const isDragged = dragId === service.id;
           return (
@@ -223,26 +247,28 @@ export function ServiceGrid({
                 isDragged ? "border-2 border-dashed border-cyan/70 bg-cyan/5" : ""
               }`}
             >
-              <div className="mb-3 flex items-center justify-end gap-1 px-1 sm:hidden">
-                <button
-                  type="button"
-                  onClick={() => moveByStep(service.id, -1)}
-                  disabled={index === 0}
-                  aria-label="Переместить выше"
-                  className="rounded-lg p-1 text-text-2 hover:text-text-0 disabled:opacity-30"
-                >
-                  ▲
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveByStep(service.id, 1)}
-                  disabled={index === displayed.length - 1}
-                  aria-label="Переместить ниже"
-                  className="rounded-lg p-1 text-text-2 hover:text-text-0 disabled:opacity-30"
-                >
-                  ▼
-                </button>
-              </div>
+              {reordering && (
+                <div className="mb-2 flex items-center justify-end gap-1 px-1 sm:hidden">
+                  <button
+                    type="button"
+                    onClick={() => moveByStep(service.id, -1)}
+                    disabled={index === 0}
+                    aria-label="Переместить выше"
+                    className="rounded-lg p-1 text-text-2 hover:text-text-0 disabled:opacity-30"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveByStep(service.id, 1)}
+                    disabled={index === displayed.length - 1}
+                    aria-label="Переместить ниже"
+                    className="rounded-lg p-1 text-text-2 hover:text-text-0 disabled:opacity-30"
+                  >
+                    ▼
+                  </button>
+                </div>
+              )}
               {/* Карточку не размонтируем: её размеры держат пустой слот ровно того же размера. */}
               <div className={isDragged ? "invisible" : undefined}>
                 <ServiceCard
