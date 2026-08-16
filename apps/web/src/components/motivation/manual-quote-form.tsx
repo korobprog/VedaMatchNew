@@ -53,7 +53,11 @@ export function ManualQuoteForm({
   const [added, setAdded] = useState<{ quote: string; author: string } | undefined>();
 
   // Обязательны только текст и автор — остальное уточняется по желанию.
-  const requiredFilled = form.originalText.trim() && form.author.trim();
+  const missing = [
+    !form.originalText.trim() && "текст цитаты",
+    !form.author.trim() && "автор",
+  ].filter((item): item is string => Boolean(item));
+  const requiredFilled = missing.length === 0;
 
   function update(field: keyof typeof form) {
     return (
@@ -241,6 +245,11 @@ export function ManualQuoteForm({
       {error && (
         <p role="alert" className="mt-3 text-sm font-medium text-red-500">
           {error}
+        </p>
+      )}
+      {!requiredFilled && (
+        <p className="mt-4 rounded-xl border border-gold/40 bg-gold/10 p-3 text-sm text-text-1">
+          Осталось заполнить: {missing.join(", ")}.
         </p>
       )}
       <button

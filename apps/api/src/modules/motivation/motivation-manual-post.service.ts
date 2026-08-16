@@ -54,8 +54,8 @@ export class MotivationManualPostService {
       throw new BadRequestException('Quote text and author are required');
 
     const copy = this.copy(input.copy, 'copy');
-    if (!copy.title || !copy.explanation)
-      throw new BadRequestException('Title and explanation are required');
+    // Пояснение необязательно: иногда цитата говорит сама за себя.
+    if (!copy.title) throw new BadRequestException('Title is required');
 
     const profileTypes = this.profileTypes(input.profileTypes);
     const audienceTrack = this.audienceTrack(input.audienceTrack);
@@ -141,9 +141,14 @@ export class MotivationManualPostService {
                 language,
                 title: localized.title,
                 // Та же склейка, что и в сгенерированных постах: цитата, пустая
-                // строка, пояснение — на неё опирается разбор в интерфейсе.
-                text: `${originalText}\n\n${localized.explanation}`,
-                storyText: localized.storyText || localized.explanation,
+                // строка, пояснение — на неё опирается разбор в интерфейсе. Без
+                // пояснения склеивать нечего, иначе останется висячий разделитель
+                // и карточка покажет пустой блок «Пояснение».
+                text: localized.explanation
+                  ? `${originalText}\n\n${localized.explanation}`
+                  : originalText,
+                storyText:
+                  localized.storyText || localized.explanation || originalText,
               };
             }),
           },
@@ -167,6 +172,9 @@ export class MotivationManualPostService {
    * Текст на каждый из трёх языков. Незаполненный язык берёт текст основного:
    * `dto()` при отсутствующем переводе отдаёт пустые строки, и читатель с
    * другим языком интерфейса увидел бы пустую карточку.
+   *
+   * Признак заполненности — заголовок: пояснение необязательно и у основного
+   * текста.
    */
   private perLanguageCopy(
     primary: MotivationManualCopy,
@@ -177,8 +185,7 @@ export class MotivationManualPostService {
       const provided = translations?.[language]
         ? this.copy(translations[language], language)
         : undefined;
-      result[language] =
-        provided?.title && provided.explanation ? provided : primary;
+      result[language] = provided?.title ? provided : primary;
     }
     return result;
   }

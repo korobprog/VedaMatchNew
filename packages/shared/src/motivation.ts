@@ -134,10 +134,13 @@ export interface MotivationManualQuoteResult {
   postId: string;
 }
 
-/** Текст мотивации на одном языке, написанный админом. */
+/**
+ * Текст мотивации на одном языке, написанный админом. Обязателен только
+ * заголовок: без пояснения карточка показывает одну цитату.
+ */
 export interface MotivationManualCopy {
   title: string;
-  explanation: string;
+  explanation?: string;
   storyText?: string;
 }
 

@@ -77,12 +77,15 @@ export function ManualPostForm({
   const [error, setError] = useState<string | undefined>();
   const [done, setDone] = useState(false);
 
-  const ready =
-    form.originalText.trim() &&
-    form.author.trim() &&
-    form.title.trim() &&
-    form.explanation.trim() &&
-    selected.length > 0;
+  // Пояснения здесь нет намеренно: оно необязательно, цитата может говорить
+  // сама за себя.
+  const missing = [
+    !form.originalText.trim() && "текст цитаты",
+    !form.author.trim() && "автор",
+    !form.title.trim() && "заголовок",
+    selected.length === 0 && "аудитория",
+  ].filter((item): item is string => Boolean(item));
+  const ready = missing.length === 0;
 
   function update(field: keyof typeof form) {
     return (
@@ -116,10 +119,11 @@ export function ManualPostForm({
     setError(undefined);
     setDone(false);
     try {
+      // Признак заполненного перевода — заголовок: пояснение необязательно.
       const extras = Object.fromEntries(
         extraLanguages
           .map(({ value }) => [value, translations[value]] as const)
-          .filter(([, copy]) => copy.title.trim() && copy.explanation.trim()),
+          .filter(([, copy]) => copy.title.trim()),
       );
       await apiRequest("/admin/motivation/manual-posts", "POST", {
         originalText: form.originalText.trim(),
@@ -133,7 +137,7 @@ export function ManualPostForm({
         category: category || undefined,
         copy: {
           title: form.title.trim(),
-          explanation: form.explanation.trim(),
+          explanation: form.explanation.trim() || undefined,
           storyText: form.storyText.trim() || undefined,
         },
         ...(Object.keys(extras).length ? { translations: extras } : {}),
@@ -294,7 +298,7 @@ export function ManualPostForm({
               />
             </div>
             <label className={labelClass}>
-              <span>Пояснение</span>
+              <span>Пояснение (необязательно)</span>
               <textarea
                 aria-label="Пояснение"
                 value={form.explanation}
@@ -303,6 +307,10 @@ export function ManualPostForm({
                 placeholder="Почему эта цитата важна и как её применить"
                 className={`mt-2 ${fieldClass}`}
               />
+              <span className="mt-1 block text-xs font-normal text-text-2">
+                Если пусто — в карточке останется одна цитата, без блока
+                «Пояснение».
+              </span>
             </label>
             <label className={labelClass}>
               <span>Текст для Stories (необязательно)</span>
@@ -446,11 +454,18 @@ export function ManualPostForm({
             {error}
           </p>
         )}
+        {/* Отключённая кнопка без объяснения — угадайка: перечисляем, чего не
+            хватает, вместо того чтобы заставлять искать пустое поле. */}
+        {!ready && (
+          <p className="mt-4 rounded-xl border border-gold/40 bg-gold/10 p-3 text-sm text-text-1">
+            Осталось заполнить: {missing.join(", ")}.
+          </p>
+        )}
         <button
           type="button"
           disabled={pending || !ready}
           onClick={submit}
-          className={`${primaryButton} mt-6`}
+          className={`${primaryButton} mt-4`}
         >
           {pending ? "Создание…" : "Создать и отправить на изображение"}
         </button>

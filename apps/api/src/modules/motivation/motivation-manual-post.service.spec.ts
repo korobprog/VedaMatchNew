@@ -106,7 +106,7 @@ describe('MotivationManualPostService', () => {
     });
   });
 
-  it('ignores a half-filled translation instead of publishing a blank title', async () => {
+  it('accepts a translation that has only a title', async () => {
     const { service, transaction } = setup();
 
     await service.create('admin', 'actor-1', {
@@ -117,7 +117,40 @@ describe('MotivationManualPostService', () => {
     const english = postData(transaction).translations.create.find(
       (item: { language: string }) => item.language === 'en',
     );
+    // Пояснение необязательно, поэтому заголовка достаточно, чтобы считать
+    // перевод заполненным.
+    expect(english.title).toBe('Go all the way');
+    expect(english.text).toBe('Не сдавайся на полпути.');
+  });
+
+  it('falls back to the primary copy for a translation without a title', async () => {
+    const { service, transaction } = setup();
+
+    await service.create('admin', 'actor-1', {
+      ...validInput,
+      translations: { en: { title: '  ', explanation: 'Orphan explanation.' } },
+    });
+
+    const english = postData(transaction).translations.create.find(
+      (item: { language: string }) => item.language === 'en',
+    );
     expect(english.title).toBe('Идти до конца');
+  });
+
+  it('keeps the text quote-only when no explanation is given', async () => {
+    const { service, transaction } = setup();
+
+    await service.create('admin', 'actor-1', {
+      ...validInput,
+      copy: { title: 'Идти до конца', explanation: '' },
+    });
+
+    const russian = postData(transaction).translations.create.find(
+      (item: { language: string }) => item.language === 'ru',
+    );
+    // Без висячего «\n\n», иначе карточка показала бы пустой блок «Пояснение».
+    expect(russian.text).toBe('Не сдавайся на полпути.');
+    expect(russian.storyText).toBe('Не сдавайся на полпути.');
   });
 
   it('stores a quote translation only for the original language', async () => {
@@ -166,11 +199,7 @@ describe('MotivationManualPostService', () => {
   it.each([
     ['originalText', { originalText: '  ' }, 'Quote text and author are required'],
     ['author', { author: '' }, 'Quote text and author are required'],
-    [
-      'title',
-      { copy: { title: '', explanation: 'text' } },
-      'Title and explanation are required',
-    ],
+    ['title', { copy: { title: '', explanation: 'text' } }, 'Title is required'],
     ['audience', { profileTypes: [] }, 'Pick at least one audience'],
     ['unknown audience', { profileTypes: ['ghost'] as never }, 'Unknown audience'],
     ['track', { audienceTrack: 'nowhere' as never }, 'Unknown audience track'],

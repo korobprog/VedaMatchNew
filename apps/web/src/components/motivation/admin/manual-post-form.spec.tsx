@@ -42,7 +42,6 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Текст цитаты"), "Не сдавайся.");
   await user.type(screen.getByLabelText("Автор"), "Шрила Прабхупада");
   await user.type(screen.getByLabelText("Заголовок"), "Идти до конца");
-  await user.type(screen.getByLabelText("Пояснение"), "Своими словами.");
 }
 
 describe("ManualPostForm", () => {
@@ -51,15 +50,35 @@ describe("ManualPostForm", () => {
     vi.unstubAllGlobals();
   });
 
-  it("stays disabled until the quote, author, title and explanation are filled", async () => {
+  it("names every field that is still empty", async () => {
     const user = userEvent.setup();
     render(<ManualPostForm categories={categories} />);
 
     const submit = screen.getByRole("button", { name: /Создать/ });
     expect(submit).toBeDisabled();
+    expect(
+      screen.getByText(/Осталось заполнить: текст цитаты, автор, заголовок/),
+    ).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Текст цитаты"), "Не сдавайся.");
+    expect(screen.getByText(/Осталось заполнить: автор, заголовок/)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Автор"), "Шрила Прабхупада");
+    await user.type(screen.getByLabelText("Заголовок"), "Идти до конца");
+    // Пояснение не заполнено, но оно необязательно.
+    expect(screen.queryByText(/Осталось заполнить/)).toBeNull();
+    expect(submit).toBeEnabled();
+  });
+
+  it("asks for an audience once every text field is filled", async () => {
+    const user = userEvent.setup();
+    render(<ManualPostForm categories={categories} />);
 
     await fillRequired(user);
-    expect(submit).toBeEnabled();
+    await user.click(screen.getByRole("checkbox", { name: "Ищущий" }));
+
+    expect(screen.getByText("Осталось заполнить: аудитория.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Создать/ })).toBeDisabled();
   });
 
   it("posts the copy the admin wrote, not a generated one", async () => {
@@ -68,6 +87,7 @@ describe("ManualPostForm", () => {
 
     render(<ManualPostForm categories={categories} />);
     await fillRequired(user);
+    await user.type(screen.getByLabelText("Пояснение"), "Своими словами.");
     await user.click(screen.getByRole("button", { name: /Создать/ }));
 
     expect(fetchMock.mock.calls[0][0]).toContain("/admin/motivation/manual-posts");
@@ -81,16 +101,27 @@ describe("ManualPostForm", () => {
     });
   });
 
-  it("omits an extra language that was only half filled", async () => {
+  it("submits without an explanation at all", async () => {
     const fetchMock = okFetch();
     const user = userEvent.setup();
 
     render(<ManualPostForm categories={categories} />);
     await fillRequired(user);
-    await user.type(screen.getByLabelText("Заголовок · English"), "Go on");
     await user.click(screen.getByRole("button", { name: /Создать/ }));
 
-    // Заголовок без пояснения — не перевод; пусть язык возьмёт основной текст.
+    expect(sentBody(fetchMock).copy).toEqual({ title: "Идти до конца" });
+  });
+
+  it("omits an extra language that has no title", async () => {
+    const fetchMock = okFetch();
+    const user = userEvent.setup();
+
+    render(<ManualPostForm categories={categories} />);
+    await fillRequired(user);
+    // Пояснение без заголовка переводом не считается — язык возьмёт основной текст.
+    await user.type(screen.getByLabelText("Пояснение · English"), "In my words.");
+    await user.click(screen.getByRole("button", { name: /Создать/ }));
+
     expect(sentBody(fetchMock)).not.toHaveProperty("translations");
   });
 
