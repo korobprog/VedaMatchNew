@@ -47,13 +47,13 @@ export function Pricing({ plan }: { plan?: PricingPlan }) {
 
               {isBeta ? (
                 <>
-                  <div className="mt-6 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <div className="mt-6 min-w-0">
                     <span className="font-display text-xl sm:text-2xl md:text-3xl font-medium text-text-2 line-through decoration-2">
                       {PLAN.priceRub} ₽
                     </span>
-                    <span className="font-display text-3xl sm:text-5xl md:text-6xl font-bold text-text-0 leading-tight break-words">
+                    <div className="min-w-0 max-w-full break-words font-display text-3xl sm:text-5xl md:text-6xl font-bold leading-tight text-text-0">
                       Бесплатно
-                    </span>
+                    </div>
                   </div>
                   <p className="mt-3 text-text-1">
                     Пока платформа в бета-тесте — платить не нужно
