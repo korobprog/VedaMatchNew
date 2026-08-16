@@ -34,9 +34,28 @@ const ibmPlexMono = IBM_Plex_Mono({
   preload: false,
 });
 
+// Абсолютный адрес нужен превью в мессенджерах: og:image обязан быть полным URL.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vedamatch.ru";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "VedaMatch Portal",
   description: "Единый вход во все сервисы VedaMatch",
+  // Картинку и её размеры Next подставляет сам из src/app/opengraph-image.png,
+  // иначе Telegram берёт первое попавшееся фото со страницы.
+  openGraph: {
+    type: "website",
+    siteName: "VedaMatch",
+    locale: "ru_RU",
+    url: SITE_URL,
+    title: "VedaMatch Portal",
+    description: "Единый вход во все сервисы VedaMatch",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "VedaMatch Portal",
+    description: "Единый вход во все сервисы VedaMatch",
+  },
 };
 
 export const viewport: Viewport = {
