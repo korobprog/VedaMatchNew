@@ -4,6 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ContactsRequestDto } from "@vedamatch/shared";
 import { ContactsRequestsView } from "./contacts-requests-view";
 
+// Компонент уводит в чат через router.push; в jsdom роутера нет.
+const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh }) }));
+
 const party = {
   userId: "u2",
   name: "Говинда дас",

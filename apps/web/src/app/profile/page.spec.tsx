@@ -9,6 +9,11 @@ vi.mock("@/lib/api", () => ({
   getBillingPlan: vi.fn().mockResolvedValue(null),
 }));
 
+// DeleteAccountSection — клиентский компонент с useRouter; в jsdom роутера нет.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
+
 vi.mock("@/components/header", () => ({
   Header: () => null,
 }));
