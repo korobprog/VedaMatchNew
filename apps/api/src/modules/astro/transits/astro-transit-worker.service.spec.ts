@@ -5,7 +5,8 @@ import { AstroSettingsService } from '../astro-settings.service';
 import { AstroTransitService } from './astro-transit.service';
 import { AstroTransitWorkerService } from './astro-transit-worker.service';
 
-const NOW = new Date('2026-08-10T03:00:00.000Z');
+// 06:00 UTC — это 09:00 МСК, задуманное время рассылки.
+const NOW = new Date('2026-08-10T06:00:00.000Z');
 const NO_REDIS_CONFIG = { get: () => undefined } as unknown as ConfigService;
 
 describe('AstroTransitWorkerService', () => {
@@ -120,9 +121,62 @@ describe('AstroTransitWorkerService', () => {
     transits.today.mockResolvedValue({ text: 'фраза', moonBhava: 2 });
 
     await worker.tick(NOW);
-    await worker.tick(new Date('2026-08-11T03:00:00.000Z'));
+    await worker.tick(new Date('2026-08-11T06:00:00.000Z'));
 
     expect(prisma.astroBirthData.findMany).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['до окна', '2026-08-10T02:59:00.000Z'],
+    ['после окна', '2026-08-10T09:00:00.000Z'],
+  ])('вне окна рассылки (%s) не шлём ничего', async (_case, iso) => {
+    prisma.astroBirthData.findMany.mockResolvedValue([{ userId: 'u1' }]);
+    transits.today.mockResolvedValue({ text: 'фраза', moonBhava: 2 });
+
+    await worker.tick(new Date(iso));
+
+    expect(prisma.astroBirthData.findMany).not.toHaveBeenCalled();
+    expect(events.emit).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Главный регресс: деплой поднимает процесс с чистым lastRunDate, и раньше
+   * это означало повторный пуш всем, кто уже получил его сегодня.
+   */
+  it('рестарт внутри окна не шлёт пуш повторно уже получившим', async () => {
+    prisma.astroBirthData.findMany.mockResolvedValue([{ userId: 'u1' }]);
+    transits.today.mockResolvedValue({ text: 'фраза', moonBhava: 2 });
+    // Строка дня уже занята утренней рассылкой: pushedAt не null.
+    prisma.astroTransitDigest.updateMany.mockResolvedValue({ count: 0 });
+
+    const afterRestart = new AstroTransitWorkerService(
+      prisma as unknown as PrismaService,
+      transits as unknown as AstroTransitService,
+      settings as unknown as AstroSettingsService,
+      events as unknown as EventEmitter2,
+      NO_REDIS_CONFIG,
+    );
+    await afterRestart.tick(new Date(NOW.getTime() + 20 * 60_000));
+
+    expect(events.emit).not.toHaveBeenCalled();
+  });
+
+  it('строка дня занимается до отправки, а не после', async () => {
+    const order: string[] = [];
+    prisma.astroBirthData.findMany.mockResolvedValue([{ userId: 'u1' }]);
+    transits.today.mockResolvedValue({ text: 'фраза', moonBhava: 2 });
+    prisma.astroTransitDigest.updateMany.mockImplementation(() => {
+      order.push('claim');
+      return Promise.resolve({ count: 1 });
+    });
+    events.emit.mockImplementation(() => {
+      order.push('emit');
+      return true;
+    });
+
+    await worker.tick(NOW);
+
+    expect(order).toEqual(['claim', 'emit']);
   });
 
   it('отбор ограничен известным временем рождения и активностью за 14 дней', async () => {
