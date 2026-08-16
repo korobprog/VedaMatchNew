@@ -17,6 +17,7 @@ import type {
   MotivationCategoryInput,
   MotivationCategoryUpdate,
   MotivationLanguage,
+  MotivationManualPostInput,
   MotivationManualQuoteInput,
   MotivationPreferenceUpdate,
   MotivationRegenerateImageInput,
@@ -25,6 +26,7 @@ import type {
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { MotivationCategoriesService } from './motivation-categories.service';
+import { MotivationManualPostService } from './motivation-manual-post.service';
 import { MotivationService } from './motivation.service';
 
 @Controller()
@@ -32,6 +34,7 @@ export class MotivationController {
   constructor(
     private readonly service: MotivationService,
     private readonly categories: MotivationCategoriesService,
+    private readonly manualPosts: MotivationManualPostService,
   ) {}
 
   @Get('health') health() {
@@ -178,6 +181,15 @@ export class MotivationController {
     @Body() input: MotivationManualQuoteInput,
   ) {
     return this.service.addManualQuote(user.role, input);
+  }
+
+  @Post('admin/motivation/manual-posts')
+  @UseGuards(AuthGuard)
+  createManualPost(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() input: MotivationManualPostInput,
+  ) {
+    return this.manualPosts.create(user.role, user.sub, input);
   }
 
   @Get('admin/motivation/categories')

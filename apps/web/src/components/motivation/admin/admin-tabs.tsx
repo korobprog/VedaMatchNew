@@ -1,7 +1,12 @@
 import Link from "next/link";
-import { FolderTree, ListChecks, PlusCircle, Radar } from "lucide-react";
+import { FolderTree, ListChecks, PenLine, PlusCircle, Radar } from "lucide-react";
 
-export type MotivationAdminTab = "queue" | "add" | "search" | "categories";
+export type MotivationAdminTab =
+  | "queue"
+  | "create"
+  | "add"
+  | "search"
+  | "categories";
 
 const ITEMS: Array<{
   key: MotivationAdminTab;
@@ -10,7 +15,9 @@ const ITEMS: Array<{
   icon: React.ComponentType<{ className?: string }>;
 }> = [
   { key: "queue", href: "/admin/motivation/queue", label: "Очередь", icon: ListChecks },
-  { key: "add", href: "/admin/motivation/add", label: "Добавить", icon: PlusCircle },
+  // Два разных пути: «Своя» — текст пишет админ, «Цитата» — текст пишет ИИ.
+  { key: "create", href: "/admin/motivation/create", label: "Своя", icon: PenLine },
+  { key: "add", href: "/admin/motivation/add", label: "Цитата", icon: PlusCircle },
   { key: "search", href: "/admin/motivation/search", label: "Поиск", icon: Radar },
   { key: "categories", href: "/admin/motivation/categories", label: "Категории", icon: FolderTree },
 ];

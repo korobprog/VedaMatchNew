@@ -134,4 +134,31 @@ export interface MotivationManualQuoteResult {
   postId: string;
 }
 
+/** Текст мотивации на одном языке, написанный админом. */
+export interface MotivationManualCopy {
+  title: string;
+  explanation: string;
+  storyText?: string;
+}
+
+/**
+ * Мотивация, у которой весь текст написан руками. Нейросеть здесь не участвует
+ * — от неё остаётся только изображение, которое по-прежнему проходит обычное
+ * одобрение.
+ */
+export interface MotivationManualPostInput extends MotivationManualQuoteInput {
+  copy: MotivationManualCopy;
+  /** Переводы на остальные языки; незаполненные берут текст основного. */
+  translations?: Partial<Record<MotivationLanguage, MotivationManualCopy>>;
+  profileTypes: MotivationProfileType[];
+  audienceTrack: MotivationAudienceTrack;
+  visualStyle?: MotivationVisualStyle;
+  contentDate?: string;
+}
+export interface MotivationManualPostResult {
+  quoteId: string;
+  postId: string;
+  reviewStatus: MotivationReviewStatus;
+}
+
 export interface MotivationSearchResult { foundCount: number }

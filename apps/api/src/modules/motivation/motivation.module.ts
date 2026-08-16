@@ -10,6 +10,7 @@ import { ApprovedWebSourceService } from './approved-web-source.service';
 import { QuoteDiscoveryService } from './quote-discovery.service';
 import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationCopyService } from './motivation-copy.service';
+import { MotivationManualPostService } from './motivation-manual-post.service';
 import { MotivationModerationService } from './motivation-moderation.service';
 import { MotivationAuthorSearchService } from './motivation-author-search.service';
 import { MotivationSourceFetchService } from './motivation-source-fetch.service';
@@ -26,6 +27,7 @@ import { MotivationSourceFetchService } from './motivation-source-fetch.service'
     QuoteDiscoveryService,
     MotivationCategoriesService,
     MotivationCopyService,
+    MotivationManualPostService,
     MotivationModerationService,
     MotivationAuthorSearchService,
     MotivationSourceFetchService,
