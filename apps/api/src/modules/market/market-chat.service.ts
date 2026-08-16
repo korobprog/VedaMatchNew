@@ -15,11 +15,9 @@ import type {
   SendMarketMessageRequest,
   StartMarketChatRequest,
 } from '@vedamatch/shared';
+import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import {
-  isWithinEditWindow,
-  validateMessageBody,
-} from './message-edit-window';
+import { isWithinEditWindow, validateMessageBody } from './message-edit-window';
 
 /** Переписка по сделке короткая; двести сообщений покрывают её с запасом,
  *  а бесконечная лента потребовала бы своей пагинации ради редкого случая. */
@@ -36,10 +34,14 @@ const CHAT_SELECT = {
   shop: {
     select: { id: true, slug: true, name: true, logoUrl: true, ownerId: true },
   },
-  buyer: { select: { id: true, name: true, avatarUrl: true } },
+  buyer: {
+    select: { id: true, name: true, spiritualName: true, avatarUrl: true },
+  },
 } satisfies Prisma.MarketConversationSelect;
 
-type ChatRow = Prisma.MarketConversationGetPayload<{ select: typeof CHAT_SELECT }>;
+type ChatRow = Prisma.MarketConversationGetPayload<{
+  select: typeof CHAT_SELECT;
+}>;
 
 /**
  * Чат Рынка.
@@ -124,7 +126,14 @@ export class MarketChatService {
         editedAt: true,
         readAt: true,
         fromUserId: true,
-        fromUser: { select: { id: true, name: true, avatarUrl: true } },
+        fromUser: {
+          select: {
+            id: true,
+            name: true,
+            spiritualName: true,
+            avatarUrl: true,
+          },
+        },
       },
     });
 
@@ -132,7 +141,9 @@ export class MarketChatService {
     return {
       chat: toChatSummary(chat, userId, {
         unreadCount: 0,
-        preview: messages.length ? preview(messages[messages.length - 1].body) : null,
+        preview: messages.length
+          ? preview(messages[messages.length - 1].body)
+          : null,
       }),
       messages: messages.map((message) => toMessageDto(message, userId, now)),
     };
@@ -155,7 +166,8 @@ export class MarketChatService {
     if (shop.ownerId === userId) {
       throw new BadRequestException('cannot_chat_with_own_shop');
     }
-    if (shop.status !== 'active') throw new BadRequestException('shop_not_active');
+    if (shop.status !== 'active')
+      throw new BadRequestException('shop_not_active');
 
     if (await this.isBlocked(userId, shop.ownerId)) {
       throw new ForbiddenException('seller_blocked');
@@ -206,7 +218,14 @@ export class MarketChatService {
           editedAt: true,
           readAt: true,
           fromUserId: true,
-          fromUser: { select: { id: true, name: true, avatarUrl: true } },
+          fromUser: {
+            select: {
+              id: true,
+              name: true,
+              spiritualName: true,
+              avatarUrl: true,
+            },
+          },
         },
       });
       await tx.marketConversation.update({
@@ -220,12 +239,12 @@ export class MarketChatService {
       chat.buyerId === userId ? chat.shop.ownerId : chat.buyerId;
     const sender = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true },
+      select: { name: true, spiritualName: true },
     });
     const event = {
       name: 'market.chat.message-sent',
       recipientId,
-      senderName: sender?.name ?? '',
+      senderName: sender ? resolveDisplayName(sender) : '',
       body: message.body,
       conversationId: id,
     } satisfies NotificationEvent;
@@ -249,7 +268,12 @@ export class MarketChatService {
 
     const existing = await this.prisma.marketMessage.findUnique({
       where: { id: messageId },
-      select: { id: true, conversationId: true, fromUserId: true, createdAt: true },
+      select: {
+        id: true,
+        conversationId: true,
+        fromUserId: true,
+        createdAt: true,
+      },
     });
     if (!existing || existing.conversationId !== chatId) {
       throw new NotFoundException('message_not_found');
@@ -274,7 +298,14 @@ export class MarketChatService {
         editedAt: true,
         readAt: true,
         fromUserId: true,
-        fromUser: { select: { id: true, name: true, avatarUrl: true } },
+        fromUser: {
+          select: {
+            id: true,
+            name: true,
+            spiritualName: true,
+            avatarUrl: true,
+          },
+        },
       },
     });
     return toMessageDto(updated, userId, now);
@@ -293,7 +324,10 @@ export class MarketChatService {
     });
   }
 
-  private async assertParticipant(userId: string, id: string): Promise<ChatRow> {
+  private async assertParticipant(
+    userId: string,
+    id: string,
+  ): Promise<ChatRow> {
     const chat = await this.prisma.marketConversation.findUnique({
       where: { id },
       select: CHAT_SELECT,
@@ -338,7 +372,7 @@ function toChatSummary(
     buyer: isSeller
       ? {
           id: row.buyer.id,
-          name: row.buyer.name,
+          name: resolveDisplayName(row.buyer),
           avatarUrl: row.buyer.avatarUrl,
         }
       : null,
@@ -376,7 +410,7 @@ function toMessageDto(
     mine,
     author: {
       id: row.fromUser.id,
-      name: row.fromUser.name,
+      name: resolveDisplayName(row.fromUser),
       avatarUrl: row.fromUser.avatarUrl,
     },
     canEdit: mine && isWithinEditWindow(row.createdAt, now),

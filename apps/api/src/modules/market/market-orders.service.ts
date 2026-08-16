@@ -13,6 +13,7 @@ import type {
   NotificationEvent,
   UpdateMarketOrderStatusRequest,
 } from '@vedamatch/shared';
+import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   availableTransitions,
@@ -39,7 +40,7 @@ const ORDER_SELECT = {
   completedAt: true,
   closedAt: true,
   buyerId: true,
-  buyer: { select: { id: true, name: true } },
+  buyer: { select: { id: true, name: true, spiritualName: true } },
   shop: {
     select: { id: true, slug: true, name: true, logoUrl: true, ownerId: true },
   },
@@ -256,7 +257,9 @@ function toOrderDto(row: OrderRow, viewerId: string): MarketOrderDto {
       logoUrl: row.shop.logoUrl,
     },
     // Покупателя видит только продавец: покупателю показывать самого себя незачем.
-    buyer: isSeller ? { id: row.buyer.id, name: row.buyer.name } : null,
+    buyer: isSeller
+      ? { id: row.buyer.id, name: resolveDisplayName(row.buyer) }
+      : null,
     viewerRole,
     availableTransitions: availableTransitions(row.status, viewerRole),
     conversationId: row.conversations[0]?.id ?? null,

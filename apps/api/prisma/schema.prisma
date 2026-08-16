@@ -156,7 +156,12 @@ enum MotivationVisualStyle {
 model User {
   id                           String                     @id @default(uuid())
   email                        String                     @unique
+  // Обычное (мирское) имя. Остаётся обязательным: оно приходит из OAuth и
+  // видно администрации, даже если человек подписан духовным именем.
   name                         String
+  // Духовное имя. Если заполнено — именно оно показывается другим людям
+  // во всём портале, см. resolveDisplayName в @vedamatch/shared.
+  spiritualName                String?
   avatarUrl                    String?
   avatarKey                    String?
   // Дата рождения; наружу отдаётся только вычисленный возраст

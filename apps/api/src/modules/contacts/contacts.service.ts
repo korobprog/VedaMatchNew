@@ -27,7 +27,10 @@ import type {
   ProfileSocialLinks,
   SpiritualStage,
 } from '@vedamatch/shared';
-import { CONTACTS_COUNT_THRESHOLD } from '@vedamatch/shared';
+import {
+  CONTACTS_COUNT_THRESHOLD,
+  resolveDisplayName,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { NEW_CONTACTS_PROFILE } from './contacts-defaults';
@@ -69,6 +72,7 @@ const FIELD_PRIVACY_KEYS = ['city', 'photo', 'age'] as const;
 interface CardUser {
   id: string;
   name: string;
+  spiritualName: string | null;
   avatarUrl: string | null;
   avatarKey: string | null;
   birthDate: Date | null;
@@ -576,6 +580,7 @@ export class ContactsService {
       select: {
         id: true,
         name: true,
+        spiritualName: true,
         avatarUrl: true,
         avatarKey: true,
         birthDate: true,
@@ -605,7 +610,7 @@ export class ContactsService {
 
     return {
       userId: owner.id,
-      name: owner.name,
+      name: resolveDisplayName(owner),
       headline: profile.headline,
       about: profile.about,
       offers: profile.offers,

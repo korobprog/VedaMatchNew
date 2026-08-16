@@ -18,6 +18,7 @@ import type {
   UnionPrivacySettings,
   UnionUserSummary,
 } from '@vedamatch/shared';
+import { resolveDisplayName } from '@vedamatch/shared';
 import type { NotificationEvent } from '@vedamatch/shared';
 import { calculateAge } from '../users/age';
 import { ModerationService } from '../moderation/moderation.service';
@@ -148,7 +149,7 @@ export class UnionConnectionService {
       const matched = {
         name: 'union.connection.accepted',
         recipientId: toUserId,
-        senderName: accepted.fromUser.name,
+        senderName: resolveDisplayName(accepted.fromUser),
         requestId: accepted.id,
       } satisfies NotificationEvent;
       this.events.emit(matched.name, matched);
@@ -169,7 +170,7 @@ export class UnionConnectionService {
     const requested = {
       name: 'union.connection.requested',
       recipientId: toUserId,
-      senderName: request.fromUser.name,
+      senderName: resolveDisplayName(request.fromUser),
     } satisfies NotificationEvent;
     this.events.emit(requested.name, requested);
     return this.toRequestDto(request, request.toUser, 'outgoing', false);
@@ -199,7 +200,7 @@ export class UnionConnectionService {
     const event = {
       name: 'union.connection.accepted',
       recipientId: accepted.fromUserId,
-      senderName: accepted.toUser.name,
+      senderName: resolveDisplayName(accepted.toUser),
       requestId: accepted.id,
     } satisfies NotificationEvent;
     this.events.emit(event.name, event);
@@ -297,7 +298,7 @@ export class UnionConnectionService {
     const location = this.location(user);
     return {
       id: user.id,
-      name: user.name,
+      name: resolveDisplayName(user),
       avatarUrl: this.isVisible(privacy?.photo, matched)
         ? await this.users.resolveAvatarUrl(user)
         : null,

@@ -46,12 +46,14 @@ function user(
   options: {
     avatarUrl?: string | null;
     photos?: ReturnType<typeof photo>[];
+    spiritualName?: string | null;
   } = {},
 ) {
   return {
     id,
     email: `${id}@example.com`,
     name: id,
+    spiritualName: options.spiritualName ?? null,
     avatarUrl: options.avatarUrl ?? null,
     avatarKey: null,
     homeLocation,
@@ -318,6 +320,30 @@ describe('UnionProfileService', () => {
 
     expect(result.items).toEqual([]);
     expect(result.total).toBe(0);
+  });
+
+  it('подписывает карточку духовным именем, когда оно заполнено', async () => {
+    const other = profile('other');
+    other.user = user('other', defaultLocation, {
+      spiritualName: 'Мадхава дас',
+    });
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([other]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me');
+
+    expect(result.items[0].user.name).toBe('Мадхава дас');
+  });
+
+  it('без духовного имени в карточке остаётся обычное', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([profile('other')]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const result = await service.getRecommendations('me');
+
+    expect(result.items[0].user.name).toBe('other');
   });
 
   it('keeps swiped profiles out of the deck', async () => {

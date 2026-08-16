@@ -9,6 +9,7 @@ import type {
   MarketCheckoutResponse,
   NotificationEvent,
 } from '@vedamatch/shared';
+import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { checkCartEligibility, isAvailable } from './market-availability';
 import { lineTotal, splitCart, type CartRow } from './cart-split';
@@ -307,7 +308,7 @@ export class MarketCartService {
       });
       const buyer = await this.prisma.user.findUnique({
         where: { id: userId },
-        select: { name: true },
+        select: { name: true, spiritualName: true },
       });
       if (!shop) continue;
       // Имя события берём из самого события: импортировать карту имён из
@@ -315,7 +316,7 @@ export class MarketCartService {
       const event = {
         name: 'market.order.created',
         recipientId: shop.ownerId,
-        buyerName: buyer?.name ?? '',
+        buyerName: buyer ? resolveDisplayName(buyer) : '',
         orderId: order.id,
         orderNumber: order.number,
         itemsCount: order.items.length,

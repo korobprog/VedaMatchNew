@@ -59,19 +59,24 @@ export default async function ProfilePage() {
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={user.avatarUrl}
-                alt={user.name}
+                alt={user.displayName}
                 className="h-16 w-16 rounded-full"
                 referrerPolicy="no-referrer"
               />
             ) : (
               <span className="flex h-16 w-16 items-center justify-center rounded-full bg-glass text-2xl font-semibold text-text-0">
-                {user.name.charAt(0).toUpperCase()}
+                {user.displayName.charAt(0).toUpperCase()}
               </span>
             )}
             <div>
               <p className="text-lg font-semibold text-text-0">
-                {user.name}
+                {user.displayName}
               </p>
+              {/* Мирское имя показываем второй строкой только владельцу: в
+                  карточке оно уже перекрыто духовным. */}
+              {user.spiritualName && (
+                <p className="text-sm text-text-1">{user.name}</p>
+              )}
               <p className="text-sm text-text-2">{user.email}</p>
             </div>
           </div>

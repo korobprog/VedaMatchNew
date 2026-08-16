@@ -16,8 +16,13 @@ import type {
   MarketReviewListResponse,
   NotificationEvent,
 } from '@vedamatch/shared';
+import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import { applyRatingDelta, isValidRating, ratingBreakdown } from './review-rating';
+import {
+  applyRatingDelta,
+  isValidRating,
+  ratingBreakdown,
+} from './review-rating';
 
 const MAX_REVIEW_LENGTH = 4000;
 const MAX_COMMENT_LENGTH = 2000;
@@ -34,10 +39,14 @@ const REVIEW_SELECT = {
   status: true,
   createdAt: true,
   authorId: true,
-  author: { select: { id: true, name: true, avatarUrl: true } },
+  author: {
+    select: { id: true, name: true, spiritualName: true, avatarUrl: true },
+  },
 } satisfies Prisma.MarketReviewSelect;
 
-type ReviewRow = Prisma.MarketReviewGetPayload<{ select: typeof REVIEW_SELECT }>;
+type ReviewRow = Prisma.MarketReviewGetPayload<{
+  select: typeof REVIEW_SELECT;
+}>;
 
 @Injectable()
 export class MarketReviewsService {
@@ -105,7 +114,10 @@ export class MarketReviewsService {
       });
       await tx.marketShop.update({
         where: { id: order.shopId },
-        data: applyRatingDelta(shop, { ratingSum: body.rating, reviewsCount: 1 }),
+        data: applyRatingDelta(shop, {
+          ratingSum: body.rating,
+          reviewsCount: 1,
+        }),
       });
 
       return review;
@@ -113,12 +125,12 @@ export class MarketReviewsService {
 
     const author = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true },
+      select: { name: true, spiritualName: true },
     });
     const event = {
       name: 'market.review.received',
       recipientId: order.shop.ownerId,
-      authorName: author?.name ?? '',
+      authorName: author ? resolveDisplayName(author) : '',
       rating: body.rating,
       shopSlug: order.shop.slug,
     } satisfies NotificationEvent;
@@ -163,7 +175,10 @@ export class MarketReviewsService {
   }
 
   /** Отзыв по конкретной заявке — чтобы страница заявки знала, оставлен ли он. */
-  async byOrder(orderId: string, viewerId: string): Promise<MarketReviewDto | null> {
+  async byOrder(
+    orderId: string,
+    viewerId: string,
+  ): Promise<MarketReviewDto | null> {
     const review = await this.prisma.marketReview.findUnique({
       where: { orderId },
       select: REVIEW_SELECT,
@@ -183,7 +198,13 @@ export class MarketReviewsService {
   ): Promise<void> {
     const review = await this.prisma.marketReview.findUnique({
       where: { id },
-      select: { id: true, authorId: true, shopId: true, rating: true, status: true },
+      select: {
+        id: true,
+        authorId: true,
+        shopId: true,
+        rating: true,
+        status: true,
+      },
     });
     if (!review) throw new NotFoundException('review_not_found');
     if (review.authorId !== userId && !viewerIsAdmin) {
@@ -195,9 +216,10 @@ export class MarketReviewsService {
       await tx.marketReview.update({
         where: { id },
         data: {
-          status: viewerIsAdmin && review.authorId !== userId
-            ? 'removed_by_admin'
-            : 'removed_by_author',
+          status:
+            viewerIsAdmin && review.authorId !== userId
+              ? 'removed_by_admin'
+              : 'removed_by_author',
         },
       });
       const shop = await tx.marketShop.findUniqueOrThrow({
@@ -237,7 +259,14 @@ export class MarketReviewsService {
           status: true,
           createdAt: true,
           userId: true,
-          user: { select: { id: true, name: true, avatarUrl: true } },
+          user: {
+            select: {
+              id: true,
+              name: true,
+              spiritualName: true,
+              avatarUrl: true,
+            },
+          },
         },
       }),
       this.prisma.marketListingComment.count({ where }),
@@ -251,7 +280,11 @@ export class MarketReviewsService {
         status: row.status,
         createdAt: row.createdAt.toISOString(),
         author: row.user
-          ? { id: row.user.id, name: row.user.name, avatarUrl: row.user.avatarUrl }
+          ? {
+              id: row.user.id,
+              name: resolveDisplayName(row.user),
+              avatarUrl: row.user.avatarUrl,
+            }
           : null,
         canDelete: Boolean(
           viewerIsAdmin || (viewerId && row.userId === viewerId),
@@ -293,7 +326,14 @@ export class MarketReviewsService {
           body: true,
           status: true,
           createdAt: true,
-          user: { select: { id: true, name: true, avatarUrl: true } },
+          user: {
+            select: {
+              id: true,
+              name: true,
+              spiritualName: true,
+              avatarUrl: true,
+            },
+          },
         },
       });
       await tx.marketListing.update({
@@ -312,7 +352,7 @@ export class MarketReviewsService {
       author: created.user
         ? {
             id: created.user.id,
-            name: created.user.name,
+            name: resolveDisplayName(created.user),
             avatarUrl: created.user.avatarUrl,
           }
         : null,
@@ -368,8 +408,14 @@ function toReviewDto(
     status: row.status,
     createdAt: row.createdAt.toISOString(),
     author: row.author
-      ? { id: row.author.id, name: row.author.name, avatarUrl: row.author.avatarUrl }
+      ? {
+          id: row.author.id,
+          name: resolveDisplayName(row.author),
+          avatarUrl: row.author.avatarUrl,
+        }
       : null,
-    canDelete: Boolean(viewerIsAdmin || (viewerId && row.authorId === viewerId)),
+    canDelete: Boolean(
+      viewerIsAdmin || (viewerId && row.authorId === viewerId),
+    ),
   };
 }

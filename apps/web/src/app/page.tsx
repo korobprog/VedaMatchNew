@@ -85,7 +85,7 @@ export default async function Home({
             </span>
           </h1>
           <p className="text-text-1">
-         {user.gender === 'female' ? 'Дорогая' : 'Дорогой'} {user.name}, Вы находитесь на Портале у вас доступ к этим сервисам:
+         {user.gender === 'female' ? 'Дорогая' : 'Дорогой'} {user.displayName}, Вы находитесь на Портале у вас доступ к этим сервисам:
           </p>
           {communityStats && (
             <p className="mt-1 text-sm text-text-2">

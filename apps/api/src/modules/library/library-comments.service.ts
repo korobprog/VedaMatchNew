@@ -9,6 +9,7 @@ import type {
   LibraryCommentDto,
   LibraryCommentsResponse,
 } from '@vedamatch/shared';
+import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const MAX_BODY_LENGTH = 2000;
@@ -21,7 +22,7 @@ const COMMENT_SELECT = {
   status: true,
   createdAt: true,
   userId: true,
-  user: { select: { id: true, name: true } },
+  user: { select: { id: true, name: true, spiritualName: true } },
 };
 
 type CommentRow = {
@@ -31,7 +32,7 @@ type CommentRow = {
   status: string;
   createdAt: Date;
   userId: string | null;
-  user: { id: string; name: string } | null;
+  user: { id: string; name: string; spiritualName: string | null } | null;
 };
 
 @Injectable()
@@ -140,7 +141,9 @@ function toCommentDto(
     body: row.body,
     status: row.status as LibraryCommentDto['status'],
     createdAt: row.createdAt.toISOString(),
-    author: row.user ? { id: row.user.id, name: row.user.name } : null,
+    author: row.user
+      ? { id: row.user.id, name: resolveDisplayName(row.user) }
+      : null,
     canDelete: viewerIsAdmin || row.userId === viewerId,
   };
 }

@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { createHash, randomBytes } from 'node:crypto';
 import * as oidc from 'openid-client';
-import type { Role } from '@vedamatch/shared';
+import { resolveDisplayName, type Role } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NEW_CONTACTS_PROFILE } from '../contacts/contacts-defaults';
 import { assertAccountActive } from '../users/account-status';
@@ -124,9 +124,10 @@ export class AuthService implements OnModuleInit {
 
     const user = await this.prisma.user.upsert({
       where: { email: claims.email as string },
+      // Имя обновляется только при создании аккаунта: человек может исправить
+      // его в профиле, и следующий вход через Google не должен затирать правку.
       update: {
         googleId: claims.sub,
-        name: (claims.name as string) ?? (claims.email as string),
         avatarUrl: (claims.picture as string) ?? null,
       },
       create: {
@@ -232,7 +233,11 @@ export class AuthService implements OnModuleInit {
     await this.issueTokens(user.id, user.email, toRole(user.role), res);
     return {
       ok: true,
-      user: { id: user.id, email: user.email, name: user.name },
+      user: {
+        id: user.id,
+        email: user.email,
+        name: resolveDisplayName(user),
+      },
     };
   }
 

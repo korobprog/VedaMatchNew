@@ -22,6 +22,7 @@ import type {
   UnionSetReactionRequest,
   UnionUserSummary,
 } from '@vedamatch/shared';
+import { resolveDisplayName } from '@vedamatch/shared';
 import type { NotificationEvent } from '@vedamatch/shared';
 import { calculateAge } from '../users/age';
 import { toActivityLevel } from './union-activity';
@@ -183,7 +184,7 @@ export class UnionChatService {
     const event = {
       name: 'union.chat.message-sent',
       recipientId,
-      senderName: sender.name,
+      senderName: resolveDisplayName(sender),
       body: text,
       requestId: connection.id,
     } satisfies NotificationEvent;
@@ -416,7 +417,7 @@ export class UnionChatService {
     const location = this.location(user);
     return {
       id: user.id,
-      name: user.name,
+      name: resolveDisplayName(user),
       avatarUrl:
         privacy?.photo === 'hidden'
           ? null

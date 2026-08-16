@@ -33,6 +33,8 @@ const user: UserProfile = {
   id: "user-1",
   email: "user@example.com",
   name: "Пользователь",
+  spiritualName: null,
+  displayName: "Пользователь",
   avatarUrl: null,
   avatarKey: null,
   homeLocation: null,
@@ -53,6 +55,10 @@ const user: UserProfile = {
     daysLeft: 30,
     note: null,
   },
+  gender: null,
+  accountStatus: "active",
+  pendingDeletionAt: null,
+  deletionEligibleAt: null,
 };
 
 describe("ProfilePage", () => {

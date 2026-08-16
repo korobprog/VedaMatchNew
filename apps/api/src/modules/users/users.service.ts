@@ -14,14 +14,16 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type {
-  Gender,
-  ProfileLocation,
-  ProfileMessengers,
-  ProfileSocialLinks,
-  ProfileUpdateRequest,
-  Role,
-  UserProfile,
+import {
+  NAME_MAX_LENGTH,
+  resolveDisplayName,
+  type Gender,
+  type ProfileLocation,
+  type ProfileMessengers,
+  type ProfileSocialLinks,
+  type ProfileUpdateRequest,
+  type Role,
+  type UserProfile,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toRole } from '../auth/role';
@@ -119,6 +121,8 @@ export class UsersService {
       id: user.id,
       email: user.email,
       name: user.name,
+      spiritualName: user.spiritualName,
+      displayName: resolveDisplayName(user),
       avatarUrl: await this.resolveAvatarUrl(user),
       avatarKey: user.avatarKey,
       birthDate: toBirthDateInput(user.birthDate),
@@ -181,6 +185,29 @@ export class UsersService {
 
     const data: Prisma.UserUpdateInput = {};
 
+    if ('name' in payload) {
+      const name = payload.name?.trim() ?? '';
+      if (!name) {
+        throw new BadRequestException('Имя не может быть пустым');
+      }
+      if (name.length > NAME_MAX_LENGTH) {
+        throw new BadRequestException(
+          `Имя не длиннее ${NAME_MAX_LENGTH} символов`,
+        );
+      }
+      data.name = name;
+    }
+    if ('spiritualName' in payload) {
+      const spiritualName = payload.spiritualName?.trim() ?? '';
+      if (spiritualName.length > NAME_MAX_LENGTH) {
+        throw new BadRequestException(
+          `Духовное имя не длиннее ${NAME_MAX_LENGTH} символов`,
+        );
+      }
+      // Пустая строка — это «убрать», а не «сохранить пустоту»: иначе
+      // resolveDisplayName пришлось бы отличать '' от null на каждом вызове.
+      data.spiritualName = spiritualName || null;
+    }
     if ('birthDate' in payload) {
       const birthDate = parseBirthDate(payload.birthDate);
       if (birthDate && 'error' in birthDate) {

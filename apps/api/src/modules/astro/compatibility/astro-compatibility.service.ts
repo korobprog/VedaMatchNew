@@ -12,6 +12,7 @@ import type {
   AstroTimeAccuracy,
   GunaMilanScore,
 } from '@vedamatch/shared';
+import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { UsersService } from '../../users/users.service';
 import {
@@ -330,7 +331,7 @@ export class AstroCompatibilityService {
       score,
       counterpart: {
         userId: counterpartId,
-        name: counterpart?.name ?? '—',
+        name: counterpart ? resolveDisplayName(counterpart) : '—',
         avatarUrl: counterpart
           ? await this.users.resolveAvatarUrl(counterpart)
           : null,

@@ -43,10 +43,31 @@ export type UserAccountStatus = 'active' | 'blocked' | 'deleted';
 /** Пол. Необязателен: у части аккаунтов он не заполнен. */
 export type Gender = 'male' | 'female';
 
+/**
+ * Имя, под которым человека видят остальные. Духовное имя перекрывает обычное:
+ * среди преданных обращаются по нему, а мирское имя тогда никуда не уезжает
+ * из профиля и админки. Пустая строка духовным именем не считается.
+ *
+ * Единственное место, где принимается это решение: DTO наружу (карточки
+ * знакомств, справочник контактов, чаты, комментарии) заполняют своё поле
+ * `name` результатом этой функции, а не `user.name` напрямую.
+ */
+export function resolveDisplayName(user: {
+  name: string;
+  spiritualName?: string | null;
+}): string {
+  return user.spiritualName?.trim() || user.name;
+}
+
 export interface UserProfile {
   id: string;
   email: string;
+  /** Обычное (мирское) имя. Владельцу профиля нужно для редактирования. */
   name: string;
+  /** Духовное имя; null, если не заполнено. */
+  spiritualName: string | null;
+  /** Что видят другие: духовное имя, если оно есть, иначе обычное. */
+  displayName: string;
   avatarUrl: string | null;
   avatarKey: string | null;
   /** `YYYY-MM-DD`; отдаётся только владельцу профиля */
@@ -155,7 +176,13 @@ export interface ProfileMessengers {
   phone?: string;
 }
 
+/** Обычное имя обязательно, поэтому пустым его стереть нельзя — только заменить. */
+export const NAME_MAX_LENGTH = 80;
+
 export interface ProfileUpdateRequest {
+  name?: string;
+  /** Пустая строка и null одинаково означают «убрать духовное имя». */
+  spiritualName?: string | null;
   birthDate?: string | null;
   gender?: Gender | null;
   homeLocation?: ProfileLocation | null;

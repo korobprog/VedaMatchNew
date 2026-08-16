@@ -44,6 +44,8 @@ const user: UserProfile = {
   id: "user-1",
   email: "radha@example.com",
   name: "Радха",
+  spiritualName: null,
+  displayName: "Радха",
   avatarUrl: null,
   avatarKey: null,
   homeLocation: null,
@@ -65,6 +67,9 @@ const user: UserProfile = {
     daysLeft: 30,
     note: null,
   },
+  accountStatus: "active",
+  pendingDeletionAt: null,
+  deletionEligibleAt: null,
 };
 
 const services: ServiceCardType[] = [

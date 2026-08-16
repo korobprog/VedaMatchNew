@@ -3,12 +3,13 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type {
-  GeoSearchResult,
-  ProfileLocation,
-  ProfileMessengers,
-  ProfileSocialLinks,
-  UserProfile,
+import {
+  NAME_MAX_LENGTH,
+  type GeoSearchResult,
+  type ProfileLocation,
+  type ProfileMessengers,
+  type ProfileSocialLinks,
+  type UserProfile,
 } from "@vedamatch/shared";
 import { UserGalleryEditor } from "./user-gallery-editor";
 import { PhotoVerificationPanel } from "./photo-verification-panel";
@@ -54,6 +55,8 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
   );
   const [locationResults, setLocationResults] = useState<GeoSearchResult[]>([]);
   const [locationPending, setLocationPending] = useState(false);
+  const [name, setName] = useState(user.name);
+  const [spiritualName, setSpiritualName] = useState(user.spiritualName ?? "");
   const [birthDate, setBirthDate] = useState(user.birthDate ?? "");
   const [gender, setGender] = useState<string>(user.gender ?? "");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -195,6 +198,8 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
+          name,
+          spiritualName: spiritualName || null,
           birthDate: birthDate || null,
           gender: gender || null,
           homeLocation,
@@ -205,6 +210,8 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
       if (!res.ok) throw new Error(await res.text());
       const updated = (await res.json()) as UserProfile;
       setProfile(updated);
+      setName(updated.name);
+      setSpiritualName(updated.spiritualName ?? "");
       setBirthDate(updated.birthDate ?? "");
       setGender(updated.gender ?? "");
       setHomeLocation(updated.homeLocation);
@@ -266,13 +273,13 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={avatarSrc}
-              alt={profile.name}
+              alt={profile.displayName}
               className="h-24 w-24 rounded-full object-cover"
               referrerPolicy="no-referrer"
             />
           ) : (
             <span className="flex h-24 w-24 items-center justify-center rounded-full bg-amber-100 text-3xl font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-              {profile.name.charAt(0).toUpperCase()}
+              {profile.displayName.charAt(0).toUpperCase()}
             </span>
           )}
           <div className="flex-1 space-y-3">
@@ -303,6 +310,53 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          Имя
+        </h2>
+        <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+          Если указано духовное имя, именно оно видно другим — в знакомствах,
+          справочнике контактов, чатах и комментариях. Обычное имя остаётся в
+          профиле и видно только вам и администрации.
+        </p>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Обычное имя
+            </span>
+            <input
+              type="text"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              maxLength={NAME_MAX_LENGTH}
+              required
+              placeholder="Максим Коробков"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Духовное имя
+            </span>
+            <input
+              type="text"
+              value={spiritualName}
+              onChange={(event) => setSpiritualName(event.target.value)}
+              maxLength={NAME_MAX_LENGTH}
+              placeholder="Мадхава дас"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            />
+          </label>
+        </div>
+        <p className="mt-3 text-sm text-zinc-500">
+          Вас будут видеть как{" "}
+          <span className="font-medium text-zinc-800 dark:text-zinc-200">
+            {spiritualName.trim() || name.trim() || "—"}
+          </span>
+          . Чтобы убрать духовное имя, очистите поле.
+        </p>
       </section>
 
       <UserGalleryEditor />

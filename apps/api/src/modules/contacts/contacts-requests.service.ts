@@ -18,7 +18,10 @@ import type {
   ContactsRespondBody,
   ProfileLocation,
 } from '@vedamatch/shared';
-import { CONTACTS_REQUESTS_PER_DAY } from '@vedamatch/shared';
+import {
+  CONTACTS_REQUESTS_PER_DAY,
+  resolveDisplayName,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { UnionChatService } from '../union/union-chat.service';
@@ -34,6 +37,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 interface PartyRow {
   id: string;
   name: string;
+  spiritualName: string | null;
   avatarUrl: string | null;
   avatarKey: string | null;
   homeLocation: unknown;
@@ -43,6 +47,7 @@ interface PartyRow {
 const PARTY_SELECT = {
   id: true,
   name: true,
+  spiritualName: true,
   avatarUrl: true,
   avatarKey: true,
   homeLocation: true,
@@ -324,7 +329,10 @@ export class ContactsRequestsService {
       where: { id: requestId },
       select: { id: true, fromUserId: true, toUserId: true },
     });
-    if (!request || (request.fromUserId !== userId && request.toUserId !== userId)) {
+    if (
+      !request ||
+      (request.fromUserId !== userId && request.toUserId !== userId)
+    ) {
       throw new NotFoundException('Запрос не найден');
     }
     const otherUserId =
@@ -452,9 +460,9 @@ export class ContactsRequestsService {
   private async displayName(userId: string): Promise<string> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true },
+      select: { name: true, spiritualName: true },
     });
-    return user?.name ?? 'Участник';
+    return user ? resolveDisplayName(user) : 'Участник';
   }
 
   private async isVerified(userId: string): Promise<boolean> {
@@ -487,7 +495,7 @@ export class ContactsRequestsService {
     const location = (party.homeLocation as ProfileLocation | null) ?? null;
     return {
       userId: party.id,
-      name: party.name,
+      name: resolveDisplayName(party),
       headline: party.contactsProfile?.headline ?? null,
       // Аватар может лежать в приватном бакете — ссылку подписывает users.
       avatarUrl: await this.users.resolveAvatarUrl(party),

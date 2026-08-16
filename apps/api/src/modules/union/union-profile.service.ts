@@ -38,6 +38,7 @@ import type {
   UnionSpiritualEducation,
   UnionUserSummary,
 } from '@vedamatch/shared';
+import { resolveDisplayName } from '@vedamatch/shared';
 import { calculateAge, MAX_PROFILE_AGE, MIN_PROFILE_AGE } from '../users/age';
 import { computeCompleteness } from './union-completeness';
 import { MotivationGenerationService } from '../motivation/motivation-generation.service';
@@ -521,7 +522,7 @@ export class UnionProfileService {
     const cityVisible = this.isVisible(privacy?.city, matched);
     const summary: UnionUserSummary = {
       id: otherUser.id,
-      name: otherUser.name,
+      name: resolveDisplayName(otherUser),
       avatarUrl: this.isVisible(privacy?.photo, matched)
         ? otherUser.avatarUrl
         : null,

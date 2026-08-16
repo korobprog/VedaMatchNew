@@ -168,13 +168,13 @@ export function Header({ user }: { user: UserProfile }) {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={user.avatarUrl}
-                  alt={user.name}
+                  alt={user.displayName}
                   className="h-8 w-8 shrink-0 rounded-full object-cover"
                   referrerPolicy="no-referrer"
                 />
               ) : (
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-glass text-sm font-semibold text-text-0">
-                  {user.name.charAt(0).toUpperCase()}
+                  {user.displayName.charAt(0).toUpperCase()}
                 </span>
               )}
             </Link>

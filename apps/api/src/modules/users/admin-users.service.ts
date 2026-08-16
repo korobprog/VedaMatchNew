@@ -21,6 +21,7 @@ import type {
   StageHistoryItem,
   UserAccountStatus,
 } from '@vedamatch/shared';
+import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toRole } from '../auth/role';
 import {
@@ -154,7 +155,11 @@ export class AdminUsersService {
       profile: {
         id: user.id,
         email: user.email,
+        // Администрация видит и мирское, и духовное имя: карточка модерации —
+        // единственное место, где нужно точно понимать, кто перед тобой.
         name: user.name,
+        spiritualName: user.spiritualName,
+        displayName: resolveDisplayName(user),
         avatarUrl: await this.users.resolveAvatarUrl(user),
         avatarKey: user.avatarKey,
         birthDate: toBirthDateInput(user.birthDate),
@@ -431,8 +436,11 @@ export class AdminUsersService {
     const q = query.q?.trim();
 
     if (q) {
+      // Духовное имя ищем наравне с мирским: в переписке человек называет
+      // себя именно им, и админ ищет по тому имени, которое ему назвали.
       where.OR = [
         { name: { contains: q, mode: 'insensitive' } },
+        { spiritualName: { contains: q, mode: 'insensitive' } },
         { email: { contains: q, mode: 'insensitive' } },
       ];
     }

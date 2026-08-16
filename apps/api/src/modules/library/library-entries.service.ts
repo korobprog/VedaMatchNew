@@ -14,6 +14,7 @@ import type {
   LibraryFeedResponse,
   UpdateLibraryEntryRequest,
 } from '@vedamatch/shared';
+import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   decodeCursor,
@@ -82,7 +83,7 @@ const ENTRY_SELECT = {
   bookmarkCount: true,
   commentsCount: true,
   publishedAt: true,
-  addedBy: { select: { id: true, name: true } },
+  addedBy: { select: { id: true, name: true, spiritualName: true } },
   categories: {
     select: {
       category: {
@@ -613,7 +614,7 @@ function toEntryDto(
       titleEn: link.category.titleEn,
     })),
     addedBy: entry.addedBy
-      ? { id: entry.addedBy.id, name: entry.addedBy.name }
+      ? { id: entry.addedBy.id, name: resolveDisplayName(entry.addedBy) }
       : null,
     canEdit:
       viewerIsAdmin || (Boolean(viewerId) && entry.addedBy?.id === viewerId),
