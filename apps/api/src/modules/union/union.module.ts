@@ -34,5 +34,6 @@ import { UnionSwipeService } from './union-swipe.service';
     UnionSwipeService,
     UnionBoostService,
   ],
+  exports: [UnionChatService],
 })
 export class UnionModule {}

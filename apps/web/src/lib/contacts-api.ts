@@ -10,6 +10,7 @@ import type {
   ContactsFieldVisibility,
   ContactsFormat,
   ContactsMapResponse,
+  ContactsOpenChatResponse,
   ContactsProfileDto,
   ContactsProfileState,
   ContactsRequestsState,
@@ -456,6 +457,13 @@ export const cancelContactsRequest = (requestId: string) =>
   requestJson<ContactsRequestsState>(
     `/contacts/requests/${encodeURIComponent(requestId)}`,
     { method: "DELETE" },
+  );
+
+/** Открыть переписку по запросу: возвращает id диалога в чате Union. */
+export const openContactsChat = (requestId: string) =>
+  requestJson<ContactsOpenChatResponse>(
+    `/contacts/requests/${encodeURIComponent(requestId)}/chat`,
+    { method: "POST" },
   );
 
 /** Журнал «кому я открыл контакты», вместе с уже отозванными записями. */

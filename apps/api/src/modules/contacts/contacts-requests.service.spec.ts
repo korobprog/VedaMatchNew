@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
+import { UnionChatService } from '../union/union-chat.service';
 import { UsersService } from '../users/users.service';
 import { ContactsRequestsService } from './contacts-requests.service';
 import { ContactsService } from './contacts.service';
@@ -76,12 +77,14 @@ describe('ContactsRequestsService', () => {
   const moderation = { hideFrom: jest.fn() };
   const users = { resolveAvatarUrl: jest.fn() };
   const events = { emit: jest.fn() };
+  const unionChat = { openDirectChat: jest.fn() };
   const service = new ContactsRequestsService(
     prisma as unknown as PrismaService,
     contacts as unknown as ContactsService,
     moderation as unknown as ModerationService,
     users as unknown as UsersService,
     events as never,
+    unionChat as unknown as UnionChatService,
   );
 
   beforeEach(() => {

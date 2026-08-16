@@ -10,6 +10,7 @@ import type {
   ContactsCreateRequestBody,
   ContactsDisclosureDto,
   ContactsDisclosuresState,
+  ContactsOpenChatResponse,
   ContactsRequestDto,
   ContactsRequestStatus,
   ContactsRequestUser,
@@ -20,6 +21,7 @@ import type {
 import { CONTACTS_REQUESTS_PER_DAY } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
+import { UnionChatService } from '../union/union-chat.service';
 import { UsersService } from '../users/users.service';
 import type { ContactsDetails } from './contacts.service';
 import { ContactsService } from './contacts.service';
@@ -74,6 +76,7 @@ export class ContactsRequestsService {
     private readonly moderation: ModerationService,
     private readonly users: UsersService,
     private readonly events: EventEmitter2,
+    private readonly unionChat: UnionChatService,
   ) {}
 
   /**
@@ -303,6 +306,47 @@ export class ContactsRequestsService {
       data: { status: 'cancelled', respondedAt: now },
     });
     return this.list(userId, now);
+  }
+
+  /**
+   * Открыть переписку по запросу контакта.
+   *
+   * Доступно в обе стороны — и тому, кто попросил контакт, и тому, кто его
+   * открыл, — при условии, что раскрытие сейчас действует хоть в одном
+   * направлении. Своей системы чатов у «Контактов» нет, поэтому диалог
+   * заводится в чате Union: доступ туда уже дан этим самым раскрытием.
+   */
+  async openChat(
+    userId: string,
+    requestId: string,
+  ): Promise<ContactsOpenChatResponse> {
+    const request = await this.prisma.contactsRequest.findUnique({
+      where: { id: requestId },
+      select: { id: true, fromUserId: true, toUserId: true },
+    });
+    if (!request || (request.fromUserId !== userId && request.toUserId !== userId)) {
+      throw new NotFoundException('Запрос не найден');
+    }
+    const otherUserId =
+      request.fromUserId === userId ? request.toUserId : request.fromUserId;
+
+    const disclosure = await this.prisma.contactsDisclosure.findFirst({
+      where: {
+        revokedAt: null,
+        OR: [
+          { ownerId: userId, viewerId: otherUserId },
+          { ownerId: otherUserId, viewerId: userId },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!disclosure) {
+      throw new BadRequestException(
+        'Переписка доступна только при открытых контактах',
+      );
+    }
+
+    return this.unionChat.openDirectChat(userId, otherUserId);
   }
 
   /** Журнал: кому я открыл контакты. Отозванные остаются с датой отзыва. */

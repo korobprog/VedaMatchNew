@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ContactsRequestDto, ContactsRequestsState } from "@vedamatch/shared";
 import { CONTACTS_REQUESTS_PER_DAY } from "@vedamatch/shared";
 import {
   cancelContactsRequest,
   getContactsRequests,
+  openContactsChat,
   respondToContactsRequest,
 } from "@/lib/contacts-api";
 import { ContactsDetails } from "./contacts-details";
@@ -21,13 +23,30 @@ import { contactsRequestStatusLabels, formatContactsDate } from "./labels";
  * склеивать их в одно действие.
  */
 export function ContactsRequestsView() {
+  const router = useRouter();
   const [state, setState] = useState<ContactsRequestsState | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   /** id запроса, по которому сейчас идёт действие: блокирует только его кнопки. */
   const [busyId, setBusyId] = useState<string | null>(null);
+  /** id запроса, по которому сейчас открывается чат. */
+  const [chatBusyId, setChatBusyId] = useState<string | null>(null);
   /** Галочки скрытия — по запросу. Отсутствие ключа означает «выключена». */
   const [hideFlags, setHideFlags] = useState<Record<string, boolean>>({});
+
+  async function openChat(requestId: string) {
+    setChatBusyId(requestId);
+    setActionError(null);
+    try {
+      const { chatId } = await openContactsChat(requestId);
+      router.push(`/union/chats/${chatId}`);
+    } catch (e: unknown) {
+      setActionError(
+        e instanceof Error ? e.message : "Не удалось открыть чат",
+      );
+      setChatBusyId(null);
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -175,12 +194,26 @@ export function ContactsRequestsView() {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-sm text-text-2">
-                      {contactsRequestStatusLabels[request.status]}
-                      {request.respondedAt
-                        ? ` · ${formatContactsDate(request.respondedAt)}`
-                        : ""}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <p className="text-sm text-text-2">
+                        {contactsRequestStatusLabels[request.status]}
+                        {request.respondedAt
+                          ? ` · ${formatContactsDate(request.respondedAt)}`
+                          : ""}
+                      </p>
+                      {request.status === "accepted" && (
+                        <button
+                          type="button"
+                          disabled={chatBusyId === request.id}
+                          onClick={() => openChat(request.id)}
+                          className="rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-3 py-1.5 text-sm font-medium text-white transition hover:shadow-[0_0_20px_rgba(255,62,158,0.4)] disabled:opacity-50"
+                        >
+                          {chatBusyId === request.id
+                            ? "Открываем чат…"
+                            : "Написать в чат"}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </article>
               </li>
@@ -213,7 +246,21 @@ export function ContactsRequestsView() {
 
                   {/* Контакты приходят только при действующем доступе. */}
                   {request.contacts && (
-                    <ContactsDetails contacts={request.contacts} />
+                    <>
+                      <ContactsDetails contacts={request.contacts} />
+                      <div>
+                        <button
+                          type="button"
+                          disabled={chatBusyId === request.id}
+                          onClick={() => openChat(request.id)}
+                          className="rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-4 py-2 text-sm font-medium text-white transition hover:shadow-[0_0_20px_rgba(255,62,158,0.4)] disabled:opacity-50"
+                        >
+                          {chatBusyId === request.id
+                            ? "Открываем чат…"
+                            : "Написать в чат"}
+                        </button>
+                      </div>
+                    </>
                   )}
 
                   {request.status === "pending" && (

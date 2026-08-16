@@ -324,6 +324,56 @@ export class UnionChatService {
     return chat.lastMessageAt ? Date.parse(chat.lastMessageAt) : 0;
   }
 
+  /**
+   * Открывает диалог с произвольным пользователем в обход обычного сценария
+   * лайк → взаимность. Используется сервисами, где доступ друг к другу уже
+   * подтверждён их собственной логикой (например, открытые контакты в
+   * «Справочнике общины») — заводить там ещё один лайк незачем.
+   *
+   * Существующую связь просто переводит в `accepted`, не трогая её
+   * направление и историю: так у диалога остаётся один `requestId`, даже
+   * если раньше он был отклонён или отменён.
+   */
+  async openDirectChat(
+    userId: string,
+    otherUserId: string,
+  ): Promise<{ chatId: string }> {
+    if (userId === otherUserId) {
+      throw new BadRequestException('Нельзя открыть чат с самим собой');
+    }
+
+    const existing = await this.prisma.unionConnectionRequest.findFirst({
+      where: {
+        OR: [
+          { fromUserId: userId, toUserId: otherUserId },
+          { fromUserId: otherUserId, toUserId: userId },
+        ],
+      },
+      select: { id: true, status: true },
+    });
+
+    if (existing) {
+      if (existing.status !== 'accepted') {
+        await this.prisma.unionConnectionRequest.update({
+          where: { id: existing.id },
+          data: { status: 'accepted', respondedAt: new Date() },
+        });
+      }
+      return { chatId: existing.id };
+    }
+
+    const created = await this.prisma.unionConnectionRequest.create({
+      data: {
+        fromUserId: userId,
+        toUserId: otherUserId,
+        status: 'accepted',
+        respondedAt: new Date(),
+      },
+      select: { id: true },
+    });
+    return { chatId: created.id };
+  }
+
   private async getAcceptedConnection(userId: string, requestId: string) {
     const connection = await this.prisma.unionConnectionRequest.findUnique({
       where: { id: requestId },

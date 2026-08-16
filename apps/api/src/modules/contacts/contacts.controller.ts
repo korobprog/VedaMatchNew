@@ -124,6 +124,12 @@ export class ContactsController {
     return this.requests.cancel(user.sub, id);
   }
 
+  /** Открыть переписку по этому запросу контакта — диалог в чате Union. */
+  @Post('requests/:id/chat')
+  openChat(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.requests.openChat(user.sub, id);
+  }
+
   @Get('disclosures')
   disclosures(@CurrentUser() user: AccessTokenPayload) {
     return this.requests.listDisclosures(user.sub);

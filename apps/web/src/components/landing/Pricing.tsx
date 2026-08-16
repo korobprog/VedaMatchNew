@@ -39,7 +39,7 @@ export function Pricing({ plan }: { plan?: PricingPlan }) {
           <div className="absolute inset-0 bg-gradient-to-br from-magenta/10 via-cyan/5 to-gold/10" />
 
           <div className="relative z-10 grid gap-8 md:grid-cols-2 md:gap-10 md:items-center">
-            <div>
+            <div className="min-w-0">
               <span className="inline-flex items-center gap-2 rounded-full border border-cyan/40 bg-cyan/10 px-3 py-1 text-sm font-medium text-text-0">
                 <Gift className="h-4 w-4 text-cyan shrink-0" />
                 {isBeta ? "Бета-доступ бесплатно" : `${PLAN.trialDays} дней бесплатно`}
@@ -51,7 +51,7 @@ export function Pricing({ plan }: { plan?: PricingPlan }) {
                     <span className="font-display text-xl sm:text-2xl md:text-3xl font-medium text-text-2 line-through decoration-2">
                       {PLAN.priceRub} ₽
                     </span>
-                    <span className="font-display text-4xl sm:text-5xl md:text-6xl font-bold text-text-0 leading-tight">
+                    <span className="font-display text-3xl sm:text-5xl md:text-6xl font-bold text-text-0 leading-tight break-words">
                       Бесплатно
                     </span>
                   </div>
