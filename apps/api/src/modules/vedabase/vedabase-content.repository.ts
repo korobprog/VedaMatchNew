@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type VedabaseBookVersion } from '@prisma/client';
+import {
+  Prisma,
+  type VedabaseBookKind,
+  type VedabaseBookVersion,
+} from '@prisma/client';
 import type {
   VedabaseBookManifest,
   VedabaseChapter,
@@ -117,9 +121,44 @@ export class VedabaseContentRepository {
       JOIN "VedabaseBookVersion" v ON v.id = u."versionId"
       JOIN "VedabaseBook" b ON b."activeVersionId" = v.id
       WHERE to_tsvector('russian', u.text) @@ websearch_to_tsquery('russian', ${query})
+        -- Биографии и прочее из подбора цитат исключены: там повествование
+        -- ведёт биограф, а в поле author стоит герой книги, и его словами
+        -- оказывалась чужая проза.
+        AND b.kind IN ('scripture', 'teaching')
       ORDER BY rank DESC, b.slug, u."chapterSlug", u.id
       LIMIT ${limit}
     `);
+  }
+
+  /** Книги с активной версией — только их и можно подбирать на цитаты. */
+  async listBooksForQuoteMining() {
+    return this.prisma.vedabaseBook.findMany({
+      where: { activeVersionId: { not: null } },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        author: true,
+        language: true,
+        kind: true,
+      },
+      orderBy: [{ kind: 'asc' }, { title: 'asc' }],
+    });
+  }
+
+  async setBookKind(id: string, kind: VedabaseBookKind) {
+    return this.prisma.vedabaseBook.update({
+      where: { id },
+      data: { kind },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        author: true,
+        language: true,
+        kind: true,
+      },
+    });
   }
 
   async activateVersion(versionId: string): Promise<void> {

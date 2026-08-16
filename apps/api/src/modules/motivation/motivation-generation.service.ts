@@ -245,6 +245,44 @@ export class MotivationGenerationService {
       .slice(0, 10);
   }
 
+  /**
+   * Отбирает из кандидатов те, что читаются как самостоятельное наставление.
+   *
+   * Один запрос на всю пачку, а не на предложение: гейт стоит до дорогой
+   * генерации пояснения и переводов, и его цена должна теряться на её фоне.
+   * При любом сбое возвращаем исходный список — молчаливо обнулить подбор хуже,
+   * чем пропустить слабую цитату: её ещё отсеет проверка администратором.
+   */
+  async selectQuotableSentences(sentences: string[]): Promise<string[]> {
+    if (sentences.length === 0) return [];
+    const numbered = sentences
+      .map((text, index) => `${index}. ${text}`)
+      .join('\n');
+    const prompt = [
+      'You are filtering candidate quotations for a daily wisdom feed.',
+      'Keep only sentences that stand on their own as a teaching, an insight or a principle.',
+      'Reject narration, biography, scene description, dialogue, logistics and anything that needs surrounding context to make sense.',
+      'Return strict JSON: {"keep":[0,2]} listing the indices worth quoting. Return {"keep":[]} if none qualify.',
+      numbered,
+    ].join('\n');
+
+    try {
+      const parsed = (await this.requestStructuredChat(prompt)) as {
+        keep?: unknown;
+      };
+      if (!Array.isArray(parsed?.keep)) return sentences;
+      const kept = parsed.keep
+        .filter(
+          (index): index is number =>
+            Number.isInteger(index) && index >= 0 && index < sentences.length,
+        )
+        .map((index) => sentences[index]);
+      return kept;
+    } catch {
+      return sentences;
+    }
+  }
+
   private async requestStructuredChat(prompt: string): Promise<unknown> {
     const apiKey = this.config.get<string>('MOTIVATION_AI_API_KEY');
     const baseUrl = this.config

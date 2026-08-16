@@ -702,11 +702,22 @@ model GitabaseSyncMutation {
 
 // ===== Vedabase canonical content =====
 
+/// Что за книга. От этого зависит, можно ли добывать из неё цитаты: в
+/// биографии повествование ведёт биограф, и его слова нельзя приписывать
+/// герою книги, который значится в поле `author`.
+enum VedabaseBookKind {
+  scripture
+  teaching
+  biography
+  other
+}
+
 model VedabaseBook {
   id              String                @id @default(uuid())
   slug            String                @unique
   title           String
   author          String?
+  kind            VedabaseBookKind      @default(teaching)
   language        String
   cover           Json?
   sourceUrl       String

@@ -179,3 +179,19 @@ export interface MotivationManualPostResult {
 }
 
 export interface MotivationSearchResult { foundCount: number }
+
+/**
+ * Тип книги в библиотеке. На цитаты разбираются только `scripture` и
+ * `teaching`: в биографии повествование ведёт биограф, и его слова нельзя
+ * приписывать герою книги.
+ */
+export type MotivationBookKind = 'scripture' | 'teaching' | 'biography' | 'other';
+export interface MotivationBookDto {
+  id: string;
+  slug: string;
+  title: string;
+  author: string | null;
+  language: string;
+  kind: MotivationBookKind;
+}
+export interface MotivationBookKindInput { kind: MotivationBookKind }

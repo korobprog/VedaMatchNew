@@ -1,17 +1,20 @@
 import { MotivationAdminTabs } from "@/components/motivation/admin/admin-tabs";
+import { BookKindList } from "@/components/motivation/admin/book-kind-list";
 import {
   AuthorWatchList,
   SourceWatchList,
 } from "@/components/motivation/admin/watch-lists";
 import {
   getAdminMotivationAuthorWatches,
+  getAdminMotivationBooks,
   getAdminMotivationSourceWatches,
 } from "@/lib/motivation-api";
 
 export default async function AdminMotivationSearchPage() {
-  const [authors, sources] = await Promise.all([
+  const [authors, sources, books] = await Promise.all([
     getAdminMotivationAuthorWatches(),
     getAdminMotivationSourceWatches(),
+    getAdminMotivationBooks(),
   ]);
 
   return (
@@ -24,6 +27,7 @@ export default async function AdminMotivationSearchPage() {
       <div className="space-y-4">
         <AuthorWatchList authors={authors ?? []} />
         <SourceWatchList sources={sources ?? []} />
+        <BookKindList books={books ?? []} />
       </div>
     </>
   );

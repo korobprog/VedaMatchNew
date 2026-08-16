@@ -6,6 +6,7 @@ import {
   ApprovedWebSourceService,
   type WebQuoteCandidate,
 } from './approved-web-source.service';
+import { MotivationGenerationService } from './motivation-generation.service';
 import { extractQuoteSentences, quoteFingerprint } from './quote-normalizer';
 import {
   QuoteVerificationService,
@@ -27,6 +28,7 @@ export class QuoteDiscoveryService {
     private readonly repository: VedabaseContentRepository,
     private readonly verifier: QuoteVerificationService,
     private readonly web: ApprovedWebSourceService,
+    private readonly generation: MotivationGenerationService,
   ) {}
 
   async discoverDaily(date: Date, count = 8): Promise<MotivationQuote[]> {
@@ -56,7 +58,12 @@ export class QuoteDiscoveryService {
         if (candidates.size >= missingCount * 4) break;
         // A single unit (e.g. a whole chapter) can hold many quotable
         // sentences — pull them all instead of stopping at the first.
-        for (const originalText of extractQuoteSentences(unit.text)) {
+        // Эвристика убирает явную прозу, модель — то, что прошло её решето,
+        // но наставлением всё равно не является.
+        const shortlist = await this.generation.selectQuotableSentences(
+          extractQuoteSentences(unit.text),
+        );
+        for (const originalText of shortlist) {
           if (candidates.size >= missingCount * 4) break;
           try {
             const verified = await this.verifier.verifyVedabaseCandidate({

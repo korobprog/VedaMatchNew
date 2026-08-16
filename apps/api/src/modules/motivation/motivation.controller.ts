@@ -14,6 +14,7 @@ import type {
   MotivationAdminUpdate,
   MotivationApproveTextInput,
   MotivationAuthorWatchInput,
+  MotivationBookKindInput,
   MotivationCategoryInput,
   MotivationCategoryUpdate,
   MotivationLanguage,
@@ -25,6 +26,7 @@ import type {
   MotivationSourceWatchInput,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { MotivationBooksService } from './motivation-books.service';
 import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationManualPostService } from './motivation-manual-post.service';
 import { MotivationStoryRebuildService } from './motivation-story-rebuild.service';
@@ -37,6 +39,7 @@ export class MotivationController {
     private readonly categories: MotivationCategoriesService,
     private readonly manualPosts: MotivationManualPostService,
     private readonly storyRebuild: MotivationStoryRebuildService,
+    private readonly books: MotivationBooksService,
   ) {}
 
   @Get('health') health() {
@@ -232,6 +235,21 @@ export class MotivationController {
     @Param('id') id: string,
   ) {
     return this.categories.remove(user.role, id);
+  }
+
+  @Get('admin/motivation/books')
+  @UseGuards(AuthGuard)
+  listBooks(@CurrentUser() user: AccessTokenPayload) {
+    return this.books.list(user.role);
+  }
+  @Patch('admin/motivation/books/:id')
+  @UseGuards(AuthGuard)
+  setBookKind(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() input: MotivationBookKindInput,
+  ) {
+    return this.books.setKind(user.role, id, input.kind);
   }
 
   @Get('admin/motivation/authors')

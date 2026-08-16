@@ -21,6 +21,8 @@ describe('QuoteDiscoveryService', () => {
       repository as never,
       verifier as never,
       web as never,
+      // Гейт пропускает всё: здесь проверяется подбор, а не отбор моделью.
+      { selectQuotableSentences: jest.fn(async (list) => list) } as never,
     );
 
     const first = await service.discoverDaily(
@@ -104,6 +106,8 @@ describe('QuoteDiscoveryService', () => {
       repository as never,
       verifier as never,
       web as never,
+      // Гейт пропускает всё: здесь проверяется подбор, а не отбор моделью.
+      { selectQuotableSentences: jest.fn(async (list) => list) } as never,
     );
 
     const result = await service.discoverDaily(
@@ -210,6 +214,8 @@ describe('QuoteDiscoveryService', () => {
       repository as never,
       verifier as never,
       web as never,
+      // Гейт пропускает всё: здесь проверяется подбор, а не отбор моделью.
+      { selectQuotableSentences: jest.fn(async (list) => list) } as never,
     );
 
     const result = await service.discoverDaily(
@@ -276,6 +282,8 @@ describe('QuoteDiscoveryService', () => {
       repository as never,
       verifier as never,
       web as never,
+      // Гейт пропускает всё: здесь проверяется подбор, а не отбор моделью.
+      { selectQuotableSentences: jest.fn(async (list) => list) } as never,
     );
 
     const result = await service.discoverDaily(
@@ -338,6 +346,8 @@ describe('QuoteDiscoveryService', () => {
       repository as never,
       verifier as never,
       web as never,
+      // Гейт пропускает всё: здесь проверяется подбор, а не отбор моделью.
+      { selectQuotableSentences: jest.fn(async (list) => list) } as never,
     );
 
     const result = await service.discoverDaily(discoveryDate, 3);
@@ -349,6 +359,55 @@ describe('QuoteDiscoveryService', () => {
       'Humility means never placing yourself above another living being.',
       'Truth opens to the one who listens rather than the one who argues.',
     ]);
+  });
+
+  it('only verifies the sentences the model kept', async () => {
+    const chapterText = [
+      'Devotion begins where the mind stops seeking its own profit.',
+      'Humility means never placing yourself above another living being.',
+    ].join(' ');
+    const prisma = {
+      motivationQuote: { findMany: jest.fn().mockResolvedValue([]) },
+      $transaction: jest.fn(),
+    };
+    const repository = {
+      findQuoteCandidates: jest
+        .fn()
+        .mockResolvedValue([
+          { bookSlug: 'bg', chapterSlug: '1', text: chapterText },
+        ]),
+    };
+    const verifier = { verifyVedabaseCandidate: jest.fn() };
+    const web = { search: jest.fn().mockResolvedValue([]) };
+    // Модель оставляет одно предложение из двух — второе до проверки не дойдёт.
+    const generation = {
+      selectQuotableSentences: jest
+        .fn()
+        .mockResolvedValue([
+          'Humility means never placing yourself above another living being.',
+        ]),
+    };
+    const service = new QuoteDiscoveryService(
+      prisma as never,
+      repository as never,
+      verifier as never,
+      web as never,
+      generation as never,
+    );
+
+    await expect(service.discoverDaily(new Date(), 1)).rejects.toThrow();
+
+    expect(generation.selectQuotableSentences).toHaveBeenCalledWith([
+      'Devotion begins where the mind stops seeking its own profit.',
+      'Humility means never placing yourself above another living being.',
+    ]);
+    expect(verifier.verifyVedabaseCandidate).toHaveBeenCalledTimes(1);
+    expect(verifier.verifyVedabaseCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        originalText:
+          'Humility means never placing yourself above another living being.',
+      }),
+    );
   });
 
   it('fails when eight unique verified quotes cannot be found', async () => {
@@ -364,6 +423,8 @@ describe('QuoteDiscoveryService', () => {
       repository as never,
       verifier as never,
       web as never,
+      // Гейт пропускает всё: здесь проверяется подбор, а не отбор моделью.
+      { selectQuotableSentences: jest.fn(async (list) => list) } as never,
     );
 
     await expect(service.discoverDaily(new Date(), 8)).rejects.toThrow(
