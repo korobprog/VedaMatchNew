@@ -17,6 +17,7 @@ const approvedPost = {
   attributionSpeaker: null,
   attributionWork: null,
   attributionLocator: null,
+  storyCaption: true,
   // Воркер тянет их ради подписи на сторис.
   translations: [{ storyText: 'Не сдавайся на полпути.' }],
   quote: {

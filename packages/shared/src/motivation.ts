@@ -157,6 +157,8 @@ export interface MotivationManualPostInput extends MotivationManualQuoteInput {
   audienceTrack: MotivationAudienceTrack;
   visualStyle?: MotivationVisualStyle;
   contentDate?: string;
+  /** Накладывать ли цитату и подпись на кадр для Stories. По умолчанию да. */
+  storyCaption?: boolean;
 }
 export interface MotivationManualPostResult {
   quoteId: string;

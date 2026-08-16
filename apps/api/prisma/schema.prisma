@@ -368,6 +368,9 @@ model MotivationPost {
   attributionWork      String?
   attributionLocator   String?
   attributionSourceUrl String?
+  /// Накладывать ли цитату и подпись на кадр для Stories. Хранится, а не
+  /// решается на лету: сторис собирает воркер уже после создания поста.
+  storyCaption         Boolean                   @default(true)
   sourceVerified       Boolean                   @default(false)
   generationStage      String?
   generationErrorCode  String?

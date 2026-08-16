@@ -73,6 +73,7 @@ export function ManualPostForm({
   const [translations, setTranslations] = useState<
     Record<string, typeof emptyCopy>
   >({ en: { ...emptyCopy }, hi: { ...emptyCopy } });
+  const [storyCaption, setStoryCaption] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [done, setDone] = useState(false);
@@ -144,6 +145,7 @@ export function ManualPostForm({
         profileTypes: selected,
         audienceTrack: track,
         visualStyle: style,
+        storyCaption,
       });
       setForm(emptyForm);
       setTranslations({ en: { ...emptyCopy }, hi: { ...emptyCopy } });
@@ -323,6 +325,22 @@ export function ManualPostForm({
               />
               <span className="mt-1 block text-xs font-normal text-text-2">
                 Если пусто — возьмём пояснение.
+              </span>
+            </label>
+            <label className="flex items-start gap-3 rounded-xl border border-glass-brd p-3">
+              <input
+                type="checkbox"
+                checked={storyCaption}
+                onChange={(event) => setStoryCaption(event.target.checked)}
+                className="mt-0.5 h-5 w-5 shrink-0 accent-cyan"
+              />
+              <span className="text-sm text-text-1">
+                Наложить текст на картинку для Stories
+                <span className="mt-0.5 block text-xs text-text-2">
+                  В ленте картинка всегда остаётся чистой — цитата выводится
+                  текстом под ней. Подпись ложится только на файл из «Скачать
+                  для Stories».
+                </span>
               </span>
             </label>
             <CollapsibleBlock title="Другие языки (необязательно)" tone="framed">

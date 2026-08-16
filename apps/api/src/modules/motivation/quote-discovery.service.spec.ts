@@ -57,7 +57,7 @@ describe('QuoteDiscoveryService', () => {
     const units = Array.from({ length: 5 }, (_, index) => ({
       bookSlug: 'bg',
       chapterSlug: String(index + 1),
-      text: `Fresh daily quote ${index + 1}`,
+      text: `Devotion ${index + 1} begins where the mind stops seeking its own profit.`,
     }));
     const repository = {
       findQuoteCandidates: jest.fn().mockResolvedValue(units),
@@ -128,7 +128,7 @@ describe('QuoteDiscoveryService', () => {
     const internalUnits = Array.from({ length: 5 }, (_, index) => ({
       bookSlug: 'bg',
       chapterSlug: String(index + 1),
-      text: `Internal exact quote ${index + 1}`,
+      text: `Humility ${index + 1} means never placing yourself above another being.`,
     }));
     const repository = {
       findQuoteCandidates: jest.fn(async () => {
@@ -158,7 +158,7 @@ describe('QuoteDiscoveryService', () => {
         order.push('external');
         return [
           {
-            originalText: 'Internal exact quote 1',
+            originalText: 'Humility 1 means never placing yourself above another being.',
             author: 'Duplicate',
             work: 'Wikiquote',
             locator: '',
@@ -167,7 +167,7 @@ describe('QuoteDiscoveryService', () => {
             verified: true,
           },
           {
-            originalText: 'Unverified',
+            originalText: 'Unverified truth that never passes the source check at all.',
             author: 'Unknown',
             work: 'Wikiquote',
             locator: '',
@@ -176,12 +176,12 @@ describe('QuoteDiscoveryService', () => {
             verified: false,
           },
           ...Array.from({ length: 3 }, (_, index) => ({
-            originalText: `Web exact quote ${index + 1}`,
+            originalText: `Service ${index + 1} purifies the mind and restores its natural freedom.`,
             author: `Web ${index + 1}`,
             work: 'Wikiquote',
             locator: '',
             sourceUrl: `https://en.wikiquote.org/wiki/Web_${index + 1}`,
-            contextExcerpt: `Web exact quote ${index + 1}`,
+            contextExcerpt: `Service ${index + 1} purifies the mind and restores its natural freedom.`,
             verified: true,
           })),
         ];
@@ -225,11 +225,11 @@ describe('QuoteDiscoveryService', () => {
   it('does not count an already persisted hash toward the daily eight', async () => {
     const existingHash = quoteFingerprint('Existing exact quote');
     const units = [
-      { bookSlug: 'bg', chapterSlug: '1', text: 'Existing exact quote' },
+      { bookSlug: 'bg', chapterSlug: '1', text: 'Existing wisdom that already lives in the quote table today.' },
       ...Array.from({ length: 8 }, (_, index) => ({
         bookSlug: 'bg',
         chapterSlug: String(index + 2),
-        text: `Brand new exact quote ${index + 1}`,
+        text: `Patience ${index + 1} is the quiet strength of a truthful mind.`,
       })),
     ];
     const repository = {
@@ -293,9 +293,9 @@ describe('QuoteDiscoveryService', () => {
   it('extracts several candidate quotes from a single long unit instead of only the first', async () => {
     const discoveryDate = new Date('2026-07-13T00:00:00.000Z');
     const chapterText = [
-      'This first sentence is long enough to be a proper quote candidate.',
-      'This second sentence is also long enough to be a proper quote candidate.',
-      'This third sentence is also long enough to be a proper quote candidate.',
+      'Devotion begins where the mind stops seeking its own profit.',
+      'Humility means never placing yourself above another living being.',
+      'Truth opens to the one who listens rather than the one who argues.',
     ].join(' ');
     const units = [{ bookSlug: 'bg', chapterSlug: '1', text: chapterText }];
     const repository = {
@@ -345,9 +345,9 @@ describe('QuoteDiscoveryService', () => {
     expect(result).toHaveLength(3);
     expect(verifier.verifyVedabaseCandidate).toHaveBeenCalledTimes(3);
     expect(saved.map((quote) => quote.originalText)).toEqual([
-      'This first sentence is long enough to be a proper quote candidate.',
-      'This second sentence is also long enough to be a proper quote candidate.',
-      'This third sentence is also long enough to be a proper quote candidate.',
+      'Devotion begins where the mind stops seeking its own profit.',
+      'Humility means never placing yourself above another living being.',
+      'Truth opens to the one who listens rather than the one who argues.',
     ]);
   });
 

@@ -315,6 +315,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
    */
   private async composeStory(
     post: {
+      storyCaption: boolean;
       translations: Array<{ storyText: string }>;
       quote: {
         originalText: string;
@@ -329,6 +330,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
     image: Buffer,
     baseKey: string,
   ): Promise<string | undefined> {
+    if (!post.storyCaption) return undefined;
     const text =
       post.translations[0]?.storyText?.trim() ||
       post.quote?.originalText?.trim();

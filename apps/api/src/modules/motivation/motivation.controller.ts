@@ -27,6 +27,7 @@ import type {
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationManualPostService } from './motivation-manual-post.service';
+import { MotivationStoryRebuildService } from './motivation-story-rebuild.service';
 import { MotivationService } from './motivation.service';
 
 @Controller()
@@ -35,6 +36,7 @@ export class MotivationController {
     private readonly service: MotivationService,
     private readonly categories: MotivationCategoriesService,
     private readonly manualPosts: MotivationManualPostService,
+    private readonly storyRebuild: MotivationStoryRebuildService,
   ) {}
 
   @Get('health') health() {
@@ -181,6 +183,15 @@ export class MotivationController {
     @Body() input: MotivationManualQuoteInput,
   ) {
     return this.service.addManualQuote(user.role, input);
+  }
+
+  @Post('admin/motivation/stories/rebuild')
+  @UseGuards(AuthGuard)
+  rebuildStories(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() input: { limit?: number } = {},
+  ) {
+    return this.storyRebuild.rebuild(user.role, input.limit);
   }
 
   @Post('admin/motivation/manual-posts')

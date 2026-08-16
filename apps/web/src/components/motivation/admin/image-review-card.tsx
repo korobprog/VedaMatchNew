@@ -27,15 +27,21 @@ export function ImageReviewCard({
   const [style, setStyle] = useState<MotivationVisualStyle>(
     post.visualStyle ?? "spiritual_watercolor",
   );
+  // Сторис — отдельный файл с подписью. Без переключателя её нельзя было
+  // проверить перед публикацией: карточка показывала только чистую картинку.
+  const [view, setView] = useState<"image" | "story">("image");
   const disabled = pendingAction !== undefined;
   const canReview = post.reviewStatus === "image_review";
+  const hasSeparateStory =
+    Boolean(post.storyImageUrl) && post.storyImageUrl !== post.imageUrl;
+  const shown = view === "story" ? post.storyImageUrl : post.imageUrl;
 
   return (
     <article className="glass overflow-hidden rounded-2xl border border-glass-brd">
-      {post.imageUrl ? (
+      {shown ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={post.imageUrl}
+          src={shown}
           alt={post.title || post.slug}
           className="aspect-[9/16] w-full object-cover"
         />
@@ -44,6 +50,32 @@ export function ImageReviewCard({
           {post.reviewStatus === "image_queued"
             ? "Изображение создаётся…"
             : "Изображение недоступно"}
+        </div>
+      )}
+
+      {post.imageUrl && (
+        <div className="flex items-center gap-2 border-b border-glass-brd px-4 py-2">
+          {(["image", "story"] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setView(key)}
+              aria-pressed={view === key}
+              className={[
+                "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                view === key
+                  ? "bg-cyan/10 text-cyan"
+                  : "text-text-2 hover:text-text-0",
+              ].join(" ")}
+            >
+              {key === "image" ? "Иллюстрация" : "Сторис с подписью"}
+            </button>
+          ))}
+          {!hasSeparateStory && (
+            <span className="ml-auto text-xs text-text-2">
+              Сторис без подписи — пост создан до её появления
+            </span>
+          )}
         </div>
       )}
 

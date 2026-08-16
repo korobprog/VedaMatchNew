@@ -129,6 +129,7 @@ export class MotivationManualPostService {
           attributionWork: work || null,
           attributionLocator: locator || null,
           attributionSourceUrl: sourceUrl,
+          storyCaption: input.storyCaption !== false,
           generationStage: 'text',
           promptVersion: 'manual-v1',
           imageUrl: null,

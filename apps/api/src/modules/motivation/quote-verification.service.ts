@@ -4,7 +4,11 @@ import {
   VedabaseContentRepository,
   type VedabaseQuoteSearchUnit,
 } from '../vedabase/vedabase-content.repository';
-import { normalizeQuote, quoteFingerprint } from './quote-normalizer';
+import {
+  normalizeQuote,
+  quoteFingerprint,
+  snapToSentences,
+} from './quote-normalizer';
 
 export interface VedabaseQuoteCandidate {
   bookSlug: string;
@@ -57,7 +61,7 @@ export class QuoteVerificationService {
       originalLanguage: unit.bookLanguage,
       author: unit.bookAuthor,
       work: unit.bookTitle,
-      locator: this.formatLocator(unit.locator),
+      locator: this.formatLocator(unit.locator, unit),
       sourceType: 'vedamatch_library',
       sourceUrl: null,
       vedabaseBookSlug: unit.bookSlug,
@@ -88,13 +92,27 @@ export class QuoteVerificationService {
       0,
       Math.min(matchIndex - 450, unit.text.length - 1_000),
     );
-    return unit.text.slice(start, start + 1_000);
+    return snapToSentences(unit.text, start, start + 1_000, quote);
   }
 
-  private formatLocator(value: unknown): string {
-    if (typeof value === 'string') return value;
-    if (!value || typeof value !== 'object') return '';
-    const locator = value as Partial<VedabaseLocator>;
-    return locator.block ?? locator.unitId ?? '';
+  /**
+   * Человекочитаемая ссылка на место в книге.
+   *
+   * `unitId` сюда не попадает намеренно: это внутренний идентификатор, и в
+   * атрибуции он выглядел как «5c9c163d730d353f915e328a». Лучше пустая строка,
+   * чем мусорная ссылка — пустые части атрибуции всё равно отбрасываются.
+   */
+  private formatLocator(value: unknown, unit: VedabaseQuoteSearchUnit): string {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    const locator =
+      value && typeof value === 'object'
+        ? (value as Partial<VedabaseLocator>)
+        : undefined;
+    return (
+      locator?.block?.trim() ||
+      unit.title?.trim() ||
+      unit.chapterSlug?.trim() ||
+      ''
+    );
   }
 }
