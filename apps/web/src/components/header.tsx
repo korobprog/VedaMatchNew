@@ -111,7 +111,15 @@ export function Header({ user }: { user: UserProfile }) {
             {/* Вектор, а не logo_tilak.png: в растре знак запечён тёмно-синим
                 и на тёмной теме сливается с фоном шапки. */}
             <VedaMatchMark className="h-9 w-9 text-text-0" />
-            <span className="font-display font-bold text-text-0 hidden sm:block">VedaMatch</span>
+            <span className="hidden items-center gap-1.5 sm:flex">
+              <span className="font-display font-bold text-text-0">VedaMatch</span>
+              {/* Значок беты стоит рядом с названием, а не на самом знаке —
+                  здесь он виден на каждой странице портала, а не только на
+                  главной, и не перекрывает мелкую деталь логотипа. */}
+              <span className="rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider leading-none text-white shadow-[0_0_6px_rgba(255,62,158,0.6)]">
+                Beta
+              </span>
+            </span>
           </Link>
 
           {/* Desktop Navigation: полный ряд на широких экранах, узкий переход на md/lg — иконки без подписи */}
