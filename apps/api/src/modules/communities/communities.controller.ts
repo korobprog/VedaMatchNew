@@ -119,7 +119,12 @@ export class CommunitiesController {
     @Query() query: Record<string, string | undefined>,
     @OptionalUser() user?: AccessTokenPayload,
   ) {
-    return this.members.list(id, user?.sub, query);
+    return this.members.list(
+      id,
+      user?.sub,
+      query,
+      user ? isAdmin(user) : false,
+    );
   }
 
   @Post(':id/join')

@@ -307,4 +307,79 @@ describe('CommunityMembersService', () => {
       ).rejects.toThrow('Передача не найдена');
     });
   });
+
+  describe('list', () => {
+    const memberUser = {
+      name: 'Иван',
+      spiritualName: null,
+      avatarUrl: null,
+      homeLocation: null,
+    };
+
+    it('чужому гостю отдаёт активную общину', async () => {
+      prisma.community.findUnique.mockResolvedValue({
+        status: 'active',
+        createdById: 'owner',
+      });
+      prisma.communityMember.findMany.mockResolvedValue([
+        { ...membership(), user: memberUser },
+      ]);
+
+      const result = await service.list('c1', undefined, {}, false);
+
+      expect(result.items).toHaveLength(1);
+    });
+
+    it('чужому гостю не отдаёт общину, ждущую проверки', async () => {
+      prisma.community.findUnique.mockResolvedValue({
+        status: 'pending',
+        createdById: 'owner',
+      });
+
+      await expect(service.list('c1', 'stranger', {}, false)).rejects.toThrow(
+        'Община не найдена',
+      );
+    });
+
+    it('создателю отдаёт список сразу после заведения общины', async () => {
+      // Регресс: bySlug() уже пускал создателя к карточке `pending`, а
+      // list() проверял только isReachable(status) — список из него самого
+      // 404-ил, и вся страница только что созданной общины разваливалась
+      // на «Община не найдена», хотя карточка была отдана секундой раньше.
+      prisma.community.findUnique.mockResolvedValue({
+        status: 'pending',
+        createdById: 'owner',
+      });
+      prisma.communityMember.findUnique.mockResolvedValue(
+        membership({ userId: 'owner', role: 'owner' }),
+      );
+      prisma.communityMember.findMany.mockResolvedValue([
+        { ...membership({ userId: 'owner', role: 'owner' }), user: memberUser },
+      ]);
+
+      const result = await service.list('c1', 'owner', {}, false);
+
+      expect(result.items).toHaveLength(1);
+    });
+
+    it('портальному админу отдаёт любую общину', async () => {
+      prisma.community.findUnique.mockResolvedValue({
+        status: 'pending',
+        createdById: 'owner',
+      });
+      prisma.communityMember.findMany.mockResolvedValue([]);
+
+      await expect(service.list('c1', 'admin-user', {}, true)).resolves.toEqual(
+        expect.objectContaining({ items: [] }),
+      );
+    });
+
+    it('несуществующую общину не путает с недоступной', async () => {
+      prisma.community.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.list('missing', undefined, {}, false),
+      ).rejects.toThrow('Община не найдена');
+    });
+  });
 });

@@ -52,18 +52,30 @@ export class CommunityMembersService {
     communityId: string,
     viewerId: string | undefined,
     query: Record<string, string | undefined>,
+    viewerIsAdmin: boolean,
   ): Promise<CommunityMembersResponse> {
     const community = await this.prisma.community.findUnique({
       where: { id: communityId },
-      select: { status: true },
+      select: { status: true, createdById: true },
     });
-    if (!community || !isReachable(community.status))
-      throw new NotFoundException('Община не найдена');
+    if (!community) throw new NotFoundException('Община не найдена');
 
     const viewer = viewerId
       ? await this.membership(communityId, viewerId)
       : null;
     const manages = canManageCommunity(viewer);
+    // Та же видимость, что в bySlug(): владелец и админ портала должны
+    // видеть карточку целиком, включая список из одного себя, пока она
+    // ждёт проверки — иначе страница вновь созданной общины разваливается
+    // ровно в момент, когда автор в неё заходит. Было расхождением: bySlug
+    // пускал создателя, а list() проверял только isReachable(status) и
+    // отдавал 404 на карточку, которую сам же bySlug только что показал.
+    const mayLook =
+      isReachable(community.status) ||
+      viewerIsAdmin ||
+      community.createdById === viewerId ||
+      manages;
+    if (!mayLook) throw new NotFoundException('Община не найдена');
     const page = Math.max(1, Number(query.page) || 1);
     const pageSize = Math.min(
       MAX_PAGE_SIZE,

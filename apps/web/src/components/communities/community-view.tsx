@@ -38,8 +38,13 @@ export function CommunityView({ slug }: { slug: string }) {
 
   const load = useCallback(async () => {
     const found = await getCommunity(slug);
-    const list = await getCommunityMembers(found.id);
-    return { found, members: list.items };
+    // Отдельно от получения самой общины: список участников — это
+    // дополнение к карточке, а не условие её существования. Раньше один
+    // общий try/catch превращал любой сбой списка (в том числе временный,
+    // сетевой) в «Община не найдена» — хотя getCommunity секундой раньше
+    // ответил, что она есть.
+    const members = await getCommunityMembers(found.id).catch(() => null);
+    return { found, members: members?.items ?? [] };
   }, [slug]);
 
   const apply = useCallback(
