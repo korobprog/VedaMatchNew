@@ -10,6 +10,15 @@ import {
   getUnionRecommendations,
 } from "@/lib/union-api";
 import { buildUnionQuickAccessData } from "@/lib/union-quick-access";
+import { getAstroState, getAstroToday } from "@/lib/astro-api";
+import {
+  getMyNoticeResponsesServer,
+  getMyNoticesForAdvisor,
+} from "@/lib/notices-server-api";
+import { getMyCommunitiesServer } from "@/lib/communities-server-api";
+import { buildAdvisorCards } from "@/lib/advisor/advisor-cards";
+import { toAdvisorInput } from "@/lib/advisor/advisor-signals";
+import { AdvisorStrip } from "@/components/advisor/advisor-strip";
 import { UnionQuickAccessWidget } from "@/components/union/union-quick-access-widget";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
@@ -34,6 +43,13 @@ export default async function Home({
     unionRecommendations,
     plan,
     communityStats,
+    // Источники советника. Каждый в своём catch — упавший сервис обязан
+    // убрать одну карточку, а не весь блок и тем более не главную.
+    astroState,
+    astroToday,
+    myNotices,
+    myResponses,
+    myCommunities,
   ] = await Promise.all([
     getProfile(),
     getServices(),
@@ -43,6 +59,11 @@ export default async function Home({
     getUnionRecommendations({ sort: "new", pageSize: "3" }).catch(() => null),
     getBillingPlan().catch(() => null),
     getCommunityStats().catch(() => null),
+    getAstroState().catch(() => null),
+    getAstroToday().catch(() => null),
+    getMyNoticesForAdvisor().catch(() => null),
+    getMyNoticeResponsesServer().catch(() => null),
+    getMyCommunitiesServer().catch(() => null),
   ]);
   if (!user || !services)
     return (
@@ -61,6 +82,22 @@ export default async function Home({
     unionRecommendations,
   );
 
+  const advisorCards = buildAdvisorCards(
+    toAdvisorInput(
+      {
+        hasHomeLocation: Boolean(user.homeLocation),
+        unionProfile,
+        unionCounts,
+        astroState,
+        astroToday,
+        myNotices,
+        myResponses,
+        myCommunities,
+      },
+      new Date(),
+    ),
+  );
+
   const unionService = services.find((s) => s.url === "/union");
   const serviceExtras = unionService
     ? {
@@ -77,20 +114,20 @@ export default async function Home({
       <NoiseOverlay />
       <Header user={user} />
       <main className="mx-auto max-w-6xl px-4 py-8 pb-24">
-        <section className="mb-10">
-          <p className="text-text-1">
-         {user.gender === 'female' ? 'Дорогая' : 'Дорогой'} {user.displayName}, Вы находитесь на Портале у вас доступ к этим сервисам:
+        <AdvisorStrip
+          cards={advisorCards}
+          userId={user.id}
+          displayName={user.displayName}
+        />
+        {communityStats && (
+          <p className="mb-8 text-sm text-text-2">
+            Вместе нас:{" "}
+            <MemberCounter
+              total={communityStats.totalMembers}
+              className="font-semibold text-text-0"
+            />
           </p>
-          {communityStats && (
-            <p className="mt-1 text-sm text-text-2">
-              Вместе нас:{" "}
-              <MemberCounter
-                total={communityStats.totalMembers}
-                className="font-semibold text-text-0"
-              />
-            </p>
-          )}
-        </section>
+        )}
         <ServiceGrid services={services} userId={user.id} extras={serviceExtras} />
       </main>
       <InstallBanner />
