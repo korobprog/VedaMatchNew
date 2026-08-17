@@ -25,7 +25,7 @@ const navItems: NavItem[] = [
   { href: "/union", label: "Знакомства", icon: <ServiceIcon slug="union" className="h-5 w-5" /> },
   { href: "/motivation", label: "Мотивация", icon: <ServiceIcon slug="motivation" className="h-5 w-5" /> },
   { href: "/vedabase", label: "Книги", icon: <ServiceIcon slug="vedabase" className="h-5 w-5" /> },
-  { href: "/library", label: "Библиотека", icon: <ServiceIcon slug="library" className="h-5 w-5" /> },
+  { href: "/library", label: "Образование", icon: <ServiceIcon slug="library" className="h-5 w-5" /> },
   { href: "/astro", label: "Джйотиш", icon: <ServiceIcon slug="astro" className="h-5 w-5" /> },
   { href: "/market", label: "Рынок", icon: <ServiceIcon slug="market" className="h-5 w-5" /> },
 ];

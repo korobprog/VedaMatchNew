@@ -15,7 +15,7 @@ import { SectionStrip } from "@/components/library/section-strip";
 import { t } from "@/components/library/i18n";
 
 export const metadata: Metadata = {
-  title: "Библиотека ссылок — VedaMatch",
+  title: "Образование — VedaMatch",
   description:
     "Общая база полезных материалов VedaMatch: статьи, видео, книги, курсы и каналы",
 };

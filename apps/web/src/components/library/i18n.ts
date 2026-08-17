@@ -2,7 +2,7 @@ import type { LibraryEntryType, LibraryLocale } from "@vedamatch/shared";
 
 const ui = {
   ru: {
-    "service.title": "Библиотека ссылок",
+    "service.title": "Образование",
     "service.subtitle":
       "Общая база полезных материалов: пополняйте её и находите нужное быстрее",
     "nav.sections": "Разделы",
@@ -105,7 +105,7 @@ const ui = {
     "section.saved": "Раздел обновлён",
   },
   en: {
-    "service.title": "Links library",
+    "service.title": "Education",
     "service.subtitle":
       "A shared base of useful materials: contribute and find things faster",
     "nav.sections": "Sections",

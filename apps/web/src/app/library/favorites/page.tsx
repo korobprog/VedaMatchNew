@@ -8,7 +8,7 @@ import { EntryList } from "@/components/library/entry-list";
 import { t } from "@/components/library/i18n";
 
 export const metadata: Metadata = {
-  title: "Избранное — Библиотека ссылок VedaMatch",
+  title: "Избранное — Образование VedaMatch",
   description: "Ссылки, сохранённые вами в библиотеке VedaMatch",
 };
 
