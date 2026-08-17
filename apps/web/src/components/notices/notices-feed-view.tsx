@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import type {
+  GeoSearchResult,
   NoticeDto,
   NoticeKind,
   NoticeRubricDto,
@@ -16,6 +17,8 @@ import {
 import { NoticeCard } from "./notice-card";
 import { NOTICE_KIND_CHIPS, NOTICE_KIND_ORDER } from "./notice-labels";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+
 /** Лента доски: вид, рубрика, город и поиск. */
 export function NoticesFeedView({ mine = false }: { mine?: boolean }) {
   const [rubrics, setRubrics] = useState<NoticeRubricDto[]>([]);
@@ -23,11 +26,44 @@ export function NoticesFeedView({ mine = false }: { mine?: boolean }) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [kind, setKind] = useState<NoticeKind | null>(null);
   const [rubric, setRubric] = useState<string | null>(null);
+  // Фильтр по городу отправляется в API точным сравнением (см.
+  // notice-feed-query.ts), поэтому в него годится только город, который
+  // подтвердил геокодер, — не то, что человек успел напечатать. `cityQuery` —
+  // то, что видно в поле, `city` — то, что реально фильтрует ленту; они
+  // расходятся ровно на время, пока подсказка ещё не выбрана.
+  const [cityQuery, setCityQuery] = useState("");
   const [city, setCity] = useState("");
+  const [cityResults, setCityResults] = useState<GeoSearchResult[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const trimmed = cityQuery.trim();
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      if (trimmed.length < 2 || trimmed === city) {
+        setCityResults([]);
+        return;
+      }
+      fetch(`${API_URL}/geo/search?q=${encodeURIComponent(trimmed)}`, {
+        signal: controller.signal,
+      })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(await res.text());
+          setCityResults((await res.json()) as GeoSearchResult[]);
+        })
+        .catch((e: unknown) => {
+          if (e instanceof DOMException && e.name === "AbortError") return;
+          setCityResults([]);
+        });
+    }, 350);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [cityQuery, city]);
 
   useEffect(() => {
     let alive = true;
@@ -161,13 +197,40 @@ export function NoticesFeedView({ mine = false }: { mine?: boolean }) {
             placeholder="Что ищете"
             className="rounded-xl border border-glass-brd bg-transparent px-3 py-2 text-sm text-text-0 placeholder:text-text-2"
           />
-          <input
-            type="search"
-            value={city}
-            onChange={(event) => setCity(event.target.value)}
-            placeholder="Город"
-            className="rounded-xl border border-glass-brd bg-transparent px-3 py-2 text-sm text-text-0 placeholder:text-text-2"
-          />
+          <div className="relative">
+            <input
+              type="search"
+              value={cityQuery}
+              onChange={(event) => {
+                setCityQuery(event.target.value);
+                // Пока не выбрали подсказку, фильтр по городу снят: точный
+                // поиск на «Хабаро» вместо «Хабаровск» отдал бы пустую ленту
+                // и выглядел бы сломанным — лучше на секунду показать всех.
+                setCity("");
+              }}
+              placeholder="Город"
+              className="w-full rounded-xl border border-glass-brd bg-transparent px-3 py-2 text-sm text-text-0 placeholder:text-text-2"
+            />
+            {cityResults.length > 0 && (
+              <ul className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-glass-brd bg-bg-1 shadow-lg">
+                {cityResults.map((result) => (
+                  <li key={`${result.lat},${result.lon}`}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCity(result.city);
+                        setCityQuery(result.city);
+                        setCityResults([]);
+                      }}
+                      className="block w-full px-3 py-2 text-left text-sm text-text-1 hover:bg-bg-2 hover:text-text-0"
+                    >
+                      {result.displayName ?? result.city}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
 
