@@ -28,6 +28,7 @@ import {
   NOTICE_KIND_ORDER,
   NOTICE_RECURRENCE_LABELS,
   NOTICE_RECURRENCE_ORDER,
+  RUBRIC_HINTS,
 } from "./notice-labels";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -259,6 +260,11 @@ export function NoticeForm() {
             </option>
           ))}
         </select>
+        {RUBRIC_HINTS[rubricSlug] && (
+          <p className="mt-1.5 text-xs text-text-2">
+            {RUBRIC_HINTS[rubricSlug]}
+          </p>
+        )}
       </Field>
 
       <Field label="Заголовок">
