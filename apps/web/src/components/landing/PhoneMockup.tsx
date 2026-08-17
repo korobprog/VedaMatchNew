@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { VedaMatchMark } from "@/components/icons/vedamatch-mark";
 import { SwipeCard } from "./SwipeCard";
 import { cn } from "@/lib/utils";
 
@@ -94,13 +95,7 @@ export function PhoneMockup({ className }: PhoneMockupProps) {
             {/* App header */}
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-2">
-                <Image
-                  src="/logo_tilak.png"
-                  alt="VedaMatch"
-                  width={36}
-                  height={36}
-                  className="h-9 w-9 object-contain"
-                />
+                <VedaMatchMark className="h-9 w-9" />
                 <span className="font-display text-sm font-bold text-text-0">VedaMatch</span>
               </div>
               <div className="flex items-center gap-2">

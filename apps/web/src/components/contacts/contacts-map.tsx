@@ -19,7 +19,8 @@ const CITY_ZOOM = 9;
  */
 const BRAND_PREFIX =
   '<span class="contacts-map-brand">' +
-  '<img src="/logo_tilak.png" alt="" width="12" height="12" />VedaMatch' +
+  // Тёмная плашка атрибуции: в растре знак запечён тёмно-синим и тонет на ней.
+  '<img src="/logo-mark-on-dark.svg" alt="" width="12" height="12" />VedaMatch' +
   "</span>";
 
 export interface ContactsMapArea {

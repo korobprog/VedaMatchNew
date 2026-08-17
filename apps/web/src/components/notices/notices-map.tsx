@@ -12,9 +12,15 @@ const DEFAULT_CENTER: [number, number] = [55.75, 60];
 const DEFAULT_ZOOM = 3;
 const CITY_ZOOM = 11;
 
+/**
+ * Знак берётся из /logo-mark-on-dark.svg, а не из logo_tilak.png: плашка
+ * атрибуции тёмная в обеих темах, а в растре знак запечён тёмно-синим и на
+ * ней тонет. Компонент `VedaMatchMark` сюда не годится — Leaflet принимает
+ * атрибуцию строкой HTML, не React-узлом.
+ */
 const BRAND_PREFIX =
   '<span class="notices-map-brand">' +
-  '<img src="/logo_tilak.png" alt="" width="12" height="12" />VedaMatch' +
+  '<img src="/logo-mark-on-dark.svg" alt="" width="12" height="12" />VedaMatch' +
   "</span>";
 
 export interface MapArea {

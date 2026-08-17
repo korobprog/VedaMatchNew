@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
 import { ServiceIcon } from "@/components/icons/service-icons";
+import { VedaMatchMark } from "@/components/icons/vedamatch-mark";
 import { SERVICE_CONTENT } from "@/lib/service-content";
 
 interface NavbarProps {
@@ -128,14 +128,9 @@ export function Navbar({ className }: NavbarProps) {
             href="/"
             className="flex items-center gap-3 transition-transform hover:scale-105 focus-visible:outline-none"
           >
-            <Image
-              src="/logo_tilak.png"
-              alt="VedaMatch"
-              width={48}
-              height={48}
-              priority
-              className="h-12 w-12 object-contain"
-            />
+            {/* Вектор, а не logo_tilak.png: у лендинга есть тёмная тема, а в
+                растре знак запечён тёмно-синим и сливается с подложкой. */}
+            <VedaMatchMark className="h-12 w-12" />
             <span className="font-display text-lg md:text-xl font-bold text-text-0 hidden sm:block">
               VedaMatch
             </span>
