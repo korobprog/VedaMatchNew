@@ -3,8 +3,6 @@ import { Unbounded, Manrope, IBM_Plex_Mono } from "next/font/google";
 import { cookies } from "next/headers";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
-import Script from "next/script";
-import { installPromptCaptureScript } from "@/lib/pwa/prompt-capture";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import { isThemePreference, THEME_COOKIE_NAME } from "@/lib/theme";
@@ -89,12 +87,21 @@ export default async function RootLayout({
       className={`${unbounded.variable} ${manrope.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col font-body">
-        <Script
-          id="pwa-install-prompt"
-          strategy="beforeInteractive"
-          // Скрипт-строка, а не компонент: событие приходит до гидратации.
-          dangerouslySetInnerHTML={{ __html: installPromptCaptureScript }}
-        />
+        {/*
+          Обычный <script async>, а не next/script со стратегией
+          beforeInteractive: тот кладёт <script> в дерево компонентов, и
+          React 19 ругается «Encountered a script tag while rendering React
+          component» на каждой странице. Асинхронный скрипт с `src` React 19
+          считает ресурсом, поднимает в <head> сам и не жалуется.
+
+          Побочная выгода — он выполняется при разборе документа, то есть
+          РАНЬШЕ, чем bootstrap Next выполняет очередь `__next_s`. Ради этого
+          всё и затевалось: Chrome шлёт beforeinstallprompt один раз и рано.
+
+          Содержимое файла сверяется с installPromptCaptureScript тестом
+          prompt-capture.spec.ts, чтобы копия не разъехалась с оригиналом.
+        */}
+        <script async src="/pwa-install-prompt.js" />
         <ServiceWorkerRegistrar />
         <NextIntlClientProvider>
           <ThemeProvider initialPreference={preference}>{children}</ThemeProvider>

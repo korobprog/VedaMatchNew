@@ -21,6 +21,7 @@ function stubCaches(names: string[]) {
 describe("service worker registration", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     localStorage.clear();
   });
 
@@ -70,6 +71,48 @@ describe("service worker registration", () => {
     await retireLegacyVedabaseWorker();
 
     expect(unregister).not.toHaveBeenCalled();
+  });
+
+  it("does not register in development and removes an existing worker", async () => {
+    // sw.js кэширует /_next/static/** без ревалидации. В сборке это безопасно
+    // — имена чанков с хэшем. У dev-сервера адреса стабильные, и в кэше
+    // навсегда залипает первая версия файла: правки перестают доезжать, а
+    // страница ломается гидратацией.
+    const deleted = stubCaches(["vedamatch-shell-v2"]);
+    const unregister = vi.fn(async () => true);
+    const register = vi.fn();
+    vi.stubGlobal("navigator", {
+      serviceWorker: {
+        getRegistrations: vi.fn(async () => [{ unregister }]),
+        getRegistration: vi.fn(),
+        register,
+      },
+    });
+    vi.stubEnv("NODE_ENV", "development");
+
+    await expect(registerAppServiceWorker("user-1")).resolves.toBeNull();
+
+    expect(register).not.toHaveBeenCalled();
+    expect(unregister).toHaveBeenCalledTimes(1);
+    expect(deleted).toEqual(["vedamatch-shell-v2"]);
+    // Идентификатор для офлайн-читалки сохраняется всё равно.
+    expect(localStorage.getItem(activeUserKey)).toBe("user-1");
+  });
+
+  it("still registers outside development", async () => {
+    const register = vi.fn(async () => ({}) as ServiceWorkerRegistration);
+    vi.stubGlobal("navigator", {
+      serviceWorker: {
+        getRegistration: vi.fn(async () => undefined),
+        getRegistrations: vi.fn(async () => []),
+        register,
+      },
+    });
+    vi.stubEnv("NODE_ENV", "production");
+
+    await registerAppServiceWorker();
+
+    expect(register).toHaveBeenCalledWith("/sw.js", { scope: "/" });
   });
 
   it("clears both current and legacy caches, leaving unrelated ones alone", async () => {

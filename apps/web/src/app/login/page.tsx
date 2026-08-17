@@ -1,9 +1,9 @@
 ﻿"use client";
 
-import Image from "next/image";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { DevLoginForm } from "@/components/dev-login-form";
+import { VedaMatchMark } from "@/components/icons/vedamatch-mark";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const DEV_AUTH = process.env.NEXT_PUBLIC_DEV_AUTH === "true";
@@ -15,14 +15,9 @@ export default function LoginPage() {
       <NoiseOverlay />
       
       <div className="glass relative z-10 w-full max-w-sm rounded-3xl border border-glass-brd p-8 text-center">
-        <Image
-          src="/logo_tilak.png"
-          alt="VedaMatch"
-          width={96}
-          height={96}
-          priority
-          className="mx-auto mb-6 h-20 w-20 rounded-2xl object-contain"
-        />
+        {/* Вектор, а не logo_tilak.png: в растре знак запечён тёмно-синим и
+            на тёмной теме сливается с фоном. */}
+        <VedaMatchMark className="mx-auto mb-6 h-20 w-20 text-text-0" />
         
         <h1 className="font-display text-2xl font-bold text-text-0 mb-2">
           VedaMatch

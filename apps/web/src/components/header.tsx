@@ -1,7 +1,6 @@
 ﻿"use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import type { UserProfile } from "@vedamatch/shared";
 import { useEffect, useRef, useState } from "react";
@@ -13,6 +12,7 @@ import { CartBadge } from "@/components/market/cart-badge";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
+import { VedaMatchMark } from "@/components/icons/vedamatch-mark";
 
 interface NavItem {
   href: string;
@@ -108,14 +108,9 @@ export function Header({ user }: { user: UserProfile }) {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 h-14">
           {/* Logo */}
           <Link href="/" className="flex shrink-0 items-center gap-2">
-            <Image
-              src="/logo_tilak.png"
-              alt="VedaMatch"
-              width={36}
-              height={36}
-              priority
-              className="h-9 w-9 rounded-lg object-contain"
-            />
+            {/* Вектор, а не logo_tilak.png: в растре знак запечён тёмно-синим
+                и на тёмной теме сливается с фоном шапки. */}
+            <VedaMatchMark className="h-9 w-9 text-text-0" />
             <span className="font-display font-bold text-text-0 hidden sm:block">VedaMatch</span>
           </Link>
 
