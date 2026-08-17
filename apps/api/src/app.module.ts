@@ -21,6 +21,8 @@ import { AstroModule } from './modules/astro/astro.module';
 import { StatsModule } from './modules/stats/stats.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
 import { ChangelogModule } from './modules/changelog/changelog.module';
+import { CommunitiesModule } from './modules/communities/communities.module';
+import { NoticesModule } from './modules/notices/notices.module';
 
 @Module({
   imports: [
@@ -49,6 +51,8 @@ import { ChangelogModule } from './modules/changelog/changelog.module';
     StatsModule,
     ContactsModule,
     ChangelogModule,
+    CommunitiesModule,
+    NoticesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

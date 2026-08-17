@@ -384,6 +384,124 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
         </svg>
       );
 
+    case "notices":
+      // Community notice board: two paper notes pinned under a saffron
+      // pushpin. Indigo is the one hue left unused by the other services, and
+      // the board silhouette reads differently from the market awning and the
+      // contacts card even at nav size.
+      return (
+        <svg
+          viewBox="0 0 32 32"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className={className}
+        >
+          {/* Board */}
+          <rect
+            x="3.5"
+            y="6.5"
+            width="25"
+            height="20"
+            rx="2.5"
+            fill={`url(#${gid("board")})`}
+            stroke={`url(#${gid("frame")})`}
+            strokeWidth="1.8"
+          />
+          {/* Left note, pinned slightly askew */}
+          <rect
+            x="7"
+            y="10"
+            width="10"
+            height="11"
+            rx="1"
+            fill={`url(#${gid("paper-l")})`}
+            transform="rotate(-6 12 15.5)"
+          />
+          <path
+            d="M9.2 13.6H14.8M9.2 16H14.8M9.2 18.4H12.6"
+            stroke="#A16207"
+            strokeWidth="1"
+            strokeLinecap="round"
+            strokeOpacity="0.6"
+            transform="rotate(-6 12 15.5)"
+          />
+          {/* Right note, overlapping — a board is never tidy */}
+          <rect
+            x="16"
+            y="12"
+            width="9.5"
+            height="10"
+            rx="1"
+            fill={`url(#${gid("paper-r")})`}
+            transform="rotate(5 20.75 17)"
+          />
+          <path
+            d="M18 15.2H23.4M18 17.6H23.4M18 20H21.2"
+            stroke="#A16207"
+            strokeWidth="1"
+            strokeLinecap="round"
+            strokeOpacity="0.5"
+            transform="rotate(5 20.75 17)"
+          />
+          {/* Saffron pushpin */}
+          <circle
+            cx="11.4"
+            cy="10.6"
+            r="2"
+            fill="#FBBF24"
+            stroke="#B45309"
+            strokeWidth="0.9"
+          />
+          <circle cx="10.8" cy="10" r="0.55" fill="#FEF9C3" />
+          <defs>
+            <linearGradient
+              id={gid("board")}
+              x1="3.5"
+              y1="6.5"
+              x2="28.5"
+              y2="26.5"
+              gradientUnits="userSpaceOnUse"
+            >
+              <stop stopColor="#312E81" />
+              <stop offset="1" stopColor="#4F46E5" />
+            </linearGradient>
+            <linearGradient
+              id={gid("frame")}
+              x1="3.5"
+              y1="6.5"
+              x2="28.5"
+              y2="26.5"
+              gradientUnits="userSpaceOnUse"
+            >
+              <stop stopColor="#818CF8" />
+              <stop offset="1" stopColor="#6366F1" />
+            </linearGradient>
+            <linearGradient
+              id={gid("paper-l")}
+              x1="7"
+              y1="10"
+              x2="17"
+              y2="21"
+              gradientUnits="userSpaceOnUse"
+            >
+              <stop stopColor="#FEF9C3" />
+              <stop offset="1" stopColor="#FDE68A" />
+            </linearGradient>
+            <linearGradient
+              id={gid("paper-r")}
+              x1="16"
+              y1="12"
+              x2="25.5"
+              y2="22"
+              gradientUnits="userSpaceOnUse"
+            >
+              <stop stopColor="#FFFBEB" />
+              <stop offset="1" stopColor="#FEF3C7" />
+            </linearGradient>
+          </defs>
+        </svg>
+      );
+
     case "devotee-space":
     default:
       // Sacred Temple / Lotus flower with Crown / Lock emblem - Restricted Space

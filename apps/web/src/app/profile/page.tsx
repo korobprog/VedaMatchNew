@@ -6,6 +6,7 @@ import { PLAN as DEFAULT_PLAN } from "@/lib/plan";
 import { formatDate, subscriptionStatusLabels } from "@/lib/support-labels";
 import { Header } from "@/components/header";
 import { ProfileEditor } from "@/components/profile-editor";
+import { CommunityPicker } from "@/components/communities/community-picker";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { LogoutButton } from "@/components/logout-button";
@@ -139,6 +140,9 @@ export default async function ProfilePage() {
         <SubscriptionCard subscription={user.subscription} plan={plan} />
         <div className="mb-6">
           <NotificationSettings />
+        </div>
+        <div className="mb-6">
+          <CommunityPicker />
         </div>
         <ProfileEditor user={user} />
       </main>

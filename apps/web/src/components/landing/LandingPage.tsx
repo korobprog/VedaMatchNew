@@ -115,7 +115,7 @@ export function LandingPage({
                 className="mt-6 inline-flex items-center gap-2 text-sm text-text-2 hover:text-text-0 transition-colors"
               >
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan/15 text-cyan text-xs font-bold">
-                  7
+                  8
                 </span>
                 сервисов платформы: практика, знания, община и рынок
               </a>
@@ -180,7 +180,7 @@ export function LandingPage({
         </motion.div>
       </section>
 
-      {/* Services Section — весь каталог из 7 сервисов платформы */}
+      {/* Services Section — весь каталог из 8 сервисов платформы */}
       <Services />
 
       {/* How It Works Section */}

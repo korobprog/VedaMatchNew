@@ -30,6 +30,21 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.noticePublished)
+  onNoticePublished(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.noticeResponseReceived)
+  onNoticeResponseReceived(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.noticeResponseAccepted)
+  onNoticeResponseAccepted(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   @OnEvent(notificationEventNames.contactsRequestReceived)
   onContactsRequestReceived(event: NotificationEvent): void {
     void this.deliver(event);

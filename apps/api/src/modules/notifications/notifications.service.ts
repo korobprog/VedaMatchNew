@@ -16,6 +16,7 @@ const defaults: NotificationPreferencesDto = {
   support: true,
   transits: true,
   market: true,
+  notices: true,
 };
 
 /**
@@ -91,6 +92,7 @@ export class NotificationsService {
       support: row.support,
       transits: row.transits,
       market: row.market,
+      notices: row.notices,
     };
   }
 
@@ -106,6 +108,7 @@ export class NotificationsService {
       support: patch.support ?? current.support,
       transits: patch.transits ?? current.transits,
       market: patch.market ?? current.market,
+      notices: patch.notices ?? current.notices,
     };
     await this.prisma.notificationPreference.upsert({
       where: { userId },

@@ -22,6 +22,9 @@ export const notificationEventNames = {
   marketListingPublished: 'market.listing.published',
   marketListingPriceDropped: 'market.listing.price-dropped',
   marketReviewReceived: 'market.review.received',
+  noticePublished: 'notices.notice.published',
+  noticeResponseReceived: 'notices.response.received',
+  noticeResponseAccepted: 'notices.response.accepted',
 } as const satisfies Record<string, NotificationEventName>;
 
 /** Payload веб-пуша ограничен ~4 КБ, да и на экране длинный текст не поместится. */
@@ -171,6 +174,34 @@ export function buildNotification(
         tag: `market-review:${event.shopSlug}`,
         category: 'market',
       };
+    case 'notices.notice.published':
+      return {
+        title: event.sourceName,
+        body: toExcerpt(event.noticeTitle),
+        url: `/notices/${event.noticeId}`,
+        // Тег по источнику подписки, а не по объявлению: пять новых
+        // объявлений в рубрике должны схлопнуться в одно уведомление, а не
+        // выстроиться пятью подряд.
+        tag: `notices:${event.sourceName}`,
+        category: 'notices',
+      };
+    case 'notices.response.received':
+      return {
+        title: 'Отклик на объявление',
+        // Без рода: User.gender необязателен.
+        body: `${event.senderName} — «${toExcerpt(event.noticeTitle)}»`,
+        url: `/notices/${event.noticeId}`,
+        tag: `notice-responses:${event.noticeId}`,
+        category: 'notices',
+      };
+    case 'notices.response.accepted':
+      return {
+        title: 'Ваш отклик принят',
+        body: `Контакты открыты: «${toExcerpt(event.noticeTitle)}»`,
+        url: '/notices/responses',
+        tag: `notice-response:${event.noticeId}`,
+        category: 'notices',
+      };
   }
 }
 
@@ -188,7 +219,9 @@ function formatMinor(minor: number, currency: string): string {
   const fraction = minor % 100;
   const grouped = String(major).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   const body =
-    fraction === 0 ? grouped : `${grouped},${String(fraction).padStart(2, '0')}`;
+    fraction === 0
+      ? grouped
+      : `${grouped},${String(fraction).padStart(2, '0')}`;
   return `${body} ${CURRENCY_SYMBOL[currency] ?? currency}`;
 }
 
@@ -203,7 +236,10 @@ function itemsWord(count: number): string {
 }
 
 function orderStatusPhrase(
-  status: Extract<NotificationEvent, { name: 'market.order.status-changed' }>['status'],
+  status: Extract<
+    NotificationEvent,
+    { name: 'market.order.status-changed' }
+  >['status'],
 ): string {
   switch (status) {
     case 'accepted':

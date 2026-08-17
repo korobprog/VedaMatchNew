@@ -82,6 +82,28 @@ export type NotificationEvent =
       listingId: string;
     }
   | {
+      name: 'notices.notice.published';
+      recipientId: string;
+      /** На что человек подписан: рубрика, город или община. */
+      sourceName: string;
+      noticeTitle: string;
+      noticeId: string;
+    }
+  | {
+      name: 'notices.response.received';
+      recipientId: string;
+      /** Имя откликнувшегося — уже через resolveDisplayName. */
+      senderName: string;
+      noticeTitle: string;
+      noticeId: string;
+    }
+  | {
+      name: 'notices.response.accepted';
+      recipientId: string;
+      noticeTitle: string;
+      noticeId: string;
+    }
+  | {
       name: 'market.listing.price-dropped';
       recipientId: string;
       listingTitle: string;
@@ -109,6 +131,7 @@ export type NotificationEventName = NotificationEvent['name'];
 
 /** Категории совпадают с тумблерами в NotificationPreferencesDto. */
 export type NotificationCategory =
+  | 'notices'
   | 'chat'
   | 'connections'
   | 'support'
@@ -148,6 +171,10 @@ export interface NotificationPreferencesDto {
    *  они идут под общим тумблером `chat`: второй переключатель на то же
    *  самое только путал бы. */
   market: boolean;
+  /** Доска «Объявления»: подписки на рубрику и город, отклики на свои
+   *  объявления. Отдельно от `market`: выключив коммерцию, человек не должен
+   *  молча потерять доску общины. */
+  notices: boolean;
 }
 
 export type UpdateNotificationPreferencesRequest =

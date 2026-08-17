@@ -268,6 +268,19 @@ model User {
   marketSubscriptions                MarketSubscription[]
   marketReportsMade                  MarketReport[]               @relation("MarketReportsMade")
   marketReportsReviewed              MarketReport[]               @relation("MarketReportsReviewed")
+  communitiesCreated                 Community[]                  @relation("CommunityCreatedBy")
+  communitiesVerified                Community[]                  @relation("CommunityVerifiedBy")
+  communityMemberships               CommunityMember[]            @relation("CommunityMemberships")
+  communityMemberDecisions           CommunityMember[]            @relation("CommunityMemberDecidedBy")
+  communityTransfersSent             CommunityOwnershipTransfer[] @relation("CommunityTransfersSent")
+  communityTransfersReceived         CommunityOwnershipTransfer[] @relation("CommunityTransfersReceived")
+  notices                            Notice[]                     @relation("NoticesAuthored")
+  noticeResponses                    NoticeResponse[]             @relation("NoticeResponsesMade")
+  noticeThanksGiven                  NoticeThanks[]               @relation("NoticeThanksGiven")
+  noticeThanksReceived               NoticeThanks[]               @relation("NoticeThanksReceived")
+  noticeReportsMade                  NoticeReport[]               @relation("NoticeReportsMade")
+  noticeReportsReviewed              NoticeReport[]               @relation("NoticeReportsReviewed")
+  noticeSubscriptions                NoticeSubscription[]         @relation("NoticeSubscriptions")
 }
 
 // Единственная строка глобальных настроек платформы (id всегда "global").
@@ -1377,6 +1390,10 @@ model NotificationPreference {
   transits    Boolean  @default(true)
   /// Заявки и их статусы на Рынке. Сообщения чата Рынка идут под `chat`.
   market      Boolean  @default(true)
+  /// Доска «Объявления»: подписки на рубрику и город, отклики на свои
+  /// объявления. Своя колонка, а не переиспользование `market`: выключив
+  /// коммерцию, человек не должен молча терять доску общины.
+  notices     Boolean  @default(true)
   updatedAt   DateTime @updatedAt
 }
 
@@ -2420,4 +2437,527 @@ model MarketReport {
   @@index([status, createdAt])
   @@index([listingId])
   @@index([shopId])
+}
+
+// ===== Communities (portal) =====
+//
+// Ятры, храмы, нама-хатты и клубы. Это портальная инфраструктура, а не модели
+// сервиса, и потому здесь нет префикса: принадлежность к общине — сквозной
+// признак человека, она видна в профиле, в знакомствах, в справочнике и в
+// объявлениях одновременно. Копия внутри одного сервиса разъехалась бы с
+// остальными на первой же правке. Сервисы читают эти таблицы только read-only
+// и только через CommunitiesService — см. docs/service-module-contract.md.
+
+enum CommunityKind {
+  yatra
+  temple
+  ashram
+  nama_hatta
+  farm
+  club
+  center
+  project
+}
+
+/// `pending` — заведена человеком и ждёт разбора администрацией. Свободное
+/// создание закрыто намеренно: справочник ятр зарастает дублями «Москва»,
+/// «Москва ятра», «ятра г. Москва» быстрее всего остального, а склеивать их
+/// задним числом дороже, чем один раз посмотреть заявку.
+enum CommunityStatus {
+  draft
+  pending
+  active
+  paused
+  archived
+  hidden_by_reports
+  removed_by_admin
+}
+
+enum CommunityJoinPolicy {
+  open
+  request_approval
+  invite_only
+}
+
+/// `moderator` заведён под делегированную модерацию Объявлений: скрыть
+/// объявление своей общины, но не править саму общину. Без делегирования
+/// доска не масштабируется — портальная администрация станет узким местом.
+enum CommunityMemberRole {
+  owner
+  admin
+  moderator
+  member
+}
+
+/// `left` и `removed` различаются намеренно: ушедший может вернуться сам,
+/// исключённого возвращает только админ общины.
+enum CommunityMemberStatus {
+  pending
+  active
+  declined
+  left
+  removed
+}
+
+/// Община. Гео продублировано скалярными колонками рядом с `location`: JSON в
+/// Postgres не индексируется, а по городу идёт фильтр справочника — та же
+/// денормализация, что у `MarketShop`.
+model Community {
+  id   String        @id @default(uuid())
+  slug String        @unique
+  kind CommunityKind
+
+  /// Название — имя собственное, поэтому одно поле, а не пара Ru/En.
+  name          String
+  descriptionRu String?
+  descriptionEn String?
+
+  logoKey  String?
+  logoUrl  String?
+  coverKey String?
+  coverUrl String?
+
+  /// ProfileLocation целиком — чтобы вернуть в форму без обратного пересчёта.
+  location  Json?
+  city      String?
+  country   String?
+  latitude  Float?
+  longitude Float?
+  /// Точный адрес. У храма он публичный — в отличие от дома человека, который
+  /// на карте портала не показывается никогда.
+  address   String?
+  /// IANA-зона места. Нужна, чтобы «воскресная программа в 17:00» означала
+  /// 17:00 там, а не у смотрящего: одного UTC-момента для этого мало.
+  timezone  String?
+
+  /// ProfileMessengers-совместимый объект: как связаться с общиной.
+  messengers Json?
+  /// ProfileSocialLinks-совместимый объект: сайт, канал, группа.
+  links      Json?
+
+  joinPolicy CommunityJoinPolicy @default(request_approval)
+  status     CommunityStatus     @default(pending)
+
+  /// Отметка администрации «это действительно та община, за которую себя
+  /// выдают». Сильнее, чем `active`: `active` означает лишь, что это не дубль.
+  verifiedAt   DateTime?
+  verifiedById String?
+  verifiedBy   User?     @relation("CommunityVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  createdById String?
+  createdBy   User?   @relation("CommunityCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  /// Денормализованные счётчики — для строки справочника без подзапроса.
+  membersCount     Int @default(0)
+  noticesCount     Int @default(0)
+  openReportsCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members            CommunityMember[]
+  ownershipTransfers CommunityOwnershipTransfer[]
+  notices            Notice[]                     @relation("NoticeAuthorCommunity")
+  noticeSubscriptions NoticeSubscription[]        @relation("NoticeSubscriptions")
+
+  @@index([status, city])
+  @@index([status, kind])
+  @@index([status, membersCount(sort: Desc)])
+}
+
+/// Участие человека в общине. Роль и статус разведены: заявка на вступление —
+/// это строка со `status: pending` и ролью `member`, а не отдельная таблица
+/// заявок, иначе принятие заявки означало бы перенос строки между таблицами.
+model CommunityMember {
+  id          String                @id @default(uuid())
+  communityId String
+  community   Community             @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User                  @relation("CommunityMemberships", fields: [userId], references: [id], onDelete: Cascade)
+  role        CommunityMemberRole   @default(member)
+  status      CommunityMemberStatus @default(pending)
+  /// Служение внутри общины свободным текстом: «пуджари», «координатор кухни».
+  /// Не роль: роль управляет правами, это — подпись в списке участников.
+  title       String?
+  /// Какая из общин человека показывается значком в профиле. Ровно одна на
+  /// человека; частичный уникальный индекс Prisma выразить не умеет, поэтому
+  /// инвариант держит сервис — снимает флаг с прежней в той же транзакции.
+  isPrimary   Boolean               @default(false)
+  /// Показывать ли участие публично. Само по себе оно не тайна, но связывать
+  /// себя с общиной на людях человек не обязан.
+  isPublic    Boolean               @default(true)
+
+  joinedAt    DateTime?
+  decidedById String?
+  decidedBy   User?     @relation("CommunityMemberDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  /// Когда по членству приняли решение — вступил, отказали, исключили.
+  /// От него отсчитывается пауза перед повторной заявкой: без неё отказ
+  /// ничего не значит, заявку переотправят в тот же вечер.
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([communityId, userId])
+  @@index([userId, status])
+  @@index([communityId, status, role])
+}
+
+/// Передача владения общиной. Отдельная таблица, а не присваивание поля:
+/// смена владельца требует согласия принимающего, иначе общину можно
+/// «подарить» человеку, который об этом не просил, и повесить на него
+/// ответственность за модерацию.
+model CommunityOwnershipTransfer {
+  id          String    @id @default(uuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  fromUserId  String
+  fromUser    User      @relation("CommunityTransfersSent", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId    String
+  toUser      User      @relation("CommunityTransfersReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  /// Непринятое предложение протухает: висящая вечно передача владения —
+  /// это мина, которая срабатывает через год после того, как о ней забыли.
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  declinedAt  DateTime?
+
+  @@index([toUserId, acceptedAt, declinedAt])
+  @@index([communityId, createdAt(sort: Desc)])
+}
+
+// ===== Notices service =====
+//
+// Некоммерческая доска общины. Ключевое отличие от Рынка — структурное:
+// здесь НЕТ НИ ОДНОГО денежного поля. Не «необязательная цена», а
+// отсутствующая: чтобы что-то продать в Объявлениях, придётся сначала
+// изменить схему. Это единственная граница между сервисами, которая
+// держится сама, без надзора. См. docs/notices-service-plan.md.
+
+/// Вид объявления. Закрытый набор из четырёх значений: вид меняет форму,
+/// обязательные поля и срок жизни, то есть код, а не данные. Всё, что растёт
+/// (тематика), живёт таблицей NoticeRubric.
+enum NoticeKind {
+  offer
+  request
+  event
+  info
+}
+
+/// `resolved` и `expired` разведены намеренно: «вопрос решён» и «протухло
+/// само» — разные факты. Первое закрывает просьбу и идёт в статистику помощи,
+/// второе продлевается одной кнопкой.
+///
+/// `moved_to_market` — модератор увидел коммерцию. Автоматического переноса
+/// записи в Рынок нет и быть не может: связь с моделями чужого сервиса
+/// запрещена контрактом, автор переносит текст сам по готовой ссылке.
+enum NoticeStatus {
+  draft
+  published
+  hidden_by_author
+  resolved
+  expired
+  moved_to_market
+  hidden_by_reports
+  removed_by_admin
+}
+
+/// Точность места. Главное приватностное решение сервиса: объявление
+/// человека НИКОГДА не ставит метку на его дом. `exact` разрешён, только
+/// когда место общественное — храм, площадка события. Понижает сервер,
+/// клиент переопределить не может.
+enum NoticePlacePrecision {
+  exact
+  city
+}
+
+/// Кому видно. `my_community` — объявление внутри ятры: сбор на храм или
+/// служение, которое незачем показывать всему порталу.
+enum NoticeAudience {
+  everyone
+  my_city
+  my_community
+}
+
+/// Рубрика доски. Таблица, а не enum: тематика растёт постоянно, и каждое
+/// добавление миграцией — тупик (то же решение, что у ContactsTag).
+/// Один уровень: на доске взаимопомощи второй уровень пустует, а вложенность
+/// ломает лёгкость публикации.
+model NoticeRubric {
+  id           String     @id @default(uuid())
+  slug         String     @unique
+  /// Виды, в которых рубрика предлагается. Пустой массив — во всех:
+  /// «разное» уместно и в просьбе, и в предложении.
+  kinds        NoticeKind[]
+  nameRu       String
+  nameEn       String
+  iconKey      String?
+  isSystem     Boolean    @default(true)
+  position     Int        @default(0)
+  /// Денормализованный счётчик опубликованных — для строки навигации.
+  noticesCount Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  notices       Notice[]
+  subscriptions NoticeSubscription[]
+
+  @@index([position])
+  @@index([noticesCount(sort: Desc)])
+}
+
+/// Объявление. Все виды — одна модель: различий между ними десяток полей,
+/// а не сущность (тот же вывод, что у MarketListing про товар и услугу).
+///
+/// Автор ВСЕГДА человек, даже когда публикуют от имени общины: за текстом
+/// стоит конкретный преданный, и при разборе жалобы нужно знать, кто именно
+/// написал. `communityId` — только «от чьего имени показано»; право его
+/// проставить проверяется через CommunitiesService.canPostAs и на создании,
+/// и на правке: роль могли снять.
+model Notice {
+  id       String       @id @default(uuid())
+  kind     NoticeKind
+  rubricId String
+  rubric   NoticeRubric @relation(fields: [rubricId], references: [id])
+
+  authorId    String
+  author      User       @relation("NoticesAuthored", fields: [authorId], references: [id], onDelete: Cascade)
+  /// От имени общины. null — от себя лично.
+  communityId String?
+  community   Community? @relation("NoticeAuthorCommunity", fields: [communityId], references: [id], onDelete: SetNull)
+
+  /// Пара Ru/En, как у MarketListing: человек заполняет одну, вторая
+  /// остаётся пустой, а выдача подставляет ту, что есть.
+  titleRu       String?
+  titleEn       String?
+  descriptionRu String?
+  descriptionEn String?
+
+  audience NoticeAudience @default(everyone)
+
+  /// Гео. Денормализовано скалярами рядом с `location` по той же причине,
+  /// что в MarketShop: JSON в Postgres не индексируется, а по городу идёт
+  /// фильтр ленты.
+  location  Json?
+  city      String?
+  country   String?
+  latitude  Float?
+  longitude Float?
+  placePrecision NoticePlacePrecision @default(city)
+
+  /// Событие. `timeZone` хранится рядом с `startsAt` намеренно: одного
+  /// UTC-момента мало — «программа в 17:00» должна остаться 17:00 по месту
+  /// проведения, куда бы ни переехал смотрящий.
+  startsAt  DateTime?
+  endsAt    DateTime?
+  timeZone  String?
+  venueName String?
+  isOnline  Boolean   @default(false)
+  onlineUrl String?
+  repeat      NoticeRecurrence @default(none)
+  /// До какой даты повторять. null у повторяющегося события — «пока не
+  /// отменят»: разворачивание всё равно ограничено окном запроса.
+  repeatUntil DateTime?
+
+  status      NoticeStatus @default(published)
+  needsReview Boolean      @default(false)
+  /// Модератор предложил перенести в Рынок; автору уходит ссылка с текстом.
+  marketMoveSuggestedAt DateTime?
+  moderatorNote         String?
+
+  /// Отпечаток нормализованного текста: один автор не публикует одно и то же
+  /// дважды. Считается чистой функцией notice-fingerprint.ts.
+  fingerprint String
+
+  /// Первая картинка по sortOrder — чтобы лента не тянула связь.
+  primaryImageUrl String?
+
+  /// `publishedAt` при продлении НЕ меняется: иначе «продлить» стало бы
+  /// бесплатным подъёмом в топ, и лента превратилась бы в соревнование по
+  /// нажатию кнопки.
+  publishedAt DateTime  @default(now())
+  expiresAt   DateTime
+  renewedAt   DateTime?
+  renewCount  Int       @default(0)
+  resolvedAt  DateTime?
+
+  viewsCount       Int @default(0)
+  responsesCount   Int @default(0)
+  thanksCount      Int @default(0)
+  openReportsCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  images    NoticeImage[]
+  responses NoticeResponse[]
+  thanks    NoticeThanks[]
+  reports   NoticeReport[]
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([status, kind, publishedAt(sort: Desc)])
+  @@index([status, rubricId, publishedAt(sort: Desc)])
+  @@index([status, city, publishedAt(sort: Desc)])
+  /// Воркер протухания ходит только по этому индексу.
+  @@index([status, expiresAt])
+  /// Афиша и календарь.
+  @@index([status, startsAt])
+  @@index([communityId, status, publishedAt(sort: Desc)])
+  @@index([authorId, status, createdAt(sort: Desc)])
+  /// Дедупликация: одинаковый текст от одного автора среди живых объявлений.
+  @@index([authorId, fingerprint])
+}
+
+/// Повторяемость события. Вхождения НЕ материализуются строками: правка
+/// «воскресной программы» превратилась бы в правку сотни записей, а календарь
+/// — в генератор мусора. Повторы разворачиваются в приложении,
+/// notice-event-occurrences.ts.
+///
+/// `ekadashi` стоит особняком: лунный календарь правилом не выражается,
+/// даты берутся таблицей из prisma/../notices/ekadashi-dates.ts.
+enum NoticeRecurrence {
+  none
+  weekly
+  biweekly
+  monthly
+  ekadashi
+}
+
+enum NoticeResponseStatus {
+  open
+  accepted
+  declined
+  withdrawn
+}
+
+/// `commercial` — отдельная причина, а не «другое»: дрейф в Рынок это
+/// главный способ, которым некоммерческая доска перестаёт быть таковой,
+/// и в очереди модератора его надо видеть отдельной строкой.
+enum NoticeReportReason {
+  spam
+  commercial
+  mlm
+  duplicate
+  scam
+  inappropriate_content
+  wrong_rubric
+  other
+}
+
+enum NoticeReportStatus {
+  open
+  reviewed
+  dismissed
+}
+
+/// Отклик. Одно сообщение и статус, а не переписка: своего чата у сервиса
+/// нет, а импортировать чат Union запрещено контрактом. Пара (объявление,
+/// человек) уникальна — второй отклик на то же объявление это правка первого.
+model NoticeResponse {
+  id       String               @id @default(uuid())
+  noticeId String
+  notice   Notice               @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User                 @relation("NoticeResponsesMade", fields: [userId], references: [id], onDelete: Cascade)
+  message  String?
+  status   NoticeResponseStatus @default(open)
+
+  createdAt   DateTime  @default(now())
+  respondedAt DateTime?
+
+  @@unique([noticeId, userId])
+  @@index([noticeId, status, createdAt])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+/// Благодарность вместо рейтинга. Звёзды здесь были бы чужеродны: человек
+/// отдал вещь даром, а ему ставят четвёрку. Благодарность нельзя занизить —
+/// её либо сказали, либо нет, и отрицательной части у неё нет намеренно.
+model NoticeThanks {
+  id         String   @id @default(uuid())
+  noticeId   String
+  notice     Notice   @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  fromUserId String
+  fromUser   User     @relation("NoticeThanksGiven", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId   String
+  toUser     User     @relation("NoticeThanksReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@unique([noticeId, fromUserId])
+  @@index([toUserId, createdAt(sort: Desc)])
+}
+
+/// Жалоба на объявление. Своя таблица, а не портальный `UserReport`: цель —
+/// объявление, а не пользователь.
+model NoticeReport {
+  id         String @id @default(uuid())
+  reporterId String
+  reporter   User   @relation("NoticeReportsMade", fields: [reporterId], references: [id], onDelete: Cascade)
+  noticeId   String
+  notice     Notice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+
+  reason        NoticeReportReason
+  note          String?
+  status        NoticeReportStatus @default(open)
+  reviewedById  String?
+  reviewedBy    User?              @relation("NoticeReportsReviewed", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt    DateTime?
+  moderatorNote String?
+  createdAt     DateTime           @default(now())
+
+  /// Один человек жалуется на объявление один раз. В отличие от Рынка,
+  /// отдельный `targetKey` не нужен: цель здесь всегда одна и не бывает NULL.
+  @@unique([reporterId, noticeId])
+  @@index([status, createdAt])
+  @@index([noticeId])
+}
+
+enum NoticeSubscriptionKind {
+  rubric
+  city
+  community
+}
+
+/// Подписка «сообщать о новом». Без неё доску открывают раз в месяц.
+///
+/// `targetKey` материализован отдельной колонкой по той же причине, что в
+/// `MarketSubscription`: уникальный индекс по колонкам с NULL в Postgres не
+/// дедуплицирует, и один человек мог бы подписаться на одну рубрику дважды.
+model NoticeSubscription {
+  id     String                 @id @default(uuid())
+  userId String
+  user   User                   @relation("NoticeSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
+  kind   NoticeSubscriptionKind
+
+  targetKey String
+  rubricId  String?
+  rubric    NoticeRubric? @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  /// Город строкой: справочника городов нет, нормализация — lower(trim()),
+  /// как и в фильтрах ленты.
+  city      String?
+  communityId String?
+  community   Community? @relation("NoticeSubscriptions", fields: [communityId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, targetKey])
+  @@index([kind, targetKey])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+/// Фото объявления. Публичные объекты в S3 — карточка попадает в SSR-HTML
+/// и должна кешироваться CDN, поэтому не пресайн, как в галерее профиля.
+model NoticeImage {
+  id         String   @id @default(uuid())
+  noticeId   String
+  notice     Notice   @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  storageKey String   @unique
+  url        String
+  width      Int
+  height     Int
+  sizeBytes  Int
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([noticeId, sortOrder])
 }

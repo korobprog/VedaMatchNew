@@ -149,6 +149,7 @@ describe('NotificationsService.getPreferences', () => {
       support: true,
       transits: true,
       market: true,
+      notices: true,
     });
   });
 
@@ -185,6 +186,7 @@ describe('NotificationsService.updatePreferences', () => {
       support: true,
       transits: true,
       market: true,
+      notices: true,
     });
   });
 });

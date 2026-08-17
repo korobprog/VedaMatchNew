@@ -89,6 +89,11 @@
   --vm-text-1: #4B3B6C;
   --vm-text-2: #766591;
 
+  /* Знак VedaMatch. Отдельный токен, а не --vm-text-0: на белом фоне
+     почти чёрная «M» выглядит тяжелее остального интерфейса, а фирменный
+     синий из оригинального логотипа и легче, и узнаваемее. */
+  --vm-logo-mark: #26356B;
+
   --vm-glow-magenta: rgba(219, 27, 132, 0.28);
   --vm-glow-cyan: rgba(12, 145, 124, 0.28);
   --vm-glow-gold: rgba(176, 119, 14, 0.28);
@@ -125,6 +130,9 @@
   --vm-text-0: #F6F1FF;
   --vm-text-1: #B8A9D9;
   --vm-text-2: #7C6D9C;
+
+  /* На тёмном знак совпадает с основным текстом: синий здесь бы утонул. */
+  --vm-logo-mark: #F6F1FF;
 
   --vm-glow-magenta: rgba(255, 62, 158, 0.45);
   --vm-glow-cyan: rgba(35, 240, 199, 0.45);
@@ -163,6 +171,8 @@
     --vm-text-0: #F6F1FF;
     --vm-text-1: #B8A9D9;
     --vm-text-2: #7C6D9C;
+
+    --vm-logo-mark: #F6F1FF;
 
     --vm-glow-magenta: rgba(255, 62, 158, 0.45);
     --vm-glow-cyan: rgba(35, 240, 199, 0.45);
@@ -570,4 +580,68 @@ body {
 .contacts-map-brand img {
   display: block;
   border-radius: 2px;
+}
+
+/* Карта доски «Объявления». Правила повторяют контактовские почти дословно —
+   это цена контракта сервисных модулей: общими остаются только классы самого
+   Leaflet выше, а брендинг и метки у каждого сервиса свои.
+
+   Метки здесь двух видов, и это не украшение: агрегат по городу обещает
+   ровно город, а точка — настоящий адрес храма или площадки. Одинаково
+   выглядеть они не должны. */
+.notices-map-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.notices-map-brand img {
+  display: block;
+  border-radius: 2px;
+}
+
+/* Агрегат по городу: подпись без острия — точности адреса за ней нет. */
+.notices-map-cluster {
+  display: inline-block;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  border-radius: 9999px;
+  border: 1px solid var(--vm-magenta, #ff3e9e);
+  background: rgba(18, 18, 26, 0.92);
+  padding: 0.15rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* Одно объявление. Точка с остриём — только у общественного места; у
+   объявления человека метка стоит в центре города, и острие ей не рисуется. */
+.notices-map-pin {
+  display: inline-block;
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 0.5rem;
+  border: 1px solid var(--vm-cyan, #33cccc);
+  background: rgba(18, 18, 26, 0.94);
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  color: #fff;
+}
+
+.notices-map-pin[data-precision="city"] {
+  border-color: var(--vm-magenta, #ff3e9e);
+  border-style: dashed;
+  transform: translate(-50%, -50%);
+}
+
+.leaflet-marker-icon:hover .notices-map-pin,
+.leaflet-marker-icon:focus-visible .notices-map-pin,
+.leaflet-marker-icon:hover .notices-map-cluster,
+.leaflet-marker-icon:focus-visible .notices-map-cluster {
+  background: var(--vm-magenta, #ff3e9e);
 }

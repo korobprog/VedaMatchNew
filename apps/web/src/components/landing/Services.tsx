@@ -32,7 +32,7 @@ export function Services() {
           className="text-center mb-16"
         >
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-text-0 mb-4">
-            Один аккаунт — семь сервисов
+            Один аккаунт — восемь сервисов
           </h2>
           <p className="text-text-1 text-lg max-w-2xl mx-auto">
             VedaMatch — это не только знакомства. Это экосистема для жизни в благости:

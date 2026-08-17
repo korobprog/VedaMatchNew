@@ -6,6 +6,7 @@ const { librarySections } = require('./library-sections-data.js');
 const { contactsTags } = require('./contacts-tags-data.js');
 const { marketSections } = require('./market-sections-data.js');
 const { marketCategories } = require('./market-categories-data.js');
+const { noticeRubrics } = require('./notice-rubrics-data.js');
 
 const services = [
   {
@@ -118,6 +119,23 @@ const services = [
     devoteeSelfIdentifiedVisible: true,
     devoteeVerifiedVisible: true,
   },
+  {
+    slug: 'notices',
+    name: 'Объявления',
+    description:
+      'Некоммерческая доска общины: отдам даром, нужны руки, попутчики, программы ятр',
+    url: '/notices',
+    // active: доска, отклики, благодарности и модерация жалоб готовы и
+    // покрыты тестами. Карта и календарь — следующий этап, статуса не меняют.
+    status: 'active',
+    category: 'community',
+    public: true,
+    seekerVisible: true,
+    practitionerVisible: true,
+    yogiVisible: true,
+    devoteeSelfIdentifiedVisible: true,
+    devoteeVerifiedVisible: true,
+  },
 ];
 
 async function main() {
@@ -183,9 +201,19 @@ async function main() {
         create: { ...fields, sectionId },
       });
     }
+    // Рубрики доски объявлений. `position` берётся из порядка в файле, чтобы
+    // не держать номер отдельным полем и не рассинхронизировать его правкой.
+    for (const [index, rubric] of noticeRubrics.entries()) {
+      const fields = { ...rubric, position: index, isSystem: true };
+      await transaction.noticeRubric.upsert({
+        where: { slug: rubric.slug },
+        update: fields,
+        create: fields,
+      });
+    }
   });
   console.log(
-    `Seeded ${services.length} services, ${librarySections.length} library sections, ${contactsTags.length} contacts tags, ${marketSections.length} market sections and ${marketCategories.length} market categories`,
+    `Seeded ${services.length} services, ${librarySections.length} library sections, ${contactsTags.length} contacts tags, ${marketSections.length} market sections, ${marketCategories.length} market categories and ${noticeRubrics.length} notice rubrics`,
   );
 }
 

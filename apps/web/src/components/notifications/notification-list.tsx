@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   BellOff,
+  ClipboardList,
   MessageCircle,
   Heart,
   LifeBuoy,
@@ -23,6 +24,7 @@ const categoryIcons: Record<NotificationCategory, React.ReactNode> = {
   support: <LifeBuoy size={18} aria-hidden="true" />,
   transits: <Sparkles size={18} aria-hidden="true" />,
   market: <ShoppingBasket size={18} aria-hidden="true" />,
+  notices: <ClipboardList size={18} aria-hidden="true" />,
 };
 
 function formatWhen(iso: string): string {

@@ -227,7 +227,7 @@ export function ServiceDetailPage({
                 Готовы попробовать «{service.name}»?
               </h2>
               <p className="text-text-1 text-base md:text-lg mb-8 max-w-xl mx-auto">
-                Первый месяц бесплатно, доступ ко всем 7 сервисам платформы в одном аккаунте.
+                Первый месяц бесплатно, доступ ко всем 8 сервисам платформы в одном аккаунте.
               </p>
               <Link
                 href={ctaHref}

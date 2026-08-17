@@ -16,6 +16,8 @@ export * from './astro-compatibility';
 export * from './astro-transit';
 export * from './changelog';
 export * from './market';
+export * from './community';
+export * from './notices';
 
 import type { SubscriptionState } from './support';
 
