@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Loader2 } from "lucide-react";
+import { Loader2, MapPin } from "lucide-react";
 import type { NoticeKind, NoticeMapResponse } from "@vedamatch/shared";
 import { NoticesApiError, getNoticesMap } from "@/lib/notices-api";
+import { plural } from "@/lib/plural";
 import { NOTICE_KIND_CHIPS, NOTICE_KIND_ORDER } from "./notice-labels";
-import type { MapArea } from "./notices-map";
+import type { MapArea, NoticesMapHandle } from "./notices-map";
 
 // Leaflet трогает `window` при вычислении модуля, поэтому карта грузится
 // только на клиенте. `ssr: false` тут обязателен, а не оптимизация.
@@ -33,6 +35,7 @@ export function NoticesMapPanel() {
   const areaRef = useRef<MapArea | null>(null);
   const timerRef = useRef<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const mapHandleRef = useRef<NoticesMapHandle>(null);
 
   const load = useCallback(
     (area: MapArea, kindFilter: NoticeKind | null) => {
@@ -108,10 +111,95 @@ export function NoticesMapPanel() {
       )}
 
       <NoticesMap
+        ref={mapHandleRef}
         data={data}
         onAreaChange={onAreaChange}
         onSelectNotice={(id) => router.push(`/notices/${id}`)}
       />
+
+      <MapVisibleList
+        data={data}
+        onSelectCluster={(lat, lon) => mapHandleRef.current?.flyTo(lat, lon)}
+      />
+    </div>
+  );
+}
+
+/**
+ * Список того же самого, что сейчас нарисовано на карте — не отдельная
+ * выборка, а текстовое представление `data`. На агрегате по городу список
+ * повторяет клик по метке (то же `flyTo`); на отдельных точках — ведёт на
+ * само объявление, тоже как клик по метке. Своего поведения список не
+ * придумывает нигде.
+ */
+function MapVisibleList({
+  data,
+  onSelectCluster,
+}: {
+  data: NoticeMapResponse | null;
+  onSelectCluster: (lat: number, lon: number) => void;
+}) {
+  if (!data) return null;
+
+  const empty =
+    data.mode === "clusters" ? data.clusters.length === 0 : data.points.length === 0;
+  if (empty) {
+    return (
+      <p className="mt-4 text-sm text-text-2">
+        В этой части карты пока ничего нет — подвиньте её или отдалите.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-4">
+      <h2 className="mb-2 text-sm font-medium text-text-1">Видно на карте</h2>
+      <ul className="space-y-1.5">
+        {data.mode === "clusters"
+          ? data.clusters.map((cluster) => (
+              <li key={`${cluster.city}-${cluster.country ?? ""}`}>
+                <button
+                  type="button"
+                  onClick={() => onSelectCluster(cluster.lat, cluster.lon)}
+                  className="glass flex w-full items-center justify-between gap-3 rounded-xl border border-glass-brd px-4 py-2.5 text-left text-sm transition hover:border-magenta/30"
+                >
+                  <span className="flex items-center gap-2 text-text-0">
+                    <MapPin aria-hidden className="size-4 shrink-0 text-text-2" />
+                    {cluster.city}
+                    {cluster.country && (
+                      <span className="text-text-2">, {cluster.country}</span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-xs text-text-2">
+                    {cluster.count}{" "}
+                    {plural(cluster.count, "объявление", "объявления", "объявлений")}
+                  </span>
+                </button>
+              </li>
+            ))
+          : data.points.map((point) => (
+              <li key={point.id}>
+                <Link
+                  href={`/notices/${point.id}`}
+                  className="glass flex items-center gap-3 rounded-xl border border-glass-brd px-4 py-2.5 text-sm transition hover:border-magenta/30"
+                >
+                  <span
+                    aria-hidden
+                    // Та же логика меток, что на карте: сплошная точка — настоящий
+                    // адрес, пунктирная — центр города. Один взгляд на список
+                    // должен читаться так же, как один взгляд на карту.
+                    className={`size-2 shrink-0 rounded-full ${
+                      point.precision === "exact"
+                        ? "bg-magenta"
+                        : "border border-dashed border-magenta bg-transparent"
+                    }`}
+                  />
+                  <span className="text-text-2">{NOTICE_KIND_CHIPS[point.kind]}</span>
+                  <span className="truncate text-text-0">{point.title}</span>
+                </Link>
+              </li>
+            ))}
+      </ul>
     </div>
   );
 }
