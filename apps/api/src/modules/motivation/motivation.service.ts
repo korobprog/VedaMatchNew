@@ -22,6 +22,7 @@ import type {
   MotivationManualQuoteResult,
   MotivationPostDto,
   MotivationPreferenceUpdate,
+  MotivationPromptUpdate,
   MotivationSourceWatchDto,
   MotivationSourceWatchInput,
   MotivationVisualStyle,
@@ -270,12 +271,14 @@ export class MotivationService {
       ) ?? [post.profileType],
       visualStyle: post.visualStyle,
       imagePrompt: post.imagePrompt,
+      imagePromptEdited: Boolean(post.imagePromptEditedAt),
       textApprovedAt: post.textApprovedAt?.toISOString() ?? null,
       imageApprovedAt: post.imageApprovedAt?.toISOString() ?? null,
       videoStatus: post.videoStatus,
       // В админке ролик виден и до приёмки — иначе его нечем было бы принять.
       videoUrl: post.videoUrl ?? '',
       videoErrorCode: post.videoErrorCode,
+      videoPrompt: post.videoPrompt,
     }));
   }
   async adminUpdate(role: Role, id: string, input: MotivationAdminUpdate) {
@@ -335,11 +338,12 @@ export class MotivationService {
     this.admin(role);
     const post = await this.prisma.motivationPost.findUnique({
       where: { id },
-      select: { imageUrl: true, imagePrompt: true, videoStatus: true },
+      select: { imageUrl: true, videoStatus: true },
     });
     if (!post) throw new NotFoundException('Post not found');
-    if (!post.imageUrl || !post.imagePrompt)
-      throw new ConflictException('Image is not ready yet');
+    // Промпт иллюстрации больше не условие: ролику нужен кадр и своё описание
+    // движения, а оно при пустом поле берётся из дефолта.
+    if (!post.imageUrl) throw new ConflictException('Image is not ready yet');
     if (
       post.videoStatus === MotivationVideoStatus.queued ||
       post.videoStatus === MotivationVideoStatus.running
@@ -385,6 +389,14 @@ export class MotivationService {
     visualStyle?: MotivationVisualStyle,
   ) {
     return this.moderation.regenerateImage(role, actorId, id, visualStyle);
+  }
+  savePrompts(
+    role: Role,
+    actorId: string,
+    id: string,
+    input: MotivationPromptUpdate,
+  ) {
+    return this.moderation.savePrompts(role, actorId, id, input);
   }
   async generateDaily(date: Date) {
     return this.discovery.discoverDaily(date, 8);

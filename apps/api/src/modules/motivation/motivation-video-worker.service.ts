@@ -11,6 +11,7 @@ import sharp from 'sharp';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FalVideoService } from './fal-video.service';
 import { MotivationGenerationService } from './motivation-generation.service';
+import { resolveVideoPrompt } from './motivation-prompt';
 import { STORY_HEIGHT, STORY_WIDTH } from './story-image';
 import { composeStoryVideo } from './story-video';
 import { estimatePlannedClipUsd } from './video-cost';
@@ -175,12 +176,13 @@ export class MotivationVideoWorkerService
       where: {
         videoStatus: MotivationVideoStatus.queued,
         imageUrl: { not: null },
-        imagePrompt: { not: null },
         videoAttemptCount: { lt: MAX_VIDEO_ATTEMPTS },
       },
       orderBy: { updatedAt: 'asc' },
     });
-    if (!post?.imageUrl || !post.imagePrompt) return;
+    // Промпт иллюстрации здесь больше не нужен: у ролика своё описание
+    // движения, а при пустом поле подставляется дефолт.
+    if (!post?.imageUrl) return;
 
     const claimed = await this.prisma.motivationPost.updateMany({
       where: { id: post.id, videoStatus: MotivationVideoStatus.queued },
@@ -204,7 +206,11 @@ export class MotivationVideoWorkerService
       const imageUrl = await this.fal.upload(frame);
       const job = await this.fal.submit({
         imageUrl,
-        prompt: post.imagePrompt,
+        // Именно videoPrompt, а не imagePrompt: промпт картинки описывает
+        // статичную сцену, и видеомодель понимает его как «повтори этот кадр»
+        // — на выходе получался застывший ролик. Модели нужно сказать, что
+        // движется и как.
+        prompt: resolveVideoPrompt(post.videoPrompt),
       });
       await this.prisma.motivationPost.updateMany({
         where: { id: post.id, videoStatus: MotivationVideoStatus.running },

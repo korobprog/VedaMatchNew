@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
@@ -8,10 +9,15 @@ import { MotivationModerationService } from './motivation-moderation.service';
 const actorId = 'actor-1';
 const postId = 'post-1';
 
-function post(reviewStatus = 'text_review') {
+function post(
+  reviewStatus = 'text_review',
+  overrides: Record<string, unknown> = {},
+) {
   return {
     id: postId,
     reviewStatus,
+    imagePromptEditedAt: null,
+    videoPrompt: null,
     category: 'verified_quote',
     status: 'draft',
     imageUrl:
@@ -33,10 +39,14 @@ function post(reviewStatus = 'text_review') {
         text: 'Exact quote about service.\n\nIt encourages compassionate action.',
       },
     ],
+    ...overrides,
   };
 }
 
-function setup(current = post(), updateCount = 1) {
+function setup(
+  current: ReturnType<typeof post> | null = post(),
+  updateCount = 1,
+) {
   const transaction = {
     motivationPost: {
       updateMany: jest.fn().mockResolvedValue({ count: updateCount }),
@@ -227,10 +237,160 @@ describe('MotivationModerationService', () => {
     });
   });
 
+  it('оставляет отредактированный промпт при перегенерации с тем же стилем', async () => {
+    // Ради этой правки промпт и открывали: пересборка черновика стёрла бы её
+    // молча, и редактирование стало бы бессмысленным.
+    const { service, transaction } = setup(
+      post('image_review', {
+        imagePrompt: 'Рассвет над Ямуной, руки в намаскаре',
+        imagePromptEditedAt: new Date('2026-08-18T10:00:00Z'),
+      }),
+    );
+
+    await service.regenerateImage(
+      'admin',
+      actorId,
+      postId,
+      'minimal_symbolism',
+    );
+
+    expect(transaction.motivationPost.updateMany).toHaveBeenCalledWith({
+      where: { id: postId, reviewStatus: 'image_review' },
+      data: expect.objectContaining({
+        imagePrompt: 'Рассвет над Ямуной, руки в намаскаре',
+      }),
+    });
+  });
+
+  it('смена стиля пересобирает черновик и снимает отметку о правке', async () => {
+    // Стиль вшит в текст промпта: сохранив правку, кнопка вернула бы ту же
+    // картинку в прежнем стиле, то есть проигнорировала бы выбор в селекте.
+    const { service, transaction } = setup(
+      post('image_review', {
+        imagePrompt: 'Рассвет над Ямуной',
+        imagePromptEditedAt: new Date('2026-08-18T10:00:00Z'),
+      }),
+    );
+
+    await service.regenerateImage('admin', actorId, postId, 'indian_miniature');
+
+    expect(transaction.motivationPost.updateMany).toHaveBeenCalledWith({
+      where: { id: postId, reviewStatus: 'image_review' },
+      data: expect.objectContaining({
+        visualStyle: 'indian_miniature',
+        imagePrompt: expect.stringContaining('vertical 9:16'),
+        imagePromptEditedAt: null,
+      }),
+    });
+  });
+
   it('reports missing posts', async () => {
     const { service } = setup(null);
     await expect(
       service.approveText('admin', actorId, postId),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('MotivationModerationService: правка промптов', () => {
+  it('сохраняет промпт иллюстрации и помечает его как правленный руками', async () => {
+    const { service, transaction } = setup(post('image_review'));
+
+    const result = await service.savePrompts('admin', actorId, postId, {
+      imagePrompt: '  Рассвет над Ямуной, тёплый свет  ',
+    });
+
+    expect(transaction.motivationPost.update).toHaveBeenCalledWith({
+      where: { id: postId },
+      data: {
+        imagePrompt: 'Рассвет над Ямуной, тёплый свет',
+        imagePromptEditedAt: expect.any(Date),
+      },
+    });
+    expect(result.imagePromptEdited).toBe(true);
+    expect(transaction.motivationModerationAudit.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        postId,
+        actorId,
+        action: 'edit_prompts',
+      }),
+    });
+  });
+
+  it('сохраняет промпт видео отдельно от промпта картинки', async () => {
+    // Ровно тот случай, ради которого поле и заведено: описание движения
+    // не должно подменяться описанием сцены.
+    const { service, transaction } = setup(post('image_review'));
+
+    await service.savePrompts('admin', actorId, postId, {
+      videoPrompt: 'Gentle breeze in the leaves. Camera almost still.',
+    });
+
+    expect(transaction.motivationPost.update).toHaveBeenCalledWith({
+      where: { id: postId },
+      data: {
+        videoPrompt: 'Gentle breeze in the leaves. Camera almost still.',
+      },
+    });
+  });
+
+  it('пустой промпт видео возвращает пост к общему дефолту', async () => {
+    const { service, transaction } = setup(post('image_review'));
+
+    const result = await service.savePrompts('admin', actorId, postId, {
+      videoPrompt: '   ',
+    });
+
+    expect(transaction.motivationPost.update).toHaveBeenCalledWith({
+      where: { id: postId },
+      data: { videoPrompt: null },
+    });
+    expect(result.videoPrompt).toBeNull();
+  });
+
+  it('пустой промпт иллюстрации не принимает', async () => {
+    // Пост с пустым промптом воркер просто не возьмёт и оставит висеть.
+    const { service, transaction } = setup(post('image_review'));
+
+    await expect(
+      service.savePrompts('admin', actorId, postId, { imagePrompt: '  ' }),
+    ).rejects.toThrow('Image prompt cannot be empty');
+    expect(transaction.motivationPost.update).not.toHaveBeenCalled();
+  });
+
+  it('отбивает промпт, который модель всё равно обрежет', async () => {
+    const { service, transaction } = setup(post('image_review'));
+
+    await expect(
+      service.savePrompts('admin', actorId, postId, {
+        imagePrompt: 'т'.repeat(4001),
+      }),
+    ).rejects.toThrow('Image prompt is too long');
+    expect(transaction.motivationPost.update).not.toHaveBeenCalled();
+  });
+
+  it('пустое тело считает ошибкой, а не «сохранить ничего»', async () => {
+    const { service, transaction } = setup(post('image_review'));
+
+    await expect(
+      service.savePrompts('admin', actorId, postId, {}),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(transaction.motivationPost.update).not.toHaveBeenCalled();
+  });
+
+  it('не пускает обычного пользователя', async () => {
+    const { service } = setup(post('image_review'));
+
+    await expect(
+      service.savePrompts('user', actorId, postId, { videoPrompt: 'x' }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('сообщает о пропавшем посте', async () => {
+    const { service } = setup(null);
+
+    await expect(
+      service.savePrompts('admin', actorId, postId, { videoPrompt: 'x' }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

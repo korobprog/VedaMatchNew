@@ -384,6 +384,15 @@ model MotivationPost {
   reviewStatus         MotivationReviewStatus    @default(discovered)
   visualStyle          MotivationVisualStyle?
   imagePrompt          String?
+  /// Отметка о том, что промпт правил человек. Нужна перегенерации: без неё
+  /// повторный заказ картинки пересобирал бы черновик заново и молча стирал
+  /// правку, ради которой администратор его и открывал.
+  imagePromptEditedAt  DateTime?
+  /// Промпт для видеомодели. Отдельно от `imagePrompt`, потому что описывает
+  /// не сцену, а движение в ней: описание статичного кадра видеомодель
+  /// понимает как «сделай ещё раз то же самое» и выдаёт мёртвый ролик.
+  /// Пусто — берётся общий дефолт из `video-prompt.ts`.
+  videoPrompt          String?
   textApprovedAt       DateTime?
   imageApprovedAt      DateTime?
   imageUrl             String?

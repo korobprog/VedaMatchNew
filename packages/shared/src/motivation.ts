@@ -70,11 +70,42 @@ export interface MotivationAdminCandidateDto extends MotivationAdminPostDto {
   profileTypes: MotivationProfileType[];
   visualStyle: MotivationVisualStyle | null;
   imagePrompt: string | null;
+  /**
+   * Промпт правил человек, а не автосборка. Перегенерация тогда идёт с
+   * сохранённым текстом, и админке есть что об этом сказать — иначе правка
+   * выглядела бы потерянной.
+   */
+  imagePromptEdited: boolean;
   textApprovedAt: string | null;
   imageApprovedAt: string | null;
   /** Ролик, оживляющий иллюстрацию. Появляется по кнопке уже после картинки. */
   videoStatus: MotivationVideoStatus;
   videoErrorCode: string | null;
+  /**
+   * Что и как движется в ролике. Пусто — уйдёт
+   * `DEFAULT_MOTIVATION_VIDEO_PROMPT`.
+   */
+  videoPrompt: string | null;
+}
+
+/**
+ * Промпт движения по умолчанию.
+ *
+ * Видеомодели нужно описание движения, а не сцены: на ручной проверке промпт
+ * картинки давал застывший кадр, а эта формулировка — живой ролик. Камера
+ * почти неподвижна намеренно: на пяти секундах любой её проезд читается как
+ * рывок, а вшитая позже подпись при движении кадра начинает плыть.
+ */
+export const DEFAULT_MOTIVATION_VIDEO_PROMPT =
+  'Gentle natural motion: soft breeze in the leaves, slow drifting clouds, warm sunrise light. Camera almost still.';
+
+/**
+ * Сохранение промптов из админки. Поля независимы: отправляется то, что
+ * действительно правили, остальное остаётся как было.
+ */
+export interface MotivationPromptUpdate {
+  imagePrompt?: string;
+  videoPrompt?: string;
 }
 
 /**

@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import type {
-  MotivationAdminCandidateDto,
-  MotivationVisualStyle,
+import {
+  DEFAULT_MOTIVATION_VIDEO_PROMPT,
+  type MotivationAdminCandidateDto,
+  type MotivationVisualStyle,
 } from "@vedamatch/shared";
 import { CollapsibleBlock } from "../collapsible-block";
 import { DeletePostButton } from "./delete-post-button";
 import { PipelineStages } from "./pipeline-stages";
+import { PromptEditor } from "./prompt-editor";
 import { QuoteDetails } from "./quote-details";
 import { ActionBar, RejectControl, StyleSelect } from "./review-actions";
 import type { RunCommand } from "./use-admin-command";
@@ -137,9 +139,41 @@ export function ImageReviewCard({
             preview={post.imagePrompt?.slice(0, 60) ?? "не сформирован"}
             tone="framed"
           >
-            <p className="whitespace-pre-line text-sm leading-6 text-text-1">
-              {post.imagePrompt || "Промпт пока не сформирован."}
-            </p>
+            <PromptEditor
+              postId={post.id}
+              postTitle={post.title || post.slug}
+              field="imagePrompt"
+              value={post.imagePrompt}
+              placeholder="Промпт пока не сформирован"
+              hint={
+                post.imagePromptEdited
+                  ? "Промпт правили руками — перегенерация возьмёт этот текст. Смена стиля соберёт черновик заново."
+                  : "Черновик собран автоматически. Правки уйдут в генерацию как есть."
+              }
+              disabled={disabled}
+              pendingAction={pendingAction}
+              run={run}
+            />
+          </CollapsibleBlock>
+        </div>
+
+        <div className="mt-4">
+          <CollapsibleBlock
+            title="Промпт видео"
+            preview={post.videoPrompt?.slice(0, 60) ?? "мягкое естественное движение"}
+            tone="framed"
+          >
+            <PromptEditor
+              postId={post.id}
+              postTitle={post.title || post.slug}
+              field="videoPrompt"
+              value={post.videoPrompt}
+              placeholder={DEFAULT_MOTIVATION_VIDEO_PROMPT}
+              hint="Здесь описывается движение, а не сцена: что колышется, куда плывёт свет, как ведёт себя камера. Описание кадра видеомодель понимает как «повтори то же самое» и отдаёт застывший ролик. Пустое поле — общий дефолт про мягкое естественное движение."
+              disabled={disabled}
+              pendingAction={pendingAction}
+              run={run}
+            />
           </CollapsibleBlock>
         </div>
 

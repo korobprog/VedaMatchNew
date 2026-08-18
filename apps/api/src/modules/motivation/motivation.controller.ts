@@ -21,6 +21,7 @@ import type {
   MotivationManualPostInput,
   MotivationManualQuoteInput,
   MotivationPreferenceUpdate,
+  MotivationPromptUpdate,
   MotivationRegenerateImageInput,
   MotivationRejectInput,
   MotivationSourceWatchInput,
@@ -146,6 +147,20 @@ export class MotivationController {
     @Param('id') id: string,
   ) {
     return this.service.approveImage(user.role, user.sub, id);
+  }
+  /**
+   * Сохранение отредактированных промптов. Одним эндпоинтом на оба поля: в
+   * карточке это две разные формы, но действие одно — «сохранить то, что уйдёт
+   * в генерацию», и разводить его по двум маршрутам нечем.
+   */
+  @Post('admin/motivation/posts/:id/prompts')
+  @UseGuards(AuthGuard)
+  savePrompts(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() input: MotivationPromptUpdate,
+  ) {
+    return this.service.savePrompts(user.role, user.sub, id, input);
   }
   @Post('admin/motivation/posts/:id/animate')
   @UseGuards(AuthGuard)

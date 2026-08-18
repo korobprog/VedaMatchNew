@@ -17,6 +17,7 @@ describe('MotivationController moderation endpoints', () => {
       rejectModeration: jest.fn(),
       regenerateModerationImage: jest.fn(),
       regenerate: jest.fn(),
+      savePrompts: jest.fn(),
     };
     const controller = new MotivationController(
       service as never,
@@ -34,6 +35,9 @@ describe('MotivationController moderation endpoints', () => {
       visualStyle: 'cinematic_nature',
     });
     await controller.regenerate(user, 'post-1');
+    await controller.savePrompts(user, 'post-1', {
+      videoPrompt: 'Gentle natural motion.',
+    });
 
     expect(service.approveText).toHaveBeenCalledWith(
       'service-admin',
@@ -62,6 +66,12 @@ describe('MotivationController moderation endpoints', () => {
       'service-admin',
       'actor-1',
       'post-1',
+    );
+    expect(service.savePrompts).toHaveBeenCalledWith(
+      'service-admin',
+      'actor-1',
+      'post-1',
+      { videoPrompt: 'Gentle natural motion.' },
     );
   });
 });

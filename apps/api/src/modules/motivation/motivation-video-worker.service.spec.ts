@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { MotivationVideoStatus } from '@prisma/client';
+import { DEFAULT_MOTIVATION_VIDEO_PROMPT } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FalVideoService } from './fal-video.service';
 import { MotivationGenerationService } from './motivation-generation.service';
@@ -87,6 +88,7 @@ const queuedPost = {
   slug: 'queued',
   imageUrl: 'https://cdn/pic.png',
   imagePrompt: 'тихий рассвет',
+  videoPrompt: null,
 };
 
 describe('MotivationVideoWorkerService', () => {
@@ -205,6 +207,95 @@ describe('MotivationVideoWorkerService', () => {
     await worker.onModuleInit();
 
     expect(prisma.motivationPost.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe('MotivationVideoWorkerService: промпт для видеомодели', () => {
+  function startWith(queued: PostRow) {
+    const prisma = {
+      motivationPost: {
+        findFirst: jest.fn(async (args: { where: PostRow }) =>
+          args.where.videoStatus === MotivationVideoStatus.running
+            ? null
+            : queued,
+        ),
+        findUnique: jest.fn(async () => ({ videoAttemptCount: 1 })),
+        aggregate: jest.fn(async () => ({ _sum: { videoCostUsd: 0 } })),
+        updateMany: jest.fn(async () => ({ count: 1 })),
+      },
+    } as unknown as PrismaService;
+    const fal = {
+      enabled: true,
+      durationSeconds: () => 5,
+      upload: jest.fn(async () => 'https://fal/frame.jpg'),
+      submit: jest.fn(async () => ({
+        requestId: 'r',
+        statusUrl: 's',
+        responseUrl: 'u',
+      })),
+      poll: jest.fn(),
+      download: jest.fn(),
+    } as unknown as FalVideoService;
+    const worker = new MotivationVideoWorkerService(
+      prisma,
+      fal,
+      { uploadStory: jest.fn() } as unknown as MotivationGenerationService,
+      { get: () => undefined } as unknown as ConfigService,
+    );
+    return { worker, fal };
+  }
+
+  async function tickWithStubbedImage(worker: MotivationVideoWorkerService) {
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      arrayBuffer: async () => new Uint8Array(TINY_PNG).buffer,
+    })) as unknown as typeof fetch;
+    try {
+      await worker.tick();
+    } finally {
+      global.fetch = originalFetch;
+    }
+  }
+
+  it('шлёт описание движения, а не промпт картинки', async () => {
+    // Промпт иллюстрации описывает статичную сцену, и видеомодель понимает
+    // его как «повтори этот кадр» — на выходе выходил застывший ролик.
+    const { worker, fal } = startWith({
+      ...queuedPost,
+      imagePrompt: 'Тихий рассвет над рекой, тёплый свет, акварель',
+      videoPrompt: 'Slow drifting mist over the water. Camera almost still.',
+    });
+
+    await tickWithStubbedImage(worker);
+
+    expect(fal.submit).toHaveBeenCalledWith({
+      imageUrl: 'https://fal/frame.jpg',
+      prompt: 'Slow drifting mist over the water. Camera almost still.',
+    });
+  });
+
+  it('без своего промпта берёт дефолт про мягкое движение', async () => {
+    const { worker, fal } = startWith({ ...queuedPost, videoPrompt: null });
+
+    await tickWithStubbedImage(worker);
+
+    expect(fal.submit).toHaveBeenCalledWith({
+      imageUrl: 'https://fal/frame.jpg',
+      prompt: DEFAULT_MOTIVATION_VIDEO_PROMPT,
+    });
+  });
+
+  it('берёт пост без промпта картинки: ролику он больше не нужен', async () => {
+    const { worker, fal } = startWith({
+      ...queuedPost,
+      imagePrompt: null,
+      videoPrompt: null,
+    });
+
+    await tickWithStubbedImage(worker);
+
+    expect(fal.submit).toHaveBeenCalledTimes(1);
   });
 });
 
