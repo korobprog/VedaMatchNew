@@ -167,6 +167,15 @@ export class MotivationController {
   animate(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.service.requestAnimation(user.role, id);
   }
+  @Post('admin/motivation/posts/:id/voice')
+  @UseGuards(AuthGuard)
+  setVideoVoice(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() input: { enabled?: boolean; voice?: string | null } = {},
+  ) {
+    return this.service.setVideoVoice(user.role, id, input);
+  }
   @Post('admin/motivation/posts/:id/approve-video')
   @UseGuards(AuthGuard)
   approveVideo(

@@ -9,11 +9,12 @@ import { MotivationVideoStatus } from '@prisma/client';
 import Redis from 'ioredis';
 import sharp from 'sharp';
 import { PrismaService } from '../../prisma/prisma.service';
+import { FalAudioService } from './fal-audio.service';
 import { FalVideoService } from './fal-video.service';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { resolveVideoPrompt } from './motivation-prompt';
 import { STORY_HEIGHT, STORY_WIDTH } from './story-image';
-import { composeStoryVideo } from './story-video';
+import { composeStoryVideo, estimateReadingSeconds } from './story-video';
 import { estimatePlannedClipUsd } from './video-cost';
 
 /**
@@ -46,6 +47,7 @@ export class MotivationVideoWorkerService
   constructor(
     private readonly prisma: PrismaService,
     private readonly fal: FalVideoService,
+    private readonly voice: FalAudioService,
     private readonly generation: MotivationGenerationService,
     private readonly config: ConfigService,
   ) {
@@ -327,6 +329,9 @@ export class MotivationVideoWorkerService
       attributionSpeaker: string | null;
       attributionWork: string | null;
       attributionLocator: string | null;
+      videoVoice: boolean;
+      videoSeconds: number | null;
+      videoVoiceName: string | null;
     },
     video: Buffer,
   ): Promise<Buffer> {
@@ -346,12 +351,49 @@ export class MotivationVideoWorkerService
       .join(' · ');
 
     try {
-      return await composeStoryVideo(video, { text, attribution });
+      // Озвучка задаёт длину: ролик у модели пять секунд, за них четыре строки
+      // не прочитать и не прослушать. Добираем повтором — растягивать саму
+      // генерацию втрое дороже.
+      const spoken = post.videoVoice
+        ? await this.speak(text, attribution, post.videoVoiceName)
+        : undefined;
+      const seconds =
+        post.videoSeconds ??
+        (spoken
+          ? Math.ceil(spoken.seconds + 1)
+          : estimateReadingSeconds(text, attribution));
+
+      return await composeStoryVideo(
+        video,
+        { text, attribution },
+        { loopToSeconds: seconds, audio: spoken?.audio, audioVolume: 1 },
+      );
     } catch (error) {
       this.logger.error(
         `Не удалось наложить подпись на ролик: ${String(error)}`,
       );
       return video;
+    }
+  }
+
+  /**
+   * Озвучка цитаты. Сбой здесь не должен губить ролик: он уже оплачен, а без
+   * голоса пост остаётся рабочим — просто немым.
+   */
+  private async speak(
+    text: string,
+    attribution: string,
+    voice: string | null,
+  ): Promise<{ audio: Buffer; seconds: number } | undefined> {
+    if (!this.voice.enabled) return undefined;
+    // Атрибуцию читаем следом за цитатой: иначе слушатель не узнает, чьи это
+    // слова, а на кадре подпись мелкая.
+    const line = attribution ? `${text} ${attribution}` : text;
+    try {
+      return await this.voice.speak(line, voice);
+    } catch (error) {
+      this.logger.error(`Не удалось озвучить цитату: ${String(error)}`);
+      return undefined;
     }
   }
 

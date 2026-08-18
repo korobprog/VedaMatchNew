@@ -80,6 +80,10 @@ export interface MotivationAdminCandidateDto extends MotivationAdminPostDto {
   imageApprovedAt: string | null;
   /** Ролик, оживляющий иллюстрацию. Появляется по кнопке уже после картинки. */
   videoStatus: MotivationVideoStatus;
+  /** Читать ли цитату голосом. Машинное чтение писания — решение редакции. */
+  videoVoice: boolean;
+  /** Выбранный голос. Пусто — берётся заданный в настройках по умолчанию. */
+  videoVoiceName: string | null;
   videoErrorCode: string | null;
   /**
    * Что и как движется в ролике. Пусто — уйдёт
@@ -112,6 +116,39 @@ export interface MotivationPromptUpdate {
  * Жизненный цикл ролика. Отдельно от `reviewStatus`: видео — необязательное
  * обогащение готового поста, и его сбой не отменяет сам пост.
  */
+/**
+ * Голоса, доступные на эндпоинте озвучки.
+ *
+ * Список нужен обеим сторонам: бэкенд им проверяет присланное значение, веб
+ * строит выпадашку. Проверка не формальность — за неизвестный голос провайдер
+ * возьмёт деньги ровно так же, как за верный запрос.
+ */
+export const MOTIVATION_VOICES = [
+  'Rachel',
+  'Aria',
+  'Roger',
+  'Sarah',
+  'Laura',
+  'Charlie',
+  'George',
+  'Callum',
+  'River',
+  'Liam',
+  'Charlotte',
+  'Alice',
+  'Matilda',
+  'Will',
+  'Jessica',
+  'Eric',
+  'Chris',
+  'Brian',
+  'Daniel',
+  'Lily',
+  'Bill',
+] as const;
+
+export type MotivationVoice = (typeof MOTIVATION_VOICES)[number];
+
 export type MotivationVideoStatus =
   | 'none'
   | 'queued'

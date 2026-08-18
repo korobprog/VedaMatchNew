@@ -1,4 +1,8 @@
-import { buildStoryVideoArgs, ffmpegPath } from './story-video';
+import {
+  buildStoryVideoArgs,
+  estimateReadingSeconds,
+  ffmpegPath,
+} from './story-video';
 import { STORY_HEIGHT, STORY_WIDTH } from './story-image';
 
 describe('buildStoryVideoArgs', () => {
@@ -88,5 +92,61 @@ describe('маркировка ИИ-контента в ролике', () => {
     // ffmpeg относит опции к следующему за ними файлу: после имени выхода
     // они бы просто потерялись.
     expect(args.lastIndexOf('-metadata')).toBeLessThan(args.length - 1);
+  });
+});
+
+describe('своя звуковая дорожка', () => {
+  const withAudio = buildStoryVideoArgs({
+    videoPath: '/tmp/in.mp4',
+    overlayPath: '/tmp/overlay.png',
+    outputPath: '/tmp/out.mp4',
+    loopToSeconds: 14,
+    audioPath: '/tmp/voice.mp3',
+    audioVolume: 1,
+  });
+
+  it('перекодирует звук, а не копирует', () => {
+    // ffmpeg отказывается совмещать filtergraph и streamcopy: с `copy` сборка
+    // падала с «Filtering and streamcopy cannot be used together».
+    expect(withAudio[withAudio.indexOf('-c:a') + 1]).toBe('aac');
+  });
+
+  it('родной звук ролика по-прежнему копирует без перекодирования', () => {
+    const plain = buildStoryVideoArgs({
+      videoPath: '/tmp/in.mp4',
+      overlayPath: '/tmp/overlay.png',
+      outputPath: '/tmp/out.mp4',
+    });
+    expect(plain[plain.indexOf('-c:a') + 1]).toBe('copy');
+  });
+
+  it('зацикливает ролик и обрезает всё по заданной длине', () => {
+    // Повтор бесконечный, музыка своей длины — без -t ролик тянулся бы до
+    // конца дорожки или вовсе без конца.
+    expect(withAudio).toContain('-stream_loop');
+    expect(withAudio[withAudio.indexOf('-t') + 1]).toBe('14');
+  });
+
+  it('уводит громкость и ставит фейды по краям', () => {
+    const filter = withAudio[withAudio.indexOf('-filter_complex') + 1];
+    expect(filter).toContain('afade=t=in');
+    expect(filter).toContain('afade=t=out');
+    expect(filter).toContain('volume=1');
+  });
+});
+
+describe('estimateReadingSeconds', () => {
+  it('коротким подписям даёт не меньше длины самого ролика', () => {
+    expect(estimateReadingSeconds('Коротко')).toBeGreaterThanOrEqual(5);
+  });
+
+  it('длинной цитате даёт время на прочтение', () => {
+    const long = estimateReadingSeconds(
+      'Кришна объясняет Арджуне, что ценность действия определяется не только самим поступком, но и тем, ради чего оно совершается.',
+      'Шри Кришна · Бхагавад-гита как она есть · 3.9',
+    );
+    expect(long).toBeGreaterThan(10);
+    // Сторис длиннее полуминуты никто не досматривает.
+    expect(long).toBeLessThanOrEqual(30);
   });
 });

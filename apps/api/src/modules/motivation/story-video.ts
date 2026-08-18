@@ -25,7 +25,67 @@ export type StoryVideoArgs = {
   videoPath: string;
   overlayPath: string;
   outputPath: string;
+  /** До какой длины растянуть ролик повтором. Пусто — оставить как есть. */
+  loopToSeconds?: number;
+  /** Звуковая дорожка. Обрезается по длине ролика, с фейдами по краям. */
+  audioPath?: string;
+  /**
+   * Громкость дорожки. Музыка играет фоном и должна быть тише, голос —
+   * наоборот, он и есть содержание.
+   */
+  audioVolume?: number;
 };
+
+/**
+ * Сколько секунд нужно, чтобы прочитать подпись.
+ *
+ * Ролик у модели длится пять секунд — за них четыре строки цитаты не прочитать.
+ * Растягивать генерацию нельзя: у провайдера цена линейна по длине, пятнадцать
+ * секунд стоят втрое. Поэтому длину задаём повтором, а нужную считаем от текста:
+ * примерно двенадцать знаков в секунду — неспешное чтение с экрана телефона.
+ */
+export function estimateReadingSeconds(
+  text: string,
+  attribution?: string | null,
+): number {
+  const chars = text.trim().length + (attribution?.trim().length ?? 0);
+  const seconds = chars / 12 + 2;
+  // Ниже пяти нет смысла — столько длится сам ролик; выше тридцати сторис уже
+  // никто не досматривает.
+  return Math.min(30, Math.max(5, Math.round(seconds)));
+}
+
+/**
+ * Аргументы для «бумеранга»: ролик вперёд, затем задом наперёд.
+ *
+ * Простой повтор дал бы рывок на стыке — последний кадр не совпадает с первым.
+ * Развернув время, получаем бесшовный цикл, а на мягком движении, которое мы и
+ * заказываем у модели (ветер, дрейф облаков), сам разворот незаметен.
+ */
+export function buildBoomerangArgs(input: {
+  videoPath: string;
+  outputPath: string;
+}): string[] {
+  return [
+    '-y',
+    '-i',
+    input.videoPath,
+    '-filter_complex',
+    '[0:v]split[fwd][back];[back]reverse[rev];[fwd][rev]concat=n=2:v=1[v]',
+    '-map',
+    '[v]',
+    '-an',
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-crf',
+    '18',
+    '-pix_fmt',
+    'yuv420p',
+    input.outputPath,
+  ];
+}
 
 /**
  * Аргументы ffmpeg для кадра сторис поверх ролика.
@@ -35,23 +95,34 @@ export type StoryVideoArgs = {
  * молча — видео просто уезжает по краям или не играет в браузере.
  */
 export function buildStoryVideoArgs(input: StoryVideoArgs): string[] {
+  const loop = input.loopToSeconds;
   return [
     '-y',
+    // Повтор задаётся до входа, а не фильтром: так ffmpeg крутит уже
+    // декодированный файл, не перечитывая его с диска на каждом круге.
+    ...(loop ? ['-stream_loop', '-1'] : []),
     '-i',
     input.videoPath,
     '-i',
     input.overlayPath,
+    ...(input.audioPath ? ['-i', input.audioPath] : []),
     // Ролик приходит от модели меньшего размера (замер: 704×1248), поэтому
     // сначала докадрируем до 1080×1920 — иначе подпись, свёрстанная под этот
     // кадр, не совпадёт с картинкой.
     '-filter_complex',
     `[0:v]scale=${STORY_WIDTH}:${STORY_HEIGHT}:force_original_aspect_ratio=increase,` +
-      `crop=${STORY_WIDTH}:${STORY_HEIGHT}[bg];[bg][1:v]overlay=0:0[v]`,
+      `crop=${STORY_WIDTH}:${STORY_HEIGHT}[bg];[bg][1:v]overlay=0:0[v]` +
+      (input.audioPath
+        ? // Фейды по краям: без них подложка обрывается на полуноте.
+          `;[2:a]afade=t=in:st=0:d=1,afade=t=out:st=${Math.max(0, (loop ?? 5) - 1.5)}:d=1.5,volume=${input.audioVolume ?? 0.35}[a]`
+        : ''),
     '-map',
     '[v]',
-    // Звук переносим, если он есть: `?` не даёт ffmpeg упасть на немом ролике.
-    '-map',
-    '0:a?',
+    // Со своей дорожкой берём её, иначе переносим звук ролика. `?` не даёт
+    // ffmpeg упасть на немом файле.
+    ...(input.audioPath ? ['-map', '[a]'] : ['-map', '0:a?']),
+    // Обрезаем ровно по заданной длине: и повтор, и музыка длиннее её.
+    ...(loop ? ['-t', String(loop)] : []),
     '-c:v',
     'libx264',
     '-preset',
@@ -61,8 +132,11 @@ export function buildStoryVideoArgs(input: StoryVideoArgs): string[] {
     // Без yuv420p ролик не играет в Safari и в предпросмотре Telegram.
     '-pix_fmt',
     'yuv420p',
+    // Свою дорожку пропускаем через фильтр (фейды, громкость), а
+    // отфильтрованный поток скопировать нельзя — ffmpeg отказывается
+    // совмещать filtergraph и streamcopy. Родной звук ролика копируем как был.
     '-c:a',
-    'copy',
+    ...(input.audioPath ? ['aac', '-b:a', '160k'] : ['copy']),
     // Индекс в начало файла: иначе браузер ждёт полной загрузки перед стартом.
     '-movflags',
     '+faststart',
@@ -103,6 +177,12 @@ function runFfmpeg(args: string[]): Promise<void> {
 export async function composeStoryVideo(
   video: Buffer,
   overlay: StoryOverlayInput,
+  options?: {
+    loopToSeconds?: number;
+    /** Готовая дорожка в памяти: воркер получает её от провайдера, не файлом. */
+    audio?: Buffer;
+    audioVolume?: number;
+  },
 ): Promise<Buffer> {
   const overlayPng = await renderStoryOverlay(overlay);
 
@@ -113,7 +193,33 @@ export async function composeStoryVideo(
     const outputPath = join(dir, 'out.mp4');
     await writeFile(videoPath, video);
     await writeFile(overlayPath, overlayPng);
-    await runFfmpeg(buildStoryVideoArgs({ videoPath, overlayPath, outputPath }));
+
+    // Бумеранг собирается отдельным проходом: разворот времени требует всего
+    // ролика целиком, одним фильтром с зацикливанием это не выразить.
+    let audioPath: string | undefined;
+    if (options?.audio) {
+      audioPath = join(dir, 'audio.mp3');
+      await writeFile(audioPath, options.audio);
+    }
+
+    let source = videoPath;
+    if (options?.loopToSeconds) {
+      source = join(dir, 'boomerang.mp4');
+      await runFfmpeg(
+        buildBoomerangArgs({ videoPath, outputPath: source }),
+      );
+    }
+
+    await runFfmpeg(
+      buildStoryVideoArgs({
+        videoPath: source,
+        overlayPath,
+        outputPath,
+        loopToSeconds: options?.loopToSeconds,
+        audioPath,
+        audioVolume: options?.audioVolume,
+      }),
+    );
     return await readFile(outputPath);
   } finally {
     await rm(dir, { recursive: true, force: true });

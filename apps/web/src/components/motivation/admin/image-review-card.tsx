@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   DEFAULT_MOTIVATION_VIDEO_PROMPT,
+  MOTIVATION_VOICES,
   type MotivationAdminCandidateDto,
   type MotivationVisualStyle,
 } from "@vedamatch/shared";
@@ -13,7 +14,7 @@ import { PromptEditor } from "./prompt-editor";
 import { QuoteDetails } from "./quote-details";
 import { ActionBar, RejectControl, StyleSelect } from "./review-actions";
 import type { RunCommand } from "./use-admin-command";
-import { badgeClass, primaryButton, secondaryButton } from "./ui";
+import { badgeClass, fieldClass, primaryButton, secondaryButton } from "./ui";
 
 export function ImageReviewCard({
   post,
@@ -204,6 +205,45 @@ export function ImageReviewCard({
               >
                 {pendingAction === "approve-image" ? "Публикация…" : "Опубликовать"}
               </button>
+              {/* Чтение цитаты голосом — решение редакции, а не побочный
+                  эффект генерации, поэтому переключатель отдельный и рядом. */}
+              <label className="flex items-center gap-2 text-sm text-text-1">
+                <input
+                  type="checkbox"
+                  checked={post.videoVoice}
+                  disabled={disabled || videoBusy}
+                  onChange={(event) =>
+                    run(post.id, "voice", {
+                      path: `/admin/motivation/posts/${post.id}/voice`,
+                      body: { enabled: event.target.checked },
+                    })
+                  }
+                />
+                Читать цитату голосом
+              </label>
+              {post.videoVoice && (
+                <label className="grid gap-1 text-sm text-text-1">
+                  <span>Голос</span>
+                  <select
+                    value={post.videoVoiceName ?? ""}
+                    disabled={disabled || videoBusy}
+                    onChange={(event) =>
+                      run(post.id, "voice", {
+                        path: `/admin/motivation/posts/${post.id}/voice`,
+                        body: { voice: event.target.value || null },
+                      })
+                    }
+                    className={fieldClass}
+                  >
+                    <option value="">По умолчанию</option>
+                    {MOTIVATION_VOICES.map((voice) => (
+                      <option key={voice} value={voice}>
+                        {voice}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               {/* Оживление стоит денег за каждый заход, поэтому это отдельное
                   осознанное действие, а не часть публикации. */}
               <button

@@ -12,6 +12,7 @@ import {
   MotivationVideoStatus,
   SpiritualStage,
 } from '@prisma/client';
+import { MOTIVATION_VOICES, type MotivationVoice } from '@vedamatch/shared';
 import type {
   MotivationAdminCandidateDto,
   MotivationAdminUpdate,
@@ -275,6 +276,8 @@ export class MotivationService {
       textApprovedAt: post.textApprovedAt?.toISOString() ?? null,
       imageApprovedAt: post.imageApprovedAt?.toISOString() ?? null,
       videoStatus: post.videoStatus,
+      videoVoice: post.videoVoice,
+      videoVoiceName: post.videoVoiceName,
       // В админке ролик виден и до приёмки — иначе его нечем было бы принять.
       videoUrl: post.videoUrl ?? '',
       videoErrorCode: post.videoErrorCode,
@@ -365,6 +368,34 @@ export class MotivationService {
     });
     return { videoStatus: 'queued' as const };
   }
+  /**
+   * Настройка озвучки у поста: включение и выбор голоса.
+   *
+   * Голос проверяется по списку из `@vedamatch/shared`: опечатка ушла бы в
+   * платный запрос к провайдеру и вернулась ошибкой уже после списания.
+   */
+  async setVideoVoice(
+    role: Role,
+    id: string,
+    input: { enabled?: boolean; voice?: string | null },
+  ) {
+    this.admin(role);
+    const voice = input.voice?.trim();
+    if (voice && !MOTIVATION_VOICES.includes(voice as MotivationVoice))
+      throw new BadRequestException('Unknown voice');
+
+    const data: { videoVoice?: boolean; videoVoiceName?: string | null } = {};
+    if (input.enabled !== undefined) data.videoVoice = input.enabled;
+    if (input.voice !== undefined) data.videoVoiceName = voice || null;
+
+    const updated = await this.prisma.motivationPost.updateMany({
+      where: { id },
+      data,
+    });
+    if (!updated.count) throw new NotFoundException('Post not found');
+    return { ok: true };
+  }
+
   /** Принимает ролик: до этого он виден только в админке. */
   async approveVideo(role: Role, id: string) {
     this.admin(role);

@@ -409,6 +409,16 @@ model MotivationPost {
   /// из имени модели нельзя, база у него не совпадает с путём модели.
   videoJobStatusUrl    String?
   videoJobResultUrl    String?
+  /// Читать ли цитату голосом. Выключено по умолчанию: машинное чтение
+  /// писания — решение редакции, а не побочный эффект включённой генерации.
+  videoVoice           Boolean                   @default(false)
+  /// Длина ролика в секундах. Пусто — считаем сами: по озвучке, если она есть,
+  /// иначе по времени чтения подписи. Модель отдаёт пять секунд, остальное
+  /// добирается повтором — растягивать генерацию втрое дороже.
+  videoSeconds         Int?
+  /// Голос озвучки. Пусто — берётся из настроек; проверяется по списку из
+  /// `@vedamatch/shared`, чтобы опечатка не ушла в платный запрос.
+  videoVoiceName       String?
   videoErrorCode       String?
   videoAttemptCount    Int                       @default(0)
   /// Стоимость ролика отдельно от `estimatedCostUsd`: без разбивки через месяц
@@ -474,8 +484,8 @@ model MotivationModerationAudit {
   id        String         @id @default(uuid())
   postId    String
   post      MotivationPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  actorId   String
-  actor     User           @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  actorId   String?
+  actor     User?          @relation(fields: [actorId], references: [id], onDelete: SetNull)
   action    String
   reason    String?
   metadata  Json?
@@ -540,8 +550,8 @@ model MotivationAuthorWatch {
   name            String
   language        String?   @db.VarChar(8)
   enabled         Boolean   @default(true)
-  createdById     String
-  createdBy       User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdById     String?
+  createdBy       User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt       DateTime  @default(now())
   lastSearchedAt  DateTime?
   lastResultCount Int       @default(0)
@@ -554,8 +564,8 @@ model MotivationSourceWatch {
   url             String
   label           String?
   enabled         Boolean   @default(true)
-  createdById     String
-  createdBy       User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdById     String?
+  createdBy       User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt       DateTime  @default(now())
   lastFetchedAt   DateTime?
   lastResultCount Int       @default(0)

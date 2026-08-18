@@ -11,6 +11,12 @@ import {
 
 type PostRow = Record<string, unknown>;
 
+const silentVoice = {
+  enabled: false,
+  speak: jest.fn(),
+} as unknown as import('./fal-audio.service').FalAudioService;
+
+
 /** Настоящий 1×1 PNG: prepareFrame гоняет байты через sharp, заглушка не подойдёт. */
 const TINY_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -63,6 +69,7 @@ function build(options: {
   const worker = new MotivationVideoWorkerService(
     prisma,
     fal,
+    silentVoice,
     generation,
     config,
   );
@@ -239,6 +246,7 @@ describe('MotivationVideoWorkerService: промпт для видеомодел
     const worker = new MotivationVideoWorkerService(
       prisma,
       fal,
+      silentVoice,
       { uploadStory: jest.fn() } as unknown as MotivationGenerationService,
       { get: () => undefined } as unknown as ConfigService,
     );
@@ -339,7 +347,13 @@ describe('MotivationVideoWorkerService: дневной потолок', () => {
         k === 'MOTIVATION_AI_DAILY_BUDGET_USD' ? limit : undefined,
     } as unknown as ConfigService;
     return {
-      worker: new MotivationVideoWorkerService(prisma, fal, generation, config),
+      worker: new MotivationVideoWorkerService(
+        prisma,
+        fal,
+        silentVoice,
+        generation,
+        config,
+      ),
       fal,
       updates,
     };
@@ -392,5 +406,113 @@ describe('MotivationVideoWorkerService: дневной потолок', () => {
     await worker.tick();
 
     expect(fal.submit).not.toHaveBeenCalled();
+  });
+});
+
+describe('MotivationVideoWorkerService: озвучка', () => {
+  const post = {
+    id: 'p1',
+    slug: 'post',
+    contentDate: new Date('2026-08-18T00:00:00.000Z'),
+    videoJobStatusUrl: 'https://queue/s',
+    videoJobResultUrl: 'https://queue/r',
+    storyCaption: true,
+    videoVoice: true,
+    videoSeconds: null,
+    videoVoiceName: null,
+    translations: [{ storyText: 'Цитата' }],
+    quote: null,
+    attributionSpeaker: 'Шри Кришна',
+    attributionWork: null,
+    attributionLocator: null,
+  };
+
+  function withVoice(
+    voiceImpl: Record<string, unknown>,
+    voiceName: string | null = null,
+  ) {
+    const prisma = {
+      motivationPost: {
+        findFirst: jest.fn(async (args: { where: PostRow }) =>
+          args.where.videoStatus === MotivationVideoStatus.running
+            ? { ...post, videoVoiceName: voiceName }
+            : null,
+        ),
+        findUnique: jest.fn(async () => ({ videoAttemptCount: 1 })),
+        updateMany: jest.fn(async () => ({ count: 1 })),
+      },
+    } as unknown as PrismaService;
+    const fal = {
+      enabled: true,
+      durationSeconds: () => 5,
+      poll: jest.fn(async () => ({
+        state: 'ready' as const,
+        videoUrl: 'https://fal/clip.mp4',
+      })),
+      download: jest.fn(async () => Buffer.from('mp4')),
+    } as unknown as FalVideoService;
+    const generation = {
+      uploadStory: jest.fn(async () => 'https://cdn/clip.mp4'),
+    } as unknown as MotivationGenerationService;
+    const voice = voiceImpl as unknown as import('./fal-audio.service').FalAudioService;
+    return {
+      worker: new MotivationVideoWorkerService(
+        prisma,
+        fal,
+        voice,
+        generation,
+        { get: () => undefined } as unknown as ConfigService,
+        ),
+      generation,
+      voice,
+    };
+  }
+
+  it('не озвучивает, когда сервис выключен', async () => {
+    const speak = jest.fn();
+    const { worker } = withVoice({ enabled: false, speak });
+
+    await worker.tick();
+
+    expect(speak).not.toHaveBeenCalled();
+  });
+
+  it('читает цитату вместе с атрибуцией', async () => {
+    // На кадре подпись мелкая: не назови мы автора голосом, слушатель не
+    // узнает, чьи это слова.
+    const speak = jest.fn(async () => ({
+      audio: Buffer.from('mp3'),
+      seconds: 9,
+    }));
+    const { worker } = withVoice({ enabled: true, speak });
+
+    await worker.tick();
+
+    // Второй аргумент — голос поста; здесь он не выбран, идёт умолчание.
+    expect(speak).toHaveBeenCalledWith('Цитата Шри Кришна', null);
+  });
+
+  it('передаёт в синтез голос, выбранный у поста', async () => {
+    const speak = jest.fn(async () => ({
+      audio: Buffer.from('mp3'),
+      seconds: 9,
+    }));
+    const { worker } = withVoice({ enabled: true, speak }, 'George');
+
+    await worker.tick();
+
+    expect(speak).toHaveBeenCalledWith(expect.any(String), 'George');
+  });
+
+  it('сбой озвучки не губит уже оплаченный ролик', async () => {
+    const speak = jest.fn(async () => {
+      throw new Error('voice_down');
+    });
+    const { worker, generation } = withVoice({ enabled: true, speak });
+
+    await worker.tick();
+
+    // Ролик всё равно доходит до S3 — просто немым.
+    expect(generation.uploadStory).toHaveBeenCalled();
   });
 });
