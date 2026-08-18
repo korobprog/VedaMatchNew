@@ -36,7 +36,10 @@ function post(reviewStatus = 'text_review') {
   };
 }
 
-function setup(current = post(), updateCount = 1) {
+function setup(
+  current: ReturnType<typeof post> | null = post(),
+  updateCount = 1,
+) {
   const transaction = {
     motivationPost: {
       updateMany: jest.fn().mockResolvedValue({ count: updateCount }),
