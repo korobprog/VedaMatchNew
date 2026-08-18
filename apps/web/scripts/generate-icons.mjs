@@ -1,4 +1,5 @@
-// Генератор иконок PWA, favicon.ico и OG-картинки из логотипа.
+// Генератор фирменных растров: знак и логотип для интерфейса, иконки PWA,
+// favicon.ico и картинка для ссылок.
 // Запуск: node scripts/generate-icons.mjs
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -6,15 +7,30 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const source = path.join(root, "public/logo_tilak.png");
 const iconsDir = path.join(root, "public/icons");
+const brandDir = path.join(root, "public/brand");
 const appDir = path.join(root, "src/app");
 
-// Квадрат вокруг знака (глобус + «M») в logo_tilak.png, измерен по альфа-каналу.
-// Надпись «VEDA MATCH» лежит ниже (y 856..918) и в кроп не попадает.
-const MARK = { left: 246, top: 279, width: 548, height: 548 };
-// Логотип целиком — знак вместе с надписью, для превью в мессенджерах.
-const FULL = { left: 96, top: 296, width: 832, height: 632 };
+// Знак берётся из квадратной версии: там он уже обрезан по краю рисунка, без
+// надписи и без полей. Раньше его вырезали из logo_tilak.png по замеренным
+// вручную координатам — лишний шаг, который ломался при любой правке файла.
+const MARK_SOURCE = path.join(root, "public/logo_tilak_kvadrat.png");
+// Логотип целиком — знак вместе с надписью «VEDA MATCH». Нужен там, где место
+// есть и название читается: страница входа и превью ссылки.
+const FULL_SOURCE = path.join(root, "public/logo_tilak.png");
+// Рамка содержимого в logo_tilak.png, замеренная по альфа-каналу: сам файл
+// на треть состоит из прозрачных полей.
+const FULL = { left: 103, top: 307, width: 816, height: 613 };
+
+// Окружность глобуса в каждом из файлов. По ней «M» отделяется от глобуса:
+// всё, что вне круга, — это буква, и её можно перекрасить под тёмную тему,
+// не трогая сам глобус. Границы взяты по самой широкой строке альфа-канала.
+const MARK_GLOBE = { cx: 291, cy: 109, r: 101 };
+const FULL_GLOBE = { cx: 517, cy: 406.5, r: 100 };
+
+// Цвет знака на тёмной теме — значение токена --vm-logo-mark из globals.css.
+// В растре цвет запечён в пиксели, переменной темы взяться неоткуда.
+const DARK_MARK = "#F6F1FF";
 const BACKGROUND = { r: 0xfb, g: 0xf9, b: 0xff, alpha: 1 };
 
 // «any» оставляет поля; «maskable» обязан пережить обрезку до внутренних 80%,
@@ -24,11 +40,74 @@ const MASKABLE_RATIO = 0.6;
 // В favicon знак должен читаться на 16×16, поэтому поля почти убраны.
 const FAVICON_RATIO = 0.88;
 
-async function renderSquare(size, ratio) {
+function parseHex(hex) {
+  return [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+}
+
+/**
+ * Перекрашивает «M» в заданный цвет, оставляя глобус как есть.
+ *
+ * Меняется только RGB, альфа остаётся исходной — сглаженные края переживают
+ * замену без ореола. Кайма глобуса не задета: круг задан по внешнему краю
+ * рисунка, а буква нигде не подходит к нему вплотную.
+ */
+async function recolorMark(source, globe, hex, region) {
+  const pipeline = sharp(source).ensureAlpha();
+  const { data, info } = await (region ? pipeline.extract(region) : pipeline)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const [red, green, blue] = parseHex(hex);
+  const offsetX = region ? region.left : 0;
+  const offsetY = region ? region.top : 0;
+  const radius = globe.r * globe.r;
+
+  for (let y = 0; y < info.height; y += 1) {
+    const dy = y + offsetY - globe.cy;
+    for (let x = 0; x < info.width; x += 1) {
+      const dx = x + offsetX - globe.cx;
+      if (dx * dx + dy * dy <= radius) continue;
+      const at = (y * info.width + x) * 4;
+      if (data[at + 3] === 0) continue;
+      data[at] = red;
+      data[at + 1] = green;
+      data[at + 2] = blue;
+    }
+  }
+
+  return sharp(data, {
+    raw: { width: info.width, height: info.height, channels: 4 },
+  })
+    .png()
+    .toBuffer();
+}
+
+// Квадрат вокруг знака: исходник обрезан по рисунку и чуть шире, чем выше.
+async function squareMark(input) {
+  const { width, height } = await sharp(input).metadata();
+  const side = Math.max(width, height);
+  const top = Math.round((side - height) / 2);
+  const left = Math.round((side - width) / 2);
+  return sharp(input)
+    .extend({
+      top,
+      bottom: side - height - top,
+      left,
+      right: side - width - left,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
+    .png()
+    .toBuffer();
+}
+
+async function write(outputPath, buffer, note) {
+  await writeFile(outputPath, buffer);
+  console.log(`Wrote ${path.relative(root, outputPath)} (${note})`);
+}
+
+async function renderSquare(markSquare, size, ratio) {
   const markSize = Math.round(size * ratio);
   const offset = Math.round((size - markSize) / 2);
-  const mark = await sharp(source)
-    .extract(MARK)
+  const mark = await sharp(markSquare)
     .resize(markSize, markSize)
     .png()
     .toBuffer();
@@ -40,17 +119,12 @@ async function renderSquare(size, ratio) {
     .toBuffer();
 }
 
-async function writeSquare(size, ratio, outputPath) {
-  await writeFile(outputPath, await renderSquare(size, ratio));
-  console.log(`Wrote ${path.relative(root, outputPath)} (${size}x${size})`);
-}
-
 // ICO с PNG внутри каждой записи: формат понимают все актуальные браузеры,
 // а хранить BMP ради IE смысла уже нет.
-async function writeIco(sizes, outputPath) {
+async function writeIco(markSquare, sizes, outputPath) {
   const images = [];
   for (const size of sizes) {
-    images.push(await renderSquare(size, FAVICON_RATIO));
+    images.push(await renderSquare(markSquare, size, FAVICON_RATIO));
   }
 
   const header = Buffer.alloc(6);
@@ -74,22 +148,22 @@ async function writeIco(sizes, outputPath) {
     offset += image.length;
   });
 
-  await writeFile(outputPath, Buffer.concat([header, directory, ...images]));
-  console.log(
-    `Wrote ${path.relative(root, outputPath)} (${sizes.join(", ")})`,
+  await write(
+    outputPath,
+    Buffer.concat([header, directory, ...images]),
+    sizes.join(", "),
   );
 }
 
 // Картинка для ссылок в мессенджерах и соцсетях: 1200×630 — размер, который
 // Telegram, WhatsApp и X показывают без обрезки.
-async function writeOpenGraphImage(outputPath) {
+async function writeOpenGraphImage(logo, outputPath) {
   const width = 1200;
   const height = 630;
   const logoWidth = 520;
   const logoHeight = Math.round((logoWidth * FULL.height) / FULL.width);
 
-  const logo = await sharp(source)
-    .extract(FULL)
+  const scaled = await sharp(logo)
     .resize(logoWidth, logoHeight)
     .png()
     .toBuffer();
@@ -140,7 +214,7 @@ async function writeOpenGraphImage(outputPath) {
   const image = await sharp(backdrop)
     .composite([
       {
-        input: logo,
+        input: scaled,
         left: Math.round((width - logoWidth) / 2),
         top: blockTop,
       },
@@ -149,16 +223,74 @@ async function writeOpenGraphImage(outputPath) {
     .png()
     .toBuffer();
 
-  await writeFile(outputPath, image);
-  console.log(`Wrote ${path.relative(root, outputPath)} (${width}x${height})`);
+  await write(outputPath, image, `${width}x${height}`);
 }
 
 await mkdir(iconsDir, { recursive: true });
-await writeSquare(192, ANY_RATIO, path.join(iconsDir, "icon-192.png"));
-await writeSquare(512, ANY_RATIO, path.join(iconsDir, "icon-512.png"));
-await writeSquare(192, MASKABLE_RATIO, path.join(iconsDir, "icon-maskable-192.png"));
-await writeSquare(512, MASKABLE_RATIO, path.join(iconsDir, "icon-maskable-512.png"));
-await writeSquare(180, ANY_RATIO, path.join(appDir, "apple-icon.png"));
-await writeIco([16, 32, 48, 64, 128, 256], path.join(appDir, "favicon.ico"));
-await writeOpenGraphImage(path.join(appDir, "opengraph-image.png"));
-await writeOpenGraphImage(path.join(appDir, "twitter-image.png"));
+await mkdir(brandDir, { recursive: true });
+
+// Знак для интерфейса. 512 — с запасом на самый крупный показ (48 CSS-пикселей
+// при тройной плотности), дальше next/image ужимает под конкретное место.
+const MARK_SIZE = 512;
+const markLight = await squareMark(MARK_SOURCE);
+const markDark = await squareMark(
+  await recolorMark(MARK_SOURCE, MARK_GLOBE, DARK_MARK),
+);
+await write(
+  path.join(brandDir, "mark.png"),
+  await sharp(markLight)
+    .resize(MARK_SIZE, MARK_SIZE)
+    .png({ compressionLevel: 9 })
+    .toBuffer(),
+  `${MARK_SIZE}x${MARK_SIZE}`,
+);
+await write(
+  path.join(brandDir, "mark-dark.png"),
+  await sharp(markDark)
+    .resize(MARK_SIZE, MARK_SIZE)
+    .png({ compressionLevel: 9 })
+    .toBuffer(),
+  `${MARK_SIZE}x${MARK_SIZE}`,
+);
+
+// Логотип целиком, обрезанный по рисунку: у исходника поля больше самого знака.
+const logoLight = await sharp(FULL_SOURCE)
+  .extract(FULL)
+  .png({ compressionLevel: 9 })
+  .toBuffer();
+const logoDark = await sharp(
+  await recolorMark(FULL_SOURCE, FULL_GLOBE, DARK_MARK, FULL),
+)
+  .png({ compressionLevel: 9 })
+  .toBuffer();
+await write(
+  path.join(brandDir, "logo.png"),
+  logoLight,
+  `${FULL.width}x${FULL.height}`,
+);
+await write(
+  path.join(brandDir, "logo-dark.png"),
+  logoDark,
+  `${FULL.width}x${FULL.height}`,
+);
+
+for (const [size, ratio, file] of [
+  [192, ANY_RATIO, "icon-192.png"],
+  [512, ANY_RATIO, "icon-512.png"],
+  [192, MASKABLE_RATIO, "icon-maskable-192.png"],
+  [512, MASKABLE_RATIO, "icon-maskable-512.png"],
+]) {
+  await write(
+    path.join(iconsDir, file),
+    await renderSquare(markLight, size, ratio),
+    `${size}x${size}`,
+  );
+}
+await write(
+  path.join(appDir, "apple-icon.png"),
+  await renderSquare(markLight, 180, ANY_RATIO),
+  "180x180",
+);
+await writeIco(markLight, [16, 32, 48, 64, 128, 256], path.join(appDir, "favicon.ico"));
+await writeOpenGraphImage(logoLight, path.join(appDir, "opengraph-image.png"));
+await writeOpenGraphImage(logoLight, path.join(appDir, "twitter-image.png"));

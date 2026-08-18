@@ -108,9 +108,7 @@ export function Header({ user }: { user: UserProfile }) {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 h-14">
           {/* Logo */}
           <Link href="/" className="flex shrink-0 items-center gap-2">
-            {/* Вектор, а не logo_tilak.png: в растре знак запечён тёмно-синим
-                и на тёмной теме сливается с фоном шапки. */}
-            <VedaMatchMark className="h-9 w-9 text-text-0" />
+            <VedaMatchMark className="h-9 w-9" />
             <span className="hidden items-center gap-1.5 sm:flex">
               <span className="font-display font-bold text-text-0">VedaMatch</span>
               {/* Значок беты стоит рядом с названием, а не на самом знаке —

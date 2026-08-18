@@ -19,8 +19,8 @@ const CITY_ZOOM = 9;
  */
 const BRAND_PREFIX =
   '<span class="contacts-map-brand">' +
-  // Тёмная плашка атрибуции: в растре знак запечён тёмно-синим и тонет на ней.
-  '<img src="/logo-mark-on-dark.svg" alt="" width="12" height="12" />VedaMatch' +
+  // Тёмная плашка атрибуции в обеих темах: светлая версия знака на ней тонет.
+  '<img src="/brand/mark-dark.png" alt="" width="12" height="12" />VedaMatch' +
   "</span>";
 
 export interface ContactsMapArea {

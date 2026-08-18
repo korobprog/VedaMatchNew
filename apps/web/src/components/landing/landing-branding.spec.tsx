@@ -22,12 +22,7 @@ vi.mock("next/image", () => ({
   },
 }));
 
-/**
- * Знак ищется по роли, а не по alt: с переходом на вектор это больше не
- * <img>, а <svg role="img" aria-label>. Проверять `src` файла теперь не на
- * чем и не нужно — весь смысл замены был в том, чтобы цвет знака брался
- * из темы, а не из пикселей.
- */
+/** Подписана только светлая копия знака — тёмная скрыта от скринридера. */
 const mark = () => screen.getByRole("img", { name: "VedaMatch" });
 
 describe("landing branding", () => {
@@ -40,13 +35,13 @@ describe("landing branding", () => {
       </NextIntlClientProvider>,
     );
 
-    expect(mark().tagName.toLowerCase()).toBe("svg");
+    expect(mark()).toHaveAttribute("src", "/brand/mark.png");
   });
 
   it("uses the product logo and local profile photos in the phone mockup", () => {
     render(<PhoneMockup />);
 
-    expect(mark().tagName.toLowerCase()).toBe("svg");
+    expect(mark()).toHaveAttribute("src", "/brand/mark.png");
     expect(screen.getByAltText("Александра")).toHaveAttribute(
       "src",
       "/landing/profiles/alexandra.jpg",

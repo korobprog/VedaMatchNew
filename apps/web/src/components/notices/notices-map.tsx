@@ -19,14 +19,14 @@ const DEFAULT_ZOOM = 3;
 const CITY_ZOOM = 11;
 
 /**
- * Знак берётся из /logo-mark-on-dark.svg, а не из logo_tilak.png: плашка
- * атрибуции тёмная в обеих темах, а в растре знак запечён тёмно-синим и на
- * ней тонет. Компонент `VedaMatchMark` сюда не годится — Leaflet принимает
- * атрибуцию строкой HTML, не React-узлом.
+ * Берётся тёмная версия знака: плашка атрибуции тёмная в обеих темах, а в
+ * светлой версии «M» запечена тёмно-синим и на ней тонет. Компонент
+ * `VedaMatchMark` сюда не годится — Leaflet принимает атрибуцию строкой
+ * HTML, не React-узлом.
  */
 const BRAND_PREFIX =
   '<span class="notices-map-brand">' +
-  '<img src="/logo-mark-on-dark.svg" alt="" width="12" height="12" />VedaMatch' +
+  '<img src="/brand/mark-dark.png" alt="" width="12" height="12" />VedaMatch' +
   "</span>";
 
 export interface MapArea {

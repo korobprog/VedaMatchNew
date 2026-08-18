@@ -1,9 +1,9 @@
 ﻿"use client";
 
+import Image from "next/image";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { DevLoginForm } from "@/components/dev-login-form";
-import { VedaMatchMark } from "@/components/icons/vedamatch-mark";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const DEV_AUTH = process.env.NEXT_PUBLIC_DEV_AUTH === "true";
@@ -15,13 +15,29 @@ export default function LoginPage() {
       <NoiseOverlay />
       
       <div className="glass relative z-10 w-full max-w-sm rounded-3xl border border-glass-brd p-8 text-center">
-        {/* Вектор, а не logo_tilak.png: в растре знак запечён тёмно-синим и
-            на тёмной теме сливается с фоном. */}
-        <VedaMatchMark className="mx-auto mb-6 h-20 w-20 text-text-0" />
-        
-        <h1 className="font-display text-2xl font-bold text-text-0 mb-2">
-          VedaMatch
-        </h1>
+        {/* Здесь логотип целиком, со словом «VEDA MATCH»: на входе он —
+            единственное, что называет продукт, и места под него хватает.
+            Заголовок с тем же словом снят, чтобы название не шло дважды. */}
+        <Image
+          src="/brand/logo.png"
+          alt="VedaMatch"
+          width={816}
+          height={613}
+          loading="eager"
+          className="mx-auto mb-6 h-auto w-52 dark:hidden"
+        />
+        <Image
+          src="/brand/logo-dark.png"
+          alt=""
+          aria-hidden
+          width={816}
+          height={613}
+          loading="eager"
+          className="mx-auto mb-6 hidden h-auto w-52 dark:block"
+        />
+        {/* Название страницы есть на картинке, но не в тексте: заголовок
+            остаётся для чтения с экрана и для разметки документа. */}
+        <h1 className="sr-only">VedaMatch</h1>
         <p className="mb-8 text-sm text-text-1">
           Единый вход во все сервисы экосистемы
         </p>

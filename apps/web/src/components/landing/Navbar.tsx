@@ -128,8 +128,6 @@ export function Navbar({ className }: NavbarProps) {
             href="/"
             className="flex items-center gap-3 transition-transform hover:scale-105 focus-visible:outline-none"
           >
-            {/* Вектор, а не logo_tilak.png: у лендинга есть тёмная тема, а в
-                растре знак запечён тёмно-синим и сливается с подложкой. */}
             <VedaMatchMark className="h-12 w-12" />
             <span className="font-display text-lg md:text-xl font-bold text-text-0 hidden sm:block">
               VedaMatch

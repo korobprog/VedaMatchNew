@@ -1,78 +1,65 @@
-import { readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { createElement, type ImgHTMLAttributes } from "react";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { VedaMatchMark } from "./vedamatch-mark";
 
-const ROOT = join(__dirname, "..", "..", "..");
-const componentSource = readFileSync(join(__dirname, "vedamatch-mark.tsx"), "utf8");
-const fileSource = readFileSync(
-  join(ROOT, "public", "logo-mark-on-dark.svg"),
-  "utf8",
-);
+vi.mock("next/image", () => ({
+  default: (
+    props: ImgHTMLAttributes<HTMLImageElement> & {
+      fill?: boolean;
+      priority?: boolean;
+    },
+  ) => {
+    const { fill, priority, ...imageProps } = props;
+    void fill;
+    void priority;
+    return createElement("img", imageProps);
+  },
+}));
 
-/** Все контуры знака: `d="…"` в любом из двух представлений. */
-const contours = (source: string) =>
-  [...source.matchAll(/\sd="([^"]+)"/g)].map((match) => match[1]);
+const PUBLIC_DIR = join(__dirname, "..", "..", "..", "public");
 
 describe("VedaMatchMark", () => {
-  it("подписан для чтения с экрана", () => {
+  it("подписан для чтения с экрана — и ровно один раз", () => {
     render(<VedaMatchMark />);
-    expect(screen.getByRole("img", { name: "VedaMatch" }).tagName).toBe("svg");
+    // Копий знака в разметке две, тёмная и светлая; подписана одна, иначе
+    // скринридер прочитал бы «VedaMatch VedaMatch».
+    expect(screen.getAllByRole("img", { name: "VedaMatch" })).toHaveLength(1);
   });
 
-  it("не жёстко зашивает цвет буквы — он приходит из темы", () => {
+  /**
+   * Обе версии лежат в разметке всегда, а видимую выбирает `dark:`. Проверка
+   * держит именно это: если тёмная копия отвалится, знак не пропадёт — он
+   * просто станет тёмно-синим на почти чёрном, и заметить это на светлой
+   * машине разработчика нечем.
+   */
+  it("держит в разметке обе темы знака", () => {
     const { container } = render(<VedaMatchMark />);
-    const strokes = [...container.querySelectorAll("path")].map((path) =>
-      path.getAttribute("stroke"),
-    );
-    expect(strokes).toContain("var(--vm-logo-mark, currentColor)");
+    const images = [...container.querySelectorAll("img")];
+
+    expect(images.map((image) => image.getAttribute("src"))).toEqual([
+      "/brand/mark.png",
+      "/brand/mark-dark.png",
+    ]);
+    expect(images[0].className).toContain("dark:hidden");
+    expect(images[1].className).toContain("dark:block");
   });
 
-  it("разводит идентификаторы градиентов между копиями", () => {
-    // Ссылки url(#…) резолвятся по всему документу: два знака на странице
-    // с одинаковыми id перебивали бы друг другу заливку.
-    const { container } = render(
-      <>
-        <VedaMatchMark />
-        <VedaMatchMark />
-      </>,
-    );
-    const ids = [...container.querySelectorAll("linearGradient")].map((node) =>
-      node.getAttribute("id"),
-    );
-    expect(new Set(ids).size).toBe(ids.length);
+  it("пробрасывает размер снаружи", () => {
+    const { container } = render(<VedaMatchMark className="h-12 w-12" />);
+    expect(container.firstElementChild?.className).toContain("h-12 w-12");
   });
 
   /**
-   * Файл в public/ существует только потому, что Leaflet принимает атрибуцию
-   * строкой HTML и переменные темы внутрь <img> не попадают. Это копия, а
-   * копия рано или поздно разъезжается с оригиналом — здесь она этого не
-   * сделает молча. Та же страховка, что у public/pwa-install-prompt.js.
+   * Файлы собираются `scripts/generate-icons.mjs` и лежат в репозитории:
+   * сборка их не создаёт. Пропавший файл ломается молча — вместо знака
+   * пустое место, и ни одного исключения.
    */
-  it("держит копию в public/ в одной геометрии с компонентом", () => {
-    expect(contours(fileSource)).toEqual(contours(componentSource));
-  });
-
-  /**
-   * Разбор проверяется отдельно, потому что ломается он молча: битый SVG
-   * отдаётся с кодом 200, исключений не бросает и в консоль ничего не пишет
-   * — на месте знака просто появляется значок битой картинки размером
-   * 12 пикселей. Реальный случай: в XML-комментарии нельзя два минуса
-   * подряд, а имя CSS-переменной с её дефисами туда просилось само.
-   */
-  it("остаётся разбираемым XML", () => {
-    const parsed = new DOMParser().parseFromString(fileSource, "image/svg+xml");
-    expect(parsed.querySelector("parsererror")).toBeNull();
-    expect(parsed.documentElement.tagName).toBe("svg");
-  });
-
-  it("в копии для тёмной плашки буква залита светлым, а не токеном", () => {
-    // CSS-переменной там взяться неоткуда: внешний SVG в <img> — отдельный
-    // документ, стилей страницы он не видит.
-    // Именно `var(…)`, а не любое упоминание: в шапке файла токен назван
-    // словами, и это ровно то объяснение, ради которого файл существует.
-    expect(fileSource).not.toContain("var(--vm-logo-mark");
-    expect(fileSource).toContain('stroke="#F6F1FF"');
+  it("ссылается на файлы, которые лежат в public/", () => {
+    for (const file of ["brand/mark.png", "brand/mark-dark.png"]) {
+      expect(existsSync(join(PUBLIC_DIR, file)), file).toBe(true);
+    }
   });
 });
