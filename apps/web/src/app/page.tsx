@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getBillingPlan, getCommunityStats, getProfile, getServices } from "@/lib/api";
 import { Header } from "@/components/header";
 import { ServiceGrid } from "@/components/service-grid";
-import { MemberCounter } from "@/components/member-counter";
+import { MemberCountLine } from "@/components/member-count-line";
 import {
   getUnionChats,
   getUnionConnectionCounts,
@@ -120,13 +120,10 @@ export default async function Home({
           displayName={user.displayName}
         />
         {communityStats && (
-          <p className="mb-8 text-sm text-text-2">
-            Вместе нас:{" "}
-            <MemberCounter
-              total={communityStats.totalMembers}
-              className="font-semibold text-text-0"
-            />
-          </p>
+          <MemberCountLine
+            userId={user.id}
+            total={communityStats.totalMembers}
+          />
         )}
         <ServiceGrid services={services} userId={user.id} extras={serviceExtras} />
       </main>

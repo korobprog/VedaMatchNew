@@ -105,6 +105,11 @@
   /* На светлом фоне те же акценты темнее и читаются сильнее — кромка тише. */
   --vm-edge-opacity: 0.28;
   --vm-edge-opacity-hover: 0.7;
+  /* Кромка сервиса. Отдельные доли, а не --vm-edge-opacity: та кромка
+     градиентная и работает как украшение, эта помечает нажимаемое и
+     обязана читаться без курсора. */
+  --vm-service-edge-opacity: 0.42;
+  --vm-service-edge-opacity-hover: 0.82;
   --vm-scrollbar-track: rgba(74, 44, 122, 0.06);
 }
 
@@ -144,6 +149,9 @@
   --vm-noise-opacity: 0.03;
   --vm-edge-opacity: 0.45;
   --vm-edge-opacity-hover: 0.9;
+  /* На тёмном мята ярче, поэтому доля меньше — иначе кромка слепит. */
+  --vm-service-edge-opacity: 0.34;
+  --vm-service-edge-opacity-hover: 0.72;
   --vm-scrollbar-track: var(--vm-bg-1);
 }
 
@@ -184,6 +192,8 @@
     --vm-noise-opacity: 0.03;
     --vm-edge-opacity: 0.45;
     --vm-edge-opacity-hover: 0.9;
+    --vm-service-edge-opacity: 0.34;
+    --vm-service-edge-opacity-hover: 0.72;
     --vm-scrollbar-track: #150C24;
   }
 }
@@ -357,6 +367,49 @@ body {
 
 .glass-edge:hover::before {
   opacity: var(--vm-edge-opacity-hover, 0.85);
+}
+
+/**
+ * Кромка сервиса — зелёная, видна всегда.
+ *
+ * Тот же приём с маской, что и у `.glass-edge`: рамка обязана повторять
+ * скругление и не закрашивать стекло под собой. Отличие в смысле. Градиентная
+ * кромка украшает карточку, эта помечает нажимаемое: в компактном режиме
+ * плитки различаются только знаком и счётчиком, и общий контур говорит
+ * «это сервис» раньше, чем человек прочитает слово. Поэтому её не носят
+ * ни советник, ни виджеты — обведи всё подряд, и она перестанет значить.
+ */
+.service-edge {
+  position: relative;
+  border-color: transparent;
+}
+
+.service-edge::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--vm-cyan);
+  opacity: var(--vm-service-edge-opacity, 0.4);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  /* Перехода здесь сознательно нет. Пока `opacity` стояла в transition,
+     смена темы оставляла кромку прежней прозрачности: переменная уже
+     пересчитана, а анимируемое значение залипает на старом, и на светлой
+     теме зелёный оставался в тёмной доле. Движение под курсором держит
+     сама плитка своим transform. */
+}
+
+.service-edge:hover::before {
+  opacity: var(--vm-service-edge-opacity-hover, 0.8);
 }
 
 /* Neon glow utilities */

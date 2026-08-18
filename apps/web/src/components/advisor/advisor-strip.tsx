@@ -12,6 +12,12 @@ import {
   visibleCards,
   writeDismissal,
 } from "@/lib/advisor/advisor-dismissals";
+import {
+  effectiveMode,
+  readLayout,
+  serverLayout,
+  subscribeToLayout,
+} from "@/lib/service-layout";
 
 /** Цвет полоски слева — единственное, чем виды отличаются визуально. */
 const TONE_ACCENT: Record<AdvisorCard["tone"], string> = {
@@ -56,7 +62,39 @@ export function AdvisorStrip({
     [cards, dismissals, displayName],
   );
 
+  const getLayout = useCallback(() => readLayout(userId), [userId]);
+  const layout = useSyncExternalStore(
+    subscribeToLayout,
+    getLayout,
+    serverLayout,
+  );
+
   if (!shown.length) return null;
+
+  /**
+   * В компактном режиме от советника остаётся одна строка с самым верхним
+   * советом. Полностью убрать его нельзя: он единственный, кто говорит,
+   * что именно требует внимания, а плитки об этом молчат. Оставить целиком
+   * — тоже нельзя: три карточки над сеткой и есть та самая «куча
+   * информации», ради ухода от которой режим и заводился.
+   */
+  if (effectiveMode(layout) === "compact") {
+    const top = shown[0];
+    return (
+      <Link
+        href={top.href}
+        className="glass mb-4 flex items-center gap-2 rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1 transition-colors hover:text-text-0"
+      >
+        {top.service && (
+          <ServiceIcon slug={top.service} className="size-4 shrink-0" />
+        )}
+        <span className="min-w-0 flex-1 truncate">{top.text}</span>
+        <span className="shrink-0 font-medium text-text-0 underline underline-offset-2">
+          {top.actionLabel}
+        </span>
+      </Link>
+    );
+  }
 
   return (
     <ul className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

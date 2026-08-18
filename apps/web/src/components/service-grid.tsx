@@ -6,33 +6,23 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { motion } from "framer-motion";
+import { LayoutGrid, Rows3 } from "lucide-react";
 import type { ServiceCard as ServiceCardType } from "@vedamatch/shared";
 import { ServiceCard } from "@/components/service-card";
-
-interface StoredLayout {
-  order: string[];
-  pinnedId: string | null;
-}
-
-function storageKey(userId: string) {
-  return `vedamatch:service-layout:${userId}`;
-}
-
-function loadLayout(userId: string): StoredLayout | null {
-  try {
-    const raw = localStorage.getItem(storageKey(userId));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed?.order)) return null;
-    return { order: parsed.order, pinnedId: parsed.pinnedId ?? null };
-  } catch {
-    return null;
-  }
-}
+import { ServiceTile } from "@/components/service-tile";
+import {
+  effectiveMode,
+  markServiceOpened,
+  readLayout,
+  serverLayout,
+  subscribeToLayout,
+  writeLayout,
+} from "@/lib/service-layout";
 
 interface ServiceExtra {
   badgeCount?: number;
@@ -59,6 +49,20 @@ export function ServiceGrid({
   userId: string;
   extras?: Record<string, ServiceExtra>;
 }) {
+  /**
+   * Режим читается через `useSyncExternalStore`, а не эффектом: у него есть
+   * отдельный серверный снимок, и React знает, что разметка сервера и первый
+   * клиентский рендер разойдутся. Тот же приём, что у советника.
+   */
+  const getLayout = useCallback(() => readLayout(userId), [userId]);
+  const layout = useSyncExternalStore(
+    subscribeToLayout,
+    getLayout,
+    serverLayout,
+  );
+  const mode = effectiveMode(layout);
+  const compact = mode === "compact";
+
   const [order, setOrder] = useState<string[]>(() => services.map((s) => s.id));
   const [pinnedId, setPinnedId] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -79,8 +83,8 @@ export function ServiceGrid({
   pinnedRef.current = pinnedId;
 
   useEffect(() => {
-    const saved = loadLayout(userId);
-    if (!saved) return;
+    const saved = readLayout(userId);
+    if (!saved.order.length) return;
     const knownIds = new Set(services.map((s) => s.id));
     const savedKnown = saved.order.filter((id) => knownIds.has(id));
     const missing = services.map((s) => s.id).filter((id) => !savedKnown.includes(id));
@@ -90,16 +94,11 @@ export function ServiceGrid({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, services.map((s) => s.id).join(",")]);
 
+  // Пишем точечно: режим лежит в том же ключе, и полная перезапись объекта
+  // стёрла бы его при первой же перестановке карточек.
   const save = useCallback(
     (nextOrder: string[], nextPinned: string | null) => {
-      try {
-        localStorage.setItem(
-          storageKey(userId),
-          JSON.stringify({ order: nextOrder, pinnedId: nextPinned }),
-        );
-      } catch {
-        // localStorage недоступен (приватный режим и т.п.) — просто не сохраняем расположение.
-      }
+      writeLayout(userId, { order: nextOrder, pinnedId: nextPinned });
     },
     [userId],
   );
@@ -213,25 +212,74 @@ export function ServiceGrid({
 
   const draggedService = dragId ? byId.get(dragId) : null;
 
+  const openService = () => markServiceOpened(userId);
+
   return (
     <>
-      {/* Перестановка нужна редко, поэтому переключатель тихий и только там,
-          где нет перетаскивания мышью. */}
-      <div className="mb-3 flex justify-end sm:hidden">
-        <button
-          type="button"
-          onClick={() => setReordering((on) => !on)}
-          aria-pressed={reordering}
-          className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${
-            reordering
-              ? "border-cyan/40 bg-cyan/10 text-cyan"
-              : "border-glass-brd text-text-2 hover:text-text-0"
-          }`}
+      <div className="mb-3 flex items-center justify-end gap-2">
+        {/* Перестановка нужна редко, поэтому переключатель тихий и только
+            там, где нет перетаскивания мышью. В компактном режиме её нет
+            вовсе: в плитке негде стоять ни ручке, ни стрелкам. */}
+        {!compact && (
+          <button
+            type="button"
+            onClick={() => setReordering((on) => !on)}
+            aria-pressed={reordering}
+            className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors sm:hidden ${
+              reordering
+                ? "border-cyan/40 bg-cyan/10 text-cyan"
+                : "border-glass-brd text-text-2 hover:text-text-0"
+            }`}
+          >
+            {reordering ? "Готово" : "Изменить порядок"}
+          </button>
+        )}
+
+        {/* Переключатель стоит над сеткой, а не в шапке портала: он влияет
+            ровно на то, что под ним, и рядом с тем, на что влияет, его не
+            приходится искать. */}
+        <div
+          role="group"
+          aria-label="Вид сервисов"
+          className="flex rounded-xl border border-glass-brd p-0.5"
         >
-          {reordering ? "Готово" : "Изменить порядок"}
-        </button>
+          {(
+            [
+              ["compact", LayoutGrid, "Плитками"],
+              ["detailed", Rows3, "Подробно"],
+            ] as const
+          ).map(([value, Icon, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => writeLayout(userId, { mode: value })}
+              aria-pressed={mode === value}
+              aria-label={label}
+              title={label}
+              className={`rounded-lg p-1.5 transition-colors ${
+                mode === value
+                  ? "bg-glass text-text-0"
+                  : "text-text-2 hover:text-text-0"
+              }`}
+            >
+              <Icon aria-hidden className="size-4" />
+            </button>
+          ))}
+        </div>
       </div>
 
+      {compact ? (
+        <section className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
+          {displayed.map((service) => (
+            <ServiceTile
+              key={service.id}
+              service={service}
+              badgeCount={extras?.[service.id]?.badgeCount}
+              onOpen={openService}
+            />
+          ))}
+        </section>
+      ) : (
       <section className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 lg:gap-4">
         {displayed.map((service, index) => {
           const isDragged = dragId === service.id;
@@ -277,6 +325,7 @@ export function ServiceGrid({
                   extra={extras?.[service.id]?.extra}
                   isPinned={pinnedId === service.id}
                   onTogglePin={() => togglePin(service.id)}
+                  onOpen={openService}
                   dragHandleProps={{
                     onPointerDown: (e) => startDrag(service.id, e),
                   }}
@@ -286,6 +335,7 @@ export function ServiceGrid({
           );
         })}
       </section>
+      )}
 
       {draggedService && visual && (
         <div

@@ -9,6 +9,7 @@ export function ServiceCard({
   extra,
   isPinned,
   onTogglePin,
+  onOpen,
   dragHandleProps,
 }: {
   service: ServiceCardType;
@@ -16,6 +17,7 @@ export function ServiceCard({
   extra?: ReactNode;
   isPinned?: boolean;
   onTogglePin?: () => void;
+  onOpen?: () => void;
   dragHandleProps?: {
     onPointerDown: (e: React.PointerEvent<HTMLSpanElement>) => void;
   };
@@ -27,7 +29,7 @@ export function ServiceCard({
       className={`group flex h-full flex-col rounded-2xl glass border p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_24px_rgba(255,62,158,0.18)] sm:p-5 ${
         isPinned
           ? "border-gold/50 shadow-[0_0_20px_rgba(250,204,21,0.12)]"
-          : "glass-edge"
+          : "service-edge"
       }`}
     >
       <div className="mb-3 flex items-center gap-3">
@@ -100,6 +102,7 @@ export function ServiceCard({
       ) : (
 <a
   href={service.url}
+  onClick={onOpen}
   className="w-full rounded-xl py-3 text-center text-sm font-medium text-white transition bg-[linear-gradient(to_right,#33CCCC,#5CCCCC)] hover:brightness-110"
 >
   Открыть
