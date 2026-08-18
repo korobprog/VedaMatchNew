@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: typecheck · lint · test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # shared и Prisma-клиент нужны и tsc, и тестам api/web/importer.
+      - name: Build shared + Prisma client
+        run: |
+          pnpm --filter @vedamatch/shared build
+          pnpm --filter @vedamatch/api prisma:generate
+
+      - name: Typecheck api (with specs)
+        run: pnpm --filter @vedamatch/api exec tsc --noEmit -p tsconfig.json
+
+      - name: Typecheck web
+        run: pnpm --filter @vedamatch/web exec tsc --noEmit
+
+      - name: Typecheck importer
+        run: pnpm --filter @vedamatch/vedabase-importer build
+
+      # В api-скрипте lint стоит --fix; в CI линтим без записи.
+      # Ошибок сейчас много (см. docs/review-2026-08-19.md) — пока не блокируем,
+      # но выводим отчёт. Снять continue-on-error, когда долг разобран.
+      - name: Lint api (report only)
+        continue-on-error: true
+        run: pnpm --filter @vedamatch/api exec eslint "src/**/*.ts" --no-fix
+
+      # 6 ошибок react-hooks (service-grid, theme-provider, member-counter) —
+      # долг из отчёта ревью; после исправления убрать continue-on-error.
+      - name: Lint web (report only)
+        continue-on-error: true
+        run: pnpm --filter @vedamatch/web lint
+
+      - name: Test api
+        run: pnpm --filter @vedamatch/api test -- --ci
+
+      - name: Test web
+        run: pnpm --filter @vedamatch/web test
+
+      - name: Test importer
+        run: pnpm --filter @vedamatch/vedabase-importer test
+
+  docker:
+    name: docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: false
+          build-args: NEXT_PUBLIC_API_URL=https://api.example.invalid
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
