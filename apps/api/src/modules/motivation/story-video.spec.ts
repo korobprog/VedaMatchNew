@@ -64,3 +64,29 @@ describe('ffmpegPath', () => {
     expect(ffmpegPath()).toBe('C:\tools\ffmpeg.exe');
   });
 });
+
+describe('маркировка ИИ-контента в ролике', () => {
+  const args = buildStoryVideoArgs({
+    videoPath: '/tmp/in.mp4',
+    overlayPath: '/tmp/overlay.png',
+    outputPath: '/tmp/out.mp4',
+  });
+
+  it('пишет отметку в метаданные файла, а не только на пиксели', () => {
+    // Надпись на кадре площадка может обрезать или перекодировать, а
+    // метаданные читает автоматика, которая решает, вешать ли значок «ИИ».
+    const values = args
+      .map((arg, index) => (args[index - 1] === '-metadata' ? arg : ''))
+      .filter(Boolean);
+
+    expect(values.some((v) => v.startsWith('comment='))).toBe(true);
+    expect(values.join(' ')).toContain('AI-generated');
+    expect(values.some((v) => v === 'copyright=VedaMatch')).toBe(true);
+  });
+
+  it('ставит метаданные до имени выходного файла', () => {
+    // ffmpeg относит опции к следующему за ними файлу: после имени выхода
+    // они бы просто потерялись.
+    expect(args.lastIndexOf('-metadata')).toBeLessThan(args.length - 1);
+  });
+});

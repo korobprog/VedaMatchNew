@@ -2,11 +2,10 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import sharp from 'sharp';
 import {
   STORY_HEIGHT,
   STORY_WIDTH,
-  buildStoryOverlaySvg,
+  renderStoryOverlay,
   type StoryOverlayInput,
 } from './story-image';
 
@@ -17,6 +16,10 @@ import {
 export function ffmpegPath(): string {
   return process.env.FFMPEG_PATH?.trim() || 'ffmpeg';
 }
+
+/** То же, что и на кадре, но в метаданных файла. */
+export const VIDEO_DISCLOSURE =
+  'Создано нейросетью в VedaMatch. AI-generated video created with VedaMatch.';
 
 export type StoryVideoArgs = {
   videoPath: string;
@@ -63,6 +66,13 @@ export function buildStoryVideoArgs(input: StoryVideoArgs): string[] {
     // Индекс в начало файла: иначе браузер ждёт полной загрузки перед стартом.
     '-movflags',
     '+faststart',
+    // Метка в самом файле, а не только на пикселях: надпись переживёт
+    // перекодирование площадкой, а метаданные читаются автоматикой, которая
+    // как раз и решает, помечать ли ролик значком «сделано ИИ».
+    '-metadata',
+    `comment=${VIDEO_DISCLOSURE}`,
+    '-metadata',
+    'copyright=VedaMatch',
     input.outputPath,
   ];
 }
@@ -94,11 +104,7 @@ export async function composeStoryVideo(
   video: Buffer,
   overlay: StoryOverlayInput,
 ): Promise<Buffer> {
-  const overlayPng = await sharp(
-    Buffer.from(buildStoryOverlaySvg(overlay)),
-  )
-    .png()
-    .toBuffer();
+  const overlayPng = await renderStoryOverlay(overlay);
 
   const dir = await mkdtemp(join(tmpdir(), 'vm-story-'));
   try {

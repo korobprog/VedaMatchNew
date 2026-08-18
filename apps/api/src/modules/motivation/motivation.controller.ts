@@ -220,9 +220,9 @@ export class MotivationController {
   @UseGuards(AuthGuard)
   rebuildStories(
     @CurrentUser() user: AccessTokenPayload,
-    @Body() input: { limit?: number } = {},
+    @Body() input: { limit?: number; force?: boolean } = {},
   ) {
-    return this.storyRebuild.rebuild(user.role, input.limit);
+    return this.storyRebuild.rebuild(user.role, input.limit, input.force);
   }
 
   @Post('admin/motivation/manual-posts')
