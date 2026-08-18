@@ -5,6 +5,7 @@ import { AdminUserStageForm } from "@/components/admin-user-stage-form";
 import { AdminUserRoleForm } from "@/components/admin-user-role-form";
 import { AdminUserBlockForm } from "@/components/admin-user-block-form";
 import { AdminUserDeleteForm } from "@/components/admin-user-delete-form";
+import { AdminUserPurgeForm } from "@/components/admin-user-purge-form";
 import { AdminPhotoVerification } from "@/components/admin-photo-verification";
 import { AdminSubscriptionForm } from "@/components/admin-subscription-form";
 import { getAdminUser, getProfile } from "@/lib/api";
@@ -215,6 +216,11 @@ export default async function AdminUserDetailPage({
               accountStatus={profile.accountStatus}
               deletedAt={profile.deletedAt}
               statusReason={profile.statusReason}
+            />
+            <AdminUserPurgeForm
+              userId={profile.id}
+              email={profile.email}
+              isSelf={currentUser.id === profile.id}
             />
             <div className="glass rounded-2xl border border-glass-brd p-4 text-sm text-text-1">
               <p className="font-medium text-text-0">Безопасность</p>

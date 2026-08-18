@@ -13,6 +13,7 @@ import type {
   AdminBlockUserRequest,
   AdminDeleteUserRequest,
   AdminManualStageUpdateRequest,
+  AdminPurgeUserRequest,
   AdminRoleUpdateRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
@@ -89,11 +90,18 @@ export class AdminUsersController {
     return this.adminUsers.softDeleteUser(user, id, body);
   }
 
-  @Post(':id/restore')
-  restore(
+  /** Безвозвратное удаление: строка User, все сервисные данные и файлы. */
+  @Post(':id/purge')
+  purge(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
+    @Body() body: AdminPurgeUserRequest,
   ) {
+    return this.adminUsers.purgeUser(user, id, body);
+  }
+
+  @Post(':id/restore')
+  restore(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.adminUsers.restoreUser(user, id);
   }
 }
