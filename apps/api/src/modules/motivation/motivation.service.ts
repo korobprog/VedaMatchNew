@@ -395,7 +395,7 @@ export class MotivationService {
     // звучат они по-разному. Без неё после смены модели админ слушал бы старые
     // записи и выбирал голос по звучанию, которого в роликах уже нет.
     const key = `motivation/voice-preview/${voicePreviewKey(
-      this.audio.modelId(),
+      await this.audio.modelId(),
     )}/${name ?? 'default'}.mp3`;
     const cached = await this.generation.findUploaded(key);
     if (cached) return { audio: cached, cached: true };

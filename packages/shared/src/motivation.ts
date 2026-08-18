@@ -169,6 +169,33 @@ export const MOTIVATION_VOICES = [
 
 export type MotivationVoice = (typeof MOTIVATION_VOICES)[number];
 
+/**
+ * Настройки сервиса. Пустое значение поля означает «взять из окружения», а не
+ * «пусто»: так настройки переносятся из `.env` по одной, ничего не ломая.
+ * Секретов здесь нет — ключи провайдеров остаются в окружении.
+ */
+export interface MotivationSettingsDto {
+  videoModel: string;
+  videoSeconds: number;
+  videoAudio: boolean;
+  voiceModel: string;
+  voiceName: string;
+  imageModel: string;
+  visualStyle: MotivationVisualStyle | null;
+  dailyBudgetUsd: number;
+}
+
+export type MotivationSettingsUpdate = Partial<{
+  videoModel: string | null;
+  videoSeconds: number | null;
+  videoAudio: boolean | null;
+  voiceModel: string | null;
+  voiceName: string | null;
+  imageModel: string | null;
+  visualStyle: MotivationVisualStyle | null;
+  dailyBudgetUsd: number | null;
+}>;
+
 export type MotivationVideoStatus =
   | 'none'
   | 'queued'

@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { MotivationSettingsService } from './motivation-settings.service';
 
 /** Ответ провайдера на постановку задачи в очередь. */
 export type FalSubmitResult = {
@@ -75,7 +76,10 @@ function describeFailure(detail: unknown): string {
  */
 @Injectable()
 export class FalVideoService {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly settings: MotivationSettingsService,
+  ) {}
 
   /** Настроен ли сервис. Воркер не должен занимать задачу, если ключа нет. */
   get enabled(): boolean {
@@ -89,28 +93,21 @@ export class FalVideoService {
     return key;
   }
 
-  /** Публичное имя модели — нужно учёту стоимости: тарифы у провайдеров разные. */
-  modelId(): string {
-    return this.model();
-  }
-
-  private model(): string {
-    return (
-      this.config.get<string>('MOTIVATION_VIDEO_MODEL') ||
-      'fal-ai/bytedance/seedance/v1/pro/fast/image-to-video'
-    );
+  /** Имя модели — нужно учёту стоимости: тарифы у провайдеров разные. */
+  async modelId(): Promise<string> {
+    return (await this.settings.read()).videoModel;
   }
 
   /** Длительность ролика в секундах. Цена линейна по ней, поэтому значение
    *  вынесено в конфиг, а не зашито. */
-  durationSeconds(): number {
-    return Number(this.config.get('MOTIVATION_VIDEO_DURATION') || 5);
+  async durationSeconds(): Promise<number> {
+    return (await this.settings.read()).videoSeconds;
   }
 
   /** Звук по умолчанию выключен: он удваивает стоимость токенов, а подпись и
    *  музыку мы накладываем своим пайплайном. */
-  audioEnabled(): boolean {
-    return this.config.get<string>('MOTIVATION_VIDEO_AUDIO') === 'true';
+  async audioEnabled(): Promise<boolean> {
+    return (await this.settings.read()).videoAudio;
   }
 
   async submit(input: {
@@ -124,7 +121,8 @@ export class FalVideoService {
       throw new BadRequestException('Video generation requires an image url');
     if (!input.prompt.trim())
       throw new BadRequestException('Video generation requires a prompt');
-    const response = await fetch(`${QUEUE_BASE}/${this.model()}`, {
+    const settings = await this.settings.read();
+    const response = await fetch(`${QUEUE_BASE}/${settings.videoModel}`, {
       method: 'POST',
       signal: AbortSignal.timeout(60_000),
       headers: {
@@ -135,9 +133,9 @@ export class FalVideoService {
         buildVideoRequest({
           imageUrl: input.imageUrl,
           prompt: input.prompt,
-          seconds: this.durationSeconds(),
-          audio: this.audioEnabled(),
-          model: this.model(),
+          seconds: settings.videoSeconds,
+          audio: settings.videoAudio,
+          model: settings.videoModel,
         }),
       ),
     });

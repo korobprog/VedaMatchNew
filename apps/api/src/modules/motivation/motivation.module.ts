@@ -18,6 +18,7 @@ import { MotivationAuthorSearchService } from './motivation-author-search.servic
 import { MotivationSourceFetchService } from './motivation-source-fetch.service';
 import { FalVideoService } from './fal-video.service';
 import { FalAudioService } from './fal-audio.service';
+import { MotivationSettingsService } from './motivation-settings.service';
 import { MotivationVideoWorkerService } from './motivation-video-worker.service';
 
 @Module({
@@ -40,6 +41,7 @@ import { MotivationVideoWorkerService } from './motivation-video-worker.service'
     MotivationSourceFetchService,
     FalVideoService,
     FalAudioService,
+    MotivationSettingsService,
     MotivationVideoWorkerService,
   ],
   exports: [

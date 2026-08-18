@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { applyVoiceTranscription } from './voice-transcription';
+import { MotivationSettingsService } from './motivation-settings.service';
 
 export type SpokenLine = {
   audio: Buffer;
@@ -35,7 +36,10 @@ export const VOICE_PREVIEW_LINE =
  */
 @Injectable()
 export class FalAudioService {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly settings: MotivationSettingsService,
+  ) {}
 
   get enabled(): boolean {
     return Boolean(this.config.get<string>('FAL_KEY'));
@@ -49,19 +53,8 @@ export class FalAudioService {
   }
 
   /** Имя модели наружу: оно входит в ключ кэша образцов. */
-  modelId(): string {
-    return this.model();
-  }
-
-  private model(): string {
-    return (
-      this.config.get<string>('MOTIVATION_VOICE_MODEL') ||
-      'fal-ai/elevenlabs/tts/multilingual-v2'
-    );
-  }
-
-  private voice(): string {
-    return this.config.get<string>('MOTIVATION_VOICE_NAME') || 'Rachel';
+  async modelId(): Promise<string> {
+    return (await this.settings.read()).voiceModel;
   }
 
   async speak(text: string, voice?: string | null): Promise<SpokenLine> {
@@ -70,7 +63,8 @@ export class FalAudioService {
     // смог разобрать — на видеомодели это стоило $2.50.
     if (!spoken) throw new BadRequestException('Nothing to speak');
 
-    const response = await fetch(`${SYNC_BASE}/${this.model()}`, {
+    const settings = await this.settings.read();
+    const response = await fetch(`${SYNC_BASE}/${settings.voiceModel}`, {
       method: 'POST',
       signal: AbortSignal.timeout(120_000),
       headers: {
@@ -81,8 +75,8 @@ export class FalAudioService {
         // Ударения подставляем здесь, а не в тексте поста: цитата обязана
         // храниться дословно, без служебных пометок.
         text: applyVoiceTranscription(spoken),
-        voice: voice?.trim() || this.voice(),
-        model: this.model(),
+        voice: voice?.trim() || settings.voiceName,
+        model: settings.voiceModel,
       })),
     });
     if (!response.ok)

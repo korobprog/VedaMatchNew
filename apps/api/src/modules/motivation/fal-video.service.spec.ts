@@ -11,7 +11,16 @@ function service(overrides: Record<string, string> = {}) {
   const config = {
     get: (key: string) => values[key],
   } as unknown as ConfigService;
-  return new FalVideoService(config);
+  // Настройки читаются из базы с откатом на окружение; в тестах подменяем
+  // готовым значением, чтобы не поднимать Prisma ради трёх полей.
+  const settings = {
+    read: async () => ({
+      videoModel: values.MOTIVATION_VIDEO_MODEL,
+      videoSeconds: 5,
+      videoAudio: false,
+    }),
+  } as unknown as import('./motivation-settings.service').MotivationSettingsService;
+  return new FalVideoService(config, settings);
 }
 
 describe('FalVideoService', () => {
@@ -34,14 +43,10 @@ describe('FalVideoService', () => {
     expect(service().enabled).toBe(true);
   });
 
-  it('звук выключен по умолчанию и включается только явным true', () => {
-    expect(service().audioEnabled()).toBe(false);
-    expect(service({ MOTIVATION_VIDEO_AUDIO: 'false' }).audioEnabled()).toBe(
-      false,
-    );
-    expect(service({ MOTIVATION_VIDEO_AUDIO: 'true' }).audioEnabled()).toBe(
-      true,
-    );
+  it('звук берёт из настроек сервиса, а не из окружения', async () => {
+    // Разбор окружения переехал в MotivationSettingsService — там же и
+    // проверяется старшинство «база → окружение → значение из кода».
+    await expect(service().audioEnabled()).resolves.toBe(false);
   });
 
   it('ставит задачу и отдаёт идентификатор со ссылками провайдера', async () => {

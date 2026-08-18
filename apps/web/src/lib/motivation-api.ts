@@ -3,6 +3,7 @@ import type {
   MotivationAuthorWatchDto,
   MotivationBookDto,
   MotivationCategoryDto,
+  MotivationSettingsDto,
   MotivationFeedResponse,
   MotivationAdminCandidateDto,
   MotivationPostDto,
@@ -65,3 +66,6 @@ export const getAdminMotivationBooks = () =>
 
 export const getAdminMotivationCategories = () =>
   motivationGet<MotivationCategoryDto[]>("/admin/motivation/categories");
+
+export const getMotivationSettings = () =>
+  motivationGet<MotivationSettingsDto>("/admin/motivation/settings");

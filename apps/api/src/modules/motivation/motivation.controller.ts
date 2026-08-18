@@ -1,5 +1,6 @@
 import {
   Body,
+  ForbiddenException,
   Controller,
   Delete,
   Get,
@@ -32,6 +33,10 @@ import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationManualPostService } from './motivation-manual-post.service';
 import { MotivationStoryRebuildService } from './motivation-story-rebuild.service';
 import { MotivationService } from './motivation.service';
+import {
+  MotivationSettingsService,
+  type MotivationSettingsUpdate,
+} from './motivation-settings.service';
 
 @Controller()
 export class MotivationController {
@@ -41,6 +46,7 @@ export class MotivationController {
     private readonly manualPosts: MotivationManualPostService,
     private readonly storyRebuild: MotivationStoryRebuildService,
     private readonly books: MotivationBooksService,
+    private readonly settings: MotivationSettingsService,
   ) {}
 
   @Get('health') health() {
@@ -166,6 +172,21 @@ export class MotivationController {
   @UseGuards(AuthGuard)
   animate(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.service.requestAnimation(user.role, id);
+  }
+  @Get('admin/motivation/settings')
+  @UseGuards(AuthGuard)
+  readSettings(@CurrentUser() user: AccessTokenPayload) {
+    if (user.role !== 'admin')
+      throw new ForbiddenException('Только администратор');
+    return this.settings.read();
+  }
+  @Patch('admin/motivation/settings')
+  @UseGuards(AuthGuard)
+  updateSettings(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() input: MotivationSettingsUpdate,
+  ) {
+    return this.settings.update(user.role, input);
   }
   @Post('admin/motivation/voice-preview')
   @UseGuards(AuthGuard)

@@ -27,13 +27,12 @@ export type StoryVideoArgs = {
   outputPath: string;
   /** До какой длины растянуть ролик повтором. Пусто — оставить как есть. */
   loopToSeconds?: number;
-  /** Звуковая дорожка. Обрезается по длине ролика, с фейдами по краям. */
-  audioPath?: string;
-  /**
-   * Громкость дорожки. Музыка играет фоном и должна быть тише, голос —
-   * наоборот, он и есть содержание.
-   */
-  audioVolume?: number;
+  /** Озвучка цитаты. Идёт на полной громкости — она и есть содержание. */
+  voicePath?: string;
+  /** Музыкальная подложка. Играет тише голоса и с фейдами по краям. */
+  musicPath?: string;
+  /** Громкость подложки. По умолчанию заметно тише речи. */
+  musicVolume?: number;
 };
 
 /**
@@ -94,6 +93,31 @@ export function buildBoomerangArgs(input: {
  * запускать кодек в тестах незачем, а порядок фильтров и флагов ломается
  * молча — видео просто уезжает по краям или не играет в браузере.
  */
+/**
+ * Звуковая часть фильтра.
+ *
+ * Голос и музыка сводятся через `amix` с `normalize=0`: по умолчанию фильтр
+ * делит громкость между источниками, и речь проваливалась бы ровно настолько,
+ * насколько громче музыка. Нам нужно обратное — музыка отступает под голос.
+ */
+function buildAudioFilter(input: StoryVideoArgs, loop?: number): string {
+  const seconds = loop ?? 5;
+  // Индексы входов: 0 — ролик, 1 — подпись, дальше по порядку добавления.
+  const voiceIndex = 2;
+  const musicIndex = input.voicePath ? 3 : 2;
+  const fadeOut = Math.max(0, seconds - 1.5);
+  const music =
+    `[${musicIndex}:a]volume=${input.musicVolume ?? 0.18},` +
+    // Фейды по краям: без них подложка обрывается на полуноте.
+    `afade=t=in:st=0:d=1.5,afade=t=out:st=${fadeOut}:d=1.5[m]`;
+
+  if (input.voicePath && input.musicPath)
+    return `;[${voiceIndex}:a]volume=1[v];${music};[v][m]amix=inputs=2:duration=first:normalize=0[a]`;
+  if (input.voicePath) return `;[${voiceIndex}:a]volume=1[a]`;
+  if (input.musicPath) return `;${music.replace('[m]', '[a]')}`;
+  return '';
+}
+
 export function buildStoryVideoArgs(input: StoryVideoArgs): string[] {
   const loop = input.loopToSeconds;
   return [
@@ -105,22 +129,22 @@ export function buildStoryVideoArgs(input: StoryVideoArgs): string[] {
     input.videoPath,
     '-i',
     input.overlayPath,
-    ...(input.audioPath ? ['-i', input.audioPath] : []),
+    ...(input.voicePath ? ['-i', input.voicePath] : []),
+    ...(input.musicPath ? ['-i', input.musicPath] : []),
     // Ролик приходит от модели меньшего размера (замер: 704×1248), поэтому
     // сначала докадрируем до 1080×1920 — иначе подпись, свёрстанная под этот
     // кадр, не совпадёт с картинкой.
     '-filter_complex',
     `[0:v]scale=${STORY_WIDTH}:${STORY_HEIGHT}:force_original_aspect_ratio=increase,` +
       `crop=${STORY_WIDTH}:${STORY_HEIGHT}[bg];[bg][1:v]overlay=0:0[v]` +
-      (input.audioPath
-        ? // Фейды по краям: без них подложка обрывается на полуноте.
-          `;[2:a]afade=t=in:st=0:d=1,afade=t=out:st=${Math.max(0, (loop ?? 5) - 1.5)}:d=1.5,volume=${input.audioVolume ?? 0.35}[a]`
-        : ''),
+      buildAudioFilter(input, loop),
     '-map',
     '[v]',
     // Со своей дорожкой берём её, иначе переносим звук ролика. `?` не даёт
     // ffmpeg упасть на немом файле.
-    ...(input.audioPath ? ['-map', '[a]'] : ['-map', '0:a?']),
+    ...(input.voicePath || input.musicPath
+      ? ['-map', '[a]']
+      : ['-map', '0:a?']),
     // Обрезаем ровно по заданной длине: и повтор, и музыка длиннее её.
     ...(loop ? ['-t', String(loop)] : []),
     '-c:v',
@@ -136,7 +160,9 @@ export function buildStoryVideoArgs(input: StoryVideoArgs): string[] {
     // отфильтрованный поток скопировать нельзя — ffmpeg отказывается
     // совмещать filtergraph и streamcopy. Родной звук ролика копируем как был.
     '-c:a',
-    ...(input.audioPath ? ['aac', '-b:a', '160k'] : ['copy']),
+    ...(input.voicePath || input.musicPath
+      ? ['aac', '-b:a', '160k']
+      : ['copy']),
     // Индекс в начало файла: иначе браузер ждёт полной загрузки перед стартом.
     '-movflags',
     '+faststart',
@@ -179,9 +205,10 @@ export async function composeStoryVideo(
   overlay: StoryOverlayInput,
   options?: {
     loopToSeconds?: number;
-    /** Готовая дорожка в памяти: воркер получает её от провайдера, не файлом. */
-    audio?: Buffer;
-    audioVolume?: number;
+    /** Готовые дорожки в памяти: воркер получает их от провайдера, не файлом. */
+    voice?: Buffer;
+    music?: Buffer;
+    musicVolume?: number;
   },
 ): Promise<Buffer> {
   const overlayPng = await renderStoryOverlay(overlay);
@@ -196,10 +223,15 @@ export async function composeStoryVideo(
 
     // Бумеранг собирается отдельным проходом: разворот времени требует всего
     // ролика целиком, одним фильтром с зацикливанием это не выразить.
-    let audioPath: string | undefined;
-    if (options?.audio) {
-      audioPath = join(dir, 'audio.mp3');
-      await writeFile(audioPath, options.audio);
+    let voicePath: string | undefined;
+    if (options?.voice) {
+      voicePath = join(dir, 'voice.mp3');
+      await writeFile(voicePath, options.voice);
+    }
+    let musicPath: string | undefined;
+    if (options?.music) {
+      musicPath = join(dir, 'music.mp3');
+      await writeFile(musicPath, options.music);
     }
 
     let source = videoPath;
@@ -216,8 +248,9 @@ export async function composeStoryVideo(
         overlayPath,
         outputPath,
         loopToSeconds: options?.loopToSeconds,
-        audioPath,
-        audioVolume: options?.audioVolume,
+        voicePath,
+        musicPath,
+        musicVolume: options?.musicVolume,
       }),
     );
     return await readFile(outputPath);

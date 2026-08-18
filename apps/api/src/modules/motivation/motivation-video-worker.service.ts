@@ -149,9 +149,9 @@ export class MotivationVideoWorkerService
     });
     const used = Number(spent._sum.videoCostUsd ?? 0);
     const planned = estimatePlannedClipUsd({
-      seconds: this.fal.durationSeconds(),
-      model: this.fal.modelId(),
-      audio: this.fal.audioEnabled(),
+      seconds: await this.fal.durationSeconds(),
+      model: await this.fal.modelId(),
+      audio: await this.fal.audioEnabled(),
     });
     const limit = this.dailyBudgetUsd();
     if (used + planned > limit)
@@ -300,9 +300,9 @@ export class MotivationVideoWorkerService
           // Провайдер не возвращает списанную сумму, поэтому пишем свою
           // оценку по его же формуле — иначе учёт расхода остался бы нулём.
           videoCostUsd: estimatePlannedClipUsd({
-            seconds: this.fal.durationSeconds(),
-            model: this.fal.modelId(),
-            audio: this.fal.audioEnabled(),
+            seconds: await this.fal.durationSeconds(),
+            model: await this.fal.modelId(),
+            audio: await this.fal.audioEnabled(),
           }),
         },
       });
@@ -370,7 +370,7 @@ export class MotivationVideoWorkerService
       return await composeStoryVideo(
         video,
         { text, attribution },
-        { loopToSeconds: seconds, audio: spoken?.audio, audioVolume: 1 },
+        { loopToSeconds: seconds, voice: spoken?.audio },
       );
     } catch (error) {
       this.logger.error(

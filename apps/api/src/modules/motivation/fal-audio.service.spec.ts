@@ -9,9 +9,18 @@ import {
 
 function service(overrides: Record<string, string> = {}) {
   const values: Record<string, string> = { FAL_KEY: 'k', ...overrides };
-  return new FalAudioService({
-    get: (key: string) => values[key],
-  } as unknown as ConfigService);
+  // Настройки читаются из базы с откатом на окружение; в тестах подменяем
+  // готовым значением, чтобы не поднимать Prisma ради одной строки.
+  const settings = {
+    read: async () => ({
+      voiceModel: 'fal-ai/elevenlabs/tts/eleven-v3',
+      voiceName: 'Rachel',
+    }),
+  } as unknown as import('./motivation-settings.service').MotivationSettingsService;
+  return new FalAudioService(
+    { get: (key: string) => values[key] } as unknown as ConfigService,
+    settings,
+  );
 }
 
 const ok = (body: unknown) =>

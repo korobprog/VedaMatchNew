@@ -101,8 +101,7 @@ describe('своя звуковая дорожка', () => {
     overlayPath: '/tmp/overlay.png',
     outputPath: '/tmp/out.mp4',
     loopToSeconds: 14,
-    audioPath: '/tmp/voice.mp3',
-    audioVolume: 1,
+    voicePath: '/tmp/voice.mp3',
   });
 
   it('перекодирует звук, а не копирует', () => {
@@ -127,10 +126,8 @@ describe('своя звуковая дорожка', () => {
     expect(withAudio[withAudio.indexOf('-t') + 1]).toBe('14');
   });
 
-  it('уводит громкость и ставит фейды по краям', () => {
+  it('голос идёт на полной громкости', () => {
     const filter = withAudio[withAudio.indexOf('-filter_complex') + 1];
-    expect(filter).toContain('afade=t=in');
-    expect(filter).toContain('afade=t=out');
     expect(filter).toContain('volume=1');
   });
 });
@@ -148,5 +145,58 @@ describe('estimateReadingSeconds', () => {
     expect(long).toBeGreaterThan(10);
     // Сторис длиннее полуминуты никто не досматривает.
     expect(long).toBeLessThanOrEqual(30);
+  });
+});
+
+describe('голос и музыка вместе', () => {
+  const both = buildStoryVideoArgs({
+    videoPath: '/tmp/in.mp4',
+    overlayPath: '/tmp/overlay.png',
+    outputPath: '/tmp/out.mp4',
+    loopToSeconds: 14,
+    voicePath: '/tmp/voice.mp3',
+    musicPath: '/tmp/music.mp3',
+  });
+  const filter = both[both.indexOf('-filter_complex') + 1];
+
+  it('сводит обе дорожки без нормализации громкости', () => {
+    // amix по умолчанию делит громкость между источниками, и речь провалилась
+    // бы ровно настолько, насколько громче музыка. Нам нужно обратное.
+    expect(filter).toContain('amix=inputs=2');
+    expect(filter).toContain('normalize=0');
+  });
+
+  it('музыка звучит заметно тише голоса', () => {
+    expect(filter).toContain('volume=1[v]');
+    expect(filter).toMatch(/volume=0\.\d+/);
+  });
+
+  it('подложке ставит фейды, чтобы не обрывалась на полуноте', () => {
+    expect(filter).toContain('afade=t=in');
+    expect(filter).toContain('afade=t=out');
+  });
+
+  it('индексы входов не путаются, когда голоса нет', () => {
+    // Без голоса музыка становится третьим входом, а не четвёртым: ошибка тут
+    // молча взяла бы звук ролика вместо подложки.
+    const onlyMusic = buildStoryVideoArgs({
+      videoPath: '/tmp/in.mp4',
+      overlayPath: '/tmp/overlay.png',
+      outputPath: '/tmp/out.mp4',
+      musicPath: '/tmp/music.mp3',
+    });
+    const musicFilter = onlyMusic[onlyMusic.indexOf('-filter_complex') + 1];
+    expect(musicFilter).toContain('[2:a]');
+    expect(musicFilter).not.toContain('[3:a]');
+  });
+
+  it('без обеих дорожек переносит родной звук ролика', () => {
+    const silent = buildStoryVideoArgs({
+      videoPath: '/tmp/in.mp4',
+      overlayPath: '/tmp/overlay.png',
+      outputPath: '/tmp/out.mp4',
+    });
+    expect(silent).toContain('0:a?');
+    expect(silent[silent.indexOf('-c:a') + 1]).toBe('copy');
   });
 });

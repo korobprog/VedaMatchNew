@@ -464,6 +464,27 @@ model MotivationPost {
   @@index([quoteId])
 }
 
+/// Единственная строка настроек сервиса (id всегда "global").
+///
+/// Всё, что раньше жило в `.env`, кроме секретов: модели меняются по несколько
+/// раз за вечер, и каждый раз править файл с перезапуском — слишком дорого.
+/// Пустое поле означает «взять из окружения», поэтому настройки можно вводить
+/// постепенно, ничего не ломая.
+model MotivationSettings {
+  id                String                 @id @default("global")
+  videoModel        String?
+  videoSeconds      Int?
+  videoAudio        Boolean?
+  voiceModel        String?
+  voiceName         String?
+  imageModel        String?
+  /// Стиль по умолчанию. Пусто — подбирать автоматически по смыслу и источнику.
+  visualStyle       MotivationVisualStyle?
+  /// Дневной потолок расхода в долларах. Меняться должен без перевыкладки.
+  dailyBudgetUsd    Decimal?               @db.Decimal(10, 2)
+  updatedAt         DateTime               @updatedAt
+}
+
 /// Справочник категорий Motivation. `MotivationPost.category` хранит `slug`
 /// строкой, а не FK: так сохраняются индекс `[category, status, publishedAt]`
 /// и фильтр ленты `?category=`, а удаление категории не трогает посты.
