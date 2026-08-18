@@ -9,13 +9,11 @@ describe('MotivationService admin list', () => {
         findUnique: jest.fn().mockResolvedValue({ spiritualStage: 'devotee' }),
       },
       motivationPreference: {
-        findUnique: jest
-          .fn()
-          .mockResolvedValue({
-            vaishnavaPercent: 50,
-            language: 'ru',
-            profileTypes: [],
-          }),
+        findUnique: jest.fn().mockResolvedValue({
+          vaishnavaPercent: 50,
+          language: 'ru',
+          profileTypes: [],
+        }),
       },
       motivationPost,
     };
@@ -35,7 +33,9 @@ describe('MotivationService admin list', () => {
         status: 'published',
         OR: [
           { profileType: { in: ['devotee'] } },
-          { quote: { profiles: { some: { profileType: { in: ['devotee'] } } } } },
+          {
+            quote: { profiles: { some: { profileType: { in: ['devotee'] } } } },
+          },
         ],
       });
     }
@@ -180,9 +180,11 @@ describe('MotivationService feed profiles', () => {
         findUnique: jest.fn().mockResolvedValue({ spiritualStage: 'seeker' }),
       },
       motivationPreference: {
-        findUnique: jest
-          .fn()
-          .mockResolvedValue({ vaishnavaPercent: 50, language: 'ru', profileTypes }),
+        findUnique: jest.fn().mockResolvedValue({
+          vaishnavaPercent: 50,
+          language: 'ru',
+          profileTypes,
+        }),
       },
       motivationPost,
     };
@@ -324,7 +326,10 @@ describe('MotivationService.adminDelete', () => {
   });
 
   it('removes a post that has no quote attached', async () => {
-    const { service, transaction } = buildService({ id: 'post-1', quoteId: null });
+    const { service, transaction } = buildService({
+      id: 'post-1',
+      quoteId: null,
+    });
 
     await service.adminDelete('admin', 'post-1');
 
@@ -358,16 +363,15 @@ describe('MotivationService.addManualQuote', () => {
   };
 
   function buildService(overrides: { prisma?: unknown; copy?: unknown } = {}) {
-    const prisma =
-      overrides.prisma ??
-      {
-        motivationQuote: {
-          findUnique: jest.fn().mockResolvedValue(null),
-          create: jest.fn().mockResolvedValue({ id: 'quote-1' }),
-        },
-      };
-    const copy =
-      overrides.copy ?? { prepareCandidate: jest.fn().mockResolvedValue({ id: 'post-1' }) };
+    const prisma = overrides.prisma ?? {
+      motivationQuote: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'quote-1' }),
+      },
+    };
+    const copy = overrides.copy ?? {
+      prepareCandidate: jest.fn().mockResolvedValue({ id: 'post-1' }),
+    };
     const categories = {
       resolveSlug: jest.fn().mockResolvedValue('verified_quote'),
     };
@@ -398,7 +402,8 @@ describe('MotivationService.addManualQuote', () => {
     });
 
     expect(
-      (prisma as { motivationQuote: { create: jest.Mock } }).motivationQuote.create,
+      (prisma as { motivationQuote: { create: jest.Mock } }).motivationQuote
+        .create,
     ).toHaveBeenCalledWith({
       data: expect.objectContaining({
         originalText: validInput.originalText,
@@ -428,7 +433,8 @@ describe('MotivationService.addManualQuote', () => {
     });
 
     expect(
-      (prisma as { motivationQuote: { create: jest.Mock } }).motivationQuote.create,
+      (prisma as { motivationQuote: { create: jest.Mock } }).motivationQuote
+        .create,
     ).toHaveBeenCalledWith({
       data: expect.objectContaining({
         work: '',
@@ -467,7 +473,8 @@ describe('MotivationService.addManualQuote', () => {
     });
 
     expect(
-      (prisma as { motivationQuote: { create: jest.Mock } }).motivationQuote.create,
+      (prisma as { motivationQuote: { create: jest.Mock } }).motivationQuote
+        .create,
     ).toHaveBeenCalledWith({
       data: expect.objectContaining({
         originalText: validInput.originalText,
@@ -505,5 +512,66 @@ describe('MotivationService.addManualQuote', () => {
     const { service } = buildService();
 
     await expect(service.addManualQuote('user', validInput)).rejects.toThrow();
+  });
+});
+
+describe('MotivationService.previewVoice', () => {
+  function build(cached: string | null) {
+    const audio = {
+      speak: jest.fn(async () => ({ audio: Buffer.from('mp3'), seconds: 3 })),
+      // Модель входит в ключ кэша: у v2 и v3 одинаковые имена голосов, но
+      // звучат они по-разному.
+      modelId: () => 'fal-ai/elevenlabs/tts/eleven-v3',
+    };
+    const generation = {
+      findUploaded: jest.fn(async () => cached),
+      uploadStory: jest.fn(async () => 'https://cdn/new.mp3'),
+    };
+    const service = new MotivationService(
+      {} as never,
+      generation as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      audio as never,
+    );
+    return { service, audio, generation };
+  }
+
+  it('готовый образец берёт из хранилища и не платит повторно', async () => {
+    const { service, audio } = build('https://cdn/Rachel.mp3');
+
+    await expect(service.previewVoice('admin', 'Rachel')).resolves.toEqual({
+      audio: 'https://cdn/Rachel.mp3',
+      cached: true,
+    });
+    // Каждый синтез стоит денег, а фраза и голос те же — платить дважды не за что.
+    expect(audio.speak).not.toHaveBeenCalled();
+  });
+
+  it('отсутствующий синтезирует и кладёт в хранилище', async () => {
+    const { service, audio, generation } = build(null);
+
+    await expect(service.previewVoice('admin', 'George')).resolves.toEqual({
+      audio: 'https://cdn/new.mp3',
+      cached: false,
+    });
+    expect(audio.speak).toHaveBeenCalled();
+    expect(generation.uploadStory).toHaveBeenCalledWith(
+      'motivation/voice-preview/fal-ai-elevenlabs-tts-eleven-v3/George.mp3',
+      expect.any(Buffer),
+      'audio/mpeg',
+    );
+  });
+
+  it('неизвестный голос отбивает до обращения к провайдеру', async () => {
+    const { service, audio } = build(null);
+
+    await expect(service.previewVoice('admin', 'Валера')).rejects.toThrow();
+    // За неизвестный голос провайдер списал бы деньги так же, как за верный.
+    expect(audio.speak).not.toHaveBeenCalled();
   });
 });

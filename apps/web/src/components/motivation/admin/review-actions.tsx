@@ -19,7 +19,19 @@ export const visualStyles: ReadonlyArray<{
   { value: "warm_documentary", label: "Тёплая документалистика" },
   { value: "cosmic_contemplation", label: "Космическое созерцание" },
   { value: "historical_editorial", label: "Историческая редакционная иллюстрация" },
+  { value: "cinematic_film", label: "Кинокадр — 35 мм, плёнка" },
+  { value: "epic_wide", label: "Эпический широкий план" },
+  { value: "night_devotional", label: "Ночное предстояние — свет лампады" },
+  { value: "painterly_realism", label: "Живописный реализм" },
 ];
+
+/**
+ * Пустое значение селекта = «стиль не выбран руками». Раньше селект стартовал
+ * с захардкоженной «Духовной акварели» и отправлял её при каждом подтверждении,
+ * затирая стиль, который система подбирает по источнику цитаты: цитата из
+ * Бхагавад-гиты уходила в генерацию акварелью вместо индийской миниатюры.
+ */
+export const autoVisualStyleLabel = "Автоматически — по смыслу и источнику";
 
 export function StyleSelect({
   post,
@@ -28,9 +40,9 @@ export function StyleSelect({
   onChange,
 }: {
   post: MotivationAdminCandidateDto;
-  value: MotivationVisualStyle;
+  value: MotivationVisualStyle | null;
   disabled: boolean;
-  onChange: (style: MotivationVisualStyle) => void;
+  onChange: (style: MotivationVisualStyle | null) => void;
 }) {
   const label = `Стиль изображения для «${post.title || post.slug}»`;
   return (
@@ -38,11 +50,14 @@ export function StyleSelect({
       <span>Стиль изображения</span>
       <select
         aria-label={label}
-        value={value}
+        value={value ?? ""}
         disabled={disabled}
-        onChange={(event) => onChange(event.target.value as MotivationVisualStyle)}
+        onChange={(event) =>
+          onChange((event.target.value || null) as MotivationVisualStyle | null)
+        }
         className={`mt-2 ${fieldClass}`}
       >
+        <option value="">{autoVisualStyleLabel}</option>
         {visualStyles.map((style) => (
           <option key={style.value} value={style.value}>
             {style.label}

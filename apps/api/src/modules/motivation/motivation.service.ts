@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -8,8 +9,10 @@ import {
   MotivationAudienceTrack,
   MotivationPostStatus,
   MotivationProfileType,
+  MotivationVideoStatus,
   SpiritualStage,
 } from '@prisma/client';
+import { MOTIVATION_VOICES, type MotivationVoice } from '@vedamatch/shared';
 import type {
   MotivationAdminCandidateDto,
   MotivationAdminUpdate,
@@ -20,6 +23,7 @@ import type {
   MotivationManualQuoteResult,
   MotivationPostDto,
   MotivationPreferenceUpdate,
+  MotivationPromptUpdate,
   MotivationSourceWatchDto,
   MotivationSourceWatchInput,
   MotivationVisualStyle,
@@ -32,6 +36,11 @@ import {
   weightedPage,
 } from './motivation-feed';
 import { MotivationAuthorSearchService } from './motivation-author-search.service';
+import {
+  FalAudioService,
+  voicePreviewKey,
+  VOICE_PREVIEW_LINE,
+} from './fal-audio.service';
 import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationCopyService } from './motivation-copy.service';
 import { MotivationGenerationService } from './motivation-generation.service';
@@ -66,6 +75,7 @@ export class MotivationService {
     private readonly sourceFetch: MotivationSourceFetchService,
     private readonly copy: MotivationCopyService,
     private readonly categories: MotivationCategoriesService,
+    private readonly audio: FalAudioService,
   ) {}
 
   async preference(userId: string) {
@@ -147,7 +157,9 @@ export class MotivationService {
     const where = {
       OR: [
         { profileType: { in: profileTypes } },
-        { quote: { profiles: { some: { profileType: { in: profileTypes } } } } },
+        {
+          quote: { profiles: { some: { profileType: { in: profileTypes } } } },
+        },
       ],
       status: MotivationPostStatus.published,
       ...(query.category ? { category: query.category } : {}),
@@ -266,8 +278,16 @@ export class MotivationService {
       ) ?? [post.profileType],
       visualStyle: post.visualStyle,
       imagePrompt: post.imagePrompt,
+      imagePromptEdited: Boolean(post.imagePromptEditedAt),
       textApprovedAt: post.textApprovedAt?.toISOString() ?? null,
       imageApprovedAt: post.imageApprovedAt?.toISOString() ?? null,
+      videoStatus: post.videoStatus,
+      videoVoice: post.videoVoice,
+      videoVoiceName: post.videoVoiceName,
+      // В админке ролик виден и до приёмки — иначе его нечем было бы принять.
+      videoUrl: post.videoUrl ?? '',
+      videoErrorCode: post.videoErrorCode,
+      videoPrompt: post.videoPrompt,
     }));
   }
   async adminUpdate(role: Role, id: string, input: MotivationAdminUpdate) {
@@ -303,7 +323,9 @@ export class MotivationService {
     await this.prisma.$transaction(async (transaction) => {
       await transaction.motivationPost.delete({ where: { id } });
       if (post.quoteId)
-        await transaction.motivationQuote.delete({ where: { id: post.quoteId } });
+        await transaction.motivationQuote.delete({
+          where: { id: post.quoteId },
+        });
     });
   }
   regenerate(role: Role, actorId: string, id: string) {
@@ -316,6 +338,115 @@ export class MotivationService {
     visualStyle?: MotivationVisualStyle,
   ) {
     return this.moderation.approveText(role, actorId, id, visualStyle);
+  }
+  /**
+   * Ставит ролик в очередь. Отдельным действием, а не автоматом после
+   * картинки: каждый ролик стоит денег, и решение о нём принимает человек.
+   */
+  async requestAnimation(role: Role, id: string) {
+    this.admin(role);
+    const post = await this.prisma.motivationPost.findUnique({
+      where: { id },
+      select: { imageUrl: true, videoStatus: true },
+    });
+    if (!post) throw new NotFoundException('Post not found');
+    // Промпт иллюстрации больше не условие: ролику нужен кадр и своё описание
+    // движения, а оно при пустом поле берётся из дефолта.
+    if (!post.imageUrl) throw new ConflictException('Image is not ready yet');
+    if (
+      post.videoStatus === MotivationVideoStatus.queued ||
+      post.videoStatus === MotivationVideoStatus.running
+    )
+      throw new ConflictException('Video is already being generated');
+
+    // Счётчик попыток сбрасываем: это осознанный повторный заказ человеком, а
+    // не автоматический ретрай после сбоя.
+    await this.prisma.motivationPost.update({
+      where: { id },
+      data: {
+        videoStatus: MotivationVideoStatus.queued,
+        videoAttemptCount: 0,
+        videoErrorCode: null,
+        videoJobId: null,
+        videoJobStatusUrl: null,
+        videoJobResultUrl: null,
+      },
+    });
+    return { videoStatus: 'queued' as const };
+  }
+  /**
+   * Короткий образец голоса для выбора в админке.
+   *
+   * Без него голос выбирается вслепую из двадцати одного имени, а услышать его
+   * можно только пересняв ролик — две минуты и двенадцать центов. Фраза
+   * намеренно короткая и с теми именами, на которых синтез спотыкается: сорок
+   * знаков стоят меньше половины цента.
+   */
+  async previewVoice(role: Role, voice?: string | null) {
+    this.admin(role);
+    const name = voice?.trim();
+    if (name && !MOTIVATION_VOICES.includes(name as MotivationVoice))
+      throw new BadRequestException('Unknown voice');
+    // Фраза фиксированная, а голосов конечное число — значит каждый достаточно
+    // синтезировать один раз за всё время. Ключ детерминированный, поэтому
+    // проверка сводится к запросу готового файла.
+    //
+    // Модель входит в ключ обязательно: у v2 и v3 совпадают имена голосов, но
+    // звучат они по-разному. Без неё после смены модели админ слушал бы старые
+    // записи и выбирал голос по звучанию, которого в роликах уже нет.
+    const key = `motivation/voice-preview/${voicePreviewKey(
+      await this.audio.modelId(),
+    )}/${name ?? 'default'}.mp3`;
+    const cached = await this.generation.findUploaded(key);
+    if (cached) return { audio: cached, cached: true };
+
+    const spoken = await this.audio.speak(VOICE_PREVIEW_LINE, name);
+    const audio = await this.generation.uploadStory(
+      key,
+      spoken.audio,
+      'audio/mpeg',
+    );
+    return { audio, cached: false };
+  }
+
+  /**
+   * Настройка озвучки у поста: включение и выбор голоса.
+   *
+   * Голос проверяется по списку из `@vedamatch/shared`: опечатка ушла бы в
+   * платный запрос к провайдеру и вернулась ошибкой уже после списания.
+   */
+  async setVideoVoice(
+    role: Role,
+    id: string,
+    input: { enabled?: boolean; voice?: string | null },
+  ) {
+    this.admin(role);
+    const voice = input.voice?.trim();
+    if (voice && !MOTIVATION_VOICES.includes(voice as MotivationVoice))
+      throw new BadRequestException('Unknown voice');
+
+    const data: { videoVoice?: boolean; videoVoiceName?: string | null } = {};
+    if (input.enabled !== undefined) data.videoVoice = input.enabled;
+    if (input.voice !== undefined) data.videoVoiceName = voice || null;
+
+    const updated = await this.prisma.motivationPost.updateMany({
+      where: { id },
+      data,
+    });
+    if (!updated.count) throw new NotFoundException('Post not found');
+    return { ok: true };
+  }
+
+  /** Принимает ролик: до этого он виден только в админке. */
+  async approveVideo(role: Role, id: string) {
+    this.admin(role);
+    const updated = await this.prisma.motivationPost.updateMany({
+      where: { id, videoStatus: MotivationVideoStatus.review },
+      data: { videoStatus: MotivationVideoStatus.ready },
+    });
+    if (!updated.count)
+      throw new ConflictException('Video is not waiting for review');
+    return { videoStatus: 'ready' as const };
   }
   approveImage(role: Role, actorId: string, id: string) {
     return this.moderation.approveImage(role, actorId, id);
@@ -330,6 +461,14 @@ export class MotivationService {
     visualStyle?: MotivationVisualStyle,
   ) {
     return this.moderation.regenerateImage(role, actorId, id, visualStyle);
+  }
+  savePrompts(
+    role: Role,
+    actorId: string,
+    id: string,
+    input: MotivationPromptUpdate,
+  ) {
+    return this.moderation.savePrompts(role, actorId, id, input);
   }
   async generateDaily(date: Date) {
     return this.discovery.discoverDaily(date, 8);
@@ -530,6 +669,11 @@ export class MotivationService {
       category: post.category,
       imageUrl: post.imageUrl ?? '',
       storyImageUrl: post.storyImageUrl ?? '',
+      // Наружу — только принятое видео: в review оно ещё не просмотрено.
+      videoUrl:
+        post.videoStatus === MotivationVideoStatus.ready
+          ? (post.videoUrl ?? '')
+          : '',
       title: t?.title ?? '',
       text: t?.text ?? '',
       storyText: t?.storyText ?? '',

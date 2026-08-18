@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { FolderTree, ListChecks, PenLine, PlusCircle, Radar } from "lucide-react";
+import { FolderTree, ListChecks, PenLine, PlusCircle, Radar, SlidersHorizontal } from "lucide-react";
 
 export type MotivationAdminTab =
   | "queue"
   | "create"
   | "add"
   | "search"
-  | "categories";
+  | "categories"
+  | "settings";
 
 const ITEMS: Array<{
   key: MotivationAdminTab;
@@ -20,6 +21,7 @@ const ITEMS: Array<{
   { key: "add", href: "/admin/motivation/add", label: "Цитата", icon: PlusCircle },
   { key: "search", href: "/admin/motivation/search", label: "Поиск", icon: Radar },
   { key: "categories", href: "/admin/motivation/categories", label: "Категории", icon: FolderTree },
+  { key: "settings", href: "/admin/motivation/settings", label: "Настройки", icon: SlidersHorizontal },
 ];
 
 /**

@@ -6,9 +6,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { MotivationReviewStatus, MotivationVisualStyle } from '@prisma/client';
-import type { Role } from '@vedamatch/shared';
+import type { MotivationPromptUpdate, Role } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { createImageDirection } from './motivation-image-director';
+import {
+  isPromptTooLong,
+  normalizeEditedPrompt,
+  shouldKeepEditedImagePrompt,
+} from './motivation-prompt';
 
 const reviewableStatuses = new Set<MotivationReviewStatus>([
   MotivationReviewStatus.discovered,
@@ -45,6 +50,8 @@ export class MotivationModerationService {
         category: post.category,
         author: post.quote?.author ?? post.attributionSpeaker,
         work: post.quote?.work ?? post.attributionWork,
+        locator: post.quote?.locator ?? post.attributionLocator,
+        contextExcerpt: post.quote?.contextExcerpt,
         profileTypes: post.quote?.profiles.map(
           (profile) => profile.profileType,
         ) ?? [post.profileType],
@@ -144,12 +151,20 @@ export class MotivationModerationService {
         category: post.category,
         author: post.quote?.author ?? post.attributionSpeaker,
         work: post.quote?.work ?? post.attributionWork,
+        locator: post.quote?.locator ?? post.attributionLocator,
+        contextExcerpt: post.quote?.contextExcerpt,
         profileTypes: post.quote?.profiles.map(
           (profile) => profile.profileType,
         ) ?? [post.profileType],
       },
       styleOverride ?? post.visualStyle ?? undefined,
     );
+    // Правку человека черновиком не затираем: ради неё промпт и открывали.
+    const keepEdited = shouldKeepEditedImagePrompt({
+      editedAt: post.imagePromptEditedAt,
+      currentStyle: post.visualStyle,
+      requestedStyle: styleOverride,
+    });
     return this.transition({
       postId,
       actorId,
@@ -162,7 +177,10 @@ export class MotivationModerationService {
         reviewStatus: MotivationReviewStatus.image_queued,
         status: 'draft',
         visualStyle: direction.style,
-        imagePrompt: direction.prompt,
+        imagePrompt: keepEdited ? post.imagePrompt : direction.prompt,
+        // Смена стиля пересобирает черновик, а значит отметка о правке больше
+        // не описывает то, что лежит в поле.
+        ...(keepEdited ? {} : { imagePromptEditedAt: null }),
         imageUrl: null,
         storyImageUrl: null,
         imageApprovedAt: null,
@@ -171,6 +189,85 @@ export class MotivationModerationService {
         generationErrorCode: null,
         attemptCount: 0,
       },
+    });
+  }
+
+  /**
+   * Сохраняет промпты, которые правил человек.
+   *
+   * Автосборка теперь только черновик: администратор видит, что уйдёт в
+   * генерацию, и правит текст до того, как это станет картинкой или роликом.
+   * Раньше он мог лишь смотреть, а несовпадение промпта с задумкой лечилось
+   * перегенерацией наугад — за деньги и без гарантии.
+   *
+   * Статус поста при этом не меняется: правка промпта — не переход по
+   * пайплайну, а подготовка следующего запуска. Поэтому и `transition()` тут
+   * не годится — он требует ожидаемого и следующего статуса.
+   */
+  async savePrompts(
+    role: Role,
+    actorId: string,
+    postId: string,
+    input: MotivationPromptUpdate,
+  ) {
+    this.assertAdmin(role);
+    if (input.imagePrompt === undefined && input.videoPrompt === undefined)
+      throw new BadRequestException('Nothing to save');
+
+    const data: Record<string, unknown> = {};
+    if (input.imagePrompt !== undefined) {
+      const imagePrompt = normalizeEditedPrompt(input.imagePrompt);
+      // Пустой промпт иллюстрации — не «вернуть автосборку», а «не из чего
+      // генерировать»: воркер такой пост просто не возьмёт и молча оставит
+      // висеть в очереди.
+      if (!imagePrompt)
+        throw new BadRequestException('Image prompt cannot be empty');
+      if (isPromptTooLong(imagePrompt))
+        throw new BadRequestException('Image prompt is too long');
+      data.imagePrompt = imagePrompt;
+      data.imagePromptEditedAt = new Date();
+    }
+    if (input.videoPrompt !== undefined) {
+      // А вот пустой промпт видео осмыслен: это откат к общему дефолту про
+      // мягкое естественное движение, и отдельная кнопка для него не нужна.
+      const videoPrompt = normalizeEditedPrompt(input.videoPrompt);
+      if (videoPrompt && isPromptTooLong(videoPrompt))
+        throw new BadRequestException('Video prompt is too long');
+      data.videoPrompt = videoPrompt;
+    }
+
+    const post = await this.loadPost(postId);
+    return this.prisma.$transaction(async (transaction) => {
+      await transaction.motivationPost.update({
+        where: { id: postId },
+        data,
+      });
+      await transaction.motivationModerationAudit.create({
+        data: {
+          postId,
+          actorId,
+          action: 'edit_prompts',
+          reason: null,
+          metadata: {
+            fields: Object.keys(data).filter(
+              (field) => field !== 'imagePromptEditedAt',
+            ),
+            status: post.reviewStatus,
+          },
+        },
+      });
+      return {
+        id: postId,
+        imagePrompt:
+          (data.imagePrompt as string | undefined) ?? post.imagePrompt,
+        imagePromptEdited:
+          data.imagePromptEditedAt !== undefined ||
+          Boolean(post.imagePromptEditedAt),
+        videoPrompt:
+          input.videoPrompt === undefined
+            ? post.videoPrompt
+            : (data.videoPrompt as string | null),
+      };
     });
   }
 

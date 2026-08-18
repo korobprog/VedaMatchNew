@@ -1,5 +1,6 @@
 import {
   Body,
+  ForbiddenException,
   Controller,
   Delete,
   Get,
@@ -21,6 +22,7 @@ import type {
   MotivationManualPostInput,
   MotivationManualQuoteInput,
   MotivationPreferenceUpdate,
+  MotivationPromptUpdate,
   MotivationRegenerateImageInput,
   MotivationRejectInput,
   MotivationSourceWatchInput,
@@ -31,6 +33,10 @@ import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationManualPostService } from './motivation-manual-post.service';
 import { MotivationStoryRebuildService } from './motivation-story-rebuild.service';
 import { MotivationService } from './motivation.service';
+import {
+  MotivationSettingsService,
+  type MotivationSettingsUpdate,
+} from './motivation-settings.service';
 
 @Controller()
 export class MotivationController {
@@ -40,6 +46,7 @@ export class MotivationController {
     private readonly manualPosts: MotivationManualPostService,
     private readonly storyRebuild: MotivationStoryRebuildService,
     private readonly books: MotivationBooksService,
+    private readonly settings: MotivationSettingsService,
   ) {}
 
   @Get('health') health() {
@@ -147,6 +154,65 @@ export class MotivationController {
   ) {
     return this.service.approveImage(user.role, user.sub, id);
   }
+  /**
+   * Сохранение отредактированных промптов. Одним эндпоинтом на оба поля: в
+   * карточке это две разные формы, но действие одно — «сохранить то, что уйдёт
+   * в генерацию», и разводить его по двум маршрутам нечем.
+   */
+  @Post('admin/motivation/posts/:id/prompts')
+  @UseGuards(AuthGuard)
+  savePrompts(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() input: MotivationPromptUpdate,
+  ) {
+    return this.service.savePrompts(user.role, user.sub, id, input);
+  }
+  @Post('admin/motivation/posts/:id/animate')
+  @UseGuards(AuthGuard)
+  animate(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.service.requestAnimation(user.role, id);
+  }
+  @Get('admin/motivation/settings')
+  @UseGuards(AuthGuard)
+  readSettings(@CurrentUser() user: AccessTokenPayload) {
+    if (user.role !== 'admin')
+      throw new ForbiddenException('Только администратор');
+    return this.settings.read();
+  }
+  @Patch('admin/motivation/settings')
+  @UseGuards(AuthGuard)
+  updateSettings(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() input: MotivationSettingsUpdate,
+  ) {
+    return this.settings.update(user.role, input);
+  }
+  @Post('admin/motivation/voice-preview')
+  @UseGuards(AuthGuard)
+  previewVoice(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() input: { voice?: string | null } = {},
+  ) {
+    return this.service.previewVoice(user.role, input.voice);
+  }
+  @Post('admin/motivation/posts/:id/voice')
+  @UseGuards(AuthGuard)
+  setVideoVoice(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() input: { enabled?: boolean; voice?: string | null } = {},
+  ) {
+    return this.service.setVideoVoice(user.role, id, input);
+  }
+  @Post('admin/motivation/posts/:id/approve-video')
+  @UseGuards(AuthGuard)
+  approveVideo(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.service.approveVideo(user.role, id);
+  }
   @Post('admin/motivation/posts/:id/reject')
   @UseGuards(AuthGuard)
   reject(
@@ -192,9 +258,9 @@ export class MotivationController {
   @UseGuards(AuthGuard)
   rebuildStories(
     @CurrentUser() user: AccessTokenPayload,
-    @Body() input: { limit?: number } = {},
+    @Body() input: { limit?: number; force?: boolean } = {},
   ) {
-    return this.storyRebuild.rebuild(user.role, input.limit);
+    return this.storyRebuild.rebuild(user.role, input.limit, input.force);
   }
 
   @Post('admin/motivation/manual-posts')

@@ -29,8 +29,11 @@ export function QuoteReviewCard({
   error: string | undefined;
   run: RunCommand;
 }) {
-  const [style, setStyle] = useState<MotivationVisualStyle>(
-    post.visualStyle ?? "spiritual_watercolor",
+  // До одобрения текста стиля ещё нет — и подставлять сюда какой-нибудь вместо
+  // пустого нельзя: он уедет на бэкенд как ручной выбор и отменит подбор по
+  // источнику цитаты.
+  const [style, setStyle] = useState<MotivationVisualStyle | null>(
+    post.visualStyle,
   );
   const [category, setCategory] = useState(post.category);
   const disabled = pendingAction !== undefined;
@@ -104,7 +107,7 @@ export function QuoteReviewCard({
             onClick={() =>
               run(post.id, "approve-text", {
                 path: `/admin/motivation/posts/${post.id}/approve-text`,
-                body: { visualStyle: style },
+                body: style ? { visualStyle: style } : {},
               })
             }
             className={`${primaryButton} sm:col-span-2`}

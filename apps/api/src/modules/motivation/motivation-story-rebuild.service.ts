@@ -29,8 +29,16 @@ export class MotivationStoryRebuildService {
    *
    * Нейросеть не трогается: фон скачивается из S3, текст накладывается заново.
    * Работает пачками, чтобы не держать соединение часами.
+   *
+   * `force` берёт и те посты, у которых сторис уже собрана: оформление подписи
+   * меняется (появился знак, отметка об ИИ), и переснимать ради этого картинку
+   * за деньги незачем — фон остаётся прежним, меняется только слой поверх.
    */
-  async rebuild(role: Role, limit = 20): Promise<StoryRebuildResult> {
+  async rebuild(
+    role: Role,
+    limit = 20,
+    force = false,
+  ): Promise<StoryRebuildResult> {
     this.admin(role);
     const batch = Math.max(1, Math.min(100, limit));
     const where = {
@@ -63,9 +71,12 @@ export class MotivationStoryRebuildService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const stale = posts.filter(
-      (post) => post.storyImageUrl === null || post.storyImageUrl === post.imageUrl,
-    );
+    const stale = force
+      ? posts
+      : posts.filter(
+          (post) =>
+            post.storyImageUrl === null || post.storyImageUrl === post.imageUrl,
+        );
 
     let rebuilt = 0;
     let skipped = 0;
@@ -93,7 +104,10 @@ export class MotivationStoryRebuildService {
         if (!response.ok)
           throw new Error(`image fetch failed: ${response.status}`);
         const background = Buffer.from(await response.arrayBuffer());
-        const story = await composeStoryImage(background, { text, attribution });
+        const story = await composeStoryImage(background, {
+          text,
+          attribution,
+        });
         const key = `motivation/${post.contentDate.toISOString().slice(0, 10)}/${post.id}/v${Date.now()}-story.png`;
         const storyImageUrl = await this.generation.uploadStory(key, story);
         await this.prisma.motivationPost.update({

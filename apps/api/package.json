@@ -13,7 +13,8 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
+    "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
@@ -25,6 +26,7 @@
     "seed": "node prisma/seed.cjs",
     "seed:dev": "node prisma/seed-dev.cjs",
     "test:ai": "node scripts/test-motivation-ai.mjs",
+    "purge:user": "node scripts/purge-user.mjs",
     "library:previews": "ts-node -T src/modules/library/backfill-previews.ts"
   },
   "prisma": {

@@ -1,4 +1,6 @@
 import sharp from 'sharp';
+import { BRAND_LOGO_ASPECT, brandLogoBuffer } from './story-brand';
+import { withPngText } from './png-metadata';
 
 /** Полный кадр вертикальной сторис. */
 export const STORY_WIDTH = 1080;
@@ -9,7 +11,21 @@ const BOTTOM_PADDING = 180;
 const QUOTE_SIZE = 54;
 const QUOTE_LINE_HEIGHT = 74;
 const META_SIZE = 30;
-const BRAND_SIZE = 32;
+/** Высота знака в кадре. Ширина считается из пропорций исходника. */
+const BRAND_LOGO_HEIGHT = 76;
+const DISCLOSURE_SIZE = 22;
+
+/**
+ * Отметка об авторстве и о том, что кадр синтетический.
+ *
+ * Не украшение: с августа 2026 AI Act требует маркировать сгенерированный
+ * контент, а площадки всё чаще проставляют такие метки сами — и лучше, когда
+ * это делаем мы, а не алгоритм соцсети поверх нашего кадра. Авторство и
+ * маркировка сведены в одну строку намеренно: знак внизу и без того называет
+ * бренд, а вторая подпись рядом читалась бы как повтор. Текст приглушённый —
+ * он должен быть читаем, но не спорить с цитатой.
+ */
+export const AI_DISCLOSURE = 'Создано нейросетью в VedaMatch';
 const META_LINE_HEIGHT = 40;
 const MAX_QUOTE_LINES = 12;
 const MAX_META_LINES = 2;
@@ -20,7 +36,10 @@ const WIDTH_SAFETY = 0.96;
  * Шрифты ставятся в образ (см. Dockerfile). Noto перечислен первым: он
  * покрывает кириллицу, латиницу и деванагари, то есть все три языка постов.
  */
-const FONT_STACK = "'Noto Sans','Noto Sans Devanagari','DejaVu Sans',sans-serif";
+const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
+
+const FONT_STACK =
+  "'Noto Sans','Noto Sans Devanagari','DejaVu Sans',sans-serif";
 
 export function escapeXml(value: string): string {
   return value
@@ -107,8 +126,27 @@ export type StoryOverlayInput = {
   text: string;
   /** Автор, произведение, глава — пустые части выбрасываются вызывающим. */
   attribution?: string | null;
-  brand?: string;
 };
+
+/**
+ * Где стоит знак. Отдельной функцией, потому что нужен и вёрстке текста (чтобы
+ * подняться над знаком), и наложению картинки поверх SVG.
+ */
+export function brandLogoBox(): {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+} {
+  const height = BRAND_LOGO_HEIGHT;
+  const width = Math.round(height * BRAND_LOGO_ASPECT);
+  return {
+    left: SIDE_PADDING,
+    top: STORY_HEIGHT - BOTTOM_PADDING + 96 - height,
+    width,
+    height,
+  };
+}
 
 export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
   const maxWidth = (STORY_WIDTH - SIDE_PADDING * 2) * WIDTH_SAFETY;
@@ -116,7 +154,6 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
     wrapText(input.text, QUOTE_SIZE, maxWidth),
     MAX_QUOTE_LINES,
   );
-  const brand = input.brand ?? 'VedaMatch';
   // Атрибуция переносится так же, как цитата: одной строкой длинная связка
   // «автор · произведение · глава» уезжала за правый край.
   const metaLines = input.attribution?.trim()
@@ -126,10 +163,12 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
       )
     : [];
 
-  const brandY = STORY_HEIGHT - BOTTOM_PADDING + 96;
-  const metaBottom = brandY - 62;
+  // Знак стоит там же, где раньше стояла надпись «VedaMatch», но занимает
+  // высоту картинки, поэтому текст над ним поднимается на эту высоту.
+  const logo = brandLogoBox();
+  const metaBottom = logo.top - 44;
   const metaTop = metaBottom - (metaLines.length - 1) * META_LINE_HEIGHT;
-  const quoteBottom = metaLines.length > 0 ? metaTop - 58 : brandY - 58;
+  const quoteBottom = metaLines.length > 0 ? metaTop - 58 : logo.top - 58;
   const firstLineY = quoteBottom - (lines.length - 1) * QUOTE_LINE_HEIGHT;
 
   // Подложка тянется выше самой верхней строки, иначе светлый фон съедает текст.
@@ -160,13 +199,33 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
   <style>
     .quote { font-family: ${FONT_STACK}; font-size: ${QUOTE_SIZE}px; font-weight: 600; fill: #FFFFFF; }
     .meta  { font-family: ${FONT_STACK}; font-size: ${META_SIZE}px; fill: #D9CCF5; }
-    .brand { font-family: ${FONT_STACK}; font-size: ${BRAND_SIZE}px; font-weight: 700; fill: #FBCF6A; letter-spacing: 1px; }
+    .disclosure { font-family: ${FONT_STACK}; font-size: ${DISCLOSURE_SIZE}px; fill: #B9A9DC; }
   </style>
   <rect x="0" y="${scrimTop}" width="${STORY_WIDTH}" height="${STORY_HEIGHT - scrimTop}" fill="url(#scrim)"/>
   ${quoteLines}
   ${attributionLine}
-  <text x="${SIDE_PADDING}" y="${brandY}" class="brand">${escapeXml(brand)}</text>
+  <text x="${STORY_WIDTH - SIDE_PADDING}" y="${logo.top + logo.height - 6}" text-anchor="end" class="disclosure">${escapeXml(AI_DISCLOSURE)}</text>
 </svg>`;
+}
+
+/**
+ * Готовый слой подписи: текст из SVG плюс знак поверх него.
+ *
+ * Один на картинку и на ролик — иначе они разъедутся при первой же правке
+ * отступов, а знак пришлось бы вклеивать дважды.
+ */
+export async function renderStoryOverlay(
+  input: StoryOverlayInput,
+): Promise<Buffer> {
+  const box = brandLogoBox();
+  const logo = await sharp(brandLogoBuffer())
+    .resize(box.width, box.height, { fit: 'contain', background: TRANSPARENT })
+    .png()
+    .toBuffer();
+  return sharp(Buffer.from(buildStoryOverlaySvg(input)))
+    .composite([{ input: logo, left: box.left, top: box.top }])
+    .png()
+    .toBuffer();
 }
 
 /**
@@ -184,10 +243,14 @@ export async function composeStoryImage(
   const canvas = await sharp(background)
     .resize(STORY_WIDTH, STORY_HEIGHT, { fit: 'cover', position: 'attention' })
     .toBuffer();
-  return sharp(canvas)
-    .composite([
-      { input: Buffer.from(buildStoryOverlaySvg(overlay)), top: 0, left: 0 },
-    ])
+  const framed = await sharp(canvas)
+    .composite([{ input: await renderStoryOverlay(overlay), top: 0, left: 0 }])
     .png()
     .toBuffer();
+  // Та же отметка, что и на пикселях, но в метаданных: надпись площадка может
+  // обрезать при перекадрировании, а чанк читает автоматика.
+  return withPngText(framed, [
+    { keyword: 'Comment', text: AI_DISCLOSURE },
+    { keyword: 'Software', text: 'VedaMatch' },
+  ]);
 }

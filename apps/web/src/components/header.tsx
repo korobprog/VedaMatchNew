@@ -26,7 +26,7 @@ const navItems: NavItem[] = [
   { href: "/motivation", label: "Мотивация", icon: <ServiceIcon slug="motivation" className="h-5 w-5" /> },
   { href: "/vedabase", label: "Книги", icon: <ServiceIcon slug="vedabase" className="h-5 w-5" /> },
   { href: "/library", label: "Образование", icon: <ServiceIcon slug="library" className="h-5 w-5" /> },
-  { href: "/astro", label: "Джйотиш", icon: <ServiceIcon slug="astro" className="h-5 w-5" /> },
+  { href: "/astro", label: "Астрология", icon: <ServiceIcon slug="astro" className="h-5 w-5" /> },
   { href: "/market", label: "Рынок", icon: <ServiceIcon slug="market" className="h-5 w-5" /> },
 ];
 
@@ -97,7 +97,7 @@ function LogoutItem() {
 
 export function Header({ user }: { user: UserProfile }) {
   const [isOpen, setIsOpen] = useState(false);
-  // Корзина принадлежит «Рынку»: на Джйотише или в Книгах она сбивает с толку,
+  // Корзина принадлежит «Рынку»: в Астрологии или в Книгах она сбивает с толку,
   // да и опрашивать счётчик там незачем.
   const pathname = usePathname();
   const inMarket = pathname === "/market" || pathname.startsWith("/market/");

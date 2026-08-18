@@ -5,7 +5,27 @@ export type MotivationLanguage = 'ru' | 'en' | 'hi';
 export type MotivationReviewStatus = 'discovered' | 'source_verified' | 'text_review' | 'image_queued' | 'image_review' | 'published' | 'rejected' | 'failed';
 export type MotivationQuoteSourceType = 'vedamatch_library' | 'approved_web' | 'manual';
 export type MotivationTranslationKind = 'official' | 'vedamatch';
-export type MotivationVisualStyle = 'spiritual_watercolor' | 'cinematic_nature' | 'indian_miniature' | 'sacred_architecture' | 'minimal_symbolism' | 'warm_documentary' | 'cosmic_contemplation' | 'historical_editorial';
+/**
+ * Визуальные стили иллюстрации.
+ *
+ * Первые восемь — рисовальные, их промпт начинается словом «Illustrate».
+ * Последние четыре кинематографические: у них свой зачин — «кадр из фильма»,
+ * «фотография», «масляная живопись», — без которого модель возвращалась к
+ * рисунку, какой бы стиль ни выбрали.
+ */
+export type MotivationVisualStyle =
+  | 'spiritual_watercolor'
+  | 'cinematic_nature'
+  | 'indian_miniature'
+  | 'sacred_architecture'
+  | 'minimal_symbolism'
+  | 'warm_documentary'
+  | 'cosmic_contemplation'
+  | 'historical_editorial'
+  | 'cinematic_film'
+  | 'epic_wide'
+  | 'night_devotional'
+  | 'painterly_realism';
 
 export interface MotivationQuoteTranslationDto {
   language: MotivationLanguage;
@@ -37,6 +57,11 @@ export interface MotivationPostDto {
   category: string;
   imageUrl: string;
   storyImageUrl: string;
+  /**
+   * Ролик, оживляющий иллюстрацию. Пустая строка — ролика нет либо он ещё не
+   * принят: наружу отдаётся только подтверждённое администратором видео.
+   */
+  videoUrl: string;
   title: string;
   text: string;
   storyText: string;
@@ -65,9 +90,119 @@ export interface MotivationAdminCandidateDto extends MotivationAdminPostDto {
   profileTypes: MotivationProfileType[];
   visualStyle: MotivationVisualStyle | null;
   imagePrompt: string | null;
+  /**
+   * Промпт правил человек, а не автосборка. Перегенерация тогда идёт с
+   * сохранённым текстом, и админке есть что об этом сказать — иначе правка
+   * выглядела бы потерянной.
+   */
+  imagePromptEdited: boolean;
   textApprovedAt: string | null;
   imageApprovedAt: string | null;
+  /** Ролик, оживляющий иллюстрацию. Появляется по кнопке уже после картинки. */
+  videoStatus: MotivationVideoStatus;
+  /** Читать ли цитату голосом. Машинное чтение писания — решение редакции. */
+  videoVoice: boolean;
+  /** Выбранный голос. Пусто — берётся заданный в настройках по умолчанию. */
+  videoVoiceName: string | null;
+  videoErrorCode: string | null;
+  /**
+   * Что и как движется в ролике. Пусто — уйдёт
+   * `DEFAULT_MOTIVATION_VIDEO_PROMPT`.
+   */
+  videoPrompt: string | null;
 }
+
+/**
+ * Промпт движения по умолчанию.
+ *
+ * Видеомодели нужно описание движения, а не сцены: на ручной проверке промпт
+ * картинки давал застывший кадр, а эта формулировка — живой ролик. Камера
+ * почти неподвижна намеренно: на пяти секундах любой её проезд читается как
+ * рывок, а вшитая позже подпись при движении кадра начинает плыть.
+ */
+export const DEFAULT_MOTIVATION_VIDEO_PROMPT =
+  'Gentle natural motion: soft breeze in the leaves, slow drifting clouds, warm sunrise light. Camera almost still.';
+
+/**
+ * Сохранение промптов из админки. Поля независимы: отправляется то, что
+ * действительно правили, остальное остаётся как было.
+ */
+export interface MotivationPromptUpdate {
+  imagePrompt?: string;
+  videoPrompt?: string;
+}
+
+/**
+ * Жизненный цикл ролика. Отдельно от `reviewStatus`: видео — необязательное
+ * обогащение готового поста, и его сбой не отменяет сам пост.
+ */
+/**
+ * Голоса, доступные на эндпоинте озвучки.
+ *
+ * Список нужен обеим сторонам: бэкенд им проверяет присланное значение, веб
+ * строит выпадашку. Проверка не формальность — за неизвестный голос провайдер
+ * возьмёт деньги ровно так же, как за верный запрос.
+ */
+export const MOTIVATION_VOICES = [
+  'Rachel',
+  'Aria',
+  'Roger',
+  'Sarah',
+  'Laura',
+  'Charlie',
+  'George',
+  'Callum',
+  'River',
+  'Liam',
+  'Charlotte',
+  'Alice',
+  'Matilda',
+  'Will',
+  'Jessica',
+  'Eric',
+  'Chris',
+  'Brian',
+  'Daniel',
+  'Lily',
+  'Bill',
+] as const;
+
+export type MotivationVoice = (typeof MOTIVATION_VOICES)[number];
+
+/**
+ * Настройки сервиса. Пустое значение поля означает «взять из окружения», а не
+ * «пусто»: так настройки переносятся из `.env` по одной, ничего не ломая.
+ * Секретов здесь нет — ключи провайдеров остаются в окружении.
+ */
+export interface MotivationSettingsDto {
+  videoModel: string;
+  videoSeconds: number;
+  videoAudio: boolean;
+  voiceModel: string;
+  voiceName: string;
+  imageModel: string;
+  visualStyle: MotivationVisualStyle | null;
+  dailyBudgetUsd: number;
+}
+
+export type MotivationSettingsUpdate = Partial<{
+  videoModel: string | null;
+  videoSeconds: number | null;
+  videoAudio: boolean | null;
+  voiceModel: string | null;
+  voiceName: string | null;
+  imageModel: string | null;
+  visualStyle: MotivationVisualStyle | null;
+  dailyBudgetUsd: number | null;
+}>;
+
+export type MotivationVideoStatus =
+  | 'none'
+  | 'queued'
+  | 'running'
+  | 'review'
+  | 'ready'
+  | 'failed';
 /**
  * Настройки ленты. `profileTypes` — какие профили показывать; пустой список
  * означает «как на самоидентификации», а не «ничего не показывать».

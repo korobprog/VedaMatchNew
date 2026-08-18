@@ -131,6 +131,18 @@ enum MotivationReviewStatus {
   failed
 }
 
+/// Жизненный цикл ролика, оживляющего иллюстрацию поста. Отдельно от
+/// `reviewStatus`: видео — необязательное обогащение уже готового поста, и его
+/// сбой не должен возвращать пост в очередь картинки.
+enum MotivationVideoStatus {
+  none
+  queued
+  running
+  review
+  ready
+  failed
+}
+
 enum MotivationQuoteSourceType {
   vedamatch_library
   approved_web
@@ -151,6 +163,13 @@ enum MotivationVisualStyle {
   warm_documentary
   cosmic_contemplation
   historical_editorial
+  /// Кинематографические стили. Заведены отдельно от рисовальных: у них другое
+  /// начало промпта — «кадр из фильма», а не «нарисуй», — и без этого модель
+  /// возвращалась к иллюстрации, какой бы стиль ни выбрали.
+  cinematic_film
+  epic_wide
+  night_devotional
+  painterly_realism
 }
 
 model User {
@@ -372,10 +391,46 @@ model MotivationPost {
   reviewStatus         MotivationReviewStatus    @default(discovered)
   visualStyle          MotivationVisualStyle?
   imagePrompt          String?
+  /// Отметка о том, что промпт правил человек. Нужна перегенерации: без неё
+  /// повторный заказ картинки пересобирал бы черновик заново и молча стирал
+  /// правку, ради которой администратор его и открывал.
+  imagePromptEditedAt  DateTime?
+  /// Промпт для видеомодели. Отдельно от `imagePrompt`, потому что описывает
+  /// не сцену, а движение в ней: описание статичного кадра видеомодель
+  /// понимает как «сделай ещё раз то же самое» и выдаёт мёртвый ролик.
+  /// Пусто — берётся общий дефолт из `video-prompt.ts`.
+  videoPrompt          String?
   textApprovedAt       DateTime?
   imageApprovedAt      DateTime?
   imageUrl             String?
   storyImageUrl        String?
+  /// Ролик, оживляющий иллюстрацию. Появляется по кнопке в админке уже после
+  /// одобрения картинки, поэтому все поля необязательные.
+  videoUrl             String?
+  videoStatus          MotivationVideoStatus     @default(none)
+  /// Идентификатор задачи у провайдера: генерация асинхронная, воркер
+  /// возвращается за результатом следующим тиком. По нему же сверяются строки
+  /// счёта в кабинете fal — там расход разложен по request id.
+  videoJobId           String?
+  /// Ссылки на статус и результат берём те, что прислал провайдер: собирать их
+  /// из имени модели нельзя, база у него не совпадает с путём модели.
+  videoJobStatusUrl    String?
+  videoJobResultUrl    String?
+  /// Читать ли цитату голосом. Выключено по умолчанию: машинное чтение
+  /// писания — решение редакции, а не побочный эффект включённой генерации.
+  videoVoice           Boolean                   @default(false)
+  /// Длина ролика в секундах. Пусто — считаем сами: по озвучке, если она есть,
+  /// иначе по времени чтения подписи. Модель отдаёт пять секунд, остальное
+  /// добирается повтором — растягивать генерацию втрое дороже.
+  videoSeconds         Int?
+  /// Голос озвучки. Пусто — берётся из настроек; проверяется по списку из
+  /// `@vedamatch/shared`, чтобы опечатка не ушла в платный запрос.
+  videoVoiceName       String?
+  videoErrorCode       String?
+  videoAttemptCount    Int                       @default(0)
+  /// Стоимость ролика отдельно от `estimatedCostUsd`: без разбивки через месяц
+  /// не понять, во что обошлось именно видео.
+  videoCostUsd         Decimal                   @default(0) @db.Decimal(12, 6)
   attributionKind      MotivationAttributionKind @default(ai_reflection)
   attributionSpeaker   String?
   attributionWork      String?
@@ -403,7 +458,31 @@ model MotivationPost {
   @@index([profileType, audienceTrack, status, publishedAt])
   @@index([category, status, publishedAt])
   @@index([reviewStatus, createdAt])
+  /// Воркер видео выбирает задачи по статусу — без индекса он сканировал бы
+  /// всю таблицу постов на каждом тике.
+  @@index([videoStatus, updatedAt])
   @@index([quoteId])
+}
+
+/// Единственная строка настроек сервиса (id всегда "global").
+///
+/// Всё, что раньше жило в `.env`, кроме секретов: модели меняются по несколько
+/// раз за вечер, и каждый раз править файл с перезапуском — слишком дорого.
+/// Пустое поле означает «взять из окружения», поэтому настройки можно вводить
+/// постепенно, ничего не ломая.
+model MotivationSettings {
+  id                String                 @id @default("global")
+  videoModel        String?
+  videoSeconds      Int?
+  videoAudio        Boolean?
+  voiceModel        String?
+  voiceName         String?
+  imageModel        String?
+  /// Стиль по умолчанию. Пусто — подбирать автоматически по смыслу и источнику.
+  visualStyle       MotivationVisualStyle?
+  /// Дневной потолок расхода в долларах. Меняться должен без перевыкладки.
+  dailyBudgetUsd    Decimal?               @db.Decimal(10, 2)
+  updatedAt         DateTime               @updatedAt
 }
 
 /// Справочник категорий Motivation. `MotivationPost.category` хранит `slug`
@@ -433,8 +512,8 @@ model MotivationModerationAudit {
   id        String         @id @default(uuid())
   postId    String
   post      MotivationPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  actorId   String
-  actor     User           @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  actorId   String?
+  actor     User?          @relation(fields: [actorId], references: [id], onDelete: SetNull)
   action    String
   reason    String?
   metadata  Json?
@@ -499,8 +578,8 @@ model MotivationAuthorWatch {
   name            String
   language        String?   @db.VarChar(8)
   enabled         Boolean   @default(true)
-  createdById     String
-  createdBy       User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdById     String?
+  createdBy       User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt       DateTime  @default(now())
   lastSearchedAt  DateTime?
   lastResultCount Int       @default(0)
@@ -513,8 +592,8 @@ model MotivationSourceWatch {
   url             String
   label           String?
   enabled         Boolean   @default(true)
-  createdById     String
-  createdBy       User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdById     String?
+  createdBy       User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt       DateTime  @default(now())
   lastFetchedAt   DateTime?
   lastResultCount Int       @default(0)
