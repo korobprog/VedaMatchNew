@@ -10,6 +10,7 @@ import {
   NoticesController,
   NoticesResponsesController,
 } from './notices.controller';
+import { NoticesPurgeListener } from './notices-purge.listener';
 import { NoticesReportsService } from './notices-reports.service';
 import { NoticesResponsesService } from './notices-responses.service';
 import { NoticesSubscriptionsService } from './notices-subscriptions.service';
@@ -34,6 +35,7 @@ import { NoticesWorkerService } from './notices-worker.service';
     NoticesReportsService,
     NoticesSubscriptionsService,
     NoticesWorkerService,
+    NoticesPurgeListener,
   ],
 })
 export class NoticesModule {}

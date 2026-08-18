@@ -30,6 +30,12 @@
 - Связи (FK) с `User` разрешены; связи с моделями других сервисов — запрещены.
 - Модели сервиса добавляются отдельным блоком в конце `apps/api/prisma/schema.prisma` с комментарием-заголовком, например `// ===== Union service =====`.
 
+### Удаление аккаунта
+
+Безвозвратное удаление пользователя (`POST /admin/users/:id/purge`) сносит строку `User`, а всё остальное — каскад Postgres. Поэтому FK сервиса на `User` обязан быть `onDelete: Cascade` (данные уходят вместе с человеком) или `onDelete: SetNull` с необязательной колонкой (текст остаётся, авторство обнуляется — так живут комментарии Библиотеки и обращения в поддержку). `Restrict` на `User` ставить нельзя: он заблокирует удаление всего аккаунта.
+
+Файлы в S3 каскадом не удаляются. Если сервис хранит объекты, он подписывается на `portal.user.purge-requested` (`{ userId }`) и возвращает `{ storageKeys: string[], counts?: Record<string, number> }` — образцы в `market-purge.listener.ts` и `notices-purge.listener.ts`. Портал спрашивает ключи до удаления строки (после каскада искать их негде) и сам чистит бакет, когда удаление прошло. Подписчик ищет только в своих таблицах по `userId`; упавший или молчащий подписчик удаление аккаунта не останавливает — его объекты просто останутся в бакете.
+
 ## Frontend (`apps/web`)
 
 - Группа маршрутов на сервис: `apps/web/src/app/<service>/`. URL-префикс зеркалит API (`/union` ↔ `/union/*` в API).
@@ -70,7 +76,7 @@
 1. Блок моделей с префиксом в `schema.prisma` + миграция.
 2. Файл типов в `packages/shared/src/<service>.ts` + реэкспорт.
 3. Папка модуля в `apps/api/src/modules/<service>/` + одна строка в `app.module.ts`.
-4. Запись сервиса в `apps/api/prisma/seed.ts` (`status: 'coming_soon'` до готовности).
+4. Запись сервиса в `apps/api/prisma/services-data.js` (`status: 'coming_soon'` до готовности). Это единственный список сервисов на стороне API: сид `seed.cjs` подключает его, тест `catalog/services-seed-data.spec.ts` сверяет со списком модулей.
 5. Папки `apps/web/src/app/<service>/` и `apps/web/src/components/<service>/`, клиент `lib/<service>-api.ts`.
 6. Когда готово — `status: 'active'` и относительный `url` в seed.
 7. Число сервисов в маркетинговых текстах живёт пятью захардкоженными строками, и пропуск одной даёт «7 сервисов» рядом со списком из восьми: `apps/api/src/modules/billing/subscription.ts`, `apps/web/src/lib/plan.ts`, `apps/web/src/components/landing/Services.tsx` (прописью), `apps/web/src/components/landing/ServiceDetailPage.tsx`, `apps/web/src/components/landing/LandingPage.tsx`.

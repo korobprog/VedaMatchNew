@@ -2,12 +2,18 @@
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { DeleteObjectsCommand, S3Client } from '@aws-sdk/client-s3';
 import type { Prisma } from '@prisma/client';
 import type {
   AdminBlockUserRequest,
   AdminDeleteUserRequest,
+  AdminPurgeUserRequest,
+  AdminPurgeUserResponse,
   AdminManualStageUpdateRequest,
   AdminMentorVerificationRequest,
   AdminRoleUpdateRequest,
@@ -33,7 +39,18 @@ import { calculateAge, toBirthDateInput } from './age';
 import { toPhotoVerificationState } from './photo-verification';
 import { toSubscriptionState } from '../billing/subscription';
 import { deletionEligibleAt } from './account-status';
+import { isPurgeConfirmed, mergePurgeContributions } from './user-purge';
 import { UsersService } from './users.service';
+
+/**
+ * Портал просит сервисы отдать ключи объектов удаляемого аккаунта. Событие
+ * самодостаточно: подписчик ищет только в своих таблицах по `userId`.
+ * Имя дублируется в каждом сервисе — модули не импортируют друг друга.
+ */
+const USER_PURGE_REQUESTED = 'portal.user.purge-requested';
+
+/** Предел DeleteObjects в S3-совместимых хранилищах. */
+const S3_DELETE_BATCH = 1000;
 
 const ROLES: Role[] = ['user', 'admin', 'service-admin'];
 const ACCOUNT_STATUSES: UserAccountStatus[] = ['active', 'blocked', 'deleted'];
@@ -63,10 +80,32 @@ interface ListUsersQuery {
 
 @Injectable()
 export class AdminUsersService {
+  private readonly logger = new Logger(AdminUsersService.name);
+  private readonly s3Client: S3Client | null;
+  private readonly bucket: string | undefined;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly users: UsersService,
-  ) {}
+    private readonly config: ConfigService,
+    private readonly events: EventEmitter2,
+  ) {
+    const region = this.config.get<string>('S3_REGION');
+    const accessKeyId = this.config.get<string>('S3_ACCESS_KEY');
+    const secretAccessKey = this.config.get<string>('S3_SECRET_KEY');
+    const endpoint = this.config.get<string>('S3_ENDPOINT');
+
+    this.bucket = this.config.get<string>('S3_BUCKET_NAME');
+    this.s3Client =
+      region && accessKeyId && secretAccessKey
+        ? new S3Client({
+            region,
+            endpoint: endpoint || undefined,
+            forcePathStyle: Boolean(endpoint),
+            credentials: { accessKeyId, secretAccessKey },
+          })
+        : null;
+  }
 
   async listUsers(
     adminRole: Role,
@@ -96,27 +135,29 @@ export class AdminUsersService {
     ]);
 
     return {
-      items: await Promise.all(users.map(async (user) => {
-        const mentorRequest = user.mentorVerificationRequests[0] ?? null;
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          avatarUrl: await this.users.resolveAvatarUrl(user),
-          role: toRole(user.role),
-          spiritualStage: user.spiritualStage,
-          devoteeVerificationStatus: user.devoteeVerificationStatus,
-          lastSelfIdentificationAt:
-            user.lastSelfIdentificationAt?.toISOString() ?? null,
-          createdAt: user.createdAt.toISOString(),
-          updatedAt: user.updatedAt.toISOString(),
-          hasMentorRequest: Boolean(mentorRequest),
-          mentorRequestStatus: mentorRequest?.status ?? null,
-          accountStatus: user.accountStatus,
-          blockedUntil: user.blockedUntil?.toISOString() ?? null,
-          deletedAt: user.deletedAt?.toISOString() ?? null,
-        };
-      })),
+      items: await Promise.all(
+        users.map(async (user) => {
+          const mentorRequest = user.mentorVerificationRequests[0] ?? null;
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            avatarUrl: await this.users.resolveAvatarUrl(user),
+            role: toRole(user.role),
+            spiritualStage: user.spiritualStage,
+            devoteeVerificationStatus: user.devoteeVerificationStatus,
+            lastSelfIdentificationAt:
+              user.lastSelfIdentificationAt?.toISOString() ?? null,
+            createdAt: user.createdAt.toISOString(),
+            updatedAt: user.updatedAt.toISOString(),
+            hasMentorRequest: Boolean(mentorRequest),
+            mentorRequestStatus: mentorRequest?.status ?? null,
+            accountStatus: user.accountStatus,
+            blockedUntil: user.blockedUntil?.toISOString() ?? null,
+            deletedAt: user.deletedAt?.toISOString() ?? null,
+          };
+        }),
+      ),
       page,
       pageSize,
       total,
@@ -303,9 +344,7 @@ export class AdminUsersService {
     this.ensureAdmin(admin.role);
 
     if (admin.sub === userId) {
-      throw new BadRequestException(
-        'Нельзя заблокировать собственный аккаунт',
-      );
+      throw new BadRequestException('Нельзя заблокировать собственный аккаунт');
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -398,6 +437,128 @@ export class AdminUsersService {
     ]);
 
     return this.getUser(admin.role, userId);
+  }
+
+  /**
+   * Безвозвратно сносит аккаунт: строку `User`, все сервисные данные каскадом
+   * и загруженные файлы из хранилища. Отмены нет — `restoreUser` тут не
+   * поможет, восстанавливать будет нечего.
+   *
+   * Порядок важен. Сначала сервисы по событию отдают ключи своих объектов —
+   * после каскада найти их уже негде. Потом удаляется строка, и только после
+   * успешного удаления чистится хранилище: осиротевший файл в бакете лучше,
+   * чем битая карточка с пропавшей картинкой.
+   */
+  async purgeUser(
+    admin: { sub: string; role: Role },
+    userId: string,
+    body: AdminPurgeUserRequest,
+  ): Promise<AdminPurgeUserResponse> {
+    this.ensureAdmin(admin.role);
+
+    const reason = body.reason?.trim() ?? '';
+    if (reason.length < 5) {
+      throw new BadRequestException(
+        'Укажите причину удаления минимум 5 символов',
+      );
+    }
+    if (admin.sub === userId && !body.confirmSelfDelete) {
+      throw new BadRequestException(
+        'Для удаления собственного аккаунта нужно явное подтверждение',
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, avatarKey: true },
+    });
+    if (!user) throw new NotFoundException('Пользователь не найден');
+
+    if (!isPurgeConfirmed(body.confirmEmail, user.email)) {
+      throw new BadRequestException(
+        'Для безвозвратного удаления введите email аккаунта точно',
+      );
+    }
+
+    // emitAsync отдаёт `any[]`: возвращать подписчики могут что угодно,
+    // разбирается с этим mergePurgeContributions.
+    const contributions = (await this.events.emitAsync(USER_PURGE_REQUESTED, {
+      userId,
+    })) as unknown[];
+    const plan = mergePurgeContributions([
+      await this.collectOwnPurgeContribution(user.id, user.avatarKey),
+      ...contributions,
+    ]);
+
+    await this.prisma.user.delete({ where: { id: userId } });
+    this.logger.warn(
+      `Безвозвратно удалён аккаунт ${user.email} (${userId}) администратором ${admin.sub}: ${reason}`,
+    );
+
+    const storageFailures = await this.removeStorageObjects(plan.storageKeys);
+
+    return {
+      id: user.id,
+      email: user.email,
+      counts: plan.counts,
+      storageObjects: plan.storageKeys.length - storageFailures,
+      storageFailures,
+    };
+  }
+
+  /** Портальные объекты пользователя: аватар и галерея. */
+  private async collectOwnPurgeContribution(
+    userId: string,
+    avatarKey: string | null,
+  ) {
+    const photos = await this.prisma.userPhoto.findMany({
+      where: { userId },
+      select: { storageKey: true },
+    });
+    return {
+      storageKeys: [
+        ...(avatarKey ? [avatarKey] : []),
+        ...photos.map((photo) => photo.storageKey),
+      ],
+      counts: { photos: photos.length },
+    };
+  }
+
+  /**
+   * Чистит бакет пачками по 1000 ключей — предел DeleteObjects у S3.
+   * Возвращает число объектов, которые удалить не удалось: строка в базе уже
+   * снесена, и падать из-за хранилища поздно, но администратору знать полезно.
+   */
+  private async removeStorageObjects(keys: string[]): Promise<number> {
+    if (keys.length === 0) return 0;
+    if (!this.s3Client || !this.bucket) {
+      this.logger.warn(
+        `Хранилище не настроено: ${keys.length} объектов удалённого аккаунта остались в бакете`,
+      );
+      return keys.length;
+    }
+
+    let failures = 0;
+    for (let offset = 0; offset < keys.length; offset += S3_DELETE_BATCH) {
+      const batch = keys.slice(offset, offset + S3_DELETE_BATCH);
+      try {
+        const result = await this.s3Client.send(
+          new DeleteObjectsCommand({
+            Bucket: this.bucket,
+            Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
+          }),
+        );
+        failures += result.Errors?.length ?? 0;
+      } catch (error) {
+        failures += batch.length;
+        this.logger.warn(
+          `Не удалось удалить объекты аккаунта: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+    return failures;
   }
 
   async restoreUser(

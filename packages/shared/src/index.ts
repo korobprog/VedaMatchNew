@@ -385,6 +385,31 @@ export interface AdminDeleteUserRequest {
   confirmSelfDelete?: boolean;
 }
 
+/**
+ * Безвозвратное удаление: строка User и все сервисные данные сносятся
+ * каскадом, файлы — из объектного хранилища. Отмены нет, поэтому
+ * подтверждается точным вводом email аккаунта.
+ */
+export interface AdminPurgeUserRequest {
+  reason: string;
+  confirmEmail: string;
+  confirmSelfDelete?: boolean;
+}
+
+export interface AdminPurgeUserResponse {
+  id: string;
+  email: string;
+  /**
+   * Что снесли сервисы: `{ photos: 4, listings: 2, notices: 1 }`. Набор ключей
+   * задают сами сервисы, портал их только складывает.
+   */
+  counts: Record<string, number>;
+  /** Сколько объектов удалено из хранилища. */
+  storageObjects: number;
+  /** Объекты, которые хранилище не отдало, — их придётся добить руками. */
+  storageFailures: number;
+}
+
 export interface CommunityStats {
   totalMembers: number;
 }

@@ -433,8 +433,8 @@ model MotivationModerationAudit {
   id        String         @id @default(uuid())
   postId    String
   post      MotivationPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  actorId   String
-  actor     User           @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  actorId   String?
+  actor     User?          @relation(fields: [actorId], references: [id], onDelete: SetNull)
   action    String
   reason    String?
   metadata  Json?
@@ -499,8 +499,8 @@ model MotivationAuthorWatch {
   name            String
   language        String?   @db.VarChar(8)
   enabled         Boolean   @default(true)
-  createdById     String
-  createdBy       User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdById     String?
+  createdBy       User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt       DateTime  @default(now())
   lastSearchedAt  DateTime?
   lastResultCount Int       @default(0)
@@ -513,8 +513,8 @@ model MotivationSourceWatch {
   url             String
   label           String?
   enabled         Boolean   @default(true)
-  createdById     String
-  createdBy       User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdById     String?
+  createdBy       User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt       DateTime  @default(now())
   lastFetchedAt   DateTime?
   lastResultCount Int       @default(0)

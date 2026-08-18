@@ -32,6 +32,7 @@ import {
   MarketChatController,
   MarketOrdersController,
 } from './market-trade.controller';
+import { MarketPurgeListener } from './market-purge.listener';
 import { MarketImagesService } from './market-images.service';
 import {
   MarketAdminListingsController,
@@ -90,6 +91,7 @@ import { MarketStatsService } from './market-stats.service';
     MarketReviewsService,
     MarketSubscriptionsService,
     MarketReportsService,
+    MarketPurgeListener,
   ],
 })
 export class MarketModule {}
