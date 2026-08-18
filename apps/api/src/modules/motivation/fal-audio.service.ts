@@ -16,6 +16,14 @@ export type SpokenLine = {
 const SYNC_BASE = 'https://fal.run';
 
 /**
+ * Фраза для образца голоса. Короткая ради цены и с теми именами, на которых
+ * синтез спотыкается: слушать «раз-два-три» бесполезно, выбирают-то по тому,
+ * как звучит «Бхагавад-гита».
+ */
+export const VOICE_PREVIEW_LINE =
+  'Кришна объясняет Арджуне. Бхагавад-гита, глава три.';
+
+/**
  * Озвучка цитаты.
  *
  * Отличается от звука, который умеет сочинять видеомодель, ровно одним, но
@@ -64,17 +72,13 @@ export class FalAudioService {
         authorization: `Key ${this.key()}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify({
+      body: JSON.stringify(buildSpeechRequest({
         // Ударения подставляем здесь, а не в тексте поста: цитата обязана
         // храниться дословно, без служебных пометок.
         text: applyVoiceTranscription(spoken),
         voice: voice?.trim() || this.voice(),
-        // Чуть медленнее обычного: цитата — не новостная лента, её слушают.
-        speed: 0.95,
-        language_code: 'ru',
-        // Просим тайминги, чтобы узнать длину записи, не поднимая ffprobe.
-        timestamps: true,
-      }),
+        model: this.model(),
+      })),
     });
     if (!response.ok)
       throw new BadGatewayException(
@@ -99,6 +103,30 @@ export class FalAudioService {
       seconds: readDuration(payload?.timestamps, spoken),
     };
   }
+}
+
+/**
+ * Тело запроса под конкретную модель.
+ *
+ * Набор полей у версий разный: v3 не принимает `speed` вовсе. Слать лишнее в
+ * платный запрос не стоит — провайдер уже показал, что берёт деньги и за то,
+ * чего не смог разобрать.
+ */
+export function buildSpeechRequest(input: {
+  text: string;
+  voice: string;
+  model: string;
+}): Record<string, unknown> {
+  const request: Record<string, unknown> = {
+    text: input.text,
+    voice: input.voice,
+    language_code: 'ru',
+    // Тайминги нужны, чтобы узнать длину записи, не поднимая ffprobe.
+    timestamps: true,
+  };
+  // Чуть медленнее обычного: цитата — не новостная лента, её слушают.
+  if (!input.model.includes('eleven-v3')) request.speed = 0.95;
+  return request;
 }
 
 /**

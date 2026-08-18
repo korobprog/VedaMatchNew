@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { BadGatewayException } from '@nestjs/common';
-import { FalVideoService } from './fal-video.service';
+import { buildVideoRequest, FalVideoService } from './fal-video.service';
 
 function service(overrides: Record<string, string> = {}) {
   const values: Record<string, string> = {
@@ -67,8 +67,10 @@ describe('FalVideoService', () => {
     });
     const body = JSON.parse(String(sent?.body)) as Record<string, unknown>;
     expect(body.image_url).toBe('https://cdn/pic.png');
-    expect(body.aspect_ratio).toBe('9:16');
     expect(body.generate_audio).toBe(false);
+    // Поля, зависящие от модели, проверяются отдельно в buildVideoRequest:
+    // здесь модель выдуманная, и соотношение сторон ей не передаётся.
+    expect(body.resolution).toBe('720p');
   });
 
   // Раньше сервис достраивал ссылки из имени модели. На живом ответе база
@@ -174,5 +176,56 @@ describe('FalVideoService: защита от платных ошибок', () =>
     // Ключевое: до провайдера дело не дошло — кривое тело он бы принял и
     // выставил счёт.
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildVideoRequest', () => {
+  const base = {
+    imageUrl: 'https://cdn/frame.jpg',
+    prompt: 'мягкое движение',
+    seconds: 5,
+    audio: false,
+  };
+
+  it('Seedance получает соотношение сторон явно', () => {
+    const request = buildVideoRequest({
+      ...base,
+      model: 'fal-ai/bytedance/seedance/v1/pro/fast/image-to-video',
+    });
+    expect(request.aspect_ratio).toBe('9:16');
+    expect(request.generate_audio).toBe(false);
+  });
+
+  it('Wan соотношения не получает — он такого поля не знает', () => {
+    // Лишнее поле ушло бы в платный запрос: на неразобранном теле однажды
+    // сгорело $2.50.
+    const request = buildVideoRequest({
+      ...base,
+      model: 'wan/v2.6/image-to-video/flash',
+    });
+    expect(request.aspect_ratio).toBeUndefined();
+    expect(request.generate_audio).toBe(false);
+  });
+
+  it('у Vidu звук называется иначе', () => {
+    const request = buildVideoRequest({
+      ...base,
+      model: 'fal-ai/vidu/q3/image-to-video',
+    });
+    expect(request.audio).toBe(false);
+    expect(request.generate_audio).toBeUndefined();
+  });
+
+  it('общие поля есть у всех', () => {
+    for (const model of [
+      'fal-ai/bytedance/seedance/v1/pro/fast/image-to-video',
+      'wan/v2.6/image-to-video/flash',
+      'fal-ai/vidu/q3/image-to-video',
+    ]) {
+      const request = buildVideoRequest({ ...base, model });
+      expect(request.image_url).toBe('https://cdn/frame.jpg');
+      expect(request.duration).toBe(5);
+      expect(request.resolution).toBe('720p');
+    }
   });
 });

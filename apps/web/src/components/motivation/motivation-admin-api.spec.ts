@@ -69,3 +69,61 @@ describe("apiRequest", () => {
     });
   });
 });
+
+describe("apiRequest: протухший токен", () => {
+  beforeEach(() => vi.unstubAllGlobals());
+
+  it("на 401 обновляет токен и повторяет запрос один раз", async () => {
+    // Токен доступа живёт недолго, а админ сидит на одной странице часами.
+    // SilentRefresh срабатывает только на лендинге, поэтому без этого повтора
+    // кнопки отвечали «Требуется авторизация», хотя сессия ещё жива.
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        calls.push(url);
+        if (url.endsWith("/auth/refresh"))
+          return { ok: true, status: 201, text: async () => "" };
+        return calls.filter((c) => c.endsWith("/target")).length === 1
+          ? { ok: false, status: 401, text: async () => "Требуется авторизация" }
+          : { ok: true, status: 200, text: async () => '{"ok":true}' };
+      }),
+    );
+
+    await expect(apiRequest("/target", "POST")).resolves.toEqual({ ok: true });
+    expect(calls.filter((c) => c.endsWith("/auth/refresh"))).toHaveLength(1);
+    expect(calls.filter((c) => c.endsWith("/target"))).toHaveLength(2);
+  });
+
+  it("если обновить не удалось — отдаёт ошибку, а не крутит запросы по кругу", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        calls.push(url);
+        return { ok: false, status: 401, text: async () => "Требуется авторизация" };
+      }),
+    );
+
+    await expect(apiRequest("/target", "POST")).rejects.toThrow(
+      "Требуется авторизация",
+    );
+    expect(calls.filter((c) => c.endsWith("/auth/refresh"))).toHaveLength(1);
+    expect(calls.filter((c) => c.endsWith("/target"))).toHaveLength(1);
+  });
+
+  it("удачный запрос токен не трогает", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        calls.push(url);
+        return { ok: true, status: 200, text: async () => '{"ok":true}' };
+      }),
+    );
+
+    await apiRequest("/target", "POST");
+
+    expect(calls.some((c) => c.endsWith("/auth/refresh"))).toBe(false);
+  });
+});

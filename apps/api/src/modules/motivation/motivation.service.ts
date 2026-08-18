@@ -36,6 +36,7 @@ import {
   weightedPage,
 } from './motivation-feed';
 import { MotivationAuthorSearchService } from './motivation-author-search.service';
+import { FalAudioService, VOICE_PREVIEW_LINE } from './fal-audio.service';
 import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationCopyService } from './motivation-copy.service';
 import { MotivationGenerationService } from './motivation-generation.service';
@@ -70,6 +71,7 @@ export class MotivationService {
     private readonly sourceFetch: MotivationSourceFetchService,
     private readonly copy: MotivationCopyService,
     private readonly categories: MotivationCategoriesService,
+    private readonly audio: FalAudioService,
   ) {}
 
   async preference(userId: string) {
@@ -368,6 +370,35 @@ export class MotivationService {
     });
     return { videoStatus: 'queued' as const };
   }
+  /**
+   * Короткий образец голоса для выбора в админке.
+   *
+   * Без него голос выбирается вслепую из двадцати одного имени, а услышать его
+   * можно только пересняв ролик — две минуты и двенадцать центов. Фраза
+   * намеренно короткая и с теми именами, на которых синтез спотыкается: сорок
+   * знаков стоят меньше половины цента.
+   */
+  async previewVoice(role: Role, voice?: string | null) {
+    this.admin(role);
+    const name = voice?.trim();
+    if (name && !MOTIVATION_VOICES.includes(name as MotivationVoice))
+      throw new BadRequestException('Unknown voice');
+    // Фраза фиксированная, а голосов конечное число — значит каждый достаточно
+    // синтезировать один раз за всё время. Ключ детерминированный, поэтому
+    // проверка сводится к запросу готового файла.
+    const key = `motivation/voice-preview/${name ?? 'default'}.mp3`;
+    const cached = await this.generation.findUploaded(key);
+    if (cached) return { audio: cached, cached: true };
+
+    const spoken = await this.audio.speak(VOICE_PREVIEW_LINE, name);
+    const audio = await this.generation.uploadStory(
+      key,
+      spoken.audio,
+      'audio/mpeg',
+    );
+    return { audio, cached: false };
+  }
+
   /**
    * Настройка озвучки у поста: включение и выбор голоса.
    *

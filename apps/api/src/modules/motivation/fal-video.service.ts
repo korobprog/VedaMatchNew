@@ -23,6 +23,37 @@ export type FalPollResult =
 const QUEUE_BASE = 'https://queue.fal.run';
 const STORAGE_BASE = 'https://rest.alpha.fal.ai';
 
+/**
+ * Тело запроса под конкретную видеомодель.
+ *
+ * Набор полей у провайдеров разный: Wan не знает про `aspect_ratio`, Vidu
+ * называет звук `audio`, а не `generate_audio`. Лишнее поле уходит в платный
+ * запрос, а провайдер уже показал, что берёт деньги и за то, чего не смог
+ * разобрать — на этом однажды сгорело $2.50.
+ *
+ * Соотношение сторон нигде не передаётся намеренно: кадр мы отдаём уже
+ * кадрированным в 9:16, и модели наследуют его от картинки.
+ */
+export function buildVideoRequest(input: {
+  imageUrl: string;
+  prompt: string;
+  seconds: number;
+  audio: boolean;
+  model: string;
+}): Record<string, unknown> {
+  const request: Record<string, unknown> = {
+    image_url: input.imageUrl,
+    prompt: input.prompt,
+    duration: input.seconds,
+    resolution: '720p',
+  };
+  if (input.model.includes('vidu')) request.audio = input.audio;
+  else request.generate_audio = input.audio;
+  // Seedance ждёт соотношение явно, остальные выводят его из кадра.
+  if (input.model.includes('seedance')) request.aspect_ratio = '9:16';
+  return request;
+}
+
 /** Разворачивает `detail` провайдера в короткий код для лога и админки. */
 function describeFailure(detail: unknown): string {
   if (typeof detail === 'string') return detail.slice(0, 200);
@@ -56,6 +87,11 @@ export class FalVideoService {
     if (!key)
       throw new ServiceUnavailableException('FAL_KEY is not configured');
     return key;
+  }
+
+  /** Публичное имя модели — нужно учёту стоимости: тарифы у провайдеров разные. */
+  modelId(): string {
+    return this.model();
   }
 
   private model(): string {
@@ -95,14 +131,15 @@ export class FalVideoService {
         authorization: `Key ${this.key()}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify({
-        image_url: input.imageUrl,
-        prompt: input.prompt,
-        duration: this.durationSeconds(),
-        resolution: '720p',
-        aspect_ratio: '9:16',
-        generate_audio: this.audioEnabled(),
-      }),
+      body: JSON.stringify(
+        buildVideoRequest({
+          imageUrl: input.imageUrl,
+          prompt: input.prompt,
+          seconds: this.durationSeconds(),
+          audio: this.audioEnabled(),
+          model: this.model(),
+        }),
+      ),
     });
     if (!response.ok)
       throw new BadGatewayException(

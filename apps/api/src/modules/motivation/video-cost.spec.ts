@@ -44,3 +44,65 @@ describe('оценка стоимости ролика', () => {
     expect(planned).toBeLessThan(0.27);
   });
 });
+
+describe('оценка под конкретную модель', () => {
+  it('Wan без звука считает по четверти ставки', () => {
+    // $0.10/с в 720p, немое видео — 25%: пять секунд выходят в $0.125.
+    expect(
+      estimatePlannedClipUsd({
+        seconds: 5,
+        model: 'wan/v2.6/image-to-video/flash',
+        audio: false,
+      }),
+    ).toBeCloseTo(0.125, 3);
+  });
+
+  it('Wan со звуком — по полной', () => {
+    expect(
+      estimatePlannedClipUsd({
+        seconds: 5,
+        model: 'wan/v2.6/image-to-video/flash',
+        audio: true,
+      }),
+    ).toBeCloseTo(0.5, 3);
+  });
+
+  it('Vidu в 720p считает с множителем', () => {
+    expect(
+      estimatePlannedClipUsd({
+        seconds: 5,
+        model: 'fal-ai/vidu/q3/image-to-video',
+        audio: false,
+      }),
+    ).toBeCloseTo(0.385, 3);
+  });
+
+  it('Seedance по-прежнему считается по токенам', () => {
+    // Держать одну формулу на всех нельзя: после перехода на Wan учёт писал бы
+    // цену Seedance, а на этом числе стоит дневной потолок расхода.
+    const seedance = estimatePlannedClipUsd({
+      seconds: 5,
+      model: 'fal-ai/bytedance/seedance/v1/pro/fast/image-to-video',
+    });
+    expect(seedance).toBeCloseTo(0.103, 2);
+  });
+
+  it('незнакомая модель не роняет расчёт, а падает на токенную формулу', () => {
+    expect(
+      estimatePlannedClipUsd({ seconds: 5, model: 'нечто/новое' }),
+    ).toBeGreaterThan(0);
+  });
+
+  it('разные модели дают разные числа — иначе учёт был бы фикцией', () => {
+    const wan = estimatePlannedClipUsd({
+      seconds: 5,
+      model: 'wan/v2.6/image-to-video/flash',
+      audio: false,
+    });
+    const vidu = estimatePlannedClipUsd({
+      seconds: 5,
+      model: 'fal-ai/vidu/q3/image-to-video',
+    });
+    expect(wan).not.toBeCloseTo(vidu, 2);
+  });
+});

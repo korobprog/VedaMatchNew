@@ -56,6 +56,8 @@ function build(options: {
       responseUrl: 'https://queue/r',
     })),
     durationSeconds: () => 5,
+      modelId: () => 'test/model',
+      audioEnabled: () => false,
     poll: jest.fn(async () => ({ state: 'running' as const })),
     download: jest.fn(async () => Buffer.from('mp4')),
     ...options.fal,
@@ -234,6 +236,8 @@ describe('MotivationVideoWorkerService: промпт для видеомодел
     const fal = {
       enabled: true,
       durationSeconds: () => 5,
+      modelId: () => 'test/model',
+      audioEnabled: () => false,
       upload: jest.fn(async () => 'https://fal/frame.jpg'),
       submit: jest.fn(async () => ({
         requestId: 'r',
@@ -330,6 +334,8 @@ describe('MotivationVideoWorkerService: дневной потолок', () => {
     const fal = {
       enabled: true,
       durationSeconds: () => 5,
+      modelId: () => 'test/model',
+      audioEnabled: () => false,
       upload: jest.fn(async () => 'https://fal/frame.jpg'),
       submit: jest.fn(async () => ({
         requestId: 'r',
@@ -445,6 +451,8 @@ describe('MotivationVideoWorkerService: озвучка', () => {
     const fal = {
       enabled: true,
       durationSeconds: () => 5,
+      modelId: () => 'test/model',
+      audioEnabled: () => false,
       poll: jest.fn(async () => ({
         state: 'ready' as const,
         videoUrl: 'https://fal/clip.mp4',

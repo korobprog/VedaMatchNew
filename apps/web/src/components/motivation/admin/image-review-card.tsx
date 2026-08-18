@@ -12,6 +12,7 @@ import { DeletePostButton } from "./delete-post-button";
 import { PipelineStages } from "./pipeline-stages";
 import { PromptEditor } from "./prompt-editor";
 import { QuoteDetails } from "./quote-details";
+import { VoicePreviewButton } from "./voice-preview-button";
 import { ActionBar, RejectControl, StyleSelect } from "./review-actions";
 import type { RunCommand } from "./use-admin-command";
 import { badgeClass, fieldClass, primaryButton, secondaryButton } from "./ui";
@@ -242,6 +243,7 @@ export function ImageReviewCard({
                       </option>
                     ))}
                   </select>
+                  <VoicePreviewButton voice={post.videoVoiceName} />
                 </label>
               )}
               {/* Оживление стоит денег за каждый заход, поэтому это отдельное

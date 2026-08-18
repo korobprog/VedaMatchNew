@@ -435,6 +435,30 @@ export class MotivationGenerationService {
   }
 
   /**
+   * Ссылка на уже загруженный файл, если он там есть.
+   *
+   * Проверяем обычным запросом по публичному адресу, а не через S3 API: бакет
+   * и так отдаётся всем, лишний клиентский вызов ничего бы не добавил. Нужно
+   * это кэшу — например образцам голосов, которые незачем синтезировать
+   * заново при каждом нажатии.
+   */
+  async findUploaded(key: string): Promise<string | null> {
+    const publicUrl = this.config.get<string>('S3_PUBLIC_URL');
+    if (!publicUrl) return null;
+    const url = `${publicUrl.replace(/\/$/, '')}/${key}`;
+    try {
+      const response = await fetch(url, {
+        method: 'HEAD',
+        signal: AbortSignal.timeout(10_000),
+      });
+      return response.ok ? url : null;
+    } catch {
+      // Недоступное хранилище — не повод падать: просто сгенерируем заново.
+      return null;
+    }
+  }
+
+  /**
    * Кладёт файл в S3 и возвращает публичную ссылку.
    *
    * `contentType` — параметр, а не константа: сюда попадают и кадры сторис, и

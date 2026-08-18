@@ -150,6 +150,8 @@ export class MotivationVideoWorkerService
     const used = Number(spent._sum.videoCostUsd ?? 0);
     const planned = estimatePlannedClipUsd({
       seconds: this.fal.durationSeconds(),
+      model: this.fal.modelId(),
+      audio: this.fal.audioEnabled(),
     });
     const limit = this.dailyBudgetUsd();
     if (used + planned > limit)
@@ -299,6 +301,8 @@ export class MotivationVideoWorkerService
           // оценку по его же формуле — иначе учёт расхода остался бы нулём.
           videoCostUsd: estimatePlannedClipUsd({
             seconds: this.fal.durationSeconds(),
+            model: this.fal.modelId(),
+            audio: this.fal.audioEnabled(),
           }),
         },
       });

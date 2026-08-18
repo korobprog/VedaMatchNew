@@ -1,6 +1,10 @@
 import { ConfigService } from '@nestjs/config';
 import { BadGatewayException, BadRequestException } from '@nestjs/common';
-import { FalAudioService, readDuration } from './fal-audio.service';
+import {
+  buildSpeechRequest,
+  FalAudioService,
+  readDuration,
+} from './fal-audio.service';
 
 function service(overrides: Record<string, string> = {}) {
   const values: Record<string, string> = { FAL_KEY: 'k', ...overrides };
@@ -85,5 +89,39 @@ describe('readDuration', () => {
   it('никогда не отдаёт ноль или отрицательное', () => {
     expect(readDuration([], '')).toBeGreaterThan(0);
     expect(readDuration([{ end: 0 }], 'к')).toBeGreaterThan(0);
+  });
+});
+
+describe('buildSpeechRequest', () => {
+  const base = { text: 'Цитата', voice: 'Rachel' };
+
+  it('для multilingual v2 задаёт темп', () => {
+    const request = buildSpeechRequest({
+      ...base,
+      model: 'fal-ai/elevenlabs/tts/multilingual-v2',
+    });
+    expect(request.speed).toBe(0.95);
+  });
+
+  it('для v3 темп не шлёт — эта модель его не принимает', () => {
+    // Лишнее поле уходит в платный запрос; провайдер уже показывал, что берёт
+    // деньги и за то, чего не смог разобрать.
+    const request = buildSpeechRequest({
+      ...base,
+      model: 'fal-ai/elevenlabs/tts/eleven-v3',
+    });
+    expect(request.speed).toBeUndefined();
+  });
+
+  it('общие поля есть у обеих', () => {
+    for (const model of [
+      'fal-ai/elevenlabs/tts/multilingual-v2',
+      'fal-ai/elevenlabs/tts/eleven-v3',
+    ]) {
+      const request = buildSpeechRequest({ ...base, model });
+      expect(request.text).toBe('Цитата');
+      expect(request.language_code).toBe('ru');
+      expect(request.timestamps).toBe(true);
+    }
   });
 });

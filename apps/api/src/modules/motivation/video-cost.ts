@@ -39,6 +39,20 @@ export function estimateVideoCostUsd(input: {
 }
 
 /**
+ * Ставки провайдеров за секунду 720p.
+ *
+ * Считают они по-разному: Seedance — по видео-токенам, Wan и Vidu — по секундам.
+ * Держать одну формулу на всех нельзя: после перехода на Wan учёт продолжал бы
+ * писать цену Seedance, а на этом же числе стоит дневной потолок расхода.
+ */
+const PER_SECOND_720P: ReadonlyArray<[string, number]> = [
+  // Wan 2.6: $0.10/с в 720p, немое видео — четверть ставки.
+  ['wan/v2.6', 0.1],
+  // Vidu Q3: базовые $0.035/с для 360p и 540p, для 720p множитель 2.2.
+  ['vidu', 0.035 * 2.2],
+];
+
+/**
  * Во сколько обойдётся ролик, который мы собираемся заказать.
  *
  * Считается до отправки: на этом числе стоит дневной потолок расхода. Кадр мы
@@ -47,8 +61,21 @@ export function estimateVideoCostUsd(input: {
  */
 export function estimatePlannedClipUsd(input: {
   seconds: number;
+  model?: string;
+  audio?: boolean;
   ratePerMTokens?: number;
 }): number {
+  const model = input.model ?? '';
+  const perSecond = PER_SECOND_720P.find(([key]) => model.includes(key));
+  if (perSecond) {
+    const [, rate] = perSecond;
+    // Скидка за немой ролик есть только у Wan; у остальных звук на цену не
+    // влияет, поэтому множитель применяем адресно.
+    const silentDiscount =
+      !input.audio && model.includes('wan/v2.6') ? 0.25 : 1;
+    return input.seconds * rate * silentDiscount;
+  }
+
   return estimateVideoCostUsd({
     width: 704,
     height: 1248,
