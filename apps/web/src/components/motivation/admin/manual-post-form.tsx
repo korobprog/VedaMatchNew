@@ -16,7 +16,7 @@ import { CollapsibleBlock } from "../collapsible-block";
 import { detectLanguage } from "../manual-quote-form";
 import { CategorySelect } from "./category-select";
 import { PipelineStages } from "./pipeline-stages";
-import { visualStyles } from "./review-actions";
+import { autoVisualStyleLabel, visualStyles } from "./review-actions";
 import {
   cardClass,
   fieldClass,
@@ -66,7 +66,9 @@ export function ManualPostForm({
   const [languageTouched, setLanguageTouched] = useState(false);
   const [selected, setSelected] = useState<MotivationProfileType[]>(["user"]);
   const [track, setTrack] = useState<MotivationAudienceTrack>("universal");
-  const [style, setStyle] = useState<MotivationVisualStyle>("spiritual_watercolor");
+  // Пусто по умолчанию: ручная цитата тоже проходит через подбор стиля по
+  // автору и книге, и предвыбранный стиль отменял бы его молча.
+  const [style, setStyle] = useState<MotivationVisualStyle | null>(null);
   const [category, setCategory] = useState(
     categories.find((item) => item.isDefault)?.slug ?? categories[0]?.slug ?? "",
   );
@@ -144,7 +146,7 @@ export function ManualPostForm({
         ...(Object.keys(extras).length ? { translations: extras } : {}),
         profileTypes: selected,
         audienceTrack: track,
-        visualStyle: style,
+        visualStyle: style ?? undefined,
         storyCaption,
       });
       setForm(emptyForm);
@@ -450,12 +452,16 @@ export function ManualPostForm({
                 <span>Стиль изображения</span>
                 <select
                   aria-label="Стиль изображения"
-                  value={style}
+                  value={style ?? ""}
                   onChange={(event) =>
-                    setStyle(event.target.value as MotivationVisualStyle)
+                    setStyle(
+                      (event.target.value ||
+                        null) as MotivationVisualStyle | null,
+                    )
                   }
                   className={`mt-2 ${fieldClass}`}
                 >
+                  <option value="">{autoVisualStyleLabel}</option>
                   {visualStyles.map((item) => (
                     <option key={item.value} value={item.value}>
                       {item.label}

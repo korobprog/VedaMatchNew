@@ -37,6 +37,11 @@ export interface MotivationPostDto {
   category: string;
   imageUrl: string;
   storyImageUrl: string;
+  /**
+   * Ролик, оживляющий иллюстрацию. Пустая строка — ролика нет либо он ещё не
+   * принят: наружу отдаётся только подтверждённое администратором видео.
+   */
+  videoUrl: string;
   title: string;
   text: string;
   storyText: string;
@@ -67,7 +72,22 @@ export interface MotivationAdminCandidateDto extends MotivationAdminPostDto {
   imagePrompt: string | null;
   textApprovedAt: string | null;
   imageApprovedAt: string | null;
+  /** Ролик, оживляющий иллюстрацию. Появляется по кнопке уже после картинки. */
+  videoStatus: MotivationVideoStatus;
+  videoErrorCode: string | null;
 }
+
+/**
+ * Жизненный цикл ролика. Отдельно от `reviewStatus`: видео — необязательное
+ * обогащение готового поста, и его сбой не отменяет сам пост.
+ */
+export type MotivationVideoStatus =
+  | 'none'
+  | 'queued'
+  | 'running'
+  | 'review'
+  | 'ready'
+  | 'failed';
 /**
  * Настройки ленты. `profileTypes` — какие профили показывать; пустой список
  * означает «как на самоидентификации», а не «ничего не показывать».

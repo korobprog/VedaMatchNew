@@ -16,6 +16,8 @@ import { MotivationStoryRebuildService } from './motivation-story-rebuild.servic
 import { MotivationModerationService } from './motivation-moderation.service';
 import { MotivationAuthorSearchService } from './motivation-author-search.service';
 import { MotivationSourceFetchService } from './motivation-source-fetch.service';
+import { FalVideoService } from './fal-video.service';
+import { MotivationVideoWorkerService } from './motivation-video-worker.service';
 
 @Module({
   imports: [AuthModule, VedabaseModule],
@@ -35,6 +37,8 @@ import { MotivationSourceFetchService } from './motivation-source-fetch.service'
     MotivationModerationService,
     MotivationAuthorSearchService,
     MotivationSourceFetchService,
+    FalVideoService,
+    MotivationVideoWorkerService,
   ],
   exports: [
     MotivationService,

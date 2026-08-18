@@ -1,6 +1,11 @@
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
 import { proxy } from "./proxy";
+
+/** Расширения, которые matcher в proxy.ts исключает — гард их не видит. */
+const BYPASSED = /\.(?:svg|png|jpg|ico)$/;
 
 describe("proxy", () => {
   it("allows guests to open the landing page", () => {
@@ -42,6 +47,24 @@ describe("proxy", () => {
       "/offline",
       "/vedabase/offline",
     ]) {
+      const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));
+
+      expect(response.headers.get("location"), path).toBeNull();
+    }
+  });
+
+  // Прежняя версия теста перечисляла файлы руками и потому повторяла
+  // реализацию: pwa-install-prompt.js не был ни там, ни в publicFiles, и
+  // проверка его отсутствие не замечала. Теперь список берётся с диска.
+  it("serves every non-image file from public/ to guests", () => {
+    // cwd теста — apps/web (корень vitest); import.meta.url здесь не file://.
+    const publicDir = join(process.cwd(), "public");
+    const files = readdirSync(publicDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && !BYPASSED.test(entry.name))
+      .map((entry) => `/${entry.name}`);
+
+    expect(files.length).toBeGreaterThan(0);
+    for (const path of files) {
       const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));
 
       expect(response.headers.get("location"), path).toBeNull();

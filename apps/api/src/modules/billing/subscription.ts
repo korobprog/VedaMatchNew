@@ -1,8 +1,9 @@
-import type {
-  BillingMode,
-  PricingPlan,
-  SubscriptionState,
-  SubscriptionStatus,
+import {
+  PLAN_FEATURES,
+  type BillingMode,
+  type PricingPlan,
+  type SubscriptionState,
+  type SubscriptionStatus,
 } from '@vedamatch/shared';
 
 export const TRIAL_DAYS = 30;
@@ -16,15 +17,7 @@ export const VEDAMATCH_PLAN: Omit<PricingPlan, 'mode'> = {
   priceUsdt: 2,
   period: 'month',
   trialDays: TRIAL_DAYS,
-  features: [
-    'Все 8 сервисов платформы в одном аккаунте',
-    'Знакомства В Благости: анкеты, рекомендации, чаты',
-    'Джйотиш: ведическая карта рождения и совместимость',
-    'Vedabase и Образование: чтение офлайн и без ограничений',
-    '«Мотивация», «Контакты» и «Рынок» — практика, община и объявления',
-    'Проверка фото и подтверждение статуса',
-    'Поддержка через тикеты в кабинете',
-  ],
+  features: PLAN_FEATURES,
 };
 
 /** Условный «конец света» для беты — доступ не истекает, пока режим не переключат на business. */

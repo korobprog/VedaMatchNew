@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -8,6 +9,7 @@ import {
   MotivationAudienceTrack,
   MotivationPostStatus,
   MotivationProfileType,
+  MotivationVideoStatus,
   SpiritualStage,
 } from '@prisma/client';
 import type {
@@ -147,7 +149,9 @@ export class MotivationService {
     const where = {
       OR: [
         { profileType: { in: profileTypes } },
-        { quote: { profiles: { some: { profileType: { in: profileTypes } } } } },
+        {
+          quote: { profiles: { some: { profileType: { in: profileTypes } } } },
+        },
       ],
       status: MotivationPostStatus.published,
       ...(query.category ? { category: query.category } : {}),
@@ -268,6 +272,10 @@ export class MotivationService {
       imagePrompt: post.imagePrompt,
       textApprovedAt: post.textApprovedAt?.toISOString() ?? null,
       imageApprovedAt: post.imageApprovedAt?.toISOString() ?? null,
+      videoStatus: post.videoStatus,
+      // В админке ролик виден и до приёмки — иначе его нечем было бы принять.
+      videoUrl: post.videoUrl ?? '',
+      videoErrorCode: post.videoErrorCode,
     }));
   }
   async adminUpdate(role: Role, id: string, input: MotivationAdminUpdate) {
@@ -303,7 +311,9 @@ export class MotivationService {
     await this.prisma.$transaction(async (transaction) => {
       await transaction.motivationPost.delete({ where: { id } });
       if (post.quoteId)
-        await transaction.motivationQuote.delete({ where: { id: post.quoteId } });
+        await transaction.motivationQuote.delete({
+          where: { id: post.quoteId },
+        });
     });
   }
   regenerate(role: Role, actorId: string, id: string) {
@@ -316,6 +326,51 @@ export class MotivationService {
     visualStyle?: MotivationVisualStyle,
   ) {
     return this.moderation.approveText(role, actorId, id, visualStyle);
+  }
+  /**
+   * Ставит ролик в очередь. Отдельным действием, а не автоматом после
+   * картинки: каждый ролик стоит денег, и решение о нём принимает человек.
+   */
+  async requestAnimation(role: Role, id: string) {
+    this.admin(role);
+    const post = await this.prisma.motivationPost.findUnique({
+      where: { id },
+      select: { imageUrl: true, imagePrompt: true, videoStatus: true },
+    });
+    if (!post) throw new NotFoundException('Post not found');
+    if (!post.imageUrl || !post.imagePrompt)
+      throw new ConflictException('Image is not ready yet');
+    if (
+      post.videoStatus === MotivationVideoStatus.queued ||
+      post.videoStatus === MotivationVideoStatus.running
+    )
+      throw new ConflictException('Video is already being generated');
+
+    // Счётчик попыток сбрасываем: это осознанный повторный заказ человеком, а
+    // не автоматический ретрай после сбоя.
+    await this.prisma.motivationPost.update({
+      where: { id },
+      data: {
+        videoStatus: MotivationVideoStatus.queued,
+        videoAttemptCount: 0,
+        videoErrorCode: null,
+        videoJobId: null,
+        videoJobStatusUrl: null,
+        videoJobResultUrl: null,
+      },
+    });
+    return { videoStatus: 'queued' as const };
+  }
+  /** Принимает ролик: до этого он виден только в админке. */
+  async approveVideo(role: Role, id: string) {
+    this.admin(role);
+    const updated = await this.prisma.motivationPost.updateMany({
+      where: { id, videoStatus: MotivationVideoStatus.review },
+      data: { videoStatus: MotivationVideoStatus.ready },
+    });
+    if (!updated.count)
+      throw new ConflictException('Video is not waiting for review');
+    return { videoStatus: 'ready' as const };
   }
   approveImage(role: Role, actorId: string, id: string) {
     return this.moderation.approveImage(role, actorId, id);
@@ -530,6 +585,11 @@ export class MotivationService {
       category: post.category,
       imageUrl: post.imageUrl ?? '',
       storyImageUrl: post.storyImageUrl ?? '',
+      // Наружу — только принятое видео: в review оно ещё не просмотрено.
+      videoUrl:
+        post.videoStatus === MotivationVideoStatus.ready
+          ? (post.videoUrl ?? '')
+          : '',
       title: t?.title ?? '',
       text: t?.text ?? '',
       storyText: t?.storyText ?? '',

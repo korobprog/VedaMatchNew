@@ -16,9 +16,16 @@ const publicPrefixes = [
 ];
 // Воркер, манифест и офлайн-оболочки обязаны отдаваться и гостю: без них
 // приложение не устанавливается и не кэшируется при первом визите.
+//
+// Сюда же обязан попадать любой статический файл из public/, кроме картинок:
+// matcher ниже исключает только svg|png|jpg|ico, поэтому .js проходит через
+// гард и гость получает HTML лендинга вместо скрипта — с падением
+// «Unexpected token '<'». Ровно так и потерялся pwa-install-prompt.js.
+// Список сверяется с диском в proxy.spec.ts.
 const publicFiles = new Set([
   "/gitabase",
   "/sw.js",
+  "/pwa-install-prompt.js",
   "/manifest.webmanifest",
   "/offline",
   "/vedabase/offline",

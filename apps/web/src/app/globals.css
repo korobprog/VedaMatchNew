@@ -81,8 +81,12 @@
   --vm-glass-light-to: rgba(255, 255, 255, 0.35);
   --vm-glass-light-brd: rgba(74, 44, 122, 0.1);
 
-  --vm-magenta: #DB1B84;
-  --vm-cyan: #0C917C;
+  /* Оба акцента идут и как цвет текста (125 мест с text-magenta /
+     text-cyan). На светлом фоне #DB1B84 давал 4.46:1, #0C917C — 3.75:1
+     при 14px, то есть ниже порога AA. Затемнены до 4.62:1 и 4.53:1:
+     на глаз не отличить, но мелкий текст перестал проваливаться. */
+  --vm-magenta: #D71A80;
+  --vm-cyan: #0B826F;
   --vm-gold: #B0770E;
 
   --vm-text-0: #180F2C;
@@ -94,11 +98,11 @@
      синий из оригинального логотипа и легче, и узнаваемее. */
   --vm-logo-mark: #26356B;
 
-  --vm-glow-magenta: rgba(219, 27, 132, 0.28);
-  --vm-glow-cyan: rgba(12, 145, 124, 0.28);
+  --vm-glow-magenta: rgba(215, 26, 128, 0.28);
+  --vm-glow-cyan: rgba(11, 130, 111, 0.28);
   --vm-glow-gold: rgba(176, 119, 14, 0.28);
-  --vm-glow-text-magenta: rgba(219, 27, 132, 0.25);
-  --vm-glow-text-cyan: rgba(12, 145, 124, 0.25);
+  --vm-glow-text-magenta: rgba(215, 26, 128, 0.25);
+  --vm-glow-text-cyan: rgba(11, 130, 111, 0.25);
 
   --vm-orb-opacity: 0.2;
   --vm-noise-opacity: 0.02;
@@ -134,7 +138,9 @@
 
   --vm-text-0: #F6F1FF;
   --vm-text-1: #B8A9D9;
-  --vm-text-2: #7C6D9C;
+  /* #7C6D9C давал 4.31:1 на --vm-bg-0 — ниже AA. Осветлён до 4.54:1.
+     Значение продублировано в media-зеркале ниже. */
+  --vm-text-2: #7F719E;
 
   /* На тёмном знак совпадает с основным текстом: синий здесь бы утонул. */
   --vm-logo-mark: #F6F1FF;
@@ -178,7 +184,7 @@
 
     --vm-text-0: #F6F1FF;
     --vm-text-1: #B8A9D9;
-    --vm-text-2: #7C6D9C;
+    --vm-text-2: #7F719E;
 
     --vm-logo-mark: #F6F1FF;
 

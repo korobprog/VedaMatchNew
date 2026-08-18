@@ -72,7 +72,7 @@ export interface AdvisorInput {
   /** Входящие симпатии, на которые не ответили. */
   unionIncomingLikes: number;
 
-  /** 0..100 заполненности данных рождения, null — Джйотиш недоступен. */
+  /** 0..100 заполненности данных рождения, null — Астрология недоступна. */
   astroPercent: number | null;
   /** Готовая фраза персонального дня, null — не сгенерирована. */
   astroTodayText: string | null;
@@ -188,7 +188,7 @@ function gapCards(input: AdvisorInput): AdvisorCard[] {
       id: "astro-birth-data",
       tone: "gap",
       service: "astro",
-      text: "Джйотиш ничего не рассчитает, пока нет точного времени и места рождения",
+      text: "Астрология ничего не рассчитает, пока нет точного времени и места рождения",
       keepFirstCase: true,
       actionLabel: "Заполнить",
       href: "/astro",

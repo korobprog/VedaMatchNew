@@ -99,6 +99,21 @@ describe('MotivationModerationService', () => {
     },
   );
 
+  it('carries the quote source and its context into the image prompt', async () => {
+    const { service, transaction } = setup();
+
+    await service.approveText('admin', actorId, postId);
+
+    expect(transaction.motivationPost.updateMany).toHaveBeenCalledWith({
+      where: { id: postId, reviewStatus: 'text_review' },
+      data: expect.objectContaining({
+        imagePrompt: expect.stringContaining(
+          'The passage is spoken by Author. Verified context around the passage: The exact quote concerns compassionate service.',
+        ),
+      }),
+    });
+  });
+
   it('publishes only from image_review and audits image approval', async () => {
     const { service, transaction } = setup(post('image_review'));
 

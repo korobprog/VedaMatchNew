@@ -45,6 +45,8 @@ export class MotivationModerationService {
         category: post.category,
         author: post.quote?.author ?? post.attributionSpeaker,
         work: post.quote?.work ?? post.attributionWork,
+        locator: post.quote?.locator ?? post.attributionLocator,
+        contextExcerpt: post.quote?.contextExcerpt,
         profileTypes: post.quote?.profiles.map(
           (profile) => profile.profileType,
         ) ?? [post.profileType],
@@ -144,6 +146,8 @@ export class MotivationModerationService {
         category: post.category,
         author: post.quote?.author ?? post.attributionSpeaker,
         work: post.quote?.work ?? post.attributionWork,
+        locator: post.quote?.locator ?? post.attributionLocator,
+        contextExcerpt: post.quote?.contextExcerpt,
         profileTypes: post.quote?.profiles.map(
           (profile) => profile.profileType,
         ) ?? [post.profileType],

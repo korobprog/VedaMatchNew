@@ -147,6 +147,19 @@ export class MotivationController {
   ) {
     return this.service.approveImage(user.role, user.sub, id);
   }
+  @Post('admin/motivation/posts/:id/animate')
+  @UseGuards(AuthGuard)
+  animate(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.service.requestAnimation(user.role, id);
+  }
+  @Post('admin/motivation/posts/:id/approve-video')
+  @UseGuards(AuthGuard)
+  approveVideo(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.service.approveVideo(user.role, id);
+  }
   @Post('admin/motivation/posts/:id/reject')
   @UseGuards(AuthGuard)
   reject(

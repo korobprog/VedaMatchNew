@@ -24,21 +24,48 @@ export function ImageReviewCard({
   error: string | undefined;
   run: RunCommand;
 }) {
-  const [style, setStyle] = useState<MotivationVisualStyle>(
-    post.visualStyle ?? "spiritual_watercolor",
+  // Селект показывает стиль, которым картинка уже сделана. Пустое значение —
+  // «оставить как решила система»: перегенерация тогда идёт с тем же стилем,
+  // а не с подставленным по умолчанию.
+  const [style, setStyle] = useState<MotivationVisualStyle | null>(
+    post.visualStyle,
   );
   // Сторис — отдельный файл с подписью. Без переключателя её нельзя было
   // проверить перед публикацией: карточка показывала только чистую картинку.
-  const [view, setView] = useState<"image" | "story">("image");
+  const [view, setView] = useState<"image" | "story" | "video">("image");
   const disabled = pendingAction !== undefined;
   const canReview = post.reviewStatus === "image_review";
   const hasSeparateStory =
     Boolean(post.storyImageUrl) && post.storyImageUrl !== post.imageUrl;
   const shown = view === "story" ? post.storyImageUrl : post.imageUrl;
+  const hasVideo = Boolean(post.videoUrl);
+  const videoBusy =
+    post.videoStatus === "queued" || post.videoStatus === "running";
 
   return (
     <article className="glass overflow-hidden rounded-2xl border border-glass-brd">
-      {shown ? (
+      {view === "video" ? (
+        hasVideo ? (
+          // Постер обязателен: пока ролик грузится, зритель должен видеть кадр,
+          // а не пустой прямоугольник.
+          <video
+            src={post.videoUrl ?? undefined}
+            poster={post.storyImageUrl ?? post.imageUrl ?? undefined}
+            controls
+            loop
+            playsInline
+            className="aspect-[9/16] w-full bg-bg-1 object-cover"
+          />
+        ) : (
+          <div className="flex aspect-[9/16] items-center justify-center bg-bg-1 px-6 text-center text-sm text-text-2">
+            {videoBusy
+              ? "Ролик создаётся, это занимает около минуты…"
+              : post.videoErrorCode
+                ? `Не получилось: ${post.videoErrorCode}`
+                : "Ролик ещё не заказан"}
+          </div>
+        )
+      ) : shown ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={shown}
@@ -55,7 +82,7 @@ export function ImageReviewCard({
 
       {post.imageUrl && (
         <div className="flex items-center gap-2 border-b border-glass-brd px-4 py-2">
-          {(["image", "story"] as const).map((key) => (
+          {(["image", "story", "video"] as const).map((key) => (
             <button
               key={key}
               type="button"
@@ -68,7 +95,11 @@ export function ImageReviewCard({
                   : "text-text-2 hover:text-text-0",
               ].join(" ")}
             >
-              {key === "image" ? "Иллюстрация" : "Сторис с подписью"}
+              {key === "image"
+                ? "Иллюстрация"
+                : key === "story"
+                  ? "Сторис с подписью"
+                  : "Видео"}
             </button>
           ))}
           {!hasSeparateStory && (
@@ -139,13 +170,34 @@ export function ImageReviewCard({
               >
                 {pendingAction === "approve-image" ? "Публикация…" : "Опубликовать"}
               </button>
+              {/* Оживление стоит денег за каждый заход, поэтому это отдельное
+                  осознанное действие, а не часть публикации. */}
+              <button
+                type="button"
+                disabled={disabled || videoBusy}
+                onClick={() =>
+                  run(post.id, "animate", {
+                    path: `/admin/motivation/posts/${post.id}/animate`,
+                  })
+                }
+                className={secondaryButton}
+                title="Создать короткий ролик из этой иллюстрации"
+              >
+                {pendingAction === "animate"
+                  ? "Ставим в очередь…"
+                  : videoBusy
+                    ? "Ролик создаётся…"
+                    : hasVideo
+                      ? "Переснять ролик"
+                      : "Оживить"}
+              </button>
               <button
                 type="button"
                 disabled={disabled}
                 onClick={() =>
                   run(post.id, "regenerate-image", {
                     path: `/admin/motivation/posts/${post.id}/regenerate-image`,
-                    body: { visualStyle: style },
+                    body: style ? { visualStyle: style } : {},
                   })
                 }
                 className={secondaryButton}

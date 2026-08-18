@@ -131,6 +131,18 @@ enum MotivationReviewStatus {
   failed
 }
 
+/// Жизненный цикл ролика, оживляющего иллюстрацию поста. Отдельно от
+/// `reviewStatus`: видео — необязательное обогащение уже готового поста, и его
+/// сбой не должен возвращать пост в очередь картинки.
+enum MotivationVideoStatus {
+  none
+  queued
+  running
+  review
+  ready
+  failed
+}
+
 enum MotivationQuoteSourceType {
   vedamatch_library
   approved_web
@@ -376,6 +388,23 @@ model MotivationPost {
   imageApprovedAt      DateTime?
   imageUrl             String?
   storyImageUrl        String?
+  /// Ролик, оживляющий иллюстрацию. Появляется по кнопке в админке уже после
+  /// одобрения картинки, поэтому все поля необязательные.
+  videoUrl             String?
+  videoStatus          MotivationVideoStatus     @default(none)
+  /// Идентификатор задачи у провайдера: генерация асинхронная, воркер
+  /// возвращается за результатом следующим тиком. По нему же сверяются строки
+  /// счёта в кабинете fal — там расход разложен по request id.
+  videoJobId           String?
+  /// Ссылки на статус и результат берём те, что прислал провайдер: собирать их
+  /// из имени модели нельзя, база у него не совпадает с путём модели.
+  videoJobStatusUrl    String?
+  videoJobResultUrl    String?
+  videoErrorCode       String?
+  videoAttemptCount    Int                       @default(0)
+  /// Стоимость ролика отдельно от `estimatedCostUsd`: без разбивки через месяц
+  /// не понять, во что обошлось именно видео.
+  videoCostUsd         Decimal                   @default(0) @db.Decimal(12, 6)
   attributionKind      MotivationAttributionKind @default(ai_reflection)
   attributionSpeaker   String?
   attributionWork      String?
@@ -403,6 +432,9 @@ model MotivationPost {
   @@index([profileType, audienceTrack, status, publishedAt])
   @@index([category, status, publishedAt])
   @@index([reviewStatus, createdAt])
+  /// Воркер видео выбирает задачи по статусу — без индекса он сканировал бы
+  /// всю таблицу постов на каждом тике.
+  @@index([videoStatus, updatedAt])
   @@index([quoteId])
 }
 
