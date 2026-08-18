@@ -300,6 +300,7 @@ model User {
   noticeReportsMade                  NoticeReport[]               @relation("NoticeReportsMade")
   noticeReportsReviewed              NoticeReport[]               @relation("NoticeReportsReviewed")
   noticeSubscriptions                NoticeSubscription[]         @relation("NoticeSubscriptions")
+  motivationTracks                   MotivationTrack[]
 }
 
 // Единственная строка глобальных настроек платформы (id всегда "global").
@@ -482,7 +483,40 @@ model MotivationSettings {
   visualStyle       MotivationVisualStyle?
   /// Дневной потолок расхода в долларах. Меняться должен без перевыкладки.
   dailyBudgetUsd    Decimal?               @db.Decimal(10, 2)
+  musicModel        String?
+  /// Трек по умолчанию. Пусто — ролики выходят без подложки.
+  defaultTrackId    String?
   updatedAt         DateTime               @updatedAt
+}
+
+/// Трек музыкальной подложки.
+///
+/// Генерируется один раз и переиспользуется во множестве роликов: клип длится
+/// секунды, а трек — полминуты, поэтому платить за музыку под каждый пост
+/// незачем. Человек прослушивает и принимает трек до того, как он попадёт в
+/// ленту, — та же проверка, что и у картинки с озвучкой.
+model MotivationTrack {
+  id          String                @id @default(uuid())
+  title       String
+  /// Промпт, которым трек создан: по нему понятно, что переслушивать и что
+  /// править, если захочется похожий.
+  prompt      String
+  url         String
+  seconds     Int
+  status      MotivationTrackStatus @default(draft)
+  model       String
+  costUsd     Decimal               @default(0) @db.Decimal(10, 4)
+  createdById String
+  createdBy   User                  @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime              @default(now())
+
+  @@index([status, createdAt])
+}
+
+enum MotivationTrackStatus {
+  draft
+  approved
+  rejected
 }
 
 /// Справочник категорий Motivation. `MotivationPost.category` хранит `slug`

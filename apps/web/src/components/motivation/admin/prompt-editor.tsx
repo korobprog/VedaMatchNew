@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { MotivationPromptUpdate } from "@vedamatch/shared";
+import { apiRequest } from "../motivation-admin-api";
 import type { RunCommand } from "./use-admin-command";
 import { fieldClass, secondaryButton } from "./ui";
 
@@ -46,8 +47,28 @@ export function PromptEditor({
   }
 
   const action = `save-${field}`;
+  const kind = field === "videoPrompt" ? "video" : "image";
   const label = `Промпт ${field === "videoPrompt" ? "видео" : "изображения"} для «${postTitle}»`;
   const dirty = text.trim() !== saved.trim();
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState<string>();
+
+  async function draft() {
+    setDrafting(true);
+    setDraftError(undefined);
+    try {
+      const result = (await apiRequest(
+        `/admin/motivation/posts/${postId}/draft-prompt`,
+        "POST",
+        { kind },
+      )) as { prompt?: string } | null;
+      if (result?.prompt) setText(result.prompt);
+    } catch (error) {
+      setDraftError(error instanceof Error ? error.message : "Не получилось");
+    } finally {
+      setDrafting(false);
+    }
+  }
 
   return (
     <div className="space-y-2">
@@ -64,6 +85,23 @@ export function PromptEditor({
         />
       </label>
       <p className="text-xs leading-5 text-text-2">{hint}</p>
+      {/* Черновик пишет наш ИИ по смыслу цитаты и проверенному источнику:
+          шаблон собирает промпт всегда одинаково, а модели слушаются
+          конкретики. Текст остаётся редактируемым — предлагается, а не
+          навязывается. */}
+      <button
+        type="button"
+        disabled={disabled || drafting}
+        onClick={() => void draft()}
+        className={secondaryButton}
+      >
+        {drafting ? "Сочиняем…" : "Сочинить нейросетью"}
+      </button>
+      {draftError && (
+        <p role="alert" className="text-xs text-red-500">
+          {draftError}
+        </p>
+      )}
       <button
         type="button"
         disabled={disabled || !dirty}

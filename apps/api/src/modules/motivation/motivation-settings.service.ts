@@ -14,6 +14,7 @@ export const SETTINGS_FALLBACK = {
   voiceName: 'Rachel',
   imageModel: 'gpt-image-2',
   dailyBudgetUsd: 5,
+  musicModel: 'fal-ai/elevenlabs/music',
 } as const;
 
 export type MotivationSettings = {
@@ -25,6 +26,8 @@ export type MotivationSettings = {
   imageModel: string;
   visualStyle: MotivationVisualStyle | null;
   dailyBudgetUsd: number;
+  musicModel: string;
+  defaultTrackId: string | null;
 };
 
 export type MotivationSettingsUpdate = Partial<{
@@ -36,6 +39,8 @@ export type MotivationSettingsUpdate = Partial<{
   imageModel: string | null;
   visualStyle: MotivationVisualStyle | null;
   dailyBudgetUsd: number | null;
+  musicModel: string | null;
+  defaultTrackId: string | null;
 }>;
 
 /**
@@ -89,6 +94,11 @@ export class MotivationSettingsService {
         (row?.dailyBudgetUsd ? Number(row.dailyBudgetUsd) : null) ??
         numberOrNull(this.config.get('MOTIVATION_AI_DAILY_BUDGET_USD')) ??
         SETTINGS_FALLBACK.dailyBudgetUsd,
+      musicModel:
+        row?.musicModel ||
+        this.config.get<string>('MOTIVATION_MUSIC_MODEL') ||
+        SETTINGS_FALLBACK.musicModel,
+      defaultTrackId: row?.defaultTrackId ?? null,
     };
   }
 
@@ -104,6 +114,8 @@ export class MotivationSettingsService {
       ...pick(input, 'voiceModel', blankToNull),
       ...pick(input, 'voiceName', blankToNull),
       ...pick(input, 'imageModel', blankToNull),
+      ...pick(input, 'musicModel', blankToNull),
+      ...pick(input, 'defaultTrackId', blankToNull),
       ...pick(input, 'videoSeconds', positiveOrNull),
       ...pick(input, 'dailyBudgetUsd', positiveOrNull),
       ...(input.videoAudio !== undefined ? { videoAudio: input.videoAudio } : {}),

@@ -3,7 +3,12 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  MOTIVATION_IMAGE_MODELS,
+  MOTIVATION_MUSIC_MODELS,
+  MOTIVATION_VIDEO_MODELS,
+  MOTIVATION_VOICE_MODELS,
   MOTIVATION_VOICES,
+  type MotivationModelOption,
   type MotivationSettingsDto,
   type MotivationSettingsUpdate,
   type MotivationVisualStyle,
@@ -12,13 +17,91 @@ import { apiRequest } from "../motivation-admin-api";
 import { visualStyles } from "./review-actions";
 import { cardClass, fieldClass, labelClass, primaryButton } from "./ui";
 
+/** Значение пункта «другая модель» — не может совпасть с идентификатором. */
+const CUSTOM_MODEL = "__custom__";
+
+/**
+ * Поле модели: список известных плюс возможность вписать свою.
+ *
+ * Сначала здесь был `datalist`, и он не работал: браузер фильтрует подсказки по
+ * тому, что уже введено, а в поле лежит полный идентификатор модели — под него
+ * подходит только он сам, и выбирать оказывается не из чего.
+ *
+ * Поэтому обычный список, а рядом пункт «другая модель»: у провайдеров они
+ * появляются каждый месяц, и запертый перечень не дал бы поставить новую.
+ */
+function ModelField({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: MotivationModelOption[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const known = options.find((option) => option.id === value);
+  const [custom, setCustom] = useState(!known && value !== "");
+
+  return (
+    <label className={labelClass}>
+      {label}
+      {custom ? (
+        <input
+          className={`mt-2 ${fieldClass}`}
+          value={value}
+          placeholder="идентификатор модели у провайдера"
+          onChange={(event) => onChange(event.target.value)}
+        />
+      ) : (
+        <select
+          className={`mt-2 ${fieldClass}`}
+          value={known ? value : ""}
+          onChange={(event) => {
+            if (event.target.value === CUSTOM_MODEL) {
+              setCustom(true);
+              onChange("");
+              return;
+            }
+            onChange(event.target.value);
+          }}
+        >
+          {!known && <option value="">Не выбрана</option>}
+          {options.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.id} — {option.note}
+            </option>
+          ))}
+          <option value={CUSTOM_MODEL}>Другая модель…</option>
+        </select>
+      )}
+      <span className="mt-1 block text-xs text-text-2">
+        {custom ? (
+          <button
+            type="button"
+            onClick={() => {
+              setCustom(false);
+              onChange(options[0]?.id ?? "");
+            }}
+            className="underline"
+          >
+            Вернуться к списку
+          </button>
+        ) : (
+          (known?.note ?? "Выберите модель")
+        )}
+      </span>
+    </label>
+  );
+}
+
 /**
  * Настройки сервиса.
  *
  * Значения показываются те, что действуют сейчас, — из базы, из окружения или
  * из кода, смотря что нашлось. Отличить источник по форме нельзя, и это
  * осознанно: администратору важно, что применится, а не откуда оно взялось.
- * Очистка поля возвращает наследование, о чём сказано подсказкой.
  */
 export function MotivationSettingsForm({
   settings,
@@ -51,6 +134,7 @@ export function MotivationSettingsForm({
       imageModel: form.imageModel,
       visualStyle: form.visualStyle,
       dailyBudgetUsd: form.dailyBudgetUsd,
+      musicModel: form.musicModel,
     };
     try {
       await apiRequest("/admin/motivation/settings", "PATCH", payload);
@@ -71,14 +155,12 @@ export function MotivationSettingsForm({
           Ролик
         </h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className={labelClass}>
-            Модель видео
-            <input
-              className={`mt-2 ${fieldClass}`}
-              value={form.videoModel}
-              onChange={(event) => set("videoModel", event.target.value)}
-            />
-          </label>
+          <ModelField
+            label="Модель видео"
+            options={MOTIVATION_VIDEO_MODELS}
+            value={form.videoModel}
+            onChange={(value) => set("videoModel", value)}
+          />
           <label className={labelClass}>
             Длительность, секунд
             <input
@@ -112,14 +194,12 @@ export function MotivationSettingsForm({
           Озвучка
         </h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className={labelClass}>
-            Модель озвучки
-            <input
-              className={`mt-2 ${fieldClass}`}
-              value={form.voiceModel}
-              onChange={(event) => set("voiceModel", event.target.value)}
-            />
-          </label>
+          <ModelField
+            label="Модель озвучки"
+            options={MOTIVATION_VOICE_MODELS}
+            value={form.voiceModel}
+            onChange={(value) => set("voiceModel", value)}
+          />
           <label className={labelClass}>
             Голос по умолчанию
             <select
@@ -146,14 +226,12 @@ export function MotivationSettingsForm({
           Иллюстрация
         </h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className={labelClass}>
-            Модель картинки
-            <input
-              className={`mt-2 ${fieldClass}`}
-              value={form.imageModel}
-              onChange={(event) => set("imageModel", event.target.value)}
-            />
-          </label>
+          <ModelField
+            label="Модель картинки"
+            options={MOTIVATION_IMAGE_MODELS}
+            value={form.imageModel}
+            onChange={(value) => set("imageModel", value)}
+          />
           <label className={labelClass}>
             Стиль по умолчанию
             <select
@@ -175,6 +253,22 @@ export function MotivationSettingsForm({
             </select>
           </label>
         </div>
+      </section>
+
+      <section className={cardClass}>
+        <h2 className="mb-3 font-display text-lg font-semibold text-text-0">
+          Музыка
+        </h2>
+        <ModelField
+          label="Модель музыки"
+          options={MOTIVATION_MUSIC_MODELS}
+          value={form.musicModel}
+          onChange={(value) => set("musicModel", value)}
+        />
+        <p className="mt-2 text-xs text-text-2">
+          Треки создаются в библиотеке ниже и переиспользуются: клип длится
+          секунды, трек — полминуты, платить за музыку под каждый пост незачем.
+        </p>
       </section>
 
       <section className={cardClass}>

@@ -1,10 +1,17 @@
 import { MotivationAdminTabs } from "@/components/motivation/admin/admin-tabs";
 import { LoadFailure } from "@/components/motivation/admin/load-failure";
+import { MusicLibrary } from "@/components/motivation/admin/music-library";
 import { MotivationSettingsForm } from "@/components/motivation/admin/settings-form";
-import { getMotivationSettings } from "@/lib/motivation-api";
+import {
+  getMotivationSettings,
+  getMotivationTracks,
+} from "@/lib/motivation-api";
 
 export default async function AdminMotivationSettingsPage() {
-  const settings = await getMotivationSettings();
+  const [settings, tracks] = await Promise.all([
+    getMotivationSettings(),
+    getMotivationTracks(),
+  ]);
 
   return (
     <>
@@ -15,7 +22,13 @@ export default async function AdminMotivationSettingsPage() {
       </p>
       <MotivationAdminTabs active="settings" />
       {settings ? (
-        <MotivationSettingsForm settings={settings} />
+        <div className="grid gap-4">
+          <MotivationSettingsForm settings={settings} />
+          <MusicLibrary
+            tracks={tracks ?? []}
+            defaultTrackId={settings.defaultTrackId}
+          />
+        </div>
       ) : (
         <LoadFailure what="настройки сервиса" />
       )}

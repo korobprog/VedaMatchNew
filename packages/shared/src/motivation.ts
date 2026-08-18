@@ -183,6 +183,81 @@ export interface MotivationSettingsDto {
   imageModel: string;
   visualStyle: MotivationVisualStyle | null;
   dailyBudgetUsd: number;
+  musicModel: string;
+  defaultTrackId: string | null;
+}
+
+/**
+ * Известные модели провайдеров с замеренной ценой.
+ *
+ * Список — подсказка, а не ограничение: поле остаётся текстовым, потому что
+ * модели появляются каждый месяц и запертый список быстро стал бы клеткой.
+ * Но набирать «wan/v2.6/image-to-video/flash» по памяти нельзя — опечатка
+ * уходит в платный запрос.
+ */
+export type MotivationModelOption = { id: string; note: string };
+
+export const MOTIVATION_VIDEO_MODELS: MotivationModelOption[] = [
+  {
+    id: 'wan/v2.6/image-to-video/flash',
+    note: '~$0.13 за 5 с в 720p без звука',
+  },
+  {
+    id: 'fal-ai/bytedance/seedance/v1/pro/fast/image-to-video',
+    note: '~$0.10 за 5 с в 720p',
+  },
+  {
+    id: 'fal-ai/bytedance/seedance/v1/pro/image-to-video',
+    note: '~$0.26 за 5 с — замерено по счёту',
+  },
+  { id: 'fal-ai/vidu/q3/image-to-video', note: '~$0.39 за 5 с в 720p' },
+];
+
+export const MOTIVATION_VOICE_MODELS: MotivationModelOption[] = [
+  {
+    id: 'fal-ai/elevenlabs/tts/eleven-v3',
+    note: '$0.10 за 1000 знаков, 70+ языков',
+  },
+  {
+    id: 'fal-ai/elevenlabs/tts/multilingual-v2',
+    note: '$0.10 за 1000 знаков, ставка на стабильность',
+  },
+  {
+    id: 'fal-ai/elevenlabs/tts/turbo-v2.5',
+    note: '$0.05 за 1000 знаков — вдвое дешевле',
+  },
+  {
+    id: 'fal-ai/minimax/speech-02-hd',
+    note: '$0.10 за 1000 знаков, 300+ голосов, свои имена голосов',
+  },
+];
+
+export const MOTIVATION_IMAGE_MODELS: MotivationModelOption[] = [
+  { id: 'gpt-image-2', note: 'через ваш relay' },
+];
+
+export const MOTIVATION_MUSIC_MODELS: MotivationModelOption[] = [
+  { id: 'fal-ai/elevenlabs/music', note: '$0.80 за минуту' },
+  { id: 'fal-ai/lyria2', note: '$0.10 за 30 с' },
+  { id: 'fal-ai/ace-step', note: '$0.0002 за секунду — дешевле, но проще' },
+  { id: 'cassetteai/music-generator', note: '$0.02 за минуту' },
+];
+
+export type MotivationTrackStatus = 'draft' | 'approved' | 'rejected';
+
+/**
+ * Трек музыкальной подложки. Промпт хранится рядом не для истории: по нему
+ * видно, что переслушивать и от чего оттолкнуться, если нужен похожий.
+ */
+export interface MotivationTrackDto {
+  id: string;
+  title: string;
+  prompt: string;
+  url: string;
+  seconds: number;
+  status: MotivationTrackStatus;
+  model: string;
+  createdAt: string;
 }
 
 export type MotivationSettingsUpdate = Partial<{
@@ -194,6 +269,8 @@ export type MotivationSettingsUpdate = Partial<{
   imageModel: string | null;
   visualStyle: MotivationVisualStyle | null;
   dailyBudgetUsd: number | null;
+  musicModel: string | null;
+  defaultTrackId: string | null;
 }>;
 
 export type MotivationVideoStatus =

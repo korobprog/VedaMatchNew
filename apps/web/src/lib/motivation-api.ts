@@ -4,6 +4,7 @@ import type {
   MotivationBookDto,
   MotivationCategoryDto,
   MotivationSettingsDto,
+  MotivationTrackDto,
   MotivationFeedResponse,
   MotivationAdminCandidateDto,
   MotivationPostDto,
@@ -69,3 +70,6 @@ export const getAdminMotivationCategories = () =>
 
 export const getMotivationSettings = () =>
   motivationGet<MotivationSettingsDto>("/admin/motivation/settings");
+
+export const getMotivationTracks = () =>
+  motivationGet<MotivationTrackDto[]>("/admin/motivation/tracks");

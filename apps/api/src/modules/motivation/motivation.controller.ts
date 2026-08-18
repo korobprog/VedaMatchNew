@@ -33,6 +33,7 @@ import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationManualPostService } from './motivation-manual-post.service';
 import { MotivationStoryRebuildService } from './motivation-story-rebuild.service';
 import { MotivationService } from './motivation.service';
+import { MotivationMusicService } from './motivation-music.service';
 import {
   MotivationSettingsService,
   type MotivationSettingsUpdate,
@@ -47,6 +48,7 @@ export class MotivationController {
     private readonly storyRebuild: MotivationStoryRebuildService,
     private readonly books: MotivationBooksService,
     private readonly settings: MotivationSettingsService,
+    private readonly music: MotivationMusicService,
   ) {}
 
   @Get('health') health() {
@@ -188,6 +190,44 @@ export class MotivationController {
   ) {
     return this.settings.update(user.role, input);
   }
+  @Get('admin/motivation/tracks')
+  @UseGuards(AuthGuard)
+  listTracks(@CurrentUser() user: AccessTokenPayload) {
+    return this.music.list(user.role);
+  }
+  @Post('admin/motivation/tracks/draft-prompt')
+  @UseGuards(AuthGuard)
+  draftMusicPrompt(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() input: { postId?: string; mood?: string } = {},
+  ) {
+    return this.music.draftPrompt(user.role, input);
+  }
+  @Post('admin/motivation/tracks')
+  @UseGuards(AuthGuard)
+  generateTrack(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() input: { title?: string; prompt: string; seconds?: number },
+  ) {
+    return this.music.generate(user.role, user.sub, input);
+  }
+  @Post('admin/motivation/tracks/:id/status')
+  @UseGuards(AuthGuard)
+  setTrackStatus(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() input: { status: 'draft' | 'approved' | 'rejected' },
+  ) {
+    return this.music.setStatus(user.role, id, input.status);
+  }
+  @Delete('admin/motivation/tracks/:id')
+  @UseGuards(AuthGuard)
+  deleteTrack(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.music.remove(user.role, id);
+  }
   @Post('admin/motivation/voice-preview')
   @UseGuards(AuthGuard)
   previewVoice(
@@ -195,6 +235,15 @@ export class MotivationController {
     @Body() input: { voice?: string | null } = {},
   ) {
     return this.service.previewVoice(user.role, input.voice);
+  }
+  @Post('admin/motivation/posts/:id/draft-prompt')
+  @UseGuards(AuthGuard)
+  draftPostPrompt(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() input: { kind: 'image' | 'video'; mood?: string },
+  ) {
+    return this.service.draftPostPrompt(user.role, id, input);
   }
   @Post('admin/motivation/posts/:id/voice')
   @UseGuards(AuthGuard)

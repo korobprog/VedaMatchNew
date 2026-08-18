@@ -41,6 +41,11 @@ import {
   voicePreviewKey,
   VOICE_PREVIEW_LINE,
 } from './fal-audio.service';
+import {
+  buildPromptDraftRequest,
+  cleanDraftedPrompt,
+  type PromptKind,
+} from './prompt-drafts';
 import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationCopyService } from './motivation-copy.service';
 import { MotivationGenerationService } from './motivation-generation.service';
@@ -435,6 +440,48 @@ export class MotivationService {
     });
     if (!updated.count) throw new NotFoundException('Post not found');
     return { ok: true };
+  }
+
+  /**
+   * Черновик промпта картинки или движения, сочинённый нашим ИИ по контексту
+   * поста.
+   *
+   * Шаблон собирает промпт всегда одинаково, а смысл цитаты у нас уже разобран
+   * и источник проверен — из этого выходит постановка лучше, чем из шаблона.
+   */
+  async draftPostPrompt(
+    role: Role,
+    id: string,
+    input: { kind: PromptKind; mood?: string },
+  ): Promise<{ prompt: string }> {
+    this.admin(role);
+    const post = await this.prisma.motivationPost.findUnique({
+      where: { id },
+      include: { quote: true, translations: { where: { language: 'ru' }, take: 1 } },
+    });
+    if (!post) throw new NotFoundException('Пост не найден');
+
+    const meaning =
+      post.translations[0]?.text ?? post.quote?.originalText ?? post.category;
+    const attribution = [
+      post.quote?.author ?? post.attributionSpeaker,
+      post.quote?.work ?? post.attributionWork,
+      post.quote?.locator ?? post.attributionLocator,
+    ]
+      .map((part) => part?.trim())
+      .filter(Boolean)
+      .join(' · ');
+
+    const raw = await this.generation.generatePlainText(
+      buildPromptDraftRequest(input.kind, {
+        meaning,
+        attribution,
+        context: post.quote?.contextExcerpt,
+        mood: input.mood,
+      }),
+      2_000,
+    );
+    return { prompt: cleanDraftedPrompt(raw) };
   }
 
   /** Принимает ролик: до этого он виден только в админке. */
