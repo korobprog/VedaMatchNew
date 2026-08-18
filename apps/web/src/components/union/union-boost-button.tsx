@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { UnionBoostStatus } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -20,7 +21,7 @@ export function UnionBoostButton() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${API_URL}/union/boost/status`, { credentials: "include" })
+    apiFetch(`${API_URL}/union/boost/status`, { credentials: "include" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: UnionBoostStatus | null) => {
         if (!cancelled && data) setStatus(data);
@@ -49,7 +50,7 @@ export function UnionBoostButton() {
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/union/boost`, {
+      const res = await apiFetch(`${API_URL}/union/boost`, {
         method: "POST",
         credentials: "include",
       });

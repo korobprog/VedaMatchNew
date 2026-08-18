@@ -17,6 +17,7 @@ import type {
 } from "@vedamatch/shared";
 import type { Locale } from "@/lib/locale";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -154,7 +155,7 @@ export function ListingForm({
     };
 
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         listing
           ? `${API_URL}/market/listings/${listing.id}`
           : `${API_URL}/market/listings`,
@@ -174,7 +175,7 @@ export function ListingForm({
       // Полки при правке ставятся отдельным маршрутом: они не часть тела
       // объявления, чтобы счётчики полок двигались своей транзакцией.
       if (listing) {
-        await fetch(`${API_URL}/market/listings/${listing.id}/shelves`, {
+        await apiFetch(`${API_URL}/market/listings/${listing.id}/shelves`, {
           method: "PUT",
           credentials: "include",
           headers: { "Content-Type": "application/json" },

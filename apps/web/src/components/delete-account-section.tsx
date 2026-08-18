@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -24,7 +25,7 @@ export function DeleteAccountSection({
     setError(null);
     setPending(true);
     try {
-      const res = await fetch(`${API_URL}/profile/delete-request`, {
+      const res = await apiFetch(`${API_URL}/profile/delete-request`, {
         method: "POST",
         credentials: "include",
       });
@@ -41,7 +42,7 @@ export function DeleteAccountSection({
     setError(null);
     setPending(true);
     try {
-      const res = await fetch(`${API_URL}/profile/delete-request`, {
+      const res = await apiFetch(`${API_URL}/profile/delete-request`, {
         method: "DELETE",
         credentials: "include",
       });

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { UserProfile } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -24,7 +25,7 @@ export function PhotoVerificationPanel({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/profile/photo-verification`, {
+      const res = await apiFetch(`${API_URL}/profile/photo-verification`, {
         method: "POST",
         credentials: "include",
       });

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -13,6 +13,7 @@ import {
 } from "@vedamatch/shared";
 import { UserGalleryEditor } from "./user-gallery-editor";
 import { PhotoVerificationPanel } from "./photo-verification-panel";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
@@ -85,7 +86,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
     const timeout = window.setTimeout(async () => {
       setLocationPending(true);
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `${API_URL}/geo/search?q=${encodeURIComponent(query)}`,
           { signal: controller.signal },
         );
@@ -147,7 +148,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
     try {
       const formData = new FormData();
       formData.append("file", avatarFile);
-      const res = await fetch(`${API_URL}/profile/avatar`, {
+      const res = await apiFetch(`${API_URL}/profile/avatar`, {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -170,7 +171,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch(`${API_URL}/profile/avatar`, {
+      const res = await apiFetch(`${API_URL}/profile/avatar`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -193,7 +194,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch(`${API_URL}/profile`, {
+      const res = await apiFetch(`${API_URL}/profile`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -238,7 +239,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
       async (position) => {
         try {
           const { latitude, longitude } = position.coords;
-          const res = await fetch(
+          const res = await apiFetch(
             `${API_URL}/geo/reverse?lat=${latitude}&lon=${longitude}`,
           );
           if (!res.ok) throw new Error(await res.text());

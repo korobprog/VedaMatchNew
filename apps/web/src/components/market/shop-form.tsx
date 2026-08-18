@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import type { MarketDeliveryOption, MarketShopDto } from "@vedamatch/shared";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -85,7 +86,7 @@ export function ShopForm({ shop }: { shop?: MarketShopDto }) {
     };
 
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         shop ? `${API_URL}/market/shops/${shop.id}` : `${API_URL}/market/shops`,
         {
           method: shop ? "PATCH" : "POST",

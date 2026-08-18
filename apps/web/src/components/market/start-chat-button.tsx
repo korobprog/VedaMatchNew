@@ -6,6 +6,7 @@ import { MessageSquare } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { MarketChatSummary } from "@vedamatch/shared";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -40,7 +41,7 @@ export function StartChatButton({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/market/chats`, {
+      const res = await apiFetch(`${API_URL}/market/chats`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

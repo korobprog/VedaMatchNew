@@ -6,6 +6,7 @@ import { Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { MarketListingImageDto } from "@vedamatch/shared";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const MAX_IMAGES = 8;
@@ -38,7 +39,7 @@ export function ListingImagesUpload({
     }
 
     try {
-      const res = await fetch(`${API_URL}/market/listings/${listingId}/images`, {
+      const res = await apiFetch(`${API_URL}/market/listings/${listingId}/images`, {
         method: "POST",
         credentials: "include",
         body: form,
@@ -60,7 +61,7 @@ export function ListingImagesUpload({
   async function remove(imageId: string) {
     setError(null);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_URL}/market/listings/${listingId}/images/${imageId}`,
         { method: "DELETE", credentials: "include" },
       );
@@ -85,7 +86,7 @@ export function ListingImagesUpload({
     try {
       // Сервер требует полный список: частичный порядок оставил бы дыры
       // в sortOrder и молча поменял обложку.
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_URL}/market/listings/${listingId}/images/order`,
         {
           method: "PUT",

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { LibraryCategoryDto, LibraryLocale } from "@vedamatch/shared";
 import { Pencil } from "lucide-react";
 import { pickLocalized, t } from "./i18n";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -51,7 +52,7 @@ export function CategoryEditForm({
     }
     setPending(true);
     try {
-      const res = await fetch(`${API_URL}/library/categories/${category.id}`, {
+      const res = await apiFetch(`${API_URL}/library/categories/${category.id}`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

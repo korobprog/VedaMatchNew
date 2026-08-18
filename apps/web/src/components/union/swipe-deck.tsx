@@ -12,6 +12,7 @@ import { UnionBoostButton } from "./union-boost-button";
 import { unionInterestIcon } from "./dictionaries";
 import { intentionLabels, yearsSuffix } from "./labels";
 import { PhotoVerifiedBadge, VerifiedBadge } from "./verified-badge";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const SWIPE_DISTANCE = 110;
@@ -44,7 +45,7 @@ export function SwipeDeck({ items }: { items: UnionRecommendation[] }) {
   ) {
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/union/swipes`, {
+      const res = await apiFetch(`${API_URL}/union/swipes`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -74,7 +75,7 @@ export function SwipeDeck({ items }: { items: UnionRecommendation[] }) {
     setUndoing(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/union/swipes/last`, {
+      const res = await apiFetch(`${API_URL}/union/swipes/last`, {
         method: "DELETE",
         credentials: "include",
       });

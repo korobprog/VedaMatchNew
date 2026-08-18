@@ -14,6 +14,7 @@ import type {
   UserPhotoDto,
   UserPhotoUploadResponse,
 } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -92,7 +93,7 @@ export function UserGalleryEditor(): React.ReactNode {
 
     async function loadGallery() {
       try {
-        const response = await fetch(`${API_URL}/profile/photos`, {
+        const response = await apiFetch(`${API_URL}/profile/photos`, {
           credentials: "include",
           signal: controller.signal,
         });
@@ -147,7 +148,7 @@ export function UserGalleryEditor(): React.ReactNode {
         formData.append("files", file);
       }
 
-      const response = await fetch(`${API_URL}/profile/photos`, {
+      const response = await apiFetch(`${API_URL}/profile/photos`, {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -202,7 +203,7 @@ export function UserGalleryEditor(): React.ReactNode {
     );
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_URL}/profile/photos/${encodeURIComponent(photo.id)}`,
         {
           method: "PATCH",
@@ -249,7 +250,7 @@ export function UserGalleryEditor(): React.ReactNode {
 
     if (!beginMutation("delete")) return;
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_URL}/profile/photos/${encodeURIComponent(photo.id)}`,
         { method: "DELETE", credentials: "include" },
       );
@@ -283,7 +284,7 @@ export function UserGalleryEditor(): React.ReactNode {
 
     setGallery({ ...gallery, photos: reordered });
     try {
-      const response = await fetch(`${API_URL}/profile/photos/order`, {
+      const response = await apiFetch(`${API_URL}/profile/photos/order`, {
         method: "PUT",
         credentials: "include",
         headers: { "content-type": "application/json" },

@@ -9,6 +9,7 @@ import type {
 } from "@vedamatch/shared";
 import { VerifiedBadge } from "./verified-badge";
 import { yearsSuffix } from "./labels";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -58,7 +59,7 @@ export function UnionLikesPanel({
     setPendingId(requestId);
     setError(null);
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_URL}/union/connection-requests/${requestId}/${action}`,
         { method: "PATCH", credentials: "include" },
       );

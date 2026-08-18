@@ -4,17 +4,26 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-vedamatch}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      # Без значения в .env compose падает сразу — лучше, чем база с паролем
+      # по умолчанию, торчащая наружу.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD не задан в .env}
       POSTGRES_DB: ${POSTGRES_DB:-vedamatch}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # Порты БД, api и web слушают только loopback хоста: для локальной
+    # разработки этого достаточно, а в проде наружу смотрит только Caddy.
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
       interval: 5s
       timeout: 5s
       retries: 10
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: '20m'
+        max-file: '5'
 
   api:
     build:
@@ -23,12 +32,19 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-vedamatch}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-vedamatch}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vedamatch}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-vedamatch}
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - '4000:4000'
+      - '127.0.0.1:4000:4000'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:4000/health >/dev/null || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging: *logging
 
   web:
     build:
@@ -37,13 +53,17 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
     restart: unless-stopped
-    env_file: .env
+    # Фронту не нужны JWT/S3/Google-секреты из .env — только свои переменные.
     environment:
       API_INTERNAL_URL: http://api:4000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+      NEXT_PUBLIC_DEV_AUTH: ${NEXT_PUBLIC_DEV_AUTH:-false}
     depends_on:
       - api
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
+    logging: *logging
 
   caddy:
     image: caddy:2-alpine
@@ -59,6 +79,32 @@ services:
     depends_on:
       - web
       - api
+    logging: *logging
+
+  # Ежедневный pg_dump в ./backups (prod-профиль). Хранит 7 дневных, 4
+  # недельных и 6 месячных копий. Восстановление:
+  #   gunzip -c backups/daily/<file>.sql.gz | docker compose exec -T postgres \
+  #     psql -U $POSTGRES_USER -d $POSTGRES_DB
+  backup:
+    image: prodrigestivill/postgres-backup-local:16-alpine
+    restart: unless-stopped
+    profiles: ['prod']
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-vedamatch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-vedamatch}
+      SCHEDULE: '@daily'
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 6
+      HEALTHCHECK_PORT: 8080
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
 
 volumes:
   pgdata:

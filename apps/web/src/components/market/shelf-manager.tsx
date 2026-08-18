@@ -6,6 +6,7 @@ import { Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { MarketShelfDto } from "@vedamatch/shared";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -30,7 +31,7 @@ export function ShelfManager({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/market/shops/${shopId}/shelves`, {
+      const res = await apiFetch(`${API_URL}/market/shops/${shopId}/shelves`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -52,7 +53,7 @@ export function ShelfManager({
   async function remove(shelfId: string) {
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/market/shelves/${shelfId}`, {
+      const res = await apiFetch(`${API_URL}/market/shelves/${shelfId}`, {
         method: "DELETE",
         credentials: "include",
       });

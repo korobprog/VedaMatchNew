@@ -16,6 +16,7 @@ import {
 } from "@/lib/notices-api";
 import { NoticeCard } from "./notice-card";
 import { NOTICE_KIND_CHIPS, NOTICE_KIND_ORDER } from "./notice-labels";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -47,7 +48,7 @@ export function NoticesFeedView({ mine = false }: { mine?: boolean }) {
         setCityResults([]);
         return;
       }
-      fetch(`${API_URL}/geo/search?q=${encodeURIComponent(trimmed)}`, {
+      apiFetch(`${API_URL}/geo/search?q=${encodeURIComponent(trimmed)}`, {
         signal: controller.signal,
       })
         .then(async (res) => {

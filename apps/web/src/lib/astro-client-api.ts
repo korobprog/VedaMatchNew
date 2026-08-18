@@ -6,6 +6,7 @@ import type {
   AstroSection,
   AstroSectionState,
 } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -25,7 +26,7 @@ export class AstroReadingError extends Error {
 export async function generateAstroReading(
   section: AstroSection,
 ): Promise<AstroSectionState> {
-  const res = await fetch(`${API_URL}/astro/readings/${section}`, {
+  const res = await apiFetch(`${API_URL}/astro/readings/${section}`, {
     method: "POST",
     credentials: "include",
   });
@@ -47,7 +48,7 @@ export async function generateAstroReading(
 }
 
 async function requestJson<T>(path: string, init: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, { credentials: "include", ...init });
+  const res = await apiFetch(`${API_URL}${path}`, { credentials: "include", ...init });
   if (!res.ok) {
     const message = await res
       .json()

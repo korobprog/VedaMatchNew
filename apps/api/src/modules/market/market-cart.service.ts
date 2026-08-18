@@ -17,6 +17,8 @@ import { MarketOrdersService } from './market-orders.service';
 
 /** Больше — это уже опт, а он делается перепиской, а не корзиной. */
 const MAX_QUANTITY_PER_ITEM = 999;
+/** Колонки totalMinor/lineTotalMinor — Int: сумма сверх этого падала бы в Prisma 500-кой. */
+const MAX_ORDER_TOTAL_MINOR = 2_147_483_647;
 const MAX_DELIVERY_NOTE = 500;
 const MAX_COMMENT = 2000;
 
@@ -222,6 +224,9 @@ export class MarketCartService {
         // Группы нет — значит все её позиции стали недоступны, пока человек
         // заполнял форму. Это ровно тот случай, ради которого нужна проверка.
         if (!group) throw new BadRequestException('cart_items_unavailable');
+        if (group.subtotalMinor > MAX_ORDER_TOTAL_MINOR) {
+          throw new BadRequestException('order_total_too_large');
+        }
 
         for (const row of group.rows) {
           const item = byListingId.get(row.listingId)!;
@@ -272,10 +277,20 @@ export class MarketCartService {
         for (const row of group.rows) {
           const item = byListingId.get(row.listingId)!;
           if (item.listing.trackStock) {
-            await tx.marketListing.update({
-              where: { id: item.listingId },
+            // Списание с условием по остатку: проверка выше сделана по данным,
+            // прочитанным в начале транзакции, и две параллельные покупки
+            // последней единицы иначе обе прошли бы и увели остаток в минус.
+            const stock = await tx.marketListing.updateMany({
+              where: {
+                id: item.listingId,
+                trackStock: true,
+                quantity: { gte: item.quantity },
+              },
               data: { quantity: { decrement: item.quantity } },
             });
+            if (stock.count === 0) {
+              throw new BadRequestException('cart_items_unavailable');
+            }
           }
           await tx.marketListing.update({
             where: { id: item.listingId },

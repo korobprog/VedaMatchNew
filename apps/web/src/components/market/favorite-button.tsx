@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Heart } from "lucide-react";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -30,7 +31,7 @@ export function FavoriteButton({
     setFavorited(next);
     setPending(true);
     try {
-      const res = await fetch(`${API_URL}/market/listings/${listingId}/favorite`, {
+      const res = await apiFetch(`${API_URL}/market/listings/${listingId}/favorite`, {
         method: next ? "POST" : "DELETE",
         credentials: "include",
       });

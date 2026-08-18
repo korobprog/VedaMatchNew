@@ -8,6 +8,7 @@ import type {
   SupportTicketCategory,
 } from "@vedamatch/shared";
 import { ticketCategories, ticketCategoryLabels } from "@/lib/support-labels";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -38,7 +39,7 @@ export function SupportTicketForm({ authorized }: { authorized: boolean }) {
 
     setPending(true);
     try {
-      const res = await fetch(`${API_URL}/support/tickets`, {
+      const res = await apiFetch(`${API_URL}/support/tickets`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

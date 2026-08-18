@@ -166,14 +166,20 @@ export class MarketOrdersService {
       body.status === 'declined_by_seller' || body.status === 'cancelled_by_buyer';
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.marketOrder.update({
-        where: { id },
+      // Переход только из того статуса, который мы проверили: иначе
+      // одновременные «продавец отклонил» и «покупатель отменил» оба
+      // прошли бы и вернули остаток дважды.
+      const updated = await tx.marketOrder.updateMany({
+        where: { id, status: order.status },
         data: {
           status: body.status,
           declineReason: closing ? reason : order.declineReason,
           ...transitionTimestamps(body.status, now),
         },
       });
+      if (updated.count === 0) {
+        throw new BadRequestException('invalid_order_transition');
+      }
 
       // Отказ и отмена возвращают отслеживаемый остаток: товар так и не ушёл,
       // и держать его списанным — значит потерять его из выдачи навсегда.

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import type { LibraryLocale } from "@vedamatch/shared";
 import { t } from "./i18n";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -35,7 +36,7 @@ export function DeleteEntryButton({
     setError(null);
     setPending(true);
     try {
-      const res = await fetch(`${API_URL}/library/entries/${entryId}`, {
+      const res = await apiFetch(`${API_URL}/library/entries/${entryId}`, {
         method: "DELETE",
         credentials: "include",
       });

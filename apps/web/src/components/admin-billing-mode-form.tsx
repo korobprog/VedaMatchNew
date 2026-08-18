@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { BillingMode } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -24,7 +25,7 @@ export function AdminBillingModeForm({ initialMode }: { initialMode: BillingMode
 
     setPending(true);
     try {
-      const res = await fetch(`${API_URL}/admin/billing/mode`, {
+      const res = await apiFetch(`${API_URL}/admin/billing/mode`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

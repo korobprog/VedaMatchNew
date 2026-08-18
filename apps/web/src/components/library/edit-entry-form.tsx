@@ -11,6 +11,7 @@ import type {
   UpdateLibraryEntryRequest,
 } from "@vedamatch/shared";
 import { entryTypeLabel, pickLocalized, t, type LibraryTextKey } from "./i18n";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const MAX_TITLE_LENGTH = 200;
@@ -101,7 +102,7 @@ function PreviewUploader({
     try {
       const body = new FormData();
       body.append("file", file);
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_URL}/library/entries/${entry.id}/preview`,
         { method: "POST", credentials: "include", body },
       );
@@ -223,7 +224,7 @@ function EntryFieldsForm({
   async function changeSection(slug: string) {
     setSectionSlug(slug);
     if (!slug) return;
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_URL}/library/categories/section/${encodeURIComponent(slug)}`,
       { credentials: "include" },
     ).catch(() => null);
@@ -275,7 +276,7 @@ function EntryFieldsForm({
 
     setPending(true);
     try {
-      const res = await fetch(`${API_URL}/library/entries/${entry.id}`, {
+      const res = await apiFetch(`${API_URL}/library/entries/${entry.id}`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

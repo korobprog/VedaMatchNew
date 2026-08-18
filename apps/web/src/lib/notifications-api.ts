@@ -8,11 +8,12 @@ import type {
   UpdateNotificationPreferencesRequest,
   VapidKeyResponse,
 } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await apiFetch(`${API_URL}${path}`, {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     ...init,

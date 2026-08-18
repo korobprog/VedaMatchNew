@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { AdminVerificationRequest, DevoteeVerificationStatus } from "@vedamatch/shared";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -26,7 +27,7 @@ export function AdminVerificationList({ requests }: { requests: AdminVerificatio
     setPendingId(id);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/admin/verification-requests/${id}`, {
+      const res = await apiFetch(`${API_URL}/admin/verification-requests/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

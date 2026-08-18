@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Role } from "@vedamatch/shared";
 import { roleLabels } from "@/lib/admin-labels";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const roles: Role[] = ["user", "admin", "service-admin"];
@@ -31,7 +32,7 @@ export function AdminUserRoleForm({
 
     setPending(true);
     try {
-      const res = await fetch(`${API_URL}/admin/users/${userId}/role`, {
+      const res = await apiFetch(`${API_URL}/admin/users/${userId}/role`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

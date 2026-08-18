@@ -1,7 +1,9 @@
+import { apiFetch } from "@/lib/http-client";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export async function apiRequest(path: string, method: string, body?: unknown) {
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await apiFetch(`${API_URL}${path}`, {
     method,
     credentials: "include",
     headers: body === undefined ? undefined : { "content-type": "application/json" },

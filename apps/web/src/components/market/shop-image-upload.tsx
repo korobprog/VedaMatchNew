@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -38,7 +39,7 @@ export function ShopImageUpload({
     const form = new FormData();
     form.append("file", file);
     try {
-      const res = await fetch(`${API_URL}/market/shops/${shopId}/${kind}`, {
+      const res = await apiFetch(`${API_URL}/market/shops/${shopId}/${kind}`, {
         method: "POST",
         credentials: "include",
         body: form,

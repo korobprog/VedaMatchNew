@@ -5,6 +5,7 @@ import type { LibraryFeedResponse, LibraryLocale } from "@vedamatch/shared";
 import { buildLibraryQuery } from "@/lib/library-query";
 import { EntryCard } from "./entry-card";
 import { t } from "./i18n";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -25,7 +26,7 @@ export function EntryList({
     setPending(true);
     try {
       const path = buildLibraryQuery({ ...query, cursor: feed.nextCursor });
-      const response = await fetch(`${API_URL}/library/entries${path}`, {
+      const response = await apiFetch(`${API_URL}/library/entries${path}`, {
         credentials: "include",
       });
       if (!response.ok) return;

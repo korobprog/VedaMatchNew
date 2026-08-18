@@ -10,6 +10,7 @@ import type {
   MarketSubscriptionKind,
 } from "@vedamatch/shared";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -47,7 +48,7 @@ export function SubscribeButton({
     setError(null);
     try {
       if (subscription) {
-        const res = await fetch(
+        const res = await apiFetch(
           `${API_URL}/market/subscriptions/${subscription.id}`,
           { method: "DELETE", credentials: "include" },
         );
@@ -57,7 +58,7 @@ export function SubscribeButton({
         }
         setSubscription(null);
       } else {
-        const res = await fetch(`${API_URL}/market/subscriptions`, {
+        const res = await apiFetch(`${API_URL}/market/subscriptions`, {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },

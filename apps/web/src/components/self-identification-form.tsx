@@ -8,6 +8,7 @@ import type {
   SelfIdentificationSubmitResult,
   StageHistoryItem,
 } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -72,7 +73,7 @@ export function SelfIdentificationForm({
     setError(null);
     setCopiedMentorLink(false);
     try {
-      const res = await fetch(`${API_URL}/self-identification/submit`, {
+      const res = await apiFetch(`${API_URL}/self-identification/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

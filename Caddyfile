@@ -1,8 +1,27 @@
-﻿# Production reverse proxy. Caddy obtains HTTPS certificates automatically.
+# Production reverse proxy. Caddy obtains HTTPS certificates automatically.
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), payment=()"
+		-Server
+	}
+	encode zstd gzip
+}
+
 vedamatch.ru {
+	import security_headers
 	reverse_proxy web:3000
 }
 
 api.vedamatch.ru {
+	import security_headers
+	# Загрузка фото в галерею: до 50 файлов по 20 МБ проверяются в API,
+	# но совсем бесконечное тело не пускаем уже на входе.
+	request_body {
+		max_size 120MB
+	}
 	reverse_proxy api:4000
 }

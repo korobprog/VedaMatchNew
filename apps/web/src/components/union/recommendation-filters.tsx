@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type {
@@ -15,6 +15,7 @@ import {
 } from "./dictionaries";
 import { IntentionChips } from "./intention-chips";
 import { intentionTypes } from "./labels";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -98,7 +99,7 @@ export function RecommendationFilters({
         const searchParams = new URLSearchParams({ q: query });
         const country = countryQuery.trim();
         if (country) searchParams.set("country", country);
-        const res = await fetch(
+        const res = await apiFetch(
           `${API_URL}/geo/search?${searchParams.toString()}`,
           { signal: controller.signal },
         );
@@ -127,7 +128,7 @@ export function RecommendationFilters({
     setHistoryError(null);
     setResettingHistory(true);
     try {
-      const res = await fetch(`${API_URL}/union/swipes/history`, {
+      const res = await apiFetch(`${API_URL}/union/swipes/history`, {
         method: "DELETE",
         credentials: "include",
       });

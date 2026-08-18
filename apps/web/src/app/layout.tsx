@@ -1,10 +1,11 @@
-﻿import type { Metadata, Viewport } from "next";
+import type { Metadata, Viewport } from "next";
 import { Unbounded, Manrope, IBM_Plex_Mono } from "next/font/google";
 import { cookies } from "next/headers";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
+import { SessionGuard } from "@/components/session-guard";
 import { isThemePreference, THEME_COOKIE_NAME } from "@/lib/theme";
 import "./globals.css";
 
@@ -103,6 +104,7 @@ export default async function RootLayout({
         */}
         <script async src="/pwa-install-prompt.js" />
         <ServiceWorkerRegistrar />
+        <SessionGuard />
         <NextIntlClientProvider>
           <ThemeProvider initialPreference={preference}>{children}</ThemeProvider>
         </NextIntlClientProvider>

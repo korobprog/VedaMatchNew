@@ -9,6 +9,7 @@ import type {
 } from "@vedamatch/shared";
 import { AstroProgress } from "./astro-progress";
 import { BirthTimeHelp } from "./birth-time-help";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -60,7 +61,7 @@ export function BirthDataForm({ initial }: { initial: AstroStateDto }) {
     const timer = window.setTimeout(async () => {
       try {
         const params = new URLSearchParams({ q: query });
-        const res = await fetch(`${API_URL}/geo/search?${params}`, {
+        const res = await apiFetch(`${API_URL}/geo/search?${params}`, {
           signal: controller.signal,
         });
         if (!res.ok) throw new Error(await res.text());
@@ -92,7 +93,7 @@ export function BirthDataForm({ initial }: { initial: AstroStateDto }) {
         lat: String(candidate.lat),
         lon: String(candidate.lon),
       });
-      const res = await fetch(`${API_URL}/astro/birth-data/timezone?${params}`, {
+      const res = await apiFetch(`${API_URL}/astro/birth-data/timezone?${params}`, {
         credentials: "include",
       });
       if (!res.ok) return;
@@ -113,7 +114,7 @@ export function BirthDataForm({ initial }: { initial: AstroStateDto }) {
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/astro/birth-data`, {
+      const res = await apiFetch(`${API_URL}/astro/birth-data`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

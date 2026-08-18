@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import type { LibraryCommentDto, LibraryLocale } from "@vedamatch/shared";
 import { t } from "./i18n";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const MAX_BODY_LENGTH = 2000;
@@ -41,7 +42,7 @@ export function EntryComments({
 
     setPending(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_URL}/library/entries/${encodeURIComponent(entryId)}/comments`,
         {
           method: "POST",
@@ -70,7 +71,7 @@ export function EntryComments({
 
   async function remove(id: string) {
     setError(null);
-    const res = await fetch(
+    const res = await apiFetch(
       `${API_URL}/library/comments/${encodeURIComponent(id)}`,
       { method: "DELETE", credentials: "include" },
     ).catch(() => null);

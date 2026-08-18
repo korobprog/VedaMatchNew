@@ -7,6 +7,7 @@ import type {
   AdminReleaseDto,
   ReleaseChangeType,
 } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -70,7 +71,7 @@ function ReleaseCard({ release }: { release: AdminReleaseDto }) {
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_URL}/admin/changelog/releases/${release.id}/current`,
         { method: "PATCH", credentials: "include" },
       );
@@ -88,7 +89,7 @@ function ReleaseCard({ release }: { release: AdminReleaseDto }) {
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/admin/changelog/releases/${release.id}`, {
+      const res = await apiFetch(`${API_URL}/admin/changelog/releases/${release.id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -203,7 +204,7 @@ function ReleaseForm({
       const url = release
         ? `${API_URL}/admin/changelog/releases/${release.id}`
         : `${API_URL}/admin/changelog/releases`;
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: release ? "PATCH" : "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
