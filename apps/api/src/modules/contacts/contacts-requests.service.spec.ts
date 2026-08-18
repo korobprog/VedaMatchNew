@@ -74,7 +74,7 @@ describe('ContactsRequestsService', () => {
     $transaction: jest.fn(),
   };
   const contacts = { getCard: jest.fn() };
-  const moderation = { hideFrom: jest.fn() };
+  const moderation = { hideFrom: jest.fn(), isHidden: jest.fn() };
   const users = { resolveAvatarUrl: jest.fn() };
   const events = { emit: jest.fn() };
   const unionChat = { openDirectChat: jest.fn() };
@@ -96,6 +96,7 @@ describe('ContactsRequestsService', () => {
     });
     prisma.contactsRequest.findUnique.mockResolvedValue(null);
     prisma.contactsRequest.findMany.mockResolvedValue([]);
+    moderation.isHidden.mockResolvedValue(false);
     prisma.contactsRequest.count.mockResolvedValue(0);
     prisma.contactsRequest.upsert.mockResolvedValue(request());
     prisma.contactsRequest.update.mockResolvedValue(request());
@@ -600,6 +601,38 @@ describe('ContactsRequestsService', () => {
       await expect(
         service.revokeDisclosure('stranger', 'disc-1', now),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('openChat', () => {
+    beforeEach(() => {
+      prisma.contactsRequest.findUnique.mockResolvedValue({
+        id: 'req-1',
+        fromUserId: 'me',
+        toUserId: 'owner',
+      });
+      prisma.contactsDisclosure.findFirst.mockResolvedValue({ id: 'disc-1' });
+      unionChat.openDirectChat.mockResolvedValue({ chatId: 'chat-1' });
+    });
+
+    it('при действующем раскрытии открывает чат Union', async () => {
+      await expect(service.openChat('me', 'req-1')).resolves.toEqual({
+        chatId: 'chat-1',
+      });
+      expect(moderation.isHidden).toHaveBeenCalledWith(
+        'me',
+        'owner',
+        'contacts',
+      );
+      expect(unionChat.openDirectChat).toHaveBeenCalledWith('me', 'owner');
+    });
+
+    it('после блокировки или скрытия чат не открывается', async () => {
+      moderation.isHidden.mockResolvedValue(true);
+      await expect(service.openChat('me', 'req-1')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(unionChat.openDirectChat).not.toHaveBeenCalled();
     });
   });
 });

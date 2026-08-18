@@ -48,8 +48,11 @@ export class NotificationsController {
 
   @UseGuards(AuthGuard)
   @Delete('subscriptions')
-  async unsubscribe(@Body() body: { endpoint: string }): Promise<{ ok: true }> {
-    await this.notifications.deleteSubscription(body.endpoint);
+  async unsubscribe(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: { endpoint: string },
+  ): Promise<{ ok: true }> {
+    await this.notifications.deleteOwnSubscription(user.sub, body?.endpoint);
     return { ok: true };
   }
 

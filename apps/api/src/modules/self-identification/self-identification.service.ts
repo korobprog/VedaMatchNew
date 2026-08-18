@@ -18,6 +18,49 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 
+const MENTOR_FORM_STRING_FIELDS = [
+  'mentorName',
+  'phone',
+  'email',
+  'cityOrCommunity',
+  'knownDuration',
+  'userCharacterReference',
+] as const;
+
+const MENTOR_FORM_BOOLEAN_FIELDS = [
+  'knowsPersonally',
+  'confirmsRegularPractice',
+  'confirmsService',
+  'confirmsSpiritualName',
+  'confirmsCommunityConnection',
+  'recommendsDevoteeStatus',
+  'truthConsent',
+] as const;
+
+const MENTOR_FORM_MAX_STRING = 2000;
+
+/**
+ * Whitelist полей формы наставника: всё, чего нет в списке
+ * (adminNote, adminReviewedAt, userId, token, createdAt…), отбрасывается.
+ * Строки обрезаются, не-boolean значения в флагах трактуются как false.
+ */
+export function pickMentorFormFields(
+  input: unknown,
+): Prisma.MentorVerificationRequestUpdateInput {
+  const raw = (input ?? {}) as Record<string, unknown>;
+  const data: Record<string, string | boolean> = {};
+  for (const key of MENTOR_FORM_STRING_FIELDS) {
+    const value = raw[key];
+    if (typeof value === 'string') {
+      data[key] = value.trim().slice(0, MENTOR_FORM_MAX_STRING);
+    }
+  }
+  for (const key of MENTOR_FORM_BOOLEAN_FIELDS) {
+    data[key] = raw[key] === true;
+  }
+  return data;
+}
+
 @Injectable()
 export class SelfIdentificationService {
   constructor(private readonly prisma: PrismaService) {}
@@ -234,10 +277,13 @@ export class SelfIdentificationService {
       throw new BadRequestException('Форма наставника уже заполнена');
     }
 
+    // Тело запроса приходит с публичной формы по токену — в Prisma уходит
+    // только явный набор полей наставника, иначе можно было бы перезаписать
+    // adminNote / adminReviewedAt / userId / token.
     const updated = await this.prisma.mentorVerificationRequest.update({
       where: { token },
       data: {
-        ...data,
+        ...pickMentorFormFields(data),
         status: 'awaiting_admin',
         mentorSubmittedAt: new Date(),
       },
@@ -456,7 +502,10 @@ export class SelfIdentificationService {
   }
 
   private validateMentorForm(data: MentorVerificationSubmit) {
-    if (!data.truthConsent) {
+    if (!data || typeof data !== 'object') {
+      throw new BadRequestException('Пустая форма наставника');
+    }
+    if (data.truthConsent !== true) {
       throw new BadRequestException('Нужно подтвердить достоверность данных');
     }
     for (const key of ['mentorName', 'phone', 'email', 'cityOrCommunity']) {

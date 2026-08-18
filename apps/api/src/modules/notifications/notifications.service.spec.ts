@@ -138,6 +138,24 @@ describe('NotificationsService.saveSubscription', () => {
   });
 });
 
+describe('NotificationsService.deleteOwnSubscription', () => {
+  it('удаляет подписку только своего пользователя', async () => {
+    const { service, prisma } = createService();
+    await service.deleteOwnSubscription('user-1', 'https://push.example/abc');
+    expect(prisma.pushSubscription.deleteMany).toHaveBeenCalledWith({
+      where: { endpoint: 'https://push.example/abc', userId: 'user-1' },
+    });
+  });
+
+  it('без endpoint отвечает 400', async () => {
+    const { service, prisma } = createService();
+    await expect(
+      service.deleteOwnSubscription('user-1', undefined as never),
+    ).rejects.toThrow('endpoint обязателен');
+    expect(prisma.pushSubscription.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('NotificationsService.getPreferences', () => {
   it('без строки в базе считает включённым всё', async () => {
     const { service } = createService();

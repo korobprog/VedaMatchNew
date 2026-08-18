@@ -343,6 +343,21 @@ export class UnionChatService {
       throw new BadRequestException('Нельзя открыть чат с самим собой');
     }
 
+    // Блокировка абсолютна и не зависит от того, каким сервисом открыт
+    // доступ: без этой проверки открытые ранее контакты позволяли бы
+    // снова получить чат с тем, кто тебя заблокировал (или кого
+    // заблокировал ты).
+    const block = await this.prisma.userBlock.findFirst({
+      where: {
+        OR: [
+          { blockerId: userId, blockedId: otherUserId },
+          { blockerId: otherUserId, blockedId: userId },
+        ],
+      },
+      select: { id: true },
+    });
+    if (block) throw new NotFoundException('Пользователь недоступен');
+
     const existing = await this.prisma.unionConnectionRequest.findFirst({
       where: {
         OR: [

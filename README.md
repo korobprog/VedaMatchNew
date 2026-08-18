@@ -21,6 +21,8 @@ docker compose up -d postgres
 cd apps/api
 pnpm prisma migrate dev                    # миграции
 pnpm seed                                  # каталог сервисов
+# Разделы библиотеки и каталог Рынка сид только создаёт (их правит админ);
+# чтобы перезаписать их из файлов данных: SEED_REFRESH_ADMIN_EDITABLE=1 pnpm seed
 pnpm seed:dev                              # демо-аккаунты Union (только dev)
 cd ../..
 

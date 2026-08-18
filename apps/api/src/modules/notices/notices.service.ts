@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type NoticeStatus } from '@prisma/client';
 import {
   MAX_IMAGES_PER_NOTICE,
   NOTICES_PER_DAY,
@@ -47,6 +47,7 @@ import { detectCommerce, needsReview } from './notice-commerce-guard';
 import {
   MAP_POINTS_CAP,
   boundsWhere,
+  coordsForPrecision,
   parseBounds,
   parseRadius,
   radiusIdsSql,
@@ -69,6 +70,18 @@ import {
  * несколько вхождений, поэтому потолок стоит на записях, а не на датах.
  */
 const CALENDAR_NOTICES_CAP = 200;
+
+/** Статусы, в которые автор может перевести объявление сам. */
+const AUTHOR_STATUS_TARGETS: ReadonlySet<string> = new Set<
+  UpdateNoticeStatusRequest['status']
+>(['published', 'hidden_by_author', 'resolved', 'draft']);
+
+/** Статусы, из которых выводит только администратор. */
+const LOCKED_STATUSES: ReadonlySet<NoticeStatus> = new Set<NoticeStatus>([
+  'hidden_by_reports',
+  'removed_by_admin',
+  'moved_to_market',
+]);
 
 @Injectable()
 export class NoticesService {
@@ -209,14 +222,24 @@ export class NoticesService {
       });
       return {
         mode: 'points',
-        points: rows.map((row) => ({
-          id: row.id,
-          title: row.titleRu ?? row.titleEn ?? 'Без названия',
-          kind: row.kind,
-          lat: row.latitude!,
-          lon: row.longitude!,
-          precision: row.placePrecision,
-        })),
+        // Огрубление повторяется и на чтении: страхует записи, созданные
+        // до снапа на записи, и любые пути, где координаты попали в базу
+        // мимо locationColumns.
+        points: rows.map((row) => {
+          const { lat, lon } = coordsForPrecision(
+            row.latitude!,
+            row.longitude!,
+            row.placePrecision,
+          );
+          return {
+            id: row.id,
+            title: row.titleRu ?? row.titleEn ?? 'Без названия',
+            kind: row.kind,
+            lat,
+            lon,
+            precision: row.placePrecision,
+          };
+        }),
         withoutLocation,
       };
     }
@@ -556,6 +579,12 @@ export class NoticesService {
     body: UpdateNoticeStatusRequest,
   ): Promise<NoticeDto> {
     const notice = await this.requireOwn(id, userId, isAdmin);
+    if (!AUTHOR_STATUS_TARGETS.has(body?.status))
+      throw new BadRequestException('Недопустимый статус объявления');
+    // Из-под модерации и из маркета автор сам не выходит: hidden_by_reports,
+    // removed_by_admin и moved_to_market снимает только администратор.
+    if (!isAdmin && LOCKED_STATUSES.has(notice.status))
+      throw new ForbiddenException('notice_status_locked');
     const now = new Date();
     const data: Prisma.NoticeUpdateInput = { status: body.status };
     if (body.status === 'resolved') data.resolvedAt = now;
@@ -893,13 +922,22 @@ export class NoticesService {
         longitude: null,
         placePrecision: 'city' as const,
       };
+    const placePrecision = communityId ? ('exact' as const) : ('city' as const);
+    // При точности `city` координаты огрубляются до сетки уже на записи —
+    // и в скалярных колонках (карта, радиус), и в JSON `location`, чтобы
+    // точное место человека нигде не сохранялось.
+    const { lat, lon } = coordsForPrecision(
+      location.lat,
+      location.lon,
+      placePrecision,
+    );
     return {
-      location: location as unknown as Prisma.InputJsonValue,
+      location: { ...location, lat, lon } as unknown as Prisma.InputJsonValue,
       city: location.city.trim(),
       country: location.country?.trim() ?? null,
-      latitude: location.lat,
-      longitude: location.lon,
-      placePrecision: communityId ? ('exact' as const) : ('city' as const),
+      latitude: lat,
+      longitude: lon,
+      placePrecision,
     };
   }
 

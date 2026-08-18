@@ -2,6 +2,24 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
+// Разделы библиотеки и каталог Рынка администратор правит из админки
+// (названия, описания, иконки, порядок). Сид запускается при каждом старте
+// контейнера, поэтому по умолчанию он такие строки только создаёт, а не
+// перезаписывает — иначе правки админа молча терялись бы на первом рестарте.
+// Чтобы принудительно «освежить» тексты из файлов данных, запустите сид с
+// SEED_REFRESH_ADMIN_EDITABLE=1.
+const refreshAdminEditable = process.env.SEED_REFRESH_ADMIN_EDITABLE === '1';
+
+/** upsert для строк, которые может править администратор. */
+async function upsertAdminEditable(model, where, fields) {
+  if (refreshAdminEditable) {
+    return model.upsert({ where, update: fields, create: fields });
+  }
+  const existing = await model.findUnique({ where });
+  if (existing) return existing;
+  return model.create({ data: fields });
+}
+
 const { librarySections } = require('./library-sections-data.js');
 const { contactsTags } = require('./contacts-tags-data.js');
 const { marketSections } = require('./market-sections-data.js');
@@ -157,11 +175,11 @@ async function main() {
       });
     }
     for (const section of librarySections) {
-      await transaction.librarySection.upsert({
-        where: { slug: section.slug },
-        update: section,
-        create: section,
-      });
+      await upsertAdminEditable(
+        transaction.librarySection,
+        { slug: section.slug },
+        section,
+      );
     }
     // Пользовательские теги сюда не попадают: upsert идёт по slug, а список
     // системных фиксирован, поэтому повторный прогон только освежает названия
@@ -173,16 +191,16 @@ async function main() {
         create: tag,
       });
     }
-    // Каталог Рынка фиксирован: разделы и категории заводит только сид и админ,
-    // поэтому upsert по slug безопасен — он освежает названия и порядок и
-    // никогда не трогает объявления, привязанные к категории.
+    // Каталог Рынка фиксирован: разделы и категории заводит только сид и админ.
+    // Сид не трогает объявления, привязанные к категории, и (без флага
+    // SEED_REFRESH_ADMIN_EDITABLE) не перезаписывает то, что правил админ.
     const marketSectionIdBySlug = new Map();
     for (const section of marketSections) {
-      const saved = await transaction.marketSection.upsert({
-        where: { slug: section.slug },
-        update: section,
-        create: section,
-      });
+      const saved = await upsertAdminEditable(
+        transaction.marketSection,
+        { slug: section.slug },
+        section,
+      );
       marketSectionIdBySlug.set(saved.slug, saved.id);
     }
     for (const category of marketCategories) {
@@ -195,11 +213,11 @@ async function main() {
       const { sectionSlug, prohibited, ...fields } = category;
       void sectionSlug;
       void prohibited;
-      await transaction.marketCategory.upsert({
-        where: { sectionId_slug: { sectionId, slug: category.slug } },
-        update: fields,
-        create: { ...fields, sectionId },
-      });
+      await upsertAdminEditable(
+        transaction.marketCategory,
+        { sectionId_slug: { sectionId, slug: category.slug } },
+        { ...fields, sectionId },
+      );
     }
     // Рубрики доски объявлений. `position` берётся из порядка в файле, чтобы
     // не держать номер отдельным полем и не рассинхронизировать его правкой.
