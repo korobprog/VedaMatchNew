@@ -519,6 +519,9 @@ describe('MotivationService.previewVoice', () => {
   function build(cached: string | null) {
     const audio = {
       speak: jest.fn(async () => ({ audio: Buffer.from('mp3'), seconds: 3 })),
+      // Модель входит в ключ кэша: у v2 и v3 одинаковые имена голосов, но
+      // звучат они по-разному.
+      modelId: () => 'fal-ai/elevenlabs/tts/eleven-v3',
     };
     const generation = {
       findUploaded: jest.fn(async () => cached),
@@ -558,7 +561,7 @@ describe('MotivationService.previewVoice', () => {
     });
     expect(audio.speak).toHaveBeenCalled();
     expect(generation.uploadStory).toHaveBeenCalledWith(
-      'motivation/voice-preview/George.mp3',
+      'motivation/voice-preview/fal-ai-elevenlabs-tts-eleven-v3/George.mp3',
       expect.any(Buffer),
       'audio/mpeg',
     );

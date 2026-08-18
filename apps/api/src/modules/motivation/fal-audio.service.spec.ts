@@ -4,6 +4,7 @@ import {
   buildSpeechRequest,
   FalAudioService,
   readDuration,
+  voicePreviewKey,
 } from './fal-audio.service';
 
 function service(overrides: Record<string, string> = {}) {
@@ -123,5 +124,26 @@ describe('buildSpeechRequest', () => {
       expect(request.language_code).toBe('ru');
       expect(request.timestamps).toBe(true);
     }
+  });
+});
+
+describe('voicePreviewKey', () => {
+  it('превращает идентификатор модели в безопасный кусок ключа', () => {
+    // Слэши в ключе S3 создали бы лишние «папки».
+    expect(voicePreviewKey('fal-ai/elevenlabs/tts/eleven-v3')).toBe(
+      'fal-ai-elevenlabs-tts-eleven-v3',
+    );
+  });
+
+  it('разные модели дают разные ключи', () => {
+    // Имена голосов у v2 и v3 совпадают, а звучат они по-разному: без модели в
+    // ключе админ слушал бы записи, которых в роликах уже нет.
+    expect(voicePreviewKey('fal-ai/elevenlabs/tts/multilingual-v2')).not.toBe(
+      voicePreviewKey('fal-ai/elevenlabs/tts/eleven-v3'),
+    );
+  });
+
+  it('пустое имя не оставляет ключ пустым', () => {
+    expect(voicePreviewKey('')).toBe('default');
   });
 });

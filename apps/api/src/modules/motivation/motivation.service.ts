@@ -36,7 +36,11 @@ import {
   weightedPage,
 } from './motivation-feed';
 import { MotivationAuthorSearchService } from './motivation-author-search.service';
-import { FalAudioService, VOICE_PREVIEW_LINE } from './fal-audio.service';
+import {
+  FalAudioService,
+  voicePreviewKey,
+  VOICE_PREVIEW_LINE,
+} from './fal-audio.service';
 import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationCopyService } from './motivation-copy.service';
 import { MotivationGenerationService } from './motivation-generation.service';
@@ -386,7 +390,13 @@ export class MotivationService {
     // Фраза фиксированная, а голосов конечное число — значит каждый достаточно
     // синтезировать один раз за всё время. Ключ детерминированный, поэтому
     // проверка сводится к запросу готового файла.
-    const key = `motivation/voice-preview/${name ?? 'default'}.mp3`;
+    //
+    // Модель входит в ключ обязательно: у v2 и v3 совпадают имена голосов, но
+    // звучат они по-разному. Без неё после смены модели админ слушал бы старые
+    // записи и выбирал голос по звучанию, которого в роликах уже нет.
+    const key = `motivation/voice-preview/${voicePreviewKey(
+      this.audio.modelId(),
+    )}/${name ?? 'default'}.mp3`;
     const cached = await this.generation.findUploaded(key);
     if (cached) return { audio: cached, cached: true };
 

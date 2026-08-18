@@ -48,6 +48,11 @@ export class FalAudioService {
     return key;
   }
 
+  /** Имя модели наружу: оно входит в ключ кэша образцов. */
+  modelId(): string {
+    return this.model();
+  }
+
   private model(): string {
     return (
       this.config.get<string>('MOTIVATION_VOICE_MODEL') ||
@@ -103,6 +108,16 @@ export class FalAudioService {
       seconds: readDuration(payload?.timestamps, spoken),
     };
   }
+}
+
+/**
+ * Короткий безопасный кусок ключа из имени модели.
+ *
+ * Идентификаторы содержат слэши, а они в ключе S3 создали бы лишние «папки» и
+ * разъехались бы при смене провайдера.
+ */
+export function voicePreviewKey(model: string): string {
+  return model.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'default';
 }
 
 /**

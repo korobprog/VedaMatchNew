@@ -19,6 +19,10 @@ export const visualStyles: ReadonlyArray<{
   { value: "warm_documentary", label: "Тёплая документалистика" },
   { value: "cosmic_contemplation", label: "Космическое созерцание" },
   { value: "historical_editorial", label: "Историческая редакционная иллюстрация" },
+  { value: "cinematic_film", label: "Кинокадр — 35 мм, плёнка" },
+  { value: "epic_wide", label: "Эпический широкий план" },
+  { value: "night_devotional", label: "Ночное предстояние — свет лампады" },
+  { value: "painterly_realism", label: "Живописный реализм" },
 ];
 
 /**

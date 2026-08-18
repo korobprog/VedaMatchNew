@@ -110,3 +110,88 @@ describe('motivation image director', () => {
     ).toThrow('Visual style is not approved');
   });
 });
+
+describe('кинематографические стили', () => {
+  const base = { meaning: 'ценность бескорыстного действия' };
+
+  it('открывают промпт кадром, а не словом «нарисуй»', () => {
+    // Зачин задаёт регистр сильнее, чем всё описание: пока каждый промпт
+    // начинался с Illustrate, модель рисовала картинку при любом стиле.
+    const film = createImageDirection(base, 'cinematic_film');
+    expect(film.prompt.startsWith('A photorealistic cinematic film still')).toBe(
+      true,
+    );
+    expect(film.prompt.startsWith('Illustrate')).toBe(false);
+  });
+
+  it('рисовальные стили зачин сохраняют — они и есть иллюстрации', () => {
+    const watercolor = createImageDirection(
+      base,
+      'spiritual_watercolor',
+    );
+    expect(watercolor.prompt.startsWith('Illustrate')).toBe(true);
+  });
+
+  it('несут операторские указания, а не одно прилагательное', () => {
+    const film = createImageDirection(base, 'cinematic_film');
+    expect(film.prompt).toContain('35mm');
+    expect(film.prompt).toContain('depth of field');
+  });
+
+  it('живописный реализм остаётся живописью, а не фотографией', () => {
+    // Для сцен с божествами фотореализм читается как свидетельство, а не как
+    // образ, поэтому у этого стиля зачин про картину.
+    const painting = createImageDirection(
+      base,
+      'painterly_realism',
+    );
+    expect(painting.prompt).toContain('oil painting');
+    expect(painting.prompt).toContain('rather than a photograph');
+  });
+
+  it('все четыре доступны как одобренные стили', () => {
+    for (const style of [
+      'cinematic_film',
+      'epic_wide',
+      'night_devotional',
+      'painterly_realism',
+    ]) {
+      expect(() => createImageDirection(base, style)).not.toThrow();
+    }
+  });
+});
+
+describe('подбор кинематографических стилей', () => {
+  it('ночную сцену отправляет к свету лампады', () => {
+    expect(
+      selectVisualStyle({ meaning: 'в тишине ночи он зажёг лампаду' }),
+    ).toBe('night_devotional');
+  });
+
+  it('поле битвы — в эпический план, даже если названа Гита', () => {
+    // Иначе всё, где упомянута книга, уходило бы в миниатюру, включая
+    // Курукшетру: примета кадра точнее приметы традиции.
+    expect(
+      selectVisualStyle({
+        meaning: 'войско выстроилось на поле битвы',
+        work: 'Бхагавад-гита как она есть',
+      }),
+    ).toBe('epic_wide');
+  });
+
+  it('обычную цитату из Гиты по-прежнему отдаёт миниатюре', () => {
+    // Прежние правила не тронуты: то, что работало, работает так же.
+    expect(
+      selectVisualStyle({
+        meaning: 'ценность действия определяется его целью',
+        work: 'Бхагавад-гита как она есть',
+      }),
+    ).toBe('indian_miniature');
+  });
+
+  it('храм остаётся сильнее ночи и битвы', () => {
+    expect(
+      selectVisualStyle({ meaning: 'ночью в храме горела лампада' }),
+    ).toBe('sacred_architecture');
+  });
+});

@@ -5,7 +5,27 @@ export type MotivationLanguage = 'ru' | 'en' | 'hi';
 export type MotivationReviewStatus = 'discovered' | 'source_verified' | 'text_review' | 'image_queued' | 'image_review' | 'published' | 'rejected' | 'failed';
 export type MotivationQuoteSourceType = 'vedamatch_library' | 'approved_web' | 'manual';
 export type MotivationTranslationKind = 'official' | 'vedamatch';
-export type MotivationVisualStyle = 'spiritual_watercolor' | 'cinematic_nature' | 'indian_miniature' | 'sacred_architecture' | 'minimal_symbolism' | 'warm_documentary' | 'cosmic_contemplation' | 'historical_editorial';
+/**
+ * Визуальные стили иллюстрации.
+ *
+ * Первые восемь — рисовальные, их промпт начинается словом «Illustrate».
+ * Последние четыре кинематографические: у них свой зачин — «кадр из фильма»,
+ * «фотография», «масляная живопись», — без которого модель возвращалась к
+ * рисунку, какой бы стиль ни выбрали.
+ */
+export type MotivationVisualStyle =
+  | 'spiritual_watercolor'
+  | 'cinematic_nature'
+  | 'indian_miniature'
+  | 'sacred_architecture'
+  | 'minimal_symbolism'
+  | 'warm_documentary'
+  | 'cosmic_contemplation'
+  | 'historical_editorial'
+  | 'cinematic_film'
+  | 'epic_wide'
+  | 'night_devotional'
+  | 'painterly_realism';
 
 export interface MotivationQuoteTranslationDto {
   language: MotivationLanguage;

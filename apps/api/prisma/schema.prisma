@@ -163,6 +163,13 @@ enum MotivationVisualStyle {
   warm_documentary
   cosmic_contemplation
   historical_editorial
+  /// Кинематографические стили. Заведены отдельно от рисовальных: у них другое
+  /// начало промпта — «кадр из фильма», а не «нарисуй», — и без этого модель
+  /// возвращалась к иллюстрации, какой бы стиль ни выбрали.
+  cinematic_film
+  epic_wide
+  night_devotional
+  painterly_realism
 }
 
 model User {
