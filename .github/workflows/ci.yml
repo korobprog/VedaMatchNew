@@ -58,7 +58,7 @@ jobs:
         run: pnpm --filter @vedamatch/web lint
 
       - name: Test api
-        run: pnpm --filter @vedamatch/api test -- --ci
+        run: pnpm --filter @vedamatch/api test
 
       - name: Test web
         run: pnpm --filter @vedamatch/web test
