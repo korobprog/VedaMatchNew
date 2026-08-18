@@ -32,6 +32,7 @@ import {
 import { calculateAge, toBirthDateInput } from './age';
 import { toPhotoVerificationState } from './photo-verification';
 import { toSubscriptionState } from '../billing/subscription';
+import { readBillingMode } from '../billing/billing-mode';
 import { deletionEligibleAt } from './account-status';
 import { UsersService } from './users.service';
 
@@ -96,27 +97,29 @@ export class AdminUsersService {
     ]);
 
     return {
-      items: await Promise.all(users.map(async (user) => {
-        const mentorRequest = user.mentorVerificationRequests[0] ?? null;
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          avatarUrl: await this.users.resolveAvatarUrl(user),
-          role: toRole(user.role),
-          spiritualStage: user.spiritualStage,
-          devoteeVerificationStatus: user.devoteeVerificationStatus,
-          lastSelfIdentificationAt:
-            user.lastSelfIdentificationAt?.toISOString() ?? null,
-          createdAt: user.createdAt.toISOString(),
-          updatedAt: user.updatedAt.toISOString(),
-          hasMentorRequest: Boolean(mentorRequest),
-          mentorRequestStatus: mentorRequest?.status ?? null,
-          accountStatus: user.accountStatus,
-          blockedUntil: user.blockedUntil?.toISOString() ?? null,
-          deletedAt: user.deletedAt?.toISOString() ?? null,
-        };
-      })),
+      items: await Promise.all(
+        users.map(async (user) => {
+          const mentorRequest = user.mentorVerificationRequests[0] ?? null;
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            avatarUrl: await this.users.resolveAvatarUrl(user),
+            role: toRole(user.role),
+            spiritualStage: user.spiritualStage,
+            devoteeVerificationStatus: user.devoteeVerificationStatus,
+            lastSelfIdentificationAt:
+              user.lastSelfIdentificationAt?.toISOString() ?? null,
+            createdAt: user.createdAt.toISOString(),
+            updatedAt: user.updatedAt.toISOString(),
+            hasMentorRequest: Boolean(mentorRequest),
+            mentorRequestStatus: mentorRequest?.status ?? null,
+            accountStatus: user.accountStatus,
+            blockedUntil: user.blockedUntil?.toISOString() ?? null,
+            deletedAt: user.deletedAt?.toISOString() ?? null,
+          };
+        }),
+      ),
       page,
       pageSize,
       total,
@@ -146,10 +149,10 @@ export class AdminUsersService {
 
     if (!user) throw new NotFoundException('Пользователь не найден');
 
-    const availableServices = await this.getAvailableServicesFor(
-      user.id,
-      toRole(user.role),
-    );
+    const [availableServices, billingMode] = await Promise.all([
+      this.getAvailableServicesFor(user.id, toRole(user.role)),
+      readBillingMode(this.prisma),
+    ]);
 
     return {
       profile: {
@@ -174,7 +177,7 @@ export class AdminUsersService {
         devoteeVerificationStatus: user.devoteeVerificationStatus,
         lastSelfIdentificationAt:
           user.lastSelfIdentificationAt?.toISOString() ?? null,
-        subscription: toSubscriptionState(user),
+        subscription: toSubscriptionState(user, new Date(), billingMode),
         createdAt: user.createdAt.toISOString(),
         updatedAt: user.updatedAt.toISOString(),
         accountStatus: user.accountStatus,
@@ -303,9 +306,7 @@ export class AdminUsersService {
     this.ensureAdmin(admin.role);
 
     if (admin.sub === userId) {
-      throw new BadRequestException(
-        'Нельзя заблокировать собственный аккаунт',
-      );
+      throw new BadRequestException('Нельзя заблокировать собственный аккаунт');
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -342,6 +343,11 @@ export class AdminUsersService {
         }),
       ]);
     } else {
+      // Разблокировать можно только заблокированного: удалённый аккаунт
+      // иначе становился бы «активным» с заполненным deletedAt.
+      if (user.accountStatus !== 'blocked') {
+        throw new BadRequestException('Аккаунт не заблокирован');
+      }
       await this.prisma.user.update({
         where: { id: userId },
         data: {
@@ -408,6 +414,11 @@ export class AdminUsersService {
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('Пользователь не найден');
+    // Восстановление — только из удалённого/ожидающего удаления состояния;
+    // блокировку снимает setBlocked, у него своя семантика и журнал.
+    if (user.accountStatus !== 'deleted' && user.pendingDeletionAt === null) {
+      throw new BadRequestException('Аккаунт не удалён');
+    }
 
     await this.prisma.user.update({
       where: { id: userId },

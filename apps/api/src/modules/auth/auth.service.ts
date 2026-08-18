@@ -121,22 +121,38 @@ export class AuthService implements OnModuleInit {
     if (!claims?.email) {
       throw new UnauthorizedException('Google не вернул email');
     }
+    // Аккаунт линкуется по email: без подтверждённого адреса кто угодно с
+    // Google-аккаунтом на чужой непроверенный email получил бы чужой профиль.
+    if (claims.email_verified !== true) {
+      throw new UnauthorizedException('Google не подтвердил email');
+    }
+    const email = claims.email as string;
+    const avatarUrl = (claims.picture as string) ?? null;
 
-    const user = await this.prisma.user.upsert({
-      where: { email: claims.email as string },
-      // Имя обновляется только при создании аккаунта: человек может исправить
-      // его в профиле, и следующий вход через Google не должен затирать правку.
-      update: {
-        googleId: claims.sub,
-        avatarUrl: (claims.picture as string) ?? null,
-      },
-      create: {
-        email: claims.email as string,
-        googleId: claims.sub,
-        name: (claims.name as string) ?? (claims.email as string),
-        avatarUrl: (claims.picture as string) ?? null,
-      },
+    // Сначала ищем по googleId: если человек сменил адрес в Google, upsert по
+    // email создал бы вторую запись и упал на уникальном googleId (P2002 →
+    // 500). Найденному по googleId обновляем email; иначе — по email.
+    const byGoogleId = await this.prisma.user.findUnique({
+      where: { googleId: claims.sub },
     });
+    const user = byGoogleId
+      ? await this.prisma.user.update({
+          where: { id: byGoogleId.id },
+          data: { email, avatarUrl },
+        })
+      : await this.prisma.user.upsert({
+          where: { email },
+          // Имя обновляется только при создании аккаунта: человек может
+          // исправить его в профиле, и следующий вход через Google не должен
+          // затирать правку.
+          update: { googleId: claims.sub, avatarUrl },
+          create: {
+            email,
+            googleId: claims.sub,
+            name: (claims.name as string) ?? email,
+            avatarUrl,
+          },
+        });
 
     await assertAccountActive(this.prisma, user);
     await this.ensureContactsProfile(user.id);
@@ -281,7 +297,7 @@ export class AuthService implements OnModuleInit {
       secure: this.isProd,
       sameSite: 'lax',
       domain: this.cookieDomain,
-      maxAge: 15 * 60 * 1000,
+      maxAge: this.accessTtlMs(),
       path: '/',
     });
     res.cookie(REFRESH_COOKIE, refreshToken, {
@@ -294,6 +310,18 @@ export class AuthService implements OnModuleInit {
     });
   }
 
+  /**
+   * Время жизни access-cookie равно TTL самого JWT (ACCESS_TOKEN_TTL, формат
+   * jose: 15m / 1h / 30s), иначе при смене конфига cookie и токен разъедутся.
+   */
+  private accessTtlMs(): number {
+    const raw = this.config.get<string>('ACCESS_TOKEN_TTL', '15m');
+    const match = /^(\d+)\s*([smhd])$/.exec(raw.trim());
+    if (!match) return 15 * 60 * 1000;
+    const unit = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[match[2]]!;
+    return Number(match[1]) * unit;
+  }
+
   async refresh(req: Request, res: Response) {
     const token = (req.cookies as Record<string, string>)[REFRESH_COOKIE];
     if (!token) throw new UnauthorizedException('Нет refresh-токена');
@@ -302,16 +330,30 @@ export class AuthService implements OnModuleInit {
       where: { tokenHash: this.hash(token) },
       include: { user: true },
     });
-    if (!stored || stored.revoked || stored.expiresAt < new Date()) {
+    if (!stored || stored.expiresAt < new Date()) {
+      throw new UnauthorizedException('Refresh-токен недействителен');
+    }
+    // Повторное предъявление уже отозванного токена — признак кражи
+    // (легитимный клиент после ротации им больше не пользуется). Отзываем
+    // все токены пользователя: и у вора, и у жертвы придётся войти заново.
+    if (stored.revoked) {
+      await this.prisma.refreshToken.updateMany({
+        where: { userId: stored.userId, revoked: false },
+        data: { revoked: true },
+      });
       throw new UnauthorizedException('Refresh-токен недействителен');
     }
     await assertAccountActive(this.prisma, stored.user);
 
-    // Ротация: старый токен отзываем, выдаём новую пару
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
+    // Ротация как CAS: два одновременных refresh с одним cookie не должны
+    // оба выдать пары — выигрывает тот, кто первым перевёл revoked в true.
+    const rotated = await this.prisma.refreshToken.updateMany({
+      where: { id: stored.id, revoked: false },
       data: { revoked: true },
     });
+    if (rotated.count === 0) {
+      throw new UnauthorizedException('Refresh-токен недействителен');
+    }
     await this.issueTokens(
       stored.user.id,
       stored.user.email,

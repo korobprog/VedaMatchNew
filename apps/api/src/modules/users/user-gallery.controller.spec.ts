@@ -66,7 +66,9 @@ describe('UserGalleryController', () => {
     ) as unknown[];
 
     expect(interceptors).toHaveLength(1);
-    expect(mockFilesInterceptor).toHaveBeenCalledWith('files', 50);
+    expect(mockFilesInterceptor).toHaveBeenCalledWith('files', 50, {
+      limits: { fileSize: 20 * 1024 * 1024, files: 50 },
+    });
   });
 
   it('delegates gallery retrieval for the authenticated user', async () => {

@@ -28,6 +28,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { toRole } from '../auth/role';
 import { toSubscriptionState } from '../billing/subscription';
+import { readBillingMode } from '../billing/billing-mode';
 import { calculateAge, parseBirthDate, toBirthDateInput } from './age';
 import {
   RESET_PHOTO_VERIFICATION,
@@ -117,6 +118,7 @@ export class UsersService {
   async getProfile(userId: string): Promise<UserProfile> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('Пользователь не найден');
+    const billingMode = await readBillingMode(this.prisma);
     return {
       id: user.id,
       email: user.email,
@@ -137,7 +139,7 @@ export class UsersService {
       devoteeVerificationStatus: user.devoteeVerificationStatus,
       lastSelfIdentificationAt:
         user.lastSelfIdentificationAt?.toISOString() ?? null,
-      subscription: toSubscriptionState(user),
+      subscription: toSubscriptionState(user, new Date(), billingMode),
       accountStatus: user.accountStatus,
       pendingDeletionAt: user.pendingDeletionAt?.toISOString() ?? null,
       deletionEligibleAt: user.pendingDeletionAt

@@ -532,6 +532,9 @@ model RefreshToken {
   createdAt DateTime @default(now())
 
   @@index([userId])
+  // Под чистку протухших/отозванных (RefreshTokenCleanupService).
+  @@index([expiresAt])
+  @@index([revoked, createdAt])
 }
 
 model Service {

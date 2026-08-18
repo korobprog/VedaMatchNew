@@ -20,6 +20,8 @@ import type {
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import {
+  MAX_FILE_BYTES,
+  MAX_FILES_PER_UPLOAD,
   UserGalleryService,
   type UploadedGalleryFile,
 } from './user-gallery.service';
@@ -35,7 +37,13 @@ export class UserGalleryController {
   }
 
   @Post()
-  @UseInterceptors(FilesInterceptor('files', 50))
+  // Лимиты на уровне multer: без них 50 файлов по сколько угодно МБ целиком
+  // буферизуются в памяти до того, как сервис проверит размер.
+  @UseInterceptors(
+    FilesInterceptor('files', MAX_FILES_PER_UPLOAD, {
+      limits: { fileSize: MAX_FILE_BYTES, files: MAX_FILES_PER_UPLOAD },
+    }),
+  )
   upload(
     @CurrentUser() user: AccessTokenPayload,
     @UploadedFiles() files: UploadedGalleryFile[] | undefined,

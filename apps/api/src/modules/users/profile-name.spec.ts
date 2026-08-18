@@ -57,6 +57,8 @@ describe('UsersService.updateProfile — имена', () => {
 
   const prisma = {
     user: { findUnique: jest.fn(), update: jest.fn() },
+    // Профиль читает режим биллинга; без строки настроек — business.
+    appSettings: { findUnique: jest.fn().mockResolvedValue(null) },
   };
   let service: UsersService;
 
@@ -64,6 +66,7 @@ describe('UsersService.updateProfile — имена', () => {
     jest.resetAllMocks();
     prisma.user.findUnique.mockResolvedValue(stored);
     prisma.user.update.mockResolvedValue(stored);
+    prisma.appSettings.findUnique.mockResolvedValue(null);
     service = new UsersService(
       prisma as unknown as PrismaService,
       { get: () => undefined } as unknown as ConfigService,
