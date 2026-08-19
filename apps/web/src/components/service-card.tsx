@@ -104,7 +104,7 @@ export function ServiceCard({
         <Link
           href={service.url}
           onClick={onOpen}
-          className="w-full rounded-xl bg-magenta py-3 text-center text-sm font-semibold text-white transition hover:shadow-[0_0_20px_var(--vm-glow-magenta)] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-magenta/60"
+          className="btn-mint self-center rounded-xl px-6 py-2 text-center text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-magenta/60"
         >
           Открыть
         </Link>

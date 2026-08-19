@@ -33,6 +33,9 @@
   --color-glass-brd: var(--vm-glass-brd);
 
   /* Accent colors */
+  --color-mint: var(--vm-mint-from);
+  --color-mint-edge: var(--vm-mint-edge);
+  --color-on-mint: var(--vm-on-mint);
   --color-magenta: var(--vm-magenta);
   --color-cyan: var(--vm-cyan);
   --color-gold: var(--vm-gold);
@@ -85,6 +88,18 @@
      text-cyan). На светлом фоне #DB1B84 давал 4.46:1, #0C917C — 3.75:1
      при 14px, то есть ниже порога AA. Затемнены до 4.62:1 и 4.53:1:
      на глаз не отличить, но мелкий текст перестал проваливаться. */
+  /* Мятная плашка кнопок — историческая пара hex-ов портала. Значения
+     одинаковы в обеих темах, поэтому и текст на ней фиксированный: --vm-text-0
+     в тёмной теме белый, а белый на мяте даёт 1,97:1. С --vm-on-mint — 9,3:1.
+     Контур чуть темнее заливки: на белой карточке кнопка иначе сливается.
+     Для контурной версии берётся --vm-cyan: сама мята текстом на светлом фоне
+     не проходит контраст, а токен для того и держит разные значения по темам. */
+  --vm-mint-from: #33CCCC;
+  --vm-mint-to: #5CCCCC;
+  --vm-mint-edge: #2AB5B5;
+  --vm-on-mint: #14212C;
+  --vm-glow-mint: rgba(51, 204, 204, 0.45);
+
   --vm-magenta: #D71A80;
   --vm-cyan: #0B826F;
   --vm-gold: #B0770E;
@@ -334,6 +349,31 @@ select option {
   backdrop-filter: blur(24px) saturate(150%);
   -webkit-backdrop-filter: blur(24px) saturate(150%);
   border: 1px solid var(--vm-glass-brd);
+}
+
+/* Основная кнопка портала. Держим классом, а не набором утилит: цвет кнопок
+   меняется целиком и сразу, без обхода двух десятков файлов. */
+.btn-mint {
+  background: linear-gradient(to right, var(--vm-mint-from), var(--vm-mint-to));
+  color: var(--vm-on-mint);
+  border: 1px solid var(--vm-mint-edge);
+}
+
+.btn-mint:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 0 20px var(--vm-glow-mint);
+}
+
+/* Тихая версия: тот же мятный род, но без заливки — для сеток, где кнопок
+   много и заливки начинают спорить друг с другом. */
+.btn-mint-outline {
+  background: transparent;
+  color: var(--vm-cyan);
+  border: 1px solid var(--vm-cyan);
+}
+
+.btn-mint-outline:hover {
+  background: color-mix(in srgb, var(--vm-cyan) 10%, transparent);
 }
 
 .glass-light {

@@ -33,6 +33,10 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-vedamatch}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-vedamatch}
+      # Сеть этого compose приватная, и `postgres` в ней однозначен. Проверку
+      # entrypoint на generic-хост (она защищает от чужой базы в общей
+      # dokploy-network) здесь отключаем осознанно.
+      ALLOW_GENERIC_DB_HOST: '1'
     depends_on:
       postgres:
         condition: service_healthy

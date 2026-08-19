@@ -26,7 +26,7 @@ export default async function NotFound() {
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           <Link
             href="/"
-            className="rounded-full bg-magenta px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+            className="btn-mint rounded-full px-5 py-2.5 text-sm font-semibold transition"
           >
             {t("backHome")}
           </Link>
