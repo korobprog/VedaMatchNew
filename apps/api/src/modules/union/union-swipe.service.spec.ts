@@ -34,6 +34,7 @@ describe('UnionSwipeService', () => {
       findMany: jest.fn(),
       upsert: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
     },
     unionConnectionRequest: {
       findUnique: jest.fn(),
@@ -133,14 +134,67 @@ describe('UnionSwipeService', () => {
     await expect(
       service.decide('user-1', { toUserId: 'user-2', decision: 'like' }),
     ).resolves.toEqual(expect.objectContaining({ matched: true }));
-    expect(connections.create).toHaveBeenNthCalledWith(1, 'user-2', {
-      toUserId: 'user-1',
-    });
+    // Встречная заявка — служебная, без пуша «X прислал заявку».
+    expect(connections.create).toHaveBeenNthCalledWith(
+      1,
+      'user-2',
+      { toUserId: 'user-1' },
+      { silent: true },
+    );
     expect(connections.create).toHaveBeenNthCalledWith(2, 'user-1', {
       toUserId: 'user-2',
       message: null,
       isSuperlike: false,
     });
+  });
+
+  it('rolls back a fresh like when the connection request is refused', async () => {
+    // Строки свайпа раньше не было — на откате её удаляем целиком.
+    prisma.unionSwipe.findUnique.mockResolvedValue(null);
+    connections.create.mockRejectedValue(new Error('Отправка недоступна'));
+
+    await expect(
+      service.decide('user-1', { toUserId: 'user-2', decision: 'like' }),
+    ).rejects.toThrow('Отправка недоступна');
+    expect(prisma.unionSwipe.upsert).toHaveBeenCalled();
+    expect(prisma.unionSwipe.delete).toHaveBeenCalledWith({
+      where: { fromUserId_toUserId: { fromUserId: 'user-1', toUserId: 'user-2' } },
+    });
+    expect(prisma.unionSwipe.update).not.toHaveBeenCalled();
+  });
+
+  it('restores the previous swipe row when the connection request is refused', async () => {
+    const earlier = new Date('2026-08-01T10:00:00.000Z');
+    prisma.unionSwipe.findUnique
+      // Прежнее состояние строки: откатанный суперлайк.
+      .mockResolvedValueOnce(swipe({ decision: 'superlike', undoneAt: earlier }))
+      // Встречный свайп для likedMe.
+      .mockResolvedValueOnce(null);
+    prisma.unionSwipe.findUnique.mockResolvedValue(null);
+    connections.create.mockRejectedValue(new Error('Отправка недоступна'));
+
+    await expect(
+      service.decide('user-1', { toUserId: 'user-2', decision: 'like' }),
+    ).rejects.toThrow('Отправка недоступна');
+    expect(prisma.unionSwipe.delete).not.toHaveBeenCalled();
+    expect(prisma.unionSwipe.update).toHaveBeenCalledWith({
+      where: { fromUserId_toUserId: { fromUserId: 'user-1', toUserId: 'user-2' } },
+      data: { decision: 'superlike', createdAt: now, undoneAt: earlier },
+    });
+  });
+
+  it('keeps a private one-sided like without rolling it back', async () => {
+    // Строгий режим у цели — это не ошибка, свайп должен остаться.
+    prisma.unionProfile.findUnique.mockResolvedValue({
+      userId: 'user-2',
+      contactMode: 'mutual_only',
+    });
+    prisma.unionSwipe.findUnique.mockResolvedValue(null);
+
+    await service.decide('user-1', { toUserId: 'user-2', decision: 'like' });
+
+    expect(prisma.unionSwipe.delete).not.toHaveBeenCalled();
+    expect(prisma.unionSwipe.update).not.toHaveBeenCalled();
   });
 
   it('ignores an undone like of the other person when deciding on a match', async () => {
@@ -182,6 +236,29 @@ describe('UnionSwipeService', () => {
       service.decide('user-1', { toUserId: 'user-2', decision: 'superlike' }),
     ).rejects.toThrow('Суперлайки на сегодня закончились');
     expect(prisma.unionSwipe.upsert).not.toHaveBeenCalled();
+  });
+
+  it('counts undone superlikes against the quota so undo does not refund it', async () => {
+    prisma.unionSwipe.findUnique.mockResolvedValue(null);
+    connections.create.mockResolvedValue({
+      id: 'request-1',
+      status: 'pending',
+    });
+
+    await service.decide('user-1', {
+      toUserId: 'user-2',
+      decision: 'superlike',
+    });
+
+    const [{ where }] = prisma.unionSwipe.count.mock.calls[0] as unknown as [
+      { where: Record<string, unknown> },
+    ];
+    expect(where).toEqual({
+      fromUserId: 'user-1',
+      decision: 'superlike',
+      createdAt: { gte: expect.any(Date) as Date },
+    });
+    expect(where).not.toHaveProperty('undoneAt');
   });
 
   it('leaves an ordinary like out of the superlike quota', async () => {

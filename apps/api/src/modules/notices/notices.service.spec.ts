@@ -53,6 +53,7 @@ function makeService(notice: Record<string, unknown>) {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
   );
   // recountRubric дергает Prisma сложнее, чем нужно тесту — гасим.
   jest

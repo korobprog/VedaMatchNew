@@ -8,8 +8,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UserGalleryService } from '../users/user-gallery.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { MotivationGenerationService } from '../motivation/motivation-generation.service';
+import { UnionBoostService } from './union-boost.service';
+import { UnionConnectionService } from './union-connection.service';
 import { UnionMatchingService } from './union-matching.service';
 import { UnionProfileService } from './union-profile.service';
+import { UnionSwipeService } from './union-swipe.service';
 
 const createdAt = new Date('2026-07-10T10:00:00.000Z');
 
@@ -278,6 +281,13 @@ describe('UnionProfileService', () => {
     moderation as unknown as ModerationService,
     generation as unknown as MotivationGenerationService,
     users as never,
+    // Свайпы и бусты — настоящие сервисы поверх того же мока Prisma: так
+    // тесты выдачи проверяют реальные запросы, а не ещё один слой моков.
+    new UnionSwipeService(
+      prisma as unknown as PrismaService,
+      {} as UnionConnectionService,
+    ),
+    new UnionBoostService(prisma as unknown as PrismaService),
   );
 
   beforeEach(() => {
@@ -884,6 +894,26 @@ describe('UnionProfileService', () => {
       socialLinks: { website: 'https://other.example.com' },
       messengers: { telegram: '@other' },
     });
+  });
+
+  it('looks up a single card only among active, non-deleting accounts', async () => {
+    prisma.unionProfile.findUnique
+      .mockResolvedValueOnce(profile('me'))
+      // Второй findUnique — карточка цели с фильтром по аккаунту.
+      .mockResolvedValueOnce(profile('other'));
+    prisma.unionConnectionRequest.findFirst.mockResolvedValue(null);
+
+    await service.getRecommendationForUser('me', 'other');
+
+    expect(prisma.unionProfile.findUnique).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: {
+          userId: 'other',
+          user: { accountStatus: 'active', pendingDeletionAt: null },
+        },
+      }),
+    );
   });
 
   it('rejects an inactive profile without an accepted connection', async () => {

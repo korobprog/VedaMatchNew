@@ -54,6 +54,9 @@ describe('UnionChatService', () => {
       ),
       updateMany: jest.fn(),
     },
+    unionMessageReaction: {
+      findMany: jest.fn(),
+    },
   };
   const users = {
     resolveAvatarUrl: jest.fn(
@@ -186,11 +189,42 @@ describe('UnionChatService', () => {
       expect(result.messages).toEqual([]);
       expect(prisma.unionChatMessage.findMany).toHaveBeenCalledWith({
         where: { requestId: 'request-1' },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
         take: 200,
       });
     },
   );
+
+  it('отдаёт последние сообщения в хронологическом порядке', async () => {
+    prisma.unionConnectionRequest.findUnique.mockResolvedValue(connection());
+    // Prisma вернёт свежие первыми (desc) — сервис должен развернуть.
+    prisma.unionChatMessage.findMany.mockResolvedValue([
+      {
+        id: 'm-new',
+        requestId: 'request-1',
+        fromUserId: 'sender',
+        body: 'Новое',
+        createdAt: new Date('2026-07-10T12:00:00.000Z'),
+        editedAt: null,
+      },
+      {
+        id: 'm-old',
+        requestId: 'request-1',
+        fromUserId: 'recipient',
+        body: 'Старое',
+        createdAt: new Date('2026-07-10T09:00:00.000Z'),
+        editedAt: null,
+      },
+    ]);
+    prisma.unionMessageReaction.findMany.mockResolvedValue([]);
+
+    const result = await service.getChat('sender', 'request-1');
+
+    expect(result.messages.map((message) => message.id)).toEqual([
+      'm-old',
+      'm-new',
+    ]);
+  });
 
   it('sends a trimmed message in an accepted chat', async () => {
     prisma.unionConnectionRequest.findUnique.mockResolvedValue(connection());

@@ -134,10 +134,19 @@ export function haversineKm(
   return EARTH_RADIUS_KM * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-/** SQL, отдающий id объявлений внутри радиуса. Рамка плюс гаверсинус. */
-export function radiusIdsSql(filter: RadiusFilter): Prisma.Sql {
+/**
+ * SQL, отдающий id объявлений внутри радиуса. Рамка плюс гаверсинус.
+ *
+ * Живость проверяется прямо здесь, а не только в общем `where` ленты: иначе
+ * потолок MAX_RADIUS_MATCHES выедали бы протухшие и скрытые записи, и живые
+ * объявления в радиусе просто не доходили бы до ленты. `now` передаётся, как
+ * и в buildFeedWhere: живость определяется данными, а не воркером.
+ */
+export function radiusIdsSql(filter: RadiusFilter, now: Date): Prisma.Sql {
   const box = boundingBox(filter.lat, filter.lon, filter.radiusKm);
   const parts: Prisma.Sql[] = [
+    Prisma.sql`"status" = 'published'`,
+    Prisma.sql`"expiresAt" > ${now}`,
     Prisma.sql`"latitude" IS NOT NULL`,
     Prisma.sql`"longitude" IS NOT NULL`,
     Prisma.sql`"latitude" BETWEEN ${box.minLat} AND ${box.maxLat}`,

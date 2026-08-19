@@ -4,7 +4,10 @@ import {
   COMMUNITY_NAME_MAX_LENGTH,
   type CommunityJoinPolicy,
   type CommunityKind,
+  type CommunityMemberRole,
+  type CommunityStatus,
   type ProfileLocation,
+  type UpdateCommunityRequest,
 } from '@vedamatch/shared';
 
 export const COMMUNITY_KINDS: CommunityKind[] = [
@@ -24,6 +27,23 @@ export const COMMUNITY_JOIN_POLICIES: CommunityJoinPolicy[] = [
   'invite_only',
 ];
 
+/**
+ * Статусы, которые владелец/админ общины меняет сам через PATCH. Остальные
+ * (`pending`, `removed_by_admin`, …) — решение администрации портала, и
+ * принимать их из тела запроса нельзя, иначе Prisma упадёт 500 на неизвестном
+ * значении или, хуже, община сама выйдет из-под модерации.
+ */
+export const COMMUNITY_EDITABLE_STATUSES: NonNullable<
+  UpdateCommunityRequest['status']
+>[] = ['active', 'paused', 'archived'];
+
+export const COMMUNITY_MEMBER_ROLES: CommunityMemberRole[] = [
+  'owner',
+  'admin',
+  'moderator',
+  'member',
+];
+
 export const MAX_ADDRESS_LENGTH = 300;
 
 export type CommunityValidationError =
@@ -34,7 +54,21 @@ export type CommunityValidationError =
   | 'kind_invalid'
   | 'join_policy_invalid'
   | 'location_invalid'
+  | 'status_invalid'
+  | 'role_invalid'
   | 'title_too_long';
+
+export function isEditableCommunityStatus(
+  value: unknown,
+): value is CommunityStatus {
+  return (COMMUNITY_EDITABLE_STATUSES as unknown[]).includes(value);
+}
+
+export function isCommunityMemberRole(
+  value: unknown,
+): value is CommunityMemberRole {
+  return (COMMUNITY_MEMBER_ROLES as unknown[]).includes(value);
+}
 
 export interface CommunityValidationInput {
   kind?: CommunityKind | null;
@@ -120,5 +154,7 @@ export const COMMUNITY_VALIDATION_MESSAGES: Record<
   kind_invalid: 'Выберите тип общины',
   join_policy_invalid: 'Неизвестный порядок вступления',
   location_invalid: 'Город указан неверно',
+  status_invalid: 'Недопустимый статус общины',
+  role_invalid: 'Неизвестная роль участника',
   title_too_long: `Служение длиннее ${COMMUNITY_MEMBER_TITLE_MAX_LENGTH} символов`,
 };

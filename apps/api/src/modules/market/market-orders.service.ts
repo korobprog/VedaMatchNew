@@ -9,12 +9,16 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   MarketOrderDto,
   MarketOrderListResponse,
-  MarketOrderStatus,
   NotificationEvent,
   UpdateMarketOrderStatusRequest,
 } from '@vedamatch/shared';
 import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  MARKET_ORDER_STATUSES,
+  assertOneOf,
+  parseOptionalEnum,
+} from './market-enums';
 import {
   availableTransitions,
   canTransition,
@@ -75,13 +79,15 @@ export class MarketOrdersService {
     const role: OrderActor = params.role === 'seller' ? 'seller' : 'buyer';
 
     const where: Prisma.MarketOrderWhereInput =
-      role === 'seller'
-        ? { shop: { ownerId: userId } }
-        : { buyerId: userId };
+      role === 'seller' ? { shop: { ownerId: userId } } : { buyerId: userId };
 
-    if (params.status) {
-      where.status = params.status as MarketOrderStatus;
-    }
+    // Фильтр из query: мусор вместо статуса — 400, а не 500 из Prisma.
+    const status = parseOptionalEnum(
+      MARKET_ORDER_STATUSES,
+      params.status,
+      'invalid_status',
+    );
+    if (status) where.status = status;
 
     const cursor = decodeCursor(params.cursor);
     if (cursor) {
@@ -149,9 +155,11 @@ export class MarketOrdersService {
 
     const isBuyer = order.buyerId === userId;
     const isSeller = order.shop.ownerId === userId;
-    if (!isBuyer && !isSeller) throw new ForbiddenException('not_order_participant');
+    if (!isBuyer && !isSeller)
+      throw new ForbiddenException('not_order_participant');
 
     const actor: OrderActor = isSeller ? 'seller' : 'buyer';
+    assertOneOf(MARKET_ORDER_STATUSES, body.status, 'invalid_status');
     if (!canTransition(order.status, body.status, actor)) {
       throw new BadRequestException('invalid_order_transition');
     }
@@ -163,7 +171,8 @@ export class MarketOrdersService {
 
     const now = new Date();
     const closing =
-      body.status === 'declined_by_seller' || body.status === 'cancelled_by_buyer';
+      body.status === 'declined_by_seller' ||
+      body.status === 'cancelled_by_buyer';
 
     await this.prisma.$transaction(async (tx) => {
       // Переход только из того статуса, который мы проверили: иначе
@@ -287,7 +296,8 @@ function decodeCursor(
     const parsed = JSON.parse(
       Buffer.from(cursor, 'base64url').toString('utf8'),
     ) as { c?: unknown; i?: unknown };
-    if (typeof parsed.c !== 'string' || typeof parsed.i !== 'string') return null;
+    if (typeof parsed.c !== 'string' || typeof parsed.i !== 'string')
+      return null;
     const createdAt = new Date(parsed.c);
     if (Number.isNaN(createdAt.getTime())) return null;
     return { createdAt, id: parsed.i };

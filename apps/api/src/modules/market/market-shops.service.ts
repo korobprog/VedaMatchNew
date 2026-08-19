@@ -16,7 +16,11 @@ import type {
   UpdateMarketShopRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import { MarketImagesService, type UploadedImageFile } from './market-images.service';
+import { OWNER_SHOP_STATUSES, assertOneOf } from './market-enums';
+import {
+  MarketImagesService,
+  type UploadedImageFile,
+} from './market-images.service';
 import { buildShopSlug, isReservedShopSlug, withSlugSuffix } from './shop-slug';
 
 const MAX_NAME_LENGTH = 80;
@@ -165,7 +169,8 @@ export class MarketShopsService {
   ): Promise<MarketShopDto> {
     // Согласие с правилами — обязательное условие, а не галочка для вида:
     // именно на него ссылается модерация, снимая объявление.
-    if (!body.rulesAccepted) throw new BadRequestException('rules_not_accepted');
+    if (!body.rulesAccepted)
+      throw new BadRequestException('rules_not_accepted');
 
     const existing = await this.prisma.marketShop.findUnique({
       where: { ownerId: userId },
@@ -235,10 +240,21 @@ export class MarketShopsService {
     // Владелец переключает только между «работает» и «закрыт»; статусы
     // модерации ставит система и админ, и через этот маршрут их не снять.
     if (body.status !== undefined) {
-      if (shop.status !== 'active' && shop.status !== 'closed' && !viewerIsAdmin) {
+      // Тип DTO сужает статус до active|closed, но тип не защищает от JSON:
+      // без проверки владелец мог бы прислать `blocked_by_admin` или мусор.
+      const status = assertOneOf(
+        OWNER_SHOP_STATUSES,
+        body.status,
+        'invalid_status',
+      );
+      if (
+        shop.status !== 'active' &&
+        shop.status !== 'closed' &&
+        !viewerIsAdmin
+      ) {
         throw new ForbiddenException('shop_status_locked');
       }
-      data.status = body.status;
+      data.status = status;
     }
 
     const updated = await this.prisma.marketShop.update({
@@ -362,7 +378,9 @@ export class MarketShopsService {
   private normalizeTexts(
     body: Partial<CreateMarketShopRequest & UpdateMarketShopRequest>,
     existing?: ShopRow,
-  ): Partial<Record<'taglineRu' | 'taglineEn' | 'aboutRu' | 'aboutEn', string | null>> {
+  ): Partial<
+    Record<'taglineRu' | 'taglineEn' | 'aboutRu' | 'aboutEn', string | null>
+  > {
     const result: Record<string, string | null> = {};
     const fields = [
       ['taglineRu', MAX_TAGLINE_LENGTH],
@@ -457,7 +475,8 @@ function decodeShopCursor(
     const parsed = JSON.parse(
       Buffer.from(cursor, 'base64url').toString('utf8'),
     ) as { c?: unknown; i?: unknown };
-    if (typeof parsed.c !== 'string' || typeof parsed.i !== 'string') return null;
+    if (typeof parsed.c !== 'string' || typeof parsed.i !== 'string')
+      return null;
     const createdAt = new Date(parsed.c);
     if (Number.isNaN(createdAt.getTime())) return null;
     return { createdAt, id: parsed.i };

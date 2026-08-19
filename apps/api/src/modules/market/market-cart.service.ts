@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
@@ -7,12 +11,14 @@ import type {
   MarketCartItemDto,
   MarketCheckoutRequest,
   MarketCheckoutResponse,
+  MarketDeliveryOption,
   NotificationEvent,
 } from '@vedamatch/shared';
 import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { checkCartEligibility, isAvailable } from './market-availability';
 import { lineTotal, splitCart, type CartRow } from './cart-split';
+import { MARKET_DELIVERY_OPTIONS, isOneOf } from './market-enums';
 import { MarketOrdersService } from './market-orders.service';
 
 /** Больше — это уже опт, а он делается перепиской, а не корзиной. */
@@ -53,7 +59,9 @@ const CART_SELECT = {
   },
 } satisfies Prisma.MarketCartItemSelect;
 
-type CartItemRow = Prisma.MarketCartItemGetPayload<{ select: typeof CART_SELECT }>;
+type CartItemRow = Prisma.MarketCartItemGetPayload<{
+  select: typeof CART_SELECT;
+}>;
 
 @Injectable()
 export class MarketCartService {
@@ -89,7 +97,9 @@ export class MarketCartService {
           shopName: shop.name,
           shopLogoUrl: shop.logoUrl,
           currency: group.currency,
-          items: group.rows.map((row) => toCartItemDto(byListingId.get(row.listingId)!)),
+          items: group.rows.map((row) =>
+            toCartItemDto(byListingId.get(row.listingId)!),
+          ),
           subtotalMinor: group.subtotalMinor,
           deliveryOptions: shop.deliveryOptions,
         };
@@ -107,7 +117,10 @@ export class MarketCartService {
     return this.prisma.marketCartItem.count({ where: { userId } });
   }
 
-  async add(userId: string, body: AddToMarketCartRequest): Promise<MarketCartDto> {
+  async add(
+    userId: string,
+    body: AddToMarketCartRequest,
+  ): Promise<MarketCartDto> {
     const listing = await this.loadListing(body.listingId);
     if (listing.shop.ownerId === userId) {
       throw new BadRequestException('cannot_order_own_listing');
@@ -174,7 +187,9 @@ export class MarketCartService {
   }
 
   async remove(userId: string, listingId: string): Promise<MarketCartDto> {
-    await this.prisma.marketCartItem.deleteMany({ where: { userId, listingId } });
+    await this.prisma.marketCartItem.deleteMany({
+      where: { userId, listingId },
+    });
     return this.get(userId);
   }
 
@@ -228,6 +243,16 @@ export class MarketCartService {
           throw new BadRequestException('order_total_too_large');
         }
 
+        // Способ доставки — из enum и из тех, что магазин реально предлагает:
+        // иначе продавцу приезжала бы заявка «курьером» от магазина, который
+        // работает только на самовывоз, а мусор вместо enum ронял бы Prisma 500-кой.
+        const shopDeliveryOptions = byListingId.get(group.rows[0].listingId)!
+          .listing.shop.deliveryOptions;
+        const deliveryOption = resolveDeliveryOption(
+          wanted.deliveryOption,
+          shopDeliveryOptions,
+        );
+
         for (const row of group.rows) {
           const item = byListingId.get(row.listingId)!;
           const rejection = checkCartEligibility({
@@ -237,7 +262,8 @@ export class MarketCartService {
             shopStatus: item.listing.shop.status,
             requestedQuantity: item.quantity,
           });
-          if (rejection) throw new BadRequestException('cart_items_unavailable');
+          if (rejection)
+            throw new BadRequestException('cart_items_unavailable');
         }
 
         const order = await tx.marketOrder.create({
@@ -246,7 +272,7 @@ export class MarketCartService {
             shopId: group.shopId,
             currency: group.currency,
             totalMinor: group.subtotalMinor,
-            deliveryOption: wanted.deliveryOption ?? null,
+            deliveryOption,
             deliveryNote: wanted.deliveryNote?.trim() || null,
             buyerComment: wanted.comment?.trim() || null,
             items: {
@@ -305,7 +331,10 @@ export class MarketCartService {
         // Из корзины уходят только оформленные позиции: остальные группы
         // человек мог намеренно оставить на потом.
         await tx.marketCartItem.deleteMany({
-          where: { userId, listingId: { in: group.rows.map((r) => r.listingId) } },
+          where: {
+            userId,
+            listingId: { in: group.rows.map((r) => r.listingId) },
+          },
         });
       }
 
@@ -360,7 +389,10 @@ export class MarketCartService {
 }
 
 /** У услуги количество бессмысленно — она не кончается и не делится. */
-function normalizeQuantity(kind: 'product' | 'service', requested: number): number {
+function normalizeQuantity(
+  kind: 'product' | 'service',
+  requested: number,
+): number {
   if (kind === 'service') return 1;
   if (!Number.isInteger(requested) || requested < 1) {
     throw new BadRequestException('quantity_invalid');
@@ -406,8 +438,27 @@ function toCartItemDto(row: CartItemRow): MarketCartItemDto {
     lineTotalMinor:
       row.listing.priceMinor === null
         ? null
-        : lineTotal({ priceMinor: row.listing.priceMinor, quantity: row.quantity }),
+        : lineTotal({
+            priceMinor: row.listing.priceMinor,
+            quantity: row.quantity,
+          }),
     available,
     quantityAvailable: row.listing.trackStock ? row.listing.quantity : null,
   };
+}
+
+/** Способ доставки не обязателен (услуги, самовывоз «по договорённости»),
+ *  но если указан — только из enum и только из предложенных магазином. */
+function resolveDeliveryOption(
+  wanted: unknown,
+  shopOptions: readonly MarketDeliveryOption[],
+): MarketDeliveryOption | null {
+  if (wanted === undefined || wanted === null || wanted === '') return null;
+  if (!isOneOf(MARKET_DELIVERY_OPTIONS, wanted)) {
+    throw new BadRequestException('delivery_option_unavailable');
+  }
+  if (!shopOptions.includes(wanted)) {
+    throw new BadRequestException('delivery_option_unavailable');
+  }
+  return wanted;
 }

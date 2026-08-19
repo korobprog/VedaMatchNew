@@ -83,9 +83,17 @@ export class UnionConnectionService {
     };
   }
 
+  /**
+   * `options.silent` — не слать получателю уведомление «X прислал заявку».
+   * Нужно, когда заявку заводит не сам человек, а сервис свайпов: при
+   * взаимном лайке он создаёт служебную встречную заявку от того, кто
+   * лайкнул первым, и без флага «мне» приходил пуш о заявке, хотя мэтч
+   * уже состоялся. Уведомление о самом мэтче (`accepted`) флаг не трогает.
+   */
   async create(
     fromUserId: string,
     body: UnionCreateConnectionRequest,
+    options: { silent?: boolean } = {},
   ): Promise<UnionConnectionRequestDto> {
     const toUserId = String(body.toUserId ?? '').trim();
     if (!toUserId) throw new BadRequestException('toUserId is required');
@@ -181,12 +189,14 @@ export class UnionConnectionService {
       // поход в базу за одним именем здесь не нужен.
       include: { toUser: { include: { unionProfile: true } }, fromUser: true },
     });
-    const requested = {
-      name: 'union.connection.requested',
-      recipientId: toUserId,
-      senderName: resolveDisplayName(request.fromUser),
-    } satisfies NotificationEvent;
-    this.events.emit(requested.name, requested);
+    if (!options.silent) {
+      const requested = {
+        name: 'union.connection.requested',
+        recipientId: toUserId,
+        senderName: resolveDisplayName(request.fromUser),
+      } satisfies NotificationEvent;
+      this.events.emit(requested.name, requested);
+    }
     return this.toRequestDto(request, request.toUser, 'outgoing', false);
   }
 

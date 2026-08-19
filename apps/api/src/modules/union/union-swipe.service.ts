@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { UnionSwipe } from '@prisma/client';
 import type {
   UnionSwipeDecision,
   UnionSwipeRequest,
@@ -56,8 +57,19 @@ export class UnionSwipeService {
 
     if (decision === 'superlike') await this.requireSuperlikeQuota(fromUserId);
 
+    // Запоминаем прежнее состояние строки: если заявка не создастся, свайп
+    // нужно откатить ровно к нему, а не просто удалить (иначе потеряем,
+    // например, откатанный суперлайк, который всё ещё считается в квоте).
+    const previous = await this.prisma.unionSwipe.findUnique({
+      where: { fromUserId_toUserId: { fromUserId, toUserId } },
+    });
+
     // Повторный свайп по тому же человеку перезаписывает решение: колода могла
     // вернуть его после отката, и последнее слово должно остаться за человеком.
+    //
+    // Свайп пишем ДО заявки, а не после: встречная заявка при взаимности
+    // (`ensureIncomingRequest`) проходит через проверку «лайкнул ли я» в моём
+    // строгом режиме, и без записанного свайпа мэтч бы не открылся.
     await this.prisma.unionSwipe.upsert({
       where: { fromUserId_toUserId: { fromUserId, toUserId } },
       create: { fromUserId, toUserId, decision },
@@ -68,28 +80,60 @@ export class UnionSwipeService {
       return { toUserId, decision, matched: false, connection: null };
     }
 
-    const likedMe = await this.likedMe(fromUserId, toUserId);
-    // В строгом режиме односторонний лайк не превращается в заявку: человек
-    // узнает об интересе, только если ответит взаимностью.
-    if (!likedMe && target.contactMode === 'mutual_only') {
-      return { toUserId, decision, matched: false, connection: null };
-    }
-    // Взаимность есть, но встречной заявки нет — так бывает после лайка в
-    // строгом режиме. Заводим её от того, кто лайкнул первым, чтобы обычная
-    // логика заявок увидела встречный интерес и сразу открыла чат.
-    if (likedMe) await this.ensureIncomingRequest(fromUserId, toUserId);
+    try {
+      const likedMe = await this.likedMe(fromUserId, toUserId);
+      // В строгом режиме односторонний лайк не превращается в заявку: человек
+      // узнает об интересе, только если ответит взаимностью.
+      if (!likedMe && target.contactMode === 'mutual_only') {
+        return { toUserId, decision, matched: false, connection: null };
+      }
+      // Взаимность есть, но встречной заявки нет — так бывает после лайка в
+      // строгом режиме. Заводим её от того, кто лайкнул первым, чтобы обычная
+      // логика заявок увидела встречный интерес и сразу открыла чат.
+      if (likedMe) await this.ensureIncomingRequest(fromUserId, toUserId);
 
-    const connection = await this.connections.create(fromUserId, {
-      toUserId,
-      message: body.message ?? null,
-      isSuperlike: decision === 'superlike',
+      const connection = await this.connections.create(fromUserId, {
+        toUserId,
+        message: body.message ?? null,
+        isSuperlike: decision === 'superlike',
+      });
+      return {
+        toUserId,
+        decision,
+        matched: connection.status === 'accepted',
+        connection,
+      };
+    } catch (error) {
+      // Заявка не создалась (скрыт модерацией, «только подтверждённые»,
+      // «только по взаимным лайкам» и т.п.). Без отката человек исчезал бы
+      // из колоды, а заявки при этом не было — лайк терялся молча.
+      await this.rollbackSwipe(fromUserId, toUserId, previous);
+      throw error;
+    }
+  }
+
+  /**
+   * Возвращает строку свайпа к состоянию до `decide`: не было — удаляем,
+   * была — восстанавливаем решение, время и отметку отката.
+   */
+  private async rollbackSwipe(
+    fromUserId: string,
+    toUserId: string,
+    previous: Pick<UnionSwipe, 'decision' | 'createdAt' | 'undoneAt'> | null,
+  ): Promise<void> {
+    const where = { fromUserId_toUserId: { fromUserId, toUserId } };
+    if (!previous) {
+      await this.prisma.unionSwipe.delete({ where });
+      return;
+    }
+    await this.prisma.unionSwipe.update({
+      where,
+      data: {
+        decision: previous.decision,
+        createdAt: previous.createdAt,
+        undoneAt: previous.undoneAt,
+      },
     });
-    return {
-      toUserId,
-      decision,
-      matched: connection.status === 'accepted',
-      connection,
-    };
   }
 
   /**
@@ -180,13 +224,16 @@ export class UnionSwipeService {
     return new Set(rows.map((row) => row.toUserId));
   }
 
-  /** Суточная квота суперлайков. В бете щедрая, см. union-limits.ts. */
+  /**
+   * Суточная квота суперлайков. В бете щедрая, см. union-limits.ts.
+   * Откатанные суперлайки тоже считаются: иначе откат возвращал бы квоту,
+   * и связка «суперлайк → откат» давала бы бесконечные суперлайки.
+   */
   private async requireSuperlikeQuota(fromUserId: string): Promise<void> {
     const used = await this.prisma.unionSwipe.count({
       where: {
         fromUserId,
         decision: 'superlike',
-        undoneAt: null,
         createdAt: { gte: quotaWindowStart() },
       },
     });
@@ -220,7 +267,13 @@ export class UnionSwipeService {
     });
     if (existing) return;
     try {
-      await this.connections.create(otherUserId, { toUserId: userId });
+      // Служебная заявка: без `silent` мне пришёл бы пуш «X прислал заявку»,
+      // хотя на самом деле мэтч уже состоялся.
+      await this.connections.create(
+        otherUserId,
+        { toUserId: userId },
+        { silent: true },
+      );
     } catch {
       // Например, я принимаю запросы только от подтверждённых преданных.
       // Тогда заявка уйдёт обычным путём — от меня к ним.
