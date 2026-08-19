@@ -56,6 +56,11 @@ export class QuoteVerificationService {
     return this.repository.listChapterUnits(bookSlug, chapterSlug);
   }
 
+  /** Содержимое главы для читалки: там части стиха лежат раздельно. */
+  chapterPayload(bookSlug: string, chapterSlug: string) {
+    return this.repository.loadChapterPayload(bookSlug, chapterSlug);
+  }
+
   async verifyVedabaseCandidate(
     candidate: VedabaseQuoteCandidate,
   ): Promise<VerifiedQuote> {

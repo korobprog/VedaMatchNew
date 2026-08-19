@@ -110,6 +110,46 @@ export class VedabaseContentRepository {
   }
 
   /**
+   * Главы книги вместе с содержимым для читалки.
+   *
+   * Поисковая единица склеивает все части стиха в одну строку — деванагари,
+   * транслитерацию, пословный перевод, перевод и комментарий, — и подходит
+   * для поиска, но не для показа. Здесь отдаётся payload, из которого можно
+   * взять именно перевод.
+   */
+  async loadChapterPayload(
+    bookSlug: string,
+    chapterSlug: string,
+  ): Promise<{
+    bookSlug: string;
+    bookTitle: string;
+    bookAuthor: string | null;
+    bookLanguage: string;
+    chapterSlug: string;
+    payload: unknown;
+  } | null> {
+    const rows = await this.prisma.$queryRaw<
+      {
+        bookSlug: string;
+        bookTitle: string;
+        bookAuthor: string | null;
+        bookLanguage: string;
+        chapterSlug: string;
+        payload: unknown;
+      }[]
+    >(Prisma.sql`
+      SELECT b.slug AS "bookSlug", b.title AS "bookTitle", b.author AS "bookAuthor",
+        b.language AS "bookLanguage", c.slug AS "chapterSlug", c.payload
+      FROM "VedabaseChapter" c
+      JOIN "VedabaseBookVersion" v ON v.id = c."versionId"
+      JOIN "VedabaseBook" b ON b."activeVersionId" = v.id
+      WHERE b.slug = ${bookSlug} AND c.slug = ${chapterSlug}
+      LIMIT 1
+    `);
+    return rows[0] ?? null;
+  }
+
+  /**
    * Единицы одной главы из поискового индекса: там уже чистый текст и
    * локатор, в отличие от payload главы, где лежит HTML для читалки.
    */
