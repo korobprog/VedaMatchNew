@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { AccountAnonymizeService } from './account-anonymize.service';
 import { AdminUsersController } from './admin-users.controller';
 import { AdminUsersService } from './admin-users.service';
 import { GeoController } from './geo.controller';
@@ -18,7 +19,12 @@ import { UsersService } from './users.service';
     GeoController,
     AdminUsersController,
   ],
-  providers: [UsersService, UserGalleryService, AdminUsersService],
+  providers: [
+    UsersService,
+    UserGalleryService,
+    AdminUsersService,
+    AccountAnonymizeService,
+  ],
   exports: [UsersService, UserGalleryService],
 })
 export class UsersModule {}

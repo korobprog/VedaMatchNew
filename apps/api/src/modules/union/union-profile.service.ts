@@ -123,6 +123,13 @@ const INCOME_VALUES: UnionIncomeLevel[] = [
 ];
 const DEFAULT_PAGE_SIZE = 12;
 const MAX_PAGE_SIZE = 50;
+/**
+ * Сколько анкет поднимать из БД под скоринг. Раньше грузилась вся таблица;
+ * теперь грубые фильтры (пол, возраст, статусы, уже отсмотренные) уходят в
+ * SQL, а сверху — потолок с сортировкой по свежести активности, чтобы
+ * колода не росла вместе с таблицей. Радиус и скоринг остаются в JS.
+ */
+export const RECOMMENDATION_CANDIDATE_LIMIT = 500;
 /** Порог веса цели «Создание семьи», начиная с которого включается авто-сужение по полу. */
 const FAMILY_GENDER_RESTRICTION_THRESHOLD = 50;
 
@@ -315,12 +322,30 @@ export class UnionProfileService {
     }
     this.requireLocation(me.user);
 
+    // Кого уже отсмотрели и кто скрыт — знают профильные сервисы; их
+    // множества уходят в SQL как notIn, а JS-фильтр ниже остаётся страховкой.
+    const hidden = await this.moderation.hiddenUserIds(userId, 'union');
+    const swiped = await this.swipes.swipedUserIds(userId);
+    const normalizedFilters = this.normalizeFilters(filters);
+    const myAgePreference: MyAgePreference = {
+      age: calculateAge(me.user.birthDate),
+      ageRangeMin: me.ageRangeMin,
+      ageRangeMax: me.ageRangeMax,
+    };
+
     const others = await this.prisma.unionProfile.findMany({
-      where: {
-        isActive: true,
-        userId: { not: userId },
-        user: { accountStatus: 'active', pendingDeletionAt: null },
-      },
+      where: buildRecommendationCandidateWhere({
+        userId,
+        excludedUserIds: [...swiped, ...hidden],
+        filters: normalizedFilters,
+        myAge: myAgePreference,
+      }),
+      // Потолок кандидатов: сначала недавно активные — им скоринг нужнее.
+      orderBy: [
+        { user: { lastSeenAt: { sort: 'desc', nulls: 'last' } } },
+        { createdAt: 'desc' },
+      ],
+      take: RECOMMENDATION_CANDIDATE_LIMIT,
       include: {
         intentions: true,
         user: {
@@ -341,14 +366,10 @@ export class UnionProfileService {
     });
 
     const connections = await this.connectionMap(userId);
-    const hidden = await this.moderation.hiddenUserIds(userId, 'union');
-    // Кого уже отсмотрели и чьи анкеты подняты «Вниманием» — знают
-    // профильные сервисы; дублировать их запросы здесь незачем.
-    const swiped = await this.swipes.swipedUserIds(userId);
+    // Чьи анкеты подняты «Вниманием» — знает сервис бустов.
     const boosted = await this.boosts.boostedUserIds();
     const myInput = this.toMatchInput(me, me.user);
     const myFamilyGender = familyGenderContext(me, me.user.gender);
-    const normalizedFilters = this.normalizeFilters(filters);
     const beforeIntentions = others
       .filter((other) => !hidden.has(other.userId))
       .filter((other) => !swiped.has(other.userId))
@@ -359,11 +380,7 @@ export class UnionProfileService {
           other.user,
           normalizedFilters,
           myInput,
-          {
-            age: calculateAge(me.user.birthDate),
-            ageRangeMin: me.ageRangeMin,
-            ageRangeMax: me.ageRangeMax,
-          },
+          myAgePreference,
           myFamilyGender,
         ),
       )
@@ -398,26 +415,26 @@ export class UnionProfileService {
           )
         : beforeIntentions
     ).sort((a, b) => {
-        // Активное «Внимание» поднимает анкету над остальными.
-        const byBoost =
-          Number(boosted.has(b.other.userId)) -
-          Number(boosted.has(a.other.userId));
-        if (byBoost !== 0) return byBoost;
-        if (normalizedFilters.sort === 'new') {
-          const byFresh =
-            b.other.createdAt.getTime() - a.other.createdAt.getTime();
-          if (byFresh !== 0) return byFresh;
-        }
-        const byScore =
-          b.recommendation.compatibility.total -
-          a.recommendation.compatibility.total;
-        if (byScore !== 0) return byScore;
-        // При равной совместимости выше идут подтверждённые администрацией.
-        return (
-          Number(b.recommendation.user.isVerifiedDevotee) -
-          Number(a.recommendation.user.isVerifiedDevotee)
-        );
-      });
+      // Активное «Внимание» поднимает анкету над остальными.
+      const byBoost =
+        Number(boosted.has(b.other.userId)) -
+        Number(boosted.has(a.other.userId));
+      if (byBoost !== 0) return byBoost;
+      if (normalizedFilters.sort === 'new') {
+        const byFresh =
+          b.other.createdAt.getTime() - a.other.createdAt.getTime();
+        if (byFresh !== 0) return byFresh;
+      }
+      const byScore =
+        b.recommendation.compatibility.total -
+        a.recommendation.compatibility.total;
+      if (byScore !== 0) return byScore;
+      // При равной совместимости выше идут подтверждённые администрацией.
+      return (
+        Number(b.recommendation.user.isVerifiedDevotee) -
+        Number(a.recommendation.user.isVerifiedDevotee)
+      );
+    });
 
     const page = normalizedFilters.page ?? 1;
     const pageSize = normalizedFilters.pageSize ?? DEFAULT_PAGE_SIZE;
@@ -1247,10 +1264,16 @@ function passesFamilyGenderRestriction(
 ): boolean {
   // Пол второй стороны не указан — соответствие проверить нечем, поэтому
   // такая анкета в сужённую ленту не попадает.
-  if (isFamilyGenderRestricted(viewer) && candidate.gender !== viewer.seeksGender) {
+  if (
+    isFamilyGenderRestricted(viewer) &&
+    candidate.gender !== viewer.seeksGender
+  ) {
     return false;
   }
-  if (isFamilyGenderRestricted(candidate) && viewer.gender !== candidate.seeksGender) {
+  if (
+    isFamilyGenderRestricted(candidate) &&
+    viewer.gender !== candidate.seeksGender
+  ) {
     return false;
   }
   return true;
@@ -1336,4 +1359,114 @@ function haversineKm(
 
 function toRad(value: number): number {
   return (value * Math.PI) / 180;
+}
+
+/**
+ * Границы `birthDate` для «возраст от min до max лет» на дату `now`.
+ * Считаются с запасом в пару дней в обе стороны: точный возраст (с учётом
+ * 29 февраля и часовых поясов) досчитывает `calculateAge` в JS, а задача
+ * SQL-условия — отсечь заведомо лишние анкеты по индексу, никого не потеряв.
+ */
+export function birthDateBoundsForAge(
+  minAge: number | null | undefined,
+  maxAge: number | null | undefined,
+  now: Date = new Date(),
+): { lte?: Date; gte?: Date } {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const d = now.getUTCDate();
+  const bounds: { lte?: Date; gte?: Date } = {};
+  // Возраст >= minAge — день рождения номер minAge уже наступил.
+  if (minAge != null) bounds.lte = new Date(Date.UTC(y - minAge, m, d + 2));
+  // Возраст <= maxAge — день рождения номер maxAge + 1 ещё не наступил.
+  if (maxAge != null) bounds.gte = new Date(Date.UTC(y - maxAge - 1, m, d - 2));
+  return bounds;
+}
+
+/**
+ * Грубый SQL-фильтр кандидатов в колоду. Переносит в БД только то, что
+ * там выражается без изменения смысла: активность анкеты, статус аккаунта,
+ * уже отсмотренных/скрытых, явные фильтры по полу, этапу, питанию, детям,
+ * верификации и возрасту (с запасом), взаимные пожелания к возрасту.
+ * Семейное авто-сужение по полу, радиус, «неполная локация» и скоринг
+ * остаются в JS (`matchesFilters`), который повторяет и всё, что здесь.
+ */
+export function buildRecommendationCandidateWhere(input: {
+  userId: string;
+  excludedUserIds: string[];
+  filters: UnionRecommendationFilters;
+  myAge: MyAgePreference;
+  now?: Date;
+}): Prisma.UnionProfileWhereInput {
+  const { userId, filters, myAge } = input;
+  const now = input.now ?? new Date();
+  const excluded = [...new Set(input.excludedUserIds)].filter(
+    (id) => id !== userId,
+  );
+
+  const user: Prisma.UserWhereInput = {
+    accountStatus: 'active',
+    pendingDeletionAt: null,
+  };
+  if (filters.gender) user.gender = filters.gender;
+  if (filters.stage) user.spiritualStage = filters.stage;
+  if (filters.photoVerifiedOnly) user.photoVerifiedAt = { not: null };
+  if (filters.verifiedOnly) {
+    // isVerifiedDevotee: этап «преданный» и подтверждение администрацией.
+    user.spiritualStage = 'devotee';
+    user.devoteeVerificationStatus = 'confirmed';
+  }
+
+  const and: Prisma.UnionProfileWhereInput[] = [];
+
+  // Явный диапазон возраста: без даты рождения анкета его не проходит.
+  if (filters.ageMin != null || filters.ageMax != null) {
+    and.push({
+      user: {
+        birthDate: {
+          not: null,
+          ...birthDateBoundsForAge(filters.ageMin, filters.ageMax, now),
+        },
+      },
+    });
+  }
+  // Мои пожелания к возрасту партнёра: неизвестный возраст не отсеивается.
+  if (myAge.ageRangeMin != null || myAge.ageRangeMax != null) {
+    and.push({
+      OR: [
+        { user: { birthDate: null } },
+        {
+          user: {
+            birthDate: birthDateBoundsForAge(
+              myAge.ageRangeMin,
+              myAge.ageRangeMax,
+              now,
+            ),
+          },
+        },
+      ],
+    });
+  }
+  // Пожелания кандидата к моему возрасту: судить есть по чему только когда
+  // мой возраст известен; незаполненная граница не ограничивает.
+  if (myAge.age !== null) {
+    and.push({
+      OR: [{ ageRangeMin: null }, { ageRangeMin: { lte: myAge.age } }],
+    });
+    and.push({
+      OR: [{ ageRangeMax: null }, { ageRangeMax: { gte: myAge.age } }],
+    });
+  }
+
+  const where: Prisma.UnionProfileWhereInput = {
+    isActive: true,
+    userId: excluded.length
+      ? { not: userId, notIn: excluded }
+      : { not: userId },
+    user,
+  };
+  if (filters.diet) where.diet = filters.diet;
+  if (filters.childrenStatus) where.childrenStatus = filters.childrenStatus;
+  if (and.length) where.AND = and;
+  return where;
 }

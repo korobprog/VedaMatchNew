@@ -1,4 +1,163 @@
 {
+  "Common": {
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "open": "Open",
+    "home": "Home",
+    "menu": "Menu",
+    "error": "Error",
+    "backHome": "Back to home",
+    "support": "Support",
+    "retry": "Try again",
+    "interfaceLanguage": "Interface language",
+    "language": "Language",
+    "theme": "Theme",
+    "notFound": {
+      "title": "This page doesn't exist",
+      "metaTitle": "Page not found",
+      "description": "The listing may have been removed, the link may be outdated, or there is a typo in the address."
+    },
+    "errorPage": {
+      "offlineTitle": "The service is temporarily unavailable",
+      "offlineDescription": "It looks like the server is updating or the connection dropped. Your data is safe — try reloading the page in a minute.",
+      "title": "The page could not be opened",
+      "description": "We've logged the error and will look into it. Try again or go back to the home page.",
+      "code": "Error code: {digest}"
+    }
+  },
+  "Header": {
+    "beta": "Beta",
+    "services": "Services",
+    "moreServices": "More services",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "menu": "Menu",
+    "admin": "Admin",
+    "adminPanel": "Admin panel",
+    "tickets": "Support tickets",
+    "astro": "Astrology",
+    "settings": "Settings",
+    "changelog": "Version & news",
+    "selfIdentification": "Self-identification",
+    "notifications": "Notifications",
+    "whatsNew": "What's new"
+  },
+  "Landing": {
+    "nav": {
+      "services": "Services",
+      "howItWorks": "How it works",
+      "pricing": "Pricing",
+      "support": "Support",
+      "start": "Get started",
+      "allOnOnePage": "See everything on one page"
+    },
+    "hero": {
+      "badge": "New at VedaMatch",
+      "titleLine1": "Conscious",
+      "titleLine2": "connections",
+      "titleLine3": "in goodness",
+      "description": "Meet like-minded people for family, friendship, service and spiritual growth — based on shared values and intentions.",
+      "ctaStart": "Start for free",
+      "ctaMore": "Learn more",
+      "ecosystem": "platform services: practice, knowledge, community and marketplace",
+      "statUsers": "Members",
+      "statMatches": "Matches",
+      "statHappy": "Satisfied",
+      "scroll": "Scroll down"
+    },
+    "services": {
+      "title": "One account — eight services",
+      "subtitle": "VedaMatch is more than dating. It's an ecosystem for a life in goodness: practice, knowledge, community and conscious connections in one place.",
+      "featured": "Flagship",
+      "learnMore": "Learn more →"
+    },
+    "howItWorks": {
+      "title": "How it works",
+      "subtitle": "Three simple steps to conscious connections and community",
+      "steps": {
+        "profile": {
+          "title": "Create a profile",
+          "description": "Tell us about yourself, your interests, your values and what you are looking for in relationships and communication."
+        },
+        "matches": {
+          "title": "Find your matches",
+          "description": "The system analyses your data and suggests people with similar interests and intentions."
+        },
+        "chat": {
+          "title": "Start talking",
+          "description": "Once the interest is mutual, a chat opens. Talk, share practices, build projects together."
+        }
+      }
+    },
+    "features": {
+      "title": "What Union offers",
+      "subtitle": "The platform's flagship service — conscious dating and bringing like-minded people together",
+      "items": {
+        "matching": {
+          "title": "Conscious matching",
+          "description": "The system compares your intentions, interests and values to find truly compatible people."
+        },
+        "stages": {
+          "title": "Spiritual stages",
+          "description": "We take your stage on the path into account — from seeker to devotee — for more precise recommendations."
+        },
+        "connections": {
+          "title": "Every kind of connection",
+          "description": "Family, friendship, service, projects or spiritual fellowship — choose what you need."
+        },
+        "privacy": {
+          "title": "Privacy under your control",
+          "description": "You decide what others see. Contacts and location open only after mutual consent."
+        },
+        "search": {
+          "title": "Smart search",
+          "description": "Filter by city, radius, interests and the type of relationship you are looking for."
+        },
+        "chat": {
+          "title": "Built-in chat",
+          "description": "Talk to your matches right in the app — no need to switch to messengers."
+        }
+      }
+    },
+    "pricing": {
+      "title": "Plan 108",
+      "subtitle": "One plan for the whole platform. The first month is free.",
+      "betaBadge": "Free beta access",
+      "trialBadge": "{days} days free",
+      "free": "Free",
+      "betaNote": "While the platform is in beta, there is nothing to pay",
+      "betaDetails": "All sections are open for free during the beta. We'll let you know in advance before payments are enabled.",
+      "perMonth": "/ month",
+      "orUsdt": "or <strong>{amount} USDT</strong> per month",
+      "trialDetails": "The trial month starts automatically when you sign up. Payment comes after it, and you can cancel at any time.",
+      "cta": "Try for free",
+      "questions": "Questions about billing?",
+      "writeSupport": "Write to support",
+      "questionsTail": "— we reply even before you sign up."
+    },
+    "cta": {
+      "title": "Ready to begin?",
+      "description": "Join thousands of people who have already found like-minded companions through VedaMatch — connections in goodness.",
+      "button": "Create an account"
+    },
+    "footer": {
+      "support": "Support",
+      "whatsNew": "What's new",
+      "privacy": "Privacy policy",
+      "terms": "Terms of service",
+      "copyright": "© {year} VedaMatch. All rights reserved."
+    },
+    "serviceDetail": {
+      "allServices": "All services",
+      "featured": "Flagship service",
+      "register": "Sign up for free",
+      "pricing": "Pricing",
+      "otherServices": "More platform services",
+      "readyTitle": "Ready to try “{name}”?",
+      "readyDescription": "First month free, with access to all 8 platform services in one account.",
+      "createAccount": "Create an account"
+    }
+  },
   "Updates": {
     "title": "Version & News",
     "currentVersion": "Current version",

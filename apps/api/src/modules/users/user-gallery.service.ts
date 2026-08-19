@@ -474,6 +474,20 @@ export class UserGalleryService {
     }
   }
 
+  /**
+   * Удаляет объекты галереи/аватара из хранилища по ключам; ошибки только
+   * логируются. Используется анонимизацией аккаунта, когда строки UserPhoto
+   * уже снесены и обычный deletePhoto неприменим.
+   */
+  async removeStorageObjects(
+    storageKeys: readonly string[],
+    context: string,
+  ): Promise<void> {
+    for (const storageKey of storageKeys) {
+      await this.deleteObject(storageKey, context);
+    }
+  }
+
   private async deleteObject(
     storageKey: string,
     context: string,

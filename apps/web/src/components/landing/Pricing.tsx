@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { ArrowRight, Check, Gift } from "lucide-react";
 import type { PricingPlan } from "@vedamatch/shared";
 import { loginHref } from "@/lib/return-to";
@@ -15,6 +16,7 @@ export function Pricing({
   plan?: PricingPlan;
   returnTo?: string;
 }) {
+  const t = useTranslations("Landing.pricing");
   const PLAN = plan ?? { ...DEFAULT_PLAN, mode: "business" as const };
   const isBeta = PLAN.mode === "beta";
 
@@ -29,11 +31,9 @@ export function Pricing({
           className="mb-12 text-center"
         >
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-text-0 mb-4">
-            Тариф 108
+            {t("title")}
           </h2>
-          <p className="text-text-1 text-lg md:text-xl">
-            Один тариф на всю платформу. Первый месяц — бесплатно.
-          </p>
+          <p className="text-text-1 text-lg md:text-xl">{t("subtitle")}</p>
         </motion.div>
 
         <motion.div
@@ -49,7 +49,7 @@ export function Pricing({
             <div className="min-w-0">
               <span className="inline-flex items-center gap-2 rounded-full border border-cyan/40 bg-cyan/10 px-3 py-1 text-sm font-medium text-text-0">
                 <Gift className="h-4 w-4 text-cyan shrink-0" />
-                {isBeta ? "Бета-доступ бесплатно" : `${PLAN.trialDays} дней бесплатно`}
+                {isBeta ? t("betaBadge") : t("trialBadge", { days: PLAN.trialDays })}
               </span>
 
               {isBeta ? (
@@ -59,15 +59,12 @@ export function Pricing({
                       {PLAN.priceRub} ₽
                     </span>
                     <div className="min-w-0 max-w-full break-words font-display text-3xl sm:text-5xl md:text-6xl font-bold leading-tight text-text-0">
-                      Бесплатно
+                      {t("free")}
                     </div>
                   </div>
-                  <p className="mt-3 text-text-1">
-                    Пока платформа в бета-тесте — платить не нужно
-                  </p>
+                  <p className="mt-3 text-text-1">{t("betaNote")}</p>
                   <p className="mt-4 text-sm text-text-2 leading-relaxed">
-                    Доступ ко всем разделам открыт бесплатно на время беты.
-                    Когда мы включим оплату, заранее предупредим.
+                    {t("betaDetails")}
                   </p>
                 </>
               ) : (
@@ -76,18 +73,18 @@ export function Pricing({
                     <span className="font-display text-4xl sm:text-5xl md:text-6xl font-bold text-text-0 leading-tight">
                       {PLAN.priceRub} ₽
                     </span>
-                    <span className="text-text-1 text-lg">/ месяц</span>
+                    <span className="text-text-1 text-lg">{t("perMonth")}</span>
                   </div>
                   <p className="mt-3 text-text-1">
-                    или{" "}
-                    <span className="font-semibold text-text-0">
-                      {PLAN.priceUsdt} USDT
-                    </span>{" "}
-                    в месяц
+                    {t.rich("orUsdt", {
+                      amount: PLAN.priceUsdt,
+                      strong: (chunks) => (
+                        <span className="font-semibold text-text-0">{chunks}</span>
+                      ),
+                    })}
                   </p>
                   <p className="mt-4 text-sm text-text-2 leading-relaxed">
-                    Пробный месяц включается автоматически при регистрации. Оплата —
-                    после него, отказаться можно в любой момент.
+                    {t("trialDetails")}
                   </p>
                 </>
               )}
@@ -104,7 +101,7 @@ export function Pricing({
                   "hover:-translate-y-0.5",
                 )}
               >
-                Попробовать бесплатно
+                {t("cta")}
                 <ArrowRight className="w-5 h-5 shrink-0 transition-transform group-hover:translate-x-1" />
               </Link>
             </div>
@@ -123,11 +120,11 @@ export function Pricing({
         </motion.div>
 
         <p className="mt-6 text-center text-sm text-text-2">
-          Вопросы по оплате?{" "}
+          {t("questions")}{" "}
           <Link href="/support" className="text-text-1 underline hover:text-text-0">
-            Напишите в поддержку
+            {t("writeSupport")}
           </Link>{" "}
-          — ответим даже без регистрации.
+          {t("questionsTail")}
         </p>
       </div>
     </section>

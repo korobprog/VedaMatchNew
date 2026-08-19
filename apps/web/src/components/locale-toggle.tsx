@@ -1,6 +1,6 @@
 "use client";
 
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,7 @@ export function LocaleToggle({
   className?: string;
 }) {
   const locale = useLocale() as Locale;
+  const t = useTranslations("Common");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -39,7 +40,7 @@ export function LocaleToggle({
   return (
     <div
       role="radiogroup"
-      aria-label="Язык интерфейса"
+      aria-label={t("interfaceLanguage")}
       className={cn(
         "flex items-center gap-1 rounded-full border border-glass-brd bg-glass p-1 backdrop-blur-xl",
         variant === "full" && "w-full rounded-2xl",

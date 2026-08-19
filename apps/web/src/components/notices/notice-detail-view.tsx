@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useLocale } from "next-intl";
 import { BadgeCheck, CalendarDays, Loader2, MapPin, Monitor } from "lucide-react";
 import type { NoticeDto } from "@vedamatch/shared";
+import { localizedName } from "@/lib/localized-name";
 import {
   NoticesApiError,
   deleteNotice,
@@ -27,6 +29,7 @@ import { NoticeResponsesPanel } from "./notice-responses-panel";
 
 export function NoticeDetailView({ id }: { id: string }) {
   const router = useRouter();
+  const locale = useLocale();
   const [notice, setNotice] = useState<NoticeDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -144,7 +147,7 @@ export function NoticeDetailView({ id }: { id: string }) {
         <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-text-2">
           <span>{NOTICE_KIND_LABELS[notice.kind]}</span>
           <span>·</span>
-          <span>{notice.rubric.nameRu}</span>
+          <span>{localizedName(notice.rubric, locale)}</span>
         </div>
         <h1 className="font-display text-2xl font-bold text-text-0">
           {noticeTitle(notice)}

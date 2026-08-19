@@ -181,11 +181,18 @@ describe('buildFeedWhere: свой кабинет', () => {
 });
 
 describe('buildFeedWhere: фильтры', () => {
-  it('город сравнивается без регистра', () => {
+  it('город сравнивается по нормализованному ключу cityKey, а не через ILIKE', () => {
     const where = JSON.stringify(
-      buildFeedWhere(filters({ city: 'москва' }), newcomer, now),
+      buildFeedWhere(filters({ city: '  МоСква ' }), newcomer, now),
     );
-    expect(where).toContain('"mode":"insensitive"');
+    expect(where).toContain('"cityKey":"москва"');
+    expect(where).not.toContain('"city":{');
+    expect(where).not.toContain('"mode":"insensitive"');
+  });
+
+  it('аудитория my_city тоже сравнивается по cityKey', () => {
+    const where = JSON.stringify(buildFeedWhere(filters(), member, now));
+    expect(where).toContain('"audience":"my_city","cityKey":"москва"');
   });
 
   it('поиск идёт по заголовкам и описанию', () => {

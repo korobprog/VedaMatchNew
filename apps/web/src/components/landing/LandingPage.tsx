@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { ArrowRight, Play } from "lucide-react";
 import type { PricingPlan } from "@vedamatch/shared";
 import { Navbar } from "./Navbar";
@@ -29,6 +30,7 @@ export function LandingPage({
   plan?: PricingPlan;
   totalMembers?: number;
 }) {
+  const t = useTranslations("Landing");
   return (
     <div className="relative min-h-screen bg-bg-0">
       <SilentRefresh returnTo={returnTo} />
@@ -58,22 +60,21 @@ export function LandingPage({
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-6"
               >
                 <span className="w-2 h-2 rounded-full bg-cyan animate-pulse" />
-                <span className="text-text-1 text-sm font-medium">Новое в VedaMatch</span>
+                <span className="text-text-1 text-sm font-medium">{t("hero.badge")}</span>
               </motion.div>
 
               {/* Heading */}
               <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-text-0 mb-6 leading-tight">
-                Осознанные
+                {t("hero.titleLine1")}
                 <span className="block bg-gradient-to-r from-magenta via-cyan to-gold bg-clip-text text-transparent">
-                  знакомства
+                  {t("hero.titleLine2")}
                 </span>
-                в благости
+                {t("hero.titleLine3")}
               </h1>
 
               {/* Description */}
               <p className="text-text-1 text-lg md:text-xl mb-8 max-w-xl mx-auto lg:mx-0 leading-relaxed">
-                Находите единомышленников для семьи, дружбы, служения и духовного развития. 
-                На основе общих ценностей и намерений.
+                {t("hero.description")}
               </p>
 
               {/* CTA buttons */}
@@ -90,7 +91,7 @@ export function LandingPage({
                     "hover:-translate-y-0.5"
                   )}
                 >
-                  Начать бесплатно
+                  {t("hero.ctaStart")}
                   <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 transition-transform group-hover:translate-x-1" />
                 </Link>
 
@@ -106,7 +107,7 @@ export function LandingPage({
                   )}
                 >
                   <Play className="w-4 h-4 sm:w-5 sm:h-5" />
-                  Узнать больше
+                  {t("hero.ctaMore")}
                 </a>
               </div>
 
@@ -118,7 +119,7 @@ export function LandingPage({
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan/15 text-cyan text-xs font-bold">
                   8
                 </span>
-                сервисов платформы: практика, знания, община и рынок
+                {t("hero.ecosystem")}
               </a>
 
               {/* Stats */}
@@ -134,17 +135,17 @@ export function LandingPage({
                       <MemberCounter total={totalMembers} />
                     </div>
                   )}
-                  <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">Пользователей</div>
+                  <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">{t("hero.statUsers")}</div>
                 </div>
                 <div className="w-px bg-glass-brd shrink-0" />
                 <div className="shrink-0">
                   <div className="font-display text-2xl md:text-3xl font-bold text-text-0">500+</div>
-                  <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">Совпадений</div>
+                  <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">{t("hero.statMatches")}</div>
                 </div>
                 <div className="w-px bg-glass-brd shrink-0" />
                 <div className="shrink-0">
                   <div className="font-display text-2xl md:text-3xl font-bold text-text-0">98%</div>
-                  <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">Довольных</div>
+                  <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">{t("hero.statHappy")}</div>
                 </div>
               </motion.div>
             </motion.div>
@@ -169,7 +170,7 @@ export function LandingPage({
           className="absolute bottom-8 left-1/2 -translate-x-1/2"
         >
           <div className="flex flex-col items-center gap-2 text-text-2">
-            <span className="text-sm font-medium">Листайте вниз</span>
+            <span className="text-sm font-medium">{t("hero.scroll")}</span>
             <motion.div
               animate={{ y: [0, 8, 0] }}
               transition={{ duration: 1.5, repeat: Infinity }}
@@ -213,10 +214,10 @@ export function LandingPage({
 
             <div className="relative z-10">
               <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-text-0 mb-4">
-                Готовы начать?
+                {t("cta.title")}
               </h2>
               <p className="text-text-1 text-lg md:text-xl mb-8 max-w-xl mx-auto">
-                Присоединяйтесь к тысячам людей, которые уже нашли единомышленников через VedaMatch «Знакомства в Благости».
+                {t("cta.description")}
               </p>
               
               <Link
@@ -231,7 +232,7 @@ export function LandingPage({
                   "hover:-translate-y-1"
                 )}
               >
-                Создать аккаунт
+                {t("cta.button")}
                 <ArrowRight className="w-6 h-6 transition-transform group-hover:translate-x-1" />
               </Link>
             </div>

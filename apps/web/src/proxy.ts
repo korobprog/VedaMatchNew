@@ -38,6 +38,8 @@ const publicFiles = new Set([
  * splash и тихо обновит токен.
  */
 const SESSION_MARKER = "vm_session";
+/** Зеркало PATHNAME_HEADER в lib/require-user.ts (proxy не импортирует серверный код). */
+const PATHNAME_HEADER = "x-pathname";
 
 export function proxy(req: NextRequest) {
   const hasAccess = req.cookies.has("access_token");
@@ -58,7 +60,15 @@ export function proxy(req: NextRequest) {
   if (hasAccess && req.nextUrl.pathname === "/login") {
     return NextResponse.redirect(new URL("/", req.url));
   }
-  return NextResponse.next();
+  // Серверным layout'ам путь запроса недоступен, а guard в (portal)/layout.tsx
+  // должен вернуть человека на ту же страницу после входа. Пробрасываем путь
+  // заголовком — читается в lib/require-user.ts.
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set(
+    PATHNAME_HEADER,
+    `${req.nextUrl.pathname}${req.nextUrl.search}`,
+  );
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

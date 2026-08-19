@@ -13,6 +13,11 @@ import { UnionConnectionService } from './union-connection.service';
 import { UnionMatchingService } from './union-matching.service';
 import { UnionProfileService } from './union-profile.service';
 import { UnionSwipeService } from './union-swipe.service';
+import {
+  birthDateBoundsForAge,
+  buildRecommendationCandidateWhere,
+  RECOMMENDATION_CANDIDATE_LIMIT,
+} from './union-profile.service';
 
 const createdAt = new Date('2026-07-10T10:00:00.000Z');
 
@@ -155,7 +160,10 @@ function withGender(
 
 function withIntentions(
   source: ReturnType<typeof profile>,
-  entries: Array<{ type: 'family' | 'business' | 'friendship' | 'service'; weight: number }>,
+  entries: Array<{
+    type: 'family' | 'business' | 'friendship' | 'service';
+    weight: number;
+  }>,
 ) {
   return {
     ...source,
@@ -294,6 +302,8 @@ describe('UnionProfileService', () => {
     jest.clearAllMocks();
     prisma.userPhoto.count.mockResolvedValue(0);
     prisma.user.findUnique.mockResolvedValue(user('me'));
+    prisma.unionSwipe.findMany.mockResolvedValue([]);
+    prisma.unionBoost.findMany.mockResolvedValue([]);
     moderation.hiddenUserIds.mockResolvedValue(new Set<string>());
     moderation.isHidden.mockResolvedValue(false);
   });
@@ -442,6 +452,59 @@ describe('UnionProfileService', () => {
           userId: { not: 'me' },
           user: { accountStatus: 'active', pendingDeletionAt: null },
         },
+        orderBy: [
+          { user: { lastSeenAt: { sort: 'desc', nulls: 'last' } } },
+          { createdAt: 'desc' },
+        ],
+        take: RECOMMENDATION_CANDIDATE_LIMIT,
+      }),
+    );
+  });
+
+  it('pushes swiped and hidden ids into the SQL exclusion', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+    prisma.unionSwipe.findMany.mockResolvedValue([{ toUserId: 'seen' }]);
+    moderation.hiddenUserIds.mockResolvedValue(new Set(['hidden']));
+
+    await service.getRecommendations('me');
+
+    expect(prisma.unionProfile.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userId: { not: 'me', notIn: ['seen', 'hidden'] },
+        }),
+      }),
+    );
+  });
+
+  it('pushes explicit gender/stage/verification filters into SQL', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    await service.getRecommendations('me', {
+      gender: 'female',
+      stage: 'devotee',
+      photoVerifiedOnly: true,
+      verifiedOnly: true,
+      diet: 'vegetarian',
+    });
+
+    expect(prisma.unionProfile.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          diet: 'vegetarian',
+          user: {
+            accountStatus: 'active',
+            pendingDeletionAt: null,
+            gender: 'female',
+            spiritualStage: 'devotee',
+            devoteeVerificationStatus: 'confirmed',
+            photoVerifiedAt: { not: null },
+          },
+        }),
       }),
     );
   });
@@ -1046,30 +1109,32 @@ describe('UnionProfileService', () => {
 
     const result = await service.getRecommendations('me');
 
-    expect(prisma.unionProfile.findMany).toHaveBeenCalledWith({
-      where: {
-        isActive: true,
-        userId: { not: 'me' },
-        user: { accountStatus: 'active', pendingDeletionAt: null },
-      },
-      include: {
-        intentions: true,
-        user: {
-          include: {
-            photos: {
-              where: { isPublic: true },
-              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-              select: {
-                id: true,
-                storageKey: true,
-                width: true,
-                height: true,
+    expect(prisma.unionProfile.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          isActive: true,
+          userId: { not: 'me' },
+          user: { accountStatus: 'active', pendingDeletionAt: null },
+        },
+        include: {
+          intentions: true,
+          user: {
+            include: {
+              photos: {
+                where: { isPublic: true },
+                orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+                select: {
+                  id: true,
+                  storageKey: true,
+                  width: true,
+                  height: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      }),
+    );
     expect(result.items[0]?.user.photos).toEqual([
       { id: 'photo-1', url: 'signed-1', width: 1200, height: 800 },
       { id: 'photo-2', url: 'signed-2', width: 800, height: 1200 },
@@ -1252,5 +1317,94 @@ describe('UnionProfileService', () => {
     });
 
     expect(result.items.map((item) => item.user.id)).toEqual(['a']);
+  });
+});
+
+describe('birthDateBoundsForAge', () => {
+  const now = new Date('2026-08-19T12:00:00Z');
+
+  it('turns an age range into birthDate bounds with a safety margin', () => {
+    const bounds = birthDateBoundsForAge(30, 40, now);
+    // Возраст >= 30: родился не позже 1996-08-19 (+2 дня запаса).
+    expect(bounds.lte?.toISOString().slice(0, 10)).toBe('1996-08-21');
+    // Возраст <= 40: 41-й день рождения ещё не наступил, то есть родился
+    // после 1985-08-19 (-2 дня запаса).
+    expect(bounds.gte?.toISOString().slice(0, 10)).toBe('1985-08-17');
+  });
+
+  it('leaves an open side unbounded', () => {
+    expect(birthDateBoundsForAge(null, 25, now).lte).toBeUndefined();
+    expect(birthDateBoundsForAge(25, null, now).gte).toBeUndefined();
+  });
+});
+
+describe('buildRecommendationCandidateWhere', () => {
+  const now = new Date('2026-08-19T12:00:00Z');
+  const base = {
+    userId: 'me',
+    excludedUserIds: [],
+    filters: {},
+    myAge: { age: null, ageRangeMin: null, ageRangeMax: null },
+    now,
+  };
+
+  it('keeps the minimal shape when nothing is filtered', () => {
+    expect(buildRecommendationCandidateWhere(base)).toEqual({
+      isActive: true,
+      userId: { not: 'me' },
+      user: { accountStatus: 'active', pendingDeletionAt: null },
+    });
+  });
+
+  it('dedupes exclusions and never lists the viewer', () => {
+    const where = buildRecommendationCandidateWhere({
+      ...base,
+      excludedUserIds: ['a', 'a', 'me', 'b'],
+    });
+    expect(where.userId).toEqual({ not: 'me', notIn: ['a', 'b'] });
+  });
+
+  it('requires a birth date for an explicit age filter', () => {
+    const where = buildRecommendationCandidateWhere({
+      ...base,
+      filters: { ageMin: 30, ageMax: 40 },
+    });
+    expect(where.AND).toEqual([
+      {
+        user: {
+          birthDate: {
+            not: null,
+            lte: new Date('1996-08-21T00:00:00Z'),
+            gte: new Date('1985-08-17T00:00:00Z'),
+          },
+        },
+      },
+    ]);
+  });
+
+  it('lets unknown age through my own preferred range', () => {
+    const where = buildRecommendationCandidateWhere({
+      ...base,
+      myAge: { age: null, ageRangeMin: 25, ageRangeMax: null },
+    });
+    expect(where.AND).toEqual([
+      {
+        OR: [
+          { user: { birthDate: null } },
+          { user: { birthDate: { lte: new Date('2001-08-21T00:00:00Z') } } },
+        ],
+      },
+    ]);
+  });
+
+  it('checks the candidate preferred range against my age only when known', () => {
+    const where = buildRecommendationCandidateWhere({
+      ...base,
+      myAge: { age: 33, ageRangeMin: null, ageRangeMax: null },
+    });
+    expect(where.AND).toEqual([
+      { OR: [{ ageRangeMin: null }, { ageRangeMin: { lte: 33 } }] },
+      { OR: [{ ageRangeMax: null }, { ageRangeMax: { gte: 33 } }] },
+    ]);
   });
 });

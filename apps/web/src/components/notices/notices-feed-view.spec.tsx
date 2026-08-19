@@ -1,7 +1,18 @@
-import { render, screen } from "@testing-library/react";
+import { render as renderRaw, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { NextIntlClientProvider } from "next-intl";
+import type { ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { NoticesFeedView } from "./notices-feed-view";
+import ru from "../../../messages/ru.json";
+
+/** Лента берёт локаль из next-intl — рендерим с настоящими сообщениями. */
+const render = (ui: ReactElement) =>
+  renderRaw(
+    <NextIntlClientProvider locale="ru" messages={ru}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 

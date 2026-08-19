@@ -1,35 +1,21 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { UserPlus, Heart, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Step {
   number: number;
-  title: string;
-  description: string;
+  /** Ключ в Landing.howItWorks.steps — тексты живут в messages/*.json. */
+  key: "profile" | "matches" | "chat";
   icon: React.ReactNode;
 }
 
 const steps: Step[] = [
-  {
-    number: 1,
-    title: "Создайте профиль",
-    description: "Расскажите о себе, своих интересах, ценностях и том, что вы ищете в отношениях и общении.",
-    icon: <UserPlus className="w-6 h-6" />,
-  },
-  {
-    number: 2,
-    title: "Найдите совпадения",
-    description: "Система анализирует ваши данные и предлагает людей с похожими интересами и намерениями.",
-    icon: <Heart className="w-6 h-6" />,
-  },
-  {
-    number: 3,
-    title: "Начните общение",
-    description: "После взаимной симпатии откроется чат. Общайтесь, делитесь практиками, создавайте проекты.",
-    icon: <Sparkles className="w-6 h-6" />,
-  },
+  { number: 1, key: "profile", icon: <UserPlus className="w-6 h-6" /> },
+  { number: 2, key: "matches", icon: <Heart className="w-6 h-6" /> },
+  { number: 3, key: "chat", icon: <Sparkles className="w-6 h-6" /> },
 ];
 
 const containerVariants = {
@@ -56,6 +42,7 @@ const itemVariants = {
 };
 
 export function HowItWorks() {
+  const t = useTranslations("Landing.howItWorks");
   return (
     <section id="how-it-works" className="relative py-20 md:py-32">
       <div className="mx-auto max-w-6xl px-4 md:px-6">
@@ -68,11 +55,9 @@ export function HowItWorks() {
           className="text-center mb-16"
         >
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-text-0 mb-4">
-            Как это работает
+            {t("title")}
           </h2>
-          <p className="text-text-1 text-lg max-w-2xl mx-auto">
-            Три простых шага к осознанным знакомствам и объединению
-          </p>
+          <p className="text-text-1 text-lg max-w-2xl mx-auto">{t("subtitle")}</p>
         </motion.div>
 
         {/* Steps */}
@@ -123,10 +108,10 @@ export function HowItWorks() {
 
                 {/* Content */}
                 <h3 className="font-display text-xl md:text-2xl font-bold text-text-0 mb-3">
-                  {step.title}
+                  {t(`steps.${step.key}.title`)}
                 </h3>
                 <p className="text-text-1 text-sm md:text-base leading-relaxed">
-                  {step.description}
+                  {t(`steps.${step.key}.description`)}
                 </p>
               </div>
             </motion.div>
