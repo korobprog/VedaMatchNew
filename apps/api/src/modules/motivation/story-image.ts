@@ -14,6 +14,11 @@ const META_SIZE = 30;
 /** Высота знака в кадре. Ширина считается из пропорций исходника. */
 const BRAND_LOGO_HEIGHT = 76;
 const DISCLOSURE_SIZE = 22;
+/** Поздравление открытки: кегль и отступ сверху. */
+const GREETING_SIZE = 62;
+const GREETING_LINE_HEIGHT = 78;
+const GREETING_TOP = 200;
+const MAX_GREETING_LINES = 2;
 
 /**
  * Отметка об авторстве и о том, что кадр синтетический.
@@ -126,26 +131,64 @@ export type StoryOverlayInput = {
   text: string;
   /** Автор, произведение, глава — пустые части выбрасываются вызывающим. */
   attribution?: string | null;
+  /**
+   * Поздравление для открытки («С Джанмаштами»). Стоит вверху кадра и
+   * превращает ту же картинку в открытку: отдельного макета нет намеренно —
+   * иначе правка отступов расходилась бы между сторис и открыткой.
+   */
+  greeting?: string | null;
 };
 
 /**
- * Где стоит знак. Отдельной функцией, потому что нужен и вёрстке текста (чтобы
- * подняться над знаком), и наложению картинки поверх SVG.
+ * Вся вёрстка нижнего блока разом.
+ *
+ * Считается в одном месте, потому что нужна и SVG с текстом, и наложению
+ * знака картинкой поверх него: разъедься эти два расчёта — знак сел бы мимо
+ * своего места, и заметно это стало бы только на готовом кадре.
+ *
+ * Блок собирается снизу вверх от нижнего поля: отметка об ИИ, атрибуция,
+ * цитата и знак над ней. Знак стоит именно над текстом — снизу он спорил с
+ * подписью, а сверху читается как шапка кадра.
  */
-export function brandLogoBox(): {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
+export function storyLayout(input: {
+  quoteLines: number;
+  metaLines: number;
+}): {
+  logo: { left: number; top: number; width: number; height: number };
+  firstLineY: number;
+  metaTop: number;
+  disclosureBaseline: number;
+  scrimTop: number;
 } {
   const height = BRAND_LOGO_HEIGHT;
   const width = Math.round(height * BRAND_LOGO_ASPECT);
+
+  const disclosureBaseline = STORY_HEIGHT - BOTTOM_PADDING + 90;
+  const metaBottom = disclosureBaseline - 48;
+  const metaTop = metaBottom - Math.max(0, input.metaLines - 1) * META_LINE_HEIGHT;
+  const quoteBottom =
+    input.metaLines > 0 ? metaTop - 58 : disclosureBaseline - 58;
+  const firstLineY =
+    quoteBottom - Math.max(0, input.quoteLines - 1) * QUOTE_LINE_HEIGHT;
+  // Знак поднимается над первой строкой на её кегль плюс воздух.
+  const logoTop = firstLineY - QUOTE_SIZE - 28 - height;
+
   return {
-    left: SIDE_PADDING,
-    top: STORY_HEIGHT - BOTTOM_PADDING + 96 - height,
-    width,
-    height,
+    logo: { left: SIDE_PADDING, top: logoTop, width, height },
+    firstLineY,
+    metaTop,
+    disclosureBaseline,
+    // Подложка начинается над знаком, иначе светлый фон съедает и его, и текст.
+    scrimTop: Math.max(0, logoTop - 60),
   };
+}
+
+/** Где стоит знак. Обёртка над `storyLayout` для наложения картинки. */
+export function brandLogoBox(input?: {
+  quoteLines: number;
+  metaLines: number;
+}): { left: number; top: number; width: number; height: number } {
+  return storyLayout(input ?? { quoteLines: 1, metaLines: 0 }).logo;
 }
 
 export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
@@ -163,16 +206,26 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
       )
     : [];
 
-  // Знак стоит там же, где раньше стояла надпись «VedaMatch», но занимает
-  // высоту картинки, поэтому текст над ним поднимается на эту высоту.
-  const logo = brandLogoBox();
-  const metaBottom = logo.top - 44;
-  const metaTop = metaBottom - (metaLines.length - 1) * META_LINE_HEIGHT;
-  const quoteBottom = metaLines.length > 0 ? metaTop - 58 : logo.top - 58;
-  const firstLineY = quoteBottom - (lines.length - 1) * QUOTE_LINE_HEIGHT;
+  const layout = storyLayout({
+    quoteLines: lines.length,
+    metaLines: metaLines.length,
+  });
+  const { firstLineY, metaTop, scrimTop } = layout;
 
-  // Подложка тянется выше самой верхней строки, иначе светлый фон съедает текст.
-  const scrimTop = Math.max(0, firstLineY - QUOTE_SIZE - 80);
+  // Поздравление переносится по тем же правилам, что и цитата: длинное
+  // «С днём явления Шри Кришны» иначе выехало бы за край кадра.
+  const greetingLines = input.greeting?.trim()
+    ? clampLines(
+        wrapText(input.greeting, GREETING_SIZE, maxWidth),
+        MAX_GREETING_LINES,
+      )
+    : [];
+  const greetingBlock = greetingLines
+    .map(
+      (line, index) =>
+        `<text x="${STORY_WIDTH / 2}" y="${GREETING_TOP + index * GREETING_LINE_HEIGHT}" text-anchor="middle" class="greeting">${escapeXml(line)}</text>`,
+    )
+    .join('');
 
   const quoteLines = lines
     .map(
@@ -190,6 +243,11 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${STORY_WIDTH}" height="${STORY_HEIGHT}">
   <defs>
+    <linearGradient id="topScrim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0A0614" stop-opacity="0.68"/>
+      <stop offset="70%" stop-color="#0A0614" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="#0A0614" stop-opacity="0"/>
+    </linearGradient>
     <linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#0A0614" stop-opacity="0"/>
       <stop offset="45%" stop-color="#0A0614" stop-opacity="0.72"/>
@@ -200,11 +258,14 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
     .quote { font-family: ${FONT_STACK}; font-size: ${QUOTE_SIZE}px; font-weight: 600; fill: #FFFFFF; }
     .meta  { font-family: ${FONT_STACK}; font-size: ${META_SIZE}px; fill: #D9CCF5; }
     .disclosure { font-family: ${FONT_STACK}; font-size: ${DISCLOSURE_SIZE}px; fill: #B9A9DC; }
+    .greeting { font-family: ${FONT_STACK}; font-size: ${GREETING_SIZE}px; font-weight: 700; fill: #FFE2A6; }
   </style>
+  ${greetingLines.length > 0 ? `<rect x="0" y="0" width="${STORY_WIDTH}" height="${GREETING_TOP + greetingLines.length * GREETING_LINE_HEIGHT + 60}" fill="url(#topScrim)"/>` : ''}
   <rect x="0" y="${scrimTop}" width="${STORY_WIDTH}" height="${STORY_HEIGHT - scrimTop}" fill="url(#scrim)"/>
+  ${greetingBlock}
   ${quoteLines}
   ${attributionLine}
-  <text x="${STORY_WIDTH - SIDE_PADDING}" y="${logo.top + logo.height - 6}" text-anchor="end" class="disclosure">${escapeXml(AI_DISCLOSURE)}</text>
+  <text x="${SIDE_PADDING}" y="${layout.disclosureBaseline}" class="disclosure">${escapeXml(AI_DISCLOSURE)}</text>
 </svg>`;
 }
 
@@ -217,7 +278,15 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
 export async function renderStoryOverlay(
   input: StoryOverlayInput,
 ): Promise<Buffer> {
-  const box = brandLogoBox();
+  const maxWidth = (STORY_WIDTH - SIDE_PADDING * 2) * WIDTH_SAFETY;
+  const box = brandLogoBox({
+    quoteLines: clampLines(wrapText(input.text, QUOTE_SIZE, maxWidth), MAX_QUOTE_LINES)
+      .length,
+    metaLines: input.attribution?.trim()
+      ? clampLines(wrapText(input.attribution, META_SIZE, maxWidth), MAX_META_LINES)
+          .length
+      : 0,
+  });
   const logo = await sharp(brandLogoBuffer())
     .resize(box.width, box.height, { fit: 'contain', background: TRANSPARENT })
     .png()

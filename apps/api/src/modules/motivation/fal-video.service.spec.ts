@@ -58,7 +58,7 @@ describe('FalVideoService', () => {
         status_url: 'https://queue/status',
         response_url: 'https://queue/result',
       });
-    }) as unknown as typeof fetch;
+    });
 
     const result = await service().submit({
       imageUrl: 'https://cdn/pic.png',
@@ -96,7 +96,7 @@ describe('FalVideoService', () => {
       if (String(url).includes('initiate'))
         return ok({ file_url: 'https://cdn/f.jpg', upload_url: 'https://up' });
       return { ok: true, status: 200 } as Response;
-    }) as unknown as typeof fetch;
+    });
 
     await expect(service().upload(Buffer.from('x'))).resolves.toBe(
       'https://cdn/f.jpg',
@@ -170,7 +170,7 @@ describe('FalVideoService', () => {
 describe('FalVideoService: защита от платных ошибок', () => {
   it('пустую картинку или промпт не отправляет в сеть вообще', async () => {
     const fetchSpy = jest.fn();
-    global.fetch = fetchSpy as unknown as typeof fetch;
+    global.fetch = fetchSpy;
     const config = {
       get: (k: string) => ({ FAL_KEY: 'k' })[k],
     } as unknown as import('@nestjs/config').ConfigService;

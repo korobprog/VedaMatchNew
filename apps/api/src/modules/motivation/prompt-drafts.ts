@@ -88,8 +88,7 @@ export function buildPromptDraftRequest(
     lines.push(`Source: ${trim(input.attribution, 200)}`);
   if (input.context?.trim())
     lines.push(`Verified context: ${trim(input.context, 600)}`);
-  if (input.mood?.trim())
-    lines.push(`Editor's wish: ${trim(input.mood, 300)}`);
+  if (input.mood?.trim()) lines.push(`Editor's wish: ${trim(input.mood, 300)}`);
   return lines.join('\n');
 }
 

@@ -67,7 +67,9 @@ describe('оба задания', () => {
       mood: 'больше тишины',
     });
     expect(withWish).toContain('больше тишины');
-    expect(buildPromptDraftRequest('image', base)).not.toContain("Editor's wish");
+    expect(buildPromptDraftRequest('image', base)).not.toContain(
+      "Editor's wish",
+    );
   });
 });
 

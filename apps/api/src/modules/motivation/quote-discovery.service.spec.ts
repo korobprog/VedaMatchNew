@@ -162,7 +162,8 @@ describe('QuoteDiscoveryService', () => {
         order.push('external');
         return [
           {
-            originalText: 'Humility 1 means never placing yourself above another being.',
+            originalText:
+              'Humility 1 means never placing yourself above another being.',
             author: 'Duplicate',
             work: 'Wikiquote',
             locator: '',
@@ -171,7 +172,8 @@ describe('QuoteDiscoveryService', () => {
             verified: true,
           },
           {
-            originalText: 'Unverified truth that never passes the source check at all.',
+            originalText:
+              'Unverified truth that never passes the source check at all.',
             author: 'Unknown',
             work: 'Wikiquote',
             locator: '',
@@ -231,7 +233,11 @@ describe('QuoteDiscoveryService', () => {
   it('does not count an already persisted hash toward the daily eight', async () => {
     const existingHash = quoteFingerprint('Existing exact quote');
     const units = [
-      { bookSlug: 'bg', chapterSlug: '1', text: 'Existing wisdom that already lives in the quote table today.' },
+      {
+        bookSlug: 'bg',
+        chapterSlug: '1',
+        text: 'Existing wisdom that already lives in the quote table today.',
+      },
       ...Array.from({ length: 8 }, (_, index) => ({
         bookSlug: 'bg',
         chapterSlug: String(index + 2),

@@ -36,6 +36,26 @@ export interface VerifiedQuote {
 export class QuoteVerificationService {
   constructor(private readonly repository: VedabaseContentRepository) {}
 
+  /**
+   * Кандидаты из книг по свободному запросу. Обёртка над репозиторием: сервис
+   * рилсов не должен знать про Vedabase напрямую, а проверка цитаты и поиск
+   * фрагмента обязаны смотреть в один и тот же индекс — иначе найденное не
+   * пройдёт последующую сверку.
+   */
+  findCandidates(query: string, limit: number) {
+    return this.repository.findQuoteCandidates(query, limit);
+  }
+
+  /** Активные книги с оглавлением — для выбора «по книгам» в мастере. */
+  listBooks() {
+    return this.repository.listActiveBooks();
+  }
+
+  /** Фрагменты одной главы в порядке чтения. */
+  chapterUnits(bookSlug: string, chapterSlug: string) {
+    return this.repository.listChapterUnits(bookSlug, chapterSlug);
+  }
+
   async verifyVedabaseCandidate(
     candidate: VedabaseQuoteCandidate,
   ): Promise<VerifiedQuote> {

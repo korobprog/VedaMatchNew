@@ -248,7 +248,9 @@ export class FalVideoService {
       body: new Uint8Array(bytes),
     });
     if (!put.ok)
-      throw new BadGatewayException(`Video storage upload failed ${put.status}`);
+      throw new BadGatewayException(
+        `Video storage upload failed ${put.status}`,
+      );
     return slot.file_url;
   }
 

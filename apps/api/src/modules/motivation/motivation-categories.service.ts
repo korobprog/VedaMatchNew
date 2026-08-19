@@ -227,7 +227,10 @@ export class MotivationCategoriesService {
     }
     return categories
       .filter((category) => !category.parentId)
-      .flatMap((parent) => [parent, ...(childrenByParent.get(parent.id) ?? [])]);
+      .flatMap((parent) => [
+        parent,
+        ...(childrenByParent.get(parent.id) ?? []),
+      ]);
   }
 
   private async countPosts(slug: string): Promise<number> {

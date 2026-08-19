@@ -3,10 +3,7 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import {
-  MotivationAudienceTrack,
-  MotivationProfileType,
-} from '@prisma/client';
+import { MotivationAudienceTrack, MotivationProfileType } from '@prisma/client';
 import type {
   MotivationLanguage,
   MotivationManualCopy,

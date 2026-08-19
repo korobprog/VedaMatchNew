@@ -25,6 +25,14 @@ export const VOICE_PREVIEW_LINE =
   'Кришна объясняет Арджуне. Бхагавад-гита, глава три.';
 
 /**
+ * Версия образцов. Поднимается при любой правке фразы выше или словаря
+ * произношения: файлы лежат в S3 навсегда и по одному ключу, поэтому без
+ * версии исправленное произношение никто бы не услышал — и админ, и автор
+ * продолжали бы слушать запись, сделанную до правки.
+ */
+export const VOICE_PREVIEW_VERSION = 2;
+
+/**
  * Озвучка цитаты.
  *
  * Отличается от звука, который умеет сочинять видеомодель, ровно одним, но
@@ -71,13 +79,15 @@ export class FalAudioService {
         authorization: `Key ${this.key()}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify(buildSpeechRequest({
-        // Ударения подставляем здесь, а не в тексте поста: цитата обязана
-        // храниться дословно, без служебных пометок.
-        text: applyVoiceTranscription(spoken),
-        voice: voice?.trim() || settings.voiceName,
-        model: settings.voiceModel,
-      })),
+      body: JSON.stringify(
+        buildSpeechRequest({
+          // Ударения подставляем здесь, а не в тексте поста: цитата обязана
+          // храниться дословно, без служебных пометок.
+          text: applyVoiceTranscription(spoken),
+          voice: voice?.trim() || settings.voiceName,
+          model: settings.voiceModel,
+        }),
+      ),
     });
     if (!response.ok)
       throw new BadGatewayException(
@@ -112,6 +122,17 @@ export class FalAudioService {
  */
 export function voicePreviewKey(model: string): string {
   return model.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'default';
+}
+
+/**
+ * Полный ключ образца в хранилище.
+ *
+ * Собирается в одном месте: раньше его складывали и админский предпросмотр, и
+ * список голосов автора, и разойтись им ничего не мешало — тогда автор искал
+ * бы образец там, где его никто не клал.
+ */
+export function voiceSampleKey(model: string, voice: string): string {
+  return `motivation/voice-preview/${voicePreviewKey(model)}/v${VOICE_PREVIEW_VERSION}/${voice}.mp3`;
 }
 
 /**

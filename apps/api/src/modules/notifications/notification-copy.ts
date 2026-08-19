@@ -25,6 +25,8 @@ export const notificationEventNames = {
   noticePublished: 'notices.notice.published',
   noticeResponseReceived: 'notices.response.received',
   noticeResponseAccepted: 'notices.response.accepted',
+  motivationReelPublished: 'motivation.reel.published',
+  motivationReelRejected: 'motivation.reel.rejected',
 } as const satisfies Record<string, NotificationEventName>;
 
 /** Payload веб-пуша ограничен ~4 КБ, да и на экране длинный текст не поместится. */
@@ -163,6 +165,23 @@ export function buildNotification(
         url: `/market/listing/${event.listingId}`,
         tag: `market-price:${event.listingId}`,
         category: 'market',
+      };
+    case 'motivation.reel.published':
+      return {
+        title: 'Ваш рилс опубликован',
+        body: 'Он появился в ленте «Мотивации» — посмотрите, как получилось',
+        url: `/m/${event.slug}`,
+        tag: `motivation-reel:${event.reelId}`,
+        category: 'motivation',
+      };
+    case 'motivation.reel.rejected':
+      return {
+        title: 'Рилс не прошёл проверку',
+        body: toExcerpt(event.reason),
+        // Мастер по этой ссылке покажет причину и даст исправить текст.
+        url: `/motivation/create?reel=${event.reelId}`,
+        tag: `motivation-reel:${event.reelId}`,
+        category: 'motivation',
       };
     case 'market.review.received':
       return {

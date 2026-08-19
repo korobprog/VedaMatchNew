@@ -5,12 +5,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type {
+  AdminUpdateDonationRequest,
   AdminUpdateSubscriptionRequest,
   BillingMode,
+  DonationSettingsDto,
   PricingPlan,
   Role,
   SubscriptionState,
 } from '@vedamatch/shared';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   extendPaidUntil,
@@ -22,6 +25,17 @@ import {
   APP_SETTINGS_ID as SETTINGS_ID,
   readBillingMode,
 } from './billing-mode';
+import {
+  MAX_DONATION_TEXT,
+  toPublicDonation,
+  validateRequisites,
+} from './donation';
+
+const DONATION_FIELDS = {
+  donationEnabled: true,
+  donationText: true,
+  donationRequisites: true,
+} as const;
 
 const SUBSCRIPTION_FIELDS = {
   createdAt: true,
@@ -53,6 +67,74 @@ export class BillingService {
       select: { billingMode: true },
     });
     return updated.billingMode;
+  }
+
+  /** Реквизиты пожертвований для кнопки «поддержать»: пусто, пока админ не включил. */
+  async donation(): Promise<DonationSettingsDto> {
+    return toPublicDonation(
+      await this.prisma.appSettings.findUnique({
+        where: { id: SETTINGS_ID },
+        select: DONATION_FIELDS,
+      }),
+    );
+  }
+
+  /** Админский вид: сырые поля, чтобы форма показывала и выключенное. */
+  async adminDonation(role: Role) {
+    this.assertAdmin(role);
+    const settings = await this.prisma.appSettings.findUnique({
+      where: { id: SETTINGS_ID },
+      select: DONATION_FIELDS,
+    });
+    const pub = toPublicDonation(
+      settings ? { ...settings, donationEnabled: true } : null,
+    );
+    return {
+      enabled: settings?.donationEnabled ?? false,
+      text: settings?.donationText ?? '',
+      requisites: pub.requisites,
+    };
+  }
+
+  async updateDonation(role: Role, body: AdminUpdateDonationRequest) {
+    this.assertAdmin(role);
+    const data: {
+      donationEnabled?: boolean;
+      donationText?: string | null;
+      donationRequisites?: Prisma.InputJsonValue;
+    } = {};
+    if (body && 'enabled' in body) {
+      if (typeof body.enabled !== 'boolean')
+        throw new BadRequestException('Флаг включения должен быть булевым');
+      data.donationEnabled = body.enabled;
+    }
+    if (body && 'text' in body) {
+      const text =
+        typeof body.text === 'string' ? body.text.trim() || null : null;
+      if (text && text.length > MAX_DONATION_TEXT)
+        throw new BadRequestException(
+          `Текст не длиннее ${MAX_DONATION_TEXT} символов`,
+        );
+      data.donationText = text;
+    }
+    if (body && 'requisites' in body)
+      data.donationRequisites = validateRequisites(
+        body.requisites,
+      ) as unknown as Prisma.InputJsonValue;
+    if (Object.keys(data).length === 0)
+      throw new BadRequestException('Нечего обновлять');
+    await this.prisma.appSettings.upsert({
+      where: { id: SETTINGS_ID },
+      create: { id: SETTINGS_ID, ...data },
+      update: data,
+      select: { id: true },
+    });
+    return this.adminDonation(role);
+  }
+
+  private assertAdmin(role: Role) {
+    if (role !== 'admin')
+      throw new ForbiddenException('Доступ только для администратора');
   }
 
   async plan(): Promise<PricingPlan> {

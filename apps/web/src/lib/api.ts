@@ -12,6 +12,7 @@ import type {
   AdminAnnouncementDto,
   AdminBillingModeResponse,
   AdminReleaseDto,
+  DonationSettingsDto,
   AdminRoadmapItemDto,
   CommunityStats,
   MentorVerificationPublicRequest,
@@ -102,6 +103,15 @@ export const getCommunityStats = () =>
   apiGetPublic<CommunityStats>("/stats/community");
 export const getAdminBillingMode = () =>
   apiGet<AdminBillingModeResponse>("/admin/billing/mode");
+
+// ===== Пожертвования на развитие (бета) =====
+
+/** Публичные реквизиты для кнопки «поддержать»; enabled=false — кнопки нет. */
+export const getDonationSettings = () =>
+  apiGetPublic<DonationSettingsDto>("/billing/donation");
+/** Админский вид: то же поле enabled, но реквизиты видны и выключенными. */
+export const getAdminDonationSettings = () =>
+  apiGet<DonationSettingsDto>("/admin/billing/donation");
 
 // ===== Changelog: версия и новости =====
 

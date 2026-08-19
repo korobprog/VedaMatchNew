@@ -1,6 +1,7 @@
 import {
   DEFAULT_RATE_PER_MTOKENS,
   estimatePlannedClipUsd,
+  ratePerMTokensFor,
   estimateVideoCostUsd,
   videoTokens,
 } from './video-cost';
@@ -46,45 +47,49 @@ describe('оценка стоимости ролика', () => {
 });
 
 describe('оценка под конкретную модель', () => {
-  it('Wan без звука считает по четверти ставки', () => {
-    // $0.10/с в 720p, немое видео — 25%: пять секунд выходят в $0.125.
+  it('Wan считает по $0.05 за секунду 720p', () => {
+    // Сверено с прайсом fal и счётом: скидки за немой ролик нет, ставка одна.
+    // Прежние $0.025/с занижали расход вдвое, а на нём стоит дневной потолок.
     expect(
       estimatePlannedClipUsd({
         seconds: 5,
         model: 'wan/v2.6/image-to-video/flash',
-        audio: false,
       }),
-    ).toBeCloseTo(0.125, 3);
+    ).toBeCloseTo(0.25, 3);
   });
 
-  it('Wan со звуком — по полной', () => {
-    expect(
-      estimatePlannedClipUsd({
-        seconds: 5,
-        model: 'wan/v2.6/image-to-video/flash',
-        audio: true,
-      }),
-    ).toBeCloseTo(0.5, 3);
-  });
-
-  it('Vidu в 720p считает с множителем', () => {
+  it('Vidu в 720p считает с множителем 2.2', () => {
+    // $0.07/с базово, 720p дороже в 2.2 раза.
     expect(
       estimatePlannedClipUsd({
         seconds: 5,
         model: 'fal-ai/vidu/q3/image-to-video',
-        audio: false,
       }),
-    ).toBeCloseTo(0.385, 3);
+    ).toBeCloseTo(0.77, 2);
   });
 
-  it('Seedance по-прежнему считается по токенам', () => {
-    // Держать одну формулу на всех нельзя: после перехода на Wan учёт писал бы
-    // цену Seedance, а на этом числе стоит дневной потолок расхода.
-    const seedance = estimatePlannedClipUsd({
+  it('Seedance считается по токенам, и Pro дороже Fast', () => {
+    const fast = estimatePlannedClipUsd({
       seconds: 5,
       model: 'fal-ai/bytedance/seedance/v1/pro/fast/image-to-video',
     });
-    expect(seedance).toBeCloseTo(0.103, 2);
+    const pro = estimatePlannedClipUsd({
+      seconds: 5,
+      model: 'fal-ai/bytedance/seedance/v1/pro/image-to-video',
+    });
+
+    expect(fast).toBeCloseTo(0.103, 2);
+    // Ставка Pro в 2.5 раза выше: одна на обе модели снова считала бы половину.
+    expect(pro).toBeCloseTo(fast * 2.5, 2);
+  });
+
+  it('ставка за миллион токенов берётся по имени модели', () => {
+    expect(ratePerMTokensFor('fal-ai/bytedance/seedance/v1/pro/fast/x')).toBe(
+      1,
+    );
+    expect(ratePerMTokensFor('fal-ai/bytedance/seedance/v1/pro/x')).toBe(2.5);
+    // Незнакомой модели приписываем верхнюю ставку: занижать расход опаснее.
+    expect(ratePerMTokensFor('нечто/новое')).toBe(2.5);
   });
 
   it('незнакомая модель не роняет расчёт, а падает на токенную формулу', () => {
@@ -97,12 +102,29 @@ describe('оценка под конкретную модель', () => {
     const wan = estimatePlannedClipUsd({
       seconds: 5,
       model: 'wan/v2.6/image-to-video/flash',
-      audio: false,
     });
     const vidu = estimatePlannedClipUsd({
       seconds: 5,
       model: 'fal-ai/vidu/q3/image-to-video',
     });
-    expect(wan).not.toBeCloseTo(vidu, 2);
+    const seedance = estimatePlannedClipUsd({
+      seconds: 5,
+      model: 'fal-ai/bytedance/seedance/v1/pro/fast/image-to-video',
+    });
+
+    expect(new Set([wan, vidu, seedance]).size).toBe(3);
+  });
+
+  it('длиннее ролик — дороже, и ровно во столько же раз', () => {
+    const five = estimatePlannedClipUsd({
+      seconds: 5,
+      model: 'wan/v2.6/image-to-video/flash',
+    });
+    const ten = estimatePlannedClipUsd({
+      seconds: 10,
+      model: 'wan/v2.6/image-to-video/flash',
+    });
+
+    expect(ten).toBeCloseTo(five * 2, 3);
   });
 });

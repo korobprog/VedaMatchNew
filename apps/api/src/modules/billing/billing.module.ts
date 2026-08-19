@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import {
   AdminBillingController,
   AdminBillingModeController,
+  AdminDonationController,
   BillingController,
 } from './billing.controller';
 import { BillingService } from './billing.service';
@@ -13,6 +14,7 @@ import { BillingService } from './billing.service';
     BillingController,
     AdminBillingController,
     AdminBillingModeController,
+    AdminDonationController,
   ],
   providers: [BillingService],
   exports: [BillingService],

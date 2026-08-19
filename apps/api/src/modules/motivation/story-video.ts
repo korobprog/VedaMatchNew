@@ -189,7 +189,9 @@ function runFfmpeg(args: string[]): Promise<void> {
     child.on('close', (code) =>
       code === 0
         ? resolve()
-        : reject(new Error(`ffmpeg exited with ${code}: ${stderr.slice(-400)}`)),
+        : reject(
+            new Error(`ffmpeg exited with ${code}: ${stderr.slice(-400)}`),
+          ),
     );
   });
 }
@@ -237,9 +239,7 @@ export async function composeStoryVideo(
     let source = videoPath;
     if (options?.loopToSeconds) {
       source = join(dir, 'boomerang.mp4');
-      await runFfmpeg(
-        buildBoomerangArgs({ videoPath, outputPath: source }),
-      );
+      await runFfmpeg(buildBoomerangArgs({ videoPath, outputPath: source }));
     }
 
     await runFfmpeg(

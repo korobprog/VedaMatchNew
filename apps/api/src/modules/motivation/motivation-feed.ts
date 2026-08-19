@@ -4,6 +4,14 @@ export interface MotivationCursor {
   universal: number;
   vaishnava: number;
   accumulator: number;
+  /**
+   * Сессия листания: момент первой страницы и прошлый визит, по которым
+   * считаются ярусы. Хранятся в курсоре, а не в базе, чтобы вторая страница
+   * видела ровно тот же порядок, что и первая. Пусто — курсор старого
+   * формата либо первая страница: сервис подставит текущие значения.
+   */
+  since?: number;
+  seenBefore?: number | null;
 }
 export const emptyMotivationCursor = (): MotivationCursor => ({
   universal: 0,
@@ -28,7 +36,11 @@ export function decodeMotivationCursor(value?: string): MotivationCursor {
       parsed.universal < 0 ||
       parsed.vaishnava < 0 ||
       parsed.accumulator < 0 ||
-      parsed.accumulator >= 100
+      parsed.accumulator >= 100 ||
+      (parsed.since !== undefined && !Number.isInteger(parsed.since)) ||
+      (parsed.seenBefore !== undefined &&
+        parsed.seenBefore !== null &&
+        !Number.isInteger(parsed.seenBefore))
     )
       throw new Error();
     return parsed;

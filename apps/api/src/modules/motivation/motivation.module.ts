@@ -21,6 +21,10 @@ import { FalAudioService } from './fal-audio.service';
 import { MotivationSettingsService } from './motivation-settings.service';
 import { MotivationMusicService } from './motivation-music.service';
 import { MotivationVideoWorkerService } from './motivation-video-worker.service';
+import { MotivationReelsService } from './motivation-reels.service';
+import { MotivationAdminReelsService } from './motivation-admin-reels.service';
+import { MotivationPostcardsService } from './motivation-postcards.service';
+import { MotivationAnalyticsService } from './motivation-analytics.service';
 
 @Module({
   imports: [AuthModule, VedabaseModule],
@@ -38,6 +42,10 @@ import { MotivationVideoWorkerService } from './motivation-video-worker.service'
     MotivationManualPostService,
     MotivationStoryRebuildService,
     MotivationModerationService,
+    MotivationReelsService,
+    MotivationAdminReelsService,
+    MotivationPostcardsService,
+    MotivationAnalyticsService,
     MotivationAuthorSearchService,
     MotivationSourceFetchService,
     FalVideoService,

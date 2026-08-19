@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   MotivationAudienceTrack,
@@ -12,18 +13,26 @@ import {
   MotivationVideoStatus,
   SpiritualStage,
 } from '@prisma/client';
-import { MOTIVATION_VOICES, type MotivationVoice } from '@vedamatch/shared';
+import {
+  MOTIVATION_VOICES,
+  resolveDisplayName,
+  type MotivationVoice,
+} from '@vedamatch/shared';
 import type {
   MotivationAdminCandidateDto,
   MotivationAdminUpdate,
   MotivationAuthorWatchDto,
   MotivationAuthorWatchInput,
+  MotivationFeedTier,
   MotivationLanguage,
+  MotivationLikeResponse,
   MotivationManualQuoteInput,
   MotivationManualQuoteResult,
   MotivationPostDto,
   MotivationPreferenceUpdate,
   MotivationPromptUpdate,
+  MotivationReportInput,
+  MotivationReportResult,
   MotivationSourceWatchDto,
   MotivationSourceWatchInput,
   MotivationVisualStyle,
@@ -35,11 +44,17 @@ import {
   encodeMotivationCursor,
   weightedPage,
 } from './motivation-feed';
+import { rankFeed } from './feed-ranking';
+import { adminAiVerdictOf, adminAppealOf } from './moderation-audit';
+import { MotivationSettingsService } from './motivation-settings.service';
+
+/** Причины жалоб: список закрытый, свободный текст — только в комментарии. */
+const REPORT_REASONS = new Set(['spam', 'offensive', 'wrong_source', 'other']);
 import { MotivationAuthorSearchService } from './motivation-author-search.service';
 import {
   FalAudioService,
-  voicePreviewKey,
   VOICE_PREVIEW_LINE,
+  voiceSampleKey,
 } from './fal-audio.service';
 import {
   buildPromptDraftRequest,
@@ -81,13 +96,21 @@ export class MotivationService {
     private readonly copy: MotivationCopyService,
     private readonly categories: MotivationCategoriesService,
     private readonly audio: FalAudioService,
+    // Необязательный: сервис создаётся в тестах позиционно, а порог жалоб
+    // нужен ровно одному методу — без него берётся значение по умолчанию.
+    @Optional() private readonly settingsService?: MotivationSettingsService,
   ) {}
 
   async preference(userId: string) {
     return (
       (await this.prisma.motivationPreference.findUnique({
         where: { userId },
-      })) ?? { vaishnavaPercent: 50, language: 'ru', profileTypes: [] }
+      })) ?? {
+        vaishnavaPercent: 50,
+        language: 'ru',
+        profileTypes: [],
+        lastSeenAt: null,
+      }
     );
   }
   async savePreference(userId: string, input: MotivationPreferenceUpdate) {
@@ -140,6 +163,11 @@ export class MotivationService {
       category?: string;
       favorites?: boolean;
       archive?: boolean;
+      /**
+       * Slug поста, с которого открывать ленту: переход «Открыть рилс» должен
+       * показать созданное в самой ленте, а не на отдельной странице.
+       */
+      post?: string;
     },
   ) {
     const user = await this.prisma.user.findUnique({
@@ -154,6 +182,27 @@ export class MotivationService {
         : 'ru';
     const cursor = decodeMotivationCursor(query.cursor),
       limit = Math.max(1, Math.min(50, query.limit ?? 20));
+    // Ярусы («свежее → непросмотренное → повтор») считаются только для
+    // основной ленты: избранное и фильтр по категории остаются хронологией.
+    const ranked = !query.favorites && !query.category;
+    // Сессия листания: первая страница фиксирует момент и прошлый визит и
+    // уносит их в курсор; дальше ленту считаем по ним, иначе просмотры,
+    // сделанные при листании, сдвинули бы порядок между страницами.
+    const since = cursor.since ? new Date(cursor.since) : new Date(),
+      seenBefore =
+        cursor.since !== undefined
+          ? cursor.seenBefore
+            ? new Date(cursor.seenBefore)
+            : null
+          : (preference.lastSeenAt ?? null);
+    if (ranked && cursor.since === undefined)
+      await this.touchLastSeen(userId, since);
+    const blockedAuthorIds = (
+      await this.prisma.userBlock.findMany({
+        where: { blockerId: userId },
+        select: { blockedId: true },
+      })
+    ).map((block) => block.blockedId);
     // Явный выбор в настройках важнее самоидентификации; пустой список
     // означает, что выбора не делали.
     const profileTypes = preference.profileTypes?.length
@@ -167,13 +216,35 @@ export class MotivationService {
         },
       ],
       status: MotivationPostStatus.published,
+      // Рилсы заблокированных авторов не показываем: портальный `UserBlock` —
+      // одна из четырёх моделей, читать которые сервисному модулю разрешено.
+      // Оба исключения — одним `AND`: два ключа `NOT` в объекте затёрли бы
+      // друг друга, и одно из правил молча перестало бы работать.
+      AND: [
+        ...(blockedAuthorIds.length > 0
+          ? [{ NOT: { authorUserId: { in: blockedAuthorIds } } }]
+          : []),
+        // Рилс участника без проверенного источника в общую ленту не идёт:
+        // он живёт во вкладке «Мои» и по прямой ссылке. Избранное —
+        // исключение: туда пост мог попасть, пока правило было другим.
+        ...(query.favorites
+          ? []
+          : [{ NOT: { origin: 'user' as const, sourceVerified: false } }]),
+      ],
+      // Опубликованное уже во время листания не втискивается в середину
+      // сессии: оно придёт «свежим» при следующем открытии ленты.
+      ...(ranked ? { publishedAt: { lte: since } } : {}),
       ...(query.category ? { category: query.category } : {}),
       ...(query.favorites ? { favorites: { some: { userId } } } : {}),
     };
     const include = {
       translations: { where: { language } },
       favorites: { where: { userId }, select: { userId: true } },
-      views: { where: { userId }, select: { userId: true } },
+      views: { where: { userId }, select: { viewedAt: true } },
+      likes: { where: { userId }, select: { userId: true } },
+      // Имя автора наружу собирает resolveDisplayName, поэтому духовное имя
+      // тянем рядом с мирским — иначе подпись слайда молча станет мирской.
+      author: { select: { name: true, spiritualName: true } },
     } as const;
     const [universal, vaishnava] = await Promise.all([
       this.prisma.motivationPost.findMany({
@@ -189,20 +260,81 @@ export class MotivationService {
         take: 200,
       }),
     ]);
+    // Названия категорий одним запросом: на посте лежит только slug, а в
+    // ленте чип должен читаться словами.
+    const categoryTitles = new Map(
+      (
+        await this.prisma.motivationCategory.findMany({
+          select: { slug: true, title: true },
+        })
+      ).map((row) => [row.slug, row.title]),
+    );
+    const withTitle = <T extends { category: string }>(post: T) => ({
+      ...post,
+      categoryTitle: categoryTitles.get(post.category) ?? post.category,
+    });
+    const session = { userId, since, seenBefore };
+    type Loaded = (typeof universal)[number];
+    const order = (
+      posts: Loaded[],
+    ): { post: Loaded; tier?: MotivationFeedTier }[] =>
+      ranked
+        ? rankFeed(
+            posts.map((post) => ({
+              ...post,
+              viewedAt: post.views[0]?.viewedAt ?? null,
+            })),
+            session,
+          )
+        : posts.map((post) => ({ post }));
     const page = weightedPage(
-      universal,
-      vaishnava,
+      order(universal),
+      order(vaishnava),
       preference.vaishnavaPercent,
       cursor,
       limit,
     );
+    // Закреплённый пост берём тем же запросом, что и ленту: у публичного DTO
+    // нет ни автора, ни отметок зрителя, и слайд выходил бы обеднённым.
+    const pinned =
+      query.post && !cursor.since
+        ? await this.prisma.motivationPost.findFirst({
+            where: { slug: query.post, status: MotivationPostStatus.published },
+            include,
+          })
+        : null;
+    const items = page.items.map(({ post, tier }) => ({
+      ...this.dto(withTitle(post), userId),
+      ...(tier ? { feedTier: tier } : {}),
+    }));
     return {
-      items: page.items.map((post) => this.dto(post)),
+      items: pinned
+        ? [
+            this.dto(withTitle(pinned), userId),
+            ...items.filter((item) => item.id !== pinned.id),
+          ]
+        : items,
       nextCursor:
         page.items.length === limit
-          ? encodeMotivationCursor(page.cursor)
+          ? encodeMotivationCursor({
+              ...page.cursor,
+              since: since.getTime(),
+              seenBefore: seenBefore?.getTime() ?? null,
+            })
           : null,
     };
+  }
+
+  /**
+   * Отметка последнего визита. Пишется при первой странице основной ленты:
+   * от неё при следующем открытии считается ярус «свежее».
+   */
+  private async touchLastSeen(userId: string, at: Date) {
+    await this.prisma.motivationPreference.upsert({
+      where: { userId },
+      create: { userId, lastSeenAt: at },
+      update: { lastSeenAt: at },
+    });
   }
 
   async publicPost(slug: string, language: MotivationLanguage = 'ru') {
@@ -232,13 +364,123 @@ export class MotivationService {
         where: { userId, postId },
       });
   }
+  /**
+   * Жалоба на рилс участника. Одна на человека: повторное нажатие ничего не
+   * меняет. Набрав порог из настроек, пост скрывается из ленты до решения
+   * администратора — молчать до его прихода нельзя, а удалять по жалобам
+   * нельзя тем более.
+   */
+  async report(
+    userId: string,
+    postId: string,
+    input: MotivationReportInput,
+  ): Promise<MotivationReportResult> {
+    const reason = input?.reason;
+    if (!REPORT_REASONS.has(reason))
+      throw new BadRequestException('Выберите причину жалобы');
+    const post = await this.prisma.motivationPost.findFirst({
+      where: { id: postId, status: 'published' },
+      select: { id: true, origin: true, authorUserId: true },
+    });
+    if (!post) throw new NotFoundException();
+    if (post.origin !== 'user')
+      throw new BadRequestException(
+        'Это редакционная публикация — напишите в поддержку',
+      );
+    if (post.authorUserId === userId)
+      throw new BadRequestException('Это ваш собственный рилс');
+    await this.prisma.motivationReport.upsert({
+      where: { postId_reporterId: { postId, reporterId: userId } },
+      create: {
+        postId,
+        reporterId: userId,
+        reason,
+        comment: input.comment?.trim().slice(0, 500) || null,
+      },
+      update: {},
+    });
+    const count = await this.prisma.motivationReport.count({
+      where: { postId },
+    });
+    const reportsToHide =
+      (await this.settingsService?.read())?.reportsToHide ?? 3;
+    let hidden = false;
+    if (count >= reportsToHide) {
+      const updated = await this.prisma.motivationPost.updateMany({
+        where: { id: postId, status: 'published' },
+        data: { status: 'hidden', generationStage: 'hidden' },
+      });
+      hidden = updated.count === 1;
+      if (hidden)
+        await this.prisma.motivationModerationAudit.create({
+          data: {
+            postId,
+            actorId: null,
+            action: 'auto_hidden',
+            reason: `Жалоб: ${count}`,
+            metadata: { actor: 'reports', count, threshold: reportsToHide },
+          },
+        });
+    }
+    return { count, hidden };
+  }
   async view(userId: string, postId: string) {
     await this.ensurePublished(postId);
+    // Повторный просмотр отметку не сдвигает: она нужна как «когда впервые
+    // видел» — по ней ярус «повтор» ставит давнее раньше недавнего, а порядок
+    // ленты не прыгает оттого, что человек листает.
     await this.prisma.motivationView.upsert({
       where: { userId_postId: { userId, postId } },
       create: { userId, postId },
-      update: { viewedAt: new Date() },
+      update: {},
     });
+  }
+  /**
+   * Лайк идемпотентен: повторный POST не удваивает счётчик, повторный DELETE
+   * не уводит его в минус. Счётчик меняется в той же транзакции, что и
+   * строка лайка, и только когда строка действительно появилась или исчезла.
+   */
+  async like(
+    userId: string,
+    postId: string,
+    liked: boolean,
+  ): Promise<MotivationLikeResponse> {
+    await this.ensurePublished(postId);
+    const likeCount = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.motivationLike.findUnique({
+        where: { userId_postId: { userId, postId } },
+        select: { userId: true },
+      });
+      if (liked && !existing) {
+        await tx.motivationLike.create({ data: { userId, postId } });
+        return (
+          await tx.motivationPost.update({
+            where: { id: postId },
+            data: { likeCount: { increment: 1 } },
+            select: { likeCount: true },
+          })
+        ).likeCount;
+      }
+      if (!liked && existing) {
+        await tx.motivationLike.delete({
+          where: { userId_postId: { userId, postId } },
+        });
+        return (
+          await tx.motivationPost.update({
+            where: { id: postId },
+            data: { likeCount: { decrement: 1 } },
+            select: { likeCount: true },
+          })
+        ).likeCount;
+      }
+      return (
+        await tx.motivationPost.findUniqueOrThrow({
+          where: { id: postId },
+          select: { likeCount: true },
+        })
+      ).likeCount;
+    });
+    return { likeCount: Math.max(0, likeCount), isLiked: liked };
   }
   async adminList(role: Role): Promise<MotivationAdminCandidateDto[]> {
     this.admin(role);
@@ -248,6 +490,30 @@ export class MotivationService {
         quote: { include: { translations: true, profiles: true } },
         favorites: false,
         views: false,
+        author: { select: { name: true } },
+        // Только записи ИИ и обращения: полный аудит карточке не нужен.
+        moderationAudits: {
+          where: {
+            action: {
+              in: [
+                'ai_suggest',
+                'ai_escalate',
+                'ai_approve',
+                'ai_reject',
+                'ai_error',
+                'ai_publish',
+                'appeal',
+              ],
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            action: true,
+            reason: true,
+            metadata: true,
+            createdAt: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -258,6 +524,10 @@ export class MotivationService {
       generationErrorCode: post.generationErrorCode,
       attemptCount: post.attemptCount,
       reviewStatus: post.reviewStatus,
+      origin: post.origin,
+      authorName: post.author?.name ?? null,
+      aiVerdict: adminAiVerdictOf(post.moderationAudits ?? []),
+      appeal: adminAppealOf(post.moderationAudits ?? []),
       quote: post.quote
         ? {
             id: post.quote.id,
@@ -399,9 +669,7 @@ export class MotivationService {
     // Модель входит в ключ обязательно: у v2 и v3 совпадают имена голосов, но
     // звучат они по-разному. Без неё после смены модели админ слушал бы старые
     // записи и выбирал голос по звучанию, которого в роликах уже нет.
-    const key = `motivation/voice-preview/${voicePreviewKey(
-      await this.audio.modelId(),
-    )}/${name ?? 'default'}.mp3`;
+    const key = voiceSampleKey(await this.audio.modelId(), name ?? 'default');
     const cached = await this.generation.findUploaded(key);
     if (cached) return { audio: cached, cached: true };
 
@@ -457,7 +725,10 @@ export class MotivationService {
     this.admin(role);
     const post = await this.prisma.motivationPost.findUnique({
       where: { id },
-      include: { quote: true, translations: { where: { language: 'ru' }, take: 1 } },
+      include: {
+        quote: true,
+        translations: { where: { language: 'ru' }, take: 1 },
+      },
     });
     if (!post) throw new NotFoundException('Пост не найден');
 
@@ -705,7 +976,7 @@ export class MotivationService {
     )
       throw new NotFoundException();
   }
-  private dto(post: any): MotivationPostDto {
+  private dto(post: any, viewerId?: string): MotivationPostDto {
     const t = post.translations[0];
     return {
       id: post.id,
@@ -714,6 +985,8 @@ export class MotivationService {
       profileType: post.profileType,
       audienceTrack: post.audienceTrack,
       category: post.category,
+      // Slug наружу не показываем: человеку нужно название из справочника.
+      categoryTitle: post.categoryTitle ?? post.category,
       imageUrl: post.imageUrl ?? '',
       storyImageUrl: post.storyImageUrl ?? '',
       // Наружу — только принятое видео: в review оно ещё не просмотрено.
@@ -721,6 +994,9 @@ export class MotivationService {
         post.videoStatus === MotivationVideoStatus.ready
           ? (post.videoUrl ?? '')
           : '',
+      // Звук в ролике есть, только если его туда положили: озвучка цитаты или
+      // выбранный трек. Сама видеомодель звук не пишет — мы просим немой кадр.
+      videoHasSound: Boolean(post.videoVoice || post.videoTrackId),
       title: t?.title ?? '',
       text: t?.text ?? '',
       storyText: t?.storyText ?? '',
@@ -733,6 +1009,17 @@ export class MotivationService {
       publishedAt: post.publishedAt?.toISOString() ?? '',
       isFavorite: post.favorites.length > 0,
       isViewed: post.views.length > 0,
+      likeCount: post.likeCount ?? 0,
+      isLiked: (post.likes?.length ?? 0) > 0,
+      origin: post.origin ?? 'editorial',
+      isOwn: Boolean(viewerId && post.authorUserId === viewerId),
+      author: post.author
+        ? {
+            name: resolveDisplayName(
+              post.author as { name: string; spiritualName: string | null },
+            ),
+          }
+        : null,
     };
   }
 }

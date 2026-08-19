@@ -6,7 +6,9 @@ type PrismaStub = {
   $transaction: jest.Mock;
 };
 
-function buildPrisma(overrides: Partial<PrismaStub['motivationCategory']> = {}) {
+function buildPrisma(
+  overrides: Partial<PrismaStub['motivationCategory']> = {},
+) {
   const motivationCategory = {
     findMany: jest.fn().mockResolvedValue([]),
     findFirst: jest.fn().mockResolvedValue(null),
@@ -63,7 +65,11 @@ describe('MotivationCategoriesService', () => {
         isDefault: true,
       },
     });
-    expect(created).toMatchObject({ slug: 'smirenie', isDefault: true, postCount: 0 });
+    expect(created).toMatchObject({
+      slug: 'smirenie',
+      isDefault: true,
+      postCount: 0,
+    });
   });
 
   it('creates a subcategory under a top-level parent', async () => {
@@ -75,7 +81,10 @@ describe('MotivationCategoriesService', () => {
       count: jest.fn().mockResolvedValue(1),
     });
     prisma.motivationCategory.create.mockImplementation(
-      ({ data }: { data: Record<string, unknown> }) => ({ id: 'cat-2', ...data }),
+      ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'cat-2',
+        ...data,
+      }),
     );
 
     const created = await buildService(prisma).create('admin', {
@@ -94,11 +103,16 @@ describe('MotivationCategoriesService', () => {
 
   it('refuses a third level of nesting', async () => {
     const prisma = buildPrisma({
-      findUnique: jest.fn().mockResolvedValue({ id: 'cat-2', parentId: 'cat-1' }),
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({ id: 'cat-2', parentId: 'cat-1' }),
     });
 
     await expect(
-      buildService(prisma).create('admin', { title: 'Глубже', parentId: 'cat-2' }),
+      buildService(prisma).create('admin', {
+        title: 'Глубже',
+        parentId: 'cat-2',
+      }),
     ).rejects.toThrow('Subcategories cannot be nested any deeper');
   });
 
@@ -113,7 +127,9 @@ describe('MotivationCategoriesService', () => {
 
     await expect(
       buildService(prisma).update('admin', 'cat-1', { parentId: 'cat-3' }),
-    ).rejects.toThrow('Move the subcategories out before nesting this category');
+    ).rejects.toThrow(
+      'Move the subcategories out before nesting this category',
+    );
   });
 
   it('refuses to make a category its own parent', async () => {
@@ -131,10 +147,38 @@ describe('MotivationCategoriesService', () => {
   it('lists subcategories right after their parent', async () => {
     const prisma = buildPrisma({
       findMany: jest.fn().mockResolvedValue([
-        { id: 'a', slug: 'a', title: 'A', sortOrder: 0, isDefault: true, parentId: null },
-        { id: 'b-1', slug: 'b-1', title: 'B-1', sortOrder: 5, isDefault: false, parentId: 'b' },
-        { id: 'b', slug: 'b', title: 'B', sortOrder: 10, isDefault: false, parentId: null },
-        { id: 'a-1', slug: 'a-1', title: 'A-1', sortOrder: 20, isDefault: false, parentId: 'a' },
+        {
+          id: 'a',
+          slug: 'a',
+          title: 'A',
+          sortOrder: 0,
+          isDefault: true,
+          parentId: null,
+        },
+        {
+          id: 'b-1',
+          slug: 'b-1',
+          title: 'B-1',
+          sortOrder: 5,
+          isDefault: false,
+          parentId: 'b',
+        },
+        {
+          id: 'b',
+          slug: 'b',
+          title: 'B',
+          sortOrder: 10,
+          isDefault: false,
+          parentId: null,
+        },
+        {
+          id: 'a-1',
+          slug: 'a-1',
+          title: 'A-1',
+          sortOrder: 20,
+          isDefault: false,
+          parentId: 'a',
+        },
       ]),
     });
 
@@ -157,7 +201,10 @@ describe('MotivationCategoriesService', () => {
       count: jest.fn().mockResolvedValue(2),
     });
     prisma.motivationCategory.create.mockImplementation(
-      ({ data }: { data: Record<string, unknown> }) => ({ id: 'cat-2', ...data }),
+      ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'cat-2',
+        ...data,
+      }),
     );
 
     await buildService(prisma).create('admin', { title: 'Вера' });
@@ -212,7 +259,9 @@ describe('MotivationCategoriesService', () => {
 
   it('deletes a non-default category without touching posts', async () => {
     const prisma = buildPrisma({
-      findUnique: jest.fn().mockResolvedValue({ id: 'cat-2', isDefault: false }),
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({ id: 'cat-2', isDefault: false }),
     });
 
     await buildService(prisma).remove('admin', 'cat-2');
@@ -248,8 +297,22 @@ describe('MotivationCategoriesService', () => {
   it('reports how many posts sit in each category', async () => {
     const prisma = buildPrisma({
       findMany: jest.fn().mockResolvedValue([
-        { id: 'cat-1', slug: 'smirenie', title: 'Смирение', sortOrder: 0, isDefault: true, parentId: null },
-        { id: 'cat-2', slug: 'vera', title: 'Вера', sortOrder: 10, isDefault: false, parentId: null },
+        {
+          id: 'cat-1',
+          slug: 'smirenie',
+          title: 'Смирение',
+          sortOrder: 0,
+          isDefault: true,
+          parentId: null,
+        },
+        {
+          id: 'cat-2',
+          slug: 'vera',
+          title: 'Вера',
+          sortOrder: 10,
+          isDefault: false,
+          parentId: null,
+        },
       ]),
     });
     prisma.motivationPost.groupBy.mockResolvedValue([

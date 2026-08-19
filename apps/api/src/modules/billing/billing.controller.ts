@@ -10,6 +10,7 @@ import {
 import type {
   AccessTokenPayload,
   AdminUpdateBillingModeRequest,
+  AdminUpdateDonationRequest,
   AdminUpdateSubscriptionRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
@@ -29,6 +30,31 @@ export class BillingController {
   @UseGuards(AuthGuard)
   me(@CurrentUser() user: AccessTokenPayload) {
     return this.billing.state(user.sub);
+  }
+
+  /** Реквизиты для кнопки «поддержать развитие»; публичные, чтобы шторку видел и гость. */
+  @Get('donation')
+  donation() {
+    return this.billing.donation();
+  }
+}
+
+@Controller('admin/billing/donation')
+@UseGuards(AuthGuard)
+export class AdminDonationController {
+  constructor(private readonly billing: BillingService) {}
+
+  @Get()
+  get(@CurrentUser() admin: AccessTokenPayload) {
+    return this.billing.adminDonation(admin.role);
+  }
+
+  @Patch()
+  update(
+    @CurrentUser() admin: AccessTokenPayload,
+    @Body() body: AdminUpdateDonationRequest,
+  ) {
+    return this.billing.updateDonation(admin.role, body);
   }
 }
 
