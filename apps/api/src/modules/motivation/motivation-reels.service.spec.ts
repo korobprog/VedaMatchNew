@@ -210,11 +210,13 @@ describe('MotivationReelsService.create', () => {
     ).resolves.toMatchObject({
       stage: 'admin_review',
     });
+    // Причина сбоя доходит до администратора: по «сбою модели» без
+    // подробностей не решить, повторять проверку или разбирать текст.
     expect(broken.moderation.aiNote).toHaveBeenCalledWith(
       'post-1',
       'ai_error',
-      null,
-      expect.anything(),
+      expect.stringContaining('Модель'),
+      expect.objectContaining({ failure: 'unknown', retryable: false }),
     );
     expect(broken.moderation.aiApproveText).not.toHaveBeenCalled();
   });

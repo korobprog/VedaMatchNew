@@ -48,6 +48,54 @@ beforeEach(() => {
 });
 
 describe("ReelsBoard", () => {
+  it("offers to run the AI check again after a model failure", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(
+      <ReelsBoard
+        data={data([
+          reel({
+            stage: "admin_review",
+            reviewStatus: "text_review",
+            aiVerdict: {
+              action: "ai_error",
+              decision: null,
+              resolved: null,
+              confidence: null,
+              flags: [],
+              reason: "Провайдер модели временно недоступен",
+              createdAt: "2026-08-20T09:01:00.000Z",
+            },
+          }),
+        ])}
+        filter="all"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Проверить ИИ ещё раз/ }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/admin/motivation/reels/post-1/recheck"),
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
+  });
+
+  it("keeps the recheck button away from a reel the model actually judged", () => {
+    render(
+      <ReelsBoard
+        data={data([reel({ stage: "admin_review", reviewStatus: "text_review" })])}
+        filter="all"
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /Проверить ИИ ещё раз/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows today's AI counters and the verdict behind a rejection", () => {
     render(<ReelsBoard data={data([reel()])} filter="all" />);
 
