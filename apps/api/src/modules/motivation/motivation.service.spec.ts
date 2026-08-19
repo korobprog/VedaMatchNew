@@ -26,6 +26,7 @@ describe('MotivationService admin list', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     await service.feed('user-1', {});
@@ -75,6 +76,7 @@ describe('MotivationService admin list', () => {
     };
     const service = new MotivationService(
       prisma as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -150,6 +152,7 @@ describe('MotivationService admin list', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     const [candidate]: MotivationAdminCandidateDto[] = (await service.adminList(
@@ -177,6 +180,7 @@ describe('MotivationService admin list', () => {
       {} as never,
       {} as never,
       discovery as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -216,6 +220,7 @@ describe('MotivationService feed profiles', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
     return { service, motivationPost };
   }
@@ -247,6 +252,7 @@ describe('MotivationService.savePreference', () => {
     const upsert = jest.fn().mockResolvedValue({});
     const service = new MotivationService(
       { motivationPreference: { upsert } } as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -317,6 +323,7 @@ describe('MotivationService.adminDelete', () => {
     };
     const service = new MotivationService(
       prisma as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -403,6 +410,7 @@ describe('MotivationService.addManualQuote', () => {
       {} as never,
       copy as never,
       categories as never,
+      {} as never,
     );
     return {
       service,

@@ -174,7 +174,7 @@ describe('FalVideoService: защита от платных ошибок', () =>
     const config = {
       get: (k: string) => ({ FAL_KEY: 'k' })[k],
     } as unknown as import('@nestjs/config').ConfigService;
-    const svc = new FalVideoService(config);
+    const svc = new FalVideoService(config, {} as never);
 
     await expect(svc.submit({ imageUrl: '', prompt: 'x' })).rejects.toThrow();
     await expect(svc.submit({ imageUrl: 'u', prompt: '  ' })).rejects.toThrow();

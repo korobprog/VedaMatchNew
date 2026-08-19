@@ -155,7 +155,7 @@ describe('кинематографические стили', () => {
       'epic_wide',
       'night_devotional',
       'painterly_realism',
-    ]) {
+    ] as const) {
       expect(() => createImageDirection(base, style)).not.toThrow();
     }
   });
