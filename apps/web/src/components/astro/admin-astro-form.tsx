@@ -202,7 +202,7 @@ export function AdminAstroForm({
         <button
           type="submit"
           disabled={pending}
-          className="rounded-xl bg-magenta px-5 py-2.5 font-medium text-white disabled:opacity-50"
+          className="btn-mint rounded-xl px-5 py-2.5 font-medium disabled:opacity-50"
         >
           {pending ? "Сохраняем…" : "Сохранить лимиты"}
         </button>

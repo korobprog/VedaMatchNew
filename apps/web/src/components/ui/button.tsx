@@ -1,7 +1,12 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
+export type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "outline"
+  | "danger"
+  | "ghost";
 export type ButtonSize = "sm" | "md";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -18,10 +23,11 @@ const base =
   "disabled:cursor-not-allowed disabled:opacity-50";
 
 export const buttonVariants: Record<ButtonVariant, string> = {
-  primary:
-    "bg-magenta text-white hover:shadow-[0_0_20px_var(--vm-glow-magenta)] hover:brightness-110",
-  secondary:
-    "glass border border-glass-brd text-text-0 hover:border-magenta/40",
+  // Заливка и контур описаны классом .btn-mint в globals.css — там же меняется
+  // цвет всех кнопок разом.
+  primary: "btn-mint",
+  secondary: "glass border border-glass-brd text-text-0 hover:border-cyan/40",
+  outline: "btn-mint-outline",
   danger:
     "border border-red-500/40 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:text-red-400",
   ghost: "text-text-1 hover:bg-glass hover:text-text-0",

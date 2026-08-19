@@ -292,7 +292,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
               type="file"
               accept="image/jpeg,image/png,image/webp"
               onChange={selectAvatar}
-              className="block w-full text-sm text-text-1 file:mr-4 file:rounded-lg file:border-0 file:bg-magenta file:px-4 file:py-2 file:text-sm file:font-medium file:text-white"
+              className="block w-full text-sm text-text-1 file:mr-4 file:rounded-lg file:border-0 file:bg-mint file:px-4 file:py-2 file:text-sm file:font-medium file:text-on-mint"
             />
             <p className="text-xs text-text-2">JPG, PNG или WebP до 5 MB. Перед сохранением показывается preview.</p>
             <div className="flex flex-wrap gap-2">
