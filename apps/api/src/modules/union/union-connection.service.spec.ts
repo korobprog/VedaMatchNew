@@ -183,6 +183,46 @@ describe('UnionConnectionService', () => {
     expect(prisma.unionConnectionRequest.upsert).not.toHaveBeenCalled();
   });
 
+  it('does not reset an accepted direct request back to pending on a repeated like', async () => {
+    const accepted = connection({
+      fromUserId: 'user-1',
+      toUserId: 'user-2',
+      status: 'accepted',
+    });
+    prisma.unionProfile.findUnique
+      .mockResolvedValueOnce(profile('user-1'))
+      .mockResolvedValueOnce(profile('user-2'));
+    // Первый findUnique — обратная заявка (нет), второй — прямая (accepted).
+    prisma.unionConnectionRequest.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(accepted);
+
+    await expect(
+      service.create('user-1', { toUserId: 'user-2' }),
+    ).resolves.toEqual(
+      expect.objectContaining({ direction: 'outgoing', status: 'accepted' }),
+    );
+    expect(prisma.unionConnectionRequest.upsert).not.toHaveBeenCalled();
+    expect(prisma.unionConnectionRequest.update).not.toHaveBeenCalled();
+  });
+
+  it('keeps a pending direct request as is and does not notify twice', async () => {
+    const pending = connection({ fromUserId: 'user-1', toUserId: 'user-2' });
+    prisma.unionProfile.findUnique
+      .mockResolvedValueOnce(profile('user-1'))
+      .mockResolvedValueOnce(profile('user-2'));
+    prisma.unionConnectionRequest.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(pending);
+
+    await expect(
+      service.create('user-1', { toUserId: 'user-2' }),
+    ).resolves.toEqual(
+      expect.objectContaining({ direction: 'outgoing', status: 'pending' }),
+    );
+    expect(prisma.unionConnectionRequest.upsert).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['accept', 'stranger', 'pending', 'Not your request'],
     ['decline', 'stranger', 'pending', 'Not your request'],

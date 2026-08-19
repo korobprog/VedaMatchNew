@@ -338,6 +338,13 @@ export class ContactsRequestsService {
     const otherUserId =
       request.fromUserId === userId ? request.toUserId : request.fromUserId;
 
+    // Раскрытие могло случиться до блокировки или скрытия: если сейчас
+    // человек невидим в Контактах — чат не открываем, отвечаем как о
+    // несуществующем запросе, чтобы не подтверждать факт блока.
+    if (await this.moderation.isHidden(userId, otherUserId, 'contacts')) {
+      throw new NotFoundException('Запрос не найден');
+    }
+
     const disclosure = await this.prisma.contactsDisclosure.findFirst({
       where: {
         revokedAt: null,

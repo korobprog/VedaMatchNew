@@ -158,6 +158,35 @@ export function radiusIdsSql(filter: RadiusFilter): Prisma.Sql {
   )} LIMIT ${MAX_RADIUS_MATCHES}`;
 }
 
+// ===== Приватность места =====
+
+/**
+ * Шаг сетки, к которой прибиваются координаты объявлений с точностью
+ * `city`. 0.02° ≈ 2,2 км по широте и ≈1,4 км по долготе в средних широтах:
+ * метка остаётся «в городе», но по ней нельзя найти дом. Обычный путь —
+ * центроид из `/geo/search` — от снапа почти не сдвигается; защита нужна
+ * от клиента, который прислал точные координаты в обход формы, и от старых
+ * записей (см. миграцию 20260819120000_notices_city_coords_coarsen).
+ */
+export const CITY_COORD_GRID = 0.02;
+
+export function coarsenCityCoord(value: number): number {
+  return Math.round(value / CITY_COORD_GRID) * CITY_COORD_GRID;
+}
+
+/**
+ * Координаты для хранения/выдачи с учётом точности места. `exact` не
+ * трогаем: он разрешён только общинам, где место общественное.
+ */
+export function coordsForPrecision(
+  lat: number,
+  lon: number,
+  precision: 'city' | 'exact',
+): { lat: number; lon: number } {
+  if (precision === 'exact') return { lat, lon };
+  return { lat: coarsenCityCoord(lat), lon: coarsenCityCoord(lon) };
+}
+
 // ===== Карта =====
 
 /**

@@ -282,3 +282,61 @@ describe('UnionChatService.sendMessage — уведомления', () => {
     });
   });
 });
+
+describe('UnionChatService.openDirectChat — блокировки', () => {
+  function makeService(opts: {
+    block: { id: string } | null;
+    existing: { id: string; status: string } | null;
+  }) {
+    const prisma = {
+      userBlock: { findFirst: jest.fn().mockResolvedValue(opts.block) },
+      unionConnectionRequest: {
+        findFirst: jest.fn().mockResolvedValue(opts.existing),
+        update: jest.fn().mockResolvedValue({}),
+        create: jest.fn().mockResolvedValue({ id: 'new-1' }),
+      },
+    };
+    const service = new UnionChatService(
+      prisma as unknown as PrismaService,
+      {} as never,
+      { emit: jest.fn() } as never,
+    );
+    return { prisma, service };
+  }
+
+  it('при блокировке в любую сторону чат не открывается и заявка не оживает', async () => {
+    const { prisma, service } = makeService({
+      block: { id: 'b1' },
+      existing: { id: 'req-1', status: 'cancelled' },
+    });
+    await expect(service.openDirectChat('a', 'b')).rejects.toThrow(
+      'Пользователь недоступен',
+    );
+    expect(prisma.unionConnectionRequest.update).not.toHaveBeenCalled();
+    expect(prisma.unionConnectionRequest.create).not.toHaveBeenCalled();
+  });
+
+  it('без блокировки существующая связь переводится в accepted', async () => {
+    const { prisma, service } = makeService({
+      block: null,
+      existing: { id: 'req-1', status: 'declined' },
+    });
+    await expect(service.openDirectChat('a', 'b')).resolves.toEqual({
+      chatId: 'req-1',
+    });
+    expect(prisma.unionConnectionRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'req-1' },
+        data: expect.objectContaining({ status: 'accepted' }),
+      }),
+    );
+  });
+
+  it('без связи создаёт принятую заявку', async () => {
+    const { prisma, service } = makeService({ block: null, existing: null });
+    await expect(service.openDirectChat('a', 'b')).resolves.toEqual({
+      chatId: 'new-1',
+    });
+    expect(prisma.unionConnectionRequest.create).toHaveBeenCalledTimes(1);
+  });
+});

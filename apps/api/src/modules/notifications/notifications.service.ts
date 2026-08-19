@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import type {
   NotificationCategory,
   NotificationInboxResponse,
@@ -69,6 +69,20 @@ export class NotificationsService {
     });
   }
 
+  /**
+   * Пользовательская отписка: удаляем только собственную подписку —
+   * иначе, зная чужой endpoint, можно было бы отключить чужие пуши.
+   */
+  async deleteOwnSubscription(userId: string, endpoint: string): Promise<void> {
+    if (typeof endpoint !== 'string' || endpoint.length === 0) {
+      throw new BadRequestException('endpoint обязателен');
+    }
+    await this.prisma.pushSubscription.deleteMany({
+      where: { endpoint, userId },
+    });
+  }
+
+  /** Служебная чистка протухших endpoint'ов после 404/410 от push-сервиса. */
   async deleteSubscription(endpoint: string): Promise<void> {
     await this.prisma.pushSubscription.deleteMany({ where: { endpoint } });
   }

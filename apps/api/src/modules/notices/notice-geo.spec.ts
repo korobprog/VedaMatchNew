@@ -5,6 +5,7 @@ import {
   MAX_RADIUS_KM,
   boundingBox,
   boundsWhere,
+  coordsForPrecision,
   haversineKm,
   parseBounds,
   parseRadius,
@@ -165,6 +166,29 @@ describe('parseBounds', () => {
     ).toEqual({
       latitude: { gte: 55, lte: 60 },
       longitude: { gte: 30, lte: 40 },
+    });
+  });
+});
+
+describe('coordsForPrecision', () => {
+  it('city: координаты прибиваются к сетке, дом по ним не найти', () => {
+    // Точный адрес в Москве.
+    const { lat, lon } = coordsForPrecision(55.751244, 37.618423, 'city');
+    expect(lat).toBeCloseTo(55.76, 6);
+    expect(lon).toBeCloseTo(37.62, 6);
+    expect(lat).not.toBe(55.751244);
+  });
+
+  it('city: центроид из геокодера почти не сдвигается', () => {
+    const { lat, lon } = coordsForPrecision(55.7558, 37.6173, 'city');
+    expect(Math.abs(lat - 55.7558)).toBeLessThan(0.02);
+    expect(Math.abs(lon - 37.6173)).toBeLessThan(0.02);
+  });
+
+  it('exact: не трогаем', () => {
+    expect(coordsForPrecision(55.751244, 37.618423, 'exact')).toEqual({
+      lat: 55.751244,
+      lon: 37.618423,
     });
   });
 });

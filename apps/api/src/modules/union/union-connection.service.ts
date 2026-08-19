@@ -159,6 +159,20 @@ export class UnionConnectionService {
       return this.toRequestDto(reverse, reverse.fromUser, 'incoming', true);
     }
 
+    // Прямая заявка уже есть: принятую не трогаем (иначе повторный лайк
+    // из колоды сбрасывал бы мэтч в pending и закрывал чат), ожидающую —
+    // не пересоздаём и не шлём второе уведомление.
+    const direct = await this.prisma.unionConnectionRequest.findUnique({
+      where: { fromUserId_toUserId: { fromUserId, toUserId } },
+      include: { toUser: { include: { unionProfile: true } } },
+    });
+    if (direct?.status === 'accepted') {
+      return this.toRequestDto(direct, direct.toUser, 'outgoing', true);
+    }
+    if (direct?.status === 'pending') {
+      return this.toRequestDto(direct, direct.toUser, 'outgoing', false);
+    }
+
     const request = await this.prisma.unionConnectionRequest.upsert({
       where: { fromUserId_toUserId: { fromUserId, toUserId } },
       create: { fromUserId, toUserId, message, isSuperlike },
