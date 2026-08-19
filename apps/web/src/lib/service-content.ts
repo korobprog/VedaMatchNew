@@ -95,9 +95,9 @@ export const SERVICE_CONTENT: ServiceContent[] = [
   {
     slug: "vedabase",
     route: "/vedabase",
-    name: "Книги",
-    nameEn: "Books",
-    tagline: "Бхагавад-гита и ведические тексты — читайте без интернета",
+    name: "Библиотека",
+    nameEn: "Library",
+    tagline: "Архив развивающей и духовной литературы ведического канона",
     taglineEn: "Bhagavad-gita and Vedic texts — read offline",
     description:
       "Библиотека книг с постраничной навигацией, поиском по тексту и офлайн-режимом — комментарии и главы всегда под рукой, даже без связи.",
@@ -159,7 +159,7 @@ export const SERVICE_CONTENT: ServiceContent[] = [
     route: "/contacts",
     name: "Контакты",
     nameEn: "Contacts",
-    tagline: "Справочник общины: нужный человек рядом",
+    tagline: "Единая база участников портала: контакты, навыки, предложения",
     taglineEn: "Community directory: the right person nearby",
     description:
       "Ищите преподавателей, служения, профессии и навыки среди участников рядом с вами — с картой и фильтрами, но без публичного поиска в интернете.",
