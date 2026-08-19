@@ -128,11 +128,16 @@ export class UnionChatService {
         ? connection.toUser
         : connection.fromUser;
 
-    const messages = await this.prisma.unionChatMessage.findMany({
-      where: { requestId: connection.id },
-      orderBy: { createdAt: 'asc' },
-      take: 200,
-    });
+    // Берём последние 200 сообщений (desc + take), а не первые — иначе в
+    // длинной переписке пользователь никогда не увидит свежие. Затем
+    // разворачиваем в хронологический порядок для клиента.
+    const messages = (
+      await this.prisma.unionChatMessage.findMany({
+        where: { requestId: connection.id },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      })
+    ).reverse();
     const reactionsByMessage = await this.loadReactions(
       messages.map((message) => message.id),
       userId,

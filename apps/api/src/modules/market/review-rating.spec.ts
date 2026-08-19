@@ -1,10 +1,10 @@
 import {
   MAX_RATING,
   MIN_RATING,
-  applyRatingDelta,
   average,
   isValidRating,
   ratingBreakdown,
+  ratingCounterSteps,
 } from './review-rating';
 
 describe('isValidRating', () => {
@@ -43,51 +43,28 @@ describe('average', () => {
   });
 });
 
-describe('applyRatingDelta', () => {
-  it('adds a review', () => {
-    expect(
-      applyRatingDelta(
-        { ratingSum: 0, reviewsCount: 0 },
-        { ratingSum: 5, reviewsCount: 1 },
-      ),
-    ).toEqual({ ratingSum: 5, reviewsCount: 1, ratingAvg: 5 });
+describe('ratingCounterSteps', () => {
+  // Шаги атомарные: Postgres прибавляет к текущему значению строки, поэтому два
+  // одновременных отзыва не затирают друг друга, как при read-modify-write.
+  it('adds a review as increments', () => {
+    expect(ratingCounterSteps({ ratingSum: 5, reviewsCount: 1 })).toEqual({
+      ratingSum: { increment: 5 },
+      reviewsCount: { increment: 1 },
+    });
   });
 
-  it('averages several reviews', () => {
-    const one = applyRatingDelta(
-      { ratingSum: 0, reviewsCount: 0 },
-      { ratingSum: 5, reviewsCount: 1 },
-    );
-    const two = applyRatingDelta(one, { ratingSum: 4, reviewsCount: 1 });
-    expect(two).toEqual({ ratingSum: 9, reviewsCount: 2, ratingAvg: 4.5 });
+  it('removes a review as decrements', () => {
+    expect(ratingCounterSteps({ ratingSum: -4, reviewsCount: -1 })).toEqual({
+      ratingSum: { decrement: 4 },
+      reviewsCount: { decrement: 1 },
+    });
   });
 
-  it('removes a review and restores the previous average', () => {
-    const after = applyRatingDelta(
-      { ratingSum: 9, reviewsCount: 2 },
-      { ratingSum: -4, reviewsCount: -1 },
-    );
-    expect(after).toEqual({ ratingSum: 5, reviewsCount: 1, ratingAvg: 5 });
-  });
-
-  it('drops back to zero when the last review goes', () => {
-    expect(
-      applyRatingDelta(
-        { ratingSum: 5, reviewsCount: 1 },
-        { ratingSum: -5, reviewsCount: -1 },
-      ),
-    ).toEqual({ ratingSum: 0, reviewsCount: 0, ratingAvg: 0 });
-  });
-
-  // Счётчики денормализованы: рассинхрон возможен, и уводить их в минус —
-  // значит получить отрицательный рейтинг на витрине.
-  it('never goes negative even if the counters drifted', () => {
-    expect(
-      applyRatingDelta(
-        { ratingSum: 0, reviewsCount: 0 },
-        { ratingSum: -5, reviewsCount: -1 },
-      ),
-    ).toEqual({ ratingSum: 0, reviewsCount: 0, ratingAvg: 0 });
+  it('treats zero as a no-op increment', () => {
+    expect(ratingCounterSteps({ ratingSum: 0, reviewsCount: 0 })).toEqual({
+      ratingSum: { increment: 0 },
+      reviewsCount: { increment: 0 },
+    });
   });
 });
 
@@ -114,6 +91,8 @@ describe('ratingBreakdown', () => {
 
   it('ignores values outside the scale', () => {
     expect(ratingBreakdown([0, 6, 3])['3']).toBe(1);
-    expect(Object.values(ratingBreakdown([0, 6])).reduce((a, b) => a + b, 0)).toBe(0);
+    expect(
+      Object.values(ratingBreakdown([0, 6])).reduce((a, b) => a + b, 0),
+    ).toBe(0);
   });
 });

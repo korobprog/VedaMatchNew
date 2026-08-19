@@ -104,13 +104,25 @@ export function cursorFilter(cursor: FeedCursor): Prisma.NoticeWhereInput {
   };
 }
 
+/**
+ * Смотрящий всегда авторизован: доска гостю не открыта (см.
+ * docs/notices-service-plan.md), поэтому `userId` обязателен.
+ */
 export interface FeedViewer {
-  userId: string | null;
+  userId: string;
   isAdmin: boolean;
   /** Город смотрящего из портального профиля — для аудитории `my_city`. */
   city: string | null;
   /** Общины, в которых он состоит, — для аудитории `my_community`. */
   communityIds: string[];
+  /**
+   * Авторы, которых смотрящему показывать нельзя: блокировки в обе стороны
+   * плюс односторонние скрытия со скоупом `all` — из `moderation`.
+   * Блокировка обязана действовать во всех сервисах сразу, доска не
+   * исключение: иначе заблокированный продолжал бы «говорить» через
+   * объявления.
+   */
+  hiddenUserIds: ReadonlySet<string>;
 }
 
 /**
@@ -129,13 +141,18 @@ export function buildFeedWhere(
 
   if (filters.mine) {
     // Свой кабинет: все статусы, но только свои записи.
-    if (!viewer.userId) return { id: '__none__' };
     and.push({ authorId: viewer.userId });
     and.push({ status: { notIn: ['removed_by_admin'] } });
   } else {
     and.push({ status: 'published' });
     and.push({ expiresAt: { gt: now } });
     and.push(audienceWhere(viewer));
+    // Исключение заблокированных живёт в SQL, а не в фильтре после
+    // выборки — по той же причине, что и аудитория: иначе дырявится
+    // курсорная пагинация. Админ видит всё, как и по аудитории: иначе
+    // достаточно было бы заблокировать админа, чтобы спрятать от него доску.
+    if (!viewer.isAdmin && viewer.hiddenUserIds.size)
+      and.push({ authorId: { notIn: [...viewer.hiddenUserIds] } });
   }
 
   if (filters.kind) and.push({ kind: filters.kind });
@@ -176,7 +193,7 @@ function audienceWhere(viewer: FeedViewer): Prisma.NoticeWhereInput {
       communityId: { in: viewer.communityIds },
     });
   // Своё объявление автор видит в ленте всегда, каким бы узким ни был круг.
-  if (viewer.userId) options.push({ authorId: viewer.userId });
+  options.push({ authorId: viewer.userId });
   return { OR: options };
 }
 

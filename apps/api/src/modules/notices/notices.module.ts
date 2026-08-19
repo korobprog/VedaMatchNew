@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module';
 // импортировать разрешено; сервисные модули — нет.
 // См. docs/service-module-contract.md.
 import { CommunitiesModule } from '../communities/communities.module';
+import { ModerationModule } from '../moderation/moderation.module';
 import { NoticeImagesService } from './notice-images.service';
 import {
   AdminNoticesController,
@@ -17,7 +18,7 @@ import { NoticesService } from './notices.service';
 import { NoticesWorkerService } from './notices-worker.service';
 
 @Module({
-  imports: [AuthModule, CommunitiesModule],
+  imports: [AuthModule, CommunitiesModule, ModerationModule],
   // Порядок значим. У `NoticesController` есть `@Get(':id')` — один сегмент,
   // и он перехватил бы `/notices/subscriptions`. Nest сопоставляет маршруты
   // в порядке регистрации, поэтому контроллер с буквальными путями идёт

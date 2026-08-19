@@ -82,11 +82,12 @@ describe('UnionConnectionService', () => {
         u.avatarKey ? 'https://signed.example/avatar' : u.avatarUrl,
     ),
   };
+  const events = { emit: jest.fn() };
   const service = new UnionConnectionService(
     prisma as unknown as PrismaService,
     moderation as unknown as ModerationService,
     users as never,
-    { emit: jest.fn() } as never,
+    events as never,
   );
 
   beforeEach(() => {
@@ -149,6 +150,30 @@ describe('UnionConnectionService', () => {
       service.create('user-1', { toUserId: 'user-2' }),
     ).resolves.toEqual(expect.objectContaining({ direction: 'outgoing' }));
   });
+
+  it.each([
+    [{}, 1],
+    [{ silent: true }, 0],
+  ] as const)(
+    'notifies the recipient about a new request unless created silently (%j)',
+    async (options, emitted) => {
+      prisma.unionProfile.findUnique
+        .mockResolvedValueOnce(profile('user-1'))
+        .mockResolvedValueOnce(profile('user-2'));
+      prisma.unionConnectionRequest.findUnique.mockResolvedValue(null);
+      prisma.unionConnectionRequest.upsert.mockResolvedValue(
+        connection({ fromUserId: 'user-1', toUserId: 'user-2' }),
+      );
+
+      await service.create('user-1', { toUserId: 'user-2' }, options);
+
+      expect(prisma.unionConnectionRequest.upsert).toHaveBeenCalledTimes(1);
+      const requested = events.emit.mock.calls.filter(
+        ([name]) => name === 'union.connection.requested',
+      );
+      expect(requested).toHaveLength(emitted);
+    },
+  );
 
   it('accepts a reverse pending request instead of creating a duplicate', async () => {
     const reverse = connection({

@@ -33,7 +33,10 @@ import {
   MarketImagesService,
   type UploadedImageFile,
 } from './market-images.service';
-import { MAX_CATEGORIES_PER_LISTING, validateListing } from './market-listing-validate';
+import {
+  MAX_CATEGORIES_PER_LISTING,
+  validateListing,
+} from './market-listing-validate';
 import { MINOR_UNITS, parsePriceMajor, validatePrice } from './market-price';
 import { MarketShopsService } from './market-shops.service';
 import { MarketSubscriptionsService } from './market-subscriptions.service';
@@ -102,11 +105,16 @@ const LISTING_SELECT = {
   },
 } satisfies Prisma.MarketListingSelect;
 
-type ListingRow = Prisma.MarketListingGetPayload<{ select: typeof LISTING_SELECT }>;
+type ListingRow = Prisma.MarketListingGetPayload<{
+  select: typeof LISTING_SELECT;
+}>;
 
 /** Один просмотр на пользователя в сутки: иначе viewsCount превращается в
  *  счётчик перезагрузок страницы и врёт в статистике продавца. */
 const VIEW_THROTTLE_MS = 24 * 60 * 60 * 1000;
+/** Потолок карты просмотров: дальше — эвикция протухших ключей. Число с
+ *  запасом относительно суточной аудитории, но не даёт памяти расти вечно. */
+const VIEW_WRITES_MAX = 10_000;
 
 @Injectable()
 export class MarketListingsService {
@@ -172,7 +180,10 @@ export class MarketListingsService {
 
     const isOwner = Boolean(viewerId) && listing.shop.ownerId === viewerId;
     if (
-      !isPubliclyVisible({ status: listing.status, shopStatus: listing.shop.status }) &&
+      !isPubliclyVisible({
+        status: listing.status,
+        shopStatus: listing.shop.status,
+      }) &&
       !isOwner &&
       !viewerIsAdmin
     ) {
@@ -203,10 +214,17 @@ export class MarketListingsService {
   ): Promise<MarketListingDto> {
     const shop = await this.prisma.marketShop.findUnique({
       where: { ownerId: userId },
-      select: { id: true, status: true, city: true, country: true, location: true },
+      select: {
+        id: true,
+        status: true,
+        city: true,
+        country: true,
+        location: true,
+      },
     });
     if (!shop) throw new NotFoundException('shop_not_found');
-    if (shop.status !== 'active') throw new ForbiddenException('shop_not_active');
+    if (shop.status !== 'active')
+      throw new ForbiddenException('shop_not_active');
 
     const categoryIds = body.categoryIds ?? [];
     const categories = await this.resolveCategories(categoryIds);
@@ -232,7 +250,7 @@ export class MarketListingsService {
     // Гео объявления по умолчанию наследуется от витрины, но остаётся своим:
     // мастерская может стоять не там, где зарегистрирован магазин.
     const location =
-      body.location ?? ((shop.location as MarketLocationDto | null) ?? null);
+      body.location ?? (shop.location as MarketLocationDto | null) ?? null;
 
     const created = await this.prisma.$transaction(async (tx) => {
       const listing = await tx.marketListing.create({
@@ -249,13 +267,18 @@ export class MarketListingsService {
           currency: body.currency,
           condition: body.kind === 'product' ? (body.condition ?? null) : null,
           quantity: body.trackStock ? (body.quantity ?? 0) : null,
-          trackStock: body.kind === 'product' ? Boolean(body.trackStock) : false,
+          trackStock:
+            body.kind === 'product' ? Boolean(body.trackStock) : false,
           serviceFormat: body.kind === 'service' ? body.serviceFormat! : null,
           serviceDurationMinutes:
-            body.kind === 'service' ? (body.serviceDurationMinutes ?? null) : null,
+            body.kind === 'service'
+              ? (body.serviceDurationMinutes ?? null)
+              : null,
           ...locationColumns(location),
           deliveryOptions: body.deliveryOptions ?? [],
-          categories: { create: categoryIds.map((categoryId) => ({ categoryId })) },
+          categories: {
+            create: categoryIds.map((categoryId) => ({ categoryId })),
+          },
           shelves: { create: shelfIds.map((shelfId) => ({ shelfId })) },
         },
         select: { id: true },
@@ -296,7 +319,11 @@ export class MarketListingsService {
       data.descriptionEn = trimOrNull(body.descriptionEn);
     }
 
-    if (body.priceMode !== undefined || body.price !== undefined || body.priceMax !== undefined) {
+    if (
+      body.priceMode !== undefined ||
+      body.price !== undefined ||
+      body.priceMax !== undefined
+    ) {
       const mode = body.priceMode ?? listing.priceMode;
       const price = this.resolvePrice(
         mode,
@@ -320,11 +347,14 @@ export class MarketListingsService {
     const kind = listing.kind;
     const trackStock =
       body.trackStock !== undefined ? body.trackStock : listing.trackStock;
-    const quantity = body.quantity !== undefined ? body.quantity : listing.quantity;
+    const quantity =
+      body.quantity !== undefined ? body.quantity : listing.quantity;
     const condition =
       body.condition !== undefined ? body.condition : listing.condition;
     const serviceFormat =
-      body.serviceFormat !== undefined ? body.serviceFormat : listing.serviceFormat;
+      body.serviceFormat !== undefined
+        ? body.serviceFormat
+        : listing.serviceFormat;
     const serviceDuration =
       body.serviceDurationMinutes !== undefined
         ? body.serviceDurationMinutes
@@ -343,9 +373,13 @@ export class MarketListingsService {
       titleRu: body.titleRu !== undefined ? body.titleRu : listing.titleRu,
       titleEn: body.titleEn !== undefined ? body.titleEn : listing.titleEn,
       descriptionRu:
-        body.descriptionRu !== undefined ? body.descriptionRu : listing.descriptionRu,
+        body.descriptionRu !== undefined
+          ? body.descriptionRu
+          : listing.descriptionRu,
       descriptionEn:
-        body.descriptionEn !== undefined ? body.descriptionEn : listing.descriptionEn,
+        body.descriptionEn !== undefined
+          ? body.descriptionEn
+          : listing.descriptionEn,
       condition,
       quantity: trackStock ? quantity : null,
       trackStock: kind === 'product' ? trackStock : false,
@@ -363,14 +397,17 @@ export class MarketListingsService {
         data.quantity = trackStock ? (quantity ?? 0) : null;
       }
     } else {
-      if (body.serviceFormat !== undefined) data.serviceFormat = body.serviceFormat;
+      if (body.serviceFormat !== undefined)
+        data.serviceFormat = body.serviceFormat;
       if (body.serviceDurationMinutes !== undefined) {
         data.serviceDurationMinutes = body.serviceDurationMinutes;
       }
     }
 
-    if (body.location !== undefined) Object.assign(data, locationColumns(body.location));
-    if (body.deliveryOptions !== undefined) data.deliveryOptions = body.deliveryOptions;
+    if (body.location !== undefined)
+      Object.assign(data, locationColumns(body.location));
+    if (body.deliveryOptions !== undefined)
+      data.deliveryOptions = body.deliveryOptions;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.marketListing.update({ where: { id }, data });
@@ -382,7 +419,9 @@ export class MarketListingsService {
         });
         const previousIds = previous.map((row) => row.categoryId);
         const added = categoryIds.filter((cid) => !previousIds.includes(cid));
-        const removed = previousIds.filter((cid) => !categoryIds!.includes(cid));
+        const removed = previousIds.filter(
+          (cid) => !categoryIds!.includes(cid),
+        );
 
         await tx.marketListingCategory.deleteMany({
           where: { listingId: id, categoryId: { in: removed } },
@@ -567,7 +606,8 @@ export class MarketListingsService {
     files: UploadedImageFile[] | undefined,
   ): Promise<MarketListingImagesResponse> {
     await this.assertOwner(id, userId, viewerIsAdmin);
-    if (!files || files.length === 0) throw new BadRequestException('image_required');
+    if (!files || files.length === 0)
+      throw new BadRequestException('image_required');
     if (!this.images.configured) {
       throw new BadRequestException('image_upload_unavailable');
     }
@@ -639,7 +679,10 @@ export class MarketListingsService {
     const requested = body.imageIds ?? [];
     // Требуем полный список: частичный порядок оставил бы дыры в sortOrder и
     // молча поменял обложку.
-    if (requested.length !== known.size || requested.some((imageId) => !known.has(imageId))) {
+    if (
+      requested.length !== known.size ||
+      requested.some((imageId) => !known.has(imageId))
+    ) {
       throw new BadRequestException('image_order_mismatch');
     }
 
@@ -662,7 +705,10 @@ export class MarketListingsService {
     body: SetMarketListingShelvesRequest,
   ): Promise<MarketListingDto> {
     const listing = await this.assertOwner(id, userId, viewerIsAdmin);
-    const shelfIds = await this.resolveShelves(listing.shopId, body.shelfIds ?? []);
+    const shelfIds = await this.resolveShelves(
+      listing.shopId,
+      body.shelfIds ?? [],
+    );
 
     await this.prisma.$transaction(async (tx) => {
       const previous = await tx.marketListingShelf.findMany({
@@ -714,7 +760,13 @@ export class MarketListingsService {
     const images = await this.prisma.marketListingImage.findMany({
       where: { listingId: id },
       orderBy: { sortOrder: 'asc' },
-      select: { id: true, url: true, width: true, height: true, sortOrder: true },
+      select: {
+        id: true,
+        url: true,
+        width: true,
+        height: true,
+        sortOrder: true,
+      },
     });
     const primaryImageUrl = images[0]?.url ?? null;
     await this.prisma.marketListing.update({
@@ -750,19 +802,25 @@ export class MarketListingsService {
 
     if (filters.kind) and.push({ kind: filters.kind });
     if (filters.condition) and.push({ condition: filters.condition });
-    if (filters.serviceFormat) and.push({ serviceFormat: filters.serviceFormat });
+    if (filters.serviceFormat)
+      and.push({ serviceFormat: filters.serviceFormat });
     if (filters.currency) and.push({ currency: filters.currency });
-    if (filters.delivery) and.push({ deliveryOptions: { has: filters.delivery } });
+    if (filters.delivery)
+      and.push({ deliveryOptions: { has: filters.delivery } });
     if (filters.city?.trim()) {
       and.push({ city: { equals: filters.city.trim(), mode: 'insensitive' } });
     }
     if (filters.country?.trim()) {
-      and.push({ country: { equals: filters.country.trim(), mode: 'insensitive' } });
+      and.push({
+        country: { equals: filters.country.trim(), mode: 'insensitive' },
+      });
     }
 
     // Категория перебивает раздел: она уже внутри него.
     if (filters.categorySlug) {
-      and.push({ categories: { some: { category: { slug: filters.categorySlug } } } });
+      and.push({
+        categories: { some: { category: { slug: filters.categorySlug } } },
+      });
     } else if (filters.sectionSlug) {
       and.push({
         categories: {
@@ -828,10 +886,27 @@ export class MarketListingsService {
     const now = Date.now();
     const last = this.viewWrites.get(key);
     if (last && now - last < VIEW_THROTTLE_MS) return;
+    this.evictStaleViews(now);
     this.viewWrites.set(key, now);
     void this.prisma.marketListing
-      .update({ where: { id: listingId }, data: { viewsCount: { increment: 1 } } })
+      .update({
+        where: { id: listingId },
+        data: { viewsCount: { increment: 1 } },
+      })
       .catch(() => this.viewWrites.delete(key));
+  }
+
+  /** Карта живёт в памяти процесса и без чистки росла бы на каждую пару
+   *  «объявление × зритель». По достижении потолка выбрасываем записи, чей
+   *  троттлинг уже истёк — они и так больше ничего не запрещают. Если протухших
+   *  нет (10k живых просмотров за сутки), сбрасываем целиком: лишний засчитанный
+   *  просмотр дешевле утечки. */
+  private evictStaleViews(now: number): void {
+    if (this.viewWrites.size < VIEW_WRITES_MAX) return;
+    for (const [key, at] of this.viewWrites) {
+      if (now - at >= VIEW_THROTTLE_MS) this.viewWrites.delete(key);
+    }
+    if (this.viewWrites.size >= VIEW_WRITES_MAX) this.viewWrites.clear();
   }
 
   private resolvePrice(
@@ -839,9 +914,12 @@ export class MarketListingsService {
     price: number | null | undefined,
     priceMax: number | null | undefined,
   ): { minor: number | null; maxMinor: number | null } {
-    const minor = price === null || price === undefined ? null : parsePriceMajor(price);
+    const minor =
+      price === null || price === undefined ? null : parsePriceMajor(price);
     const maxMinor =
-      priceMax === null || priceMax === undefined ? null : parsePriceMajor(priceMax);
+      priceMax === null || priceMax === undefined
+        ? null
+        : parsePriceMajor(priceMax);
 
     // parsePriceMajor вернул null там, где значение прислали — значит это не
     // «цены нет», а «цена не разобрана».
@@ -900,7 +978,10 @@ export class MarketListingsService {
       delta: number;
     },
   ): Promise<void> {
-    const step = params.delta > 0 ? { increment: params.delta } : { decrement: -params.delta };
+    const step =
+      params.delta > 0
+        ? { increment: params.delta }
+        : { decrement: -params.delta };
     await tx.marketShop.update({
       where: { id: params.shopId },
       data: { listingsCount: step },

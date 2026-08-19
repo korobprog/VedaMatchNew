@@ -119,7 +119,7 @@ describe('validateMemberTitle', () => {
 describe('сообщения об ошибках', () => {
   it('есть на каждый код: наружу коды не отдаются', () => {
     const codes = Object.keys(COMMUNITY_VALIDATION_MESSAGES);
-    expect(codes).toHaveLength(8);
+    expect(codes).toHaveLength(10);
     for (const code of codes) {
       expect(
         COMMUNITY_VALIDATION_MESSAGES[

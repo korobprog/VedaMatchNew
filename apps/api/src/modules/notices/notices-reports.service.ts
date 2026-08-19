@@ -12,6 +12,7 @@ import {
   type NoticeReportReason,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { recountRubricOfNotice } from './notice-rubric-count';
 // Роли общины — портальная инфраструктура, читать её разрешено;
 // см. docs/service-module-contract.md.
 import { canModerateCommunityContent } from '../communities/community-roles';
@@ -60,24 +61,30 @@ export class NoticesReportsService {
     // порог автоскрытия.
     if (existing) throw new BadRequestException('Вы уже пожаловались');
 
-    await this.prisma.noticeReport.create({
-      data: { reporterId: userId, noticeId, reason: body.reason, note },
-    });
+    // Жалоба, счётчик и автоскрытие — одной транзакцией: иначе сбой между
+    // шагами оставлял бы жалобу без учёта в openReportsCount.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.noticeReport.create({
+        data: { reporterId: userId, noticeId, reason: body.reason, note },
+      });
 
-    const openReportsCount = await this.prisma.noticeReport.count({
-      where: { noticeId, status: 'open' },
-    });
-    await this.prisma.notice.update({
-      where: { id: noticeId },
-      data: {
-        openReportsCount,
-        // Скрываем ровно на пороге, а не при `>=`: иначе объявление
-        // пряталось бы снова после того, как админ его вернул.
-        ...(crossesHideThreshold(openReportsCount) &&
-        notice.status === 'published'
-          ? { status: 'hidden_by_reports' as const }
-          : {}),
-      },
+      const openReportsCount = await tx.noticeReport.count({
+        where: { noticeId, status: 'open' },
+      });
+      // Скрываем ровно на пороге, а не при `>=`: иначе объявление
+      // пряталось бы снова после того, как админ его вернул.
+      const hide =
+        crossesHideThreshold(openReportsCount) && notice.status === 'published';
+      await tx.notice.update({
+        where: { id: noticeId },
+        data: {
+          openReportsCount,
+          ...(hide ? { status: 'hidden_by_reports' as const } : {}),
+        },
+      });
+      // Скрытое по жалобе объявление выпадает из счётчика рубрики так же,
+      // как скрытое автором.
+      if (hide) await recountRubricOfNotice(tx, noticeId);
     });
     return { ok: true };
   }
@@ -115,12 +122,15 @@ export class NoticesReportsService {
     if (!canModerateCommunityContent(membership))
       throw new ForbiddenException('Нет прав модератора в этой общине');
 
-    await this.prisma.notice.update({
-      where: { id: noticeId },
-      data: {
-        status: 'hidden_by_reports',
-        moderatorNote: moderatorNote?.trim() || null,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.notice.update({
+        where: { id: noticeId },
+        data: {
+          status: 'hidden_by_reports',
+          moderatorNote: moderatorNote?.trim() || null,
+        },
+      });
+      await recountRubricOfNotice(tx, noticeId);
     });
     return { ok: true };
   }
@@ -215,6 +225,9 @@ export class NoticesReportsService {
         where: { id: report.noticeId },
         data: { openReportsCount },
       });
+      // Решение админа меняет статус (скрыть / вернуть / в Рынок) — счётчик
+      // рубрики обязан это увидеть.
+      if (noticeData) await recountRubricOfNotice(tx, report.noticeId);
     });
     return { ok: true };
   }

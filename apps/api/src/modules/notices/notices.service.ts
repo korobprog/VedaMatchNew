@@ -24,6 +24,7 @@ import {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CommunitiesService } from '../communities/communities.service';
+import { ModerationService } from '../moderation/moderation.service';
 import {
   NOTICE_INCLUDE,
   toImageDto,
@@ -54,6 +55,7 @@ import {
   resolveMapMode,
 } from './notice-geo';
 import { noticeFingerprint } from './notice-fingerprint';
+import { recountRubric } from './notice-rubric-count';
 import {
   NoticeImagesService,
   type UploadedImageFile,
@@ -90,6 +92,7 @@ export class NoticesService {
     // Портальная инфраструктура, импортировать разрешено — см.
     // docs/service-module-contract.md.
     private readonly communities: CommunitiesService,
+    private readonly moderation: ModerationService,
     private readonly images: NoticeImagesService,
     private readonly subscriptions: NoticesSubscriptionsService,
   ) {}
@@ -116,14 +119,14 @@ export class NoticesService {
     const radius = parseRadius(query);
     if (!radius) return null;
     const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(
-      radiusIdsSql(radius),
+      radiusIdsSql(radius, new Date()),
     );
     return rows.map((row) => row.id);
   }
 
   async feed(
     filters: NormalizedFeedFilters,
-    viewerId: string | undefined,
+    viewerId: string,
     isAdmin: boolean,
   ): Promise<NoticeFeedResponse> {
     const now = new Date();
@@ -151,7 +154,7 @@ export class NoticesService {
 
   async byId(
     id: string,
-    viewerId: string | undefined,
+    viewerId: string,
     isAdmin: boolean,
   ): Promise<NoticeDto> {
     const now = new Date();
@@ -162,7 +165,7 @@ export class NoticesService {
     if (!row) throw new NotFoundException('Объявление не найдено');
 
     const viewer = await this.resolveViewer(viewerId, isAdmin);
-    if (!this.mayView(row, viewer)) {
+    if (!this.mayView(row, viewer, now)) {
       // 404, а не 403: 403 подтверждает существование скрытой записи.
       throw new NotFoundException('Объявление не найдено');
     }
@@ -186,7 +189,7 @@ export class NoticesService {
   async map(
     filters: NormalizedFeedFilters,
     query: Record<string, string | undefined>,
-    viewerId: string | undefined,
+    viewerId: string,
     isAdmin: boolean,
   ): Promise<NoticeMapResponse> {
     const now = new Date();
@@ -281,7 +284,7 @@ export class NoticesService {
   async calendar(
     filters: NormalizedFeedFilters,
     query: Record<string, string | undefined>,
-    viewerId: string | undefined,
+    viewerId: string,
     isAdmin: boolean,
   ): Promise<NoticeCalendarResponse> {
     const now = new Date();
@@ -342,7 +345,7 @@ export class NoticesService {
   /** Один `.ics` на объявление: разовое событие или все вхождения повтора. */
   async ics(
     id: string,
-    viewerId: string | undefined,
+    viewerId: string,
     isAdmin: boolean,
     publicUrl: string,
   ): Promise<string> {
@@ -354,7 +357,7 @@ export class NoticesService {
     if (!row || !row.startsAt)
       throw new NotFoundException('Событие не найдено');
     const viewer = await this.resolveViewer(viewerId, isAdmin);
-    if (!this.mayView(row, viewer))
+    if (!this.mayView(row, viewer, now))
       throw new NotFoundException('Событие не найдено');
 
     const occurrences = expandOccurrences(
@@ -773,19 +776,46 @@ export class NoticesService {
 
   // ===== Внутреннее =====
 
+  /**
+   * Может ли пользователь видеть объявление — по тому же правилу, что и
+   * лента. Наружу для соседних сервисов модуля: отклик на объявление, которого
+   * человек не видит (чужая община, чужой город, заблокированный автор), не
+   * должен проходить только потому, что он угадал id. Бросает 404, а не 403 —
+   * по той же причине, что и карточка.
+   */
+  async assertVisible(noticeId: string, viewerId: string): Promise<void> {
+    const now = new Date();
+    const row = await this.prisma.notice.findUnique({
+      where: { id: noticeId },
+      select: {
+        authorId: true,
+        status: true,
+        expiresAt: true,
+        audience: true,
+        city: true,
+        communityId: true,
+      },
+    });
+    if (!row) throw new NotFoundException('Объявление не найдено');
+    const viewer = await this.resolveViewer(viewerId, false);
+    if (!this.mayView(row, viewer, now))
+      throw new NotFoundException('Объявление не найдено');
+  }
+
   private async resolveViewer(
-    viewerId: string | undefined,
+    viewerId: string,
     isAdmin: boolean,
   ): Promise<FeedViewer> {
-    if (!viewerId)
-      return { userId: null, isAdmin: false, city: null, communityIds: [] };
-    const [user, memberships] = await Promise.all([
+    const [user, memberships, hiddenUserIds] = await Promise.all([
       // Портальный профиль читается read-only — это разрешено контрактом.
       this.prisma.user.findUnique({
         where: { id: viewerId },
         select: { homeLocation: true },
       }),
       this.communities.membershipsOf(viewerId),
+      // Скоуп `all`: у доски своего скоупа скрытий нет, действуют только
+      // общие блокировки и скрытия «везде».
+      this.moderation.hiddenUserIds(viewerId, 'all'),
     ]);
     const location = user?.homeLocation as { city?: string } | null;
     return {
@@ -793,6 +823,7 @@ export class NoticesService {
       isAdmin,
       city: location?.city ?? null,
       communityIds: memberships.map((badge) => badge.id),
+      hiddenUserIds,
     };
   }
 
@@ -807,11 +838,15 @@ export class NoticesService {
       communityId: string | null;
     },
     viewer: FeedViewer,
+    now: Date,
   ): boolean {
     if (viewer.isAdmin) return true;
     if (row.authorId === viewer.userId) return true;
+    // Заблокированный автор — 404, как и в ленте: блокировка действует во
+    // всех сервисах сразу.
+    if (viewer.hiddenUserIds.has(row.authorId)) return false;
     if (row.status !== 'published') return false;
-    if (row.expiresAt.getTime() <= Date.now()) return false;
+    if (row.expiresAt.getTime() <= now.getTime()) return false;
     if (row.audience === 'everyone') return true;
     if (row.audience === 'my_city')
       return Boolean(
@@ -960,13 +995,7 @@ export class NoticesService {
    * инкрементов видно в навигации сразу.
    */
   private async recountRubric(rubricId: string) {
-    const noticesCount = await this.prisma.notice.count({
-      where: { rubricId, status: 'published', expiresAt: { gt: new Date() } },
-    });
-    await this.prisma.noticeRubric.update({
-      where: { id: rubricId },
-      data: { noticesCount },
-    });
+    await recountRubric(this.prisma, rubricId);
   }
 }
 

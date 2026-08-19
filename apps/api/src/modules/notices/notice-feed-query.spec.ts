@@ -12,17 +12,21 @@ import {
 
 const now = new Date('2026-08-17T12:00:00.000Z');
 
-const guest: FeedViewer = {
-  userId: null,
+// Гостя на доске нет — минимальный смотрящий это авторизованный без города
+// в профиле и без общин.
+const newcomer: FeedViewer = {
+  userId: 'u0',
   isAdmin: false,
   city: null,
   communityIds: [],
+  hiddenUserIds: new Set(),
 };
 const member: FeedViewer = {
   userId: 'u1',
   isAdmin: false,
   city: 'Москва',
   communityIds: ['c1'],
+  hiddenUserIds: new Set(),
 };
 
 const filters = (over: Record<string, string | undefined> = {}) =>
@@ -94,17 +98,58 @@ describe('buildFeedWhere: видимость', () => {
     JSON.stringify(where);
 
   it('лента показывает только живые опубликованные', () => {
-    const where = buildFeedWhere(filters(), guest, now);
+    const where = buildFeedWhere(filters(), newcomer, now);
     expect(conditions(where)).toContain('"status":"published"');
     // Живость определяется данными, а не работой воркера протухания.
     expect(conditions(where)).toContain('"expiresAt":{"gt"');
   });
 
-  it('гостю видно только everyone', () => {
-    const where = buildFeedWhere(filters(), guest, now);
+  it('без города и общин видно только everyone и своё', () => {
+    const where = buildFeedWhere(filters(), newcomer, now);
     expect(conditions(where)).toContain('"audience":"everyone"');
     expect(conditions(where)).not.toContain('my_city');
     expect(conditions(where)).not.toContain('my_community');
+    expect(conditions(where)).toContain('"authorId":"u0"');
+  });
+
+  it('заблокированные авторы исключаются в самом where', () => {
+    // В SQL, а не после выборки: иначе дырявится курсорная пагинация.
+    const where = conditions(
+      buildFeedWhere(
+        filters(),
+        { ...member, hiddenUserIds: new Set(['bad1', 'bad2']) },
+        now,
+      ),
+    );
+    expect(where).toContain('"authorId":{"notIn":["bad1","bad2"]}');
+  });
+
+  it('без блокировок лишнего условия нет', () => {
+    expect(conditions(buildFeedWhere(filters(), member, now))).not.toContain(
+      'notIn":[]',
+    );
+  });
+
+  it('админа блокировки не сужают: иначе его достаточно заблокировать', () => {
+    const where = conditions(
+      buildFeedWhere(
+        filters(),
+        { ...member, isAdmin: true, hiddenUserIds: new Set(['bad1']) },
+        now,
+      ),
+    );
+    expect(where).not.toContain('notIn":["bad1"]');
+  });
+
+  it('в своём кабинете блокировки не применяются — там только свои записи', () => {
+    const where = conditions(
+      buildFeedWhere(
+        filters({ mine: 'true' }),
+        { ...member, hiddenUserIds: new Set(['bad1']) },
+        now,
+      ),
+    );
+    expect(where).not.toContain('notIn":["bad1"]');
   });
 
   it('участнику добавляются его город и его общины', () => {
@@ -133,26 +178,19 @@ describe('buildFeedWhere: свой кабинет', () => {
     expect(where).not.toContain('"status":"published"');
     expect(where).toContain('removed_by_admin');
   });
-
-  it('гостю свой кабинет не отдаётся вовсе', () => {
-    // Пустая выдача, а не чужие объявления.
-    expect(buildFeedWhere(filters({ mine: 'true' }), guest, now)).toEqual({
-      id: '__none__',
-    });
-  });
 });
 
 describe('buildFeedWhere: фильтры', () => {
   it('город сравнивается без регистра', () => {
     const where = JSON.stringify(
-      buildFeedWhere(filters({ city: 'москва' }), guest, now),
+      buildFeedWhere(filters({ city: 'москва' }), newcomer, now),
     );
     expect(where).toContain('"mode":"insensitive"');
   });
 
   it('поиск идёт по заголовкам и описанию', () => {
     const where = JSON.stringify(
-      buildFeedWhere(filters({ q: 'холодильник' }), guest, now),
+      buildFeedWhere(filters({ q: 'холодильник' }), newcomer, now),
     );
     expect(where).toContain('titleRu');
     expect(where).toContain('descriptionRu');
@@ -160,7 +198,7 @@ describe('buildFeedWhere: фильтры', () => {
 
   it('рубрика фильтруется по слагу', () => {
     const where = JSON.stringify(
-      buildFeedWhere(filters({ rubric: 'giveaway' }), guest, now),
+      buildFeedWhere(filters({ rubric: 'giveaway' }), newcomer, now),
     );
     expect(where).toContain('"slug":"giveaway"');
   });
@@ -169,7 +207,7 @@ describe('buildFeedWhere: фильтры', () => {
     // Так курсорная пагинация по-прежнему строится из одного условия:
     // фильтрации после выборки нет даже у гео.
     const where = JSON.stringify(
-      buildFeedWhere({ ...filters(), radiusIds: ['n1', 'n2'] }, guest, now),
+      buildFeedWhere({ ...filters(), radiusIds: ['n1', 'n2'] }, newcomer, now),
     );
     expect(where).toContain('"id":{"in":["n1","n2"]}');
   });
@@ -177,7 +215,7 @@ describe('buildFeedWhere: фильтры', () => {
   it('пустой радиус даёт пустую выдачу, а не всю доску', () => {
     // Радиус, в который ничего не попало, — это ноль результатов.
     const where = JSON.stringify(
-      buildFeedWhere({ ...filters(), radiusIds: [] }, guest, now),
+      buildFeedWhere({ ...filters(), radiusIds: [] }, newcomer, now),
     );
     expect(where).toContain('"id":{"in":[]}');
   });

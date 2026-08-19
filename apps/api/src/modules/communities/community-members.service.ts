@@ -27,6 +27,7 @@ import {
 } from './community-roles';
 import {
   COMMUNITY_VALIDATION_MESSAGES,
+  isCommunityMemberRole,
   validateMemberTitle,
 } from './community-validate';
 
@@ -235,6 +236,11 @@ export class CommunityMembersService {
 
     const data: Prisma.CommunityMemberUpdateInput = {};
     if (body.role !== undefined) {
+      // Неизвестную роль отсекаем до Prisma: иначе enum-ошибка уходит 500.
+      if (!isCommunityMemberRole(body.role))
+        throw new BadRequestException(
+          COMMUNITY_VALIDATION_MESSAGES.role_invalid,
+        );
       if (!canAssignRole(actor, target, body.role))
         throw new ForbiddenException('Нет прав на эту роль');
       data.role = body.role;
@@ -361,6 +367,18 @@ export class CommunityMembersService {
       });
       return this.toTransferDto(declined);
     }
+
+    // За две недели между предложением и ответом принимающий мог выйти или
+    // быть исключён: владельцем должен стать только действующий участник,
+    // иначе община получит владельца со статусом `left`.
+    const recipient = await this.membershipRow(
+      transfer.communityId,
+      transfer.toUserId,
+    );
+    if (!recipient || recipient.status !== 'active')
+      throw new BadRequestException(
+        'Принять владение может только действующий участник общины',
+      );
 
     // Обе роли меняются одной транзакцией: полшага здесь оставили бы
     // общину либо с двумя владельцами, либо без единого.

@@ -34,6 +34,7 @@ import {
 import {
   COMMUNITY_KINDS,
   COMMUNITY_VALIDATION_MESSAGES,
+  isEditableCommunityStatus,
   validateCommunity,
 } from './community-validate';
 
@@ -316,7 +317,21 @@ export class CommunitiesService {
 
     const data: Prisma.CommunityUpdateInput = {};
     if (body.kind !== undefined) data.kind = body.kind;
-    if (body.name !== undefined) data.name = body.name.trim();
+    if (body.name !== undefined) {
+      const name = body.name.trim();
+      // Переименование проверяем на дубль так же, как создание: иначе
+      // «Община Москва» заводится под нейтральным именем и переименовывается
+      // в уже существующую. Себя из кандидатов исключаем — иначе любое
+      // сохранение без смены имени споткнётся о собственную карточку.
+      // Город берём из тела, если его тоже меняют, иначе — сохранённый.
+      const city =
+        body.location !== undefined
+          ? (body.location?.city?.trim() ?? null)
+          : community.city;
+      if (name !== community.name || city !== community.city)
+        await this.assertNoDuplicate(name, city, community.id);
+      data.name = name;
+    }
     if (body.descriptionRu !== undefined)
       data.descriptionRu = trimOrNull(body.descriptionRu);
     if (body.descriptionEn !== undefined)
@@ -330,6 +345,10 @@ export class CommunitiesService {
     if (body.location !== undefined)
       Object.assign(data, locationColumns(body.location));
     if (body.status !== undefined) {
+      if (!isEditableCommunityStatus(body.status))
+        throw new BadRequestException(
+          COMMUNITY_VALIDATION_MESSAGES.status_invalid,
+        );
       // Разбор заявок — дело админа: через этот маршрут из `pending`
       // в `active` себя не перевести.
       if (!isReachable(community.status) && !isAdmin)
@@ -387,6 +406,10 @@ export class CommunitiesService {
     id: string,
     body: AdminCommunityDecisionRequest,
   ): Promise<CommunityDto> {
+    // Любое неожиданное значение раньше молча читалось как «отклонить» —
+    // опечатка в клиенте превращалась в removed_by_admin.
+    if (body?.decision !== 'approve' && body?.decision !== 'reject')
+      throw new BadRequestException('Решение — approve или reject');
     const community = await this.prisma.community.findUnique({ where: { id } });
     if (!community) throw new NotFoundException('Община не найдена');
     const approved = body.decision === 'approve';
