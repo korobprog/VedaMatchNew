@@ -60,6 +60,11 @@ import {
 import sharp from 'sharp';
 import { canAnimateReel } from './reel-animate';
 import { readingUnitQuote, readingUnitsOf } from './reading-unit-quote';
+import {
+  aiFailureReason,
+  classifyAiFailure,
+  isRetryableFailure,
+} from './ai-failure';
 import { fundingMessage } from './funding-error';
 
 const LANGUAGES: readonly MotivationLanguage[] = ['ru', 'en', 'hi'];
@@ -607,6 +612,53 @@ export class MotivationReelsService {
   }
 
   /**
+   * Повторная ИИ-проверка по просьбе администратора.
+   *
+   * Нужна, когда проверка не состоялась не из-за текста: провайдер модели
+   * отвечает 503 или ограничивает частоту, и рилс уходит к человеку, хотя
+   * разбирать в нём нечего. Через минуту та же проверка проходит.
+   *
+   * Вход собирается из самого поста: всё, что видела модель в первый раз, в
+   * нём и лежит. Пересоздавать рилс ради повтора не нужно.
+   */
+  async recheck(role: Role, postId: string): Promise<MotivationReelDto> {
+    if (!this.isAdmin(role))
+      throw new ForbiddenException('Только администратор');
+    const post = await this.prisma.motivationPost.findFirst({
+      where: { id: postId, origin: 'user' },
+      include: {
+        translations: { where: { language: 'ru' }, take: 1 },
+      },
+    });
+    if (!post) throw new NotFoundException('Рилс не найден');
+    if (post.reviewStatus !== 'text_review')
+      throw new BadRequestException(
+        'Повторить проверку можно, пока текст ещё не разобран',
+      );
+
+    const translation = post.translations[0];
+    const [text, explanation] = (translation?.storyText
+      ? [translation.storyText, translation.text.slice(translation.storyText.length).trim()]
+      : [translation?.text ?? '', '']) as [string, string];
+
+    await this.review(post.id, {
+      text,
+      explanation,
+      author: post.attributionSpeaker,
+      work: post.attributionWork,
+      locator: post.attributionLocator,
+      sourceVerified: post.sourceVerified,
+      audienceTrack: post.audienceTrack,
+      language: 'ru',
+      visualStyle: post.visualStyle,
+      // Доверенность здесь ни при чём: раз рилс дошёл до проверки, её и
+      // повторяем, а не подменяем автоодобрением.
+      trusted: false,
+    });
+    return this.get(post.authorUserId ?? '', post.id, role);
+  }
+
+  /**
    * ИИ-проверка текста сразу после создания. Режимы: выключено — к админу без
    * вызова; подсказывает — вердикт в аудит, решает человек; решает сам —
    * исполняет уверенные вердикты, сомнительные эскалирует. Любой сбой модели
@@ -645,6 +697,7 @@ export class MotivationReelsService {
       return { stage: 'admin_review', reason: null };
     }
     let verdict: AiVerdict | null = null;
+    let failure: unknown = null;
     try {
       verdict = parseAiVerdict(
         await this.generation.moderationVerdict(
@@ -656,10 +709,16 @@ export class MotivationReelsService {
       );
     } catch (error) {
       this.logger.warn(`AI moderation failed for ${postId}: ${String(error)}`);
+      failure = error;
     }
     if (!verdict) {
-      await this.moderation.aiNote(postId, 'ai_error', null, {
+      // Причину сбоя сохраняем: по «сбою модели» без подробностей нельзя
+      // решить, ждать и повторить или разбирать текст руками.
+      await this.moderation.aiNote(postId, 'ai_error', aiFailureReason(failure), {
         mode: settings.aiModerationMode,
+        failure: classifyAiFailure(failure),
+        retryable: isRetryableFailure(classifyAiFailure(failure)),
+        error: failure instanceof Error ? failure.message.slice(0, 500) : null,
       });
       return { stage: 'admin_review', reason: null };
     }

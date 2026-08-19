@@ -233,6 +233,23 @@ function ReelCard({ reel }: { reel: MotivationAdminReelDto }) {
             К очереди проверки
           </Link>
         )}
+        {/* Сбой модели — не приговор тексту: провайдер отвечает 503 или режет
+            частоту, и через минуту та же проверка проходит. Кнопка избавляет
+            от ручного разбора там, где разбирать нечего. */}
+        {reel.stage === "admin_review" && reel.aiVerdict?.action === "ai_error" && (
+          <button
+            type="button"
+            disabled={pending !== null}
+            onClick={() =>
+              void run("recheck", () =>
+                apiRequest(`/admin/motivation/reels/${reel.id}/recheck`, "POST"),
+              )
+            }
+            className={secondaryButton}
+          >
+            {pending === "recheck" ? "Проверяем…" : "Проверить ИИ ещё раз"}
+          </button>
+        )}
         {reel.authorId && (
           <button
             type="button"

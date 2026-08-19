@@ -226,6 +226,18 @@ export class MotivationController {
   ) {
     return this.reels.uploadImage(user.sub, id, file);
   }
+  /**
+   * Повтор ИИ-проверки. Живёт среди админских маршрутов рилсов, но обращается
+   * к тому же сервису: проверку выполняет он, админка только просит.
+   */
+  @Post('admin/motivation/reels/:id/recheck')
+  @UseGuards(AuthGuard)
+  recheckReel(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.reels.recheck(user.role, id);
+  }
   @Post('motivation/reels/:id/animate')
   @UseGuards(AuthGuard)
   animateReel(
