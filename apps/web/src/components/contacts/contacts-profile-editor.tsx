@@ -535,7 +535,7 @@ export function ContactsProfileEditor() {
         type="button"
         disabled={saveState === "saving"}
         onClick={() => void save()}
-        className="w-full rounded-xl bg-magenta py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+        className="btn-mint w-full rounded-xl py-3 text-sm font-medium transition disabled:opacity-50"
       >
         {saveState === "saving" ? "Сохранение…" : "Сохранить карточку"}
       </button>

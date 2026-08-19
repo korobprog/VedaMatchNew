@@ -76,7 +76,7 @@ export function AdminBillingModeForm({ initialMode }: { initialMode: BillingMode
       </div>
       <button
         disabled={pending || mode === initialMode}
-        className="rounded-xl bg-magenta px-4 py-2 text-sm font-medium text-white hover:bg-magenta/90 disabled:bg-zinc-400"
+        className="btn-mint rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-50"
       >
         {pending ? "Сохраняем…" : "Сохранить режим"}
       </button>

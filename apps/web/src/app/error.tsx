@@ -55,7 +55,7 @@ export default function PortalError({
           <button
             type="button"
             onClick={unstable_retry}
-            className="rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] px-5 py-2.5 text-sm font-medium text-white"
+            className="btn-mint rounded-full px-5 py-2.5 text-sm font-medium"
           >
             Повторить
           </button>

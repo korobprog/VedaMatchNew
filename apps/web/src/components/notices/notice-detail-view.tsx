@@ -116,7 +116,7 @@ export function NoticeDetailView({ id }: { id: string }) {
                 })
                 .finally(() => setLoading(false));
             }}
-            className="rounded-xl bg-magenta px-4 py-2 text-sm font-semibold text-white"
+            className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold"
           >
             Повторить
           </button>
