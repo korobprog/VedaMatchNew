@@ -4,6 +4,9 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { UnionChatMessageDto, UnionChatState } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { fieldClassName } from "@/components/ui/input";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -138,8 +141,8 @@ export function UnionChatPanel({ chat }: { chat: UnionChatState }) {
   }
 
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex items-center gap-3 border-b border-zinc-100 p-4 dark:border-zinc-800">
+    <section className="glass rounded-2xl border border-glass-brd">
+      <div className="flex items-center gap-3 border-b border-glass-brd p-4">
         {chat.otherUser.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -149,15 +152,15 @@ export function UnionChatPanel({ chat }: { chat: UnionChatState }) {
             referrerPolicy="no-referrer"
           />
         ) : (
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-lg font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-glass text-lg font-semibold text-text-0">
             {chat.otherUser.name.charAt(0).toUpperCase()}
           </span>
         )}
         <div>
-          <h2 className="font-semibold text-zinc-900 dark:text-zinc-100">
+          <h2 className="font-semibold text-text-0">
             {chat.otherUser.name}
           </h2>
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-text-2">
             {[chat.otherUser.city, chat.otherUser.country].filter(Boolean).join(", ") ||
               "Матч Union"}
           </p>
@@ -166,7 +169,7 @@ export function UnionChatPanel({ chat }: { chat: UnionChatState }) {
 
       <div className="max-h-[60vh] space-y-3 overflow-y-auto p-4">
         {chat.messages.length === 0 ? (
-          <p className="rounded-xl bg-zinc-50 p-4 text-center text-sm text-zinc-500 dark:bg-zinc-800">
+          <p className="rounded-xl bg-bg-1 p-4 text-center text-sm text-text-2">
             Чат открыт после взаимного согласия. Напишите первое сообщение.
           </p>
         ) : (
@@ -181,8 +184,8 @@ export function UnionChatPanel({ chat }: { chat: UnionChatState }) {
                 <div
                   className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
                     message.mine
-                      ? "bg-green-500 text-white"
-                      : "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+                      ? "bg-magenta text-white"
+                      : "bg-bg-1 text-text-0"
                   }`}
                 >
                   {isEditing ? (
@@ -235,8 +238,8 @@ export function UnionChatPanel({ chat }: { chat: UnionChatState }) {
                         onClick={() => toggleReaction(message.id, reaction.emoji)}
                         className={`rounded-full border px-2 py-0.5 text-xs ${
                           reaction.mine
-                            ? "border-amber-500 bg-amber-50 dark:bg-amber-950"
-                            : "border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900"
+                            ? "border-gold bg-gold/15"
+                            : "border-glass-brd bg-bg-1"
                         }`}
                       >
                         {reaction.emoji} {reaction.count}
@@ -246,11 +249,11 @@ export function UnionChatPanel({ chat }: { chat: UnionChatState }) {
                 )}
 
                 {!isEditing && (
-                  <div className="relative mt-1 flex items-center gap-3 text-xs text-zinc-400 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="relative mt-1 flex items-center gap-3 text-xs text-text-2 opacity-0 transition-opacity group-hover:opacity-100">
                     <button
                       type="button"
                       onClick={() => copyMessage(message)}
-                      className="hover:text-zinc-600 dark:hover:text-zinc-200"
+                      className="hover:text-text-0"
                     >
                       {copiedId === message.id ? "Скопировано" : "Копировать"}
                     </button>
@@ -259,7 +262,7 @@ export function UnionChatPanel({ chat }: { chat: UnionChatState }) {
                       onClick={() =>
                         setReactionPickerId((id) => (id === message.id ? null : message.id))
                       }
-                      className="hover:text-zinc-600 dark:hover:text-zinc-200"
+                      className="hover:text-text-0"
                     >
                       Реакция
                     </button>
@@ -267,14 +270,14 @@ export function UnionChatPanel({ chat }: { chat: UnionChatState }) {
                       <button
                         type="button"
                         onClick={() => startEdit(message)}
-                        className="hover:text-zinc-600 dark:hover:text-zinc-200"
+                        className="hover:text-text-0"
                       >
                         Изменить
                       </button>
                     )}
                     {isReactionPickerOpen && (
                       <div
-                        className={`absolute top-5 z-10 flex gap-1 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg dark:border-zinc-700 dark:bg-zinc-800 ${
+                        className={`absolute top-5 z-10 flex gap-1 rounded-xl border border-glass-brd bg-bg-1 p-1.5 shadow-lg ${
                           message.mine ? "right-0" : "left-0"
                         }`}
                       >
@@ -283,7 +286,7 @@ export function UnionChatPanel({ chat }: { chat: UnionChatState }) {
                             key={emoji}
                             type="button"
                             onClick={() => toggleReaction(message.id, emoji)}
-                            className="rounded-lg p-1 text-base hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                            className="rounded-lg p-1 text-base hover:bg-glass"
                           >
                             {emoji}
                           </button>
@@ -298,7 +301,7 @@ export function UnionChatPanel({ chat }: { chat: UnionChatState }) {
         )}
       </div>
 
-      <form onSubmit={submit} className="border-t border-zinc-100 p-4 dark:border-zinc-800">
+      <form onSubmit={submit} className="border-t border-glass-brd p-4">
         <label className="block">
           <span className="sr-only">Сообщение</span>
           <textarea
@@ -307,7 +310,7 @@ export function UnionChatPanel({ chat }: { chat: UnionChatState }) {
             rows={3}
             maxLength={2000}
             placeholder="Напишите осознанное и уважительное сообщение..."
-            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className={`${fieldClassName} resize-y`}
           />
         </label>
 
@@ -317,7 +320,7 @@ export function UnionChatPanel({ chat }: { chat: UnionChatState }) {
               key={emoji}
               type="button"
               onClick={() => insertEmoji(emoji)}
-              className="rounded-lg p-1 text-base hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="rounded-lg p-1 text-base hover:bg-glass"
             >
               {emoji}
             </button>
@@ -326,22 +329,22 @@ export function UnionChatPanel({ chat }: { chat: UnionChatState }) {
             <button
               type="button"
               onClick={() => setEmojiPickerOpen((open) => !open)}
-              className="rounded-lg px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="rounded-lg px-2 py-1 text-sm text-text-2 hover:bg-glass hover:text-text-0"
             >
               Ещё emoji
             </button>
             {emojiPickerOpen && (
-              <div className="absolute bottom-9 left-0 z-10 w-64 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+              <div className="absolute bottom-9 left-0 z-10 w-64 rounded-xl border border-glass-brd bg-bg-1 p-3 shadow-lg">
                 {INPUT_EMOJI_GROUPS.map((group) => (
                   <div key={group.title} className="mb-2 last:mb-0">
-                    <p className="mb-1 text-[11px] font-medium text-zinc-400">{group.title}</p>
+                    <p className="mb-1 text-[11px] font-medium text-text-2">{group.title}</p>
                     <div className="flex flex-wrap gap-1">
                       {group.emojis.map((emoji) => (
                         <button
                           key={emoji}
                           type="button"
                           onClick={() => insertEmoji(emoji)}
-                          className="rounded-lg p-1 text-base hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                          className="rounded-lg p-1 text-base hover:bg-glass"
                         >
                           {emoji}
                         </button>
@@ -354,15 +357,15 @@ export function UnionChatPanel({ chat }: { chat: UnionChatState }) {
           </div>
         </div>
 
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+        {error && (
+          <Alert tone="error" className="mt-2">
+            {error}
+          </Alert>
+        )}
         <div className="mt-3 flex justify-end">
-          <button
-            type="submit"
-            disabled={pending || !body.trim()}
-            className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:bg-zinc-300"
-          >
+          <Button type="submit" loading={pending} disabled={!body.trim()}>
             {pending ? "Отправка..." : "Отправить"}
-          </button>
+          </Button>
         </div>
       </form>
     </section>

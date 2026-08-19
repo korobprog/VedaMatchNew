@@ -23,6 +23,30 @@ export { toRole } from './role';
 const OIDC_COOKIE = 'oidc_flow';
 const ACCESS_COOKIE = 'access_token';
 const REFRESH_COOKIE = 'refresh_token';
+/**
+ * Не-httpOnly маркер «сессия есть». Refresh-cookie живёт на `path=/auth` и
+ * не видна ни Next-proxy, ни странице; без маркера после истечения access
+ * (15 мин) вошедший на секунду видит лендинг для гостя. Значение не секрет —
+ * по нему только решают, показывать ли splash «Восстанавливаем сессию».
+ */
+const SESSION_MARKER_COOKIE = 'vm_session';
+
+/**
+ * Куда вернуть человека после входа. Принимаем только внутренний путь: одна
+ * ведущая косая (не `//host`), без схемы и управляющих символов — иначе
+ * open-redirect. Всё, что не прошло, превращается в `/`.
+ */
+export function safeReturnTo(value: unknown): string {
+  if (typeof value !== 'string') return '/';
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > 2048) return '/';
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return '/';
+  if (trimmed.startsWith('/\\')) return '/';
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(trimmed)) return '/';
+  if (/^\/[^/?#]*:/.test(trimmed)) return '/';
+  return trimmed;
+}
 
 @Injectable()
 export class AuthService implements OnModuleInit {
@@ -71,14 +95,22 @@ export class AuthService implements OnModuleInit {
     return this.google;
   }
 
-  async startGoogleLogin(res: Response) {
+  async startGoogleLogin(res: Response, returnTo?: string) {
     const google = this.requireGoogle();
     const codeVerifier = oidc.randomPKCECodeVerifier();
     const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
     const state = oidc.randomState();
     const nonce = oidc.randomNonce();
 
-    res.cookie(OIDC_COOKIE, JSON.stringify({ codeVerifier, state, nonce }), {
+    // returnTo едет в той же OIDC-cookie, что и PKCE: state остаётся
+    // случайным, а путь возврата не попадает в URL Google.
+    const oidcPayload = {
+      codeVerifier,
+      state,
+      nonce,
+      returnTo: safeReturnTo(returnTo),
+    };
+    res.cookie(OIDC_COOKIE, JSON.stringify(oidcPayload), {
       httpOnly: true,
       secure: this.isProd,
       sameSite: 'lax',
@@ -104,10 +136,11 @@ export class AuthService implements OnModuleInit {
     if (!raw) {
       throw new BadRequestException('OAuth-сессия не найдена или истекла');
     }
-    const { codeVerifier, state, nonce } = JSON.parse(raw) as {
+    const { codeVerifier, state, nonce, returnTo } = JSON.parse(raw) as {
       codeVerifier: string;
       state: string;
       nonce: string;
+      returnTo?: string;
     };
 
     const currentUrl = new URL(`${this.apiUrl}${req.originalUrl}`);
@@ -168,7 +201,7 @@ export class AuthService implements OnModuleInit {
 
     res.clearCookie(OIDC_COOKIE, { path: '/auth', domain: this.cookieDomain });
     await this.issueTokens(user.id, user.email, toRole(user.role), res);
-    res.redirect(this.webOrigin);
+    res.redirect(`${this.webOrigin}${safeReturnTo(returnTo)}`);
   }
 
   /**
@@ -216,7 +249,7 @@ export class AuthService implements OnModuleInit {
    * аккаунта и внешнего редиректа, что мешает тестировать демо-профили Union.
    */
   async devLogin(
-    body: { email?: string; password?: string },
+    body: { email?: string; password?: string; returnTo?: string },
     req: Request,
     res: Response,
   ) {
@@ -249,6 +282,7 @@ export class AuthService implements OnModuleInit {
     await this.issueTokens(user.id, user.email, toRole(user.role), res);
     return {
       ok: true,
+      returnTo: safeReturnTo(body?.returnTo),
       user: {
         id: user.id,
         email: user.email,
@@ -308,6 +342,26 @@ export class AuthService implements OnModuleInit {
       maxAge: ttlDays * 24 * 60 * 60 * 1000,
       path: '/auth',
     });
+    res.cookie(SESSION_MARKER_COOKIE, '1', {
+      httpOnly: false,
+      secure: this.isProd,
+      sameSite: 'lax',
+      domain: this.cookieDomain,
+      maxAge: ttlDays * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+  }
+
+  private clearSessionCookies(res: Response) {
+    res.clearCookie(ACCESS_COOKIE, { path: '/', domain: this.cookieDomain });
+    res.clearCookie(REFRESH_COOKIE, {
+      path: '/auth',
+      domain: this.cookieDomain,
+    });
+    res.clearCookie(SESSION_MARKER_COOKIE, {
+      path: '/',
+      domain: this.cookieDomain,
+    });
   }
 
   /**
@@ -323,6 +377,22 @@ export class AuthService implements OnModuleInit {
   }
 
   async refresh(req: Request, res: Response) {
+    try {
+      return await this.rotateRefreshToken(req, res);
+    } catch (error) {
+      // Refresh мёртв — снимаем и маркер сессии, иначе web будет крутить
+      // splash «Восстанавливаем сессию» вместо лендинга/формы входа.
+      if (error instanceof UnauthorizedException) {
+        res.clearCookie(SESSION_MARKER_COOKIE, {
+          path: '/',
+          domain: this.cookieDomain,
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async rotateRefreshToken(req: Request, res: Response) {
     const token = (req.cookies as Record<string, string>)[REFRESH_COOKIE];
     if (!token) throw new UnauthorizedException('Нет refresh-токена');
 
@@ -371,11 +441,7 @@ export class AuthService implements OnModuleInit {
         data: { revoked: true },
       });
     }
-    res.clearCookie(ACCESS_COOKIE, { path: '/', domain: this.cookieDomain });
-    res.clearCookie(REFRESH_COOKIE, {
-      path: '/auth',
-      domain: this.cookieDomain,
-    });
+    this.clearSessionCookies(res);
     return { ok: true };
   }
 
@@ -385,11 +451,7 @@ export class AuthService implements OnModuleInit {
       where: { userId, revoked: false },
       data: { revoked: true },
     });
-    res.clearCookie(ACCESS_COOKIE, { path: '/', domain: this.cookieDomain });
-    res.clearCookie(REFRESH_COOKIE, {
-      path: '/auth',
-      domain: this.cookieDomain,
-    });
+    this.clearSessionCookies(res);
     return { ok: true };
   }
 

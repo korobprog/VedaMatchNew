@@ -1,4 +1,5 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { getTranslations } from "next-intl/server";
 import { getProfile } from "@/lib/api";
 import { getMarketAdminReports } from "@/lib/market-api";
@@ -9,7 +10,7 @@ import { template } from "@/components/market/labels";
 
 export default async function MarketAdminReportsPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/market/admin/reports");
   // Права проверяет и API, но страницу админа посторонним показывать незачем
   // даже пустой: сам факт её существования — лишняя подсказка.
   if (user.role !== "admin") notFound();

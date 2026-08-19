@@ -1,10 +1,10 @@
-import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
+import { redirectToLogin } from "@/lib/require-user";
 import { NotificationList } from "@/components/notifications/notification-list";
 import { getProfile } from "@/lib/api";
 
 export const metadata = {
-  title: "Уведомления — VedaMatch",
+  title: "Уведомления",
   description: "Непрочитанные уведомления портала.",
   // Личная лента: в поисковиках ей делать нечего.
   robots: { index: false, follow: false },
@@ -12,7 +12,7 @@ export const metadata = {
 
 export default async function NotificationsPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/notifications");
 
   return (
     <div className="relative min-h-screen bg-bg-0">

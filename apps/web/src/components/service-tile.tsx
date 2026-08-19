@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ServiceCard as ServiceCardType } from "@vedamatch/shared";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { Lock } from "lucide-react";
@@ -83,12 +84,12 @@ export function ServiceTile({
   }
 
   return (
-    <a
+    <Link
       href={service.url}
       onClick={onOpen}
       className={`${shape} service-edge text-text-1 transition-transform duration-200 hover:-translate-y-0.5 hover:text-text-0`}
     >
       {inside}
-    </a>
+    </Link>
   );
 }

@@ -14,7 +14,7 @@ import {
 } from "@/lib/support-labels";
 
 export const metadata: Metadata = {
-  title: "Поддержка — VedaMatch",
+  title: "Поддержка",
   description:
     "Задайте вопрос поддержке VedaMatch. Обращение можно отправить без регистрации — ответим на email или в Telegram.",
 };

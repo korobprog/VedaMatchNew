@@ -10,9 +10,12 @@ import { LocaleToggle } from "@/components/locale-toggle";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { VedaMatchMark } from "@/components/icons/vedamatch-mark";
 import { SERVICE_CONTENT } from "@/lib/service-content";
+import { loginHref } from "@/lib/return-to";
 
 interface NavbarProps {
   className?: string;
+  /** Куда вернуть после входа — прокидывается в `/login?returnTo=`. */
+  returnTo?: string;
 }
 
 const navLinks = [
@@ -85,7 +88,7 @@ function ServicesMenu() {
   );
 }
 
-export function Navbar({ className }: NavbarProps) {
+export function Navbar({ className, returnTo }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [servicesExpanded, setServicesExpanded] = useState(false);
@@ -153,7 +156,7 @@ export function Navbar({ className }: NavbarProps) {
             <LocaleToggle />
             <ThemeToggle />
             <Link
-              href="/login"
+              href={loginHref(returnTo)}
               className="px-5 py-2.5 rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] text-white font-semibold transition-all duration-200 hover:shadow-[0_0_24px_rgba(255,62,158,0.45)] hover:-translate-y-0.5"
             >
               Начать
@@ -291,7 +294,7 @@ export function Navbar({ className }: NavbarProps) {
                 {/* CTA Button */}
                 <div className="mt-auto pt-8 pb-4">
                   <Link
-                    href="/login"
+                    href={loginHref(returnTo)}
                     onClick={() => setIsOpen(false)}
                     className="block w-full py-4 px-6 rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] text-white font-semibold text-center text-lg transition-all duration-200 hover:shadow-[0_0_24px_rgba(255,62,158,0.45)]"
                   >

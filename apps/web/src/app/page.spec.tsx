@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServiceCard as ServiceCardType, UserProfile } from "@vedamatch/shared";
 import Home from "./page";
 import { getCommunityStats, getProfile, getServices } from "@/lib/api";
+import { needsSessionRestore } from "@/lib/session-marker";
 import {
   getUnionChats,
   getUnionConnectionCounts,
@@ -32,6 +33,16 @@ vi.mock("@/components/landing", () => ({
 
 vi.mock("@/components/header", () => ({
   Header: () => null,
+}));
+
+vi.mock("@/lib/session-marker", () => ({
+  needsSessionRestore: vi.fn().mockResolvedValue(false),
+}));
+
+vi.mock("@/components/session-restore", () => ({
+  SessionRestore: ({ returnTo }: { returnTo?: string }) => (
+    <div data-testid="session-restore" data-return-to={returnTo} />
+  ),
 }));
 
 // Анимация числа уже покрыта отдельным тестом MemberCounter — здесь важно
@@ -95,6 +106,21 @@ describe("Home", () => {
     vi.mocked(getUnionProfileState).mockResolvedValue(null);
     vi.mocked(getUnionRecommendations).mockResolvedValue(null);
     vi.mocked(getCommunityStats).mockResolvedValue(null);
+    vi.mocked(needsSessionRestore).mockResolvedValue(false);
+  });
+
+  it("shows the session splash instead of the landing when the marker cookie is set", async () => {
+    vi.mocked(needsSessionRestore).mockResolvedValue(true);
+
+    render(
+      await Home({ searchParams: Promise.resolve({ returnTo: "/notices" }) }),
+    );
+
+    expect(screen.getByTestId("session-restore")).toHaveAttribute(
+      "data-return-to",
+      "/notices",
+    );
+    expect(screen.queryByTestId("landing")).not.toBeInTheDocument();
   });
 
   it("renders the landing page for a guest", async () => {

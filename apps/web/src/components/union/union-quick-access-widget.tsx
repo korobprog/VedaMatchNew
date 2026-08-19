@@ -65,7 +65,7 @@ export function UnionQuickAccessWidget({
           className="h-1.5 w-full overflow-hidden rounded-full bg-glass"
         >
           <div
-            className="h-full rounded-full bg-[linear-gradient(to_right,#33CCCC,#5CCCCC)]"
+            className="h-full rounded-full bg-cyan"
             style={{ width: `${profileCompletionPercent}%` }}
           />
         </div>

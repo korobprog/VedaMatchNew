@@ -5,7 +5,7 @@ import { UnauthorizedException } from '@nestjs/common';
 jest.mock('openid-client', () => ({}));
 jest.mock('./jwt.service', () => ({ JwtSignService: class {} }));
 
-import { AuthService } from './auth.service';
+import { AuthService, safeReturnTo } from './auth.service';
 
 /**
  * refresh: ротация как CAS и reuse-detection. Google/OIDC здесь не трогаем.
@@ -28,7 +28,7 @@ function makeService(stored: Record<string, unknown> | null, rotatedCount = 1) {
     prisma as never,
     jwt as never,
   );
-  const res = { cookie: jest.fn() };
+  const res = { cookie: jest.fn(), clearCookie: jest.fn() };
   const req = { cookies: { refresh_token: 'raw-token' } };
   return { service, prisma, req, res };
 }
@@ -59,7 +59,14 @@ describe('AuthService.refresh', () => {
       data: { revoked: true },
     });
     expect(prisma.refreshToken.create).toHaveBeenCalledTimes(1);
-    expect(res.cookie).toHaveBeenCalledTimes(2);
+    // access + refresh + маркер vm_session
+    expect(res.cookie).toHaveBeenCalledTimes(3);
+    const marker = res.cookie.mock.calls.find(
+      (call: unknown[]) => call[0] === 'vm_session',
+    ) as [string, string, { httpOnly: boolean; path: string }];
+    expect(marker[1]).toBe('1');
+    expect(marker[2].httpOnly).toBe(false);
+    expect(marker[2].path).toBe('/');
   });
 
   it('проигравший гонку параллельный refresh получает 401 без новой пары', async () => {
@@ -77,6 +84,17 @@ describe('AuthService.refresh', () => {
       service.refresh(req as never, res as never),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+  });
+
+  it('при мёртвом refresh снимает маркер vm_session', async () => {
+    const { service, req, res } = makeService(null);
+    await expect(
+      service.refresh(req as never, res as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(res.clearCookie).toHaveBeenCalledWith(
+      'vm_session',
+      expect.objectContaining({ path: '/' }),
+    );
   });
 
   it('повторное предъявление отозванного токена отзывает все токены пользователя', async () => {
@@ -114,5 +132,46 @@ describe('AuthService.refresh', () => {
       (call: unknown[]) => call[0] === 'access_token',
     ) as [string, string, { maxAge: number }];
     expect(accessCookie[2].maxAge).toBe(60 * 60 * 1000);
+  });
+});
+
+describe('AuthService.logout', () => {
+  it('снимает access, refresh и маркер vm_session', async () => {
+    const { service, res } = makeService(null);
+    const clearCookie = jest.fn();
+    await service.logout(
+      { cookies: {} } as never,
+      { ...res, clearCookie } as never,
+    );
+    const names = clearCookie.mock.calls.map((call: unknown[]) => call[0]);
+    expect(names).toEqual(
+      expect.arrayContaining(['access_token', 'refresh_token', 'vm_session']),
+    );
+  });
+});
+
+describe('safeReturnTo', () => {
+  it('пропускает только внутренний путь с одной ведущей косой', () => {
+    expect(safeReturnTo('/union?tab=matches')).toBe('/union?tab=matches');
+    expect(safeReturnTo('/')).toBe('/');
+    expect(safeReturnTo('/notices/abc#top')).toBe('/notices/abc#top');
+  });
+
+  it('всё остальное превращает в «/»', () => {
+    for (const bad of [
+      undefined,
+      null,
+      42,
+      '',
+      'union',
+      '//evil.example',
+      '/\\evil.example',
+      'https://evil.example/x',
+      'javascript:alert(1)',
+      '/foo\nSet-Cookie: x',
+      '/x'.padEnd(3000, 'a'),
+    ]) {
+      expect(safeReturnTo(bad)).toBe('/');
+    }
   });
 });

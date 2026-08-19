@@ -9,6 +9,10 @@ import type {
   StageHistoryItem,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardTitle } from "@/components/ui/card";
+import { fieldClassName } from "@/components/ui/input";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -106,11 +110,11 @@ export function SelfIdentificationForm({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+      <Card className="p-6">
+        <CardTitle className="mb-2 text-xl">
           Анкета самоидентификации
-        </h2>
-        <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-400">
+        </CardTitle>
+        <p className="mb-6 text-sm text-text-1">
           Этап определяется системой по ответам. Это не ранг, а текущий этап пути.
         </p>
 
@@ -189,96 +193,91 @@ export function SelfIdentificationForm({
         </div>
 
         {error && (
-          <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-200">
+          <Alert tone="error" className="mt-4">
             {error}
-          </p>
+          </Alert>
         )}
 
-        <button
-          type="button"
+        <Button
           onClick={submit}
-          disabled={pending}
-          className="mt-6 w-full rounded-xl bg-amber-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
+          loading={pending}
+          className="mt-6 w-full py-3"
         >
           {pending ? "Сохраняем..." : "Определить мой этап"}
-        </button>
-      </div>
+        </Button>
+      </Card>
 
       {currentStage && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-900 dark:bg-amber-950/40">
-          <p className="text-sm text-amber-900 dark:text-amber-200">
+        <Card className="border-gold/40 bg-gold/10 p-6">
+          <p className="text-sm text-text-1">
             Текущий этап
           </p>
-          <p className="text-2xl font-bold text-amber-950 dark:text-amber-100">
+          <p className="font-display text-2xl font-bold text-text-0">
             {displayedStage}
           </p>
           {currentStatus && (
-            <p className="mt-2 text-sm text-amber-900 dark:text-amber-200">
+            <p className="mt-2 text-sm text-text-1">
               Статус подтверждения: {verificationLabels[currentStatus]}
             </p>
           )}
           {mentorLink && currentStatus !== "confirmed" && (
-            <div className="mt-4 rounded-xl bg-white p-4 text-sm dark:bg-zinc-900">
-              <p className="mb-2 font-medium text-zinc-900 dark:text-zinc-100">
+            <div className="mt-4 rounded-xl bg-bg-1 p-4 text-sm">
+              <p className="mb-2 font-medium text-text-0">
                 Ссылка для наставника
               </p>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   readOnly
                   value={mentorLink}
-                  className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                  aria-label="Ссылка для наставника"
+                  className={`${fieldClassName} min-w-0 flex-1`}
                   onFocus={(event) => event.currentTarget.select()}
                 />
-                <button
-                  type="button"
-                  onClick={copyMentorLink}
-                  className="rounded-lg bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-                >
+                <Button variant="secondary" onClick={copyMentorLink}>
                   {copiedMentorLink ? "Скопировано" : "Копировать"}
-                </button>
+                </Button>
               </div>
-              <p className="mt-2 text-zinc-500">
+              <p className="mt-2 text-text-2">
                 Отправьте эту ссылку наставнику. Он сможет заполнить форму без регистрации.
               </p>
-              <button
-                type="button"
+              <Button
                 onClick={() => router.push("/")}
-                className="mt-4 w-full rounded-lg bg-amber-600 px-4 py-2 font-medium text-white transition hover:bg-amber-700 sm:w-auto"
+                className="mt-4 w-full sm:w-auto"
               >
                 На главную страницу портала
-              </button>
+              </Button>
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {currentStage && (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-3 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        <Card className="p-6">
+          <CardTitle className="mb-3 text-lg">
             Что дальше
-          </h2>
+          </CardTitle>
           <NextStep stage={currentStage} status={currentStatus} hasMentorLink={Boolean(mentorLink)} />
-        </div>
+        </Card>
       )}
 
       {history.length > 0 && (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        <Card className="p-6">
+          <CardTitle className="mb-4 text-lg">
             История изменений
-          </h2>
+          </CardTitle>
           <div className="space-y-3">
             {history.map((item) => (
-              <div key={item.id} className="rounded-xl bg-zinc-50 p-3 text-sm dark:bg-zinc-800">
-                <p className="font-medium text-zinc-900 dark:text-zinc-100">
+              <div key={item.id} className="rounded-xl bg-bg-1 p-3 text-sm">
+                <p className="font-medium text-text-0">
                   {item.oldStage ? stageLabels[item.oldStage] : "Не определен"} → {stageLabels[item.newStage]}
                 </p>
-                <p className="text-zinc-500">
+                <p className="text-text-2">
                   {new Date(item.createdAt).toLocaleString("ru-RU")} · {item.reason}
                 </p>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );
@@ -296,7 +295,7 @@ function NextStep({
   if (stage === "devotee") {
     if (status === "confirmed") {
       return (
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="text-sm text-text-1">
           Вы отображаетесь как “Преданный, подтвержден”. Закрытые сервисы,
           доступные подтвержденным преданным, будут отображаться в каталоге.
         </p>
@@ -304,7 +303,7 @@ function NextStep({
     }
 
     return (
-      <div className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
+      <div className="space-y-2 text-sm text-text-1">
         <p>
           Вы указали этап “Преданный”. Сейчас статус подтверждения: не
           подтвержден / ожидает наставника.
@@ -323,7 +322,7 @@ function NextStep({
   }
 
   return (
-    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+    <p className="text-sm text-text-1">
       Откройте каталог сервисов на главной странице: портал покажет материалы и приложения, подходящие вашему текущему этапу. Анкету можно пройти повторно в профиле, когда ваш путь изменится.
     </p>
   );
@@ -352,13 +351,13 @@ function SelectField<T extends string>({
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+      <span className="mb-2 block text-sm font-medium text-text-1">
         {label}
       </span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value as T)}
-        className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+        className={`${fieldClassName} py-3`}
       >
         {options.map(([optionValue, optionLabel]) => (
           <option key={optionValue} value={optionValue}>
@@ -380,12 +379,12 @@ function CheckboxField({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex items-center gap-3 rounded-xl border border-zinc-200 p-3 text-sm text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
+    <label className="flex items-center gap-3 rounded-xl border border-glass-brd p-3 text-sm text-text-1">
       <input
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="h-4 w-4 accent-amber-600"
+        className="h-4 w-4 accent-magenta"
       />
       {label}
     </label>

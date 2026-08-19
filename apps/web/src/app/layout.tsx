@@ -38,7 +38,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vedamatch.ru";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "VedaMatch Portal",
+  title: { default: "VedaMatch Portal", template: "%s — VedaMatch" },
   description: "Единый вход во все сервисы VedaMatch",
   // Картинку и её размеры Next подставляет сам из src/app/opengraph-image.png,
   // иначе Telegram берёт первое попавшееся фото со страницы.
@@ -58,6 +58,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  // Под вырезы и скругления телефонов: контент заходит под них, отступы даёт
+  // safe-area (см. .safe-top в globals.css).
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#FBF9FF" },
     { media: "(prefers-color-scheme: dark)", color: "#0A0614" },

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { UnionChatsList } from "@/components/union/union-chats-list";
 import { UnionNav } from "@/components/union/union-nav";
@@ -12,7 +13,7 @@ import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 export default async function UnionChatsPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/union/chats");
   if (!hasCompleteUnionLocation(user)) redirect("/union/location");
 
   const [chats, counts] = await Promise.all([

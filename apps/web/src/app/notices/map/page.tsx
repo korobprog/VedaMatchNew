@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
+import { redirectToLogin } from "@/lib/require-user";
 import { NoticesMapPanel } from "@/components/notices/notices-map-panel";
 import { NoticesNav } from "@/components/notices/notices-nav";
 import { getProfile } from "@/lib/api";
@@ -11,7 +11,7 @@ export const metadata = {
 
 export default async function NoticesMapPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/notices/map");
 
   return (
     <div className="relative min-h-screen bg-bg-0">

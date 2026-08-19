@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { redirectToLogin } from "@/lib/require-user";
 import { getProfile } from "@/lib/api";
 import { getLibraryFeed, getLibraryPreferences } from "@/lib/library-api";
 import { Header } from "@/components/header";
@@ -8,13 +8,13 @@ import { EntryList } from "@/components/library/entry-list";
 import { t } from "@/components/library/i18n";
 
 export const metadata: Metadata = {
-  title: "Избранное — Образование VedaMatch",
+  title: "Избранное — Образование",
   description: "Ссылки, сохранённые вами в библиотеке VedaMatch",
 };
 
 export default async function LibraryFavoritesPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/library/favorites");
 
   const [preferences, feed] = await Promise.all([
     getLibraryPreferences(),

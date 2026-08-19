@@ -42,9 +42,6 @@ export class MotivationController {
     private readonly books: MotivationBooksService,
   ) {}
 
-  @Get('health') health() {
-    return { status: 'ok' };
-  }
   @Get('motivation/posts/:slug') publicPost(
     @Param('slug') slug: string,
     @Query('language') language?: MotivationLanguage,

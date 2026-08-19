@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { getTranslations } from "next-intl/server";
 import { getProfile } from "@/lib/api";
 import { getMarketChat } from "@/lib/market-api";
@@ -15,7 +16,10 @@ export default async function MarketChatPage({
   params: Promise<{ id: string }>;
 }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) {
+    const { id } = await params;
+    redirectToLogin(`/market/chats/${id}`);
+  }
 
   const { id } = await params;
   const [t, locale, state] = await Promise.all([

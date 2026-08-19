@@ -1,5 +1,6 @@
 ﻿import Link from "next/link";
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import type { DevoteeVerificationStatus, Role, SpiritualStage, UserAccountStatus } from "@vedamatch/shared";
 import { Header } from "@/components/header";
 import { getAdminUsers, getProfile } from "@/lib/api";
@@ -30,7 +31,7 @@ export default async function AdminUsersPage({
   const raw = await searchParams;
   const query = normalizeQuery(raw);
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/admin/users");
   if (user.role !== "admin") redirect("/");
 
   const users = await getAdminUsers(query);

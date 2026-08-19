@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { redirectToLogin } from "@/lib/require-user";
 import { getProfile } from "@/lib/api";
 import { getMarketFavorites } from "@/lib/market-api";
 import { getServerLocale } from "@/i18n/get-locale";
@@ -15,7 +15,7 @@ export default async function MarketFavoritesPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/market/favorites");
 
   const params = await searchParams;
   const [t, locale, feed] = await Promise.all([

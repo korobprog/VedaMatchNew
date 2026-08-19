@@ -2,18 +2,9 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { getSafeReturnTo } from "@/lib/return-to";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-
-function getSafeReturnTo(returnTo?: string): string {
-  if (!returnTo?.startsWith("/")) return "/";
-
-  const baseUrl = "https://vedamatch.local";
-  const destination = new URL(returnTo, baseUrl);
-  return destination.origin === baseUrl
-    ? `${destination.pathname}${destination.search}${destination.hash}`
-    : "/";
-}
 
 export function SilentRefresh({ returnTo }: { returnTo?: string }) {
   const router = useRouter();

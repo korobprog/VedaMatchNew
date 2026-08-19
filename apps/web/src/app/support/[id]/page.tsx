@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { getMySupportTicket, getProfile } from "@/lib/api";
 import { Header } from "@/components/header";
 import { BackgroundOrbs } from "@/components/landing/Orb";
@@ -13,7 +14,7 @@ export default async function MySupportTicketPage({
 }) {
   const { id } = await params;
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin(`/support/${id}`);
 
   const ticket = await getMySupportTicket(id);
   if (!ticket) notFound();

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { MotivationFeed } from "@/components/motivation/motivation-feed";
 import { MotivationNav } from "@/components/motivation/motivation-nav";
@@ -9,7 +10,7 @@ import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 export default async function MotivationPage() {
   const [user, feed] = await Promise.all([getProfile(), getMotivationFeed()]);
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/motivation");
   if (!user.spiritualStage) redirect("/self-identification");
 
   return (

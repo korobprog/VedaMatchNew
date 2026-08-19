@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { getTranslations } from "next-intl/server";
 import { getProfile } from "@/lib/api";
 import { getMarketShopStats, getMyMarketShop } from "@/lib/market-api";
@@ -13,7 +13,7 @@ import { navLabels } from "../labels";
 
 export default async function MarketSellPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/market/sell");
 
   const [t, locale, shop] = await Promise.all([
     getTranslations("Market"),

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { getProfile } from "@/lib/api";
 import { BackgroundOrbs } from "@/components/landing/Orb";
@@ -14,7 +15,7 @@ export default async function AdminMotivationLayout({
   children: React.ReactNode;
 }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/admin/motivation");
   if (user.role !== "admin" && user.role !== "service-admin") redirect("/");
 
   return (

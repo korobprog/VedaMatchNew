@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { MapPin, Pencil } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { getProfile } from "@/lib/api";
@@ -24,7 +25,10 @@ export default async function MarketListingPage({
   params: Promise<{ id: string }>;
 }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) {
+    const { id } = await params;
+    redirectToLogin(`/market/listing/${id}`);
+  }
 
   const { id } = await params;
   const [t, locale, listing, comments] = await Promise.all([

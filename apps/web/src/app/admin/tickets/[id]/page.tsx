@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { getAdminSupportTicket, getProfile } from "@/lib/api";
 import { BackgroundOrbs } from "@/components/landing/Orb";
@@ -13,7 +14,7 @@ export default async function AdminTicketPage({
 }) {
   const { id } = await params;
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin(`/admin/tickets/${id}`);
   if (user.role !== "admin") redirect("/");
 
   const ticket = await getAdminSupportTicket(id);

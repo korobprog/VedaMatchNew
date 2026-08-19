@@ -14,6 +14,10 @@ import {
 import { UserGalleryEditor } from "./user-gallery-editor";
 import { PhotoVerificationPanel } from "./photo-verification-panel";
 import { apiFetch } from "@/lib/http-client";
+import { Alert } from "@/components/ui/alert";
+import { Button, buttonClassName } from "@/components/ui/button";
+import { Card, CardTitle } from "@/components/ui/card";
+import { Input, fieldClassName } from "@/components/ui/input";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
@@ -265,10 +269,10 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
 
   return (
     <form onSubmit={saveProfile} className="mt-6 space-y-6">
-      <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+      <Card className="p-6">
+        <CardTitle className="mb-4 text-lg">
           Аватар
-        </h2>
+        </CardTitle>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           {avatarSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -279,7 +283,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
               referrerPolicy="no-referrer"
             />
           ) : (
-            <span className="flex h-24 w-24 items-center justify-center rounded-full bg-amber-100 text-3xl font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+            <span className="flex h-24 w-24 items-center justify-center rounded-full bg-glass text-3xl font-semibold text-text-0">
               {profile.displayName.charAt(0).toUpperCase()}
             </span>
           )}
@@ -288,145 +292,129 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
               type="file"
               accept="image/jpeg,image/png,image/webp"
               onChange={selectAvatar}
-              className="block w-full text-sm text-zinc-600 file:mr-4 file:rounded-lg file:border-0 file:bg-zinc-900 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white dark:text-zinc-300 dark:file:bg-zinc-100 dark:file:text-zinc-900"
+              className="block w-full text-sm text-text-1 file:mr-4 file:rounded-lg file:border-0 file:bg-magenta file:px-4 file:py-2 file:text-sm file:font-medium file:text-white"
             />
-            <p className="text-xs text-zinc-500">JPG, PNG или WebP до 5 MB. Перед сохранением показывается preview.</p>
+            <p className="text-xs text-text-2">JPG, PNG или WebP до 5 MB. Перед сохранением показывается preview.</p>
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
+              <Button
                 onClick={uploadAvatar}
-                disabled={!avatarFile || avatarPending}
-                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
+                disabled={!avatarFile}
+                loading={avatarPending}
               >
                 {avatarPending ? "Сохраняем..." : "Сохранить аватар"}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="secondary"
                 onClick={deleteAvatar}
                 disabled={!profile.avatarUrl || avatarPending}
-                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-400 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
               >
                 Удалить
-              </button>
+              </Button>
             </div>
           </div>
         </div>
-      </section>
+      </Card>
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+      <Card className="p-6">
+        <CardTitle className="mb-2 text-lg">
           Имя
-        </h2>
-        <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+        </CardTitle>
+        <p className="mb-4 text-sm text-text-1">
           Если указано духовное имя, именно оно видно другим — в знакомствах,
           справочнике контактов, чатах и комментариях. Обычное имя остаётся в
           профиле и видно только вам и администрации.
         </p>
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Обычное имя
-            </span>
-            <input
-              type="text"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              maxLength={NAME_MAX_LENGTH}
-              required
-              placeholder="Максим Коробков"
-              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Духовное имя
-            </span>
-            <input
-              type="text"
-              value={spiritualName}
-              onChange={(event) => setSpiritualName(event.target.value)}
-              maxLength={NAME_MAX_LENGTH}
-              placeholder="Мадхава дас"
-              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-            />
-          </label>
+          <Input
+            label="Обычное имя"
+            type="text"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            maxLength={NAME_MAX_LENGTH}
+            required
+            placeholder="Максим Коробков"
+            className="py-3"
+          />
+          <Input
+            label="Духовное имя"
+            type="text"
+            value={spiritualName}
+            onChange={(event) => setSpiritualName(event.target.value)}
+            maxLength={NAME_MAX_LENGTH}
+            placeholder="Мадхава дас"
+            className="py-3"
+          />
         </div>
-        <p className="mt-3 text-sm text-zinc-500">
+        <p className="mt-3 text-sm text-text-2">
           Вас будут видеть как{" "}
-          <span className="font-medium text-zinc-800 dark:text-zinc-200">
+          <span className="font-medium text-text-0">
             {spiritualName.trim() || name.trim() || "—"}
           </span>
           . Чтобы убрать духовное имя, очистите поле.
         </p>
-      </section>
+      </Card>
 
       <UserGalleryEditor />
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+      <Card className="p-6">
+        <CardTitle className="mb-2 text-lg">
           Дата рождения
-        </h2>
-        <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+        </CardTitle>
+        <p className="mb-4 text-sm text-text-1">
           В знакомствах показывается только возраст — саму дату видите лишь вы.
           Видимость возраста настраивается в анкете Union.
         </p>
-        <label className="block max-w-xs">
-          <span className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
-            Дата рождения
-          </span>
-          <input
-            type="date"
-            value={birthDate}
-            onChange={(event) => setBirthDate(event.target.value)}
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-          />
-        </label>
+        <Input
+          label="Дата рождения"
+          type="date"
+          value={birthDate}
+          onChange={(event) => setBirthDate(event.target.value)}
+          wrapperClassName="max-w-xs"
+        />
         {profile.age != null && (
-          <p className="mt-2 text-sm text-zinc-500">
+          <p className="mt-2 text-sm text-text-2">
             Возраст в карточке: {profile.age}
           </p>
         )}
         <label className="mt-4 block max-w-xs">
-          <span className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
-            Пол
-          </span>
+          <span className="mb-1 block text-xs text-text-2">Пол</span>
           <select
             value={gender}
             onChange={(event) => setGender(event.target.value)}
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className={fieldClassName}
           >
             <option value="">Не указан</option>
             <option value="male">Мужской</option>
             <option value="female">Женский</option>
           </select>
         </label>
-        <p className="mt-2 text-sm text-zinc-500">
+        <p className="mt-2 text-sm text-text-2">
           Используется в фильтре знакомств. Если не указан, вы не попадёте в
           выдачу тех, кто ищет по полу.
         </p>
 
-        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950">
-          <p className="text-sm text-zinc-700 dark:text-zinc-300">
+        <div className="mt-6 rounded-xl border border-gold/40 bg-gold/10 p-4">
+          <p className="text-sm text-text-1">
             Для гороскопа и проверки совместимости по звёздам нужны ещё время
             и место рождения — их сервис астрологии хранит отдельно, дата
             рождения ими не заменяется.
           </p>
           <Link
             href="/astro"
-            className="mt-3 inline-block rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+            className={buttonClassName({ className: "mt-3" })}
           >
             Указать время и место рождения
           </Link>
         </div>
-      </section>
+      </Card>
 
       <PhotoVerificationPanel profile={profile} onUpdated={setProfile} />
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+      <Card className="p-6">
+        <CardTitle className="mb-2 text-lg">
           Город проживания
-        </h2>
-        <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+        </CardTitle>
+        <p className="mb-4 text-sm text-text-1">
           Геолокация не запрашивается автоматически. Выберите город поиском или нажмите кнопку ниже.
         </p>
         <div className="relative">
@@ -438,10 +426,10 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
               setLocationResults([]);
             }}
             placeholder="Начните вводить город"
-            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className={`${fieldClassName} py-3`}
           />
           {locationResults.length > 0 && (
-            <div className="absolute z-10 mt-2 max-h-72 w-full overflow-auto rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="absolute z-10 mt-2 max-h-72 w-full overflow-auto rounded-xl border border-glass-brd bg-bg-1 shadow-lg">
               {locationResults.map((item) => (
                 <button
                   key={`${item.lat}-${item.lon}-${item.displayName}`}
@@ -451,13 +439,13 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
                     setLocationQuery(item.displayName ?? item.city);
                     setLocationResults([]);
                   }}
-                  className="block w-full px-4 py-3 text-left text-sm hover:bg-amber-50 dark:hover:bg-zinc-800"
+                  className="block w-full px-4 py-3 text-left text-sm hover:bg-glass"
                 >
-                  <span className="block font-medium text-zinc-900 dark:text-zinc-100">
+                  <span className="block font-medium text-text-0">
                     {item.city}{item.country ? `, ${item.country}` : ""}
                   </span>
                   {item.displayName && (
-                    <span className="block text-xs text-zinc-500">{item.displayName}</span>
+                    <span className="block text-xs text-text-2">{item.displayName}</span>
                   )}
                 </button>
               ))}
@@ -465,29 +453,27 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
           )}
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
             onClick={detectLocation}
-            disabled={locationPending}
-            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-400 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            loading={locationPending}
           >
             {locationPending ? "Ищем..." : "Определить моё местоположение"}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="secondary"
             onClick={() => {
               setHomeLocation(null);
               setLocationQuery("");
               setLocationResults([]);
             }}
-            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
           >
             Очистить город
-          </button>
+          </Button>
         </div>
         {homeLocation && (
-          <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700">
-            <div className="bg-zinc-50 p-3 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+          <div className="mt-4 overflow-hidden rounded-xl border border-glass-brd">
+            <div className="bg-bg-1 p-3 text-sm text-text-1">
               Выбран город: <span className="font-medium">{homeLocation.city}</span>
               {homeLocation.country ? `, ${homeLocation.country}` : ""}
             </div>
@@ -501,12 +487,12 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
             )}
           </div>
         )}
-      </section>
+      </Card>
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+      <Card className="p-6">
+        <CardTitle className="mb-4 text-lg">
           Социальные сети
-        </h2>
+        </CardTitle>
         <div className="grid gap-4 md:grid-cols-2">
           {socialFields.map(([key, label, placeholder]) => (
             <TextField
@@ -518,12 +504,12 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
             />
           ))}
         </div>
-      </section>
+      </Card>
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+      <Card className="p-6">
+        <CardTitle className="mb-4 text-lg">
           Мессенджеры и контакты
-        </h2>
+        </CardTitle>
         <div className="grid gap-4 md:grid-cols-2">
           {messengerFields.map(([key, label, placeholder, type]) => (
             <TextField
@@ -536,26 +522,14 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
             />
           ))}
         </div>
-      </section>
+      </Card>
 
-      {error && (
-        <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-200">
-          {error}
-        </p>
-      )}
-      {message && (
-        <p className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200">
-          {message}
-        </p>
-      )}
+      {error && <Alert tone="error">{error}</Alert>}
+      {message && <Alert tone="success">{message}</Alert>}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-full rounded-xl bg-amber-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
-      >
+      <Button type="submit" loading={pending} className="w-full py-3">
         {pending ? "Сохраняем..." : "Сохранить изменения профиля"}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -574,18 +548,14 @@ function TextField({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-        {label}
-      </span>
-      <input
-        type={type}
-        inputMode={type === "tel" ? "tel" : undefined}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-      />
-    </label>
+    <Input
+      label={label}
+      type={type}
+      inputMode={type === "tel" ? "tel" : undefined}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+      className="py-3"
+    />
   );
 }

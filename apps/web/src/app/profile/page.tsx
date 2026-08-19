@@ -1,6 +1,6 @@
 ﻿import Link from "next/link";
-import { redirect } from "next/navigation";
 import type { PricingPlan, SubscriptionState } from "@vedamatch/shared";
+import { redirectToLogin } from "@/lib/require-user";
 import { getBillingPlan, getProfile } from "@/lib/api";
 import { PLAN as DEFAULT_PLAN } from "@/lib/plan";
 import { formatDate, subscriptionStatusLabels } from "@/lib/support-labels";
@@ -36,7 +36,7 @@ export default async function ProfilePage() {
     getProfile(),
     getBillingPlan().catch(() => null),
   ]);
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/profile");
   const plan: PricingPlan = fetchedPlan ?? {
     ...DEFAULT_PLAN,
     id: "vedamatch-basic",
@@ -128,7 +128,7 @@ export default async function ProfilePage() {
             Пройти самоидентификацию заново
           </Link>
           <InstallButton className="mt-3" />
-          <LogoutButton className="mt-3 w-full rounded-xl border-red-400/30 px-4 py-3 text-red-400 hover:border-red-400/50 hover:bg-red-400/10 dark:border-red-400/30 dark:text-red-400 dark:hover:bg-red-400/10">
+          <LogoutButton variant="danger" className="mt-3 w-full py-3">
             Выйти из аккаунта
           </LogoutButton>
           <DeleteAccountSection

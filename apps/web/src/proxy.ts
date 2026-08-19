@@ -24,14 +24,23 @@ const publicFiles = new Set([
   "/vedabase/offline",
 ]);
 
+/**
+ * Не-httpOnly маркер сессии от API (см. lib/session-marker.ts). Refresh-cookie
+ * живёт на `path=/auth` и здесь не видна, а маркер — да: по нему вошедшего с
+ * истёкшим access не гоним на лендинг, а пропускаем — страница сама покажет
+ * splash и тихо обновит токен.
+ */
+const SESSION_MARKER = "vm_session";
+
 export function proxy(req: NextRequest) {
   const hasAccess = req.cookies.has("access_token");
+  const hasSessionMarker = req.cookies.has(SESSION_MARKER);
   const isPublic =
     req.nextUrl.pathname === "/" ||
     publicFiles.has(req.nextUrl.pathname) ||
     publicPrefixes.some((prefix) => req.nextUrl.pathname.startsWith(prefix));
 
-  if (!hasAccess && !isPublic) {
+  if (!hasAccess && !isPublic && !hasSessionMarker) {
     const landingUrl = new URL("/", req.url);
     landingUrl.searchParams.set(
       "returnTo",

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { RecommendationsView } from "@/components/union/recommendations-view";
 import { RecommendationFilters } from "@/components/union/recommendation-filters";
@@ -24,7 +25,7 @@ export default async function UnionRecommendationsPage({
   searchParams: SearchParams;
 }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/union/recommendations");
   if (!hasCompleteUnionLocation(user)) redirect("/union/location");
 
   const params = await searchParams;

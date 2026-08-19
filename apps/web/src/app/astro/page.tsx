@@ -1,20 +1,20 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { getProfile } from "@/lib/api";
 import { getAstroState } from "@/lib/astro-api";
 import { BirthDataForm } from "@/components/astro/birth-data-form";
 
 export const metadata = {
-  title: "Джйотиш — VedaMatch",
+  title: "Джйотиш",
   description: "Ведическая карта рождения и персональный день",
 };
 
 export default async function AstroPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/astro");
 
   const state = await getAstroState();
-  if (!state) redirect("/login");
+  if (!state) redirectToLogin("/astro");
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-8">

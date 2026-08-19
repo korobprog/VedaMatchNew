@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { SilentRefresh } from "@/components/silent-refresh";
 import { InstallBanner } from "@/components/pwa/install-banner";
 import { MemberCounter } from "@/components/member-counter";
+import { loginHref } from "@/lib/return-to";
 
 export function LandingPage({
   returnTo,
@@ -36,7 +37,7 @@ export function LandingPage({
       <NoiseOverlay />
 
       {/* Navigation */}
-      <Navbar />
+      <Navbar returnTo={returnTo} />
 
       {/* Hero Section */}
       <section className="relative min-h-screen flex items-center pt-20 pb-32 md:pt-24 md:pb-40 overflow-hidden">
@@ -78,7 +79,7 @@ export function LandingPage({
               {/* CTA buttons */}
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Link
-                  href="/login"
+                  href={loginHref(returnTo)}
                   className={cn(
                     "group inline-flex items-center justify-center gap-2",
                     "px-5 py-2.5 rounded-full sm:px-8 sm:py-4",
@@ -190,7 +191,7 @@ export function LandingPage({
       <Features />
 
       {/* Pricing Section */}
-      <Pricing plan={plan} />
+      <Pricing plan={plan} returnTo={returnTo} />
 
       {/* CTA Section */}
       <section className="relative py-20 md:py-32">
@@ -219,7 +220,7 @@ export function LandingPage({
               </p>
               
               <Link
-                href="/login"
+                href={loginHref(returnTo)}
                 className={cn(
                   "group inline-flex items-center justify-center gap-2",
                   "px-10 py-5 rounded-full",

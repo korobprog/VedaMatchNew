@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
+import { redirectToLogin } from "@/lib/require-user";
 import { NoticeForm } from "@/components/notices/notice-form";
 import { NoticesNav } from "@/components/notices/notices-nav";
 import { getProfile } from "@/lib/api";
@@ -11,7 +11,7 @@ export const metadata = {
 
 export default async function NewNoticePage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/notices/new");
 
   return (
     <div className="relative min-h-screen bg-bg-0">

@@ -46,7 +46,14 @@ export function ThemeProvider({
   const [preference, setPreferenceState] = useState<ThemePreference>(
     initialPreference ?? "system",
   );
-  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>("dark");
+  // Системную тему читаем сразу при первом клиентском рендере, а не в
+  // эффекте: иначе первый applyTheme ставил бы data-theme="dark" и у
+  // «системных» светлых пользователей на кадр мигала тёмная тема. На сервере
+  // matchMedia нет — там остаётся "dark", как и раньше (в разметку это не
+  // попадает: для system сервер data-theme не ставит).
+  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(() =>
+    readSystemTheme(),
+  );
   const resolved = preference === "system" ? systemTheme : preference;
 
   useEffect(() => {
@@ -102,6 +109,11 @@ export function useTheme(): ThemeContextValue {
   const context = useContext(ThemeContext);
   if (!context) throw new Error("useTheme must be used inside ThemeProvider");
   return context;
+}
+
+function readSystemTheme(): ResolvedTheme {
+  if (typeof window === "undefined" || !window.matchMedia) return "dark";
+  return window.matchMedia(DARK_QUERY).matches ? "dark" : "light";
 }
 
 function writeThemeCookie(preference: ThemePreference): void {

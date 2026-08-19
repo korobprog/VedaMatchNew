@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { getProfile } from "@/lib/api";
 import {
   getLibraryCategories,
@@ -23,7 +24,10 @@ export default async function LibrarySectionPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) {
+    const { section } = await params;
+    redirectToLogin(`/library/${section}`);
+  }
 
   const { section: sectionSlug } = await params;
   const query = await searchParams;

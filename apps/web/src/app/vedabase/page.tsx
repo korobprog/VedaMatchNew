@@ -1,6 +1,6 @@
 import type { VedabaseLibraryManifest } from "@vedamatch/shared";
+import { redirectToLogin } from "@/lib/require-user";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
 import { getProfile } from "@/lib/api";
 import { getVedabaseLibrary } from "@/lib/vedabase-api";
@@ -9,10 +9,10 @@ import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 export default async function VedabasePage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/vedabase");
 
   const library = await getVedabaseLibrary();
-  if (!library) redirect("/login");
+  if (!library) redirectToLogin("/vedabase");
 
   return (
     <div className="relative min-h-screen bg-bg-0">

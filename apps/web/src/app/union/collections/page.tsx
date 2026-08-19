@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { UnionNav } from "@/components/union/union-nav";
 import { UnionTabBar } from "@/components/union/union-tabbar";
@@ -81,7 +82,7 @@ const collections: {
 
 export default async function UnionCollectionsPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/union/collections");
   if (!hasCompleteUnionLocation(user)) redirect("/union/location");
 
   const [counts, chats] = await Promise.all([

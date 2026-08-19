@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import type { DevoteeVerificationStatus } from "@vedamatch/shared";
 import { getAdminVerificationRequests, getProfile } from "@/lib/api";
 import { Header } from "@/components/header";
@@ -43,7 +44,7 @@ export default async function AdminVerificationRequestsPage({
     getProfile(),
     getAdminVerificationRequests(status),
   ]);
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/admin/verification-requests");
   if (user.role !== "admin" && user.role !== "service-admin") redirect("/");
 
   return (

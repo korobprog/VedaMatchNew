@@ -4,10 +4,17 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, Check, Gift } from "lucide-react";
 import type { PricingPlan } from "@vedamatch/shared";
+import { loginHref } from "@/lib/return-to";
 import { cn } from "@/lib/utils";
 import { PLAN as DEFAULT_PLAN } from "@/lib/plan";
 
-export function Pricing({ plan }: { plan?: PricingPlan }) {
+export function Pricing({
+  plan,
+  returnTo,
+}: {
+  plan?: PricingPlan;
+  returnTo?: string;
+}) {
   const PLAN = plan ?? { ...DEFAULT_PLAN, mode: "business" as const };
   const isBeta = PLAN.mode === "beta";
 
@@ -86,7 +93,7 @@ export function Pricing({ plan }: { plan?: PricingPlan }) {
               )}
 
               <Link
-                href="/login"
+                href={loginHref(returnTo)}
                 className={cn(
                   "group mt-8 inline-flex w-full items-center justify-center gap-2 sm:w-auto",
                   "px-6 py-3.5 sm:px-8 sm:py-4 rounded-full",

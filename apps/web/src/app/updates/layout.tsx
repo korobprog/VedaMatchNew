@@ -8,7 +8,7 @@ import { getCurrentRelease } from "@/lib/api";
 import { getServerLocale } from "@/i18n/get-locale";
 
 export const metadata: Metadata = {
-  title: "Версия и новости — VedaMatch",
+  title: "Версия и новости",
   description: "Текущая версия приложения, история релизов, новости и roadmap VedaMatch.",
 };
 

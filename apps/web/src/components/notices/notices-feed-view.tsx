@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import type {
@@ -115,8 +115,17 @@ export function NoticesFeedView({ mine = false }: { mine?: boolean }) {
     };
   }, [mine, kind, rubric, city, query]);
 
+  // Номер «поколения» ленты: растёт при каждой смене фильтров. Ответ на
+  // «показать ещё», пришедший после смены фильтра, приклеил бы старые
+  // объявления к новой ленте — такие ответы отбрасываем.
+  const feedGeneration = useRef(0);
+  useEffect(() => {
+    feedGeneration.current += 1;
+  }, [mine, kind, rubric, city, query]);
+
   const loadMore = useCallback(async () => {
     if (!nextCursor) return;
+    const generation = feedGeneration.current;
     setLoadingMore(true);
     try {
       const response = await getNoticesFeed({
@@ -127,9 +136,11 @@ export function NoticesFeedView({ mine = false }: { mine?: boolean }) {
         q: query || undefined,
         cursor: nextCursor,
       });
+      if (generation !== feedGeneration.current) return;
       setItems((current) => [...current, ...response.items]);
       setNextCursor(response.nextCursor);
     } catch (e) {
+      if (generation !== feedGeneration.current) return;
       setError(e instanceof NoticesApiError ? e.message : "Не получилось");
     } finally {
       setLoadingMore(false);

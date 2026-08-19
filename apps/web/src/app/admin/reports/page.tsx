@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import type { UserReportStatus } from "@vedamatch/shared";
 import { Header } from "@/components/header";
 import { AdminReportList } from "@/components/admin-report-list";
@@ -35,7 +36,7 @@ export default async function AdminReportsPage({
     : "open";
 
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/admin/reports");
   if (user.role !== "admin") redirect("/");
 
   const reports = await getAdminUserReports(status === "all" ? undefined : status);

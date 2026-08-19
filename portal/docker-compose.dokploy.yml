@@ -23,12 +23,11 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    command:
-      - sh
-      - -lc
-      - >-
-        export DATABASE_URL="$$(printf '%s' "$$DATABASE_URL" | sed 's/@postgres:/@vedamatch-portal-db-scqe9y:/')" &&
-        pnpm prisma migrate deploy && pnpm prisma db seed && node dist/main.js
+    # Запуск идёт через ENTRYPOINT образа (apps/api/docker-entrypoint.sh):
+    # migrate deploy → db seed (SEED_ON_START=0 отключает) → node dist/main.js.
+    # DATABASE_URL задаётся в Dokploy целиком, с реальным хостом Postgres
+    # (например postgresql://user:pass@vedamatch-portal-db-scqe9y:5432/vedamatch);
+    # никаких sed-подмен хоста в command больше нет.
     environment:
       NODE_ENV: production
       API_PORT: ${API_PORT}
@@ -40,7 +39,8 @@ services:
       JWT_PRIVATE_KEY_BASE64: ${JWT_PRIVATE_KEY_BASE64}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL}
       REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS}
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL не задан в окружении Dokploy}
+      SEED_ON_START: ${SEED_ON_START:-1}
       S3_ENDPOINT: ${S3_ENDPOINT}
       S3_REGION: ${S3_REGION}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
@@ -55,8 +55,6 @@ services:
       MOTIVATION_AI_API_KEY: ${MOTIVATION_AI_API_KEY:-${NEUROGATE_API_KEY}}
       MOTIVATION_TEXT_MODEL: ${MOTIVATION_TEXT_MODEL:-${NEUROGATE_MODEL:-gpt-5.5}}
       MOTIVATION_IMAGE_MODEL: ${MOTIVATION_IMAGE_MODEL:-${NEUROGATE_IMAGE_MODEL:-gpt-image-2}}
-      MOTIVATION_LANGUAGES: ${MOTIVATION_LANGUAGES:-ru,en,hi}
-      MOTIVATION_DAILY_CRON: ${MOTIVATION_DAILY_CRON:-0 4 * * *}
       ASTRO_AI_BASE_URL: ${ASTRO_AI_BASE_URL:-${MOTIVATION_AI_BASE_URL:-${NEUROGATE_BASE_URL:-https://r-api.vibemod.pro/v1}}}
       ASTRO_AI_API_KEY: ${ASTRO_AI_API_KEY:-${MOTIVATION_AI_API_KEY:-${NEUROGATE_API_KEY}}}
       ASTRO_TEXT_MODEL: ${ASTRO_TEXT_MODEL:-${MOTIVATION_TEXT_MODEL:-gpt-5.4-mini}}

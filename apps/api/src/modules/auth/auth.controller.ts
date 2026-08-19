@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -20,8 +21,8 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Get('google')
-  google(@Res() res: Response) {
-    return this.auth.startGoogleLogin(res);
+  google(@Res() res: Response, @Query('returnTo') returnTo?: string) {
+    return this.auth.startGoogleLogin(res, returnTo);
   }
 
   @Get('google/callback')
@@ -33,7 +34,7 @@ export class AuthController {
   @Post('dev-login')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   devLogin(
-    @Body() body: { email?: string; password?: string },
+    @Body() body: { email?: string; password?: string; returnTo?: string },
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {

@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { UnionChatPanel } from "@/components/union/union-chat-panel";
 import { UnionNav } from "@/components/union/union-nav";
@@ -10,7 +11,10 @@ type Params = Promise<{ id: string }>;
 
 export default async function UnionChatPage({ params }: { params: Params }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) {
+    const { id } = await params;
+    redirectToLogin(`/union/chats/${id}`);
+  }
   if (!hasCompleteUnionLocation(user)) redirect("/union/location");
 
   const { id } = await params;

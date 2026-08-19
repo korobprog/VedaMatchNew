@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { ContactsCardView } from "@/components/contacts/contacts-card-view";
 import { getProfile } from "@/lib/api";
@@ -19,7 +19,10 @@ export default async function ContactsUserPage({
   params: Params;
 }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) {
+    const { id } = await params;
+    redirectToLogin(`/contacts/users/${id}`);
+  }
 
   const { id } = await params;
 
