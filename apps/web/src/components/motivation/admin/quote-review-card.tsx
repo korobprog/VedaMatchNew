@@ -16,6 +16,15 @@ import { splitQuoteAndExplanation } from "../quote-text";
 import type { RunCommand } from "./use-admin-command";
 import { badgeClass, cardClass, primaryButton } from "./ui";
 
+const aiActionLabel: Record<string, string> = {
+  ai_suggest: "подсказка",
+  ai_escalate: "эскалация",
+  ai_approve: "одобрил",
+  ai_reject: "отклонил",
+  ai_error: "сбой модели",
+  ai_publish: "опубликовал",
+};
+
 export function QuoteReviewCard({
   post,
   categories,
@@ -57,6 +66,39 @@ export function QuoteReviewCard({
       </div>
 
       <PipelineStages status={post.reviewStatus} className="mt-4" />
+
+      {post.origin === "user" && (
+        <div className="mt-4 rounded-2xl border border-gold/40 bg-gold/5 p-3 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-gold/50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gold">
+              Рилс участника
+            </span>
+            <span className="text-text-1">{post.authorName ?? "автор удалён"}</span>
+            {!post.sourceVerified && (
+              <span className="text-xs text-text-2">· своя цитата, без проверенного источника</span>
+            )}
+          </div>
+          {post.aiVerdict && (
+            <div className="mt-2 rounded-xl bg-bg-0/60 p-2 text-xs text-text-1">
+              <span className="font-mono font-semibold text-text-0">
+                ИИ · {aiActionLabel[post.aiVerdict.action]}
+                {post.aiVerdict.decision ? ` · ${post.aiVerdict.decision}` : ""}
+                {post.aiVerdict.confidence !== null ? ` · ${post.aiVerdict.confidence.toFixed(2)}` : ""}
+              </span>
+              {post.aiVerdict.flags.length > 0 && (
+                <span className="ml-2 text-text-2">флаги: {post.aiVerdict.flags.join(", ")}</span>
+              )}
+              {post.aiVerdict.reason && <p className="mt-1 text-text-1">{post.aiVerdict.reason}</p>}
+            </div>
+          )}
+          {post.appeal && (
+            <div className="mt-2 rounded-xl border border-magenta/40 bg-magenta/5 p-2 text-xs">
+              <span className="font-semibold text-magenta">Обращение автора</span>
+              <p className="mt-1 text-text-1">{post.appeal.message}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-4">
         <QuoteDetails post={post} />

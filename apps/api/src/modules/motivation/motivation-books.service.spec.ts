@@ -58,8 +58,6 @@ describe('MotivationBooksService', () => {
     const { service } = setup();
 
     await expect(service.list('user')).rejects.toThrow();
-    await expect(
-      service.setKind('user', 'b2', 'biography'),
-    ).rejects.toThrow();
+    await expect(service.setKind('user', 'b2', 'biography')).rejects.toThrow();
   });
 });

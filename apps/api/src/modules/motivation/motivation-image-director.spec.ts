@@ -118,17 +118,14 @@ describe('кинематографические стили', () => {
     // Зачин задаёт регистр сильнее, чем всё описание: пока каждый промпт
     // начинался с Illustrate, модель рисовала картинку при любом стиле.
     const film = createImageDirection(base, 'cinematic_film');
-    expect(film.prompt.startsWith('A photorealistic cinematic film still')).toBe(
-      true,
-    );
+    expect(
+      film.prompt.startsWith('A photorealistic cinematic film still'),
+    ).toBe(true);
     expect(film.prompt.startsWith('Illustrate')).toBe(false);
   });
 
   it('рисовальные стили зачин сохраняют — они и есть иллюстрации', () => {
-    const watercolor = createImageDirection(
-      base,
-      'spiritual_watercolor',
-    );
+    const watercolor = createImageDirection(base, 'spiritual_watercolor');
     expect(watercolor.prompt.startsWith('Illustrate')).toBe(true);
   });
 
@@ -141,10 +138,7 @@ describe('кинематографические стили', () => {
   it('живописный реализм остаётся живописью, а не фотографией', () => {
     // Для сцен с божествами фотореализм читается как свидетельство, а не как
     // образ, поэтому у этого стиля зачин про картину.
-    const painting = createImageDirection(
-      base,
-      'painterly_realism',
-    );
+    const painting = createImageDirection(base, 'painterly_realism');
     expect(painting.prompt).toContain('oil painting');
     expect(painting.prompt).toContain('rather than a photograph');
   });
@@ -190,8 +184,8 @@ describe('подбор кинематографических стилей', () 
   });
 
   it('храм остаётся сильнее ночи и битвы', () => {
-    expect(
-      selectVisualStyle({ meaning: 'ночью в храме горела лампада' }),
-    ).toBe('sacred_architecture');
+    expect(selectVisualStyle({ meaning: 'ночью в храме горела лампада' })).toBe(
+      'sacred_architecture',
+    );
   });
 });

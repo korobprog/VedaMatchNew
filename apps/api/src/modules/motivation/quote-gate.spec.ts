@@ -34,7 +34,9 @@ describe('selectQuotableSentences', () => {
   it('returns nothing when the model rejects everything', async () => {
     const { service } = buildService({ keep: [] });
 
-    await expect(service.selectQuotableSentences(sentences)).resolves.toEqual([]);
+    await expect(service.selectQuotableSentences(sentences)).resolves.toEqual(
+      [],
+    );
   });
 
   it('ignores indices outside the list instead of returning undefined', async () => {

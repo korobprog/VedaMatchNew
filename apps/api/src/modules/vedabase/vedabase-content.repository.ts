@@ -109,6 +109,29 @@ export class VedabaseContentRepository {
     `);
   }
 
+  /**
+   * Единицы одной главы из поискового индекса: там уже чистый текст и
+   * локатор, в отличие от payload главы, где лежит HTML для читалки.
+   */
+  async listChapterUnits(
+    bookSlug: string,
+    chapterSlug: string,
+  ): Promise<VedabaseQuoteSearchUnit[]> {
+    return this.prisma.$queryRaw<VedabaseQuoteSearchUnit[]>(Prisma.sql`
+      SELECT b.slug AS "bookSlug", b.title AS "bookTitle", b.author AS "bookAuthor",
+        b.language AS "bookLanguage", u."chapterSlug", u.locator, u.title, u.text,
+        0::float AS rank
+      FROM "VedabaseSearchUnit" u
+      JOIN "VedabaseBookVersion" v ON v.id = u."versionId"
+      JOIN "VedabaseBook" b ON b."activeVersionId" = v.id
+      WHERE b.slug = ${bookSlug} AND u."chapterSlug" = ${chapterSlug}
+      -- Порядок внутри главы наводит вызывающий: локатор — JSON, и его форма
+      -- у разных книг разная, поэтому сортировать им в SQL ненадёжно.
+      ORDER BY u.title
+      LIMIT 200
+    `);
+  }
+
   async findQuoteCandidates(
     query: string,
     limit: number,

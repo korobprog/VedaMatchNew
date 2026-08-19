@@ -67,6 +67,37 @@ describe('clampLines', () => {
   });
 });
 
+describe('buildStoryOverlaySvg · открытка', () => {
+  it('ставит поздравление вверху кадра и затемняет полосу под ним', () => {
+    const svg = buildStoryOverlaySvg({
+      text: 'Пусть в сердце будет радость служения.',
+      greeting: 'С Джанмаштами',
+    });
+
+    expect(svg).toContain('class="greeting"');
+    expect(svg).toContain('С Джанмаштами');
+    // Заголовок по центру, в отличие от цитаты, прижатой влево.
+    expect(svg).toMatch(/text-anchor="middle" class="greeting"/);
+  });
+
+  it('без поздравления кадр остаётся прежней сторис', () => {
+    const svg = buildStoryOverlaySvg({ text: 'Только цитата.' });
+
+    expect(svg).not.toContain('class="greeting"');
+  });
+
+  it('переносит длинное поздравление и не даёт ему занять кадр', () => {
+    const svg = buildStoryOverlaySvg({
+      text: 'Цитата.',
+      greeting: 'С днём явления Шри Кришны и светлым праздником всей общины',
+    });
+
+    const lines = svg.match(/class="greeting"/g) ?? [];
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.length).toBeLessThanOrEqual(2);
+  });
+});
+
 describe('buildStoryOverlaySvg', () => {
   it('covers the full story frame', () => {
     const svg = buildStoryOverlaySvg({ text: 'Цитата' });
@@ -83,38 +114,50 @@ describe('buildStoryOverlaySvg', () => {
     expect(box.left + box.width).toBeLessThan(STORY_WIDTH);
   });
 
-  it('не даёт тексту наехать на знак', () => {
-    // Подпись раньше была строкой в SVG и занимала одну строку. Знак выше,
-    // поэтому вёрстка обязана поднимать текст на его высоту — иначе
-    // атрибуция ляжет прямо поверх логотипа.
-    const svg = buildStoryOverlaySvg({
+  it('ставит знак над текстом, а не под ним', () => {
+    const input = {
       text: 'Цитата',
       attribution: 'Шри Кришна · Бхагавад-гита',
-    });
-    const box = brandLogoBox();
-    // Отметка об ИИ стоит на одной линии со знаком, но у правого края, поэтому
-    // её проверяем отдельно — по горизонтали, а не по высоте.
+    };
+    const svg = buildStoryOverlaySvg(input);
+    const box = brandLogoBox({ quoteLines: 1, metaLines: 1 });
     const blockBaselines = [
-      ...svg.matchAll(/<text[^>]*y="(\d+(?:\.\d+)?)"[^>]*class="(quote|meta)"/g),
+      ...svg.matchAll(
+        /<text[^>]*y="(\d+(?:\.\d+)?)"[^>]*class="(quote|meta|disclosure)"/g,
+      ),
     ].map((match) => Number(match[1]));
 
     expect(blockBaselines.length).toBeGreaterThan(0);
-    for (const y of blockBaselines) expect(y).toBeLessThan(box.top);
+    // Знак — шапка блока: весь текст начинается ниже его нижнего края.
+    for (const y of blockBaselines)
+      expect(y).toBeGreaterThan(box.top + box.height);
   });
 
-  it('отметку об ИИ уводит вправо, чтобы она не села на знак', () => {
-    const svg = buildStoryOverlaySvg({ text: 'Цитата' });
-    const box = brandLogoBox();
-    const disclosure = svg.match(
-      /<text x="(\d+)"[^>]*text-anchor="end"[^>]*class="disclosure"/,
-    );
+  it('поднимает знак вместе с длинной цитатой', () => {
+    // Знак привязан к первой строке, а не к низу кадра: иначе многострочная
+    // цитата подъехала бы под него и легла поверх.
+    const short = brandLogoBox({ quoteLines: 1, metaLines: 0 });
+    const long = brandLogoBox({ quoteLines: 6, metaLines: 2 });
 
-    expect(disclosure).not.toBeNull();
+    expect(long.top).toBeLessThan(short.top);
+    expect(long.top).toBeGreaterThan(0);
+  });
+
+  it('отметку об ИИ ставит последней строкой блока', () => {
+    const svg = buildStoryOverlaySvg({
+      text: 'Цитата',
+      attribution: 'Шри Кришна',
+    });
+    const baseline = (kind: string) => {
+      const found = [
+        ...svg.matchAll(/<text[^>]*y="(\d+(?:\.\d+)?)"[^>]*class="([a-z]+)"/g),
+      ].find((match) => match[2] === kind);
+      return Number(found?.[1]);
+    };
+
     expect(svg).toContain(AI_DISCLOSURE);
-    // Текст выключен по правому краю, поэтому его левая граница правее x
-    // минус ширина строки; знак занимает левый край — достаточно проверить,
-    // что якорь ушёл далеко за его пределы.
-    expect(Number(disclosure?.[1])).toBeGreaterThan(box.left + box.width);
+    expect(baseline('disclosure')).toBeGreaterThan(baseline('meta'));
+    expect(baseline('disclosure')).toBeLessThan(STORY_HEIGHT);
   });
 
   it('рисует знак в готовом слое подписи', async () => {

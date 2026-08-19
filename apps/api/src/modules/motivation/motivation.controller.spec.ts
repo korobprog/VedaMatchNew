@@ -27,6 +27,10 @@ describe('MotivationController moderation endpoints', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
     );
 
     await controller.approveText(user, 'post-1', {

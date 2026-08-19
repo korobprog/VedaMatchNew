@@ -7,6 +7,7 @@ import {
   MessageCircle,
   Heart,
   LifeBuoy,
+  Film,
   ShoppingBasket,
   Sparkles,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const categoryIcons: Record<NotificationCategory, React.ReactNode> = {
   transits: <Sparkles size={18} aria-hidden="true" />,
   market: <ShoppingBasket size={18} aria-hidden="true" />,
   notices: <ClipboardList size={18} aria-hidden="true" />,
+  motivation: <Film size={18} aria-hidden="true" />,
 };
 
 function formatWhen(iso: string): string {

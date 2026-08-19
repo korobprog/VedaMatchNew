@@ -2,6 +2,23 @@ import { useEffect, useState, type RefObject } from "react";
 import type { VedabaseSelectionRange } from "@/lib/vedabase/locators";
 import { selectionToRange } from "@/lib/vedabase/locators";
 
+/**
+ * Ссылка в мастер «Свой рилс» с выделенным фрагментом. Связь с сервисом
+ * мотивации — только через URL: компоненты чужого сервиса не импортируются,
+ * а сервер сам сверит текст с главой по книге и главе.
+ */
+export function reelLinkFor(input: { bookSlug: string; chapterSlug: string; text: string }): string {
+  const query = new URLSearchParams({
+    from: "vedabase",
+    book: input.bookSlug,
+    chapter: input.chapterSlug,
+    text: input.text.trim(),
+  });
+  return `/motivation/create?${query.toString()}`;
+}
+
+const MAX_REEL_TEXT = 600;
+
 export interface ReaderAnnotationView {
   id: string;
   kind: "highlight" | "note";
@@ -31,6 +48,7 @@ export function AnnotationToolbar({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [lastText, setLastText] = useState("");
 
   useEffect(() => {
     const capture = () => {
@@ -38,7 +56,10 @@ export function AnnotationToolbar({
       const range = root
         ? selectionToRange(window.getSelection(), root, bookSlug, chapterSlug)
         : null;
-      if (range) setLastSelection(range);
+      if (range) {
+        setLastSelection(range);
+        setLastText(window.getSelection()?.toString() ?? "");
+      }
     };
     document.addEventListener("selectionchange", capture);
     return () => document.removeEventListener("selectionchange", capture);
@@ -92,6 +113,29 @@ export function AnnotationToolbar({
           className="reader-subtle rounded-lg px-3 py-2 text-sm"
         >
           Add note to selection
+        </button>
+        <button
+          type="button"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            const range = currentSelection();
+            if (!range) return;
+            const text = (window.getSelection()?.toString() || lastText).trim();
+            if (!text) {
+              setSelectionError("Select text inside one reader block first");
+              return;
+            }
+            if (text.length > MAX_REEL_TEXT) {
+              setSelectionError(`Для рилса выделите фрагмент короче ${MAX_REEL_TEXT} символов`);
+              return;
+            }
+            // Переход обычной навигацией: мастер живёт в другом сервисе, а
+            // читалка работает и офлайн без app-router-контекста.
+            window.location.assign(reelLinkFor({ bookSlug, chapterSlug, text }));
+          }}
+          className="reader-mark rounded-lg px-3 py-2 text-sm"
+        >
+          🎞 Сделать рилс
         </button>
       </div>
       {selectionError && <p role="alert" className="reader-danger mt-2 text-sm">{selectionError}</p>}

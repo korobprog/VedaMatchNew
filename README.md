@@ -24,6 +24,7 @@ pnpm seed                                  # каталог сервисов
 # Разделы библиотеки и каталог Рынка сид только создаёт (их правит админ);
 # чтобы перезаписать их из файлов данных: SEED_REFRESH_ADMIN_EDITABLE=1 pnpm seed
 pnpm seed:dev                              # демо-аккаунты Union (только dev)
+pnpm seed:vedabase                         # демо-книга «Бхагавад-гита», 2 главы (только dev)
 cd ../..
 
 pnpm dev                                   # web:3000 + api:4000
@@ -105,6 +106,25 @@ docker compose --profile prod up -d --build
 | GET | `/billing/plan` | Публичный тариф (108 ₽ / 2 USDT в месяц, 30 дней пробно) |
 | GET | `/billing/me` | Статус подписки текущего пользователя |
 | PATCH | `/admin/billing/users/:id` | Продление или сброс оплаченного доступа (admin) |
+| GET | `/billing/donation` | Реквизиты пожертвований для кнопки «Поддержать развитие» (пусто, пока админ не включил) |
+| GET/PATCH | `/admin/billing/donation` | Реквизиты пожертвований: включение, текст, список строк (admin) |
+| GET | `/motivation/feed` | Лента мотивации: порядок «свежее → непросмотренное → повтор», `filter=favorites` — избранное |
+| POST/DELETE | `/motivation/posts/:id/like` | Публичный лайк со счётчиком (в отличие от личного избранного) |
+| GET | `/motivation/reels/quota` | Лимит «своих рилсов» на сегодня (админам не считается) |
+| GET/POST | `/motivation/reels` | Мои рилсы / создать свой рилс: цитата своя или из Vedabase (сверяется с главой) → ИИ-модерация → генерация |
+| GET | `/motivation/reels/:id` | Стадия рилса (`ai_review`, `admin_review`, `rejected`, `generating`, `image_review`, `published`, `failed`) и причина отказа |
+| POST | `/motivation/reels/:id/appeal` | Обращение к администратору после отказа (одно на рилс) |
+| GET | `/motivation/reels/books` | Книги с оглавлением для выбора цитаты в мастере |
+| GET | `/motivation/reels/books/:book/chapters/:chapter` | Фрагменты главы, пригодные для рилса |
+| GET | `/motivation/reels/sources` | Поиск фрагмента по словам |
+| POST | `/motivation/reels/:id/animate` | Оживить свой рилс в видео (если включено в настройках) |
+| POST | `/motivation/reels/:id/image` | Своя картинка для рилса: кадрирование 9:16, всегда ручная проверка |
+| POST | `/motivation/posts/:id/report` | Жалоба на рилс участника; набрав порог, рилс скрывается до решения админа |
+| POST | `/motivation/posts/:id/postcard` | Открытка из кадра поста и поздравления |
+| GET | `/motivation/postcards/event` | Ближайший праздник для открытки |
+| GET | `/admin/motivation/reels` | Рилсы участников: фильтры, вердикты ИИ, счётчики за сегодня (admin) |
+| GET | `/admin/motivation/analytics` | Сводка: лента, участники, расход (admin) |
+| GET/POST | `/admin/motivation/events` | Справочник праздников для открыток (admin) |
 | POST | `/support/tickets` | Создать обращение (работает без авторизации) |
 | GET | `/support/tickets/track/:token` | Гостевой просмотр обращения по секретной ссылке |
 | POST | `/support/tickets/track/:token/messages` | Ответ гостя в своём обращении |

@@ -1,8 +1,11 @@
 import Link from "next/link";
-import { FolderTree, ListChecks, PenLine, PlusCircle, Radar, SlidersHorizontal } from "lucide-react";
+import { BarChart3, CalendarHeart, Film, FolderTree, ListChecks, PenLine, PlusCircle, Radar, SlidersHorizontal } from "lucide-react";
 
 export type MotivationAdminTab =
   | "queue"
+  | "reels"
+  | "events"
+  | "analytics"
   | "create"
   | "add"
   | "search"
@@ -17,10 +20,13 @@ const ITEMS: Array<{
 }> = [
   { key: "queue", href: "/admin/motivation/queue", label: "Очередь", icon: ListChecks },
   // Два разных пути: «Своя» — текст пишет админ, «Цитата» — текст пишет ИИ.
+  { key: "reels", href: "/admin/motivation/reels", label: "Рилсы", icon: Film },
   { key: "create", href: "/admin/motivation/create", label: "Своя", icon: PenLine },
   { key: "add", href: "/admin/motivation/add", label: "Цитата", icon: PlusCircle },
   { key: "search", href: "/admin/motivation/search", label: "Поиск", icon: Radar },
   { key: "categories", href: "/admin/motivation/categories", label: "Категории", icon: FolderTree },
+  { key: "events", href: "/admin/motivation/events", label: "Праздники", icon: CalendarHeart },
+  { key: "analytics", href: "/admin/motivation/analytics", label: "Аналитика", icon: BarChart3 },
   { key: "settings", href: "/admin/motivation/settings", label: "Настройки", icon: SlidersHorizontal },
 ];
 

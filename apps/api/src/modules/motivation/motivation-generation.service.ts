@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { IMAGE_SIZE } from './image-cost';
 
 export type VerifiedQuoteCopy = {
   originalText: string;
@@ -283,6 +284,14 @@ export class MotivationGenerationService {
     }
   }
 
+  /**
+   * Вердикт ИИ-модератора по пользовательскому рилсу. Тот же текстовый
+   * провайдер, что и у копирайта: разбор и пороги — в `ai-verdict.ts`.
+   */
+  moderationVerdict(prompt: string): Promise<unknown> {
+    return this.requestStructuredChat(prompt);
+  }
+
   private async requestStructuredChat(prompt: string): Promise<unknown> {
     const apiKey = this.config.get<string>('MOTIVATION_AI_API_KEY');
     const baseUrl = this.config
@@ -387,7 +396,7 @@ export class MotivationGenerationService {
         body: JSON.stringify({
           model,
           prompt: imagePrompt,
-          size: '1024x1536',
+          size: IMAGE_SIZE,
         }),
       });
     } finally {

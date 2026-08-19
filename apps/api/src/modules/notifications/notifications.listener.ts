@@ -90,6 +90,16 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.motivationReelPublished)
+  onMotivationReelPublished(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.motivationReelRejected)
+  onMotivationReelRejected(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   @OnEvent(notificationEventNames.marketReviewReceived)
   onMarketReviewReceived(event: NotificationEvent): void {
     void this.deliver(event);

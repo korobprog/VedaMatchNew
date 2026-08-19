@@ -16,6 +16,7 @@ import { resolveVideoPrompt } from './motivation-prompt';
 import { STORY_HEIGHT, STORY_WIDTH } from './story-image';
 import { composeStoryVideo, estimateReadingSeconds } from './story-video';
 import { estimatePlannedClipUsd } from './video-cost';
+import { BUDGET_CODE_PREFIX } from './funding-error';
 
 /**
  * Попыток меньше, чем у картинки, и это осознанно: провайдер берёт деньги даже
@@ -33,7 +34,12 @@ export const PERMANENT_FAILURES = new Set([
 ]);
 
 /** Превышение потолка — не сбой задачи: повторять будем, но не сейчас. */
-export const BUDGET_PREFIX = 'daily_budget_exceeded';
+/**
+ * Префикс кода «упёрлись в дневной потолок». Значение живёт в `funding-error`
+ * вместе с разбором таких кодов: расходиться им нельзя — по этому же префиксу
+ * автору показывается просьба о поддержке.
+ */
+export const BUDGET_PREFIX = BUDGET_CODE_PREFIX;
 
 @Injectable()
 export class MotivationVideoWorkerService
@@ -135,23 +141,28 @@ export class MotivationVideoWorkerService
   /**
    * Не даёт превысить дневной расход.
    *
-   * Считаем по сумме `videoCostUsd` за сегодня. Оценка снизу: при повторе поле
+   * Считаем по сумме `videoCostUsd` и `estimatedCostUsd` за сегодня. Оценка снизу: при повторе поле
    * поста перезаписывается, и неудачная первая попытка в сумму не попадёт.
    * Точный учёт потребовал бы отдельной таблицы списаний — пока кнопка только
    * у администратора, этой точности хватает, но до открытия пользователям
    * счётчик надо будет сделать честным.
    */
   private async assertWithinBudget(): Promise<void> {
-    const since = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const since = new Date(
+      `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
+    );
     const spent = await this.prisma.motivationPost.aggregate({
-      _sum: { videoCostUsd: true },
+      _sum: { videoCostUsd: true, estimatedCostUsd: true },
       where: { updatedAt: { gte: since } },
     });
-    const used = Number(spent._sum.videoCostUsd ?? 0);
+    // Кадры считаются вместе с роликами: платим за них с того же счёта, и
+    // потолок, стерегущий только видео, пропускал бы половину расхода.
+    const used =
+      Number(spent._sum.videoCostUsd ?? 0) +
+      Number(spent._sum.estimatedCostUsd ?? 0);
     const planned = estimatePlannedClipUsd({
       seconds: await this.fal.durationSeconds(),
       model: await this.fal.modelId(),
-      audio: await this.fal.audioEnabled(),
     });
     const limit = this.dailyBudgetUsd();
     if (used + planned > limit)
@@ -243,7 +254,8 @@ export class MotivationVideoWorkerService
     const source = await fetch(imageUrl, {
       signal: AbortSignal.timeout(60_000),
     });
-    if (!source.ok) throw new Error(`source_image_unavailable_${source.status}`);
+    if (!source.ok)
+      throw new Error(`source_image_unavailable_${source.status}`);
     return sharp(Buffer.from(await source.arrayBuffer()))
       .resize(STORY_WIDTH, STORY_HEIGHT, {
         fit: 'cover',
@@ -302,7 +314,6 @@ export class MotivationVideoWorkerService
           videoCostUsd: estimatePlannedClipUsd({
             seconds: await this.fal.durationSeconds(),
             model: await this.fal.modelId(),
-            audio: await this.fal.audioEnabled(),
           }),
         },
       });
@@ -336,6 +347,7 @@ export class MotivationVideoWorkerService
       videoVoice: boolean;
       videoSeconds: number | null;
       videoVoiceName: string | null;
+      videoTrack?: { url: string } | null;
     },
     video: Buffer,
   ): Promise<Buffer> {
@@ -367,16 +379,36 @@ export class MotivationVideoWorkerService
           ? Math.ceil(spoken.seconds + 1)
           : estimateReadingSeconds(text, attribution));
 
+      // Музыка необязательна и не должна ронять ролик: не скачалась — соберём
+      // без неё, это лучше, чем потерять уже оплаченную генерацию.
+      const music = post.videoTrack?.url
+        ? await this.download(post.videoTrack.url)
+        : undefined;
+
       return await composeStoryVideo(
         video,
         { text, attribution },
-        { loopToSeconds: seconds, voice: spoken?.audio },
+        { loopToSeconds: seconds, voice: spoken?.audio, music },
       );
     } catch (error) {
       this.logger.error(
         `Не удалось наложить подпись на ролик: ${String(error)}`,
       );
       return video;
+    }
+  }
+
+  /** Файл подложки. Ошибку глотаем: ролик важнее музыки. */
+  private async download(url: string): Promise<Buffer | undefined> {
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) throw new Error(`music_${response.status}`);
+      return Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      this.logger.warn(`Не удалось получить музыку: ${String(error)}`);
+      return undefined;
     }
   }
 

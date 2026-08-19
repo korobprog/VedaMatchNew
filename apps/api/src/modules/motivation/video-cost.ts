@@ -39,18 +39,35 @@ export function estimateVideoCostUsd(input: {
 }
 
 /**
- * Ставки провайдеров за секунду 720p.
+ * Ставки провайдеров за секунду 720p. Сверены с прайсом fal и счётом за август
+ * 2026: прежние значения были вдвое ниже фактических, и на них же стоял дневной
+ * потолок — расход считался наполовину.
  *
- * Считают они по-разному: Seedance — по видео-токенам, Wan и Vidu — по секундам.
- * Держать одну формулу на всех нельзя: после перехода на Wan учёт продолжал бы
- * писать цену Seedance, а на этом же числе стоит дневной потолок расхода.
+ * Считают провайдеры по-разному: Seedance — по видео-токенам, Wan и Vidu — по
+ * секундам. Держать одну формулу на всех нельзя: после перехода на Wan учёт
+ * продолжал бы писать цену Seedance.
  */
 const PER_SECOND_720P: ReadonlyArray<[string, number]> = [
-  // Wan 2.6: $0.10/с в 720p, немое видео — четверть ставки.
-  ['wan/v2.6', 0.1],
-  // Vidu Q3: базовые $0.035/с для 360p и 540p, для 720p множитель 2.2.
-  ['vidu', 0.035 * 2.2],
+  // Wan 2.6 flash: $0.05/с в 720p ($0.075 в 1080p). Скидки за немой ролик нет —
+  // цена одна, звук на неё не влияет.
+  ['wan/v2.6', 0.05],
+  // Vidu Q3: $0.07/с для 360p и 540p, для 720p и выше множитель 2.2.
+  ['vidu', 0.07 * 2.2],
 ];
+
+/**
+ * Тариф за миллион видео-токенов по имени модели. У Pro он вдвое с половиной
+ * выше, чем у Pro Fast, и брать один на обе — снова считать половину расхода.
+ */
+const PER_MTOKENS: ReadonlyArray<[string, number]> = [
+  ['seedance/v1/pro/fast', 1.0],
+  ['seedance/v1/pro', 2.5],
+];
+
+/** Ставка за миллион токенов для модели; для незнакомой — осторожная верхняя. */
+export function ratePerMTokensFor(model: string): number {
+  return PER_MTOKENS.find(([key]) => model.includes(key))?.[1] ?? 2.5;
+}
 
 /**
  * Во сколько обойдётся ролик, который мы собираемся заказать.
@@ -62,24 +79,16 @@ const PER_SECOND_720P: ReadonlyArray<[string, number]> = [
 export function estimatePlannedClipUsd(input: {
   seconds: number;
   model?: string;
-  audio?: boolean;
   ratePerMTokens?: number;
 }): number {
   const model = input.model ?? '';
   const perSecond = PER_SECOND_720P.find(([key]) => model.includes(key));
-  if (perSecond) {
-    const [, rate] = perSecond;
-    // Скидка за немой ролик есть только у Wan; у остальных звук на цену не
-    // влияет, поэтому множитель применяем адресно.
-    const silentDiscount =
-      !input.audio && model.includes('wan/v2.6') ? 0.25 : 1;
-    return input.seconds * rate * silentDiscount;
-  }
+  if (perSecond) return input.seconds * perSecond[1];
 
   return estimateVideoCostUsd({
     width: 704,
     height: 1248,
     seconds: input.seconds,
-    ratePerMTokens: input.ratePerMTokens,
+    ratePerMTokens: input.ratePerMTokens ?? ratePerMTokensFor(model),
   });
 }

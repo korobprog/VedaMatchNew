@@ -3,11 +3,40 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPublicMotivationPost } from "@/lib/motivation-api";
 
+/** Цитата и пояснение склеены пустой строкой — см. motivation-copy.service. */
+const SEPARATOR = "\n\n";
+
+/**
+ * Карточка ссылки в мессенджерах. У рилса с роликом отдаём и видео: без
+ * `og:video` Telegram и WhatsApp показывают только неподвижный кадр, а ссылка
+ * на рилс должна разворачиваться в рилс.
+ */
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const post = await getPublicMotivationPost(slug);
   if (!post) return { title: "VedaMatch Motivation" };
-  return { title: `${post.title} — Motivation`, description: post.text, openGraph: { title: post.title, description: post.text, images: post.imageUrl ? [post.imageUrl] : [] } };
+  // Описание — цитата без пояснения: пояснение в карточку всё равно не влезет.
+  const description = post.text.split(SEPARATOR)[0].slice(0, 300);
+  const poster = post.storyImageUrl || post.imageUrl;
+  return {
+    title: `${post.title} — Motivation`,
+    description,
+    openGraph: {
+      type: post.videoUrl ? "video.other" : "article",
+      title: post.title,
+      description,
+      images: poster ? [{ url: poster, width: 1080, height: 1920 }] : [],
+      ...(post.videoUrl
+        ? { videos: [{ url: post.videoUrl, type: "video/mp4", width: 1080, height: 1920 }] }
+        : {}),
+    },
+    twitter: {
+      card: post.videoUrl ? "player" : "summary_large_image",
+      title: post.title,
+      description,
+      images: poster ? [poster] : [],
+    },
+  };
 }
 
 export default async function PublicMotivationPostPage({ params }: { params: Promise<{ slug: string }> }) {

@@ -119,6 +119,20 @@ export type NotificationEvent =
       authorName: string;
       rating: number;
       shopSlug: string;
+    }
+  | {
+      name: 'motivation.reel.published';
+      recipientId: string;
+      reelId: string;
+      /** Slug опубликованного поста: ведём сразу на него. */
+      slug: string;
+    }
+  | {
+      name: 'motivation.reel.rejected';
+      recipientId: string;
+      reelId: string;
+      /** Причина простым языком — её же видит автор в мастере. */
+      reason: string;
     };
 
 /**
@@ -136,7 +150,8 @@ export type NotificationCategory =
   | 'connections'
   | 'support'
   | 'transits'
-  | 'market';
+  | 'market'
+  | 'motivation';
 
 /** Уведомление в колокольчике. Живёт до прочтения, потом удаляется — это
  *  список непрочитанного, а не архив. */
@@ -175,6 +190,8 @@ export interface NotificationPreferencesDto {
    *  объявления. Отдельно от `market`: выключив коммерцию, человек не должен
    *  молча потерять доску общины. */
   notices: boolean;
+  /** Судьба своих рилсов в «Мотивации»: опубликован или отклонён. */
+  motivation: boolean;
 }
 
 export type UpdateNotificationPreferencesRequest =

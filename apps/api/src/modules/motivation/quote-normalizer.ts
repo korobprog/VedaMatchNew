@@ -74,9 +74,10 @@ export function isQuotableSentence(sentence: string): boolean {
   // Прошедшее время без обобщения — рассказ о событии.
   const pastTense =
     /\p{L}+(?:ла|ло|ли|л)(?![\p{L}])/u.test(text) &&
-    !new RegExp(`${edge}(был|была|было|были|есть|бывает)(?![\\p{L}])`, 'iu').test(
-      text,
-    );
+    !new RegExp(
+      `${edge}(был|была|было|были|есть|бывает)(?![\\p{L}])`,
+      'iu',
+    ).test(text);
   if (pastTense && !teaching) return false;
 
   return teaching;
@@ -142,7 +143,10 @@ const MAX_WORD_LOOKBACK = 40;
  */
 function wordAlignedStart(text: string, start: number): number {
   if (start <= 0) return 0;
-  if (!/\p{L}/u.test(text[start] ?? '') || !/\p{L}/u.test(text[start - 1] ?? ''))
+  if (
+    !/\p{L}/u.test(text[start] ?? '') ||
+    !/\p{L}/u.test(text[start - 1] ?? '')
+  )
     return start;
 
   let back = start;
