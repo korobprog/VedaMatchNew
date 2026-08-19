@@ -59,6 +59,7 @@ import {
 } from './reel-image';
 import sharp from 'sharp';
 import { canAnimateReel } from './reel-animate';
+import { readingUnitQuote, readingUnitsOf } from './reading-unit-quote';
 import { fundingMessage } from './funding-error';
 
 const LANGUAGES: readonly MotivationLanguage[] = ['ru', 'en', 'hi'];
@@ -428,7 +429,24 @@ export class MotivationReelsService {
     chapterSlug: string,
   ): Promise<MotivationReelSourceHit[]> {
     const units = await this.verification.chapterUnits(bookSlug, chapterSlug);
-    return toSourceHits(sortByLocator(units), 60);
+    // Локатор и данные книги берём из поискового индекса, а текст — из главы
+    // для читалки: в индексе стих склеен с транслитерацией и пословным
+    // разбором, и в поле цитаты приезжала транскрипция вместо перевода.
+    const chapter = await this.verification.chapterPayload(
+      bookSlug,
+      chapterSlug,
+    );
+    const translations = new Map(
+      readingUnitsOf(chapter?.payload).map((unit) => [
+        unit.title?.trim() ?? '',
+        readingUnitQuote(unit),
+      ]),
+    );
+    const translated = units.map((unit) => {
+      const quote = translations.get(unit.title?.trim() ?? '');
+      return quote ? { ...unit, text: quote } : unit;
+    });
+    return toSourceHits(sortByLocator(translated), 60);
   }
 
   /**
