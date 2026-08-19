@@ -15,6 +15,7 @@ import type {
   ProfileMessengers,
   UpdateMarketShopRequest,
 } from '@vedamatch/shared';
+import { normalizeCityKey } from '../../common/city-key';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OWNER_SHOP_STATUSES, assertOneOf } from './market-enums';
 import {
@@ -118,8 +119,10 @@ export class MarketShopsService {
         { taglineEn: { contains: q, mode: 'insensitive' } },
       ];
     }
+    // Город — по нормализованному ключу (индекс (status, cityKey)), а не через
+    // `mode: 'insensitive'`: Prisma превращает его в ILIKE и мимо индекса.
     if (params.city?.trim()) {
-      where.city = { equals: params.city.trim(), mode: 'insensitive' };
+      where.cityKey = normalizeCityKey(params.city);
     }
     if (params.country?.trim()) {
       where.country = { equals: params.country.trim(), mode: 'insensitive' };
@@ -412,6 +415,7 @@ function locationColumns(location: MarketLocationDto | null | undefined) {
     return {
       location: Prisma.DbNull,
       city: null,
+      cityKey: null,
       country: null,
       latitude: null,
       longitude: null,
@@ -420,6 +424,7 @@ function locationColumns(location: MarketLocationDto | null | undefined) {
   return {
     location: location as unknown as Prisma.InputJsonValue,
     city: location.city,
+    cityKey: normalizeCityKey(location.city),
     country: location.country ?? null,
     latitude: location.lat,
     longitude: location.lon,

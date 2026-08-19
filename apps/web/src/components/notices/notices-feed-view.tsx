@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useLocale } from "next-intl";
 import { Loader2 } from "lucide-react";
 import type {
   GeoSearchResult,
@@ -17,11 +18,13 @@ import {
 import { NoticeCard } from "./notice-card";
 import { NOTICE_KIND_CHIPS, NOTICE_KIND_ORDER } from "./notice-labels";
 import { apiFetch } from "@/lib/http-client";
+import { localizedName } from "@/lib/localized-name";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 /** Лента доски: вид, рубрика, город и поиск. */
 export function NoticesFeedView({ mine = false }: { mine?: boolean }) {
+  const locale = useLocale();
   const [rubrics, setRubrics] = useState<NoticeRubricDto[]>([]);
   const [items, setItems] = useState<NoticeDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -192,7 +195,7 @@ export function NoticesFeedView({ mine = false }: { mine?: boolean }) {
                     : "border-glass-brd text-text-2 hover:text-text-0"
                 }`}
               >
-                {item.nameRu}
+                {localizedName(item, locale)}
                 {item.noticesCount > 0 && (
                   <span className="ml-1 text-text-2">{item.noticesCount}</span>
                 )}

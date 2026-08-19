@@ -14,10 +14,6 @@
 | `LibraryCategory_normalizedRu_trgm_idx` — GIN `gin_trgm_ops` | `library_core` | `DROP INDEX` |
 | `LibraryCategory_normalizedEn_trgm_idx` — GIN `gin_trgm_ops` | `library_core` | `DROP INDEX` |
 | `VedabaseSearchUnit_text_fts_idx` — GIN по `to_tsvector('russian', "text")` | `20260711_vedabase_postgres_content` | `DROP INDEX` |
-| `Notice_status_city_lower_idx` — btree `(status, lower("city"))` | `20260819150000_city_lower_indexes` | `DROP INDEX` |
-| `MarketListing_status_city_lower_idx` — btree `(status, lower("city"))` | `20260819150000_city_lower_indexes` | `DROP INDEX` |
-| `MarketShop_status_city_lower_idx` — btree `(status, lower("city"))` | `20260819150000_city_lower_indexes` | `DROP INDEX` |
-| `Community_status_city_lower_idx` — btree `(status, lower("city"))` | `20260819150000_city_lower_indexes` | `DROP INDEX` |
 
 Удаление любого из них ломает полнотекстовый поиск по библиотеке и подсказку
 похожих категорий при создании, а также полнотекстовый поиск по Vedabase
@@ -25,21 +21,24 @@
 и без GIN-индекса сканирует все юниты). Причём тихо: тесты на моках этого не
 увидят, поиск просто станет медленным или пустым.
 
-Индексы `*_status_city_lower_idx` — для регистронезависимого фильтра по городу
-(Notice, MarketListing, MarketShop, Community). Обратите внимание: Prisma для
-`{ city: { equals, mode: 'insensitive' } }` генерирует `"city" ILIKE $1`, а не
-`lower("city") = lower($1)`, поэтому текущие ORM-запросы этими индексами **не
-пользуются**. Их подхватят только raw-запросы вида
-`lower("city") = lower(${city})` либо переход на нормализованную колонку
-`cityKey`; до тех пор индексы просто лежат и стоят немного на записи.
+Про фильтр по городу (Notice, MarketListing, MarketShop, Community): Prisma
+для `{ city: { equals, mode: 'insensitive' } }` генерирует `"city" ILIKE $1`,
+а не `lower("city") = lower($1)`, поэтому ни btree по `city`, ни
+expression-индексы по `lower("city")` такими запросами не используются.
+Expression-индексы `*_status_city_lower_idx` из `20260819150000_city_lower_indexes`
+удалены миграцией `20260819160000_city_key_union_indexes`: вместо них у этих
+четырёх моделей есть обычная колонка `cityKey` (`lower(trim(city))`, пишется
+через `normalizeCityKey` из `apps/api/src/common/city-key.ts` везде, где пишется
+`city`) и объявленные в `schema.prisma` индексы `(status, cityKey)`. Фильтры
+сравнивают `cityKey = normalizeCityKey(input)` — сырых SQL-объектов для города
+больше нет.
 
 ## Правило
 
 **После каждого `prisma migrate dev` открывайте сгенерированный `migration.sql`
 и удаляйте оттуда любые `DROP INDEX` и `ALTER COLUMN "searchVector"` из таблиц
-`LibraryEntry`, `LibraryCategory`, `VedabaseSearchUnit`, а также `DROP INDEX`
-для `*_status_city_lower_idx` в `Notice`, `MarketListing`, `MarketShop`,
-`Community`, если вы не меняли поиск осознанно.**
+`LibraryEntry`, `LibraryCategory`, `VedabaseSearchUnit`, если вы не меняли
+поиск осознанно.**
 
 Пример такой правки — миграция `20260729131836_user_gender`: в ней осталась
 только работа с `Gender`, а четыре лишних оператора удалены вручную.

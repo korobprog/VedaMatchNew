@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import { 
   Heart, 
   Sparkles, 
@@ -13,48 +14,18 @@ import { cn } from "@/lib/utils";
 
 interface Feature {
   icon: React.ReactNode;
-  title: string;
-  description: string;
+  /** Ключ в Landing.features.items — тексты живут в messages/*.json. */
+  key: "matching" | "stages" | "connections" | "privacy" | "search" | "chat";
   accentColor: "magenta" | "cyan" | "gold";
 }
 
 const features: Feature[] = [
-  {
-    icon: <Heart className="w-7 h-7" />,
-    title: "Осознанный матчинг",
-    description: "Система сравнивает ваши намерения, интересы и ценности, чтобы найти по-настоящему совместимых людей.",
-    accentColor: "magenta",
-  },
-  {
-    icon: <Sparkles className="w-7 h-7" />,
-    title: "Духовные этапы",
-    description: "Учитываем ваш этап пути — от ищущего до преданного — для более точных рекомендаций.",
-    accentColor: "cyan",
-  },
-  {
-    icon: <Users className="w-7 h-7" />,
-    title: "Все типы связей",
-    description: "Семья, дружба, служение, проекты или духовное общение — выбирайте то, что вам нужно.",
-    accentColor: "gold",
-  },
-  {
-    icon: <Shield className="w-7 h-7" />,
-    title: "Приватность под контролем",
-    description: "Вы решаете, что видно другим. Контакты и локация открываются только после взаимного согласия.",
-    accentColor: "magenta",
-  },
-  {
-    icon: <Compass className="w-7 h-7" />,
-    title: "Умный поиск",
-    description: "Фильтруйте по городу, радиусу, интересам и типу отношений, которые вы ищете.",
-    accentColor: "cyan",
-  },
-  {
-    icon: <MessageCircle className="w-7 h-7" />,
-    title: "Встроенный чат",
-    description: "Общайтесь с совпадениями сразу в приложении. Без перехода в мессенджеры.",
-    accentColor: "gold",
-  },
+  { icon: <Heart className="w-7 h-7" />, key: "matching", accentColor: "magenta" },
+  { icon: <Sparkles className="w-7 h-7" />, key: "stages", accentColor: "cyan" },
+  { icon: <Users className="w-7 h-7" />, key: "connections", accentColor: "gold" },
+  { icon: <Shield className="w-7 h-7" />, key: "privacy", accentColor: "magenta" },
+  { icon: <Compass className="w-7 h-7" />, key: "search", accentColor: "cyan" },
+  { icon: <MessageCircle className="w-7 h-7" />, key: "chat", accentColor: "gold" },
 ];
 
 const containerVariants = {
@@ -102,6 +73,7 @@ const accentColorMap = {
 };
 
 export function Features() {
+  const t = useTranslations("Landing.features");
   return (
     <section id="features" className="relative py-20 md:py-32">
       <div className="mx-auto max-w-6xl px-4 md:px-6">
@@ -114,11 +86,9 @@ export function Features() {
           className="text-center mb-16"
         >
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-text-0 mb-4">
-            Возможности «Знакомств»
+            {t("title")}
           </h2>
-          <p className="text-text-1 text-lg max-w-2xl mx-auto">
-            Флагманский сервис платформы — осознанные знакомства и объединение единомышленников
-          </p>
+          <p className="text-text-1 text-lg max-w-2xl mx-auto">{t("subtitle")}</p>
         </motion.div>
 
         {/* Features grid */}
@@ -134,7 +104,7 @@ export function Features() {
             
             return (
               <motion.div
-                key={feature.title}
+                key={feature.key}
                 variants={itemVariants}
                 className={cn(
                   "group relative",
@@ -160,12 +130,12 @@ export function Features() {
 
                 {/* Title */}
                 <h3 className="font-display text-xl font-bold text-text-0 mb-2">
-                  {feature.title}
+                  {t(`items.${feature.key}.title`)}
                 </h3>
 
                 {/* Description */}
                 <p className="text-text-1 text-sm leading-relaxed">
-                  {feature.description}
+                  {t(`items.${feature.key}.description`)}
                 </p>
 
                 {/* Accent line */}

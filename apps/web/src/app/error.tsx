@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 /**
  * Отличает недоступный API от прочих поломок.
@@ -28,6 +29,7 @@ export default function PortalError({
   error: Error & { digest?: string };
   unstable_retry: () => void;
 }) {
+  const t = useTranslations("Common");
   useEffect(() => {
     console.error(error);
   }, [error]);
@@ -38,17 +40,15 @@ export default function PortalError({
     <main className="mx-auto flex min-h-[60vh] max-w-2xl items-center justify-center px-4 py-12">
       <section className="glass w-full rounded-2xl border border-glass-brd p-6 text-center sm:p-8">
         <h1 className="text-xl font-semibold text-text-0 sm:text-2xl">
-          {offline ? "Сервис сейчас недоступен" : "Страница не открылась"}
+          {offline ? t("errorPage.offlineTitle") : t("errorPage.title")}
         </h1>
         <p className="mt-3 text-sm leading-6 text-text-1">
-          {offline
-            ? "Похоже, сервер обновляется или потерялась связь. Данные не пропали — попробуйте обновить страницу через минуту."
-            : "Мы записали ошибку и разберёмся. Попробуйте повторить или вернуться на главную."}
+          {offline ? t("errorPage.offlineDescription") : t("errorPage.description")}
         </p>
         {error.digest && (
           // Код нужен поддержке, чтобы найти именно этот случай в логах.
           <p className="mt-3 font-mono text-xs text-text-2">
-            Код ошибки: {error.digest}
+            {t("errorPage.code", { digest: error.digest })}
           </p>
         )}
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
@@ -57,13 +57,13 @@ export default function PortalError({
             onClick={unstable_retry}
             className="rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] px-5 py-2.5 text-sm font-medium text-white"
           >
-            Повторить
+            {t("retry")}
           </button>
           <Link
             href="/"
             className="rounded-full border border-glass-brd px-5 py-2.5 text-sm font-medium text-text-1 hover:text-text-0"
           >
-            На главную
+            {t("backHome")}
           </Link>
         </div>
       </section>

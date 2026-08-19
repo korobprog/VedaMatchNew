@@ -40,6 +40,7 @@ import { toPhotoVerificationState } from './photo-verification';
 import { toSubscriptionState } from '../billing/subscription';
 import { readBillingMode } from '../billing/billing-mode';
 import { deletionEligibleAt } from './account-status';
+import { isAnonymizedEmail } from './account-anonymize.service';
 import { isPurgeConfirmed, mergePurgeContributions } from './user-purge';
 import { UsersService } from './users.service';
 
@@ -579,6 +580,12 @@ export class AdminUsersService {
     // блокировку снимает setBlocked, у него своя семантика и журнал.
     if (user.accountStatus !== 'deleted' && user.pendingDeletionAt === null) {
       throw new BadRequestException('Аккаунт не удалён');
+    }
+    // После анонимизации восстанавливать нечего: PII стёрты, email занят маркером.
+    if (isAnonymizedEmail(user.email)) {
+      throw new BadRequestException(
+        'Аккаунт анонимизирован, восстановление невозможно',
+      );
     }
 
     await this.prisma.user.update({

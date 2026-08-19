@@ -22,6 +22,7 @@ import {
   type UpdateNoticeRequest,
   type UpdateNoticeStatusRequest,
 } from '@vedamatch/shared';
+import { normalizeCityKey } from '../../common/city-key';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CommunitiesService } from '../communities/communities.service';
 import { ModerationService } from '../moderation/moderation.service';
@@ -952,6 +953,7 @@ export class NoticesService {
       return {
         location: Prisma.DbNull,
         city: null,
+        cityKey: null,
         country: null,
         latitude: null,
         longitude: null,
@@ -969,6 +971,7 @@ export class NoticesService {
     return {
       location: { ...location, lat, lon } as unknown as Prisma.InputJsonValue,
       city: location.city.trim(),
+      cityKey: normalizeCityKey(location.city),
       country: location.country?.trim() ?? null,
       latitude: lat,
       longitude: lon,

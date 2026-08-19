@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import type { NoticeKind } from '@vedamatch/shared';
+import { normalizeCityKey } from '../../common/city-key';
 import { NOTICE_KINDS } from './notice-validate';
 
 /**
@@ -157,8 +158,9 @@ export function buildFeedWhere(
 
   if (filters.kind) and.push({ kind: filters.kind });
   if (filters.rubric) and.push({ rubric: { slug: filters.rubric } });
-  if (filters.city)
-    and.push({ city: { equals: filters.city, mode: 'insensitive' } });
+  // Город — по нормализованному ключу (btree по cityKey), а не через
+  // `mode: 'insensitive'`: Prisma превращает его в ILIKE и мимо индекса.
+  if (filters.city) and.push({ cityKey: normalizeCityKey(filters.city) });
   if (filters.country)
     and.push({ country: { equals: filters.country, mode: 'insensitive' } });
   if (filters.communityId) and.push({ communityId: filters.communityId });
@@ -185,7 +187,7 @@ function audienceWhere(viewer: FeedViewer): Prisma.NoticeWhereInput {
   if (viewer.city)
     options.push({
       audience: 'my_city',
-      city: { equals: viewer.city, mode: 'insensitive' },
+      cityKey: normalizeCityKey(viewer.city),
     });
   if (viewer.communityIds.length)
     options.push({

@@ -301,6 +301,9 @@ model User {
   noticeReportsReviewed              NoticeReport[]               @relation("NoticeReportsReviewed")
   noticeSubscriptions                NoticeSubscription[]         @relation("NoticeSubscriptions")
   motivationTracks                   MotivationTrack[]
+
+  @@index([accountStatus])
+  @@index([birthDate])
 }
 
 // Единственная строка глобальных настроек платформы (id всегда "global").
@@ -472,21 +475,21 @@ model MotivationPost {
 /// Пустое поле означает «взять из окружения», поэтому настройки можно вводить
 /// постепенно, ничего не ломая.
 model MotivationSettings {
-  id                String                 @id @default("global")
-  videoModel        String?
-  videoSeconds      Int?
-  videoAudio        Boolean?
-  voiceModel        String?
-  voiceName         String?
-  imageModel        String?
+  id             String                 @id @default("global")
+  videoModel     String?
+  videoSeconds   Int?
+  videoAudio     Boolean?
+  voiceModel     String?
+  voiceName      String?
+  imageModel     String?
   /// Стиль по умолчанию. Пусто — подбирать автоматически по смыслу и источнику.
-  visualStyle       MotivationVisualStyle?
+  visualStyle    MotivationVisualStyle?
   /// Дневной потолок расхода в долларах. Меняться должен без перевыкладки.
-  dailyBudgetUsd    Decimal?               @db.Decimal(10, 2)
-  musicModel        String?
+  dailyBudgetUsd Decimal?               @db.Decimal(10, 2)
+  musicModel     String?
   /// Трек по умолчанию. Пусто — ролики выходят без подложки.
-  defaultTrackId    String?
-  updatedAt         DateTime               @updatedAt
+  defaultTrackId String?
+  updatedAt      DateTime               @updatedAt
 }
 
 /// Трек музыкальной подложки.
@@ -573,16 +576,16 @@ model MotivationPostTranslation {
 }
 
 model MotivationPreference {
-  userId           String   @id
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  vaishnavaPercent Int      @default(50)
-  language         String   @default("ru") @db.VarChar(8)
+  userId           String                  @id
+  user             User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vaishnavaPercent Int                     @default(50)
+  language         String                  @default("ru") @db.VarChar(8)
   /// Какие профили показывать в ленте. Пустой список — «как на
   /// самоидентификации»: так у прежних пользователей ничего не меняется без
   /// бэкфила, а осознанный выбор отличим от его отсутствия.
   profileTypes     MotivationProfileType[]
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
 }
 
 model MotivationFavorite {
@@ -1042,6 +1045,8 @@ model UnionProfile {
   updatedAt                DateTime                   @updatedAt
 
   intentions UnionIntention[]
+
+  @@index([isActive])
 }
 
 /// Режим знакомства. `requests` — односторонний лайк приходит как заявка,
@@ -2062,6 +2067,8 @@ model MarketShop {
   /// ProfileLocation целиком — чтобы вернуть в форму без обратного пересчёта.
   location  Json?
   city      String?
+  /// Нормализованный город (trim + lower) для фильтра по равенству; см. common/city-key.ts.
+  cityKey   String?
   country   String?
   latitude  Float?
   longitude Float?
@@ -2098,6 +2105,7 @@ model MarketShop {
   @@index([status, createdAt(sort: Desc)])
   @@index([status, ratingAvg(sort: Desc)])
   @@index([city])
+  @@index([status, cityKey])
 }
 
 /// Полка внутри магазина — навигация по своей витрине, независимая от
@@ -2157,6 +2165,8 @@ model MarketListing {
   /// (мастерская в другом городе), поэтому это свои колонки, а не ссылка.
   location  Json?
   city      String?
+  /// Нормализованный город (trim + lower) для фильтра по равенству; см. common/city-key.ts.
+  cityKey   String?
   country   String?
   latitude  Float?
   longitude Float?
@@ -2195,6 +2205,7 @@ model MarketListing {
   @@index([status, kind, publishedAt(sort: Desc)])
   @@index([status, currency, priceMinor])
   @@index([status, city])
+  @@index([status, cityKey])
   @@index([status, favoritesCount(sort: Desc)])
 }
 
@@ -2636,6 +2647,8 @@ model Community {
   /// ProfileLocation целиком — чтобы вернуть в форму без обратного пересчёта.
   location  Json?
   city      String?
+  /// Нормализованный город (trim + lower) для фильтра по равенству; см. common/city-key.ts.
+  cityKey   String?
   country   String?
   latitude  Float?
   longitude Float?
@@ -2671,12 +2684,13 @@ model Community {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members            CommunityMember[]
-  ownershipTransfers CommunityOwnershipTransfer[]
-  notices            Notice[]                     @relation("NoticeAuthorCommunity")
-  noticeSubscriptions NoticeSubscription[]        @relation("NoticeSubscriptions")
+  members             CommunityMember[]
+  ownershipTransfers  CommunityOwnershipTransfer[]
+  notices             Notice[]                     @relation("NoticeAuthorCommunity")
+  noticeSubscriptions NoticeSubscription[]         @relation("NoticeSubscriptions")
 
   @@index([status, city])
+  @@index([status, cityKey])
   @@index([status, kind])
   @@index([status, membersCount(sort: Desc)])
 }
@@ -2799,20 +2813,20 @@ enum NoticeAudience {
 /// Один уровень: на доске взаимопомощи второй уровень пустует, а вложенность
 /// ломает лёгкость публикации.
 model NoticeRubric {
-  id           String     @id @default(uuid())
-  slug         String     @unique
+  id           String       @id @default(uuid())
+  slug         String       @unique
   /// Виды, в которых рубрика предлагается. Пустой массив — во всех:
   /// «разное» уместно и в просьбе, и в предложении.
   kinds        NoticeKind[]
   nameRu       String
   nameEn       String
   iconKey      String?
-  isSystem     Boolean    @default(true)
-  position     Int        @default(0)
+  isSystem     Boolean      @default(true)
+  position     Int          @default(0)
   /// Денормализованный счётчик опубликованных — для строки навигации.
-  noticesCount Int        @default(0)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  noticesCount Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   notices       Notice[]
   subscriptions NoticeSubscription[]
@@ -2853,29 +2867,31 @@ model Notice {
   /// Гео. Денормализовано скалярами рядом с `location` по той же причине,
   /// что в MarketShop: JSON в Postgres не индексируется, а по городу идёт
   /// фильтр ленты.
-  location  Json?
-  city      String?
-  country   String?
-  latitude  Float?
-  longitude Float?
+  location       Json?
+  city           String?
+  /// Нормализованный город (trim + lower) для фильтра по равенству; см. common/city-key.ts.
+  cityKey        String?
+  country        String?
+  latitude       Float?
+  longitude      Float?
   placePrecision NoticePlacePrecision @default(city)
 
   /// Событие. `timeZone` хранится рядом с `startsAt` намеренно: одного
   /// UTC-момента мало — «программа в 17:00» должна остаться 17:00 по месту
   /// проведения, куда бы ни переехал смотрящий.
-  startsAt  DateTime?
-  endsAt    DateTime?
-  timeZone  String?
-  venueName String?
-  isOnline  Boolean   @default(false)
-  onlineUrl String?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  timeZone    String?
+  venueName   String?
+  isOnline    Boolean          @default(false)
+  onlineUrl   String?
   repeat      NoticeRecurrence @default(none)
   /// До какой даты повторять. null у повторяющегося события — «пока не
   /// отменят»: разворачивание всё равно ограничено окном запроса.
   repeatUntil DateTime?
 
-  status      NoticeStatus @default(published)
-  needsReview Boolean      @default(false)
+  status                NoticeStatus @default(published)
+  needsReview           Boolean      @default(false)
   /// Модератор предложил перенести в Рынок; автору уходит ссылка с текстом.
   marketMoveSuggestedAt DateTime?
   moderatorNote         String?
@@ -2913,6 +2929,7 @@ model Notice {
   @@index([status, kind, publishedAt(sort: Desc)])
   @@index([status, rubricId, publishedAt(sort: Desc)])
   @@index([status, city, publishedAt(sort: Desc)])
+  @@index([status, cityKey, publishedAt(sort: Desc)])
   /// Воркер протухания ходит только по этому индексу.
   @@index([status, expiresAt])
   /// Афиша и календарь.
@@ -3047,14 +3064,14 @@ model NoticeSubscription {
   user   User                   @relation("NoticeSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
   kind   NoticeSubscriptionKind
 
-  targetKey String
-  rubricId  String?
-  rubric    NoticeRubric? @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  targetKey   String
+  rubricId    String?
+  rubric      NoticeRubric? @relation(fields: [rubricId], references: [id], onDelete: Cascade)
   /// Город строкой: справочника городов нет, нормализация — lower(trim()),
   /// как и в фильтрах ленты.
-  city      String?
+  city        String?
   communityId String?
-  community   Community? @relation("NoticeSubscriptions", fields: [communityId], references: [id], onDelete: Cascade)
+  community   Community?    @relation("NoticeSubscriptions", fields: [communityId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 

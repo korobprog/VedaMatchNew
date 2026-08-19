@@ -2,13 +2,18 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useLocale, useTranslations } from "next-intl";
 import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { Navbar } from "./Navbar";
 import { BackgroundOrbs } from "./Orb";
 import { NoiseOverlay } from "./NoiseOverlay";
 import { Footer } from "./Footer";
-import type { ServiceContent } from "@/lib/service-content";
+import {
+  serviceName,
+  serviceTagline,
+  type ServiceContent,
+} from "@/lib/service-content";
 import { cn } from "@/lib/utils";
 
 const containerVariants = {
@@ -32,6 +37,9 @@ export function ServiceDetailPage({
   service: ServiceContent;
   otherServices: ServiceContent[];
 }) {
+  const t = useTranslations("Landing.serviceDetail");
+  const locale = useLocale();
+  const name = serviceName(service, locale);
   // Ведём на настоящий маршрут сервиса, а не на /login: вошедший попадает
   // сразу в сервис, гостя proxy отправит на "/?returnTo=…" — оттуда и кнопка
   // «Начать», и OAuth-колбэк вернут его на этот же маршрут.
@@ -51,7 +59,7 @@ export function ServiceDetailPage({
             className="inline-flex items-center gap-1.5 text-sm text-text-2 hover:text-text-0 transition-colors mb-8"
           >
             <ArrowLeft className="w-4 h-4" />
-            Все сервисы
+            {t("allServices")}
           </Link>
 
           <motion.div
@@ -73,7 +81,7 @@ export function ServiceDetailPage({
               className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] px-3 py-1 text-xs font-bold uppercase tracking-wider text-white mb-4"
             >
               <Sparkles className="h-3 w-3" />
-              Флагманский сервис
+              {t("featured")}
             </motion.span>
           )}
 
@@ -83,7 +91,7 @@ export function ServiceDetailPage({
             transition={{ delay: 0.1 }}
             className="font-display text-3xl md:text-5xl font-bold text-text-0 mb-4 leading-tight"
           >
-            {service.name}
+            {name}
           </motion.h1>
 
           <motion.p
@@ -92,7 +100,7 @@ export function ServiceDetailPage({
             transition={{ delay: 0.15 }}
             className="text-lg md:text-xl bg-gradient-to-r from-magenta via-cyan to-gold bg-clip-text text-transparent font-semibold mb-6"
           >
-            {service.tagline}
+            {serviceTagline(service, locale)}
           </motion.p>
 
           <motion.p
@@ -122,7 +130,7 @@ export function ServiceDetailPage({
                 "hover:-translate-y-0.5",
               )}
             >
-              Зарегистрироваться бесплатно
+              {t("register")}
               <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 transition-transform group-hover:translate-x-1" />
             </Link>
             <Link
@@ -136,7 +144,7 @@ export function ServiceDetailPage({
                 "hover:border-cyan/50",
               )}
             >
-              Тариф
+              {t("pricing")}
             </Link>
           </motion.div>
         </div>
@@ -189,7 +197,7 @@ export function ServiceDetailPage({
         <section className="relative py-16 md:py-24">
           <div className="mx-auto max-w-6xl px-4 md:px-6">
             <h2 className="font-display text-2xl md:text-3xl font-bold text-text-0 mb-8 text-center">
-              Ещё сервисы платформы
+              {t("otherServices")}
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
               {otherServices.map((other) => (
@@ -202,7 +210,7 @@ export function ServiceDetailPage({
                     <ServiceIcon slug={other.slug} className="h-6 w-6" />
                   </span>
                   <span className="text-xs font-medium text-text-1 group-hover:text-text-0 transition-colors">
-                    {other.name}
+                    {serviceName(other, locale)}
                   </span>
                 </Link>
               ))}
@@ -223,10 +231,10 @@ export function ServiceDetailPage({
             <div className="absolute inset-0 bg-gradient-to-br from-magenta/10 via-cyan/5 to-gold/10" />
             <div className="relative z-10">
               <h2 className="font-display text-2xl md:text-4xl font-bold text-text-0 mb-4">
-                Готовы попробовать «{service.name}»?
+                {t("readyTitle", { name })}
               </h2>
               <p className="text-text-1 text-base md:text-lg mb-8 max-w-xl mx-auto">
-                Первый месяц бесплатно, доступ ко всем 8 сервисам платформы в одном аккаунте.
+                {t("readyDescription")}
               </p>
               <Link
                 href={ctaHref}
@@ -240,7 +248,7 @@ export function ServiceDetailPage({
                   "hover:-translate-y-1",
                 )}
               >
-                Создать аккаунт
+                {t("createAccount")}
                 <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
               </Link>
             </div>

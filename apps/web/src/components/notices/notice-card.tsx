@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { useLocale } from "next-intl";
 import { BadgeCheck, CalendarDays, MapPin, Monitor } from "lucide-react";
 import type { NoticeDto } from "@vedamatch/shared";
+import { localizedName } from "@/lib/localized-name";
 import {
   NOTICE_KIND_CHIPS,
   NOTICE_STATUS_LABELS,
@@ -17,6 +21,7 @@ const KIND_CHIP_STYLE: Record<string, string> = {
 };
 
 export function NoticeCard({ notice }: { notice: NoticeDto }) {
+  const locale = useLocale();
   const description = noticeDescription(notice);
   const live = notice.status === "published";
 
@@ -31,7 +36,9 @@ export function NoticeCard({ notice }: { notice: NoticeDto }) {
         >
           {NOTICE_KIND_CHIPS[notice.kind]}
         </span>
-        <span className="text-xs text-text-2">{notice.rubric.nameRu}</span>
+        <span className="text-xs text-text-2">
+          {localizedName(notice.rubric, locale)}
+        </span>
         {/* Статус показываем только когда он не «опубликовано»: в общей ленте
             все записи живые, и подпись была бы шумом. */}
         {!live && (

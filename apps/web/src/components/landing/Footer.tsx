@@ -1,8 +1,13 @@
+"use client";
+
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { Iris } from "./Iris";
-import { SERVICE_CONTENT } from "@/lib/service-content";
+import { SERVICE_CONTENT, serviceName } from "@/lib/service-content";
 
 export function Footer() {
+  const t = useTranslations("Landing.footer");
+  const locale = useLocale();
   return (
     <footer className="relative py-12 border-t border-glass-brd">
       <div className="mx-auto max-w-6xl px-4 md:px-6">
@@ -21,25 +26,25 @@ export function Footer() {
                 href={`/services/${service.slug}`}
                 className="hover:text-text-0 transition-colors"
               >
-                {service.name}
+                {serviceName(service, locale)}
               </Link>
             ))}
             <Link href="/support" className="hover:text-text-0 transition-colors">
-              Поддержка
+              {t("support")}
             </Link>
             <Link href="/updates" className="hover:text-text-0 transition-colors">
-              Что нового
+              {t("whatsNew")}
             </Link>
             <Link href="/legal/privacy" className="hover:text-text-0 transition-colors">
-              Политика конфиденциальности
+              {t("privacy")}
             </Link>
             <Link href="/legal/terms" className="hover:text-text-0 transition-colors">
-              Пользовательское соглашение
+              {t("terms")}
             </Link>
           </nav>
 
           {/* Copyright */}
-          <p className="text-text-2 text-sm">© 2026 VedaMatch. Все права защищены.</p>
+          <p className="text-text-2 text-sm">{t("copyright", { year: 2026 })}</p>
         </div>
       </div>
     </footer>

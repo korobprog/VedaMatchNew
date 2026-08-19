@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useLocale, useTranslations } from "next-intl";
 import { ServiceIcon } from "@/components/icons/service-icons";
-import { SERVICE_CONTENT } from "@/lib/service-content";
+import { SERVICE_CONTENT, serviceName, serviceTagline } from "@/lib/service-content";
 import { cn } from "@/lib/utils";
 
 const containerVariants = {
@@ -21,6 +22,8 @@ const itemVariants = {
 };
 
 export function Services() {
+  const t = useTranslations("Landing.services");
+  const locale = useLocale();
   return (
     <section id="services" className="relative py-20 md:py-32">
       <div className="mx-auto max-w-6xl px-4 md:px-6">
@@ -32,12 +35,9 @@ export function Services() {
           className="text-center mb-16"
         >
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-text-0 mb-4">
-            Один аккаунт — восемь сервисов
+            {t("title")}
           </h2>
-          <p className="text-text-1 text-lg max-w-2xl mx-auto">
-            VedaMatch — это не только знакомства. Это экосистема для жизни в благости:
-            практика, знания, община и осознанные связи в одном месте.
-          </p>
+          <p className="text-text-1 text-lg max-w-2xl mx-auto">{t("subtitle")}</p>
         </motion.div>
 
         <motion.div
@@ -64,16 +64,20 @@ export function Services() {
               >
                 {service.featured && (
                   <span className="absolute -top-3 right-5 rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] px-3 py-1 text-xs font-bold uppercase tracking-wider text-white shadow-[0_0_16px_rgba(255,62,158,0.4)]">
-                    Флагман
+                    {t("featured")}
                   </span>
                 )}
                 <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-glass border-2 border-text-2/35 transition-colors group-hover:border-magenta/50">
                   <ServiceIcon slug={service.slug} className="h-8 w-8" />
                 </span>
-                <h3 className="font-display text-lg font-bold text-text-0 mb-2">{service.name}</h3>
-                <p className="text-text-1 text-sm leading-relaxed flex-1">{service.tagline}</p>
+                <h3 className="font-display text-lg font-bold text-text-0 mb-2">
+                  {serviceName(service, locale)}
+                </h3>
+                <p className="text-text-1 text-sm leading-relaxed flex-1">
+                  {serviceTagline(service, locale)}
+                </p>
                 <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-cyan opacity-0 transition-opacity group-hover:opacity-100">
-                  Узнать больше →
+                  {t("learnMore")}
                 </span>
               </Link>
             </motion.div>

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import type {
   AdminSupportTicketDto,
@@ -53,7 +54,11 @@ async function apiGetPublic<T>(path: string): Promise<T | null> {
   return text ? (JSON.parse(text) as T) : null;
 }
 
-export const getProfile = () => apiGet<UserProfile>("/users/me");
+/**
+ * Профиль текущего пользователя. Обёрнут в React.cache: layout группы (portal)
+ * и сама страница запрашивают его в одном рендере — к API уходит один запрос.
+ */
+export const getProfile = cache(() => apiGet<UserProfile>("/users/me"));
 export const getServices = () => apiGet<ServiceCard[]>("/services");
 export const getSelfIdentificationState = () =>
   apiGet<SelfIdentificationState>("/self-identification/me");

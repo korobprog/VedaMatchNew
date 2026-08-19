@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -9,7 +10,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { VedaMatchMark } from "@/components/icons/vedamatch-mark";
-import { SERVICE_CONTENT } from "@/lib/service-content";
+import { SERVICE_CONTENT, serviceName, serviceTagline } from "@/lib/service-content";
 import { loginHref } from "@/lib/return-to";
 
 interface NavbarProps {
@@ -19,14 +20,16 @@ interface NavbarProps {
 }
 
 const navLinks = [
-  { href: "/#how-it-works", label: "Как это работает" },
-  { href: "/#pricing", label: "Тариф" },
-  { href: "/support", label: "Поддержка" },
-];
+  { href: "/#how-it-works", key: "howItWorks" },
+  { href: "/#pricing", key: "pricing" },
+  { href: "/support", key: "support" },
+] as const;
 
 /** Выпадающее меню «Сервисы» на десктопе: прямые ссылки на все 7 страниц-описаний,
  * а не один якорь-скролл — оглавление сайта должно отражать его реальную структуру. */
 function ServicesMenu() {
+  const t = useTranslations("Landing.nav");
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -46,7 +49,7 @@ function ServicesMenu() {
         className="flex items-center gap-1 text-text-1 hover:text-text-0 transition-colors duration-200 font-medium"
         aria-expanded={open}
       >
-        Сервисы
+        {t("services")}
         <ChevronDown size={16} className={cn("transition-transform", open && "rotate-180")} />
       </button>
       <AnimatePresence>
@@ -69,8 +72,12 @@ function ServicesMenu() {
                   <ServiceIcon slug={service.slug} className="h-5 w-5" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-text-0">{service.name}</span>
-                  <span className="block text-xs text-text-2 truncate">{service.tagline}</span>
+                  <span className="block text-sm font-semibold text-text-0">
+                    {serviceName(service, locale)}
+                  </span>
+                  <span className="block text-xs text-text-2 truncate">
+                    {serviceTagline(service, locale)}
+                  </span>
                 </span>
               </Link>
             ))}
@@ -79,7 +86,7 @@ function ServicesMenu() {
               onClick={() => setOpen(false)}
               className="mt-1 block rounded-xl p-2.5 text-center text-sm font-semibold text-cyan hover:bg-glass transition-colors"
             >
-              Смотреть всё на одной странице
+              {t("allOnOnePage")}
             </Link>
           </motion.div>
         )}
@@ -89,6 +96,10 @@ function ServicesMenu() {
 }
 
 export function Navbar({ className, returnTo }: NavbarProps) {
+  const t = useTranslations("Landing.nav");
+  const tHeader = useTranslations("Header");
+  const tCommon = useTranslations("Common");
+  const locale = useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [servicesExpanded, setServicesExpanded] = useState(false);
@@ -146,7 +157,7 @@ export function Navbar({ className, returnTo }: NavbarProps) {
                 href={link.href}
                 className="text-text-1 hover:text-text-0 transition-colors duration-200 font-medium"
               >
-                {link.label}
+                {t(link.key)}
               </Link>
             ))}
           </div>
@@ -159,7 +170,7 @@ export function Navbar({ className, returnTo }: NavbarProps) {
               href={loginHref(returnTo)}
               className="px-5 py-2.5 rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] text-white font-semibold transition-all duration-200 hover:shadow-[0_0_24px_rgba(255,62,158,0.45)] hover:-translate-y-0.5"
             >
-              Начать
+              {t("start")}
             </Link>
           </div>
 
@@ -167,7 +178,7 @@ export function Navbar({ className, returnTo }: NavbarProps) {
           <button
             onClick={() => setIsOpen(!isOpen)}
             className="lg:hidden p-2 -mr-2 text-text-0 hover:text-magenta transition-colors"
-            aria-label={isOpen ? "Закрыть меню" : "Открыть меню"}
+            aria-label={isOpen ? tHeader("closeMenu") : tHeader("openMenu")}
             aria-expanded={isOpen}
           >
             <motion.div
@@ -209,7 +220,7 @@ export function Navbar({ className, returnTo }: NavbarProps) {
                   <button
                     onClick={() => setIsOpen(false)}
                     className="p-2 -mr-2 text-text-0 hover:text-magenta transition-colors"
-                    aria-label="Закрыть меню"
+                    aria-label={tHeader("closeMenu")}
                   >
                     <X size={24} />
                   </button>
@@ -224,7 +235,7 @@ export function Navbar({ className, returnTo }: NavbarProps) {
                       className="flex w-full items-center justify-between text-2xl font-display font-bold text-text-0 hover:text-magenta transition-colors"
                       aria-expanded={servicesExpanded}
                     >
-                      Сервисы
+                      {t("services")}
                       <ChevronDown
                         size={22}
                         className={cn("transition-transform", servicesExpanded && "rotate-180")}
@@ -248,7 +259,7 @@ export function Navbar({ className, returnTo }: NavbarProps) {
                                 className="flex items-center gap-2.5 rounded-lg py-1.5 text-base font-medium text-text-1 hover:text-text-0 transition-colors"
                               >
                                 <ServiceIcon slug={service.slug} className="h-5 w-5 shrink-0" />
-                                {service.name}
+                                {serviceName(service, locale)}
                               </Link>
                             ))}
                           </div>
@@ -269,7 +280,7 @@ export function Navbar({ className, returnTo }: NavbarProps) {
                         onClick={() => setIsOpen(false)}
                         className="block text-2xl font-display font-bold text-text-0 hover:text-magenta transition-colors"
                       >
-                        {link.label}
+                        {t(link.key)}
                       </Link>
                     </motion.div>
                   ))}
@@ -278,7 +289,7 @@ export function Navbar({ className, returnTo }: NavbarProps) {
                 {/* Language */}
                 <div className="mt-10">
                   <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-2">
-                    Язык
+                    {tCommon("language")}
                   </p>
                   <LocaleToggle variant="full" />
                 </div>
@@ -286,7 +297,7 @@ export function Navbar({ className, returnTo }: NavbarProps) {
                 {/* Theme */}
                 <div className="mt-4">
                   <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-2">
-                    Тема
+                    {tCommon("theme")}
                   </p>
                   <ThemeToggle variant="full" />
                 </div>
@@ -298,7 +309,7 @@ export function Navbar({ className, returnTo }: NavbarProps) {
                     onClick={() => setIsOpen(false)}
                     className="block w-full py-4 px-6 rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] text-white font-semibold text-center text-lg transition-all duration-200 hover:shadow-[0_0_24px_rgba(255,62,158,0.45)]"
                   >
-                    Начать
+                    {t("start")}
                   </Link>
                 </div>
               </div>

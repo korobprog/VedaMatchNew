@@ -18,6 +18,7 @@ import type {
   ProfileLocation,
   UpdateCommunityRequest,
 } from '@vedamatch/shared';
+import { normalizeCityKey } from '../../common/city-key';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toBadgeDto, toCommunityDto, toMapPoint } from './community-dto';
 import {
@@ -440,8 +441,9 @@ export class CommunitiesService {
         { descriptionRu: { contains: q, mode: 'insensitive' } },
         { city: { contains: q, mode: 'insensitive' } },
       ];
-    if (query.city?.trim())
-      where.city = { equals: query.city.trim(), mode: 'insensitive' };
+    // Город — по нормализованному ключу (индекс (status, cityKey)), а не через
+    // `mode: 'insensitive'`: Prisma превращает его в ILIKE и мимо индекса.
+    if (query.city?.trim()) where.cityKey = normalizeCityKey(query.city);
     if (query.country?.trim())
       where.country = { equals: query.country.trim(), mode: 'insensitive' };
     const kinds = (query.kinds ?? '')
@@ -510,7 +512,7 @@ export class CommunitiesService {
     const candidates = await this.prisma.community.findMany({
       where: {
         status: { notIn: ['removed_by_admin', 'archived'] },
-        ...(city ? { city: { equals: city, mode: 'insensitive' } } : {}),
+        ...(city ? { cityKey: normalizeCityKey(city) } : {}),
         ...(exceptId ? { id: { not: exceptId } } : {}),
       },
       select: { name: true, city: true },
@@ -556,6 +558,7 @@ function locationColumns(location: ProfileLocation | null | undefined) {
     return {
       location: Prisma.DbNull,
       city: null,
+      cityKey: null,
       country: null,
       latitude: null,
       longitude: null,
@@ -563,6 +566,7 @@ function locationColumns(location: ProfileLocation | null | undefined) {
   return {
     location: location as unknown as Prisma.InputJsonValue,
     city: location.city.trim(),
+    cityKey: normalizeCityKey(location.city),
     country: location.country?.trim() ?? null,
     latitude: location.lat,
     longitude: location.lon,

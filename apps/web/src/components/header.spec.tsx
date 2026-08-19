@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { UserProfile } from "@vedamatch/shared";
 import { Header, isCurrentRoute } from "./header";
 import { SERVICE_CONTENT } from "@/lib/service-content";
+import ru from "../../messages/ru.json";
 
 let pathname = "/";
 
@@ -54,13 +56,22 @@ describe("isCurrentRoute", () => {
   });
 });
 
+/** Шапка берёт подписи из next-intl — рендерим с настоящими русскими сообщениями. */
+function renderHeader() {
+  return render(
+    <NextIntlClientProvider locale="ru" messages={ru}>
+      <Header user={user} />
+    </NextIntlClientProvider>,
+  );
+}
+
 describe("Header", () => {
   beforeEach(() => {
     pathname = "/notices/my";
   });
 
   it("lists every service from service-content and marks the current one", () => {
-    render(<Header user={user} />);
+    renderHeader();
     const nav = screen.getAllByRole("navigation", { name: "Сервисы" })[0];
     for (const service of SERVICE_CONTENT) {
       expect(
@@ -78,7 +89,7 @@ describe("Header", () => {
   });
 
   it("opens the drawer as a dialog, closes it on Escape and returns focus", async () => {
-    render(<Header user={user} />);
+    renderHeader();
     const burger = screen.getByRole("button", { name: "Открыть меню" });
     expect(burger).toHaveAttribute("aria-expanded", "false");
 

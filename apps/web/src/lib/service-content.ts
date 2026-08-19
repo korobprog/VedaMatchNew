@@ -8,7 +8,10 @@ export interface ServiceContent {
   /** Реальный маршрут приложения, куда ведёт финальный CTA после логина. */
   route: string;
   name: string;
+  /** Английское имя сервиса — для шапки/лендинга при locale=en. */
+  nameEn: string;
   tagline: string;
+  taglineEn: string;
   description: string;
   features: ServiceFeature[];
   /** Один факт, который выгодно отличает сервис — честный, не рекламный. */
@@ -24,7 +27,9 @@ export const SERVICE_CONTENT: ServiceContent[] = [
     slug: "union",
     route: "/union",
     name: "Знакомства",
+    nameEn: "Union",
     tagline: "Совместимость — это не вайб, а расчёт",
+    taglineEn: "Compatibility is a calculation, not a vibe",
     description:
       "Каждая рекомендация — результат числового скоринга по семи критериям, а не случайная лента анкет. Семья, дружба, служение или совместные проекты — вы сами выбираете, что ищете.",
     features: [
@@ -57,7 +62,9 @@ export const SERVICE_CONTENT: ServiceContent[] = [
     slug: "astro",
     route: "/astro",
     name: "Астрология",
+    nameEn: "Astrology",
     tagline: "Ведическая карта рождения — по традиционной методике",
+    taglineEn: "Vedic birth chart by the traditional method",
     description:
       "Настоящий расчёт натальной карты по дате, времени и месту рождения — детерминированный, без «на глаз» и без отдельной ИИ-квоты за каждый разбор.",
     features: [
@@ -89,7 +96,9 @@ export const SERVICE_CONTENT: ServiceContent[] = [
     slug: "vedabase",
     route: "/vedabase",
     name: "Книги",
+    nameEn: "Books",
     tagline: "Бхагавад-гита и ведические тексты — читайте без интернета",
+    taglineEn: "Bhagavad-gita and Vedic texts — read offline",
     description:
       "Библиотека книг с постраничной навигацией, поиском по тексту и офлайн-режимом — комментарии и главы всегда под рукой, даже без связи.",
     features: [
@@ -117,7 +126,9 @@ export const SERVICE_CONTENT: ServiceContent[] = [
     slug: "motivation",
     route: "/motivation",
     name: "Мотивация",
+    nameEn: "Motivation",
     tagline: "Ежедневная мотивация, подобранная под ваш путь",
+    taglineEn: "Daily motivation tailored to your path",
     description:
       "Лента цитат и материалов, которая подстраивается под ваш духовный этап и предпочитаемое соотношение вайшнавского и общего контента.",
     features: [
@@ -147,7 +158,9 @@ export const SERVICE_CONTENT: ServiceContent[] = [
     slug: "contacts",
     route: "/contacts",
     name: "Контакты",
+    nameEn: "Contacts",
     tagline: "Справочник общины: нужный человек рядом",
+    taglineEn: "Community directory: the right person nearby",
     description:
       "Ищите преподавателей, служения, профессии и навыки среди участников рядом с вами — с картой и фильтрами, но без публичного поиска в интернете.",
     features: [
@@ -177,7 +190,9 @@ export const SERVICE_CONTENT: ServiceContent[] = [
     slug: "market",
     route: "/market",
     name: "Рынок",
+    nameEn: "Market",
     tagline: "Объявления комерческие и услуги в благости",
+    taglineEn: "Commercial listings and services in goodness",
     description:
       "Полноценная площадка: витрина с товарами и услугами, корзина, заказы, чат с продавцом и собственный магазин для каждого продавца.",
     features: [
@@ -205,7 +220,9 @@ export const SERVICE_CONTENT: ServiceContent[] = [
     slug: "library",
     route: "/library",
     name: "Образование",
+    nameEn: "Education",
     tagline: "Курируемая подборка знаний со всего интернета",
+    taglineEn: "A curated collection of knowledge from across the web",
     description:
       "Статьи, видео, книги, курсы и каналы, отобранные и разложенные по разделам — чтобы не искать по крупицам в соцсетях и мессенджерах.",
     features: [
@@ -233,7 +250,9 @@ export const SERVICE_CONTENT: ServiceContent[] = [
     slug: "notices",
     route: "/notices",
     name: "Объявления",
+    nameEn: "Notices",
     tagline: "Доска общины, где не продают",
+    taglineEn: "The community board where nothing is for sale",
     description:
       "Отдать вещь даром, найти руки на переезд, доехать вместе до фестиваля, позвать на воскресную программу. Денежных полей здесь нет в самой модели данных: как только появляется цена, объявлению место в Рынке.",
     features: [
@@ -265,4 +284,13 @@ export const SERVICE_CONTENT: ServiceContent[] = [
 
 export function getServiceContent(slug: string): ServiceContent | undefined {
   return SERVICE_CONTENT.find((s) => s.slug === slug);
+}
+
+/** Имя сервиса на языке интерфейса; описания и фичи пока только по-русски. */
+export function serviceName(service: ServiceContent, locale: string): string {
+  return locale === "en" ? service.nameEn : service.name;
+}
+
+export function serviceTagline(service: ServiceContent, locale: string): string {
+  return locale === "en" ? service.taglineEn : service.tagline;
 }

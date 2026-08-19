@@ -18,6 +18,7 @@ import type {
   UpdateMarketListingRequest,
   UpdateMarketListingStatusRequest,
 } from '@vedamatch/shared';
+import { normalizeCityKey } from '../../common/city-key';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isAvailable, isPubliclyVisible } from './market-availability';
 import {
@@ -807,8 +808,10 @@ export class MarketListingsService {
     if (filters.currency) and.push({ currency: filters.currency });
     if (filters.delivery)
       and.push({ deliveryOptions: { has: filters.delivery } });
+    // Город — по нормализованному ключу (индекс (status, cityKey)), а не через
+    // `mode: 'insensitive'`: Prisma превращает его в ILIKE и мимо индекса.
     if (filters.city?.trim()) {
-      and.push({ city: { equals: filters.city.trim(), mode: 'insensitive' } });
+      and.push({ cityKey: normalizeCityKey(filters.city) });
     }
     if (filters.country?.trim()) {
       and.push({
@@ -1012,6 +1015,7 @@ function locationColumns(location: MarketLocationDto | null | undefined) {
     return {
       location: Prisma.DbNull,
       city: null,
+      cityKey: null,
       country: null,
       latitude: null,
       longitude: null,
@@ -1020,6 +1024,7 @@ function locationColumns(location: MarketLocationDto | null | undefined) {
   return {
     location: location as unknown as Prisma.InputJsonValue,
     city: location.city,
+    cityKey: normalizeCityKey(location.city),
     country: location.country ?? null,
     latitude: location.lat,
     longitude: location.lon,
