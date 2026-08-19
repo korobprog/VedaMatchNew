@@ -57,7 +57,7 @@ const member = {
 
 describe('toCommunityDto', () => {
   it('не отдаёт наружу ключи хранилища и служебные поля', () => {
-    const dto = toCommunityDto(community, null) as Record<string, unknown>;
+    const dto = toCommunityDto(community, null) as unknown as Record<string, unknown>;
     // logoKey/coverKey — внутренние ключи S3; verifiedById и счётчик жалоб
     // наружу тоже не нужны.
     for (const leaked of [

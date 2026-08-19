@@ -24,6 +24,10 @@ describe('MotivationService admin list', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
     );
 
     await service.feed('user-1', {});
@@ -71,6 +75,11 @@ describe('MotivationService admin list', () => {
     };
     const service = new MotivationService(
       prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
       {} as never,
       {} as never,
     );
@@ -136,6 +145,11 @@ describe('MotivationService admin list', () => {
       prisma as never,
       {} as never,
       {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
     );
 
     const [candidate]: MotivationAdminCandidateDto[] = (await service.adminList(
@@ -163,6 +177,11 @@ describe('MotivationService admin list', () => {
       {} as never,
       {} as never,
       discovery as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
     );
 
     await expect(service.generateDaily(date)).resolves.toEqual([

@@ -1,7 +1,7 @@
 import { GeoController } from './geo.controller';
 
 describe('GeoController', () => {
-  const fetchMock = jest.fn<typeof fetch>();
+  const fetchMock = jest.fn() as jest.MockedFunction<typeof fetch>;
 
   beforeEach(() => {
     fetchMock.mockReset();
