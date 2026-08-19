@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { AdminNoticeReportsView } from "@/components/notices/admin-notice-reports-view";
 import { getProfile } from "@/lib/api";
@@ -10,7 +11,7 @@ export const metadata = {
 
 export default async function AdminNoticesPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/admin/notices");
   if (user.role !== "admin" && user.role !== "service-admin") redirect("/");
 
   return (

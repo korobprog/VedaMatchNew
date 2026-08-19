@@ -37,7 +37,9 @@ describe('UserGalleryService', () => {
       .spyOn(S3Client.prototype, 'send')
       .mockResolvedValue({} as never);
     signedUrl.mockImplementation((_client, command) =>
-      Promise.resolve(`https://signed.test/${String(command.input.Key)}`),
+      Promise.resolve(
+        `https://signed.test/${String((command as { input: { Key?: string } }).input.Key)}`,
+      ),
     );
     service = createService(prisma);
   });
@@ -220,7 +222,7 @@ describe('UserGalleryService', () => {
 
   it('keeps processing later files and preserves result order', async () => {
     send
-      .mockRejectedValueOnce(new Error('first failed'))
+      .mockRejectedValueOnce(new Error('first failed') as never)
       .mockResolvedValue({} as never);
 
     const result = await service.uploadMany(USER_ID, [
@@ -427,7 +429,7 @@ describe('UserGalleryService', () => {
 
   it('removes the DB row transactionally and does not resurrect it if S3 cleanup fails', async () => {
     prisma.userPhoto.findFirst.mockResolvedValueOnce(photo());
-    send.mockRejectedValueOnce(new Error('S3 unavailable'));
+    send.mockRejectedValueOnce(new Error('S3 unavailable') as never);
 
     await expect(service.remove(USER_ID, 'photo-id')).resolves.toBeUndefined();
 

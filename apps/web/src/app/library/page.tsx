@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import type { Metadata } from "next";
 import { getProfile } from "@/lib/api";
 import {
@@ -15,7 +15,7 @@ import { SectionStrip } from "@/components/library/section-strip";
 import { t } from "@/components/library/i18n";
 
 export const metadata: Metadata = {
-  title: "Образование — VedaMatch",
+  title: "Образование",
   description:
     "Общая база полезных материалов VedaMatch: статьи, видео, книги, курсы и каналы",
 };
@@ -26,7 +26,7 @@ export default async function LibraryPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/library");
 
   const params = await searchParams;
   const [sections, preferences, feed] = await Promise.all([

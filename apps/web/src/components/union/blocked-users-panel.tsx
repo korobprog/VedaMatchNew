@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { UserBlockDto } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -15,7 +16,7 @@ export function BlockedUsersPanel({ blocked }: { blocked: UserBlockDto[] }) {
     setPendingId(userId);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/union/users/${userId}/block`, {
+      const res = await apiFetch(`${API_URL}/union/users/${userId}/block`, {
         method: "DELETE",
         credentials: "include",
       });

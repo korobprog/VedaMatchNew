@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import type { MarketListingStatus } from "@vedamatch/shared";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -30,7 +31,7 @@ export function ListingStatusActions({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/market/listings/${listingId}/status`, {
+      const res = await apiFetch(`${API_URL}/market/listings/${listingId}/status`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -54,7 +55,7 @@ export function ListingStatusActions({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/market/listings/${listingId}`, {
+      const res = await apiFetch(`${API_URL}/market/listings/${listingId}`, {
         method: "DELETE",
         credentials: "include",
       });

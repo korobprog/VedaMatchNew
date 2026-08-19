@@ -21,6 +21,7 @@ import {
   type ProfileSocialLinks,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NoticesService } from './notices.service';
 
 type ResponseRow = NoticeResponse & {
   notice: Pick<Notice, 'id' | 'titleRu' | 'titleEn' | 'authorId'>;
@@ -54,6 +55,7 @@ export class NoticesResponsesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventEmitter2,
+    private readonly notices: NoticesService,
   ) {}
 
   /**
@@ -77,6 +79,10 @@ export class NoticesResponsesService {
       throw new BadRequestException('Это ваше объявление');
     if (notice.status !== 'published' || notice.expiresAt <= new Date())
       throw new BadRequestException('Объявление больше не активно');
+    // Откликнуться можно только на то, что видно в ленте: объявление «для
+    // моей общины/города» или заблокированного автора для чужого — 404, а не
+    // канал связи в обход аудитории.
+    await this.notices.assertVisible(noticeId, userId);
 
     const message = body.message?.trim() || null;
     if (message && message.length > NOTICE_RESPONSE_MESSAGE_MAX_LENGTH)
@@ -95,7 +101,14 @@ export class NoticesResponsesService {
     const row = existing
       ? await this.prisma.noticeResponse.update({
           where: { noticeId_userId: { noticeId, userId } },
-          data: { message, status: 'open', respondedAt: null },
+          // createdAt сдвигаем: повторный отклик после отзыва — новая
+          // попытка и тратит суточный лимит, а не обходит его.
+          data: {
+            message,
+            status: 'open',
+            respondedAt: null,
+            createdAt: new Date(),
+          },
           include: RESPONSE_INCLUDE,
         })
       : await this.prisma.noticeResponse.create({

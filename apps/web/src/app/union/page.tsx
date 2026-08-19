@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { getProfile } from "@/lib/api";
 import { getUnionProfileState } from "@/lib/union-api";
 import { hasCompleteUnionLocation } from "@/lib/union-location";
@@ -9,7 +10,7 @@ import { hasCompleteUnionLocation } from "@/lib/union-location";
  */
 export default async function UnionPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/union");
   if (!hasCompleteUnionLocation(user)) redirect("/union/location");
 
   const state = await getUnionProfileState();

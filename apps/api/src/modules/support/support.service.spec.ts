@@ -18,7 +18,11 @@ function createService() {
     },
   } as unknown as PrismaService;
 
-  return { service: new SupportService(prisma), created, prisma };
+  return {
+    service: new SupportService(prisma, { emit: jest.fn() } as never),
+    created,
+    prisma,
+  };
 }
 
 describe('SupportService.create', () => {

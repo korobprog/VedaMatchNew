@@ -8,6 +8,7 @@ import type {
   MarketReportTargetKind,
 } from "@vedamatch/shared";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -47,7 +48,7 @@ export function ReportButton({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/market/reports`, {
+      const res = await apiFetch(`${API_URL}/market/reports`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

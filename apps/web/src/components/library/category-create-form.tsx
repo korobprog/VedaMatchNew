@@ -10,6 +10,7 @@ import type {
   LibrarySectionDto,
 } from "@vedamatch/shared";
 import { pickLocalized, t } from "./i18n";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -49,7 +50,7 @@ export function CategoryCreateForm({
         setSuggestions([]);
         return;
       }
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_URL}/library/categories/suggest?q=${encodeURIComponent(query)}`,
         { credentials: "include", signal: controller.signal },
       ).catch(() => null);
@@ -66,7 +67,7 @@ export function CategoryCreateForm({
     setError(null);
     setPending(true);
     try {
-      const res = await fetch(`${API_URL}/library/categories`, {
+      const res = await apiFetch(`${API_URL}/library/categories`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

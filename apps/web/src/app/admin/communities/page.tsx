@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { AdminCommunitiesView } from "@/components/communities/admin-communities-view";
 import { getProfile } from "@/lib/api";
@@ -10,7 +11,7 @@ export const metadata = {
 
 export default async function AdminCommunitiesPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/admin/communities");
   if (user.role !== "admin" && user.role !== "service-admin") redirect("/");
 
   return (

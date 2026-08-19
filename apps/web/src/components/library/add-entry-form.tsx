@@ -13,6 +13,7 @@ import type {
 } from "@vedamatch/shared";
 import { CategoryCreateForm } from "./category-create-form";
 import { entryTypeLabel, pickLocalized, t, type LibraryTextKey } from "./i18n";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const MAX_URL_LENGTH = 2000;
@@ -95,7 +96,7 @@ export function AddEntryForm({
   async function changeSection(slug: string) {
     setSectionSlug(slug);
     if (!slug) return;
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_URL}/library/categories/section/${encodeURIComponent(slug)}`,
       { credentials: "include" },
     ).catch(() => null);
@@ -173,7 +174,7 @@ export function AddEntryForm({
 
     setPending(true);
     try {
-      const res = await fetch(`${API_URL}/library/entries`, {
+      const res = await apiFetch(`${API_URL}/library/entries`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

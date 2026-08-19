@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { getAdminBillingMode, getProfile } from "@/lib/api";
 import { BackgroundOrbs } from "@/components/landing/Orb";
@@ -7,7 +8,7 @@ import { AdminBillingModeForm } from "@/components/admin-billing-mode-form";
 
 export default async function AdminSettingsPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/admin/settings");
   if (user.role !== "admin") redirect("/");
 
   const billingMode = await getAdminBillingMode();

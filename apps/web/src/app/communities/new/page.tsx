@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
+import { redirectToLogin } from "@/lib/require-user";
 import { CommunityForm } from "@/components/communities/community-form";
 import { getProfile } from "@/lib/api";
 
@@ -10,7 +10,7 @@ export const metadata = {
 
 export default async function NewCommunityPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/communities/new");
 
   return (
     <div className="relative min-h-screen bg-bg-0">

@@ -48,10 +48,12 @@ import { isVerifiedDevotee } from './union-verification';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserGalleryService } from '../users/user-gallery.service';
 import { UsersService } from '../users/users.service';
+import { UnionBoostService } from './union-boost.service';
 import {
   UnionMatchingService,
   UnionMatchInput,
 } from './union-matching.service';
+import { UnionSwipeService } from './union-swipe.service';
 
 const INTENTION_TYPES: UnionIntentionType[] = [
   'family',
@@ -162,6 +164,8 @@ export class UnionProfileService {
     private readonly moderation: ModerationService,
     private readonly generation: MotivationGenerationService,
     private readonly users: UsersService,
+    private readonly swipes: UnionSwipeService,
+    private readonly boosts: UnionBoostService,
   ) {}
 
   async getState(userId: string): Promise<UnionProfileState> {
@@ -338,8 +342,10 @@ export class UnionProfileService {
 
     const connections = await this.connectionMap(userId);
     const hidden = await this.moderation.hiddenUserIds(userId, 'union');
-    const swiped = await this.swipedUserIds(userId);
-    const boosted = await this.boostedUserIds();
+    // Кого уже отсмотрели и чьи анкеты подняты «Вниманием» — знают
+    // профильные сервисы; дублировать их запросы здесь незачем.
+    const swiped = await this.swipes.swipedUserIds(userId);
+    const boosted = await this.boosts.boostedUserIds();
     const myInput = this.toMatchInput(me, me.user);
     const myFamilyGender = familyGenderContext(me, me.user.gender);
     const normalizedFilters = this.normalizeFilters(filters);
@@ -447,8 +453,13 @@ export class UnionProfileService {
     if (!me) throw new NotFoundException('Сначала заполните профиль Union');
     this.requireLocation(me.user);
 
+    // Тот же фильтр по аккаунту, что и в колоде: заблокированный или
+    // удаляющийся пользователь не должен открываться по прямой ссылке.
     const other = await this.prisma.unionProfile.findUnique({
-      where: { userId: targetUserId },
+      where: {
+        userId: targetUserId,
+        user: { accountStatus: 'active', pendingDeletionAt: null },
+      },
       include: {
         intentions: true,
         user: {
@@ -573,27 +584,6 @@ export class UnionProfileService {
         ? this.toConnectionSummary(connection, currentUserId)
         : null,
     };
-  }
-
-  /**
-   * Кого человек уже отсмотрел в колоде. Откатанные свайпы (`undoneAt`)
-   * не учитываются — такие анкеты сознательно возвращают в выдачу.
-   */
-  private async swipedUserIds(userId: string): Promise<Set<string>> {
-    const rows = await this.prisma.unionSwipe.findMany({
-      where: { fromUserId: userId, undoneAt: null },
-      select: { toUserId: true },
-    });
-    return new Set(rows.map((row) => row.toUserId));
-  }
-
-  /** Чьи анкеты сейчас подняты бустом «Внимание». */
-  private async boostedUserIds(): Promise<Set<string>> {
-    const rows = await this.prisma.unionBoost.findMany({
-      where: { expiresAt: { gt: new Date() } },
-      select: { userId: true },
-    });
-    return new Set(rows.map((row) => row.userId));
   }
 
   private async connectionMap(

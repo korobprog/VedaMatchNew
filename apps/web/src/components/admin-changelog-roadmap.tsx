@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { AdminRoadmapItemDto, RoadmapStatus } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -51,7 +52,7 @@ function RoadmapCard({ item }: { item: AdminRoadmapItemDto }) {
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/admin/changelog/roadmap/${item.id}`, {
+      const res = await apiFetch(`${API_URL}/admin/changelog/roadmap/${item.id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -132,7 +133,7 @@ function RoadmapForm({
       const url = item
         ? `${API_URL}/admin/changelog/roadmap/${item.id}`
         : `${API_URL}/admin/changelog/roadmap`;
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: item ? "PATCH" : "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

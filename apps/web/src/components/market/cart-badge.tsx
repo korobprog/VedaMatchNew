@@ -9,6 +9,7 @@ import {
   setCartCount,
   subscribeCartCount,
 } from "@/lib/market-cart-badge";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -27,7 +28,7 @@ export function CartBadge({ className = "" }: { className?: string }) {
     const refresh = () => {
       // Вкладка в фоне — запрос всё равно отложится браузером, не тратим его.
       if (document.visibilityState === "hidden") return;
-      void fetch(`${API_URL}/market/cart/count`, { credentials: "include" })
+      void apiFetch(`${API_URL}/market/cart/count`, { credentials: "include" })
         .then((res) => (res.ok ? res.json() : null))
         .then((data: { count: number } | null) => {
           if (!cancelled && data) setCartCount(data.count);

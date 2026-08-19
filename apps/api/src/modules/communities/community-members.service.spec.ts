@@ -274,6 +274,9 @@ describe('CommunityMembersService', () => {
     it('принятие меняет обе роли, а не одну', async () => {
       // Полшага здесь оставили бы общину либо с двумя владельцами, либо ни с одним.
       prisma.communityOwnershipTransfer.findUnique.mockResolvedValue(transfer);
+      prisma.communityMember.findUnique.mockResolvedValue(
+        membership({ userId: 'heir' }),
+      );
       prisma.communityMember.update.mockResolvedValue(membership());
       prisma.communityOwnershipTransfer.update.mockResolvedValue({
         ...transfer,

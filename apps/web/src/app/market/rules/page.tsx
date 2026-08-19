@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { redirectToLogin } from "@/lib/require-user";
 import { getTranslations } from "next-intl/server";
 import { getProfile } from "@/lib/api";
 import { Header } from "@/components/header";
@@ -7,12 +7,12 @@ import { MarketNav } from "@/components/market/market-nav";
 import { navLabels } from "../labels";
 
 export const metadata: Metadata = {
-  title: "Правила Рынка — VedaMatch",
+  title: "Правила Рынка",
 };
 
 export default async function MarketRulesPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/market/rules");
 
   const t = await getTranslations("Market");
 

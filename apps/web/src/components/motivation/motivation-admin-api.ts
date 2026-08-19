@@ -1,28 +1,16 @@
+import { apiFetch } from "@/lib/http-client";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
-function send(path: string, method: string, body?: unknown) {
-  return fetch(`${API_URL}${path}`, {
+export async function apiRequest(path: string, method: string, body?: unknown) {
+  // apiFetch сам делает refresh на 401 и повторяет запрос: админ сидит на
+  // одной странице часами, и без этого кнопки начинали отвечать «Требуется
+  // авторизация» до перезагрузки, хотя сессия ещё жива.
+  const response = await apiFetch(`${API_URL}${path}`, {
     method,
-    credentials: "include",
     headers: body === undefined ? undefined : { "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-}
-
-export async function apiRequest(path: string, method: string, body?: unknown) {
-  let response = await send(path, method, body);
-
-  // Токен доступа живёт недолго, а админ сидит на одной странице часами:
-  // SilentRefresh срабатывает только на лендинге, куда proxy выбрасывает
-  // при переходе. Без этого повтора кнопки начинали отвечать «Требуется
-  // авторизация» до перезагрузки страницы, хотя сессия ещё жива.
-  if (response.status === 401) {
-    const refreshed = await fetch(`${API_URL}/auth/refresh`, {
-      method: "POST",
-      credentials: "include",
-    }).catch(() => null);
-    if (refreshed?.ok) response = await send(path, method, body);
-  }
 
   if (!response.ok) throw new Error((await response.text()) || `Ошибка API ${response.status}`);
 

@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Нет подключения — VedaMatch",
+  title: "Нет подключения",
 };
 
 export default function OfflinePage() {

@@ -1,4 +1,5 @@
-﻿import type { ReactNode } from "react";
+import type { ReactNode } from "react";
+import Link from "next/link";
 import type { ServiceCard as ServiceCardType } from "@vedamatch/shared";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { GripVertical, Pin } from "lucide-react";
@@ -100,13 +101,13 @@ export function ServiceCard({
           В разработке
         </button>
       ) : (
-<a
-  href={service.url}
-  onClick={onOpen}
-  className="w-full rounded-xl py-3 text-center text-sm font-medium text-white transition bg-[linear-gradient(to_right,#33CCCC,#5CCCCC)] hover:brightness-110"
->
-  Открыть
-</a>
+        <Link
+          href={service.url}
+          onClick={onOpen}
+          className="w-full rounded-xl bg-magenta py-3 text-center text-sm font-semibold text-white transition hover:shadow-[0_0_20px_var(--vm-glow-magenta)] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-magenta/60"
+        >
+          Открыть
+        </Link>
       )}
     </div>
   );

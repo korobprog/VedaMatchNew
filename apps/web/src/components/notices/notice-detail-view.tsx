@@ -84,13 +84,46 @@ export function NoticeDetailView({ id }: { id: string }) {
       </p>
     );
 
-  if (notFound || !notice)
+  if (notFound)
     return (
       <div className="glass rounded-2xl border border-glass-brd p-6 text-sm text-text-1">
         <p>Объявление не найдено — возможно, его сняли или срок вышел.</p>
         <Link href="/notices" className="mt-2 inline-block text-text-0 underline">
           Вернуться на доску
         </Link>
+      </div>
+    );
+
+  // Не 404 (сеть, 500, истёкшая сессия) — это ошибка, а не «сняли»: иначе
+  // человек уходит с доски, хотя объявление живо и стоит просто повторить.
+  if (!notice)
+    return (
+      <div className="glass rounded-2xl border border-glass-brd p-6 text-sm text-text-1">
+        <p role="alert" className="text-red-500">
+          {error ?? "Не удалось загрузить объявление"}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setLoading(true);
+              getNotice(id)
+                .then(setNotice)
+                .catch((e: unknown) => {
+                  if (e instanceof NoticesApiError && e.status === 404) setNotFound(true);
+                  else setError(e instanceof NoticesApiError ? e.message : "Ошибка");
+                })
+                .finally(() => setLoading(false));
+            }}
+            className="rounded-xl bg-magenta px-4 py-2 text-sm font-semibold text-white"
+          >
+            Повторить
+          </button>
+          <Link href="/notices" className="inline-block self-center text-text-0 underline">
+            Вернуться на доску
+          </Link>
+        </div>
       </div>
     );
 

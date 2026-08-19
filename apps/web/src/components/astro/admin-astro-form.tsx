@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AstroAdminUsageDto, AstroSettingsDto } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -68,7 +69,7 @@ export function AdminAstroForm({
     setSaved(false);
     setPending(true);
     try {
-      const res = await fetch(`${API_URL}${path}`, {
+      const res = await apiFetch(`${API_URL}${path}`, {
         credentials: "include",
         ...init,
       });

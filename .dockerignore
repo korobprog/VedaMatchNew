@@ -1,5 +1,8 @@
 .git
 .env
+**/.env
+**/.env.*
+!**/.env.example
 node_modules
 **/node_modules
 .turbo
@@ -10,3 +13,4 @@ dist
 **/dist
 coverage
 **/coverage
+backups

@@ -1,4 +1,12 @@
-import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { AuthGuard } from '../auth/auth.guard';
 import type { GeoSearchResult } from '@vedamatch/shared';
 
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org';
@@ -39,7 +47,12 @@ interface PhotonResponse {
   features?: PhotonFeature[];
 }
 
+// Прокси к внешнему геокодеру, который сам ограничен 1 запросом/с: гостям
+// он не нужен (все формы с ним — за авторизацией), а отдельный лимит не даёт
+// одному IP занять общую очередь.
 @Controller('geo')
+@UseGuards(AuthGuard)
+@Throttle({ default: { ttl: 60_000, limit: 20 } })
 export class GeoController {
   @Get('search')
   async search(
@@ -107,12 +120,31 @@ function sleep(ms: number): Promise<void> {
 // forcing the weaker Photon fallback. Serialize all outgoing Nominatim calls
 // through one queue so the whole process honors the limit, not just one call.
 let nominatimQueueTail: Promise<void> = Promise.resolve();
+let nominatimQueueLength = 0;
+/**
+ * Потолок очереди: при 1,1 с на вызов 30 ожидающих — это полминуты. Дальше
+ * честнее ответить 503 сразу, чем держать всех в очереди на минуты (и дать
+ * одному клиенту забить её для остальных).
+ */
+export const NOMINATIM_QUEUE_LIMIT = 30;
 function scheduleNominatimCall<T>(fn: () => Promise<T>): Promise<T> {
+  if (nominatimQueueLength >= NOMINATIM_QUEUE_LIMIT) {
+    // 503 как «upstream недоступен»: search() уйдёт в Photon-фоллбек, а
+    // reverse отдаст ошибку сразу вместо минут ожидания.
+    return Promise.reject(new GeocoderRequestError(503));
+  }
+  nominatimQueueLength += 1;
   const result = nominatimQueueTail.then(fn);
   nominatimQueueTail = result.then(
     () => sleep(1100),
     () => sleep(1100),
   );
+  // Счётчик уменьшаем на любом исходе; отдельная цепочка, чтобы reject
+  // самого запроса не стал необработанным.
+  const release = () => {
+    nominatimQueueLength -= 1;
+  };
+  result.then(release, release);
   return result;
 }
 

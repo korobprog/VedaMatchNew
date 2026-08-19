@@ -104,7 +104,7 @@ describe('toNoticeDto: приватность места', () => {
   });
 
   it('сырой JSON локации наружу не уезжает', () => {
-    const dto = toNoticeDto(row, null, now) as Record<string, unknown>;
+    const dto = toNoticeDto(row, null, now) as unknown as Record<string, unknown>;
     for (const leaked of [
       'location',
       'latitude',

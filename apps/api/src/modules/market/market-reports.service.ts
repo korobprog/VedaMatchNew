@@ -14,6 +14,11 @@ import type {
   ResolveMarketReportRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  MARKET_REPORT_STATUSES,
+  assertOneOf,
+  parseOptionalEnum,
+} from './market-enums';
 import { crossesHideThreshold, reportTargetKey } from './report-threshold';
 
 const MAX_NOTE_LENGTH = 1000;
@@ -31,10 +36,7 @@ export class MarketReportsService {
    * Порог автоскрытия проверяем внутри той же транзакции, что и инкремент
    * счётчика: иначе две одновременные жалобы могут обе «не заметить» порог.
    */
-  async create(
-    userId: string,
-    body: CreateMarketReportRequest,
-  ): Promise<void> {
+  async create(userId: string, body: CreateMarketReportRequest): Promise<void> {
     const note = body.note?.trim() || null;
     if (note && note.length > MAX_NOTE_LENGTH) {
       throw new BadRequestException('note_too_long');
@@ -122,7 +124,9 @@ export class MarketReportsService {
     if (!viewerIsAdmin) throw new ForbiddenException('not_admin');
 
     const where: Prisma.MarketReportWhereInput = {
-      status: (status as 'open' | 'reviewed' | 'dismissed') ?? 'open',
+      status:
+        parseOptionalEnum(MARKET_REPORT_STATUSES, status, 'invalid_status') ??
+        'open',
     };
 
     const [rows, total] = await Promise.all([
@@ -133,11 +137,27 @@ export class MarketReportsService {
         include: {
           reporter: { select: { id: true, name: true } },
           listing: {
-            select: { titleRu: true, titleEn: true, status: true, openReportsCount: true },
+            select: {
+              titleRu: true,
+              titleEn: true,
+              status: true,
+              openReportsCount: true,
+            },
           },
-          shop: { select: { name: true, status: true, openReportsCount: true } },
-          comment: { select: { body: true, status: true, openReportsCount: true } },
-          review: { select: { body: true, rating: true, status: true, openReportsCount: true } },
+          shop: {
+            select: { name: true, status: true, openReportsCount: true },
+          },
+          comment: {
+            select: { body: true, status: true, openReportsCount: true },
+          },
+          review: {
+            select: {
+              body: true,
+              rating: true,
+              status: true,
+              openReportsCount: true,
+            },
+          },
         },
       }),
       this.prisma.marketReport.count({ where }),
@@ -158,6 +178,12 @@ export class MarketReportsService {
     body: ResolveMarketReportRequest,
   ): Promise<void> {
     if (!viewerIsAdmin) throw new ForbiddenException('not_admin');
+    // Разбор закрывает жалобу; вернуть её в `open` этим методом нельзя.
+    const resolution = assertOneOf(
+      ['reviewed', 'dismissed'] as const,
+      body.status,
+      'invalid_status',
+    );
 
     const report = await this.prisma.marketReport.findUnique({
       where: { id },
@@ -184,7 +210,7 @@ export class MarketReportsService {
       await tx.marketReport.updateMany({
         where: { targetKey: report.targetKey, status: 'open' },
         data: {
-          status: body.status,
+          status: resolution,
           reviewedById: adminId,
           reviewedAt: new Date(),
           moderatorNote: body.moderatorNote?.trim() || null,
@@ -218,33 +244,65 @@ export class MarketReportsService {
           }
           break;
         }
-        case 'shop':
+        // Ниже — то же правило, что и для объявления: «не скрывать» означает
+        // снять только модераторское скрытие. Магазин, закрытый владельцем, и
+        // отзыв/комментарий, удалённый автором (рейтинг по нему уже списан),
+        // разбором жалобы воскресать не должны.
+        case 'shop': {
+          const shop = await tx.marketShop.findUnique({
+            where: { id: targetId },
+            select: { status: true },
+          });
           await tx.marketShop.update({
             where: { id: targetId },
             data: {
               openReportsCount: 0,
-              status: hide ? 'blocked_by_admin' : 'active',
+              ...(hide
+                ? { status: 'blocked_by_admin' as const }
+                : shop?.status === 'hidden_by_reports' ||
+                    shop?.status === 'blocked_by_admin'
+                  ? { status: 'active' as const }
+                  : {}),
             },
           });
           break;
-        case 'comment':
+        }
+        case 'comment': {
+          const comment = await tx.marketListingComment.findUnique({
+            where: { id: targetId },
+            select: { status: true },
+          });
           await tx.marketListingComment.update({
             where: { id: targetId },
             data: {
               openReportsCount: 0,
-              status: hide ? 'removed_by_admin' : 'published',
+              ...(hide
+                ? { status: 'removed_by_admin' as const }
+                : comment?.status === 'removed_by_admin'
+                  ? { status: 'published' as const }
+                  : {}),
             },
           });
           break;
-        case 'review':
+        }
+        case 'review': {
+          const review = await tx.marketReview.findUnique({
+            where: { id: targetId },
+            select: { status: true },
+          });
           await tx.marketReview.update({
             where: { id: targetId },
             data: {
               openReportsCount: 0,
-              status: hide ? 'removed_by_admin' : 'published',
+              ...(hide
+                ? { status: 'removed_by_admin' as const }
+                : review?.status === 'removed_by_admin'
+                  ? { status: 'published' as const }
+                  : {}),
             },
           });
           break;
+        }
       }
     });
   }
@@ -257,7 +315,10 @@ export class MarketReportsService {
       case 'listing': {
         const listing = await this.prisma.marketListing.findUnique({
           where: { id },
-          select: { openReportsCount: true, shop: { select: { ownerId: true } } },
+          select: {
+            openReportsCount: true,
+            shop: { select: { ownerId: true } },
+          },
         });
         if (!listing) throw new NotFoundException('listing_not_found');
         return {
@@ -271,7 +332,10 @@ export class MarketReportsService {
           select: { openReportsCount: true, ownerId: true },
         });
         if (!shop) throw new NotFoundException('shop_not_found');
-        return { ownerId: shop.ownerId, openReportsCount: shop.openReportsCount };
+        return {
+          ownerId: shop.ownerId,
+          openReportsCount: shop.openReportsCount,
+        };
       }
       case 'comment': {
         const comment = await this.prisma.marketListingComment.findUnique({
@@ -364,10 +428,20 @@ function toAdminReportDto(row: {
   status: AdminMarketReportDto['status'];
   createdAt: Date;
   reporter: { id: string; name: string } | null;
-  listing: { titleRu: string | null; titleEn: string | null; status: string; openReportsCount: number } | null;
+  listing: {
+    titleRu: string | null;
+    titleEn: string | null;
+    status: string;
+    openReportsCount: number;
+  } | null;
   shop: { name: string; status: string; openReportsCount: number } | null;
   comment: { body: string; status: string; openReportsCount: number } | null;
-  review: { body: string | null; rating: number; status: string; openReportsCount: number } | null;
+  review: {
+    body: string | null;
+    rating: number;
+    status: string;
+    openReportsCount: number;
+  } | null;
 }): AdminMarketReportDto {
   const targetId =
     row.listingId ?? row.shopId ?? row.commentId ?? row.reviewId ?? '';
@@ -377,11 +451,16 @@ function toAdminReportDto(row: {
     row.listing?.titleEn ??
     row.shop?.name ??
     excerpt(row.comment?.body) ??
-    (row.review ? `${row.review.rating}★ ${excerpt(row.review.body) ?? ''}`.trim() : null) ??
+    (row.review
+      ? `${row.review.rating}★ ${excerpt(row.review.body) ?? ''}`.trim()
+      : null) ??
     targetId;
 
   const status =
-    row.listing?.status ?? row.shop?.status ?? row.comment?.status ?? row.review?.status;
+    row.listing?.status ??
+    row.shop?.status ??
+    row.comment?.status ??
+    row.review?.status;
 
   return {
     id: row.id,

@@ -104,14 +104,23 @@ describe('haversineKm', () => {
 });
 
 describe('radiusIdsSql', () => {
+  const now = new Date('2026-08-19T12:00:00.000Z');
   const sql = (filter: Parameters<typeof radiusIdsSql>[0]) =>
-    radiusIdsSql(filter).sql;
+    radiusIdsSql(filter, now).sql;
 
   it('отсекает рамкой и точной формулой', () => {
     const text = sql({ radiusKm: 100, lat: 55.75, lon: 37.62 });
     expect(text).toContain('BETWEEN');
     expect(text).toContain('asin(least(1, sqrt(');
     expect(text).toContain('LIMIT');
+  });
+
+  it('берёт только живые опубликованные — потолок не выедается протухшими', () => {
+    const query = radiusIdsSql({ radiusKm: 100, lat: 55.75, lon: 37.62 }, now);
+    expect(query.sql).toContain(`"status" = 'published'`);
+    expect(query.sql).toContain('"expiresAt" > ');
+    // Момент «сейчас» уходит параметром, а не берётся внутри SQL.
+    expect(query.values).toContain(now);
   });
 
   it('пропускает записи без координат', () => {

@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { redirectToLogin } from "@/lib/require-user";
 import { getTranslations } from "next-intl/server";
 import { getProfile } from "@/lib/api";
 import { getMarketListings, getMarketSections } from "@/lib/market-api";
@@ -13,7 +13,7 @@ import { SectionStrip } from "@/components/market/section-strip";
 import { filterLabels, navLabels } from "./labels";
 
 export const metadata: Metadata = {
-  title: "Рынок — VedaMatch",
+  title: "Рынок",
   description:
     "Объявления комерческие и услуги в благости: товары, книги, мастерские и помощь",
 };
@@ -24,7 +24,7 @@ export default async function MarketPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/market");
 
   const params = await searchParams;
   const [t, locale, sections, feed] = await Promise.all([

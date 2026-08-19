@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getSafeReturnTo } from "@/lib/return-to";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -12,7 +13,7 @@ type DemoAccount = { email: string; name: string };
  * NEXT_PUBLIC_DEV_AUTH=true, а API дополнительно требует DEV_AUTH_ENABLED=true
  * и непроизводственный NODE_ENV.
  */
-export function DevLoginForm() {
+export function DevLoginForm({ returnTo }: { returnTo?: string }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,10 +41,13 @@ export function DevLoginForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, returnTo }),
       });
       if (!res.ok) throw new Error(await res.text());
-      router.push("/");
+      const data = (await res.json().catch(() => null)) as {
+        returnTo?: string;
+      } | null;
+      router.push(getSafeReturnTo(data?.returnTo ?? returnTo));
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось войти");

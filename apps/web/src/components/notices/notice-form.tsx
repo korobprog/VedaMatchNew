@@ -30,6 +30,7 @@ import {
   NOTICE_RECURRENCE_ORDER,
   RUBRIC_HINTS,
 } from "./notice-labels";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -110,7 +111,7 @@ export function NoticeForm() {
         setLocationResults([]);
         return;
       }
-      fetch(`${API_URL}/geo/search?q=${encodeURIComponent(query)}`, {
+      apiFetch(`${API_URL}/geo/search?q=${encodeURIComponent(query)}`, {
         signal: controller.signal,
       })
         .then(async (res) => {

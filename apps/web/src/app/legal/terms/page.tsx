@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { PLAN } from "@/lib/plan";
 
 export const metadata: Metadata = {
-  title: "Пользовательское соглашение — VedaMatch",
+  title: "Пользовательское соглашение",
   description:
     "Условия использования сервиса VedaMatch: доступ к сервисам, тариф и пробный период, правила поведения и ответственность сторон.",
 };

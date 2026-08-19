@@ -10,6 +10,7 @@ import type { AccessTokenPayload } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { assertAccountActive } from '../users/account-status';
 import { JwtSignService } from './jwt.service';
+import { toRole } from './role';
 
 export interface AuthenticatedRequest extends Request {
   user: AccessTokenPayload;
@@ -39,15 +40,23 @@ export class AuthGuard implements CanActivate {
     } catch {
       throw new UnauthorizedException('Токен недействителен или истёк');
     }
-    await this.ensureAccountActive(req.user.sub);
+    // Пользователь и так читается из базы на каждый запрос — роль берём
+    // оттуда, а не из токена: разжалованный админ иначе сохранял бы права
+    // до истечения access-токена, а повышенный не получал бы их до refresh.
+    req.user = {
+      ...req.user,
+      role: await this.ensureAccountActive(req.user.sub),
+    };
     this.touchLastSeen(req.user.sub);
     return true;
   }
 
-  private async ensureAccountActive(userId: string): Promise<void> {
+  private async ensureAccountActive(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new UnauthorizedException('Токен недействителен или истёк');
+    if (!user)
+      throw new UnauthorizedException('Токен недействителен или истёк');
     await assertAccountActive(this.prisma, user);
+    return toRole(user.role);
   }
 
   /** Обновление активности не должно задерживать или ронять сам запрос. */

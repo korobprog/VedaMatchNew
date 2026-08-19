@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { LibraryLocale, LibrarySectionDto } from "@vedamatch/shared";
 import { Pencil } from "lucide-react";
 import { t } from "./i18n";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -51,7 +52,7 @@ export function SectionEditForm({
     }
     setPending(true);
     try {
-      const res = await fetch(`${API_URL}/library/sections/${section.id}`, {
+      const res = await apiFetch(`${API_URL}/library/sections/${section.id}`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

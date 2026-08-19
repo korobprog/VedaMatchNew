@@ -5,6 +5,7 @@ import { Check, ShoppingBasket } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { bumpCartCount } from "@/lib/market-cart-badge";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -27,7 +28,7 @@ export function AddToCartButton({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/market/cart/items`, {
+      const res = await apiFetch(`${API_URL}/market/cart/items`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

@@ -24,6 +24,7 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toSubscriptionState } from '../billing/subscription';
+import { readBillingMode } from '../billing/billing-mode';
 
 const CATEGORIES: SupportTicketCategory[] = [
   'billing',
@@ -284,6 +285,7 @@ export class SupportService {
       },
     });
     if (!ticket) throw new NotFoundException('Обращение не найдено');
+    const billingMode = await readBillingMode(this.prisma);
 
     return {
       ...toTicketDto(ticket),
@@ -294,7 +296,11 @@ export class SupportService {
             id: ticket.user.id,
             name: ticket.user.name,
             email: ticket.user.email,
-            subscription: toSubscriptionState(ticket.user),
+            subscription: toSubscriptionState(
+              ticket.user,
+              new Date(),
+              billingMode,
+            ),
           }
         : null,
       assignedTo: ticket.assignedTo,

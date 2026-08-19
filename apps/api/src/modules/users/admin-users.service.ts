@@ -38,6 +38,7 @@ import {
 import { calculateAge, toBirthDateInput } from './age';
 import { toPhotoVerificationState } from './photo-verification';
 import { toSubscriptionState } from '../billing/subscription';
+import { readBillingMode } from '../billing/billing-mode';
 import { deletionEligibleAt } from './account-status';
 import { isPurgeConfirmed, mergePurgeContributions } from './user-purge';
 import { UsersService } from './users.service';
@@ -187,10 +188,10 @@ export class AdminUsersService {
 
     if (!user) throw new NotFoundException('Пользователь не найден');
 
-    const availableServices = await this.getAvailableServicesFor(
-      user.id,
-      toRole(user.role),
-    );
+    const [availableServices, billingMode] = await Promise.all([
+      this.getAvailableServicesFor(user.id, toRole(user.role)),
+      readBillingMode(this.prisma),
+    ]);
 
     return {
       profile: {
@@ -215,7 +216,7 @@ export class AdminUsersService {
         devoteeVerificationStatus: user.devoteeVerificationStatus,
         lastSelfIdentificationAt:
           user.lastSelfIdentificationAt?.toISOString() ?? null,
-        subscription: toSubscriptionState(user),
+        subscription: toSubscriptionState(user, new Date(), billingMode),
         createdAt: user.createdAt.toISOString(),
         updatedAt: user.updatedAt.toISOString(),
         accountStatus: user.accountStatus,
@@ -381,6 +382,11 @@ export class AdminUsersService {
         }),
       ]);
     } else {
+      // Разблокировать можно только заблокированного: удалённый аккаунт
+      // иначе становился бы «активным» с заполненным deletedAt.
+      if (user.accountStatus !== 'blocked') {
+        throw new BadRequestException('Аккаунт не заблокирован');
+      }
       await this.prisma.user.update({
         where: { id: userId },
         data: {
@@ -569,6 +575,11 @@ export class AdminUsersService {
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('Пользователь не найден');
+    // Восстановление — только из удалённого/ожидающего удаления состояния;
+    // блокировку снимает setBlocked, у него своя семантика и журнал.
+    if (user.accountStatus !== 'deleted' && user.pendingDeletionAt === null) {
+      throw new BadRequestException('Аккаунт не удалён');
+    }
 
     await this.prisma.user.update({
       where: { id: userId },

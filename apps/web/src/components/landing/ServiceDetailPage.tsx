@@ -32,17 +32,16 @@ export function ServiceDetailPage({
   service: ServiceContent;
   otherServices: ServiceContent[];
 }) {
-  // Ведём на настоящий маршрут сервиса, а не на /login — так же, как остальное
-  // приложение уже обрабатывает неавторизованный доступ (редирект на "/?returnTo=…"
-  // с автоматическим silent-refresh). "/login?returnTo=" в этом приложении никто не
-  // читает: сама страница логина и OAuth-колбэк параметр returnTo не используют.
+  // Ведём на настоящий маршрут сервиса, а не на /login: вошедший попадает
+  // сразу в сервис, гостя proxy отправит на "/?returnTo=…" — оттуда и кнопка
+  // «Начать», и OAuth-колбэк вернут его на этот же маршрут.
   const ctaHref = service.route;
 
   return (
     <div className="relative min-h-screen bg-bg-0">
       <BackgroundOrbs />
       <NoiseOverlay />
-      <Navbar />
+      <Navbar returnTo={service.route} />
 
       {/* Hero */}
       <section className="relative pt-28 pb-16 md:pt-36 md:pb-24">

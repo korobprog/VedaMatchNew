@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import { getProfile } from "@/lib/api";
+import { redirectToLogin } from "@/lib/require-user";
 import {
   getLibraryCategories,
   getLibraryPreferences,
@@ -16,7 +16,7 @@ export default async function LibraryAddPage({
   searchParams: Promise<{ section?: string }>;
 }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/library/add");
 
   const { section } = await searchParams;
   const [sections, preferences] = await Promise.all([

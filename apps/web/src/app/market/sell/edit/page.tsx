@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { getTranslations } from "next-intl/server";
 import { getProfile } from "@/lib/api";
 import { getMarketShopShelves, getMyMarketShop } from "@/lib/market-api";
@@ -11,7 +12,7 @@ import { navLabels } from "../../labels";
 
 export default async function MarketEditShopPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/market/sell/edit");
 
   const [t, shop] = await Promise.all([
     getTranslations("Market"),

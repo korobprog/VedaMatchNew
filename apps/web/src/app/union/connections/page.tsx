@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { ConnectionsPanel } from "@/components/union/connections-panel";
 import { UnionNav } from "@/components/union/union-nav";
@@ -18,7 +19,7 @@ const connectionsLoadError =
 
 export default async function UnionConnectionsPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/union/connections");
   if (!hasCompleteUnionLocation(user)) redirect("/union/location");
 
   const [requests, counts, chats] = await Promise.all([

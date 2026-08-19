@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { MotivationFeedResponse, MotivationPostDto } from "@vedamatch/shared";
 import { MotivationPostCard } from "./motivation-post-card";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -19,7 +20,7 @@ export function MotivationFeed({ initial, favorites = false }: { initial: Motiva
     try {
       const query = new URLSearchParams({ cursor });
       if (favorites) query.set("filter", "favorites");
-      const response = await fetch(`${API_URL}/motivation/feed?${query}`, { credentials: "include" });
+      const response = await apiFetch(`${API_URL}/motivation/feed?${query}`, { credentials: "include" });
       if (!response.ok) throw new Error(await response.text());
       const page = (await response.json()) as MotivationFeedResponse;
       setItems((current) => mergePosts(current, page.items));

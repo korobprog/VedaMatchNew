@@ -8,6 +8,7 @@ import type {
   UserReportReason,
   UserReportStatus,
 } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -58,7 +59,7 @@ function ReportCard({ report }: { report: AdminUserReportDto }) {
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/admin/reports/${report.id}`, {
+      const res = await apiFetch(`${API_URL}/admin/reports/${report.id}`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

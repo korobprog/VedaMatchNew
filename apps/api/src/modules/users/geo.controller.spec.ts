@@ -1,7 +1,12 @@
+// AuthGuard тянет jose (ESM-only) — здесь гвард не нужен, мокаем модуль.
+jest.mock('../auth/auth.guard', () => ({
+  AuthGuard: class {},
+}));
+
 import { GeoController } from './geo.controller';
 
 describe('GeoController', () => {
-  const fetchMock = jest.fn<typeof fetch>();
+  const fetchMock = jest.fn() as jest.MockedFunction<typeof fetch>;
 
   beforeEach(() => {
     fetchMock.mockReset();

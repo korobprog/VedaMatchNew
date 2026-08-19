@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { GeoSearchResult, UserProfile } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -38,7 +39,7 @@ export function UnionLocationOnboarding() {
           q: city,
           country: selectedCountry,
         });
-        const response = await fetch(`${API_URL}/geo/search?${params}`, {
+        const response = await apiFetch(`${API_URL}/geo/search?${params}`, {
           signal: controller.signal,
         });
         if (!response.ok) throw new Error(await response.text());
@@ -73,7 +74,7 @@ export function UnionLocationOnboarding() {
     setSavePending(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/profile`, {
+      const response = await apiFetch(`${API_URL}/profile`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

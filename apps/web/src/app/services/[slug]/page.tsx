@@ -16,10 +16,12 @@ export async function generateMetadata({
   const service = getServiceContent(slug);
   if (!service) return {};
 
+  // Суффикс « — VedaMatch» для вкладки добавит template из корневого layout;
+  // в openGraph шаблон не действует, поэтому там имя полное.
   const title = `${service.name} — VedaMatch`;
   const description = `${service.tagline}. ${service.description}`;
   return {
-    title,
+    title: service.name,
     description,
     openGraph: { title, description },
   };

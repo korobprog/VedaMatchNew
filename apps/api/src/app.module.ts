@@ -23,6 +23,7 @@ import { ContactsModule } from './modules/contacts/contacts.module';
 import { ChangelogModule } from './modules/changelog/changelog.module';
 import { CommunitiesModule } from './modules/communities/communities.module';
 import { NoticesModule } from './modules/notices/notices.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { NoticesModule } from './modules/notices/notices.module';
     // Шина доменных событий: сервисы публикуют факты, не зная о подписчиках.
     EventEmitterModule.forRoot(),
     PrismaModule,
+    HealthModule,
     AuthModule,
     UsersModule,
     CatalogModule,

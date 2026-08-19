@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { AdminChangelogReleases } from "@/components/admin-changelog-releases";
 import { AdminChangelogAnnouncements } from "@/components/admin-changelog-announcements";
@@ -14,7 +15,7 @@ import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 export default async function AdminChangelogPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/admin/changelog");
   if (user.role !== "admin") redirect("/");
 
   const [releases, announcements, roadmap] = await Promise.all([

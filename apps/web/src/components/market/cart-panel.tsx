@@ -16,6 +16,7 @@ import { setCartCount } from "@/lib/market-cart-badge";
 import { listingTitle } from "./listing-card";
 import { formatPriceMinor, priceText } from "./price";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -42,7 +43,7 @@ export function CartPanel({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}${path}`, {
+      const res = await apiFetch(`${API_URL}${path}`, {
         credentials: "include",
         ...init,
       });
@@ -175,7 +176,7 @@ function CartGroup({
     if (sending) return;
     setSending(true);
     try {
-      const res = await fetch(`${API_URL}/market/cart/checkout`, {
+      const res = await apiFetch(`${API_URL}/market/cart/checkout`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -195,7 +196,7 @@ function CartGroup({
         onError(await marketErrorCode(res));
         return;
       }
-      const cart = await fetch(`${API_URL}/market/cart`, {
+      const cart = await apiFetch(`${API_URL}/market/cart`, {
         credentials: "include",
       }).then((r) => r.json() as Promise<MarketCartDto>);
       onCheckedOut(cart);

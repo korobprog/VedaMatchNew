@@ -7,7 +7,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const post = await getPublicMotivationPost(slug);
   if (!post) return { title: "VedaMatch Motivation" };
-  return { title: `${post.title} — VedaMatch Motivation`, description: post.text, openGraph: { title: post.title, description: post.text, images: post.imageUrl ? [post.imageUrl] : [] } };
+  return { title: `${post.title} — Motivation`, description: post.text, openGraph: { title: post.title, description: post.text, images: post.imageUrl ? [post.imageUrl] : [] } };
 }
 
 export default async function PublicMotivationPostPage({ params }: { params: Promise<{ slug: string }> }) {

@@ -29,7 +29,8 @@ import sharp from 'sharp';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RESET_PHOTO_VERIFICATION } from './photo-verification';
 
-const MAX_FILE_BYTES = 20 * 1024 * 1024;
+export const MAX_FILE_BYTES = 20 * 1024 * 1024;
+export const MAX_FILES_PER_UPLOAD = 50;
 const DEFAULT_QUOTA_MB = 250;
 const SIGNED_URL_TTL_SECONDS = 15 * 60;
 const ACCEPTED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);

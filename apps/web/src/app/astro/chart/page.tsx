@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import {
   GRAHA_NAMES,
   NAKSHATRA_NAMES,
@@ -14,13 +15,13 @@ import { ReadingsAccordion } from "@/components/astro/readings-accordion";
 import { TodayCard } from "@/components/astro/today-card";
 
 export const metadata = {
-  title: "Карта рождения — VedaMatch",
+  title: "Карта рождения",
   description: "Ведическая карта рождения: раши, бхавы, накшатры и даши",
 };
 
 export default async function AstroChartPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/astro/chart");
 
   const [chart, readings, today] = await Promise.all([
     getAstroChart(),

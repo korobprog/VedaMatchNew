@@ -50,6 +50,9 @@ export function ThemeToggle({
             role="radio"
             aria-checked={active}
             aria-label={option.label}
+            // title зависит от системной темы, которой сервер не знает —
+            // расхождение атрибута при гидратации ожидаемо и безвредно.
+            suppressHydrationWarning
             title={
               option.value === "system"
                 ? `Как в системе (${resolved === "dark" ? "тёмная" : "светлая"})`

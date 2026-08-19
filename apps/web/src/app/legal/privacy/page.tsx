@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Политика конфиденциальности — VedaMatch",
+  title: "Политика конфиденциальности",
   description:
     "Как VedaMatch обрабатывает данные пользователей: какие сведения собираются, зачем, кому передаются и как их удалить.",
 };

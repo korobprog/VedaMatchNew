@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import type { MarketReviewDto } from "@vedamatch/shared";
 import { StarRating, StarRatingInput } from "./star-rating";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -72,7 +73,7 @@ export function ReviewForm({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/market/reviews/${existing.id}`, {
+      const res = await apiFetch(`${API_URL}/market/reviews/${existing.id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -94,7 +95,7 @@ export function ReviewForm({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/market/reviews`, {
+      const res = await apiFetch(`${API_URL}/market/reviews`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

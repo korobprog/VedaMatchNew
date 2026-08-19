@@ -49,6 +49,7 @@ import {
   UnionRangeEditor,
   UnionTextEditor,
 } from "./union-field-row";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const SAVE_DEBOUNCE_MS = 600;
@@ -201,7 +202,7 @@ export function UnionProfileForm({
     setSaveState("saving");
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/union/profile`, {
+      const res = await apiFetch(`${API_URL}/union/profile`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

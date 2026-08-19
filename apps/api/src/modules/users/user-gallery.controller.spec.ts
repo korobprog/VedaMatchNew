@@ -21,7 +21,7 @@ import { UserGalleryController } from './user-gallery.controller';
 import type { UserGalleryService } from './user-gallery.service';
 
 describe('UserGalleryController', () => {
-  const user = { sub: 'user-id' };
+  const user = { sub: 'user-id', email: 'u@example.com', role: 'user' as const };
   let gallery: {
     getGallery: jest.Mock;
     uploadMany: jest.Mock;
@@ -39,7 +39,7 @@ describe('UserGalleryController', () => {
       reorder: jest.fn(),
       remove: jest.fn(),
     };
-    controller = new UserGalleryController(gallery as UserGalleryService);
+    controller = new UserGalleryController(gallery as unknown as UserGalleryService);
   });
 
   it('declares the guarded profile photos route', () => {
@@ -66,7 +66,9 @@ describe('UserGalleryController', () => {
     ) as unknown[];
 
     expect(interceptors).toHaveLength(1);
-    expect(mockFilesInterceptor).toHaveBeenCalledWith('files', 50);
+    expect(mockFilesInterceptor).toHaveBeenCalledWith('files', 50, {
+      limits: { fileSize: 20 * 1024 * 1024, files: 50 },
+    });
   });
 
   it('delegates gallery retrieval for the authenticated user', async () => {

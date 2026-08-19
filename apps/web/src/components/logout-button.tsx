@@ -7,16 +7,19 @@ import { deleteVedabaseDb } from "@/lib/vedabase/local-db";
 import { activeUserKey, clearOfflineCaches } from "@/lib/pwa/service-worker";
 import { currentSubscription } from "@/lib/pwa/push-subscription";
 import { removeSubscription } from "@/lib/notifications-api";
-import { cn } from "@/lib/utils";
+import { Alert } from "@/components/ui/alert";
+import { Button, type ButtonVariant } from "@/components/ui/button";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export function LogoutButton({
   children = "Выйти",
   className,
+  variant = "secondary",
 }: {
   children?: ReactNode;
   className?: string;
+  variant?: ButtonVariant;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -56,21 +59,18 @@ export function LogoutButton({
 
   return (
     <div>
-      <button
-        type="button"
+      <Button
+        variant={variant}
         onClick={logout}
-        disabled={pending}
-        className={cn(
-          "rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-wait disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800",
-          className,
-        )}
+        loading={pending}
+        className={className}
       >
         {pending ? "Выходим..." : children}
-      </button>
+      </Button>
       {error && (
-        <p role="alert" className="mt-2 text-sm text-red-400">
+        <Alert tone="error" className="mt-2">
           {error}
-        </p>
+        </Alert>
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import type { SupportTicketStatus } from "@vedamatch/shared";
 import { Header } from "@/components/header";
 import { getAdminSupportTickets, getProfile } from "@/lib/api";
@@ -33,7 +34,7 @@ export default async function AdminTicketsPage({
     : "open";
 
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/admin/tickets");
   if (user.role !== "admin") redirect("/");
 
   const tickets = await getAdminSupportTickets(

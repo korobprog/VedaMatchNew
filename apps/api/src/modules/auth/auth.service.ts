@@ -23,6 +23,30 @@ export { toRole } from './role';
 const OIDC_COOKIE = 'oidc_flow';
 const ACCESS_COOKIE = 'access_token';
 const REFRESH_COOKIE = 'refresh_token';
+/**
+ * Не-httpOnly маркер «сессия есть». Refresh-cookie живёт на `path=/auth` и
+ * не видна ни Next-proxy, ни странице; без маркера после истечения access
+ * (15 мин) вошедший на секунду видит лендинг для гостя. Значение не секрет —
+ * по нему только решают, показывать ли splash «Восстанавливаем сессию».
+ */
+const SESSION_MARKER_COOKIE = 'vm_session';
+
+/**
+ * Куда вернуть человека после входа. Принимаем только внутренний путь: одна
+ * ведущая косая (не `//host`), без схемы и управляющих символов — иначе
+ * open-redirect. Всё, что не прошло, превращается в `/`.
+ */
+export function safeReturnTo(value: unknown): string {
+  if (typeof value !== 'string') return '/';
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > 2048) return '/';
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return '/';
+  if (trimmed.startsWith('/\\')) return '/';
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(trimmed)) return '/';
+  if (/^\/[^/?#]*:/.test(trimmed)) return '/';
+  return trimmed;
+}
 
 @Injectable()
 export class AuthService implements OnModuleInit {
@@ -71,14 +95,22 @@ export class AuthService implements OnModuleInit {
     return this.google;
   }
 
-  async startGoogleLogin(res: Response) {
+  async startGoogleLogin(res: Response, returnTo?: string) {
     const google = this.requireGoogle();
     const codeVerifier = oidc.randomPKCECodeVerifier();
     const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
     const state = oidc.randomState();
     const nonce = oidc.randomNonce();
 
-    res.cookie(OIDC_COOKIE, JSON.stringify({ codeVerifier, state, nonce }), {
+    // returnTo едет в той же OIDC-cookie, что и PKCE: state остаётся
+    // случайным, а путь возврата не попадает в URL Google.
+    const oidcPayload = {
+      codeVerifier,
+      state,
+      nonce,
+      returnTo: safeReturnTo(returnTo),
+    };
+    res.cookie(OIDC_COOKIE, JSON.stringify(oidcPayload), {
       httpOnly: true,
       secure: this.isProd,
       sameSite: 'lax',
@@ -104,10 +136,11 @@ export class AuthService implements OnModuleInit {
     if (!raw) {
       throw new BadRequestException('OAuth-сессия не найдена или истекла');
     }
-    const { codeVerifier, state, nonce } = JSON.parse(raw) as {
+    const { codeVerifier, state, nonce, returnTo } = JSON.parse(raw) as {
       codeVerifier: string;
       state: string;
       nonce: string;
+      returnTo?: string;
     };
 
     const currentUrl = new URL(`${this.apiUrl}${req.originalUrl}`);
@@ -121,22 +154,38 @@ export class AuthService implements OnModuleInit {
     if (!claims?.email) {
       throw new UnauthorizedException('Google не вернул email');
     }
+    // Аккаунт линкуется по email: без подтверждённого адреса кто угодно с
+    // Google-аккаунтом на чужой непроверенный email получил бы чужой профиль.
+    if (claims.email_verified !== true) {
+      throw new UnauthorizedException('Google не подтвердил email');
+    }
+    const email = claims.email as string;
+    const avatarUrl = (claims.picture as string) ?? null;
 
-    const user = await this.prisma.user.upsert({
-      where: { email: claims.email as string },
-      // Имя обновляется только при создании аккаунта: человек может исправить
-      // его в профиле, и следующий вход через Google не должен затирать правку.
-      update: {
-        googleId: claims.sub,
-        avatarUrl: (claims.picture as string) ?? null,
-      },
-      create: {
-        email: claims.email as string,
-        googleId: claims.sub,
-        name: (claims.name as string) ?? (claims.email as string),
-        avatarUrl: (claims.picture as string) ?? null,
-      },
+    // Сначала ищем по googleId: если человек сменил адрес в Google, upsert по
+    // email создал бы вторую запись и упал на уникальном googleId (P2002 →
+    // 500). Найденному по googleId обновляем email; иначе — по email.
+    const byGoogleId = await this.prisma.user.findUnique({
+      where: { googleId: claims.sub },
     });
+    const user = byGoogleId
+      ? await this.prisma.user.update({
+          where: { id: byGoogleId.id },
+          data: { email, avatarUrl },
+        })
+      : await this.prisma.user.upsert({
+          where: { email },
+          // Имя обновляется только при создании аккаунта: человек может
+          // исправить его в профиле, и следующий вход через Google не должен
+          // затирать правку.
+          update: { googleId: claims.sub, avatarUrl },
+          create: {
+            email,
+            googleId: claims.sub,
+            name: (claims.name as string) ?? email,
+            avatarUrl,
+          },
+        });
 
     await assertAccountActive(this.prisma, user);
     await this.ensureContactsProfile(user.id);
@@ -152,7 +201,7 @@ export class AuthService implements OnModuleInit {
 
     res.clearCookie(OIDC_COOKIE, { path: '/auth', domain: this.cookieDomain });
     await this.issueTokens(user.id, user.email, toRole(user.role), res);
-    res.redirect(this.webOrigin);
+    res.redirect(`${this.webOrigin}${safeReturnTo(returnTo)}`);
   }
 
   /**
@@ -200,7 +249,7 @@ export class AuthService implements OnModuleInit {
    * аккаунта и внешнего редиректа, что мешает тестировать демо-профили Union.
    */
   async devLogin(
-    body: { email?: string; password?: string },
+    body: { email?: string; password?: string; returnTo?: string },
     req: Request,
     res: Response,
   ) {
@@ -233,6 +282,7 @@ export class AuthService implements OnModuleInit {
     await this.issueTokens(user.id, user.email, toRole(user.role), res);
     return {
       ok: true,
+      returnTo: safeReturnTo(body?.returnTo),
       user: {
         id: user.id,
         email: user.email,
@@ -281,7 +331,7 @@ export class AuthService implements OnModuleInit {
       secure: this.isProd,
       sameSite: 'lax',
       domain: this.cookieDomain,
-      maxAge: 15 * 60 * 1000,
+      maxAge: this.accessTtlMs(),
       path: '/',
     });
     res.cookie(REFRESH_COOKIE, refreshToken, {
@@ -292,9 +342,57 @@ export class AuthService implements OnModuleInit {
       maxAge: ttlDays * 24 * 60 * 60 * 1000,
       path: '/auth',
     });
+    res.cookie(SESSION_MARKER_COOKIE, '1', {
+      httpOnly: false,
+      secure: this.isProd,
+      sameSite: 'lax',
+      domain: this.cookieDomain,
+      maxAge: ttlDays * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+  }
+
+  private clearSessionCookies(res: Response) {
+    res.clearCookie(ACCESS_COOKIE, { path: '/', domain: this.cookieDomain });
+    res.clearCookie(REFRESH_COOKIE, {
+      path: '/auth',
+      domain: this.cookieDomain,
+    });
+    res.clearCookie(SESSION_MARKER_COOKIE, {
+      path: '/',
+      domain: this.cookieDomain,
+    });
+  }
+
+  /**
+   * Время жизни access-cookie равно TTL самого JWT (ACCESS_TOKEN_TTL, формат
+   * jose: 15m / 1h / 30s), иначе при смене конфига cookie и токен разъедутся.
+   */
+  private accessTtlMs(): number {
+    const raw = this.config.get<string>('ACCESS_TOKEN_TTL', '15m');
+    const match = /^(\d+)\s*([smhd])$/.exec(raw.trim());
+    if (!match) return 15 * 60 * 1000;
+    const unit = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[match[2]]!;
+    return Number(match[1]) * unit;
   }
 
   async refresh(req: Request, res: Response) {
+    try {
+      return await this.rotateRefreshToken(req, res);
+    } catch (error) {
+      // Refresh мёртв — снимаем и маркер сессии, иначе web будет крутить
+      // splash «Восстанавливаем сессию» вместо лендинга/формы входа.
+      if (error instanceof UnauthorizedException) {
+        res.clearCookie(SESSION_MARKER_COOKIE, {
+          path: '/',
+          domain: this.cookieDomain,
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async rotateRefreshToken(req: Request, res: Response) {
     const token = (req.cookies as Record<string, string>)[REFRESH_COOKIE];
     if (!token) throw new UnauthorizedException('Нет refresh-токена');
 
@@ -302,16 +400,30 @@ export class AuthService implements OnModuleInit {
       where: { tokenHash: this.hash(token) },
       include: { user: true },
     });
-    if (!stored || stored.revoked || stored.expiresAt < new Date()) {
+    if (!stored || stored.expiresAt < new Date()) {
+      throw new UnauthorizedException('Refresh-токен недействителен');
+    }
+    // Повторное предъявление уже отозванного токена — признак кражи
+    // (легитимный клиент после ротации им больше не пользуется). Отзываем
+    // все токены пользователя: и у вора, и у жертвы придётся войти заново.
+    if (stored.revoked) {
+      await this.prisma.refreshToken.updateMany({
+        where: { userId: stored.userId, revoked: false },
+        data: { revoked: true },
+      });
       throw new UnauthorizedException('Refresh-токен недействителен');
     }
     await assertAccountActive(this.prisma, stored.user);
 
-    // Ротация: старый токен отзываем, выдаём новую пару
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
+    // Ротация как CAS: два одновременных refresh с одним cookie не должны
+    // оба выдать пары — выигрывает тот, кто первым перевёл revoked в true.
+    const rotated = await this.prisma.refreshToken.updateMany({
+      where: { id: stored.id, revoked: false },
       data: { revoked: true },
     });
+    if (rotated.count === 0) {
+      throw new UnauthorizedException('Refresh-токен недействителен');
+    }
     await this.issueTokens(
       stored.user.id,
       stored.user.email,
@@ -329,11 +441,7 @@ export class AuthService implements OnModuleInit {
         data: { revoked: true },
       });
     }
-    res.clearCookie(ACCESS_COOKIE, { path: '/', domain: this.cookieDomain });
-    res.clearCookie(REFRESH_COOKIE, {
-      path: '/auth',
-      domain: this.cookieDomain,
-    });
+    this.clearSessionCookies(res);
     return { ok: true };
   }
 
@@ -343,11 +451,7 @@ export class AuthService implements OnModuleInit {
       where: { userId, revoked: false },
       data: { revoked: true },
     });
-    res.clearCookie(ACCESS_COOKIE, { path: '/', domain: this.cookieDomain });
-    res.clearCookie(REFRESH_COOKIE, {
-      path: '/auth',
-      domain: this.cookieDomain,
-    });
+    this.clearSessionCookies(res);
     return { ok: true };
   }
 

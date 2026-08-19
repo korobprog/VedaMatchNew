@@ -15,6 +15,7 @@ import {
   ticketStatusLabels,
   ticketStatuses,
 } from "@/lib/support-labels";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -31,7 +32,7 @@ export function AdminTicketDetail({ ticket }: { ticket: AdminSupportTicketDto })
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/admin/support/tickets/${ticket.id}${path}`, {
+      const res = await apiFetch(`${API_URL}/admin/support/tickets/${ticket.id}${path}`, {
         method,
         credentials: "include",
         headers: { "Content-Type": "application/json" },

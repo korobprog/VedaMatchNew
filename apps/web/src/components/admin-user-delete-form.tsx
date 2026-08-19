@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { UserAccountStatus } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -29,7 +30,7 @@ export function AdminUserDeleteForm({
     setError(null);
     setPending(true);
     try {
-      const res = await fetch(`${API_URL}/admin/users/${userId}/restore`, {
+      const res = await apiFetch(`${API_URL}/admin/users/${userId}/restore`, {
         method: "POST",
         credentials: "include",
       });
@@ -47,7 +48,7 @@ export function AdminUserDeleteForm({
     setError(null);
     setPending(true);
     try {
-      const res = await fetch(`${API_URL}/admin/users/${userId}/delete`, {
+      const res = await apiFetch(`${API_URL}/admin/users/${userId}/delete`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

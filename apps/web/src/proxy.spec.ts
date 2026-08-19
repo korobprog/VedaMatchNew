@@ -88,4 +88,26 @@ describe("proxy", () => {
 
     expect(response.headers.get("location")).toBe("https://vedamatch.ru/");
   });
+
+  it("lets a user with a session marker but no access token through to protected pages", () => {
+    const response = proxy(
+      new NextRequest("https://vedamatch.ru/union?tab=matches", {
+        headers: { cookie: "vm_session=1" },
+      }),
+    );
+
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("still lets the marker holder open the landing and login pages", () => {
+    for (const path of ["/", "/login"]) {
+      const response = proxy(
+        new NextRequest(`https://vedamatch.ru${path}`, {
+          headers: { cookie: "vm_session=1" },
+        }),
+      );
+
+      expect(response.headers.get("location"), path).toBeNull();
+    }
+  });
 });

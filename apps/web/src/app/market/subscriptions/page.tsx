@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { getTranslations } from "next-intl/server";
 import { getProfile } from "@/lib/api";
 import { getMarketSubscriptions } from "@/lib/market-api";
@@ -12,7 +12,7 @@ import { navLabels } from "../labels";
 
 export default async function MarketSubscriptionsPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/market/subscriptions");
 
   const [t, locale, subscriptions] = await Promise.all([
     getTranslations("Market"),

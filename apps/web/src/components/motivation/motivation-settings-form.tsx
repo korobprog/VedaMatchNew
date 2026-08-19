@@ -6,6 +6,7 @@ import type {
   MotivationPreferenceDto,
   MotivationProfileType,
 } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -44,7 +45,7 @@ export function MotivationSettingsForm({
   async function save() {
     setState("saving");
     try {
-      const response = await fetch(`${API_URL}/motivation/preferences`, {
+      const response = await apiFetch(`${API_URL}/motivation/preferences`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

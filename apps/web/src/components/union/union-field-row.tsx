@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect, useId, useState } from "react";
 import type { UnionGenerableField } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -378,7 +379,7 @@ export function UnionGenerateButton({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/union/profile/generate`, {
+      const res = await apiFetch(`${API_URL}/union/profile/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

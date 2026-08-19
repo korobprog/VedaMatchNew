@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import type { MarketOrderStatus } from "@vedamatch/shared";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -34,7 +35,7 @@ export function OrderStatusActions({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/market/orders/${orderId}/status`, {
+      const res = await apiFetch(`${API_URL}/market/orders/${orderId}/status`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

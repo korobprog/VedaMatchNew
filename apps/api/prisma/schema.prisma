@@ -645,6 +645,9 @@ model RefreshToken {
   createdAt DateTime @default(now())
 
   @@index([userId])
+  // Под чистку протухших/отозванных (RefreshTokenCleanupService).
+  @@index([expiresAt])
+  @@index([revoked, createdAt])
 }
 
 model Service {
@@ -2914,6 +2917,8 @@ model Notice {
   @@index([status, expiresAt])
   /// Афиша и календарь.
   @@index([status, startsAt])
+  /// Радиус и рамка карты: подзапрос по координатам среди живых.
+  @@index([status, latitude, longitude])
   @@index([communityId, status, publishedAt(sort: Desc)])
   @@index([authorId, status, createdAt(sort: Desc)])
   /// Дедупликация: одинаковый текст от одного автора среди живых объявлений.

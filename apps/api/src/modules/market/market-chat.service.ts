@@ -114,28 +114,33 @@ export class MarketChatService {
       data: { readAt: new Date() },
     });
 
-    const messages = await this.prisma.marketMessage.findMany({
-      where: { conversationId: id },
-      orderBy: { createdAt: 'asc' },
-      take: MESSAGES_LIMIT,
-      select: {
-        id: true,
-        conversationId: true,
-        body: true,
-        createdAt: true,
-        editedAt: true,
-        readAt: true,
-        fromUserId: true,
-        fromUser: {
-          select: {
-            id: true,
-            name: true,
-            spiritualName: true,
-            avatarUrl: true,
+    // Берём ПОСЛЕДНИЕ сообщения (desc + take), а затем разворачиваем в
+    // хронологию: с `asc, take` в длинном диалоге обрезались бы новые, а не
+    // старые сообщения — открывший чат не видел бы, что ему только что написали.
+    const messages = (
+      await this.prisma.marketMessage.findMany({
+        where: { conversationId: id },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: MESSAGES_LIMIT,
+        select: {
+          id: true,
+          conversationId: true,
+          body: true,
+          createdAt: true,
+          editedAt: true,
+          readAt: true,
+          fromUserId: true,
+          fromUser: {
+            select: {
+              id: true,
+              name: true,
+              spiritualName: true,
+              avatarUrl: true,
+            },
           },
         },
-      },
-    });
+      })
+    ).reverse();
 
     const now = new Date();
     return {
@@ -173,6 +178,12 @@ export class MarketChatService {
       throw new ForbiddenException('seller_blocked');
     }
 
+    // Повод для диалога должен принадлежать этому магазину и этому покупателю:
+    // иначе в чужой переписке можно было бы «прикрепить» произвольный товар
+    // или чужой заказ и по нему выяснять, что заказано и кем.
+    const listingId = await this.resolveListingId(shop.id, body.listingId);
+    const orderId = await this.resolveOrderId(shop.id, userId, body.orderId);
+
     const existing = await this.prisma.marketConversation.findUnique({
       where: { shopId_buyerId: { shopId: shop.id, buyerId: userId } },
       select: CHAT_SELECT,
@@ -185,8 +196,8 @@ export class MarketChatService {
       data: {
         shopId: shop.id,
         buyerId: userId,
-        listingId: body.listingId ?? null,
-        orderId: body.orderId ?? null,
+        listingId,
+        orderId,
       },
       select: CHAT_SELECT,
     });
@@ -322,6 +333,44 @@ export class MarketChatService {
         },
       },
     });
+  }
+
+  private async resolveListingId(
+    shopId: string,
+    listingId: string | null | undefined,
+  ): Promise<string | null> {
+    if (!listingId) return null;
+    if (typeof listingId !== 'string') {
+      throw new BadRequestException('invalid_listing_id');
+    }
+    const listing = await this.prisma.marketListing.findUnique({
+      where: { id: listingId },
+      select: { shopId: true },
+    });
+    if (!listing || listing.shopId !== shopId) {
+      throw new NotFoundException('listing_not_found');
+    }
+    return listingId;
+  }
+
+  private async resolveOrderId(
+    shopId: string,
+    userId: string,
+    orderId: string | null | undefined,
+  ): Promise<string | null> {
+    if (!orderId) return null;
+    if (typeof orderId !== 'string') {
+      throw new BadRequestException('invalid_order_id');
+    }
+    const order = await this.prisma.marketOrder.findUnique({
+      where: { id: orderId },
+      select: { shopId: true, buyerId: true },
+    });
+    // Чужой заказ отдаём как «не найден», чтобы не подтверждать его существование.
+    if (!order || order.shopId !== shopId || order.buyerId !== userId) {
+      throw new NotFoundException('order_not_found');
+    }
+    return orderId;
   }
 
   private async assertParticipant(

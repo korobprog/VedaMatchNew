@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Bookmark } from "lucide-react";
 import type { LibraryLocale } from "@vedamatch/shared";
 import { t } from "./i18n";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -34,7 +35,7 @@ export function BookmarkButton({
     setCount((current) => current + (next ? 1 : -1));
     setPending(true);
 
-    const res = await fetch(
+    const res = await apiFetch(
       `${API_URL}/library/entries/${encodeURIComponent(entryId)}/bookmark`,
       { method: next ? "POST" : "DELETE", credentials: "include" },
     ).catch(() => null);

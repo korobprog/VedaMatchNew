@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import type {
@@ -16,6 +16,7 @@ import {
 } from "@/lib/notices-api";
 import { NoticeCard } from "./notice-card";
 import { NOTICE_KIND_CHIPS, NOTICE_KIND_ORDER } from "./notice-labels";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -47,7 +48,7 @@ export function NoticesFeedView({ mine = false }: { mine?: boolean }) {
         setCityResults([]);
         return;
       }
-      fetch(`${API_URL}/geo/search?q=${encodeURIComponent(trimmed)}`, {
+      apiFetch(`${API_URL}/geo/search?q=${encodeURIComponent(trimmed)}`, {
         signal: controller.signal,
       })
         .then(async (res) => {
@@ -114,8 +115,17 @@ export function NoticesFeedView({ mine = false }: { mine?: boolean }) {
     };
   }, [mine, kind, rubric, city, query]);
 
+  // Номер «поколения» ленты: растёт при каждой смене фильтров. Ответ на
+  // «показать ещё», пришедший после смены фильтра, приклеил бы старые
+  // объявления к новой ленте — такие ответы отбрасываем.
+  const feedGeneration = useRef(0);
+  useEffect(() => {
+    feedGeneration.current += 1;
+  }, [mine, kind, rubric, city, query]);
+
   const loadMore = useCallback(async () => {
     if (!nextCursor) return;
+    const generation = feedGeneration.current;
     setLoadingMore(true);
     try {
       const response = await getNoticesFeed({
@@ -126,9 +136,11 @@ export function NoticesFeedView({ mine = false }: { mine?: boolean }) {
         q: query || undefined,
         cursor: nextCursor,
       });
+      if (generation !== feedGeneration.current) return;
       setItems((current) => [...current, ...response.items]);
       setNextCursor(response.nextCursor);
     } catch (e) {
+      if (generation !== feedGeneration.current) return;
       setError(e instanceof NoticesApiError ? e.message : "Не получилось");
     } finally {
       setLoadingMore(false);

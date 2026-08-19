@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { UserReportReason } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -36,7 +37,7 @@ export function ReportBlockMenu({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}${path}`, {
+      const res = await apiFetch(`${API_URL}${path}`, {
         ...init,
         credentials: "include",
         headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },

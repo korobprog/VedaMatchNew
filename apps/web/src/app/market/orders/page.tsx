@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { getTranslations } from "next-intl/server";
 import { getProfile } from "@/lib/api";
 import { getMarketOrders } from "@/lib/market-api";
@@ -16,7 +16,7 @@ export default async function MarketOrdersPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/market/orders");
 
   const params = await searchParams;
   const roleParam = Array.isArray(params.role) ? params.role[0] : params.role;

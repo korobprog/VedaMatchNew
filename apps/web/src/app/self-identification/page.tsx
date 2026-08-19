@@ -1,10 +1,10 @@
-﻿import { redirect } from "next/navigation";
-import {
+﻿import {
   getProfile,
   getSelfIdentificationHistory,
   getSelfIdentificationState,
 } from "@/lib/api";
 import { Header } from "@/components/header";
+import { redirectToLogin } from "@/lib/require-user";
 import { SelfIdentificationForm } from "@/components/self-identification-form";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
@@ -15,7 +15,7 @@ export default async function SelfIdentificationPage() {
     getSelfIdentificationState(),
     getSelfIdentificationHistory(),
   ]);
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/self-identification");
 
   return (
     <div className="relative min-h-screen bg-bg-0">

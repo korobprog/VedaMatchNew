@@ -5,6 +5,7 @@ import type { MarketListingFeedResponse } from "@vedamatch/shared";
 import { buildMarketQuery } from "@/lib/market-query";
 import type { Locale } from "@/lib/locale";
 import { ListingCard, type ListingCardLabels } from "./listing-card";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -38,7 +39,7 @@ export function ListingGrid({
     setPending(true);
     try {
       const path = buildMarketQuery(query, { cursor: feed.nextCursor });
-      const response = await fetch(`${API_URL}${endpoint}${path}`, {
+      const response = await apiFetch(`${API_URL}${endpoint}${path}`, {
         credentials: "include",
       });
       if (!response.ok) return;

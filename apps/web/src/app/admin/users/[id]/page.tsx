@@ -1,5 +1,6 @@
 ﻿import Link from "next/link";
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { AdminUserStageForm } from "@/components/admin-user-stage-form";
 import { AdminUserRoleForm } from "@/components/admin-user-role-form";
@@ -21,7 +22,7 @@ export default async function AdminUserDetailPage({
 }) {
   const { id } = await params;
   const currentUser = await getProfile();
-  if (!currentUser) redirect("/login");
+  if (!currentUser) redirectToLogin(`/admin/users/${id}`);
   if (currentUser.role !== "admin") redirect("/");
 
   const detail = await getAdminUser(id);

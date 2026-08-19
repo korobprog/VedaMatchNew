@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { LibraryLocale } from "@vedamatch/shared";
 import { t } from "./i18n";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -11,7 +12,7 @@ export function LocaleSwitch({ locale }: { locale: LibraryLocale }) {
 
   async function change(next: LibraryLocale) {
     if (next === locale) return;
-    const response = await fetch(`${API_URL}/library/me/preferences`, {
+    const response = await apiFetch(`${API_URL}/library/me/preferences`, {
       method: "PATCH",
       credentials: "include",
       headers: { "Content-Type": "application/json" },

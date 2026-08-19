@@ -9,6 +9,7 @@ import {
   ticketStatusClasses,
   ticketStatusLabels,
 } from "@/lib/support-labels";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -42,7 +43,7 @@ export function SupportThread({
         mode === "my"
           ? `${API_URL}/support/my/tickets/${ticket.id}/messages`
           : `${API_URL}/support/tickets/track/${token}/messages`;
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

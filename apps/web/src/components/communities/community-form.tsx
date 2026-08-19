@@ -15,6 +15,7 @@ import {
   COMMUNITY_KIND_ORDER,
   JOIN_POLICY_LABELS,
 } from "./community-labels";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -49,7 +50,7 @@ export function CommunityForm() {
         setLocationResults([]);
         return;
       }
-      fetch(`${API_URL}/geo/search?q=${encodeURIComponent(query)}`, {
+      apiFetch(`${API_URL}/geo/search?q=${encodeURIComponent(query)}`, {
         signal: controller.signal,
       })
         .then(async (res) => {

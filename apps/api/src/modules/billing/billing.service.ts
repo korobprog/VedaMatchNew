@@ -18,7 +18,10 @@ import {
   VEDAMATCH_PLAN,
 } from './subscription';
 
-const SETTINGS_ID = 'global';
+import {
+  APP_SETTINGS_ID as SETTINGS_ID,
+  readBillingMode,
+} from './billing-mode';
 
 const SUBSCRIPTION_FIELDS = {
   createdAt: true,
@@ -35,12 +38,8 @@ export class BillingService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Текущий режим биллинга; при отсутствии строки настроек — обычная бизнес-логика. */
-  async billingMode(): Promise<BillingMode> {
-    const settings = await this.prisma.appSettings.findUnique({
-      where: { id: SETTINGS_ID },
-      select: { billingMode: true },
-    });
-    return settings?.billingMode ?? 'business';
+  billingMode(): Promise<BillingMode> {
+    return readBillingMode(this.prisma);
   }
 
   async setBillingMode(role: Role, mode: BillingMode): Promise<BillingMode> {

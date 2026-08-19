@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { ContactsNav } from "@/components/contacts/contacts-nav";
 import { ContactsSearchView } from "@/components/contacts/contacts-search-view";
@@ -15,7 +15,7 @@ export const metadata = {
 
 export default async function ContactsSearchPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/contacts");
 
   return (
     <div className="relative min-h-screen bg-bg-0">

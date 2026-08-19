@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { getProfile } from "@/lib/api";
 import { getAdminAstroSettings, getAdminAstroUsage } from "@/lib/astro-api";
@@ -12,7 +13,7 @@ export const metadata = {
 
 export default async function AdminAstroPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/admin/astro");
   if (user.role !== "admin") redirect("/");
 
   const [settings, usage] = await Promise.all([

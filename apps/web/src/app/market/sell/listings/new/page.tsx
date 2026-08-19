@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { getTranslations } from "next-intl/server";
 import type { MarketCategoryDto } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
@@ -16,7 +17,7 @@ import { navLabels } from "../../../labels";
 
 export default async function MarketNewListingPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/market/sell/listings/new");
 
   const [t, locale, shop, sections] = await Promise.all([
     getTranslations("Market"),

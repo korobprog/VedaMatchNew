@@ -1,7 +1,8 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import type { MentorVerificationPublicRequest, MentorVerificationSubmit } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -37,7 +38,7 @@ export function MentorVerificationForm({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/mentor-verifications/${token}`, {
+      const res = await apiFetch(`${API_URL}/mentor-verifications/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),

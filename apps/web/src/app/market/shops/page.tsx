@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { redirectToLogin } from "@/lib/require-user";
 import { getProfile } from "@/lib/api";
 import { getMarketShops } from "@/lib/market-api";
 import { Header } from "@/components/header";
@@ -14,7 +14,7 @@ export default async function MarketShopsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/market/shops");
 
   const params = await searchParams;
   const [t, shops] = await Promise.all([

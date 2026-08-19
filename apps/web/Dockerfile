@@ -23,8 +23,12 @@ ENV NODE_ENV=production
 # the server unreachable from other Docker networks (e.g. the Traefik/dokploy network).
 # Force it to 0.0.0.0 so the server listens on all interfaces.
 ENV HOSTNAME=0.0.0.0
-COPY --from=build /app/apps/web/.next/standalone /app
-COPY --from=build /app/apps/web/.next/static /app/apps/web/.next/static
-COPY --from=build /app/apps/web/public /app/apps/web/public
+# Non-root: всё дерево принадлежит node, чтобы оптимизатор next/image мог писать
+# кэш в apps/web/.next/cache — больше сервер на диск ничего не пишет.
+COPY --from=build --chown=node:node /app/apps/web/.next/standalone /app
+COPY --from=build --chown=node:node /app/apps/web/.next/static /app/apps/web/.next/static
+COPY --from=build --chown=node:node /app/apps/web/public /app/apps/web/public
+USER node
 EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3   CMD wget -qO- http://127.0.0.1:3000/ >/dev/null || exit 1
 CMD ["node", "apps/web/server.js"]

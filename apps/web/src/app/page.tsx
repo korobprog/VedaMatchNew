@@ -23,6 +23,8 @@ import { UnionQuickAccessWidget } from "@/components/union/union-quick-access-wi
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { LandingPage } from "@/components/landing";
+import { SessionRestore } from "@/components/session-restore";
+import { needsSessionRestore } from "@/lib/session-marker";
 import { InstallBanner } from "@/components/pwa/install-banner";
 import { NotificationPermissionPrompt } from "@/components/pwa/notification-permission-prompt";
 import { PushSubscriptionSync } from "@/components/pwa/push-subscription-sync";
@@ -65,7 +67,12 @@ export default async function Home({
     getMyNoticeResponsesServer().catch(() => null),
     getMyCommunitiesServer().catch(() => null),
   ]);
-  if (!user || !services)
+  if (!user || !services) {
+    // Маркер сессии без access-cookie: человек уже входил, refresh скорее всего
+    // жив — не мигаем лендингом, показываем splash с тихим обновлением.
+    if (!user && (await needsSessionRestore())) {
+      return <SessionRestore returnTo={returnTo} />;
+    }
     return (
       <LandingPage
         returnTo={returnTo}
@@ -73,6 +80,7 @@ export default async function Home({
         totalMembers={communityStats?.totalMembers}
       />
     );
+  }
   if (!user.spiritualStage) redirect("/self-identification");
 
   const unionQuickAccess = buildUnionQuickAccessData(

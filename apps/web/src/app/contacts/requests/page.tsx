@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
+import { redirectToLogin } from "@/lib/require-user";
 import { ContactsNav } from "@/components/contacts/contacts-nav";
 import { ContactsRequestsView } from "@/components/contacts/contacts-requests-view";
 import { getProfile } from "@/lib/api";
@@ -13,7 +13,7 @@ export const metadata = {
 
 export default async function ContactsRequestsPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/contacts/requests");
 
   return (
     <div className="relative min-h-screen bg-bg-0">

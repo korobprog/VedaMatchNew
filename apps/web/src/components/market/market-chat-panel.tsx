@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import type { MarketChatState, MarketMessageDto } from "@vedamatch/shared";
 import type { Locale } from "@/lib/locale";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -36,7 +37,7 @@ export function MarketChatPanel({
     let cancelled = false;
     const refresh = () => {
       if (document.visibilityState === "hidden") return;
-      void fetch(`${API_URL}/market/chats/${chatId}`, { credentials: "include" })
+      void apiFetch(`${API_URL}/market/chats/${chatId}`, { credentials: "include" })
         .then((res) => (res.ok ? res.json() : null))
         .then((state: MarketChatState | null) => {
           if (!cancelled && state) setMessages(state.messages);
@@ -60,7 +61,7 @@ export function MarketChatPanel({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/market/chats/${chatId}/messages`, {
+      const res = await apiFetch(`${API_URL}/market/chats/${chatId}/messages`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -85,7 +86,7 @@ export function MarketChatPanel({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_URL}/market/chats/${chatId}/messages/${editing.id}`,
         {
           method: "PATCH",

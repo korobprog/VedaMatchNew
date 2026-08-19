@@ -1,0 +1,24 @@
+# Нормализуем переводы строк: в репозитории всегда LF, независимо от ОС
+# разработчика (Windows-чекауты с core.autocrlf давали смешанные CRLF/LF).
+* text=auto eol=lf
+
+# Windows-скрипты должны оставаться с CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Бинарники — без нормализации и диффов.
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.gif -text
+*.webp -text
+*.ico -text
+*.zip -text
+*.gz -text
+*.woff -text
+*.woff2 -text
+*.ttf -text
+*.otf -text
+*.pdf -text
+*.node -text

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { getProfile } from "@/lib/api";
 import {
   getLibraryCategories,
@@ -24,7 +24,10 @@ export default async function LibraryEntryPage({
   params: Promise<{ id: string }>;
 }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) {
+    const { id } = await params;
+    redirectToLogin(`/library/entry/${id}`);
+  }
 
   const { id } = await params;
   const [entry, preferences] = await Promise.all([

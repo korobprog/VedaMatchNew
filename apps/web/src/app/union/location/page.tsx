@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { UnionLocationOnboarding } from "@/components/union/union-location-onboarding";
 import { getProfile } from "@/lib/api";
@@ -9,7 +10,7 @@ import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 export default async function UnionLocationPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/union/location");
   if (hasCompleteUnionLocation(user)) redirect("/union");
 
   return (

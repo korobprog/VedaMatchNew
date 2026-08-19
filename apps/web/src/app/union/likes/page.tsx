@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { UnionLikesPanel } from "@/components/union/union-likes-panel";
 import { UnionNav } from "@/components/union/union-nav";
@@ -16,7 +17,7 @@ import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 export default async function UnionLikesPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/union/likes");
   if (!hasCompleteUnionLocation(user)) redirect("/union/location");
 
   const [requests, counts, chats] = await Promise.all([

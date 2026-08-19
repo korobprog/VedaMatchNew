@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { CommunitiesSearchView } from "@/components/communities/communities-search-view";
 import { getProfile } from "@/lib/api";
@@ -14,7 +14,7 @@ export const metadata = {
 
 export default async function CommunitiesPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/communities");
 
   return (
     <div className="relative min-h-screen bg-bg-0">

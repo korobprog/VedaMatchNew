@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { MotivationPostDto } from "@vedamatch/shared";
 import { CollapsibleBlock } from "./collapsible-block";
 import { splitQuoteAndExplanation } from "./quote-text";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -20,7 +21,7 @@ export function MotivationPostCard({ post }: { post: MotivationPostDto }) {
     const next = !favorite;
     setFavorite(next);
     try {
-      const response = await fetch(`${API_URL}/motivation/posts/${post.id}/favorite`, {
+      const response = await apiFetch(`${API_URL}/motivation/posts/${post.id}/favorite`, {
         method: next ? "POST" : "DELETE",
         credentials: "include",
       });

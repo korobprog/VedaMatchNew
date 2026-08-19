@@ -19,9 +19,9 @@ import type {
 import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
-  applyRatingDelta,
   isValidRating,
   ratingBreakdown,
+  ratingCounterSteps,
 } from './review-rating';
 
 const MAX_REVIEW_LENGTH = 4000;
@@ -108,16 +108,9 @@ export class MarketReviewsService {
         select: REVIEW_SELECT,
       });
 
-      const shop = await tx.marketShop.findUniqueOrThrow({
-        where: { id: order.shopId },
-        select: { ratingSum: true, reviewsCount: true },
-      });
-      await tx.marketShop.update({
-        where: { id: order.shopId },
-        data: applyRatingDelta(shop, {
-          ratingSum: body.rating,
-          reviewsCount: 1,
-        }),
+      await this.applyShopRatingDelta(tx, order.shopId, {
+        ratingSum: body.rating,
+        reviewsCount: 1,
       });
 
       return review;
@@ -222,18 +215,39 @@ export class MarketReviewsService {
               : 'removed_by_author',
         },
       });
-      const shop = await tx.marketShop.findUniqueOrThrow({
-        where: { id: review.shopId },
-        select: { ratingSum: true, reviewsCount: true },
-      });
-      await tx.marketShop.update({
-        where: { id: review.shopId },
-        data: applyRatingDelta(shop, {
-          ratingSum: -review.rating,
-          reviewsCount: -1,
-        }),
+      await this.applyShopRatingDelta(tx, review.shopId, {
+        ratingSum: -review.rating,
+        reviewsCount: -1,
       });
     });
+  }
+
+  /**
+   * Счётчики рейтинга — атомарными шагами, без чтения текущего значения:
+   * read-modify-write в транзакции без блокировки терял один из двух
+   * одновременных отзывов. Среднее пересчитываем вторым UPDATE от уже
+   * обновлённых колонок: Postgres берёт их из актуальной версии строки под
+   * row-lock, поэтому последний писатель всегда считает от полной суммы.
+   * Формула та же, что в `average()` из review-rating.ts (округление до сотых).
+   */
+  private async applyShopRatingDelta(
+    tx: Prisma.TransactionClient,
+    shopId: string,
+    delta: { ratingSum: number; reviewsCount: number },
+  ): Promise<void> {
+    await tx.marketShop.update({
+      where: { id: shopId },
+      data: ratingCounterSteps(delta),
+    });
+    await tx.$executeRaw`
+      UPDATE "MarketShop"
+      SET "ratingAvg" = CASE
+        WHEN "reviewsCount" > 0
+          THEN ROUND("ratingSum"::numeric / "reviewsCount", 2)::float
+        ELSE 0
+      END
+      WHERE "id" = ${shopId}
+    `;
   }
 
   // ===== Комментарии под объявлением =====

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { ReaderScreen } from "@/components/vedabase/reader-screen";
 import { getProfile } from "@/lib/api";
@@ -8,7 +8,10 @@ type Params = Promise<{ bookSlug: string; chapterSlug: string }>;
 
 export default async function VedabaseReaderPage({ params }: { params: Params }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) {
+    const { bookSlug, chapterSlug } = await params;
+    redirectToLogin(`/vedabase/books/${bookSlug}/${chapterSlug}`);
+  }
 
   const { bookSlug, chapterSlug } = await params;
 

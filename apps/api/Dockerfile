@@ -30,8 +30,21 @@ ENV NODE_ENV=production
 # докадрируют, а это уже не по силам sharp: он не умеет видео.
 RUN apk add --no-cache fontconfig font-noto font-noto-devanagari ffmpeg \
   && fc-cache -f
-COPY --from=build /out /app
-COPY --from=build /app/packages/shared /app/packages/shared
-COPY --from=build /app/apps/api/dist /app/dist
+# Всё принадлежит непривилегированному пользователю node (uid 1000 в базовом
+# образе); приложение на диск не пишет, так что права только на чтение достаточно.
+COPY --from=build --chown=node:node /out /app
+# @vedamatch/shared: pnpm deploy кладёт в /out symlink на workspace-пакет, поэтому
+# сам пакет нужен рядом. Рантайму хватает собранного dist и package.json
+# (main: dist/index.js) — исходники и tsconfig в образ не тащим.
+COPY --from=build --chown=node:node /app/packages/shared/package.json /app/packages/shared/package.json
+COPY --from=build --chown=node:node /app/packages/shared/dist /app/packages/shared/dist
+COPY --from=build --chown=node:node /app/apps/api/dist /app/dist
+COPY --chown=node:node apps/api/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod 0755 /app/docker-entrypoint.sh
+USER node
 EXPOSE 4000
-CMD ["sh", "-c", "npx prisma migrate resolve --rolled-back 20260705090000_extend_profile || true; npx prisma migrate deploy && npx prisma db seed && node dist/main.js"]
+# /health отвечает 503, если Postgres недоступен (HealthModule) — wget тогда
+# завершится ненулевым кодом, и контейнер станет unhealthy.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:4000/health >/dev/null || exit 1
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

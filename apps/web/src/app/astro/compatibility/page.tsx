@@ -1,9 +1,9 @@
-import { redirect } from "next/navigation";
 import { getProfile } from "@/lib/api";
+import { redirectToLogin } from "@/lib/require-user";
 import { CompatibilityView } from "@/components/astro/compatibility-view";
 
 export const metadata = {
-  title: "Совместимость по звёздам — VedaMatch",
+  title: "Совместимость по звёздам",
   description: "Гуна-милан: совместимость натальных карт по традиции джйотиша",
 };
 
@@ -13,7 +13,7 @@ export default async function AstroCompatibilityPage({
   searchParams: Promise<{ with?: string }>;
 }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/astro/compatibility");
 
   const { with: withUserId } = await searchParams;
 

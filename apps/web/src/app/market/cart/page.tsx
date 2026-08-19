@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { redirectToLogin } from "@/lib/require-user";
 import { getProfile } from "@/lib/api";
 import { getMarketCart } from "@/lib/market-api";
 import { getServerLocale } from "@/i18n/get-locale";
@@ -10,7 +10,7 @@ import { navLabels } from "../labels";
 
 export default async function MarketCartPage() {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) redirectToLogin("/market/cart");
 
   const [t, locale, cart] = await Promise.all([
     getTranslations("Market"),

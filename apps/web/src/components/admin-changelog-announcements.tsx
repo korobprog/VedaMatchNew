@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { AdminAnnouncementDto, AnnouncementStatus } from "@vedamatch/shared";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -50,7 +51,7 @@ function AnnouncementCard({ item }: { item: AdminAnnouncementDto }) {
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/admin/changelog/announcements/${item.id}`, {
+      const res = await apiFetch(`${API_URL}/admin/changelog/announcements/${item.id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -123,7 +124,7 @@ function AnnouncementForm({
       const url = item
         ? `${API_URL}/admin/changelog/announcements/${item.id}`
         : `${API_URL}/admin/changelog/announcements`;
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: item ? "PATCH" : "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

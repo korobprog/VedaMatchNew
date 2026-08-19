@@ -33,12 +33,7 @@ import {
   type UpdateNoticeRequest,
   type UpdateNoticeStatusRequest,
 } from '@vedamatch/shared';
-import {
-  AuthGuard,
-  CurrentUser,
-  OptionalAuthGuard,
-  OptionalUser,
-} from '../auth/auth.guard';
+import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { isAdmin } from './is-admin';
 import {
   MAX_UPLOAD_BYTES,
@@ -63,76 +58,76 @@ export class NoticesController {
     return this.notices.rubrics();
   }
 
+  // Доска — внутренняя жизнь общины, а не витрина: гостю не открыта ни
+  // лента, ни карта, ни карточка (см. docs/notices-service-plan.md, «Гостю
+  // лента не открыта»). Публичны только рубрики выше.
+  //
   // Лента живёт под послабленным лимитом чтения: фильтры на доске
   // переключают часто, и час бана за перебор рубрик был бы абсурдом.
   @Get()
-  @UseGuards(OptionalAuthGuard)
+  @UseGuards(AuthGuard)
   @Throttle({ default: { ttl: 60_000, limit: 120 } })
   async feed(
     @Query() query: Record<string, string | undefined>,
-    @OptionalUser() user?: AccessTokenPayload,
+    @CurrentUser() user: AccessTokenPayload,
   ) {
     const filters = parseFeedFilters(query);
     filters.radiusIds = await this.notices.resolveRadius(query);
-    return this.notices.feed(filters, user?.sub, user ? isAdmin(user) : false);
+    return this.notices.feed(filters, user.sub, isAdmin(user));
   }
 
   // Карту двигают чаще, чем переключают фильтры: лимит выше, чем у ленты.
   @Get('map')
-  @UseGuards(OptionalAuthGuard)
+  @UseGuards(AuthGuard)
   @Throttle({ default: { ttl: 60_000, limit: 240 } })
   async map(
     @Query() query: Record<string, string | undefined>,
-    @OptionalUser() user?: AccessTokenPayload,
+    @CurrentUser() user: AccessTokenPayload,
   ) {
     const filters = parseFeedFilters(query);
     filters.radiusIds = await this.notices.resolveRadius(query);
-    return this.notices.map(
-      filters,
-      query,
-      user?.sub,
-      user ? isAdmin(user) : false,
-    );
+    return this.notices.map(filters, query, user.sub, isAdmin(user));
   }
 
   // Календарь: события окна с развёрнутыми повторами.
   @Get('events')
-  @UseGuards(OptionalAuthGuard)
+  @UseGuards(AuthGuard)
   @Throttle({ default: { ttl: 60_000, limit: 120 } })
   events(
     @Query() query: Record<string, string | undefined>,
-    @OptionalUser() user?: AccessTokenPayload,
+    @CurrentUser() user: AccessTokenPayload,
   ) {
     return this.notices.calendar(
       parseFeedFilters(query),
       query,
-      user?.sub,
-      user ? isAdmin(user) : false,
+      user.sub,
+      isAdmin(user),
     );
   }
 
   @Get(':id')
-  @UseGuards(OptionalAuthGuard)
-  byId(@Param('id') id: string, @OptionalUser() user?: AccessTokenPayload) {
-    return this.notices.byId(id, user?.sub, user ? isAdmin(user) : false);
+  @UseGuards(AuthGuard)
+  byId(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.notices.byId(id, user.sub, isAdmin(user));
   }
 
   /**
    * Экспорт события в календарь телефона. Отдаётся файлом: `text/calendar`
-   * с `attachment`, иначе браузер покажет его текстом.
+   * с `attachment`, иначе браузер покажет его текстом. Ссылка открывается
+   * прямым переходом из афиши, cookie при этом уходит — гвард тот же.
    */
   @Get(':id/ics')
-  @UseGuards(OptionalAuthGuard)
+  @UseGuards(AuthGuard)
   @Throttle({ default: { ttl: 3_600_000, limit: 60 } })
   async ics(
     @Param('id') id: string,
     @Res({ passthrough: true }) res: Response,
-    @OptionalUser() user?: AccessTokenPayload,
+    @CurrentUser() user: AccessTokenPayload,
   ) {
     const body = await this.notices.ics(
       id,
-      user?.sub,
-      user ? isAdmin(user) : false,
+      user.sub,
+      isAdmin(user),
       this.config.get<string>('WEB_PUBLIC_URL') ?? 'https://vedamatch.ru',
     );
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');

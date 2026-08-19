@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { redirectToLogin } from "@/lib/require-user";
 import { getTranslations } from "next-intl/server";
 import { getProfile } from "@/lib/api";
 import { getMarketOrder, getMarketOrderReview } from "@/lib/market-api";
@@ -18,7 +19,10 @@ export default async function MarketOrderPage({
   params: Promise<{ id: string }>;
 }) {
   const user = await getProfile();
-  if (!user) redirect("/login");
+  if (!user) {
+    const { id } = await params;
+    redirectToLogin(`/market/orders/${id}`);
+  }
 
   const { id } = await params;
   const [t, locale, order, review] = await Promise.all([

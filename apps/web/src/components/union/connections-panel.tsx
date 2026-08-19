@@ -8,6 +8,7 @@ import type {
   UnionConnectionRequestsState,
 } from "@vedamatch/shared";
 import { VerifiedBadge } from "./verified-badge";
+import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -90,7 +91,7 @@ export function ConnectionsPanel({
     setPendingRequestId(requestId);
     setActionError(null);
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_URL}/union/connection-requests/${requestId}/${action}`,
         { method: "PATCH", credentials: "include" },
       );
