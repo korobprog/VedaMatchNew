@@ -407,7 +407,7 @@ describe("ReelWizard", () => {
             "Провайдер видео отклонил этот кадр: его проверка содержания сочла картинку неподходящей.",
         }),
     });
-    render(<ReelWizard prefill={{ reelId: "reel-1" }} />);
+    render(<ReelWizard prefill={{ reelId: "reel-1" }} donation={null} />);
 
     expect(await screen.findByText(/отклонил этот кадр/)).toBeInTheDocument();
     expect(screen.queryByText(/можно попробовать ещё раз/)).toBeNull();
