@@ -889,11 +889,13 @@ function ReelStatus({
             )}
           </>
         )}
+        {/* Лента — главный выход отсюда: рилс сделан, смотреть его идут туда.
+            Поэтому она крупнее и заметнее остальных ссылок. */}
+        <Link href="/motivation" className="btn-mint rounded-xl px-6 py-3 text-base font-semibold">
+          К ленте
+        </Link>
         <Link href="/motivation/my" className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1">
           Студия
-        </Link>
-        <Link href="/motivation" className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1">
-          К ленте
         </Link>
         <DonateButton donation={donation} />
       </div>
@@ -1144,12 +1146,17 @@ function StageDot({ state, index }: { state: StageState; index: number }) {
       ? "bg-cyan text-white"
       : state === "active"
         ? "bg-magenta text-white motion-safe:animate-pulse"
-        : state === "failed"
-          ? "bg-magenta text-white"
-          : "bg-bg-2 text-text-2";
+        : state === "waiting"
+          // Заливкой не берём: `--vm-gold` тёмный в светлой теме и светлый в
+          // тёмной, и текст на нём тонул бы то в одной, то в другой. Обводка с
+          // прозрачным фоном — тот же приём, что у золотых бейджей админки.
+          ? "border-2 border-gold bg-gold/15 text-gold"
+          : state === "failed"
+            ? "bg-magenta text-white"
+            : "bg-bg-2 text-text-2";
   return (
     <span aria-hidden="true" className={`flex h-7 w-7 flex-none items-center justify-center rounded-full font-mono text-xs font-bold ${className}`}>
-      {state === "done" ? "✓" : state === "failed" ? "!" : index}
+      {state === "done" ? "✓" : state === "failed" ? "!" : state === "waiting" ? "⏳" : index}
     </span>
   );
 }
