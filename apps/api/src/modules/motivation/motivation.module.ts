@@ -16,6 +16,7 @@ import { MotivationStoryRebuildService } from './motivation-story-rebuild.servic
 import { MotivationModerationService } from './motivation-moderation.service';
 import { MotivationAuthorSearchService } from './motivation-author-search.service';
 import { MotivationSourceFetchService } from './motivation-source-fetch.service';
+import { FalImageService } from './fal-image.service';
 import { FalVideoService } from './fal-video.service';
 import { FalAudioService } from './fal-audio.service';
 import { MotivationSettingsService } from './motivation-settings.service';
@@ -48,6 +49,7 @@ import { MotivationAnalyticsService } from './motivation-analytics.service';
     MotivationAnalyticsService,
     MotivationAuthorSearchService,
     MotivationSourceFetchService,
+    FalImageService,
     FalVideoService,
     FalAudioService,
     MotivationSettingsService,

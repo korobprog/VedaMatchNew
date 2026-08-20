@@ -15,7 +15,7 @@ import { QuoteDiscoveryService } from './quote-discovery.service';
 import { composeStoryImage } from './story-image';
 import { MotivationSettingsService } from './motivation-settings.service';
 import { MotivationModerationService } from './motivation-moderation.service';
-import { estimateImageCostUsd } from './image-cost';
+import { estimateImageCostUsd, IMAGE_SIZE } from './image-cost';
 import { classifyAiFailure, isRetryableFailure } from './ai-failure';
 
 /**
@@ -268,7 +268,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
       const baseKey = `motivation/${post.contentDate.toISOString().slice(0, 10)}/${post.id}/v${version}`;
       const imageUrl = await this.generation.uploadStory(
         `${baseKey}.png`,
-        image,
+        image.bytes,
       );
       // Сторис — отдельный файл: тот же фон, докадрированный до 9:16, плюс
       // текст и подпись. Раньше сюда клался тот же imageUrl, и «Скачать для
@@ -278,7 +278,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
       // ошибка — иначе пропавшие в образе шрифты молча вернули бы сторис без
       // текста, ровно ту проблему, ради которой всё и делалось.
       const storyImageUrl =
-        (await this.composeStory(post, image, baseKey)) ?? imageUrl;
+        (await this.composeStory(post, image.bytes, baseKey)) ?? imageUrl;
       // Пользовательский рилс, текст которого одобрил ИИ в автономном режиме,
       // публикуется сразу: человек в этой цепочке — оператор, а не этап.
       // Редакционные посты и режим «подсказывает» по-прежнему ждут админа.
@@ -305,7 +305,11 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
               // Кадр — единственная платная стадия текстового конвейера,
               // и до сих пор её цена никуда не писалась. Считаем по размеру
               // запроса: без этого дневной потолок сторожит только видео.
-              estimatedCostUsd: { increment: estimateImageCostUsd() },
+              // Ставка зависит от того, кто нарисовал: у запасного поставщика
+              // она втрое выше.
+              estimatedCostUsd: {
+                increment: estimateImageCostUsd(IMAGE_SIZE, image.provider),
+              },
             }
           : {
               reviewStatus: MotivationReviewStatus.image_review,
@@ -318,7 +322,11 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
               // Кадр — единственная платная стадия текстового конвейера,
               // и до сих пор её цена никуда не писалась. Считаем по размеру
               // запроса: без этого дневной потолок сторожит только видео.
-              estimatedCostUsd: { increment: estimateImageCostUsd() },
+              // Ставка зависит от того, кто нарисовал: у запасного поставщика
+              // она втрое выше.
+              estimatedCostUsd: {
+                increment: estimateImageCostUsd(IMAGE_SIZE, image.provider),
+              },
             },
       });
       if (autoPublish && updated.count === 1) {

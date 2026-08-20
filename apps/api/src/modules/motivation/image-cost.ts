@@ -24,6 +24,19 @@ const LARGE_SIDE_PX = 1792;
 const RATE_SMALL_USD = 0.01;
 const RATE_LARGE_USD = 0.02;
 
+/** Кто нарисовал кадр: основной релей или запасной fal. */
+export type ImageProvider = 'relay' | 'fal';
+
+/**
+ * Ставка запасного поставщика.
+ *
+ * Seedream V4 у fal — фиксированные $0.03 за изображение, независимо от
+ * разрешения. Ставка привязана к модели из `MOTIVATION_IMAGE_MODEL_FALLBACK`:
+ * меняете модель — правьте и это число, иначе дневной потолок расхода соврёт
+ * в меньшую сторону. Сверять на https://fal.ai/pricing.
+ */
+export const FAL_IMAGE_RATE_USD = 0.03;
+
 /** Большая сторона из строки вида `1024x1536`; для неразобранной — 0. */
 export function largestSidePx(size: string): number {
   const sides = size
@@ -39,7 +52,12 @@ export function largestSidePx(size: string): number {
  * Неразобранный размер считаем по верхней ставке: занизить расход опаснее,
  * чем завысить, — на этой сумме стоит дневной потолок.
  */
-export function estimateImageCostUsd(size: string = IMAGE_SIZE): number {
+export function estimateImageCostUsd(
+  size: string = IMAGE_SIZE,
+  provider: ImageProvider = 'relay',
+): number {
+  // У fal цена не зависит от разрешения, поэтому размер здесь не при чём.
+  if (provider === 'fal') return FAL_IMAGE_RATE_USD;
   const side = largestSidePx(size);
   if (!side) return RATE_LARGE_USD;
   return side <= LARGE_SIDE_PX ? RATE_SMALL_USD : RATE_LARGE_USD;

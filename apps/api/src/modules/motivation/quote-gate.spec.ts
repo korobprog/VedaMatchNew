@@ -1,8 +1,8 @@
 import { MotivationGenerationService } from './motivation-generation.service';
 
 function buildService(reply: unknown | Error) {
-  const service = new MotivationGenerationService({
-    get: jest.fn(),
+  const service = new MotivationGenerationService({ get: jest.fn() } as never, {
+    enabled: false,
   } as never);
   const request = jest.spyOn(
     service as unknown as {
