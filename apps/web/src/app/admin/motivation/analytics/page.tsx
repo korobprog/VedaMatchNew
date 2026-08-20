@@ -78,7 +78,7 @@ export default async function AdminMotivationAnalyticsPage({
               {data.top.map((post) => (
                 <li key={post.id} className="flex items-center gap-3 text-sm">
                   <span className="font-mono text-text-0">{post.likeCount}</span>
-                  <Link href={`/m/${post.slug}`} className="truncate text-text-1 hover:text-text-0">
+                  <Link href={`/motivation?post=${post.slug}`} className="truncate text-text-1 hover:text-text-0">
                     {post.title}
                   </Link>
                   {post.origin === "user" && <span className="text-xs text-cyan">участник</span>}

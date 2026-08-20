@@ -19,6 +19,33 @@ describe('buildNotification', () => {
     });
   });
 
+  it('ведёт автора в ленту, а не на страницу для гостей', () => {
+    // `/m/<slug>` сделана для внешних ссылок и незалогиненных; автор — участник
+    // и ждёт увидеть свой рилс там, где листает остальные.
+    expect(
+      buildNotification({
+        name: 'motivation.reel.published',
+        recipientId: 'u1',
+        reelId: 'reel-1',
+        slug: 'reel-abc',
+      }),
+    ).toMatchObject({
+      url: '/motivation?post=reel-abc',
+      category: 'motivation',
+    });
+  });
+
+  it('после отказа ведёт в мастер: там причина и правка текста', () => {
+    expect(
+      buildNotification({
+        name: 'motivation.reel.rejected',
+        recipientId: 'u1',
+        reelId: 'reel-1',
+        reason: 'Реклама платных курсов',
+      }),
+    ).toMatchObject({ url: '/motivation/create?reel=reel-1' });
+  });
+
   it('схлопывает сообщения одного чата общим тегом', () => {
     const first = buildNotification({
       name: 'union.chat.message-sent',
