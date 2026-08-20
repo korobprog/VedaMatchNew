@@ -15,7 +15,7 @@ export default async function AdminCommunitiesPage() {
   if (user.role !== "admin" && user.role !== "service-admin") redirect("/");
 
   return (
-    <div className="relative min-h-screen bg-bg-0">
+    <div className="relative min-h-dvh bg-bg-0">
       <Header user={user} />
       <main className="mx-auto max-w-4xl px-4 py-8 pb-28">
         <h1 className="mb-1 font-display text-2xl font-bold text-text-0">

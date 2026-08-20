@@ -21,7 +21,7 @@ export default async function AdminTicketPage({
   if (!ticket) notFound();
 
   return (
-    <div className="relative min-h-screen bg-bg-0">
+    <div className="relative min-h-dvh bg-bg-0">
       <BackgroundOrbs />
       <NoiseOverlay />
       <Header user={user} />

@@ -31,7 +31,7 @@ export default async function UpdatesLayout({
   const current = await getCurrentRelease(locale);
 
   return (
-    <div className="relative min-h-screen bg-bg-0">
+    <div className="relative min-h-dvh bg-bg-0">
       <BackgroundOrbs />
       <NoiseOverlay />
       <Navbar />

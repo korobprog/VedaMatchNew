@@ -413,7 +413,7 @@ export function ReaderScreen({
   }));
 
   return (
-    <main data-reader-theme={preferences.theme} className="reader-shell min-h-screen">
+    <main data-reader-theme={preferences.theme} className="reader-shell min-h-dvh">
       <div className="mx-auto space-y-4 px-4 py-6" style={{ maxWidth: lineWidth, fontSize: preferences.fontSize }}>
         <ReaderToolbar
           preferences={preferences}
