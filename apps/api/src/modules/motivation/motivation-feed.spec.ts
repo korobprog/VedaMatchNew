@@ -2,83 +2,72 @@ import {
   decodeMotivationCursor,
   encodeMotivationCursor,
   emptyMotivationCursor,
-  weightedPage,
-  moveOwnToReadableTrack,
+  feedPage,
 } from './motivation-feed';
 
-describe('motivation weighted feed', () => {
-  it.each([25, 50, 75])('preserves cadence across pages at %s%%', (percent) => {
-    const universal = [20, 18, 16, 14, 12, 10, 8, 6, 4, 2],
-      vaishnava = [19, 17, 15, 13, 11, 9, 7, 5, 3, 1];
+describe('feedPage', () => {
+  const posts = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+
+  it('листает ленту без потерь и повторов', () => {
     let cursor = emptyMotivationCursor();
-    const actual: number[] = [];
-    while (
-      cursor.universal < universal.length ||
-      cursor.vaishnava < vaishnava.length
-    ) {
-      const page = weightedPage(universal, vaishnava, percent, cursor, 3);
-      actual.push(...page.items);
+    const seen: number[] = [];
+    for (;;) {
+      const page = feedPage(posts, cursor, 3);
+      if (page.items.length === 0) break;
+      seen.push(...page.items);
+      // Курсор переживает кодирование: клиент присылает его строкой.
       cursor = decodeMotivationCursor(encodeMotivationCursor(page.cursor));
     }
-    expect(new Set(actual).size).toBe(20);
-    expect(actual).toEqual(
-      weightedPage(universal, vaishnava, percent, emptyMotivationCursor(), 20)
-        .items,
+
+    expect(seen).toEqual(posts);
+    expect(new Set(seen).size).toBe(posts.length);
+  });
+
+  it('на исчерпанной ленте отдаёт пусто и не двигает курсор', () => {
+    const cursor = { ...emptyMotivationCursor(), universal: posts.length };
+
+    const page = feedPage(posts, cursor, 5);
+
+    expect(page.items).toEqual([]);
+    expect(page.cursor.universal).toBe(posts.length);
+  });
+
+  it('принимает курсор, выданный до отказа от смешивания треков', () => {
+    // Такие курсоры живут в открытых вкладках: падать на них незачем.
+    const legacy = decodeMotivationCursor(
+      encodeMotivationCursor({ universal: 2, vaishnava: 7, accumulator: 40 }),
     );
+
+    const page = feedPage(posts, legacy, 2);
+
+    expect(page.items).toEqual([8, 7]);
+    expect(page.cursor).toMatchObject({ vaishnava: 7, accumulator: 40 });
   });
 });
 
-describe('moveOwnToReadableTrack', () => {
-  const own = { id: 'own', authorUserId: 'u1' };
-  const other = { id: 'other', authorUserId: 'u2' };
 
-  it('при нулевой доле вайшнавского поднимает свой рилс в читаемый трек', () => {
-    // Иначе автору пишут «ваш рилс опубликован», он идёт и не находит его:
-    // рилс лежит в треке, который он себе отключил.
-    const result = moveOwnToReadableTrack({
-      universal: [other],
-      vaishnava: [own],
-      percent: 0,
-      userId: 'u1',
-    });
-
-    expect(result.universal.map((post) => post.id)).toEqual(['own', 'other']);
+describe('decodeMotivationCursor', () => {
+  it('без значения начинает ленту сначала', () => {
+    expect(decodeMotivationCursor()).toEqual(emptyMotivationCursor());
   });
 
-  it('при доле 100 переносит свой универсальный рилс в вайшнавский трек', () => {
-    const result = moveOwnToReadableTrack({
-      universal: [own],
-      vaishnava: [other],
-      percent: 100,
-      userId: 'u1',
-    });
-
-    expect(result.vaishnava.map((post) => post.id)).toEqual(['own', 'other']);
-  });
-
-  it('чужие рилсы не трогает', () => {
-    const result = moveOwnToReadableTrack({
-      universal: [],
-      vaishnava: [other],
-      percent: 0,
-      userId: 'u1',
-    });
-
-    expect(result.universal).toEqual([]);
-    expect(result.vaishnava).toEqual([other]);
-  });
-
-  it('при промежуточной доле читаются оба трека — переносить нечего', () => {
-    const input = {
-      universal: [other],
-      vaishnava: [own],
-      percent: 50,
-      userId: 'u1',
-    };
-
-    const result = moveOwnToReadableTrack(input);
-
-    expect(result.universal).toBe(input.universal);
-    expect(result.vaishnava).toBe(input.vaishnava);
+  it('отвергает подделанный курсор', () => {
+    // Курсор приходит от клиента строкой: дробная или отрицательная позиция
+    // увела бы выборку в бессмыслицу.
+    expect(() => decodeMotivationCursor('не-курсор')).toThrow();
+    expect(() =>
+      decodeMotivationCursor(
+        Buffer.from(JSON.stringify({ universal: -1, vaishnava: 0, accumulator: 0 })).toString(
+          'base64url',
+        ),
+      ),
+    ).toThrow();
+    expect(() =>
+      decodeMotivationCursor(
+        Buffer.from(JSON.stringify({ universal: 1.5, vaishnava: 0, accumulator: 0 })).toString(
+          'base64url',
+        ),
+      ),
+    ).toThrow();
   });
 });

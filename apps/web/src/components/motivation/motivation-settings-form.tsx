@@ -26,7 +26,6 @@ export function MotivationSettingsForm({
 }: {
   initial: MotivationPreferenceDto;
 }) {
-  const [percent, setPercent] = useState(initial.vaishnavaPercent);
   const [language, setLanguage] = useState<MotivationLanguage>(initial.language);
   const [selected, setSelected] = useState<MotivationProfileType[]>(
     initial.profileTypes ?? [],
@@ -50,7 +49,6 @@ export function MotivationSettingsForm({
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          vaishnavaPercent: percent,
           language,
           profileTypes: selected,
         }),
@@ -103,24 +101,6 @@ export function MotivationSettingsForm({
           })}
         </div>
       </fieldset>
-
-      <label className="mt-6 block font-medium text-zinc-900 dark:text-zinc-100">
-        Доля вайшнавских публикаций: {percent}%
-        <input
-          aria-label="Доля вайшнавских публикаций"
-          type="range"
-          min="0"
-          max="100"
-          step="10"
-          value={percent}
-          onChange={(event) => setPercent(Number(event.target.value))}
-          className="mt-4 w-full accent-amber-600"
-        />
-      </label>
-      <div className="mt-2 flex justify-between text-xs text-zinc-500">
-        <span>Только универсальные</span>
-        <span>Только вайшнавские</span>
-      </div>
 
       <label className="mt-6 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
         Язык
