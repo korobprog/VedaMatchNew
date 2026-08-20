@@ -7,7 +7,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { IMAGE_SIZE } from './image-cost';
+import { IMAGE_SIZE, type ImageProvider } from './image-cost';
+import { FalImageService } from './fal-image.service';
 import { stripJsonFence } from './chat-json';
 
 export type VerifiedQuoteCopy = {
@@ -27,12 +28,21 @@ export type VerifiedQuoteCopy = {
   >;
 };
 
+/** Кадр вместе с тем, кто его нарисовал: ставки у поставщиков разные. */
+export interface GeneratedImage {
+  bytes: Buffer;
+  provider: ImageProvider;
+}
+
 @Injectable()
 export class MotivationGenerationService {
   private readonly logger = new Logger(MotivationGenerationService.name);
 
   private readonly s3: S3Client | null;
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly falImage: FalImageService,
+  ) {
     const region = config.get<string>('S3_REGION'),
       accessKeyId = config.get<string>('S3_ACCESS_KEY'),
       secretAccessKey = config.get<string>('S3_SECRET_KEY');
@@ -396,7 +406,31 @@ export class MotivationGenerationService {
     }
   }
 
-  async generateImage(prompt: string): Promise<Buffer> {
+  /**
+   * Кадр с запасным поставщиком на случай сбоя канала.
+   *
+   * Та же болезнь, что у запасной текстовой модели: релей раздаёт модель
+   * через каналы, и канал ложится при полностью исправном ключе. Для картинки
+   * это означало пост без кадра и ручной разбор в админке. fal — другой
+   * апстрим, поэтому годится в резерв; его цена (втрое выше) платится только
+   * когда основной не ответил.
+   *
+   * Возвращаем и поставщика: ставки у них разные, а на сумме расхода стоит
+   * дневной потолок.
+   */
+  async generateImage(prompt: string): Promise<GeneratedImage> {
+    try {
+      return { bytes: await this.requestRelayImage(prompt), provider: 'relay' };
+    } catch (error) {
+      if (!this.falImage.enabled) throw error;
+      this.logger.warn(
+        `Релей не отдал кадр (${String(error).slice(0, 120)}), пробуем запасного поставщика`,
+      );
+      return { bytes: await this.falImage.generate(prompt), provider: 'fal' };
+    }
+  }
+
+  private async requestRelayImage(prompt: string): Promise<Buffer> {
     const apiKey = this.config.get<string>('MOTIVATION_AI_API_KEY');
     const baseUrl = this.config
       .get<string>('MOTIVATION_AI_BASE_URL')
@@ -465,7 +499,7 @@ export class MotivationGenerationService {
   async generateApprovedImage(input: {
     imagePrompt: string | null;
     textApprovedAt: Date | null;
-  }): Promise<Buffer> {
+  }): Promise<GeneratedImage> {
     if (
       !input.textApprovedAt ||
       Number.isNaN(input.textApprovedAt.getTime()) ||

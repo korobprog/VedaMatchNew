@@ -63,6 +63,7 @@ services:
       # У остальных значений есть дефолты в коде, и читаются они через `||`,
       # поэтому незаданная переменная (пустая строка) их не перебивает.
       FAL_KEY: ${FAL_KEY:-}
+      MOTIVATION_IMAGE_MODEL_FALLBACK: ${MOTIVATION_IMAGE_MODEL_FALLBACK:-}
       MOTIVATION_VIDEO_MODEL: ${MOTIVATION_VIDEO_MODEL:-}
       MOTIVATION_VIDEO_DURATION: ${MOTIVATION_VIDEO_DURATION:-}
       MOTIVATION_VIDEO_AUDIO: ${MOTIVATION_VIDEO_AUDIO:-}

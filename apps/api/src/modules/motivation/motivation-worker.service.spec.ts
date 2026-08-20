@@ -37,7 +37,9 @@ function createWorker(overrides: Record<string, unknown> = {}) {
   };
   const prisma = { motivationPost, ...overrides };
   const generation = {
-    generateApprovedImage: jest.fn().mockResolvedValue(Buffer.from('png')),
+    generateApprovedImage: jest
+      .fn()
+      .mockResolvedValue({ bytes: Buffer.from('png'), provider: 'relay' }),
     // URL из ключа: иначе обычная картинка и сторис неотличимы в проверках.
     uploadStory: jest
       .fn()
@@ -274,8 +276,8 @@ describe('MotivationWorkerService', () => {
   it('uploads the story frame as a separate file next to the plain image', async () => {
     const { worker, motivationPost, generation } = createWorker();
     // Настоящий PNG, иначе композит не соберётся и сработает откат.
-    generation.generateApprovedImage.mockResolvedValue(
-      await sharp({
+    generation.generateApprovedImage.mockResolvedValue({
+      bytes: await sharp({
         create: {
           width: 1024,
           height: 1536,
@@ -285,7 +287,8 @@ describe('MotivationWorkerService', () => {
       })
         .png()
         .toBuffer(),
-    );
+      provider: 'relay',
+    });
 
     await worker.tick();
 
