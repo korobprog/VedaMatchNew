@@ -14,6 +14,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { FalAudioService } from './fal-audio.service';
 import { FalVideoService } from './fal-video.service';
 import { buildImageDataUri, encodedSizeBytes } from './image-data-uri';
+import { isAutonomousApproval } from './autonomous-approval';
+import { MotivationSettingsService } from './motivation-settings.service';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { resolveVideoPrompt } from './motivation-prompt';
 import { composeStoryVideo, estimateReadingSeconds } from './story-video';
@@ -74,6 +76,9 @@ export class MotivationVideoWorkerService
     // Необязательный: воркер создаётся в тестах позиционно, а без шины он
     // просто не рассылает — работать это не мешает.
     @Optional() private readonly events?: EventEmitter2,
+    // Необязательная по той же причине, что и шина: без неё воркер просто
+    // отправляет ролик на приёмку человеку.
+    @Optional() private readonly settings?: MotivationSettingsService,
   ) {
     const host = config.get<string>('REDIS_HOST');
     this.redis = host
@@ -299,6 +304,45 @@ export class MotivationVideoWorkerService
   }
 
   /**
+   * Пройдёт ли ролик без человека. Условие то же, что у кадра: свой рилс,
+   * автономный режим модерации и одобрение именно от ИИ.
+   */
+  private async shouldAutoAccept(post: {
+    id: string;
+    origin: string;
+  }): Promise<boolean> {
+    if (!this.settings) return false;
+    const settings = await this.settings.read();
+    const approval = await this.prisma.motivationModerationAudit.findFirst({
+      where: {
+        postId: post.id,
+        action: { in: ['ai_approve', 'approve_text'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { action: true },
+    });
+    return isAutonomousApproval({
+      origin: post.origin,
+      moderationMode: settings.aiModerationMode,
+      lastApprovalAction: approval?.action,
+    });
+  }
+
+  /** Автору — что ролик готов и виден. */
+  private notifyAuthor(post: {
+    id: string;
+    origin: string;
+    authorUserId: string | null;
+  }): void {
+    if (post.origin !== 'user' || !post.authorUserId || !this.events) return;
+    this.events.emit('motivation.video.ready', {
+      name: 'motivation.video.ready',
+      recipientId: post.authorUserId,
+      reelId: post.id,
+    });
+  }
+
+  /**
    * Сообщить администраторам, что ролик ждёт приёмки.
    *
    * До приёмки он виден только в очереди, и без сигнала о нём никто не
@@ -365,10 +409,17 @@ export class MotivationVideoWorkerService
         withCaption,
         'video/mp4',
       );
+      // Приёмка человеком нужна не всегда: в автономном режиме администратор
+      // — оператор, а не этап, и кадр по тому же правилу публикуется сам.
+      // Признак общий с кадром (isAutonomousApproval), чтобы две стадии не
+      // разошлись в понимании «можно без человека».
+      const autoAccept = await this.shouldAutoAccept(post);
       await this.prisma.motivationPost.updateMany({
         where: { id: post.id, videoStatus: MotivationVideoStatus.running },
         data: {
-          videoStatus: MotivationVideoStatus.review,
+          videoStatus: autoAccept
+            ? MotivationVideoStatus.ready
+            : MotivationVideoStatus.review,
           videoUrl,
           videoErrorCode: null,
           // Провайдер не возвращает списанную сумму, поэтому пишем свою
@@ -379,8 +430,13 @@ export class MotivationVideoWorkerService
           }),
         },
       });
-      this.logger.log(`Видео готово к проверке: ${post.slug}`);
-      await this.notifyReviewers(post.id);
+      if (autoAccept) {
+        this.logger.log(`Видео принято автоматически: ${post.slug}`);
+        this.notifyAuthor(post);
+      } else {
+        this.logger.log(`Видео готово к проверке: ${post.slug}`);
+        await this.notifyReviewers(post.id);
+      }
       return true;
     } catch (error) {
       await this.fail(post.id, error);
