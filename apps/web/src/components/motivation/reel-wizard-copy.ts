@@ -22,7 +22,13 @@ export const STYLE_LABELS: Record<MotivationVisualStyle, string> = {
 
 export const STYLE_OPTIONS = Object.entries(STYLE_LABELS) as [MotivationVisualStyle, string][];
 
-export type StageState = "done" | "active" | "pending" | "failed";
+export type StageState =
+  | "done"
+  | "active"
+  | "pending"
+  /** Жёлтый: не получилось с первого раза, но работа продолжается. */
+  | "waiting"
+  | "failed";
 
 export interface StageItem {
   key: "quote" | "review" | "image" | "ready";
@@ -42,7 +48,10 @@ export function stageItems(stage: MotivationReelStage): StageItem[] {
     rejected: ["done", "failed", "pending", "pending"],
     generating: ["done", "done", "active", "pending"],
     image_review: ["done", "done", "done", "active"],
-    failed: ["done", "done", "failed", "pending"],
+    // Кадр — не приговор: провайдер бывает занят, попытка повторится, а
+    // администратор видит такие рилсы в очереди. Красное «!» и слово
+    // «не удалось» пугали там, где всё ещё делается.
+    failed: ["done", "done", "waiting", "pending"],
     published: ["done", "done", "done", "done"],
   };
   const hints: Record<MotivationReelStage, [string, string, string, string]> = {
@@ -61,8 +70,8 @@ export function stageItems(stage: MotivationReelStage): StageItem[] {
     failed: [
       "Принята",
       "Пройдена",
-      "Не удалось нарисовать — попробуем снова позже, уведомление придёт",
-      "—",
+      "Кадр ещё в работе — уведомление придёт, когда он будет готов",
+      "Публикация в ленту",
     ],
     published: ["Принята", "Пройдена", "Готова", "Опубликован"],
   };
