@@ -866,9 +866,14 @@ function ReelStatus({
           </div>
         </div>
       ) : (
-        reel.videoState === "failed" && (
+        reel.videoState === "failed" &&
+        // Отказ по содержанию — не «не получилось»: повтор с тем же кадром
+        // даст ровно то же и снова будет оплачен.
+        (reel.videoRejectionNotice ? (
+          <p className="text-sm text-text-1">{reel.videoRejectionNotice}</p>
+        ) : (
           <p className="text-sm text-text-1">Ролик не получился — можно попробовать ещё раз.</p>
-        )
+        ))
       )}
 
       <div className="flex flex-wrap items-center gap-2">

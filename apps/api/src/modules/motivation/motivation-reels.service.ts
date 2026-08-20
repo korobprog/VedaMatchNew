@@ -68,6 +68,7 @@ import {
   isRetryableFailure,
 } from './ai-failure';
 import { fundingMessage } from './funding-error';
+import { videoRejectionMessage } from './video-rejection';
 import { PROVIDER_BUSY } from './motivation-worker.service';
 
 const LANGUAGES: readonly MotivationLanguage[] = ['ru', 'en', 'hi'];
@@ -906,6 +907,9 @@ export class MotivationReelsService {
         post.generationErrorCode === PROVIDER_BUSY
           ? 'Провайдер картинок сейчас перегружен. Кадр дорисуется сам, как только он освободится, — можно закрыть страницу.'
           : null,
+      // Проверка содержания у провайдера отвергла кадр: повтор даст то же
+      // самое, поэтому вместо «попробуйте ещё раз» говорим прямо.
+      videoRejectionNotice: videoRejectionMessage(post.videoErrorCode),
       canAppeal: canAppeal(stage, hasAppeal),
       sourceKind: post.sourceVerified ? 'vedabase' : 'own',
       createdAt: post.createdAt.toISOString(),

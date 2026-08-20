@@ -71,7 +71,7 @@ export function buildVideoRequest(input: {
 }
 
 /** Разворачивает `detail` провайдера в короткий код для лога и админки. */
-function describeFailure(detail: unknown): string {
+export function describeFailure(detail: unknown): string {
   if (typeof detail === 'string') return detail.slice(0, 200);
   if (Array.isArray(detail)) {
     const first = detail[0] as { msg?: string; type?: string } | undefined;
@@ -205,14 +205,22 @@ export class FalVideoService {
       signal: AbortSignal.timeout(30_000),
       headers: { authorization: `Key ${this.key()}` },
     });
-    if (!result.ok)
-      throw new BadGatewayException(
-        `Video provider result error ${result.status}`,
-      );
+    // Тело читаем до проверки статуса: причину отказа провайдер кладёт в
+    // `detail` и при не-ok. Именно так приходил 422 с
+    // `content_policy_violation`, а мы выбрасывали тело и писали в лог
+    // безликое «result error 422», из-за чего отказ по содержанию выглядел
+    // техническим сбоем и повторялся за деньги.
     const payload = (await result.json().catch(() => null)) as {
       video?: { url?: string };
       detail?: unknown;
     } | null;
+    if (!result.ok)
+      return {
+        state: 'failed',
+        reason: payload?.detail
+          ? describeFailure(payload.detail)
+          : `provider_result_${result.status}`,
+      };
     const url = payload?.video?.url;
     if (url) return { state: 'ready', videoUrl: url };
     // Провайдер отдаёт и ошибки валидации со статусом COMPLETED, а причину

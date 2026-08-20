@@ -17,6 +17,7 @@ import { resolveVideoPrompt } from './motivation-prompt';
 import { composeStoryVideo, estimateReadingSeconds } from './story-video';
 import { estimatePlannedClipUsd } from './video-cost';
 import { BUDGET_CODE_PREFIX } from './funding-error';
+import { CONTENT_POLICY_CODE } from './video-rejection';
 
 /**
  * Попыток меньше, чем у картинки, и это осознанно: провайдер берёт деньги даже
@@ -40,6 +41,9 @@ export const PERMANENT_FAILURES = new Set([
   'file_download_error',
   'missing',
   'no_video_in_response',
+  // Проверка содержания у провайдера: с тем же кадром ответ не изменится, а
+  // каждая попытка платная.
+  CONTENT_POLICY_CODE,
 ]);
 
 /** Превышение потолка — не сбой задачи: повторять будем, но не сейчас. */
