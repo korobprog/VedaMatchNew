@@ -26,7 +26,10 @@ export default async function AdminUserDetailPage({
   if (currentUser.role !== "admin") redirect("/");
 
   const detail = await getAdminUser(id);
-  if (!detail) throw new Error("Пользователь не найден");
+  // Пользователя удалили — вернуть администратора к списку честнее, чем
+  // показать экран «страница не открылась»: карточки больше нет, и это
+  // штатный исход его же действия.
+  if (!detail) redirect("/admin/users");
 
   const profile = detail.profile;
 

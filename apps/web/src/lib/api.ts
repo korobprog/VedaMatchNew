@@ -30,8 +30,19 @@ import type { Locale } from "@/lib/locale";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
-/** Server-side запрос к API с пробросом access_token из cookie. null — не авторизован. */
-async function apiGet<T>(path: string): Promise<T | null> {
+/**
+ * Server-side запрос к API с пробросом access_token из cookie.
+ * null — не авторизован.
+ *
+ * `absentStatuses` — коды, означающие «такого объекта нет», а не сбой. По
+ * умолчанию пуст: страница, потерявшая свои данные, должна падать заметно.
+ * Передавать 404 стоит там, где отсутствие законно — например у карточки
+ * пользователя, которого администратор только что удалил.
+ */
+async function apiGet<T>(
+  path: string,
+  absentStatuses: readonly number[] = [],
+): Promise<T | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get("access_token")?.value;
   if (!token) return null;
@@ -40,7 +51,7 @@ async function apiGet<T>(path: string): Promise<T | null> {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
-  if (res.status === 401) return null;
+  if (res.status === 401 || absentStatuses.includes(res.status)) return null;
   if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`);
   return (await res.json()) as T;
 }
@@ -81,8 +92,9 @@ export const getAdminUserReports = (status?: string) => {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
   return apiGet<AdminUserReportsResponse>(`/admin/reports${query}`);
 };
+/** 404 — пользователя удалили: страница уведёт к списку, а не упадёт. */
 export const getAdminUser = (id: string) =>
-  apiGet<AdminUserDetail>(`/admin/users/${id}`);
+  apiGet<AdminUserDetail>(`/admin/users/${id}`, [404]);
 export const getMentorVerificationRequest = (token: string) =>
   apiGetPublic<MentorVerificationPublicRequest>(`/mentor-verifications/${token}`);
 export const getMySupportTickets = () =>
