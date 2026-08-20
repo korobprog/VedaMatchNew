@@ -25,6 +25,94 @@ describe('MotivationGenerationService', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('переходит на запасную модель, когда канал основной лёг', async () => {
+    // Релей раздаёт модель через каналы, и канал ложится при исправном ключе:
+    // «upstream_unavailable, текущий источник GPT Team/Plus». Без запасной
+    // модели это давало «сбой модели» и ручной разбор нормального текста.
+    const config = {
+      get: (key: string) =>
+        ({
+          MOTIVATION_AI_API_KEY: 'test',
+          MOTIVATION_AI_BASE_URL: 'https://example.test/v1',
+          MOTIVATION_TEXT_MODEL: 'gpt-5.4-mini',
+          MOTIVATION_TEXT_MODEL_FALLBACK: 'gemini-3.6-flash',
+        })[key],
+    } as ConfigService;
+    const service = new MotivationGenerationService(config);
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response('{"error":{"code":"upstream_unavailable"}}', {
+          status: 503,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: '{"decision":"approve"}' } }],
+          }),
+          { status: 200 },
+        ),
+      );
+
+    await expect(service.moderationVerdict('проверь')).resolves.toEqual({
+      decision: 'approve',
+    });
+
+    const models = fetchMock.mock.calls.map(
+      ([, init]) => JSON.parse(String((init as RequestInit).body)).model,
+    );
+    expect(models).toEqual(['gpt-5.4-mini', 'gemini-3.6-flash']);
+  });
+
+  it('не ходит дважды, когда запасная модель совпадает с основной', async () => {
+    const config = {
+      get: (key: string) =>
+        ({
+          MOTIVATION_AI_API_KEY: 'test',
+          MOTIVATION_AI_BASE_URL: 'https://example.test/v1',
+          MOTIVATION_TEXT_MODEL: 'gemini-3.6-flash',
+          MOTIVATION_TEXT_MODEL_FALLBACK: 'gemini-3.6-flash',
+        })[key],
+    } as ConfigService;
+    const service = new MotivationGenerationService(config);
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(new Response('нет', { status: 503 }));
+
+    await expect(service.moderationVerdict('проверь')).rejects.toThrow('503');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('разбирает вердикт, обёрнутый в markdown-ограждение', async () => {
+    const config = {
+      get: (key: string) =>
+        ({
+          MOTIVATION_AI_API_KEY: 'test',
+          MOTIVATION_AI_BASE_URL: 'https://example.test/v1',
+        })[key],
+    } as ConfigService;
+    const service = new MotivationGenerationService(config);
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: ['```json', '{"decision":"reject"}', '```'].join(String.fromCharCode(10)),
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await expect(service.moderationVerdict('проверь')).resolves.toEqual({
+      decision: 'reject',
+    });
+  });
+
   it('sends the provider-compatible chat and image request contract', async () => {
     const config = {
       get: (key: string) =>
