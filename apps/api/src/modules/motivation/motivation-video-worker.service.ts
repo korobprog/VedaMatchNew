@@ -13,7 +13,6 @@ import { FalAudioService } from './fal-audio.service';
 import { FalVideoService } from './fal-video.service';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { resolveVideoPrompt } from './motivation-prompt';
-import { STORY_HEIGHT, STORY_WIDTH } from './story-image';
 import { composeStoryVideo, estimateReadingSeconds } from './story-video';
 import { estimatePlannedClipUsd } from './video-cost';
 import { BUDGET_CODE_PREFIX } from './funding-error';
@@ -25,6 +24,15 @@ import { BUDGET_CODE_PREFIX } from './funding-error';
  * посте превращались бы в $7.50.
  */
 export const MAX_VIDEO_ATTEMPTS = 2;
+
+/**
+ * Разрешение кадра на входе видеомодели. Совпадает с тем, в котором
+ * заказывается ролик (`resolution: '720p'` в buildVideoRequest): больше
+ * отправлять бессмысленно — модель уменьшит сама, а нам это лишний вес на
+ * заливке.
+ */
+export const VIDEO_FRAME_WIDTH = 720;
+export const VIDEO_FRAME_HEIGHT = 1280;
 
 /** Ошибки, которые не лечатся повтором: с тем же входом выйдет то же самое. */
 export const PERMANENT_FAILURES = new Set([
@@ -249,6 +257,13 @@ export class MotivationVideoWorkerService
    * Иллюстрация приходит 2:3, а сторис нужен 9:16 — без докадрирования ролик
    * лёг бы с полями. JPEG вместо PNG срезает вес с 2.82 МБ до 0.43: провайдеру
    * меньше тянуть, а именно на скачивании он и спотыкался.
+   *
+   * Размер — VIDEO_FRAME_*, а не STORY_*: ролик мы заказываем в 720p
+   * (см. buildVideoRequest), и модель всё равно уменьшает вход сама. Гонять
+   * ей 1080×1920 значило платить за лишние пиксели узким каналом: замер с
+   * прода показал заливку в v3b.fal.media на 11.4 КБ/с при исходящем канале
+   * сервера 1.4 МБ/с, и кадр на 541 КБ не укладывался в таймаут хранилища
+   * (408 Request timeout на 47-й секунде).
    */
   private async prepareFrame(imageUrl: string): Promise<Buffer> {
     const source = await fetch(imageUrl, {
@@ -257,11 +272,11 @@ export class MotivationVideoWorkerService
     if (!source.ok)
       throw new Error(`source_image_unavailable_${source.status}`);
     return sharp(Buffer.from(await source.arrayBuffer()))
-      .resize(STORY_WIDTH, STORY_HEIGHT, {
+      .resize(VIDEO_FRAME_WIDTH, VIDEO_FRAME_HEIGHT, {
         fit: 'cover',
         position: 'attention',
       })
-      .jpeg({ quality: 88 })
+      .jpeg({ quality: 82 })
       .toBuffer();
   }
 
