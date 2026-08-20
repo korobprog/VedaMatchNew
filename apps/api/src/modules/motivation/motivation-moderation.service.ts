@@ -55,6 +55,23 @@ export class MotivationModerationService {
     });
   }
 
+  /**
+   * Автору — что ролик принят и виден. Событие самодостаточно: получатель и
+   * идентификатор рилса, подписчик формулирует сам.
+   */
+  notifyVideoReady(post: {
+    id: string;
+    origin: string;
+    authorUserId: string | null;
+  }): void {
+    if (post.origin !== 'user' || !post.authorUserId || !this.events) return;
+    this.events.emit('motivation.video.ready', {
+      name: 'motivation.video.ready',
+      recipientId: post.authorUserId,
+      reelId: post.id,
+    });
+  }
+
   async approveText(
     role: Role,
     actorId: string,

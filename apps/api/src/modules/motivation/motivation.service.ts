@@ -763,6 +763,13 @@ export class MotivationService {
     });
     if (!updated.count)
       throw new ConflictException('Video is not waiting for review');
+    // Автор до этого момента видел «ждёт проверки администратора» и никак не
+    // узнавал, что проверка прошла.
+    const post = await this.prisma.motivationPost.findUnique({
+      where: { id },
+      select: { id: true, origin: true, authorUserId: true },
+    });
+    if (post) this.moderation.notifyVideoReady(post);
     return { videoStatus: 'ready' as const };
   }
   approveImage(role: Role, actorId: string, id: string) {

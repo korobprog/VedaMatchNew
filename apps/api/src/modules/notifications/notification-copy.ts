@@ -28,6 +28,8 @@ export const notificationEventNames = {
   announcementPublished: 'portal.announcement.published',
   motivationReelPublished: 'motivation.reel.published',
   motivationReelRejected: 'motivation.reel.rejected',
+  motivationVideoReady: 'motivation.video.ready',
+  motivationVideoReview: 'motivation.video.review',
 } as const satisfies Record<string, NotificationEventName>;
 
 /** Payload веб-пуша ограничен ~4 КБ, да и на экране длинный текст не поместится. */
@@ -188,6 +190,25 @@ export function buildNotification(
         // ленту одним нажатием.
         url: `/motivation/create?reel=${event.reelId}`,
         tag: `motivation-reel:${event.reelId}`,
+        category: 'motivation',
+      };
+    case 'motivation.video.ready':
+      return {
+        title: 'Ролик готов',
+        body: 'Иллюстрация ожила — посмотрите в студии или скачайте для Stories',
+        // В студию, как и у кадра: там ролик можно посмотреть и скачать.
+        url: `/motivation/create?reel=${event.reelId}`,
+        // Тот же тег, что у кадра: плашка о ролике заменяет прежнюю по этому
+        // же рилсу, а не ложится второй.
+        tag: `motivation-reel:${event.reelId}`,
+        category: 'motivation',
+      };
+    case 'motivation.video.review':
+      return {
+        title: 'Ролик ждёт приёмки',
+        body: 'Автор его пока не видит — посмотрите и примите в очереди',
+        url: '/admin/motivation/queue',
+        tag: `motivation-video-review:${event.reelId}`,
         category: 'motivation',
       };
     case 'motivation.reel.rejected':

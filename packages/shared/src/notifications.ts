@@ -141,6 +141,21 @@ export type NotificationEvent =
       reelId: string;
       /** Причина простым языком — её же видит автор в мастере. */
       reason: string;
+    }
+  | {
+      /** Ролик принят администратором и стал виден автору. */
+      name: 'motivation.video.ready';
+      recipientId: string;
+      reelId: string;
+    }
+  | {
+      /**
+       * Ролик собран и ждёт приёмки. Уходит администраторам: до приёмки он
+       * виден только в очереди, и без сигнала о нём никто не узнает.
+       */
+      name: 'motivation.video.review';
+      recipientId: string;
+      reelId: string;
     };
 
 /**

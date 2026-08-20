@@ -3,7 +3,9 @@ import {
   Logger,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { MotivationVideoStatus } from '@prisma/client';
 import Redis from 'ioredis';
@@ -69,6 +71,9 @@ export class MotivationVideoWorkerService
     private readonly voice: FalAudioService,
     private readonly generation: MotivationGenerationService,
     private readonly config: ConfigService,
+    // Необязательный: воркер создаётся в тестах позиционно, а без шины он
+    // просто не рассылает — работать это не мешает.
+    @Optional() private readonly events?: EventEmitter2,
   ) {
     const host = config.get<string>('REDIS_HOST');
     this.redis = host
@@ -293,6 +298,35 @@ export class MotivationVideoWorkerService
       .toBuffer();
   }
 
+  /**
+   * Сообщить администраторам, что ролик ждёт приёмки.
+   *
+   * До приёмки он виден только в очереди, и без сигнала о нём никто не
+   * узнаёт: ролики копились в `review`, а автор ждал впустую. Получателей
+   * читаем из `User` — это одна из четырёх портальных моделей, открытых
+   * сервисам на чтение.
+   *
+   * Событие самодостаточно: получатель и идентификатор рилса, формулировку
+   * собирает подписчик.
+   */
+  private async notifyReviewers(postId: string): Promise<void> {
+    if (!this.events) return;
+    const admins = await this.prisma.user.findMany({
+      where: {
+        role: { in: ['admin', 'service_admin'] },
+        accountStatus: 'active',
+      },
+      select: { id: true },
+    });
+    for (const admin of admins) {
+      this.events.emit('motivation.video.review', {
+        name: 'motivation.video.review',
+        recipientId: admin.id,
+        reelId: postId,
+      });
+    }
+  }
+
   /** @returns true, если в этом тике было что опрашивать. */
   private async pollRunning(): Promise<boolean> {
     const post = await this.prisma.motivationPost.findFirst({
@@ -346,6 +380,7 @@ export class MotivationVideoWorkerService
         },
       });
       this.logger.log(`Видео готово к проверке: ${post.slug}`);
+      await this.notifyReviewers(post.id);
       return true;
     } catch (error) {
       await this.fail(post.id, error);
