@@ -14,6 +14,7 @@ function build(
       blocked: boolean;
     } | null;
     videoEnabled?: boolean;
+    videoConfigured?: boolean;
     voices?: string[];
     voiceDefault?: string | null;
   } = {},
@@ -90,6 +91,9 @@ function build(
   const categories = { resolveSlug: jest.fn().mockResolvedValue('daily') };
   const events = { emit: jest.fn() };
   const audio = { modelId: jest.fn().mockResolvedValue('eleven-v3') };
+  // Ключ fal.ai по умолчанию есть: без него сервис отказывает раньше всех
+  // прочих проверок, и остальные тесты «оживления» не дошли бы до сути.
+  const video = { enabled: options.videoConfigured ?? true };
   const service = new MotivationReelsService(
     prisma as never,
     settings as never,
@@ -99,6 +103,7 @@ function build(
     categories as never,
     events as never,
     audio as never,
+    video as never,
   );
   return {
     service,
@@ -109,6 +114,7 @@ function build(
     verification,
     events,
     audio,
+    video,
   };
 }
 
@@ -485,6 +491,27 @@ describe('MotivationReelsService.animate', () => {
           actorId: 'user-1',
         }),
       }),
+    );
+  });
+
+  it('refuses when fal.ai is not configured, instead of queueing into a void', async () => {
+    // Прод-случай: FAL_KEY не задан, воркер видео не стартовал. Раньше заказ
+    // молча уходил в queued и залипал там навсегда.
+    const { service, prisma } = build({ videoConfigured: false });
+    prisma.motivationPost.findFirst.mockResolvedValue(published);
+
+    await expect(service.animate('user-1', 'user', 'post-1')).rejects.toThrow(
+      'не настроен',
+    );
+    expect(prisma.motivationPost.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses an admin too: the key lives in the environment, not in settings', async () => {
+    const { service, prisma } = build({ videoConfigured: false });
+    prisma.motivationPost.findFirst.mockResolvedValue(published);
+
+    await expect(service.animate('admin-1', 'admin', 'post-1')).rejects.toThrow(
+      'не настроен',
     );
   });
 

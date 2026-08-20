@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
@@ -42,6 +43,7 @@ import { MotivationGenerationService } from './motivation-generation.service';
 import { MotivationModerationService } from './motivation-moderation.service';
 import { MotivationSettingsService } from './motivation-settings.service';
 import { FalAudioService, voiceSampleKey } from './fal-audio.service';
+import { FalVideoService } from './fal-video.service';
 import { QuoteVerificationService } from './quote-verification.service';
 import { quoteFingerprint } from './quote-normalizer';
 import { canAppeal, reelStageOf, startOfUtcDay } from './reel-stages';
@@ -114,6 +116,7 @@ export class MotivationReelsService {
     private readonly categories: MotivationCategoriesService,
     private readonly events: EventEmitter2,
     private readonly audio: FalAudioService,
+    private readonly video: FalVideoService,
   ) {}
 
   /** Персональные правила автора; у большинства их нет — тогда null. */
@@ -497,6 +500,13 @@ export class MotivationReelsService {
     postId: string,
     options?: MotivationReelVideoOptions,
   ): Promise<MotivationReelDto> {
+    // Проверяем раньше выключателя в админке: без ключа fal.ai стадия видео
+    // не запущена, и заказ ушёл бы в очередь, которую некому разобрать.
+    // Администратора это касается наравне со всеми — ключ живёт в окружении.
+    if (!this.video.enabled)
+      throw new ServiceUnavailableException(
+        'Оживление кадра сейчас недоступно: сервис видео не настроен',
+      );
     const settings = await this.settings.read();
     if (!settings.userVideoEnabled && !this.isAdmin(role))
       throw new ForbiddenException(
@@ -881,6 +891,7 @@ export class MotivationReelsService {
         hasImage: Boolean(post.imageUrl),
         videoState,
         videoEnabled: videoAllowed,
+        videoConfigured: this.video.enabled,
         isAdmin: false,
       }),
       reason: stage === 'rejected' ? (rejection?.reason ?? null) : null,
