@@ -19,9 +19,9 @@ describe('buildNotification', () => {
     });
   });
 
-  it('ведёт автора в ленту, а не на страницу для гостей', () => {
-    // `/m/<slug>` сделана для внешних ссылок и незалогиненных; автор — участник
-    // и ждёт увидеть свой рилс там, где листает остальные.
+  it('ведёт автора в студию, где с кадром можно работать', () => {
+    // `/m/<slug>` сделана для внешних ссылок и незалогиненных: посмотреть
+    // можно, сделать нельзя. Автор приходит по уведомлению доводить рилс.
     expect(
       buildNotification({
         name: 'motivation.reel.published',
@@ -30,7 +30,7 @@ describe('buildNotification', () => {
         slug: 'reel-abc',
       }),
     ).toMatchObject({
-      url: '/motivation?post=reel-abc',
+      url: '/motivation/create?reel=reel-1',
       category: 'motivation',
     });
   });

@@ -1,6 +1,11 @@
 import Link from "next/link";
 
-export type MotivationSection = "feed" | "favorites" | "settings" | "admin";
+export type MotivationSection =
+  | "feed"
+  | "favorites"
+  | "studio"
+  | "settings"
+  | "admin";
 
 export function MotivationNav({
   active,
@@ -15,6 +20,11 @@ export function MotivationNav({
   const links = [
     ["feed", "/motivation", "Лента"],
     ["favorites", "/motivation/favorites", "Избранное"],
+    // «Студия» — место, где живут свои рилсы: там их создают, там же ждут
+    // готовый кадр и оживляют его в видео. Раньше раздел назывался «Мои
+    // рилсы» и в меню его не было вовсе — попасть можно было только по
+    // ссылке из мастера.
+    ["studio", "/motivation/my", "Студия"],
     ["settings", "/motivation/settings", "Настройки"],
     ...(isAdmin ? ([["admin", "/admin/motivation", "Админ"]] as const) : []),
   ] as const;
