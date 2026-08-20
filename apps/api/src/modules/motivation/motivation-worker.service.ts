@@ -16,6 +16,7 @@ import { composeStoryImage } from './story-image';
 import { MotivationSettingsService } from './motivation-settings.service';
 import { MotivationModerationService } from './motivation-moderation.service';
 import { estimateImageCostUsd, IMAGE_SIZE } from './image-cost';
+import { isAutonomousApproval } from './autonomous-approval';
 import { classifyAiFailure, isRetryableFailure } from './ai-failure';
 
 /**
@@ -409,9 +410,8 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
     id: string;
     origin?: string;
   }): Promise<boolean> {
-    if (post.origin !== 'user' || !this.settings) return false;
+    if (!this.settings) return false;
     const settings = await this.settings.read();
-    if (settings.aiModerationMode !== 'autonomous') return false;
     const approval = await this.prisma.motivationModerationAudit.findFirst({
       where: {
         postId: post.id,
@@ -420,7 +420,11 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
       orderBy: { createdAt: 'desc' },
       select: { action: true },
     });
-    return approval?.action === 'ai_approve';
+    return isAutonomousApproval({
+      origin: post.origin,
+      moderationMode: settings.aiModerationMode,
+      lastApprovalAction: approval?.action,
+    });
   }
 
   private async composeStory(
