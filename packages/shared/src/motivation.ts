@@ -180,6 +180,11 @@ export interface MotivationReelDto {
    * «~1–2 минуты» и молчит, а ждать приходится дольше.
    */
   waitNotice: string | null;
+  /**
+   * Провайдер отклонил кадр по содержанию. Отдельно от waitNotice: там «само
+   * дорисуется», здесь — повтор бесполезен и нужен другой кадр.
+   */
+  videoRejectionNotice: string | null;
   /** Можно написать администратору: рилс отклонён и обращения ещё не было. */
   canAppeal: boolean;
   sourceKind: MotivationReelSource['kind'];

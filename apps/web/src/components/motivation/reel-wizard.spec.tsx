@@ -15,6 +15,7 @@ function reelDto(overrides: Partial<MotivationReelDto>): MotivationReelDto {
     reason: null,
     fundingNotice: null,
     waitNotice: null,
+    videoRejectionNotice: null,
     canAppeal: false,
     sourceKind: "own",
     createdAt: "2026-08-19T10:00:00.000Z",
@@ -390,6 +391,26 @@ describe("ReelWizard", () => {
     render(<ReelWizard prefill={{ reelId: "reel-1" }} donation={null} />);
 
     expect(await screen.findByText(/ждёт проверки администратора/)).toBeInTheDocument();
+  });
+
+  it("объясняет отказ по содержанию вместо предложения повторить", async () => {
+    // Повтор с тем же кадром провайдер отвергнет так же и снова выставит счёт,
+    // поэтому «можно попробовать ещё раз» здесь — вредный совет.
+    routeFetch({
+      "/motivation/reels/quota": () => quota,
+      "/motivation/reels/reel-1": () =>
+        reelDto({
+          stage: "published",
+          canAnimate: false,
+          videoState: "failed",
+          videoRejectionNotice:
+            "Провайдер видео отклонил этот кадр: его проверка содержания сочла картинку неподходящей.",
+        }),
+    });
+    render(<ReelWizard prefill={{ reelId: "reel-1" }} />);
+
+    expect(await screen.findByText(/отклонил этот кадр/)).toBeInTheDocument();
+    expect(screen.queryByText(/можно попробовать ещё раз/)).toBeNull();
   });
 
   it("asks for support and shows requisites when generation ran out of money", async () => {
