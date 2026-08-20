@@ -43,7 +43,7 @@ export default async function PublicMotivationPostPage({ params }: { params: Pro
   const { slug } = await params;
   const post = await getPublicMotivationPost(slug);
   if (!post) notFound();
-  return <main className="min-h-screen bg-bg-0 px-4 py-10 text-text-0"><article className="glass mx-auto max-w-2xl overflow-hidden rounded-3xl shadow-2xl">{post.videoUrl ? (
+  return <main className="min-h-dvh bg-bg-0 px-4 py-10 text-text-0"><article className="glass mx-auto max-w-2xl overflow-hidden rounded-3xl shadow-2xl">{post.videoUrl ? (
     // Постер обязателен: без него на время загрузки зритель видит пустой
     // прямоугольник вместо кадра. muted — иначе браузер не даст автозапуск.
     <video src={post.videoUrl} poster={post.storyImageUrl || post.imageUrl} autoPlay muted loop playsInline className="aspect-[9/16] w-full bg-bg-1 object-cover" />

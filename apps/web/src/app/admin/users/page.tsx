@@ -38,7 +38,7 @@ export default async function AdminUsersPage({
   if (!users) throw new Error("Не удалось загрузить пользователей");
 
   return (
-    <div className="relative min-h-screen bg-bg-0">
+    <div className="relative min-h-dvh bg-bg-0">
       <BackgroundOrbs />
       <NoiseOverlay />
       <Header user={user} />

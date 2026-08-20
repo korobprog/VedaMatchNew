@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { PwaBrowserFamily, PwaPlatform } from "@vedamatch/shared";
 import { InstallBanner } from "./install-banner";
 import { useInstallPrompt } from "./use-install-prompt";
 
@@ -10,9 +11,15 @@ vi.mock("./use-install-prompt", () => ({
 
 const promptInstall = vi.fn();
 
-function mockMode(mode: string) {
+function mockMode(
+  mode: string,
+  browser: PwaBrowserFamily = "chrome",
+  platform: PwaPlatform = "android",
+) {
   vi.mocked(useInstallPrompt).mockReturnValue({
     mode: mode as never,
+    browser,
+    platform,
     promptInstall,
   });
 }
@@ -35,7 +42,7 @@ describe("InstallBanner", () => {
   });
 
   it("opens manual instructions on iOS instead of a dialog", async () => {
-    mockMode("ios-manual");
+    mockMode("ios-manual", "safari", "ios");
     render(<InstallBanner />);
 
     await userEvent.click(
@@ -62,5 +69,32 @@ describe("InstallBanner", () => {
     render(<InstallBanner />);
 
     expect(screen.queryByRole("button", { name: "Установить" })).toBeNull();
+  });
+
+  it("never calls the system dialog in Yandex Browser: it would make a shortcut", async () => {
+    mockMode("wrong-browser", "yandex-browser", "android");
+    render(<InstallBanner />);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Как установить" }),
+    );
+
+    expect(promptInstall).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("dialog", { name: /через Chrome/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("points iOS users of a non-Safari browser at Safari", async () => {
+    mockMode("wrong-browser", "yandex-browser", "ios");
+    render(<InstallBanner />);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Как установить" }),
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: /через Safari/ }),
+    ).toBeInTheDocument();
   });
 });

@@ -33,6 +33,7 @@ import { LandingPage } from "@/components/landing";
 import { SessionRestore } from "@/components/session-restore";
 import { needsSessionRestore } from "@/lib/session-marker";
 import { InstallBanner } from "@/components/pwa/install-banner";
+import { InstallEnvironmentBeacon } from "@/components/pwa/install-environment-beacon";
 import { NotificationPermissionPrompt } from "@/components/pwa/notification-permission-prompt";
 import { PushSubscriptionSync } from "@/components/pwa/push-subscription-sync";
 
@@ -127,7 +128,7 @@ export default async function Home({
     : {};
 
   return (
-    <div className="relative min-h-screen bg-bg-0">
+    <div className="relative min-h-dvh bg-bg-0">
       <BackgroundOrbs />
       <NoiseOverlay />
       <Header user={user} />
@@ -149,6 +150,9 @@ export default async function Home({
         <ServiceGrid services={services} userId={user.id} extras={serviceExtras} />
       </main>
       <InstallBanner />
+      {/* Главная лежит вне группы (portal), где висит тот же маячок, — без
+          этой строки самая посещаемая страница в замер не попадает. */}
+      <InstallEnvironmentBeacon />
       <NotificationPermissionPrompt />
       <PushSubscriptionSync />
     </div>

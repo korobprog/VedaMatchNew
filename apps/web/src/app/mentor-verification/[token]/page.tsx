@@ -13,7 +13,7 @@ export default async function MentorVerificationPage({
   if (!request) notFound();
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-4 py-8 dark:bg-zinc-950">
+    <main className="min-h-dvh bg-zinc-50 px-4 py-8 dark:bg-zinc-950">
       <div className="mx-auto max-w-3xl">
         <div className="mb-6 flex items-center gap-3">
           <VedaMatchMark className="size-13" />

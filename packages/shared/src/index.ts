@@ -18,6 +18,7 @@ export * from './changelog';
 export * from './market';
 export * from './community';
 export * from './notices';
+export * from './pwa';
 
 import type { SubscriptionState } from './support';
 

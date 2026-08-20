@@ -7,9 +7,9 @@ export function IosInstallInstructions({ onClose }: { onClose: () => void }) {
     <div
       role="dialog"
       aria-label="Как установить приложение на iPhone"
-      className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4"
+      className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4"
     >
-      <div className="glass w-full max-w-sm rounded-2xl border border-glass-brd p-6">
+      <div className="w-full max-w-sm rounded-2xl border border-glass-brd bg-bg-1 p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <h2 className="font-display text-lg font-bold text-text-0">
             Установка на iPhone

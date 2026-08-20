@@ -19,7 +19,7 @@ export function LoginCard({ returnTo }: { returnTo?: string }) {
       ? `${API_URL}/auth/google?returnTo=${encodeURIComponent(returnTo)}`
       : `${API_URL}/auth/google`;
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-bg-0">
+    <div className="relative flex min-h-dvh items-center justify-center bg-bg-0">
       <BackgroundOrbs />
       <NoiseOverlay />
       

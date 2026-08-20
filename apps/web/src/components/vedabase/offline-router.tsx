@@ -116,7 +116,7 @@ function parseOfflineRoute(pathname: string): OfflineRoute {
 
 function OfflineMessage({ children }: { children: React.ReactNode }) {
   return (
-    <main className="grid min-h-screen place-items-center bg-zinc-50 px-4 dark:bg-zinc-950">
+    <main className="grid min-h-dvh place-items-center bg-zinc-50 px-4 dark:bg-zinc-950">
       <section className="max-w-lg rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
           Union Vedabase · офлайн

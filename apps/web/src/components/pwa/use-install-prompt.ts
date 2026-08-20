@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { PwaBrowserFamily, PwaPlatform } from "@vedamatch/shared";
 import {
-  detectInstallMode,
+  detectInstallState,
   type BeforeInstallPromptEvent,
   type InstallMode,
 } from "@/lib/pwa/platform";
@@ -13,26 +14,34 @@ import {
 
 type InstallNavigator = Navigator & { standalone?: boolean };
 
-export function useInstallPrompt(): {
+export interface InstallPrompt {
   mode: InstallMode;
+  /** Нужны диалогу «wrong-browser»: совет для Android и для iOS разный. */
+  browser: PwaBrowserFamily;
+  platform: PwaPlatform;
   promptInstall: () => Promise<void>;
-} {
+}
+
+export function useInstallPrompt(): InstallPrompt {
   // На сервере режим неизвестен — «unsupported» ничего не рисует, поэтому
   // разметка сервера и первого рендера совпадают.
   const [mode, setMode] = useState<InstallMode>("unsupported");
+  const [browser, setBrowser] = useState<PwaBrowserFamily>("other");
+  const [platform, setPlatform] = useState<PwaPlatform>("desktop");
   const [promptEvent, setPromptEvent] =
     useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
     function resolve(event: BeforeInstallPromptEvent | null) {
       setPromptEvent(event);
-      setMode(
-        detectInstallMode({
-          matchMedia: (query) => window.matchMedia(query),
-          navigator: window.navigator as InstallNavigator,
-          promptEvent: event,
-        }),
-      );
+      const state = detectInstallState({
+        matchMedia: (query) => window.matchMedia(query),
+        navigator: window.navigator as InstallNavigator,
+        promptEvent: event,
+      });
+      setMode(state.mode);
+      setBrowser(state.browser);
+      setPlatform(state.platform);
     }
 
     resolve(readCapturedInstallPrompt());
@@ -65,5 +74,5 @@ export function useInstallPrompt(): {
     if (outcome === "accepted") setMode("installed");
   }, [promptEvent]);
 
-  return { mode, promptInstall };
+  return { mode, browser, platform, promptInstall };
 }

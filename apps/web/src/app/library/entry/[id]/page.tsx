@@ -38,7 +38,7 @@ export default async function LibraryEntryPage({
 
   if (!entry) {
     return (
-      <div className="relative min-h-screen bg-bg-0">
+      <div className="relative min-h-dvh bg-bg-0">
         <Header user={user} />
         <main className="mx-auto max-w-3xl px-4 py-8">
           <BackLink locale={locale} fallbackHref="/library" />
@@ -66,7 +66,7 @@ export default async function LibraryEntryPage({
   ]);
 
   return (
-    <div className="relative min-h-screen bg-bg-0">
+    <div className="relative min-h-dvh bg-bg-0">
       <Header user={user} />
       <main className="mx-auto max-w-3xl px-4 py-8 pb-24">
         <BackLink locale={locale} fallbackHref="/library" />

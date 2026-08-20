@@ -32,7 +32,7 @@ export function LandingPage({
 }) {
   const t = useTranslations("Landing");
   return (
-    <div className="relative min-h-screen bg-bg-0">
+    <div className="relative min-h-dvh bg-bg-0">
       <SilentRefresh returnTo={returnTo} />
       {/* Background elements */}
       <BackgroundOrbs />
@@ -42,7 +42,7 @@ export function LandingPage({
       <Navbar returnTo={returnTo} />
 
       {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center pt-20 pb-32 md:pt-24 md:pb-40 overflow-hidden">
+      <section className="relative min-h-dvh flex items-center pt-20 pb-32 md:pt-24 md:pb-40 overflow-hidden">
         <div className="mx-auto max-w-7xl px-4 md:px-6 w-full">
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             {/* Left side - Text content */}
