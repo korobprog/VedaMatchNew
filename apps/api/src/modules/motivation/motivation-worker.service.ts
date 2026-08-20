@@ -16,6 +16,17 @@ import { composeStoryImage } from './story-image';
 import { MotivationSettingsService } from './motivation-settings.service';
 import { MotivationModerationService } from './motivation-moderation.service';
 import { estimateImageCostUsd } from './image-cost';
+import { classifyAiFailure, isRetryableFailure } from './ai-failure';
+
+/**
+ * Код «провайдер занят» и пауза перед следующей попыткой.
+ *
+ * Отдельный код, а не текст ошибки: по нему и очередь узнаёт отложенный пост,
+ * и интерфейс говорит автору «рисуем, как только освободится» вместо «не
+ * получилось».
+ */
+export const PROVIDER_BUSY = 'provider_busy';
+const PROVIDER_BUSY_PAUSE_MS = 5 * 60_000;
 
 @Injectable()
 export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
@@ -119,6 +130,14 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
           textApprovedAt: { not: null },
           imagePrompt: { not: null },
           attemptCount: { lt: 3 },
+          // Перегруженного провайдера ждём молча: тик раз в 30 секунд бил бы
+          // в ту же стену и только копил отказы в журнале.
+          OR: [
+            { generationErrorCode: { not: PROVIDER_BUSY } },
+            {
+              updatedAt: { lt: new Date(Date.now() - PROVIDER_BUSY_PAUSE_MS) },
+            },
+          ],
         },
         orderBy: { createdAt: 'asc' },
       });
@@ -334,7 +353,12 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
         current?.reviewStatus === MotivationReviewStatus.image_queued &&
         current.status === 'generating'
       ) {
-        const retryable = current.attemptCount < 3;
+        // Перегрузка провайдера — не вина рилса: попытку возвращаем, иначе
+        // три отказа подряд за полторы минуты хоронят кадр, который просто
+        // некому было нарисовать. Провайдер отвечает на это 429, а его канал
+        // 503 — оба разбирает `classifyAiFailure`.
+        const busy = isRetryableFailure(classifyAiFailure(error));
+        const retryable = busy || current.attemptCount < 3;
         await this.prisma.motivationPost.updateMany({
           where: {
             id,
@@ -348,10 +372,12 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
               : MotivationReviewStatus.failed,
             status: retryable ? 'draft' : 'failed',
             generationStage: retryable ? 'image_queued' : 'image',
-            generationErrorCode:
-              error instanceof Error
+            generationErrorCode: busy
+              ? PROVIDER_BUSY
+              : error instanceof Error
                 ? error.message.slice(0, 200)
                 : 'generation_failed',
+            ...(busy ? { attemptCount: { decrement: 1 } } : {}),
           },
         });
       }

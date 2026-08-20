@@ -66,6 +66,7 @@ import {
   isRetryableFailure,
 } from './ai-failure';
 import { fundingMessage } from './funding-error';
+import { PROVIDER_BUSY } from './motivation-worker.service';
 
 const LANGUAGES: readonly MotivationLanguage[] = ['ru', 'en', 'hi'];
 const MAX_TEXT = 600;
@@ -888,6 +889,12 @@ export class MotivationReelsService {
       fundingNotice:
         fundingMessage(post.videoErrorCode) ??
         fundingMessage(post.generationErrorCode),
+      // Кадр ждёт освободившегося провайдера, а не сломался: попытки на этот
+      // отказ не тратятся, и рилс дорисуется сам.
+      waitNotice:
+        post.generationErrorCode === PROVIDER_BUSY
+          ? 'Провайдер картинок сейчас перегружен. Кадр дорисуется сам, как только он освободится, — можно закрыть страницу.'
+          : null,
       canAppeal: canAppeal(stage, hasAppeal),
       sourceKind: post.sourceVerified ? 'vedabase' : 'own',
       createdAt: post.createdAt.toISOString(),

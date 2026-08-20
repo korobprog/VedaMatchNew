@@ -14,6 +14,7 @@ function reelDto(overrides: Partial<MotivationReelDto>): MotivationReelDto {
     canAnimate: false,
     reason: null,
     fundingNotice: null,
+    waitNotice: null,
     canAppeal: false,
     sourceKind: "own",
     createdAt: "2026-08-19T10:00:00.000Z",
