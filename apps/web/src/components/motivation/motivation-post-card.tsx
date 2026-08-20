@@ -79,7 +79,10 @@ export function MotivationPostCard({ post }: { post: MotivationPostDto }) {
           {post.storyImageUrl && (
             <a href={post.storyImageUrl} download className="col-span-2 rounded-xl bg-amber-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-amber-700">Скачать для Stories</a>
           )}
-          <Link href={`/m/${post.slug}`} className="col-span-2 rounded-xl px-4 py-2 text-center text-sm font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950">Открыть пост</Link>
+          {/* Внутрь ленты: `/m/<slug>` — страница для гостей и внешних ссылок,
+              участнику она показывает пост в отрыве от ленты. Ссылка «Поделиться»
+              выше остаётся публичной — её как раз отправляют наружу. */}
+          <Link href={`/motivation?post=${post.slug}`} className="col-span-2 rounded-xl px-4 py-2 text-center text-sm font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950">Открыть в ленте</Link>
         </div>
       </div>
     </article>

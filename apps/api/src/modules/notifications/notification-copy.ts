@@ -170,7 +170,10 @@ export function buildNotification(
       return {
         title: 'Ваш рилс опубликован',
         body: 'Он появился в ленте «Мотивации» — посмотрите, как получилось',
-        url: `/m/${event.slug}`,
+        // В ленту, а не на публичную страницу: `/m/<slug>` сделана для гостей
+        // и внешних ссылок, а автор — участник и ждёт увидеть свой рилс там,
+        // где листает остальные.
+        url: `/motivation?post=${event.slug}`,
         tag: `motivation-reel:${event.reelId}`,
         category: 'motivation',
       };
