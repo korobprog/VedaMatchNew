@@ -55,6 +55,11 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.announcementPublished)
+  onAnnouncementPublished(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   @OnEvent(notificationEventNames.supportReplied)
   onSupportReplied(event: NotificationEvent): void {
     void this.deliver(event);

@@ -1,10 +1,14 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import type {
   AdminAnnouncementDto,
+  AnnouncementAudienceStage,
+  BroadcastAnnouncementRequest,
+  BroadcastAnnouncementResult,
   AdminReleaseDto,
   AdminRoadmapItemDto,
   AnnouncementStatus,
@@ -20,7 +24,13 @@ import type {
   UpdateReleaseRequest,
   UpdateRoadmapItemRequest,
 } from '@vedamatch/shared';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  announcementSortDate,
+  isAnnouncementVisible,
+  visibleAnnouncementWhere,
+} from './announcement-visibility';
 
 export type Lang = 'ru' | 'en';
 
@@ -29,7 +39,10 @@ const ROADMAP_STATUSES: RoadmapStatus[] = ['planned', 'in_progress', 'done'];
 
 @Injectable()
 export class ChangelogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   // ===== Публичное чтение =====
 
@@ -51,15 +64,24 @@ export class ChangelogService {
 
   async listAnnouncements(lang: Lang): Promise<PublicAnnouncementDto[]> {
     const announcements = await this.prisma.announcement.findMany({
-      where: { status: 'published' },
-      orderBy: { publishedAt: 'desc' },
+      where: visibleAnnouncementWhere(new Date()),
     });
-    return announcements.map((item) => ({
-      id: item.id,
-      title: lang === 'en' ? item.titleEn : item.titleRu,
-      body: lang === 'en' ? item.bodyEn : item.bodyRu,
-      publishedAt: (item.publishedAt ?? item.createdAt).toISOString(),
-    }));
+    // Порядок наводим здесь: у отложенной новости «когда вышла» — назначенное
+    // время, а не отметка публикации, и одним `orderBy` эти два поля не свести.
+    return announcements
+      .sort(
+        (left, right) =>
+          announcementSortDate(right).getTime() -
+          announcementSortDate(left).getTime(),
+      )
+      .sort((left, right) => Number(right.pinned) - Number(left.pinned))
+      .map((item) => ({
+        id: item.id,
+        title: lang === 'en' ? item.titleEn : item.titleRu,
+        body: lang === 'en' ? item.bodyEn : item.bodyRu,
+        publishedAt: announcementSortDate(item).toISOString(),
+        pinned: item.pinned,
+      }));
   }
 
   async listRoadmap(lang: Lang): Promise<PublicRoadmapItemDto[]> {
@@ -184,15 +206,23 @@ export class ChangelogService {
   ): Promise<AdminAnnouncementDto> {
     this.ensureAdmin(role);
     const status = this.normalizeAnnouncementStatus(body.status);
-    const item = await this.prisma.announcement.create({
-      data: {
-        titleRu: body.titleRu,
-        titleEn: body.titleEn,
-        bodyRu: body.bodyRu,
-        bodyEn: body.bodyEn,
-        status,
-        publishedAt: status === 'published' ? new Date() : null,
-      },
+    const schedule = this.announcementSchedule(body);
+    // Закреплённая всегда одна: снимаем прежнюю в той же транзакции, иначе
+    // частичный уникальный индекс отвергнет вставку.
+    const item = await this.prisma.$transaction(async (tx) => {
+      if (body.pinned) await tx.announcement.updateMany({ where: { pinned: true }, data: { pinned: false } });
+      return tx.announcement.create({
+        data: {
+          titleRu: body.titleRu,
+          titleEn: body.titleEn,
+          bodyRu: body.bodyRu,
+          bodyEn: body.bodyEn,
+          status,
+          pinned: Boolean(body.pinned),
+          ...schedule,
+          publishedAt: status === 'published' ? new Date() : null,
+        },
+      });
     });
     return this.toAdminAnnouncement(item);
   }
@@ -214,18 +244,100 @@ export class ChangelogService {
     const becamePublished =
       status === 'published' && existing.status !== 'published';
 
-    const item = await this.prisma.announcement.update({
-      where: { id },
-      data: {
-        titleRu: body.titleRu,
-        titleEn: body.titleEn,
-        bodyRu: body.bodyRu,
-        bodyEn: body.bodyEn,
-        status,
-        publishedAt: becamePublished ? new Date() : undefined,
-      },
+    const schedule = this.announcementSchedule(body);
+    const item = await this.prisma.$transaction(async (tx) => {
+      if (body.pinned)
+        await tx.announcement.updateMany({
+          where: { pinned: true, NOT: { id } },
+          data: { pinned: false },
+        });
+      return tx.announcement.update({
+        where: { id },
+        data: {
+          titleRu: body.titleRu,
+          titleEn: body.titleEn,
+          bodyRu: body.bodyRu,
+          bodyEn: body.bodyEn,
+          status,
+          ...(body.pinned === undefined ? {} : { pinned: body.pinned }),
+          ...schedule,
+          publishedAt: becamePublished ? new Date() : undefined,
+        },
+      });
     });
     return this.toAdminAnnouncement(item);
+  }
+
+  /**
+   * Разослать новость участникам.
+   *
+   * Отдельным действием, а не частью публикации: новость на главной никого не
+   * беспокоит, а рассылка приходит в колокольчик и на телефон — решать, стоит
+   * ли она того, должен человек, а не код.
+   *
+   * Уведомления уходят событиями на шину: сервисный модуль не вправе дёргать
+   * чужой напрямую, а подписчик сам сверится с настройками получателя и
+   * отправит push тем, у кого есть подписка.
+   */
+  async adminBroadcastAnnouncement(
+    role: Role,
+    id: string,
+    body: BroadcastAnnouncementRequest = {},
+  ): Promise<BroadcastAnnouncementResult> {
+    this.ensureAdmin(role);
+    const announcement = await this.prisma.announcement.findUnique({
+      where: { id },
+    });
+    if (!announcement) throw new NotFoundException('Новость не найдена');
+    // Не только статус: отложенной новости на портале ещё нет, и человек,
+    // пришедший по уведомлению, не нашёл бы её. Просроченной — тем более.
+    if (!isAnnouncementVisible(announcement, new Date()))
+      throw new BadRequestException(
+        announcement.status === 'published'
+          ? 'Новость сейчас не показывается на портале: проверьте даты показа'
+          : 'Сначала опубликуйте новость: рассылать черновик некуда',
+      );
+
+    const stages = this.audienceStages(body.stages);
+    const recipients = await this.prisma.user.findMany({
+      where: {
+        // Удалённые и анонимизированные аккаунты в рассылку не идут.
+        deletedAt: null,
+        ...(stages.length > 0 ? { spiritualStage: { in: stages } } : {}),
+      },
+      select: { id: true },
+    });
+
+    for (const recipient of recipients)
+      this.events.emit('portal.announcement.published', {
+        name: 'portal.announcement.published',
+        recipientId: recipient.id,
+        announcementId: announcement.id,
+        title: announcement.titleRu,
+        excerpt: announcement.bodyRu,
+      });
+
+    await this.prisma.announcement.update({
+      where: { id },
+      data: {
+        broadcastAt: new Date(),
+        broadcastCount: { increment: recipients.length },
+      },
+    });
+    // Сколько дойдёт до телефонов, знает только подписчик: у части людей нет
+    // подписки, у части выключена категория. Честно отдаём число адресатов.
+    return { recipients: recipients.length, pushed: recipients.length };
+  }
+
+  private audienceStages(
+    stages: AnnouncementAudienceStage[] | undefined,
+  ): AnnouncementAudienceStage[] {
+    if (!stages || stages.length === 0) return [];
+    const known = new Set<string>(['seeker', 'practitioner', 'yogi', 'devotee']);
+    const picked = stages.filter((stage) => known.has(stage));
+    if (picked.length === 0)
+      throw new BadRequestException('Неизвестная ступень в списке аудитории');
+    return picked;
   }
 
   async adminDeleteAnnouncement(role: Role, id: string): Promise<{ ok: true }> {
@@ -360,6 +472,33 @@ export class ChangelogService {
     };
   }
 
+  /**
+   * Разбор дат расписания. Пустая строка и null означают «снять», отсутствие
+   * поля — «не трогать»: админка шлёт частичное обновление, и молча обнулять
+   * то, чего в запросе не было, нельзя.
+   */
+  private announcementSchedule(body: {
+    publishAt?: string | null;
+    expiresAt?: string | null;
+  }): { publishAt?: Date | null; expiresAt?: Date | null } {
+    const parse = (value: string | null | undefined) => {
+      if (value === undefined) return undefined;
+      if (!value) return null;
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime()))
+        throw new BadRequestException('Некорректная дата расписания');
+      return date;
+    };
+    const publishAt = parse(body.publishAt);
+    const expiresAt = parse(body.expiresAt);
+    if (publishAt && expiresAt && expiresAt.getTime() <= publishAt.getTime())
+      throw new BadRequestException('Срок показа кончается раньше, чем начинается');
+    return {
+      ...(publishAt === undefined ? {} : { publishAt }),
+      ...(expiresAt === undefined ? {} : { expiresAt }),
+    };
+  }
+
   private toAdminAnnouncement(item: {
     id: string;
     titleRu: string;
@@ -368,6 +507,11 @@ export class ChangelogService {
     bodyEn: string;
     status: AnnouncementStatus;
     publishedAt: Date | null;
+    pinned: boolean;
+    publishAt: Date | null;
+    expiresAt: Date | null;
+    broadcastAt: Date | null;
+    broadcastCount: number;
   }): AdminAnnouncementDto {
     return {
       id: item.id,
@@ -377,6 +521,11 @@ export class ChangelogService {
       bodyEn: item.bodyEn,
       status: item.status,
       publishedAt: item.publishedAt?.toISOString() ?? null,
+      pinned: item.pinned,
+      publishAt: item.publishAt?.toISOString() ?? null,
+      expiresAt: item.expiresAt?.toISOString() ?? null,
+      broadcastAt: item.broadcastAt?.toISOString() ?? null,
+      broadcastCount: item.broadcastCount,
     };
   }
 

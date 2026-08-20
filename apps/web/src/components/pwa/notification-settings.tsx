@@ -24,6 +24,7 @@ const categories = [
   { key: "market", label: "Заявки на Рынке" },
   // Только про свои публикации: лента мотивации сама по себе не пишет.
   { key: "motivation", label: "Мои рилсы: студия «Мотивации»" },
+  { key: "announcements", label: "Новости VedaMatch" },
 ] as const;
 
 export function NotificationSettings() {
