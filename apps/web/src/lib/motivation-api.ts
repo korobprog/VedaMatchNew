@@ -17,6 +17,8 @@ import type {
   MotivationSourceWatchDto,
 } from "@vedamatch/shared";
 
+import { parseJsonBody } from "@/lib/json-body";
+
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
 async function motivationGet<T>(path: string): Promise<T | null> {
@@ -35,14 +37,14 @@ async function motivationGet<T>(path: string): Promise<T | null> {
   // экран показывает свою заглушку.
   if ([401, 403, 404].includes(response.status)) return null;
   if (!response.ok) throw new Error(`API ${path} failed: ${response.status}`);
-  return (await response.json()) as T;
+  return parseJsonBody<T>(await response.text());
 }
 
 async function motivationGetPublic<T>(path: string): Promise<T | null> {
   const response = await fetch(`${API_URL}${path}`, { cache: "no-store" });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`API ${path} failed: ${response.status}`);
-  return (await response.json()) as T;
+  return parseJsonBody<T>(await response.text());
 }
 
 /** `post` открывает ленту на конкретном рилсе — он придёт первым в списке. */
