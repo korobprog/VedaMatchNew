@@ -18,6 +18,7 @@ const defaults: NotificationPreferencesDto = {
   market: true,
   notices: true,
   motivation: true,
+  announcements: true,
 };
 
 /**
@@ -26,7 +27,11 @@ const defaults: NotificationPreferencesDto = {
  * уведомление потерялось. Не сутки: колокольчик — список непрочитанного,
  * а не архив.
  */
-const readRetentionMs = 15 * 60 * 1000;
+/**
+ * Прочитанное живёт неделю, а не четверть часа: список показывает его ниже
+ * непрочитанного, и вернуться к уже открытому уведомлению — обычное дело.
+ */
+const readRetentionMs = 7 * 24 * 60 * 60 * 1000;
 
 /** Непрочитанное тоже не копится вечно: неактивный аккаунт иначе растит таблицу. */
 const unreadRetentionMs = 30 * 24 * 60 * 60 * 1000;
@@ -109,6 +114,7 @@ export class NotificationsService {
       market: row.market,
       notices: row.notices,
       motivation: row.motivation,
+      announcements: row.announcements,
     };
   }
 
@@ -126,6 +132,7 @@ export class NotificationsService {
       market: patch.market ?? current.market,
       notices: patch.notices ?? current.notices,
       motivation: patch.motivation ?? current.motivation,
+      announcements: patch.announcements ?? current.announcements,
     };
     await this.prisma.notificationPreference.upsert({
       where: { userId },
@@ -157,8 +164,10 @@ export class NotificationsService {
   async listInbox(userId: string): Promise<NotificationInboxResponse> {
     await this.purge(userId);
     const rows = await this.prisma.notificationItem.findMany({
-      where: { userId, readAt: null },
-      orderBy: { createdAt: 'desc' },
+      where: { userId },
+      // Непрочитанное первым, внутри групп — свежее сверху: человек приходит
+      // за новым, а прочитанное держим под рукой на случай «а что там было».
+      orderBy: [{ readAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'desc' }],
       select: {
         id: true,
         title: true,
@@ -166,6 +175,7 @@ export class NotificationsService {
         url: true,
         category: true,
         createdAt: true,
+        readAt: true,
       },
     });
     const items: NotificationItemDto[] = rows.map((row) => ({
@@ -175,8 +185,12 @@ export class NotificationsService {
       url: row.url,
       category: row.category as NotificationCategory,
       createdAt: row.createdAt.toISOString(),
+      readAt: row.readAt?.toISOString() ?? null,
     }));
-    return { items, unreadCount: items.length };
+    return {
+      items,
+      unreadCount: items.filter((item) => item.readAt === null).length,
+    };
   }
 
   /**
