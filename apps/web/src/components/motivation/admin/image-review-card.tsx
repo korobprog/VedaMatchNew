@@ -267,6 +267,26 @@ export function ImageReviewCard({
                       ? "Переснять ролик"
                       : "Оживить"}
               </button>
+              {/* Собранный ролик виден только здесь, пока его не приняли.
+                  Эндпоинт приёмки был, а вызвать его из интерфейса было
+                  нечем — ролики копились в очереди, а автор ждал впустую. */}
+              {post.videoStatus === "review" && (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() =>
+                    run(post.id, "approve-video", {
+                      path: `/admin/motivation/posts/${post.id}/approve-video`,
+                    })
+                  }
+                  className={primaryButton}
+                  title="Показать ролик автору"
+                >
+                  {pendingAction === "approve-video"
+                    ? "Принимаем…"
+                    : "Принять ролик"}
+                </button>
+              )}
               <button
                 type="button"
                 disabled={disabled}
