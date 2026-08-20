@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { AdminPurgeUserResponse } from "@vedamatch/shared";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -27,7 +26,6 @@ export function AdminUserPurgeForm({
   email: string;
   isSelf: boolean;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [confirmEmail, setConfirmEmail] = useState("");
@@ -52,7 +50,10 @@ export function AdminUserPurgeForm({
       });
       if (!res.ok) throw new Error(await res.text());
       setDone((await res.json()) as AdminPurgeUserResponse);
-      router.refresh();
+      // Ни refresh, ни переход: карточки этого пользователя больше нет, и её
+      // перечитывание упиралось в 404, роняя страницу «Страница не открылась».
+      // Остаёмся на месте — в сводке ниже счётчик файлов, которые не удалось
+      // снести из хранилища, и администратор обязан его увидеть.
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось удалить аккаунт");
     } finally {
