@@ -280,8 +280,10 @@ describe('MotivationVideoWorkerService: промпт для видеомодел
 
     await tickWithStubbedImage(worker);
 
+    // Кадр уходит в теле задачи: хранилище провайдера с боевого сервера
+    // недоступно, см. комментарий в startQueued.
     expect(fal.submit).toHaveBeenCalledWith({
-      imageUrl: 'https://fal/frame.jpg',
+      imageUrl: expect.stringMatching(/^data:image\/jpeg;base64,/) as string,
       prompt: 'Slow drifting mist over the water. Camera almost still.',
     });
   });
@@ -292,7 +294,7 @@ describe('MotivationVideoWorkerService: промпт для видеомодел
     await tickWithStubbedImage(worker);
 
     expect(fal.submit).toHaveBeenCalledWith({
-      imageUrl: 'https://fal/frame.jpg',
+      imageUrl: expect.stringMatching(/^data:image\/jpeg;base64,/) as string,
       prompt: DEFAULT_MOTIVATION_VIDEO_PROMPT,
     });
   });
@@ -401,7 +403,8 @@ describe('MotivationVideoWorkerService: дневной потолок', () => {
       global.fetch = originalFetch;
     }
 
-    expect(fal.upload).toHaveBeenCalledTimes(1);
+    // upload больше не участвует: кадр уходит в теле задачи.
+    expect(fal.upload).not.toHaveBeenCalled();
     expect(fal.submit).toHaveBeenCalledTimes(1);
   });
 

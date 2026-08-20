@@ -11,6 +11,7 @@ import sharp from 'sharp';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FalAudioService } from './fal-audio.service';
 import { FalVideoService } from './fal-video.service';
+import { buildImageDataUri, encodedSizeBytes } from './image-data-uri';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { resolveVideoPrompt } from './motivation-prompt';
 import { composeStoryVideo, estimateReadingSeconds } from './story-video';
@@ -223,10 +224,18 @@ export class MotivationVideoWorkerService
       await this.assertWithinBudget();
 
       const frame = await this.prepareFrame(post.imageUrl);
-      // Кадр обязательно перекладываем в хранилище провайдера: прямую ссылку
-      // на наш S3 он не осиливает — тянул её 99 секунд и сдался с
-      // file_download_error, хотя снаружи она отдаётся мгновенно.
-      const imageUrl = await this.fal.upload(frame);
+      // Кадр уходит прямо в теле задачи, а не через хранилище провайдера.
+      //
+      // Оба обходных пути закрыты замерами с боевого сервера: заливка в
+      // v3b.fal.media встаёт на объёме больше ~20 КБ и обрывается по таймауту,
+      // а скачать картинку из нашего S3 провайдер не может вовсе — 96 секунд
+      // и file_download_error, даже на файле в 230 КБ. Зато API-сеть fal
+      // (queue.fal.run) здорова: 300 КБ уходят за 1,15 с. Data-URI ведёт кадр
+      // по здоровому маршруту и сломанный хост не задействует совсем.
+      const imageUrl = buildImageDataUri(frame);
+      this.logger.log(
+        `Кадр уходит в теле задачи: ${frame.length} Б, в base64 ${encodedSizeBytes(frame.length)} Б`,
+      );
       const job = await this.fal.submit({
         imageUrl,
         // Именно videoPrompt, а не imagePrompt: промпт картинки описывает
