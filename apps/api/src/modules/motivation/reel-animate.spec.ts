@@ -5,6 +5,7 @@ const base = {
   hasImage: true,
   videoState: 'none',
   videoEnabled: true,
+  videoConfigured: true,
   isAdmin: false,
 };
 
@@ -33,8 +34,17 @@ describe('canAnimateReel', () => {
   });
 
   it('администратора выключатель не касается', () => {
-    expect(canAnimateReel({ ...base, videoEnabled: false, isAdmin: true })).toBe(
-      true,
-    );
+    expect(
+      canAnimateReel({ ...base, videoEnabled: false, isAdmin: true }),
+    ).toBe(true);
+  });
+
+  it('без ключа fal.ai кнопки нет ни у кого, включая администратора', () => {
+    // Очередь без воркера — рилс завис бы в «готовится» навсегда, а поправить
+    // это из админки нельзя: ключ живёт в окружении.
+    expect(canAnimateReel({ ...base, videoConfigured: false })).toBe(false);
+    expect(
+      canAnimateReel({ ...base, videoConfigured: false, isAdmin: true }),
+    ).toBe(false);
   });
 });
