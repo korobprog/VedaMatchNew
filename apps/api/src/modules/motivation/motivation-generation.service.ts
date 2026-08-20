@@ -2,11 +2,13 @@ import {
   BadGatewayException,
   BadRequestException,
   Injectable,
+  Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { IMAGE_SIZE } from './image-cost';
+import { stripJsonFence } from './chat-json';
 
 export type VerifiedQuoteCopy = {
   originalText: string;
@@ -27,6 +29,8 @@ export type VerifiedQuoteCopy = {
 
 @Injectable()
 export class MotivationGenerationService {
+  private readonly logger = new Logger(MotivationGenerationService.name);
+
   private readonly s3: S3Client | null;
   constructor(private readonly config: ConfigService) {
     const region = config.get<string>('S3_REGION'),
@@ -292,13 +296,44 @@ export class MotivationGenerationService {
     return this.requestStructuredChat(prompt);
   }
 
+  /**
+   * Запрос к модели с запасной на случай сбоя канала.
+   *
+   * Релей раздаёт одну и ту же модель через каналы, и канал регулярно ложится:
+   * «upstream_unavailable, текущий источник GPT Team/Plus» — при полностью
+   * исправном ключе. Для модерации это означало «сбой модели» и ручной разбор
+   * текста, с которым всё в порядке. Поэтому при сбое пробуем вторую модель:
+   * задаётся `MOTIVATION_TEXT_MODEL_FALLBACK`, по умолчанию — быстрая и
+   * дешёвая gemini-3.6-flash другого поставщика, то есть с другим апстримом.
+   *
+   * Запасная модель должна быть именно у другого поставщика: вторая попытка в
+   * тот же упавший канал ничего не даёт.
+   */
   private async requestStructuredChat(prompt: string): Promise<unknown> {
+    const primary =
+      this.config.get<string>('MOTIVATION_TEXT_MODEL') || 'deepseek-v4-flash';
+    const fallback =
+      this.config.get<string>('MOTIVATION_TEXT_MODEL_FALLBACK') ||
+      'gemini-3.6-flash';
+    try {
+      return await this.requestChatWithModel(prompt, primary);
+    } catch (error) {
+      if (fallback === primary) throw error;
+      this.logger.warn(
+        `Модель ${primary} не ответила (${String(error).slice(0, 120)}), пробуем ${fallback}`,
+      );
+      return this.requestChatWithModel(prompt, fallback);
+    }
+  }
+
+  private async requestChatWithModel(
+    prompt: string,
+    model: string,
+  ): Promise<unknown> {
     const apiKey = this.config.get<string>('MOTIVATION_AI_API_KEY');
     const baseUrl = this.config
       .get<string>('MOTIVATION_AI_BASE_URL')
       ?.replace(/\/$/, '');
-    const model =
-      this.config.get<string>('MOTIVATION_TEXT_MODEL') || 'deepseek-v4-flash';
     if (!apiKey || !baseUrl)
       throw new ServiceUnavailableException('Motivation AI is not configured');
     const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -324,7 +359,7 @@ export class MotivationGenerationService {
     if (!content)
       throw new BadGatewayException('Text provider returned no content');
     try {
-      return JSON.parse(content);
+      return JSON.parse(stripJsonFence(content));
     } catch {
       throw new BadGatewayException('Text provider returned invalid JSON');
     }
