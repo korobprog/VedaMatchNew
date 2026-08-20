@@ -89,6 +89,77 @@ export function PortalIcon({ className = "h-7 w-7" }: { className?: string }) {
 }
 
 /**
+ * Обратная связь: оператор в гарнитуре.
+ *
+ * Отличается от `SupportIcon` намеренно: ладонь означает пришедший ответ, а
+ * человек в наушниках — что на той стороне кто-то есть и ему можно написать.
+ * Первая стоит в списке уведомлений, вторая — на кнопке.
+ */
+export function HeadsetIcon({ className = "h-7 w-7" }: { className?: string }) {
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const gid = (name: string) => `headset-${name}-${uid}`;
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden="true"
+    >
+      {/* Дуга гарнитуры над головой */}
+      <path
+        d="M7.5 18v-2.5a8.5 8.5 0 0 1 17 0V18"
+        stroke={`url(#${gid("stroke")})`}
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      {/* Чашки: левая с микрофоном на штанге */}
+      <rect
+        x="4.5"
+        y="16.5"
+        width="4.5"
+        height="7"
+        rx="2.2"
+        fill={`url(#${gid("cup")})`}
+      />
+      <rect
+        x="23"
+        y="16.5"
+        width="4.5"
+        height="7"
+        rx="2.2"
+        fill={`url(#${gid("cup")})`}
+      />
+      <path
+        d="M6.7 23.5v1.2a2.5 2.5 0 0 0 2.5 2.5H13"
+        stroke={`url(#${gid("stroke")})`}
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+      {/* Голова и плечи: без них гарнитура висит сама по себе */}
+      <circle cx="16" cy="14" r="3.4" fill="#FFFFFF" fillOpacity="0.92" />
+      <path
+        d="M10.5 27c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6"
+        stroke="#FFFFFF"
+        strokeOpacity="0.92"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+      <defs>
+        <linearGradient id={gid("cup")} x1="4" y1="16" x2="28" y2="24" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#5EE7C5" />
+          <stop offset="1" stopColor="#2AA88C" />
+        </linearGradient>
+        <linearGradient id={gid("stroke")} x1="4" y1="7" x2="28" y2="27" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#9CF7E2" />
+          <stop offset="1" stopColor="#3FC7A8" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+/**
  * Поддержка: раскрытая ладонь под каплей-искрой.
  *
  * Мятная, а не малиновая, как остальные: ответ поддержки — единственное

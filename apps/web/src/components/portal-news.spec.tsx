@@ -62,9 +62,22 @@ describe("PortalNews", () => {
     expect(screen.queryByText("Открыли Студию")).not.toBeInTheDocument();
   });
 
-  it("без новостей не занимает место на главной", () => {
-    const { container } = render(<PortalNews items={[]} />);
-    expect(container).toBeEmptyDOMElement();
+  it("без новостей оставляет только обратную связь", async () => {
+    // Написать в поддержку человек хочет независимо от того, есть ли новости.
+    render(<PortalNews items={[]} />);
+
+    const support = await screen.findByRole("link", { name: /Написать в поддержку/ });
+    expect(support).toHaveAttribute("href", "/support");
+    expect(screen.queryByText("Все новости")).not.toBeInTheDocument();
+  });
+
+  it("ведёт в поддержку и рядом с новостями", async () => {
+    render(<PortalNews items={[news({ pinned: true })]} />);
+
+    expect(await screen.findByText("Открыли Студию")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Написать в поддержку/ }),
+    ).toHaveAttribute("href", "/support");
   });
 
   it("показывает не больше трёх непрочитанных рядом с закреплённой", async () => {
