@@ -42,8 +42,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   decodeMotivationCursor,
   encodeMotivationCursor,
-  weightedPage,
-  moveOwnToReadableTrack,
+  feedPage,
 } from './motivation-feed';
 import { rankFeed } from './feed-ranking';
 import { adminAiVerdictOf, adminAppealOf } from './moderation-audit';
@@ -115,10 +114,16 @@ export class MotivationService {
     );
   }
   async savePreference(userId: string, input: MotivationPreferenceUpdate) {
+    // Доля вайшнавских публикаций больше не спрашивается и на ленту не влияет:
+    // человек отмечает направления галочками, и два способа отбора рядом
+    // противоречили друг другу — выбранное направление могло не показываться
+    // из-за ползунка, о котором никто не помнил. Колонка осталась в базе с
+    // прежними значениями, поэтому старый клиент ничего не ломает.
+    const percent = Number.isInteger(input.vaishnavaPercent)
+      ? (input.vaishnavaPercent as number)
+      : undefined;
     if (
-      !Number.isInteger(input.vaishnavaPercent) ||
-      input.vaishnavaPercent < 0 ||
-      input.vaishnavaPercent > 100 ||
+      (percent !== undefined && (percent < 0 || percent > 100)) ||
       (input.language && !languages.has(input.language))
     )
       throw new BadRequestException('Некорректные настройки');
@@ -127,12 +132,12 @@ export class MotivationService {
       where: { userId },
       create: {
         userId,
-        vaishnavaPercent: input.vaishnavaPercent,
+        vaishnavaPercent: percent ?? 50,
         language: input.language ?? 'ru',
         profileTypes: profileTypes ?? [],
       },
       update: {
-        vaishnavaPercent: input.vaishnavaPercent,
+        ...(percent !== undefined ? { vaishnavaPercent: percent } : {}),
         ...(input.language ? { language: input.language } : {}),
         ...(profileTypes ? { profileTypes } : {}),
       },
@@ -251,20 +256,15 @@ export class MotivationService {
       // тянем рядом с мирским — иначе подпись слайда молча станет мирской.
       author: { select: { name: true, spiritualName: true } },
     } as const;
-    const [universal, vaishnava] = await Promise.all([
-      this.prisma.motivationPost.findMany({
-        where: { ...where, audienceTrack: MotivationAudienceTrack.universal },
-        include,
-        orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
-        take: 200,
-      }),
-      this.prisma.motivationPost.findMany({
-        where: { ...where, audienceTrack: MotivationAudienceTrack.vaishnava },
-        include,
-        orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
-        take: 200,
-      }),
-    ]);
+    // Один запрос на оба трека: доля вайшнавских публикаций из ленты убрана,
+    // и делить выборку больше незачем — что показывать, решают отмеченные
+    // направления.
+    const posts = await this.prisma.motivationPost.findMany({
+      where,
+      include,
+      orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
+      take: 400,
+    });
     // Названия категорий одним запросом: на посте лежит только slug, а в
     // ленте чип должен читаться словами.
     const categoryTitles = new Map(
@@ -278,17 +278,8 @@ export class MotivationService {
       ...post,
       categoryTitle: categoryTitles.get(post.category) ?? post.category,
     });
-    // Свой рилс мог попасть в трек, который человек себе отключил долей
-    // вайшнавского контента: тогда лента его не покажет, хотя автор пришёл
-    // именно за ним.
-    const tracks = moveOwnToReadableTrack({
-      universal,
-      vaishnava,
-      percent: preference.vaishnavaPercent,
-      userId,
-    });
     const session = { userId, since, seenBefore };
-    type Loaded = (typeof universal)[number];
+    type Loaded = (typeof posts)[number];
     const order = (
       posts: Loaded[],
     ): { post: Loaded; tier?: MotivationFeedTier }[] =>
@@ -301,13 +292,7 @@ export class MotivationService {
             session,
           )
         : posts.map((post) => ({ post }));
-    const page = weightedPage(
-      order(tracks.universal),
-      order(tracks.vaishnava),
-      preference.vaishnavaPercent,
-      cursor,
-      limit,
-    );
+    const page = feedPage(order(posts), cursor, limit);
     // Закреплённый пост берём тем же запросом, что и ленту: у публичного DTO
     // нет ни автора, ни отметок зрителя, и слайд выходил бы обеднённым.
     const pinned =

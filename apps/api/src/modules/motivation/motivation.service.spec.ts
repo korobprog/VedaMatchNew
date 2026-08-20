@@ -39,7 +39,7 @@ describe('MotivationService admin list', () => {
 
     await service.feed('user-1', {});
 
-    expect(motivationPost.findMany).toHaveBeenCalledTimes(2);
+    expect(motivationPost.findMany).toHaveBeenCalledTimes(1);
     for (const [input] of motivationPost.findMany.mock.calls) {
       // Настройки пустые, поэтому профиль берётся из самоидентификации.
       expect(input.where).toMatchObject({
@@ -296,11 +296,9 @@ describe('MotivationService feed tiers', () => {
   }
   function build(lastSeenAt: Date | null, posts: ReturnType<typeof post>[]) {
     const motivationPost = {
-      findMany: jest
-        .fn()
-        .mockImplementation(({ where }: { where: { audienceTrack: string } }) =>
-          Promise.resolve(where.audienceTrack === 'universal' ? posts : []),
-        ),
+      // Лента читает посты одним запросом: доля вайшнавских публикаций из неё
+      // убрана, делить выборку на треки больше незачем.
+      findMany: jest.fn().mockResolvedValue(posts),
       // Закреплённый пост лента ищет отдельным запросом.
       findFirst: jest.fn().mockResolvedValue(null),
     };
