@@ -288,7 +288,7 @@ model User {
   motivationFavorites                MotivationFavorite[]
   motivationViews                    MotivationView[]
   motivationLikes                    MotivationLike[]
-  motivationAuthoredPosts            MotivationPost[]           @relation("MotivationAuthoredPosts")
+  motivationAuthoredPosts            MotivationPost[]             @relation("MotivationAuthoredPosts")
   motivationAuthorPolicy             MotivationAuthorPolicy?
   motivationReports                  MotivationReport[]
   motivationModerationAudits         MotivationModerationAudit[]
@@ -329,6 +329,7 @@ model User {
   noticeReportsReviewed              NoticeReport[]               @relation("NoticeReportsReviewed")
   noticeSubscriptions                NoticeSubscription[]         @relation("NoticeSubscriptions")
   motivationTracks                   MotivationTrack[]
+  telemetryInstallEnvironment        TelemetryInstallEnvironment? @relation("TelemetryInstallEnvironment")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -336,16 +337,16 @@ model User {
 
 // Единственная строка глобальных настроек платформы (id всегда "global").
 model AppSettings {
-  id          String      @id @default("global")
-  billingMode BillingMode @default(business)
+  id                 String      @id @default("global")
+  billingMode        BillingMode @default(business)
   /// Пожертвования на развитие в бете: кнопка показывается, только когда
   /// включено и есть хотя бы один реквизит. Реквизиты — массив
   /// `{ kind, label, value }`; набор произвольный (СБП, карта, крипто,
   /// ссылка), поэтому JSON, а не колонки.
-  donationEnabled    Boolean @default(false)
+  donationEnabled    Boolean     @default(false)
   donationText       String?
   donationRequisites Json?
-  updatedAt   DateTime    @updatedAt
+  updatedAt          DateTime    @updatedAt
 }
 
 model UserPhoto {
@@ -500,7 +501,7 @@ model MotivationPost {
   /// самой горячей таблице сервиса. Меняется только вместе с записью лайка.
   likeCount            Int                       @default(0)
   origin               MotivationPostOrigin      @default(editorial)
-  imageSource          MotivationImageSource      @default(generated)
+  imageSource          MotivationImageSource     @default(generated)
   /// Автор пользовательского рилса. SetNull, а не Cascade: при удалении
   /// аккаунта опубликованный пост обезличивается сценарием анонимизации, а
   /// не исчезает из чужих лент вместе со ссылками на него.
@@ -534,20 +535,20 @@ model MotivationPost {
 /// Пустое поле означает «взять из окружения», поэтому настройки можно вводить
 /// постепенно, ничего не ломая.
 model MotivationSettings {
-  id             String                 @id @default("global")
-  videoModel     String?
-  videoSeconds   Int?
-  videoAudio     Boolean?
-  voiceModel     String?
-  voiceName      String?
-  imageModel     String?
+  id                 String                     @id @default("global")
+  videoModel         String?
+  videoSeconds       Int?
+  videoAudio         Boolean?
+  voiceModel         String?
+  voiceName          String?
+  imageModel         String?
   /// Стиль по умолчанию. Пусто — подбирать автоматически по смыслу и источнику.
-  visualStyle    MotivationVisualStyle?
+  visualStyle        MotivationVisualStyle?
   /// Дневной потолок расхода в долларах. Меняться должен без перевыкладки.
-  dailyBudgetUsd Decimal?               @db.Decimal(10, 2)
-  musicModel     String?
+  dailyBudgetUsd     Decimal?                   @db.Decimal(10, 2)
+  musicModel         String?
   /// Трек по умолчанию. Пусто — ролики выходят без подложки.
-  defaultTrackId String?
+  defaultTrackId     String?
   /// Пользовательские рилсы: рубильник, дневной лимит на человека (админам
   /// лимит не считается) и ИИ-модерация с порогами уверенности. Между
   /// порогами — эскалация к админу. Правила редакции дописываются к промпту
@@ -568,7 +569,7 @@ model MotivationSettings {
   /// провайдера бессмысленно.
   userVoices         String[]
   userVoiceDefault   String?
-  updatedAt      DateTime               @updatedAt
+  updatedAt          DateTime                   @updatedAt
 }
 
 /// Трек музыкальной подложки.
@@ -1653,27 +1654,27 @@ model PushSubscription {
 /// Настройки уведомлений. Отсутствие строки означает «включено всё»,
 /// поэтому при регистрации её создавать не нужно.
 model NotificationPreference {
-  userId      String   @id
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  enabled     Boolean  @default(true)
-  chat        Boolean  @default(true)
-  connections Boolean  @default(true)
-  support     Boolean  @default(true)
+  userId        String   @id
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled       Boolean  @default(true)
+  chat          Boolean  @default(true)
+  connections   Boolean  @default(true)
+  support       Boolean  @default(true)
   /// Ежедневный персональный день по транзитам (сервис astro).
-  transits    Boolean  @default(true)
+  transits      Boolean  @default(true)
   /// Заявки и их статусы на Рынке. Сообщения чата Рынка идут под `chat`.
-  market      Boolean  @default(true)
+  market        Boolean  @default(true)
   /// Доска «Объявления»: подписки на рубрику и город, отклики на свои
   /// объявления. Своя колонка, а не переиспользование `market`: выключив
   /// коммерцию, человек не должен молча терять доску общины.
-  notices     Boolean  @default(true)
+  notices       Boolean  @default(true)
   /// Новости от администрации портала. Отключаемы: человек, которому нужны
   /// только ответы поддержки, не обязан читать анонсы.
-  announcements Boolean @default(true)
+  announcements Boolean  @default(true)
   /// Судьба своих рилсов в «Мотивации». Отдельно от остальных: человек может
   /// не хотеть ничего от сервиса, кроме ответа по собственной публикации.
-  motivation  Boolean  @default(true)
-  updatedAt   DateTime @updatedAt
+  motivation    Boolean  @default(true)
+  updatedAt     DateTime @updatedAt
 }
 
 /// Входящие уведомления портала (колокольчик). Намеренно НЕ архив: прочитанное
@@ -1922,25 +1923,25 @@ model ReleaseChange {
 }
 
 model Announcement {
-  id          String             @id @default(uuid())
-  titleRu     String
-  titleEn     String
-  bodyRu      String
-  bodyEn      String
-  status      AnnouncementStatus @default(draft)
-  publishedAt DateTime?
+  id             String             @id @default(uuid())
+  titleRu        String
+  titleEn        String
+  bodyRu         String
+  bodyEn         String
+  status         AnnouncementStatus @default(draft)
+  publishedAt    DateTime?
   /// Закреплённая новость висит вверху блока на главной. Уникальный частичный
   /// индекс не даёт закрепить вторую: снимать флаг с прежней обязан сервис.
-  pinned      Boolean            @default(false)
+  pinned         Boolean            @default(false)
   /// Показывать не раньше этого момента; null — сразу после публикации.
-  publishAt   DateTime?
+  publishAt      DateTime?
   /// Убрать с главной после этого момента; null — висит, пока не снимут.
-  expiresAt   DateTime?
+  expiresAt      DateTime?
   /// Когда новость рассылали и скольким: чтобы не отправить дважды вслепую.
   broadcastAt    DateTime?
-  broadcastCount Int             @default(0)
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  broadcastCount Int                @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
   @@index([status, publishedAt(sort: Desc)])
   @@index([publishAt(sort: Desc)])
@@ -3264,4 +3265,55 @@ model NoticeImage {
   createdAt  DateTime @default(now())
 
   @@index([noticeId, sortOrder])
+}
+
+/// Замер окружения установки: с чего человек открывает портал и во что
+/// превратилась установка. Отвечает ровно на один вопрос — какая доля
+/// аудитории сидит в браузере, где «Установить» кладёт на экран ярлык внутри
+/// браузера вместо приложения.
+///
+/// Одна строка на человека, а не журнал событий: нужен срез «как сейчас»,
+/// и он не должен расти вместе с числом открытий приложения.
+model TelemetryInstallEnvironment {
+  userId String @id
+  user   User   @relation("TelemetryInstallEnvironment", fields: [userId], references: [id], onDelete: Cascade)
+
+  browser           TelemetryPwaBrowser
+  platform          TelemetryPwaPlatform
+  displayMode       TelemetryPwaDisplayMode
+  /// Дала бы установка из этого браузера настоящее приложение без хрома.
+  standaloneCapable Boolean
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([browser, displayMode])
+  @@index([updatedAt])
+}
+
+/// Дефис в имени члена enum Prisma не разрешает, поэтому на границе базы
+/// значения переписываются через подчёркивание (см. install-environment-dto).
+enum TelemetryPwaBrowser {
+  chrome
+  samsung
+  yandex_browser
+  yandex_app
+  safari
+  firefox
+  edge
+  opera
+  other
+}
+
+enum TelemetryPwaPlatform {
+  android
+  ios
+  desktop
+}
+
+enum TelemetryPwaDisplayMode {
+  fullscreen
+  standalone
+  minimal_ui
+  browser
 }

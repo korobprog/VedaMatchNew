@@ -326,6 +326,13 @@ export function Header({ user }: { user: UserProfile }) {
                     >
                       <span className="text-sm font-medium">{t("changelog")}</span>
                     </Link>
+                    <Link
+                      href="/admin/pwa"
+                      onClick={closeDrawer}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
+                    >
+                      <span className="text-sm font-medium">{t("installStats")}</span>
+                    </Link>
                   </motion.div>
                 )}
 

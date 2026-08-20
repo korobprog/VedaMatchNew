@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Header } from "@/components/header";
 import { requireUser } from "@/lib/require-user";
+import { InstallEnvironmentBeacon } from "@/components/pwa/install-environment-beacon";
 
 /**
  * Приватные разделы портала: один guard и одна шапка на всех вместо
@@ -16,6 +17,7 @@ export default async function PortalLayout({
   return (
     <div className="relative min-h-dvh bg-bg-0">
       <Header user={user} />
+      <InstallEnvironmentBeacon />
       {children}
     </div>
   );

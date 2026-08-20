@@ -10,9 +10,10 @@ import {
 } from "@/lib/pwa/install-dismissal";
 import { useInstallPrompt } from "./use-install-prompt";
 import { IosInstallInstructions } from "./ios-install-instructions";
+import { WrongBrowserInstructions } from "./wrong-browser-instructions";
 
 export function InstallBanner() {
-  const { mode, promptInstall } = useInstallPrompt();
+  const { mode, browser, platform, promptInstall } = useInstallPrompt();
   // Считаем закрытым до гидратации: так баннер не мигает при загрузке.
   const dismissed = useSyncExternalStore(
     subscribeInstallDismissal,
@@ -23,10 +24,19 @@ export function InstallBanner() {
 
   if (dismissed || mode === "installed" || mode === "unsupported") return null;
 
+  const wrongBrowser = mode === "wrong-browser";
+
   return (
     <>
-      <div className="fixed inset-x-0 bottom-0 z-40 p-3 sm:hidden">
-        <div className="glass rounded-2xl border border-glass-brd p-4">
+      {/* Нижний отступ считаем от safe-area: под ней и вырез iPhone, и панель
+          жестов Android — иначе баннер прижимается к самому краю. */}
+      <div
+        className="install-banner-enter fixed inset-x-0 bottom-0 z-40 p-3 sm:hidden"
+        style={{
+          paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))",
+        }}
+      >
+        <div className="install-banner-ping rounded-2xl border border-glass-brd bg-bg-1 p-4 shadow-2xl">
           {/* Текст занимает всю ширину: в одну строку с кнопкой он на 375px
               разваливается на четыре строки. */}
           <div className="flex items-start gap-3">
@@ -35,7 +45,9 @@ export function InstallBanner() {
               aria-hidden="true"
             />
             <p className="min-w-0 flex-1 text-sm text-text-1">
-              Установите VedaMatch на телефон — открывается как приложение.
+              {wrongBrowser
+                ? `Установите VedaMatch на телефон — но ${platform === "ios" ? "через Safari" : "через Chrome"}: здесь получится ярлык с поисковой строкой.`
+                : "Установите VedaMatch на телефон — открывается как приложение."}
             </p>
             <button
               type="button"
@@ -49,18 +61,25 @@ export function InstallBanner() {
           <button
             type="button"
             onClick={() => {
-              if (mode === "ios-manual") setShowInstructions(true);
-              else void promptInstall();
+              if (mode === "can-prompt") void promptInstall();
+              else setShowInstructions(true);
             }}
             className="mt-3 w-full rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-4 py-3 text-sm font-medium text-white"
           >
-            Установить
+            {wrongBrowser ? "Как установить" : "Установить"}
           </button>
         </div>
       </div>
-      {showInstructions && (
-        <IosInstallInstructions onClose={() => setShowInstructions(false)} />
-      )}
+      {showInstructions &&
+        (wrongBrowser ? (
+          <WrongBrowserInstructions
+            browser={browser}
+            platform={platform}
+            onClose={() => setShowInstructions(false)}
+          />
+        ) : (
+          <IosInstallInstructions onClose={() => setShowInstructions(false)} />
+        ))}
     </>
   );
 }
