@@ -16,6 +16,8 @@ vi.mock("@/lib/api", () => ({
   getServices: vi.fn(),
   getBillingPlan: vi.fn().mockResolvedValue(null),
   getCommunityStats: vi.fn().mockResolvedValue(null),
+  // Новости портала: главная тянет их вместе с остальным.
+  getAnnouncements: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("@/lib/union-api", () => ({

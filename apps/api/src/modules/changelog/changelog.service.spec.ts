@@ -22,6 +22,7 @@ describe('ChangelogService', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       delete: jest.fn(),
     },
     roadmapItem: {
@@ -31,9 +32,16 @@ describe('ChangelogService', () => {
       update: jest.fn(),
       delete: jest.fn(),
     },
+    user: { findMany: jest.fn() },
     $transaction: jest.fn(),
   };
-  const service = new ChangelogService(prisma as unknown as PrismaService);
+  // Рассылка уходит событиями на шину: сервисный модуль не вправе дёргать
+  // уведомления напрямую.
+  const events = { emit: jest.fn() };
+  const service = new ChangelogService(
+    prisma as unknown as PrismaService,
+    events as never,
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -148,5 +156,115 @@ describe('ChangelogService', () => {
       expect(ru[0].changes[0].title).toBe('Улучшение');
       expect(en[0].changes[0].title).toBe('Improvement');
     });
+  });
+});
+
+describe('ChangelogService: рассылка новости', () => {
+  function build() {
+    const prisma = {
+      announcement: {
+        findUnique: jest.fn(),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      user: { findMany: jest.fn().mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]) },
+    };
+    const events = { emit: jest.fn() };
+    return {
+      prisma,
+      events,
+      service: new ChangelogService(
+        prisma as unknown as PrismaService,
+        events as never,
+      ),
+    };
+  }
+
+  const published = {
+    id: 'a1',
+    status: 'published',
+    publishAt: null,
+    expiresAt: null,
+    titleRu: 'Открыли Студию',
+    bodyRu: 'Теперь свои рилсы живут в отдельном разделе',
+  };
+
+  it('шлёт событие каждому получателю и считает адресатов', async () => {
+    const { service, events, prisma } = build();
+    prisma.announcement.findUnique.mockResolvedValue(published);
+
+    await expect(service.adminBroadcastAnnouncement('admin', 'a1')).resolves.toEqual(
+      { recipients: 2, pushed: 2 },
+    );
+
+    expect(events.emit).toHaveBeenCalledTimes(2);
+    expect(events.emit).toHaveBeenCalledWith(
+      'portal.announcement.published',
+      expect.objectContaining({ recipientId: 'u1', announcementId: 'a1' }),
+    );
+    // След рассылки: админ должен видеть, что новость уже уходила.
+    expect(prisma.announcement.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ broadcastCount: { increment: 2 } }),
+      }),
+    );
+  });
+
+  it('без ступеней шлёт всем, со ступенями — только им', async () => {
+    const { service, prisma } = build();
+    prisma.announcement.findUnique.mockResolvedValue(published);
+
+    await service.adminBroadcastAnnouncement('admin', 'a1');
+    expect(prisma.user.findMany.mock.calls[0][0].where.spiritualStage).toBeUndefined();
+
+    await service.adminBroadcastAnnouncement('admin', 'a1', {
+      stages: ['seeker', 'yogi'],
+    });
+    expect(prisma.user.findMany.mock.calls[1][0].where.spiritualStage).toEqual({
+      in: ['seeker', 'yogi'],
+    });
+  });
+
+  it('отложенную новость разослать нельзя: на портале её ещё нет', async () => {
+    const { service, events, prisma } = build();
+    prisma.announcement.findUnique.mockResolvedValue({
+      ...published,
+      publishAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+
+    await expect(
+      service.adminBroadcastAnnouncement('admin', 'a1'),
+    ).rejects.toThrow('не показывается');
+    expect(events.emit).not.toHaveBeenCalled();
+  });
+
+  it('черновик разослать нельзя', async () => {
+    const { service, events, prisma } = build();
+    prisma.announcement.findUnique.mockResolvedValue({
+      ...published,
+      status: 'draft',
+    });
+
+    await expect(
+      service.adminBroadcastAnnouncement('admin', 'a1'),
+    ).rejects.toThrow('опубликуйте');
+    expect(events.emit).not.toHaveBeenCalled();
+  });
+
+  it('рассылка закрыта для не-администратора', async () => {
+    const { service, prisma } = build();
+
+    await expect(
+      service.adminBroadcastAnnouncement('user', 'a1'),
+    ).rejects.toThrow();
+    expect(prisma.announcement.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('не берёт удалённые аккаунты', async () => {
+    const { service, prisma } = build();
+    prisma.announcement.findUnique.mockResolvedValue(published);
+
+    await service.adminBroadcastAnnouncement('admin', 'a1');
+
+    expect(prisma.user.findMany.mock.calls[0][0].where.deletedAt).toBeNull();
   });
 });

@@ -22,7 +22,7 @@ export default async function NotificationsPage() {
           Уведомления
         </h1>
         <p className="mb-6 text-sm text-text-1">
-          Непрочитанное. После просмотра список очищается сам.
+          Новое сверху. Прочитанное остаётся неделю и удаляется само.
         </p>
 
         <NotificationList />

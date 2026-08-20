@@ -1,8 +1,15 @@
 import { redirect } from "next/navigation";
-import { getBillingPlan, getCommunityStats, getProfile, getServices } from "@/lib/api";
+import {
+  getAnnouncements,
+  getBillingPlan,
+  getCommunityStats,
+  getProfile,
+  getServices,
+} from "@/lib/api";
 import { Header } from "@/components/header";
 import { ServiceGrid } from "@/components/service-grid";
 import { MemberCountLine } from "@/components/member-count-line";
+import { PortalNews } from "@/components/portal-news";
 import {
   getUnionChats,
   getUnionConnectionCounts,
@@ -52,6 +59,7 @@ export default async function Home({
     myNotices,
     myResponses,
     myCommunities,
+    news,
   ] = await Promise.all([
     getProfile(),
     getServices(),
@@ -66,6 +74,8 @@ export default async function Home({
     getMyNoticesForAdvisor().catch(() => null),
     getMyNoticeResponsesServer().catch(() => null),
     getMyCommunitiesServer().catch(() => null),
+    // Новости портала — не повод ронять главную: не пришли, значит их нет.
+    getAnnouncements("ru").catch(() => null),
   ]);
   if (!user || !services) {
     // Маркер сессии без access-cookie: человек уже входил, refresh скорее всего
@@ -122,6 +132,9 @@ export default async function Home({
       <NoiseOverlay />
       <Header user={user} />
       <main className="mx-auto max-w-6xl px-4 py-8 pb-24">
+        {/* Новости администрации выше советника: советник говорит о делах
+            человека, новость — о портале, и она не должна теряться под ними. */}
+        <PortalNews items={news ?? []} />
         <AdvisorStrip
           cards={advisorCards}
           userId={user.id}

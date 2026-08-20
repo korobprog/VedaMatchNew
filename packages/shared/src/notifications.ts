@@ -121,6 +121,14 @@ export type NotificationEvent =
       shopSlug: string;
     }
   | {
+      /** Новость от администрации портала: рассылает админ вручную. */
+      name: 'portal.announcement.published';
+      recipientId: string;
+      announcementId: string;
+      title: string;
+      excerpt: string;
+    }
+  | {
       name: 'motivation.reel.published';
       recipientId: string;
       reelId: string;
@@ -145,6 +153,7 @@ export type NotificationEventName = NotificationEvent['name'];
 
 /** Категории совпадают с тумблерами в NotificationPreferencesDto. */
 export type NotificationCategory =
+  | 'announcements'
   | 'notices'
   | 'chat'
   | 'connections'
@@ -164,9 +173,16 @@ export interface NotificationItemDto {
   category: NotificationCategory;
   /** ISO-строка. */
   createdAt: string;
+  /**
+   * Когда прочитано; null — ещё нет. Прочитанное остаётся в списке неделю:
+   * раньше открытие страницы гасило всё разом, и уведомления, до которых
+   * человек не успел дойти, исчезали у него на глазах.
+   */
+  readAt: string | null;
 }
 
 export interface NotificationInboxResponse {
+  /** Непрочитанные и, следом, прочитанные за последнюю неделю. */
   items: NotificationItemDto[];
   unreadCount: number;
 }
@@ -192,6 +208,8 @@ export interface NotificationPreferencesDto {
   notices: boolean;
   /** Судьба своих рилсов в «Мотивации»: опубликован или отклонён. */
   motivation: boolean;
+  /** Новости от администрации портала. */
+  announcements: boolean;
 }
 
 export type UpdateNotificationPreferencesRequest =

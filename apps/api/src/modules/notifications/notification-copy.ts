@@ -25,6 +25,7 @@ export const notificationEventNames = {
   noticePublished: 'notices.notice.published',
   noticeResponseReceived: 'notices.response.received',
   noticeResponseAccepted: 'notices.response.accepted',
+  announcementPublished: 'portal.announcement.published',
   motivationReelPublished: 'motivation.reel.published',
   motivationReelRejected: 'motivation.reel.rejected',
 } as const satisfies Record<string, NotificationEventName>;
@@ -165,6 +166,17 @@ export function buildNotification(
         url: `/market/listing/${event.listingId}`,
         tag: `market-price:${event.listingId}`,
         category: 'market',
+      };
+    case 'portal.announcement.published':
+      return {
+        title: event.title,
+        body: toExcerpt(event.excerpt),
+        // На страницу новостей, а не на главную: там новость целиком и
+        // предыдущие рядом.
+        url: '/updates/news',
+        // Тег по новости: повторная рассылка не должна множить плашки.
+        tag: `announcement:${event.announcementId}`,
+        category: 'announcements',
       };
     case 'motivation.reel.published':
       return {
