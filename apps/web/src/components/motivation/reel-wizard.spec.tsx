@@ -97,7 +97,9 @@ describe("ReelWizard", () => {
       visualStyle: "indian_miniature",
       explanation: null,
     });
-    expect(await screen.findByText("Рисуем иллюстрацию, ~1–2 минуты")).toBeInTheDocument();
+    // Обещание уведомления стоит на самом шаге: человек смотрит на «Картинку»
+    // и решает, ждать ему или уходить.
+    expect(await screen.findByText(/мы пришлём уведомление/)).toBeInTheDocument();
     expect(screen.getByText("Сегодня: 1 из 1")).toBeInTheDocument();
   });
 
