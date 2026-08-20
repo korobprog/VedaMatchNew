@@ -49,6 +49,42 @@ export function decodeMotivationCursor(value?: string): MotivationCursor {
   }
 }
 
+/**
+ * Свой рилс автор видит независимо от выбранной доли вайшнавского контента.
+ *
+ * Лента читает два трека и смешивает их по проценту из настроек, а крайние
+ * значения читают ровно один трек: при 0% вайшнавские посты не показываются
+ * вовсе, при 100% — универсальные. Автор при этом получает «ваш рилс
+ * опубликован», идёт смотреть и не находит: его собственный рилс попал в трек,
+ * который он себе отключил. Поэтому свои посты переносим в тот трек, который
+ * заведомо читается.
+ *
+ * При промежуточной доле читаются оба трека, и переносить нечего.
+ */
+export function moveOwnToReadableTrack<
+  T extends { authorUserId?: string | null },
+>(input: {
+  universal: T[];
+  vaishnava: T[];
+  percent: number;
+  userId: string;
+}): { universal: T[]; vaishnava: T[] } {
+  const { universal, vaishnava, percent, userId } = input;
+  if (percent > 0 && percent < 100) return { universal, vaishnava };
+  const mine = (post: T) => post.authorUserId === userId;
+
+  if (percent <= 0) {
+    const moved = vaishnava.filter(mine);
+    return moved.length === 0
+      ? { universal, vaishnava }
+      : { universal: [...moved, ...universal], vaishnava };
+  }
+  const moved = universal.filter(mine);
+  return moved.length === 0
+    ? { universal, vaishnava }
+    : { universal, vaishnava: [...moved, ...vaishnava] };
+}
+
 export function weightedPage<T>(
   universal: T[],
   vaishnava: T[],

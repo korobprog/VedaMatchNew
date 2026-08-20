@@ -49,6 +49,9 @@ describe('MotivationService admin list', () => {
           {
             quote: { profiles: { some: { profileType: { in: ['devotee'] } } } },
           },
+          // Свой рилс автор видит всегда — настройки ленты не должны прятать
+          // от него его же публикацию.
+          { authorUserId: 'user-1' },
         ],
       });
     }

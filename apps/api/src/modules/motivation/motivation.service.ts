@@ -43,6 +43,7 @@ import {
   decodeMotivationCursor,
   encodeMotivationCursor,
   weightedPage,
+  moveOwnToReadableTrack,
 } from './motivation-feed';
 import { rankFeed } from './feed-ranking';
 import { adminAiVerdictOf, adminAppealOf } from './moderation-audit';
@@ -214,6 +215,10 @@ export class MotivationService {
         {
           quote: { profiles: { some: { profileType: { in: profileTypes } } } },
         },
+        // Свой рилс автор видит всегда: он его создал, ему написали «рилс
+        // опубликован», и настройки ленты не должны прятать от него его же
+        // публикацию.
+        { authorUserId: userId },
       ],
       status: MotivationPostStatus.published,
       // Рилсы заблокированных авторов не показываем: портальный `UserBlock` —
@@ -273,6 +278,15 @@ export class MotivationService {
       ...post,
       categoryTitle: categoryTitles.get(post.category) ?? post.category,
     });
+    // Свой рилс мог попасть в трек, который человек себе отключил долей
+    // вайшнавского контента: тогда лента его не покажет, хотя автор пришёл
+    // именно за ним.
+    const tracks = moveOwnToReadableTrack({
+      universal,
+      vaishnava,
+      percent: preference.vaishnavaPercent,
+      userId,
+    });
     const session = { userId, since, seenBefore };
     type Loaded = (typeof universal)[number];
     const order = (
@@ -288,8 +302,8 @@ export class MotivationService {
           )
         : posts.map((post) => ({ post }));
     const page = weightedPage(
-      order(universal),
-      order(vaishnava),
+      order(tracks.universal),
+      order(tracks.vaishnava),
       preference.vaishnavaPercent,
       cursor,
       limit,
