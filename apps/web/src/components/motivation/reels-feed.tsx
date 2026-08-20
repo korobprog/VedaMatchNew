@@ -674,6 +674,11 @@ function DividerSlide({
         <button type="button" onClick={onNext} className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold">
           Листать дальше
         </button>
+        {/* Место, где смотреть больше нечего, — лучшее для предложения
+            сделать своё: человек уже здесь и уже листает. */}
+        <Link href="/motivation/create" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">
+          ✨ Создать рилс
+        </Link>
         <Link href="/motivation?tab=saved" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">
           Избранное
         </Link>
@@ -707,11 +712,17 @@ function EndSlide({
         <>
           <p className="font-display text-xl font-semibold">{tab === "saved" ? "Это всё избранное" : "На сегодня это всё"}</p>
           <p className="max-w-xs text-sm text-white/75">
-            Завтра появится новый пост дня. Настройте, сколько вайшнавской мудрости показывать, в настройках.
+            Завтра появится новый пост дня. А сегодняшний вечер — повод сделать
+            свой: цитата, кадр и, если захотите, видео.
           </p>
-          <Link href="/motivation/settings" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">
-            Настройки ленты
-          </Link>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Link href="/motivation/create" className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold">
+              ✨ Создать рилс
+            </Link>
+            <Link href="/motivation/settings" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">
+              Настройки ленты
+            </Link>
+          </div>
           <DonateButton donation={donation} />
         </>
       )}

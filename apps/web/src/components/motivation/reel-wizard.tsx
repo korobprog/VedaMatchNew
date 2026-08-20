@@ -241,7 +241,7 @@ export function ReelWizard({
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link href="/motivation/my" className="btn-mint-outline rounded-xl px-3 py-1.5 text-sm font-medium">
-              Мои рилсы
+              Студия
             </Link>
             <DonateButton donation={donation} />
           </div>
@@ -890,7 +890,7 @@ function ReelStatus({
           </>
         )}
         <Link href="/motivation/my" className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1">
-          Мои рилсы
+          Студия
         </Link>
         <Link href="/motivation" className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1">
           К ленте
@@ -898,7 +898,11 @@ function ReelStatus({
         <DonateButton donation={donation} />
       </div>
       {shouldPoll(reel.stage) && (
-        <p className="text-xs text-text-2">Можно закрыть страницу — сборка продолжится, статус будет в «Мои рилсы».</p>
+        <p className="text-xs text-text-2">
+          Можно закрыть страницу: когда кадр будет готов, придёт уведомление — по
+          нему вы вернётесь сюда и решите, что делать с картинкой. Рилс всё это
+          время ждёт в «Студии».
+        </p>
       )}
     </div>
   );

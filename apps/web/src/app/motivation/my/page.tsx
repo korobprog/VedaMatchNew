@@ -39,14 +39,14 @@ export default async function MyReelsPage() {
       <Header user={user} />
       <main className="mx-auto max-w-2xl px-2 py-4 pb-24 sm:px-4">
         <MotivationTopBar
-          active="feed"
+          active="studio"
           isAdmin={isAdmin}
-          title="Мои рилсы"
+          title="Студия"
           action={{ href: "/motivation/create", label: "+ Создать" }}
         />
         {items.length === 0 ? (
           <div className="glass mt-4 rounded-2xl p-8 text-center text-text-1">
-            <p className="font-display text-lg text-text-0">Пока ни одного рилса</p>
+            <p className="font-display text-lg text-text-0">В студии пока пусто</p>
             <p className="mt-2 text-sm">Создайте первый: своя мысль или фрагмент из книги — и картинка к нему.</p>
           </div>
         ) : (

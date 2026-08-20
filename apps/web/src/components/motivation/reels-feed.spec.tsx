@@ -288,6 +288,21 @@ describe("ReelsFeed", () => {
     expect(screen.queryByRole("button", { name: /звук/i })).not.toBeInTheDocument();
   });
 
+  it("предлагает создать свой рилс там, где смотреть больше нечего", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    const create = screen.getAllByRole("link", { name: /Создать рилс/ });
+    expect(create.length).toBeGreaterThan(0);
+    expect(create[0]).toHaveAttribute("href", "/motivation/create");
+  });
+
   it("tells an empty saved tab where to go", () => {
     fetchOk({});
     render(<ReelsFeed initial={{ items: [], nextCursor: null }} tab="saved" donation={null} />);
