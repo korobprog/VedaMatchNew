@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   Injectable,
+  Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -22,6 +23,20 @@ export type FalPollResult =
   | { state: 'failed'; reason: string };
 
 const QUEUE_BASE = 'https://queue.fal.run';
+
+/**
+ * Хост подписанной ссылки — для лога.
+ *
+ * Целиком её писать нельзя: подпись в query это одноразовый доступ на запись,
+ * то есть учётные данные, и в логах им не место.
+ */
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return 'неразобранный url';
+  }
+}
 const STORAGE_BASE = 'https://rest.alpha.fal.ai';
 
 /**
@@ -76,6 +91,8 @@ function describeFailure(detail: unknown): string {
  */
 @Injectable()
 export class FalVideoService {
+  private readonly logger = new Logger(FalVideoService.name);
+
   constructor(
     private readonly config: ConfigService,
     private readonly settings: MotivationSettingsService,
@@ -215,6 +232,7 @@ export class FalVideoService {
     contentType = 'image/jpeg',
     fileName = 'story.jpg',
   ): Promise<string> {
+    const initiatedAt = Date.now();
     const initiate = await fetch(
       `${STORAGE_BASE}/storage/upload/initiate?storage_type=fal-cdn-v3`,
       {
@@ -241,16 +259,40 @@ export class FalVideoService {
     if (!slot?.file_url || !slot.upload_url)
       throw new BadGatewayException('Video storage returned no upload slot');
 
+    const initiateMs = Date.now() - initiatedAt;
+
+    const startedAt = Date.now();
     const put = await fetch(slot.upload_url, {
       method: 'PUT',
       signal: AbortSignal.timeout(120_000),
       headers: { 'content-type': contentType },
       body: new Uint8Array(bytes),
     });
-    if (!put.ok)
+    const putMs = Date.now() - startedAt;
+    if (!put.ok) {
+      // Подробности — только в лог. Текст исключения попадает в
+      // `videoErrorCode`, обрезается до 200 символов и сравнивается с
+      // PERMANENT_FAILURES по точному совпадению: переменная строка сломала бы
+      // и логику повторов, и группировку сбоев в админке.
+      const detail = await put.text().catch(() => '');
+      this.logger.error(
+        [
+          `Заливка кадра не прошла: ${put.status}`,
+          `${bytes.length} Б за ${putMs} мс`,
+          `слот выдан за ${initiateMs} мс`,
+          `хост ${hostOf(slot.upload_url)}`,
+          `server=${put.headers.get('server') ?? '—'}`,
+          `cf-ray=${put.headers.get('cf-ray') ?? '—'}`,
+          detail ? `ответ: ${detail.slice(0, 300)}` : 'ответ пуст',
+        ].join(', '),
+      );
       throw new BadGatewayException(
         `Video storage upload failed ${put.status}`,
       );
+    }
+    this.logger.log(
+      `Кадр залит: ${bytes.length} Б за ${putMs} мс (слот за ${initiateMs} мс)`,
+    );
     return slot.file_url;
   }
 
