@@ -189,6 +189,19 @@ describe('UserGalleryService', () => {
     expect(result.usedBytes).toBe(180);
   });
 
+  // Раньше публиковалось только первое фото, остальные ждали отдельного
+  // тумблера у каждого снимка — и не дожидались: человек загружал галерею и
+  // был уверен, что он в Знакомствах с ней, а его видели по аватарке.
+  it('публикует каждое загруженное фото, а не только первое', async () => {
+    prisma.userPhoto.count.mockResolvedValue(3);
+
+    await service.uploadMany(USER_ID, [await validImageFile('image/png')]);
+
+    expect(prisma.userPhoto.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ isPublic: true }),
+    });
+  });
+
   it('locks the owner row before quota and ordering reads', async () => {
     await service.uploadMany(USER_ID, [await validImageFile('image/jpeg')]);
 

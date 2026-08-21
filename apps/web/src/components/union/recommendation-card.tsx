@@ -29,8 +29,21 @@ const stageLabels: Record<string, string> = {
   devotee: "Преданный",
 };
 
-/** Карточка человека в ленте знакомств: фото во всю ширину, поверх — имя и матч. */
-export function RecommendationCard({ item }: { item: UnionRecommendation }) {
+/**
+ * Карточка человека в ленте знакомств: фото во всю ширину, поверх — имя и матч.
+ *
+ * `preview` — та же карточка, но показанная человеку про него самого («как вас
+ * видят»). Совместимость с собой бессмысленна, а связаться с собой нельзя,
+ * поэтому и процент, и действия в этом режиме сняты: остаётся ровно то, ради
+ * чего превью и заведено — как выглядит анкета чужими глазами.
+ */
+export function RecommendationCard({
+  item,
+  preview = false,
+}: {
+  item: UnionRecommendation;
+  preview?: boolean;
+}) {
   const { user, profile, compatibility } = item;
   const subtitle =
     [
@@ -71,9 +84,11 @@ export function RecommendationCard({ item }: { item: UnionRecommendation }) {
 
         {/* top-7 — ниже полосок-индикаторов карусели фото */}
         <div className="absolute right-3 top-7 flex flex-col items-end gap-2">
-          <span className="rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] px-3 py-1 text-sm font-bold text-white shadow-[0_0_16px_var(--vm-glow-magenta)]">
-            {compatibility.total}%
-          </span>
+          {!preview && (
+            <span className="rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] px-3 py-1 text-sm font-bold text-white shadow-[0_0_16px_var(--vm-glow-magenta)]">
+              {compatibility.total}%
+            </span>
+          )}
           {user.isVerifiedDevotee && <VerifiedBadge variant="overlay" />}
           {user.isPhotoVerified && <PhotoVerifiedBadge variant="overlay" />}
         </div>
@@ -121,6 +136,7 @@ export function RecommendationCard({ item }: { item: UnionRecommendation }) {
 
         {user.contacts && <ContactList contacts={user.contacts} />}
 
+        {!preview && (
         <details className="text-sm">
           <summary className="cursor-pointer text-magenta">
             Почему {compatibility.total}%?
@@ -146,17 +162,20 @@ export function RecommendationCard({ item }: { item: UnionRecommendation }) {
             ))}
           </dl>
         </details>
+        )}
 
-        <div className="mt-auto space-y-3 pt-1">
-          <ConnectionActions userId={user.id} connection={item.connection} />
-          <Link
-            href={`/astro/compatibility?with=${user.id}`}
-            className="block text-center text-xs text-text-2 underline underline-offset-4 hover:text-text-1"
-          >
-            Проверить совместимость по звёздам
-          </Link>
-          <ReportBlockMenu userId={user.id} userName={user.name} />
-        </div>
+        {!preview && (
+          <div className="mt-auto space-y-3 pt-1">
+            <ConnectionActions userId={user.id} connection={item.connection} />
+            <Link
+              href={`/astro/compatibility?with=${user.id}`}
+              className="block text-center text-xs text-text-2 underline underline-offset-4 hover:text-text-1"
+            >
+              Проверить совместимость по звёздам
+            </Link>
+            <ReportBlockMenu userId={user.id} userName={user.name} />
+          </div>
+        )}
       </div>
     </article>
   );

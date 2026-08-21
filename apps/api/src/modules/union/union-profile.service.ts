@@ -420,6 +420,18 @@ export class UnionProfileService {
         Number(boosted.has(b.other.userId)) -
         Number(boosted.has(a.other.userId));
       if (byBoost !== 0) return byBoost;
+      // Анкета без фото — ниже. Не запрет, а порядок: карточку без снимка в
+      // ленте пролистывают не глядя, и держать её высоко значит тратить
+      // внимание смотрящего впустую. Это единственное, что делает загрузку
+      // фото выгодной: в самой совместимости фото не участвует и участвовать
+      // не должно — снимок не делает людей более подходящими друг другу.
+      // Считаем по `other.user.photos` (там уже только isPublic), а не по
+      // отданным наружу: те могли быть спрятаны настройкой «после взаимного
+      // интереса», а это осознанный выбор, а не незаполненная анкета.
+      const byPhoto =
+        Number(b.other.user.photos.length > 0) -
+        Number(a.other.user.photos.length > 0);
+      if (byPhoto !== 0) return byPhoto;
       if (normalizedFilters.sort === 'new') {
         const byFresh =
           b.other.createdAt.getTime() - a.other.createdAt.getTime();

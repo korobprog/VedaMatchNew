@@ -5,6 +5,7 @@ import { UnionProfileForm } from "@/components/union/union-profile-form";
 import { UserGalleryEditor } from "@/components/user-gallery-editor";
 import { requireUser } from "@/lib/require-user";
 import { BlockedUsersPanel } from "@/components/union/blocked-users-panel";
+import { UnionSelfPreview } from "@/components/union/union-self-preview";
 import {
   getUnionChats,
   getUnionBlocks,
@@ -68,6 +69,15 @@ export default async function UnionProfilePage() {
         <div className="mt-6">
           <UserGalleryEditor />
         </div>
+
+        {/* Сразу под галереей: увидев пустую карточку, человек возвращается
+            на пару сантиметров выше и загружает фото. Между «загрузить» и
+            «зачем» не должно быть экрана прокрутки. */}
+        {profile && (
+          <div className="mt-6">
+            <UnionSelfPreview userId={user.id} />
+          </div>
+        )}
 
         <div className="mt-6">
           <BlockedUsersPanel blocked={blocks?.blocked ?? []} />

@@ -156,8 +156,8 @@ describe("UserGalleryEditor", () => {
     expect(request).toMatchObject({ method: "POST", credentials: "include" });
     const formData = request?.body as FormData;
     expect(formData.getAll("files")).toEqual([validJpeg, validPng]);
-    expect(await screen.findByText(/valid\.jpg: фото загружено как приватное/)).toBeInTheDocument();
-    expect(screen.getByText(/valid\.png: фото загружено как приватное/)).toBeInTheDocument();
+    expect(await screen.findByText(/valid\.jpg: фото загружено, но скрыто от Знакомств/)).toBeInTheDocument();
+    expect(screen.getByText(/valid\.png: фото загружено, но скрыто от Знакомств/)).toBeInTheDocument();
     expect(screen.getAllByText("Сейчас видно только вам")).toHaveLength(2);
   });
 
@@ -189,7 +189,7 @@ describe("UserGalleryEditor", () => {
     ]);
     await user.click(screen.getByRole("button", { name: /Загрузить выбранные/ }));
 
-    expect(await screen.findByText(/one\.jpg: фото загружено как приватное/)).toBeInTheDocument();
+    expect(await screen.findByText(/one\.jpg: фото загружено, но скрыто от Знакомств/)).toBeInTheDocument();
     expect(screen.getByText("two.png: Недостаточно места")).toBeInTheDocument();
     expect(screen.getByAltText("Фото галереи профиля")).toHaveAttribute(
       "src",

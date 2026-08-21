@@ -119,4 +119,25 @@ describe("RecommendationCard photo fallback", () => {
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.queryByTestId("recommendation-carousel")).not.toBeInTheDocument();
   });
+
+  /**
+   * Превью «как вас видят» — та же карточка, показанная человеку про него
+   * самого. Совместимость с собой бессмысленна, а связаться с собой нельзя.
+   */
+  it("в режиме превью снимает процент и действия", () => {
+    render(<RecommendationCard item={recommendation()} preview />);
+
+    expect(screen.queryByText(/^\d+%$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Почему \d+%/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Проверить совместимость по звёздам"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("без превью процент на месте", () => {
+    const item = recommendation();
+    render(<RecommendationCard item={item} />);
+
+    expect(screen.getByText(`${item.compatibility.total}%`)).toBeInTheDocument();
+  });
 });

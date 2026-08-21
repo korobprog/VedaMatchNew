@@ -15,6 +15,7 @@ import type {
   UserPhotoUploadResponse,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
+import { buttonClassName } from "@/components/ui/button";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -170,7 +171,7 @@ export function UserGalleryEditor(): React.ReactNode {
           "success",
           uploaded.photo.isPublic
             ? `${uploaded.fileName}: фото загружено и уже видно в Знакомствах`
-            : `${uploaded.fileName}: фото загружено как приватное`,
+            : `${uploaded.fileName}: фото загружено, но скрыто от Знакомств`,
         );
       }
       for (const failed of result.failed) {
@@ -326,27 +327,29 @@ export function UserGalleryEditor(): React.ReactNode {
   return (
     <section
       aria-labelledby="gallery-heading"
-      className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900"
+      className="glass rounded-2xl border border-glass-brd p-6"
     >
       <h2
         id="gallery-heading"
-        className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+        className="font-display text-lg font-semibold text-text-0"
       >
         Галерея профиля
       </h2>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-        Новые фото приватны. Откройте доступ, чтобы показать их в рекомендациях
-        Union.
+      {/* Сказать это до загрузки, а не после: человек выкладывает свои
+          фотографии и обязан заранее знать, кто их увидит. */}
+      <p className="mt-1 text-sm text-text-1">
+        Загруженные фото сразу видны в Знакомствах. Любое можно скрыть в один
+        клик — переключателем под снимком.
       </p>
 
       {gallery && (
         <div className="mt-4" aria-label="Использование хранилища">
-          <div className="flex justify-between text-sm text-zinc-600 dark:text-zinc-400">
+          <div className="flex justify-between text-sm text-text-1">
             <span>Занято {formatBytes(gallery.usedBytes)}</span>
             <span>Доступно {formatBytes(gallery.quotaBytes)}</span>
           </div>
           <progress
-            className="mt-2 h-2 w-full accent-amber-600"
+            className="mt-2 h-2 w-full accent-magenta"
             value={gallery.usedBytes}
             max={Math.max(gallery.quotaBytes, 1)}
           >
@@ -355,10 +358,10 @@ export function UserGalleryEditor(): React.ReactNode {
         </div>
       )}
 
-      <div className="mt-5 rounded-xl border border-dashed border-zinc-300 p-4 dark:border-zinc-700">
+      <div className="mt-5 rounded-xl border border-dashed border-glass-brd p-4">
         <label
           htmlFor="gallery-files"
-          className="block text-sm font-medium text-zinc-800 dark:text-zinc-200"
+          className="block text-sm font-medium text-text-1"
         >
           Выберите несколько фото
         </label>
@@ -370,9 +373,9 @@ export function UserGalleryEditor(): React.ReactNode {
           accept={ACCEPT_ATTRIBUTE}
           onChange={selectFiles}
           disabled={isMutating}
-          className="mt-3 block w-full text-sm text-zinc-600 file:mr-4 file:rounded-lg file:border-0 file:bg-zinc-900 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white dark:text-zinc-300 dark:file:bg-zinc-100 dark:file:text-zinc-900"
+          className="mt-3 block w-full text-sm text-text-1 file:mr-4 file:cursor-pointer file:rounded-lg file:border file:border-glass-brd file:bg-glass file:px-4 file:py-2 file:text-sm file:font-medium file:text-text-0"
         />
-        <p className="mt-2 text-xs text-zinc-500">
+        <p className="mt-2 text-xs text-text-2">
           JPG, PNG или WebP до 20 МБ каждый.
         </p>
 
@@ -387,13 +390,13 @@ export function UserGalleryEditor(): React.ReactNode {
                     alt={`Предпросмотр ${file.name}`}
                     className="aspect-square w-full rounded-lg object-cover"
                   />
-                  <p className="mt-1 truncate text-xs text-zinc-600 dark:text-zinc-400">
+                  <p className="mt-1 truncate text-xs text-text-2">
                     {file.name}
                   </p>
                   {uploading && (
                     <progress
                       aria-label={`Загрузка ${file.name}`}
-                      className="mt-1 h-1 w-full accent-amber-600"
+                      className="mt-1 h-1 w-full accent-magenta"
                     />
                   )}
                 </li>
@@ -403,7 +406,7 @@ export function UserGalleryEditor(): React.ReactNode {
               type="button"
               onClick={uploadSelected}
               disabled={isMutating}
-              className="mt-4 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
+              className={buttonClassName({ size: "sm", className: "mt-4" })}
             >
               {uploading ? "Загружаем..." : "Загрузить выбранные фото"}
             </button>
@@ -428,7 +431,7 @@ export function UserGalleryEditor(): React.ReactNode {
       </div>
 
       {loading ? (
-        <p className="mt-5 text-sm text-zinc-500" role="status">
+        <p className="mt-5 text-sm text-text-2" role="status">
           Загружаем галерею...
         </p>
       ) : gallery && gallery.photos.length > 0 ? (
@@ -439,14 +442,14 @@ export function UserGalleryEditor(): React.ReactNode {
             // Прогресс анкеты про это говорит только непоставленной галочкой.
             <p
               role="status"
-              className="mt-5 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200"
+              className="mt-5 rounded-lg border border-gold/40 bg-gold/10 px-3 py-2 text-sm text-text-1"
             >
               Ни одно фото не показывается в Знакомствах — там вас видят по
               аватарке. Включите переключатель «Показывать в Знакомствах» у
               нужного снимка.
             </p>
           )}
-          <p className="mt-5 text-xs text-zinc-500">
+          <p className="mt-5 text-xs text-text-2">
             Перетаскивайте фото для изменения порядка. С клавиатуры используйте
             Alt + стрелки.
           </p>
@@ -473,10 +476,10 @@ export function UserGalleryEditor(): React.ReactNode {
                   }}
                   onKeyDown={(event) => handleDragKeyDown(event, photo.id)}
                   aria-label={`Фото ${photo.id}. Перетащите для изменения порядка`}
-                  className={`overflow-hidden rounded-xl border bg-zinc-50 outline-none focus:ring-2 focus:ring-amber-500 dark:bg-zinc-800 ${
+                  className={`overflow-hidden rounded-xl border bg-bg-1 outline-none focus-visible:ring-2 focus-visible:ring-magenta/60 ${
                     draggedId === photo.id
-                      ? "border-amber-500 opacity-60"
-                      : "border-zinc-200 dark:border-zinc-700"
+                      ? "border-magenta opacity-60"
+                      : "border-glass-brd"
                   }`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -492,10 +495,10 @@ export function UserGalleryEditor(): React.ReactNode {
                         читается как кнопка «сделать публичным» и нажимается
                         ровно наоборот. Само состояние видно по тумблеру и
                         продублировано строкой ниже. */}
-                    <label className="flex cursor-pointer items-center justify-between gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                    <label className="flex cursor-pointer items-center justify-between gap-2 text-sm text-text-1">
                       <span>
                         Показывать в Знакомствах
-                        <span className="block text-xs text-zinc-500">
+                        <span className="block text-xs text-text-2">
                           {photo.isPublic
                             ? "Сейчас видно всем"
                             : "Сейчас видно только вам"}
@@ -508,14 +511,14 @@ export function UserGalleryEditor(): React.ReactNode {
                         checked={photo.isPublic}
                         disabled={isMutating}
                         onChange={() => void toggleVisibility(photo)}
-                        className="h-4 w-4 accent-amber-600"
+                        className="h-4 w-4 accent-magenta"
                       />
                     </label>
                     <button
                       type="button"
                       onClick={() => void deletePhoto(photo)}
                       disabled={isMutating}
-                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-white disabled:cursor-not-allowed disabled:text-zinc-400 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                      className={buttonClassName({ variant: "secondary", size: "sm", className: "w-full" })}
                       aria-label={`Удалить фото ${photo.id}`}
                     >
                       Удалить
@@ -527,7 +530,7 @@ export function UserGalleryEditor(): React.ReactNode {
                         disabled={isMutating || index === 0}
                         aria-label={`Переместить фото ${photo.id} влево`}
                         title="Переместить влево"
-                        className="flex items-center justify-center rounded-lg border border-zinc-300 px-3 py-2 text-zinc-700 hover:bg-white disabled:cursor-not-allowed disabled:text-zinc-400 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                        className={buttonClassName({ variant: "secondary", size: "sm", className: "justify-center" })}
                       >
                         {/* Стрелка вместо слова: в узкой колонке галереи
                             «Вправо» не помещалось в кнопку и вылезало за её
@@ -542,7 +545,7 @@ export function UserGalleryEditor(): React.ReactNode {
                         }
                         aria-label={`Переместить фото ${photo.id} вправо`}
                         title="Переместить вправо"
-                        className="flex items-center justify-center rounded-lg border border-zinc-300 px-3 py-2 text-zinc-700 hover:bg-white disabled:cursor-not-allowed disabled:text-zinc-400 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                        className={buttonClassName({ variant: "secondary", size: "sm", className: "justify-center" })}
                       >
                         <ChevronRight aria-hidden="true" className="h-4 w-4" />
                       </button>
@@ -555,7 +558,7 @@ export function UserGalleryEditor(): React.ReactNode {
         </>
       ) : (
         !loading && (
-          <p className="mt-5 text-sm text-zinc-500">
+          <p className="mt-5 text-sm text-text-2">
             В галерее пока нет фотографий.
           </p>
         )
