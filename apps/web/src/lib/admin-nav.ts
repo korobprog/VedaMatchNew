@@ -79,6 +79,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         scope: "market",
       },
       {
+        href: "/admin/library",
+        label: "Образование",
+        hint: "Дубли категорий, записи каталога",
+        scope: "library",
+      },
+      {
         href: "/admin/notices",
         label: "Объявления",
         hint: "Жалобы на доску объявлений",

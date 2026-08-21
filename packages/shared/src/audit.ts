@@ -33,6 +33,9 @@ export const ADMIN_AUDIT_ACTIONS = [
   'union.profile-hidden',
   'union.profile-restored',
   'union.chat-viewed',
+  'library.category-merged',
+  'library.entry-removed',
+  'library.entry-restored',
   'astro.generation-resumed',
 ] as const;
 

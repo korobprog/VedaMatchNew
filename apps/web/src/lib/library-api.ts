@@ -1,6 +1,11 @@
 // API-клиент сервиса Library. См. docs/service-module-contract.md
 import { cookies } from "next/headers";
 import type {
+  LibraryAdminCategoryDto,
+  LibraryAdminDuplicateGroup,
+  LibraryAdminEntryListResponse,
+  LibraryAdminEntryQuery,
+  LibraryAdminStats,
   LibraryCategoryDto,
   LibraryCommentsResponse,
   LibraryEntryDto,
@@ -51,3 +56,27 @@ export const getLibraryComments = (entryId: string) =>
 
 export const getLibraryPreferences = () =>
   libraryGet<LibraryPreferencesDto>("/library/me/preferences");
+
+// ===== Админка Library. Команды — в library-admin-api.ts =====
+
+export const getLibraryAdminStats = () =>
+  libraryGet<LibraryAdminStats>("/library/admin/stats");
+
+export const getLibraryAdminDuplicates = () =>
+  libraryGet<LibraryAdminDuplicateGroup[]>("/library/admin/categories/duplicates");
+
+export const getLibraryAdminCategories = (sectionId?: string) =>
+  libraryGet<LibraryAdminCategoryDto[]>(
+    `/library/admin/categories${sectionId ? `?sectionId=${encodeURIComponent(sectionId)}` : ""}`,
+  );
+
+export const getLibraryAdminEntries = (query: LibraryAdminEntryQuery) => {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  }
+  const qs = params.toString();
+  return libraryGet<LibraryAdminEntryListResponse>(
+    `/library/admin/entries${qs ? `?${qs}` : ""}`,
+  );
+};

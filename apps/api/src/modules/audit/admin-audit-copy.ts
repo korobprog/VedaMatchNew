@@ -31,6 +31,9 @@ const TEMPLATES: Record<AdminAuditAction, string> = {
   'union.profile-hidden': 'Анкета знакомств снята с выдачи',
   'union.profile-restored': 'Анкета знакомств возвращена в выдачу',
   'union.chat-viewed': 'Просмотрена переписка по жалобе',
+  'library.category-merged': 'Слиты категории Образования',
+  'library.entry-removed': 'Запись Образования снята с публикации',
+  'library.entry-restored': 'Запись Образования возвращена',
   'astro.generation-resumed': 'Генерация астрологии возобновлена',
 };
 
