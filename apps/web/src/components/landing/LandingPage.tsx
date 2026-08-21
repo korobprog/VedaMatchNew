@@ -4,7 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { ArrowRight, Play } from "lucide-react";
-import type { HomeAnnouncementDto, PricingPlan } from "@vedamatch/shared";
+import type { PricingPlan } from "@vedamatch/shared";
 import { Navbar } from "./Navbar";
 import { BackgroundOrbs } from "./Orb";
 import { NoiseOverlay } from "./NoiseOverlay";
@@ -19,7 +19,6 @@ import { cn } from "@/lib/utils";
 import { SilentRefresh } from "@/components/silent-refresh";
 import { InstallBanner } from "@/components/pwa/install-banner";
 import { MemberCounter } from "@/components/member-counter";
-import { NewsBanner } from "@/components/news-banner";
 import { loginHref } from "@/lib/return-to";
 
 export function LandingPage({
@@ -28,15 +27,12 @@ export function LandingPage({
   totalMembers,
   totalCities,
   totalCommunities,
-  news,
 }: {
   returnTo?: string;
   plan?: PricingPlan;
   totalMembers?: number;
   totalCities?: number;
   totalCommunities?: number;
-  /** Новость баннера. Счётчик сюда не передаётся: он уже есть в первом экране. */
-  news?: HomeAnnouncementDto | null;
 }) {
   const t = useTranslations("Landing");
   return (
@@ -48,12 +44,6 @@ export function LandingPage({
 
       {/* Navigation */}
       <Navbar returnTo={returnTo} />
-
-      {news && (
-        <div className="mx-auto max-w-7xl px-4 pb-2 pt-20 md:px-6 md:pt-24">
-          <NewsBanner news={news} />
-        </div>
-      )}
 
       {/* Hero Section */}
       <section className="relative min-h-dvh flex items-center pt-20 pb-32 md:pt-24 md:pb-40 overflow-hidden">

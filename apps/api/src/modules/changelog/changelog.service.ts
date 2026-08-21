@@ -15,7 +15,6 @@ import type {
   CreateAnnouncementRequest,
   CreateReleaseRequest,
   CreateRoadmapItemRequest,
-  HomeAnnouncementDto,
   PublicAnnouncementDto,
   PublicReleaseDto,
   PublicRoadmapItemDto,
@@ -83,32 +82,6 @@ export class ChangelogService {
         publishedAt: announcementSortDate(item).toISOString(),
         pinned: item.pinned,
       }));
-  }
-
-  /**
-   * Новость для баннера на главной: последняя опубликованная, помеченная
-   * «показывать на главной» и с неистёкшим сроком. Ровно одна — баннер
-   * показывает одну, и тянуть ради неё весь архив незачем.
-   */
-  async homeAnnouncement(
-    lang: Lang,
-    now: Date = new Date(),
-  ): Promise<HomeAnnouncementDto | null> {
-    const item = await this.prisma.announcement.findFirst({
-      where: {
-        status: 'published',
-        showOnHome: true,
-        OR: [{ homeUntil: null }, { homeUntil: { gt: now } }],
-      },
-      orderBy: { publishedAt: 'desc' },
-    });
-    if (!item) return null;
-    return {
-      id: item.id,
-      title: lang === 'en' ? item.titleEn : item.titleRu,
-      body: lang === 'en' ? item.bodyEn : item.bodyRu,
-      publishedAt: (item.publishedAt ?? item.createdAt).toISOString(),
-    };
   }
 
   async listRoadmap(lang: Lang): Promise<PublicRoadmapItemDto[]> {
@@ -533,8 +506,6 @@ export class ChangelogService {
     bodyRu: string;
     bodyEn: string;
     status: AnnouncementStatus;
-    showOnHome: boolean;
-    homeUntil: Date | null;
     publishedAt: Date | null;
     pinned: boolean;
     publishAt: Date | null;
@@ -548,8 +519,6 @@ export class ChangelogService {
       titleEn: item.titleEn,
       bodyRu: item.bodyRu,
       bodyEn: item.bodyEn,
-      showOnHome: item.showOnHome,
-      homeUntil: item.homeUntil?.toISOString() ?? null,
       status: item.status,
       publishedAt: item.publishedAt?.toISOString() ?? null,
       pinned: item.pinned,
