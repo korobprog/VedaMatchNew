@@ -61,6 +61,10 @@ export interface AdminAnnouncementDto {
   bodyRu: string;
   bodyEn: string;
   status: AnnouncementStatus;
+  /** Показывать баннером на главной, а не только в архиве новостей. */
+  showOnHome: boolean;
+  /** ISO-дата; `null` — висит, пока не снимут вручную. */
+  homeUntil: string | null;
   publishedAt: string | null;
 }
 
@@ -101,6 +105,9 @@ export interface CreateAnnouncementRequest {
   bodyRu: string;
   bodyEn: string;
   status?: AnnouncementStatus;
+  showOnHome?: boolean;
+  /** ISO-дата или `null`. */
+  homeUntil?: string | null;
 }
 
 export type UpdateAnnouncementRequest = Partial<CreateAnnouncementRequest>;
@@ -115,3 +122,14 @@ export interface CreateRoadmapItemRequest {
 }
 
 export type UpdateRoadmapItemRequest = Partial<CreateRoadmapItemRequest>;
+
+/**
+ * Новость для баннера на главной. Отдельный тип, а не PublicAnnouncementDto:
+ * баннеру нужна ровно одна запись, и запрашивать ради неё весь архив незачем.
+ */
+export interface HomeAnnouncementDto {
+  id: string;
+  title: string;
+  body: string;
+  publishedAt: string;
+}

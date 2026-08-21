@@ -39,6 +39,12 @@ export class ChangelogController {
     return this.changelog.getCurrentRelease(resolveLang(lang));
   }
 
+  /** Новость для баннера на главной: одна актуальная или ничего. */
+  @Get('announcements/home')
+  homeAnnouncement(@Query('lang') lang?: string) {
+    return this.changelog.homeAnnouncement(resolveLang(lang));
+  }
+
   @Get('announcements')
   announcements(@Query('lang') lang?: string) {
     return this.changelog.listAnnouncements(resolveLang(lang));

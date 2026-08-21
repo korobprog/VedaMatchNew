@@ -1,8 +1,15 @@
 import { redirect } from "next/navigation";
-import { getBillingPlan, getCommunityStats, getProfile, getServices } from "@/lib/api";
+import {
+  getBillingPlan,
+  getCommunityStats,
+  getHomeAnnouncement,
+  getProfile,
+  getServices,
+} from "@/lib/api";
 import { Header } from "@/components/header";
 import { ServiceGrid } from "@/components/service-grid";
-import { MemberCountLine } from "@/components/member-count-line";
+import { NewsBanner } from "@/components/news-banner";
+import { getServerLocale } from "@/i18n/get-locale";
 import {
   getUnionChats,
   getUnionConnectionCounts,
@@ -36,6 +43,7 @@ export default async function Home({
 }) {
   const { returnTo: rawReturnTo } = await searchParams;
   const returnTo = Array.isArray(rawReturnTo) ? rawReturnTo[0] : rawReturnTo;
+  const locale = await getServerLocale();
   const [
     user,
     services,
@@ -45,6 +53,7 @@ export default async function Home({
     unionRecommendations,
     plan,
     communityStats,
+    homeNews,
     // Источники советника. Каждый в своём catch — упавший сервис обязан
     // убрать одну карточку, а не весь блок и тем более не главную.
     astroState,
@@ -61,6 +70,8 @@ export default async function Home({
     getUnionRecommendations({ sort: "new", pageSize: "3" }).catch(() => null),
     getBillingPlan().catch(() => null),
     getCommunityStats().catch(() => null),
+    // Новость баннера — не повод ронять главную: упала, значит баннер без неё.
+    getHomeAnnouncement(locale).catch(() => null),
     getAstroState().catch(() => null),
     getAstroToday().catch(() => null),
     getMyNoticesForAdvisor().catch(() => null),
@@ -78,6 +89,7 @@ export default async function Home({
         returnTo={returnTo}
         plan={plan ?? undefined}
         totalMembers={communityStats?.totalMembers}
+        news={homeNews}
       />
     );
   }
@@ -127,12 +139,7 @@ export default async function Home({
           userId={user.id}
           displayName={user.displayName}
         />
-        {communityStats && (
-          <MemberCountLine
-            userId={user.id}
-            total={communityStats.totalMembers}
-          />
-        )}
+        <NewsBanner news={homeNews} totalMembers={communityStats?.totalMembers} />
         <ServiceGrid services={services} userId={user.id} extras={serviceExtras} />
       </main>
       <InstallBanner />

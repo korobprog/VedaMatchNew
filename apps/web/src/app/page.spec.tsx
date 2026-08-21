@@ -16,6 +16,12 @@ vi.mock("@/lib/api", () => ({
   getServices: vi.fn(),
   getBillingPlan: vi.fn().mockResolvedValue(null),
   getCommunityStats: vi.fn().mockResolvedValue(null),
+  getHomeAnnouncement: vi.fn().mockResolvedValue(null),
+}));
+
+// Локаль читается из cookie, а вне запроса Next это запрещает.
+vi.mock("@/i18n/get-locale", () => ({
+  getServerLocale: vi.fn().mockResolvedValue("ru"),
 }));
 
 vi.mock("@/lib/union-api", () => ({
@@ -167,7 +173,7 @@ describe("Home", () => {
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
-  it("shows the live member count under the welcome message", async () => {
+  it("shows the live member count in the news banner", async () => {
     vi.mocked(getProfile).mockResolvedValue(user);
     vi.mocked(getServices).mockResolvedValue(services);
     vi.mocked(getCommunityStats).mockResolvedValue({ totalMembers: 1234 });
@@ -178,7 +184,7 @@ describe("Home", () => {
     expect(screen.getByText("1234")).toBeInTheDocument();
   });
 
-  it("hides the member count line when the stats request fails", async () => {
+  it("hides the member count when the stats request fails", async () => {
     vi.mocked(getProfile).mockResolvedValue(user);
     vi.mocked(getServices).mockResolvedValue(services);
     vi.mocked(getCommunityStats).mockResolvedValue(null);

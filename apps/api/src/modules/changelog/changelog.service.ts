@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -11,6 +12,7 @@ import type {
   CreateAnnouncementRequest,
   CreateReleaseRequest,
   CreateRoadmapItemRequest,
+  HomeAnnouncementDto,
   PublicAnnouncementDto,
   PublicReleaseDto,
   PublicRoadmapItemDto,
@@ -60,6 +62,32 @@ export class ChangelogService {
       body: lang === 'en' ? item.bodyEn : item.bodyRu,
       publishedAt: (item.publishedAt ?? item.createdAt).toISOString(),
     }));
+  }
+
+  /**
+   * Новость для баннера на главной: последняя опубликованная, помеченная
+   * «показывать на главной» и с неистёкшим сроком. Ровно одна — баннер
+   * показывает одну, и тянуть ради неё весь архив незачем.
+   */
+  async homeAnnouncement(
+    lang: Lang,
+    now: Date = new Date(),
+  ): Promise<HomeAnnouncementDto | null> {
+    const item = await this.prisma.announcement.findFirst({
+      where: {
+        status: 'published',
+        showOnHome: true,
+        OR: [{ homeUntil: null }, { homeUntil: { gt: now } }],
+      },
+      orderBy: { publishedAt: 'desc' },
+    });
+    if (!item) return null;
+    return {
+      id: item.id,
+      title: lang === 'en' ? item.titleEn : item.titleRu,
+      body: lang === 'en' ? item.bodyEn : item.bodyRu,
+      publishedAt: (item.publishedAt ?? item.createdAt).toISOString(),
+    };
   }
 
   async listRoadmap(lang: Lang): Promise<PublicRoadmapItemDto[]> {
@@ -191,6 +219,8 @@ export class ChangelogService {
         bodyRu: body.bodyRu,
         bodyEn: body.bodyEn,
         status,
+        showOnHome: body.showOnHome === true,
+        homeUntil: parseHomeUntil(body.homeUntil),
         publishedAt: status === 'published' ? new Date() : null,
       },
     });
@@ -222,6 +252,10 @@ export class ChangelogService {
         bodyRu: body.bodyRu,
         bodyEn: body.bodyEn,
         status,
+        showOnHome: body.showOnHome,
+        // undefined — «не менять», null — «снять срок и висеть до ручного снятия».
+        homeUntil:
+          body.homeUntil === undefined ? undefined : parseHomeUntil(body.homeUntil),
         publishedAt: becamePublished ? new Date() : undefined,
       },
     });
@@ -367,6 +401,8 @@ export class ChangelogService {
     bodyRu: string;
     bodyEn: string;
     status: AnnouncementStatus;
+    showOnHome: boolean;
+    homeUntil: Date | null;
     publishedAt: Date | null;
   }): AdminAnnouncementDto {
     return {
@@ -375,6 +411,8 @@ export class ChangelogService {
       titleEn: item.titleEn,
       bodyRu: item.bodyRu,
       bodyEn: item.bodyEn,
+      showOnHome: item.showOnHome,
+      homeUntil: item.homeUntil?.toISOString() ?? null,
       status: item.status,
       publishedAt: item.publishedAt?.toISOString() ?? null,
     };
@@ -417,4 +455,18 @@ export class ChangelogService {
       throw new ForbiddenException('Доступ только для администратора');
     }
   }
+}
+
+/**
+ * Срок показа баннера из тела запроса. Пустая строка и null одинаково значат
+ * «без срока»: иначе очищенное поле формы превращалось бы в Invalid Date.
+ */
+function parseHomeUntil(value: string | null | undefined): Date | null {
+  const text = value?.trim();
+  if (!text) return null;
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new BadRequestException('Некорректная дата показа на главной');
+  }
+  return parsed;
 }

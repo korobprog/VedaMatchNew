@@ -4,7 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { ArrowRight, Play } from "lucide-react";
-import type { PricingPlan } from "@vedamatch/shared";
+import type { HomeAnnouncementDto, PricingPlan } from "@vedamatch/shared";
 import { Navbar } from "./Navbar";
 import { BackgroundOrbs } from "./Orb";
 import { NoiseOverlay } from "./NoiseOverlay";
@@ -19,16 +19,20 @@ import { cn } from "@/lib/utils";
 import { SilentRefresh } from "@/components/silent-refresh";
 import { InstallBanner } from "@/components/pwa/install-banner";
 import { MemberCounter } from "@/components/member-counter";
+import { NewsBanner } from "@/components/news-banner";
 import { loginHref } from "@/lib/return-to";
 
 export function LandingPage({
   returnTo,
   plan,
   totalMembers,
+  news,
 }: {
   returnTo?: string;
   plan?: PricingPlan;
   totalMembers?: number;
+  /** Новость баннера. Счётчик сюда не передаётся: он уже есть в первом экране. */
+  news?: HomeAnnouncementDto | null;
 }) {
   const t = useTranslations("Landing");
   return (
@@ -41,8 +45,26 @@ export function LandingPage({
       {/* Navigation */}
       <Navbar returnTo={returnTo} />
 
+      {news && (
+        <div className="mx-auto max-w-7xl px-4 pb-2 pt-20 md:px-6 md:pt-24">
+          <NewsBanner news={news} />
+        </div>
+      )}
+
       {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center pt-20 pb-32 md:pt-24 md:pb-40 overflow-hidden">
+      <section
+        className={cn(
+          "relative flex overflow-hidden pb-32 md:pb-40",
+          // Без баннера первый экран занимает всю высоту, а содержимое стоит
+          // по центру — так задумано. С баннером центрировать нечего: полосу
+          // новости уже видно, и вертикальное выравнивание оставляло бы под
+          // ней двести пикселей воздуха. Поэтому содержимое прижимается вверх,
+          // а высоту диктует оно само.
+          news
+            ? "items-start pt-6"
+            : "min-h-screen items-center pt-20 md:pt-24",
+        )}
+      >
         <div className="mx-auto max-w-7xl px-4 md:px-6 w-full">
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             {/* Left side - Text content */}

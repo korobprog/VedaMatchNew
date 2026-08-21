@@ -11,6 +11,7 @@ import type {
   AdminUserReportsResponse,
   AdminAnnouncementDto,
   AdminPlatformSettings,
+  HomeAnnouncementDto,
   AdminAuditListResponse,
   AdminAuditQuery,
   AdminPortalStats,
@@ -157,6 +158,9 @@ export const getReleases = (lang: Locale) =>
   apiGetPublic<PublicReleaseDto[]>(`/changelog/releases?lang=${lang}`);
 export const getCurrentRelease = (lang: Locale) =>
   apiGetPublic<PublicReleaseDto>(`/changelog/releases/current?lang=${lang}`);
+/** Новость для баннера на главной: одна актуальная или `null`. */
+export const getHomeAnnouncement = (lang: Locale) =>
+  apiGetPublic<HomeAnnouncementDto>(`/changelog/announcements/home?lang=${lang}`);
 export const getAnnouncements = (lang: Locale) =>
   apiGetPublic<PublicAnnouncementDto[]>(`/changelog/announcements?lang=${lang}`);
 export const getRoadmap = (lang: Locale) =>

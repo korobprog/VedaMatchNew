@@ -113,6 +113,11 @@ function AnnouncementForm({
   const [bodyRu, setBodyRu] = useState(item?.bodyRu ?? "");
   const [bodyEn, setBodyEn] = useState(item?.bodyEn ?? "");
   const [status, setStatus] = useState<AnnouncementStatus>(item?.status ?? "draft");
+  const [showOnHome, setShowOnHome] = useState(item?.showOnHome ?? false);
+  // Дата в поле — «YYYY-MM-DD», в API уходит ISO. Пусто = без срока.
+  const [homeUntil, setHomeUntil] = useState(
+    item?.homeUntil ? item.homeUntil.slice(0, 10) : "",
+  );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -120,7 +125,15 @@ function AnnouncementForm({
     setPending(true);
     setError(null);
     try {
-      const body = { titleRu, titleEn, bodyRu, bodyEn, status };
+      const body = {
+        titleRu,
+        titleEn,
+        bodyRu,
+        bodyEn,
+        status,
+        showOnHome,
+        homeUntil: homeUntil ? new Date(homeUntil).toISOString() : null,
+      };
       const url = item
         ? `${API_URL}/admin/changelog/announcements/${item.id}`
         : `${API_URL}/admin/changelog/announcements`;
@@ -184,6 +197,34 @@ function AnnouncementForm({
           ))}
         </select>
       </label>
+
+      <label className="flex items-start gap-2 text-sm text-text-1">
+        <input
+          type="checkbox"
+          checked={showOnHome}
+          onChange={(e) => setShowOnHome(e.target.checked)}
+          className="mt-1"
+        />
+        <span>
+          Показывать баннером на главной. Без этого новость видна только в
+          архиве «Что нового».
+        </span>
+      </label>
+
+      {showOnHome && (
+        <label className="flex flex-wrap items-center gap-2 text-sm text-text-1">
+          Снять с главной
+          <input
+            type="date"
+            value={homeUntil}
+            onChange={(e) => setHomeUntil(e.target.value)}
+            className="rounded-xl border border-glass-brd bg-bg-1 px-2 py-2 text-sm text-text-0"
+          />
+          <span className="text-xs text-text-2">
+            Пусто — висит, пока не снимете вручную.
+          </span>
+        </label>
+      )}
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
