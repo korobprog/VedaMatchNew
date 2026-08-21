@@ -40,7 +40,10 @@ export function AdminSidebar({ groups }: { groups: AdminNavGroup[] }) {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-controls="admin-nav-sections"
-        className="glass flex w-full items-center justify-between gap-3 rounded-xl border border-glass-brd px-4 py-3 text-left text-sm text-text-0 lg:hidden"
+        // Фон непрозрачный, а не стеклянный: кнопка липнет над содержимым,
+        // и в тёмной теме стекло — это 6% белого, сквозь которое читается
+        // текст страницы.
+        className="flex w-full items-center justify-between gap-3 rounded-xl border border-glass-brd bg-bg-1 px-4 py-3 text-left text-sm text-text-0 shadow-lg lg:hidden"
       >
         <span className="min-w-0 truncate">
           <span className="text-text-2">Раздел: </span>
@@ -60,10 +63,10 @@ export function AdminSidebar({ groups }: { groups: AdminNavGroup[] }) {
         className={cn(
           // Список ложится поверх содержимого, а не раздвигает его, и
           // прокручивается сам: восемнадцать пунктов выше экрана телефона.
-          "glass absolute inset-x-0 top-full mt-2 max-h-[70vh] space-y-4 overflow-y-auto rounded-2xl border border-glass-brd p-2",
+          "absolute inset-x-0 top-full mt-2 max-h-[70vh] space-y-4 overflow-y-auto rounded-2xl border border-glass-brd bg-bg-1 p-2 shadow-2xl",
           // На широком экране это обычная колонка: ни рамки, ни стекла, ни
           // скрытия — там ничего не разворачивают.
-          "lg:static lg:mt-0 lg:block lg:max-h-none lg:space-y-6 lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none",
+          "lg:static lg:mt-0 lg:block lg:max-h-none lg:space-y-6 lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none",
           open ? "block" : "hidden",
         )}
       >
@@ -75,7 +78,10 @@ export function AdminSidebar({ groups }: { groups: AdminNavGroup[] }) {
         />
         {groups.map((group) => (
           <div key={group.title}>
-            <p className="px-3 pb-1.5 font-display text-xs font-semibold uppercase tracking-wide text-text-2">
+            {/* На панели фон светлее страницы, и на нём `--vm-text-2` даёт
+                4.29:1 при 12px — ниже порога. В колонке на широком экране
+                подпись лежит на фоне страницы и остаётся приглушённой. */}
+            <p className="px-3 pb-1.5 font-display text-xs font-semibold uppercase tracking-wide text-text-1 lg:text-text-2">
               {group.title}
             </p>
             <ul className="space-y-1">
