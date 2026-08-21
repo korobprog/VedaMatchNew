@@ -28,7 +28,9 @@ export function AdminSidebar({ groups }: { groups: AdminNavGroup[] }) {
   return (
     <nav
       aria-label="Разделы админки"
-      className="lg:w-56 lg:shrink-0"
+      // Липкая под шапкой: разделы вроде справочника тянутся на пять тысяч
+      // точек, и ради смены раздела мотать всё обратно вверх — наказание.
+      className="sticky top-14 z-30 lg:static lg:w-56 lg:shrink-0"
       onKeyDown={(event) => {
         if (event.key === "Escape") setOpen(false);
       }}
@@ -56,12 +58,12 @@ export function AdminSidebar({ groups }: { groups: AdminNavGroup[] }) {
       <div
         id="admin-nav-sections"
         className={cn(
-          // Список из восемнадцати пунктов выше экрана телефона: прокручиваем
-          // его сам, чтобы страница под меню не уезжала на экран вниз.
-          "glass mt-2 max-h-[70vh] space-y-4 overflow-y-auto rounded-2xl border border-glass-brd p-2",
+          // Список ложится поверх содержимого, а не раздвигает его, и
+          // прокручивается сам: восемнадцать пунктов выше экрана телефона.
+          "glass absolute inset-x-0 top-full mt-2 max-h-[70vh] space-y-4 overflow-y-auto rounded-2xl border border-glass-brd p-2",
           // На широком экране это обычная колонка: ни рамки, ни стекла, ни
           // скрытия — там ничего не разворачивают.
-          "lg:mt-0 lg:block lg:max-h-none lg:space-y-6 lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none",
+          "lg:static lg:mt-0 lg:block lg:max-h-none lg:space-y-6 lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none",
           open ? "block" : "hidden",
         )}
       >

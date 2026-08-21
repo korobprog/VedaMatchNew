@@ -1,4 +1,5 @@
 ﻿import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { redirect } from "next/navigation";
 import { redirectToLogin } from "@/lib/require-user";
 import type { DevoteeVerificationStatus, Role, SpiritualStage, UserAccountStatus } from "@vedamatch/shared";
@@ -43,7 +44,9 @@ export default async function AdminUsersPage({
             Поиск, фильтры, этапы, заявки наставников и доступность сервисов.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        {/* На телефоне эти три ссылки — дубль меню разделов, которое теперь
+            рядом: они съедали треть первого экрана перед списком людей. */}
+        <div className="hidden flex-wrap gap-2 sm:flex">
           <Link href="/admin/verification-requests" className="rounded-xl glass border border-glass-brd px-4 py-2 text-sm font-medium text-text-1 hover:text-text-0 hover:border-magenta/30">
             Заявки на подтверждение
           </Link>
@@ -56,7 +59,15 @@ export default async function AdminUsersPage({
         </div>
       </div>
 
-      <form className="mb-6 grid gap-3 glass rounded-2xl border border-glass-brd p-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Девять фильтров стопкой отодвигали список на полтора экрана вниз.
+          На телефоне они под кнопкой, на sm и выше — раскрыты всегда: там
+          места хватает, и прятать поиск за лишний клик незачем. */}
+      <details className="group mb-6 [&[open]>summary>svg]:rotate-180">
+        <summary className="glass flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-xl border border-glass-brd px-4 text-sm text-text-1 sm:hidden">
+          Фильтры и поиск
+          <ChevronDown className="h-4 w-4 shrink-0 text-text-2 transition-transform" aria-hidden="true" />
+        </summary>
+        <form className="mt-2 gap-3 glass rounded-2xl border border-glass-brd p-4 group-open:grid sm:mt-0 sm:grid sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-sm font-medium text-text-1">
           Поиск
           <input name="q" defaultValue={query.q} placeholder="Имя или email" className="mt-1 w-full rounded-xl border border-glass-brd bg-glass px-3 py-2 text-text-0" />
@@ -72,8 +83,9 @@ export default async function AdminUsersPage({
         <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
           <button className="rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-4 py-2 text-sm font-medium text-white hover:shadow-[0_0_20px_rgba(255,62,158,0.4)]">Применить</button>
           <Link href="/admin/users" className="rounded-xl glass border border-glass-brd px-4 py-2 text-sm font-medium text-text-1 hover:text-text-0">Сбросить</Link>
-        </div>
-      </form>
+          </div>
+        </form>
+      </details>
 
       {users.items.length === 0 ? (
         <div className="glass rounded-2xl border border-glass-brd p-8 text-center text-text-1">
