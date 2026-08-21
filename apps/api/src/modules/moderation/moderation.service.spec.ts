@@ -29,7 +29,11 @@ describe('ModerationService', () => {
     user: { findUnique: jest.fn() },
     $transaction: jest.fn().mockResolvedValue([]),
   };
-  const service = new ModerationService(prisma as unknown as PrismaService);
+  const events = { emit: jest.fn() };
+  const service = new ModerationService(
+    prisma as unknown as PrismaService,
+    events as never,
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();

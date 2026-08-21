@@ -7,12 +7,14 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type {
+  AdminAuditEvent,
   AdminMarketReportDto,
   AdminMarketReportListResponse,
   CreateMarketReportRequest,
   MarketReportTargetKind,
   ResolveMarketReportRequest,
 } from '@vedamatch/shared';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   MARKET_REPORT_STATUSES,
@@ -26,7 +28,10 @@ const PAGE_SIZE = 50;
 
 @Injectable()
 export class MarketReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   /**
    * Жалоба. Один человек жалуется на объект один раз — это выражено
@@ -305,6 +310,19 @@ export class MarketReportsService {
         }
       }
     });
+
+    const event: AdminAuditEvent = {
+      actorId: adminId,
+      action: 'market.report-resolved',
+      targetType: 'report',
+      targetId: id,
+      details: {
+        status: resolution,
+        target: report.targetKind,
+        hidden: body.hideTarget === true,
+      },
+    };
+    this.events.emit('admin.action', event);
   }
 
   private async loadTarget(

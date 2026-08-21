@@ -6,11 +6,13 @@ import {
 } from '@nestjs/common';
 import {
   NOTICE_REPORT_NOTE_MAX_LENGTH,
+  type AdminAuditEvent,
   type AdminNoticeReportDecisionRequest,
   type AdminNoticeReportsResponse,
   type CreateNoticeReportRequest,
   type NoticeReportReason,
 } from '@vedamatch/shared';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { recountRubricOfNotice } from './notice-rubric-count';
 // Роли общины — портальная инфраструктура, читать её разрешено;
@@ -32,7 +34,10 @@ const REASONS: NoticeReportReason[] = [
 
 @Injectable()
 export class NoticesReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   async report(
     userId: string,
@@ -229,6 +234,15 @@ export class NoticesReportsService {
       // рубрики обязан это увидеть.
       if (noticeData) await recountRubricOfNotice(tx, report.noticeId);
     });
+
+    const event: AdminAuditEvent = {
+      actorId: adminId,
+      action: 'notices.report-resolved',
+      targetType: 'notice',
+      targetId: report.noticeId,
+      details: { status: body.decision },
+    };
+    this.events.emit('admin.action', event);
     return { ok: true };
   }
 

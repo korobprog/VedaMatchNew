@@ -48,11 +48,7 @@ export class AdminUsersController {
     @Param('id') id: string,
     @Body() body: { verified?: boolean },
   ) {
-    return this.users.setPhotoVerification(
-      user.role,
-      id,
-      body?.verified === true,
-    );
+    return this.users.setPhotoVerification(user, id, body?.verified === true);
   }
 
   @Patch(':id/stage')

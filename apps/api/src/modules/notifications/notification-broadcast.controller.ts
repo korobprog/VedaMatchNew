@@ -10,8 +10,10 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   AccessTokenPayload,
+  AdminAuditEvent,
   CreateNotificationBroadcastRequest,
   NotificationAudienceFilter,
   UpdateNotificationBroadcastRequest,
@@ -30,6 +32,7 @@ export class NotificationBroadcastController {
   constructor(
     private readonly broadcasts: NotificationBroadcastService,
     private readonly worker: NotificationBroadcastWorkerService,
+    private readonly events: EventEmitter2,
   ) {}
 
   @Get()
@@ -92,14 +95,44 @@ export class NotificationBroadcastController {
   async send(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     this.assertAdmin(user);
     const started = await this.broadcasts.start(id);
+    this.audit(user.sub, 'broadcast.sent', started.id, {
+      title: started.title,
+      recipients: started.totalRecipients,
+      important: started.important,
+    });
     void this.worker.tick();
     return started;
   }
 
   @Post(':id/cancel')
-  cancel(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+  async cancel(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
     this.assertAdmin(user);
-    return this.broadcasts.cancel(id);
+    const cancelled = await this.broadcasts.cancel(id);
+    this.audit(user.sub, 'broadcast.cancelled', id, {
+      title: cancelled.title,
+      // Сколько успело уйти до остановки — это и есть цена ошибки.
+      recipients: cancelled.deliveredCount,
+    });
+    return cancelled;
+  }
+
+  private audit(
+    actorId: string,
+    action: AdminAuditEvent['action'],
+    broadcastId: string,
+    details: AdminAuditEvent['details'],
+  ): void {
+    const event: AdminAuditEvent = {
+      actorId,
+      action,
+      targetType: 'broadcast',
+      targetId: broadcastId,
+      details,
+    };
+    this.events.emit('admin.action', event);
   }
 
   private assertAdmin(user: AccessTokenPayload): void {

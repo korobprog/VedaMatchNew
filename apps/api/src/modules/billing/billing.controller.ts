@@ -43,7 +43,7 @@ export class AdminBillingController {
     @Param('id') id: string,
     @Body() body: AdminUpdateSubscriptionRequest,
   ) {
-    return this.billing.adminUpdate(admin.role, id, body);
+    return this.billing.adminUpdate(admin, id, body);
   }
 }
 
@@ -65,6 +65,6 @@ export class AdminBillingModeController {
     @CurrentUser() admin: AccessTokenPayload,
     @Body() body: AdminUpdateBillingModeRequest,
   ) {
-    return { mode: await this.billing.setBillingMode(admin.role, body.mode) };
+    return { mode: await this.billing.setBillingMode(admin, body.mode) };
   }
 }

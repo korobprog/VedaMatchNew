@@ -234,6 +234,7 @@ model User {
   notificationPreference             NotificationPreference?
   notificationItems                  NotificationItem[]
   notificationBroadcasts             NotificationBroadcast[]      @relation("NotificationBroadcastsCreated")
+  adminAuditEntries                  AdminAuditEntry[]            @relation("AdminAuditEntries")
   selfIdentificationResponses        SelfIdentificationResponse[]
   stageHistory                       StageHistory[]
   mentorVerificationRequests         MentorVerificationRequest[]
@@ -698,6 +699,32 @@ model ServiceAccess {
   service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@id([userId, serviceId])
+}
+
+/// Журнал действий администрации: кто, что и над кем сделал. Пишется
+/// подписчиком на событие `admin.action` — так модуль-издатель не зависит от
+/// журнала, а сервисные модули не нарушают контракт, импортируя чужой сервис.
+///
+/// Модерация Motivation ведёт свой журнал (MotivationModerationAudit): он
+/// привязан к посту и живёт вместе с ним, дублировать его сюда незачем.
+model AdminAuditEntry {
+  id         String   @id @default(uuid())
+  /// Автор действия. null — аккаунт администратора удалён; запись остаётся.
+  actorId    String?
+  actor      User?    @relation("AdminAuditEntries", fields: [actorId], references: [id], onDelete: SetNull)
+  /// Что произошло: значение AdminAuditAction из @vedamatch/shared.
+  action     String
+  /// Над чем: тип объекта и его id. `platform` — действие над всем порталом.
+  targetType String
+  targetId   String?
+  /// Подробности для строки журнала: было/стало, причина.
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([targetType, targetId])
+  @@index([action, createdAt(sort: Desc)])
 }
 
 model LoginAudit {

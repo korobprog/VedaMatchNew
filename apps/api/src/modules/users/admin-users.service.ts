@@ -16,6 +16,9 @@ import type {
   AdminPurgeUserResponse,
   AdminManualStageUpdateRequest,
   AdminMentorVerificationRequest,
+  AdminAuditAction,
+  AdminAuditDetails,
+  AdminAuditEvent,
   AdminRoleUpdateRequest,
   AdminServiceScopeUpdateRequest,
   AdminUserDetail,
@@ -308,6 +311,12 @@ export class AdminUsersService {
       }),
     ]);
 
+    this.audit(admin.sub, 'user.stage-changed', userId, {
+      from: user.spiritualStage,
+      to: body.spiritualStage,
+      status: nextStatus,
+      reason: body.reason.trim(),
+    });
     return this.getUser(admin.role, userId);
   }
 
@@ -344,6 +353,10 @@ export class AdminUsersService {
       await this.prisma.serviceAdmin.deleteMany({ where: { userId } });
     }
 
+    this.audit(admin.sub, 'user.role-changed', userId, {
+      from: toRole(user.role),
+      to: body.role,
+    });
     return this.getUser(admin.role, userId);
   }
 
@@ -407,6 +420,9 @@ export class AdminUsersService {
       }),
     ]);
 
+    this.audit(admin.sub, 'user.services-changed', userId, {
+      services: slugs.join(', ') || '—',
+    });
     return this.getUser(admin.role, userId);
   }
 
@@ -454,6 +470,10 @@ export class AdminUsersService {
           },
         }),
       ]);
+      this.audit(admin.sub, 'user.blocked', userId, {
+        reason,
+        until: blockedUntil?.toISOString() ?? 'бессрочно',
+      });
     } else {
       // Разблокировать можно только заблокированного: удалённый аккаунт
       // иначе становился бы «активным» с заполненным deletedAt.
@@ -470,6 +490,7 @@ export class AdminUsersService {
           blockedUntil: null,
         },
       });
+      this.audit(admin.sub, 'user.unblocked', userId);
     }
 
     return this.getUser(admin.role, userId);
@@ -515,6 +536,7 @@ export class AdminUsersService {
       }),
     ]);
 
+    this.audit(admin.sub, 'user.deleted', userId, { reason });
     return this.getUser(admin.role, userId);
   }
 
@@ -569,6 +591,9 @@ export class AdminUsersService {
       ...contributions,
     ]);
 
+    // Журнал пишется до удаления: строки User уже не будет, поэтому в
+    // подробностях остаётся email — по нему запись и опознают потом.
+    this.audit(admin.sub, 'user.purged', userId, { reason, email: user.email });
     await this.prisma.user.delete({ where: { id: userId } });
     this.logger.warn(
       `Безвозвратно удалён аккаунт ${user.email} (${userId}) администратором ${admin.sub}: ${reason}`,
@@ -673,7 +698,28 @@ export class AdminUsersService {
       },
     });
 
+    this.audit(admin.sub, 'user.restored', userId);
     return this.getUser(admin.role, userId);
+  }
+
+  /**
+   * Событие для журнала действий. Отправляется через шину, а не вызовом чужого
+   * сервиса: журнал не должен быть зависимостью модуля пользователей.
+   */
+  private audit(
+    actorId: string,
+    action: AdminAuditAction,
+    userId: string,
+    details?: AdminAuditDetails,
+  ): void {
+    const event: AdminAuditEvent = {
+      actorId,
+      action,
+      targetType: 'user',
+      targetId: userId,
+      details,
+    };
+    this.events.emit('admin.action', event);
   }
 
   private ensureAdmin(role: Role) {

@@ -28,16 +28,17 @@ describe('AdminUsersService.updateAdminServices', () => {
       },
       $transaction: jest.fn().mockResolvedValue([]),
     };
+    const events = { emit: jest.fn() };
     const service = new AdminUsersService(
       prisma as never,
       {} as never,
       { get: () => undefined } as never,
-      {} as never,
+      events as never,
     );
     jest
       .spyOn(service, 'getUser')
       .mockResolvedValue({ profile: { adminServices: [] } } as never);
-    return { service, prisma };
+    return { service, prisma, events };
   }
 
   it('заменяет набор сервисов одной транзакцией', async () => {
@@ -57,6 +58,20 @@ describe('AdminUsersService.updateAdminServices', () => {
       ],
     });
     expect(prisma.$transaction).toHaveBeenCalledWith(['delete', 'create']);
+  });
+
+  it('оставляет след в журнале действий', async () => {
+    const { service, events } = build('service_admin');
+
+    await service.updateAdminServices(admin, 'u-1', { services: ['market'] });
+
+    expect(events.emit).toHaveBeenCalledWith('admin.action', {
+      actorId: 'admin-1',
+      action: 'user.services-changed',
+      targetType: 'user',
+      targetId: 'u-1',
+      details: { services: 'market' },
+    });
   });
 
   it('снимает дубли из запроса', async () => {

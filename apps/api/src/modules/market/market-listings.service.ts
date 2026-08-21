@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type {
+  AdminAuditEvent,
   CreateMarketListingRequest,
   MarketListingDto,
   MarketListingFilters,
@@ -19,6 +20,7 @@ import type {
   UpdateMarketListingStatusRequest,
 } from '@vedamatch/shared';
 import { normalizeCityKey } from '../../common/city-key';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isAvailable, isPubliclyVisible } from './market-availability';
 import {
@@ -129,6 +131,7 @@ export class MarketListingsService {
     private readonly images: MarketImagesService,
     private readonly shops: MarketShopsService,
     private readonly subscriptions: MarketSubscriptionsService,
+    private readonly events: EventEmitter2,
   ) {}
 
   async feed(
@@ -420,9 +423,7 @@ export class MarketListingsService {
         });
         const previousIds = previous.map((row) => row.categoryId);
         const added = categoryIds.filter((cid) => !previousIds.includes(cid));
-        const removed = previousIds.filter(
-          (cid) => !categoryIds!.includes(cid),
-        );
+        const removed = previousIds.filter((cid) => !categoryIds.includes(cid));
 
         await tx.marketListingCategory.deleteMany({
           where: { listingId: id, categoryId: { in: removed } },
@@ -529,7 +530,11 @@ export class MarketListingsService {
 
   /** Административное скрытие. Перенесено в первую фазу: при постмодерации
    *  нельзя ждать полноценной системы жалоб из третьей. */
-  async hideByAdmin(viewerIsAdmin: boolean, id: string): Promise<void> {
+  async hideByAdmin(
+    viewerIsAdmin: boolean,
+    adminId: string,
+    id: string,
+  ): Promise<void> {
     if (!viewerIsAdmin) throw new ForbiddenException('not_admin');
 
     const listing = await this.prisma.marketListing.findUnique({
@@ -561,6 +566,14 @@ export class MarketListingsService {
         });
       }
     });
+
+    const event: AdminAuditEvent = {
+      actorId: adminId,
+      action: 'market.listing-hidden',
+      targetType: 'listing',
+      targetId: id,
+    };
+    this.events.emit('admin.action', event);
   }
 
   async remove(

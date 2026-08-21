@@ -168,7 +168,7 @@ export class MarketAdminListingsController {
   @Post(':id/hide')
   @HttpCode(204)
   async hide(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
-    await this.listings.hideByAdmin(isAdmin(user), id);
+    await this.listings.hideByAdmin(isAdmin(user), user.sub, id);
   }
 }
 

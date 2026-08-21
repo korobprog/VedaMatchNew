@@ -89,6 +89,6 @@ export class SelfIdentificationController {
     @Param('id') id: string,
     @Body() body: { status: DevoteeVerificationStatus; adminNote?: string },
   ) {
-    return this.service.reviewAdminRequest(user.role, id, body);
+    return this.service.reviewAdminRequest(user, id, body);
   }
 }

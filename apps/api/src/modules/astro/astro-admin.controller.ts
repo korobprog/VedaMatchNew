@@ -8,8 +8,10 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   AccessTokenPayload,
+  AdminAuditEvent,
   AstroAdminUsageDto,
   AstroSettingsDto,
   UpdateAstroSettingsRequest,
@@ -25,7 +27,10 @@ import { isAdmin } from './is-admin';
 @Controller('admin/astro')
 @UseGuards(AuthGuard)
 export class AstroAdminController {
-  constructor(private readonly admin: AstroAdminService) {}
+  constructor(
+    private readonly admin: AstroAdminService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   @Get('settings')
   settings(@CurrentUser() user: AccessTokenPayload): Promise<AstroSettingsDto> {
@@ -55,6 +60,12 @@ export class AstroAdminController {
   @Post('resume')
   resume(@CurrentUser() user: AccessTokenPayload): Promise<AstroAdminUsageDto> {
     this.assertAdmin(user);
+    const event: AdminAuditEvent = {
+      actorId: user.sub,
+      action: 'astro.generation-resumed',
+      targetType: 'platform',
+    };
+    this.events.emit('admin.action', event);
     return this.admin.resume();
   }
 

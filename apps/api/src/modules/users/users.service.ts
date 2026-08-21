@@ -17,6 +17,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   NAME_MAX_LENGTH,
   resolveDisplayName,
+  type AdminAuditEvent,
   type Gender,
   type ProfileLocation,
   type ProfileMessengers,
@@ -25,6 +26,7 @@ import {
   type Role,
   type UserProfile,
 } from '@vedamatch/shared';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toRole } from '../auth/role';
 import { toSubscriptionState } from '../billing/subscription';
@@ -79,6 +81,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly events: EventEmitter2,
   ) {
     const region = this.config.get<string>('S3_REGION');
     const accessKeyId = this.config.get<string>('S3_ACCESS_KEY');
@@ -285,11 +288,11 @@ export class UsersService {
   }
 
   async setPhotoVerification(
-    role: Role,
+    admin: { sub: string; role: Role },
     userId: string,
     verified: boolean,
   ): Promise<UserProfile> {
-    if (role !== 'admin') {
+    if (admin.role !== 'admin') {
       throw new ForbiddenException('Доступ только для администратора');
     }
     await this.ensureUser(userId);
@@ -300,6 +303,14 @@ export class UsersService {
         ? { photoVerifiedAt: new Date(), photoVerificationRequestedAt: null }
         : RESET_PHOTO_VERIFICATION,
     });
+
+    const event: AdminAuditEvent = {
+      actorId: admin.sub,
+      action: verified ? 'user.photo-verified' : 'user.photo-unverified',
+      targetType: 'user',
+      targetId: userId,
+    };
+    this.events.emit('admin.action', event);
     return this.getProfile(userId);
   }
 

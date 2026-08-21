@@ -90,6 +90,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     title: "Платформа",
     items: [
       {
+        href: "/admin/audit",
+        label: "Журнал действий",
+        hint: "Кто и что сделал в админке",
+        scope: "portal",
+      },
+      {
         href: "/admin/notifications",
         label: "Рассылки",
         hint: "Объявления администрации в колокольчик и пуш",

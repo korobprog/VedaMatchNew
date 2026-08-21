@@ -43,7 +43,8 @@ function makeService(opts: {
       fn(tx),
     ),
   };
-  const service = new MarketReportsService(prisma as never);
+  const events = { emit: jest.fn() };
+  const service = new MarketReportsService(prisma as never, events as never);
   return { service, target, prisma };
 }
 

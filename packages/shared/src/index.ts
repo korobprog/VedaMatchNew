@@ -18,6 +18,7 @@ export * from './changelog';
 export * from './market';
 export * from './community';
 export * from './notices';
+export * from './audit';
 
 import type { SubscriptionState } from './support';
 

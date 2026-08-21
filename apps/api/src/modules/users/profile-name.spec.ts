@@ -70,6 +70,7 @@ describe('UsersService.updateProfile — имена', () => {
     service = new UsersService(
       prisma as unknown as PrismaService,
       { get: () => undefined } as unknown as ConfigService,
+      { emit: jest.fn() } as never,
     );
   });
 

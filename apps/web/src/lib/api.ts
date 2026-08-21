@@ -11,6 +11,8 @@ import type {
   AdminUserReportsResponse,
   AdminAnnouncementDto,
   AdminBillingModeResponse,
+  AdminAuditListResponse,
+  AdminAuditQuery,
   AdminPortalStats,
   NotificationBroadcastDto,
   AdminReleaseDto,
@@ -77,6 +79,15 @@ export const getAdminUsers = (query: Record<string, string | undefined>) => {
   }
   const qs = params.toString();
   return apiGet<AdminUserListResponse>(`/admin/users${qs ? `?${qs}` : ""}`);
+};
+/** Журнал действий администрации. Фильтры приходят из query страницы. */
+export const getAdminAudit = (query: AdminAuditQuery) => {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  }
+  const qs = params.toString();
+  return apiGet<AdminAuditListResponse>(`/admin/audit${qs ? `?${qs}` : ""}`);
 };
 /** История рассылок администрации. Команды над ними — в lib/broadcasts-api.ts. */
 export const getAdminBroadcasts = () =>

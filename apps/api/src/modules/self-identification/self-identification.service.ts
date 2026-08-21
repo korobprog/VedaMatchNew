@@ -7,6 +7,7 @@
 import { randomBytes } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import type {
+  AdminAuditEvent,
   DevoteeVerificationStatus,
   MentorVerificationSubmit,
   PortalUseStage,
@@ -16,6 +17,7 @@ import type {
   SpiritualStage,
   StageHistoryItem,
 } from '@vedamatch/shared';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const MENTOR_FORM_STRING_FIELDS = [
@@ -63,7 +65,10 @@ export function pickMentorFormFields(
 
 @Injectable()
 export class SelfIdentificationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   async getState(userId: string): Promise<SelfIdentificationState> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -342,11 +347,12 @@ export class SelfIdentificationService {
   }
 
   async reviewAdminRequest(
-    adminRole: string,
+    admin: { sub: string; role: string },
     requestId: string,
     data: { status: DevoteeVerificationStatus; adminNote?: string },
   ) {
-    if (adminRole !== 'admin' && adminRole !== 'service-admin') {
+    // Проверка преданных — портальная задача: service-admin сюда не входит.
+    if (admin.role !== 'admin') {
       throw new ForbiddenException('Недостаточно прав');
     }
     if (
@@ -401,6 +407,18 @@ export class SelfIdentificationService {
       },
     });
 
+    const event: AdminAuditEvent = {
+      actorId: admin.sub,
+      action: 'verification.decided',
+      targetType: 'user',
+      targetId: request.userId,
+      details: {
+        status: data.status,
+        to: nextStage,
+        note: data.adminNote ?? null,
+      },
+    };
+    this.events.emit('admin.action', event);
     return { ok: true };
   }
 
