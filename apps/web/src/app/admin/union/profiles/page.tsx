@@ -96,12 +96,14 @@ export default async function AdminUnionProfilesPage({
             {list.items.map((item) => (
               <li
                 key={item.userId}
-                className="glass rounded-2xl border border-glass-brd p-4"
+                className="glass relative rounded-2xl border border-glass-brd p-4"
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  {/* Карточка кликается целиком: на телефоне строка имени
+                      высотой в текст — слишком мелкая цель для пальца. */}
                   <Link
                     href={`/admin/union/profiles/${item.userId}`}
-                    className="font-medium text-text-0 underline-offset-2 hover:underline"
+                    className="font-medium text-text-0 underline-offset-2 after:absolute after:inset-0 after:content-[''] hover:underline"
                   >
                     {item.name}
                   </Link>

@@ -64,7 +64,7 @@ export function ContactsTagEditor({ tags }: { tags: ContactsAdminTagDto[] }) {
                     type="button"
                     onClick={() => setOpenId(openId === tag.id ? null : tag.id)}
                     aria-expanded={openId === tag.id}
-                    className="rounded-lg border border-glass-brd px-2.5 py-1 text-xs text-text-1 hover:text-text-0"
+                    className="flex min-h-9 shrink-0 items-center rounded-lg border border-glass-brd px-3 py-1 text-xs text-text-1 hover:text-text-0"
                   >
                     {openId === tag.id ? "Закрыть" : "Править"}
                   </button>

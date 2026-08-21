@@ -73,7 +73,7 @@ export function ServiceCatalogEditor({
                   setOpenId(openId === service.id ? null : service.id)
                 }
                 aria-expanded={openId === service.id}
-                className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0"
+                className="flex min-h-9 shrink-0 items-center rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0"
               >
                 {openId === service.id ? "Свернуть" : "Править"}
               </button>

@@ -54,6 +54,10 @@ export function isCurrentRoute(pathname: string, href: string): boolean {
 const navLinkClass =
   "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-text-1 hover:text-text-0 hover:bg-glass transition-colors aria-[current=page]:bg-glass aria-[current=page]:text-text-0";
 
+/** Тот же пункт, но одной иконкой: подпись живёт в title и aria-label. */
+const navIconLinkClass =
+  "flex h-10 w-10 items-center justify-center rounded-xl text-text-1 hover:text-text-0 hover:bg-glass transition-colors aria-[current=page]:bg-glass aria-[current=page]:text-text-0";
+
 function MoreNavMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
   const t = useTranslations("Header");
   const [open, setOpen] = useState(false);
@@ -159,17 +163,22 @@ export function Header({ user }: { user: UserProfile }) {
             </span>
           </Link>
 
-          {/* Desktop Navigation: полный ряд на широких экранах, узкий переход на md/lg — иконки без подписи */}
+          {/* Полный ряд сервисов на широких экранах — иконками, без подписей.
+              С подписями девять пунктов занимают 1222px, а контейнер шапки
+              ограничен 1152px: ряд выталкивал колокольчик, переключатели и
+              аватар за край экрана, и страница ехала вбок. Название сервиса
+              остаётся в title и aria-label. */}
           <nav aria-label={t("services")} className="hidden xl:flex items-center gap-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 aria-current={currentAttr(item.href)}
-                className={navLinkClass}
+                aria-label={item.label}
+                title={item.label}
+                className={navIconLinkClass}
               >
                 {item.icon}
-                {item.label}
               </Link>
             ))}
           </nav>

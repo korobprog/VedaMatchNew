@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ADMIN_NAV,
   canOpenAdminSection,
+  currentAdminNavLabel,
   isAdminNavItemActive,
   visibleAdminNav,
 } from "./admin-nav";
@@ -68,5 +69,23 @@ describe("isAdminNavItemActive", () => {
   it("главная админки подсвечивается только на самой себе", () => {
     expect(isAdminNavItemActive("/admin", "/admin")).toBe(true);
     expect(isAdminNavItemActive("/admin", "/admin/users")).toBe(false);
+  });
+});
+
+describe("currentAdminNavLabel", () => {
+  const groups = visibleAdminNav({ role: "admin" });
+
+  it("называет раздел, в котором человек находится", () => {
+    expect(currentAdminNavLabel(groups, "/admin/contacts")).toBe("Справочник");
+  });
+
+  it("держит название на вложенной вкладке сервиса", () => {
+    expect(currentAdminNavLabel(groups, "/admin/motivation/queue")).toBe(
+      "Motivation",
+    );
+  });
+
+  it("на главной админки — «Обзор»", () => {
+    expect(currentAdminNavLabel(groups, "/admin")).toBe("Обзор");
   });
 });
