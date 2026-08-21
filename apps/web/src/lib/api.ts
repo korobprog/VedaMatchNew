@@ -12,6 +12,7 @@ import type {
   AdminAnnouncementDto,
   AdminPlatformSettings,
   HomeAnnouncementDto,
+  PortalStats,
   AdminAuditListResponse,
   AdminAuditQuery,
   AdminPortalStats,
@@ -146,6 +147,8 @@ export const getAdminSupportTicket = (id: string) =>
   apiGet<AdminSupportTicketDto>(`/admin/support/tickets/${id}`);
 /** Публичный тариф, включает текущий режим биллинга (beta/business). */
 export const getBillingPlan = () => apiGetPublic<PricingPlan>("/billing/plan");
+/** Подробная статистика портала; доступна только вошедшим. */
+export const getPortalStats = () => apiGet<PortalStats>("/stats/portal");
 export const getCommunityStats = () =>
   apiGetPublic<CommunityStats>("/stats/community");
 /** Глобальные настройки портала. Команды — в lib/settings-admin-api.ts. */

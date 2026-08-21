@@ -37,6 +37,9 @@ export class PlatformSettingsService {
       billingMode: settings?.billingMode ?? 'business',
       registrationMode: settings?.registrationMode ?? 'open',
       registrationNote: settings?.registrationNote ?? null,
+      donateEnabled: settings?.donateEnabled ?? false,
+      donateNote: settings?.donateNote ?? null,
+      donateDetails: settings?.donateDetails ?? null,
       integrations: collectIntegrationStatuses((key) =>
         this.config.get<string>(key),
       ),
@@ -82,6 +85,9 @@ export class PlatformSettingsService {
       billingMode: updated.billingMode,
       registrationMode: updated.registrationMode,
       registrationNote: updated.registrationNote,
+      donateEnabled: updated.donateEnabled,
+      donateNote: updated.donateNote,
+      donateDetails: updated.donateDetails,
       integrations: collectIntegrationStatuses((key) =>
         this.config.get<string>(key),
       ),
@@ -108,6 +114,9 @@ export interface NormalizedSettings {
   billingMode?: BillingMode;
   registrationMode?: RegistrationMode;
   registrationNote?: string | null;
+  donateEnabled?: boolean;
+  donateNote?: string | null;
+  donateDetails?: string | null;
 }
 
 /**
@@ -142,6 +151,15 @@ export function normalizeSettings(
     // Пустая строка — «убрать свой текст», а не сохранить пустоту: иначе
     // человеку при отказе показалось бы пустое сообщение.
     data.registrationNote = note || null;
+  }
+  if (body.donateEnabled !== undefined) {
+    data.donateEnabled = body.donateEnabled === true;
+  }
+  if (body.donateNote !== undefined) {
+    data.donateNote = body.donateNote?.trim() || null;
+  }
+  if (body.donateDetails !== undefined) {
+    data.donateDetails = body.donateDetails?.trim() || null;
   }
   return data;
 }

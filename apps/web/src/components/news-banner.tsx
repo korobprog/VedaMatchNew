@@ -79,13 +79,21 @@ export function NewsBanner({
       )}
 
       {showsCounter && (
-        <p className="shrink-0 text-sm text-text-2">
+        // Ссылка, а не просто цифра: за ней статистика портала и способ
+        // поддержать проект — иначе число ничего не предлагает сделать.
+        <Link
+          href="/stats"
+          className="group shrink-0 text-sm text-text-2 transition-colors hover:text-text-1"
+        >
           Вместе нас:{" "}
           <MemberCounter
             total={totalMembers}
             className="font-semibold text-text-0"
           />
-        </p>
+          <span className="block text-xs underline underline-offset-2 group-hover:text-text-0">
+            Пусть нас будет больше
+          </span>
+        </Link>
       )}
 
       {!hidden && news && (

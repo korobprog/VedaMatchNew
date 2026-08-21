@@ -323,6 +323,12 @@ model AppSettings {
   registrationMode RegistrationMode @default(open)
   /// Что увидит человек, которому отказано в регистрации. Пусто — общий текст.
   registrationNote String?
+  /// Показывать блок поддержки на странице статистики.
+  donateEnabled    Boolean          @default(false)
+  /// На что идут деньги. Без объяснения просить не за что.
+  donateNote       String?
+  /// Реквизиты как есть: карта, криптокошелёк, что угодно построчно.
+  donateDetails    String?
   updatedAt        DateTime         @updatedAt
 }
 

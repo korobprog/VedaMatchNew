@@ -176,7 +176,11 @@ describe("Home", () => {
   it("shows the live member count in the news banner", async () => {
     vi.mocked(getProfile).mockResolvedValue(user);
     vi.mocked(getServices).mockResolvedValue(services);
-    vi.mocked(getCommunityStats).mockResolvedValue({ totalMembers: 1234 });
+    vi.mocked(getCommunityStats).mockResolvedValue({
+      totalMembers: 1234,
+      totalCities: 3,
+      totalCommunities: 1,
+    });
 
     render(await Home({ searchParams: Promise.resolve({}) }));
 

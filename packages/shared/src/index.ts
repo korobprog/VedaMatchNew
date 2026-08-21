@@ -466,7 +466,49 @@ export interface AdminPurgeUserResponse {
 
 export interface CommunityStats {
   totalMembers: number;
+  /** Городов, где есть хотя бы один участник. */
+  totalCities: number;
+  /** Подтверждённых общин: храмы, ятры, нама-хатты. */
+  totalCommunities: number;
 }
+
+/** Точка графика: день или месяц и сколько регистраций в нём. */
+export interface PortalStatsPoint {
+  /** `YYYY-MM-DD` для дней, `YYYY-MM` для месяцев. */
+  period: string;
+  count: number;
+}
+
+/**
+ * Статистика портала для участников. Только портальные сущности: людей,
+ * города, общины. Данные сервисов сюда не тянутся — портал не читает их
+ * таблицы, см. контракт сервисного модуля.
+ */
+export interface PortalStats {
+  people: {
+    total: number;
+    newLast7Days: number;
+    newLast30Days: number;
+    activeLast7Days: number;
+  };
+  /** Сколько людей на каждом этапе; `null` — этап не выбран. */
+  stages: Array<{ stage: SpiritualStage | null; count: number }>;
+  /** Города, где участников не меньше порога; остальные сведены в «другие». */
+  cities: Array<{ city: string; count: number }>;
+  /** Сколько людей в городах, не прошедших порог. */
+  otherCitiesPeople: number;
+  registrationsByDay: PortalStatsPoint[];
+  registrationsByMonth: PortalStatsPoint[];
+  communities: number;
+  /** Блок поддержки; `null` — выключен в настройках. */
+  donate: { note: string | null; details: string } | null;
+}
+
+/**
+ * Меньше скольких человек город не показывается отдельно. При небольшом
+ * портале город с одним участником — это почти имя и фамилия.
+ */
+export const CITY_PRIVACY_THRESHOLD = 3;
 
 /** Одна строка очереди на главной админки: сколько ждёт разбора и куда идти. */
 export interface AdminQueueCounter {
@@ -584,6 +626,9 @@ export interface AdminPlatformSettings {
   billingMode: BillingMode;
   registrationMode: RegistrationMode;
   registrationNote: string | null;
+  donateEnabled: boolean;
+  donateNote: string | null;
+  donateDetails: string | null;
   integrations: AdminIntegrationStatus[];
   updatedAt: string | null;
 }
@@ -592,6 +637,9 @@ export interface AdminUpdatePlatformSettingsRequest {
   billingMode?: BillingMode;
   registrationMode?: RegistrationMode;
   registrationNote?: string | null;
+  donateEnabled?: boolean;
+  donateNote?: string | null;
+  donateDetails?: string | null;
 }
 
 export const REGISTRATION_NOTE_MAX_LENGTH = 300;

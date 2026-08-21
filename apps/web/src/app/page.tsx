@@ -89,6 +89,8 @@ export default async function Home({
         returnTo={returnTo}
         plan={plan ?? undefined}
         totalMembers={communityStats?.totalMembers}
+        totalCities={communityStats?.totalCities}
+        totalCommunities={communityStats?.totalCommunities}
         news={homeNews}
       />
     );

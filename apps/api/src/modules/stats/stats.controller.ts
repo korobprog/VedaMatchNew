@@ -14,6 +14,13 @@ export class StatsController {
   community() {
     return this.stats.communityStats();
   }
+
+  /** Подробная статистика — только для вошедших: своим показываем как есть. */
+  @Get('portal')
+  @UseGuards(AuthGuard)
+  portal() {
+    return this.stats.portalStats();
+  }
 }
 
 /** Сводка для главной админки: только роль admin, у сервисных админов своя. */
