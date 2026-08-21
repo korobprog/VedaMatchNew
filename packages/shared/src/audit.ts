@@ -36,6 +36,11 @@ export const ADMIN_AUDIT_ACTIONS = [
   'library.category-merged',
   'library.entry-removed',
   'library.entry-restored',
+  'contacts.tag-created',
+  'contacts.tag-updated',
+  'contacts.tag-deleted',
+  'contacts.profile-hidden',
+  'contacts.profile-restored',
   'astro.generation-resumed',
 ] as const;
 

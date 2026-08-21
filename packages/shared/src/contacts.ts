@@ -262,3 +262,81 @@ export interface ContactsCardDto {
     messengers: ProfileMessengers;
   } | null;
 }
+
+// ===== Админка Contacts =====
+
+/** Тег справочника глазами администрации. */
+export interface ContactsAdminTagDto {
+  id: string;
+  slug: string;
+  kind: ContactsTagKind;
+  nameRu: string;
+  /** Системные приезжают сидом: их можно править, но не удалять — вернутся. */
+  isSystem: boolean;
+  sortOrder: number;
+  /** На скольких карточках стоит тег. */
+  profilesCount: number;
+}
+
+export interface CreateContactsTagRequest {
+  slug: string;
+  nameRu: string;
+  kind: ContactsTagKind;
+  sortOrder?: number;
+}
+
+export type UpdateContactsTagRequest = Partial<
+  Pick<CreateContactsTagRequest, 'nameRu' | 'kind' | 'sortOrder'>
+>;
+
+/** Карточка справочника глазами администрации. */
+export interface ContactsAdminProfileDto {
+  userId: string;
+  /** Мирское имя: админский экран. */
+  name: string;
+  email: string;
+  headline: string | null;
+  about: string | null;
+  offers: string | null;
+  status: ContactsProfileStatus;
+  visibility: ContactsVisibility;
+  ashram: ContactsAshram | null;
+  city: string | null;
+  tags: string[];
+  /** Открытых жалоб на человека — общий портальный счётчик. */
+  openReports: number;
+  requestsReceived: number;
+  lastSeenAt: string | null;
+  updatedAt: string;
+}
+
+export interface ContactsAdminProfileListResponse {
+  items: ContactsAdminProfileDto[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface ContactsAdminProfileQuery {
+  /** Поиск по имени, почте и заголовку карточки. */
+  q?: string;
+  status?: ContactsProfileStatus;
+  /** Только скрытые самим человеком. */
+  hiddenOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ContactsAdminHideRequest {
+  /** Причина обязательна: карточка уходит из справочника. */
+  reason: string;
+}
+
+export interface ContactsAdminStats {
+  profiles: { total: number; active: number; pending: number; hidden: number };
+  tags: { total: number; system: number; custom: number };
+  requests: { pending: number; accepted: number };
+}
+
+export const CONTACTS_HIDE_REASON_MIN_LENGTH = 5;

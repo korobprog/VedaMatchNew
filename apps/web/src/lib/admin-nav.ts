@@ -91,6 +91,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         scope: "notices",
       },
       {
+        href: "/admin/contacts",
+        label: "Справочник",
+        hint: "Теги справочника и карточки участников",
+        scope: "contacts",
+      },
+      {
         href: "/admin/astro",
         label: "Astro",
         hint: "Расход токенов и пауза генерации",

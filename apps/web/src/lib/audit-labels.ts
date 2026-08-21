@@ -38,6 +38,11 @@ export const auditActionLabels: Record<AdminAuditAction, string> = {
   "library.category-merged": "Слиты категории Образования",
   "library.entry-removed": "Запись Образования снята с публикации",
   "library.entry-restored": "Запись Образования возвращена",
+  "contacts.tag-created": "Добавлен тег справочника",
+  "contacts.tag-updated": "Изменён тег справочника",
+  "contacts.tag-deleted": "Удалён тег справочника",
+  "contacts.profile-hidden": "Карточка справочника снята",
+  "contacts.profile-restored": "Карточка справочника возвращена",
   "astro.generation-resumed": "Генерация астрологии возобновлена",
 };
 
@@ -46,6 +51,7 @@ const DETAIL_LABELS: Record<string, string> = {
   to: "стало",
   reason: "причина",
   reportId: "жалоба",
+  kind: "вид",
   messages: "сообщений",
   status: "статус",
   title: "заголовок",

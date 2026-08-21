@@ -15,6 +15,10 @@ import type {
   AdminAuditQuery,
   AdminPortalStats,
   AdminServiceCardDto,
+  ContactsAdminProfileListResponse,
+  ContactsAdminProfileQuery,
+  ContactsAdminStats,
+  ContactsAdminTagDto,
   NotificationBroadcastDto,
   AdminReleaseDto,
   AdminRoadmapItemDto,
@@ -81,6 +85,23 @@ export const getAdminUsers = (query: Record<string, string | undefined>) => {
   const qs = params.toString();
   return apiGet<AdminUserListResponse>(`/admin/users${qs ? `?${qs}` : ""}`);
 };
+// ===== Админка «Контактов». Команды — в lib/contacts-admin-api.ts =====
+
+export const getContactsAdminStats = () =>
+  apiGet<ContactsAdminStats>("/contacts/admin/stats");
+export const getContactsAdminTags = () =>
+  apiGet<ContactsAdminTagDto[]>("/contacts/admin/tags");
+export const getContactsAdminProfiles = (query: ContactsAdminProfileQuery) => {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  }
+  const qs = params.toString();
+  return apiGet<ContactsAdminProfileListResponse>(
+    `/contacts/admin/profiles${qs ? `?${qs}` : ""}`,
+  );
+};
+
 /** Каталог сервисов портала. Команды над ним — в lib/catalog-admin-api.ts. */
 export const getAdminServices = () =>
   apiGet<AdminServiceCardDto[]>("/admin/catalog/services");
