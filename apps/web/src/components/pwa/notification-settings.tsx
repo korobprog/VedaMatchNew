@@ -22,6 +22,8 @@ const categories = [
   { key: "transits", label: "Персональный день (астрология)" },
   // Сообщения чата Рынка идут под тумблером «Сообщения»: это та же переписка.
   { key: "market", label: "Заявки на Рынке" },
+  { key: "notices", label: "Доска объявлений" },
+  { key: "system", label: "Объявления администрации" },
 ] as const;
 
 export function NotificationSettings() {

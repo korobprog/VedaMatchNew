@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { isPortalAdmin } from "@vedamatch/shared";
 import type { UserProfile } from "@vedamatch/shared";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -195,9 +196,9 @@ export function Header({ user }: { user: UserProfile }) {
             <LocaleToggle className="hidden sm:flex" />
             <ThemeToggle className="hidden sm:flex" />
 
-            {user.role === "admin" && (
+            {isPortalAdmin(user) && (
               <Link
-                href="/admin/users"
+                href="/admin"
                 className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-text-1 hover:text-magenta border border-glass-brd hover:border-magenta/30 transition-colors"
               >
                 {t("admin")}
@@ -284,47 +285,21 @@ export function Header({ user }: { user: UserProfile }) {
                   ))}
                 </nav>
                 
-                {user.role === "admin" && (
+                {isPortalAdmin(user) && (
                   <motion.div
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: navItems.length * 0.05 }}
                     className="mt-4 pt-4 border-t border-glass-brd"
                   >
+                    {/* Один вход: разделы админки живут в её собственном
+                        сайдбаре, дублировать их список в бургере незачем. */}
                     <Link
-                      href="/admin/users"
+                      href="/admin"
                       onClick={closeDrawer}
                       className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
                     >
                       <span className="text-sm font-medium">{t("adminPanel")}</span>
-                    </Link>
-                    <Link
-                      href="/admin/tickets"
-                      onClick={closeDrawer}
-                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
-                    >
-                      <span className="text-sm font-medium">{t("tickets")}</span>
-                    </Link>
-                    <Link
-                      href="/admin/astro"
-                      onClick={closeDrawer}
-                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
-                    >
-                      <span className="text-sm font-medium">{t("astro")}</span>
-                    </Link>
-                    <Link
-                      href="/admin/settings"
-                      onClick={closeDrawer}
-                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
-                    >
-                      <span className="text-sm font-medium">{t("settings")}</span>
-                    </Link>
-                    <Link
-                      href="/admin/changelog"
-                      onClick={closeDrawer}
-                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
-                    >
-                      <span className="text-sm font-medium">{t("changelog")}</span>
                     </Link>
                   </motion.div>
                 )}

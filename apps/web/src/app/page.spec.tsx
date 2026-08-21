@@ -63,6 +63,7 @@ const user: UserProfile = {
   socialLinks: {},
   messengers: {},
   role: "user",
+  adminServices: [],
   gender: "female",
   spiritualStage: "seeker",
   devoteeVerificationStatus: null,

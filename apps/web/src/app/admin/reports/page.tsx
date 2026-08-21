@@ -2,11 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { redirectToLogin } from "@/lib/require-user";
 import type { UserReportStatus } from "@vedamatch/shared";
-import { Header } from "@/components/header";
 import { AdminReportList } from "@/components/admin-report-list";
 import { getAdminUserReports, getProfile } from "@/lib/api";
-import { BackgroundOrbs } from "@/components/landing/Orb";
-import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 const statuses: Array<UserReportStatus | "all"> = [
   "open",
@@ -43,37 +40,32 @@ export default async function AdminReportsPage({
   if (!reports) throw new Error("Не удалось загрузить жалобы");
 
   return (
-    <div className="relative min-h-screen bg-bg-0">
-      <BackgroundOrbs />
-      <NoiseOverlay />
-      <Header user={user} />
-      <main className="mx-auto max-w-5xl px-4 py-8 pb-24">
-        <h1 className="mb-1 font-display text-2xl font-bold text-text-0">
-          Жалобы пользователей
-        </h1>
-        <p className="mb-6 text-sm text-text-1">
-          Новых жалоб: {reports.openCount}
-        </p>
+    <>
+      <h1 className="mb-1 font-display text-2xl font-bold text-text-0">
+        Жалобы пользователей
+      </h1>
+      <p className="mb-6 text-sm text-text-1">
+        Новых жалоб: {reports.openCount}
+      </p>
 
-        <nav className="mb-6 flex flex-wrap gap-2">
-          {statuses.map((value) => (
-            <Link
-              key={value}
-              href={`/admin/reports?status=${value}`}
-              aria-current={value === status ? "page" : undefined}
-              className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
-                value === status
-                  ? "border-magenta/40 bg-magenta/10 text-text-0"
-                  : "glass border-glass-brd text-text-1 hover:text-text-0"
-              }`}
-            >
-              {statusLabels[value]}
-            </Link>
-          ))}
-        </nav>
+      <nav className="mb-6 flex flex-wrap gap-2">
+        {statuses.map((value) => (
+          <Link
+            key={value}
+            href={`/admin/reports?status=${value}`}
+            aria-current={value === status ? "page" : undefined}
+            className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
+              value === status
+                ? "border-magenta/40 bg-magenta/10 text-text-0"
+                : "glass border-glass-brd text-text-1 hover:text-text-0"
+            }`}
+          >
+            {statusLabels[value]}
+          </Link>
+        ))}
+      </nav>
 
-        <AdminReportList reports={reports.items} />
-      </main>
-    </div>
+      <AdminReportList reports={reports.items} />
+    </>
   );
 }

@@ -15,6 +15,7 @@ import type {
   AdminManualStageUpdateRequest,
   AdminPurgeUserRequest,
   AdminRoleUpdateRequest,
+  AdminServiceScopeUpdateRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { AdminUsersService } from './admin-users.service';
@@ -70,6 +71,16 @@ export class AdminUsersController {
     @Body() body: AdminRoleUpdateRequest,
   ) {
     return this.adminUsers.updateRole(user, id, body);
+  }
+
+  /** Какими сервисами управляет администратор сервиса; полная замена списка. */
+  @Patch(':id/services')
+  updateAdminServices(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: AdminServiceScopeUpdateRequest,
+  ) {
+    return this.adminUsers.updateAdminServices(user, id, body);
   }
 
   @Patch(':id/block')

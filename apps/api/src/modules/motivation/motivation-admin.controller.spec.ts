@@ -5,9 +5,9 @@ jest.mock('../auth/auth.guard', () => ({
   CurrentUser: () => () => undefined,
 }));
 
-import { MotivationController } from './motivation.controller';
+import { MotivationAdminController } from './motivation-admin.controller';
 
-describe('MotivationController moderation endpoints', () => {
+describe('MotivationAdminController moderation endpoints', () => {
   const user = { sub: 'actor-1', role: 'service-admin' } as AccessTokenPayload;
 
   it('passes the authenticated actor to every moderation command', async () => {
@@ -19,8 +19,9 @@ describe('MotivationController moderation endpoints', () => {
       regenerate: jest.fn(),
       savePrompts: jest.fn(),
     };
-    const controller = new MotivationController(
+    const controller = new MotivationAdminController(
       service as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,

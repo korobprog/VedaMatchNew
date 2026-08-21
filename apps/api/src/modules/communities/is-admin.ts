@@ -1,8 +1,8 @@
 import type { AccessTokenPayload } from '@vedamatch/shared';
 
-// Копия market/is-admin.ts. Общего портального хелпера для этого нет, а
-// заводить его отдельной задачей ради трёх строк — не повод трогать чужие
-// модули; расхождение ловится тестом.
+// Сообщества — портальная сущность, а не сервис: их видят все сервисы через
+// read-only модели Community/CommunityMember. Поэтому здесь, в отличие от
+// market/notices/library, роль service-admin прав не даёт — только admin.
 export function isAdmin(user: AccessTokenPayload): boolean {
-  return user.role === 'admin' || user.role === 'service-admin';
+  return user.role === 'admin';
 }

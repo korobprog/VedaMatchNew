@@ -224,6 +224,7 @@ model User {
 
   refreshTokens                      RefreshToken[]
   serviceAccess                      ServiceAccess[]
+  serviceAdminScopes                 ServiceAdmin[]
   loginAudits                        LoginAudit[]
   pushSubscriptions                  PushSubscription[]
   astroBirthData                     AstroBirthData?
@@ -232,6 +233,7 @@ model User {
   astroCompatibilityRequestsReceived AstroCompatibilityRequest[]  @relation("AstroCompatibilityTarget")
   notificationPreference             NotificationPreference?
   notificationItems                  NotificationItem[]
+  notificationBroadcasts             NotificationBroadcast[]      @relation("NotificationBroadcastsCreated")
   selfIdentificationResponses        SelfIdentificationResponse[]
   stageHistory                       StageHistory[]
   mentorVerificationRequests         MentorVerificationRequest[]
@@ -673,6 +675,20 @@ model Service {
   updatedAt                    DateTime      @updatedAt
 
   access ServiceAccess[]
+  admins ServiceAdmin[]
+}
+
+// Сервисы, которыми управляет аккаунт с ролью service_admin. Роль admin
+// эту таблицу игнорирует — у неё доступ ко всему порталу.
+model ServiceAdmin {
+  userId    String
+  serviceId String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, serviceId])
+  @@index([serviceId])
 }
 
 model ServiceAccess {
@@ -1515,6 +1531,10 @@ model NotificationPreference {
   /// объявления. Своя колонка, а не переиспользование `market`: выключив
   /// коммерцию, человек не должен молча терять доску общины.
   notices     Boolean  @default(true)
+  /// Объявления администрации портала (рассылки). Выключение гасит пуш; в
+  /// колокольчик важная рассылка приходит всё равно — см.
+  /// NotificationBroadcast.important.
+  system      Boolean  @default(true)
   updatedAt   DateTime @updatedAt
 }
 
@@ -1536,6 +1556,53 @@ model NotificationItem {
 
   @@index([userId, readAt])
   @@index([userId, createdAt])
+}
+
+/// Статус рассылки. Отправка идёт пакетами в фоне, поэтому `sending` — не миг,
+/// а состояние, из которого воркер выходит сам.
+enum NotificationBroadcastStatus {
+  draft
+  sending
+  sent
+  failed
+  cancelled
+}
+
+/// Объявление администрации всем или части портала. Хранится целиком: после
+/// отправки нужно знать, что именно ушло и скольким.
+model NotificationBroadcast {
+  id          String                      @id @default(uuid())
+  title       String
+  body        String
+  /// Куда ведёт клик. Пусто — уведомление без перехода.
+  url         String?
+  /// Важное: попадает в колокольчик даже при выключенной категории `system`.
+  /// Пуш при этом всё равно уважает настройки — устройство человека не наше.
+  important   Boolean                     @default(false)
+  /// Фильтр аудитории (NotificationAudienceFilter). Json, а не колонки: набор
+  /// фильтров будет меняться чаще, чем стоит гонять миграции.
+  audience    Json
+  status      NotificationBroadcastStatus @default(draft)
+  /// Сколько получателей насчитал фильтр в момент запуска.
+  totalRecipients Int                     @default(0)
+  /// Сколько уведомлений положено в колокольчик.
+  deliveredCount  Int                     @default(0)
+  /// Сколько пушей ушло на устройства. Меньше deliveredCount — это норма.
+  pushSentCount   Int                     @default(0)
+  /// Курсор пакетной отправки: id последнего обработанного пользователя.
+  /// Сортировка по id — единственный способ не пропустить и не задвоить.
+  cursorUserId    String?
+  attemptCount    Int                     @default(0)
+  errorMessage    String?
+  createdById String?
+  createdBy   User?                       @relation("NotificationBroadcastsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  @@index([status, updatedAt])
+  @@index([createdAt(sort: Desc)])
 }
 
 // ===== Astro service =====

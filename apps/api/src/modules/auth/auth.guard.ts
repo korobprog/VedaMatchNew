@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import type { AccessTokenPayload } from '@vedamatch/shared';
+import type { AccessTokenPayload, Role } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { assertAccountActive } from '../users/account-status';
 import { JwtSignService } from './jwt.service';
@@ -45,18 +45,39 @@ export class AuthGuard implements CanActivate {
     // до истечения access-токена, а повышенный не получал бы их до refresh.
     req.user = {
       ...req.user,
-      role: await this.ensureAccountActive(req.user.sub),
+      ...(await this.ensureAccountActive(req.user.sub)),
     };
     this.touchLastSeen(req.user.sub);
     return true;
   }
 
-  private async ensureAccountActive(userId: string) {
+  private async ensureAccountActive(
+    userId: string,
+  ): Promise<{ role: Role; adminServices: string[] }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user)
       throw new UnauthorizedException('Токен недействителен или истёк');
     await assertAccountActive(this.prisma, user);
-    return toRole(user.role);
+    return {
+      role: toRole(user.role),
+      adminServices: await this.loadAdminServices(user.role, userId),
+    };
+  }
+
+  /**
+   * Сервисы, доступные администратору сервиса. Отдельным запросом, а не join'ом
+   * к пользователю: роль редкая, а запрос к User идёт на каждый вызов API.
+   */
+  private async loadAdminServices(
+    dbRole: string,
+    userId: string,
+  ): Promise<string[]> {
+    if (dbRole !== 'service_admin') return [];
+    const scopes = await this.prisma.serviceAdmin.findMany({
+      where: { userId },
+      select: { service: { select: { slug: true } } },
+    });
+    return scopes.map((scope) => scope.service.slug);
   }
 
   /** Обновление активности не должно задерживать или ронять сам запрос. */

@@ -17,6 +17,7 @@ const defaults: NotificationPreferencesDto = {
   transits: true,
   market: true,
   notices: true,
+  system: true,
 };
 
 /**
@@ -107,6 +108,7 @@ export class NotificationsService {
       transits: row.transits,
       market: row.market,
       notices: row.notices,
+      system: row.system,
     };
   }
 
@@ -123,6 +125,7 @@ export class NotificationsService {
       transits: patch.transits ?? current.transits,
       market: patch.market ?? current.market,
       notices: patch.notices ?? current.notices,
+      system: patch.system ?? current.system,
     };
     await this.prisma.notificationPreference.upsert({
       where: { userId },
@@ -137,6 +140,17 @@ export class NotificationsService {
   async addToInbox(userId: string, draft: InboxDraft): Promise<void> {
     await this.prisma.notificationItem.create({
       data: { userId, ...draft },
+    });
+  }
+
+  /**
+   * Одинаковое уведомление многим за один запрос. Нужно рассылкам: класть его
+   * по одному — двести INSERT'ов на пакет.
+   */
+  async addManyToInbox(userIds: string[], draft: InboxDraft): Promise<void> {
+    if (userIds.length === 0) return;
+    await this.prisma.notificationItem.createMany({
+      data: userIds.map((userId) => ({ userId, ...draft })),
     });
   }
 

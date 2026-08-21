@@ -23,6 +23,45 @@ import type { SubscriptionState } from './support';
 
 export type Role = 'user' | 'admin' | 'service-admin';
 
+/**
+ * Сервисы, у которых есть собственный раздел админки. Роль `service-admin`
+ * получает права ровно на те из них, что перечислены в `adminServices`.
+ * Портальные разделы (пользователи, биллинг, поддержка, сообщества,
+ * changelog, настройки) в список не входят — они только для роли `admin`.
+ */
+export const ADMIN_SERVICE_SLUGS = [
+  'union',
+  'market',
+  'motivation',
+  'library',
+  'notices',
+  'astro',
+  'contacts',
+  'vedabase',
+] as const;
+
+export type AdminServiceSlug = (typeof ADMIN_SERVICE_SLUGS)[number];
+
+/** Есть ли у аккаунта доступ хоть к какой-то части админки. */
+export function isPortalAdmin(user: { role: Role }): boolean {
+  return user.role === 'admin' || user.role === 'service-admin';
+}
+
+/**
+ * Право администрировать конкретный сервис. `admin` управляет всем порталом,
+ * `service-admin` — только сервисами из своего списка. Список приходит из базы
+ * (см. модель ServiceAdmin), а не из токена: разжалованный админ иначе
+ * сохранял бы права до истечения access-токена.
+ */
+export function canAdminService(
+  user: { role: Role; adminServices?: string[] },
+  slug: AdminServiceSlug,
+): boolean {
+  if (user.role === 'admin') return true;
+  if (user.role !== 'service-admin') return false;
+  return (user.adminServices ?? []).includes(slug);
+}
+
 export type ServiceStatus = 'active' | 'coming_soon' | 'disabled';
 
 export type SpiritualStage = 'seeker' | 'practitioner' | 'yogi' | 'devotee';
@@ -81,6 +120,8 @@ export interface UserProfile {
   socialLinks: ProfileSocialLinks;
   messengers: ProfileMessengers;
   role: Role;
+  /** Слаги сервисов, которыми управляет `service-admin`; у остальных ролей пусто. */
+  adminServices: string[];
   spiritualStage: SpiritualStage | null;
   devoteeVerificationStatus: DevoteeVerificationStatus | null;
   lastSelfIdentificationAt: string | null;
@@ -212,6 +253,11 @@ export interface AccessTokenPayload {
   sub: string;
   email: string;
   role: Role;
+  /**
+   * Слаги сервисов, которыми управляет `service-admin`. В подписанный токен не
+   * попадает: AuthGuard подставляет актуальный список из базы на каждый запрос.
+   */
+  adminServices?: string[];
 }
 
 export interface SelfIdentificationAnswers {
@@ -373,6 +419,11 @@ export interface AdminRoleUpdateRequest {
   confirmSelfChange?: boolean;
 }
 
+/** Полная замена набора сервисов у роли `service-admin`. */
+export interface AdminServiceScopeUpdateRequest {
+  services: AdminServiceSlug[];
+}
+
 export interface AdminBlockUserRequest {
   blocked: boolean;
   reason?: string;
@@ -412,4 +463,31 @@ export interface AdminPurgeUserResponse {
 
 export interface CommunityStats {
   totalMembers: number;
+}
+
+/** Одна строка очереди на главной админки: сколько ждёт разбора и куда идти. */
+export interface AdminQueueCounter {
+  key:
+    | 'userReports'
+    | 'supportTickets'
+    | 'verificationRequests'
+    | 'communities';
+  count: number;
+}
+
+/**
+ * Портальная сводка для главной админки. Сервисные счётчики сюда не попадают:
+ * их отдают сами сервисы, портал в чужие таблицы не ходит.
+ */
+export interface AdminPortalStats {
+  users: {
+    total: number;
+    active: number;
+    blocked: number;
+    newLast7Days: number;
+    newLast30Days: number;
+    seenLast24Hours: number;
+    paidSubscriptions: number;
+  };
+  queues: AdminQueueCounter[];
 }

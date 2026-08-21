@@ -17,6 +17,7 @@ import type {
   AdminManualStageUpdateRequest,
   AdminMentorVerificationRequest,
   AdminRoleUpdateRequest,
+  AdminServiceScopeUpdateRequest,
   AdminUserDetail,
   AdminUserListResponse,
   DevoteeVerificationStatus,
@@ -27,7 +28,7 @@ import type {
   StageHistoryItem,
   UserAccountStatus,
 } from '@vedamatch/shared';
-import { resolveDisplayName } from '@vedamatch/shared';
+import { ADMIN_SERVICE_SLUGS, resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toRole } from '../auth/role';
 import {
@@ -189,9 +190,10 @@ export class AdminUsersService {
 
     if (!user) throw new NotFoundException('Пользователь не найден');
 
-    const [availableServices, billingMode] = await Promise.all([
+    const [availableServices, billingMode, adminServices] = await Promise.all([
       this.getAvailableServicesFor(user.id, toRole(user.role)),
       readBillingMode(this.prisma),
+      this.listAdminServices(user.id),
     ]);
 
     return {
@@ -213,6 +215,7 @@ export class AdminUsersService {
         socialLinks: parseSocialLinks(user.socialLinks),
         messengers: parseMessengers(user.messengers),
         role: toRole(user.role),
+        adminServices,
         spiritualStage: user.spiritualStage,
         devoteeVerificationStatus: user.devoteeVerificationStatus,
         lastSelfIdentificationAt:
@@ -334,6 +337,75 @@ export class AdminUsersService {
         role: body.role.replace('-', '_') as Prisma.UserUpdateInput['role'],
       },
     });
+
+    // Выданные сервисы имеют смысл только у роли service-admin: у admin права
+    // и так полные, у user их не должно остаться после разжалования.
+    if (body.role !== 'service-admin') {
+      await this.prisma.serviceAdmin.deleteMany({ where: { userId } });
+    }
+
+    return this.getUser(admin.role, userId);
+  }
+
+  /** Слаги сервисов, которыми управляет аккаунт (пусто у всех, кроме service-admin). */
+  private async listAdminServices(userId: string): Promise<string[]> {
+    const scopes = await this.prisma.serviceAdmin.findMany({
+      where: { userId },
+      select: { service: { select: { slug: true } } },
+    });
+    return scopes.map((scope) => scope.service.slug);
+  }
+
+  /**
+   * Полная замена набора сервисов у администратора сервиса. Только для роли
+   * service-admin: у admin список игнорируется, у обычного пользователя прав нет.
+   */
+  async updateAdminServices(
+    admin: { sub: string; role: Role },
+    userId: string,
+    body: AdminServiceScopeUpdateRequest,
+  ): Promise<AdminUserDetail> {
+    this.ensureAdmin(admin.role);
+
+    const requested = body?.services ?? [];
+    if (!Array.isArray(requested)) {
+      throw new BadRequestException('Некорректный список сервисов');
+    }
+    const slugs = [...new Set(requested)];
+    const unknown = slugs.filter((slug) => !ADMIN_SERVICE_SLUGS.includes(slug));
+    if (unknown.length > 0) {
+      throw new BadRequestException(
+        `Неизвестный сервис: ${unknown.join(', ')}`,
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Пользователь не найден');
+    if (user.role !== 'service_admin' && slugs.length > 0) {
+      throw new BadRequestException(
+        'Сервисы выдаются только роли «администратор сервиса»',
+      );
+    }
+
+    const services = await this.prisma.service.findMany({
+      where: { slug: { in: slugs } },
+      select: { id: true, slug: true },
+    });
+    const missing = slugs.filter(
+      (slug) => !services.some((service) => service.slug === slug),
+    );
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Сервиса нет в каталоге: ${missing.join(', ')}`,
+      );
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.serviceAdmin.deleteMany({ where: { userId } }),
+      this.prisma.serviceAdmin.createMany({
+        data: services.map((service) => ({ userId, serviceId: service.id })),
+      }),
+    ]);
 
     return this.getUser(admin.role, userId);
   }

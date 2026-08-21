@@ -1,6 +1,7 @@
 ﻿import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -73,8 +74,10 @@ export class SelfIdentificationController {
     @CurrentUser() user: AccessTokenPayload,
     @Query('status') status?: DevoteeVerificationStatus,
   ) {
-    if (user.role !== 'admin' && user.role !== 'service-admin') {
-      return [];
+    // Проверка преданных — портальная задача, а не сервисная: доступ только
+    // у роли admin, service-admin сюда не попадает.
+    if (user.role !== 'admin') {
+      throw new ForbiddenException('Доступ только для администратора');
     }
     return this.service.listAdminRequests(status);
   }

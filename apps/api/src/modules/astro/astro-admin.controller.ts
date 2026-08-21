@@ -16,6 +16,7 @@ import type {
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { AstroAdminService } from './astro-admin.service';
+import { isAdmin } from './is-admin';
 
 /**
  * Админка сервиса. Роль проверяется в каждом методе, как в AdminBillingModeController:
@@ -58,7 +59,7 @@ export class AstroAdminController {
   }
 
   private assertAdmin(user: AccessTokenPayload): void {
-    if (user.role !== 'admin') {
+    if (!isAdmin(user)) {
       throw new ForbiddenException('Доступ только для администратора');
     }
   }

@@ -11,6 +11,8 @@ import type {
   AdminUserReportsResponse,
   AdminAnnouncementDto,
   AdminBillingModeResponse,
+  AdminPortalStats,
+  NotificationBroadcastDto,
   AdminReleaseDto,
   AdminRoadmapItemDto,
   CommunityStats,
@@ -76,6 +78,12 @@ export const getAdminUsers = (query: Record<string, string | undefined>) => {
   const qs = params.toString();
   return apiGet<AdminUserListResponse>(`/admin/users${qs ? `?${qs}` : ""}`);
 };
+/** История рассылок администрации. Команды над ними — в lib/broadcasts-api.ts. */
+export const getAdminBroadcasts = () =>
+  apiGet<NotificationBroadcastDto[]>("/admin/notifications/broadcasts");
+/** Сводка на главной админки; для роли service-admin API отвечает 403. */
+export const getAdminPortalStats = () =>
+  apiGet<AdminPortalStats>("/admin/stats/portal");
 export const getAdminUserReports = (status?: string) => {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
   return apiGet<AdminUserReportsResponse>(`/admin/reports${query}`);

@@ -1,9 +1,21 @@
-﻿import type { DevoteeVerificationStatus, Role, SpiritualStage, StageChangeActor, UserAccountStatus } from '@vedamatch/shared';
+﻿import type { AdminServiceSlug, DevoteeVerificationStatus, Role, SpiritualStage, StageChangeActor, UserAccountStatus } from '@vedamatch/shared';
 
 export const roleLabels: Record<Role, string> = {
   user: 'Пользователь',
   admin: 'Администратор',
   'service-admin': 'Админ сервиса',
+};
+
+/** Названия сервисов в форме выдачи прав администратору сервиса. */
+export const adminServiceLabels: Record<AdminServiceSlug, string> = {
+  union: 'Union — знакомства',
+  market: 'Market — объявления и магазины',
+  motivation: 'Motivation — цитаты и ролики',
+  library: 'Library — библиотека',
+  notices: 'Notices — доска объявлений',
+  astro: 'Astro — ведическая астрология',
+  contacts: 'Contacts — справочник',
+  vedabase: 'Vedabase — священные тексты',
 };
 
 export const stageLabels: Record<SpiritualStage, string> = {

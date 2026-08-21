@@ -119,6 +119,7 @@ export class UsersService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('Пользователь не найден');
     const billingMode = await readBillingMode(this.prisma);
+    const adminServices = await this.loadAdminServices(user.role, user.id);
     return {
       id: user.id,
       email: user.email,
@@ -135,6 +136,7 @@ export class UsersService {
       socialLinks: parseSocialLinks(user.socialLinks),
       messengers: parseMessengers(user.messengers),
       role: toRole(user.role),
+      adminServices,
       spiritualStage: user.spiritualStage,
       devoteeVerificationStatus: user.devoteeVerificationStatus,
       lastSelfIdentificationAt:
@@ -146,6 +148,22 @@ export class UsersService {
         ? deletionEligibleAt(user.pendingDeletionAt).toISOString()
         : null,
     };
+  }
+
+  /**
+   * Сервисы, которыми управляет администратор сервиса. У остальных ролей пусто:
+   * `admin` и так имеет полный доступ, а `user` — никакого.
+   */
+  private async loadAdminServices(
+    dbRole: string,
+    userId: string,
+  ): Promise<string[]> {
+    if (dbRole !== 'service_admin') return [];
+    const scopes = await this.prisma.serviceAdmin.findMany({
+      where: { userId },
+      select: { service: { select: { slug: true } } },
+    });
+    return scopes.map((scope) => scope.service.slug);
   }
 
   /** Самостоятельный запрос на удаление аккаунта: не разлогинивает, даёт окно на отмену. */

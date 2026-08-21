@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { VedabaseModule } from '../vedabase/vedabase.module';
+import { MotivationAdminController } from './motivation-admin.controller';
+import { MotivationHealthService } from './motivation-health.service';
 import { MotivationController } from './motivation.controller';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { MotivationService } from './motivation.service';
@@ -24,7 +26,7 @@ import { MotivationVideoWorkerService } from './motivation-video-worker.service'
 
 @Module({
   imports: [AuthModule, VedabaseModule],
-  controllers: [MotivationController],
+  controllers: [MotivationController, MotivationAdminController],
   providers: [
     MotivationService,
     MotivationGenerationService,
@@ -45,6 +47,7 @@ import { MotivationVideoWorkerService } from './motivation-video-worker.service'
     MotivationSettingsService,
     MotivationMusicService,
     MotivationVideoWorkerService,
+    MotivationHealthService,
   ],
   exports: [
     MotivationService,
