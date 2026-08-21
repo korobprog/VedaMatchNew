@@ -178,3 +178,19 @@ export function isAdminNavItemActive(href: string, pathname: string): boolean {
   if (href === "/admin") return pathname === "/admin";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
+
+/**
+ * Название текущего раздела для кнопки мобильного меню. Без него человек на
+ * телефоне видел бы свёрнутый список и не понимал, где находится.
+ */
+export function currentAdminNavLabel(
+  groups: AdminNavGroup[],
+  pathname: string,
+): string {
+  for (const group of groups) {
+    for (const item of group.items) {
+      if (isAdminNavItemActive(item.href, pathname)) return item.label;
+    }
+  }
+  return "Обзор";
+}

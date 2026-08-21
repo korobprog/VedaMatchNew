@@ -81,7 +81,44 @@ export default async function AdminUsersPage({
         </div>
       ) : (
         <div className="overflow-hidden glass rounded-2xl border border-glass-brd">
-          <div className="overflow-x-auto">
+          {/* На телефоне вместо таблицы карточки: восемь колонок в 375 точках
+              превращались в метр горизонтальной прокрутки, где имя и статус
+              никогда не видны одновременно. */}
+          <ul className="divide-y divide-glass-brd sm:hidden">
+            {users.items.map((item) => (
+              <li key={item.id} className="relative px-4 py-3">
+                {/* Карточка целиком ведёт в карточку пользователя: попадать
+                    пальцем в строку имени высотой в текст — не попадание. */}
+                <Link
+                  href={`/admin/users/${item.id}`}
+                  className="font-medium text-text-0 after:absolute after:inset-0 after:content-['']"
+                >
+                  {item.name}
+                </Link>
+                <div className="mt-0.5 break-all text-xs text-text-2">{item.email}</div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-text-1">
+                  <span>{roleLabels[item.role]}</span>
+                  {item.spiritualStage && <Badge>{stageLabels[item.spiritualStage]}</Badge>}
+                  {item.devoteeVerificationStatus && (
+                    <Badge tone={item.devoteeVerificationStatus === "confirmed" ? "green" : "amber"}>
+                      {verificationLabels[item.devoteeVerificationStatus]}
+                    </Badge>
+                  )}
+                  {item.hasMentorRequest && (
+                    <Badge tone="blue">{item.mentorRequestStatus ? verificationLabels[item.mentorRequestStatus] : "Есть"}</Badge>
+                  )}
+                  {item.accountStatus !== "active" && (
+                    <Badge tone="red">
+                      {accountStatusLabels[item.accountStatus]}
+                      {item.accountStatus === "blocked" && item.blockedUntil ? ` до ${formatDate(item.blockedUntil)}` : ""}
+                    </Badge>
+                  )}
+                </div>
+                <div className="mt-2 text-xs text-text-2">Регистрация: {formatDate(item.createdAt)}</div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="min-w-full divide-y divide-glass-brd text-sm">
               <thead className="text-left text-xs uppercase tracking-wide text-text-2">
                 <tr>

@@ -188,7 +188,7 @@ export function MusicLibrary({
             />
 
             <details className="mt-2">
-              <summary className="cursor-pointer text-xs text-text-2">
+              <summary className="flex min-h-11 cursor-pointer items-center text-xs text-text-2">
                 Промпт
               </summary>
               <p className="mt-1 font-mono text-xs leading-5 text-text-1">

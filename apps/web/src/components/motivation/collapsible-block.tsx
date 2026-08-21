@@ -30,7 +30,7 @@ export function CollapsibleBlock({
           : "",
       ].join(" ")}
     >
-      <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-text-0 marker:hidden [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm font-medium text-text-0 marker:hidden [&::-webkit-details-marker]:hidden">
         <ChevronDown className="h-4 w-4 shrink-0 text-text-2 transition-transform group-open:rotate-180" />
         <span>{title}</span>
         {preview && (

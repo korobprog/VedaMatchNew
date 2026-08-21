@@ -88,7 +88,7 @@ export function RejectControl({
 
   return (
     <details className="sm:col-span-2">
-      <summary className="cursor-pointer list-none text-sm font-medium text-text-2 hover:text-text-0">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center text-sm font-medium text-text-2 hover:text-text-0">
         Отклонить…
       </summary>
       <div className="mt-3 space-y-2">

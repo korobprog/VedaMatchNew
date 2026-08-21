@@ -227,7 +227,7 @@ function CategoryList({
                   setEditingId(editingId === category.id ? null : category.id)
                 }
                 aria-expanded={editingId === category.id}
-                className="rounded-lg border border-glass-brd px-2.5 py-1 text-xs text-text-1 hover:text-text-0"
+                className="flex min-h-9 shrink-0 items-center rounded-lg border border-glass-brd px-3 py-1 text-xs text-text-1 hover:text-text-0"
               >
                 {editingId === category.id ? "Закрыть" : "Править"}
               </button>
