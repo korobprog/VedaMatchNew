@@ -26,6 +26,9 @@ const TEMPLATES: Record<AdminAuditAction, string> = {
   'market.report-resolved': 'Разобрана жалоба Рынка',
   'market.listing-hidden': 'Объявление Рынка скрыто',
   'notices.report-resolved': 'Разобрана жалоба на объявление',
+  'union.profile-hidden': 'Анкета знакомств снята с выдачи',
+  'union.profile-restored': 'Анкета знакомств возвращена в выдачу',
+  'union.chat-viewed': 'Просмотрена переписка по жалобе',
   'astro.generation-resumed': 'Генерация астрологии возобновлена',
 };
 
@@ -34,6 +37,8 @@ const DETAIL_LABELS: Record<string, string> = {
   from: 'было',
   to: 'стало',
   reason: 'причина',
+  reportId: 'жалоба',
+  messages: 'сообщений',
   status: 'статус',
   title: 'заголовок',
   recipients: 'получателей',

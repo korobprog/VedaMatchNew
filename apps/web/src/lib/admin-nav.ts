@@ -61,6 +61,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     title: "Сервисы",
     items: [
       {
+        href: "/admin/union",
+        label: "Знакомства",
+        hint: "Анкеты, скрытие из выдачи, сводка сервиса",
+        scope: "union",
+      },
+      {
         href: "/admin/motivation",
         label: "Motivation",
         hint: "Очередь модерации, категории, музыка, настройки",

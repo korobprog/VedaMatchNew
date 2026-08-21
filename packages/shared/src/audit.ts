@@ -28,6 +28,9 @@ export const ADMIN_AUDIT_ACTIONS = [
   'market.report-resolved',
   'market.listing-hidden',
   'notices.report-resolved',
+  'union.profile-hidden',
+  'union.profile-restored',
+  'union.chat-viewed',
   'astro.generation-resumed',
 ] as const;
 

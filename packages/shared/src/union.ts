@@ -455,3 +455,107 @@ export interface UnionEditChatMessageRequest {
 export interface UnionSetReactionRequest {
   emoji: string;
 }
+
+// ===== Админка Union =====
+
+/** Строка в списке анкет админки: столько, сколько нужно, чтобы выбрать. */
+export interface UnionAdminProfileListItem {
+  userId: string;
+  /** Мирское имя: админка смотрит на человека, а не на подпись. */
+  name: string;
+  email: string;
+  spiritualStage: SpiritualStage | null;
+  city: string | null;
+  isActive: boolean;
+  /** Аккаунт заблокирован администрацией — анкета и так не показывается. */
+  accountBlocked: boolean;
+  /** Открытых жалоб на человека. */
+  openReports: number;
+  photosCount: number;
+  lastSeenAt: string | null;
+  updatedAt: string;
+}
+
+export interface UnionAdminProfileListResponse {
+  items: UnionAdminProfileListItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+/** Что видно администрации в анкете. Без фильтра приватности: настройки
+ *  показываются как факт, а не применяются — иначе жалобу не разобрать. */
+export interface UnionAdminProfileDto extends UnionAdminProfileListItem {
+  about: string | null;
+  status: string | null;
+  format: UnionFormat;
+  languages: string[];
+  skills: string[];
+  interests: string[];
+  values: string[];
+  familyStatus: string | null;
+  intentions: UnionIntentionDto[];
+  privacy: UnionPrivacySettings | null;
+  requestsFromVerifiedOnly: boolean;
+  contactMode: UnionContactMode;
+  createdAt: string;
+  /** Активность в сервисе — по ней видно, живая анкета или брошенная. */
+  activity: {
+    swipesMade: number;
+    likesReceived: number;
+    requestsSent: number;
+    requestsReceived: number;
+    matches: number;
+    messagesSent: number;
+  };
+}
+
+export interface UnionAdminProfileQuery {
+  /** Поиск по имени или почте. */
+  q?: string;
+  /** `active` — в выдаче, `hidden` — снята с выдачи. */
+  visibility?: 'all' | 'active' | 'hidden';
+  /** Только те, на кого есть открытые жалобы. */
+  reportedOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface UnionAdminHideProfileRequest {
+  /** Причина обязательна: анкету снимают с выдачи, человек об этом узнает. */
+  reason: string;
+}
+
+/** Сообщение переписки, открытой администрации по жалобе. */
+export interface UnionAdminChatMessageDto {
+  id: string;
+  fromUserId: string;
+  fromName: string;
+  body: string;
+  editedAt: string | null;
+  createdAt: string;
+}
+
+/**
+ * Переписка пары по конкретной жалобе. Открывается только по id жалобы:
+ * без неё у администрации нет повода читать чужую переписку.
+ */
+export interface UnionAdminChatResponse {
+  reportId: string;
+  reporter: { id: string; name: string };
+  target: { id: string; name: string };
+  /** Заявки между ними не было — тогда и переписки нет. */
+  messages: UnionAdminChatMessageDto[];
+}
+
+/** Сводка по сервису знакомств для админки. */
+export interface UnionAdminStats {
+  profiles: { total: number; active: number; hidden: number };
+  /** За последние 7 дней. */
+  week: { swipes: number; likes: number; requests: number; messages: number };
+  matches: { total: number; pending: number };
+  boostsActive: number;
+}
+
+export const UNION_ADMIN_HIDE_REASON_MIN_LENGTH = 5;
