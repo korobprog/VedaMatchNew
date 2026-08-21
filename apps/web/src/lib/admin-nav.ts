@@ -108,6 +108,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         scope: "portal",
       },
       {
+        href: "/admin/services",
+        label: "Каталог сервисов",
+        hint: "Карточки в сетке портала: статус, порядок, видимость",
+        scope: "portal",
+      },
+      {
         href: "/admin/settings",
         label: "Настройки",
         hint: "Режим биллинга и глобальные параметры",

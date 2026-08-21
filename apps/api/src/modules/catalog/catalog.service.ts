@@ -29,7 +29,9 @@ export class CatalogService {
               ...stageFilters,
             ],
           },
-      orderBy: [{ status: 'asc' }, { name: 'asc' }],
+      // Заданный администратором порядок важнее статуса: «скоро» может
+      // стоять выше активного, если так решили в каталоге.
+      orderBy: [{ sortOrder: 'asc' }, { status: 'asc' }, { name: 'asc' }],
     });
     return services.map((s) => ({
       id: s.id,

@@ -14,6 +14,7 @@ import type {
   AdminAuditListResponse,
   AdminAuditQuery,
   AdminPortalStats,
+  AdminServiceCardDto,
   NotificationBroadcastDto,
   AdminReleaseDto,
   AdminRoadmapItemDto,
@@ -80,6 +81,9 @@ export const getAdminUsers = (query: Record<string, string | undefined>) => {
   const qs = params.toString();
   return apiGet<AdminUserListResponse>(`/admin/users${qs ? `?${qs}` : ""}`);
 };
+/** Каталог сервисов портала. Команды над ним — в lib/catalog-admin-api.ts. */
+export const getAdminServices = () =>
+  apiGet<AdminServiceCardDto[]>("/admin/catalog/services");
 /** Журнал действий администрации. Фильтры приходят из query страницы. */
 export const getAdminAudit = (query: AdminAuditQuery) => {
   const params = new URLSearchParams();

@@ -20,6 +20,8 @@ export const ADMIN_AUDIT_ACTIONS = [
   'user.photo-unverified',
   'user.subscription-changed',
   'billing.mode-changed',
+  'catalog.service-created',
+  'catalog.service-updated',
   'report.resolved',
   'verification.decided',
   'community.decided',

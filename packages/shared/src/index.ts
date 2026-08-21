@@ -492,3 +492,61 @@ export interface AdminPortalStats {
   };
   queues: AdminQueueCounter[];
 }
+
+// ===== Каталог сервисов портала (админка) =====
+
+/**
+ * Карточка сервиса глазами администрации: все флаги видимости, а не итог их
+ * применения. Маркетинговые тексты лендинга сюда не входят — они живут в коде
+ * (apps/web/src/lib/service-content.ts), здесь только сетка портала.
+ */
+export interface AdminServiceCardDto {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  iconUrl: string | null;
+  url: string;
+  status: ServiceStatus;
+  category: string;
+  sortOrder: number;
+  /** `false` — сервис виден только по персональному доступу или по этапу. */
+  public: boolean;
+  seekerVisible: boolean;
+  practitionerVisible: boolean;
+  yogiVisible: boolean;
+  devoteeSelfIdentifiedVisible: boolean;
+  devoteeVerifiedVisible: boolean;
+  /** Сколько человек получили персональный доступ к сервису. */
+  personalAccessCount: number;
+  updatedAt: string;
+}
+
+export type UpdateAdminServiceRequest = Partial<
+  Pick<
+    AdminServiceCardDto,
+    | 'name'
+    | 'description'
+    | 'iconUrl'
+    | 'url'
+    | 'status'
+    | 'category'
+    | 'sortOrder'
+    | 'public'
+    | 'seekerVisible'
+    | 'practitionerVisible'
+    | 'yogiVisible'
+    | 'devoteeSelfIdentifiedVisible'
+    | 'devoteeVerifiedVisible'
+  >
+>;
+
+export interface CreateAdminServiceRequest extends UpdateAdminServiceRequest {
+  /** Задаётся один раз: слаг попадает в ссылки и потом не меняется. */
+  slug: string;
+  name: string;
+  description: string;
+  url: string;
+  /** Группа в сетке портала; у существующих сервисов — `community`. */
+  category: string;
+}

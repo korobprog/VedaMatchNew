@@ -18,6 +18,8 @@ const TEMPLATES: Record<AdminAuditAction, string> = {
   'user.photo-unverified': 'Подтверждение фото снято',
   'user.subscription-changed': 'Изменена подписка',
   'billing.mode-changed': 'Изменён режим биллинга',
+  'catalog.service-created': 'Добавлен сервис в каталог',
+  'catalog.service-updated': 'Изменена карточка сервиса',
   'report.resolved': 'Разобрана жалоба на человека',
   'verification.decided': 'Решение по заявке на проверку',
   'community.decided': 'Решение по заявке сообщества',

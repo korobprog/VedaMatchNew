@@ -665,6 +665,8 @@ model Service {
   url                          String
   status                       ServiceStatus @default(coming_soon)
   category                     String
+  /// Порядок в сетке портала. Меньше — выше; при равенстве сортировка по имени.
+  sortOrder                    Int           @default(0)
   // null/true = СЃРµСЂРІРёСЃ РґРѕСЃС‚СѓРїРµРЅ РІСЃРµРј Р°РІС‚РѕСЂРёР·РѕРІР°РЅРЅС‹Рј; РёРЅР°С‡Рµ РґРѕСЃС‚СѓРї С‡РµСЂРµР· ServiceAccess/СЂРѕР»СЊ/СЌС‚Р°Рї РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
   public                       Boolean       @default(true)
   seekerVisible                Boolean       @default(true)

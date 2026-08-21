@@ -10,7 +10,7 @@ describe("auditActionLabels", () => {
     expect(auditActionLabels["user.purged"]).toBe(
       "Аккаунт удалён безвозвратно",
     );
-    expect(Object.keys(auditActionLabels)).toHaveLength(24);
+    expect(Object.keys(auditActionLabels)).toHaveLength(26);
   });
 });
 
