@@ -4,7 +4,9 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MotivationReviewStatus, MotivationVisualStyle } from '@prisma/client';
 import type { MotivationPromptUpdate, Role } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -27,7 +29,48 @@ const approvedStyles = new Set<string>(Object.values(MotivationVisualStyle));
 
 @Injectable()
 export class MotivationModerationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // Необязательная: модерация работает и без шины, уведомление автору —
+    // побочный эффект, ради которого публикация падать не должна.
+    @Optional() private readonly events?: EventEmitter2,
+  ) {}
+
+  /**
+   * Уведомление автору пользовательского рилса о публикации. Событие
+   * самодостаточно: получатель и slug, ничего дочитывать не нужно.
+   */
+  notifyPublished(post: {
+    id: string;
+    slug: string;
+    origin: string;
+    authorUserId: string | null;
+  }): void {
+    if (post.origin !== 'user' || !post.authorUserId || !this.events) return;
+    this.events.emit('motivation.reel.published', {
+      name: 'motivation.reel.published',
+      recipientId: post.authorUserId,
+      reelId: post.id,
+      slug: post.slug,
+    });
+  }
+
+  /**
+   * Автору — что ролик принят и виден. Событие самодостаточно: получатель и
+   * идентификатор рилса, подписчик формулирует сам.
+   */
+  notifyVideoReady(post: {
+    id: string;
+    origin: string;
+    authorUserId: string | null;
+  }): void {
+    if (post.origin !== 'user' || !post.authorUserId || !this.events) return;
+    this.events.emit('motivation.video.ready', {
+      name: 'motivation.video.ready',
+      recipientId: post.authorUserId,
+      reelId: post.id,
+    });
+  }
 
   async approveText(
     role: Role,
@@ -37,7 +80,101 @@ export class MotivationModerationService {
   ) {
     this.assertAdmin(role);
     this.assertApprovedStyle(styleOverride);
+    return this.approveTextWith({
+      actorId,
+      postId,
+      styleOverride,
+      action: 'approve_text',
+      metadata: {},
+    });
+  }
+
+  /**
+   * Одобрение текста ИИ-модератором. Актор пуст — FK аудита смотрит на
+   * `User`, а модель им не является; кто именно решил, лежит в metadata.
+   */
+  aiApproveText(
+    postId: string,
+    styleOverride: MotivationVisualStyle | undefined,
+    verdict: Record<string, unknown>,
+  ) {
+    this.assertApprovedStyle(styleOverride);
+    return this.approveTextWith({
+      actorId: null,
+      postId,
+      styleOverride,
+      action: 'ai_approve',
+      metadata: { actor: 'ai', verdict },
+    });
+  }
+
+  /** Отказ ИИ-модератора: причина — текст для автора. */
+  async aiReject(
+    postId: string,
+    reason: string,
+    verdict: Record<string, unknown>,
+  ) {
     const post = await this.loadPost(postId);
+    if (post.reviewStatus !== MotivationReviewStatus.text_review)
+      throw new ConflictException('Text is not ready for review');
+    return this.transition({
+      postId,
+      actorId: null,
+      expected: MotivationReviewStatus.text_review,
+      next: MotivationReviewStatus.rejected,
+      action: 'ai_reject',
+      style: post.visualStyle,
+      reason,
+      data: {
+        reviewStatus: MotivationReviewStatus.rejected,
+        status: 'draft',
+        generationStage: 'rejected',
+        generationErrorCode: null,
+      },
+      metadata: { actor: 'ai', verdict },
+    });
+  }
+
+  /**
+   * Запись ИИ-модератора без смены статуса: подсказка админу, эскалация или
+   * сбой модели. Стадия генерации помечается, чтобы автор видел «ждёт
+   * администратора», а не вечную «проверку».
+   */
+  async aiNote(
+    postId: string,
+    action: 'ai_suggest' | 'ai_escalate' | 'ai_error',
+    reason: string | null,
+    metadata: Record<string, unknown>,
+  ) {
+    const stage = action === 'ai_suggest' ? 'ai_suggested' : 'ai_escalated';
+    await this.prisma.$transaction(async (transaction) => {
+      await transaction.motivationPost.updateMany({
+        where: {
+          id: postId,
+          reviewStatus: MotivationReviewStatus.text_review,
+        },
+        data: { generationStage: stage },
+      });
+      await transaction.motivationModerationAudit.create({
+        data: {
+          postId,
+          actorId: null,
+          action,
+          reason,
+          metadata: { actor: 'ai', ...metadata },
+        },
+      });
+    });
+  }
+
+  private async approveTextWith(input: {
+    actorId: string | null;
+    postId: string;
+    styleOverride?: MotivationVisualStyle;
+    action: string;
+    metadata: Record<string, unknown>;
+  }) {
+    const post = await this.loadPost(input.postId);
     if (post.reviewStatus !== MotivationReviewStatus.text_review)
       throw new ConflictException('Text is not ready for review');
     const direction = createImageDirection(
@@ -56,15 +193,15 @@ export class MotivationModerationService {
           (profile) => profile.profileType,
         ) ?? [post.profileType],
       },
-      styleOverride,
+      input.styleOverride,
     );
     const now = new Date();
     return this.transition({
-      postId,
-      actorId,
+      postId: input.postId,
+      actorId: input.actorId,
       expected: MotivationReviewStatus.text_review,
       next: MotivationReviewStatus.image_queued,
-      action: 'approve_text',
+      action: input.action,
       style: direction.style,
       reason: null,
       data: {
@@ -75,12 +212,14 @@ export class MotivationModerationService {
         generationStage: 'image_queued',
         generationErrorCode: null,
       },
+      metadata: input.metadata,
     });
   }
 
   async approveImage(role: Role, actorId: string, postId: string) {
     this.assertAdmin(role);
     const post = await this.loadPost(postId);
+    const notify = () => this.notifyPublished(post);
     if (post.reviewStatus !== MotivationReviewStatus.image_review)
       throw new ConflictException('Image is not ready for review');
     if (!post.imageUrl)
@@ -102,6 +241,9 @@ export class MotivationModerationService {
         generationStage: 'published',
         generationErrorCode: null,
       },
+    }).then((result) => {
+      notify();
+      return result;
     });
   }
 
@@ -288,13 +430,14 @@ export class MotivationModerationService {
 
   private transition(input: {
     postId: string;
-    actorId: string;
+    actorId: string | null;
     expected: MotivationReviewStatus;
     next: MotivationReviewStatus;
     action: string;
     style: MotivationVisualStyle | null;
     reason: string | null;
     data: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
   }) {
     return this.prisma.$transaction(async (transaction) => {
       const updated = await transaction.motivationPost.updateMany({
@@ -316,6 +459,7 @@ export class MotivationModerationService {
             newStatus: input.next,
             style: input.style,
             reason: input.reason,
+            ...(input.metadata ?? {}),
           },
         },
       });

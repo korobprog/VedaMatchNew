@@ -4,6 +4,14 @@ export interface MotivationCursor {
   universal: number;
   vaishnava: number;
   accumulator: number;
+  /**
+   * Сессия листания: момент первой страницы и прошлый визит, по которым
+   * считаются ярусы. Хранятся в курсоре, а не в базе, чтобы вторая страница
+   * видела ровно тот же порядок, что и первая. Пусто — курсор старого
+   * формата либо первая страница: сервис подставит текущие значения.
+   */
+  since?: number;
+  seenBefore?: number | null;
 }
 export const emptyMotivationCursor = (): MotivationCursor => ({
   universal: 0,
@@ -28,7 +36,11 @@ export function decodeMotivationCursor(value?: string): MotivationCursor {
       parsed.universal < 0 ||
       parsed.vaishnava < 0 ||
       parsed.accumulator < 0 ||
-      parsed.accumulator >= 100
+      parsed.accumulator >= 100 ||
+      (parsed.since !== undefined && !Number.isInteger(parsed.since)) ||
+      (parsed.seenBefore !== undefined &&
+        parsed.seenBefore !== null &&
+        !Number.isInteger(parsed.seenBefore))
     )
       throw new Error();
     return parsed;
@@ -37,39 +49,31 @@ export function decodeMotivationCursor(value?: string): MotivationCursor {
   }
 }
 
-export function weightedPage<T>(
-  universal: T[],
-  vaishnava: T[],
-  percent: number,
+/**
+ * Страница ленты и позиция для следующей.
+ *
+ * Раньше лента складывалась из двух треков, смешанных по доле вайшнавских
+ * публикаций из настроек. Способов отбора получалось два, и они спорили друг
+ * с другом: человек отмечал направление галочкой, а ползунок, о котором он
+ * давно забыл, эту же ленту обрезал — вплоть до того, что собственный рилс
+ * пропадал. Отбор остался один — по отмеченным направлениям.
+ *
+ * Поля `vaishnava` и `accumulator` в курсоре сохранены: курсоры, выданные до
+ * этой правки, живут в открытых вкладках, и падать на них незачем.
+ */
+export function feedPage<T>(
+  posts: T[],
   cursor: MotivationCursor,
   limit: number,
 ) {
-  const items: T[] = [];
-  let u = cursor.universal,
-    v = cursor.vaishnava,
-    accumulator = cursor.accumulator;
-  const safePercent = Math.max(0, Math.min(100, percent));
-  while (
-    items.length < limit &&
-    (u < universal.length || v < vaishnava.length)
-  ) {
-    if (safePercent === 0) {
-      if (u >= universal.length) break;
-      items.push(universal[u++]);
-      continue;
-    }
-    if (safePercent === 100) {
-      if (v >= vaishnava.length) break;
-      items.push(vaishnava[v++]);
-      continue;
-    }
-    accumulator += safePercent;
-    const chooseV = accumulator >= 100;
-    if (chooseV) accumulator -= 100;
-    if (chooseV && v < vaishnava.length) items.push(vaishnava[v++]);
-    else if (!chooseV && u < universal.length) items.push(universal[u++]);
-    else if (u < universal.length) items.push(universal[u++]);
-    else if (v < vaishnava.length) items.push(vaishnava[v++]);
-  }
-  return { items, cursor: { universal: u, vaishnava: v, accumulator } };
+  const from = cursor.universal;
+  const items = posts.slice(from, from + limit);
+  return {
+    items,
+    cursor: {
+      universal: from + items.length,
+      vaishnava: cursor.vaishnava,
+      accumulator: cursor.accumulator,
+    },
+  };
 }

@@ -178,7 +178,7 @@ export class NotificationBroadcastService {
         where: {
           ...where,
           notificationPreference: {
-            OR: [{ enabled: false }, { system: false }],
+            OR: [{ enabled: false }, { announcements: false }],
           },
         },
       }),
@@ -188,7 +188,7 @@ export class NotificationBroadcastService {
           pushSubscriptions: { some: {} },
           OR: [
             { notificationPreference: null },
-            { notificationPreference: { enabled: true, system: true } },
+            { notificationPreference: { enabled: true, announcements: true } },
           ],
         },
       }),

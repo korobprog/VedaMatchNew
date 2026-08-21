@@ -3,7 +3,12 @@ import type { MotivationAdminCandidateDto } from '@vedamatch/shared';
 
 describe('MotivationService admin list', () => {
   it('includes verified quotes assigned to the user profile', async () => {
-    const motivationPost = { findMany: jest.fn().mockResolvedValue([]) };
+    const motivationPost = {
+      findMany: jest.fn().mockResolvedValue([]),
+      // Закреплённый пост лента ищет отдельным запросом; без него мок
+      // не описывает используемую часть клиента.
+      findFirst: jest.fn().mockResolvedValue(null),
+    };
     const prisma = {
       user: {
         findUnique: jest.fn().mockResolvedValue({ spiritualStage: 'devotee' }),
@@ -14,8 +19,11 @@ describe('MotivationService admin list', () => {
           language: 'ru',
           profileTypes: [],
         }),
+        upsert: jest.fn().mockResolvedValue({}),
       },
       motivationPost,
+      userBlock: { findMany: jest.fn().mockResolvedValue([]) },
+      motivationCategory: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = new MotivationService(
       prisma as never,
@@ -31,7 +39,7 @@ describe('MotivationService admin list', () => {
 
     await service.feed('user-1', {});
 
-    expect(motivationPost.findMany).toHaveBeenCalledTimes(2);
+    expect(motivationPost.findMany).toHaveBeenCalledTimes(1);
     for (const [input] of motivationPost.findMany.mock.calls) {
       // Настройки пустые, поэтому профиль берётся из самоидентификации.
       expect(input.where).toMatchObject({
@@ -41,6 +49,9 @@ describe('MotivationService admin list', () => {
           {
             quote: { profiles: { some: { profileType: { in: ['devotee'] } } } },
           },
+          // Свой рилс автор видит всегда — настройки ленты не должны прятать
+          // от него его же публикацию.
+          { authorUserId: 'user-1' },
         ],
       });
     }
@@ -197,7 +208,12 @@ describe('MotivationService admin list', () => {
 
 describe('MotivationService feed profiles', () => {
   function buildFeed(profileTypes: string[]) {
-    const motivationPost = { findMany: jest.fn().mockResolvedValue([]) };
+    const motivationPost = {
+      findMany: jest.fn().mockResolvedValue([]),
+      // Закреплённый пост лента ищет отдельным запросом; без него мок
+      // не описывает используемую часть клиента.
+      findFirst: jest.fn().mockResolvedValue(null),
+    };
     const prisma = {
       user: {
         findUnique: jest.fn().mockResolvedValue({ spiritualStage: 'seeker' }),
@@ -208,8 +224,11 @@ describe('MotivationService feed profiles', () => {
           language: 'ru',
           profileTypes,
         }),
+        upsert: jest.fn().mockResolvedValue({}),
       },
       motivationPost,
+      userBlock: { findMany: jest.fn().mockResolvedValue([]) },
+      motivationCategory: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = new MotivationService(
       prisma as never,
@@ -244,6 +263,369 @@ describe('MotivationService feed profiles', () => {
 
     for (const [input] of motivationPost.findMany.mock.calls)
       expect(input.where.OR[0]).toEqual({ profileType: { in: ['user'] } });
+  });
+});
+
+describe('MotivationService feed tiers', () => {
+  const day = (n: number) => new Date(Date.UTC(2026, 7, n));
+  function post(id: string, publishedAt: Date, viewedAt: Date | null) {
+    return {
+      id,
+      slug: id,
+      contentDate: publishedAt,
+      profileType: 'user',
+      audienceTrack: 'universal',
+      category: 'daily',
+      imageUrl: null,
+      storyImageUrl: null,
+      videoUrl: null,
+      videoStatus: 'none',
+      attributionKind: 'ai_reflection',
+      attributionSpeaker: null,
+      attributionWork: null,
+      attributionLocator: null,
+      attributionSourceUrl: null,
+      sourceVerified: false,
+      publishedAt,
+      likeCount: 3,
+      translations: [],
+      favorites: [],
+      views: viewedAt ? [{ viewedAt }] : [],
+      likes: [],
+    };
+  }
+  function build(lastSeenAt: Date | null, posts: ReturnType<typeof post>[]) {
+    const motivationPost = {
+      // Лента читает посты одним запросом: доля вайшнавских публикаций из неё
+      // убрана, делить выборку на треки больше незачем.
+      findMany: jest.fn().mockResolvedValue(posts),
+      // Закреплённый пост лента ищет отдельным запросом.
+      findFirst: jest.fn().mockResolvedValue(null),
+    };
+    const motivationPreference = {
+      findUnique: jest.fn().mockResolvedValue({
+        vaishnavaPercent: 0,
+        language: 'ru',
+        profileTypes: [],
+        lastSeenAt,
+      }),
+      upsert: jest.fn().mockResolvedValue({}),
+    };
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ spiritualStage: 'seeker' }),
+      },
+      motivationPreference,
+      motivationPost,
+      userBlock: { findMany: jest.fn().mockResolvedValue([]) },
+      motivationCategory: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new MotivationService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    return { service, prisma, motivationPost, motivationPreference };
+  }
+
+  it('orders fresh, then unseen, then seen and records the visit', async () => {
+    const { service, motivationPreference } = build(day(10), [
+      post('seen', day(1), day(2)),
+      post('archive', day(5), null),
+      post('fresh', day(12), null),
+    ]);
+
+    const page = await service.feed('user-1', {});
+
+    expect(page.items.map((item) => `${item.feedTier}:${item.id}`)).toEqual([
+      'fresh:fresh',
+      'unseen:archive',
+      'seen:seen',
+    ]);
+    expect(page.items[0]).toMatchObject({ likeCount: 3, isLiked: false });
+    expect(motivationPreference.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: 'user-1' },
+        update: { lastSeenAt: expect.any(Date) },
+      }),
+    );
+  });
+
+  it('keeps the session on later pages instead of re-reading the visit', async () => {
+    // Вторая страница приходит с курсором: отметку визита не трогаем и
+    // ярусы считаем по зафиксированным в курсоре значениям.
+    const { service, motivationPreference, motivationPost } = build(day(19), [
+      post('a', day(12), null),
+    ]);
+    const first = await service.feed('user-1', { limit: 1 });
+    motivationPreference.upsert.mockClear();
+
+    const second = await service.feed('user-1', {
+      cursor: first.nextCursor ?? undefined,
+      limit: 1,
+    });
+
+    expect(motivationPreference.upsert).not.toHaveBeenCalled();
+    expect(second.items).toEqual([]);
+    for (const [input] of motivationPost.findMany.mock.calls)
+      expect(input.where.publishedAt).toEqual({ lte: expect.any(Date) });
+  });
+
+  it('shows the category title from the catalogue, not its slug', async () => {
+    const { service, prisma } = build(day(10), [post('a', day(12), null)]);
+    prisma.motivationCategory.findMany.mockResolvedValue([
+      { slug: 'daily', title: 'Каждый день' },
+    ]);
+
+    const page = await service.feed('user-1', {});
+
+    expect(page.items[0]).toMatchObject({
+      category: 'daily',
+      categoryTitle: 'Каждый день',
+    });
+  });
+
+  it('falls back to the slug when the catalogue does not know it', async () => {
+    const { service } = build(day(10), [post('a', day(12), null)]);
+
+    const page = await service.feed('user-1', {});
+
+    expect(page.items[0].categoryTitle).toBe('daily');
+  });
+
+  it('hides reels of blocked authors from the feed', async () => {
+    // UserBlock — портальная модель, читать её сервису разрешено контрактом.
+    const { service, prisma, motivationPost } = build(day(10), []);
+    prisma.userBlock.findMany.mockResolvedValue([{ blockedId: 'author-9' }]);
+
+    await service.feed('user-1', {});
+
+    for (const [input] of motivationPost.findMany.mock.calls)
+      expect(input.where.AND).toContainEqual({
+        NOT: { authorUserId: { in: ['author-9'] } },
+      });
+  });
+
+  it('keeps unverified user reels out of the shared feed but not out of favorites', async () => {
+    // Решение по сервису: своя цитата без проверенного источника живёт в
+    // «Мои» и по ссылке, а в «Для вас» не попадает.
+    const { service, motivationPost } = build(day(10), []);
+
+    await service.feed('user-1', {});
+    for (const [input] of motivationPost.findMany.mock.calls)
+      expect(input.where.AND).toContainEqual({
+        NOT: { origin: 'user', sourceVerified: false },
+      });
+
+    motivationPost.findMany.mockClear();
+    await service.feed('user-1', { favorites: true });
+    for (const [input] of motivationPost.findMany.mock.calls)
+      expect(input.where.AND).toEqual([]);
+  });
+
+  it('puts the requested post first so the feed opens on it', async () => {
+    const target = post('target', day(3), day(2));
+    const { service, prisma } = build(day(10), [
+      post('a', day(12), null),
+      target,
+    ]);
+    prisma.motivationPost.findFirst = jest.fn().mockResolvedValue(target);
+
+    const page = await service.feed('user-1', { post: 'target' });
+
+    expect(prisma.motivationPost.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { slug: 'target', status: 'published' },
+      }),
+    );
+    // Первым идёт запрошенный, и второй раз в списке он не появляется.
+    expect(page.items[0].id).toBe('target');
+    expect(page.items.filter((item) => item.id === 'target')).toHaveLength(1);
+  });
+
+  it('leaves favorites chronological without tiers', async () => {
+    const { service, motivationPreference } = build(day(10), [
+      post('a', day(12), null),
+    ]);
+
+    const page = await service.feed('user-1', { favorites: true });
+
+    expect(page.items[0].feedTier).toBeUndefined();
+    expect(motivationPreference.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('MotivationService.like', () => {
+  function build(existing: boolean) {
+    const tx = {
+      motivationLike: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue(existing ? { userId: 'u' } : null),
+        create: jest.fn().mockResolvedValue({}),
+        delete: jest.fn().mockResolvedValue({}),
+      },
+      motivationPost: {
+        update: jest.fn().mockResolvedValue({ likeCount: 5 }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ likeCount: 4 }),
+      },
+    };
+    const prisma = {
+      motivationPost: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'p' }),
+      },
+      $transaction: jest.fn((fn: (t: typeof tx) => unknown) => fn(tx)),
+    };
+    const service = new MotivationService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    return { service, tx };
+  }
+
+  it('creates the like and bumps the counter once', async () => {
+    const { service, tx } = build(false);
+
+    await expect(service.like('u', 'p', true)).resolves.toEqual({
+      likeCount: 5,
+      isLiked: true,
+    });
+    expect(tx.motivationLike.create).toHaveBeenCalled();
+    expect(tx.motivationPost.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { likeCount: { increment: 1 } } }),
+    );
+  });
+
+  it('does not double-count a repeated like', async () => {
+    const { service, tx } = build(true);
+
+    await expect(service.like('u', 'p', true)).resolves.toEqual({
+      likeCount: 4,
+      isLiked: true,
+    });
+    expect(tx.motivationLike.create).not.toHaveBeenCalled();
+    expect(tx.motivationPost.update).not.toHaveBeenCalled();
+  });
+
+  it('removes the like and decrements only when it existed', async () => {
+    const { service, tx } = build(true);
+
+    await service.like('u', 'p', false);
+
+    expect(tx.motivationLike.delete).toHaveBeenCalled();
+    expect(tx.motivationPost.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { likeCount: { decrement: 1 } } }),
+    );
+  });
+});
+
+describe('MotivationService.report', () => {
+  function build(
+    options: {
+      count?: number;
+      threshold?: number;
+      post?: Record<string, unknown> | null;
+    } = {},
+  ) {
+    const prisma = {
+      motivationPost: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue(
+            options.post === undefined
+              ? { id: 'post-1', origin: 'user', authorUserId: 'author-1' }
+              : options.post,
+          ),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      motivationReport: {
+        upsert: jest.fn().mockResolvedValue({}),
+        count: jest.fn().mockResolvedValue(options.count ?? 1),
+      },
+      motivationModerationAudit: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const settings = {
+      read: jest
+        .fn()
+        .mockResolvedValue({ reportsToHide: options.threshold ?? 3 }),
+    };
+    const service = new MotivationService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      settings as never,
+    );
+    return { service, prisma };
+  }
+
+  it('records one report per person without hiding the reel yet', async () => {
+    const { service, prisma } = build({ count: 1 });
+
+    await expect(
+      service.report('user-2', 'post-1', { reason: 'spam' }),
+    ).resolves.toEqual({ count: 1, hidden: false });
+    expect(prisma.motivationReport.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: {} }),
+    );
+    expect(prisma.motivationPost.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('hides the reel once the threshold is reached and writes an audit', async () => {
+    const { service, prisma } = build({ count: 3, threshold: 3 });
+
+    await expect(
+      service.report('user-2', 'post-1', { reason: 'offensive' }),
+    ).resolves.toEqual({ count: 3, hidden: true });
+    expect(prisma.motivationPost.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { status: 'hidden', generationStage: 'hidden' },
+      }),
+    );
+    expect(prisma.motivationModerationAudit.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: 'auto_hidden', actorId: null }),
+      }),
+    );
+  });
+
+  it('refuses an unknown reason, editorial posts and self-reports', async () => {
+    const { service } = build();
+    await expect(
+      service.report('user-2', 'post-1', { reason: 'whatever' as never }),
+    ).rejects.toThrow('причину');
+
+    const editorial = build({
+      post: { id: 'post-1', origin: 'editorial', authorUserId: null },
+    });
+    await expect(
+      editorial.service.report('user-2', 'post-1', { reason: 'spam' }),
+    ).rejects.toThrow('поддержку');
+
+    const own = build({
+      post: { id: 'post-1', origin: 'user', authorUserId: 'user-2' },
+    });
+    await expect(
+      own.service.report('user-2', 'post-1', { reason: 'spam' }),
+    ).rejects.toThrow('ваш собственный');
   });
 });
 
@@ -588,7 +970,7 @@ describe('MotivationService.previewVoice', () => {
     });
     expect(audio.speak).toHaveBeenCalled();
     expect(generation.uploadStory).toHaveBeenCalledWith(
-      'motivation/voice-preview/fal-ai-elevenlabs-tts-eleven-v3/George.mp3',
+      'motivation/voice-preview/fal-ai-elevenlabs-tts-eleven-v3/v2/George.mp3',
       expect.any(Buffer),
       'audio/mpeg',
     );

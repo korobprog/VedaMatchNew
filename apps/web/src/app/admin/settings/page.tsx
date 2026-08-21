@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import type { AdminIntegrationStatus } from "@vedamatch/shared";
 import { PlatformSettingsForm } from "@/components/admin/platform-settings-form";
 import { formatDate } from "@/lib/admin-labels";
-import { getAdminPlatformSettings } from "@/lib/api";
+import { AdminDonationForm } from "@/components/admin-donation-form";
+import { getAdminDonationSettings, getAdminPlatformSettings } from "@/lib/api";
 import { requireUser } from "@/lib/require-user";
 
 export const metadata = {
@@ -49,7 +50,10 @@ export default async function AdminSettingsPage() {
   const user = await requireUser();
   if (user.role !== "admin") redirect("/");
 
-  const settings = await getAdminPlatformSettings();
+  const [settings, donation] = await Promise.all([
+    getAdminPlatformSettings(),
+    getAdminDonationSettings(),
+  ]);
   if (!settings) throw new Error("Не удалось загрузить настройки");
 
   const broken = settings.integrations.filter(
@@ -67,7 +71,12 @@ export default async function AdminSettingsPage() {
       </p>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-        <PlatformSettingsForm settings={settings} />
+        <div className="space-y-6">
+          <PlatformSettingsForm settings={settings} />
+          <AdminDonationForm
+            initial={donation ?? { enabled: false, text: "", requisites: [] }}
+          />
+        </div>
 
         <section aria-labelledby="integrations">
           <h2

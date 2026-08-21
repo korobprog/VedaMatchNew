@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import {
   AdminBillingController,
+  AdminDonationController,
   AdminPlatformSettingsController,
   BillingController,
 } from './billing.controller';
@@ -13,6 +14,7 @@ import { PlatformSettingsService } from './platform-settings.service';
   controllers: [
     BillingController,
     AdminBillingController,
+      AdminDonationController,
     AdminPlatformSettingsController,
   ],
   providers: [BillingService, PlatformSettingsService],

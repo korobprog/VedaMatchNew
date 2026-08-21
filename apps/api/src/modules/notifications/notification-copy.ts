@@ -25,6 +25,11 @@ export const notificationEventNames = {
   noticePublished: 'notices.notice.published',
   noticeResponseReceived: 'notices.response.received',
   noticeResponseAccepted: 'notices.response.accepted',
+  announcementPublished: 'portal.announcement.published',
+  motivationReelPublished: 'motivation.reel.published',
+  motivationReelRejected: 'motivation.reel.rejected',
+  motivationVideoReady: 'motivation.video.ready',
+  motivationVideoReview: 'motivation.video.review',
 } as const satisfies Record<string, NotificationEventName>;
 
 /** Payload веб-пуша ограничен ~4 КБ, да и на экране длинный текст не поместится. */
@@ -163,6 +168,57 @@ export function buildNotification(
         url: `/market/listing/${event.listingId}`,
         tag: `market-price:${event.listingId}`,
         category: 'market',
+      };
+    case 'portal.announcement.published':
+      return {
+        title: event.title,
+        body: toExcerpt(event.excerpt),
+        // На страницу новостей, а не на главную: там новость целиком и
+        // предыдущие рядом.
+        url: '/updates/news',
+        // Тег по новости: повторная рассылка не должна множить плашки.
+        tag: `announcement:${event.announcementId}`,
+        category: 'announcements',
+      };
+    case 'motivation.reel.published':
+      return {
+        title: 'Кадр готов, рилс опубликован',
+        body: 'Откройте студию: посмотреть, оживить в видео или скачать для Stories',
+        // В студию, а не на `/m/<slug>`: та страница сделана для гостей и
+        // внешних ссылок, и с кадром на ней ничего не сделать. Автор пришёл по
+        // уведомлению доводить рилс до конца, а «Открыть рилс» отсюда ведёт в
+        // ленту одним нажатием.
+        url: `/motivation/create?reel=${event.reelId}`,
+        tag: `motivation-reel:${event.reelId}`,
+        category: 'motivation',
+      };
+    case 'motivation.video.ready':
+      return {
+        title: 'Ролик готов',
+        body: 'Иллюстрация ожила — посмотрите в студии или скачайте для Stories',
+        // В студию, как и у кадра: там ролик можно посмотреть и скачать.
+        url: `/motivation/create?reel=${event.reelId}`,
+        // Тот же тег, что у кадра: плашка о ролике заменяет прежнюю по этому
+        // же рилсу, а не ложится второй.
+        tag: `motivation-reel:${event.reelId}`,
+        category: 'motivation',
+      };
+    case 'motivation.video.review':
+      return {
+        title: 'Ролик ждёт приёмки',
+        body: 'Автор его пока не видит — посмотрите и примите в очереди',
+        url: '/admin/motivation/queue',
+        tag: `motivation-video-review:${event.reelId}`,
+        category: 'motivation',
+      };
+    case 'motivation.reel.rejected':
+      return {
+        title: 'Рилс не прошёл проверку',
+        body: toExcerpt(event.reason),
+        // Мастер по этой ссылке покажет причину и даст исправить текст.
+        url: `/motivation/create?reel=${event.reelId}`,
+        tag: `motivation-reel:${event.reelId}`,
+        category: 'motivation',
       };
     case 'market.review.received':
       return {

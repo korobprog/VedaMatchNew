@@ -37,7 +37,9 @@ function createWorker(overrides: Record<string, unknown> = {}) {
   };
   const prisma = { motivationPost, ...overrides };
   const generation = {
-    generateApprovedImage: jest.fn().mockResolvedValue(Buffer.from('png')),
+    generateApprovedImage: jest
+      .fn()
+      .mockResolvedValue({ bytes: Buffer.from('png'), provider: 'relay' }),
     // URL из ключа: иначе обычная картинка и сторис неотличимы в проверках.
     uploadStory: jest
       .fn()
@@ -63,6 +65,71 @@ function createWorker(overrides: Record<string, unknown> = {}) {
 }
 
 describe('MotivationWorkerService', () => {
+  it('перегрузка провайдера не тратит попытку и откладывает кадр', async () => {
+    // Провайдер картинок отвечает 429 «модель перегружена». Раньше три таких
+    // отказа подряд за полторы минуты хоронили кадр, который просто некому
+    // было нарисовать.
+    const { worker, motivationPost, generation } = createWorker();
+    generation.generateApprovedImage.mockRejectedValue(
+      new Error('Image provider error 429: модель сейчас перегружена'),
+    );
+    // Второй раз пост читают уже в разборе сбоя: там он занят генерацией.
+    motivationPost.findUnique
+      .mockResolvedValueOnce(approvedPost)
+      .mockResolvedValueOnce({
+        attemptCount: 1,
+        reviewStatus: 'image_queued',
+        status: 'generating',
+      });
+
+    await worker.tick();
+
+    const failure = motivationPost.updateMany.mock.calls
+      .map(([input]) => input as { data: Record<string, unknown> })
+      .find((input) => input.data.generationErrorCode === 'provider_busy');
+    expect(failure).toBeDefined();
+    expect(failure?.data).toMatchObject({
+      reviewStatus: 'image_queued',
+      status: 'draft',
+      attemptCount: { decrement: 1 },
+    });
+  });
+
+  it('обычный сбой по-прежнему тратит попытку', async () => {
+    const { worker, motivationPost, generation } = createWorker();
+    generation.generateApprovedImage.mockRejectedValue(
+      new Error('Image provider returned no valid PNG'),
+    );
+    motivationPost.findUnique
+      .mockResolvedValueOnce(approvedPost)
+      .mockResolvedValueOnce({
+        attemptCount: 1,
+        reviewStatus: 'image_queued',
+        status: 'generating',
+      });
+
+    await worker.tick();
+
+    const failure = motivationPost.updateMany.mock.calls
+      .map(([input]) => input as { data: Record<string, unknown> })
+      .find((input) => 'generationErrorCode' in input.data && input.data.generationErrorCode !== null);
+    expect(failure?.data.attemptCount).toBeUndefined();
+  });
+
+  it('не берёт из очереди кадр, отложенный из-за перегрузки', async () => {
+    const { worker, motivationPost } = createWorker();
+
+    await worker.tick();
+
+    const [claim] = motivationPost.findFirst.mock.calls[0] as [
+      { where: { OR?: unknown[] } },
+    ];
+    expect(claim.where.OR).toEqual([
+      { generationErrorCode: { not: 'provider_busy' } },
+      { updatedAt: { lt: expect.any(Date) } },
+    ]);
+  });
+
   it('prepares all discovered quotes before marking the UTC day complete', async () => {
     const quotes = Array.from({ length: 8 }, (_, index) => ({
       id: `quote-${index + 1}`,
@@ -209,8 +276,8 @@ describe('MotivationWorkerService', () => {
   it('uploads the story frame as a separate file next to the plain image', async () => {
     const { worker, motivationPost, generation } = createWorker();
     // Настоящий PNG, иначе композит не соберётся и сработает откат.
-    generation.generateApprovedImage.mockResolvedValue(
-      await sharp({
+    generation.generateApprovedImage.mockResolvedValue({
+      bytes: await sharp({
         create: {
           width: 1024,
           height: 1536,
@@ -220,7 +287,8 @@ describe('MotivationWorkerService', () => {
       })
         .png()
         .toBuffer(),
-    );
+      provider: 'relay',
+    });
 
     await worker.tick();
 
@@ -266,6 +334,11 @@ describe('MotivationWorkerService', () => {
         textApprovedAt: { not: null },
         imagePrompt: { not: null },
         attemptCount: { lt: 3 },
+        // Отложенные из-за перегрузки провайдера ждут своей паузы.
+        OR: [
+          { generationErrorCode: { not: 'provider_busy' } },
+          { updatedAt: { lt: expect.any(Date) } },
+        ],
       },
       orderBy: { createdAt: 'asc' },
     });

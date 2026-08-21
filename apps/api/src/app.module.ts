@@ -25,6 +25,7 @@ import { ChangelogModule } from './modules/changelog/changelog.module';
 import { CommunitiesModule } from './modules/communities/communities.module';
 import { NoticesModule } from './modules/notices/notices.module';
 import { HealthModule } from './modules/health/health.module';
+import { TelemetryModule } from './modules/telemetry/telemetry.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { HealthModule } from './modules/health/health.module';
     ChangelogModule,
     CommunitiesModule,
     NoticesModule,
+    TelemetryModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

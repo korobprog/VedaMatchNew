@@ -121,6 +121,43 @@ export type NotificationEvent =
       authorName: string;
       rating: number;
       shopSlug: string;
+    }
+  | {
+      /** Новость от администрации портала: рассылает админ вручную. */
+      name: 'portal.announcement.published';
+      recipientId: string;
+      announcementId: string;
+      title: string;
+      excerpt: string;
+    }
+  | {
+      name: 'motivation.reel.published';
+      recipientId: string;
+      reelId: string;
+      /** Slug опубликованного поста: ведём сразу на него. */
+      slug: string;
+    }
+  | {
+      name: 'motivation.reel.rejected';
+      recipientId: string;
+      reelId: string;
+      /** Причина простым языком — её же видит автор в мастере. */
+      reason: string;
+    }
+  | {
+      /** Ролик принят администратором и стал виден автору. */
+      name: 'motivation.video.ready';
+      recipientId: string;
+      reelId: string;
+    }
+  | {
+      /**
+       * Ролик собран и ждёт приёмки. Уходит администраторам: до приёмки он
+       * виден только в очереди, и без сигнала о нём никто не узнает.
+       */
+      name: 'motivation.video.review';
+      recipientId: string;
+      reelId: string;
     };
 
 /**
@@ -133,13 +170,15 @@ export type NotificationEventName = NotificationEvent['name'];
 
 /** Категории совпадают с тумблерами в NotificationPreferencesDto. */
 export type NotificationCategory =
+  | 'announcements'
   | 'notices'
   | 'chat'
   | 'connections'
   | 'support'
   | 'transits'
   | 'market'
-  | 'system';
+  | 'motivation'
+  | 'announcements';
 
 /** Уведомление в колокольчике. Живёт до прочтения, потом удаляется — это
  *  список непрочитанного, а не архив. */
@@ -152,9 +191,16 @@ export interface NotificationItemDto {
   category: NotificationCategory;
   /** ISO-строка. */
   createdAt: string;
+  /**
+   * Когда прочитано; null — ещё нет. Прочитанное остаётся в списке неделю:
+   * раньше открытие страницы гасило всё разом, и уведомления, до которых
+   * человек не успел дойти, исчезали у него на глазах.
+   */
+  readAt: string | null;
 }
 
 export interface NotificationInboxResponse {
+  /** Непрочитанные и, следом, прочитанные за последнюю неделю. */
   items: NotificationItemDto[];
   unreadCount: number;
 }
@@ -178,9 +224,12 @@ export interface NotificationPreferencesDto {
    *  объявления. Отдельно от `market`: выключив коммерцию, человек не должен
    *  молча потерять доску общины. */
   notices: boolean;
-  /** Объявления администрации портала. Выключение гасит пуш; важная рассылка
-   *  всё равно появится в колокольчике — см. `important` у рассылки. */
-  system: boolean;
+  /** Судьба своих рилсов в «Мотивации»: опубликован или отклонён. */
+  motivation: boolean;
+  /** Новости от администрации портала. Под этой же категорией идут рассылки
+   *  из админки: выключение гасит пуш, а важная рассылка всё равно появится
+   *  в колокольчике — см. `important` у рассылки. */
+  announcements: boolean;
 }
 
 export type UpdateNotificationPreferencesRequest =

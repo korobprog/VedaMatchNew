@@ -29,6 +29,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "seed": "node prisma/seed.cjs",
     "seed:dev": "node prisma/seed-dev.cjs",
+    "seed:vedabase": "node prisma/seed-vedabase-dev.cjs",
     "test:ai": "node scripts/test-motivation-ai.mjs",
     "purge:user": "node scripts/purge-user.mjs",
     "library:previews": "ts-node -T src/modules/library/backfill-previews.ts"

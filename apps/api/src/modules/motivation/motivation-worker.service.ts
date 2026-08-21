@@ -15,6 +15,21 @@ import { QuoteDiscoveryService } from './quote-discovery.service';
 import { composeStoryImage } from './story-image';
 import type { MotivationWorkerHealth } from '@vedamatch/shared';
 import { isWorkerAlive } from './motivation-worker-health';
+import { MotivationSettingsService } from './motivation-settings.service';
+import { MotivationModerationService } from './motivation-moderation.service';
+import { estimateImageCostUsd, IMAGE_SIZE } from './image-cost';
+import { isAutonomousApproval } from './autonomous-approval';
+import { classifyAiFailure, isRetryableFailure } from './ai-failure';
+
+/**
+ * Код «провайдер занят» и пауза перед следующей попыткой.
+ *
+ * Отдельный код, а не текст ошибки: по нему и очередь узнаёт отложенный пост,
+ * и интерфейс говорит автору «рисуем, как только освободится» вместо «не
+ * получилось».
+ */
+export const PROVIDER_BUSY = 'provider_busy';
+const PROVIDER_BUSY_PAUSE_MS = 5 * 60_000;
 
 @Injectable()
 export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
@@ -34,6 +49,8 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
     private readonly config: ConfigService,
     private readonly copy: MotivationCopyService,
     @Optional() private readonly discovery?: QuoteDiscoveryService,
+    @Optional() private readonly settings?: MotivationSettingsService,
+    @Optional() private readonly moderation?: MotivationModerationService,
   ) {
     const host = config.get<string>('REDIS_HOST');
     this.redis = host
@@ -135,6 +152,14 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
           textApprovedAt: { not: null },
           imagePrompt: { not: null },
           attemptCount: { lt: 3 },
+          // Перегруженного провайдера ждём молча: тик раз в 30 секунд бил бы
+          // в ту же стену и только копил отказы в журнале.
+          OR: [
+            { generationErrorCode: { not: PROVIDER_BUSY } },
+            {
+              updatedAt: { lt: new Date(Date.now() - PROVIDER_BUSY_PAUSE_MS) },
+            },
+          ],
         },
         orderBy: { createdAt: 'asc' },
       });
@@ -269,7 +294,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
       const baseKey = `motivation/${post.contentDate.toISOString().slice(0, 10)}/${post.id}/v${version}`;
       const imageUrl = await this.generation.uploadStory(
         `${baseKey}.png`,
-        image,
+        image.bytes,
       );
       // Сторис — отдельный файл: тот же фон, докадрированный до 9:16, плюс
       // текст и подпись. Раньше сюда клался тот же imageUrl, и «Скачать для
@@ -279,24 +304,80 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
       // ошибка — иначе пропавшие в образе шрифты молча вернули бы сторис без
       // текста, ровно ту проблему, ради которой всё и делалось.
       const storyImageUrl =
-        (await this.composeStory(post, image, baseKey)) ?? imageUrl;
-      await this.prisma.motivationPost.updateMany({
+        (await this.composeStory(post, image.bytes, baseKey)) ?? imageUrl;
+      // Пользовательский рилс, текст которого одобрил ИИ в автономном режиме,
+      // публикуется сразу: человек в этой цепочке — оператор, а не этап.
+      // Редакционные посты и режим «подсказывает» по-прежнему ждут админа.
+      const autoPublish = await this.shouldAutoPublish(post);
+      const now = new Date();
+      const updated = await this.prisma.motivationPost.updateMany({
         where: {
           id,
           reviewStatus: MotivationReviewStatus.image_queued,
           status: 'generating',
           generationStage: 'image',
         },
-        data: {
-          reviewStatus: MotivationReviewStatus.image_review,
-          status: 'draft',
-          generationStage: 'image_review',
-          generationErrorCode: null,
-          imageUrl,
-          storyImageUrl,
-          modelVersion: 'responses:image_generation',
-        },
+        data: autoPublish
+          ? {
+              reviewStatus: MotivationReviewStatus.published,
+              status: 'published',
+              generationStage: 'published',
+              generationErrorCode: null,
+              imageUrl,
+              storyImageUrl,
+              imageApprovedAt: now,
+              publishedAt: now,
+              modelVersion: 'responses:image_generation',
+              // Кадр — единственная платная стадия текстового конвейера,
+              // и до сих пор её цена никуда не писалась. Считаем по размеру
+              // запроса: без этого дневной потолок сторожит только видео.
+              // Ставка зависит от того, кто нарисовал: у запасного поставщика
+              // она втрое выше.
+              estimatedCostUsd: {
+                increment: estimateImageCostUsd(IMAGE_SIZE, image.provider),
+              },
+            }
+          : {
+              reviewStatus: MotivationReviewStatus.image_review,
+              status: 'draft',
+              generationStage: 'image_review',
+              generationErrorCode: null,
+              imageUrl,
+              storyImageUrl,
+              modelVersion: 'responses:image_generation',
+              // Кадр — единственная платная стадия текстового конвейера,
+              // и до сих пор её цена никуда не писалась. Считаем по размеру
+              // запроса: без этого дневной потолок сторожит только видео.
+              // Ставка зависит от того, кто нарисовал: у запасного поставщика
+              // она втрое выше.
+              estimatedCostUsd: {
+                increment: estimateImageCostUsd(IMAGE_SIZE, image.provider),
+              },
+            },
       });
+      if (autoPublish && updated.count === 1) {
+        // Автор узнаёт о публикации из колокольчика: экран мастера он к этому
+        // моменту, скорее всего, уже закрыл.
+        this.moderation?.notifyPublished({
+          id: post.id,
+          slug: post.slug,
+          origin: post.origin,
+          authorUserId: post.authorUserId,
+        });
+        await this.prisma.motivationModerationAudit.create({
+          data: {
+            postId: id,
+            actorId: null,
+            action: 'ai_publish',
+            reason: null,
+            metadata: {
+              actor: 'ai',
+              oldStatus: 'image_queued',
+              newStatus: 'published',
+            },
+          },
+        });
+      }
     } catch (error) {
       const current = await this.prisma.motivationPost.findUnique({
         where: { id },
@@ -306,7 +387,12 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
         current?.reviewStatus === MotivationReviewStatus.image_queued &&
         current.status === 'generating'
       ) {
-        const retryable = current.attemptCount < 3;
+        // Перегрузка провайдера — не вина рилса: попытку возвращаем, иначе
+        // три отказа подряд за полторы минуты хоронят кадр, который просто
+        // некому было нарисовать. Провайдер отвечает на это 429, а его канал
+        // 503 — оба разбирает `classifyAiFailure`.
+        const busy = isRetryableFailure(classifyAiFailure(error));
+        const retryable = busy || current.attemptCount < 3;
         await this.prisma.motivationPost.updateMany({
           where: {
             id,
@@ -320,10 +406,12 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
               : MotivationReviewStatus.failed,
             status: retryable ? 'draft' : 'failed',
             generationStage: retryable ? 'image_queued' : 'image',
-            generationErrorCode:
-              error instanceof Error
+            generationErrorCode: busy
+              ? PROVIDER_BUSY
+              : error instanceof Error
                 ? error.message.slice(0, 200)
                 : 'generation_failed',
+            ...(busy ? { attemptCount: { decrement: 1 } } : {}),
           },
         });
       }
@@ -338,6 +426,32 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
    * Кадр для сторис. Если композит не удался — отдаём чистую картинку: пост
    * из-за подписи срываться не должен, он уже сгенерирован и оплачен.
    */
+  /**
+   * Автопубликация после картинки: только пользовательские посты, только в
+   * автономном режиме ИИ-модерации и только если текст одобрил именно ИИ
+   * (а не админ вручную — тогда он и картинку посмотрит сам).
+   */
+  private async shouldAutoPublish(post: {
+    id: string;
+    origin?: string;
+  }): Promise<boolean> {
+    if (!this.settings) return false;
+    const settings = await this.settings.read();
+    const approval = await this.prisma.motivationModerationAudit.findFirst({
+      where: {
+        postId: post.id,
+        action: { in: ['ai_approve', 'approve_text'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { action: true },
+    });
+    return isAutonomousApproval({
+      origin: post.origin,
+      moderationMode: settings.aiModerationMode,
+      lastApprovalAction: approval?.action,
+    });
+  }
+
   private async composeStory(
     post: {
       storyCaption: boolean;

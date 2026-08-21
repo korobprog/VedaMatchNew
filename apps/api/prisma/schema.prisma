@@ -134,6 +134,30 @@ enum MotivationReviewStatus {
 /// Жизненный цикл ролика, оживляющего иллюстрацию поста. Отдельно от
 /// `reviewStatus`: видео — необязательное обогащение уже готового поста, и его
 /// сбой не должен возвращать пост в очередь картинки.
+/// Кто завёл пост: редакция (админ или конвейер) или участник через мастер
+/// «свой рилс». Пользовательские посты считаются в дневной лимит и проходят
+/// ИИ-модерацию; редакционные — прежний путь через очередь админа.
+/// Откуда кадр поста: нарисован моделью или загружен человеком. Загруженный
+/// всегда проходит ручную проверку — vision-шлюза у нас пока нет.
+enum MotivationImageSource {
+  generated
+  uploaded
+}
+
+enum MotivationPostOrigin {
+  editorial
+  user
+}
+
+/// Режим ИИ-модератора пользовательских рилсов: выключен (всё к админу),
+/// подсказывает (пишет вердикт в аудит, решает человек), решает сам в
+/// пределах порогов уверенности.
+enum MotivationAiModerationMode {
+  off
+  assist
+  autonomous
+}
+
 enum MotivationVideoStatus {
   none
   queued
@@ -266,6 +290,10 @@ model User {
   motivationPreference               MotivationPreference?
   motivationFavorites                MotivationFavorite[]
   motivationViews                    MotivationView[]
+  motivationLikes                    MotivationLike[]
+  motivationAuthoredPosts            MotivationPost[]             @relation("MotivationAuthoredPosts")
+  motivationAuthorPolicy             MotivationAuthorPolicy?
+  motivationReports                  MotivationReport[]
   motivationModerationAudits         MotivationModerationAudit[]
   motivationAuthorWatches            MotivationAuthorWatch[]
   motivationSourceWatches            MotivationSourceWatch[]
@@ -304,6 +332,7 @@ model User {
   noticeReportsReviewed              NoticeReport[]               @relation("NoticeReportsReviewed")
   noticeSubscriptions                NoticeSubscription[]         @relation("NoticeSubscriptions")
   motivationTracks                   MotivationTrack[]
+  telemetryInstallEnvironment        TelemetryInstallEnvironment? @relation("TelemetryInstallEnvironment")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -318,18 +347,19 @@ enum RegistrationMode {
 }
 
 model AppSettings {
-  id               String           @id @default("global")
-  billingMode      BillingMode      @default(business)
-  registrationMode RegistrationMode @default(open)
+  id                 String           @id @default("global")
+  billingMode        BillingMode      @default(business)
+  registrationMode   RegistrationMode @default(open)
   /// Что увидит человек, которому отказано в регистрации. Пусто — общий текст.
-  registrationNote String?
-  /// Показывать блок поддержки на странице статистики.
-  donateEnabled    Boolean          @default(false)
-  /// На что идут деньги. Без объяснения просить не за что.
-  donateNote       String?
-  /// Реквизиты как есть: карта, криптокошелёк, что угодно построчно.
-  donateDetails    String?
-  updatedAt        DateTime         @updatedAt
+  registrationNote   String?
+  /// Пожертвования на развитие в бете: кнопка показывается, только когда
+  /// включено и есть хотя бы один реквизит. Реквизиты — массив
+  /// `{ kind, label, value }`; набор произвольный (СБП, карта, крипто,
+  /// ссылка), поэтому JSON, а не колонки.
+  donationEnabled    Boolean          @default(false)
+  donationText       String?
+  donationRequisites Json?
+  updatedAt          DateTime         @updatedAt
 }
 
 model UserPhoto {
@@ -427,6 +457,11 @@ model MotivationPost {
   imageApprovedAt      DateTime?
   imageUrl             String?
   storyImageUrl        String?
+  /// Кадр-открытка: та же картинка с поздравлением сверху. Появляется по
+  /// кнопке, поэтому необязательное поле.
+  postcardImageUrl     String?
+  /// Событие, к которому собрана открытка: по нему подписывается кнопка.
+  postcardEventTitle   String?
   /// Ролик, оживляющий иллюстрацию. Появляется по кнопке в админке уже после
   /// одобрения картинки, поэтому все поля необязательные.
   videoUrl             String?
@@ -449,6 +484,10 @@ model MotivationPost {
   /// Голос озвучки. Пусто — берётся из настроек; проверяется по списку из
   /// `@vedamatch/shared`, чтобы опечатка не ушла в платный запрос.
   videoVoiceName       String?
+  /// Музыкальная подложка ролика. Пусто — без музыки: тишина под цитатой
+  /// уместнее случайного трека.
+  videoTrackId         String?
+  videoTrack           MotivationTrack?          @relation(fields: [videoTrackId], references: [id], onDelete: SetNull)
   videoErrorCode       String?
   videoAttemptCount    Int                       @default(0)
   /// Стоимость ролика отдельно от `estimatedCostUsd`: без разбивки через месяц
@@ -470,12 +509,25 @@ model MotivationPost {
   attemptCount         Int                       @default(0)
   estimatedCostUsd     Decimal                   @default(0) @db.Decimal(12, 6)
   publishedAt          DateTime?
+  /// Счётчик лайков денормализован: лента показывает его на каждом слайде, а
+  /// считать по `MotivationLike` на 20 постов за запрос — лишний запрос к
+  /// самой горячей таблице сервиса. Меняется только вместе с записью лайка.
+  likeCount            Int                       @default(0)
+  origin               MotivationPostOrigin      @default(editorial)
+  imageSource          MotivationImageSource     @default(generated)
+  /// Автор пользовательского рилса. SetNull, а не Cascade: при удалении
+  /// аккаунта опубликованный пост обезличивается сценарием анонимизации, а
+  /// не исчезает из чужих лент вместе со ссылками на него.
+  authorUserId         String?
+  author               User?                     @relation("MotivationAuthoredPosts", fields: [authorUserId], references: [id], onDelete: SetNull)
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
 
   translations     MotivationPostTranslation[]
   favorites        MotivationFavorite[]
   views            MotivationView[]
+  likes            MotivationLike[]
+  reports          MotivationReport[]
   moderationAudits MotivationModerationAudit[]
 
   @@index([profileType, audienceTrack, status, publishedAt])
@@ -485,6 +537,8 @@ model MotivationPost {
   /// всю таблицу постов на каждом тике.
   @@index([videoStatus, updatedAt])
   @@index([quoteId])
+  /// Лимит «рилсов в день» и вкладка «Мои» выбирают по автору и дате.
+  @@index([authorUserId, createdAt])
 }
 
 /// Единственная строка настроек сервиса (id всегда "global").
@@ -494,21 +548,41 @@ model MotivationPost {
 /// Пустое поле означает «взять из окружения», поэтому настройки можно вводить
 /// постепенно, ничего не ломая.
 model MotivationSettings {
-  id             String                 @id @default("global")
-  videoModel     String?
-  videoSeconds   Int?
-  videoAudio     Boolean?
-  voiceModel     String?
-  voiceName      String?
-  imageModel     String?
+  id                 String                     @id @default("global")
+  videoModel         String?
+  videoSeconds       Int?
+  videoAudio         Boolean?
+  voiceModel         String?
+  voiceName          String?
+  imageModel         String?
   /// Стиль по умолчанию. Пусто — подбирать автоматически по смыслу и источнику.
-  visualStyle    MotivationVisualStyle?
+  visualStyle        MotivationVisualStyle?
   /// Дневной потолок расхода в долларах. Меняться должен без перевыкладки.
-  dailyBudgetUsd Decimal?               @db.Decimal(10, 2)
-  musicModel     String?
+  dailyBudgetUsd     Decimal?                   @db.Decimal(10, 2)
+  musicModel         String?
   /// Трек по умолчанию. Пусто — ролики выходят без подложки.
-  defaultTrackId String?
-  updatedAt      DateTime               @updatedAt
+  defaultTrackId     String?
+  /// Пользовательские рилсы: рубильник, дневной лимит на человека (админам
+  /// лимит не считается) и ИИ-модерация с порогами уверенности. Между
+  /// порогами — эскалация к админу. Правила редакции дописываются к промпту
+  /// модератора и меняются без деплоя.
+  userReelsEnabled   Boolean                    @default(true)
+  userDailyLimit     Int                        @default(1)
+  aiModerationMode   MotivationAiModerationMode @default(assist)
+  aiApproveThreshold Decimal                    @default(0.75) @db.Decimal(3, 2)
+  aiRejectThreshold  Decimal                    @default(0.85) @db.Decimal(3, 2)
+  aiEditorialRules   String?
+  /// Сколько жалоб скрывает рилс участника до решения администратора.
+  reportsToHide      Int                        @default(3)
+  /// Можно ли участникам оживлять свои рилсы в видео. Выключено по умолчанию:
+  /// ролик стоит заметно дороже картинки, и включать его — решение редакции.
+  userVideoEnabled   Boolean                    @default(false)
+  /// Голоса, из которых выбирает автор рилса, и предвыбранный. Пустой список —
+  /// небольшой набор по умолчанию: показывать человеку два десятка имён
+  /// провайдера бессмысленно.
+  userVoices         String[]
+  userVoiceDefault   String?
+  updatedAt          DateTime                   @updatedAt
 }
 
 /// Трек музыкальной подложки.
@@ -530,6 +604,7 @@ model MotivationTrack {
   costUsd     Decimal               @default(0) @db.Decimal(10, 4)
   createdById String
   createdBy   User                  @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  posts       MotivationPost[]
   createdAt   DateTime              @default(now())
 
   @@index([status, createdAt])
@@ -603,8 +678,80 @@ model MotivationPreference {
   /// самоидентификации»: так у прежних пользователей ничего не меняется без
   /// бэкфила, а осознанный выбор отличим от его отсутствия.
   profileTypes     MotivationProfileType[]
+  /// Когда человек в прошлый раз открывал ленту. От этой отметки считается
+  /// ярус «свежее»: опубликованное после неё и ещё не просмотренное идёт
+  /// первым. Пусто — новичок, для него всё архив.
+  lastSeenAt       DateTime?
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
+}
+
+/// Жалоба на рилс участника. Одна на пару «человек — пост»: повторные нажатия
+/// не должны накручивать счётчик, по которому пост скрывается автоматически.
+model MotivationReport {
+  id         String         @id @default(uuid())
+  postId     String
+  post       MotivationPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  reporterId String
+  reporter   User           @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  /// Короткая причина из списка: spam, offensive, wrong_source, other.
+  reason     String
+  comment    String?
+  createdAt  DateTime       @default(now())
+
+  @@unique([postId, reporterId])
+  @@index([postId, createdAt])
+}
+
+/// Праздник или памятная дата: из неё рождается открытка. Справочник ведёт
+/// админ вручную — вайшнавский календарь считается по лунным датам и из года в
+/// год смещается, поэтому «дата + название» проще и честнее любой автоматики.
+model MotivationEvent {
+  id        String   @id @default(uuid())
+  /// Дата в конкретном году: событие заводится на год, а не «каждое 19 августа».
+  date      DateTime @db.Date
+  title     String
+  /// Текст поздравления на кадре открытки. Пусто — возьмётся название.
+  greeting  String?
+  /// За сколько дней до даты открытка появляется в мастере и ленте.
+  leadDays  Int      @default(3)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([date, title])
+  @@index([enabled, date])
+}
+
+/// Персональные правила автора рилсов. Строка появляется, только когда админ
+/// отступил от общего лимита: у остальных её нет, и действует
+/// `MotivationSettings.userDailyLimit`.
+model MotivationAuthorPolicy {
+  userId     String   @id
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Личный дневной лимит. Пусто — общий из настроек сервиса.
+  dailyLimit Int?
+  /// Доверенный автор: его рилсы публикуются без ИИ-проверки и очереди.
+  trusted    Boolean  @default(false)
+  /// Запрет создавать рилсы. Отдельно от `dailyLimit = 0`: запрет — решение
+  /// модерации с причиной, а нулевой лимит — временная настройка.
+  blocked    Boolean  @default(false)
+  note       String?
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+}
+
+/// Лайк — публичное действие со счётчиком, в отличие от личного избранного
+/// (`MotivationFavorite`). Поэтому две таблицы, а не флаг на одной.
+model MotivationLike {
+  userId    String
+  postId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      MotivationPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  @@id([userId, postId])
+  @@index([postId, createdAt])
 }
 
 model MotivationFavorite {
@@ -1565,25 +1712,29 @@ model PushSubscription {
 /// Настройки уведомлений. Отсутствие строки означает «включено всё»,
 /// поэтому при регистрации её создавать не нужно.
 model NotificationPreference {
-  userId      String   @id
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  enabled     Boolean  @default(true)
-  chat        Boolean  @default(true)
-  connections Boolean  @default(true)
-  support     Boolean  @default(true)
+  userId        String   @id
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled       Boolean  @default(true)
+  chat          Boolean  @default(true)
+  connections   Boolean  @default(true)
+  support       Boolean  @default(true)
   /// Ежедневный персональный день по транзитам (сервис astro).
-  transits    Boolean  @default(true)
+  transits      Boolean  @default(true)
   /// Заявки и их статусы на Рынке. Сообщения чата Рынка идут под `chat`.
-  market      Boolean  @default(true)
+  market        Boolean  @default(true)
   /// Доска «Объявления»: подписки на рубрику и город, отклики на свои
   /// объявления. Своя колонка, а не переиспользование `market`: выключив
   /// коммерцию, человек не должен молча терять доску общины.
-  notices     Boolean  @default(true)
-  /// Объявления администрации портала (рассылки). Выключение гасит пуш; в
-  /// колокольчик важная рассылка приходит всё равно — см.
-  /// NotificationBroadcast.important.
-  system      Boolean  @default(true)
-  updatedAt   DateTime @updatedAt
+  notices       Boolean  @default(true)
+  /// Новости от администрации портала. Отключаемы: человек, которому нужны
+  /// только ответы поддержки, не обязан читать анонсы. Под этой же категорией
+  /// идут рассылки из админки: выключение гасит пуш, а важная рассылка всё
+  /// равно попадает в колокольчик — см. NotificationBroadcast.important.
+  announcements Boolean  @default(true)
+  /// Судьба своих рилсов в «Мотивации». Отдельно от остальных: человек может
+  /// не хотеть ничего от сервиса, кроме ответа по собственной публикации.
+  motivation    Boolean  @default(true)
+  updatedAt     DateTime @updatedAt
 }
 
 /// Входящие уведомления портала (колокольчик). Намеренно НЕ архив: прочитанное
@@ -1619,35 +1770,35 @@ enum NotificationBroadcastStatus {
 /// Объявление администрации всем или части портала. Хранится целиком: после
 /// отправки нужно знать, что именно ушло и скольким.
 model NotificationBroadcast {
-  id          String                      @id @default(uuid())
-  title       String
-  body        String
+  id              String                      @id @default(uuid())
+  title           String
+  body            String
   /// Куда ведёт клик. Пусто — уведомление без перехода.
-  url         String?
+  url             String?
   /// Важное: попадает в колокольчик даже при выключенной категории `system`.
   /// Пуш при этом всё равно уважает настройки — устройство человека не наше.
-  important   Boolean                     @default(false)
+  important       Boolean                     @default(false)
   /// Фильтр аудитории (NotificationAudienceFilter). Json, а не колонки: набор
   /// фильтров будет меняться чаще, чем стоит гонять миграции.
-  audience    Json
-  status      NotificationBroadcastStatus @default(draft)
+  audience        Json
+  status          NotificationBroadcastStatus @default(draft)
   /// Сколько получателей насчитал фильтр в момент запуска.
-  totalRecipients Int                     @default(0)
+  totalRecipients Int                         @default(0)
   /// Сколько уведомлений положено в колокольчик.
-  deliveredCount  Int                     @default(0)
+  deliveredCount  Int                         @default(0)
   /// Сколько пушей ушло на устройства. Меньше deliveredCount — это норма.
-  pushSentCount   Int                     @default(0)
+  pushSentCount   Int                         @default(0)
   /// Курсор пакетной отправки: id последнего обработанного пользователя.
   /// Сортировка по id — единственный способ не пропустить и не задвоить.
   cursorUserId    String?
-  attemptCount    Int                     @default(0)
+  attemptCount    Int                         @default(0)
   errorMessage    String?
-  createdById String?
-  createdBy   User?                       @relation("NotificationBroadcastsCreated", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt   DateTime                    @default(now())
-  updatedAt   DateTime                    @updatedAt
-  startedAt   DateTime?
-  finishedAt  DateTime?
+  createdById     String?
+  createdBy       User?                       @relation("NotificationBroadcastsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+  startedAt       DateTime?
+  finishedAt      DateTime?
 
   @@index([status, updatedAt])
   @@index([createdAt(sort: Desc)])
@@ -1879,23 +2030,28 @@ model ReleaseChange {
 }
 
 model Announcement {
-  id          String             @id @default(uuid())
-  titleRu     String
-  titleEn     String
-  bodyRu      String
-  bodyEn      String
-  status      AnnouncementStatus @default(draft)
-  /// Показывать баннером на главной, а не только в архиве новостей.
-  showOnHome  Boolean            @default(false)
-  /// До какой даты висит баннер. Пусто — пока не снимут вручную; срок нужен,
-  /// чтобы новость не превратилась в мебель.
-  homeUntil   DateTime?
-  publishedAt DateTime?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id             String             @id @default(uuid())
+  titleRu        String
+  titleEn        String
+  bodyRu         String
+  bodyEn         String
+  status         AnnouncementStatus @default(draft)
+  publishedAt    DateTime?
+  /// Закреплённая новость висит вверху блока на главной. Уникальный частичный
+  /// индекс не даёт закрепить вторую: снимать флаг с прежней обязан сервис.
+  pinned         Boolean            @default(false)
+  /// Показывать не раньше этого момента; null — сразу после публикации.
+  publishAt      DateTime?
+  /// Убрать с главной после этого момента; null — висит, пока не снимут.
+  expiresAt      DateTime?
+  /// Когда новость рассылали и скольким: чтобы не отправить дважды вслепую.
+  broadcastAt    DateTime?
+  broadcastCount Int                @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
   @@index([status, publishedAt(sort: Desc)])
-  @@index([status, showOnHome, homeUntil])
+  @@index([publishAt(sort: Desc)])
 }
 
 model RoadmapItem {
@@ -3216,4 +3372,55 @@ model NoticeImage {
   createdAt  DateTime @default(now())
 
   @@index([noticeId, sortOrder])
+}
+
+/// Замер окружения установки: с чего человек открывает портал и во что
+/// превратилась установка. Отвечает ровно на один вопрос — какая доля
+/// аудитории сидит в браузере, где «Установить» кладёт на экран ярлык внутри
+/// браузера вместо приложения.
+///
+/// Одна строка на человека, а не журнал событий: нужен срез «как сейчас»,
+/// и он не должен расти вместе с числом открытий приложения.
+model TelemetryInstallEnvironment {
+  userId String @id
+  user   User   @relation("TelemetryInstallEnvironment", fields: [userId], references: [id], onDelete: Cascade)
+
+  browser           TelemetryPwaBrowser
+  platform          TelemetryPwaPlatform
+  displayMode       TelemetryPwaDisplayMode
+  /// Дала бы установка из этого браузера настоящее приложение без хрома.
+  standaloneCapable Boolean
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([browser, displayMode])
+  @@index([updatedAt])
+}
+
+/// Дефис в имени члена enum Prisma не разрешает, поэтому на границе базы
+/// значения переписываются через подчёркивание (см. install-environment-dto).
+enum TelemetryPwaBrowser {
+  chrome
+  samsung
+  yandex_browser
+  yandex_app
+  safari
+  firefox
+  edge
+  opera
+  other
+}
+
+enum TelemetryPwaPlatform {
+  android
+  ios
+  desktop
+}
+
+enum TelemetryPwaDisplayMode {
+  fullscreen
+  standalone
+  minimal_ui
+  browser
 }

@@ -55,6 +55,11 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.announcementPublished)
+  onAnnouncementPublished(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   @OnEvent(notificationEventNames.supportReplied)
   onSupportReplied(event: NotificationEvent): void {
     void this.deliver(event);
@@ -87,6 +92,16 @@ export class NotificationsListener {
 
   @OnEvent(notificationEventNames.marketListingPriceDropped)
   onMarketListingPriceDropped(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.motivationReelPublished)
+  onMotivationReelPublished(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.motivationReelRejected)
+  onMotivationReelRejected(event: NotificationEvent): void {
     void this.deliver(event);
   }
 

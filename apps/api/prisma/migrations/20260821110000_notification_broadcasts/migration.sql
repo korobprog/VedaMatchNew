@@ -1,6 +1,3 @@
--- Категория «объявления администрации» в настройках уведомлений.
-ALTER TABLE "NotificationPreference" ADD COLUMN "system" BOOLEAN NOT NULL DEFAULT true;
-
 -- Рассылки администрации: черновик, фоновая отправка пакетами, итог.
 CREATE TYPE "NotificationBroadcastStatus" AS ENUM ('draft', 'sending', 'sent', 'failed', 'cancelled');
 

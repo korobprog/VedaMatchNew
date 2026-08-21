@@ -3,7 +3,9 @@ import {
   Logger,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { MotivationVideoStatus } from '@prisma/client';
 import Redis from 'ioredis';
@@ -11,11 +13,15 @@ import sharp from 'sharp';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FalAudioService } from './fal-audio.service';
 import { FalVideoService } from './fal-video.service';
+import { buildImageDataUri, encodedSizeBytes } from './image-data-uri';
+import { isAutonomousApproval } from './autonomous-approval';
+import { MotivationSettingsService } from './motivation-settings.service';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { resolveVideoPrompt } from './motivation-prompt';
-import { STORY_HEIGHT, STORY_WIDTH } from './story-image';
 import { composeStoryVideo, estimateReadingSeconds } from './story-video';
 import { estimatePlannedClipUsd } from './video-cost';
+import { BUDGET_CODE_PREFIX } from './funding-error';
+import { CONTENT_POLICY_CODE } from './video-rejection';
 
 /**
  * Попыток меньше, чем у картинки, и это осознанно: провайдер берёт деньги даже
@@ -25,15 +31,32 @@ import { estimatePlannedClipUsd } from './video-cost';
  */
 export const MAX_VIDEO_ATTEMPTS = 2;
 
+/**
+ * Разрешение кадра на входе видеомодели. Совпадает с тем, в котором
+ * заказывается ролик (`resolution: '720p'` в buildVideoRequest): больше
+ * отправлять бессмысленно — модель уменьшит сама, а нам это лишний вес на
+ * заливке.
+ */
+export const VIDEO_FRAME_WIDTH = 720;
+export const VIDEO_FRAME_HEIGHT = 1280;
+
 /** Ошибки, которые не лечатся повтором: с тем же входом выйдет то же самое. */
 export const PERMANENT_FAILURES = new Set([
   'file_download_error',
   'missing',
   'no_video_in_response',
+  // Проверка содержания у провайдера: с тем же кадром ответ не изменится, а
+  // каждая попытка платная.
+  CONTENT_POLICY_CODE,
 ]);
 
 /** Превышение потолка — не сбой задачи: повторять будем, но не сейчас. */
-export const BUDGET_PREFIX = 'daily_budget_exceeded';
+/**
+ * Префикс кода «упёрлись в дневной потолок». Значение живёт в `funding-error`
+ * вместе с разбором таких кодов: расходиться им нельзя — по этому же префиксу
+ * автору показывается просьба о поддержке.
+ */
+export const BUDGET_PREFIX = BUDGET_CODE_PREFIX;
 
 @Injectable()
 export class MotivationVideoWorkerService
@@ -50,6 +73,12 @@ export class MotivationVideoWorkerService
     private readonly voice: FalAudioService,
     private readonly generation: MotivationGenerationService,
     private readonly config: ConfigService,
+    // Необязательный: воркер создаётся в тестах позиционно, а без шины он
+    // просто не рассылает — работать это не мешает.
+    @Optional() private readonly events?: EventEmitter2,
+    // Необязательная по той же причине, что и шина: без неё воркер просто
+    // отправляет ролик на приёмку человеку.
+    @Optional() private readonly settings?: MotivationSettingsService,
   ) {
     const host = config.get<string>('REDIS_HOST');
     this.redis = host
@@ -135,23 +164,28 @@ export class MotivationVideoWorkerService
   /**
    * Не даёт превысить дневной расход.
    *
-   * Считаем по сумме `videoCostUsd` за сегодня. Оценка снизу: при повторе поле
+   * Считаем по сумме `videoCostUsd` и `estimatedCostUsd` за сегодня. Оценка снизу: при повторе поле
    * поста перезаписывается, и неудачная первая попытка в сумму не попадёт.
    * Точный учёт потребовал бы отдельной таблицы списаний — пока кнопка только
    * у администратора, этой точности хватает, но до открытия пользователям
    * счётчик надо будет сделать честным.
    */
   private async assertWithinBudget(): Promise<void> {
-    const since = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const since = new Date(
+      `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
+    );
     const spent = await this.prisma.motivationPost.aggregate({
-      _sum: { videoCostUsd: true },
+      _sum: { videoCostUsd: true, estimatedCostUsd: true },
       where: { updatedAt: { gte: since } },
     });
-    const used = Number(spent._sum.videoCostUsd ?? 0);
+    // Кадры считаются вместе с роликами: платим за них с того же счёта, и
+    // потолок, стерегущий только видео, пропускал бы половину расхода.
+    const used =
+      Number(spent._sum.videoCostUsd ?? 0) +
+      Number(spent._sum.estimatedCostUsd ?? 0);
     const planned = estimatePlannedClipUsd({
       seconds: await this.fal.durationSeconds(),
       model: await this.fal.modelId(),
-      audio: await this.fal.audioEnabled(),
     });
     const limit = this.dailyBudgetUsd();
     if (used + planned > limit)
@@ -204,10 +238,18 @@ export class MotivationVideoWorkerService
       await this.assertWithinBudget();
 
       const frame = await this.prepareFrame(post.imageUrl);
-      // Кадр обязательно перекладываем в хранилище провайдера: прямую ссылку
-      // на наш S3 он не осиливает — тянул её 99 секунд и сдался с
-      // file_download_error, хотя снаружи она отдаётся мгновенно.
-      const imageUrl = await this.fal.upload(frame);
+      // Кадр уходит прямо в теле задачи, а не через хранилище провайдера.
+      //
+      // Оба обходных пути закрыты замерами с боевого сервера: заливка в
+      // v3b.fal.media встаёт на объёме больше ~20 КБ и обрывается по таймауту,
+      // а скачать картинку из нашего S3 провайдер не может вовсе — 96 секунд
+      // и file_download_error, даже на файле в 230 КБ. Зато API-сеть fal
+      // (queue.fal.run) здорова: 300 КБ уходят за 1,15 с. Data-URI ведёт кадр
+      // по здоровому маршруту и сломанный хост не задействует совсем.
+      const imageUrl = buildImageDataUri(frame);
+      this.logger.log(
+        `Кадр уходит в теле задачи: ${frame.length} Б, в base64 ${encodedSizeBytes(frame.length)} Б`,
+      );
       const job = await this.fal.submit({
         imageUrl,
         // Именно videoPrompt, а не imagePrompt: промпт картинки описывает
@@ -238,19 +280,95 @@ export class MotivationVideoWorkerService
    * Иллюстрация приходит 2:3, а сторис нужен 9:16 — без докадрирования ролик
    * лёг бы с полями. JPEG вместо PNG срезает вес с 2.82 МБ до 0.43: провайдеру
    * меньше тянуть, а именно на скачивании он и спотыкался.
+   *
+   * Размер — VIDEO_FRAME_*, а не STORY_*: ролик мы заказываем в 720p
+   * (см. buildVideoRequest), и модель всё равно уменьшает вход сама. Гонять
+   * ей 1080×1920 значило платить за лишние пиксели узким каналом: замер с
+   * прода показал заливку в v3b.fal.media на 11.4 КБ/с при исходящем канале
+   * сервера 1.4 МБ/с, и кадр на 541 КБ не укладывался в таймаут хранилища
+   * (408 Request timeout на 47-й секунде).
    */
   private async prepareFrame(imageUrl: string): Promise<Buffer> {
     const source = await fetch(imageUrl, {
       signal: AbortSignal.timeout(60_000),
     });
-    if (!source.ok) throw new Error(`source_image_unavailable_${source.status}`);
+    if (!source.ok)
+      throw new Error(`source_image_unavailable_${source.status}`);
     return sharp(Buffer.from(await source.arrayBuffer()))
-      .resize(STORY_WIDTH, STORY_HEIGHT, {
+      .resize(VIDEO_FRAME_WIDTH, VIDEO_FRAME_HEIGHT, {
         fit: 'cover',
         position: 'attention',
       })
-      .jpeg({ quality: 88 })
+      .jpeg({ quality: 82 })
       .toBuffer();
+  }
+
+  /**
+   * Пройдёт ли ролик без человека. Условие то же, что у кадра: свой рилс,
+   * автономный режим модерации и одобрение именно от ИИ.
+   */
+  private async shouldAutoAccept(post: {
+    id: string;
+    origin: string;
+  }): Promise<boolean> {
+    if (!this.settings) return false;
+    const settings = await this.settings.read();
+    const approval = await this.prisma.motivationModerationAudit.findFirst({
+      where: {
+        postId: post.id,
+        action: { in: ['ai_approve', 'approve_text'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { action: true },
+    });
+    return isAutonomousApproval({
+      origin: post.origin,
+      moderationMode: settings.aiModerationMode,
+      lastApprovalAction: approval?.action,
+    });
+  }
+
+  /** Автору — что ролик готов и виден. */
+  private notifyAuthor(post: {
+    id: string;
+    origin: string;
+    authorUserId: string | null;
+  }): void {
+    if (post.origin !== 'user' || !post.authorUserId || !this.events) return;
+    this.events.emit('motivation.video.ready', {
+      name: 'motivation.video.ready',
+      recipientId: post.authorUserId,
+      reelId: post.id,
+    });
+  }
+
+  /**
+   * Сообщить администраторам, что ролик ждёт приёмки.
+   *
+   * До приёмки он виден только в очереди, и без сигнала о нём никто не
+   * узнаёт: ролики копились в `review`, а автор ждал впустую. Получателей
+   * читаем из `User` — это одна из четырёх портальных моделей, открытых
+   * сервисам на чтение.
+   *
+   * Событие самодостаточно: получатель и идентификатор рилса, формулировку
+   * собирает подписчик.
+   */
+  private async notifyReviewers(postId: string): Promise<void> {
+    if (!this.events) return;
+    const admins = await this.prisma.user.findMany({
+      where: {
+        role: { in: ['admin', 'service_admin'] },
+        accountStatus: 'active',
+      },
+      select: { id: true },
+    });
+    for (const admin of admins) {
+      this.events.emit('motivation.video.review', {
+        name: 'motivation.video.review',
+        recipientId: admin.id,
+        reelId: postId,
+      });
+    }
   }
 
   /** @returns true, если в этом тике было что опрашивать. */
@@ -291,10 +409,17 @@ export class MotivationVideoWorkerService
         withCaption,
         'video/mp4',
       );
+      // Приёмка человеком нужна не всегда: в автономном режиме администратор
+      // — оператор, а не этап, и кадр по тому же правилу публикуется сам.
+      // Признак общий с кадром (isAutonomousApproval), чтобы две стадии не
+      // разошлись в понимании «можно без человека».
+      const autoAccept = await this.shouldAutoAccept(post);
       await this.prisma.motivationPost.updateMany({
         where: { id: post.id, videoStatus: MotivationVideoStatus.running },
         data: {
-          videoStatus: MotivationVideoStatus.review,
+          videoStatus: autoAccept
+            ? MotivationVideoStatus.ready
+            : MotivationVideoStatus.review,
           videoUrl,
           videoErrorCode: null,
           // Провайдер не возвращает списанную сумму, поэтому пишем свою
@@ -302,11 +427,16 @@ export class MotivationVideoWorkerService
           videoCostUsd: estimatePlannedClipUsd({
             seconds: await this.fal.durationSeconds(),
             model: await this.fal.modelId(),
-            audio: await this.fal.audioEnabled(),
           }),
         },
       });
-      this.logger.log(`Видео готово к проверке: ${post.slug}`);
+      if (autoAccept) {
+        this.logger.log(`Видео принято автоматически: ${post.slug}`);
+        this.notifyAuthor(post);
+      } else {
+        this.logger.log(`Видео готово к проверке: ${post.slug}`);
+        await this.notifyReviewers(post.id);
+      }
       return true;
     } catch (error) {
       await this.fail(post.id, error);
@@ -336,6 +466,7 @@ export class MotivationVideoWorkerService
       videoVoice: boolean;
       videoSeconds: number | null;
       videoVoiceName: string | null;
+      videoTrack?: { url: string } | null;
     },
     video: Buffer,
   ): Promise<Buffer> {
@@ -367,16 +498,36 @@ export class MotivationVideoWorkerService
           ? Math.ceil(spoken.seconds + 1)
           : estimateReadingSeconds(text, attribution));
 
+      // Музыка необязательна и не должна ронять ролик: не скачалась — соберём
+      // без неё, это лучше, чем потерять уже оплаченную генерацию.
+      const music = post.videoTrack?.url
+        ? await this.download(post.videoTrack.url)
+        : undefined;
+
       return await composeStoryVideo(
         video,
         { text, attribution },
-        { loopToSeconds: seconds, voice: spoken?.audio },
+        { loopToSeconds: seconds, voice: spoken?.audio, music },
       );
     } catch (error) {
       this.logger.error(
         `Не удалось наложить подпись на ролик: ${String(error)}`,
       );
       return video;
+    }
+  }
+
+  /** Файл подложки. Ошибку глотаем: ролик важнее музыки. */
+  private async download(url: string): Promise<Buffer | undefined> {
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) throw new Error(`music_${response.status}`);
+      return Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      this.logger.warn(`Не удалось получить музыку: ${String(error)}`);
+      return undefined;
     }
   }
 

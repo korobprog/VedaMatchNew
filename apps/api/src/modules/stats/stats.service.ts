@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { CommunityStats, PortalStats } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import { APP_SETTINGS_ID } from '../billing/billing-mode';
 import {
   fillDailySeries,
   fillMonthlySeries,
@@ -62,7 +61,6 @@ export class StatsService {
       stageGroups,
       cities,
       communities,
-      settings,
       daily,
       monthly,
     ] = await Promise.all([
@@ -76,13 +74,11 @@ export class StatsService {
       }),
       this.cityCounts(),
       this.prisma.community.count({ where: { status: 'active' } }),
-      this.prisma.appSettings.findUnique({ where: { id: APP_SETTINGS_ID } }),
       this.registrationsByDay(since(GRAPH_DAYS)),
       this.registrationsByMonth(monthsAgo),
     ]);
 
     const { shown, hiddenPeople } = groupCities(cities);
-    const details = settings?.donateDetails?.trim();
 
     return {
       people: { total, newLast7Days, newLast30Days, activeLast7Days },
@@ -95,12 +91,6 @@ export class StatsService {
       registrationsByDay: fillDailySeries(daily, now, GRAPH_DAYS),
       registrationsByMonth: fillMonthlySeries(monthly, now, GRAPH_MONTHS),
       communities,
-      // Блок поддержки без реквизитов бессмыслен: включённый тумблер с пустым
-      // полем не должен показывать пустую карточку.
-      donate:
-        settings?.donateEnabled && details
-          ? { note: settings.donateNote?.trim() || null, details }
-          : null,
     };
   }
 

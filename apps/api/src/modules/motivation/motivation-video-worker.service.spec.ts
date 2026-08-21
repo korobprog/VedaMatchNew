@@ -16,7 +16,6 @@ const silentVoice = {
   speak: jest.fn(),
 } as unknown as import('./fal-audio.service').FalAudioService;
 
-
 /** Настоящий 1×1 PNG: prepareFrame гоняет байты через sharp, заглушка не подойдёт. */
 const TINY_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -56,8 +55,8 @@ function build(options: {
       responseUrl: 'https://queue/r',
     })),
     durationSeconds: () => 5,
-      modelId: () => 'test/model',
-      audioEnabled: () => false,
+    modelId: () => 'test/model',
+    audioEnabled: () => false,
     poll: jest.fn(async () => ({ state: 'running' as const })),
     download: jest.fn(async () => Buffer.from('mp4')),
     ...options.fal,
@@ -281,8 +280,10 @@ describe('MotivationVideoWorkerService: промпт для видеомодел
 
     await tickWithStubbedImage(worker);
 
+    // Кадр уходит в теле задачи: хранилище провайдера с боевого сервера
+    // недоступно, см. комментарий в startQueued.
     expect(fal.submit).toHaveBeenCalledWith({
-      imageUrl: 'https://fal/frame.jpg',
+      imageUrl: expect.stringMatching(/^data:image\/jpeg;base64,/) as string,
       prompt: 'Slow drifting mist over the water. Camera almost still.',
     });
   });
@@ -293,7 +294,7 @@ describe('MotivationVideoWorkerService: промпт для видеомодел
     await tickWithStubbedImage(worker);
 
     expect(fal.submit).toHaveBeenCalledWith({
-      imageUrl: 'https://fal/frame.jpg',
+      imageUrl: expect.stringMatching(/^data:image\/jpeg;base64,/) as string,
       prompt: DEFAULT_MOTIVATION_VIDEO_PROMPT,
     });
   });
@@ -402,7 +403,8 @@ describe('MotivationVideoWorkerService: дневной потолок', () => {
       global.fetch = originalFetch;
     }
 
-    expect(fal.upload).toHaveBeenCalledTimes(1);
+    // upload больше не участвует: кадр уходит в теле задачи.
+    expect(fal.upload).not.toHaveBeenCalled();
     expect(fal.submit).toHaveBeenCalledTimes(1);
   });
 
@@ -462,15 +464,12 @@ describe('MotivationVideoWorkerService: озвучка', () => {
     const generation = {
       uploadStory: jest.fn(async () => 'https://cdn/clip.mp4'),
     } as unknown as MotivationGenerationService;
-    const voice = voiceImpl as unknown as import('./fal-audio.service').FalAudioService;
+    const voice =
+      voiceImpl as unknown as import('./fal-audio.service').FalAudioService;
     return {
-      worker: new MotivationVideoWorkerService(
-        prisma,
-        fal,
-        voice,
-        generation,
-        { get: () => undefined } as unknown as ConfigService,
-        ),
+      worker: new MotivationVideoWorkerService(prisma, fal, voice, generation, {
+        get: () => undefined,
+      } as unknown as ConfigService),
       generation,
       voice,
     };

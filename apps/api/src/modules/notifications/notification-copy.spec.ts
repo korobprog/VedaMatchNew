@@ -19,6 +19,65 @@ describe('buildNotification', () => {
     });
   });
 
+  it('ведёт автора в студию, где с кадром можно работать', () => {
+    // `/m/<slug>` сделана для внешних ссылок и незалогиненных: посмотреть
+    // можно, сделать нельзя. Автор приходит по уведомлению доводить рилс.
+    expect(
+      buildNotification({
+        name: 'motivation.reel.published',
+        recipientId: 'u1',
+        reelId: 'reel-1',
+        slug: 'reel-abc',
+      }),
+    ).toMatchObject({
+      url: '/motivation/create?reel=reel-1',
+      category: 'motivation',
+    });
+  });
+
+  it('о готовом ролике зовёт в студию тем же тегом, что и кадр', () => {
+    // Тег общий по рилсу: плашка о ролике заменяет прежнюю, а не ложится
+    // второй по тому же посту.
+    expect(
+      buildNotification({
+        name: 'motivation.video.ready',
+        recipientId: 'u1',
+        reelId: 'reel-1',
+      }),
+    ).toMatchObject({
+      title: 'Ролик готов',
+      url: '/motivation/create?reel=reel-1',
+      tag: 'motivation-reel:reel-1',
+      category: 'motivation',
+    });
+  });
+
+  it('администратора о приёмке ведёт в очередь, а не в студию автора', () => {
+    expect(
+      buildNotification({
+        name: 'motivation.video.review',
+        recipientId: 'admin-1',
+        reelId: 'reel-1',
+      }),
+    ).toMatchObject({
+      title: 'Ролик ждёт приёмки',
+      url: '/admin/motivation/queue',
+      // Свой тег: приёмка и готовность — разные плашки у разных людей.
+      tag: 'motivation-video-review:reel-1',
+    });
+  });
+
+  it('после отказа ведёт в мастер: там причина и правка текста', () => {
+    expect(
+      buildNotification({
+        name: 'motivation.reel.rejected',
+        recipientId: 'u1',
+        reelId: 'reel-1',
+        reason: 'Реклама платных курсов',
+      }),
+    ).toMatchObject({ url: '/motivation/create?reel=reel-1' });
+  });
+
   it('схлопывает сообщения одного чата общим тегом', () => {
     const first = buildNotification({
       name: 'union.chat.message-sent',

@@ -3,9 +3,9 @@ import { Header } from "@/components/header";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { RegistrationsChart } from "@/components/stats/registrations-chart";
-import { DonateBlock } from "@/components/stats/donate-block";
+import { DonateButton } from "@/components/donate-sheet";
 import { stageLabels } from "@/lib/admin-labels";
-import { getPortalStats } from "@/lib/api";
+import { getDonationSettings, getPortalStats } from "@/lib/api";
 import { requireUser } from "@/lib/require-user";
 
 export const metadata = {
@@ -15,11 +15,14 @@ export const metadata = {
 
 export default async function StatsPage() {
   const user = await requireUser();
-  const stats = await getPortalStats();
+  const [stats, donation] = await Promise.all([
+    getPortalStats(),
+    getDonationSettings(),
+  ]);
   if (!stats) throw new Error("Не удалось загрузить статистику");
 
   return (
-    <div className="relative min-h-screen bg-bg-0">
+    <div className="relative min-h-dvh bg-bg-0">
       <BackgroundOrbs />
       <NoiseOverlay />
       <Header user={user} />
@@ -135,7 +138,18 @@ export default async function StatsPage() {
           </div>
         </section>
 
-        {stats.donate && <DonateBlock donate={stats.donate} />}
+        {/* Кнопка сама решает, показываться ли: без включённых пожертвований
+            и реквизитов она не рисуется, и просить не за что. */}
+        <section className="glass rounded-2xl border border-glass-brd p-4">
+          <h2 className="font-display text-lg font-semibold text-text-0">
+            Портал живёт на пожертвования
+          </h2>
+          <p className="mb-4 mt-1 text-sm text-text-1">
+            Хостинг, домен и генерация иллюстраций стоят денег. Рекламы здесь
+            нет и не будет.
+          </p>
+          <DonateButton donation={donation} />
+        </section>
       </main>
     </div>
   );

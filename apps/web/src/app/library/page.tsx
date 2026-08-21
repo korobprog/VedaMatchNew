@@ -37,7 +37,7 @@ export default async function LibraryPage({
   const locale = preferences?.uiLanguage ?? "ru";
 
   return (
-    <div className="relative min-h-screen bg-bg-0">
+    <div className="relative min-h-dvh bg-bg-0">
       <Header user={user} />
       <main className="mx-auto max-w-5xl px-4 py-8 pb-24">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">

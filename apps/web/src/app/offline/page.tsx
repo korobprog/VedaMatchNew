@@ -4,7 +4,7 @@ export const metadata = {
 
 export default function OfflinePage() {
   return (
-    <main className="grid min-h-screen place-items-center bg-bg-0 px-4">
+    <main className="grid min-h-dvh place-items-center bg-bg-0 px-4">
       <section className="glass max-w-md rounded-2xl border border-glass-brd p-6 text-center">
         <h1 className="font-display text-xl font-bold text-text-0">
           Нет подключения

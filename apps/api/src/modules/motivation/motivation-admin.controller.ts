@@ -7,16 +7,20 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import type {
   AccessTokenPayload,
+  MotivationAdminReelFilter,
   MotivationAdminUpdate,
   MotivationApproveTextInput,
+  MotivationAuthorPolicyUpdate,
   MotivationAuthorWatchInput,
   MotivationBookKindInput,
   MotivationCategoryInput,
   MotivationCategoryUpdate,
+  MotivationEventInput,
   MotivationManualPostInput,
   MotivationManualQuoteInput,
   MotivationPromptUpdate,
@@ -33,6 +37,10 @@ import { MotivationManualPostService } from './motivation-manual-post.service';
 import { MotivationStoryRebuildService } from './motivation-story-rebuild.service';
 import { MotivationService } from './motivation.service';
 import { MotivationMusicService } from './motivation-music.service';
+import { MotivationReelsService } from './motivation-reels.service';
+import { MotivationAdminReelsService } from './motivation-admin-reels.service';
+import { MotivationPostcardsService } from './motivation-postcards.service';
+import { MotivationAnalyticsService } from './motivation-analytics.service';
 import {
   MotivationSettingsService,
   type MotivationSettingsUpdate,
@@ -55,6 +63,10 @@ export class MotivationAdminController {
     private readonly settings: MotivationSettingsService,
     private readonly music: MotivationMusicService,
     private readonly health_: MotivationHealthService,
+    private readonly reels: MotivationReelsService,
+    private readonly adminReels: MotivationAdminReelsService,
+    private readonly postcards: MotivationPostcardsService,
+    private readonly analytics: MotivationAnalyticsService,
   ) {}
   /** Состояние генерации: очередь и живой воркер. */
   @Get('health')
@@ -335,5 +347,89 @@ export class MotivationAdminController {
     @Param('id') id: string,
   ) {
     return this.service.searchSourceWatch(user.role, id);
+  }
+
+  @Get('events')
+  adminEvents(@CurrentUser() user: AccessTokenPayload) {
+    return this.postcards.list(user.role);
+  }
+
+  @Post('events')
+  adminCreateEvent(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() input: MotivationEventInput,
+  ) {
+    return this.postcards.create(user.role, input);
+  }
+
+  @Delete('events/:id')
+  adminDeleteEvent(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.postcards.remove(user.role, id);
+  }
+
+  /**
+   * Повтор ИИ-проверки. Живёт среди админских маршрутов рилсов, но обращается
+   * к тому же сервису: проверку выполняет он, админка только просит.
+   */
+  @Post('reels/:id/recheck')
+  recheckReel(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.reels.recheck(user.role, id);
+  }
+
+  // ===== Админка: рилсы участников и решения ИИ =====
+  @Get('reels')
+  adminReelList(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('filter') filter?: MotivationAdminReelFilter,
+  ) {
+    return this.adminReels.list(user.role, filter);
+  }
+
+  @Post('reels/:id/restore')
+  adminReelRestore(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.adminReels.restore(user.role, user.sub, id);
+  }
+
+  @Post('reels/:id/hide')
+  adminReelHide(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+  ) {
+    return this.adminReels.hide(user.role, user.sub, id, body?.reason ?? '');
+  }
+
+  @Get('authors/:userId/policy')
+  adminAuthorPolicy(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('userId') userId: string,
+  ) {
+    return this.adminReels.policy(user.role, userId);
+  }
+
+  @Patch('authors/:userId/policy')
+  adminSaveAuthorPolicy(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('userId') userId: string,
+    @Body() body: MotivationAuthorPolicyUpdate,
+  ) {
+    return this.adminReels.savePolicy(user.role, userId, body);
+  }
+
+  @Get('analytics')
+  adminAnalytics(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('days') days?: string,
+  ) {
+    return this.analytics.read(user.role, days ? Number(days) : undefined);
   }
 }

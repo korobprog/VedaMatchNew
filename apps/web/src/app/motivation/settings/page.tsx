@@ -1,12 +1,35 @@
 import { Header } from "@/components/header";
 import { redirectToLogin } from "@/lib/require-user";
-import { MotivationNav } from "@/components/motivation/motivation-nav";
+import { MotivationTopBar } from "@/components/motivation/motivation-top-bar";
 import { MotivationSettingsForm } from "@/components/motivation/motivation-settings-form";
 import { getProfile } from "@/lib/api";
 import { getMotivationPreferences } from "@/lib/motivation-api";
+import { BackgroundOrbs } from "@/components/landing/Orb";
+import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 export default async function MotivationSettingsPage() {
   const [user, preferences] = await Promise.all([getProfile(), getMotivationPreferences()]);
   if (!user) redirectToLogin("/motivation/settings");
-  return <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950"><Header user={user} /><main className="mx-auto max-w-3xl px-4 py-8"><h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">Настройки Motivation</h1><MotivationNav active="settings" isAdmin={user.role === "admin" || user.role === "service-admin"} /><MotivationSettingsForm initial={preferences ?? { vaishnavaPercent: 50, language: "ru", profileTypes: [] }} /></main></div>;
+  const isAdmin = user.role === "admin" || user.role === "service-admin";
+
+  return (
+    <div className="relative min-h-dvh bg-bg-0">
+      <BackgroundOrbs />
+      <NoiseOverlay />
+      <Header user={user} />
+      <main className="mx-auto max-w-3xl px-2 py-4 pb-24 sm:px-4">
+        <MotivationTopBar
+          active="settings"
+          isAdmin={isAdmin}
+          title="Настройки ленты"
+          action={{ href: "/motivation", label: "К ленте" }}
+        />
+        <div className="mt-4 px-2">
+          <MotivationSettingsForm
+            initial={preferences ?? { vaishnavaPercent: 50, language: "ru", profileTypes: [] }}
+          />
+        </div>
+      </main>
+    </div>
+  );
 }

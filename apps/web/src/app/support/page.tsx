@@ -24,7 +24,7 @@ export default async function SupportPage() {
   const tickets = user ? await getMySupportTickets() : null;
 
   return (
-    <div className="relative min-h-screen bg-bg-0">
+    <div className="relative min-h-dvh bg-bg-0">
       <BackgroundOrbs />
       <NoiseOverlay />
       {user ? <Header user={user} /> : <Navbar />}

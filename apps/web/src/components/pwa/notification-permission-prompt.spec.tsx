@@ -32,6 +32,8 @@ describe("NotificationPermissionPrompt", () => {
     vi.mocked(enablePush).mockResolvedValue("granted");
     vi.mocked(useInstallPrompt).mockReturnValue({
       mode: "unsupported",
+      browser: "chrome",
+      platform: "android",
       promptInstall: vi.fn(),
     });
   });
@@ -75,6 +77,8 @@ describe("NotificationPermissionPrompt", () => {
     localStorage.setItem(notificationPromptKey, "browser");
     vi.mocked(useInstallPrompt).mockReturnValue({
       mode: "installed",
+      browser: "chrome",
+      platform: "android",
       promptInstall: vi.fn(),
     });
 
@@ -95,6 +99,8 @@ describe("NotificationPermissionPrompt", () => {
     localStorage.setItem(notificationPromptKey, "installed");
     vi.mocked(useInstallPrompt).mockReturnValue({
       mode: "installed",
+      browser: "chrome",
+      platform: "android",
       promptInstall: vi.fn(),
     });
 

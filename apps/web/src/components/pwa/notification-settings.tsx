@@ -22,8 +22,9 @@ const categories = [
   { key: "transits", label: "Персональный день (астрология)" },
   // Сообщения чата Рынка идут под тумблером «Сообщения»: это та же переписка.
   { key: "market", label: "Заявки на Рынке" },
-  { key: "notices", label: "Доска объявлений" },
-  { key: "system", label: "Объявления администрации" },
+  // Только про свои публикации: лента мотивации сама по себе не пишет.
+  { key: "motivation", label: "Мои рилсы: студия «Мотивации»" },
+  { key: "announcements", label: "Новости VedaMatch" },
 ] as const;
 
 export function NotificationSettings() {

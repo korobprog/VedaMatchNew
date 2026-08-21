@@ -5,11 +5,15 @@ const S = '́';
 
 describe('applyVoiceTranscription', () => {
   it('ставит ударение и сохраняет падежное окончание', () => {
-    expect(applyVoiceTranscription('Кришна объясняет Арджуне')).toBe(
-      `Кри${S}шна объясняет Арджу${S}не`,
+    expect(applyVoiceTranscription('Кришна учит')).toBe(`Кри${S}шна учит`);
+    expect(applyVoiceTranscription('беседа в Маяпуре')).toBe(
+      `беседа в Маяпу${S}ре`,
     );
-    expect(applyVoiceTranscription('беседа с Арджуной')).toBe(
-      `беседа с Арджу${S}ной`,
+  });
+
+  it('оставляет «Арджуне» без пометки: со знаком слышится «АрджунЭ»', () => {
+    expect(applyVoiceTranscription('Кришна объясняет Арджуне')).toBe(
+      `Кри${S}шна объясняет Арджуне`,
     );
   });
 

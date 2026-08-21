@@ -19,6 +19,7 @@ export * from './market';
 export * from './community';
 export * from './notices';
 export * from './audit';
+export * from './pwa';
 
 import type { BillingMode, SubscriptionState } from './support';
 
@@ -500,8 +501,6 @@ export interface PortalStats {
   registrationsByDay: PortalStatsPoint[];
   registrationsByMonth: PortalStatsPoint[];
   communities: number;
-  /** Блок поддержки; `null` — выключен в настройках. */
-  donate: { note: string | null; details: string } | null;
 }
 
 /**
@@ -626,9 +625,6 @@ export interface AdminPlatformSettings {
   billingMode: BillingMode;
   registrationMode: RegistrationMode;
   registrationNote: string | null;
-  donateEnabled: boolean;
-  donateNote: string | null;
-  donateDetails: string | null;
   integrations: AdminIntegrationStatus[];
   updatedAt: string | null;
 }
@@ -637,9 +633,6 @@ export interface AdminUpdatePlatformSettingsRequest {
   billingMode?: BillingMode;
   registrationMode?: RegistrationMode;
   registrationNote?: string | null;
-  donateEnabled?: boolean;
-  donateNote?: string | null;
-  donateDetails?: string | null;
 }
 
 export const REGISTRATION_NOTE_MAX_LENGTH = 300;

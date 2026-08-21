@@ -1,15 +1,15 @@
 import { redirect } from "next/navigation";
 import {
+  getAnnouncements,
   getBillingPlan,
   getCommunityStats,
-  getHomeAnnouncement,
   getProfile,
   getServices,
 } from "@/lib/api";
 import { Header } from "@/components/header";
 import { ServiceGrid } from "@/components/service-grid";
-import { NewsBanner } from "@/components/news-banner";
-import { getServerLocale } from "@/i18n/get-locale";
+import { MemberCountLine } from "@/components/member-count-line";
+import { PortalNews } from "@/components/portal-news";
 import {
   getUnionChats,
   getUnionConnectionCounts,
@@ -33,6 +33,7 @@ import { LandingPage } from "@/components/landing";
 import { SessionRestore } from "@/components/session-restore";
 import { needsSessionRestore } from "@/lib/session-marker";
 import { InstallBanner } from "@/components/pwa/install-banner";
+import { InstallEnvironmentBeacon } from "@/components/pwa/install-environment-beacon";
 import { NotificationPermissionPrompt } from "@/components/pwa/notification-permission-prompt";
 import { PushSubscriptionSync } from "@/components/pwa/push-subscription-sync";
 
@@ -43,7 +44,6 @@ export default async function Home({
 }) {
   const { returnTo: rawReturnTo } = await searchParams;
   const returnTo = Array.isArray(rawReturnTo) ? rawReturnTo[0] : rawReturnTo;
-  const locale = await getServerLocale();
   const [
     user,
     services,
@@ -53,7 +53,6 @@ export default async function Home({
     unionRecommendations,
     plan,
     communityStats,
-    homeNews,
     // Источники советника. Каждый в своём catch — упавший сервис обязан
     // убрать одну карточку, а не весь блок и тем более не главную.
     astroState,
@@ -61,6 +60,7 @@ export default async function Home({
     myNotices,
     myResponses,
     myCommunities,
+    news,
   ] = await Promise.all([
     getProfile(),
     getServices(),
@@ -70,13 +70,13 @@ export default async function Home({
     getUnionRecommendations({ sort: "new", pageSize: "3" }).catch(() => null),
     getBillingPlan().catch(() => null),
     getCommunityStats().catch(() => null),
-    // Новость баннера — не повод ронять главную: упала, значит баннер без неё.
-    getHomeAnnouncement(locale).catch(() => null),
     getAstroState().catch(() => null),
     getAstroToday().catch(() => null),
     getMyNoticesForAdvisor().catch(() => null),
     getMyNoticeResponsesServer().catch(() => null),
     getMyCommunitiesServer().catch(() => null),
+    // Новости портала — не повод ронять главную: не пришли, значит их нет.
+    getAnnouncements("ru").catch(() => null),
   ]);
   if (!user || !services) {
     // Маркер сессии без access-cookie: человек уже входил, refresh скорее всего
@@ -91,7 +91,6 @@ export default async function Home({
         totalMembers={communityStats?.totalMembers}
         totalCities={communityStats?.totalCities}
         totalCommunities={communityStats?.totalCommunities}
-        news={homeNews}
       />
     );
   }
@@ -131,27 +130,37 @@ export default async function Home({
     : {};
 
   return (
-    <div className="relative min-h-screen bg-bg-0">
+    <div className="relative min-h-dvh bg-bg-0">
       <BackgroundOrbs />
       <NoiseOverlay />
       <Header user={user} />
       <main className="mx-auto max-w-6xl px-4 py-8 pb-24">
+        {/* Новости администрации выше советника: советник говорит о делах
+            человека, новость — о портале, и она не должна теряться под ними. */}
+        <PortalNews items={news ?? []} />
         <AdvisorStrip
           cards={advisorCards}
           userId={user.id}
           displayName={user.displayName}
         />
-        {/* Здоровается кто-то один: советник обращается по имени в первой
-            карточке, и второе обращение в паре сантиметров обесценивало бы
-            имя. Когда советнику нечего сказать, приветствие берёт баннер. */}
-        <NewsBanner
-          news={homeNews}
-          totalMembers={communityStats?.totalMembers}
-          greetName={advisorCards.length === 0 ? user.displayName : undefined}
-        />
+        {communityStats && (
+          // Здоровается кто-то один: советник обращается по имени в первой
+          // карточке, и второе обращение в паре сантиметров обесценивало бы
+          // имя. Когда советнику нечего сказать, приветствие берёт строка.
+          <MemberCountLine
+            userId={user.id}
+            total={communityStats.totalMembers}
+            greetName={
+              advisorCards.length === 0 ? user.displayName : undefined
+            }
+          />
+        )}
         <ServiceGrid services={services} userId={user.id} extras={serviceExtras} />
       </main>
       <InstallBanner />
+      {/* Главная лежит вне группы (portal), где висит тот же маячок, — без
+          этой строки самая посещаемая страница в замер не попадает. */}
+      <InstallEnvironmentBeacon />
       <NotificationPermissionPrompt />
       <PushSubscriptionSync />
     </div>

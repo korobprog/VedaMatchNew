@@ -2,10 +2,14 @@ import {
   BadGatewayException,
   BadRequestException,
   Injectable,
+  Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { IMAGE_SIZE, type ImageProvider } from './image-cost';
+import { FalImageService } from './fal-image.service';
+import { stripJsonFence } from './chat-json';
 
 export type VerifiedQuoteCopy = {
   originalText: string;
@@ -24,10 +28,21 @@ export type VerifiedQuoteCopy = {
   >;
 };
 
+/** Кадр вместе с тем, кто его нарисовал: ставки у поставщиков разные. */
+export interface GeneratedImage {
+  bytes: Buffer;
+  provider: ImageProvider;
+}
+
 @Injectable()
 export class MotivationGenerationService {
+  private readonly logger = new Logger(MotivationGenerationService.name);
+
   private readonly s3: S3Client | null;
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly falImage: FalImageService,
+  ) {
     const region = config.get<string>('S3_REGION'),
       accessKeyId = config.get<string>('S3_ACCESS_KEY'),
       secretAccessKey = config.get<string>('S3_SECRET_KEY');
@@ -283,13 +298,52 @@ export class MotivationGenerationService {
     }
   }
 
+  /**
+   * Вердикт ИИ-модератора по пользовательскому рилсу. Тот же текстовый
+   * провайдер, что и у копирайта: разбор и пороги — в `ai-verdict.ts`.
+   */
+  moderationVerdict(prompt: string): Promise<unknown> {
+    return this.requestStructuredChat(prompt);
+  }
+
+  /**
+   * Запрос к модели с запасной на случай сбоя канала.
+   *
+   * Релей раздаёт одну и ту же модель через каналы, и канал регулярно ложится:
+   * «upstream_unavailable, текущий источник GPT Team/Plus» — при полностью
+   * исправном ключе. Для модерации это означало «сбой модели» и ручной разбор
+   * текста, с которым всё в порядке. Поэтому при сбое пробуем вторую модель:
+   * задаётся `MOTIVATION_TEXT_MODEL_FALLBACK`, по умолчанию — быстрая и
+   * дешёвая gemini-3.6-flash другого поставщика, то есть с другим апстримом.
+   *
+   * Запасная модель должна быть именно у другого поставщика: вторая попытка в
+   * тот же упавший канал ничего не даёт.
+   */
   private async requestStructuredChat(prompt: string): Promise<unknown> {
+    const primary =
+      this.config.get<string>('MOTIVATION_TEXT_MODEL') || 'deepseek-v4-flash';
+    const fallback =
+      this.config.get<string>('MOTIVATION_TEXT_MODEL_FALLBACK') ||
+      'gemini-3.6-flash';
+    try {
+      return await this.requestChatWithModel(prompt, primary);
+    } catch (error) {
+      if (fallback === primary) throw error;
+      this.logger.warn(
+        `Модель ${primary} не ответила (${String(error).slice(0, 120)}), пробуем ${fallback}`,
+      );
+      return this.requestChatWithModel(prompt, fallback);
+    }
+  }
+
+  private async requestChatWithModel(
+    prompt: string,
+    model: string,
+  ): Promise<unknown> {
     const apiKey = this.config.get<string>('MOTIVATION_AI_API_KEY');
     const baseUrl = this.config
       .get<string>('MOTIVATION_AI_BASE_URL')
       ?.replace(/\/$/, '');
-    const model =
-      this.config.get<string>('MOTIVATION_TEXT_MODEL') || 'deepseek-v4-flash';
     if (!apiKey || !baseUrl)
       throw new ServiceUnavailableException('Motivation AI is not configured');
     const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -315,7 +369,7 @@ export class MotivationGenerationService {
     if (!content)
       throw new BadGatewayException('Text provider returned no content');
     try {
-      return JSON.parse(content);
+      return JSON.parse(stripJsonFence(content));
     } catch {
       throw new BadGatewayException('Text provider returned invalid JSON');
     }
@@ -352,7 +406,31 @@ export class MotivationGenerationService {
     }
   }
 
-  async generateImage(prompt: string): Promise<Buffer> {
+  /**
+   * Кадр с запасным поставщиком на случай сбоя канала.
+   *
+   * Та же болезнь, что у запасной текстовой модели: релей раздаёт модель
+   * через каналы, и канал ложится при полностью исправном ключе. Для картинки
+   * это означало пост без кадра и ручной разбор в админке. fal — другой
+   * апстрим, поэтому годится в резерв; его цена (втрое выше) платится только
+   * когда основной не ответил.
+   *
+   * Возвращаем и поставщика: ставки у них разные, а на сумме расхода стоит
+   * дневной потолок.
+   */
+  async generateImage(prompt: string): Promise<GeneratedImage> {
+    try {
+      return { bytes: await this.requestRelayImage(prompt), provider: 'relay' };
+    } catch (error) {
+      if (!this.falImage.enabled) throw error;
+      this.logger.warn(
+        `Релей не отдал кадр (${String(error).slice(0, 120)}), пробуем запасного поставщика`,
+      );
+      return { bytes: await this.falImage.generate(prompt), provider: 'fal' };
+    }
+  }
+
+  private async requestRelayImage(prompt: string): Promise<Buffer> {
     const apiKey = this.config.get<string>('MOTIVATION_AI_API_KEY');
     const baseUrl = this.config
       .get<string>('MOTIVATION_AI_BASE_URL')
@@ -387,7 +465,7 @@ export class MotivationGenerationService {
         body: JSON.stringify({
           model,
           prompt: imagePrompt,
-          size: '1024x1536',
+          size: IMAGE_SIZE,
         }),
       });
     } finally {
@@ -421,7 +499,7 @@ export class MotivationGenerationService {
   async generateApprovedImage(input: {
     imagePrompt: string | null;
     textApprovedAt: Date | null;
-  }): Promise<Buffer> {
+  }): Promise<GeneratedImage> {
     if (
       !input.textApprovedAt ||
       Number.isNaN(input.textApprovedAt.getTime()) ||

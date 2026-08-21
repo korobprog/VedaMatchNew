@@ -172,6 +172,38 @@ export interface AdminUpdateBillingModeRequest {
   mode: BillingMode;
 }
 
+// ===== Пожертвования на развитие (бета) =====
+
+export type DonationRequisiteKind = 'sbp' | 'card' | 'crypto' | 'link' | 'other';
+export const DONATION_REQUISITE_KINDS: readonly DonationRequisiteKind[] = [
+  'sbp',
+  'card',
+  'crypto',
+  'link',
+  'other',
+];
+
+export interface DonationRequisite {
+  kind: DonationRequisiteKind;
+  /** Подпись строки: «Перевод по СБП», «USDT TRC-20». */
+  label: string;
+  /** Сам реквизит: номер, адрес или URL — копируется в один тап. */
+  value: string;
+}
+
+/** Публичный ответ: только когда включено и есть хотя бы один реквизит. */
+export interface DonationSettingsDto {
+  enabled: boolean;
+  text: string;
+  requisites: DonationRequisite[];
+}
+
+export interface AdminUpdateDonationRequest {
+  enabled?: boolean;
+  text?: string | null;
+  requisites?: DonationRequisite[];
+}
+
 export interface AdminUpdateSubscriptionRequest {
   /** ISO-дата оплаченного доступа; null — сбросить платный период. */
   paidUntil?: string | null;

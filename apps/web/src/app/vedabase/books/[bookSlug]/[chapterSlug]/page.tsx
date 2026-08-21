@@ -16,7 +16,7 @@ export default async function VedabaseReaderPage({ params }: { params: Params })
   const { bookSlug, chapterSlug } = await params;
 
   return (
-    <div className="min-h-screen bg-bg-0">
+    <div className="min-h-dvh bg-bg-0">
       <Header user={user} />
       <div className="mx-auto max-w-6xl px-4 pt-6">
         <Link

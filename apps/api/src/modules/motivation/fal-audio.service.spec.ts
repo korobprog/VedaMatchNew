@@ -34,7 +34,7 @@ describe('FalAudioService', () => {
 
   it('пустой текст не отправляет в сеть вообще', async () => {
     const spy = jest.fn();
-    global.fetch = spy as unknown as typeof fetch;
+    global.fetch = spy;
 
     await expect(service().speak('   ')).rejects.toBeInstanceOf(
       BadRequestException,
@@ -55,7 +55,7 @@ describe('FalAudioService', () => {
             ok: true,
             arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
           } as unknown as Response),
-    ) as unknown as typeof fetch;
+    );
 
     const spoken = await service().speak('Цитата');
 

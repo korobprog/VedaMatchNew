@@ -46,7 +46,9 @@ export function buildMusicPromptRequest(input: {
   if (input.attribution?.trim())
     lines.push(`Source: ${input.attribution.trim().slice(0, 200)}`);
   if (input.mood?.trim())
-    lines.push(`Desired mood from the editor: ${input.mood.trim().slice(0, 300)}`);
+    lines.push(
+      `Desired mood from the editor: ${input.mood.trim().slice(0, 300)}`,
+    );
   lines.push('', 'Return only the prompt text, nothing else.');
   return lines.join('\n');
 }

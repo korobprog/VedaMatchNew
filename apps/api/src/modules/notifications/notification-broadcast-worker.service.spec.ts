@@ -3,7 +3,7 @@ import type { PrismaService } from '../../prisma/prisma.service';
 import type { NotificationsService } from './notifications.service';
 import type { PushSenderService } from './push-sender.service';
 
-type Prefs = { enabled: boolean; system: boolean } | null;
+type Prefs = { enabled: boolean; announcements: boolean } | null;
 
 interface Recipient {
   id: string;
@@ -75,16 +75,16 @@ const containing = (shape: Record<string, unknown>): unknown =>
 
 const allowed: Recipient = {
   id: 'u-1',
-  notificationPreference: { enabled: true, system: true },
+  notificationPreference: { enabled: true, announcements: true },
 };
 const noPrefsRow: Recipient = { id: 'u-2', notificationPreference: null };
 const optedOut: Recipient = {
   id: 'u-3',
-  notificationPreference: { enabled: true, system: false },
+  notificationPreference: { enabled: true, announcements: false },
 };
 const allOff: Recipient = {
   id: 'u-4',
-  notificationPreference: { enabled: false, system: true },
+  notificationPreference: { enabled: false, announcements: true },
 };
 
 describe('NotificationBroadcastWorkerService.sendBatch', () => {
@@ -97,7 +97,7 @@ describe('NotificationBroadcastWorkerService.sendBatch', () => {
 
     expect(notifications.addManyToInbox).toHaveBeenCalledWith(
       ['u-1', 'u-2'],
-      expect.objectContaining({ category: 'system' }),
+      expect.objectContaining({ category: 'announcements' }),
     );
   });
 

@@ -55,6 +55,21 @@ services:
       MOTIVATION_AI_API_KEY: ${MOTIVATION_AI_API_KEY:-${NEUROGATE_API_KEY}}
       MOTIVATION_TEXT_MODEL: ${MOTIVATION_TEXT_MODEL:-${NEUROGATE_MODEL:-gpt-5.5}}
       MOTIVATION_IMAGE_MODEL: ${MOTIVATION_IMAGE_MODEL:-${NEUROGATE_IMAGE_MODEL:-gpt-image-2}}
+      # Стадия видео (fal.ai). Без FAL_KEY MotivationVideoWorkerService выходит
+      # из onModuleInit, не заведя таймер, — заказы копятся в `queued`, и
+      # разобрать их некому. Переменную мало задать в Dokploy: compose
+      # пробрасывает в контейнер только то, что перечислено здесь.
+      #
+      # У остальных значений есть дефолты в коде, и читаются они через `||`,
+      # поэтому незаданная переменная (пустая строка) их не перебивает.
+      FAL_KEY: ${FAL_KEY:-}
+      MOTIVATION_IMAGE_MODEL_FALLBACK: ${MOTIVATION_IMAGE_MODEL_FALLBACK:-}
+      MOTIVATION_VIDEO_MODEL: ${MOTIVATION_VIDEO_MODEL:-}
+      MOTIVATION_VIDEO_DURATION: ${MOTIVATION_VIDEO_DURATION:-}
+      MOTIVATION_VIDEO_AUDIO: ${MOTIVATION_VIDEO_AUDIO:-}
+      MOTIVATION_VOICE_MODEL: ${MOTIVATION_VOICE_MODEL:-}
+      MOTIVATION_VOICE_NAME: ${MOTIVATION_VOICE_NAME:-}
+      MOTIVATION_MUSIC_MODEL: ${MOTIVATION_MUSIC_MODEL:-}
       ASTRO_AI_BASE_URL: ${ASTRO_AI_BASE_URL:-${MOTIVATION_AI_BASE_URL:-${NEUROGATE_BASE_URL:-https://r-api.vibemod.pro/v1}}}
       ASTRO_AI_API_KEY: ${ASTRO_AI_API_KEY:-${MOTIVATION_AI_API_KEY:-${NEUROGATE_API_KEY}}}
       ASTRO_TEXT_MODEL: ${ASTRO_TEXT_MODEL:-${MOTIVATION_TEXT_MODEL:-gpt-5.4-mini}}

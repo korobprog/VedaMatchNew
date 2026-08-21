@@ -77,7 +77,7 @@ export function SessionRestore({ returnTo }: { returnTo?: string }) {
   }, [destination, router]);
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-bg-0">
+    <div className="relative flex min-h-dvh items-center justify-center bg-bg-0">
       <BackgroundOrbs />
       <NoiseOverlay />
       <div

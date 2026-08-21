@@ -34,7 +34,6 @@ export function PlatformSettingsForm({
   const [registrationMode, setRegistrationMode] = useState<RegistrationMode>(
     settings.registrationMode,
   );
-  const [donateEnabled, setDonateEnabled] = useState(settings.donateEnabled);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -50,9 +49,6 @@ export function PlatformSettingsForm({
         billingMode: String(data.get("billingMode") ?? "") as BillingMode,
         registrationMode,
         registrationNote: String(data.get("registrationNote") ?? "").trim(),
-        donateEnabled,
-        donateNote: String(data.get("donateNote") ?? "").trim(),
-        donateDetails: String(data.get("donateDetails") ?? "").trim(),
       });
       setSaved(true);
       router.refresh();
@@ -130,52 +126,6 @@ export function PlatformSettingsForm({
         </label>
       )}
 
-      <fieldset className="rounded-xl border border-glass-brd p-3">
-        <legend className="px-1 text-sm font-medium text-text-1">
-          Поддержка проекта
-        </legend>
-        <label className="flex items-start gap-2 text-sm text-text-1">
-          <input
-            type="checkbox"
-            checked={donateEnabled}
-            onChange={(event) => setDonateEnabled(event.target.checked)}
-            className="mt-1"
-          />
-          <span>
-            Показывать блок поддержки на странице статистики. Без реквизитов
-            блок не появится, даже если галочка стоит.
-          </span>
-        </label>
-
-        {donateEnabled && (
-          <>
-            <label className="mt-3 block text-sm font-medium text-text-1">
-              На что идут деньги
-              <textarea
-                name="donateNote"
-                defaultValue={settings.donateNote ?? ""}
-                rows={2}
-                placeholder="Хостинг, домен, генерация иллюстраций"
-                className={field}
-              />
-            </label>
-            <label className="mt-3 block text-sm font-medium text-text-1">
-              Реквизиты
-              <textarea
-                name="donateDetails"
-                defaultValue={settings.donateDetails ?? ""}
-                rows={4}
-                placeholder="Карта 0000 0000 0000 0000 · USDT TRC-20: T…"
-                className={`${field} font-mono`}
-              />
-              <span className="mt-1 block text-xs text-text-2">
-                Показываются как есть, с кнопкой «скопировать». Платёжной
-                интеграции у портала нет.
-              </span>
-            </label>
-          </>
-        )}
-      </fieldset>
 
       <Button type="submit" loading={pending}>
         Сохранить настройки

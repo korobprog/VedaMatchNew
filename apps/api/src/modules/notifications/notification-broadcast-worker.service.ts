@@ -155,7 +155,7 @@ export class NotificationBroadcastWorkerService
       take: BROADCAST_BATCH_SIZE,
       select: {
         id: true,
-        notificationPreference: { select: { enabled: true, system: true } },
+        notificationPreference: { select: { enabled: true, announcements: true } },
       },
     });
 
@@ -174,7 +174,7 @@ export class NotificationBroadcastWorkerService
     const allowed = recipients.filter(
       (user) =>
         (user.notificationPreference?.enabled ?? true) &&
-        (user.notificationPreference?.system ?? true),
+        (user.notificationPreference?.announcements ?? true),
     );
     const inboxTargets = broadcast.important ? recipients : allowed;
 
@@ -184,7 +184,7 @@ export class NotificationBroadcastWorkerService
         title: broadcast.title,
         body: broadcast.body,
         url: broadcast.url ?? '/notifications',
-        category: 'system',
+        category: 'announcements',
       },
     );
 

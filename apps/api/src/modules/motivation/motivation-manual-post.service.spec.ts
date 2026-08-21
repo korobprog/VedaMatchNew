@@ -94,7 +94,10 @@ describe('MotivationManualPostService', () => {
 
     const byLanguage = Object.fromEntries(
       postData(transaction).translations.create.map(
-        (item: { language: string; title: string }) => [item.language, item.title],
+        (item: { language: string; title: string }) => [
+          item.language,
+          item.title,
+        ],
       ),
     );
     expect(byLanguage).toEqual({
@@ -197,11 +200,23 @@ describe('MotivationManualPostService', () => {
   });
 
   it.each([
-    ['originalText', { originalText: '  ' }, 'Quote text and author are required'],
+    [
+      'originalText',
+      { originalText: '  ' },
+      'Quote text and author are required',
+    ],
     ['author', { author: '' }, 'Quote text and author are required'],
-    ['title', { copy: { title: '', explanation: 'text' } }, 'Title is required'],
+    [
+      'title',
+      { copy: { title: '', explanation: 'text' } },
+      'Title is required',
+    ],
     ['audience', { profileTypes: [] }, 'Pick at least one audience'],
-    ['unknown audience', { profileTypes: ['ghost'] as never }, 'Unknown audience'],
+    [
+      'unknown audience',
+      { profileTypes: ['ghost'] as never },
+      'Unknown audience',
+    ],
     ['track', { audienceTrack: 'nowhere' as never }, 'Unknown audience track'],
     ['language', { originalLanguage: 'fr' }, 'Unsupported original language'],
     ['date', { contentDate: 'вчера' }, 'Invalid content date'],
@@ -215,7 +230,9 @@ describe('MotivationManualPostService', () => {
   });
 
   it('refuses a duplicate quote', async () => {
-    const { service, transaction } = setup({ existingQuote: { id: 'existing' } });
+    const { service, transaction } = setup({
+      existingQuote: { id: 'existing' },
+    });
 
     await expect(
       service.create('admin', 'actor-1', validInput),

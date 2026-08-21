@@ -6,7 +6,10 @@ import {
   SETTINGS_FALLBACK,
 } from './motivation-settings.service';
 
-function build(row: Record<string, unknown> | null, env: Record<string, string> = {}) {
+function build(
+  row: Record<string, unknown> | null,
+  env: Record<string, string> = {},
+) {
   const saved: Array<Record<string, unknown>> = [];
   const prisma = {
     motivationSettings: {

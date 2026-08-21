@@ -168,7 +168,8 @@ describe('NotificationsService.getPreferences', () => {
       transits: true,
       market: true,
       notices: true,
-      system: true,
+      motivation: true,
+      announcements: true,
     });
   });
 
@@ -206,7 +207,8 @@ describe('NotificationsService.updatePreferences', () => {
       transits: true,
       market: true,
       notices: true,
-      system: true,
+      motivation: true,
+      announcements: true,
     });
   });
 });
@@ -240,25 +242,41 @@ describe('NotificationsService: колокольчик', () => {
     await expect(service.countUnread('user-1')).resolves.toBe(0);
   });
 
-  it('после отметки прочитанным счётчик обнуляется, а список пустеет', async () => {
+  it('после отметки прочитанным счётчик обнуляется, а запись остаётся в списке', async () => {
+    // Список показывает и прочитанное: раньше открытие страницы гасило всё
+    // разом, и уведомления исчезали до того, как человек до них дошёл.
     const { service } = createService();
     await service.addToInbox('user-1', draft);
 
     await service.markRead('user-1');
 
     await expect(service.countUnread('user-1')).resolves.toBe(0);
-    await expect(service.listInbox('user-1')).resolves.toEqual({
-      items: [],
-      unreadCount: 0,
-    });
+    const inbox = await service.listInbox('user-1');
+    expect(inbox.unreadCount).toBe(0);
+    expect(inbox.items).toHaveLength(1);
+    expect(inbox.items[0].readAt).not.toBeNull();
   });
 
-  it('удаляет прочитанное, пролежавшее дольше отсрочки: архив не копится', async () => {
+  it('помечает прочитанным только названные уведомления', async () => {
+    const { service } = createService();
+    await service.addToInbox('user-1', draft);
+    await service.addToInbox('user-1', { ...draft, title: 'Второе' });
+    const before = await service.listInbox('user-1');
+
+    await service.markRead('user-1', [before.items[0].id]);
+
+    const after = await service.listInbox('user-1');
+    expect(after.unreadCount).toBe(1);
+    expect(after.items.find((item) => item.id === before.items[0].id)?.readAt)
+      .not.toBeNull();
+  });
+
+  it('удаляет прочитанное, пролежавшее дольше недели: архив не копится', async () => {
     const { service, store } = createService();
     await service.addToInbox('user-1', draft);
     await service.markRead('user-1');
-    // Отсрочка (15 минут) прошла — строке больше незачем занимать место.
-    store.inbox[0].readAt = new Date(Date.now() - 60 * 60 * 1000);
+    // Неделя прошла — строке больше незачем занимать место.
+    store.inbox[0].readAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
 
     await service.listInbox('user-1');
 

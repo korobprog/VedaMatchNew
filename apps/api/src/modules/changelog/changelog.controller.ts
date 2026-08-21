@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import type {
   AccessTokenPayload,
+  BroadcastAnnouncementRequest,
   CreateAnnouncementRequest,
   CreateReleaseRequest,
   CreateRoadmapItemRequest,
@@ -119,6 +120,16 @@ export class AdminChangelogController {
     @Body() body: UpdateAnnouncementRequest,
   ) {
     return this.changelog.adminUpdateAnnouncement(user.role, id, body);
+  }
+
+  /** Рассылка новости: отдельным действием после публикации. */
+  @Post('announcements/:id/broadcast')
+  broadcastAnnouncement(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: BroadcastAnnouncementRequest = {},
+  ) {
+    return this.changelog.adminBroadcastAnnouncement(user.role, id, body);
   }
 
   @Delete('announcements/:id')

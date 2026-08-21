@@ -10,8 +10,15 @@ import type {
   MotivationAdminHealth,
   MotivationPostDto,
   MotivationPreferenceDto,
+  MotivationAdminReelFilter,
+  MotivationAnalyticsDto,
+  MotivationEventDto,
+  MotivationAdminReelsResponse,
+  MotivationReelDto,
   MotivationSourceWatchDto,
 } from "@vedamatch/shared";
+
+import { parseJsonBody } from "@/lib/json-body";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -31,20 +38,33 @@ async function motivationGet<T>(path: string): Promise<T | null> {
   // экран показывает свою заглушку.
   if ([401, 403, 404].includes(response.status)) return null;
   if (!response.ok) throw new Error(`API ${path} failed: ${response.status}`);
-  return (await response.json()) as T;
+  return parseJsonBody<T>(await response.text());
 }
 
 async function motivationGetPublic<T>(path: string): Promise<T | null> {
   const response = await fetch(`${API_URL}${path}`, { cache: "no-store" });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`API ${path} failed: ${response.status}`);
-  return (await response.json()) as T;
+  return parseJsonBody<T>(await response.text());
 }
 
-export const getMotivationFeed = (filter: "all" | "favorites" = "all") =>
-  motivationGet<MotivationFeedResponse>(
-    `/motivation/feed${filter === "favorites" ? "?filter=favorites" : ""}`,
+/** `post` открывает ленту на конкретном рилсе — он придёт первым в списке. */
+export const getMotivationFeed = (
+  filter: "all" | "favorites" = "all",
+  post?: string,
+) => {
+  const query = new URLSearchParams();
+  if (filter === "favorites") query.set("filter", "favorites");
+  if (post) query.set("post", post);
+  const suffix = query.toString();
+  return motivationGet<MotivationFeedResponse>(
+    `/motivation/feed${suffix ? `?${suffix}` : ""}`,
   );
+};
+
+/** Рилсы, созданные текущим пользователем, новые сверху. */
+export const getMyMotivationReels = () =>
+  motivationGet<MotivationReelDto[]>("/motivation/reels");
 
 export const getMotivationPreferences = () =>
   motivationGet<MotivationPreferenceDto>("/motivation/preferences");
@@ -68,6 +88,24 @@ export const getAdminMotivationSourceWatches = () =>
 
 export const getAdminMotivationBooks = () =>
   motivationGet<MotivationBookDto[]>("/admin/motivation/books");
+
+/** Рилсы участников для админки: список и счётчики решений ИИ за сегодня. */
+export const getAdminMotivationReels = (filter: MotivationAdminReelFilter = "all") =>
+  motivationGet<MotivationAdminReelsResponse>(
+    `/admin/motivation/reels${filter === "all" ? "" : `?filter=${filter}`}`,
+  );
+
+/** Сводка сервиса за окно в днях. */
+export const getAdminMotivationAnalytics = (days = 7) =>
+  motivationGet<MotivationAnalyticsDto>(`/admin/motivation/analytics?days=${days}`);
+
+/** Справочник праздников для открыток. */
+export const getAdminMotivationEvents = () =>
+  motivationGet<MotivationEventDto[]>("/admin/motivation/events");
+
+/** Ближайшее событие: по нему подписывается кнопка «Сделать открытку». */
+export const getMotivationCurrentEvent = () =>
+  motivationGet<MotivationEventDto | null>("/motivation/postcards/event");
 
 export const getAdminMotivationCategories = () =>
   motivationGet<MotivationCategoryDto[]>("/admin/motivation/categories");
