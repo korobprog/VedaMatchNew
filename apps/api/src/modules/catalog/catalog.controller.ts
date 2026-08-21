@@ -4,11 +4,21 @@ import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { CatalogService } from './catalog.service';
 
 @Controller('services')
-@UseGuards(AuthGuard)
 export class CatalogController {
   constructor(private readonly catalog: CatalogService) {}
 
+  /**
+   * Публичный каталог: лендинг и шапка показывают названия сервисов гостю,
+   * до всякой авторизации. Единственный намеренно открытый маршрут модуля —
+   * как /stats/community у сводки.
+   */
+  @Get('public')
+  publicList() {
+    return this.catalog.getPublic();
+  }
+
   @Get()
+  @UseGuards(AuthGuard)
   list(@CurrentUser() user: AccessTokenPayload) {
     return this.catalog.getForUser(user.sub, user.role);
   }

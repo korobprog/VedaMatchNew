@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type {
+  AdminAuditEvent,
   AdminCommunityDecisionRequest,
   AdminCommunityListResponse,
   CommunityBadgeDto,
@@ -19,6 +20,7 @@ import type {
   UpdateCommunityRequest,
 } from '@vedamatch/shared';
 import { normalizeCityKey } from '../../common/city-key';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toBadgeDto, toCommunityDto, toMapPoint } from './community-dto';
 import {
@@ -53,7 +55,10 @@ const DUPLICATE_SCAN_LIMIT = 500;
 
 @Injectable()
 export class CommunitiesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   // ===== Узкий контракт для остальных модулей портала =====
   //
@@ -425,6 +430,19 @@ export class CommunitiesService {
           approved && body.verify ? adminId : community.verifiedById,
       },
     });
+
+    const event: AdminAuditEvent = {
+      actorId: adminId,
+      action: 'community.decided',
+      targetType: 'community',
+      targetId: id,
+      details: {
+        status: updated.status,
+        title: community.name,
+        verified: approved && body.verify === true,
+      },
+    };
+    this.events.emit('admin.action', event);
     return toCommunityDto(updated, null);
   }
 

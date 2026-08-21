@@ -71,7 +71,12 @@ describe('SelfIdentificationService.submitMentorForm', () => {
     };
     return {
       prisma,
-      service: new SelfIdentificationService(prisma as never),
+      service: new SelfIdentificationService(
+        prisma as never,
+        {
+          emit: jest.fn(),
+        } as never,
+      ),
     };
   }
 

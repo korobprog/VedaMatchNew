@@ -29,12 +29,40 @@ export class CatalogService {
               ...stageFilters,
             ],
           },
-      orderBy: [{ status: 'asc' }, { name: 'asc' }],
+      // Заданный администратором порядок важнее статуса: «скоро» может
+      // стоять выше активного, если так решили в каталоге.
+      orderBy: [{ sortOrder: 'asc' }, { status: 'asc' }, { name: 'asc' }],
     });
     return services.map((s) => ({
       id: s.id,
       slug: s.slug,
       name: s.name,
+      nameEn: s.nameEn,
+      description: s.description,
+      iconUrl: s.iconUrl,
+      url: s.url,
+      status: s.status,
+      category: s.category,
+      requiresDevoteeVerification:
+        s.devoteeVerifiedVisible && !s.devoteeSelfIdentifiedVisible,
+    }));
+  }
+
+  /**
+   * Каталог для гостя: лендинг и шапка показывают названия сервисов ещё до
+   * входа, поэтому им нужен маршрут без авторизации. Отдаются только публичные
+   * и не выключенные карточки — ровно то, что и так видно на витрине.
+   */
+  async getPublic(): Promise<ServiceCard[]> {
+    const services = await this.prisma.service.findMany({
+      where: { public: true, status: { not: 'disabled' } },
+      orderBy: [{ sortOrder: 'asc' }, { status: 'asc' }, { name: 'asc' }],
+    });
+    return services.map((s) => ({
+      id: s.id,
+      slug: s.slug,
+      name: s.name,
+      nameEn: s.nameEn,
       description: s.description,
       iconUrl: s.iconUrl,
       url: s.url,

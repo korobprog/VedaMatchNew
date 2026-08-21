@@ -8,14 +8,17 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   AccessTokenPayload,
+  AdminAuditEvent,
   AstroAdminUsageDto,
   AstroSettingsDto,
   UpdateAstroSettingsRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { AstroAdminService } from './astro-admin.service';
+import { isAdmin } from './is-admin';
 
 /**
  * Админка сервиса. Роль проверяется в каждом методе, как в AdminBillingModeController:
@@ -24,7 +27,10 @@ import { AstroAdminService } from './astro-admin.service';
 @Controller('admin/astro')
 @UseGuards(AuthGuard)
 export class AstroAdminController {
-  constructor(private readonly admin: AstroAdminService) {}
+  constructor(
+    private readonly admin: AstroAdminService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   @Get('settings')
   settings(@CurrentUser() user: AccessTokenPayload): Promise<AstroSettingsDto> {
@@ -54,11 +60,17 @@ export class AstroAdminController {
   @Post('resume')
   resume(@CurrentUser() user: AccessTokenPayload): Promise<AstroAdminUsageDto> {
     this.assertAdmin(user);
+    const event: AdminAuditEvent = {
+      actorId: user.sub,
+      action: 'astro.generation-resumed',
+      targetType: 'platform',
+    };
+    this.events.emit('admin.action', event);
     return this.admin.resume();
   }
 
   private assertAdmin(user: AccessTokenPayload): void {
-    if (user.role !== 'admin') {
+    if (!isAdmin(user)) {
       throw new ForbiddenException('Доступ только для администратора');
     }
   }

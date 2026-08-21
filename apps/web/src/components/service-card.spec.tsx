@@ -7,6 +7,7 @@ const service: ServiceCardType = {
   id: "union",
   slug: "union",
   name: "Union",
+  nameEn: "Union",
   description: "Знакомства и сотрудничество",
   iconUrl: null,
   url: "/union",

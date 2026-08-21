@@ -60,6 +60,7 @@ const { noticeRubrics } = require('./notice-rubrics-data.js') as {
 const services = [
   {
     slug: 'union',
+    nameEn: 'Union',
     name: 'Знакомства',
     description: 'Осознанные знакомства и сотрудничество: семья, дружба, служение, проекты',
     url: '/union',
@@ -74,6 +75,7 @@ const services = [
   },
   {
     slug: 'vedabase',
+    nameEn: 'Library',
     name: 'Книги',
     description: 'База знаний по Бхагавад-гите и ведическим текстам',
     url: '/vedabase',
@@ -88,6 +90,7 @@ const services = [
   },
   {
     slug: 'motivation',
+    nameEn: 'Motivation',
     name: 'Мотивация',
     description: 'Ежедневная мотивация и практики саморазвития',
     url: '/motivation',
@@ -102,6 +105,7 @@ const services = [
   },
   {
     slug: 'library',
+    nameEn: 'Education',
     name: 'Образование',
     description:
       'Общая база полезных материалов: статьи, видео, книги, курсы и каналы',
@@ -117,6 +121,7 @@ const services = [
   },
   {
     slug: 'astro',
+    nameEn: 'Astrology',
     name: 'Астрология',
     description:
       'Ведическая карта рождения с разбором и совместимость по звёздам',
@@ -135,6 +140,7 @@ const services = [
   },
   {
     slug: 'contacts',
+    nameEn: 'Contacts',
     name: 'Контакты',
     description:
       'Справочник общины: преподаватели, служения, профессии и навыки рядом',
@@ -152,6 +158,7 @@ const services = [
   },
   {
     slug: 'market',
+    nameEn: 'Market',
     name: 'Рынок',
     description:
       'Объявления комерческие и услуги в благости: товары, книги, мастерские и помощь',
@@ -169,6 +176,7 @@ const services = [
   },
   {
     slug: 'notices',
+    nameEn: 'Notices',
     name: 'Объявления',
     description:
       'Некоммерческая доска общины: отдам даром, нужны руки, попутчики, программы ятр',

@@ -7,6 +7,7 @@ import type {
   MotivationTrackDto,
   MotivationFeedResponse,
   MotivationAdminCandidateDto,
+  MotivationAdminHealth,
   MotivationPostDto,
   MotivationPreferenceDto,
   MotivationAdminReelFilter,
@@ -75,6 +76,9 @@ export const getPublicMotivationPost = (slug: string) =>
 
 export const getAdminMotivationPosts = () =>
   motivationGet<MotivationAdminCandidateDto[]>("/admin/motivation/posts");
+
+export const getAdminMotivationHealth = () =>
+  motivationGet<MotivationAdminHealth>("/admin/motivation/health");
 
 export const getAdminMotivationAuthorWatches = () =>
   motivationGet<MotivationAuthorWatchDto[]>("/admin/motivation/authors");

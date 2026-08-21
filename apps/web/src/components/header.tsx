@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { isPortalAdmin } from "@vedamatch/shared";
 import type { UserProfile } from "@vedamatch/shared";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Home, LifeBuoy, Bell, MoreHorizontal } from "lucide-react";
 import { ServiceIcon } from "@/components/icons/service-icons";
@@ -14,7 +15,8 @@ import { NotificationBell } from "@/components/notifications/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
 import { VedaMatchMark } from "@/components/icons/vedamatch-mark";
-import { SERVICE_CONTENT, serviceName } from "@/lib/service-content";
+import { useServiceNames } from "@/components/service-catalog-provider";
+import { SERVICE_CONTENT } from "@/lib/service-content";
 import { useDialogFocus, useDismissable } from "@/lib/use-dismissable";
 
 interface NavItem {
@@ -27,19 +29,19 @@ interface NavItem {
 // 8 пунктов и в том же порядке, что на лендинге и в /services. Подписи
 // зависят от языка интерфейса, поэтому список собирается внутри компонента.
 function useNavItems(): NavItem[] {
-  const locale = useLocale();
   const t = useTranslations("Common");
+  const names = useServiceNames();
   const home = t("home");
   return useMemo(
     () => [
       { href: "/", label: home, icon: <Home size={20} /> },
       ...SERVICE_CONTENT.map((service) => ({
         href: service.route,
-        label: serviceName(service, locale),
+        label: names(service.slug, service.name),
         icon: <ServiceIcon slug={service.slug} className="h-5 w-5" />,
       })),
     ],
-    [home, locale],
+    [home, names],
   );
 }
 
@@ -195,9 +197,9 @@ export function Header({ user }: { user: UserProfile }) {
             <LocaleToggle className="hidden sm:flex" />
             <ThemeToggle className="hidden sm:flex" />
 
-            {user.role === "admin" && (
+            {isPortalAdmin(user) && (
               <Link
-                href="/admin/users"
+                href="/admin"
                 className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-text-1 hover:text-magenta border border-glass-brd hover:border-magenta/30 transition-colors"
               >
                 {t("admin")}
@@ -284,54 +286,21 @@ export function Header({ user }: { user: UserProfile }) {
                   ))}
                 </nav>
                 
-                {user.role === "admin" && (
+                {isPortalAdmin(user) && (
                   <motion.div
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: navItems.length * 0.05 }}
                     className="mt-4 pt-4 border-t border-glass-brd"
                   >
+                    {/* Один вход: разделы админки живут в её собственном
+                        сайдбаре, дублировать их список в бургере незачем. */}
                     <Link
-                      href="/admin/users"
+                      href="/admin"
                       onClick={closeDrawer}
                       className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
                     >
                       <span className="text-sm font-medium">{t("adminPanel")}</span>
-                    </Link>
-                    <Link
-                      href="/admin/tickets"
-                      onClick={closeDrawer}
-                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
-                    >
-                      <span className="text-sm font-medium">{t("tickets")}</span>
-                    </Link>
-                    <Link
-                      href="/admin/astro"
-                      onClick={closeDrawer}
-                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
-                    >
-                      <span className="text-sm font-medium">{t("astro")}</span>
-                    </Link>
-                    <Link
-                      href="/admin/settings"
-                      onClick={closeDrawer}
-                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
-                    >
-                      <span className="text-sm font-medium">{t("settings")}</span>
-                    </Link>
-                    <Link
-                      href="/admin/changelog"
-                      onClick={closeDrawer}
-                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
-                    >
-                      <span className="text-sm font-medium">{t("changelog")}</span>
-                    </Link>
-                    <Link
-                      href="/admin/pwa"
-                      onClick={closeDrawer}
-                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
-                    >
-                      <span className="text-sm font-medium">{t("installStats")}</span>
                     </Link>
                   </motion.div>
                 )}

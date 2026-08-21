@@ -46,6 +46,7 @@ const user: UserProfile = {
   socialLinks: {},
   messengers: {},
   role: "user",
+  adminServices: [],
   spiritualStage: "seeker",
   devoteeVerificationStatus: null,
   birthDate: null,

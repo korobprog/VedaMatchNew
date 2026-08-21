@@ -13,6 +13,8 @@ import { MotivationGenerationService } from './motivation-generation.service';
 import { MotivationCopyService } from './motivation-copy.service';
 import { QuoteDiscoveryService } from './quote-discovery.service';
 import { composeStoryImage } from './story-image';
+import type { MotivationWorkerHealth } from '@vedamatch/shared';
+import { isWorkerAlive } from './motivation-worker-health';
 import { MotivationSettingsService } from './motivation-settings.service';
 import { MotivationModerationService } from './motivation-moderation.service';
 import { estimateImageCostUsd, IMAGE_SIZE } from './image-cost';
@@ -36,6 +38,10 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
   private running = false;
   private lastDiscoveryDate?: string;
+  /** Начало последнего тика — по нему админка видит, что воркер вообще живой. */
+  private lastTickAt: Date | null = null;
+  /** Последняя ошибка тика: в админке она нужнее, чем в логах контейнера. */
+  private lastError: { at: string; message: string } | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -99,9 +105,24 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  /**
+   * Состояние воркера для админки. Отдаёт то, что нельзя увидеть из базы:
+   * жив ли лиз в Redis, когда был последний тик и на чём он падал.
+   */
+  workerHealth(now = new Date()): MotivationWorkerHealth {
+    return {
+      redis: this.redis ? this.redis.status : 'disabled',
+      running: this.running,
+      alive: isWorkerAlive(this.lastTickAt, now),
+      lastTickAt: this.lastTickAt?.toISOString() ?? null,
+      lastError: this.lastError,
+    };
+  }
+
   async tick() {
     if (this.running) return;
     this.running = true;
+    this.lastTickAt = new Date();
     const lockKey = 'motivation:worker:lease';
     const token = crypto.randomUUID();
     if (this.redis?.status === 'ready') {
@@ -161,6 +182,10 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
       if (!claimed.count) return;
       await this.process(post.id);
     } catch (error) {
+      this.lastError = {
+        at: new Date().toISOString(),
+        message: error instanceof Error ? error.message : String(error),
+      };
       this.logger.error(
         'Motivation worker tick failed',
         error instanceof Error ? error.stack : undefined,

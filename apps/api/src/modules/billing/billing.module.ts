@@ -2,21 +2,22 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import {
   AdminBillingController,
-  AdminBillingModeController,
   AdminDonationController,
+  AdminPlatformSettingsController,
   BillingController,
 } from './billing.controller';
 import { BillingService } from './billing.service';
+import { PlatformSettingsService } from './platform-settings.service';
 
 @Module({
   imports: [AuthModule],
   controllers: [
     BillingController,
     AdminBillingController,
-    AdminBillingModeController,
-    AdminDonationController,
+      AdminDonationController,
+    AdminPlatformSettingsController,
   ],
-  providers: [BillingService],
+  providers: [BillingService, PlatformSettingsService],
   exports: [BillingService],
 })
 export class BillingModule {}

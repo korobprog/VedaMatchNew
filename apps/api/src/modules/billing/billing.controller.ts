@@ -9,12 +9,13 @@ import {
 } from '@nestjs/common';
 import type {
   AccessTokenPayload,
-  AdminUpdateBillingModeRequest,
   AdminUpdateDonationRequest,
+  AdminUpdatePlatformSettingsRequest,
   AdminUpdateSubscriptionRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { BillingService } from './billing.service';
+import { PlatformSettingsService } from './platform-settings.service';
 
 @Controller('billing')
 export class BillingController {
@@ -69,28 +70,33 @@ export class AdminBillingController {
     @Param('id') id: string,
     @Body() body: AdminUpdateSubscriptionRequest,
   ) {
-    return this.billing.adminUpdate(admin.role, id, body);
+    return this.billing.adminUpdate(admin, id, body);
   }
 }
 
-@Controller('admin/billing/mode')
+@Controller('admin/settings')
 @UseGuards(AuthGuard)
-export class AdminBillingModeController {
-  constructor(private readonly billing: BillingService) {}
+export class AdminPlatformSettingsController {
+  constructor(private readonly settings: PlatformSettingsService) {}
 
   @Get()
-  async get(@CurrentUser() admin: AccessTokenPayload) {
-    if (admin.role !== 'admin') {
-      throw new ForbiddenException('Доступ только для администратора');
-    }
-    return { mode: await this.billing.billingMode() };
+  async read(@CurrentUser() admin: AccessTokenPayload) {
+    this.assertAdmin(admin);
+    return this.settings.read();
   }
 
   @Patch()
   async update(
     @CurrentUser() admin: AccessTokenPayload,
-    @Body() body: AdminUpdateBillingModeRequest,
+    @Body() body: AdminUpdatePlatformSettingsRequest,
   ) {
-    return { mode: await this.billing.setBillingMode(admin.role, body.mode) };
+    this.assertAdmin(admin);
+    return this.settings.update(admin.sub, body);
+  }
+
+  private assertAdmin(admin: AccessTokenPayload): void {
+    if (admin.role !== 'admin') {
+      throw new ForbiddenException('Доступ только для администратора');
+    }
   }
 }

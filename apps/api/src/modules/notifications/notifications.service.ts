@@ -150,6 +150,17 @@ export class NotificationsService {
     });
   }
 
+  /**
+   * Одинаковое уведомление многим за один запрос. Нужно рассылкам: класть его
+   * по одному — двести INSERT'ов на пакет.
+   */
+  async addManyToInbox(userIds: string[], draft: InboxDraft): Promise<void> {
+    if (userIds.length === 0) return;
+    await this.prisma.notificationItem.createMany({
+      data: userIds.map((userId) => ({ userId, ...draft })),
+    });
+  }
+
   async countUnread(userId: string): Promise<number> {
     return this.prisma.notificationItem.count({
       where: { userId, readAt: null },

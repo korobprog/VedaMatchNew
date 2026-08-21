@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { LibraryAdminController } from './library-admin.controller';
+import { LibraryAdminService } from './library-admin.service';
 import { LibraryCategoriesController } from './library-categories.controller';
 import { LibraryCategoriesService } from './library-categories.service';
 import { LibraryBookmarksService } from './library-bookmarks.service';
@@ -23,6 +25,7 @@ import { LibrarySectionsService } from './library-sections.service';
     LibraryEntriesController,
     LibraryCommentsController,
     LibraryPreferencesController,
+    LibraryAdminController,
   ],
   providers: [
     LibrarySectionsService,
@@ -32,6 +35,7 @@ import { LibrarySectionsService } from './library-sections.service';
     LibraryPreviewsService,
     LibraryBookmarksService,
     LibraryCommentsService,
+    LibraryAdminService,
   ],
 })
 export class LibraryModule {}

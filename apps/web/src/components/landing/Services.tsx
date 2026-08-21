@@ -4,7 +4,8 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useLocale, useTranslations } from "next-intl";
 import { ServiceIcon } from "@/components/icons/service-icons";
-import { SERVICE_CONTENT, serviceName, serviceTagline } from "@/lib/service-content";
+import { useServiceNames } from "@/components/service-catalog-provider";
+import { SERVICE_CONTENT, serviceTagline } from "@/lib/service-content";
 import { cn } from "@/lib/utils";
 
 const containerVariants = {
@@ -24,6 +25,7 @@ const itemVariants = {
 export function Services() {
   const t = useTranslations("Landing.services");
   const locale = useLocale();
+  const names = useServiceNames();
   return (
     <section id="services" className="relative py-20 md:py-32">
       <div className="mx-auto max-w-6xl px-4 md:px-6">
@@ -71,7 +73,7 @@ export function Services() {
                   <ServiceIcon slug={service.slug} className="h-8 w-8" />
                 </span>
                 <h3 className="font-display text-lg font-bold text-text-0 mb-2">
-                  {serviceName(service, locale)}
+                  {names(service.slug, service.name)}
                 </h3>
                 <p className="text-text-1 text-sm leading-relaxed flex-1">
                   {serviceTagline(service, locale)}

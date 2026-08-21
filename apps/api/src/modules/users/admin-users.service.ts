@@ -16,7 +16,11 @@ import type {
   AdminPurgeUserResponse,
   AdminManualStageUpdateRequest,
   AdminMentorVerificationRequest,
+  AdminAuditAction,
+  AdminAuditDetails,
+  AdminAuditEvent,
   AdminRoleUpdateRequest,
+  AdminServiceScopeUpdateRequest,
   AdminUserDetail,
   AdminUserListResponse,
   DevoteeVerificationStatus,
@@ -27,7 +31,7 @@ import type {
   StageHistoryItem,
   UserAccountStatus,
 } from '@vedamatch/shared';
-import { resolveDisplayName } from '@vedamatch/shared';
+import { ADMIN_SERVICE_SLUGS, resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toRole } from '../auth/role';
 import {
@@ -189,9 +193,10 @@ export class AdminUsersService {
 
     if (!user) throw new NotFoundException('Пользователь не найден');
 
-    const [availableServices, billingMode] = await Promise.all([
+    const [availableServices, billingMode, adminServices] = await Promise.all([
       this.getAvailableServicesFor(user.id, toRole(user.role)),
       readBillingMode(this.prisma),
+      this.listAdminServices(user.id),
     ]);
 
     return {
@@ -213,6 +218,7 @@ export class AdminUsersService {
         socialLinks: parseSocialLinks(user.socialLinks),
         messengers: parseMessengers(user.messengers),
         role: toRole(user.role),
+        adminServices,
         spiritualStage: user.spiritualStage,
         devoteeVerificationStatus: user.devoteeVerificationStatus,
         lastSelfIdentificationAt:
@@ -305,6 +311,12 @@ export class AdminUsersService {
       }),
     ]);
 
+    this.audit(admin.sub, 'user.stage-changed', userId, {
+      from: user.spiritualStage,
+      to: body.spiritualStage,
+      status: nextStatus,
+      reason: body.reason.trim(),
+    });
     return this.getUser(admin.role, userId);
   }
 
@@ -335,6 +347,82 @@ export class AdminUsersService {
       },
     });
 
+    // Выданные сервисы имеют смысл только у роли service-admin: у admin права
+    // и так полные, у user их не должно остаться после разжалования.
+    if (body.role !== 'service-admin') {
+      await this.prisma.serviceAdmin.deleteMany({ where: { userId } });
+    }
+
+    this.audit(admin.sub, 'user.role-changed', userId, {
+      from: toRole(user.role),
+      to: body.role,
+    });
+    return this.getUser(admin.role, userId);
+  }
+
+  /** Слаги сервисов, которыми управляет аккаунт (пусто у всех, кроме service-admin). */
+  private async listAdminServices(userId: string): Promise<string[]> {
+    const scopes = await this.prisma.serviceAdmin.findMany({
+      where: { userId },
+      select: { service: { select: { slug: true } } },
+    });
+    return scopes.map((scope) => scope.service.slug);
+  }
+
+  /**
+   * Полная замена набора сервисов у администратора сервиса. Только для роли
+   * service-admin: у admin список игнорируется, у обычного пользователя прав нет.
+   */
+  async updateAdminServices(
+    admin: { sub: string; role: Role },
+    userId: string,
+    body: AdminServiceScopeUpdateRequest,
+  ): Promise<AdminUserDetail> {
+    this.ensureAdmin(admin.role);
+
+    const requested = body?.services ?? [];
+    if (!Array.isArray(requested)) {
+      throw new BadRequestException('Некорректный список сервисов');
+    }
+    const slugs = [...new Set(requested)];
+    const unknown = slugs.filter((slug) => !ADMIN_SERVICE_SLUGS.includes(slug));
+    if (unknown.length > 0) {
+      throw new BadRequestException(
+        `Неизвестный сервис: ${unknown.join(', ')}`,
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Пользователь не найден');
+    if (user.role !== 'service_admin' && slugs.length > 0) {
+      throw new BadRequestException(
+        'Сервисы выдаются только роли «администратор сервиса»',
+      );
+    }
+
+    const services = await this.prisma.service.findMany({
+      where: { slug: { in: slugs } },
+      select: { id: true, slug: true },
+    });
+    const missing = slugs.filter(
+      (slug) => !services.some((service) => service.slug === slug),
+    );
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Сервиса нет в каталоге: ${missing.join(', ')}`,
+      );
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.serviceAdmin.deleteMany({ where: { userId } }),
+      this.prisma.serviceAdmin.createMany({
+        data: services.map((service) => ({ userId, serviceId: service.id })),
+      }),
+    ]);
+
+    this.audit(admin.sub, 'user.services-changed', userId, {
+      services: slugs.join(', ') || '—',
+    });
     return this.getUser(admin.role, userId);
   }
 
@@ -382,6 +470,10 @@ export class AdminUsersService {
           },
         }),
       ]);
+      this.audit(admin.sub, 'user.blocked', userId, {
+        reason,
+        until: blockedUntil?.toISOString() ?? 'бессрочно',
+      });
     } else {
       // Разблокировать можно только заблокированного: удалённый аккаунт
       // иначе становился бы «активным» с заполненным deletedAt.
@@ -398,6 +490,7 @@ export class AdminUsersService {
           blockedUntil: null,
         },
       });
+      this.audit(admin.sub, 'user.unblocked', userId);
     }
 
     return this.getUser(admin.role, userId);
@@ -443,6 +536,7 @@ export class AdminUsersService {
       }),
     ]);
 
+    this.audit(admin.sub, 'user.deleted', userId, { reason });
     return this.getUser(admin.role, userId);
   }
 
@@ -497,6 +591,9 @@ export class AdminUsersService {
       ...contributions,
     ]);
 
+    // Журнал пишется до удаления: строки User уже не будет, поэтому в
+    // подробностях остаётся email — по нему запись и опознают потом.
+    this.audit(admin.sub, 'user.purged', userId, { reason, email: user.email });
     await this.prisma.user.delete({ where: { id: userId } });
     this.logger.warn(
       `Безвозвратно удалён аккаунт ${user.email} (${userId}) администратором ${admin.sub}: ${reason}`,
@@ -601,7 +698,28 @@ export class AdminUsersService {
       },
     });
 
+    this.audit(admin.sub, 'user.restored', userId);
     return this.getUser(admin.role, userId);
+  }
+
+  /**
+   * Событие для журнала действий. Отправляется через шину, а не вызовом чужого
+   * сервиса: журнал не должен быть зависимостью модуля пользователей.
+   */
+  private audit(
+    actorId: string,
+    action: AdminAuditAction,
+    userId: string,
+    details?: AdminAuditDetails,
+  ): void {
+    const event: AdminAuditEvent = {
+      actorId,
+      action,
+      targetType: 'user',
+      targetId: userId,
+      details,
+    };
+    this.events.emit('admin.action', event);
   }
 
   private ensureAdmin(role: Role) {
@@ -712,6 +830,7 @@ export class AdminUsersService {
       id: s.id,
       slug: s.slug,
       name: s.name,
+      nameEn: s.nameEn,
       description: s.description,
       iconUrl: s.iconUrl,
       url: s.url,

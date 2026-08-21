@@ -18,11 +18,51 @@ export * from './changelog';
 export * from './market';
 export * from './community';
 export * from './notices';
+export * from './audit';
 export * from './pwa';
 
-import type { SubscriptionState } from './support';
+import type { BillingMode, SubscriptionState } from './support';
 
 export type Role = 'user' | 'admin' | 'service-admin';
+
+/**
+ * Сервисы, у которых есть собственный раздел админки. Роль `service-admin`
+ * получает права ровно на те из них, что перечислены в `adminServices`.
+ * Портальные разделы (пользователи, биллинг, поддержка, сообщества,
+ * changelog, настройки) в список не входят — они только для роли `admin`.
+ */
+export const ADMIN_SERVICE_SLUGS = [
+  'union',
+  'market',
+  'motivation',
+  'library',
+  'notices',
+  'astro',
+  'contacts',
+  'vedabase',
+] as const;
+
+export type AdminServiceSlug = (typeof ADMIN_SERVICE_SLUGS)[number];
+
+/** Есть ли у аккаунта доступ хоть к какой-то части админки. */
+export function isPortalAdmin(user: { role: Role }): boolean {
+  return user.role === 'admin' || user.role === 'service-admin';
+}
+
+/**
+ * Право администрировать конкретный сервис. `admin` управляет всем порталом,
+ * `service-admin` — только сервисами из своего списка. Список приходит из базы
+ * (см. модель ServiceAdmin), а не из токена: разжалованный админ иначе
+ * сохранял бы права до истечения access-токена.
+ */
+export function canAdminService(
+  user: { role: Role; adminServices?: string[] },
+  slug: AdminServiceSlug,
+): boolean {
+  if (user.role === 'admin') return true;
+  if (user.role !== 'service-admin') return false;
+  return (user.adminServices ?? []).includes(slug);
+}
 
 export type ServiceStatus = 'active' | 'coming_soon' | 'disabled';
 
@@ -82,6 +122,8 @@ export interface UserProfile {
   socialLinks: ProfileSocialLinks;
   messengers: ProfileMessengers;
   role: Role;
+  /** Слаги сервисов, которыми управляет `service-admin`; у остальных ролей пусто. */
+  adminServices: string[];
   spiritualStage: SpiritualStage | null;
   devoteeVerificationStatus: DevoteeVerificationStatus | null;
   lastSelfIdentificationAt: string | null;
@@ -201,6 +243,8 @@ export interface ServiceCard {
   id: string;
   slug: string;
   name: string;
+  /** Английское название; `null` — показывать русское и в en-локали. */
+  nameEn: string | null;
   description: string;
   iconUrl: string | null;
   url: string;
@@ -213,6 +257,11 @@ export interface AccessTokenPayload {
   sub: string;
   email: string;
   role: Role;
+  /**
+   * Слаги сервисов, которыми управляет `service-admin`. В подписанный токен не
+   * попадает: AuthGuard подставляет актуальный список из базы на каждый запрос.
+   */
+  adminServices?: string[];
 }
 
 export interface SelfIdentificationAnswers {
@@ -374,6 +423,11 @@ export interface AdminRoleUpdateRequest {
   confirmSelfChange?: boolean;
 }
 
+/** Полная замена набора сервисов у роли `service-admin`. */
+export interface AdminServiceScopeUpdateRequest {
+  services: AdminServiceSlug[];
+}
+
 export interface AdminBlockUserRequest {
   blocked: boolean;
   reason?: string;
@@ -413,4 +467,185 @@ export interface AdminPurgeUserResponse {
 
 export interface CommunityStats {
   totalMembers: number;
+  /** Городов, где есть хотя бы один участник. */
+  totalCities: number;
+  /** Подтверждённых общин: храмы, ятры, нама-хатты. */
+  totalCommunities: number;
+}
+
+/** Точка графика: день или месяц и сколько регистраций в нём. */
+export interface PortalStatsPoint {
+  /** `YYYY-MM-DD` для дней, `YYYY-MM` для месяцев. */
+  period: string;
+  count: number;
+}
+
+/**
+ * Статистика портала для участников. Только портальные сущности: людей,
+ * города, общины. Данные сервисов сюда не тянутся — портал не читает их
+ * таблицы, см. контракт сервисного модуля.
+ */
+export interface PortalStats {
+  people: {
+    total: number;
+    newLast7Days: number;
+    newLast30Days: number;
+    activeLast7Days: number;
+  };
+  /** Сколько людей на каждом этапе; `null` — этап не выбран. */
+  stages: Array<{ stage: SpiritualStage | null; count: number }>;
+  /** Города, где участников не меньше порога; остальные сведены в «другие». */
+  cities: Array<{ city: string; count: number }>;
+  /** Сколько людей в городах, не прошедших порог. */
+  otherCitiesPeople: number;
+  registrationsByDay: PortalStatsPoint[];
+  registrationsByMonth: PortalStatsPoint[];
+  communities: number;
+}
+
+/**
+ * Меньше скольких человек город не показывается отдельно. При небольшом
+ * портале город с одним участником — это почти имя и фамилия.
+ */
+export const CITY_PRIVACY_THRESHOLD = 3;
+
+/** Одна строка очереди на главной админки: сколько ждёт разбора и куда идти. */
+export interface AdminQueueCounter {
+  key:
+    | 'userReports'
+    | 'supportTickets'
+    | 'verificationRequests'
+    | 'communities';
+  count: number;
+}
+
+/**
+ * Портальная сводка для главной админки. Сервисные счётчики сюда не попадают:
+ * их отдают сами сервисы, портал в чужие таблицы не ходит.
+ */
+export interface AdminPortalStats {
+  users: {
+    total: number;
+    active: number;
+    blocked: number;
+    newLast7Days: number;
+    newLast30Days: number;
+    seenLast24Hours: number;
+    paidSubscriptions: number;
+  };
+  queues: AdminQueueCounter[];
+}
+
+// ===== Каталог сервисов портала (админка) =====
+
+/**
+ * Карточка сервиса глазами администрации: все флаги видимости, а не итог их
+ * применения. Маркетинговые тексты лендинга сюда не входят — они живут в коде
+ * (apps/web/src/lib/service-content.ts), здесь только сетка портала.
+ */
+export interface AdminServiceCardDto {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  iconUrl: string | null;
+  url: string;
+  status: ServiceStatus;
+  category: string;
+  nameEn: string | null;
+  sortOrder: number;
+  /** `false` — сервис виден только по персональному доступу или по этапу. */
+  public: boolean;
+  seekerVisible: boolean;
+  practitionerVisible: boolean;
+  yogiVisible: boolean;
+  devoteeSelfIdentifiedVisible: boolean;
+  devoteeVerifiedVisible: boolean;
+  /** Сколько человек получили персональный доступ к сервису. */
+  personalAccessCount: number;
+  updatedAt: string;
+}
+
+export type UpdateAdminServiceRequest = Partial<
+  Pick<
+    AdminServiceCardDto,
+    | 'name'
+    | 'description'
+    | 'iconUrl'
+    | 'url'
+    | 'status'
+    | 'category'
+    | 'nameEn'
+    | 'sortOrder'
+    | 'public'
+    | 'seekerVisible'
+    | 'practitionerVisible'
+    | 'yogiVisible'
+    | 'devoteeSelfIdentifiedVisible'
+    | 'devoteeVerifiedVisible'
+  >
+>;
+
+export interface CreateAdminServiceRequest extends UpdateAdminServiceRequest {
+  /** Задаётся один раз: слаг попадает в ссылки и потом не меняется. */
+  slug: string;
+  name: string;
+  description: string;
+  url: string;
+  /** Группа в сетке портала; у существующих сервисов — `community`. */
+  category: string;
+}
+
+// ===== Настройки платформы (админка) =====
+
+/** Приём новых аккаунтов. `closed` не мешает входить уже заведённым. */
+export type RegistrationMode = 'open' | 'closed';
+
+/**
+ * Внешняя интеграция глазами администрации. Значения ключей наружу не уходят
+ * никогда — только факт настройки: этого достаточно, чтобы понять, почему
+ * не идут пуши или не генерируются картинки.
+ */
+export interface AdminIntegrationStatus {
+  key:
+    | 'google-oauth'
+    | 'storage'
+    | 'push'
+    | 'redis'
+    | 'motivation-ai'
+    | 'motivation-media'
+    | 'astro-ai';
+  /** Все обязательные переменные окружения заданы. */
+  configured: boolean;
+  /** Каких переменных не хватает. Имена, не значения. */
+  missing: string[];
+}
+
+export interface AdminPlatformSettings {
+  billingMode: BillingMode;
+  registrationMode: RegistrationMode;
+  registrationNote: string | null;
+  integrations: AdminIntegrationStatus[];
+  updatedAt: string | null;
+}
+
+export interface AdminUpdatePlatformSettingsRequest {
+  billingMode?: BillingMode;
+  registrationMode?: RegistrationMode;
+  registrationNote?: string | null;
+}
+
+export const REGISTRATION_NOTE_MAX_LENGTH = 300;
+
+/**
+ * Название сервиса в нужной локали. Единственное место, где решается, какое
+ * имя показывать: и лендинг, и шапка, и сетка портала зовут её, чтобы правка
+ * в каталоге админки доезжала везде одинаково.
+ */
+export function serviceCardName(
+  service: Pick<ServiceCard, 'name' | 'nameEn'>,
+  locale: string,
+): string {
+  if (locale !== 'en') return service.name;
+  return service.nameEn?.trim() || service.name;
 }

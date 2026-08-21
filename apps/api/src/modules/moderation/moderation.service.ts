@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type {
+  AdminAuditEvent,
   Role,
   AdminUpdateUserReportRequest,
   AdminUserReportDto,
@@ -17,6 +18,7 @@ import type {
   UserReportReason,
   UserReportStatus,
 } from '@vedamatch/shared';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const REPORT_REASONS: UserReportReason[] = [
@@ -32,7 +34,10 @@ const MAX_COMMENT_LENGTH = 1000;
 
 @Injectable()
 export class ModerationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   /**
    * Идентификаторы, которых нельзя показывать пользователю: симметричные
@@ -325,6 +330,15 @@ export class ModerationService {
         reviewedById: body.status === 'open' ? null : moderator.sub,
       },
     });
+
+    const event: AdminAuditEvent = {
+      actorId: moderator.sub,
+      action: 'report.resolved',
+      targetType: 'report',
+      targetId: reportId,
+      details: { status: body.status, note },
+    };
+    this.events.emit('admin.action', event);
     return { ok: true };
   }
 

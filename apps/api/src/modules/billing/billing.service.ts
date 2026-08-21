@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type {
+  AdminAuditEvent,
   AdminUpdateDonationRequest,
   AdminUpdateSubscriptionRequest,
   BillingMode,
@@ -13,6 +14,7 @@ import type {
   Role,
   SubscriptionState,
 } from '@vedamatch/shared';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -49,24 +51,14 @@ const MAX_ADD_MONTHS = 36;
 
 @Injectable()
 export class BillingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   /** Текущий режим биллинга; при отсутствии строки настроек — обычная бизнес-логика. */
   billingMode(): Promise<BillingMode> {
     return readBillingMode(this.prisma);
-  }
-
-  async setBillingMode(role: Role, mode: BillingMode): Promise<BillingMode> {
-    if (role !== 'admin') {
-      throw new ForbiddenException('Доступ только для администратора');
-    }
-    const updated = await this.prisma.appSettings.upsert({
-      where: { id: SETTINGS_ID },
-      create: { id: SETTINGS_ID, billingMode: mode },
-      update: { billingMode: mode },
-      select: { billingMode: true },
-    });
-    return updated.billingMode;
   }
 
   /** Реквизиты пожертвований для кнопки «поддержать»: пусто, пока админ не включил. */
@@ -154,11 +146,11 @@ export class BillingService {
   }
 
   async adminUpdate(
-    role: Role,
+    admin: { sub: string; role: Role },
     userId: string,
     body: AdminUpdateSubscriptionRequest,
   ): Promise<SubscriptionState> {
-    if (role !== 'admin') {
+    if (admin.role !== 'admin') {
       throw new ForbiddenException('Доступ только для администратора');
     }
     const user = await this.prisma.user.findUnique({
@@ -219,6 +211,18 @@ export class BillingService {
       }),
       this.billingMode(),
     ]);
+
+    const event: AdminAuditEvent = {
+      actorId: admin.sub,
+      action: 'user.subscription-changed',
+      targetType: 'user',
+      targetId: userId,
+      details: {
+        paidUntil: updated.subscriptionPaidUntil?.toISOString() ?? null,
+        note: updated.subscriptionNote,
+      },
+    };
+    this.events.emit('admin.action', event);
     return toSubscriptionState(updated, new Date(), mode);
   }
 }

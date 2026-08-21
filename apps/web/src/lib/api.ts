@@ -10,7 +10,17 @@ import type {
   AdminUserListResponse,
   AdminUserReportsResponse,
   AdminAnnouncementDto,
-  AdminBillingModeResponse,
+  AdminPlatformSettings,
+  PortalStats,
+  AdminAuditListResponse,
+  AdminAuditQuery,
+  AdminPortalStats,
+  AdminServiceCardDto,
+  ContactsAdminProfileListResponse,
+  ContactsAdminProfileQuery,
+  ContactsAdminStats,
+  ContactsAdminTagDto,
+  NotificationBroadcastDto,
   AdminReleaseDto,
   DonationSettingsDto,
   AdminRoadmapItemDto,
@@ -72,6 +82,9 @@ async function apiGetPublic<T>(path: string): Promise<T | null> {
  */
 export const getProfile = cache(() => apiGet<UserProfile>("/users/me"));
 export const getServices = () => apiGet<ServiceCard[]>("/services");
+/** Каталог для гостя: лендинг и шапка показывают названия до авторизации. */
+export const getPublicServices = () =>
+  apiGetPublic<ServiceCard[]>("/services/public");
 export const getSelfIdentificationState = () =>
   apiGet<SelfIdentificationState>("/self-identification/me");
 export const getSelfIdentificationHistory = () =>
@@ -88,6 +101,41 @@ export const getAdminUsers = (query: Record<string, string | undefined>) => {
   const qs = params.toString();
   return apiGet<AdminUserListResponse>(`/admin/users${qs ? `?${qs}` : ""}`);
 };
+// ===== Админка «Контактов». Команды — в lib/contacts-admin-api.ts =====
+
+export const getContactsAdminStats = () =>
+  apiGet<ContactsAdminStats>("/contacts/admin/stats");
+export const getContactsAdminTags = () =>
+  apiGet<ContactsAdminTagDto[]>("/contacts/admin/tags");
+export const getContactsAdminProfiles = (query: ContactsAdminProfileQuery) => {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  }
+  const qs = params.toString();
+  return apiGet<ContactsAdminProfileListResponse>(
+    `/contacts/admin/profiles${qs ? `?${qs}` : ""}`,
+  );
+};
+
+/** Каталог сервисов портала. Команды над ним — в lib/catalog-admin-api.ts. */
+export const getAdminServices = () =>
+  apiGet<AdminServiceCardDto[]>("/admin/catalog/services");
+/** Журнал действий администрации. Фильтры приходят из query страницы. */
+export const getAdminAudit = (query: AdminAuditQuery) => {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  }
+  const qs = params.toString();
+  return apiGet<AdminAuditListResponse>(`/admin/audit${qs ? `?${qs}` : ""}`);
+};
+/** История рассылок администрации. Команды над ними — в lib/broadcasts-api.ts. */
+export const getAdminBroadcasts = () =>
+  apiGet<NotificationBroadcastDto[]>("/admin/notifications/broadcasts");
+/** Сводка на главной админки; для роли service-admin API отвечает 403. */
+export const getAdminPortalStats = () =>
+  apiGet<AdminPortalStats>("/admin/stats/portal");
 export const getAdminUserReports = (status?: string) => {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
   return apiGet<AdminUserReportsResponse>(`/admin/reports${query}`);
@@ -111,10 +159,13 @@ export const getAdminSupportTicket = (id: string) =>
   apiGet<AdminSupportTicketDto>(`/admin/support/tickets/${id}`);
 /** Публичный тариф, включает текущий режим биллинга (beta/business). */
 export const getBillingPlan = () => apiGetPublic<PricingPlan>("/billing/plan");
+/** Подробная статистика портала; доступна только вошедшим. */
+export const getPortalStats = () => apiGet<PortalStats>("/stats/portal");
 export const getCommunityStats = () =>
   apiGetPublic<CommunityStats>("/stats/community");
-export const getAdminBillingMode = () =>
-  apiGet<AdminBillingModeResponse>("/admin/billing/mode");
+/** Глобальные настройки портала. Команды — в lib/settings-admin-api.ts. */
+export const getAdminPlatformSettings = () =>
+  apiGet<AdminPlatformSettings>("/admin/settings");
 
 // ===== Пожертвования на развитие (бета) =====
 

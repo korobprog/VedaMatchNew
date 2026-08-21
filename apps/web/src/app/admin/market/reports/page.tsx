@@ -1,36 +1,40 @@
-import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { requireUser } from "@/lib/require-user";
-import { getMarketAdminReports } from "@/lib/market-api";
-import { getServerLocale } from "@/i18n/get-locale";
 import { AdminReportActions } from "@/components/market/admin-report-actions";
+import { MarketAdminTabs } from "@/components/market/admin/admin-tabs";
+import { HideListingForm } from "@/components/market/admin/hide-listing-form";
 import { template } from "@/components/market/labels";
+import { getServerLocale } from "@/i18n/get-locale";
+import { getMarketAdminReports } from "@/lib/market-api";
 
-export default async function MarketAdminReportsPage() {
-  const user = await requireUser();
-  // Права проверяет и API, но страницу админа посторонним показывать незачем
-  // даже пустой: сам факт её существования — лишняя подсказка.
-  if (user.role !== "admin") notFound();
+export const metadata = {
+  title: "Жалобы Рынка",
+  robots: { index: false, follow: false },
+};
 
+export default async function AdminMarketReportsPage() {
   const [t, locale, reports] = await Promise.all([
     getTranslations("Market"),
     getServerLocale(),
     getMarketAdminReports(),
   ]);
+  const items = reports?.items ?? [];
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8 pb-24">
-      <h1 className="mb-6 font-display text-2xl font-bold text-text-0">
-        {t("admin.reports")}
-      </h1>
+    <>
+      <MarketAdminTabs active="reports" reportsCount={items.length} />
 
-      {!reports || reports.items.length === 0 ? (
+      <p className="mb-4 max-w-3xl text-sm text-text-1">
+        «Подтвердить и скрыть» убирает объект из выдачи насовсем. «Отклонить»
+        закрывает все открытые жалобы на этот объект и снимает автоскрытие.
+      </p>
+
+      {items.length === 0 ? (
         <p className="glass rounded-2xl border border-glass-brd p-6 text-sm text-text-1">
           {t("admin.reportsEmpty")}
         </p>
       ) : (
         <ul className="space-y-3">
-          {reports.items.map((report) => (
+          {items.map((report) => (
             <li
               key={report.id}
               className="glass rounded-2xl border border-glass-brd p-4"
@@ -39,7 +43,7 @@ export default async function MarketAdminReportsPage() {
                 <span className="rounded-full border border-glass-brd px-2 py-0.5 text-text-2">
                   {t(`report.targets.${report.targetKind}`)}
                 </span>
-                <span className="rounded-full border border-magenta/40 px-2 py-0.5 text-magenta">
+                <span className="rounded-full border border-magenta/40 px-2 py-0.5 text-text-1">
                   {t(`report.reasons.${report.reason}`)}
                 </span>
                 {report.targetHidden && (
@@ -61,7 +65,8 @@ export default async function MarketAdminReportsPage() {
                   "{count}",
                   String(report.openReportsCount),
                 )}
-                {report.reporter && ` · ${t("admin.reporter")}: ${report.reporter.name}`}
+                {report.reporter &&
+                  ` · ${t("admin.reporter")}: ${report.reporter.name}`}
               </p>
 
               {report.note && (
@@ -75,6 +80,8 @@ export default async function MarketAdminReportsPage() {
           ))}
         </ul>
       )}
-    </main>
+
+      <HideListingForm />
+    </>
   );
 }

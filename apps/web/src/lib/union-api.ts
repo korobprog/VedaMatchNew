@@ -5,6 +5,11 @@ import type {
   UnionChatsState,
   UnionConnectionCounts,
   UnionConnectionRequestsState,
+  UnionAdminChatResponse,
+  UnionAdminProfileDto,
+  UnionAdminProfileListResponse,
+  UnionAdminProfileQuery,
+  UnionAdminStats,
   UnionProfileState,
   UnionRecommendation,
   UnionRecommendationsResponse,
@@ -49,6 +54,33 @@ export const getUnionBlocks = () => unionGet<UserBlocksState>("/union/blocks");
 export const getUnionChats = () => unionGet<UnionChatsState>("/union/chats");
 export const getUnionChat = (id: string) =>
   unionGet<UnionChatState>(`/union/chats/${encodeURIComponent(id)}`);
+
+// ===== Админка Union. Команды над анкетами — в union-admin-api.ts =====
+
+export const getUnionAdminStats = () =>
+  unionGet<UnionAdminStats>("/union/admin/stats");
+
+export const getUnionAdminProfiles = (query: UnionAdminProfileQuery) => {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  }
+  const qs = params.toString();
+  return unionGet<UnionAdminProfileListResponse>(
+    `/union/admin/profiles${qs ? `?${qs}` : ""}`,
+  );
+};
+
+export const getUnionAdminProfile = (userId: string) =>
+  unionGet<UnionAdminProfileDto>(
+    `/union/admin/profiles/${encodeURIComponent(userId)}`,
+  );
+
+/** Переписка пары по жалобе. Каждый просмотр попадает в журнал действий. */
+export const getUnionAdminChat = (reportId: string) =>
+  unionGet<UnionAdminChatResponse>(
+    `/union/admin/reports/${encodeURIComponent(reportId)}/chat`,
+  );
 
 export function toQueryString(
   params?: Record<string, string | string[] | undefined>,

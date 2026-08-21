@@ -248,6 +248,7 @@ model User {
 
   refreshTokens                      RefreshToken[]
   serviceAccess                      ServiceAccess[]
+  serviceAdminScopes                 ServiceAdmin[]
   loginAudits                        LoginAudit[]
   pushSubscriptions                  PushSubscription[]
   astroBirthData                     AstroBirthData?
@@ -256,6 +257,8 @@ model User {
   astroCompatibilityRequestsReceived AstroCompatibilityRequest[]  @relation("AstroCompatibilityTarget")
   notificationPreference             NotificationPreference?
   notificationItems                  NotificationItem[]
+  notificationBroadcasts             NotificationBroadcast[]      @relation("NotificationBroadcastsCreated")
+  adminAuditEntries                  AdminAuditEntry[]            @relation("AdminAuditEntries")
   selfIdentificationResponses        SelfIdentificationResponse[]
   stageHistory                       StageHistory[]
   mentorVerificationRequests         MentorVerificationRequest[]
@@ -336,17 +339,27 @@ model User {
 }
 
 // Единственная строка глобальных настроек платформы (id всегда "global").
+/// Приём новых аккаунтов. `closed` не трогает уже заведённых: вход остаётся,
+/// не создаётся только новая запись при первом входе через Google.
+enum RegistrationMode {
+  open
+  closed
+}
+
 model AppSettings {
-  id                 String      @id @default("global")
-  billingMode        BillingMode @default(business)
+  id                 String           @id @default("global")
+  billingMode        BillingMode      @default(business)
+  registrationMode   RegistrationMode @default(open)
+  /// Что увидит человек, которому отказано в регистрации. Пусто — общий текст.
+  registrationNote   String?
   /// Пожертвования на развитие в бете: кнопка показывается, только когда
   /// включено и есть хотя бы один реквизит. Реквизиты — массив
   /// `{ kind, label, value }`; набор произвольный (СБП, карта, крипто,
   /// ссылка), поэтому JSON, а не колонки.
-  donationEnabled    Boolean     @default(false)
+  donationEnabled    Boolean          @default(false)
   donationText       String?
   donationRequisites Json?
-  updatedAt          DateTime    @updatedAt
+  updatedAt          DateTime         @updatedAt
 }
 
 model UserPhoto {
@@ -813,8 +826,13 @@ model Service {
   description                  String
   iconUrl                      String?
   url                          String
+  /// Английское название. Отдаётся лендингу и шапке при locale=en; пусто —
+  /// показывается русское.
+  nameEn                       String?
   status                       ServiceStatus @default(coming_soon)
   category                     String
+  /// Порядок в сетке портала. Меньше — выше; при равенстве сортировка по имени.
+  sortOrder                    Int           @default(0)
   // null/true = СЃРµСЂРІРёСЃ РґРѕСЃС‚СѓРїРµРЅ РІСЃРµРј Р°РІС‚РѕСЂРёР·РѕРІР°РЅРЅС‹Рј; РёРЅР°С‡Рµ РґРѕСЃС‚СѓРї С‡РµСЂРµР· ServiceAccess/СЂРѕР»СЊ/СЌС‚Р°Рї РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
   public                       Boolean       @default(true)
   seekerVisible                Boolean       @default(true)
@@ -826,6 +844,20 @@ model Service {
   updatedAt                    DateTime      @updatedAt
 
   access ServiceAccess[]
+  admins ServiceAdmin[]
+}
+
+// Сервисы, которыми управляет аккаунт с ролью service_admin. Роль admin
+// эту таблицу игнорирует — у неё доступ ко всему порталу.
+model ServiceAdmin {
+  userId    String
+  serviceId String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, serviceId])
+  @@index([serviceId])
 }
 
 model ServiceAccess {
@@ -835,6 +867,32 @@ model ServiceAccess {
   service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@id([userId, serviceId])
+}
+
+/// Журнал действий администрации: кто, что и над кем сделал. Пишется
+/// подписчиком на событие `admin.action` — так модуль-издатель не зависит от
+/// журнала, а сервисные модули не нарушают контракт, импортируя чужой сервис.
+///
+/// Модерация Motivation ведёт свой журнал (MotivationModerationAudit): он
+/// привязан к посту и живёт вместе с ним, дублировать его сюда незачем.
+model AdminAuditEntry {
+  id         String   @id @default(uuid())
+  /// Автор действия. null — аккаунт администратора удалён; запись остаётся.
+  actorId    String?
+  actor      User?    @relation("AdminAuditEntries", fields: [actorId], references: [id], onDelete: SetNull)
+  /// Что произошло: значение AdminAuditAction из @vedamatch/shared.
+  action     String
+  /// Над чем: тип объекта и его id. `platform` — действие над всем порталом.
+  targetType String
+  targetId   String?
+  /// Подробности для строки журнала: было/стало, причина.
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([targetType, targetId])
+  @@index([action, createdAt(sort: Desc)])
 }
 
 model LoginAudit {
@@ -1669,7 +1727,9 @@ model NotificationPreference {
   /// коммерцию, человек не должен молча терять доску общины.
   notices       Boolean  @default(true)
   /// Новости от администрации портала. Отключаемы: человек, которому нужны
-  /// только ответы поддержки, не обязан читать анонсы.
+  /// только ответы поддержки, не обязан читать анонсы. Под этой же категорией
+  /// идут рассылки из админки: выключение гасит пуш, а важная рассылка всё
+  /// равно попадает в колокольчик — см. NotificationBroadcast.important.
   announcements Boolean  @default(true)
   /// Судьба своих рилсов в «Мотивации». Отдельно от остальных: человек может
   /// не хотеть ничего от сервиса, кроме ответа по собственной публикации.
@@ -1695,6 +1755,53 @@ model NotificationItem {
 
   @@index([userId, readAt])
   @@index([userId, createdAt])
+}
+
+/// Статус рассылки. Отправка идёт пакетами в фоне, поэтому `sending` — не миг,
+/// а состояние, из которого воркер выходит сам.
+enum NotificationBroadcastStatus {
+  draft
+  sending
+  sent
+  failed
+  cancelled
+}
+
+/// Объявление администрации всем или части портала. Хранится целиком: после
+/// отправки нужно знать, что именно ушло и скольким.
+model NotificationBroadcast {
+  id              String                      @id @default(uuid())
+  title           String
+  body            String
+  /// Куда ведёт клик. Пусто — уведомление без перехода.
+  url             String?
+  /// Важное: попадает в колокольчик даже при выключенной категории `system`.
+  /// Пуш при этом всё равно уважает настройки — устройство человека не наше.
+  important       Boolean                     @default(false)
+  /// Фильтр аудитории (NotificationAudienceFilter). Json, а не колонки: набор
+  /// фильтров будет меняться чаще, чем стоит гонять миграции.
+  audience        Json
+  status          NotificationBroadcastStatus @default(draft)
+  /// Сколько получателей насчитал фильтр в момент запуска.
+  totalRecipients Int                         @default(0)
+  /// Сколько уведомлений положено в колокольчик.
+  deliveredCount  Int                         @default(0)
+  /// Сколько пушей ушло на устройства. Меньше deliveredCount — это норма.
+  pushSentCount   Int                         @default(0)
+  /// Курсор пакетной отправки: id последнего обработанного пользователя.
+  /// Сортировка по id — единственный способ не пропустить и не задвоить.
+  cursorUserId    String?
+  attemptCount    Int                         @default(0)
+  errorMessage    String?
+  createdById     String?
+  createdBy       User?                       @relation("NotificationBroadcastsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+  startedAt       DateTime?
+  finishedAt      DateTime?
+
+  @@index([status, updatedAt])
+  @@index([createdAt(sort: Desc)])
 }
 
 // ===== Astro service =====

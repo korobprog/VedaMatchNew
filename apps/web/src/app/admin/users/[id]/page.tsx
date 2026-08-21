@@ -1,9 +1,9 @@
 ﻿import Link from "next/link";
 import { redirect } from "next/navigation";
 import { redirectToLogin } from "@/lib/require-user";
-import { Header } from "@/components/header";
 import { AdminUserStageForm } from "@/components/admin-user-stage-form";
 import { AdminUserRoleForm } from "@/components/admin-user-role-form";
+import { AdminUserServicesForm } from "@/components/admin-user-services-form";
 import { AdminUserBlockForm } from "@/components/admin-user-block-form";
 import { AdminUserDeleteForm } from "@/components/admin-user-delete-form";
 import { AdminUserPurgeForm } from "@/components/admin-user-purge-form";
@@ -11,8 +11,6 @@ import { AdminPhotoVerification } from "@/components/admin-photo-verification";
 import { AdminSubscriptionForm } from "@/components/admin-subscription-form";
 import { getAdminUser, getProfile } from "@/lib/api";
 import { actorLabels, formatBool, formatDate, roleLabels, stageLabels, verificationLabels } from "@/lib/admin-labels";
-import { BackgroundOrbs } from "@/components/landing/Orb";
-import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { cn } from "@/lib/utils";
 
 export default async function AdminUserDetailPage({
@@ -34,206 +32,206 @@ export default async function AdminUserDetailPage({
   const profile = detail.profile;
 
   return (
-    <div className="relative min-h-dvh bg-bg-0">
-      <BackgroundOrbs />
-      <NoiseOverlay />
-      <Header user={currentUser} />
-      <main className="mx-auto max-w-6xl px-4 py-8 pb-24">
-        <Link href="/admin/users" className="mb-4 inline-flex text-sm font-medium text-text-1 hover:text-magenta">
-          ← К списку пользователей
-        </Link>
+    <>
+      <Link href="/admin/users" className="mb-4 inline-flex text-sm font-medium text-text-1 hover:text-magenta">
+        ← К списку пользователей
+      </Link>
 
-        <div className="glass rounded-2xl border border-glass-brd p-6 mb-6">
-          <div className="flex flex-wrap items-start gap-4">
-            {profile.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={profile.avatarUrl} alt={profile.name} className="h-16 w-16 rounded-full" referrerPolicy="no-referrer" />
-            ) : (
-              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-glass text-xl font-semibold text-text-0">
-                {profile.name.charAt(0).toUpperCase()}
-              </span>
-            )}
-            <div className="min-w-0 flex-1">
-              <h1 className="font-display text-2xl font-bold text-text-0">{profile.name}</h1>
-              <p className="text-text-1">{profile.email}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Badge>{roleLabels[profile.role]}</Badge>
-                {profile.spiritualStage && <Badge>{stageLabels[profile.spiritualStage]}</Badge>}
-                {profile.devoteeVerificationStatus && (
-                  <Badge tone={profile.devoteeVerificationStatus === "confirmed" ? "green" : "amber"}>
-                    {verificationLabels[profile.devoteeVerificationStatus]}
-                  </Badge>
-                )}
+      <div className="glass rounded-2xl border border-glass-brd p-6 mb-6">
+        <div className="flex flex-wrap items-start gap-4">
+          {profile.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={profile.avatarUrl} alt={profile.name} className="h-16 w-16 rounded-full" referrerPolicy="no-referrer" />
+          ) : (
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-glass text-xl font-semibold text-text-0">
+              {profile.name.charAt(0).toUpperCase()}
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-2xl font-bold text-text-0">{profile.name}</h1>
+            <p className="text-text-1">{profile.email}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Badge>{roleLabels[profile.role]}</Badge>
+              {profile.spiritualStage && <Badge>{stageLabels[profile.spiritualStage]}</Badge>}
+              {profile.devoteeVerificationStatus && (
+                <Badge tone={profile.devoteeVerificationStatus === "confirmed" ? "green" : "amber"}>
+                  {verificationLabels[profile.devoteeVerificationStatus]}
+                </Badge>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+        <div className="space-y-6">
+          <Section title="Профиль">
+            <dl className="grid gap-3 sm:grid-cols-2">
+              <Info label="ID" value={profile.id} />
+              <Info label="Роль" value={roleLabels[profile.role]} />
+              <Info label="Создан" value={formatDate(profile.createdAt)} />
+              <Info label="Обновлён" value={formatDate(profile.updatedAt)} />
+              <Info label="Последняя анкета" value={formatDate(profile.lastSelfIdentificationAt)} />
+              <Info label="Город" value={profile.homeLocation?.city} />
+              <Info label="Страна" value={profile.homeLocation?.country} />
+              <Info label="Координаты" value={profile.homeLocation ? `${profile.homeLocation.lat}, ${profile.homeLocation.lon}` : null} />
+            </dl>
+            <JsonBlock title="Соцсети" value={profile.socialLinks} />
+            <JsonBlock title="Мессенджеры" value={profile.messengers} />
+          </Section>
+
+          <Section title="Проверка фото">
+            <AdminPhotoVerification
+              userId={profile.id}
+              state={profile.photoVerification}
+            />
+          </Section>
+
+          <Section title="Подписка">
+            <AdminSubscriptionForm
+              userId={profile.id}
+              subscription={profile.subscription}
+            />
+          </Section>
+
+          <Section title="Духовный этап">
+            <dl className="grid gap-3 sm:grid-cols-3">
+              <Info label="Текущий этап" value={profile.spiritualStage ? stageLabels[profile.spiritualStage] : null} />
+              <Info label="Статус подтверждения" value={profile.devoteeVerificationStatus ? verificationLabels[profile.devoteeVerificationStatus] : null} />
+              <Info label="Последняя анкета" value={formatDate(profile.lastSelfIdentificationAt)} />
+            </dl>
+          </Section>
+
+          <Section title="Анкета">
+            {detail.latestSelfIdentificationResponse ? (
+              <div className="space-y-3">
+                <dl className="grid gap-3 sm:grid-cols-3">
+                  <Info label="Дата" value={formatDate(detail.latestSelfIdentificationResponse.createdAt)} />
+                  <Info label="Определённый этап" value={stageLabels[detail.latestSelfIdentificationResponse.detectedStage]} />
+                  <Info label="Статус" value={detail.latestSelfIdentificationResponse.verificationStatus ? verificationLabels[detail.latestSelfIdentificationResponse.verificationStatus] : null} />
+                </dl>
+                <JsonBlock title="Ответы" value={detail.latestSelfIdentificationResponse.answers} />
               </div>
-            </div>
-          </div>
-        </div>
+            ) : (
+              <Empty>Пользователь ещё не проходил самоидентификацию.</Empty>
+            )}
+          </Section>
 
-        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-          <div className="space-y-6">
-            <Section title="Профиль">
-              <dl className="grid gap-3 sm:grid-cols-2">
-                <Info label="ID" value={profile.id} />
-                <Info label="Роль" value={roleLabels[profile.role]} />
-                <Info label="Создан" value={formatDate(profile.createdAt)} />
-                <Info label="Обновлён" value={formatDate(profile.updatedAt)} />
-                <Info label="Последняя анкета" value={formatDate(profile.lastSelfIdentificationAt)} />
-                <Info label="Город" value={profile.homeLocation?.city} />
-                <Info label="Страна" value={profile.homeLocation?.country} />
-                <Info label="Координаты" value={profile.homeLocation ? `${profile.homeLocation.lat}, ${profile.homeLocation.lon}` : null} />
-              </dl>
-              <JsonBlock title="Соцсети" value={profile.socialLinks} />
-              <JsonBlock title="Мессенджеры" value={profile.messengers} />
-            </Section>
+          <Section title="Заявка наставника">
+            {detail.mentorRequest ? (
+              <div className="space-y-4">
+                <dl className="grid gap-3 sm:grid-cols-2">
+                  <Info label="Статус" value={verificationLabels[detail.mentorRequest.status]} />
+                  <Info label="Создана" value={formatDate(detail.mentorRequest.createdAt)} />
+                  <Info label="Наставник" value={detail.mentorRequest.mentorName} />
+                  <Info label="Телефон" value={detail.mentorRequest.mentorPhone} />
+                  <Info label="Email" value={detail.mentorRequest.mentorEmail} />
+                  <Info label="Город / община" value={detail.mentorRequest.cityOrCommunity} />
+                  <Info label="Как давно знает" value={detail.mentorRequest.knownDuration} />
+                  <Info label="Знает лично" value={formatBool(detail.mentorRequest.knowsPersonally)} />
+                  <Info label="Регулярная практика" value={formatBool(detail.mentorRequest.confirmsRegularPractice)} />
+                  <Info label="Служение" value={formatBool(detail.mentorRequest.confirmsService)} />
+                  <Info label="Духовное имя" value={formatBool(detail.mentorRequest.confirmsSpiritualName)} />
+                  <Info label="Связь с общиной" value={formatBool(detail.mentorRequest.confirmsCommunityConnection)} />
+                  <Info label="Рекомендует статус" value={formatBool(detail.mentorRequest.recommendsDevoteeStatus)} />
+                  <Info label="Проверена" value={formatDate(detail.mentorRequest.adminReviewedAt)} />
+                </dl>
+                <TextBlock title="Характеристика" value={detail.mentorRequest.userCharacterReference} />
+                <TextBlock title="Комментарий администратора" value={detail.mentorRequest.adminNote} />
+              </div>
+            ) : (
+              <Empty>Заявки наставника пока нет.</Empty>
+            )}
+          </Section>
 
-            <Section title="Проверка фото">
-              <AdminPhotoVerification
-                userId={profile.id}
-                state={profile.photoVerification}
-              />
-            </Section>
-
-            <Section title="Подписка">
-              <AdminSubscriptionForm
-                userId={profile.id}
-                subscription={profile.subscription}
-              />
-            </Section>
-
-            <Section title="Духовный этап">
-              <dl className="grid gap-3 sm:grid-cols-3">
-                <Info label="Текущий этап" value={profile.spiritualStage ? stageLabels[profile.spiritualStage] : null} />
-                <Info label="Статус подтверждения" value={profile.devoteeVerificationStatus ? verificationLabels[profile.devoteeVerificationStatus] : null} />
-                <Info label="Последняя анкета" value={formatDate(profile.lastSelfIdentificationAt)} />
-              </dl>
-            </Section>
-
-            <Section title="Анкета">
-              {detail.latestSelfIdentificationResponse ? (
-                <div className="space-y-3">
-                  <dl className="grid gap-3 sm:grid-cols-3">
-                    <Info label="Дата" value={formatDate(detail.latestSelfIdentificationResponse.createdAt)} />
-                    <Info label="Определённый этап" value={stageLabels[detail.latestSelfIdentificationResponse.detectedStage]} />
-                    <Info label="Статус" value={detail.latestSelfIdentificationResponse.verificationStatus ? verificationLabels[detail.latestSelfIdentificationResponse.verificationStatus] : null} />
-                  </dl>
-                  <JsonBlock title="Ответы" value={detail.latestSelfIdentificationResponse.answers} />
-                </div>
-              ) : (
-                <Empty>Пользователь ещё не проходил самоидентификацию.</Empty>
-              )}
-            </Section>
-
-            <Section title="Заявка наставника">
-              {detail.mentorRequest ? (
-                <div className="space-y-4">
-                  <dl className="grid gap-3 sm:grid-cols-2">
-                    <Info label="Статус" value={verificationLabels[detail.mentorRequest.status]} />
-                    <Info label="Создана" value={formatDate(detail.mentorRequest.createdAt)} />
-                    <Info label="Наставник" value={detail.mentorRequest.mentorName} />
-                    <Info label="Телефон" value={detail.mentorRequest.mentorPhone} />
-                    <Info label="Email" value={detail.mentorRequest.mentorEmail} />
-                    <Info label="Город / община" value={detail.mentorRequest.cityOrCommunity} />
-                    <Info label="Как давно знает" value={detail.mentorRequest.knownDuration} />
-                    <Info label="Знает лично" value={formatBool(detail.mentorRequest.knowsPersonally)} />
-                    <Info label="Регулярная практика" value={formatBool(detail.mentorRequest.confirmsRegularPractice)} />
-                    <Info label="Служение" value={formatBool(detail.mentorRequest.confirmsService)} />
-                    <Info label="Духовное имя" value={formatBool(detail.mentorRequest.confirmsSpiritualName)} />
-                    <Info label="Связь с общиной" value={formatBool(detail.mentorRequest.confirmsCommunityConnection)} />
-                    <Info label="Рекомендует статус" value={formatBool(detail.mentorRequest.recommendsDevoteeStatus)} />
-                    <Info label="Проверена" value={formatDate(detail.mentorRequest.adminReviewedAt)} />
-                  </dl>
-                  <TextBlock title="Характеристика" value={detail.mentorRequest.userCharacterReference} />
-                  <TextBlock title="Комментарий администратора" value={detail.mentorRequest.adminNote} />
-                </div>
-              ) : (
-                <Empty>Заявки наставника пока нет.</Empty>
-              )}
-            </Section>
-
-            <Section title="История">
-              {detail.stageHistory.length > 0 ? (
-                <div className="space-y-3">
-                  {detail.stageHistory.map((item) => (
-                    <div key={item.id} className="glass rounded-xl p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="font-medium text-text-0">
-                          {item.oldStage ? stageLabels[item.oldStage] : "—"} → {stageLabels[item.newStage]}
-                        </p>
-                        <span className="text-xs text-text-2">{formatDate(item.createdAt)}</span>
-                      </div>
-                      <p className="mt-1 text-sm text-text-1">
-                        {actorLabels[item.actor]} · {item.verificationStatus ? verificationLabels[item.verificationStatus] : "без статуса"}
+          <Section title="История">
+            {detail.stageHistory.length > 0 ? (
+              <div className="space-y-3">
+                {detail.stageHistory.map((item) => (
+                  <div key={item.id} className="glass rounded-xl p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-medium text-text-0">
+                        {item.oldStage ? stageLabels[item.oldStage] : "—"} → {stageLabels[item.newStage]}
                       </p>
-                      {item.reason && <p className="mt-2 text-sm text-text-1">{item.reason}</p>}
+                      <span className="text-xs text-text-2">{formatDate(item.createdAt)}</span>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <Empty>История изменений пока пустая.</Empty>
-              )}
-            </Section>
+                    <p className="mt-1 text-sm text-text-1">
+                      {actorLabels[item.actor]} · {item.verificationStatus ? verificationLabels[item.verificationStatus] : "без статуса"}
+                    </p>
+                    {item.reason && <p className="mt-2 text-sm text-text-1">{item.reason}</p>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Empty>История изменений пока пустая.</Empty>
+            )}
+          </Section>
 
-            <Section title="Доступ к сервисам">
-              {detail.availableServices.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {detail.availableServices.map((service) => (
-                    <div key={service.id} className="glass rounded-xl border border-glass-brd p-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h3 className="font-semibold text-text-0">{service.name}</h3>
-                          <p className="mt-1 text-sm text-text-1">{service.description}</p>
-                        </div>
-                        <Badge tone={service.status === "active" ? "green" : "amber"}>{service.status}</Badge>
+          <Section title="Доступ к сервисам">
+            {detail.availableServices.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {detail.availableServices.map((service) => (
+                  <div key={service.id} className="glass rounded-xl border border-glass-brd p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h3 className="font-semibold text-text-0">{service.name}</h3>
+                        <p className="mt-1 text-sm text-text-1">{service.description}</p>
                       </div>
-                      {service.requiresDevoteeVerification && <p className="mt-2 text-xs text-magenta">Требует подтверждённого статуса преданного</p>}
+                      <Badge tone={service.status === "active" ? "green" : "amber"}>{service.status}</Badge>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <Empty>Нет доступных сервисов.</Empty>
-              )}
-            </Section>
-          </div>
-
-          <aside className="space-y-6">
-            <AdminUserRoleForm
-              userId={profile.id}
-              isSelf={currentUser.id === profile.id}
-              initialRole={profile.role}
-            />
-            <AdminUserStageForm
-              userId={profile.id}
-              isSelf={currentUser.id === profile.id}
-              initialStage={profile.spiritualStage}
-              initialStatus={profile.devoteeVerificationStatus}
-            />
-            <AdminUserBlockForm
-              userId={profile.id}
-              isSelf={currentUser.id === profile.id}
-              accountStatus={profile.accountStatus}
-              blockedUntil={profile.blockedUntil}
-              statusReason={profile.statusReason}
-            />
-            <AdminUserDeleteForm
-              userId={profile.id}
-              isSelf={currentUser.id === profile.id}
-              accountStatus={profile.accountStatus}
-              deletedAt={profile.deletedAt}
-              statusReason={profile.statusReason}
-            />
-            <AdminUserPurgeForm
-              userId={profile.id}
-              email={profile.email}
-              isSelf={currentUser.id === profile.id}
-            />
-            <div className="glass rounded-2xl border border-glass-brd p-4 text-sm text-text-1">
-              <p className="font-medium text-text-0">Безопасность</p>
-              <p className="mt-2">При изменении этапа создаётся запись в истории. Сброс подтверждённого статуса требует отдельного подтверждения.</p>
-            </div>
-          </aside>
+                    {service.requiresDevoteeVerification && <p className="mt-2 text-xs text-magenta">Требует подтверждённого статуса преданного</p>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Empty>Нет доступных сервисов.</Empty>
+            )}
+          </Section>
         </div>
-      </main>
-    </div>
+
+        <aside className="space-y-6">
+          <AdminUserRoleForm
+            userId={profile.id}
+            isSelf={currentUser.id === profile.id}
+            initialRole={profile.role}
+          />
+          <AdminUserServicesForm
+            userId={profile.id}
+            role={profile.role}
+            initialServices={profile.adminServices}
+          />
+          <AdminUserStageForm
+            userId={profile.id}
+            isSelf={currentUser.id === profile.id}
+            initialStage={profile.spiritualStage}
+            initialStatus={profile.devoteeVerificationStatus}
+          />
+          <AdminUserBlockForm
+            userId={profile.id}
+            isSelf={currentUser.id === profile.id}
+            accountStatus={profile.accountStatus}
+            blockedUntil={profile.blockedUntil}
+            statusReason={profile.statusReason}
+          />
+          <AdminUserDeleteForm
+            userId={profile.id}
+            isSelf={currentUser.id === profile.id}
+            accountStatus={profile.accountStatus}
+            deletedAt={profile.deletedAt}
+            statusReason={profile.statusReason}
+          />
+          <AdminUserPurgeForm
+            userId={profile.id}
+            email={profile.email}
+            isSelf={currentUser.id === profile.id}
+          />
+          <div className="glass rounded-2xl border border-glass-brd p-4 text-sm text-text-1">
+            <p className="font-medium text-text-0">Безопасность</p>
+            <p className="mt-2">При изменении этапа создаётся запись в истории. Сброс подтверждённого статуса требует отдельного подтверждения.</p>
+          </div>
+        </aside>
+      </div>
+    </>
   );
 }
 

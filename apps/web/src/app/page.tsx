@@ -89,6 +89,8 @@ export default async function Home({
         returnTo={returnTo}
         plan={plan ?? undefined}
         totalMembers={communityStats?.totalMembers}
+        totalCities={communityStats?.totalCities}
+        totalCommunities={communityStats?.totalCommunities}
       />
     );
   }
@@ -142,9 +144,15 @@ export default async function Home({
           displayName={user.displayName}
         />
         {communityStats && (
+          // Здоровается кто-то один: советник обращается по имени в первой
+          // карточке, и второе обращение в паре сантиметров обесценивало бы
+          // имя. Когда советнику нечего сказать, приветствие берёт строка.
           <MemberCountLine
             userId={user.id}
             total={communityStats.totalMembers}
+            greetName={
+              advisorCards.length === 0 ? user.displayName : undefined
+            }
           />
         )}
         <ServiceGrid services={services} userId={user.id} extras={serviceExtras} />

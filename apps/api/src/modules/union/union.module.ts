@@ -3,6 +3,8 @@ import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { MotivationModule } from '../motivation/motivation.module';
+import { UnionAdminController } from './union-admin.controller';
+import { UnionAdminService } from './union-admin.service';
 import { UnionBoostController } from './union-boost.controller';
 import { UnionBoostService } from './union-boost.service';
 import { UnionChatController } from './union-chat.controller';
@@ -25,6 +27,7 @@ import { UnionSwipeService } from './union-swipe.service';
     UnionChatController,
     UnionSwipeController,
     UnionBoostController,
+    UnionAdminController,
   ],
   providers: [
     UnionProfileService,
@@ -33,6 +36,7 @@ import { UnionSwipeService } from './union-swipe.service';
     UnionChatService,
     UnionSwipeService,
     UnionBoostService,
+    UnionAdminService,
   ],
   exports: [UnionChatService],
 })

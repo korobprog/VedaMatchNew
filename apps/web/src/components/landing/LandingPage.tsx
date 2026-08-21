@@ -25,10 +25,14 @@ export function LandingPage({
   returnTo,
   plan,
   totalMembers,
+  totalCities,
+  totalCommunities,
 }: {
   returnTo?: string;
   plan?: PricingPlan;
   totalMembers?: number;
+  totalCities?: number;
+  totalCommunities?: number;
 }) {
   const t = useTranslations("Landing");
   return (
@@ -137,16 +141,35 @@ export function LandingPage({
                   )}
                   <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">{t("hero.statUsers")}</div>
                 </div>
-                <div className="w-px bg-glass-brd shrink-0" />
-                <div className="shrink-0">
-                  <div className="font-display text-2xl md:text-3xl font-bold text-text-0">500+</div>
-                  <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">{t("hero.statMatches")}</div>
-                </div>
-                <div className="w-px bg-glass-brd shrink-0" />
-                <div className="shrink-0">
-                  <div className="font-display text-2xl md:text-3xl font-bold text-text-0">98%</div>
-                  <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">{t("hero.statHappy")}</div>
-                </div>
+                {/* Числа берутся из базы, а не рисуются: статистика портала
+                    открыта участникам, и придуманные «500+ совпадений» рядом
+                    с настоящими сразу бросались бы в глаза. */}
+                {totalCities != null && totalCities > 0 && (
+                  <>
+                    <div className="w-px bg-glass-brd shrink-0" />
+                    <div className="shrink-0">
+                      <div className="font-display text-2xl md:text-3xl font-bold text-text-0">
+                        {totalCities}
+                      </div>
+                      <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">
+                        {t("hero.statCities")}
+                      </div>
+                    </div>
+                  </>
+                )}
+                {totalCommunities != null && totalCommunities > 0 && (
+                  <>
+                    <div className="w-px bg-glass-brd shrink-0" />
+                    <div className="shrink-0">
+                      <div className="font-display text-2xl md:text-3xl font-bold text-text-0">
+                        {totalCommunities}
+                      </div>
+                      <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">
+                        {t("hero.statCommunities")}
+                      </div>
+                    </div>
+                  </>
+                )}
               </motion.div>
             </motion.div>
 

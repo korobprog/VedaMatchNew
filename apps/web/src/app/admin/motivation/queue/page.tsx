@@ -1,15 +1,18 @@
 import { MotivationAdminTabs } from "@/components/motivation/admin/admin-tabs";
 import { QueueBoard } from "@/components/motivation/admin/queue-board";
 import { countQueue } from "@/components/motivation/admin/queue-selectors";
+import { MotivationWorkerHealthCard } from "@/components/motivation/admin/worker-health";
 import {
   getAdminMotivationCategories,
+  getAdminMotivationHealth,
   getAdminMotivationPosts,
 } from "@/lib/motivation-api";
 
 export default async function AdminMotivationQueuePage() {
-  const [posts, categories] = await Promise.all([
+  const [posts, categories, health] = await Promise.all([
     getAdminMotivationPosts(),
     getAdminMotivationCategories(),
+    getAdminMotivationHealth(),
   ]);
 
   return (
@@ -19,6 +22,7 @@ export default async function AdminMotivationQueuePage() {
         одобрения текста и публикуется отдельным подтверждением.
       </p>
       <MotivationAdminTabs active="queue" queueCount={posts ? countQueue(posts) : undefined} />
+      <MotivationWorkerHealthCard health={health} />
       <QueueBoard posts={posts} categories={categories ?? []} />
     </>
   );

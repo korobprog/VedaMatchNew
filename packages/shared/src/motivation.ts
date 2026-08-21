@@ -798,3 +798,32 @@ export interface MotivationBookDto {
   kind: MotivationBookKind;
 }
 export interface MotivationBookKindInput { kind: MotivationBookKind }
+
+/** Живое состояние воркера Motivation: то, чего нет в базе. */
+export interface MotivationWorkerHealth {
+  /** Статус ioredis: `ready`, `connecting`, … или `disabled`, если REDIS_HOST не задан. */
+  redis: string;
+  running: boolean;
+  /** Тик был не дольше срока лиза назад. Считает сервер: часы браузера не в счёт. */
+  alive: boolean;
+  lastTickAt: string | null;
+  lastError: { at: string; message: string } | null;
+}
+
+/** Что лежит в очереди генерации прямо сейчас. */
+export interface MotivationQueueCounts {
+  /** Ждут изображения. */
+  queued: number;
+  /** Взяты воркером в работу. */
+  inProgress: number;
+  /** Взяты в работу и не двигались дольше срока лиза — кандидаты на восстановление. */
+  stuck: number;
+  failed: number;
+  /** Ждут решения администратора: проверка текста или изображения. */
+  awaitingReview: number;
+}
+
+export interface MotivationAdminHealth {
+  worker: MotivationWorkerHealth;
+  queue: MotivationQueueCounts;
+}

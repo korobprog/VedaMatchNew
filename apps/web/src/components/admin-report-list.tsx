@@ -8,6 +8,7 @@ import type {
   UserReportReason,
   UserReportStatus,
 } from "@vedamatch/shared";
+import { UnionReportChat } from "@/components/union/admin/report-chat";
 import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -111,7 +112,9 @@ function ReportCard({ report }: { report: AdminUserReportDto }) {
         </p>
       )}
 
-      <label className="block">
+      <UnionReportChat reportId={report.id} />
+
+      <label className="mt-3 block">
         <span className="mb-1 block text-xs uppercase tracking-wide text-text-2">
           Заметка модератора
         </span>

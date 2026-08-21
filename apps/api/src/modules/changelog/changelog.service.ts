@@ -567,3 +567,17 @@ export class ChangelogService {
     }
   }
 }
+
+/**
+ * Срок показа баннера из тела запроса. Пустая строка и null одинаково значат
+ * «без срока»: иначе очищенное поле формы превращалось бы в Invalid Date.
+ */
+function parseHomeUntil(value: string | null | undefined): Date | null {
+  const text = value?.trim();
+  if (!text) return null;
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new BadRequestException('Некорректная дата показа на главной');
+  }
+  return parsed;
+}

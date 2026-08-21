@@ -202,3 +202,90 @@ export interface UpdateLibraryPreferencesRequest {
   uiLanguage?: LibraryLocale;
   contentLanguages?: string[];
 }
+
+// ===== Админка Library =====
+
+export type LibraryCategoryStatus =
+  | 'active'
+  | 'hidden_by_reports'
+  | 'merged'
+  | 'removed';
+
+export type LibraryEnrichmentStatus = 'pending' | 'queued' | 'ready' | 'failed';
+
+/** Категория глазами администрации: с автором, статусом и счётчиками. */
+export interface LibraryAdminCategoryDto {
+  id: string;
+  sectionId: string;
+  sectionSlug: string;
+  sectionTitleRu: string;
+  slug: string;
+  titleRu: string | null;
+  titleEn: string | null;
+  status: LibraryCategoryStatus;
+  entriesCount: number;
+  followersCount: number;
+  /** Куда слита категория; заполнено только у статуса `merged`. */
+  mergedIntoId: string | null;
+  /** Мирское имя автора: админский экран. `null` — аккаунт удалён. */
+  createdByName: string | null;
+  createdAt: string;
+}
+
+/**
+ * Кандидаты на слияние: категории с одинаковым нормализованным названием.
+ * Пользователи заводят категории сами, и дубли — вопрос времени.
+ */
+export interface LibraryAdminDuplicateGroup {
+  /** Нормализованное название, по которому категории признаны дублями. */
+  normalized: string;
+  categories: LibraryAdminCategoryDto[];
+}
+
+export interface MergeLibraryCategoryRequest {
+  /** Категория, в которую переносятся записи. Исходная станет `merged`. */
+  targetId: string;
+}
+
+/** Запись каталога глазами администрации. */
+export interface LibraryAdminEntryDto {
+  id: string;
+  url: string;
+  domain: string;
+  type: LibraryEntryType;
+  titleRu: string | null;
+  titleEn: string | null;
+  status: LibraryEntryStatus;
+  enrichmentStatus: LibraryEnrichmentStatus;
+  enrichmentError: string | null;
+  previewUrl: string | null;
+  addedByName: string | null;
+  categories: string[];
+  usefulCount: number;
+  commentsCount: number;
+  createdAt: string;
+}
+
+export interface LibraryAdminEntryListResponse {
+  items: LibraryAdminEntryDto[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface LibraryAdminEntryQuery {
+  /** Поиск по адресу, домену и заголовкам. */
+  q?: string;
+  status?: LibraryEntryStatus;
+  /** Только те, у кого обогащение так и не отработало. */
+  notEnrichedOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface LibraryAdminStats {
+  entries: { total: number; published: number; removed: number; notEnriched: number };
+  categories: { total: number; active: number; merged: number; duplicates: number };
+  sections: number;
+}

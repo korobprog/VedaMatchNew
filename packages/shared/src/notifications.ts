@@ -1,3 +1,5 @@
+import type { Role, SpiritualStage } from './index';
+
 /** Событие для уведомлений. Несёт факты, а не формулировки: тексты живут
  *  в apps/api/src/modules/notifications/notification-copy.ts. */
 export type NotificationEvent =
@@ -175,7 +177,8 @@ export type NotificationCategory =
   | 'support'
   | 'transits'
   | 'market'
-  | 'motivation';
+  | 'motivation'
+  | 'announcements';
 
 /** Уведомление в колокольчике. Живёт до прочтения, потом удаляется — это
  *  список непрочитанного, а не архив. */
@@ -223,7 +226,9 @@ export interface NotificationPreferencesDto {
   notices: boolean;
   /** Судьба своих рилсов в «Мотивации»: опубликован или отклонён. */
   motivation: boolean;
-  /** Новости от администрации портала. */
+  /** Новости от администрации портала. Под этой же категорией идут рассылки
+   *  из админки: выключение гасит пуш, а важная рассылка всё равно появится
+   *  в колокольчике — см. `important` у рассылки. */
   announcements: boolean;
 }
 
@@ -238,3 +243,70 @@ export interface PushSubscriptionRequest {
 export interface VapidKeyResponse {
   publicKey: string;
 }
+
+// ===== Рассылки администрации =====
+
+/**
+ * Кому уйдёт рассылка. Пустое поле — «неважно»; заблокированные и удалённые
+ * аккаунты не попадают в выборку никогда, это не настраивается.
+ */
+export interface NotificationAudienceFilter {
+  /** Этапы. Пусто — все, включая аккаунты без этапа. */
+  stages?: SpiritualStage[];
+  /** Роли. Пусто — все. */
+  roles?: Role[];
+  /** `paid` — активный платный доступ на сейчас, `unpaid` — его нет. */
+  payment?: 'paid' | 'unpaid';
+  /** Только те, у кого есть хотя бы одна подписка на веб-пуш. */
+  withPushOnly?: boolean;
+}
+
+export type NotificationBroadcastStatus =
+  | 'draft'
+  | 'sending'
+  | 'sent'
+  | 'failed'
+  | 'cancelled';
+
+export interface NotificationBroadcastDto {
+  id: string;
+  title: string;
+  body: string;
+  url: string | null;
+  important: boolean;
+  audience: NotificationAudienceFilter;
+  status: NotificationBroadcastStatus;
+  totalRecipients: number;
+  deliveredCount: number;
+  pushSentCount: number;
+  errorMessage: string | null;
+  /** Мирское имя автора: это админский экран. `null` — аккаунт удалён. */
+  createdByName: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface CreateNotificationBroadcastRequest {
+  title: string;
+  body: string;
+  url?: string | null;
+  important?: boolean;
+  audience?: NotificationAudienceFilter;
+}
+
+export type UpdateNotificationBroadcastRequest =
+  Partial<CreateNotificationBroadcastRequest>;
+
+/** Сколько человек попадёт под фильтр — до того, как рассылку запустили. */
+export interface NotificationAudiencePreviewResponse {
+  /** Всего подходящих активных аккаунтов. */
+  total: number;
+  /** Из них получат пуш: категория включена и есть подписка на устройство. */
+  withPush: number;
+  /** Из них выключили категорию «объявления администрации». */
+  optedOut: number;
+}
+
+export const BROADCAST_TITLE_MAX_LENGTH = 120;
+export const BROADCAST_BODY_MAX_LENGTH = 1000;

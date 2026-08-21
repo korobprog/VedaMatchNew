@@ -45,6 +45,7 @@ const user = {
   displayName: "Радха",
   avatarUrl: null,
   role: "user",
+  adminServices: [],
 } as unknown as UserProfile;
 
 describe("isCurrentRoute", () => {

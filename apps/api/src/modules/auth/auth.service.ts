@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   OnModuleInit,
@@ -12,6 +13,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import * as oidc from 'openid-client';
 import { resolveDisplayName, type Role } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { readRegistrationMode } from '../billing/billing-mode';
 import { NEW_CONTACTS_PROFILE } from '../contacts/contacts-defaults';
 import { assertAccountActive } from '../users/account-status';
 import { JwtSignService } from './jwt.service';
@@ -168,6 +170,12 @@ export class AuthService implements OnModuleInit {
     const byGoogleId = await this.prisma.user.findUnique({
       where: { googleId: claims.sub },
     });
+    // Закрытая регистрация не трогает уже заведённых: отказ получает только
+    // тот, для кого пришлось бы создать новую запись.
+    if (!byGoogleId) {
+      const byEmail = await this.prisma.user.findUnique({ where: { email } });
+      if (!byEmail) await this.assertRegistrationOpen();
+    }
     const user = byGoogleId
       ? await this.prisma.user.update({
           where: { id: byGoogleId.id },
@@ -202,6 +210,15 @@ export class AuthService implements OnModuleInit {
     res.clearCookie(OIDC_COOKIE, { path: '/auth', domain: this.cookieDomain });
     await this.issueTokens(user.id, user.email, toRole(user.role), res);
     res.redirect(`${this.webOrigin}${safeReturnTo(returnTo)}`);
+  }
+
+  /** Приём новых аккаунтов закрыт — вход существующих это не затрагивает. */
+  private async assertRegistrationOpen(): Promise<void> {
+    const { mode, note } = await readRegistrationMode(this.prisma);
+    if (mode === 'open') return;
+    throw new ForbiddenException(
+      note?.trim() || 'Регистрация новых участников сейчас закрыта',
+    );
   }
 
   /**

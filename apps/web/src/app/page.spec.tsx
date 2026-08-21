@@ -65,6 +65,7 @@ const user: UserProfile = {
   socialLinks: {},
   messengers: {},
   role: "user",
+  adminServices: [],
   gender: "female",
   spiritualStage: "seeker",
   devoteeVerificationStatus: null,
@@ -90,6 +91,7 @@ const services: ServiceCardType[] = [
     id: "union",
     slug: "union",
     name: "Знакомства",
+    nameEn: "Union",
     description: "Осознанные знакомства и сотрудничество",
     iconUrl: null,
     url: "/union",
@@ -167,10 +169,14 @@ describe("Home", () => {
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
-  it("shows the live member count under the welcome message", async () => {
+  it("shows the live member count in the news banner", async () => {
     vi.mocked(getProfile).mockResolvedValue(user);
     vi.mocked(getServices).mockResolvedValue(services);
-    vi.mocked(getCommunityStats).mockResolvedValue({ totalMembers: 1234 });
+    vi.mocked(getCommunityStats).mockResolvedValue({
+      totalMembers: 1234,
+      totalCities: 3,
+      totalCommunities: 1,
+    });
 
     render(await Home({ searchParams: Promise.resolve({}) }));
 
@@ -178,7 +184,7 @@ describe("Home", () => {
     expect(screen.getByText("1234")).toBeInTheDocument();
   });
 
-  it("hides the member count line when the stats request fails", async () => {
+  it("hides the member count when the stats request fails", async () => {
     vi.mocked(getProfile).mockResolvedValue(user);
     vi.mocked(getServices).mockResolvedValue(services);
     vi.mocked(getCommunityStats).mockResolvedValue(null);

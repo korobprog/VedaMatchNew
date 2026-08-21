@@ -33,6 +33,7 @@ const profile: UserProfile = {
   socialLinks: {},
   messengers: {},
   role: "user",
+  adminServices: [],
   spiritualStage: null,
   devoteeVerificationStatus: null,
   lastSelfIdentificationAt: null,
