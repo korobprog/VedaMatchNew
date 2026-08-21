@@ -4,14 +4,23 @@ jest.mock('../auth/auth.guard', () => ({
 }));
 
 import { GeoController } from './geo.controller';
+import type { PrismaService } from '../../prisma/prisma.service';
 
 describe('GeoController', () => {
   const fetchMock = jest.fn() as jest.MockedFunction<typeof fetch>;
+  const queryRaw = jest.fn();
 
   beforeEach(() => {
     fetchMock.mockReset();
     global.fetch = fetchMock;
+    // Справочник отвечает первым, поэтому тесты внешнего геокодера обязаны
+    // начинать с пустого справочника — иначе до Nominatim дело не дойдёт.
+    queryRaw.mockReset();
+    queryRaw.mockResolvedValue([]);
   });
+
+  const controller = () =>
+    new GeoController({ $queryRaw: queryRaw } as unknown as PrismaService);
 
   it('returns Nominatim city results and includes the country in the query', async () => {
     fetchMock.mockResolvedValueOnce(
@@ -40,7 +49,7 @@ describe('GeoController', () => {
       ]),
     );
 
-    const result = await new GeoController().search('Хабаровск', 'Россия');
+    const result = await controller().search('Хабаровск', 'Россия');
 
     expect(result).toEqual([
       {
@@ -79,7 +88,7 @@ describe('GeoController', () => {
         ]),
       );
 
-    const result = await new GeoController().search('Минск', 'Беларусь');
+    const result = await controller().search('Минск', 'Беларусь');
 
     expect(result).toEqual([
       {
@@ -113,7 +122,7 @@ describe('GeoController', () => {
         ]),
       );
 
-    const result = await new GeoController().search('Springfield', 'Narnia');
+    const result = await controller().search('Springfield', 'Narnia');
 
     expect(result).toEqual([
       expect.objectContaining({ city: 'Springfield', country: 'США' }),
@@ -140,7 +149,7 @@ describe('GeoController', () => {
       }),
     );
 
-    const result = await new GeoController().search('Хабаровск', 'Россия');
+    const result = await controller().search('Хабаровск', 'Россия');
 
     expect(result).toEqual([
       {
@@ -180,7 +189,7 @@ describe('GeoController', () => {
         }),
       );
 
-    const result = await new GeoController().search('Минск', 'Беларусь');
+    const result = await controller().search('Минск', 'Беларусь');
 
     expect(result).toEqual([
       expect.objectContaining({ city: 'Мінск', country: 'Беларусь' }),
@@ -191,6 +200,58 @@ describe('GeoController', () => {
     expect(photonCombinedUrl).toContain('q=%D0%9C%D0%B8%D0%BD%D1%81%D0%BA%2C');
     expect(photonCityUrl).toContain('q=%D0%9C%D0%B8%D0%BD%D1%81%D0%BA&');
   }, 10000);
+
+  /**
+   * Справочник заведён ровно из-за «Маяпура»: OSM знает этот город только
+   * латиницей и без `name:ru`, поэтому кириллический запрос возвращал пустоту,
+   * а найденный по-английски уезжал в профиль как «Mayapur» — мимо русского
+   * фильтра по городу у всех остальных.
+   */
+  describe('справочник городов', () => {
+    const mayapur = {
+      city: 'Маяпур',
+      country: 'Индия',
+      lat: 23.4234,
+      lon: 88.3908,
+      displayName: 'Маяпур, Западная Бенгалия, Индия',
+    };
+
+    it('отвечает сам и не идёт во внешний геокодер', async () => {
+      queryRaw.mockResolvedValue([mayapur]);
+
+      const result = await controller().search('Маяпур');
+
+      expect(result).toEqual([
+        {
+          city: 'Маяпур',
+          country: 'Индия',
+          lat: 23.4234,
+          lon: 88.3908,
+          displayName: 'Маяпур, Западная Бенгалия, Индия',
+          type: 'city',
+        },
+      ]);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('ищет по началу написания и приводит «ё» к «е»', async () => {
+      queryRaw.mockResolvedValue([mayapur]);
+
+      await controller().search('Кишинёв');
+
+      const needle = queryRaw.mock.calls[0].slice(1);
+      expect(needle).toContain('кишинев%');
+    });
+
+    it('пустой справочник пропускает запрос дальше, к Nominatim', async () => {
+      queryRaw.mockResolvedValue([]);
+      fetchMock.mockResolvedValue(response([]));
+
+      await controller().search('Урюпинск');
+
+      expect(fetchMock).toHaveBeenCalled();
+    });
+  });
 });
 
 function response(body: unknown, status = 200): Response {

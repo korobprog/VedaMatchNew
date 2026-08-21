@@ -25,6 +25,7 @@ const { contactsTags } = require('./contacts-tags-data.js');
 const { marketSections } = require('./market-sections-data.js');
 const { marketCategories } = require('./market-categories-data.js');
 const { noticeRubrics } = require('./notice-rubrics-data.js');
+const { geoCities } = require('./geo-cities-data.js');
 
 const services = [
   {
@@ -230,9 +231,52 @@ async function main() {
         create: fields,
       });
     }
+
+    // Справочник городов перезаписывается целиком: файл — источник истины,
+    // и правка алиаса в нём обязана доехать до базы, а не остаться рядом
+    // со старым значением.
+    for (const city of geoCities) {
+      await transaction.geoCity.upsert({
+        where: { city_country: { city: city.city, country: city.country } },
+        update: city,
+        create: city,
+      });
+    }
+
+    // Профили, заполненные до справочника, держат написание внешнего
+    // геокодера: «Mayapur, India» там, где справочник теперь говорит
+    // «Маяпур, Индия». Фильтр по городу сравнивает строки, поэтому такие
+    // соседи друг друга не видят — приводим их к канону.
+    const [{ count: canonicalized }] = await transaction.$queryRaw`
+      WITH updated AS (
+        UPDATE "User" u
+        SET "homeLocation" = jsonb_set(
+          jsonb_set(
+            jsonb_set(
+              (u."homeLocation")::jsonb,
+              '{city}',
+              to_jsonb(g."city")
+            ),
+            '{country}',
+            to_jsonb(g."country")
+          ),
+          '{displayName}',
+          to_jsonb(g."displayName")
+        )
+        FROM "GeoCity" g
+        WHERE u."homeLocation" IS NOT NULL
+          AND lower(u."homeLocation"->>'city') = ANY (g."aliases")
+          AND u."homeLocation"->>'city' IS DISTINCT FROM g."city"
+        RETURNING u.id
+      )
+      SELECT count(*)::int AS count FROM updated
+    `;
+    if (canonicalized > 0) {
+      console.log(`Canonicalized city in ${canonicalized} profiles`);
+    }
   });
   console.log(
-    `Seeded ${services.length} services, ${librarySections.length} library sections, ${contactsTags.length} contacts tags, ${marketSections.length} market sections, ${marketCategories.length} market categories and ${noticeRubrics.length} notice rubrics`,
+    `Seeded ${services.length} services, ${librarySections.length} library sections, ${contactsTags.length} contacts tags, ${marketSections.length} market sections, ${marketCategories.length} market categories ${noticeRubrics.length} notice rubrics and ${geoCities.length} cities`,
   );
 }
 

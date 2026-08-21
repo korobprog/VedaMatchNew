@@ -1,8 +1,19 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render as renderRaw, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { NextIntlClientProvider } from "next-intl";
+import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UserProfile } from "@vedamatch/shared";
 import { ProfileEditor } from "./profile-editor";
+import ru from "../../messages/ru.json";
+
+/** Редактор берёт локаль из next-intl: она уезжает в геокодер как `lang`. */
+const render = (ui: ReactElement) =>
+  renderRaw(
+    <NextIntlClientProvider locale="ru" messages={ru}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
