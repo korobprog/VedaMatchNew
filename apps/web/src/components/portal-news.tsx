@@ -36,13 +36,13 @@ export function PortalNews({ items }: { items: PublicAnnouncementDto[] }) {
   const rest = visible.filter((item) => item.id !== pinned?.id).slice(0, 3);
 
   return (
-    <section aria-label="Новости VedaMatch" className="mb-6 space-y-3">
+    <section aria-label="Сообщения VedaMatch" className="mb-6 space-y-3">
       {pinned && (
         <article className="glass rounded-2xl border border-gold/40 bg-gold/5 p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="font-mono text-[11px] uppercase tracking-wide text-gold">
-                Новости VedaMatch
+                Сообщения VedaMatch
               </p>
               <h2 className="mt-1 font-display text-base font-bold text-text-0">
                 {pinned.title}
@@ -67,7 +67,7 @@ export function PortalNews({ items }: { items: PublicAnnouncementDto[] }) {
         <div className="glass rounded-2xl border border-glass-brd p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="font-mono text-[11px] uppercase tracking-wide text-text-2">
-              {pinned ? "Ещё новости" : "Новости VedaMatch"}
+              {pinned ? "Ещё сообщения" : "Сообщения VedaMatch"}
             </p>
             <Link
               href="/updates/news"
