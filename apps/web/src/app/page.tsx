@@ -141,7 +141,14 @@ export default async function Home({
           userId={user.id}
           displayName={user.displayName}
         />
-        <NewsBanner news={homeNews} totalMembers={communityStats?.totalMembers} />
+        {/* Здоровается кто-то один: советник обращается по имени в первой
+            карточке, и второе обращение в паре сантиметров обесценивало бы
+            имя. Когда советнику нечего сказать, приветствие берёт баннер. */}
+        <NewsBanner
+          news={homeNews}
+          totalMembers={communityStats?.totalMembers}
+          greetName={advisorCards.length === 0 ? user.displayName : undefined}
+        />
         <ServiceGrid services={services} userId={user.id} extras={serviceExtras} />
       </main>
       <InstallBanner />

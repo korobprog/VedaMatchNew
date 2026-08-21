@@ -5,6 +5,7 @@ import { useSyncExternalStore } from "react";
 import { Megaphone, X } from "lucide-react";
 import type { HomeAnnouncementDto } from "@vedamatch/shared";
 import { MemberCounter } from "@/components/member-counter";
+import { statsCallToAction } from "@/lib/stats-call-to-action";
 import {
   isNewsDismissed,
   newsDismissalSnapshot,
@@ -24,9 +25,15 @@ import {
 export function NewsBanner({
   news,
   totalMembers,
+  greetName,
 }: {
   news: HomeAnnouncementDto | null;
   totalMembers?: number;
+  /**
+   * Имя для обращения. Приходит, только когда советник молчит: здоровается
+   * кто-то один, иначе имя звучит дважды на одном экране.
+   */
+  greetName?: string;
 }) {
   // Хранилище читается через useSyncExternalStore, а не в эффекте: на сервере
   // его нет, и снапшот там честно отдаёт «ничего не скрыто» — разметка сервера
@@ -91,7 +98,7 @@ export function NewsBanner({
             className="font-semibold text-text-0"
           />
           <span className="block text-xs underline underline-offset-2 group-hover:text-text-0">
-            Пусть нас будет больше
+            {statsCallToAction(greetName)}
           </span>
         </Link>
       )}
