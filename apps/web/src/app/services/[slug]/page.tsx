@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ServiceDetailPage } from "@/components/landing/ServiceDetailPage";
+import { getPublicServices } from "@/lib/api";
 import { SERVICE_CONTENT, getServiceContent } from "@/lib/service-content";
 
 export function generateStaticParams() {
@@ -16,12 +17,15 @@ export async function generateMetadata({
   const service = getServiceContent(slug);
   if (!service) return {};
 
+  // Имя берётся из каталога, как и на самой странице: иначе заголовок вкладки
+  // расходится с h1 после правки названия в админке.
+  const name = await catalogName(slug, service.name);
   // Суффикс « — VedaMatch» для вкладки добавит template из корневого layout;
   // в openGraph шаблон не действует, поэтому там имя полное.
-  const title = `${service.name} — VedaMatch`;
+  const title = `${name} — VedaMatch`;
   const description = `${service.tagline}. ${service.description}`;
   return {
-    title: service.name,
+    title: name,
     description,
     openGraph: { title, description },
   };
@@ -39,4 +43,10 @@ export default async function ServicePage({
   const otherServices = SERVICE_CONTENT.filter((s) => s.slug !== slug);
 
   return <ServiceDetailPage service={service} otherServices={otherServices} />;
+}
+
+/** Название из каталога с запасным значением из копирайта. */
+async function catalogName(slug: string, fallback: string): Promise<string> {
+  const services = await getPublicServices();
+  return services?.find((service) => service.slug === slug)?.name ?? fallback;
 }

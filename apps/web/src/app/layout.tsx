@@ -6,6 +6,8 @@ import { getLocale } from "next-intl/server";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import { SessionGuard } from "@/components/session-guard";
+import { ServiceCatalogProvider } from "@/components/service-catalog-provider";
+import { getPublicServices } from "@/lib/api";
 import { isThemePreference, THEME_COOKIE_NAME } from "@/lib/theme";
 import "./globals.css";
 
@@ -86,6 +88,9 @@ export default async function RootLayout({
   // Для «как в системе» атрибут не ставим — тему подхватит prefers-color-scheme.
   const resolved = preference === "system" ? null : preference;
   const locale = await getLocale();
+  // Названия сервисов приходят из каталога, а не из копирайта в коде:
+  // так правка имени в админке доезжает и до лендинга, и до шапки.
+  const services = (await getPublicServices()) ?? [];
 
   return (
     <html
@@ -115,7 +120,11 @@ export default async function RootLayout({
         <ServiceWorkerRegistrar />
         <SessionGuard />
         <NextIntlClientProvider>
-          <ThemeProvider initialPreference={preference}>{children}</ThemeProvider>
+          <ServiceCatalogProvider services={services}>
+            <ThemeProvider initialPreference={preference}>
+              {children}
+            </ThemeProvider>
+          </ServiceCatalogProvider>
         </NextIntlClientProvider>
       </body>
     </html>

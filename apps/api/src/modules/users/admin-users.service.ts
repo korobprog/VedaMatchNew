@@ -830,6 +830,7 @@ export class AdminUsersService {
       id: s.id,
       slug: s.slug,
       name: s.name,
+      nameEn: s.nameEn,
       description: s.description,
       iconUrl: s.iconUrl,
       url: s.url,

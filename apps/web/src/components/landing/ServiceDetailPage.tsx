@@ -5,12 +5,12 @@ import { motion } from "framer-motion";
 import { useLocale, useTranslations } from "next-intl";
 import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
 import { ServiceIcon } from "@/components/icons/service-icons";
+import { useServiceNames } from "@/components/service-catalog-provider";
 import { Navbar } from "./Navbar";
 import { BackgroundOrbs } from "./Orb";
 import { NoiseOverlay } from "./NoiseOverlay";
 import { Footer } from "./Footer";
 import {
-  serviceName,
   serviceTagline,
   type ServiceContent,
 } from "@/lib/service-content";
@@ -39,7 +39,8 @@ export function ServiceDetailPage({
 }) {
   const t = useTranslations("Landing.serviceDetail");
   const locale = useLocale();
-  const name = serviceName(service, locale);
+  const names = useServiceNames();
+  const name = names(service.slug, service.name);
   // Ведём на настоящий маршрут сервиса, а не на /login: вошедший попадает
   // сразу в сервис, гостя proxy отправит на "/?returnTo=…" — оттуда и кнопка
   // «Начать», и OAuth-колбэк вернут его на этот же маршрут.
@@ -210,7 +211,7 @@ export function ServiceDetailPage({
                     <ServiceIcon slug={other.slug} className="h-6 w-6" />
                   </span>
                   <span className="text-xs font-medium text-text-1 group-hover:text-text-0 transition-colors">
-                    {serviceName(other, locale)}
+                    {names(other.slug, other.name)}
                   </span>
                 </Link>
               ))}

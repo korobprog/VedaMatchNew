@@ -95,6 +95,7 @@ function ServiceForm({ service }: { service: AdminServiceCardDto }) {
     const data = new FormData(event.currentTarget);
     const body: UpdateAdminServiceRequest = {
       name: String(data.get("name") ?? "").trim(),
+      nameEn: String(data.get("nameEn") ?? "").trim() || null,
       description: String(data.get("description") ?? "").trim(),
       url: String(data.get("url") ?? "").trim(),
       iconUrl: String(data.get("iconUrl") ?? "").trim() || null,
@@ -119,6 +120,12 @@ function ServiceForm({ service }: { service: AdminServiceCardDto }) {
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Text name="name" label="Название" defaultValue={service.name} />
+        <Text
+          name="nameEn"
+          label="Название (en)"
+          defaultValue={service.nameEn ?? ""}
+          placeholder="показывать русское"
+        />
         <Text name="category" label="Категория" defaultValue={service.category} />
         <Text name="url" label="Адрес" defaultValue={service.url} />
         <Text

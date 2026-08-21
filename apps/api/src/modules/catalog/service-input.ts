@@ -19,6 +19,7 @@ const FLAGS = [
 
 export interface NormalizedServiceInput {
   name?: string;
+  nameEn?: string | null;
   description?: string;
   url?: string;
   iconUrl?: string | null;
@@ -62,6 +63,10 @@ export function normalizeServiceInput(
     const name = body.name.trim();
     if (!name) throw new BadRequestException('Имя не может быть пустым');
     data.name = name;
+  }
+  if (body.nameEn !== undefined) {
+    // Пустое английское имя — «показывать русское», а не пустая подпись.
+    data.nameEn = body.nameEn?.trim() || null;
   }
   if (body.description !== undefined) {
     const description = body.description.trim();

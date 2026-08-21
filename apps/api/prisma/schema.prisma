@@ -673,6 +673,9 @@ model Service {
   description                  String
   iconUrl                      String?
   url                          String
+  /// Английское название. Отдаётся лендингу и шапке при locale=en; пусто —
+  /// показывается русское.
+  nameEn                       String?
   status                       ServiceStatus @default(coming_soon)
   category                     String
   /// Порядок в сетке портала. Меньше — выше; при равенстве сортировка по имени.

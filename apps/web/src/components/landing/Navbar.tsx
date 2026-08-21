@@ -10,7 +10,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { VedaMatchMark } from "@/components/icons/vedamatch-mark";
-import { SERVICE_CONTENT, serviceName, serviceTagline } from "@/lib/service-content";
+import { useServiceNames } from "@/components/service-catalog-provider";
+import { SERVICE_CONTENT, serviceTagline } from "@/lib/service-content";
 import { loginHref } from "@/lib/return-to";
 
 interface NavbarProps {
@@ -30,6 +31,7 @@ const navLinks = [
 function ServicesMenu() {
   const t = useTranslations("Landing.nav");
   const locale = useLocale();
+  const names = useServiceNames();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -73,7 +75,7 @@ function ServicesMenu() {
                 </span>
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold text-text-0">
-                    {serviceName(service, locale)}
+                    {names(service.slug, service.name)}
                   </span>
                   <span className="block text-xs text-text-2 truncate">
                     {serviceTagline(service, locale)}
@@ -99,7 +101,7 @@ export function Navbar({ className, returnTo }: NavbarProps) {
   const t = useTranslations("Landing.nav");
   const tHeader = useTranslations("Header");
   const tCommon = useTranslations("Common");
-  const locale = useLocale();
+  const names = useServiceNames();
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [servicesExpanded, setServicesExpanded] = useState(false);
@@ -259,7 +261,7 @@ export function Navbar({ className, returnTo }: NavbarProps) {
                                 className="flex items-center gap-2.5 rounded-lg py-1.5 text-base font-medium text-text-1 hover:text-text-0 transition-colors"
                               >
                                 <ServiceIcon slug={service.slug} className="h-5 w-5 shrink-0" />
-                                {serviceName(service, locale)}
+                                {names(service.slug, service.name)}
                               </Link>
                             ))}
                           </div>

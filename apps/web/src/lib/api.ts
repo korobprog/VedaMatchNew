@@ -69,6 +69,9 @@ async function apiGetPublic<T>(path: string): Promise<T | null> {
  */
 export const getProfile = cache(() => apiGet<UserProfile>("/users/me"));
 export const getServices = () => apiGet<ServiceCard[]>("/services");
+/** Каталог для гостя: лендинг и шапка показывают названия до авторизации. */
+export const getPublicServices = () =>
+  apiGetPublic<ServiceCard[]>("/services/public");
 export const getSelfIdentificationState = () =>
   apiGet<SelfIdentificationState>("/self-identification/me");
 export const getSelfIdentificationHistory = () =>

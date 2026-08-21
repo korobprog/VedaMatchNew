@@ -89,6 +89,7 @@ const services: ServiceCardType[] = [
     id: "union",
     slug: "union",
     name: "Знакомства",
+    nameEn: "Union",
     description: "Осознанные знакомства и сотрудничество",
     iconUrl: null,
     url: "/union",

@@ -12,6 +12,7 @@ function service(over: Partial<ServiceCardType> = {}): ServiceCardType {
     id: over.slug ?? "union",
     slug: "union",
     name: "Знакомства",
+    nameEn: "Union",
     description: "Осознанные знакомства и сотрудничество",
     iconUrl: null,
     url: "/union",

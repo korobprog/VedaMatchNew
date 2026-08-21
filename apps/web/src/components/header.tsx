@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { isPortalAdmin } from "@vedamatch/shared";
 import type { UserProfile } from "@vedamatch/shared";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Home, LifeBuoy, Bell, MoreHorizontal } from "lucide-react";
 import { ServiceIcon } from "@/components/icons/service-icons";
@@ -15,7 +15,8 @@ import { NotificationBell } from "@/components/notifications/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
 import { VedaMatchMark } from "@/components/icons/vedamatch-mark";
-import { SERVICE_CONTENT, serviceName } from "@/lib/service-content";
+import { useServiceNames } from "@/components/service-catalog-provider";
+import { SERVICE_CONTENT } from "@/lib/service-content";
 import { useDialogFocus, useDismissable } from "@/lib/use-dismissable";
 
 interface NavItem {
@@ -28,19 +29,19 @@ interface NavItem {
 // 8 пунктов и в том же порядке, что на лендинге и в /services. Подписи
 // зависят от языка интерфейса, поэтому список собирается внутри компонента.
 function useNavItems(): NavItem[] {
-  const locale = useLocale();
   const t = useTranslations("Common");
+  const names = useServiceNames();
   const home = t("home");
   return useMemo(
     () => [
       { href: "/", label: home, icon: <Home size={20} /> },
       ...SERVICE_CONTENT.map((service) => ({
         href: service.route,
-        label: serviceName(service, locale),
+        label: names(service.slug, service.name),
         icon: <ServiceIcon slug={service.slug} className="h-5 w-5" />,
       })),
     ],
-    [home, locale],
+    [home, names],
   );
 }
 

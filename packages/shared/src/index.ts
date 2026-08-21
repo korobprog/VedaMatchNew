@@ -242,6 +242,8 @@ export interface ServiceCard {
   id: string;
   slug: string;
   name: string;
+  /** Английское название; `null` — показывать русское и в en-локали. */
+  nameEn: string | null;
   description: string;
   iconUrl: string | null;
   url: string;
@@ -509,6 +511,7 @@ export interface AdminServiceCardDto {
   url: string;
   status: ServiceStatus;
   category: string;
+  nameEn: string | null;
   sortOrder: number;
   /** `false` — сервис виден только по персональному доступу или по этапу. */
   public: boolean;
@@ -531,6 +534,7 @@ export type UpdateAdminServiceRequest = Partial<
     | 'url'
     | 'status'
     | 'category'
+    | 'nameEn'
     | 'sortOrder'
     | 'public'
     | 'seekerVisible'
@@ -591,3 +595,16 @@ export interface AdminUpdatePlatformSettingsRequest {
 }
 
 export const REGISTRATION_NOTE_MAX_LENGTH = 300;
+
+/**
+ * Название сервиса в нужной локали. Единственное место, где решается, какое
+ * имя показывать: и лендинг, и шапка, и сетка портала зовут её, чтобы правка
+ * в каталоге админки доезжала везде одинаково.
+ */
+export function serviceCardName(
+  service: Pick<ServiceCard, 'name' | 'nameEn'>,
+  locale: string,
+): string {
+  if (locale !== 'en') return service.name;
+  return service.nameEn?.trim() || service.name;
+}
