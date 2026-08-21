@@ -39,6 +39,7 @@ const TEMPLATES: Record<AdminAuditAction, string> = {
   'contacts.tag-deleted': 'Удалён тег справочника',
   'contacts.profile-hidden': 'Карточка справочника снята',
   'contacts.profile-restored': 'Карточка справочника возвращена',
+  'platform.registration-changed': 'Изменён режим регистрации',
   'astro.generation-resumed': 'Генерация астрологии возобновлена',
 };
 

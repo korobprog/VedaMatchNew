@@ -20,7 +20,7 @@ export * from './community';
 export * from './notices';
 export * from './audit';
 
-import type { SubscriptionState } from './support';
+import type { BillingMode, SubscriptionState } from './support';
 
 export type Role = 'user' | 'admin' | 'service-admin';
 
@@ -550,3 +550,44 @@ export interface CreateAdminServiceRequest extends UpdateAdminServiceRequest {
   /** Группа в сетке портала; у существующих сервисов — `community`. */
   category: string;
 }
+
+// ===== Настройки платформы (админка) =====
+
+/** Приём новых аккаунтов. `closed` не мешает входить уже заведённым. */
+export type RegistrationMode = 'open' | 'closed';
+
+/**
+ * Внешняя интеграция глазами администрации. Значения ключей наружу не уходят
+ * никогда — только факт настройки: этого достаточно, чтобы понять, почему
+ * не идут пуши или не генерируются картинки.
+ */
+export interface AdminIntegrationStatus {
+  key:
+    | 'google-oauth'
+    | 'storage'
+    | 'push'
+    | 'redis'
+    | 'motivation-ai'
+    | 'motivation-media'
+    | 'astro-ai';
+  /** Все обязательные переменные окружения заданы. */
+  configured: boolean;
+  /** Каких переменных не хватает. Имена, не значения. */
+  missing: string[];
+}
+
+export interface AdminPlatformSettings {
+  billingMode: BillingMode;
+  registrationMode: RegistrationMode;
+  registrationNote: string | null;
+  integrations: AdminIntegrationStatus[];
+  updatedAt: string | null;
+}
+
+export interface AdminUpdatePlatformSettingsRequest {
+  billingMode?: BillingMode;
+  registrationMode?: RegistrationMode;
+  registrationNote?: string | null;
+}
+
+export const REGISTRATION_NOTE_MAX_LENGTH = 300;

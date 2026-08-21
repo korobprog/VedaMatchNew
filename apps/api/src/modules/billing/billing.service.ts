@@ -20,10 +20,7 @@ import {
   VEDAMATCH_PLAN,
 } from './subscription';
 
-import {
-  APP_SETTINGS_ID as SETTINGS_ID,
-  readBillingMode,
-} from './billing-mode';
+import { readBillingMode } from './billing-mode';
 
 const SUBSCRIPTION_FIELDS = {
   createdAt: true,
@@ -45,33 +42,6 @@ export class BillingService {
   /** Текущий режим биллинга; при отсутствии строки настроек — обычная бизнес-логика. */
   billingMode(): Promise<BillingMode> {
     return readBillingMode(this.prisma);
-  }
-
-  async setBillingMode(
-    admin: { sub: string; role: Role },
-    mode: BillingMode,
-  ): Promise<BillingMode> {
-    if (admin.role !== 'admin') {
-      throw new ForbiddenException('Доступ только для администратора');
-    }
-    const previous = await this.billingMode();
-    const updated = await this.prisma.appSettings.upsert({
-      where: { id: SETTINGS_ID },
-      create: { id: SETTINGS_ID, billingMode: mode },
-      update: { billingMode: mode },
-      select: { billingMode: true },
-    });
-
-    // Режим биллинга — единственная настройка, меняющая доступ сразу всем,
-    // поэтому в журнале она нужна вместе с прежним значением.
-    const event: AdminAuditEvent = {
-      actorId: admin.sub,
-      action: 'billing.mode-changed',
-      targetType: 'platform',
-      details: { from: previous, to: updated.billingMode },
-    };
-    this.events.emit('admin.action', event);
-    return updated.billingMode;
   }
 
   async plan(): Promise<PricingPlan> {

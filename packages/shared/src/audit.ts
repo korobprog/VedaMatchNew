@@ -41,6 +41,7 @@ export const ADMIN_AUDIT_ACTIONS = [
   'contacts.tag-deleted',
   'contacts.profile-hidden',
   'contacts.profile-restored',
+  'platform.registration-changed',
   'astro.generation-resumed',
 ] as const;
 

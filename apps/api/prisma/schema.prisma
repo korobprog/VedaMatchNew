@@ -310,10 +310,20 @@ model User {
 }
 
 // Единственная строка глобальных настроек платформы (id всегда "global").
+/// Приём новых аккаунтов. `closed` не трогает уже заведённых: вход остаётся,
+/// не создаётся только новая запись при первом входе через Google.
+enum RegistrationMode {
+  open
+  closed
+}
+
 model AppSettings {
-  id          String      @id @default("global")
-  billingMode BillingMode @default(business)
-  updatedAt   DateTime    @updatedAt
+  id               String           @id @default("global")
+  billingMode      BillingMode      @default(business)
+  registrationMode RegistrationMode @default(open)
+  /// Что увидит человек, которому отказано в регистрации. Пусто — общий текст.
+  registrationNote String?
+  updatedAt        DateTime         @updatedAt
 }
 
 model UserPhoto {

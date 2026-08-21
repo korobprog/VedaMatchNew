@@ -10,7 +10,7 @@ import type {
   AdminUserListResponse,
   AdminUserReportsResponse,
   AdminAnnouncementDto,
-  AdminBillingModeResponse,
+  AdminPlatformSettings,
   AdminAuditListResponse,
   AdminAuditQuery,
   AdminPortalStats,
@@ -144,8 +144,9 @@ export const getAdminSupportTicket = (id: string) =>
 export const getBillingPlan = () => apiGetPublic<PricingPlan>("/billing/plan");
 export const getCommunityStats = () =>
   apiGetPublic<CommunityStats>("/stats/community");
-export const getAdminBillingMode = () =>
-  apiGet<AdminBillingModeResponse>("/admin/billing/mode");
+/** Глобальные настройки портала. Команды — в lib/settings-admin-api.ts. */
+export const getAdminPlatformSettings = () =>
+  apiGet<AdminPlatformSettings>("/admin/settings");
 
 // ===== Changelog: версия и новости =====
 
