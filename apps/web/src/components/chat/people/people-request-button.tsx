@@ -16,13 +16,53 @@ import { PeopleDetails, type ContactsDetailsValue } from "./people-details";
  * Контакты показываются только из того, что прислал бэкенд: поле `contacts`
  * приходит непустым исключительно при действующем раскрытии. Своей проверки
  * «а можно ли» здесь нет — иначе интерфейс начал бы решать за сервер.
+ *
+ * Единственное исключение — своя же карточка: бэкенд такой запрос отбивает
+ * («Нельзя отправить запрос самому себе»), поэтому предлагать форму нечестно.
  */
 export function PeopleRequestButton({
+  userId,
+  viewerId,
+  contacts,
+}: {
+  userId: string;
+  /** Кто смотрит: совпал с `userId` — карточка своя. */
+  viewerId: string;
+  /** Поле `contacts` карточки: непустое — доступ уже открыт. */
+  contacts: ContactsDetailsValue | null;
+}) {
+  // Развилка вынесена в обёртку без хуков: на своей карточке форма не просто
+  // прячется — она не монтируется, и за списком запросов никто не ходит.
+  if (userId === viewerId) return <OwnCardLink />;
+  return <RequestForm userId={userId} contacts={contacts} />;
+}
+
+/** Блок под своей карточкой: вместо доступа к человеку — путь к её настройкам. */
+function OwnCardLink() {
+  return (
+    <section className="glass rounded-2xl border border-glass-brd p-4">
+      <h3 className="font-display text-base font-semibold text-text-0">
+        Это ваша карточка
+      </h3>
+      <p className="mt-1 text-xs text-text-2">
+        Так вас видят другие участники справочника. Что рассказывать о себе и
+        кому показывать карточку — в её настройках.
+      </p>
+      <Link
+        href="/chat/people/profile"
+        className="mt-3 inline-block rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1 transition hover:text-text-0"
+      >
+        Моя карточка
+      </Link>
+    </section>
+  );
+}
+
+function RequestForm({
   userId,
   contacts,
 }: {
   userId: string;
-  /** Поле `contacts` карточки: непустое — доступ уже открыт. */
   contacts: ContactsDetailsValue | null;
 }) {
   const [outgoing, setOutgoing] = useState<ContactsRequestDto | null>(null);

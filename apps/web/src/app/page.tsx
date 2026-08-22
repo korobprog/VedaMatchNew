@@ -127,23 +127,20 @@ export default async function Home({
   );
 
   const unionService = services.find((s) => s.url === "/union");
-  const chatService = services.find((s) => s.url === "/chat");
+  // Считаем сообщения, а не беседы: значок читается как «столько меня ждёт»,
+  // и три письма из одного диалога — это три письма. Запросы на переписку в
+  // том же числе: человеку важно, что его ждут, а не в какой это очереди.
+  //
+  // Число живёт только на крупной кнопке «Общения». На плитке сервиса в сетке
+  // его нет намеренно: два одинаковых счётчика на одном экране человек
+  // начинает сверять между собой вместо того, чтобы открыть переписку.
+  const chatBadge = (chatUnread?.messages ?? 0) + (chatUnread?.requests ?? 0);
   const serviceExtras = {
     ...(unionService
       ? {
           [unionService.id]: {
             badgeCount: unionCounts?.incomingPending,
             extra: <UnionQuickAccessWidget {...unionQuickAccess} />,
-          },
-        }
-      : {}),
-    // Непрочитанное и запросы на переписку в одном числе: человеку важно,
-    // что его ждут, а не в какой именно очереди это лежит.
-    ...(chatService
-      ? {
-          [chatService.id]: {
-            badgeCount:
-              (chatUnread?.conversations ?? 0) + (chatUnread?.requests ?? 0),
           },
         }
       : {}),
@@ -177,7 +174,7 @@ export default async function Home({
         )}
         {/* Ходовые сервисы отдельной строкой над сеткой: за ними заходят
             чаще всего, и искать их среди равных плиток не нужно. */}
-        <FeaturedServices />
+        <FeaturedServices unread={chatBadge} />
         <ServiceGrid services={services} userId={user.id} extras={serviceExtras} />
       </main>
       <InstallBanner />

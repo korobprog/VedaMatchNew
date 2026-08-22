@@ -296,6 +296,36 @@ export const SERVICE_CONTENT: ServiceContent[] = [
   },
 ];
 
+/**
+ * Сервисы, которых ещё нет. Лежат отдельно от `SERVICE_CONTENT`: у них нет
+ * маршрута и страницы, поэтому в шапке и в `/services` им делать нечего — а на
+ * лендинге они честно показывают, куда портал растёт.
+ */
+export interface PlannedService {
+  slug: string;
+  name: string;
+  nameEn: string;
+  tagline: string;
+  taglineEn: string;
+}
+
+export const PLANNED_SERVICES: PlannedService[] = [
+  {
+    slug: "music",
+    name: "Музыка",
+    nameEn: "Music",
+    tagline: "Киртаны, бхаджаны и записи с программ",
+    taglineEn: "Kirtans, bhajans and recordings from programs",
+  },
+  {
+    slug: "work",
+    name: "Работа",
+    nameEn: "Work",
+    tagline: "Вакансии, услуги и инструменты для служения и дела",
+    taglineEn: "Jobs, services and tools for service and business",
+  },
+];
+
 export function getServiceContent(slug: string): ServiceContent | undefined {
   return SERVICE_CONTENT.find((s) => s.slug === slug);
 }

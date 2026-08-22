@@ -291,7 +291,7 @@ export function ServiceGrid({
               }}
               layout
               transition={{ type: "spring", stiffness: 500, damping: 38 }}
-              className={`relative rounded-2xl ${
+              className={`relative flex h-full flex-col rounded-2xl ${
                 isDragged ? "border-2 border-dashed border-cyan/70 bg-cyan/5" : ""
               }`}
             >
@@ -318,7 +318,7 @@ export function ServiceGrid({
                 </div>
               )}
               {/* Карточку не размонтируем: её размеры держат пустой слот ровно того же размера. */}
-              <div className={isDragged ? "invisible" : undefined}>
+              <div className={`flex-1 ${isDragged ? "invisible" : ""}`}>
                 <ServiceCard
                   service={service}
                   badgeCount={extras?.[service.id]?.badgeCount}

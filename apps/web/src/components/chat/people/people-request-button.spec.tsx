@@ -39,6 +39,7 @@ describe("PeopleRequestButton", () => {
     render(
       <PeopleRequestButton
         userId="u2"
+        viewerId="u1"
         contacts={{
           socialLinks: { telegram: "https://t.me/govinda" },
           messengers: { phone: "+79990000000" },
@@ -55,7 +56,7 @@ describe("PeopleRequestButton", () => {
 
   it("offers the form with a counter when access is closed", async () => {
     vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(json(state())));
-    render(<PeopleRequestButton userId="u2" contacts={null} />);
+    render(<PeopleRequestButton userId="u2" viewerId="u1" contacts={null} />);
 
     expect(
       await screen.findByRole("button", { name: "Запросить контакт" }),
@@ -73,7 +74,7 @@ describe("PeopleRequestButton", () => {
       .mockResolvedValueOnce(json(state()))
       .mockResolvedValueOnce(json(state([outgoingPending], 9)));
     vi.stubGlobal("fetch", fetchMock);
-    render(<PeopleRequestButton userId="u2" contacts={null} />);
+    render(<PeopleRequestButton userId="u2" viewerId="u1" contacts={null} />);
 
     await userEvent.type(
       await screen.findByRole("textbox"),
@@ -96,7 +97,7 @@ describe("PeopleRequestButton", () => {
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(json(state([outgoingPending]))),
     );
-    render(<PeopleRequestButton userId="u2" contacts={null} />);
+    render(<PeopleRequestButton userId="u2" viewerId="u1" contacts={null} />);
 
     expect(
       await screen.findByText("Запрос отправлен, ждём ответа."),
@@ -111,7 +112,7 @@ describe("PeopleRequestButton", () => {
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(json(state([], 0))),
     );
-    render(<PeopleRequestButton userId="u2" contacts={null} />);
+    render(<PeopleRequestButton userId="u2" viewerId="u1" contacts={null} />);
 
     expect(
       await screen.findByText(/Лимит запросов на сегодня исчерпан/),
@@ -119,6 +120,24 @@ describe("PeopleRequestButton", () => {
     expect(
       screen.getByRole("button", { name: "Запросить контакт" }),
     ).toBeDisabled();
+  });
+
+  it("offers the own card instead of asking yourself for contacts", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(json(state()));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PeopleRequestButton userId="u1" viewerId="u1" contacts={null} />);
+
+    expect(
+      await screen.findByRole("link", { name: "Моя карточка" }),
+    ).toHaveAttribute("href", "/chat/people/profile");
+    expect(
+      screen.queryByRole("button", { name: "Запросить контакт" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Сегодня можно отправить/)).not.toBeInTheDocument();
+    // Список запросов для своей карточки не нужен — за ним и не ходим.
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("shows the Russian error text the backend sent", async () => {
@@ -135,7 +154,7 @@ describe("PeopleRequestButton", () => {
         ),
       );
     vi.stubGlobal("fetch", fetchMock);
-    render(<PeopleRequestButton userId="u2" contacts={null} />);
+    render(<PeopleRequestButton userId="u2" viewerId="u1" contacts={null} />);
 
     await userEvent.click(
       await screen.findByRole("button", { name: "Запросить контакт" }),

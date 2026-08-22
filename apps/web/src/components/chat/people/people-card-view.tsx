@@ -35,7 +35,14 @@ type Result = { userId: string } & (
   | { status: "error"; message: string }
 );
 
-export function PeopleCardView({ userId }: { userId: string }) {
+export function PeopleCardView({
+  userId,
+  viewerId,
+}: {
+  userId: string;
+  /** Кто смотрит: по нему блок под карточкой отличает свою карточку от чужой. */
+  viewerId: string;
+}) {
   const [result, setResult] = useState<Result | null>(null);
 
   useEffect(() => {
@@ -115,6 +122,7 @@ export function PeopleCardView({ userId }: { userId: string }) {
           карточка описывает человека, а этот блок — доступ к нему. */}
       <PeopleRequestButton
         userId={state.card.userId}
+        viewerId={viewerId}
         contacts={state.card.contacts}
       />
     </div>
