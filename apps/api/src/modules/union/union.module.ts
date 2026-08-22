@@ -7,8 +7,6 @@ import { UnionAdminController } from './union-admin.controller';
 import { UnionAdminService } from './union-admin.service';
 import { UnionBoostController } from './union-boost.controller';
 import { UnionBoostService } from './union-boost.service';
-import { UnionChatController } from './union-chat.controller';
-import { UnionChatService } from './union-chat.service';
 import { UnionConnectionController } from './union-connection.controller';
 import { UnionConnectionService } from './union-connection.service';
 import { UnionMatchingService } from './union-matching.service';
@@ -24,7 +22,6 @@ import { UnionSwipeService } from './union-swipe.service';
     UnionProfileController,
     UnionRecommendationsController,
     UnionConnectionController,
-    UnionChatController,
     UnionSwipeController,
     UnionBoostController,
     UnionAdminController,
@@ -33,11 +30,9 @@ import { UnionSwipeService } from './union-swipe.service';
     UnionProfileService,
     UnionMatchingService,
     UnionConnectionService,
-    UnionChatService,
     UnionSwipeService,
     UnionBoostService,
     UnionAdminService,
   ],
-  exports: [UnionChatService],
 })
 export class UnionModule {}

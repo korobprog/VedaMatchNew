@@ -5,7 +5,6 @@ import type {
   UnionChatsState,
   UnionConnectionCounts,
   UnionConnectionRequestsState,
-  UnionAdminChatResponse,
   UnionAdminProfileDto,
   UnionAdminProfileListResponse,
   UnionAdminProfileQuery,
@@ -74,12 +73,6 @@ export const getUnionAdminProfiles = (query: UnionAdminProfileQuery) => {
 export const getUnionAdminProfile = (userId: string) =>
   unionGet<UnionAdminProfileDto>(
     `/union/admin/profiles/${encodeURIComponent(userId)}`,
-  );
-
-/** Переписка пары по жалобе. Каждый просмотр попадает в журнал действий. */
-export const getUnionAdminChat = (reportId: string) =>
-  unionGet<UnionAdminChatResponse>(
-    `/union/admin/reports/${encodeURIComponent(reportId)}/chat`,
   );
 
 export function toQueryString(

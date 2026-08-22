@@ -433,7 +433,9 @@ describe('UnionProfileService', () => {
       profile('boostedNoPhoto'),
     ]);
     prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
-    prisma.unionBoost.findMany.mockResolvedValue([{ userId: 'boostedNoPhoto' }]);
+    prisma.unionBoost.findMany.mockResolvedValue([
+      { userId: 'boostedNoPhoto' },
+    ]);
 
     const result = await service.getRecommendations('me');
 

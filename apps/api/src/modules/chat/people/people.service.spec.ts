@@ -543,11 +543,11 @@ describe('PeopleService', () => {
           headline: 'Пуджари',
           about: 'Пришло из старого клиента',
           languages: ['русский'],
-        } as never,
+        },
         now,
       );
 
-      const saved = expectSaved() as Record<string, unknown>;
+      const saved = expectSaved();
       expect(saved.headline).toBe('Пуджари');
       expect(saved).not.toHaveProperty('about');
       expect(saved).not.toHaveProperty('languages');

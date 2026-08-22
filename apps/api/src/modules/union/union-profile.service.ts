@@ -312,7 +312,8 @@ export class UnionProfileService {
         lines.push(`Дети: ${profile.childrenStatus}`);
       }
       if (profile.housing) lines.push(`Жилищные условия: ${profile.housing}`);
-      if (profile.about) lines.push(`Уже написано о себе: ${profile.about}`);
+      if (profile.user.about)
+        lines.push(`Уже написано о себе: ${profile.user.about}`);
       if (profile.status) lines.push(`Текущий статус: ${profile.status}`);
     }
     return lines.length > 0
@@ -420,9 +421,7 @@ export class UnionProfileService {
     const recommendations = (
       selectedIntentions
         ? beforeIntentions.filter(({ other }) =>
-            other.intentions.some((i) =>
-              selectedIntentions.includes(i.type as UnionIntentionType),
-            ),
+            other.intentions.some((i) => selectedIntentions.includes(i.type)),
           )
         : beforeIntentions
     ).sort((a, b) => {
@@ -592,10 +591,10 @@ export class UnionProfileService {
     return {
       user: summary,
       profile: {
-        about: other.about,
+        about: other.user.about,
         format: other.format,
         relocationReady: other.relocationReady,
-        languages: other.languages,
+        languages: other.user.languages,
         skills: other.skills,
         interests: other.interests,
         values: other.values,
@@ -731,7 +730,7 @@ export class UnionProfileService {
     };
     for (const profile of profiles) {
       for (const type of new Set(profile.intentions.map((i) => i.type))) {
-        counts[type as UnionIntentionType] += 1;
+        counts[type] += 1;
       }
     }
     return counts;
@@ -820,7 +819,7 @@ export class UnionProfileService {
     }
     if (filters.language) {
       const needle = normalizeText(filters.language);
-      const hasLanguage = profile.languages.some((language) =>
+      const hasLanguage = profile.user.languages.some((language) =>
         normalizeText(language).includes(needle),
       );
       if (!hasLanguage) return false;

@@ -158,7 +158,9 @@ describe('UnionSwipeService', () => {
     ).rejects.toThrow('Отправка недоступна');
     expect(prisma.unionSwipe.upsert).toHaveBeenCalled();
     expect(prisma.unionSwipe.delete).toHaveBeenCalledWith({
-      where: { fromUserId_toUserId: { fromUserId: 'user-1', toUserId: 'user-2' } },
+      where: {
+        fromUserId_toUserId: { fromUserId: 'user-1', toUserId: 'user-2' },
+      },
     });
     expect(prisma.unionSwipe.update).not.toHaveBeenCalled();
   });
@@ -167,7 +169,9 @@ describe('UnionSwipeService', () => {
     const earlier = new Date('2026-08-01T10:00:00.000Z');
     prisma.unionSwipe.findUnique
       // Прежнее состояние строки: откатанный суперлайк.
-      .mockResolvedValueOnce(swipe({ decision: 'superlike', undoneAt: earlier }))
+      .mockResolvedValueOnce(
+        swipe({ decision: 'superlike', undoneAt: earlier }),
+      )
       // Встречный свайп для likedMe.
       .mockResolvedValueOnce(null);
     prisma.unionSwipe.findUnique.mockResolvedValue(null);
@@ -178,7 +182,9 @@ describe('UnionSwipeService', () => {
     ).rejects.toThrow('Отправка недоступна');
     expect(prisma.unionSwipe.delete).not.toHaveBeenCalled();
     expect(prisma.unionSwipe.update).toHaveBeenCalledWith({
-      where: { fromUserId_toUserId: { fromUserId: 'user-1', toUserId: 'user-2' } },
+      where: {
+        fromUserId_toUserId: { fromUserId: 'user-1', toUserId: 'user-2' },
+      },
       data: { decision: 'superlike', createdAt: now, undoneAt: earlier },
     });
   });

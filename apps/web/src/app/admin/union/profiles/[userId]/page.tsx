@@ -110,10 +110,6 @@ export default async function AdminUnionProfilePage({
               label="Знакомств состоялось"
               value={String(profile.activity.matches)}
             />
-            <Field
-              label="Сообщений написано"
-              value={String(profile.activity.messagesSent)}
-            />
           </Section>
         </div>
 
