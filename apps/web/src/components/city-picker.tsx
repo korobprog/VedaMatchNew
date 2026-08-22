@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useLocale } from "next-intl";
 import type { GeoSearchResult, ProfileLocation } from "@vedamatch/shared";
-import { apiFetch } from "@/lib/http-client";
+import { apiFetch, readErrorMessage } from "@/lib/http-client";
 import { Button } from "@/components/ui/button";
 import { fieldClassName } from "@/components/ui/input";
 
@@ -47,6 +47,10 @@ export function CityPicker({
   const [results, setResults] = useState<GeoSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [empty, setEmpty] = useState(false);
+  // Отдельно от `empty`: отказ геокодера и честное «такого города нет» —
+  // разные вещи, а под одной подписью человек читает их одинаково и правит
+  // написание там, где править нечего.
+  const [failure, setFailure] = useState<string | null>(null);
   const [detecting, setDetecting] = useState(false);
   // -1 — «ничего не подсвечено»: список открыт, но Enter пока отправляет
   // не выбор, а ничего. Так стрелка вниз всегда начинает с первого варианта.
@@ -64,15 +68,28 @@ export function CityPicker({
           `${API_URL}/geo/search?q=${encodeURIComponent(trimmed)}&lang=${locale}`,
           { signal: controller.signal },
         );
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) {
+          throw new Error(
+            await readErrorMessage(
+              res,
+              "Поиск городов сейчас недоступен, попробуйте через минуту",
+            ),
+          );
+        }
         const found = (await res.json()) as GeoSearchResult[];
         setResults(found);
         setEmpty(found.length === 0);
+        setFailure(null);
         setActiveIndex(-1);
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return;
         setResults([]);
-        setEmpty(true);
+        setEmpty(false);
+        setFailure(
+          e instanceof Error && e.message
+            ? e.message
+            : "Поиск городов сейчас недоступен, попробуйте через минуту",
+        );
       } finally {
         setSearching(false);
       }
@@ -89,6 +106,7 @@ export function CityPicker({
     setQuery(item.displayName ?? item.city);
     setResults([]);
     setEmpty(false);
+    setFailure(null);
     setActiveIndex(-1);
   }
 
@@ -185,8 +203,10 @@ export function CityPicker({
             setQuery(event.target.value);
             setResults([]);
             // Ответ на прошлый запрос новому вводу не относится: и старые
-            // варианты, и «ничего не нашлось» снимаются сразу.
+            // варианты, и «ничего не нашлось», и сообщение об отказе
+            // геокодера снимаются сразу.
             setEmpty(false);
+            setFailure(null);
             setActiveIndex(-1);
           }}
           onKeyDown={onKeyDown}
@@ -237,7 +257,12 @@ export function CityPicker({
           занять пару секунд, а пустой ответ без подсказки — тупик. */}
       <p className="mt-2 min-h-5 text-sm text-text-2" aria-live="polite">
         {searching && "Ищем города…"}
-        {!searching && empty && (
+        {!searching && failure && (
+          <span className="text-text-1">
+            {failure} Город можно оставить пустым и заполнить позже.
+          </span>
+        )}
+        {!searching && !failure && empty && (
           <span className="text-text-1">
             Ничего не нашлось. Попробуйте другое написание — например,
             латиницей: Mayapur, Vrindavan.
@@ -261,6 +286,7 @@ export function CityPicker({
               setQuery(place);
               setResults([]);
               setEmpty(false);
+              setFailure(null);
               setActiveIndex(-1);
               field.current?.focus();
             }}
@@ -283,6 +309,7 @@ export function CityPicker({
             setQuery("");
             setResults([]);
             setEmpty(false);
+            setFailure(null);
             setActiveIndex(-1);
           }}
         >
