@@ -40,8 +40,8 @@ export function PeopleCardView({
   viewerId,
 }: {
   userId: string;
-  /** Кто смотрит: на своей карточке запрашивать контакты не у кого. */
-  viewerId?: string | null;
+  /** Кто смотрит: по нему блок под карточкой отличает свою карточку от чужой. */
+  viewerId: string;
 }) {
   const [result, setResult] = useState<Result | null>(null);
 
@@ -115,33 +115,16 @@ export function PeopleCardView({
     );
   }
 
-  const isSelf = viewerId != null && viewerId === state.card.userId;
-
   return (
     <div className="flex flex-col gap-4">
       <ContactsCard card={state.card} />
       {/* Кнопка запроса и сами контакты — отдельным блоком под карточкой:
-          карточка описывает человека, а этот блок — доступ к нему. На своей
-          карточке блока нет: запрашивать контакты у самого себя не у кого,
-          а вот поправить их — обычное дело. */}
-      {isSelf ? (
-        <div className="glass flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-glass-brd p-4">
-          <p className="text-sm text-text-1">
-            Это ваша карточка — так её видят остальные.
-          </p>
-          <Link
-            href="/chat/people/profile"
-            className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-semibold text-text-1 transition hover:text-text-0"
-          >
-            Изменить
-          </Link>
-        </div>
-      ) : (
-        <PeopleRequestButton
-          userId={state.card.userId}
-          contacts={state.card.contacts}
-        />
-      )}
+          карточка описывает человека, а этот блок — доступ к нему. */}
+      <PeopleRequestButton
+        userId={state.card.userId}
+        viewerId={viewerId}
+        contacts={state.card.contacts}
+      />
     </div>
   );
 }

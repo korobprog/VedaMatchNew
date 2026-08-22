@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PeopleCardView } from "@/components/chat/people/people-card-view";
-import { getProfile } from "@/lib/api";
+import { requireUser } from "@/lib/require-user";
 
 export const metadata = {
   title: "Карточка человека — Общение",
@@ -11,12 +11,13 @@ export const metadata = {
 
 type Params = Promise<{ id: string }>;
 
-export default async function PeopleUserPage({
+export default async function ContactsUserPage({
   params,
 }: {
   params: Params;
 }) {
-  const [{ id }, viewer] = await Promise.all([params, getProfile()]);
+
+  const [{ id }, user] = await Promise.all([params, requireUser()]);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 pb-28">
@@ -29,7 +30,7 @@ export default async function PeopleUserPage({
 
       {/* Карточка грузится в браузере тем же клиентом, что и выдача поиска:
           видимость проверяет бэкенд, а не страница. */}
-      <PeopleCardView userId={id} viewerId={viewer?.id ?? null} />
+      <PeopleCardView userId={id} viewerId={user.id} />
     </main>
   );
 }

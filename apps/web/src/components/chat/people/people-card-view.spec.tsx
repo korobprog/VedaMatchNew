@@ -54,7 +54,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe("PeopleCardView", () => {
   it("asks the card endpoint for the id it was given", async () => {
     const fetchMock = stubCard(card);
-    render(<PeopleCardView userId="u1" />);
+    render(<PeopleCardView userId="u1" viewerId="viewer" />);
 
     await screen.findByText("Радха дд");
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
@@ -62,35 +62,9 @@ describe("PeopleCardView", () => {
     );
   });
 
-  it("на своей карточке ведёт к её редактору, а не просит контакты у себя", async () => {
-    stubCard(card);
-    render(<PeopleCardView userId="u1" viewerId="u1" />);
-
-    await screen.findByText("Радха дд");
-    expect(
-      screen.getByText("Это ваша карточка — так её видят остальные."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Изменить" })).toHaveAttribute(
-      "href",
-      "/chat/people/profile",
-    );
-    expect(screen.queryByText("Запросить контакт")).not.toBeInTheDocument();
-  });
-
-  it("на чужой карточке блок запроса на месте", async () => {
-    stubCard(card);
-    render(<PeopleCardView userId="u1" viewerId="u2" />);
-
-    await screen.findByText("Радха дд");
-    expect(await screen.findAllByText("Запросить контакт")).not.toHaveLength(0);
-    expect(
-      screen.queryByText("Это ваша карточка — так её видят остальные."),
-    ).not.toBeInTheDocument();
-  });
-
   it("shows the whole card: texts, place, details, badges and tags", async () => {
     stubCard(card);
-    render(<PeopleCardView userId="u1" />);
+    render(<PeopleCardView userId="u1" viewerId="viewer" />);
 
     expect(await screen.findByText("Радха дд")).toBeInTheDocument();
     expect(
@@ -116,7 +90,7 @@ describe("PeopleCardView", () => {
 
   it("keeps contact details out of the card itself and offers to ask for them", async () => {
     stubCard(card);
-    render(<PeopleCardView userId="u1" />);
+    render(<PeopleCardView userId="u1" viewerId="viewer" />);
 
     await screen.findByText("Радха дд");
     expect(screen.queryByTestId("contacts-details")).not.toBeInTheDocument();
@@ -133,7 +107,7 @@ describe("PeopleCardView", () => {
         messengers: { whatsapp: "+79990000000" },
       },
     });
-    render(<PeopleCardView userId="u1" />);
+    render(<PeopleCardView userId="u1" viewerId="viewer" />);
 
     const details = await screen.findByTestId("contacts-details");
     expect(details).toHaveTextContent("+79990000000");
@@ -143,9 +117,23 @@ describe("PeopleCardView", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("offers the own card instead of the request form on your own card", async () => {
+    stubCard(card);
+    render(<PeopleCardView userId="u1" viewerId="u1" />);
+
+    await screen.findByText("Радха дд");
+    expect(
+      await screen.findByRole("link", { name: "Моя карточка" }),
+    ).toHaveAttribute("href", "/chat/people/profile");
+    expect(
+      screen.queryByRole("button", { name: "Запросить контакт" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Сегодня можно отправить/)).not.toBeInTheDocument();
+  });
+
   it("shows a plain «not found» page on 404 without hinting why", async () => {
     stubCard({ message: "Карточка не найдена" }, 404);
-    render(<PeopleCardView userId="ghost" />);
+    render(<PeopleCardView userId="ghost" viewerId="viewer" />);
 
     expect(await screen.findByText("Карточка не найдена")).toBeInTheDocument();
     expect(
@@ -160,7 +148,7 @@ describe("PeopleCardView", () => {
 
   it("shows the Russian error text the backend sent on other failures", async () => {
     stubCard({ message: "Справочник временно недоступен" }, 503);
-    render(<PeopleCardView userId="u1" />);
+    render(<PeopleCardView userId="u1" viewerId="viewer" />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Справочник временно недоступен",

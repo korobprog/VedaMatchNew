@@ -115,10 +115,16 @@ describe('PeopleRequestsService', () => {
 
   describe('create', () => {
     it('нельзя отправить запрос самому себе', async () => {
+      // 400 с понятным текстом, а не 500 и не тихий успех: карточка своя,
+      // и до проверок видимости с лимитом дело не доходит вовсе.
+      await expect(
+        service.create('viewer', { toUserId: 'viewer' }, now),
+      ).rejects.toThrow(BadRequestException);
       await expect(
         service.create('viewer', { toUserId: 'viewer' }, now),
       ).rejects.toThrow('Нельзя отправить запрос самому себе');
       expect(contacts.getCard).not.toHaveBeenCalled();
+      expect(prisma.contactsRequest.upsert).not.toHaveBeenCalled();
     });
 
     it('404, когда карточка получателя не видна отправителю', async () => {
