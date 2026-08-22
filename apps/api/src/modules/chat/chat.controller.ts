@@ -25,6 +25,10 @@ import type {
   SetChatReactionRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import {
+  ChatSignedUrlsInterceptor,
+  RawStorageUrls,
+} from './chat-signed-urls.interceptor';
 import { ChatConversationsService } from './chat-conversations.service';
 import { ChatMessagesService } from './chat-messages.service';
 import { ChatReportsService } from './chat-reports.service';
@@ -36,6 +40,7 @@ import {
 
 @Controller('chat')
 @UseGuards(AuthGuard)
+@UseInterceptors(ChatSignedUrlsInterceptor)
 export class ChatController {
   constructor(
     private readonly conversations: ChatConversationsService,
@@ -230,6 +235,7 @@ export class ChatController {
 
   /** Вложение: файл сначала уезжает в S3, ссылка потом идёт в сообщение. */
   @Post('conversations/:id/uploads')
+  @RawStorageUrls()
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: MAX_FILE_BYTES } }),

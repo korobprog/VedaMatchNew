@@ -7,6 +7,7 @@ import { ChatEventsService } from './chat-events.service';
 import { ChatMessagesService } from './chat-messages.service';
 import { ChatPurgeListener } from './chat-purge.listener';
 import { ChatReportsService } from './chat-reports.service';
+import { ChatSignedUrlsInterceptor } from './chat-signed-urls.interceptor';
 import { ChatStreamController } from './chat-stream.controller';
 import { ChatUploadsService } from './chat-uploads.service';
 import { ChatController } from './chat.controller';
@@ -43,6 +44,7 @@ import { PeopleService } from './people/people.service';
     ChatReportsService,
     ChatEventsService,
     ChatUploadsService,
+    ChatSignedUrlsInterceptor,
     ChatPurgeListener,
     PeopleService,
     PeopleRequestsService,

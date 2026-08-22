@@ -1,8 +1,9 @@
 import { Controller, Header, Sse, UseGuards } from '@nestjs/common';
-import { map, merge, Observable, timer } from 'rxjs';
+import { from, map, merge, mergeMap, Observable, timer } from 'rxjs';
 import type { AccessTokenPayload, ChatStreamEvent } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { ChatEventsService } from './chat-events.service';
+import { ChatSignedUrlsInterceptor } from './chat-signed-urls.interceptor';
 
 interface SseMessage {
   data: string;
@@ -17,7 +18,10 @@ interface SseMessage {
 @Controller('chat')
 @UseGuards(AuthGuard)
 export class ChatStreamController {
-  constructor(private readonly events: ChatEventsService) {}
+  constructor(
+    private readonly events: ChatEventsService,
+    private readonly signer: ChatSignedUrlsInterceptor,
+  ) {}
 
   /**
    * `X-Accel-Buffering: no` и `no-transform` — не украшение: буферизующий
@@ -29,11 +33,12 @@ export class ChatStreamController {
   @Header('X-Accel-Buffering', 'no')
   @Header('Cache-Control', 'no-cache, no-transform')
   stream(@CurrentUser() user: AccessTokenPayload): Observable<SseMessage> {
+    // Ссылки на файлы подписываются и здесь: сообщение с фотографией
+    // приходит живым потоком, и прямой адрес закрытого бакета в нём отвечал
+    // бы 403 ровно так же, как в ленте.
     const events = this.events.streamFor(user.sub).pipe(
-      map((event: ChatStreamEvent) => ({
-        type: 'chat',
-        data: JSON.stringify(event),
-      })),
+      mergeMap((event: ChatStreamEvent) => from(this.signer.sign(event))),
+      map((event) => ({ type: 'chat', data: JSON.stringify(event) })),
     );
 
     // Пустой тик раз в 25 секунд: прокси и мобильные сети рвут молчащее

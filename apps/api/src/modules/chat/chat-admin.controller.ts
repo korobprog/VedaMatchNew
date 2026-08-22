@@ -7,12 +7,14 @@ import {
   Post,
   Query,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import type {
   AccessTokenPayload,
   AdminChatReportDecisionRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { ChatSignedUrlsInterceptor } from './chat-signed-urls.interceptor';
 import { ChatReportsService } from './chat-reports.service';
 import { isAdmin } from './is-admin';
 
@@ -22,6 +24,7 @@ import { isAdmin } from './is-admin';
  */
 @Controller('admin/chat')
 @UseGuards(AuthGuard)
+@UseInterceptors(ChatSignedUrlsInterceptor)
 export class ChatAdminController {
   constructor(private readonly reports: ChatReportsService) {}
 
