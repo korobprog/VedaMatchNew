@@ -40,6 +40,18 @@ function stubGeo(results: unknown[]) {
   return fetchMock;
 }
 
+/** Отказ геокодера: текст ошибки приходит телом ответа Nest. */
+function stubGeoFailure(status: number, message: string) {
+  const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+    new Response(JSON.stringify({ statusCode: status, message }), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    }),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -57,6 +69,25 @@ describe("CityPicker — ответ геокодера", () => {
     await user.type(screen.getByLabelText("Поиск города"), "Маяпур");
 
     expect(await screen.findByText(/Ничего не нашлось/)).toBeInTheDocument();
+  });
+
+  /**
+   * Отказ геокодера под подписью «Ничего не нашлось» — это ложь, за которую
+   * человек платит своим временем: он правит написание города, хотя город
+   * набран верно, а не отвечает сервер. Ровно так «Хабаровск» на проде
+   * выглядел ошибкой пользователя.
+   */
+  it("отказ геокодера не выдаётся за отсутствие города", async () => {
+    const user = userEvent.setup();
+    stubGeoFailure(503, "Поиск городов сейчас недоступен, попробуйте через минуту");
+    render(<CityPicker value={null} onChange={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("Поиск города"), "Хабаровск");
+
+    expect(
+      await screen.findByText(/Поиск городов сейчас недоступен/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Ничего не нашлось/)).not.toBeInTheDocument();
   });
 
   it("язык интерфейса уезжает в геокодер: названия приходят по-русски", async () => {

@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Query,
+  ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -54,12 +55,16 @@ interface PhotonResponse {
   features?: PhotonFeature[];
 }
 
-// Прокси к внешнему геокодеру, который сам ограничен 1 запросом/с: гостям
-// он не нужен (все формы с ним — за авторизацией), а отдельный лимит не даёт
-// одному IP занять общую очередь.
+// Прокси к внешним геокодерам: гостям он не нужен (все формы с ним — за
+// авторизацией), а отдельный лимит не даёт одному IP занять общую очередь.
+//
+// Лимит считаем от того, как поле работает на самом деле: подсказки летят на
+// каждое нажатие клавиши с паузой в 350 мс, поэтому один набранный «Хабаровск»
+// — это до восьми запросов. Прежние 20/мин упирались в потолок на второй
+// попытке, и человек получал 429 под видом «Ничего не нашлось».
 @Controller('geo')
 @UseGuards(AuthGuard)
-@Throttle({ default: { ttl: 60_000, limit: 20 } })
+@Throttle({ default: { ttl: 60_000, limit: 60 } })
 export class GeoController {
   constructor(private readonly prisma: PrismaService) {}
 
@@ -79,23 +84,48 @@ export class GeoController {
       throw new BadRequestException('Слишком длинное название страны');
 
     // Справочник отвечает первым: он знает русские названия святых мест,
-    // которых нет в OSM, отдаёт одно каноническое написание на всех и не
-    // стоит секунды в общей очереди к Nominatim.
+    // которых нет в OSM, отдаёт одно каноническое написание на всех, ищет по
+    // началу слова и не стоит секунды в общей очереди к Nominatim.
     const curated = await this.searchDirectory(query, country);
     if (curated.length > 0) return curated;
 
-    try {
-      // requestNominatim() already serializes and paces every outgoing call
-      // (see scheduleNominatimCall), so the retry below is naturally spaced.
-      return await searchTransliterated(query, country, (q) =>
-        nominatimSettlements(q, lang),
-      );
-    } catch (error) {
-      if (!shouldUseFallback(error)) throw error;
-      // Тот же провал «город, страна» воспроизводится и у Photon — применяем
-      // ту же стратегию ретрая, а не просто пересылаем туда исходный запрос.
-      return searchTransliterated(query, country, (q) => searchPhoton(q, lang));
+    // Дальше — внешние геокодеры, и порядок между ними принципиален.
+    //
+    // Photon — поисковый индекс под автодополнение: он находит по началу
+    // слова, поэтому «Хабаровс» отдаёт Хабаровск. Nominatim ищет по полному
+    // имени и на любом недонабранном слове возвращает пустоту — человек,
+    // набирающий город на телефоне, видел «Ничего не нашлось» на каждой
+    // букве и бросал форму, не дойдя до последней. Вдобавок политика
+    // Nominatim прямо запрещает автодополнение и разрешает один запрос в
+    // секунду на всех: очередь ниже стоит ровно из-за неё, и держать её на
+    // пути каждого нажатия клавиши — значит отвечать через десятки секунд.
+    //
+    // Nominatim остаётся вторым: его addressdetails точнее, и он знает то,
+    // мимо чего промахивается индекс Photon.
+    let failed = 0;
+    const geocoders = [
+      (q: string) => searchPhoton(q, lang),
+      (q: string) => nominatimSettlements(q, lang),
+    ];
+    for (const fetchPlaces of geocoders) {
+      try {
+        const found = await searchTransliterated(query, country, fetchPlaces);
+        if (found.length > 0) return found;
+      } catch (error) {
+        if (!(error instanceof GeocoderRequestError)) throw error;
+        failed += 1;
+      }
     }
+
+    // Отказ обоих геокодеров — это не «такого города нет», и форма обязана
+    // говорить разное в этих двух случаях: пустой список человек читает как
+    // свою ошибку в написании и правит её до бесконечности.
+    if (failed === geocoders.length) {
+      throw new ServiceUnavailableException(
+        'Поиск городов сейчас недоступен, попробуйте через минуту',
+      );
+    }
+    return [];
   }
 
   /**
@@ -308,7 +338,13 @@ const PHOTON_SETTLEMENT_TYPES = new Set([
 
 // Photon понимает лишь короткий список языков и на незнакомом отвечает 400 —
 // поэтому берём первый код из accept-language и сверяем со списком.
-const PHOTON_LANGS = new Set(['de', 'en', 'fr', 'it', 'ru']);
+//
+// Русского в списке нет и не было: photon.komoot.io на `lang=ru` отвечает
+// «Language is not supported. Supported are: default, de, en, fr». Пока `ru`
+// стоял здесь, фоллбек был мёртв для всей русской локали — 400 приходил на
+// каждый запрос. Без `lang` Photon отдаёт местное написание, то есть для
+// России как раз русское, что нам и нужно.
+const PHOTON_LANGS = new Set(['de', 'en', 'fr']);
 
 async function searchPhoton(
   q: string,
@@ -324,7 +360,9 @@ async function searchPhoton(
     },
   });
   if (!res.ok) {
-    throw new BadRequestException(`Ошибка геопоиска: ${res.status}`);
+    // Тем же типом, что и провал Nominatim: search() отличает «геокодер
+    // отказал» от «геокодер ответил пустым списком» именно по нему.
+    throw new GeocoderRequestError(res.status);
   }
   const payload = (await res.json()) as PhotonResponse;
   return uniqueLocations(
@@ -334,15 +372,6 @@ async function searchPhoton(
       )
       .map(toPhotonGeoSearchResult)
       .filter(Boolean) as GeoSearchResult[],
-  );
-}
-
-function shouldUseFallback(error: unknown): boolean {
-  return (
-    error instanceof GeocoderRequestError &&
-    (error.upstreamStatus === 403 ||
-      error.upstreamStatus === 429 ||
-      error.upstreamStatus >= 500)
   );
 }
 
