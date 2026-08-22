@@ -5,6 +5,7 @@ import { Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInstallPrompt } from "./use-install-prompt";
 import { IosInstallInstructions } from "./ios-install-instructions";
+import { AndroidInstallInstructions } from "./android-install-instructions";
 import { WrongBrowserInstructions } from "./wrong-browser-instructions";
 
 export function InstallButton({ className }: { className?: string }) {
@@ -14,6 +15,7 @@ export function InstallButton({ className }: { className?: string }) {
   if (mode === "installed" || mode === "unsupported") return null;
 
   const wrongBrowser = mode === "wrong-browser";
+  const manual = mode === "android-manual";
 
   return (
     <>
@@ -38,6 +40,10 @@ export function InstallButton({ className }: { className?: string }) {
           <WrongBrowserInstructions
             browser={browser}
             platform={platform}
+            onClose={() => setShowInstructions(false)}
+          />
+        ) : manual ? (
+          <AndroidInstallInstructions
             onClose={() => setShowInstructions(false)}
           />
         ) : (

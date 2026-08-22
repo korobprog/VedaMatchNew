@@ -66,6 +66,28 @@ describe("detectInstallMode", () => {
   it("stays silent where installation is not available", () => {
     expect(detectInstallMode(environment({}))).toBe("unsupported");
   });
+
+  // Ради этого случая режим и заведён: раньше отсюда возвращалось
+  // «unsupported», и человеку с установимым порталом портал молчал.
+  it("explains the browser menu on Android when Chrome sent no event", () => {
+    expect(
+      detectInstallMode(environment({ navigator: { userAgent: androidChrome } })),
+    ).toBe("android-manual");
+  });
+
+  it("keeps the system dialog ahead of the manual advice when the event is here", () => {
+    expect(
+      detectInstallMode(
+        environment({ navigator: { userAgent: androidChrome }, promptEvent }),
+      ),
+    ).toBe("can-prompt");
+  });
+
+  it("leaves the desktop silent: there the banner is hidden anyway", () => {
+    expect(
+      detectInstallMode(environment({ navigator: { userAgent: desktopFirefox } })),
+    ).toBe("unsupported");
+  });
 });
 
 const yandexAndroid =
@@ -108,10 +130,10 @@ describe("detectInstallMode in a browser that cannot install", () => {
     ).toBe("can-prompt");
   });
 
-  it("stays silent in Firefox on Android, which sends no event to argue with", () => {
+  it("sends Firefox on Android to Chrome: it makes a shortcut, not an app", () => {
     expect(
       detectInstallMode(environment({ navigator: { userAgent: androidFirefox } })),
-    ).toBe("unsupported");
+    ).toBe("wrong-browser");
   });
 
   it("treats a shortcut opened in minimal-ui as installed, not as a fresh chance to nag", () => {
