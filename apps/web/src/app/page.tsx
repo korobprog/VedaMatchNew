@@ -8,7 +8,10 @@ import {
 } from "@/lib/api";
 import { Header } from "@/components/header";
 import { ServiceGrid } from "@/components/service-grid";
-import { FeaturedServices } from "@/components/featured-services";
+import {
+  FEATURED_ROUTES,
+  FeaturedServices,
+} from "@/components/featured-services";
 import { MemberCountLine } from "@/components/member-count-line";
 import { PortalNews } from "@/components/portal-news";
 import {
@@ -126,6 +129,10 @@ export default async function Home({
     ),
   );
 
+  // «Общение» уже стоит крупной кнопкой выше — в сетке ему делать нечего.
+  const gridServices = services.filter(
+    (service) => !FEATURED_ROUTES.includes(service.url),
+  );
   const unionService = services.find((s) => s.url === "/union");
   // Считаем сообщения, а не беседы: значок читается как «столько меня ждёт»,
   // и три письма из одного диалога — это три письма. Запросы на переписку в
@@ -175,7 +182,11 @@ export default async function Home({
         {/* Ходовые сервисы отдельной строкой над сеткой: за ними заходят
             чаще всего, и искать их среди равных плиток не нужно. */}
         <FeaturedServices unread={chatBadge} />
-        <ServiceGrid services={services} userId={user.id} extras={serviceExtras} />
+        <ServiceGrid
+          services={gridServices}
+          userId={user.id}
+          extras={serviceExtras}
+        />
       </main>
       <InstallBanner />
       {/* Главная лежит вне группы (portal), где висит тот же маячок, — без
