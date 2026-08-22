@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import type { ChatUploadResult } from '@vedamatch/shared';
@@ -16,6 +21,14 @@ import { attachmentKindFor } from './chat-upload-rules';
  * без публичного ACL и раздаются по прямой ссылке бакета, который закрыт
  * политикой. Голос и документы не пережимаются, картинки — да.
  */
+/**
+ * Сколько живёт подписанная ссылка на файл переписки. Шесть часов: столько
+ * человек листает открытую вкладку, и настолько же ограничен ущерб, если
+ * ссылку кто-то перешлёт наружу. Аватары подписываются на неделю, но они и не
+ * приватны — их видно всякому, кто открыл профиль.
+ */
+const ATTACHMENT_SIGNED_URL_TTL_SECONDS = 6 * 60 * 60;
+
 const IMAGE_WIDTH = 1600;
 const IMAGE_QUALITY = 80;
 
@@ -58,6 +71,31 @@ export class ChatUploadsService {
    */
   get configured(): boolean {
     return Boolean(this.s3Client && this.bucket && this.publicUrl);
+  }
+
+  /** Начало адресов нашего бакета: по нему ответы узнают свои файлы. */
+  get storagePrefix(): string | null {
+    return this.publicUrl ? `${this.publicUrl.replace(/\/$/, '')}/` : null;
+  }
+
+  /**
+   * Подписанный адрес взамен прямого. Бакет закрыт политикой, и прямая ссылка
+   * на объект отвечает 403: фотография не показывалась, голосовое молчало.
+   */
+  async signPublicUrl(url: string): Promise<string> {
+    const prefix = this.storagePrefix;
+    if (!prefix || !this.s3Client || !this.bucket || !url.startsWith(prefix))
+      return url;
+    // Уже подписанный адрес подписывать нельзя: подпись стала бы частью имени
+    // объекта, и ссылка повела бы в никуда.
+    if (url.includes('X-Amz-Signature=')) return url;
+    const key = decodeURIComponent(url.slice(prefix.length));
+    if (!key) return url;
+    return getSignedUrl(
+      this.s3Client as unknown as Parameters<typeof getSignedUrl>[0],
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      { expiresIn: ATTACHMENT_SIGNED_URL_TTL_SECONDS },
+    );
   }
 
   async store(
