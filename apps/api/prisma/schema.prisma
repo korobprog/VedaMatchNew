@@ -333,6 +333,13 @@ model User {
   noticeSubscriptions                NoticeSubscription[]         @relation("NoticeSubscriptions")
   motivationTracks                   MotivationTrack[]
   telemetryInstallEnvironment        TelemetryInstallEnvironment? @relation("TelemetryInstallEnvironment")
+  chatConversationsCreated           ChatConversation[]           @relation("ChatConversationsCreated")
+  chatMemberships                    ChatMember[]                 @relation("ChatMemberships")
+  chatMessagesSent                   ChatMessage[]                @relation("ChatMessagesSent")
+  chatReactionsMade                  ChatMessageReaction[]        @relation("ChatReactionsMade")
+  chatReportsMade                    ChatReport[]                 @relation("ChatReportsMade")
+  chatReportsDecided                 ChatReport[]                 @relation("ChatReportsDecided")
+  chatMessageViews                   ChatMessageView[]            @relation("ChatMessageViews")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -2965,6 +2972,7 @@ model Community {
   ownershipTransfers  CommunityOwnershipTransfer[]
   notices             Notice[]                     @relation("NoticeAuthorCommunity")
   noticeSubscriptions NoticeSubscription[]         @relation("NoticeSubscriptions")
+  chatConversations   ChatConversation[]
 
   @@index([status, city])
   @@index([status, cityKey])
@@ -3434,10 +3442,10 @@ model GeoCity {
   id String @id @default(uuid())
 
   /// То, что уедет в профиль и по чему сходятся фильтры.
-  city    String
-  country String?
-  lat     Float
-  lon     Float
+  city        String
+  country     String?
+  lat         Float
+  lon         Float
   /// Подпись в подсказке: «Маяпур, Западная Бенгалия, Индия».
   displayName String?
 
@@ -3453,4 +3461,266 @@ model GeoCity {
 
   @@unique([city, country])
   @@index([weight])
+}
+
+// ===== Chat service («Общение») =====
+
+/// Вид беседы. Личный диалог всегда на двоих, группа и канал живут по своим
+/// правилам записи: в группе пишут все участники, в канале — только владелец
+/// и администраторы общины.
+enum ChatConversationKind {
+  direct
+  group
+  channel
+}
+
+/// Состояние беседы. `request` бывает только у личного диалога: первое
+/// сообщение незнакомцу лежит запросом, пока получатель не ответит.
+enum ChatConversationState {
+  request
+  active
+  declined
+  archived
+}
+
+/// Открытая беседа видна в каталоге общины, и подписаться на неё можно
+/// самому. Закрытая — только по приглашению; личный диалог закрыт всегда.
+enum ChatConversationVisibility {
+  public
+  private
+}
+
+enum ChatMemberRole {
+  owner
+  admin
+  member
+}
+
+/// Вид вложения. Карточки чужих сервисов (`story`, `notice`, `listing`)
+/// хранятся снимком: заголовок, текст и картинка копируются в сообщение,
+/// чтобы удалённый оригинал не оставлял дыру в переписке.
+enum ChatAttachmentKind {
+  image
+  file
+  voice
+  story
+  notice
+  listing
+  contact
+}
+
+enum ChatReportStatus {
+  open
+  resolved
+  rejected
+}
+
+/// Беседа: личный диалог, группа или канал общины.
+model ChatConversation {
+  id   String               @id @default(uuid())
+  kind ChatConversationKind
+
+  /// Заголовок и оформление есть у групп и каналов; у личного диалога имя
+  /// собеседника берётся из участников и не дублируется здесь.
+  title       String?
+  description String?
+  avatarKey   String?
+  avatarUrl   String?
+
+  /// Ключ личного диалога: два id пользователей через двоеточие, меньший
+  /// первым. Уникальность на уровне базы — единственный способ не завести
+  /// два диалога на одну пару при гонке двух запросов.
+  directKey String? @unique
+
+  /// Община-владелец канала. `Community` — портальная модель, FK разрешён.
+  communityId String?
+  community   Community? @relation(fields: [communityId], references: [id], onDelete: SetNull)
+
+  createdById String?
+  createdBy   User?   @relation("ChatConversationsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  state ChatConversationState @default(active)
+
+  /// Кто может войти сам. По умолчанию закрыто: беседа, случайно ставшая
+  /// публичной, — это чужие люди в переписке, а обратно уже не собрать.
+  visibility ChatConversationVisibility @default(private)
+
+  /// Кто отправил запрос: пока состояние `request`, писать может только он,
+  /// и ровно одно сообщение.
+  requestedById String?
+
+  /// Время последнего сообщения — сортировка списка бесед без подзапроса.
+  lastMessageAt DateTime?
+
+  /// Закреплённое сообщение — одно на беседу. Больше одного закрепления
+  /// превращает шапку в ленту: то, что «важно всегда», перестаёт читаться.
+  pinnedMessageId String?      @unique
+  pinnedMessage   ChatMessage? @relation("ChatPinnedMessage", fields: [pinnedMessageId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members  ChatMember[]
+  messages ChatMessage[]
+  reports  ChatReport[]
+
+  @@index([kind, lastMessageAt])
+  @@index([communityId])
+}
+
+/// Участие в беседе. Отдельной таблицы прочтений нет: «прочитано» у своего
+/// сообщения — это `lastReadAt` собеседника позже времени сообщения.
+model ChatMember {
+  id             String           @id @default(uuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User             @relation("ChatMemberships", fields: [userId], references: [id], onDelete: Cascade)
+
+  role ChatMemberRole @default(member)
+
+  joinedAt   DateTime  @default(now())
+  lastReadAt DateTime?
+  /// Беззвучный режим до указанного времени; null — уведомления приходят.
+  mutedUntil DateTime?
+  /// Закреплено в списке бесед этого человека, а не у всех сразу.
+  pinnedAt   DateTime?
+  /// Вышел из группы или удалил диалог: строка остаётся ради истории.
+  leftAt     DateTime?
+
+  @@unique([conversationId, userId])
+  @@index([userId, leftAt])
+}
+
+model ChatMessage {
+  id             String           @id @default(uuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  authorId       String
+  author         User             @relation("ChatMessagesSent", fields: [authorId], references: [id], onDelete: Cascade)
+
+  body String
+
+  /// Ответ-цитата. Ссылка внутри одной беседы, при удалении оригинала
+  /// цитата отвязывается, а не уносит ответ за собой.
+  replyToId String?
+  replyTo   ChatMessage?  @relation("ChatMessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   ChatMessage[] @relation("ChatMessageReplies")
+
+  editedAt  DateTime?
+  /// Мягкое удаление: место сообщения в переписке остаётся видимым.
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  /// Сколько человек открыли пост канала. Денормализовано: счётчик читают
+  /// на каждый пост ленты, а считать строки просмотров каждый раз — это
+  /// подзапрос на подзапросе.
+  viewsCount Int @default(0)
+
+  /// Имя автора исходного сообщения при пересылке. Снимок, а не ссылка:
+  /// пересылают и из беседы, куда получатель не входит, — сходить туда за
+  /// именем он всё равно не сможет, а подпись «переслано от кого» нужна.
+  forwardedFrom String?
+
+  attachments ChatAttachment[]
+  reactions   ChatMessageReaction[]
+  reports     ChatReport[]
+  views       ChatMessageView[]
+  pinnedIn    ChatConversation[]    @relation("ChatPinnedMessage")
+
+  @@index([conversationId, createdAt])
+  @@index([authorId])
+}
+
+/// Кто открыл пост канала. Отдельная строка на человека, а не голый счётчик:
+/// иначе один и тот же читатель накручивает просмотры каждым открытием ленты.
+model ChatMessageView {
+  id        String      @id @default(uuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation("ChatMessageViews", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+}
+
+model ChatAttachment {
+  id        String             @id @default(uuid())
+  messageId String
+  message   ChatMessage        @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  kind      ChatAttachmentKind
+
+  /// Файл в S3 (`image`, `file`, `voice`) либо картинка снимка карточки.
+  url        String?
+  key        String?
+  previewUrl String?
+
+  /// Снимок карточки чужого сервиса: то, что человек увидит в переписке
+  /// независимо от судьбы оригинала.
+  title    String?
+  subtitle String?
+  body     String?
+
+  /// Откуда карточка родом — только чтобы дать ссылку «открыть оригинал».
+  /// Читать по этой паре чужие таблицы модуль не имеет права.
+  sourceService String?
+  sourceId      String?
+
+  mimeType    String?
+  sizeBytes   Int?
+  durationSec Int?
+  width       Int?
+  height      Int?
+  /// Волна голосового: уровни 0..100, посчитанные на клиенте при записи.
+  waveform    Int[]
+
+  position Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([messageId, position])
+}
+
+/// Реакция на сообщение. Одна на пользователя: повторный выбор того же
+/// эмодзи снимает реакцию, другого — заменяет.
+model ChatMessageReaction {
+  id        String      @id @default(uuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation("ChatReactionsMade", fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime    @default(now())
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+}
+
+/// Жалоба для раздела админки. Живёт в модуле чата: общая модерация не
+/// должна дочитывать переписку, ей хватает решения по жалобе.
+model ChatReport {
+  id String @id @default(uuid())
+
+  reporterId String
+  reporter   User   @relation("ChatReportsMade", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  conversationId String?
+  conversation   ChatConversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  messageId      String?
+  message        ChatMessage?      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  reason  String
+  comment String?
+
+  status      ChatReportStatus @default(open)
+  decidedAt   DateTime?
+  decidedById String?
+  decidedBy   User?            @relation("ChatReportsDecided", fields: [decidedById], references: [id], onDelete: SetNull)
+  decision    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
 }

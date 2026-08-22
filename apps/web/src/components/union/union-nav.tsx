@@ -8,7 +8,7 @@ const links = [
   { href: "/union/recommendations", label: "Знакомства" },
   { href: "/union/collections", label: "Подборки" },
   { href: "/union/likes", label: "Лайки" },
-  { href: "/union/chats", label: "Чаты" },
+  { href: "/chat", label: "Чаты" },
   { href: "/union/connections", label: "Связи" },
   { href: "/union/profile", label: "Профиль" },
 ];

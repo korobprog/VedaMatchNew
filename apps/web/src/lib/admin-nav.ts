@@ -85,16 +85,22 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         scope: "library",
       },
       {
+        href: "/admin/chat",
+        label: "Общение",
+        hint: "Жалобы на переписку, статистика бесед",
+        scope: "chat",
+      },
+      {
+        href: "/admin/chat/people",
+        label: "Общение — люди",
+        hint: "Теги справочника и карточки участников",
+        scope: "chat",
+      },
+      {
         href: "/admin/notices",
         label: "Объявления",
         hint: "Жалобы на доску объявлений",
         scope: "notices",
-      },
-      {
-        href: "/admin/contacts",
-        label: "Справочник",
-        hint: "Теги справочника и карточки участников",
-        scope: "contacts",
       },
       {
         href: "/admin/astro",
@@ -187,10 +193,31 @@ export function currentAdminNavLabel(
   groups: AdminNavGroup[],
   pathname: string,
 ): string {
+  const active = activeAdminNavHref(groups, pathname);
   for (const group of groups) {
     for (const item of group.items) {
-      if (isAdminNavItemActive(item.href, pathname)) return item.label;
+      if (item.href === active) return item.label;
     }
   }
   return "Обзор";
+}
+
+/**
+ * Адрес самого точного подходящего пункта. Разделы вкладываются друг в друга
+ * — `/admin/chat/people` лежит внутри `/admin/chat`, — и без выбора самого
+ * длинного совпадения подсветились бы оба, а на кнопке мобильного меню стояло
+ * бы название родителя.
+ */
+export function activeAdminNavHref(
+  groups: AdminNavGroup[],
+  pathname: string,
+): string | null {
+  let best: string | null = null;
+  for (const group of groups) {
+    for (const item of group.items) {
+      if (!isAdminNavItemActive(item.href, pathname)) continue;
+      if (best === null || item.href.length > best.length) best = item.href;
+    }
+  }
+  return best;
 }

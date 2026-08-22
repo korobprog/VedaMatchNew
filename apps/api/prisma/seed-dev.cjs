@@ -329,14 +329,14 @@ async function seedPerson(person) {
     // чтобы было видно поведение фильтра на таких аккаунтах.
     gender: person.gender ?? null,
     // Разная давность визитов, чтобы было видно все уровни активности.
-    lastSeenAt: new Date(Date.now() - (person.lastSeenMinutesAgo ?? 5) * 60_000),
+    lastSeenAt: new Date(
+      Date.now() - (person.lastSeenMinutesAgo ?? 5) * 60_000,
+    ),
     // Часть демо-аккаунтов с проверенными фото — чтобы был виден второй значок.
     photoVerifiedAt: person.photoVerified ? new Date() : null,
     // Значок «Проверен» получают только преданные со статусом confirmed.
     devoteeVerificationStatus:
-      person.stage === 'devotee'
-        ? (person.verification ?? 'confirmed')
-        : null,
+      person.stage === 'devotee' ? (person.verification ?? 'confirmed') : null,
     homeLocation: person.location,
     messengers: { telegram: `@${person.slug}_demo` },
     socialLinks: {},
@@ -350,7 +350,10 @@ async function seedPerson(person) {
 
   await prisma.userPhoto.deleteMany({ where: { userId: user.id } });
   await prisma.userPhoto.createMany({
-    data: photosFor(person.slug).map((photo) => ({ ...photo, userId: user.id })),
+    data: photosFor(person.slug).map((photo) => ({
+      ...photo,
+      userId: user.id,
+    })),
   });
 
   const profileData = {
@@ -402,6 +405,313 @@ async function seedAdmin() {
   return email;
 }
 
+/**
+ * Демо-переписка сервиса «Общение». Без неё чат в dev — пустой экран, и ни
+ * один сценарий (непрочитанное, запрос, группа, канал) нельзя увидеть, не
+ * набивая сообщения руками.
+ */
+const chatScript = {
+  /** Личные диалоги: пара людей и их разговор. */
+  direct: [
+    {
+      between: ['govinda', 'radha'],
+      messages: [
+        ['govinda', 'Харе Кришна! Идёшь в субботу на киртан в центре?', -180],
+        ['radha', 'Иду. Начало в 18:00, буду чуть раньше', -175],
+        ['govinda', 'Отлично, тогда встретимся у входа', -170, ['🙏']],
+        ['radha', 'Возьму караталы и прасад на всех', -20],
+      ],
+    },
+    {
+      between: ['madhava', 'tulasi'],
+      messages: [
+        ['tulasi', 'Прабху, вы ещё отдаёте книги?', -2880],
+        [
+          'madhava',
+          'Да, «Бхагавад-гита» и два тома «Шримад-Бхагаватам»',
+          -2870,
+        ],
+        ['tulasi', 'Заберу в воскресенье после программы', -2860, ['👍']],
+      ],
+    },
+    {
+      between: ['arjuna', 'kesava'],
+      messages: [
+        ['kesava', 'Как проходит утренняя практика?', -600],
+        ['arjuna', 'Встаю в 4:30, шестнадцать кругов до завтрака', -590],
+        ['kesava', 'Крепко. У меня пока двенадцать', -580],
+      ],
+    },
+  ],
+  /** Запросы: первое сообщение незнакомому человеку, ответа ещё нет. */
+  requests: [
+    {
+      from: 'nitai',
+      to: 'radha',
+      message:
+        'Харе Кришна! Видел ваш отклик на объявление о воскресной программе — можно задать пару вопросов?',
+    },
+    {
+      from: 'vrinda',
+      to: 'govinda',
+      message:
+        'Здравствуйте! Подскажете, где в Москве собирается киртан-группа?',
+    },
+  ],
+  /** Группа: несколько участников, ответы и реакции. */
+  group: {
+    title: 'Киртан-группа · Москва',
+    description: 'Репетиции, инструменты, кто что везёт',
+    owner: 'govinda',
+    members: ['madhava', 'tulasi', 'radha', 'yamuna'],
+    messages: [
+      ['madhava', 'Мриданги беру на себя, привезу к шести', -1440],
+      ['tulasi', 'Тогда я привезу караталы и прасад на всех', -1435, ['🙌']],
+      ['govinda', 'Возьму колонку и провода. Кто-нибудь снимет видео?', -1430],
+      ['yamuna', 'Сниму, если кто-то подержит штатив', -60],
+    ],
+  },
+  /** Канал общины: пишет только администрация, остальные читают. */
+  channel: {
+    title: 'Объявления общины',
+    description: 'Официальные новости храма',
+    owner: 'madhava',
+    subscribers: ['radha', 'govinda', 'tulasi', 'nitai', 'arjuna', 'kesava'],
+    messages: [
+      [
+        'madhava',
+        'Набор на курс по «Бхагавад-гите». Занятия по средам в 19:00, начало 3 сентября. Запись до 30 августа.',
+        -2160,
+      ],
+      [
+        'madhava',
+        'Воскресная программа переносится в новый зал: Беговая, 12. Метро — семь минут пешком.',
+        -720,
+      ],
+    ],
+  },
+};
+
+function minutesAgo(minutes) {
+  return new Date(Date.now() + minutes * 60_000);
+}
+
+/** id демо-людей по слагу: переписку собираем уже по ним. */
+async function demoUserIds() {
+  const rows = await prisma.user.findMany({
+    where: { email: { endsWith: '@demo.vedamatch.local' } },
+    select: { id: true, email: true },
+  });
+  return Object.fromEntries(
+    rows.map((row) => [row.email.split('@')[0], row.id]),
+  );
+}
+
+async function addMessages(conversationId, messages, ids) {
+  let last = null;
+  for (const [slug, body, offset, reactions] of messages) {
+    const createdAt = minutesAgo(offset);
+    const message = await prisma.chatMessage.create({
+      data: { conversationId, authorId: ids[slug], body, createdAt },
+    });
+    last = createdAt;
+
+    // Реакцию ставит не автор: своя отметка на своём сообщении выглядит
+    // странно и не показывает, как читается чужая.
+    for (const emoji of reactions ?? []) {
+      const other = await prisma.chatMember.findFirst({
+        where: { conversationId, userId: { not: ids[slug] } },
+        select: { userId: true },
+      });
+      if (!other) continue;
+      await prisma.chatMessageReaction.create({
+        data: { messageId: message.id, userId: other.userId, emoji },
+      });
+    }
+  }
+  if (last)
+    await prisma.chatConversation.update({
+      where: { id: conversationId },
+      data: { lastMessageAt: last },
+    });
+}
+
+/**
+ * Демо-община с владельцем и участниками. Без неё в dev не увидеть ни
+ * значка общины в профиле, ни канала: канал заводит только администрация
+ * общины, а общин в базе разработчика обычно нет вовсе.
+ */
+async function seedCommunity(ids) {
+  if (!ids.govinda) return null;
+
+  // Демо-община пересобирается на каждом запуске, как и демо-люди: пустой
+  // `update` оставлял старую запись без новых полей — например, без
+  // координат, и карта в разработке выглядела сломанной.
+  const communityData = {
+    kind: 'nama_hatta',
+    name: 'Община Москвы (демо)',
+    descriptionRu: 'Демо-община для разработки: программы, киртаны, прасад.',
+    status: 'active',
+    city: 'Москва',
+    cityKey: 'москва',
+    // Без координат община не попадает на карту, и раздел в разработке
+    // выглядит сломанным, хотя он работает.
+    location: {
+      city: 'Москва',
+      country: 'Россия',
+      lat: 55.7558,
+      lon: 37.6173,
+      displayName: 'Москва, Россия',
+    },
+    createdById: ids.govinda,
+  };
+
+  const community = await prisma.community.upsert({
+    where: { slug: 'demo-moscow' },
+    update: communityData,
+    create: { slug: 'demo-moscow', ...communityData },
+  });
+
+  const roles = [
+    ['govinda', 'owner'],
+    ['madhava', 'admin'],
+    ['radha', 'member'],
+    ['tulasi', 'member'],
+    ['nitai', 'member'],
+  ];
+
+  for (const [slug, role] of roles) {
+    if (!ids[slug]) continue;
+    await prisma.communityMember.upsert({
+      where: {
+        communityId_userId: { communityId: community.id, userId: ids[slug] },
+      },
+      update: { role, status: 'active' },
+      create: {
+        communityId: community.id,
+        userId: ids[slug],
+        role,
+        status: 'active',
+        joinedAt: new Date(),
+      },
+    });
+  }
+
+  await prisma.community.update({
+    where: { id: community.id },
+    data: { membersCount: roles.filter(([slug]) => ids[slug]).length },
+  });
+
+  return community;
+}
+
+async function seedChat() {
+  const ids = await demoUserIds();
+  if (!ids.govinda) return 0;
+
+  const community = await seedCommunity(ids);
+
+  // Пересобираем демо-переписку заново: иначе повторный запуск сида множит
+  // одни и те же диалоги.
+  await prisma.chatConversation.deleteMany({
+    where: { createdBy: { email: { endsWith: '@demo.vedamatch.local' } } },
+  });
+
+  let count = 0;
+
+  for (const dialog of chatScript.direct) {
+    const [first, second] = dialog.between;
+    const pair = [ids[first], ids[second]].sort();
+    const conversation = await prisma.chatConversation.create({
+      data: {
+        kind: 'direct',
+        state: 'active',
+        directKey: `${pair[0]}:${pair[1]}`,
+        createdById: ids[first],
+        requestedById: ids[first],
+        members: {
+          create: [
+            // Начавший разговор всё прочитал, собеседник — нет: так в списке
+            // видно и прочитанное, и счётчик непрочитанного.
+            { userId: ids[first], lastReadAt: new Date() },
+            { userId: ids[second] },
+          ],
+        },
+      },
+    });
+    await addMessages(conversation.id, dialog.messages, ids);
+    count += 1;
+  }
+
+  for (const request of chatScript.requests) {
+    const pair = [ids[request.from], ids[request.to]].sort();
+    const conversation = await prisma.chatConversation.create({
+      data: {
+        kind: 'direct',
+        state: 'request',
+        directKey: `${pair[0]}:${pair[1]}`,
+        createdById: ids[request.from],
+        requestedById: ids[request.from],
+        members: {
+          create: [{ userId: ids[request.from] }, { userId: ids[request.to] }],
+        },
+      },
+    });
+    await addMessages(
+      conversation.id,
+      [[request.from, request.message, -30]],
+      ids,
+    );
+    count += 1;
+  }
+
+  const group = chatScript.group;
+  const groupConversation = await prisma.chatConversation.create({
+    data: {
+      kind: 'group',
+      state: 'active',
+      // Группа закрытая: демо-данные должны показывать оба случая.
+      visibility: 'private',
+      title: group.title,
+      description: group.description,
+      createdById: ids[group.owner],
+      members: {
+        create: [
+          { userId: ids[group.owner], role: 'owner', lastReadAt: new Date() },
+          ...group.members.map((slug) => ({ userId: ids[slug] })),
+        ],
+      },
+    },
+  });
+  await addMessages(groupConversation.id, group.messages, ids);
+  count += 1;
+
+  const channel = chatScript.channel;
+  const channelConversation = await prisma.chatConversation.create({
+    data: {
+      kind: 'channel',
+      state: 'active',
+      // Канал общины — витрина: он открыт, иначе его не видно ни в каталоге,
+      // ни на карте, и проверить эти экраны в разработке нечем.
+      visibility: 'public',
+      title: channel.title,
+      description: channel.description,
+      communityId: community?.id ?? null,
+      createdById: ids[channel.owner],
+      members: {
+        create: [
+          { userId: ids[channel.owner], role: 'owner', lastReadAt: new Date() },
+          ...channel.subscribers.map((slug) => ({ userId: ids[slug] })),
+        ],
+      },
+    },
+  });
+  await addMessages(channelConversation.id, channel.messages, ids);
+  count += 1;
+
+  return count;
+}
+
 async function main() {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('seed:dev нельзя запускать в production');
@@ -413,9 +723,11 @@ async function main() {
   }
   const adminEmail = await seedAdmin();
   console.log(`  ${'Админ'.padEnd(10)} ${adminEmail}`);
+  const conversations = await seedChat();
   console.log(
     `\nСоздано демо-аккаунтов: ${people.length + 1}. Пароль у всех: ${DEMO_PASSWORD}`,
   );
+  console.log(`Демо-бесед в «Общении»: ${conversations}`);
 }
 
 main()

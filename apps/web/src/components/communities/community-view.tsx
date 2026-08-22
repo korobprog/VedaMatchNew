@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useCallback, useEffect, useState } from "react";
 import { BadgeCheck, Loader2, MapPin } from "lucide-react";
 import type {
@@ -188,6 +190,40 @@ export function CommunityView({ slug }: { slug: string }) {
           )}
         </div>
       </div>
+
+      {/* Беседы общины живут в сервисе «Общение» — отсюда ведём ссылкой,
+          чтобы не тянуть его компоненты в чужой раздел. */}
+      <Link
+        href={`/chat/discover?communityId=${community.id}`}
+        className="glass flex items-center gap-3 rounded-2xl border border-glass-brd p-4 transition-colors hover:border-cyan/40"
+      >
+        <span className="flex size-10 items-center justify-center rounded-xl bg-cyan/12 text-cyan">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="M21 11.5a8.4 8.4 0 01-9 8.4L3 21l1.1-3.3A8.4 8.4 0 1121 11.5z" />
+          </svg>
+        </span>
+        <span className="flex flex-1 flex-col gap-0.5">
+          <span className="text-sm font-semibold text-text-0">
+            Чаты и каналы общины
+          </span>
+          <span className="text-xs text-text-1">
+            Открытые беседы, на которые можно подписаться
+          </span>
+        </span>
+        <span className="text-cyan" aria-hidden>
+          ›
+        </span>
+      </Link>
 
       {manages && requests.length > 0 && (
         <div className="glass rounded-2xl border border-glass-brd p-6">

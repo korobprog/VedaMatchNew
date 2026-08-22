@@ -20,7 +20,13 @@ export type NotificationEvent =
       name: 'union.connection.accepted';
       recipientId: string;
       senderName: string;
-      requestId: string;
+      /**
+       * Тот, с кем теперь можно переписываться. Раньше событие несло id
+       * заявки, и ссылка вела в `/union/chats/<id>`; после переезда переписки
+       * такой адрес совпадает с беседой только у диалогов, перенесённых
+       * миграцией, а у новой пары ведёт в никуда.
+       */
+      companionId: string;
     }
   | {
       name: 'contacts.request.received';
@@ -158,6 +164,24 @@ export type NotificationEvent =
       name: 'motivation.video.review';
       recipientId: string;
       reelId: string;
+    }
+  | {
+      /** Сообщение в сервисе «Общение»: личный диалог, группа или канал. */
+      name: 'chat.message-sent';
+      recipientId: string;
+      senderName: string;
+      /** Название группы или канала; у личного диалога пусто. */
+      conversationTitle?: string;
+      body: string;
+      conversationId: string;
+    }
+  | {
+      /** Первое сообщение от незнакомого человека — лежит в запросах. */
+      name: 'chat.request-received';
+      recipientId: string;
+      senderName: string;
+      body: string;
+      conversationId: string;
     };
 
 /**

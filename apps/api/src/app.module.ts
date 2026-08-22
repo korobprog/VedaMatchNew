@@ -15,12 +15,12 @@ import { ModerationModule } from './modules/moderation/moderation.module';
 import { SupportModule } from './modules/support/support.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { LibraryModule } from './modules/library/library.module';
+import { ChatModule } from './modules/chat/chat.module';
 import { MarketModule } from './modules/market/market.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AstroModule } from './modules/astro/astro.module';
 import { StatsModule } from './modules/stats/stats.module';
 import { AuditModule } from './modules/audit/audit.module';
-import { ContactsModule } from './modules/contacts/contacts.module';
 import { ChangelogModule } from './modules/changelog/changelog.module';
 import { CommunitiesModule } from './modules/communities/communities.module';
 import { NoticesModule } from './modules/notices/notices.module';
@@ -49,12 +49,12 @@ import { TelemetryModule } from './modules/telemetry/telemetry.module';
     SupportModule,
     BillingModule,
     LibraryModule,
+    ChatModule,
     MarketModule,
     NotificationsModule,
     AstroModule,
     StatsModule,
     AuditModule,
-    ContactsModule,
     ChangelogModule,
     CommunitiesModule,
     NoticesModule,

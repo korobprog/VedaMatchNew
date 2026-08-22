@@ -9,7 +9,7 @@ const tabs: { key: TabKey; href: string; label: string }[] = [
   { key: "profiles", href: "/union/recommendations", label: "Анкеты" },
   { key: "collections", href: "/union/collections", label: "Подборки" },
   { key: "likes", href: "/union/likes", label: "Лайки" },
-  { key: "chats", href: "/union/chats", label: "Чаты" },
+  { key: "chats", href: "/chat", label: "Чаты" },
   { key: "account", href: "/union/profile", label: "Профиль" },
 ];
 

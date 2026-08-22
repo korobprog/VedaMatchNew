@@ -76,7 +76,18 @@ describe("currentAdminNavLabel", () => {
   const groups = visibleAdminNav({ role: "admin" });
 
   it("называет раздел, в котором человек находится", () => {
-    expect(currentAdminNavLabel(groups, "/admin/contacts")).toBe("Справочник");
+    expect(currentAdminNavLabel(groups, "/admin/chat/people")).toBe(
+      "Общение — люди",
+    );
+  });
+
+  it("выбирает вложенный раздел, а не родительский", () => {
+    // «Общение — люди» лежит внутри «Общения»: без выбора самого длинного
+    // совпадения на кнопке стояло бы название родителя.
+    expect(currentAdminNavLabel(groups, "/admin/chat")).toBe("Общение");
+    expect(currentAdminNavLabel(groups, "/admin/chat/people/profiles")).toBe(
+      "Общение — люди",
+    );
   });
 
   it("держит название на вложенной вкладке сервиса", () => {
