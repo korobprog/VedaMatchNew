@@ -2142,6 +2142,12 @@ model ContactsProfile {
   fieldPrivacy             Json?
   /// Обращения только от подтверждённых преданных.
   requestsFromVerifiedOnly Boolean               @default(false)
+  /// Согласие показывать себя на общей карте «Общения». Выключено по
+  /// умолчанию: карта справочника — инструмент поиска, а общая карта портала
+  /// это другой уровень огласки, и заводить на неё молча нельзя. Метка всё
+  /// равно ставится в центр города, а не по адресу, и людей на ней считают,
+  /// а не перечисляют.
+  showOnMap                Boolean               @default(false)
   createdAt                DateTime              @default(now())
   updatedAt                DateTime              @updatedAt
 

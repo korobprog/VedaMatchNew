@@ -48,6 +48,14 @@ const FEATURED: FeaturedService[] = [
  * повторяет колокольчик уведомлений: человек уже знает, что это счётчик
  * ждущего, и второй язык для той же мысли только сбивает.
  */
+/**
+ * Маршруты, вынесенные наверх. Сетка по ним отсеивает свои плитки: сервис,
+ * показанный крупной кнопкой, второй раз в списке — просто шум.
+ */
+export const FEATURED_ROUTES: string[] = FEATURED.map(
+  (service) => service.href,
+).filter((href): href is string => Boolean(href));
+
 export function FeaturedServices({ unread = 0 }: { unread?: number }) {
   return (
     <section aria-label="Ходовые сервисы" className="mb-4">

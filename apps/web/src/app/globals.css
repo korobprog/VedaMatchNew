@@ -858,6 +858,18 @@ select option {
   color: #fff;
 }
 
+/* Города людей — своим цветом: иначе метка общины и метка города читаются
+   как одно и то же, а это разные вещи. */
+.chat-map-pin--people {
+  border-color: var(--vm-violet, #c68bff);
+}
+
+.leaflet-marker-icon:hover .chat-map-pin--people,
+.leaflet-marker-icon:focus-visible .chat-map-pin--people {
+  background: var(--vm-violet, #c68bff);
+  color: #0a0614;
+}
+
 .leaflet-marker-icon:hover .chat-map-pin,
 .leaflet-marker-icon:focus-visible .chat-map-pin {
   background: var(--vm-cyan, #23f0c7);

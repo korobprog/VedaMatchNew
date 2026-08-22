@@ -48,7 +48,7 @@ export default async function ChatPage() {
           </Link>
           <Link
             href="/chat/map"
-            aria-label="Карта общин"
+            aria-label="Карта общин и людей"
             className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-glass-brd bg-glass text-text-1 transition-colors hover:text-text-0"
           >
             <svg

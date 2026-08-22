@@ -323,6 +323,8 @@ export interface ContactsProfileDraft {
   pausedUntil: string;
   fieldPrivacy: Required<ContactsFieldPrivacy>;
   requestsFromVerifiedOnly: boolean;
+  /** Согласие на метку своего города на общей карте «Общения». */
+  showOnMap: boolean;
   tagIds: string[];
 }
 
@@ -349,6 +351,8 @@ export function toContactsDraft(
       age: visibleIfUnset(profile?.fieldPrivacy?.age),
     },
     requestsFromVerifiedOnly: profile?.requestsFromVerifiedOnly ?? false,
+    // Согласие на карту не подразумевается: нет карточки — нет и метки.
+    showOnMap: profile?.showOnMap ?? false,
     tagIds: profile?.tagIds ?? [],
   };
 }
@@ -390,6 +394,7 @@ export function buildContactsProfileRequest(
         : new Date(`${draft.pausedUntil}T23:59:59.999Z`).toISOString(),
     fieldPrivacy: draft.fieldPrivacy,
     requestsFromVerifiedOnly: draft.requestsFromVerifiedOnly,
+    showOnMap: draft.showOnMap,
     tagIds: draft.tagIds.slice(0, CONTACTS_MAX_TAGS),
   };
 }
