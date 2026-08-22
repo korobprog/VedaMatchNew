@@ -5,6 +5,7 @@ import { ChatAdminController } from './chat-admin.controller';
 import { ChatConversationsService } from './chat-conversations.service';
 import { ChatEventsService } from './chat-events.service';
 import { ChatMessagesService } from './chat-messages.service';
+import { ChatPurgeListener } from './chat-purge.listener';
 import { ChatReportsService } from './chat-reports.service';
 import { ChatStreamController } from './chat-stream.controller';
 import { ChatUploadsService } from './chat-uploads.service';
@@ -42,6 +43,7 @@ import { PeopleService } from './people/people.service';
     ChatReportsService,
     ChatEventsService,
     ChatUploadsService,
+    ChatPurgeListener,
     PeopleService,
     PeopleRequestsService,
     PeopleAdminService,
