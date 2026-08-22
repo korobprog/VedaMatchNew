@@ -11,10 +11,10 @@ import type { LucideIcon } from "lucide-react";
  * квадратов. Поэтому ходовые вынесены выше и крупнее: они читаются раньше
  * сетки, а сетка остаётся полным списком.
  *
- * Пока все три — будущие сервисы, поэтому это не ссылки, а плашки со
+ * Музыка и Работа — будущие сервисы, поэтому это не ссылки, а плашки со
  * словом «Скоро»: приглушённая ссылка ведёт на пустую страницу, и человек
  * возвращается ни с чем. Как только сервис появится в каталоге, здесь
- * останется подставить `href` и снять `comingSoon`.
+ * останется подставить `href`.
  */
 interface FeaturedService {
   name: string;
@@ -34,20 +34,43 @@ const FEATURED: FeaturedService[] = [
     accent: "text-cyan",
     href: "/chat",
   },
-  { name: "Музыка", hint: "Киртаны и бхаджаны", Icon: Music, accent: "text-cyan" },
-  { name: "Работа", hint: "Вакансии и услуги", Icon: Briefcase, accent: "text-gold" },
+  { name: "Музыка", hint: "Киртаны и бхаджаны", Icon: Music, accent: "text-violet" },
+  {
+    name: "Работа",
+    hint: "Вакансии, услуги и инструменты",
+    Icon: Briefcase,
+    accent: "text-gold",
+  },
 ];
 
-export function FeaturedServices() {
+/**
+ * `unread` — непрочитанные беседы и запросы «Общения» одним числом. Значок
+ * повторяет колокольчик уведомлений: человек уже знает, что это счётчик
+ * ждущего, и второй язык для той же мысли только сбивает.
+ */
+export function FeaturedServices({ unread = 0 }: { unread?: number }) {
   return (
     <section aria-label="Ходовые сервисы" className="mb-4">
       <ul className="grid grid-cols-3 gap-2 sm:gap-3">
         {FEATURED.map(({ name, hint, Icon, accent, href }) => {
+          const badge = href === "/chat" ? unread : 0;
+          const label =
+            badge > 0 ? `${name}, непрочитанных: ${badge}` : undefined;
           const shape =
             "service-edge relative flex min-h-[112px] flex-col items-center justify-center gap-2 rounded-2xl glass px-2 py-4 text-center sm:min-h-[128px]";
           const inside = (
             <>
-              <Icon aria-hidden className={`size-7 sm:size-8 ${accent}`} />
+              <span className="relative">
+                <Icon aria-hidden className={`size-7 sm:size-8 ${accent}`} />
+                {badge > 0 && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-magenta px-1 text-[10px] font-bold leading-none text-white shadow-[0_0_10px_rgba(255,62,158,0.6)]"
+                  >
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+              </span>
               <span className="text-sm font-semibold leading-tight text-text-0 sm:text-base">
                 {name}
               </span>
@@ -66,6 +89,8 @@ export function FeaturedServices() {
               {href ? (
                 <Link
                   href={href}
+                  aria-label={label}
+                  title={label}
                   className={`${shape} transition-transform duration-200 hover:-translate-y-0.5`}
                 >
                   {inside}
