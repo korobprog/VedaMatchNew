@@ -15,6 +15,11 @@ export type InstallMode =
    */
   | "wrong-browser"
   | "ios-manual"
+  /**
+   * Установка настоящая, но системного диалога нет: браузер не прислал
+   * beforeinstallprompt. Рассказываем, как поставить портал через меню.
+   */
+  | "android-manual"
   | "unsupported";
 
 // Событие нестандартное: его шлёт только Chromium, в lib.dom оно отсутствует.
@@ -74,6 +79,16 @@ export function detectInstallMode(
   // «Яндекса с Алисой» — никогда, установки в нём нет вовсе.
   if (browser === "yandex-browser" || browser === "yandex-app")
     return "wrong-browser";
+
+  // Дальше — Android без события. Раньше отсюда возвращалось «unsupported», и
+  // портал молчал, хотя ставится прекрасно: событие Chrome шлёт один раз и
+  // только когда сам сочтёт нужным — на первом визите воркер ещё не управляет
+  // страницей, а установившему он не шлёт его вовсе. Отличить «нельзя» от «в
+  // этот раз не прислал» по событию нельзя, поэтому не молчим: установка через
+  // меню браузера доступна всегда. Тех, у кого портал уже стоит, отсекает
+  // getInstalledRelatedApps в use-install-prompt.
+  if (platform === "android")
+    return standaloneCapable ? "android-manual" : "wrong-browser";
 
   return "unsupported";
 }

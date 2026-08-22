@@ -11,8 +11,15 @@ import {
   clearCapturedInstallPrompt,
   readCapturedInstallPrompt,
 } from "@/lib/pwa/prompt-capture";
+import {
+  hasInstalledWebApp,
+  type RelatedApplication,
+} from "@/lib/pwa/installed-apps";
 
-type InstallNavigator = Navigator & { standalone?: boolean };
+type InstallNavigator = Navigator & {
+  standalone?: boolean;
+  getInstalledRelatedApps?: () => Promise<RelatedApplication[]>;
+};
 
 export interface InstallPrompt {
   mode: InstallMode;
@@ -46,6 +53,17 @@ export function useInstallPrompt(): InstallPrompt {
 
     resolve(readCapturedInstallPrompt());
 
+    // Во вкладке установленный портал ничем не отличается от неустановленного:
+    // display-mode у обоих `browser`, а события Chrome не шлёт ни тому, ни
+    // другому. Спрашиваем браузер прямо, иначе режим `android-manual` позовёт
+    // ставить портал заново того, у кого он уже стоит.
+    let cancelled = false;
+    void hasInstalledWebApp(window.navigator as InstallNavigator).then(
+      (installed) => {
+        if (installed && !cancelled) setMode("installed");
+      },
+    );
+
     function onBeforeInstallPrompt(event: Event) {
       event.preventDefault();
       resolve(event as BeforeInstallPromptEvent);
@@ -59,6 +77,7 @@ export function useInstallPrompt(): InstallPrompt {
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
     window.addEventListener("appinstalled", onInstalled);
     return () => {
+      cancelled = true;
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
       window.removeEventListener("appinstalled", onInstalled);
     };

@@ -85,6 +85,20 @@ describe("InstallBanner", () => {
     ).toBeInTheDocument();
   });
 
+  it("explains the browser menu when Chrome on Android sent no event", async () => {
+    mockMode("android-manual", "chrome", "android");
+    render(<InstallBanner />);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Как установить" }),
+    );
+
+    expect(promptInstall).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("dialog", { name: /на Android/ }),
+    ).toBeInTheDocument();
+  });
+
   it("points iOS users of a non-Safari browser at Safari", async () => {
     mockMode("wrong-browser", "yandex-browser", "ios");
     render(<InstallBanner />);

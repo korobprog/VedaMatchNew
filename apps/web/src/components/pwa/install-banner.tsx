@@ -10,6 +10,7 @@ import {
 } from "@/lib/pwa/install-dismissal";
 import { useInstallPrompt } from "./use-install-prompt";
 import { IosInstallInstructions } from "./ios-install-instructions";
+import { AndroidInstallInstructions } from "./android-install-instructions";
 import { WrongBrowserInstructions } from "./wrong-browser-instructions";
 
 export function InstallBanner() {
@@ -25,6 +26,9 @@ export function InstallBanner() {
   if (dismissed || mode === "installed" || mode === "unsupported") return null;
 
   const wrongBrowser = mode === "wrong-browser";
+  // Системный диалог есть только у can-prompt; остальным показываем, как
+  // поставить портал руками, поэтому и зовём кнопку по-другому.
+  const manual = mode === "android-manual";
 
   return (
     <>
@@ -66,7 +70,7 @@ export function InstallBanner() {
             }}
             className="mt-3 w-full rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-4 py-3 text-sm font-medium text-white"
           >
-            {wrongBrowser ? "Как установить" : "Установить"}
+            {wrongBrowser || manual ? "Как установить" : "Установить"}
           </button>
         </div>
       </div>
@@ -75,6 +79,10 @@ export function InstallBanner() {
           <WrongBrowserInstructions
             browser={browser}
             platform={platform}
+            onClose={() => setShowInstructions(false)}
+          />
+        ) : manual ? (
+          <AndroidInstallInstructions
             onClose={() => setShowInstructions(false)}
           />
         ) : (
