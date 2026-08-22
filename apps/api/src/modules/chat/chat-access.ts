@@ -159,6 +159,22 @@ export function denySetRole(
  * старших. В группе и канале — владелец и администратор, иначе закреплённое
  * будет переписываться каждым, кто счёл своё сообщение важным.
  */
+/**
+ * Удалить беседу целиком может только её владелец и только группу или канал.
+ *
+ * Личный диалог не удаляется ни одной из сторон: у него два хозяина, и
+ * стереть общую переписку по желанию одного — значит стереть её и у второго.
+ * Оттуда выходят (`leave`), а не удаляют.
+ */
+export function canDeleteConversation(
+  conversation: ConversationAccessInput,
+  member: MemberAccessInput | null | undefined,
+): boolean {
+  if (conversation.kind === 'direct') return false;
+  if (!member || member.leftAt) return false;
+  return member.role === 'owner';
+}
+
 export function canPinMessage(
   conversation: ConversationAccessInput,
   member: MemberAccessInput | null | undefined,

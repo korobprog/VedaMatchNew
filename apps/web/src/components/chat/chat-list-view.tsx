@@ -39,6 +39,17 @@ export function ChatListView({ initial }: { initial: ChatListState }) {
         setState((current) => upsert(current, event.conversation));
         return;
       }
+      // Владелец удалил группу — она должна исчезнуть из списка сразу, а не
+      // остаться строкой, которая при нажатии отвечает «не найдено».
+      if (event.type === "conversation.removed") {
+        setState((current) => ({
+          ...current,
+          conversations: current.conversations.filter(
+            (conversation) => conversation.id !== event.conversationId,
+          ),
+        }));
+        return;
+      }
       if (event.type === "message.created") {
         setState((current) => ({
           ...current,

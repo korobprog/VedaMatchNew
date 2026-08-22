@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -96,6 +97,26 @@ export class ChatUploadsService {
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),
       { expiresIn: ATTACHMENT_SIGNED_URL_TTL_SECONDS },
     );
+  }
+
+  /**
+   * Убрать объекты из бакета. Ошибка одного файла не должна ронять операцию,
+   * ради которой чистка затевалась: беседа уже удалена, и оставшийся в бакете
+   * файл — это мусор, а не потеря.
+   */
+  async removeMany(keys: readonly string[]): Promise<void> {
+    if (!this.s3Client || !this.bucket || keys.length === 0) return;
+    for (const key of keys) {
+      try {
+        await this.s3Client.send(
+          new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Не удалось убрать файл ${key}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
   }
 
   async store(

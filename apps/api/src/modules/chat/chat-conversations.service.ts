@@ -20,7 +20,10 @@ import type {
 } from '@vedamatch/shared';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { orphanStorageKeys } from './chat-purge';
+import { ChatUploadsService } from './chat-uploads.service';
 import {
+  canDeleteConversation,
   canPinMessage,
   canRead,
   denyJoin,
@@ -56,6 +59,7 @@ export class ChatConversationsService {
     private readonly prisma: PrismaService,
     private readonly events: ChatEventsService,
     private readonly bus: EventEmitter2,
+    private readonly uploads: ChatUploadsService,
   ) {}
 
   /** Список бесед: активные диалоги, группы и каналы. Запросы — отдельно. */
@@ -540,6 +544,57 @@ export class ChatConversationsService {
   }
 
   /** Выйти из группы или убрать диалог из списка. */
+  /**
+   * Удалить группу или канал целиком — вместе с сообщениями и файлами.
+   *
+   * Строки унесёт каскад от беседы, а вот объекты в S3 каскадом не удаляются:
+   * ключи собираем до удаления, иначе искать их будет негде. Чужие копии
+   * пересланных вложений при этом не трогаем — тот же расчёт, что и при
+   * удалении аккаунта.
+   */
+  async remove(userId: string, conversationId: string) {
+    const row = await this.requireConversation(conversationId, userId);
+    const member = row.members.find((entry) => entry.userId === userId);
+    if (!canDeleteConversation(row, member))
+      throw new ForbiddenException('Удалить беседу может только владелец');
+
+    const attachments = await this.prisma.chatAttachment.findMany({
+      where: { message: { conversationId } },
+      select: { key: true },
+    });
+    const keys = attachments
+      .map((attachment) => attachment.key)
+      .filter((key): key is string => Boolean(key));
+    const survivors = keys.length
+      ? await this.prisma.chatAttachment.findMany({
+          where: {
+            key: { in: keys },
+            message: { conversationId: { not: conversationId } },
+          },
+          select: { key: true },
+        })
+      : [];
+
+    const recipients = this.recipients(row);
+    await this.prisma.chatConversation.delete({
+      where: { id: conversationId },
+    });
+    await this.uploads.removeMany(
+      orphanStorageKeys(
+        keys,
+        survivors.map((attachment) => attachment.key),
+      ),
+    );
+
+    // Собеседники узнают об этом сразу: беседа исчезает из списка, а не
+    // остаётся строкой, которая при нажатии отвечает «не найдено».
+    this.events.publish(recipients, {
+      type: 'conversation.removed',
+      conversationId,
+    });
+    return { ok: true };
+  }
+
   async leave(userId: string, conversationId: string) {
     await this.requireConversation(conversationId, userId);
     await this.prisma.chatMember.updateMany({

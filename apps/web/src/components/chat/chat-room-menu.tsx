@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ChatConversationDetail } from "@vedamatch/shared";
 import {
+  deleteChatConversation,
   leaveChatConversation,
   reportChat,
   setChatMuted,
@@ -146,6 +147,31 @@ export function ChatRoomMenu({
               })
             }
           />
+
+          {/* Удаление — только у владельца группы и канала: оно уносит
+              переписку у всех участников, а не только у себя. Поэтому и
+              подтверждение, и отдельный цвет. */}
+          {conversation.kind !== "direct" &&
+            conversation.myRole === "owner" && (
+              <MenuItem
+                busy={busy}
+                tone="warn"
+                label={isChannel ? "Удалить канал" : "Удалить группу"}
+                onClick={() =>
+                  void run(async () => {
+                    const what = isChannel ? "канал" : "группу";
+                    if (
+                      !window.confirm(
+                        `Удалить ${what} со всей перепиской? Её потеряют все участники, и вернуть будет нельзя.`,
+                      )
+                    )
+                      return;
+                    await deleteChatConversation(conversation.id);
+                    router.push("/chat");
+                  })
+                }
+              />
+            )}
         </div>
       )}
     </div>

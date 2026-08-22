@@ -225,6 +225,15 @@ export function leaveChatConversation(
   );
 }
 
+/** Удалить группу или канал целиком. Доступно только владельцу. */
+export function deleteChatConversation(
+  conversationId: string,
+): Promise<{ ok: boolean }> {
+  return send<{ ok: boolean }>(`/chat/conversations/${conversationId}`, {
+    method: "DELETE",
+  });
+}
+
 export function subscribeToChannel(
   conversationId: string,
 ): Promise<{ ok: boolean }> {

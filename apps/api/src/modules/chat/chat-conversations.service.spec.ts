@@ -98,11 +98,13 @@ describe('ChatConversationsService', () => {
 
   const events = { publish: fn() };
   const bus = { emit: fn() };
+  const uploads = { removeMany: fn() };
 
   const service = new ChatConversationsService(
     prisma as unknown as PrismaService,
     events as unknown as ChatEventsService,
     bus as never,
+    uploads as never,
   );
 
   beforeEach(() => {

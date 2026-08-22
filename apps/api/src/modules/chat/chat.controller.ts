@@ -236,6 +236,15 @@ export class ChatController {
     return this.conversations.updateConversation(user.sub, id, body ?? {});
   }
 
+  /** Удалить группу или канал целиком: только владелец, только не диалог. */
+  @Delete('conversations/:id')
+  removeConversation(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.conversations.remove(user.sub, id);
+  }
+
   @Delete('conversations/:id/members/me')
   leave(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.conversations.leave(user.sub, id);
