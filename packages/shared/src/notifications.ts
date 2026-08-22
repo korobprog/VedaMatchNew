@@ -158,6 +158,24 @@ export type NotificationEvent =
       name: 'motivation.video.review';
       recipientId: string;
       reelId: string;
+    }
+  | {
+      /** Сообщение в сервисе «Общение»: личный диалог, группа или канал. */
+      name: 'chat.message-sent';
+      recipientId: string;
+      senderName: string;
+      /** Название группы или канала; у личного диалога пусто. */
+      conversationTitle?: string;
+      body: string;
+      conversationId: string;
+    }
+  | {
+      /** Первое сообщение от незнакомого человека — лежит в запросах. */
+      name: 'chat.request-received';
+      recipientId: string;
+      senderName: string;
+      body: string;
+      conversationId: string;
     };
 
 /**

@@ -8,6 +8,7 @@ import {
 } from "@/lib/api";
 import { Header } from "@/components/header";
 import { ServiceGrid } from "@/components/service-grid";
+import { FeaturedServices } from "@/components/featured-services";
 import { MemberCountLine } from "@/components/member-count-line";
 import { PortalNews } from "@/components/portal-news";
 import {
@@ -18,6 +19,7 @@ import {
 } from "@/lib/union-api";
 import { buildUnionQuickAccessData } from "@/lib/union-quick-access";
 import { getAstroState, getAstroToday } from "@/lib/astro-api";
+import { getChatUnread } from "@/lib/chat-api";
 import {
   getMyNoticeResponsesServer,
   getMyNoticesForAdvisor,
@@ -61,6 +63,7 @@ export default async function Home({
     myResponses,
     myCommunities,
     news,
+    chatUnread,
   ] = await Promise.all([
     getProfile(),
     getServices(),
@@ -77,6 +80,7 @@ export default async function Home({
     getMyCommunitiesServer().catch(() => null),
     // Новости портала — не повод ронять главную: не пришли, значит их нет.
     getAnnouncements("ru").catch(() => null),
+    getChatUnread().catch(() => null),
   ]);
   if (!user || !services) {
     // Маркер сессии без access-cookie: человек уже входил, refresh скорее всего
@@ -123,14 +127,27 @@ export default async function Home({
   );
 
   const unionService = services.find((s) => s.url === "/union");
-  const serviceExtras = unionService
-    ? {
-        [unionService.id]: {
-          badgeCount: unionCounts?.incomingPending,
-          extra: <UnionQuickAccessWidget {...unionQuickAccess} />,
-        },
-      }
-    : {};
+  const chatService = services.find((s) => s.url === "/chat");
+  const serviceExtras = {
+    ...(unionService
+      ? {
+          [unionService.id]: {
+            badgeCount: unionCounts?.incomingPending,
+            extra: <UnionQuickAccessWidget {...unionQuickAccess} />,
+          },
+        }
+      : {}),
+    // Непрочитанное и запросы на переписку в одном числе: человеку важно,
+    // что его ждут, а не в какой именно очереди это лежит.
+    ...(chatService
+      ? {
+          [chatService.id]: {
+            badgeCount:
+              (chatUnread?.conversations ?? 0) + (chatUnread?.requests ?? 0),
+          },
+        }
+      : {}),
+  };
 
   return (
     <div className="relative min-h-dvh bg-bg-0">
@@ -158,6 +175,9 @@ export default async function Home({
             }
           />
         )}
+        {/* Ходовые сервисы отдельной строкой над сеткой: за ними заходят
+            чаще всего, и искать их среди равных плиток не нужно. */}
+        <FeaturedServices />
         <ServiceGrid services={services} userId={user.id} extras={serviceExtras} />
       </main>
       <InstallBanner />

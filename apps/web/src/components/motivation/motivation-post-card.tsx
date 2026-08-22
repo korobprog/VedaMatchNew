@@ -76,6 +76,28 @@ export function MotivationPostCard({ post }: { post: MotivationPostDto }) {
             {favorite ? "★ В избранном" : "☆ В избранное"}
           </button>
           <button type="button" onClick={share} className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Поделиться</button>
+          {/* Отправка внутрь портала — обычная ссылка в «Общение»: сервис
+              «Мотивация» не знает про устройство чата, а чат не читает его
+              таблиц. Всё, что нужно сообщению, уезжает в адресе и хранится
+              в переписке снимком. */}
+          <Link
+            href={{
+              pathname: "/chat/share",
+              query: {
+                kind: "story",
+                title: quote.slice(0, 200),
+                subtitle: [post.attributionSpeaker, post.attributionWork]
+                  .filter(Boolean)
+                  .join(" · "),
+                previewUrl: post.storyImageUrl ?? post.imageUrl,
+                sourceService: "motivation",
+                sourceId: post.slug,
+              },
+            }}
+            className="rounded-xl border border-zinc-200 px-4 py-2 text-center text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          >
+            Отправить в чат
+          </Link>
           {post.storyImageUrl && (
             <a href={post.storyImageUrl} download className="col-span-2 rounded-xl bg-amber-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-amber-700">Скачать для Stories</a>
           )}

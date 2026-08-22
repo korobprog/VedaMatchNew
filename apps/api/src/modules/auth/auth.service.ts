@@ -14,7 +14,6 @@ import * as oidc from 'openid-client';
 import { resolveDisplayName, type Role } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { readRegistrationMode } from '../billing/billing-mode';
-import { NEW_CONTACTS_PROFILE } from '../contacts/contacts-defaults';
 import { assertAccountActive } from '../users/account-status';
 import { JwtSignService } from './jwt.service';
 import { verifyPassword } from './password';
@@ -222,7 +221,7 @@ export class AuthService implements OnModuleInit {
   }
 
   /**
-   * Карточка справочника «Контакты» заводится вместе с пользователем: человек
+   * Карточка справочника людей заводится вместе с пользователем: человек
    * должен быть в списке участников сразу после регистрации, ничего не
    * заполняя. Содержимое карточки берётся из профиля join-ом, поэтому пустых
    * полей достаточно.
@@ -233,21 +232,22 @@ export class AuthService implements OnModuleInit {
    * второй вкладкой не должен ронять авторизацию конфликтом уникального
    * `userId`.
    *
-   * Логика продублирована из `ContactsService.ensureProfile` намеренно:
-   * ContactsModule импортирует AuthModule, и обратная зависимость сделала бы
-   * их циклическими. Общие для обоих мест значения лежат в
-   * `contacts/contacts-defaults.ts`.
+   * Логика продублирована из `PeopleService.ensureProfile` намеренно:
+   * ChatModule импортирует AuthModule, и обратная зависимость сделала бы
+   * их циклическими. Значения совпадают с `chat/people/people-defaults.ts` и
+   * с бэкфиллом миграции `20260814090000_contacts_profile_for_every_user`;
+   * менять их нужно во всех трёх местах.
    */
   private async ensureContactsProfile(userId: string): Promise<void> {
     try {
       await this.prisma.contactsProfile.createMany({
-        data: [{ userId, ...NEW_CONTACTS_PROFILE }],
+        data: [{ userId, status: 'active', visibility: 'everyone' }],
         skipDuplicates: true,
       });
     } catch (error) {
       // Справочник не должен мешать входу: логиним и идём дальше.
       this.logger.error(
-        `Не удалось создать карточку «Контакты» для ${userId}`,
+        `Не удалось создать карточку справочника для ${userId}`,
         error instanceof Error ? error.stack : String(error),
       );
     }

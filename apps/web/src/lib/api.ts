@@ -101,12 +101,12 @@ export const getAdminUsers = (query: Record<string, string | undefined>) => {
   const qs = params.toString();
   return apiGet<AdminUserListResponse>(`/admin/users${qs ? `?${qs}` : ""}`);
 };
-// ===== Админка «Контактов». Команды — в lib/contacts-admin-api.ts =====
+// ===== Админка справочника людей «Общения». Команды — в lib/chat-people-admin-api.ts =====
 
 export const getContactsAdminStats = () =>
-  apiGet<ContactsAdminStats>("/contacts/admin/stats");
+  apiGet<ContactsAdminStats>("/chat/people/admin/stats");
 export const getContactsAdminTags = () =>
-  apiGet<ContactsAdminTagDto[]>("/contacts/admin/tags");
+  apiGet<ContactsAdminTagDto[]>("/chat/people/admin/tags");
 export const getContactsAdminProfiles = (query: ContactsAdminProfileQuery) => {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
@@ -114,7 +114,7 @@ export const getContactsAdminProfiles = (query: ContactsAdminProfileQuery) => {
   }
   const qs = params.toString();
   return apiGet<ContactsAdminProfileListResponse>(
-    `/contacts/admin/profiles${qs ? `?${qs}` : ""}`,
+    `/chat/people/admin/profiles${qs ? `?${qs}` : ""}`,
   );
 };
 

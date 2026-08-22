@@ -9,12 +9,12 @@ export const roleLabels: Record<Role, string> = {
 /** Названия сервисов в форме выдачи прав администратору сервиса. */
 export const adminServiceLabels: Record<AdminServiceSlug, string> = {
   union: 'Union — знакомства',
+  chat: 'Chat — общение',
   market: 'Market — объявления и магазины',
   motivation: 'Motivation — цитаты и ролики',
   library: 'Library — библиотека',
   notices: 'Notices — доска объявлений',
   astro: 'Astro — ведическая астрология',
-  contacts: 'Contacts — справочник',
   vedabase: 'Vedabase — священные тексты',
 };
 

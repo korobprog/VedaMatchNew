@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { AdminSidebar } from "./admin-sidebar";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/admin/contacts",
+  usePathname: () => "/admin/chat/people",
 }));
 
 const groups = [
@@ -11,10 +11,10 @@ const groups = [
     title: "Сервисы",
     items: [
       {
-        href: "/admin/contacts",
-        label: "Справочник",
+        href: "/admin/chat/people",
+        label: "Общение — люди",
         hint: "",
-        scope: "contacts" as const,
+        scope: "chat" as const,
       },
       {
         href: "/admin/library",
@@ -30,13 +30,13 @@ describe("AdminSidebar", () => {
   it("на телефоне свёрнут и показывает текущий раздел на кнопке", () => {
     render(<AdminSidebar groups={groups} />);
 
-    const toggle = screen.getByRole("button", { name: /Справочник/ });
+    const toggle = screen.getByRole("button", { name: /Общение — люди/ });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
   });
 
   it("разворачивается и сворачивается обратно по выбору раздела", () => {
     render(<AdminSidebar groups={groups} />);
-    const toggle = screen.getByRole("button", { name: /Справочник/ });
+    const toggle = screen.getByRole("button", { name: /Общение — люди/ });
 
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
@@ -50,7 +50,7 @@ describe("AdminSidebar", () => {
   it("отмечает текущий раздел для скринридера", () => {
     render(<AdminSidebar groups={groups} />);
 
-    expect(screen.getByRole("link", { name: "Справочник" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Общение — люди" })).toHaveAttribute(
       "aria-current",
       "page",
     );

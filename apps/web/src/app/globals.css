@@ -39,6 +39,8 @@
   --color-magenta: var(--vm-magenta);
   --color-cyan: var(--vm-cyan);
   --color-gold: var(--vm-gold);
+  --color-violet: var(--vm-violet);
+  --color-blue: var(--vm-blue);
 
   /* Text colors */
   --color-text-0: var(--vm-text-0);
@@ -104,6 +106,13 @@
   --vm-cyan: #0B826F;
   --vm-gold: #B0770E;
 
+  /* Цвета имён участников в групповых беседах. Отдельные токены, а не
+     существующие акценты: маджента занята жалобой, мята — действиями, и
+     подписывать ими людей значит путать роль цвета. Значения подобраны
+     под мелкий текст (12px): 6,5:1 и 6,1:1 на --vm-bg-0. */
+  --vm-violet: #7A3FBF;
+  --vm-blue: #1F5FBF;
+
   --vm-text-0: #180F2C;
   --vm-text-1: #4B3B6C;
   --vm-text-2: #766591;
@@ -151,6 +160,9 @@
   --vm-cyan: #23F0C7;
   --vm-gold: #FFC85C;
 
+  --vm-violet: #C68BFF;
+  --vm-blue: #7FB4FF;
+
   --vm-text-0: #F6F1FF;
   --vm-text-1: #B8A9D9;
   /* #7C6D9C давал 4.31:1 на --vm-bg-0 — ниже AA. Осветлён до 4.54:1.
@@ -196,6 +208,9 @@
     --vm-magenta: #FF3E9E;
     --vm-cyan: #23F0C7;
     --vm-gold: #FFC85C;
+
+    --vm-violet: #C68BFF;
+    --vm-blue: #7FB4FF;
 
     --vm-text-0: #F6F1FF;
     --vm-text-1: #B8A9D9;
@@ -390,6 +405,41 @@ select option {
 *:focus-visible {
   outline: 2px solid var(--vm-magenta);
   outline-offset: 2px;
+}
+
+/**
+ * Тонкая полоса прокрутки для длинных лент — переписки прежде всего.
+ * Общая полоса портала в 8 пикселей рядом с пузырями читается как элемент
+ * беседы, а на телефоне она вовсе не нужна: палец скроллит без неё, а место
+ * отъедает. Поэтому при грубом указателе полосы нет совсем.
+ */
+.scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vm-text-2) transparent;
+}
+
+.scroll-slim::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.scroll-slim::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll-slim::-webkit-scrollbar-thumb {
+  background: var(--vm-glass-brd);
+  border-radius: 2px;
+}
+
+@media (pointer: coarse) {
+  .scroll-slim {
+    scrollbar-width: none;
+  }
+
+  .scroll-slim::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Custom scrollbar */
@@ -788,6 +838,30 @@ select option {
 .notices-map-brand img {
   display: block;
   border-radius: 2px;
+}
+
+/* Метка общины на карте «Общения». Мятная кромка, а не маджента: маджента
+   в этом сервисе занята жалобой, и метка не должна читаться тревожно. */
+.chat-map-pin {
+  display: inline-block;
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 0.5rem;
+  border: 1px solid var(--vm-cyan, #23f0c7);
+  background: rgba(18, 18, 26, 0.94);
+  padding: 0.15rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.leaflet-marker-icon:hover .chat-map-pin,
+.leaflet-marker-icon:focus-visible .chat-map-pin {
+  background: var(--vm-cyan, #23f0c7);
+  color: #0a0614;
 }
 
 /* Агрегат по городу: подпись без острия — точности адреса за ней нет. */

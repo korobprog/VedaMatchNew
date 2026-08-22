@@ -20,6 +20,16 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.portalChatMessageSent)
+  onPortalChatMessage(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.portalChatRequestReceived)
+  onPortalChatRequest(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   @OnEvent(notificationEventNames.connectionRequested)
   onConnectionRequested(event: NotificationEvent): void {
     void this.deliver(event);

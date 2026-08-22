@@ -52,7 +52,7 @@ export function ConnectionActions({
           Матч подтверждён — контакты открыты.
         </p>
         <Link
-          href={`/union/chats/${connection.id}`}
+          href={`/chat/with/${userId}`}
           className="flex justify-center rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-4 py-2.5 text-sm font-semibold text-white transition hover:shadow-[0_0_20px_var(--vm-glow-magenta)]"
         >
           Открыть чат

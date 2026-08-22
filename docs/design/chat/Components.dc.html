@@ -1,0 +1,160 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; background: #0A0614; color: #F6F1FF; font-family: "Manrope", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: #23F0C7; } a:hover { color: #5CF3D5; }
+  </style>
+</helmet>
+<div style="position: relative; width: 1280px; height: 620px; overflow: hidden; background: #0E0819; border: 1px dashed rgba(255,255,255,0.12);">
+  <div style="display: flex; flex-direction: column; gap: 28px; padding: 28px 32px;">
+
+    <div style="display: flex; align-items: baseline; gap: 14px;">
+      <span style="font-family: 'Unbounded', system-ui, sans-serif; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; color: #F6F1FF;">Компоненты</span>
+      <span style="font-size: 13px; color: #7F719E;">Все цвета — токены портала: --vm-cyan, --vm-mint-*, --vm-gold, --vm-glass-*, --vm-text-0/1/2</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px;">
+
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <span style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #7F719E;">Пузыри</span>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="align-self: flex-start; max-width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 8px 14px; border-radius: 20px 20px 20px 6px; background: linear-gradient(135deg, rgba(255,255,255,0.11) 0%, rgba(255,255,255,0.04) 100%); border: 1px solid rgba(255,255,255,0.12); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.28);">
+            <span style="font-size: 15px; line-height: 21px; color: #F6F1FF;">Входящее — стекло, хвост слева</span>
+            <span style="align-self: flex-end; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; color: #7F719E;">14:02</span>
+          </div>
+          <div style="align-self: flex-end; max-width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 8px 14px; border-radius: 20px 20px 6px 20px; background: linear-gradient(135deg, rgba(35,240,199,0.24) 0%, rgba(51,204,204,0.10) 100%); border: 1px solid rgba(35,240,199,0.30); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 8px 24px rgba(35,240,199,0.10);">
+            <span style="font-size: 15px; line-height: 21px; color: #F6F1FF;">Исходящее — мята, хвост справа</span>
+            <span style="align-self: flex-end; display: flex; align-items: center; gap: 4px;">
+              <span style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; color: #9FE9DA;">14:05</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#23F0C7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12.5l4 4L13 9"></path><path d="M11 15l1.5 1.5L21 8"></path></svg>
+            </span>
+          </div>
+          <div style="align-self: flex-end; max-width: 300px; display: flex; flex-direction: column; gap: 8px; padding: 8px 12px 8px 8px; border-radius: 20px 20px 6px 20px; background: linear-gradient(135deg, rgba(35,240,199,0.24) 0%, rgba(51,204,204,0.10) 100%); border: 1px solid rgba(35,240,199,0.30); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 8px 24px rgba(35,240,199,0.10);">
+            <div style="display: flex; gap: 10px; padding: 7px 10px 7px 0; border-radius: 10px; background: rgba(10,6,20,0.35);">
+              <span style="flex-shrink: 0; width: 3px; border-radius: 2px; background: #23F0C7;"></span>
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <span style="font-size: 11px; font-weight: 700; color: #23F0C7;">Говинда</span>
+                <span style="font-size: 12px; line-height: 16px; color: #D8CCF0;">Цитата, на которую отвечают</span>
+              </div>
+            </div>
+            <span style="padding-left: 6px; font-size: 15px; line-height: 21px; color: #F6F1FF;">Ответ с цитатой</span>
+          </div>
+          <div style="align-self: center; padding: 4px 12px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #7F719E;">Системное · Сегодня</div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <span style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #7F719E;">Аватары и статусы</span>
+        <div style="display: flex; align-items: flex-end; gap: 14px;">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+            <div style="position: relative;">
+              <div style="display: flex; align-items: center; justify-content: center; width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, #5CCCCC 0%, #2AB5B5 100%); box-shadow: 0 0 0 2px #0E0819, 0 0 0 3.5px rgba(35,240,199,0.55); font-family: 'Unbounded', system-ui, sans-serif; font-size: 18px; font-weight: 600; color: #0A0614;">Г</div>
+              <span style="position: absolute; right: -1px; bottom: -1px; width: 13px; height: 13px; border-radius: 50%; background: #23F0C7; border: 2.5px solid #0E0819;"></span>
+            </div>
+            <span style="font-size: 11px; color: #7F719E;">в сети</span>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; justify-content: center; width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, #B23EFF 0%, #6C5CE7 100%); font-family: 'Unbounded', system-ui, sans-serif; font-size: 18px; font-weight: 600; color: #F6F1FF;">М</div>
+            <span style="font-size: 11px; color: #7F719E;">офлайн</span>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; justify-content: center; width: 50px; height: 50px; border-radius: 17px; background: linear-gradient(135deg, rgba(35,240,199,0.22) 0%, rgba(35,240,199,0.06) 100%); border: 1px solid rgba(35,240,199,0.34); color: #23F0C7;">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3.2"></circle><path d="M3.5 19a5.8 5.8 0 0111 0"></path><circle cx="17" cy="10" r="2.6"></circle><path d="M15.4 15.6a5 5 0 015.1 3.4"></path></svg>
+            </div>
+            <span style="font-size: 11px; color: #7F719E;">группа</span>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; justify-content: center; width: 50px; height: 50px; border-radius: 17px; background: linear-gradient(135deg, rgba(255,200,92,0.22) 0%, rgba(255,200,92,0.06) 100%); border: 1px solid rgba(255,200,92,0.34); color: #FFC85C;">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4a1 1 0 001 1h2l6 4V5L7 9H5a1 1 0 00-1 1z"></path><path d="M17 9.5a4 4 0 010 5"></path></svg>
+            </div>
+            <span style="font-size: 11px; color: #7F719E;">канал</span>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+            <div style="display: flex; padding-left: 8px;">
+              <span style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #23F0C7 0%, #33CCCC 100%); border: 2px solid #0E0819;"></span>
+              <span style="width: 28px; height: 28px; margin-left: -8px; border-radius: 50%; background: linear-gradient(135deg, #B23EFF 0%, #6C5CE7 100%); border: 2px solid #0E0819;"></span>
+              <span style="width: 28px; height: 28px; margin-left: -8px; border-radius: 50%; background: linear-gradient(135deg, #FFC85C 0%, #FF8A3E 100%); border: 2px solid #0E0819;"></span>
+            </div>
+            <span style="font-size: 11px; color: #7F719E;">стек</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 18px; padding-top: 6px;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7F719E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l2.5 2"></path></svg>
+            <span style="font-size: 12px; color: #B8A9D9;">отправляется</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9FE9DA" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l4.5 4.5L20 6"></path></svg>
+            <span style="font-size: 12px; color: #B8A9D9;">доставлено</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#23F0C7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12.5l4 4L13 9"></path><path d="M11 15l1.5 1.5L21 8"></path></svg>
+            <span style="font-size: 12px; color: #B8A9D9;">прочитано</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding-top: 4px;">
+          <div style="display: flex; align-items: center; gap: 4px; padding: 8px 12px; border-radius: 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10);">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #23F0C7; box-shadow: 0 0 8px rgba(35,240,199,0.6);"></span>
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: rgba(35,240,199,0.55);"></span>
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: rgba(35,240,199,0.25);"></span>
+          </div>
+          <span style="font-size: 12px; color: #7F719E;">печатает</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <span style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #7F719E;">Счётчики, реакции, кнопки</span>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: linear-gradient(135deg, #5CCCCC 0%, #33CCCC 100%); box-shadow: 0 4px 12px rgba(51,204,204,0.4); font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; line-height: 22px; text-align: center; color: #0A0614;">2</span>
+          <span style="min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.10); font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; line-height: 20px; text-align: center; color: #B8A9D9;">12</span>
+          <span style="font-size: 12px; color: #7F719E;">непрочитанное · без звука</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 12px; background: #1B1230; border: 1px solid rgba(35,240,199,0.34); box-shadow: 0 4px 12px rgba(0,0,0,0.35);">
+            <span style="font-size: 12px; line-height: 14px;">🙏</span>
+            <span style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; color: #23F0C7;">2</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 12px; background: #1B1230; border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 4px 12px rgba(0,0,0,0.35);">
+            <span style="font-size: 12px; line-height: 14px;">🔥</span>
+            <span style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; color: #B8A9D9;">5</span>
+          </div>
+          <span style="font-size: 12px; color: #7F719E;">моя · чужая</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="display: flex; align-items: center; justify-content: center; gap: 6px; height: 44px; padding: 0 18px; border-radius: 14px; background: linear-gradient(135deg, #5CCCCC 0%, #33CCCC 100%); border: 1px solid #2AB5B5; box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 8px 22px rgba(51,204,204,0.32); font-size: 14px; font-weight: 700; color: #14212C;">Принять</div>
+          <div style="display: flex; align-items: center; justify-content: center; height: 44px; padding: 0 18px; border-radius: 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); font-size: 14px; font-weight: 600; color: #B8A9D9;">Отклонить</div>
+          <div style="display: flex; align-items: center; justify-content: center; height: 44px; padding: 0 16px; border-radius: 14px; background: rgba(35,240,199,0.10); border: 1px solid rgba(35,240,199,0.36); font-size: 14px; font-weight: 700; color: #23F0C7;">Подписка</div>
+          <div style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 14px; border: 1px solid rgba(255,62,158,0.26); background: rgba(255,62,158,0.05); color: #FF3E9E;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4.5"></path><path d="M5 5.5h11l-1.6 3.6L16 12.7H5z"></path></svg>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="display: flex; margin-top: 2px; padding: 3px; border-radius: 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.10);">
+            <div style="display: flex; align-items: center; justify-content: center; height: 32px; padding: 0 16px; border-radius: 11px; background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 100%); border: 1px solid rgba(255,255,255,0.14); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 4px 12px rgba(0,0,0,0.25); font-size: 12px; font-weight: 700; color: #F6F1FF;">Все</div>
+            <div style="display: flex; align-items: center; justify-content: center; height: 32px; padding: 0 16px; border-radius: 11px; font-size: 12px; font-weight: 500; color: #B8A9D9;">Личные</div>
+          </div>
+          <span style="font-size: 12px; color: #7F719E;">сегмент</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1280,"height":620}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

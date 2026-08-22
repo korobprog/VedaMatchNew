@@ -10,6 +10,8 @@ export type { NotificationCategory };
  *  значения оттуда уронил бы API при старте. Тип сверяет литералы с контрактом. */
 export const notificationEventNames = {
   chatMessageSent: 'union.chat.message-sent',
+  portalChatMessageSent: 'chat.message-sent',
+  portalChatRequestReceived: 'chat.request-received',
   connectionRequested: 'union.connection.requested',
   connectionAccepted: 'union.connection.accepted',
   contactsRequestReceived: 'contacts.request.received',
@@ -64,6 +66,26 @@ export function buildNotification(
         body: toExcerpt(event.body),
         url: `/union/chats/${event.requestId}`,
         tag: `chat:${event.requestId}`,
+        category: 'chat',
+      };
+    case 'chat.message-sent':
+      return {
+        // В группе и канале первым идёт название беседы: имя отправителя без
+        // него не говорит, куда идти, а «Общение» есть у всех уведомлений.
+        title: event.conversationTitle
+          ? `${event.conversationTitle} · ${event.senderName}`
+          : event.senderName,
+        body: toExcerpt(event.body),
+        url: `/chat/${event.conversationId}`,
+        tag: `chat:${event.conversationId}`,
+        category: 'chat',
+      };
+    case 'chat.request-received':
+      return {
+        title: 'Запрос на переписку',
+        body: `${event.senderName}: ${toExcerpt(event.body)}`,
+        url: '/chat/requests',
+        tag: `chat-request:${event.conversationId}`,
         category: 'chat',
       };
     case 'union.connection.requested':

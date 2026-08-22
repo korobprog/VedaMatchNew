@@ -5,7 +5,11 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import type { AdminNavGroup } from "@/lib/admin-nav";
-import { currentAdminNavLabel, isAdminNavItemActive } from "@/lib/admin-nav";
+import {
+  activeAdminNavHref,
+  currentAdminNavLabel,
+  isAdminNavItemActive,
+} from "@/lib/admin-nav";
 import { cn } from "@/lib/utils";
 
 /**
@@ -24,6 +28,7 @@ export function AdminSidebar({ groups }: { groups: AdminNavGroup[] }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const current = currentAdminNavLabel(groups, pathname);
+  const activeHref = activeAdminNavHref(groups, pathname);
 
   return (
     <nav
@@ -90,7 +95,7 @@ export function AdminSidebar({ groups }: { groups: AdminNavGroup[] }) {
                   <AdminNavLink
                     href={item.href}
                     label={item.label}
-                    active={isAdminNavItemActive(item.href, pathname)}
+                    active={item.href === activeHref}
                     onNavigate={() => setOpen(false)}
                   />
                 </li>

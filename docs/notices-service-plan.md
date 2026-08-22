@@ -8,7 +8,7 @@
 Строится по [контракту сервисного модуля](./service-module-contract.md).
 Образец изоляции — **только `market`** (`apps/api/src/modules/market/`):
 `ContactsModule` импортирует `UsersModule`, `UnionModule` и `ModerationModule`
-(`apps/api/src/modules/contacts/contacts.module.ts:11`) и потому эталоном не
+(бывший `ContactsModule`, ныне `apps/api/src/modules/chat/people/`) и потому эталоном не
 является — у «Контактов» берём образец документа, модель приватности и
 поисковый SQL, но не устройство модуля.
 
@@ -173,7 +173,7 @@ FK на `User` и `Community` разрешены, на модели других
 ## Гео и карта
 
 Радиус уже реализован ровно так, как нужно, — в
-`apps/api/src/modules/contacts/contacts-search-query.ts`: грубая рамка плюс
+`apps/api/src/modules/chat/people/people-search-query.ts`: грубая рамка плюс
 точный гаверсинус, всё одним SQL-выражением, тесты в
 `contacts-search-query.spec.ts:232`. Файл копируется в модуль и упрощается: у
 Contacts координаты достаются из `User.homeLocation` через `jsonb_typeof`,
@@ -188,7 +188,7 @@ Contacts координаты достаются из `User.homeLocation` чер
 
 **Карта.** Leaflet + OSM, загрузка через динамический `import()` внутри
 `useEffect` — модуль трогает `window` и ломает SSR. Образец
-`components/contacts/contacts-map.tsx` копируется в
+`components/chat/people/people-map.tsx` копируется в
 `components/notices/notices-map.tsx`. Отличие: Contacts кластеризует по городам,
 здесь нужны настоящие точки — у храма адрес, у события площадка. `GET /notices/map?bbox=`
 отдаёт точки, пока их в рамке меньше порога, и агрегаты по городам, когда больше;

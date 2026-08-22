@@ -19,6 +19,7 @@ export * from './market';
 export * from './community';
 export * from './notices';
 export * from './audit';
+export * from './chat';
 export * from './pwa';
 
 import type { BillingMode, SubscriptionState } from './support';
@@ -33,12 +34,12 @@ export type Role = 'user' | 'admin' | 'service-admin';
  */
 export const ADMIN_SERVICE_SLUGS = [
   'union',
+  'chat',
   'market',
   'motivation',
   'library',
   'notices',
   'astro',
-  'contacts',
   'vedabase',
 ] as const;
 

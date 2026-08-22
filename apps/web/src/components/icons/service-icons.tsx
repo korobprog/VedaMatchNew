@@ -270,6 +270,55 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
         </svg>
       );
 
+    case "chat":
+      // Two speech bubbles - a conversation, not a broadcast
+      return (
+        <svg
+          viewBox="0 0 32 32"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className={className}
+        >
+          {/* Bubble of the person who wrote first */}
+          <path
+            d="M5 10a3 3 0 013-3h11a3 3 0 013 3v6a3 3 0 01-3 3h-6l-5 4v-4H8a3 3 0 01-3-3z"
+            fill={`url(#${gid("bg")})`}
+            stroke={`url(#${gid("stroke")})`}
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+          />
+          {/* Reply bubble, overlapping - the answer */}
+          <path
+            d="M13 20a3 3 0 013-3h8a3 3 0 013 3v4a3 3 0 01-3 3h-3l-4 3v-3h-1a3 3 0 01-3-3z"
+            fill={`url(#${gid("bg2")})`}
+            stroke={`url(#${gid("stroke")})`}
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+          />
+          {/* Lines of text in the first bubble */}
+          <path
+            d="M9 11.5h9M9 14.5h6"
+            stroke="#5EEAD4"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+          <defs>
+            <linearGradient id={gid("bg")} x1="5" y1="7" x2="22" y2="23" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#134E4A" stopOpacity="0.85" />
+              <stop offset="1" stopColor="#0D9488" stopOpacity="0.75" />
+            </linearGradient>
+            <linearGradient id={gid("bg2")} x1="13" y1="17" x2="27" y2="30" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#164E63" stopOpacity="0.85" />
+              <stop offset="1" stopColor="#0891B2" stopOpacity="0.75" />
+            </linearGradient>
+            <linearGradient id={gid("stroke")} x1="5" y1="7" x2="27" y2="30" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#2DD4BF" />
+              <stop offset="1" stopColor="#67E8F9" />
+            </linearGradient>
+          </defs>
+        </svg>
+      );
+
     case "contacts":
       // Address card with a community network of people - who's who nearby
       return (
