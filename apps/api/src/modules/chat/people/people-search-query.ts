@@ -294,7 +294,7 @@ export function buildFilterConditions(
     const pattern = likePattern(filters.q);
     conditions.push(Prisma.sql`(
       p."headline" ILIKE ${pattern}
-      OR p."about" ILIKE ${pattern}
+      OR u."about" ILIKE ${pattern}
       OR p."offers" ILIKE ${pattern}
       OR u."name" ILIKE ${pattern}
     )`);
@@ -332,7 +332,7 @@ export function buildFilterConditions(
   if (filters.languages.length > 0) {
     // Пересечение множеств: достаточно одного общего языка.
     conditions.push(
-      Prisma.sql`p."languages" && ARRAY[${Prisma.join(filters.languages, ',')}]::text[]`,
+      Prisma.sql`u."languages" && ARRAY[${Prisma.join(filters.languages, ',')}]::text[]`,
     );
   }
 

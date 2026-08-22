@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   ContactsAshram,
@@ -12,9 +13,8 @@ import type {
 } from "@vedamatch/shared";
 import {
   CONTACTS_MAX_HEADLINE_LENGTH,
-  CONTACTS_MAX_LANGUAGES,
-  CONTACTS_MAX_TAGS,
   CONTACTS_MAX_TEXT_LENGTH,
+  CONTACTS_MAX_TAGS,
   buildContactsProfileRequest,
   getContactsProfileState,
   getContactsTags,
@@ -172,12 +172,6 @@ export function PeopleProfileEditor() {
     });
   }
 
-  function updateLanguage(index: number, value: string) {
-    update(
-      "languages",
-      draft.languages.map((item, i) => (i === index ? value : item)),
-    );
-  }
 
   async function save() {
     setSaveState("saving");
@@ -249,23 +243,14 @@ export function PeopleProfileEditor() {
           {draft.headline.length} / {CONTACTS_MAX_HEADLINE_LENGTH}
         </p>
 
-        <label
-          htmlFor="contacts-about"
-          className="mb-1 mt-4 block text-sm text-text-1"
-        >
-          О себе
-        </label>
-        <textarea
-          id="contacts-about"
-          rows={6}
-          value={draft.about}
-          maxLength={CONTACTS_MAX_TEXT_LENGTH}
-          placeholder="Кто вы, чем занимаетесь, где практикуете"
-          onChange={(event) => update("about", event.target.value)}
-          className={inputClass}
-        />
-        <p className={hintClass}>
-          {draft.about.length} / {CONTACTS_MAX_TEXT_LENGTH}
+        {/* Рассказ о себе — портальный: он же виден в Знакомствах, и писать
+            его дважды человек больше не должен. */}
+        <p className="mt-4 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-1">
+          Рассказ о себе и языки теперь в{" "}
+          <Link href="/profile" className="font-medium text-cyan underline">
+            профиле портала
+          </Link>{" "}
+          — они одни на все сервисы, и карточка показывает их же.
         </p>
 
         <label
@@ -285,50 +270,6 @@ export function PeopleProfileEditor() {
         />
         <p className={hintClass}>
           {draft.offers.length} / {CONTACTS_MAX_TEXT_LENGTH}
-        </p>
-      </section>
-
-      <section className={sectionClass}>
-        <h2 className={sectionTitleClass}>Языки</h2>
-        {draft.languages.length === 0 && (
-          <p className={hintClass}>Пока не добавлено ни одного языка.</p>
-        )}
-        <ul className="space-y-2">
-          {draft.languages.map((language, index) => (
-            <li key={index} className="flex items-center gap-2">
-              <input
-                aria-label={`Язык ${index + 1}`}
-                value={language}
-                placeholder="Например: русский"
-                onChange={(event) => updateLanguage(index, event.target.value)}
-                className={inputClass}
-              />
-              <button
-                type="button"
-                aria-label={`Удалить язык ${index + 1}`}
-                onClick={() =>
-                  update(
-                    "languages",
-                    draft.languages.filter((_, i) => i !== index),
-                  )
-                }
-                className="rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1 transition hover:text-magenta"
-              >
-                Удалить
-              </button>
-            </li>
-          ))}
-        </ul>
-        <button
-          type="button"
-          disabled={draft.languages.length >= CONTACTS_MAX_LANGUAGES}
-          onClick={() => update("languages", [...draft.languages, ""])}
-          className="mt-3 rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1 transition hover:text-text-0 disabled:opacity-50"
-        >
-          Добавить язык
-        </button>
-        <p className={hintClass}>
-          Не больше {CONTACTS_MAX_LANGUAGES} языков.
         </p>
       </section>
 

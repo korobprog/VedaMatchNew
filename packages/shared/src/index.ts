@@ -103,6 +103,12 @@ export function resolveDisplayName(user: {
   return user.spiritualName?.trim() || user.name;
 }
 
+/** Рассказ о себе в портальном профиле: столько же, сколько было в анкетах. */
+export const ABOUT_MAX_LENGTH = 2000;
+
+/** Сколько языков можно перечислить: список, а не биография. */
+export const LANGUAGES_MAX = 10;
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -119,6 +125,10 @@ export interface UserProfile {
   age: number | null;
   gender: Gender | null;
   photoVerification: PhotoVerificationState;
+  /** Рассказ о себе: один на портал, показывается и в Знакомствах, и в справочнике. */
+  about: string | null;
+  /** Языки общения: тоже общие для всего портала. */
+  languages: string[];
   homeLocation: ProfileLocation | null;
   socialLinks: ProfileSocialLinks;
   messengers: ProfileMessengers;
@@ -231,6 +241,9 @@ export interface ProfileUpdateRequest {
   spiritualName?: string | null;
   birthDate?: string | null;
   gender?: Gender | null;
+  /** Пустая строка означает «убрать рассказ», как и у духовного имени. */
+  about?: string | null;
+  languages?: string[];
   homeLocation?: ProfileLocation | null;
   socialLinks?: ProfileSocialLinks;
   messengers?: ProfileMessengers;

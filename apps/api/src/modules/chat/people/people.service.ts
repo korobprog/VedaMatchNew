@@ -95,9 +95,12 @@ interface ProfileRow {
   id: string;
   userId: string;
   headline: string | null;
-  about: string | null;
   offers: string | null;
-  languages: string[];
+  /**
+   * Рассказ о себе и языки — портальные: человек заполняет их один раз в
+   * профиле, а справочник и Знакомства показывают одно и то же.
+   */
+  user: { about: string | null; languages: string[] };
   ashram: ContactsAshram | null;
   format: ContactsFormat;
   visibility: ContactsVisibility;
@@ -122,9 +125,7 @@ interface TagRow {
 /** Нормализованные значения карточки после валидации запроса. */
 interface ProfileValues {
   headline: string | null;
-  about: string | null;
   offers: string | null;
-  languages: string[];
   ashram: ContactsAshram | null;
   format: ContactsFormat;
   visibility: ContactsVisibility;
@@ -134,7 +135,11 @@ interface ProfileValues {
   showOnMap: boolean;
 }
 
-const PROFILE_INCLUDE = { tags: { include: { tag: true } } } as const;
+const PROFILE_INCLUDE = {
+  tags: { include: { tag: true } },
+  // Рассказ и языки живут в `User`; без них карточку не собрать.
+  user: { select: { about: true, languages: true } },
+} as const;
 
 /**
  * Карточка справочника: своя — целиком, чужая — через модель видимости.
@@ -686,14 +691,14 @@ export class PeopleService {
       userId: owner.id,
       name: resolveDisplayName(owner),
       headline: profile.headline,
-      about: profile.about,
+      about: profile.user.about,
       offers: profile.offers,
       // Аватар может лежать в приватном бакете — ссылку подписывает users.
       avatarUrl: photoVisible ? await this.users.resolveAvatarUrl(owner) : null,
       city: cityVisible ? (location?.city ?? null) : null,
       country: cityVisible ? (location?.country ?? null) : null,
       age: ageVisible ? calculateAge(owner.birthDate) : null,
-      languages: profile.languages,
+      languages: profile.user.languages,
       ashram: profile.ashram,
       format: profile.format,
       spiritualStage: owner.spiritualStage,
@@ -711,9 +716,9 @@ export class PeopleService {
   private toProfileDto(profile: ProfileRow): ContactsProfileDto {
     return {
       headline: profile.headline,
-      about: profile.about,
+      about: profile.user.about,
       offers: profile.offers,
-      languages: profile.languages,
+      languages: profile.user.languages,
       ashram: profile.ashram,
       format: profile.format,
       visibility: profile.visibility,
@@ -776,13 +781,6 @@ export class PeopleService {
         MAX_HEADLINE_LENGTH,
         'Заголовок',
       ),
-      about: this.text(
-        body,
-        'about',
-        existing?.about ?? null,
-        MAX_TEXT_LENGTH,
-        'Описание',
-      ),
       offers: this.text(
         body,
         'offers',
@@ -790,10 +788,6 @@ export class PeopleService {
         MAX_TEXT_LENGTH,
         'Чем можете помочь',
       ),
-      languages:
-        body.languages === undefined
-          ? (existing?.languages ?? [])
-          : this.languages(body.languages),
       ashram:
         body.ashram === undefined
           ? (existing?.ashram ?? null)

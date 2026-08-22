@@ -527,49 +527,36 @@ describe('PeopleService', () => {
     it('превращает пустые строки в null', async () => {
       stubSave(null, profile());
 
-      await service.upsertProfile('owner', { about: '   ', offers: '' }, now);
+      await service.upsertProfile('owner', { offers: '' }, now);
 
-      expect(expectSaved()).toEqual(
-        expect.objectContaining({ about: null, offers: null }),
+      expect(expectSaved()).toEqual(expect.objectContaining({ offers: null }));
+    });
+
+    it('рассказ и языки в карточку не пишутся: они портальные', async () => {
+      // Их редактирует профиль портала, и присланные сюда значения карточка
+      // молча игнорирует — иначе завелась бы вторая, расходящаяся копия.
+      stubSave(null, profile());
+
+      await service.upsertProfile(
+        'owner',
+        {
+          headline: 'Пуджари',
+          about: 'Пришло из старого клиента',
+          languages: ['русский'],
+        } as never,
+        now,
       );
+
+      const saved = expectSaved() as Record<string, unknown>;
+      expect(saved.headline).toBe('Пуджари');
+      expect(saved).not.toHaveProperty('about');
+      expect(saved).not.toHaveProperty('languages');
     });
 
     it('отклоняет слишком длинный заголовок', async () => {
       await expect(
         service.upsertProfile('owner', { headline: 'я'.repeat(121) }, now),
       ).rejects.toThrow(BadRequestException);
-    });
-
-    it('отклоняет слишком длинное описание', async () => {
-      await expect(
-        service.upsertProfile('owner', { about: 'я'.repeat(2001) }, now),
-      ).rejects.toThrow('Описание: не длиннее 2000 символов');
-    });
-
-    it('отклоняет больше десяти языков', async () => {
-      const languages = Array.from({ length: 11 }, (_, i) => `язык-${i}`);
-
-      await expect(
-        service.upsertProfile('owner', { languages }, now),
-      ).rejects.toThrow('Языков не больше 10');
-    });
-
-    it('отклоняет слишком длинное название языка', async () => {
-      await expect(
-        service.upsertProfile('owner', { languages: ['я'.repeat(41)] }, now),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('убирает дубликаты языков', async () => {
-      stubSave(null, profile());
-
-      await service.upsertProfile(
-        'owner',
-        { languages: ['русский', 'русский', 'хинди'] },
-        now,
-      );
-
-      expect(expectSaved().languages).toEqual(['русский', 'хинди']);
     });
 
     it('отклоняет больше двенадцати тегов', async () => {
@@ -675,13 +662,13 @@ describe('PeopleService', () => {
         profile(),
       );
 
-      await service.upsertProfile('owner', { about: 'Новое' }, now);
+      await service.upsertProfile('owner', { offers: 'Новое' }, now);
 
       expect(expectSaved()).toEqual(
         expect.objectContaining({
           headline: 'Пуджари',
           visibility: 'by_link',
-          about: 'Новое',
+          offers: 'Новое',
           status: 'active',
         }),
       );

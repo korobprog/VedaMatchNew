@@ -3,7 +3,7 @@ import { PeopleProfileEditor } from "@/components/chat/people/people-profile-edi
 
 export const metadata = {
   title: "Моя карточка — Общение",
-  description: "Справочник людей общины: как вас увидят другие участники",
+  description: "Справочник участников портала: как вас увидят другие",
 };
 
 export default async function ContactsProfilePage() {
@@ -15,7 +15,8 @@ export default async function ContactsProfilePage() {
           Моя карточка
         </h1>
         <p className="mt-1 text-sm text-text-1">
-          Справочник людей общины: расскажите о себе и решите, кому вас видно.
+          Справочник участников портала: расскажите о себе и решите, кому вас
+          видно.
         </p>
       </div>
 

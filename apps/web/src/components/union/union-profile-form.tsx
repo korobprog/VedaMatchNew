@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
@@ -30,7 +31,6 @@ import {
   unionHousingLabels,
   unionIncomeLabels,
   unionInterestOptions,
-  unionLanguageOptions,
   unionPetOptions,
   unionRegulativePrincipleLabels,
   unionSkillCategories,
@@ -53,7 +53,6 @@ import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const SAVE_DEBOUNCE_MS = 600;
-const MAX_ABOUT_LENGTH = 2000;
 // Совпадает с MIN/MAX_PROFILE_AGE на бэкенде
 const MIN_PARTNER_AGE = 18;
 const MAX_PARTNER_AGE = 100;
@@ -159,6 +158,36 @@ const sectionTitleClass =
   "mb-2 text-xs font-semibold uppercase tracking-wide text-text-2";
 const selectClass =
   "w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0";
+
+/**
+ * Поле, которое анкета показывает, но не правит: рассказ о себе и языки живут
+ * в портальном профиле и одинаковы во всех сервисах. Ссылка ведёт туда, где
+ * их меняют, — иначе человек ищет, почему поле «не нажимается».
+ */
+function PortalFieldRow({
+  label,
+  value,
+  empty,
+}: {
+  label: string;
+  value: string | null;
+  empty: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-glass-brd/60 py-3 last:border-b-0">
+      <div className="min-w-0">
+        <span className="block text-xs text-text-2">{label}</span>
+        <span className="block text-sm text-text-0">{value ?? empty}</span>
+      </div>
+      <Link
+        href="/profile"
+        className="shrink-0 rounded-xl border border-glass-brd px-3 py-1.5 text-xs font-medium text-text-1 hover:text-text-0"
+      >
+        В профиле
+      </Link>
+    </div>
+  );
+}
 
 export function UnionProfileForm({
   profile,
@@ -289,26 +318,12 @@ export function UnionProfileForm({
           label="Сгенерировать статус"
           onGenerated={(text) => update("status", text)}
         />
-        <UnionFieldRow
+        {/* Рассказ о себе — портальный: он же показывается в справочнике
+            участников, и писать его дважды человек больше не должен. */}
+        <PortalFieldRow
           label="О себе"
           value={draft.about ?? null}
-          hint="Свободный рассказ о себе, своём пути и о том, что вы ищете"
-        >
-          {(close) => (
-            <UnionTextEditor
-              value={draft.about ?? ""}
-              maxLength={MAX_ABOUT_LENGTH}
-              rows={8}
-              placeholder="Дополни рассказ о себе"
-              onApply={(value) => update("about", value.trim() || null)}
-              close={close}
-            />
-          )}
-        </UnionFieldRow>
-        <UnionGenerateButton
-          field="about"
-          label="Сгенерировать описание"
-          onGenerated={(text) => update("about", text)}
+          empty="Не заполнено — расскажите о себе в профиле"
         />
       </section>
 
@@ -517,21 +532,11 @@ export function UnionProfileForm({
           )}
         </UnionFieldRow>
 
-        <UnionFieldRow
+        <PortalFieldRow
           label="Знание языков"
           value={listValue(draft.languages ?? [])}
-        >
-          {() => (
-            <UnionTagPicker
-              label="Языки общения"
-              selected={draft.languages ?? []}
-              options={unionLanguageOptions}
-              onChange={(languages) => update("languages", languages)}
-              placeholder="Например: русский, английский"
-              helperText="Если нужного языка нет — добавьте свой вариант."
-            />
-          )}
-        </UnionFieldRow>
+          empty="Не указаны — добавьте их в профиле"
+        />
 
         <UnionFieldRow
           label="Домашние животные"

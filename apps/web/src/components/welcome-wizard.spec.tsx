@@ -30,6 +30,8 @@ const profile = {
   email: "user@example.com",
   name: "Гаура Прия",
   spiritualName: null,
+  about: null,
+  languages: [],
   displayName: "Гаура Прия",
   avatarUrl: null,
   avatarKey: null,
