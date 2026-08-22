@@ -2,7 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { Map as LeafletMap, LayerGroup } from "leaflet";
-import type { ChatMapCommunity } from "@vedamatch/shared";
+import type { ChatMapCity, ChatMapCommunity } from "@vedamatch/shared";
 // Стили Leaflet обязательны: без них слои плиток позиционируются как обычные
 // блоки и карта рассыпается в вертикальную колонку картинок.
 import "leaflet/dist/leaflet.css";
@@ -22,13 +22,15 @@ export interface ChatMapHandle {
 }
 
 /**
- * Карта общин сервиса «Общение». Механика повторяет notices-map.tsx —
+ * Карта сервиса «Общение»: общины и города. Механика повторяет notices-map.tsx —
  * компоненты чужого сервиса импортировать нельзя, см.
  * docs/service-module-contract.md.
  *
- * Отличие в том, что здесь одна метка на общину и никаких людей: в профиле
- * человека указан город, а не адрес, и точка на публичной карте — это
- * другой уровень раскрытия, чем он соглашался.
+ * Слоя два: общины и города. Метки человека на карте нет — в профиле указан
+ * город, а не адрес, и точка на публичной карте была бы другим уровнем
+ * раскрытия, чем он соглашался. Поэтому город получает одну метку со
+ * счётчиком тех, кто сам согласился показываться, а кто именно за этим числом
+ * — видно только в справочнике, по его же правилам видимости.
  *
  * Leaflet грузится динамическим `import()` внутри эффекта: он трогает
  * `window` прямо при вычислении модуля, и статический импорт уронил бы
@@ -38,9 +40,11 @@ export const ChatMap = forwardRef<
   ChatMapHandle,
   {
     communities: ChatMapCommunity[];
+    cities: ChatMapCity[];
     onSelect: (communityId: string) => void;
+    onSelectCity: (city: string) => void;
   }
->(function ChatMap({ communities, onSelect }, handleRef) {
+>(function ChatMap({ communities, cities, onSelect, onSelectCity }, handleRef) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<LayerGroup | null>(null);
@@ -60,6 +64,11 @@ export const ChatMap = forwardRef<
   useEffect(() => {
     selectRef.current = onSelect;
   }, [onSelect]);
+
+  const selectCityRef = useRef(onSelectCity);
+  useEffect(() => {
+    selectCityRef.current = onSelectCity;
+  }, [onSelectCity]);
 
   useEffect(() => {
     let disposed = false;
@@ -113,6 +122,26 @@ export const ChatMap = forwardRef<
       if (disposed) return;
       layer.clearLayers();
 
+      // Города рисуются первыми: метка общины важнее и должна лечь поверх.
+      for (const point of cities) {
+        const label = `${point.city} · ${point.people}`;
+        L.marker([point.lat, point.lon], {
+          icon: L.divIcon({
+            className: "",
+            html: `<span class="chat-map-pin chat-map-pin--people">${escapeHtml(label)}</span>`,
+            iconSize: [0, 0],
+            iconAnchor: [0, 0],
+          }),
+          alt: `${point.city}: людей на карте ${point.people}`,
+          keyboard: true,
+        })
+          .on("click", () => {
+            map.flyTo([point.lat, point.lon], CITY_ZOOM);
+            selectCityRef.current(point.city);
+          })
+          .addTo(layer);
+      }
+
       for (const point of communities) {
         const beseds = point.channels + point.groups;
         const label = beseds
@@ -140,13 +169,13 @@ export const ChatMap = forwardRef<
     return () => {
       disposed = true;
     };
-  }, [ready, communities]);
+  }, [ready, communities, cities]);
 
   return (
     <div
       ref={containerRef}
       role="application"
-      aria-label="Карта общин"
+      aria-label="Карта общин и городов"
       className="h-[420px] w-full overflow-hidden rounded-3xl border border-glass-brd"
     />
   );
