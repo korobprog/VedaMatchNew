@@ -125,6 +125,18 @@ docker compose --profile prod up -d --build
 | GET | `/admin/motivation/reels` | Рилсы участников: фильтры, вердикты ИИ, счётчики за сегодня (admin) |
 | GET | `/admin/motivation/analytics` | Сводка: лента, участники, расход (admin) |
 | GET/POST | `/admin/motivation/events` | Справочник праздников для открыток (admin) |
+| GET | `/chat/conversations` | Беседы человека: диалоги, группы, каналы |
+| POST | `/chat/conversations` | Новая беседа: диалог, группа или канал общины |
+| GET | `/chat/conversations/:id` | Лента беседы страницами по 40 сообщений |
+| POST | `/chat/conversations/:id/messages` | Отправить сообщение: текст, ответ, вложения |
+| GET | `/chat/stream` | Живой поток событий (SSE), один на человека |
+| GET | `/chat/requests` | Запросы на переписку от незнакомых |
+| GET | `/chat/discover` | Каталог открытых чатов и каналов общин |
+| GET | `/chat/map` | Общины на карте вместе со счётчиком открытых бесед |
+| GET | `/chat/people/search` | Справочник людей: служение, профессия, навык, город |
+| POST | `/chat/people/requests` | Попросить открыть способы связи |
+| GET | `/admin/chat/reports` | Жалобы на переписку и заморозка беседы (admin) |
+| GET | `/chat/people/admin/profiles` | Карточки справочника: снятие и возврат (admin) |
 | POST | `/support/tickets` | Создать обращение (работает без авторизации) |
 | GET | `/support/tickets/track/:token` | Гостевой просмотр обращения по секретной ссылке |
 | POST | `/support/tickets/track/:token/messages` | Ответ гостя в своём обращении |

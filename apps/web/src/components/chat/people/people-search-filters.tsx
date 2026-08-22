@@ -57,6 +57,9 @@ export function PeopleSearchFiltersPanel({
   onReset: () => void;
 }) {
   const [draft, setDraft] = useState<ContactsSearchFilters>(filters);
+  // Подсказка про подтверждённых закрыта по умолчанию: она нужна один раз, а
+  // место в панели фильтров дорогое.
+  const [hintOpen, setHintOpen] = useState(false);
 
   const counts = useMemo(() => {
     const map = new Map<string, number>();
@@ -271,17 +274,41 @@ export function PeopleSearchFiltersPanel({
       ))}
       </ChipGroups>
 
-      <label className="mt-4 flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-1">
-        <input
-          type="checkbox"
-          checked={draft.verifiedDevoteeOnly ?? false}
-          onChange={(event) =>
-            update("verifiedDevoteeOnly", event.target.checked)
-          }
-          className="h-4 w-4 accent-cyan"
-        />
-        Только подтверждённые преданные
-      </label>
+      <div className="mt-4 flex w-fit items-center gap-2">
+        <label className="flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-1">
+          <input
+            type="checkbox"
+            checked={draft.verifiedDevoteeOnly ?? false}
+            onChange={(event) =>
+              update("verifiedDevoteeOnly", event.target.checked)
+            }
+            className="h-4 w-4 accent-cyan"
+          />
+          Только подтверждённые
+        </label>
+        <button
+          type="button"
+          onClick={() => setHintOpen((open) => !open)}
+          aria-expanded={hintOpen}
+          aria-controls="people-verified-hint"
+          aria-label="Кто такие подтверждённые"
+          className="flex size-7 shrink-0 items-center justify-center rounded-full border border-glass-brd bg-bg-1 font-mono text-sm text-text-1 transition-colors hover:text-text-0"
+        >
+          ?
+        </button>
+      </div>
+
+      {hintOpen && (
+        <p
+          id="people-verified-hint"
+          className="mt-2 max-w-prose rounded-xl border border-cyan/34 bg-cyan/10 px-3 py-2 text-[13px] text-text-1"
+        >
+          Статус преданного проверила администрация: человек назвал наставника,
+          наставник заполнил форму, администратор её принял. Отметка
+          «преданный», выбранная в своей анкете, такой проверки не проходила и
+          под этот фильтр не попадает.
+        </p>
+      )}
 
       <label className="mt-2 flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-1">
         <input

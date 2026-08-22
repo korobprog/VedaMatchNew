@@ -122,7 +122,7 @@ export function activeFilterChips(
   if (filters.verifiedDevoteeOnly) {
     chips.push({
       id: "verifiedDevoteeOnly",
-      label: "Только подтверждённые преданные",
+      label: "Только подтверждённые",
       next: { ...filters, verifiedDevoteeOnly: false },
     });
   }

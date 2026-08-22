@@ -1,4 +1,4 @@
-import { Controller, Sse, UseGuards } from '@nestjs/common';
+import { Controller, Header, Sse, UseGuards } from '@nestjs/common';
 import { map, merge, Observable, timer } from 'rxjs';
 import type { AccessTokenPayload, ChatStreamEvent } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
@@ -19,7 +19,15 @@ interface SseMessage {
 export class ChatStreamController {
   constructor(private readonly events: ChatEventsService) {}
 
+  /**
+   * `X-Accel-Buffering: no` и `no-transform` — не украшение: буферизующий
+   * прокси копит поток до заполнения буфера, и сообщения приходят пачкой
+   * через минуту либо не приходят вовсе. Заголовки просят nginx и его родню
+   * пропускать события как есть; gzip на потоке даёт тот же эффект.
+   */
   @Sse('stream')
+  @Header('X-Accel-Buffering', 'no')
+  @Header('Cache-Control', 'no-cache, no-transform')
   stream(@CurrentUser() user: AccessTokenPayload): Observable<SseMessage> {
     const events = this.events.streamFor(user.sub).pipe(
       map((event: ChatStreamEvent) => ({
