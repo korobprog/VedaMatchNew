@@ -19,6 +19,16 @@ const BRAND_PREFIX =
 
 export interface ChatMapHandle {
   flyTo: (lat: number, lon: number) => void;
+  /** Вернуть в кадр все метки: выход из «пустого места» одним нажатием. */
+  fitAll: () => void;
+}
+
+/** Что сейчас видно на карте. Списки под ней показывают ровно это. */
+export interface ChatMapBounds {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
 }
 
 /**
@@ -43,17 +53,36 @@ export const ChatMap = forwardRef<
     cities: ChatMapCity[];
     onSelect: (communityId: string) => void;
     onSelectCity: (city: string) => void;
+    /** Кадр изменился: сдвинули, приблизили или вернули всё в вид. */
+    onBoundsChange: (bounds: ChatMapBounds) => void;
   }
->(function ChatMap({ communities, cities, onSelect, onSelectCity }, handleRef) {
+>(function ChatMap(
+  { communities, cities, onSelect, onSelectCity, onBoundsChange },
+  handleRef,
+) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<LayerGroup | null>(null);
   const [ready, setReady] = useState(false);
 
+  // Точки живут в ref: обработчик карты создаётся один раз, а список меток
+  // меняется — без этого «показать всё» возвращало бы устаревший набор.
+  const pointsRef = useRef<Array<[number, number]>>([]);
+  pointsRef.current = [
+    ...communities.map((point): [number, number] => [point.lat, point.lon]),
+    ...cities.map((point): [number, number] => [point.lat, point.lon]),
+  ];
+
   useImperativeHandle(
     handleRef,
     () => ({
       flyTo: (lat, lon) => mapRef.current?.flyTo([lat, lon], CITY_ZOOM),
+      fitAll: () => {
+        const map = mapRef.current;
+        const points = pointsRef.current;
+        if (!map || points.length === 0) return;
+        map.fitBounds(points, { padding: [40, 40], maxZoom: CITY_ZOOM });
+      },
     }),
     [],
   );
@@ -70,6 +99,11 @@ export const ChatMap = forwardRef<
     selectCityRef.current = onSelectCity;
   }, [onSelectCity]);
 
+  const boundsRef = useRef(onBoundsChange);
+  useEffect(() => {
+    boundsRef.current = onBoundsChange;
+  }, [onBoundsChange]);
+
   useEffect(() => {
     let disposed = false;
     let map: LeafletMap | null = null;
@@ -81,10 +115,26 @@ export const ChatMap = forwardRef<
       map = L.map(containerRef.current, {
         center: DEFAULT_CENTER,
         zoom: DEFAULT_ZOOM,
-        // Прокрутка страницы важнее зума: колесо над картой не должно ловить
-        // страницу в ловушку. Зум остаётся кнопками и щипком.
+        // Колесо включается не сразу, а после нажатия на карту — см. ниже.
         scrollWheelZoom: false,
         attributionControl: false,
+      });
+
+      /**
+       * Колесом карта приближается только после того, как по ней нажали.
+       *
+       * Включить колесо сразу — значит поймать в ловушку страницу: человек
+       * листает вниз, курсор проходит над картой, и вместо страницы уезжает
+       * масштаб. Выключить совсем — колесо не работает вовсе, а это первое,
+       * что пробуют мышью. Нажатие по карте — осознанный вход в неё; увёл
+       * курсор — колесо снова отдано странице.
+       *
+       * Щипок на телефоне (`touchZoom`) включён всегда: там прокрутка
+       * страницы и масштаб карты не спорят между собой.
+       */
+      map.on('click', () => map?.scrollWheelZoom.enable());
+      containerRef.current.addEventListener('mouseleave', () => {
+        map?.scrollWheelZoom.disable();
       });
       L.control
         .attribution({ position: "bottomright", prefix: BRAND_PREFIX })
@@ -99,6 +149,23 @@ export const ChatMap = forwardRef<
 
       markersRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
+
+      // Кадр сообщаем и сразу, и на каждое движение: списки под картой
+      // показывают то же, что видно в ней.
+      const report = () => {
+        const bounds = map?.getBounds();
+        if (!bounds) return;
+        boundsRef.current({
+          north: bounds.getNorth(),
+          south: bounds.getSouth(),
+          east: bounds.getEast(),
+          west: bounds.getWest(),
+        });
+      };
+      map.on('moveend', report);
+      map.on('zoomend', report);
+      report();
+
       setReady(true);
     })();
 
