@@ -386,7 +386,13 @@ class GeocoderRequestError extends BadRequestException {
 // rather than just "Казань" — the admin-division label is baked into the
 // name field itself. Stored profiles use the plain city name, so an
 // unstripped prefix silently breaks the filter's substring match.
-const ADMIN_DIVISION_PREFIX = /^(городской округ|муниципальный округ)\s+/i;
+//
+// Голое «город» — из того же ряда: на «Ялта» приходит «город Ялта», и в
+// профиль уезжало имя, мимо которого промахивался фильтр у соседа,
+// выбравшего тот же город из другой подсказки. `\s+` после слова
+// обязателен, иначе под нож пойдут Городец и Городище.
+const ADMIN_DIVISION_PREFIX =
+  /^(городской округ|муниципальный округ|город)\s+/i;
 
 function toGeoSearchResult(place: NominatimPlace): GeoSearchResult | null {
   const lat = Number(place.lat);
