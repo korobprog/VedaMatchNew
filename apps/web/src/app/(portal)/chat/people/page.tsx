@@ -2,7 +2,7 @@ import { PeopleNav } from "@/components/chat/people/people-nav";
 import { PeopleSearchView } from "@/components/chat/people/people-search-view";
 
 export const metadata = {
-  title: "Люди — справочник общины",
+  title: "Люди — справочник участников портала",
   description:
     "Найдите человека в общине: служение, профессия, навык, город и язык.",
   // Каталог живых людей с городами не должен попадать в поисковики.
@@ -29,8 +29,8 @@ export default async function PeopleSearchPage({
           Люди
         </h1>
         <p className="mt-1 text-sm text-text-1">
-          Справочник людей общины: служение, профессия, навык. Здесь ищут
-          нужного человека, а не знакомства.
+          Справочник участников портала: служение, профессия, навык. Здесь
+          ищут нужного человека, а не знакомства.
         </p>
       </div>
 

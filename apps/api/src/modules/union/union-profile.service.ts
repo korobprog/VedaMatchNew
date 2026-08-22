@@ -133,7 +133,18 @@ export const RECOMMENDATION_CANDIDATE_LIMIT = 500;
 /** Порог веса цели «Создание семьи», начиная с которого включается авто-сужение по полу. */
 const FAMILY_GENDER_RESTRICTION_THRESHOLD = 50;
 
-type ProfileWithIntentions = UnionProfile & { intentions: UnionIntention[] };
+/**
+ * Рассказ о себе и языки живут в `User`: человек заполняет их один раз в
+ * портальном профиле, а Знакомства и справочник показывают одно и то же.
+ * Поэтому анкета всегда читается вместе с ними.
+ */
+type PortalAbout = { about: string | null; languages: string[] };
+type ProfileWithIntentions = UnionProfile & {
+  intentions: UnionIntention[];
+  user: PortalAbout;
+};
+
+const PORTAL_ABOUT_SELECT = { about: true, languages: true } as const;
 /** Возраст смотрящего и его пожелания к возрасту партнёра. */
 interface MyAgePreference {
   age: number | null;
@@ -178,7 +189,7 @@ export class UnionProfileService {
   async getState(userId: string): Promise<UnionProfileState> {
     const profile = await this.prisma.unionProfile.findUnique({
       where: { userId },
-      include: { intentions: true },
+      include: { intentions: true, user: { select: PORTAL_ABOUT_SELECT } },
     });
     return this.toState(userId, profile);
   }
@@ -222,7 +233,7 @@ export class UnionProfileService {
       });
       return tx.unionProfile.findUniqueOrThrow({
         where: { id: saved.id },
-        include: { intentions: true },
+        include: { intentions: true, user: { select: PORTAL_ABOUT_SELECT } },
       });
     });
 
@@ -243,7 +254,7 @@ export class UnionProfileService {
     const [profile, user] = await Promise.all([
       this.prisma.unionProfile.findUnique({
         where: { userId },
-        include: { intentions: true },
+        include: { intentions: true, user: { select: PORTAL_ABOUT_SELECT } },
       }),
       this.prisma.user.findUnique({
         where: { id: userId },
@@ -974,14 +985,10 @@ export class UnionProfileService {
     // Затираем только то, что клиент прислал явно: анкета сохраняется
     // по одному полю за раз. Незаполненные поля берут default из схемы.
     const data: Omit<Prisma.UnionProfileUncheckedCreateInput, 'userId'> = {};
-    if (body.about !== undefined) data.about = body.about?.trim() || null;
     if (body.relocationReady !== undefined) {
       data.relocationReady = body.relocationReady;
     }
     if (body.format !== undefined) data.format = body.format;
-    if (body.languages !== undefined) {
-      data.languages = this.cleanList(body.languages, 'Языки');
-    }
     if (body.skills !== undefined) {
       data.skills = this.cleanList(body.skills, 'Навыки');
     }
@@ -1202,10 +1209,10 @@ export class UnionProfileService {
     return {
       id: profile.id,
       userId: profile.userId,
-      about: profile.about,
+      about: profile.user.about,
       relocationReady: profile.relocationReady,
       format: profile.format,
-      languages: profile.languages,
+      languages: profile.user.languages,
       skills: profile.skills,
       interests: profile.interests,
       values: profile.values,

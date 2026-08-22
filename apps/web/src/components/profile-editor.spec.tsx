@@ -33,6 +33,8 @@ const profile: UserProfile = {
   email: "user@example.com",
   name: "Максим Коробков",
   spiritualName: null,
+  about: null,
+  languages: [],
   displayName: "Максим Коробков",
   avatarUrl: null,
   avatarKey: null,

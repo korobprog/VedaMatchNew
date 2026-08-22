@@ -64,6 +64,9 @@ function user(
     spiritualName: options.spiritualName ?? null,
     avatarUrl: options.avatarUrl ?? null,
     avatarKey: null,
+    // Рассказ и языки — портальные: анкета Знакомств читает их отсюда.
+    about: null,
+    languages: [],
     homeLocation,
     socialLinks: { website: `https://${id}.example.com` },
     messengers: { telegram: `@${id}` },
@@ -92,10 +95,8 @@ function profile(
   return {
     id: `profile-${userId}`,
     userId,
-    about: null,
     relocationReady: false,
     format: 'any',
-    languages: [],
     skills: [],
     interests: [],
     values: [],

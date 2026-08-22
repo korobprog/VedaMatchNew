@@ -15,6 +15,8 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
+  ABOUT_MAX_LENGTH,
+  LANGUAGES_MAX,
   NAME_MAX_LENGTH,
   resolveDisplayName,
   type AdminAuditEvent,
@@ -32,6 +34,7 @@ import { toRole } from '../auth/role';
 import { toSubscriptionState } from '../billing/subscription';
 import { readBillingMode } from '../billing/billing-mode';
 import { calculateAge, parseBirthDate, toBirthDateInput } from './age';
+import { normalizeLanguages } from './languages';
 import {
   RESET_PHOTO_VERIFICATION,
   toPhotoVerificationState,
@@ -135,6 +138,8 @@ export class UsersService {
       age: calculateAge(user.birthDate),
       gender: user.gender,
       photoVerification: toPhotoVerificationState(user),
+      about: user.about,
+      languages: user.languages,
       homeLocation: parseLocation(user.homeLocation),
       socialLinks: parseSocialLinks(user.socialLinks),
       messengers: parseMessengers(user.messengers),
@@ -243,6 +248,20 @@ export class UsersService {
         throw new BadRequestException('Недопустимое значение пола');
       }
       data.gender = payload.gender ?? null;
+    }
+    if ('about' in payload) {
+      const about = payload.about?.trim() ?? '';
+      if (about.length > ABOUT_MAX_LENGTH) {
+        throw new BadRequestException(
+          `Рассказ о себе не длиннее ${ABOUT_MAX_LENGTH} символов`,
+        );
+      }
+      // Пустая строка — «убрать», как и у духовного имени: пустой рассказ и
+      // отсутствующий это одно и то же, а различать их пришлось бы везде.
+      data.about = about || null;
+    }
+    if ('languages' in payload) {
+      data.languages = normalizeLanguages(payload.languages);
     }
     if ('homeLocation' in payload) {
       data.homeLocation = payload.homeLocation

@@ -11,6 +11,8 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  ABOUT_MAX_LENGTH,
+  LANGUAGES_MAX,
   NAME_MAX_LENGTH,
   type ProfileLocation,
   type ProfileMessengers,
@@ -65,6 +67,10 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
   const cityInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(user.name);
   const [spiritualName, setSpiritualName] = useState(user.spiritualName ?? "");
+  // Рассказ о себе и языки — портальные: их показывают и Знакомства, и
+  // справочник, поэтому заполняются они один раз, здесь.
+  const [about, setAbout] = useState(user.about ?? "");
+  const [languages, setLanguages] = useState<string[]>(user.languages ?? []);
   const [birthDate, setBirthDate] = useState(user.birthDate ?? "");
   const [gender, setGender] = useState<string>(user.gender ?? "");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -178,6 +184,8 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
         body: JSON.stringify({
           name,
           spiritualName: spiritualName || null,
+          about: about.trim() || null,
+          languages,
           birthDate: birthDate || null,
           gender: gender || null,
           homeLocation,
@@ -190,6 +198,8 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
       setProfile(updated);
       setName(updated.name);
       setSpiritualName(updated.spiritualName ?? "");
+      setAbout(updated.about ?? "");
+      setLanguages(updated.languages ?? []);
       setBirthDate(updated.birthDate ?? "");
       setGender(updated.gender ?? "");
       setHomeLocation(updated.homeLocation);
@@ -291,6 +301,79 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
           </span>
           . Чтобы убрать духовное имя, очистите поле.
         </p>
+      </Card>
+
+      <Card className="p-6">
+        <CardTitle className="mb-2 text-lg">О себе</CardTitle>
+        <p className="mb-4 text-sm text-text-1">
+          Один рассказ на весь портал: его показывают и Знакомства, и
+          справочник участников. Раньше это приходилось писать дважды.
+        </p>
+        <label className="block">
+          <span className="mb-1 block text-xs text-text-2">Рассказ о себе</span>
+          <textarea
+            value={about}
+            onChange={(event) => setAbout(event.target.value)}
+            maxLength={ABOUT_MAX_LENGTH}
+            rows={5}
+            placeholder="Чем живёте, что вам важно, чем готовы поделиться"
+            className={fieldClassName}
+          />
+        </label>
+        <p className="mt-1 text-xs text-text-2">
+          Осталось символов: {ABOUT_MAX_LENGTH - about.length}
+        </p>
+
+        <div className="mt-4">
+          <span className="mb-1 block text-xs text-text-2">Языки общения</span>
+          {languages.length === 0 && (
+            <p className="text-sm text-text-2">Пока не добавлено ни одного.</p>
+          )}
+          <div className="flex flex-col gap-2">
+            {languages.map((language, index) => (
+              <div key={index} className="flex max-w-sm items-center gap-2">
+                <input
+                  type="text"
+                  value={language}
+                  onChange={(event) =>
+                    setLanguages((current) =>
+                      current.map((item, i) =>
+                        i === index ? event.target.value : item,
+                      ),
+                    )
+                  }
+                  maxLength={40}
+                  placeholder="русский"
+                  className={fieldClassName}
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLanguages((current) =>
+                      current.filter((_, i) => i !== index),
+                    )
+                  }
+                  aria-label={`Убрать язык ${language || index + 1}`}
+                  className="shrink-0 rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1 hover:text-text-0"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+          {languages.length < LANGUAGES_MAX && (
+            <button
+              type="button"
+              onClick={() => setLanguages((current) => [...current, ""])}
+              className="mt-2 rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1 hover:text-text-0"
+            >
+              Добавить язык
+            </button>
+          )}
+          <p className="mt-1 text-xs text-text-2">
+            Не больше {LANGUAGES_MAX} языков.
+          </p>
+        </div>
       </Card>
 
       <UserGalleryEditor />

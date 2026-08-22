@@ -58,6 +58,8 @@ const user: UserProfile = {
   email: "radha@example.com",
   name: "Радха",
   spiritualName: null,
+  about: null,
+  languages: [],
   displayName: "Радха",
   avatarUrl: null,
   avatarKey: null,
