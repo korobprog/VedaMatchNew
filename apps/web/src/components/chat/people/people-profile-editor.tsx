@@ -518,6 +518,21 @@ export function PeopleProfileEditor() {
           Карточку по-прежнему видят все, кому она открыта, но написать вам
           смогут только те, чей статус преданного подтвердила администрация.
         </p>
+
+        <label className="mt-4 flex items-center gap-2 text-sm text-text-1">
+          <input
+            type="checkbox"
+            checked={draft.showOnMap}
+            onChange={(event) => update("showOnMap", event.target.checked)}
+            className="h-4 w-4 accent-cyan"
+          />
+          Показывать меня на карте «Общения»
+        </label>
+        <p className="mt-1 pl-6 text-xs text-text-2">
+          На общей карте портала ваш город получит метку со счётчиком: «Москва
+          · 12». Метка ставится в центр города, а не по вашему адресу, и людей
+          на ней считают, а не перечисляют. Выключено по умолчанию.
+        </p>
       </section>
 
       {error && (

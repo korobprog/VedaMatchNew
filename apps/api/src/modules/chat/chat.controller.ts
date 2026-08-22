@@ -32,6 +32,7 @@ import {
 import { ChatConversationsService } from './chat-conversations.service';
 import { ChatMessagesService } from './chat-messages.service';
 import { ChatReportsService } from './chat-reports.service';
+import { PeopleService } from './people/people.service';
 import { MAX_FILE_BYTES, validateUpload } from './chat-upload-rules';
 import {
   ChatUploadsService,
@@ -47,6 +48,7 @@ export class ChatController {
     private readonly messages: ChatMessagesService,
     private readonly reports: ChatReportsService,
     private readonly uploads: ChatUploadsService,
+    private readonly directory: PeopleService,
   ) {}
 
   @Get('conversations')
@@ -77,10 +79,16 @@ export class ChatController {
     return this.conversations.unread(user.sub);
   }
 
-  /** Карта общин с их открытыми беседами. */
+  /**
+   * Карта: общины с их открытыми беседами и города со счётчиком людей.
+   *
+   * Люди попадают сюда только по своему согласию (`showOnMap` в карточке
+   * справочника) и только числом на город — метка ставится в его центр, а не
+   * по адресу человека.
+   */
   @Get('map')
-  map() {
-    return this.conversations.map();
+  async map(@CurrentUser() user: AccessTokenPayload) {
+    return this.conversations.map(await this.directory.mapCities(user.sub));
   }
 
   /** Каталог открытых бесед: чаты и каналы, куда можно войти самому. */

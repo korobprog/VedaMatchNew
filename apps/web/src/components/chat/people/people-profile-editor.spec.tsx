@@ -23,6 +23,7 @@ const baseProfile: ContactsProfileDto = {
   pausedUntil: null,
   fieldPrivacy: null,
   requestsFromVerifiedOnly: false,
+  showOnMap: false,
   tagIds: [],
   createdAt: "2026-08-01T00:00:00.000Z",
   updatedAt: "2026-08-01T00:00:00.000Z",
@@ -130,6 +131,33 @@ describe("PeopleProfileEditor", () => {
       "false",
     );
     expect(screen.getByRole("button", { name: "Навык 12" })).toBeDisabled();
+  });
+
+  it("метка на карте выключена, пока человек её не включил", async () => {
+    const user = userEvent.setup();
+    const fetchMock = stubApi(baseProfile);
+    render(<PeopleProfileEditor />);
+
+    const toggle = await screen.findByRole("checkbox", {
+      name: /Показывать меня на карте/,
+    });
+    expect(toggle).not.toBeChecked();
+
+    await user.click(toggle);
+    await user.click(
+      screen.getByRole("button", { name: "Сохранить карточку" }),
+    );
+
+    await waitFor(() => {
+      const put = fetchMock.mock.calls.find(
+        (call) => (call[1] as RequestInit | undefined)?.method === "PUT",
+      );
+      expect(put).toBeDefined();
+      const body = JSON.parse(
+        String((put?.[1] as RequestInit).body),
+      ) as Record<string, unknown>;
+      expect(body.showOnMap).toBe(true);
+    });
   });
 
   it("sends the edited card and reports success", async () => {

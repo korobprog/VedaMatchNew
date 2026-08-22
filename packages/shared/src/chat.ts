@@ -262,9 +262,13 @@ export interface ChatSearchState {
 }
 
 /**
- * Точка на карте — община. Людей на карту не выводим: в профиле указан
- * город, а не адрес, и точка на публичной карте у частного человека —
- * это другой уровень раскрытия, чем он соглашался.
+ * Точка на карте — община.
+ *
+ * Люди на карте есть, но иначе: не метка на человека, а метка на город со
+ * счётчиком. В профиле указан город, а не адрес, и точка на публичной карте
+ * у частного человека была бы другим уровнем раскрытия, чем он соглашался.
+ * Поэтому на карту попадают только те, кто включил это сам
+ * (`ContactsProfile.showOnMap`), и попадают числом, а не именем.
  */
 export interface ChatMapCommunity {
   community: ChatCommunityRef;
@@ -276,8 +280,19 @@ export interface ChatMapCommunity {
   groups: number;
 }
 
+/** Город со счётчиком людей, согласившихся быть на общей карте. */
+export interface ChatMapCity {
+  city: string;
+  country: string | null;
+  lat: number;
+  lon: number;
+  /** Сколько человек согласились показываться отсюда. */
+  people: number;
+}
+
 export interface ChatMapState {
   communities: ChatMapCommunity[];
+  cities: ChatMapCity[];
 }
 
 /** Открытая беседа в каталоге: то, на что можно подписаться самому. */

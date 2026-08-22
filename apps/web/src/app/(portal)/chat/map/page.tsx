@@ -5,7 +5,7 @@ import { ChatMapView } from "@/components/chat/chat-map-view";
 import { getChatMap } from "@/lib/chat-api";
 
 export default async function ChatMapPage() {
-  const state = (await getChatMap()) ?? { communities: [] };
+  const state = (await getChatMap()) ?? { communities: [], cities: [] };
 
   return (
     <>
@@ -34,10 +34,11 @@ export default async function ChatMapPage() {
           </Link>
           <div className="flex flex-col gap-0.5">
             <h1 className="font-display text-xl font-semibold text-text-0">
-              Карта общин
+              Карта
             </h1>
             <p className="text-xs text-text-2">
-              Где что происходит и на какие беседы можно подписаться
+              Общины с их беседами и города, откуда участники согласились
+              показываться
             </p>
           </div>
         </header>

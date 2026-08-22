@@ -10,6 +10,7 @@ import type {
   ChatConversationDetail,
   ChatDiscoverState,
   ChatListState,
+  ChatMapCity,
   ChatMapState,
   ChatRequestsState,
   ChatRequestSummary,
@@ -587,7 +588,7 @@ export class ChatConversationsService {
    * открытые беседы. `Community` — портальная модель, читать её модулю
    * разрешено; людей на карту не выводим осознанно (см. ChatMapCommunity).
    */
-  async map(): Promise<ChatMapState> {
+  async map(cities: ChatMapCity[] = []): Promise<ChatMapState> {
     const rows = await this.prisma.community.findMany({
       where: { status: 'active', location: { not: Prisma.DbNull } },
       select: { id: true, slug: true, name: true, city: true, location: true },
@@ -631,7 +632,7 @@ export class ChatConversationsService {
       })
       .filter((row): row is NonNullable<typeof row> => row !== null);
 
-    return { communities };
+    return { communities, cities };
   }
 
   /**

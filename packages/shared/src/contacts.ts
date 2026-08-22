@@ -54,6 +54,8 @@ export interface ContactsProfileDto {
   pausedUntil: string | null;
   fieldPrivacy: ContactsFieldPrivacy | null;
   requestsFromVerifiedOnly: boolean;
+  /** Согласие показываться на общей карте «Общения» — по городу, не по адресу. */
+  showOnMap: boolean;
   tagIds: string[];
   createdAt: string;
   updatedAt: string;
@@ -75,6 +77,7 @@ export interface ContactsUpdateProfileRequest {
   pausedUntil?: string | null;
   fieldPrivacy?: ContactsFieldPrivacy | null;
   requestsFromVerifiedOnly?: boolean;
+  showOnMap?: boolean;
   tagIds?: string[];
 }
 

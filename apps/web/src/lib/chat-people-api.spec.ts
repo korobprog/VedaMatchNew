@@ -34,6 +34,7 @@ const profile: ContactsProfileDto = {
   pausedUntil: "2026-09-01T23:59:59.999Z",
   fieldPrivacy: { city: "hidden" },
   requestsFromVerifiedOnly: true,
+  showOnMap: true,
   tagIds: ["t1"],
   createdAt: "2026-08-01T00:00:00.000Z",
   updatedAt: "2026-08-01T00:00:00.000Z",
@@ -52,8 +53,16 @@ describe("toContactsDraft", () => {
       pausedUntil: "",
       fieldPrivacy: { city: "everyone", photo: "everyone", age: "everyone" },
       requestsFromVerifiedOnly: false,
+      showOnMap: false,
       tagIds: [],
     });
+  });
+
+  it("согласие на карту не подразумевается: нет карточки — нет и метки", () => {
+    // Метка города на общей карте — отдельное решение человека, а не
+    // следствие того, что он вообще завёл карточку.
+    expect(toContactsDraft(null).showOnMap).toBe(false);
+    expect(toContactsDraft(profile).showOnMap).toBe(true);
   });
 
   it("cuts the pause moment down to a date input value", () => {

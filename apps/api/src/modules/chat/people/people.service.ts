@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type {
+  ChatMapCity,
   ContactsAshram,
   ContactsCardDto,
   ContactsFieldPrivacy,
@@ -104,6 +105,7 @@ interface ProfileRow {
   pausedUntil: Date | null;
   fieldPrivacy: unknown;
   requestsFromVerifiedOnly: boolean;
+  showOnMap: boolean;
   createdAt: Date;
   updatedAt: Date;
   tags: { tag: TagRow }[];
@@ -129,6 +131,7 @@ interface ProfileValues {
   pausedUntil: Date | null;
   fieldPrivacy: ContactsFieldPrivacy | null;
   requestsFromVerifiedOnly: boolean;
+  showOnMap: boolean;
 }
 
 const PROFILE_INCLUDE = { tags: { include: { tag: true } } } as const;
@@ -499,6 +502,77 @@ export class PeopleService {
   }
 
   /**
+   * Города для общей карты «Общения»: сколько людей согласились показываться
+   * из каждого.
+   *
+   * Отличие от карты справочника ровно одно — `showOnMap`. Всё остальное то
+   * же самое: правила видимости карточки, скрытия и блокировки, координаты
+   * города, а не адреса, и счётчик вместо перечисления людей.
+   */
+  async mapCities(
+    viewerId: string,
+    now: Date = new Date(),
+  ): Promise<ChatMapCity[]> {
+    const viewerRow = await this.loadViewer(viewerId);
+    if (!viewerRow) throw new NotFoundException('Пользователь не найден');
+
+    const location = this.location(viewerRow.homeLocation);
+    const viewer: SearchViewer = {
+      id: viewerId,
+      isVerifiedDevotee: isVerifiedDevotee(viewerRow),
+      cityKey: normalizeLocationKey(location?.city),
+      lat: typeof location?.lat === 'number' ? location.lat : null,
+      lon: typeof location?.lon === 'number' ? location.lon : null,
+    };
+    const hiddenUserIds = await this.moderation.hiddenUserIds(
+      viewerId,
+      'contacts',
+    );
+    const where = buildSearchWhere({
+      filters: normalizeSearchFilters(undefined),
+      viewer,
+      hiddenUserIds,
+      now,
+    });
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        city: string;
+        country: string | null;
+        lat: number;
+        lon: number;
+        people: number;
+      }>
+    >(Prisma.sql`
+      SELECT
+        MIN(trim(u."homeLocation"->>'city')) AS city,
+        MIN(trim(u."homeLocation"->>'country')) AS country,
+        AVG((u."homeLocation"->>'lat')::double precision) AS lat,
+        AVG((u."homeLocation"->>'lon')::double precision) AS lon,
+        COUNT(*)::int AS people
+      FROM "ContactsProfile" p
+      JOIN "User" u ON u."id" = p."userId"
+      WHERE ${where}
+        AND p."showOnMap" = true
+        AND COALESCE(p."fieldPrivacy"->>'city', 'everyone') <> 'hidden'
+        AND u."homeLocation"->>'city' IS NOT NULL
+        AND jsonb_typeof(u."homeLocation"->'lat') = 'number'
+        AND jsonb_typeof(u."homeLocation"->'lon') = 'number'
+      GROUP BY lower(trim(u."homeLocation"->>'city')),
+               lower(trim(coalesce(u."homeLocation"->>'country', '')))
+      ORDER BY people DESC, city ASC
+    `);
+
+    return rows.map((row) => ({
+      city: row.city,
+      country: row.country || null,
+      lat: Number(row.lat),
+      lon: Number(row.lon),
+      people: Number(row.people),
+    }));
+  }
+
+  /**
    * Порог к фасетам НЕ применяется. Они считаются по тому же условию
    * видимости, что и выдача, поэтому ничего сверх неё не раскрывают, а
    * обрезка по порогу просто выкосила бы почти все чипы: в справочнике
@@ -647,6 +721,7 @@ export class PeopleService {
       pausedUntil: profile.pausedUntil?.toISOString() ?? null,
       fieldPrivacy: this.parseFieldPrivacy(profile.fieldPrivacy),
       requestsFromVerifiedOnly: profile.requestsFromVerifiedOnly,
+      showOnMap: profile.showOnMap,
       tagIds: this.sortTags(profile.tags.map((link) => link.tag)).map(
         (tag) => tag.id,
       ),
@@ -744,6 +819,10 @@ export class PeopleService {
         body.requestsFromVerifiedOnly === undefined
           ? (existing?.requestsFromVerifiedOnly ?? false)
           : Boolean(body.requestsFromVerifiedOnly),
+      showOnMap:
+        body.showOnMap === undefined
+          ? (existing?.showOnMap ?? false)
+          : Boolean(body.showOnMap),
     };
   }
 
