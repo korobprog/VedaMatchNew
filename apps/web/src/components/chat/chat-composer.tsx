@@ -49,14 +49,35 @@ export function ChatComposer({
   const fileInput = useRef<HTMLInputElement | null>(null);
   const imageInput = useRef<HTMLInputElement | null>(null);
 
+  /**
+   * Правка начинается с прежнего текста сообщения.
+   *
+   * Раньше поле оставалось пустым, а «Сохранить» на пустом поле молча ничего
+   * не делало — со стороны это выглядело как «изменить нельзя». Состояние
+   * подгоняется прямо на рендере, а не эффектом: так текст виден в том же
+   * кадре, где появилась полоска «Изменение сообщения».
+   *
+   * Начатое письмо при этом не теряется: черновик откладывается и
+   * возвращается, когда правку отменили или сохранили.
+   */
+  const editingId = editing?.id ?? null;
+  const [editingShown, setEditingShown] = useState<string | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  if (editingId !== editingShown) {
+    // Черновик откладываем только на входе в правку: при переходе от одного
+    // сообщения к другому он уже отложен.
+    if (editingId && editingShown === null) setDraft(text);
+    setEditingShown(editingId);
+    setText(editingId ? (editing?.body ?? "") : (draft ?? ""));
+    if (!editingId) setDraft(null);
+  }
+
   if (disabled)
     return (
       <p className="rounded-2xl border border-glass-brd bg-glass px-4 py-3 text-center text-[13px] text-text-1">
         {disabledReason ?? "Писать сюда нельзя"}
       </p>
     );
-
-  const value = editing ? (editing.body ?? "") : text;
 
   async function pick(files: FileList | null) {
     if (!files?.length) return;
@@ -95,7 +116,6 @@ export function ChatComposer({
       setBusy(true);
       try {
         await onSaveEdit(body);
-        setText("");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Не сохранилось");
       } finally {
@@ -153,7 +173,7 @@ export function ChatComposer({
       {editing && (
         <div className="flex items-center gap-2.5 rounded-xl border border-gold/30 bg-gold/10 px-3 py-2">
           <span className="flex-1 text-xs text-gold">
-            Изменение сообщения — было: «{value}»
+            Изменение сообщения — было: «{editing.body}»
           </span>
           <button
             type="button"
