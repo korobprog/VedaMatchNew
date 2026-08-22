@@ -20,7 +20,13 @@ export type NotificationEvent =
       name: 'union.connection.accepted';
       recipientId: string;
       senderName: string;
-      requestId: string;
+      /**
+       * Тот, с кем теперь можно переписываться. Раньше событие несло id
+       * заявки, и ссылка вела в `/union/chats/<id>`; после переезда переписки
+       * такой адрес совпадает с беседой только у диалогов, перенесённых
+       * миграцией, а у новой пары ведёт в никуда.
+       */
+      companionId: string;
     }
   | {
       name: 'contacts.request.received';

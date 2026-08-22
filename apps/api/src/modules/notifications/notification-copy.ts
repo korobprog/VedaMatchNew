@@ -100,7 +100,7 @@ export function buildNotification(
       return {
         title: 'Заявка принята',
         body: `Теперь вы можете общаться с ${event.senderName}`,
-        url: `/union/chats/${event.requestId}`,
+        url: `/chat/with/${event.companionId}`,
         tag: 'connections',
         category: 'connections',
       };

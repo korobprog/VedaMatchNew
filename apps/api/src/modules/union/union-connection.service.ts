@@ -153,12 +153,14 @@ export class UnionConnectionService {
         data: { status: 'accepted', respondedAt: new Date() },
         include: { fromUser: { include: { unionProfile: true } } },
       });
-      // Взаимный лайк: заявка того, кто написал первым, принята.
+      // Взаимный лайк: заявка того, кто написал первым, принята. Имя в
+      // уведомлении — того, кто ответил взаимностью: адресат и так знает, как
+      // зовут его самого.
       const matched = {
         name: 'union.connection.accepted',
         recipientId: toUserId,
-        senderName: resolveDisplayName(accepted.fromUser),
-        requestId: accepted.id,
+        senderName: resolveDisplayName(fromProfile.user),
+        companionId: fromUserId,
       } satisfies NotificationEvent;
       this.events.emit(matched.name, matched);
       return this.toRequestDto(accepted, accepted.fromUser, 'incoming', true);
@@ -225,7 +227,7 @@ export class UnionConnectionService {
       name: 'union.connection.accepted',
       recipientId: accepted.fromUserId,
       senderName: resolveDisplayName(accepted.toUser),
-      requestId: accepted.id,
+      companionId: accepted.toUserId,
     } satisfies NotificationEvent;
     this.events.emit(event.name, event);
     return this.toRequestDto(accepted, accepted.fromUser, 'incoming', true);

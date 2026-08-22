@@ -208,6 +208,55 @@ describe('UnionConnectionService', () => {
     expect(prisma.unionConnectionRequest.upsert).not.toHaveBeenCalled();
   });
 
+  it('о взаимном лайке зовёт того, кто ответил, и ведёт в беседу с ним', async () => {
+    const reverse = connection({ fromUserId: 'user-2', toUserId: 'user-1' });
+    prisma.unionProfile.findUnique
+      .mockResolvedValueOnce(profile('user-1'))
+      .mockResolvedValueOnce(profile('user-2'));
+    prisma.unionConnectionRequest.findUnique.mockResolvedValue(reverse);
+    prisma.unionConnectionRequest.update.mockResolvedValue(
+      connection({
+        fromUserId: 'user-2',
+        toUserId: 'user-1',
+        status: 'accepted',
+      }),
+    );
+
+    await service.create('user-1', { toUserId: 'user-2' });
+
+    // Уведомление идёт тому, кто написал первым. В нём должно стоять имя
+    // ответившего: своё собственное адресату ничего не говорит. А ссылка —
+    // на собеседника, потому что беседу заводит «Общение» со своим id.
+    expect(events.emit).toHaveBeenCalledWith('union.connection.accepted', {
+      name: 'union.connection.accepted',
+      recipientId: 'user-2',
+      senderName: 'user-1',
+      companionId: 'user-1',
+    });
+  });
+
+  it('о принятой заявке ведёт в беседу с принявшим', async () => {
+    prisma.unionConnectionRequest.findUnique.mockResolvedValue(
+      connection({ fromUserId: 'user-2', toUserId: 'user-1' }),
+    );
+    prisma.unionConnectionRequest.update.mockResolvedValue(
+      connection({
+        fromUserId: 'user-2',
+        toUserId: 'user-1',
+        status: 'accepted',
+      }),
+    );
+
+    await service.accept('user-1', 'request-1');
+
+    expect(events.emit).toHaveBeenCalledWith('union.connection.accepted', {
+      name: 'union.connection.accepted',
+      recipientId: 'user-2',
+      senderName: 'user-1',
+      companionId: 'user-1',
+    });
+  });
+
   it('does not reset an accepted direct request back to pending on a repeated like', async () => {
     const accepted = connection({
       fromUserId: 'user-1',

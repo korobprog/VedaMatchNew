@@ -147,12 +147,14 @@ describe('buildNotification', () => {
       name: 'union.connection.accepted',
       recipientId: 'u1',
       senderName: 'Лалита',
-      requestId: 'r7',
+      companionId: 'u2',
     });
 
     expect(content.body).toBe('Теперь вы можете общаться с Лалита');
     expect(content.body).not.toContain('(а)');
-    expect(content.url).toBe('/union/chats/r7');
+    // Не `/union/chats/<id заявки>`: беседу заводит «Общение» со своим
+    // идентификатором, и по заявке её у новой пары не найти.
+    expect(content.url).toBe('/chat/with/u2');
   });
 
   it('ведёт ответ поддержки в тикет пользователя, а не в гостевой трекер', () => {
