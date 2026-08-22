@@ -400,6 +400,45 @@ describe('UnionProfileService', () => {
     ]);
   });
 
+  /**
+   * Единственное, что делает загрузку фото выгодной: в самой совместимости
+   * фото не участвует, а карточку без снимка в ленте пролистывают не глядя.
+   */
+  it('опускает анкету без фото ниже анкеты с фото', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([
+      profile('noPhoto'),
+      profile('withPhoto', { photos: [photo('photo-1')] }),
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+    matching.computeCompatibility
+      .mockReturnValueOnce({ total: 90, breakdown: [] })
+      .mockReturnValueOnce({ total: 10, breakdown: [] });
+
+    const result = await service.getRecommendations('me');
+
+    expect(result.items.map((item) => item.user.id)).toEqual([
+      'withPhoto',
+      'noPhoto',
+    ]);
+  });
+
+  // «Внимание» — платная подъёмная сила, она обязана перебивать всё
+  // остальное, иначе за него незачем платить.
+  it('буст поднимает анкету даже без фото', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([
+      profile('withPhoto', { photos: [photo('photo-1')] }),
+      profile('boostedNoPhoto'),
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+    prisma.unionBoost.findMany.mockResolvedValue([{ userId: 'boostedNoPhoto' }]);
+
+    const result = await service.getRecommendations('me');
+
+    expect(result.items[0].user.id).toBe('boostedNoPhoto');
+  });
+
   it('sorts by profile freshness when the collection asks for new ones', async () => {
     const older = profile('older');
     const newer = {

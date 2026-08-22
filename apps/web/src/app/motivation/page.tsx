@@ -30,7 +30,10 @@ export default async function MotivationPage({
     getDonationSettings(),
   ]);
   if (!user) redirectToLogin("/motivation");
-  if (!user.spiritualStage) redirect("/self-identification");
+  // Новичок идёт в мастер: там тот же вопрос об этапе, но после имени
+  // и города и с прогрессом. Страница анкеты остаётся для повторного
+  // прохождения, её не редирект открывает, а ссылка из профиля.
+  if (!user.spiritualStage) redirect("/welcome");
   const isAdmin = user.role === "admin" || user.role === "service-admin";
   const initial = feed ?? { items: [], nextCursor: null };
 

@@ -8,6 +8,12 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '../auth/auth.guard';
 import type { GeoSearchResult } from '@vedamatch/shared';
+import { PrismaService } from '../../prisma/prisma.service';
+import {
+  acceptLanguage,
+  directoryNeedle,
+  geoQueryVariants,
+} from './geo-query';
 
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org';
 const PHOTON_URL = 'https://photon.komoot.io';
@@ -22,6 +28,7 @@ interface NominatimPlace {
     city?: string;
     town?: string;
     village?: string;
+    city_district?: string;
     municipality?: string;
     county?: string;
     state?: string;
@@ -54,37 +61,94 @@ interface PhotonResponse {
 @UseGuards(AuthGuard)
 @Throttle({ default: { ttl: 60_000, limit: 20 } })
 export class GeoController {
+  constructor(private readonly prisma: PrismaService) {}
+
   @Get('search')
   async search(
     @Query('q') q: string,
     @Query('country') countryQuery?: string,
+    @Query('lang') langQuery?: string,
   ): Promise<GeoSearchResult[]> {
     const query = String(q ?? '').trim();
     const country = String(countryQuery ?? '').trim();
+    const lang = acceptLanguage(langQuery);
     if (query.length < 2) return [];
     if (query.length > 120)
       throw new BadRequestException('Слишком длинный запрос');
     if (country.length > 100)
       throw new BadRequestException('Слишком длинное название страны');
 
+    // Справочник отвечает первым: он знает русские названия святых мест,
+    // которых нет в OSM, отдаёт одно каноническое написание на всех и не
+    // стоит секунды в общей очереди к Nominatim.
+    const curated = await this.searchDirectory(query, country);
+    if (curated.length > 0) return curated;
+
     try {
       // requestNominatim() already serializes and paces every outgoing call
       // (see scheduleNominatimCall), so the retry below is naturally spaced.
-      return await searchWithCityFallback(query, country, (q) =>
-        nominatimSettlements(q),
+      return await searchTransliterated(query, country, (q) =>
+        nominatimSettlements(q, lang),
       );
     } catch (error) {
       if (!shouldUseFallback(error)) throw error;
       // Тот же провал «город, страна» воспроизводится и у Photon — применяем
       // ту же стратегию ретрая, а не просто пересылаем туда исходный запрос.
-      return searchWithCityFallback(query, country, (q) => searchPhoton(q));
+      return searchTransliterated(query, country, (q) => searchPhoton(q, lang));
     }
+  }
+
+  /**
+   * Поиск по справочнику `GeoCity`. Совпадением считается начало любого из
+   * написаний города, поэтому «мая» находит Маяпур, а «mayapur» — его же.
+   * «ё» с обеих сторон сравнения приводится к «е»: люди пишут и «Кишинёв»,
+   * и «Кишинев».
+   */
+  private async searchDirectory(
+    query: string,
+    country: string,
+  ): Promise<GeoSearchResult[]> {
+    const needle = directoryNeedle(query);
+    const countryNeedle = country ? `%${country.toLowerCase()}%` : null;
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        city: string;
+        country: string | null;
+        lat: number;
+        lon: number;
+        displayName: string | null;
+      }>
+    >`
+      SELECT "city", "country", "lat", "lon", "displayName"
+      FROM "GeoCity"
+      WHERE EXISTS (
+        SELECT 1 FROM unnest("aliases") AS alias
+        WHERE replace(alias, 'ё', 'е') LIKE ${needle}
+      )
+      AND (
+        ${countryNeedle}::text IS NULL
+        OR lower(coalesce("country", '')) LIKE ${countryNeedle}
+      )
+      ORDER BY "weight" DESC, "city" ASC
+      LIMIT 6
+    `;
+
+    return rows.map((row) => ({
+      city: row.city,
+      country: row.country ?? undefined,
+      lat: row.lat,
+      lon: row.lon,
+      displayName: row.displayName ?? undefined,
+      type: 'city',
+    }));
   }
 
   @Get('reverse')
   async reverse(
     @Query('lat') latQuery: string,
     @Query('lon') lonQuery: string,
+    @Query('lang') langQuery?: string,
   ): Promise<GeoSearchResult> {
     const lat = Number(latQuery);
     const lon = Number(lonQuery);
@@ -101,6 +165,7 @@ export class GeoController {
       format: 'jsonv2',
       addressdetails: '1',
       zoom: '10',
+      'accept-language': acceptLanguage(langQuery),
     });
 
     const place = await requestNominatim<NominatimPlace>(`/reverse?${params}`);
@@ -169,12 +234,38 @@ async function searchWithCityFallback(
   return byCountry.length > 0 ? byCountry : cityOnly;
 }
 
-async function nominatimSettlements(q: string): Promise<GeoSearchResult[]> {
+/**
+ * OSM знает индийские населённые пункты только под латинским именем: на
+ * «Маяпур» приходит пустой список, на «Mayapur» — тот самый город. Перебираем
+ * написания (как ввели → словарь святых мест → транслитерация) и
+ * останавливаемся на первом непустом ответе, так что русские города остаются
+ * одним вызовом.
+ */
+async function searchTransliterated(
+  query: string,
+  country: string,
+  fetchPlaces: (q: string, isRetry: boolean) => Promise<GeoSearchResult[]>,
+): Promise<GeoSearchResult[]> {
+  for (const variant of geoQueryVariants(query)) {
+    const found = await searchWithCityFallback(variant, country, fetchPlaces);
+    if (found.length > 0) return found;
+  }
+  return [];
+}
+
+async function nominatimSettlements(
+  q: string,
+  lang: string,
+): Promise<GeoSearchResult[]> {
   const params = new URLSearchParams({
     q,
     format: 'jsonv2',
     addressdetails: '1',
     limit: '6',
+    // Без accept-language названия приходят на языке страны: русскоязычный
+    // участник сохранял в профиль «Mayapur», мимо которого потом промахивался
+    // фильтр по городу.
+    'accept-language': lang,
   });
   const places = await requestNominatim<NominatimPlace[]>(`/search?${params}`);
   return uniqueLocations(
@@ -215,8 +306,17 @@ const PHOTON_SETTLEMENT_TYPES = new Set([
   'state',
 ]);
 
-async function searchPhoton(q: string): Promise<GeoSearchResult[]> {
+// Photon понимает лишь короткий список языков и на незнакомом отвечает 400 —
+// поэтому берём первый код из accept-language и сверяем со списком.
+const PHOTON_LANGS = new Set(['de', 'en', 'fr', 'it', 'ru']);
+
+async function searchPhoton(
+  q: string,
+  lang: string,
+): Promise<GeoSearchResult[]> {
   const params = new URLSearchParams({ q, limit: '6' });
+  const photonLang = lang.split(',')[0];
+  if (PHOTON_LANGS.has(photonLang)) params.set('lang', photonLang);
   const res = await fetch(`${PHOTON_URL}/api/?${params}`, {
     headers: {
       Accept: 'application/json',
@@ -268,6 +368,10 @@ function toGeoSearchResult(place: NominatimPlace): GeoSearchResult | null {
     place.address?.city ??
     place.address?.town ??
     place.address?.village ??
+    // Индийские tahsil-границы кладут имя места в city_district, а в county —
+    // название района. Без этой ветки поиск «Маяпур» подписывал найденные
+    // места чужими именами: «Sheopur Tahsil» вместо «Mayapur».
+    place.address?.city_district ??
     place.address?.municipality ??
     place.address?.county ??
     place.address?.state;

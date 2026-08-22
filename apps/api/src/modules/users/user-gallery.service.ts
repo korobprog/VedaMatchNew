@@ -145,8 +145,6 @@ export class UserGalleryService {
             throw new GalleryQuotaError();
           }
 
-          const existingCount = await tx.userPhoto.count({ where: { userId } });
-
           return tx.userPhoto.create({
             data: {
               userId,
@@ -154,7 +152,13 @@ export class UserGalleryService {
               sizeBytes: processed.data.length,
               width: processed.width,
               height: processed.height,
-              isPublic: existingCount === 0,
+              // Публично сразу. Раньше публиковалось только первое фото, а
+              // остальные ждали отдельного тумблера у каждого снимка — и не
+              // дожидались: человек загружал галерею, был уверен, что он в
+              // Знакомствах с ней, а его видели по аватарке. Скрыть любое
+              // фото по-прежнему можно в один клик, и об этом сказано прямо
+              // в форме загрузки.
+              isPublic: true,
               sortOrder: (totals._max.sortOrder ?? -1) + 1,
             },
           });

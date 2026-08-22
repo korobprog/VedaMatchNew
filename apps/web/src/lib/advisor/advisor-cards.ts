@@ -166,7 +166,9 @@ function gapCards(input: AdvisorInput): AdvisorCard[] {
       service: null,
       text: "Без города Объявления и Контакты не покажут, что происходит рядом с вами",
       actionLabel: "Указать город",
-      href: "/profile",
+      // Якорь обязателен: профиль длиной в пять экранов, и без него плашка
+      // высаживает человека на самом верху, далеко от поля города.
+      href: "/profile#city",
       weight: 60,
     });
   }
@@ -176,7 +178,9 @@ function gapCards(input: AdvisorInput): AdvisorCard[] {
       id: "union-profile",
       tone: "gap",
       service: "union",
-      text: `Анкета заполнена на ${input.unionProfilePercent}% — чем полнее, тем чаще вас показывают`,
+      // «Анкета» без уточнения читается как только что пройденная
+      // самоидентификация — называем сервис, к которому она относится.
+      text: `Анкета Знакомств заполнена на ${input.unionProfilePercent}% — чем полнее, тем чаще вас показывают`,
       actionLabel: "Дополнить",
       href: "/union/profile",
       weight: 50,

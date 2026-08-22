@@ -1,11 +1,17 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  ChangeEvent,
+  FormEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   NAME_MAX_LENGTH,
-  type GeoSearchResult,
   type ProfileLocation,
   type ProfileMessengers,
   type ProfileSocialLinks,
@@ -13,6 +19,7 @@ import {
 } from "@vedamatch/shared";
 import { UserGalleryEditor } from "./user-gallery-editor";
 import { PhotoVerificationPanel } from "./photo-verification-panel";
+import { CityPicker } from "./city-picker";
 import { apiFetch } from "@/lib/http-client";
 import { Alert } from "@/components/ui/alert";
 import { Button, buttonClassName } from "@/components/ui/button";
@@ -55,11 +62,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
   const [homeLocation, setHomeLocation] = useState<ProfileLocation | null>(
     user.homeLocation ?? null,
   );
-  const [locationQuery, setLocationQuery] = useState(
-    user.homeLocation?.displayName ?? user.homeLocation?.city ?? "",
-  );
-  const [locationResults, setLocationResults] = useState<GeoSearchResult[]>([]);
-  const [locationPending, setLocationPending] = useState(false);
+  const cityInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(user.name);
   const [spiritualName, setSpiritualName] = useState(user.spiritualName ?? "");
   const [birthDate, setBirthDate] = useState(user.birthDate ?? "");
@@ -80,48 +83,18 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
     return () => URL.revokeObjectURL(avatarPreview);
   }, [avatarPreview]);
 
+  /**
+   * Плашка «Указать город» на главной ведёт на `/profile#city`: без переноса
+   * фокуса человек попадал на верх длинной страницы, а поле города — экранов
+   * на пять ниже.
+   */
   useEffect(() => {
-    const query = locationQuery.trim();
-    if (query.length < 2 || query === homeLocation?.displayName) {
-      return;
-    }
-
-    const controller = new AbortController();
-    const timeout = window.setTimeout(async () => {
-      setLocationPending(true);
-      try {
-        const res = await apiFetch(
-          `${API_URL}/geo/search?q=${encodeURIComponent(query)}`,
-          { signal: controller.signal },
-        );
-        if (!res.ok) throw new Error(await res.text());
-        setLocationResults((await res.json()) as GeoSearchResult[]);
-      } catch (e) {
-        if (e instanceof DOMException && e.name === "AbortError") return;
-        setLocationResults([]);
-      } finally {
-        setLocationPending(false);
-      }
-    }, 350);
-
-    return () => {
-      window.clearTimeout(timeout);
-      controller.abort();
-    };
-  }, [homeLocation?.displayName, locationQuery]);
-
-  const mapUrl = useMemo(() => {
-    if (!homeLocation) return null;
-    const lat = homeLocation.lat;
-    const lon = homeLocation.lon;
-    const bbox = [lon - 0.08, lat - 0.04, lon + 0.08, lat + 0.04].join(",");
-    const params = new URLSearchParams({
-      bbox,
-      layer: "mapnik",
-      marker: `${lat},${lon}`,
-    });
-    return `https://www.openstreetmap.org/export/embed.html?${params.toString()}`;
-  }, [homeLocation]);
+    if (window.location.hash !== "#city") return;
+    const input = cityInputRef.current;
+    if (!input) return;
+    input.scrollIntoView({ block: "center" });
+    input.focus({ preventScroll: true });
+  }, []);
 
   function selectAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
@@ -229,40 +202,6 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
     } finally {
       setPending(false);
     }
-  }
-
-  async function detectLocation() {
-    if (!navigator.geolocation) {
-      setError("Браузер не поддерживает определение местоположения");
-      return;
-    }
-    setError(null);
-    setMessage(null);
-    setLocationPending(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const { latitude, longitude } = position.coords;
-          const res = await apiFetch(
-            `${API_URL}/geo/reverse?lat=${latitude}&lon=${longitude}`,
-          );
-          if (!res.ok) throw new Error(await res.text());
-          const location = (await res.json()) as GeoSearchResult;
-          setHomeLocation(location);
-          setLocationQuery(location.displayName ?? location.city);
-          setLocationResults([]);
-        } catch (e) {
-          setError(e instanceof Error ? e.message : "Не удалось определить город");
-        } finally {
-          setLocationPending(false);
-        }
-      },
-      () => {
-        setLocationPending(false);
-        setError("Разрешение на геолокацию не получено");
-      },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
-    );
   }
 
   const avatarSrc = avatarPreview ?? profile.avatarUrl;
@@ -410,83 +349,19 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
 
       <PhotoVerificationPanel profile={profile} onUpdated={setProfile} />
 
-      <Card className="p-6">
+      <Card className="scroll-mt-24 p-6" id="city">
         <CardTitle className="mb-2 text-lg">
           Город проживания
         </CardTitle>
         <p className="mb-4 text-sm text-text-1">
           Геолокация не запрашивается автоматически. Выберите город поиском или нажмите кнопку ниже.
         </p>
-        <div className="relative">
-          <input
-            type="text"
-            value={locationQuery}
-            onChange={(event) => {
-              setLocationQuery(event.target.value);
-              setLocationResults([]);
-            }}
-            placeholder="Начните вводить город"
-            className={`${fieldClassName} py-3`}
-          />
-          {locationResults.length > 0 && (
-            <div className="absolute z-10 mt-2 max-h-72 w-full overflow-auto rounded-xl border border-glass-brd bg-bg-1 shadow-lg">
-              {locationResults.map((item) => (
-                <button
-                  key={`${item.lat}-${item.lon}-${item.displayName}`}
-                  type="button"
-                  onClick={() => {
-                    setHomeLocation(item);
-                    setLocationQuery(item.displayName ?? item.city);
-                    setLocationResults([]);
-                  }}
-                  className="block w-full px-4 py-3 text-left text-sm hover:bg-glass"
-                >
-                  <span className="block font-medium text-text-0">
-                    {item.city}{item.country ? `, ${item.country}` : ""}
-                  </span>
-                  {item.displayName && (
-                    <span className="block text-xs text-text-2">{item.displayName}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            onClick={detectLocation}
-            loading={locationPending}
-          >
-            {locationPending ? "Ищем..." : "Определить моё местоположение"}
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setHomeLocation(null);
-              setLocationQuery("");
-              setLocationResults([]);
-            }}
-          >
-            Очистить город
-          </Button>
-        </div>
-        {homeLocation && (
-          <div className="mt-4 overflow-hidden rounded-xl border border-glass-brd">
-            <div className="bg-bg-1 p-3 text-sm text-text-1">
-              Выбран город: <span className="font-medium">{homeLocation.city}</span>
-              {homeLocation.country ? `, ${homeLocation.country}` : ""}
-            </div>
-            {mapUrl && (
-              <iframe
-                title="Карта города проживания"
-                src={mapUrl}
-                className="h-72 w-full border-0"
-                loading="lazy"
-              />
-            )}
-          </div>
-        )}
+        <CityPicker
+          value={homeLocation}
+          onChange={setHomeLocation}
+          onError={setError}
+          inputRef={cityInputRef}
+        />
       </Card>
 
       <Card className="p-6">
@@ -524,12 +399,17 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
         </div>
       </Card>
 
-      {error && <Alert tone="error">{error}</Alert>}
-      {message && <Alert tone="success">{message}</Alert>}
-
-      <Button type="submit" loading={pending} className="w-full py-3">
-        {pending ? "Сохраняем..." : "Сохранить изменения профиля"}
-      </Button>
+      {/* Страница длиной в пять экранов: правку в середине формы человек
+          сохраняет, только докрутив до низа. Кнопка едет с ним — и ответ
+          сервера вместе с ней, иначе «Профиль сохранён» остаётся за краем
+          экрана и сохранение выглядит как ничего не сделавшее. */}
+      <div className="sticky bottom-3 z-20 space-y-2 rounded-xl bg-bg-0/80 p-1 backdrop-blur">
+        {error && <Alert tone="error">{error}</Alert>}
+        {message && <Alert tone="success">{message}</Alert>}
+        <Button type="submit" loading={pending} className="w-full py-3">
+          {pending ? "Сохраняем..." : "Сохранить изменения профиля"}
+        </Button>
+      </div>
     </form>
   );
 }

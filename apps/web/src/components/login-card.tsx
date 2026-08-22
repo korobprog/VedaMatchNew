@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { DevLoginForm } from "@/components/dev-login-form";
@@ -46,11 +47,18 @@ export function LoginCard({ returnTo }: { returnTo?: string }) {
         />
         {/* Название страницы есть на картинке, но не в тексте: заголовок
             остаётся для чтения с экрана и для разметки документа. */}
-        <h1 className="sr-only">VedaMatch</h1>
-        <p className="mb-8 text-sm text-text-1">
+        <h1 className="sr-only">Вход и регистрация в VedaMatch</h1>
+        <p className="mb-2 text-sm text-text-1">
           Единый вход во все сервисы экосистемы
         </p>
-        
+        {/* Кнопка на лендинге обещает «Начать бесплатно», а страница называлась
+            «Вход»: человек не понимал, что аккаунта у него ещё нет и что он
+            заведётся сам. Называем это прямо. */}
+        <p className="mb-6 text-sm text-text-1">
+          Первый вход через Google создаёт аккаунт — отдельная регистрация не
+          нужна.
+        </p>
+
         <a
           href={googleHref}
           className="flex w-full items-center justify-center gap-3 rounded-xl bg-white/10 border border-glass-brd py-3 text-sm font-medium text-text-0 transition hover:bg-white/20 hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
@@ -75,6 +83,22 @@ export function LoginCard({ returnTo }: { returnTo?: string }) {
           </svg>
           Войти через Google
         </a>
+
+        {/* Согласие называется до нажатия, а не после: на этой кнопке заводится
+            аккаунт, и ссылки должны быть перед ней в порядке чтения. */}
+        {/* text-1, а не text-2: под стеклом фон композитный, и --vm-text-2 на
+            12px даёт 4.07:1 — ниже порога AA. Согласие обязано читаться. */}
+        <p className="mt-4 text-xs leading-relaxed text-text-1">
+          Продолжая, вы принимаете{" "}
+          <Link href="/legal/terms" className="underline hover:text-text-0">
+            условия использования
+          </Link>{" "}
+          и{" "}
+          <Link href="/legal/privacy" className="underline hover:text-text-0">
+            политику конфиденциальности
+          </Link>
+          .
+        </p>
 
         {DEV_AUTH && <DevLoginForm returnTo={returnTo} />}
       </div>

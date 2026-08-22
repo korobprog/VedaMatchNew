@@ -18,6 +18,11 @@ export function UnionProfileProgress({
   saveState: "idle" | "saving" | "saved" | "error";
 }) {
   const { percent, next } = completeness;
+  // Спрашиваем items, а не `next === "photos"`: сейчас фото стоит первым в
+  // списке весов и совпадает с `next`, но порядок весов — вопрос настройки,
+  // а последствие у пустой галереи одно и то же при любом порядке.
+  const hasPhotos =
+    completeness.items.find((item) => item.key === "photos")?.filled ?? false;
 
   return (
     <div className="glass sticky top-2 z-10 mb-4 rounded-2xl border border-glass-brd p-4">
@@ -51,12 +56,15 @@ export function UnionProfileProgress({
         />
       </div>
 
-      {next === "photos" ? (
+      {/* Процент заполнения — плохой стимул: он ничего не обещает. Здесь
+          названо последствие, и оно настоящее — лента действительно ставит
+          анкеты с фото выше (см. сортировку в union-profile.service.ts). */}
+      {!hasPhotos ? (
         <a
           href="#gallery-heading"
           className="mt-2 block text-xs text-magenta underline underline-offset-2"
         >
-          Дальше: {unionProfileFieldLabels[next]} — загрузите фото ниже
+          Анкеты с фото показываются выше — загрузите фото ниже
         </a>
       ) : next ? (
         <p className="mt-2 text-xs text-text-2">

@@ -13,6 +13,10 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { fieldClassName } from "@/components/ui/input";
+import {
+  DEFAULT_ANSWERS,
+  SelfIdentificationQuestions,
+} from "./self-identification-questions";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -33,16 +37,6 @@ const verificationLabels: Record<string, string> = {
   needs_clarification: "Требует уточнения",
 };
 
-const defaultAnswers: SelfIdentificationAnswers = {
-  interest: "beginning",
-  regularPractice: "none",
-  currentFocus: "curiosity",
-  hasMentor: false,
-  hasCommunity: false,
-  hasSpiritualName: false,
-  participatesInService: false,
-  wantsRecommendations: true,
-};
 
 export function SelfIdentificationForm({
   state,
@@ -56,7 +50,7 @@ export function SelfIdentificationForm({
     SelfIdentificationState | SelfIdentificationSubmitResult | null
   >(null);
   const [answers, setAnswers] = useState<SelfIdentificationAnswers>(
-    state?.latestAnswers ?? defaultAnswers,
+    state?.latestAnswers ?? DEFAULT_ANSWERS,
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,79 +112,7 @@ export function SelfIdentificationForm({
           Этап определяется системой по ответам. Это не ранг, а текущий этап пути.
         </p>
 
-        <div className="space-y-5">
-          <SelectField
-            label="Как бы вы описали свой интерес к самоосознанию?"
-            value={answers.interest}
-            onChange={(interest) => setAnswers({ ...answers, interest })}
-            options={[
-              ["beginning", "Только начинаю интересоваться"],
-              ["learning", "Изучаю основы и пробую применять"],
-              ["deepening", "Хочу углублять регулярную практику"],
-              ["devotional_service", "Живу практикой, служением и общиной"],
-            ]}
-          />
-          <SelectField
-            label="Есть ли у вас регулярная духовная практика?"
-            value={answers.regularPractice}
-            onChange={(regularPractice) =>
-              setAnswers({ ...answers, regularPractice })
-            }
-            options={[
-              ["none", "Пока нет"],
-              ["sometimes", "Иногда"],
-              ["daily", "Ежедневно"],
-              ["strict_daily", "Строго и ежедневно"],
-            ]}
-          />
-          <SelectField
-            label="Что вам сейчас ближе всего?"
-            value={answers.currentFocus}
-            onChange={(currentFocus) => setAnswers({ ...answers, currentFocus })}
-            options={[
-              ["curiosity", "Понять, подходит ли мне этот путь"],
-              ["basic_practice", "Освоить базовую практику"],
-              ["deep_practice", "Углубить практику"],
-              ["service_community", "Служение и жизнь в общине"],
-            ]}
-          />
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <CheckboxField
-              label="Есть наставник"
-              checked={answers.hasMentor}
-              onChange={(hasMentor) => setAnswers({ ...answers, hasMentor })}
-            />
-            <CheckboxField
-              label="Есть связь с общиной"
-              checked={answers.hasCommunity}
-              onChange={(hasCommunity) =>
-                setAnswers({ ...answers, hasCommunity })
-              }
-            />
-            <CheckboxField
-              label="Есть духовное имя"
-              checked={answers.hasSpiritualName}
-              onChange={(hasSpiritualName) =>
-                setAnswers({ ...answers, hasSpiritualName })
-              }
-            />
-            <CheckboxField
-              label="Участвую в служении"
-              checked={answers.participatesInService}
-              onChange={(participatesInService) =>
-                setAnswers({ ...answers, participatesInService })
-              }
-            />
-            <CheckboxField
-              label="Хочу получать рекомендации по развитию"
-              checked={answers.wantsRecommendations}
-              onChange={(wantsRecommendations) =>
-                setAnswers({ ...answers, wantsRecommendations })
-              }
-            />
-          </div>
-        </div>
+        <SelfIdentificationQuestions answers={answers} onChange={setAnswers} />
 
         {error && (
           <Alert tone="error" className="mt-4">
@@ -257,6 +179,15 @@ export function SelfIdentificationForm({
             Что дальше
           </CardTitle>
           <NextStep stage={currentStage} status={currentStatus} hasMentorLink={Boolean(mentorLink)} />
+          {/* Анкета — первый экран после регистрации, и раньше она кончалась
+              текстом «откройте каталог на главной». Выход из воронки не
+              объясняют словами, его дают кнопкой. */}
+          <Button
+            onClick={() => router.push("/")}
+            className="mt-4 w-full sm:w-auto"
+          >
+            Перейти к сервисам портала
+          </Button>
         </Card>
       )}
 
@@ -323,7 +254,7 @@ function NextStep({
 
   return (
     <p className="text-sm text-text-1">
-      Откройте каталог сервисов на главной странице: портал покажет материалы и приложения, подходящие вашему текущему этапу. Анкету можно пройти повторно в профиле, когда ваш путь изменится.
+      Портал покажет материалы и приложения, подходящие вашему текущему этапу. Анкету можно пройти повторно в профиле, когда ваш путь изменится.
     </p>
   );
 }
@@ -337,60 +268,3 @@ function getStageDisplayName(
     ? "Преданный, подтвержден"
     : "Преданный, не подтвержден";
 }
-
-function SelectField<T extends string>({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: T;
-  onChange: (value: T) => void;
-  options: Array<[T, string]>;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-medium text-text-1">
-        {label}
-      </span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value as T)}
-        className={`${fieldClassName} py-3`}
-      >
-        {options.map(([optionValue, optionLabel]) => (
-          <option key={optionValue} value={optionValue}>
-            {optionLabel}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function CheckboxField({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <label className="flex items-center gap-3 rounded-xl border border-glass-brd p-3 text-sm text-text-1">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="h-4 w-4 accent-magenta"
-      />
-      {label}
-    </label>
-  );
-}
-
-
-
-

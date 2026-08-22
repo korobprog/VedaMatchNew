@@ -15,7 +15,10 @@ import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 export default async function MotivationFavoritesPage() {
   const [user, feed] = await Promise.all([getProfile(), getMotivationFeed("favorites")]);
   if (!user) redirectToLogin("/motivation/favorites");
-  if (!user.spiritualStage) redirect("/self-identification");
+  // Новичок идёт в мастер: там тот же вопрос об этапе, но после имени
+  // и города и с прогрессом. Страница анкеты остаётся для повторного
+  // прохождения, её не редирект открывает, а ссылка из профиля.
+  if (!user.spiritualStage) redirect("/welcome");
   const isAdmin = user.role === "admin" || user.role === "service-admin";
 
   return (

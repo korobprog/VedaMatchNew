@@ -13,11 +13,26 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh }),
 }));
 
+// `items` заполнен намеренно: подсказка про фото смотрит именно в него, а не
+// в `next`, и с пустым списком считала бы галерею пустой у всех подряд.
 const completeness: UnionProfileCompleteness = {
   percent: 30,
-  items: [],
+  items: [
+    { key: "photos", weight: 12, filled: true },
+    { key: "about", weight: 12, filled: false },
+  ],
   missing: ["about"],
   next: "about",
+};
+
+const withoutPhotos: UnionProfileCompleteness = {
+  ...completeness,
+  items: [
+    { key: "photos", weight: 12, filled: false },
+    { key: "about", weight: 12, filled: false },
+  ],
+  missing: ["photos", "about"],
+  next: "photos",
 };
 
 const profile: UnionProfileDto = {
@@ -75,6 +90,18 @@ describe("UnionProfileForm", () => {
 
     expect(screen.getByText("Заполнен на 30%")).toBeInTheDocument();
     expect(screen.getByText("Дальше: О себе")).toBeInTheDocument();
+  });
+
+  // Процент заполнения ничего не обещает, поэтому вместо него названо
+  // последствие — и оно настоящее: лента ставит анкеты с фото выше.
+  it("пустая галерея объясняется последствием, а не процентом", () => {
+    render(
+      <UnionProfileForm profile={profile} completeness={withoutPhotos} />,
+    );
+
+    expect(
+      screen.getByText(/Анкеты с фото показываются выше/),
+    ).toBeInTheDocument();
   });
 
   it("сохраняет отдельное поле, не трогая соседние", async () => {

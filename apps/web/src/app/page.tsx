@@ -94,7 +94,10 @@ export default async function Home({
       />
     );
   }
-  if (!user.spiritualStage) redirect("/self-identification");
+  // Новичок идёт в мастер: там тот же вопрос об этапе, но после имени
+  // и города и с прогрессом. Страница анкеты остаётся для повторного
+  // прохождения, её не редирект открывает, а ссылка из профиля.
+  if (!user.spiritualStage) redirect("/welcome");
 
   const unionQuickAccess = buildUnionQuickAccessData(
     unionChats,
