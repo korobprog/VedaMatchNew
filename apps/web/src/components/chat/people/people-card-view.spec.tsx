@@ -62,6 +62,32 @@ describe("PeopleCardView", () => {
     );
   });
 
+  it("на своей карточке ведёт к её редактору, а не просит контакты у себя", async () => {
+    stubCard(card);
+    render(<PeopleCardView userId="u1" viewerId="u1" />);
+
+    await screen.findByText("Радха дд");
+    expect(
+      screen.getByText("Это ваша карточка — так её видят остальные."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Изменить" })).toHaveAttribute(
+      "href",
+      "/chat/people/profile",
+    );
+    expect(screen.queryByText("Запросить контакт")).not.toBeInTheDocument();
+  });
+
+  it("на чужой карточке блок запроса на месте", async () => {
+    stubCard(card);
+    render(<PeopleCardView userId="u1" viewerId="u2" />);
+
+    await screen.findByText("Радха дд");
+    expect(await screen.findAllByText("Запросить контакт")).not.toHaveLength(0);
+    expect(
+      screen.queryByText("Это ваша карточка — так её видят остальные."),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows the whole card: texts, place, details, badges and tags", async () => {
     stubCard(card);
     render(<PeopleCardView userId="u1" />);
