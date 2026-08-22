@@ -78,6 +78,13 @@ export function ChatMapView({ initial }: { initial: ChatMapState }) {
         </p>
       )}
 
+      {communities.length > 0 && (
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-text-2">
+          Общины
+        </h2>
+      )}
+      {/* Заголовок нужен обоим спискам: без него первый читается как ничей,
+          и метки общин на карте будто не имеют строки под ней. */}
       <ul className="flex flex-col gap-1">
         {communities.map((point) => {
           const beseds = point.channels + point.groups;
