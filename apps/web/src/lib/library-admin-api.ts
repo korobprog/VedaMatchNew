@@ -1,7 +1,9 @@
 // Команды админки Library из браузера. Чтение — серверное, в library-api.ts.
 import type {
+  CreateLibrarySectionRequestBody,
   LibraryAdminCategoryDto,
   LibraryAdminEntryDto,
+  LibrarySectionRequestDto,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 
@@ -32,4 +34,18 @@ export const removeLibraryEntry = (id: string) =>
 export const restoreLibraryEntry = (id: string) =>
   command<LibraryAdminEntryDto>(
     `/library/admin/entries/${encodeURIComponent(id)}/restore`,
+  );
+
+/** Заявку на раздел шлёт обычный участник, а не админ — но команда та же. */
+export const requestLibrarySection = (body: CreateLibrarySectionRequestBody) =>
+  command<LibrarySectionRequestDto>("/library/section-requests", body);
+
+export const decideLibrarySectionRequest = (
+  id: string,
+  action: "approve" | "reject",
+  comment?: string,
+) =>
+  command<LibrarySectionRequestDto>(
+    `/library/admin/section-requests/${encodeURIComponent(id)}/decide`,
+    { action, comment: comment ?? null },
   );

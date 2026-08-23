@@ -12,6 +12,7 @@ import type {
 } from "@vedamatch/shared";
 import { CategoryCreateForm } from "./category-create-form";
 import { SectionCreateForm } from "./section-create-form";
+import { SectionRequestForm } from "./section-request-form";
 import { entryTypeLabel, pickLocalized, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
 import {
@@ -453,20 +454,22 @@ export function AddEntryWizard({
                     : `+ ${t(locale, "add.categoryNew")}`}
                 </button>
 
-                {canCreateSection && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSectionFormOpen((open) => !open);
-                      setCategoryFormOpen(false);
-                    }}
-                    className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-0 hover:bg-glass-brd/40"
-                  >
-                    {sectionFormOpen
-                      ? t(locale, "add.categoryCancel")
-                      : `+ ${t(locale, "add.sectionNew")}`}
-                  </button>
-                )}
+                {/* Админ заводит раздел сам, остальные — просят: бэкенд
+                    откажет им, и кнопка «создать» вела бы в тупик. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSectionFormOpen((open) => !open);
+                    setCategoryFormOpen(false);
+                  }}
+                  className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-0 hover:bg-glass-brd/40"
+                >
+                  {sectionFormOpen
+                    ? t(locale, "add.categoryCancel")
+                    : canCreateSection
+                      ? `+ ${t(locale, "add.sectionNew")}`
+                      : t(locale, "add.sectionRequest")}
+                </button>
               </div>
 
               {categoryFormOpen && (
@@ -482,7 +485,11 @@ export function AddEntryWizard({
 
               {sectionFormOpen && (
                 <div className="rounded-xl border border-glass-brd p-3">
-                  <SectionCreateForm onCreated={handleSectionCreated} />
+                  {canCreateSection ? (
+                    <SectionCreateForm onCreated={handleSectionCreated} />
+                  ) : (
+                    <SectionRequestForm locale={locale} />
+                  )}
                 </div>
               )}
 

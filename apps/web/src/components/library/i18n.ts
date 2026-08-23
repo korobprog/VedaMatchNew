@@ -101,6 +101,16 @@ const ui = {
     "add.coverHint":
       "У материала без ссылки картинку взять неоткуда — можно загрузить свою",
     "add.coverChosen": "Выбрано",
+    "add.sectionRequest": "Попросить раздел",
+    "add.sectionRequestHint":
+      "Разделы заводит администрация — опишите, какой нужен, и мы рассмотрим",
+    "add.sectionRequestReason": "Зачем он нужен",
+    "add.sectionRequestReasonHint":
+      "Пара слов: какие материалы туда пойдут и почему не подходят имеющиеся",
+    "add.sectionRequestSubmit": "Отправить заявку",
+    "add.sectionRequestSent":
+      "Заявка отправлена — о решении сообщим уведомлением",
+    "add.sectionRequestTitles": "Нужны оба названия — русское и английское",
     "add.sectionNew": "Новый раздел",
     "add.sectionCreated": "Раздел создан и выбран",
     "add.noCategoryFits": "Ничего не подходит?",
@@ -261,6 +271,16 @@ const ui = {
     "add.coverHint":
       "There is no picture to take for a material without a link — upload your own",
     "add.coverChosen": "Chosen",
+    "add.sectionRequest": "Ask for a section",
+    "add.sectionRequestHint":
+      "Sections are created by the admins — describe the one you need and we will consider it",
+    "add.sectionRequestReason": "Why it is needed",
+    "add.sectionRequestReasonHint":
+      "A couple of words: what will go there and why the existing ones do not fit",
+    "add.sectionRequestSubmit": "Send the request",
+    "add.sectionRequestSent":
+      "The request is sent — we will let you know the decision",
+    "add.sectionRequestTitles": "Both titles are needed — Russian and English",
     "add.sectionNew": "New section",
     "add.sectionCreated": "The section is created and selected",
     "add.noCategoryFits": "Nothing fits?",

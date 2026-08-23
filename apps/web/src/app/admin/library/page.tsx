@@ -1,8 +1,10 @@
 import { LibraryAdminTabs } from "@/components/library/admin/admin-tabs";
 import { LibraryDuplicateMerge } from "@/components/library/admin/duplicate-merge";
 import { LibraryTaxonomyManager } from "@/components/library/admin/taxonomy-manager";
+import { LibrarySectionRequests } from "@/components/library/admin/section-requests";
 import {
   getLibraryAdminDuplicates,
+  getLibraryAdminSectionRequests,
   getLibraryAdminStats,
   getLibrarySections,
 } from "@/lib/library-api";
@@ -13,10 +15,11 @@ export const metadata = {
 };
 
 export default async function AdminLibraryPage() {
-  const [stats, duplicates, sections] = await Promise.all([
+  const [stats, duplicates, sections, sectionRequests] = await Promise.all([
     getLibraryAdminStats(),
     getLibraryAdminDuplicates(),
     getLibrarySections(),
+    getLibraryAdminSectionRequests(),
   ]);
   const groups = duplicates ?? [];
 
@@ -34,6 +37,21 @@ export default async function AdminLibraryPage() {
       )}
 
       <LibraryTaxonomyManager initialSections={sections ?? []} />
+
+      <h2 className="mb-2 font-display text-lg font-semibold text-text-0">
+        Заявки на разделы
+      </h2>
+      <p className="mb-4 max-w-3xl text-sm text-text-1">
+        Разделы заводит администрация, поэтому участник, которому не нашлось
+        подходящего, присылает заявку. «Одобрить» заводит раздел названиями из
+        заявки; автор в любом случае получает уведомление, так что у отказа
+        стоит указать причину.
+      </p>
+      <div className="mb-8">
+        <LibrarySectionRequests
+          initialRequests={sectionRequests?.requests ?? []}
+        />
+      </div>
 
       <h2 className="mb-2 font-display text-lg font-semibold text-text-0">
         Дубли категорий
