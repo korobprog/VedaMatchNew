@@ -314,12 +314,19 @@ export function ChatMessage({
 function Attachment({ attachment }: { attachment: ChatAttachmentDto }) {
   if (attachment.kind === "image")
     return (
-      <a href={attachment.url ?? "#"} target="_blank" rel="noreferrer">
+      // Отрицательные поля гасят паддинг пузыря (px-3.5): фото идёт в край
+      // по бокам, а не остаётся в рамке из подложки пузыря вокруг картинки.
+      <a
+        href={attachment.url ?? "#"}
+        target="_blank"
+        rel="noreferrer"
+        className="-mx-3.5 block"
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={attachment.url ?? ""}
           alt=""
-          className="max-h-72 w-full rounded-xl object-cover"
+          className="max-h-72 w-[calc(100%+1.75rem)] rounded-lg object-cover"
         />
       </a>
     );
