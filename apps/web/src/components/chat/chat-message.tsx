@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import type {
   ChatAttachmentDto,
   ChatMessageDto,
@@ -67,8 +67,18 @@ export function ChatMessage({
   const palette = authorPalette(message.author.id);
 
   const bubble = mine
-    ? "rounded-[20px] rounded-br-md border border-cyan/30 bg-gradient-to-br from-cyan/24 to-mint/10"
-    : "rounded-[20px] rounded-bl-md border border-glass-brd bg-glass";
+    ? "rounded-[20px] rounded-br-md border border-cyan/30"
+    : "rounded-[20px] rounded-bl-md border border-glass-brd";
+  const bubbleStyle: CSSProperties = mine
+    ? {
+        background:
+          "var(--chat-bubble-mine, linear-gradient(to bottom right, color-mix(in srgb, var(--vm-cyan) 24%, transparent), color-mix(in srgb, var(--vm-mint-from) 10%, transparent)))",
+        color: "var(--chat-bubble-mine-ink, var(--vm-text-0))",
+      }
+    : {
+        background: "var(--chat-bubble-theirs, var(--vm-glass))",
+        color: "var(--chat-bubble-theirs-ink, var(--vm-text-0))",
+      };
 
   return (
     <div
@@ -94,6 +104,7 @@ export function ChatMessage({
           }}
           aria-expanded={open}
           aria-label={open ? "Скрыть действия" : "Действия с сообщением"}
+          style={bubbleStyle}
           className={`max-w-[85%] cursor-default px-3.5 py-2.5 text-left ${bubble} shadow-lg shadow-black/20`}
         >
           {deleted ? (
@@ -124,9 +135,15 @@ export function ChatMessage({
 
               {message.replyTo && (
                 <span className="mb-2 flex gap-2.5 rounded-lg bg-bg-0/35 py-1.5 pr-2.5">
-                  <span className="w-[3px] shrink-0 rounded-sm bg-cyan" />
+                  <span
+                    className="w-[3px] shrink-0 rounded-sm"
+                    style={{ background: "var(--chat-accent, var(--vm-cyan))" }}
+                  />
                   <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="text-[11px] font-bold text-cyan">
+                    <span
+                      className="text-[11px] font-bold"
+                      style={{ color: "var(--chat-accent, var(--vm-cyan))" }}
+                    >
                       {message.replyTo.authorName}
                     </span>
                     <span className="truncate text-xs leading-4 text-text-1">
@@ -148,7 +165,7 @@ export function ChatMessage({
               )}
 
               {message.body && (
-                <span className="block whitespace-pre-wrap break-words text-[15px] leading-[21px] text-text-0">
+                <span className="block whitespace-pre-wrap break-words text-[15px] leading-[21px]">
                   {message.body}
                 </span>
               )}
@@ -191,7 +208,8 @@ export function ChatMessage({
         {threadHref && !deleted && (
           <Link
             href={threadHref}
-            className="px-1.5 text-[13px] font-semibold text-cyan hover:underline"
+            style={{ color: "var(--chat-accent, var(--vm-cyan))" }}
+            className="px-1.5 text-[13px] font-semibold hover:underline"
           >
             {message.commentsCount
               ? `Комментарии · ${message.commentsCount}`
@@ -411,7 +429,7 @@ function ReadMark({ read }: { read: boolean }) {
       strokeWidth="2.2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="text-cyan"
+      style={{ color: "var(--chat-accent, var(--vm-cyan))" }}
       aria-label="прочитано"
     >
       <path d="M2 12.5l4 4L13 9" />
