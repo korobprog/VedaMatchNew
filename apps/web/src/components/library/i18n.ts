@@ -89,6 +89,27 @@ const ui = {
     "add.hintUrl": "Полный адрес вместе с https://",
     "add.hintTitle": "Коротко и по делу — так, как назвали бы полку",
     "add.hintDescription": "Пара предложений: о чём материал и кому пригодится",
+    "add.stepWhat": "Что добавляем",
+    "add.stepWhatHint":
+      "Тип задаёт, что спросим дальше: видео нужен адрес, книге — источник",
+    "add.stepWhere": "Где найти и как называется",
+    "add.stepWhereHint":
+      "Материал в сети — дайте ссылку; из книги — укажите источник",
+    "add.cover": "Обложка",
+    "add.coverHint":
+      "У материала без ссылки картинку взять неоткуда — можно загрузить свою",
+    "add.coverChosen": "Выбрано",
+    "add.sectionNew": "Новый раздел",
+    "add.sectionCreated": "Раздел создан и выбран",
+    "add.noCategoryFits": "Ничего не подходит?",
+    "add.locatorLegend": "Как указать материал",
+    "add.locatorUrl": "Есть ссылка",
+    "add.locatorSource": "Только источник",
+    "add.source": "Источник",
+    "add.hintSource":
+      "Откуда материал: «Бхагавад-гита 9.22, комментарий Прабхупады»",
+    "add.sourceRequired": "Укажите источник или переключитесь на ссылку",
+    "add.sourceTooLong": "Источник длиннее 300 символов",
     "entry.preview": "Обложка материала",
     "entry.play": "Смотреть здесь",
     "entry.watchOn": "Смотреть на",
@@ -226,6 +247,27 @@ const ui = {
     "add.hintTitle": "Short and to the point — the way you would name a shelf",
     "add.hintDescription":
       "A couple of sentences: what it is about and who it helps",
+    "add.stepWhat": "What are you adding",
+    "add.stepWhatHint":
+      "The type decides what comes next: a video needs an address, a book needs a source",
+    "add.stepWhere": "Where to find it and what it is called",
+    "add.stepWhereHint":
+      "Material on the web — give a link; from a book — name the source",
+    "add.cover": "Cover",
+    "add.coverHint":
+      "There is no picture to take for a material without a link — upload your own",
+    "add.coverChosen": "Chosen",
+    "add.sectionNew": "New section",
+    "add.sectionCreated": "The section is created and selected",
+    "add.noCategoryFits": "Nothing fits?",
+    "add.locatorLegend": "How to point to the material",
+    "add.locatorUrl": "There is a link",
+    "add.locatorSource": "Source only",
+    "add.source": "Source",
+    "add.hintSource":
+      "Where the material comes from: “Bhagavad-gita 9.22, Prabhupada’s purport”",
+    "add.sourceRequired": "Name the source or switch to a link",
+    "add.sourceTooLong": "The source is longer than 300 characters",
     "entry.preview": "Material cover",
     "entry.play": "Play here",
     "entry.watchOn": "Watch on",

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { LibrarySectionDto } from "@vedamatch/shared";
 import { CategoryCreateForm } from "../category-create-form";
-import { SectionCreateForm } from "./section-create-form";
+import { SectionCreateForm } from "../section-create-form";
 
 /**
  * Разделы и категории — админ заводит их здесь, а не только правит дубли.

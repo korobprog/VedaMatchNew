@@ -17,11 +17,14 @@ import { entryTypeLabel, pickLocalized, t } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
 import {
   badRequestKey,
+  defaultLocator,
   ENTRY_TYPES,
   MAX_CATEGORIES,
   MAX_DESCRIPTION_LENGTH,
+  MAX_SOURCE_LENGTH,
   MAX_TITLE_LENGTH,
   MAX_URL_LENGTH,
+  type EntryLocator,
 } from "./entry-draft";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -39,6 +42,11 @@ export function AddEntryForm({
 }) {
   const router = useRouter();
   const [url, setUrl] = useState("");
+  const [source, setSource] = useState("");
+  const [locator, setLocator] = useState<EntryLocator>(
+    defaultLocator("article"),
+  );
+  const [locatorTouched, setLocatorTouched] = useState(false);
   const [type, setType] = useState<LibraryEntryType>("article");
   const [contentLanguage, setContentLanguage] = useState("ru");
   const [titleRu, setTitleRu] = useState("");
@@ -114,14 +122,28 @@ export function AddEntryForm({
     setNotice(null);
     setDuplicateId(null);
 
+    // Проверяем то из двух, что выбрано: второе поле могло остаться
+    // заполненным с прошлого положения переключателя и всё равно не уедет.
     const trimmedUrl = url.trim();
-    if (trimmedUrl.length > MAX_URL_LENGTH) {
-      setError(t(locale, "add.urlTooLong"));
-      return;
-    }
-    if (!/^https?:\/\/\S+$/i.test(trimmedUrl)) {
-      setError(t(locale, "add.unsupportedUrl"));
-      return;
+    const trimmedSource = source.trim();
+    if (locator === "url") {
+      if (trimmedUrl.length > MAX_URL_LENGTH) {
+        setError(t(locale, "add.urlTooLong"));
+        return;
+      }
+      if (!/^https?:\/\/\S+$/i.test(trimmedUrl)) {
+        setError(t(locale, "add.unsupportedUrl"));
+        return;
+      }
+    } else {
+      if (!trimmedSource) {
+        setError(t(locale, "add.sourceRequired"));
+        return;
+      }
+      if (trimmedSource.length > MAX_SOURCE_LENGTH) {
+        setError(t(locale, "add.sourceTooLong"));
+        return;
+      }
     }
     if (!titleRu.trim() && !titleEn.trim()) {
       setError(t(locale, "add.titleRequired"));
@@ -151,7 +173,8 @@ export function AddEntryForm({
     }
 
     const body: CreateLibraryEntryRequest = {
-      url: trimmedUrl,
+      url: locator === "url" ? trimmedUrl : null,
+      source: locator === "source" ? trimmedSource : null,
       type,
       contentLanguage,
       titleRu: titleRu.trim() || null,
@@ -204,30 +227,78 @@ export function AddEntryForm({
           в доступное имя поля («Адрес ссылки Полный адрес вместе с https://»),
           и скринридер называет поле целой фразой. Описание вешаем через
           aria-describedby — оно читается отдельно от имени. */}
-      <div>
-        <label className="text-sm text-text-1">
-          {t(locale, "add.url")}
-          <input
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
-            placeholder="https://"
-            maxLength={MAX_URL_LENGTH}
-            aria-describedby="add-url-hint"
-            required
-          />
-        </label>
-        <span id="add-url-hint" className="mt-1 block text-xs text-text-2">
-          {t(locale, "add.hintUrl")}
-        </span>
-      </div>
+      <fieldset className="text-sm text-text-1">
+        <legend className="mb-2">{t(locale, "add.locatorLegend")}</legend>
+        <div className="flex flex-wrap gap-4">
+          {(["url", "source"] as const).map((value) => (
+            <label key={value} className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="add-locator"
+                checked={locator === value}
+                onChange={() => {
+                  setLocatorTouched(true);
+                  setLocator(value);
+                }}
+              />
+              {t(
+                locale,
+                value === "url" ? "add.locatorUrl" : "add.locatorSource",
+              )}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      {locator === "url" ? (
+        <div>
+          <label className="text-sm text-text-1">
+            {t(locale, "add.url")}
+            <input
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+              placeholder="https://"
+              maxLength={MAX_URL_LENGTH}
+              aria-describedby="add-url-hint"
+              required
+            />
+          </label>
+          <span id="add-url-hint" className="mt-1 block text-xs text-text-2">
+            {t(locale, "add.hintUrl")}
+          </span>
+        </div>
+      ) : (
+        <div>
+          <label className="text-sm text-text-1">
+            {t(locale, "add.source")}
+            <input
+              value={source}
+              onChange={(event) => setSource(event.target.value)}
+              className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+              maxLength={MAX_SOURCE_LENGTH}
+              aria-describedby="add-source-hint"
+              required
+            />
+          </label>
+          <span id="add-source-hint" className="mt-1 block text-xs text-text-2">
+            {t(locale, "add.hintSource")}
+          </span>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="text-sm text-text-1">
           {t(locale, "add.type")}
           <select
             value={type}
-            onChange={(event) => setType(event.target.value as LibraryEntryType)}
+            onChange={(event) => {
+              const next = event.target.value as LibraryEntryType;
+              setType(next);
+              // Пока человек не трогал переключатель сам, его двигает тип;
+              // после ручного выбора не перебиваем — он знает лучше.
+              if (!locatorTouched) setLocator(defaultLocator(next));
+            }}
             className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
           >
             {ENTRY_TYPES.map((value) => (

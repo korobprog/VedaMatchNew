@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCreateEntryBody,
+  defaultLocator,
   isWizardStepReady,
   validateEntryDraft,
   type LibraryEntryDraft,
@@ -9,6 +10,8 @@ import {
 function draft(over: Partial<LibraryEntryDraft> = {}): LibraryEntryDraft {
   return {
     url: "https://example.com/kirtan",
+    source: "",
+    locator: "url",
     type: "video",
     contentLanguage: "ru",
     titleRu: "Как проходит киртан",
@@ -20,6 +23,17 @@ function draft(over: Partial<LibraryEntryDraft> = {}): LibraryEntryDraft {
   };
 }
 
+/** Черновик материала из книги: адреса нет, есть источник. */
+function sourceDraft(over: Partial<LibraryEntryDraft> = {}): LibraryEntryDraft {
+  return draft({
+    locator: "source",
+    url: "",
+    source: "Бхагавад-гита 9.22",
+    type: "book",
+    ...over,
+  });
+}
+
 describe("validateEntryDraft", () => {
   it("пропускает заполненный черновик", () => {
     expect(validateEntryDraft(draft())).toBeNull();
@@ -29,6 +43,24 @@ describe("validateEntryDraft", () => {
     expect(validateEntryDraft(draft({ url: "example.com" }))).toBe(
       "add.unsupportedUrl",
     );
+  });
+
+  it("пропускает материал из книги без адреса", () => {
+    expect(validateEntryDraft(sourceDraft())).toBeNull();
+  });
+
+  it("требует источник, когда выбран он", () => {
+    expect(validateEntryDraft(sourceDraft({ source: "  " }))).toBe(
+      "add.sourceRequired",
+    );
+  });
+
+  it("не придирается к пустому адресу, когда выбран источник", () => {
+    // Поле могло остаться заполненным с прошлого положения переключателя —
+    // ругать за то, что всё равно не уедет на сервер, незачем.
+    expect(
+      validateEntryDraft(sourceDraft({ url: "совсем не ссылка" })),
+    ).toBeNull();
   });
 
   it("требует заголовок хотя бы на одном языке", () => {
@@ -81,6 +113,7 @@ describe("buildCreateEntryBody", () => {
       ),
     ).toEqual({
       url: "https://example.com/kirtan",
+      source: null,
       type: "video",
       contentLanguage: "ru",
       titleRu: "Киртан",
@@ -90,20 +123,49 @@ describe("buildCreateEntryBody", () => {
       categoryIds: ["cat-1"],
     });
   });
+
+  it("отправляет только выбранное из двух", () => {
+    // Адрес остался с прошлого положения переключателя — на сервер он не
+    // уезжает, иначе запись молча получила бы и то, и другое.
+    const body = buildCreateEntryBody(
+      sourceDraft({ url: "https://example.com/остаток" }),
+    );
+
+    expect(body.url).toBeNull();
+    expect(body.source).toBe("Бхагавад-гита 9.22");
+  });
+});
+
+describe("defaultLocator", () => {
+  it("книге по умолчанию хватает источника", () => {
+    expect(defaultLocator("book")).toBe("source");
+  });
+
+  it("остальным типам нужен адрес", () => {
+    for (const type of ["video", "website", "article", "audio"] as const)
+      expect(defaultLocator(type)).toBe("url");
+  });
 });
 
 describe("isWizardStepReady", () => {
-  it("первый шаг ждёт корректный адрес", () => {
-    expect(isWizardStepReady(1, draft({ url: "" }))).toBe(false);
-    expect(isWizardStepReady(1, draft({ url: "не ссылка" }))).toBe(false);
-    expect(isWizardStepReady(1, draft())).toBe(true);
+  it("первый шаг готов всегда — у типа и языка есть значения", () => {
+    expect(isWizardStepReady(1, draft({ url: "", titleRu: "" }))).toBe(true);
   });
 
-  it("второй шаг ждёт заголовок, а категории ему не важны", () => {
+  it("второй шаг ждёт адрес и заголовок, а категории ему не важны", () => {
+    expect(isWizardStepReady(2, draft({ url: "" }))).toBe(false);
+    expect(isWizardStepReady(2, draft({ url: "не ссылка" }))).toBe(false);
     expect(
       isWizardStepReady(2, draft({ titleRu: "", titleEn: "", categoryIds: [] })),
     ).toBe(false);
     expect(isWizardStepReady(2, draft({ categoryIds: [] }))).toBe(true);
+  });
+
+  it("со включённым источником второй шаг ждёт источник, а не адрес", () => {
+    expect(isWizardStepReady(2, sourceDraft({ categoryIds: [] }))).toBe(true);
+    expect(isWizardStepReady(2, sourceDraft({ source: "" }))).toBe(false);
+    // Битый адрес не мешает: он не уедет на сервер.
+    expect(isWizardStepReady(2, sourceDraft({ url: "мусор" }))).toBe(true);
   });
 
   it("третий шаг ждёт хотя бы одну категорию", () => {
@@ -114,5 +176,7 @@ describe("isWizardStepReady", () => {
   it("последний шаг проверяет черновик целиком", () => {
     expect(isWizardStepReady(4, draft())).toBe(true);
     expect(isWizardStepReady(4, draft({ url: "битая" }))).toBe(false);
+    expect(isWizardStepReady(4, sourceDraft())).toBe(true);
+    expect(isWizardStepReady(4, sourceDraft({ source: "" }))).toBe(false);
   });
 });

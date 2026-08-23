@@ -17,6 +17,7 @@ export const MAX_URL_LENGTH = 2000;
 export const MAX_TITLE_LENGTH = 200;
 export const MAX_DESCRIPTION_LENGTH = 1000;
 export const MAX_CATEGORIES = 5;
+export const MAX_SOURCE_LENGTH = 300;
 
 /** Адрес принимаем только абсолютный: относительный некуда открыть. */
 const URL_PATTERN = /^https?:\/\/\S+$/i;
@@ -62,6 +63,14 @@ export async function badRequestKey(
 
 export interface LibraryEntryDraft {
   url: string;
+  /** Откуда материал, когда ссылки нет: «Бхагавад-гита 9.22». */
+  source: string;
+  /**
+   * Что из двух заполняет человек. Не выводится из типа: «книга» бывает и
+   * бумажной, и на сайте, «статья» — и в журнале, и в блоге. Тип задаёт
+   * лишь начальное положение — см. defaultLocator.
+   */
+  locator: EntryLocator;
   type: LibraryEntryType;
   contentLanguage: string;
   titleRu: string;
@@ -71,13 +80,29 @@ export interface LibraryEntryDraft {
   categoryIds: string[];
 }
 
+export type EntryLocator = "url" | "source";
+
+/** Только у книги по умолчанию нет адреса; исключения закрывает переключатель. */
+export function defaultLocator(type: LibraryEntryType): EntryLocator {
+  return type === "book" ? "source" : "url";
+}
+
 /** Ошибка черновика ключом словаря; `null` — можно отправлять. */
 export function validateEntryDraft(
   draft: LibraryEntryDraft,
 ): LibraryTextKey | null {
-  const url = draft.url.trim();
-  if (url.length > MAX_URL_LENGTH) return "add.urlTooLong";
-  if (!URL_PATTERN.test(url)) return "add.unsupportedUrl";
+  // Проверяем то из двух, что человек выбрал: второе поле могло остаться
+  // заполненным с прошлого положения переключателя, и придираться к нему
+  // значило бы ругать за то, что всё равно не уедет на сервер.
+  if (draft.locator === "url") {
+    const url = draft.url.trim();
+    if (url.length > MAX_URL_LENGTH) return "add.urlTooLong";
+    if (!URL_PATTERN.test(url)) return "add.unsupportedUrl";
+  } else {
+    const source = draft.source.trim();
+    if (!source) return "add.sourceRequired";
+    if (source.length > MAX_SOURCE_LENGTH) return "add.sourceTooLong";
+  }
 
   if (!draft.titleRu.trim() && !draft.titleEn.trim())
     return "add.titleRequired";
@@ -105,7 +130,10 @@ export function buildCreateEntryBody(
   draft: LibraryEntryDraft,
 ): CreateLibraryEntryRequest {
   return {
-    url: draft.url.trim(),
+    // Уезжает только выбранное: иначе поле, заполненное до переключения,
+    // молча попало бы в запись вместе с тем, что человек выбрал в итоге.
+    url: draft.locator === "url" ? draft.url.trim() : null,
+    source: draft.locator === "source" ? draft.source.trim() : null,
     type: draft.type,
     contentLanguage: draft.contentLanguage,
     titleRu: draft.titleRu.trim() || null,
@@ -131,17 +159,24 @@ export function isWizardStepReady(
   step: number,
   draft: LibraryEntryDraft,
 ): boolean {
-  if (step === 1) {
-    const url = draft.url.trim();
-    return URL_PATTERN.test(url) && url.length <= MAX_URL_LENGTH;
-  }
+  // Шаг 1 — тип и язык: у обоих всегда есть значение, спрашивать нечего.
+  if (step === 1) return true;
 
+  // Шаг 2 — где найти и как называется.
   if (step === 2) {
+    const locatorReady =
+      draft.locator === "url"
+        ? URL_PATTERN.test(draft.url.trim()) &&
+          draft.url.trim().length <= MAX_URL_LENGTH
+        : draft.source.trim().length > 0 &&
+          draft.source.trim().length <= MAX_SOURCE_LENGTH;
+
     const hasTitle = Boolean(draft.titleRu.trim() || draft.titleEn.trim());
-    const tooLong =
+    const titleTooLong =
       draft.titleRu.trim().length > MAX_TITLE_LENGTH ||
       draft.titleEn.trim().length > MAX_TITLE_LENGTH;
-    return hasTitle && !tooLong;
+
+    return locatorReady && hasTitle && !titleTooLong;
   }
 
   if (step === 3)

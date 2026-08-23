@@ -11,6 +11,7 @@ const entry: LibraryEntryDto = {
   id: "entry-1",
   url: "https://example.com/a",
   domain: "example.com",
+  source: null,
   type: "video",
   contentLanguage: "ru",
   titleRu: "Лекция по Гите",

@@ -10,18 +10,23 @@ import type {
   LibraryLocale,
   LibrarySectionDto,
 } from "@vedamatch/shared";
+import { CategoryCreateForm } from "./category-create-form";
+import { SectionCreateForm } from "./section-create-form";
 import { entryTypeLabel, pickLocalized, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
 import {
   badRequestKey,
   buildCreateEntryBody,
+  defaultLocator,
   ENTRY_TYPES,
   isWizardStepReady,
   MAX_DESCRIPTION_LENGTH,
+  MAX_SOURCE_LENGTH,
   MAX_TITLE_LENGTH,
   MAX_URL_LENGTH,
   validateEntryDraft,
   WIZARD_STEPS,
+  type EntryLocator,
   type LibraryEntryDraft,
 } from "./entry-draft";
 
@@ -29,8 +34,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 /** Заголовок и подсказка каждого шага — порядок задаёт номер шага. */
 const STEPS: { title: LibraryTextKey; hint: LibraryTextKey }[] = [
-  { title: "add.stepUrl", hint: "add.stepUrlHint" },
-  { title: "add.stepAbout", hint: "add.stepAboutHint" },
+  { title: "add.stepWhat", hint: "add.stepWhatHint" },
+  { title: "add.stepWhere", hint: "add.stepWhereHint" },
   { title: "add.stepPlace", hint: "add.stepPlaceHint" },
   { title: "add.stepReview", hint: "add.stepReviewHint" },
 ];
@@ -64,9 +69,22 @@ export function AddEntryWizard({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [duplicateId, setDuplicateId] = useState<string | null>(null);
+  const [locatorTouched, setLocatorTouched] = useState(false);
+  const [categoryFormOpen, setCategoryFormOpen] = useState(false);
+  const [sectionFormOpen, setSectionFormOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  // Заведённые прямо здесь разделы дописываются к пришедшим с сервера:
+  // иначе новый раздел не появился бы в пикере до перезагрузки страницы.
+  const [knownSections, setKnownSections] = useState(sections);
+
+  /** Заводить разделы вправе только администрация — `canEdit` это и значит. */
+  const canCreateSection = knownSections.some((section) => section.canEdit);
 
   const [draft, setDraft] = useState<LibraryEntryDraft>({
     url: "",
+    source: "",
+    locator: defaultLocator("article"),
     type: "article",
     contentLanguage: locale,
     titleRu: "",
@@ -80,6 +98,20 @@ export function AddEntryWizard({
     setDraft((current) => ({ ...current, ...next }));
   }
 
+  /**
+   * Пока человек не трогал переключатель сам, его положение задаёт тип.
+   * После ручного выбора тип его больше не двигает: иначе «книга, но по
+   * ссылке» сбрасывалось бы каждый раз при возврате на первый шаг.
+   */
+  function changeType(type: LibraryEntryType) {
+    patch(locatorTouched ? { type } : { type, locator: defaultLocator(type) });
+  }
+
+  function changeLocator(locator: EntryLocator) {
+    setLocatorTouched(true);
+    patch({ locator });
+  }
+
   function toggleCategory(category: LibraryCategoryDto) {
     setSelected((current) => {
       const next = current.some((item) => item.id === category.id)
@@ -88,6 +120,32 @@ export function AddEntryWizard({
       patch({ categoryIds: next.map((item) => item.id) });
       return next;
     });
+  }
+
+  function handleCategoryCreated(category: LibraryCategoryDto) {
+    setSectionCategories((current) =>
+      current.some((item) => item.id === category.id)
+        ? current
+        : [...current, category],
+    );
+    // Свежесозданную сразу отмечаем: её ради этого и заводили.
+    setSelected((current) => {
+      if (current.some((item) => item.id === category.id)) return current;
+      const next = [...current, category];
+      patch({ categoryIds: next.map((item) => item.id) });
+      return next;
+    });
+    setCategoryFormOpen(false);
+    setNotice(t(locale, "add.categoryCreated"));
+  }
+
+  function handleSectionCreated(section: LibrarySectionDto) {
+    setKnownSections((current) => [...current, section]);
+    setSectionFormOpen(false);
+    setNotice(t(locale, "add.sectionCreated"));
+    // Переходим в новый раздел: категорий в нём пока нет, и следующим шагом
+    // человек заведёт первую — ради этого раздел и создавался.
+    void changeSection(section.slug);
   }
 
   async function changeSection(slug: string) {
@@ -140,6 +198,21 @@ export function AddEntryWizard({
       }
 
       const created = (await res.json()) as { id: string };
+
+      // Обложка уезжает уже к созданной записи: отдельного эндпоинта на
+      // «загрузить до создания» нет, а этот переиспользуется как есть.
+      // Неудача не отменяет добавление — запись уже существует, и на её
+      // странице загрузку можно повторить.
+      if (coverFile) {
+        const cover = new FormData();
+        cover.append("file", coverFile);
+        await apiFetch(`${API_URL}/library/entries/${created.id}/preview`, {
+          method: "POST",
+          credentials: "include",
+          body: cover,
+        }).catch(() => null);
+      }
+
       router.push(`/library/entry/${created.id}`);
     } catch {
       setError(t(locale, "add.failed"));
@@ -177,32 +250,110 @@ export function AddEntryWizard({
         <p className="text-sm text-text-1">{t(locale, current.hint)}</p>
 
         {step === 1 && (
-          // Подсказка — сиблинг label, а не её содержимое: внутри она вошла бы
-          // в доступное имя поля, и скринридер назвал бы поле целой фразой.
-          <div>
+          <>
             <label className="text-sm text-text-1">
-              {t(locale, "add.url")}
-              <input
-                value={draft.url}
-                onChange={(event) => patch({ url: event.target.value })}
-                placeholder="https://"
-                maxLength={MAX_URL_LENGTH}
+              {t(locale, "add.type")}
+              <select
+                value={draft.type}
+                onChange={(event) =>
+                  changeType(event.target.value as LibraryEntryType)
+                }
                 autoFocus
-                aria-describedby="wizard-url-hint"
                 className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
-              />
+              >
+                {ENTRY_TYPES.map((value) => (
+                  <option key={value} value={value}>
+                    {entryTypeLabel(locale, value)}
+                  </option>
+                ))}
+              </select>
             </label>
-            <span
-              id="wizard-url-hint"
-              className="mt-1 block text-xs text-text-2"
-            >
-              {t(locale, "add.hintUrl")}
-            </span>
-          </div>
+
+            <label className="text-sm text-text-1">
+              {t(locale, "add.language")}
+              <select
+                value={draft.contentLanguage}
+                onChange={(event) =>
+                  patch({ contentLanguage: event.target.value })
+                }
+                className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+              >
+                <option value="ru">RU</option>
+                <option value="en">EN</option>
+              </select>
+            </label>
+          </>
         )}
 
         {step === 2 && (
           <>
+            <fieldset className="text-sm text-text-1">
+              {/* Легенда скрыта: на экране она повторяла бы заголовок шага,
+                  а скринридеру нужна, чтобы сгруппировать переключатели. */}
+              <legend className="sr-only">
+                {t(locale, "add.locatorLegend")}
+              </legend>
+              <div className="flex flex-wrap gap-4">
+                {(["url", "source"] as const).map((value) => (
+                  <label key={value} className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="wizard-locator"
+                      checked={draft.locator === value}
+                      onChange={() => changeLocator(value)}
+                    />
+                    {t(
+                      locale,
+                      value === "url" ? "add.locatorUrl" : "add.locatorSource",
+                    )}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            {/* Подсказка — сиблинг label, а не её содержимое: внутри она вошла
+                бы в доступное имя поля, и скринридер назвал бы поле фразой. */}
+            {draft.locator === "url" ? (
+              <div>
+                <label className="text-sm text-text-1">
+                  {t(locale, "add.url")}
+                  <input
+                    value={draft.url}
+                    onChange={(event) => patch({ url: event.target.value })}
+                    placeholder="https://"
+                    maxLength={MAX_URL_LENGTH}
+                    aria-describedby="wizard-url-hint"
+                    className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+                  />
+                </label>
+                <span
+                  id="wizard-url-hint"
+                  className="mt-1 block text-xs text-text-2"
+                >
+                  {t(locale, "add.hintUrl")}
+                </span>
+              </div>
+            ) : (
+              <div>
+                <label className="text-sm text-text-1">
+                  {t(locale, "add.source")}
+                  <input
+                    value={draft.source}
+                    onChange={(event) => patch({ source: event.target.value })}
+                    maxLength={MAX_SOURCE_LENGTH}
+                    aria-describedby="wizard-source-hint"
+                    className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+                  />
+                </label>
+                <span
+                  id="wizard-source-hint"
+                  className="mt-1 block text-xs text-text-2"
+                >
+                  {t(locale, "add.hintSource")}
+                </span>
+              </div>
+            )}
+
             <div>
               <label className="text-sm text-text-1">
                 {locale === "ru"
@@ -218,7 +369,6 @@ export function AddEntryWizard({
                     )
                   }
                   maxLength={MAX_TITLE_LENGTH}
-                  autoFocus
                   aria-describedby="wizard-title-hint"
                   className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
                 />
@@ -230,23 +380,6 @@ export function AddEntryWizard({
                 {t(locale, "add.hintTitle")}
               </span>
             </div>
-
-            <label className="text-sm text-text-1">
-              {t(locale, "add.type")}
-              <select
-                value={draft.type}
-                onChange={(event) =>
-                  patch({ type: event.target.value as LibraryEntryType })
-                }
-                className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
-              >
-                {ENTRY_TYPES.map((value) => (
-                  <option key={value} value={value}>
-                    {entryTypeLabel(locale, value)}
-                  </option>
-                ))}
-              </select>
-            </label>
           </>
         )}
 
@@ -259,7 +392,7 @@ export function AddEntryWizard({
                 onChange={(event) => void changeSection(event.target.value)}
                 className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
               >
-                {sections.map((section) => (
+                {knownSections.map((section) => (
                   <option key={section.id} value={section.slug}>
                     {pickLocalized(locale, {
                       ru: section.titleRu,
@@ -297,13 +430,77 @@ export function AddEntryWizard({
                 })}
               </div>
             </fieldset>
+
+            {/* Подходящей категории может не оказаться — тупик посреди
+                мастера хуже, чем лишняя кнопка. Раздел заводит только
+                администрация: это заранее продуманный список рубрик, а не
+                пользовательский контент, и бэкенд отказал бы остальным. */}
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-text-2">
+                {t(locale, "add.noCategoryFits")}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCategoryFormOpen((open) => !open);
+                    setSectionFormOpen(false);
+                  }}
+                  className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-0 hover:bg-glass-brd/40"
+                >
+                  {categoryFormOpen
+                    ? t(locale, "add.categoryCancel")
+                    : `+ ${t(locale, "add.categoryNew")}`}
+                </button>
+
+                {canCreateSection && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSectionFormOpen((open) => !open);
+                      setCategoryFormOpen(false);
+                    }}
+                    className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-0 hover:bg-glass-brd/40"
+                  >
+                    {sectionFormOpen
+                      ? t(locale, "add.categoryCancel")
+                      : `+ ${t(locale, "add.sectionNew")}`}
+                  </button>
+                )}
+              </div>
+
+              {categoryFormOpen && (
+                <div className="rounded-xl border border-glass-brd p-3">
+                  <CategoryCreateForm
+                    locale={locale}
+                    sections={knownSections}
+                    initialSectionSlug={sectionSlug}
+                    onCreated={handleCategoryCreated}
+                  />
+                </div>
+              )}
+
+              {sectionFormOpen && (
+                <div className="rounded-xl border border-glass-brd p-3">
+                  <SectionCreateForm onCreated={handleSectionCreated} />
+                </div>
+              )}
+
+              {notice && <p className="text-xs text-cyan">{notice}</p>}
+            </div>
           </>
         )}
 
         {step === WIZARD_STEPS && (
           <>
             <dl className="grid gap-2 rounded-xl border border-glass-brd p-3 text-sm">
-              <Row label={t(locale, "add.url")} value={draft.url} />
+              <Row
+                label={t(
+                  locale,
+                  draft.locator === "url" ? "add.url" : "add.source",
+                )}
+                value={draft.locator === "url" ? draft.url : draft.source}
+              />
               <Row
                 label={t(locale, "add.type")}
                 value={entryTypeLabel(locale, draft.type)}
@@ -328,6 +525,35 @@ export function AddEntryWizard({
                   .join(", ")}
               />
             </dl>
+
+            {/* Обложку предлагаем только материалу без ссылки: у остальных
+                картинку тянет обогащение со страницы источника. */}
+            {draft.locator === "source" && (
+              <div>
+                <label className="text-sm text-text-1">
+                  {t(locale, "add.cover")}{" "}
+                  <span className="text-text-2">
+                    — {t(locale, "add.optional")}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(event) =>
+                      setCoverFile(event.target.files?.[0] ?? null)
+                    }
+                    aria-describedby="wizard-cover-hint"
+                    className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-sm text-text-0"
+                  />
+                </label>
+                <span
+                  id="wizard-cover-hint"
+                  className="mt-1 block text-xs text-text-2"
+                >
+                  {t(locale, "add.coverHint")}
+                  {coverFile && ` · ${t(locale, "add.coverChosen")}: ${coverFile.name}`}
+                </span>
+              </div>
+            )}
 
             <div>
               <label className="text-sm text-text-1">

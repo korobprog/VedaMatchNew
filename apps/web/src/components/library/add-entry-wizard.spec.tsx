@@ -51,63 +51,84 @@ function setup() {
   );
 }
 
+/** Проходит первый шаг, выбрав тип материала. */
+async function pickType(user: ReturnType<typeof userEvent.setup>, type: string) {
+  await user.selectOptions(screen.getByLabelText("Тип материала"), type);
+  await user.click(screen.getByRole("button", { name: "Далее" }));
+}
+
 describe("AddEntryWizard", () => {
-  it("начинается с первого шага и не пускает дальше без ссылки", () => {
+  it("начинается с типа — от него зависит, что спросят дальше", () => {
     setup();
 
     expect(screen.getByText(/Шаг 1 из 4/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Далее" })).toBeDisabled();
+    expect(screen.getByLabelText("Тип материала")).toBeInTheDocument();
+    // У типа и языка всегда есть значение, ждать нечего.
+    expect(screen.getByRole("button", { name: "Далее" })).toBeEnabled();
   });
 
-  it("не считает шаг готовым, пока адрес не абсолютный", async () => {
+  it("не пускает со второго шага, пока адрес не абсолютный", async () => {
     const user = userEvent.setup();
     setup();
+    await pickType(user, "video");
 
     await user.type(screen.getByLabelText("Адрес ссылки"), "example.com");
+    await user.type(
+      screen.getByLabelText("Заголовок по-русски"),
+      "Как проходит киртан",
+    );
 
     expect(screen.getByRole("button", { name: "Далее" })).toBeDisabled();
   });
 
-  it("пускает на второй шаг после корректной ссылки", async () => {
+  it("для книги сразу предлагает источник вместо ссылки", async () => {
     const user = userEvent.setup();
     setup();
+    await pickType(user, "book");
 
-    await user.type(
-      screen.getByLabelText("Адрес ссылки"),
-      "https://example.com/kirtan",
-    );
-    await user.click(screen.getByRole("button", { name: "Далее" }));
+    expect(screen.getByLabelText("Источник")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Адрес ссылки")).not.toBeInTheDocument();
+  });
 
-    expect(screen.getByText(/Шаг 2 из 4/)).toBeInTheDocument();
-    expect(screen.getByLabelText("Заголовок по-русски")).toBeInTheDocument();
+  it("переключатель меняет поле, а выбор человека тип не перебивает", async () => {
+    const user = userEvent.setup();
+    setup();
+    await pickType(user, "video");
+
+    expect(screen.getByLabelText("Адрес ссылки")).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText("Только источник"));
+
+    expect(screen.getByLabelText("Источник")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Адрес ссылки")).not.toBeInTheDocument();
   });
 
   it("возвращает на предыдущий шаг и сохраняет введённое", async () => {
     const user = userEvent.setup();
     setup();
+    await pickType(user, "video");
 
     await user.type(
       screen.getByLabelText("Адрес ссылки"),
       "https://example.com/kirtan",
     );
-    await user.click(screen.getByRole("button", { name: "Далее" }));
     await user.click(screen.getByRole("button", { name: "Назад" }));
+    await user.click(screen.getByRole("button", { name: "Далее" }));
 
     expect(screen.getByLabelText("Адрес ссылки")).toHaveValue(
       "https://example.com/kirtan",
     );
   });
 
-  it("доходит до проверки и показывает сводку выбранного", async () => {
+  it("доходит до проверки со ссылкой и показывает сводку", async () => {
     const user = userEvent.setup();
     setup();
+    await pickType(user, "video");
 
     await user.type(
       screen.getByLabelText("Адрес ссылки"),
       "https://example.com/kirtan",
     );
-    await user.click(screen.getByRole("button", { name: "Далее" }));
-
     await user.type(
       screen.getByLabelText("Заголовок по-русски"),
       "Как проходит киртан",
@@ -122,6 +143,26 @@ describe("AddEntryWizard", () => {
     expect(screen.getByText(/Шаг 4 из 4/)).toBeInTheDocument();
     expect(screen.getByText("https://example.com/kirtan")).toBeInTheDocument();
     expect(screen.getByText("Как проходит киртан")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Добавить" })).toBeEnabled();
+  });
+
+  it("доходит до отправки материала из книги — без всякой ссылки", async () => {
+    const user = userEvent.setup();
+    setup();
+    await pickType(user, "book");
+
+    await user.type(screen.getByLabelText("Источник"), "Бхагавад-гита 9.22");
+    await user.type(
+      screen.getByLabelText("Заголовок по-русски"),
+      "О преданном служении",
+    );
+    await user.click(screen.getByRole("button", { name: "Далее" }));
+
+    await user.click(screen.getByLabelText("Шрила Прабхупада"));
+    await user.click(screen.getByRole("button", { name: "Далее" }));
+
+    // В сводке на месте адреса — источник.
+    expect(screen.getByText("Бхагавад-гита 9.22")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Добавить" })).toBeEnabled();
   });
 });
