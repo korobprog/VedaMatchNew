@@ -82,9 +82,16 @@ export function ChatMessage({
           // реакции идут ниже отдельной строкой и на выравнивание не влияют.
           <span className="w-8 shrink-0">{avatar}</span>
         )}
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={0}
           onClick={() => setOpen((current) => !current)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setOpen((current) => !current);
+            }
+          }}
           aria-expanded={open}
           aria-label={open ? "Скрыть действия" : "Действия с сообщением"}
           className={`max-w-[85%] cursor-default px-3.5 py-2.5 text-left ${bubble} shadow-lg shadow-black/20`}
@@ -147,7 +154,7 @@ export function ChatMessage({
               )}
             </>
           )}
-        </button>
+        </div>
       </div>
 
       {/* Время под пузырём, а не внутри: в пузыре оно врезается в последнюю
