@@ -201,7 +201,12 @@ export class MotivationService {
             ? new Date(cursor.seenBefore)
             : null
           : (preference.lastSeenAt ?? null);
-    if (ranked && cursor.since === undefined)
+    // Переход по прямой ссылке на один рилс — не сеанс листания, и отмечать
+    // им визит нельзя: всё, что вышло с прошлого раза, потеряет ярус
+    // «свежее», так и не показавшись. Больнее всего это било по автору —
+    // мастер сам зовёт его «Открыть рилс» сразу после публикации, и этот
+    // переход прятал от него его же публикацию.
+    if (ranked && cursor.since === undefined && !query.post)
       await this.touchLastSeen(userId, since);
     const blockedAuthorIds = (
       await this.prisma.userBlock.findMany({
@@ -424,7 +429,17 @@ export class MotivationService {
     return { count, hidden };
   }
   async view(userId: string, postId: string) {
-    await this.ensurePublished(postId);
+    const post = await this.prisma.motivationPost.findFirst({
+      where: { id: postId, status: 'published' },
+      select: { authorUserId: true },
+    });
+    if (!post) throw new NotFoundException();
+    // Свой рилс автор смотрит не как читатель. Отметка просмотра уводит пост
+    // в ярус «повтор», то есть в самый хвост ленты — за все непросмотренные.
+    // Автор публиковал ровно затем, чтобы пост в ленте появился, а один
+    // взгляд на него убирал его оттуда. Заодно и счётчик просмотров у автора
+    // перестаёт расти от него самого.
+    if (post.authorUserId === userId) return;
     // Повторный просмотр отметку не сдвигает: она нужна как «когда впервые
     // видел» — по ней ярус «повтор» ставит давнее раньше недавнего, а порядок
     // ленты не прыгает оттого, что человек листает.

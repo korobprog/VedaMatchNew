@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { MotivationService } from './motivation.service';
 import type { MotivationAdminCandidateDto } from '@vedamatch/shared';
 
@@ -449,6 +450,19 @@ describe('MotivationService feed tiers', () => {
     expect(page.items.filter((item) => item.id === 'target')).toHaveLength(1);
   });
 
+  it('does not count a link to one reel as a visit', async () => {
+    // Автор приходит сюда из мастера по кнопке «Открыть рилс». Если считать
+    // это визитом, его свежая публикация в следующий раз перестанет быть
+    // «свежей», так и не показавшись ему в ленте.
+    const target = post('target', day(12), null);
+    const { service, prisma, motivationPreference } = build(day(10), [target]);
+    prisma.motivationPost.findFirst = jest.fn().mockResolvedValue(target);
+
+    await service.feed('user-1', { post: 'target' });
+
+    expect(motivationPreference.upsert).not.toHaveBeenCalled();
+  });
+
   it('leaves favorites chronological without tiers', async () => {
     const { service, motivationPreference } = build(day(10), [
       post('a', day(12), null),
@@ -458,6 +472,61 @@ describe('MotivationService feed tiers', () => {
 
     expect(page.items[0].feedTier).toBeUndefined();
     expect(motivationPreference.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('MotivationService.view', () => {
+  function build(authorUserId: string | null) {
+    const motivationView = { upsert: jest.fn().mockResolvedValue({}) };
+    const prisma = {
+      motivationPost: {
+        findFirst: jest.fn().mockResolvedValue({ authorUserId }),
+      },
+      motivationView,
+    };
+    const service = new MotivationService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    return { service, motivationView, prisma };
+  }
+
+  it('записывает просмотр читателя', async () => {
+    const { service, motivationView } = build('author-1');
+
+    await service.view('reader-1', 'p1');
+
+    expect(motivationView.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId_postId: { userId: 'reader-1', postId: 'p1' } },
+      }),
+    );
+  });
+
+  it('не засчитывает автору просмотр своего рилса', async () => {
+    // Иначе один взгляд на собственную публикацию — а мастер сам зовёт
+    // «Открыть рилс» — уводит её в ярус «повтор», в самый хвост ленты.
+    const { service, motivationView } = build('author-1');
+
+    await service.view('author-1', 'p1');
+
+    expect(motivationView.upsert).not.toHaveBeenCalled();
+  });
+
+  it('неопубликованного поста не знает', async () => {
+    const { service, prisma } = build(null);
+    prisma.motivationPost.findFirst = jest.fn().mockResolvedValue(null);
+
+    await expect(service.view('reader-1', 'p1')).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });
 
