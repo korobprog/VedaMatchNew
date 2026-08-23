@@ -65,6 +65,8 @@ describe("ChatRoomMenu — оформление", () => {
     await waitFor(() =>
       expect(setConversationTheme).toHaveBeenCalledWith("conv-1", "tpl-1"),
     );
-    expect(onThemeChange).toHaveBeenCalledWith("tpl-1");
+    expect(onThemeChange).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "tpl-1" }),
+    );
   });
 });

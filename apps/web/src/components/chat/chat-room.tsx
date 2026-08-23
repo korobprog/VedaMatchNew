@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import type {
   ChatAttachmentInput,
+  ChatColorTemplateDto,
   ChatConversationDetail,
   ChatMessageDto,
 } from "@vedamatch/shared";
@@ -27,6 +29,7 @@ import { ChatMessage } from "./chat-message";
 import { formatChatDivider } from "./chat-time";
 import { isOnline, presenceLabel } from "./chat-presence";
 import { withPlural } from "./chat-plural";
+import { pickBubbleInk } from "./chat-contrast-ink";
 
 /** Сколько «печатает…» держится без нового сигнала. */
 const TYPING_TTL_MS = 5000;
@@ -36,12 +39,15 @@ const TYPING_PING_MS = 3000;
 export function ChatRoom({
   initial,
   viewerId,
+  initialTheme,
 }: {
   initial: ChatConversationDetail;
   viewerId: string;
+  initialTheme: ChatColorTemplateDto | null;
 }) {
   const [conversation, setConversation] = useState(initial);
   const [messages, setMessages] = useState(initial.messages);
+  const [theme, setTheme] = useState(initialTheme);
   const [typing, setTyping] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<ChatMessageDto | null>(null);
   const [editing, setEditing] = useState<ChatMessageDto | null>(null);
@@ -237,8 +243,22 @@ export function ChatRoom({
     await reportChat({ reason: "Жалоба из переписки", messageId: message.id });
   }
 
+  const themeStyle = theme
+    ? ({
+        "--chat-bubble-mine": theme.bubbleMine,
+        "--chat-bubble-mine-ink": pickBubbleInk(theme.bubbleMine),
+        "--chat-bubble-theirs": theme.bubbleTheirs,
+        "--chat-bubble-theirs-ink": pickBubbleInk(theme.bubbleTheirs),
+        "--chat-accent": theme.accent,
+        "--chat-bg": theme.background,
+      } as CSSProperties)
+    : undefined;
+
   return (
-    <div className="flex h-[calc(100dvh-9rem)] flex-col">
+    <div
+      className="flex h-[calc(100dvh-9rem)] flex-col"
+      style={{ ...themeStyle, background: "var(--chat-bg, transparent)" }}
+    >
       <header className="flex items-center gap-2.5 border-b border-glass-brd pb-3">
         <Link
           href="/chat"
@@ -313,6 +333,7 @@ export function ChatRoom({
           onChange={(patch) =>
             setConversation((current) => ({ ...current, ...patch }))
           }
+          onThemeChange={setTheme}
         />
       </header>
 

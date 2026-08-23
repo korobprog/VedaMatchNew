@@ -6,6 +6,7 @@ import type {
   AdminChatStats,
   ChatColorTemplatesState,
   ChatConversationDetail,
+  ChatConversationThemeState,
   ChatListState,
   ChatChannelCommunitiesState,
   ChatDiscoverState,
@@ -102,4 +103,12 @@ export function getAdminChatStats(): Promise<AdminChatStats | null> {
 /** Шаблоны цвета — для серверного рендера страницы /chat/appearance. */
 export function getChatColorTemplates(): Promise<ChatColorTemplatesState | null> {
   return chatGet<ChatColorTemplatesState>("/chat/color-templates");
+}
+
+export function getChatConversationTheme(
+  conversationId: string,
+): Promise<ChatConversationThemeState | null> {
+  return chatGet<ChatConversationThemeState>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/theme`,
+  );
 }

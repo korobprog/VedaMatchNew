@@ -26,7 +26,7 @@ export function ChatRoomMenu({
 }: {
   conversation: ChatConversationDetail;
   onChange: (patch: Partial<ChatConversationDetail>) => void;
-  onThemeChange: (templateId: string | null) => void;
+  onThemeChange: (template: ChatColorTemplateDto | null) => void;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -41,9 +41,9 @@ export function ChatRoomMenu({
     void listColorTemplates().then((state) => setTemplates(state.templates));
   }, [appearanceOpen, templates]);
 
-  async function applyTheme(templateId: string | null) {
-    await setConversationTheme(conversation.id, templateId);
-    onThemeChange(templateId);
+  async function applyTheme(template: ChatColorTemplateDto | null) {
+    await setConversationTheme(conversation.id, template?.id ?? null);
+    onThemeChange(template);
     setAppearanceOpen(false);
     setOpen(false);
   }
@@ -213,7 +213,7 @@ export function ChatRoomMenu({
             <button
               key={template.id}
               type="button"
-              onClick={() => void applyTheme(template.id)}
+              onClick={() => void applyTheme(template)}
               className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-left text-sm text-text-1 transition-colors hover:bg-white/6 hover:text-text-0"
             >
               <span
