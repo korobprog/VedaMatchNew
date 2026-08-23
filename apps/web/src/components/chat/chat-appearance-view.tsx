@@ -17,6 +17,31 @@ const DEFAULT_DRAFT: SaveChatColorTemplateRequest = {
 };
 
 /**
+ * Готовые цвета вместо свободного hex-ввода: клик сразу ставит цвет, без
+ * набора кода. Одна и та же карта на все четыре роли (пузырь свой/чужой,
+ * акцент, фон) — нейтральные тона и фирменные цвета сервиса вперемешку,
+ * потому что заранее не знать, для чего именно готовят цвет каждый раз.
+ */
+const COLOR_SWATCHES = [
+  "#FFFFFF",
+  "#F5F5F5",
+  "#D0D0D0",
+  "#8A8A8A",
+  "#4A4A4A",
+  "#1A1A2E",
+  "#0A0614",
+  "#23F0C7",
+  "#33CCCC",
+  "#5CCCCC",
+  "#FF3E9E",
+  "#FFC85C",
+  "#B23EFF",
+  "#FF6B6B",
+  "#4ADE80",
+  "#60A5FA",
+];
+
+/**
  * «Мои шаблоны оформления»: список именованных шаблонов цвета переписки,
  * создание/редактирование/удаление. Применение к конкретной беседе живёт
  * в меню беседы (chat-room-menu.tsx), не здесь.
@@ -201,21 +226,30 @@ function ColorField({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="flex items-center gap-3 text-sm text-text-1">
-      <input
-        type="color"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={label}
-        className="size-9 shrink-0 rounded-lg border border-glass-brd bg-transparent"
-      />
-      <span className="flex-1">{label}</span>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-24 rounded-lg border border-glass-brd bg-bg-1 px-2 py-1 font-mono text-xs text-text-0"
-      />
-    </label>
+    <fieldset className="flex flex-col gap-2 text-sm text-text-1">
+      <legend className="mb-1">{label}</legend>
+      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={label}>
+        {COLOR_SWATCHES.map((color) => {
+          const selected = color.toLowerCase() === value.toLowerCase();
+          return (
+            <button
+              key={color}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              aria-label={color}
+              onClick={() => onChange(color)}
+              style={{ backgroundColor: color }}
+              className={`size-8 shrink-0 rounded-full border-2 transition-transform ${
+                selected
+                  ? "scale-110 border-cyan"
+                  : "border-glass-brd hover:scale-105"
+              }`}
+            />
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 
