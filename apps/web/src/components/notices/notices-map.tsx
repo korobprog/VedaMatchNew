@@ -101,10 +101,20 @@ export const NoticesMap = forwardRef<NoticesMapHandle, NoticesMapProps>(
         map = L.map(containerRef.current, {
           center: DEFAULT_CENTER,
           zoom: DEFAULT_ZOOM,
-          // Прокрутка страницы важнее зума: колесо над картой не должно ловить
-          // страницу в ловушку. Зум остаётся кнопками и щипком.
+          // Колесо включается не сразу, а после нажатия по карте — см. ниже.
           scrollWheelZoom: false,
           attributionControl: false,
+        });
+
+        /**
+         * Колесом карта приближается только после нажатия по ней: включить
+         * сразу — значит поймать в ловушку страницу, выключить совсем —
+         * колесо не работает вовсе. Увёл курсор — колесо снова у страницы.
+         * Щипок на телефоне включён всегда.
+         */
+        map.on("click", () => map?.scrollWheelZoom.enable());
+        containerRef.current.addEventListener("mouseleave", () => {
+          map?.scrollWheelZoom.disable();
         });
         L.control
           .attribution({ position: "bottomright", prefix: BRAND_PREFIX })
