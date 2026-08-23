@@ -305,6 +305,8 @@ model User {
   supportTicketMessages              SupportTicketMessage[]       @relation("SupportTicketMessagesAuthored")
   libraryCategories                  LibraryCategory[]            @relation("LibraryCategoryAuthor")
   libraryEntries                     LibraryEntry[]               @relation("LibraryEntryAuthor")
+  librarySectionRequests             LibrarySectionRequest[]      @relation("LibrarySectionRequests")
+  librarySectionRequestsDecided      LibrarySectionRequest[]      @relation("LibrarySectionRequestsDecided")
   libraryPreference                  LibraryPreference?
   libraryBookmarks                   LibraryBookmark[]
   libraryComments                    LibraryComment[]
@@ -1680,6 +1682,48 @@ model LibraryPreference {
   contentLanguages String[] @default([])
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+enum LibrarySectionRequestStatus {
+  pending
+  approved
+  rejected
+}
+
+/// Заявка на новый раздел справочника.
+///
+/// Разделы заводит только администрация — это заранее продуманный список
+/// рубрик. Но участнику, которому не нашлось подходящего, нужен выход:
+/// иначе он либо кладёт материал не туда, либо не кладёт вовсе.
+model LibrarySectionRequest {
+  id String @id @default(uuid())
+
+  requestedById String
+  requestedBy   User   @relation("LibrarySectionRequests", fields: [requestedById], references: [id], onDelete: Cascade)
+
+  titleRu String
+  titleEn String
+  /// Зачем нужен раздел: по одному названию решение принимать не о чем.
+  reason  String?
+
+  status LibrarySectionRequestStatus @default(pending)
+
+  decidedById String?
+  decidedBy   User?     @relation("LibrarySectionRequestsDecided", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt   DateTime?
+  /// Причина отказа либо комментарий к одобрению — уезжает автору.
+  decision    String?
+
+  /// Раздел, созданный по заявке. Хранится, чтобы повторное одобрение не
+  /// завело второй такой же; FK нет — раздел живёт своей жизнью и его
+  /// удаление не должно трогать историю заявок.
+  createdSectionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([requestedById])
 }
 
 // ===== Notifications (портальная инфраструктура) =====

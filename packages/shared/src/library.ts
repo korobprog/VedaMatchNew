@@ -132,6 +132,43 @@ export interface UpdateLibrarySectionRequest {
   iconKey?: string | null;
 }
 
+export type LibrarySectionRequestStatus = 'pending' | 'approved' | 'rejected';
+
+/**
+ * Заявка на новый раздел. Разделы заводит администрация, но участнику,
+ * которому не нашлось подходящего, нужен способ попросить.
+ */
+export interface LibrarySectionRequestDto {
+  id: string;
+  titleRu: string;
+  titleEn: string;
+  reason: string | null;
+  status: LibrarySectionRequestStatus;
+  /** Кто просил — админу решать по человеку, а не по одному названию. */
+  requestedByName: string | null;
+  /** Комментарий администратора к решению. */
+  decision: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+}
+
+export interface LibrarySectionRequestsState {
+  requests: LibrarySectionRequestDto[];
+  /** Сколько ждёт решения — значок на вкладке админки. */
+  pendingCount: number;
+}
+
+export interface CreateLibrarySectionRequestBody {
+  titleRu: string;
+  titleEn: string;
+  reason?: string | null;
+}
+
+export interface DecideLibrarySectionRequestBody {
+  action: 'approve' | 'reject';
+  comment?: string | null;
+}
+
 /** Новый раздел встаёт последним по `position` — порядок правится не отсюда. */
 export interface SaveLibrarySectionRequest {
   titleRu: string;
