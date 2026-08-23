@@ -47,16 +47,26 @@ export function PeopleSearchFiltersPanel({
   filters,
   tags,
   facets,
+  activeCount,
   onApply,
   onReset,
 }: {
   filters: ContactsSearchFilters;
   tags: ContactsTagDto[];
   facets: ContactsSearchFacet[];
+  /** Сколько условий применено. Приходит извне — тем же счётом, что и чипы. */
+  activeCount: number;
   onApply: (filters: ContactsSearchFilters) => void;
   onReset: () => void;
 }) {
   const [draft, setDraft] = useState<ContactsSearchFilters>(filters);
+  /**
+   * Панель свёрнута по умолчанию: большинство приходит смотреть выдачу, а не
+   * настраивать поиск, и восемь полей сверху отодвигают людей за край экрана.
+   * Что именно сейчас включено, видно по чипам под картой.
+   */
+  const [open, setOpen] = useState(false);
+
   // Подсказка про подтверждённых закрыта по умолчанию: она нужна один раз, а
   // место в панели фильтров дорогое.
   const [hintOpen, setHintOpen] = useState(false);
@@ -109,7 +119,36 @@ export function PeopleSearchFiltersPanel({
       }}
       className="glass mb-6 rounded-3xl border border-glass-brd p-4 sm:p-5"
     >
-      <div className="grid gap-3 md:grid-cols-3">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        aria-controls="people-filters-body"
+        className="flex w-full items-center justify-between gap-3 text-left"
+      >
+        <span className="text-sm font-semibold text-text-0">
+          Поиск и фильтры
+        </span>
+        <span className="flex items-center gap-2 text-xs text-text-2">
+          {activeCount > 0 && (
+            <span className="rounded-full border border-magenta/40 bg-magenta/10 px-2 py-0.5 font-semibold text-text-0">
+              {activeCount}
+            </span>
+          )}
+          {open ? "Свернуть" : "Развернуть"}
+        </span>
+      </button>
+
+      {!open && (
+        <p className="mt-2 text-xs text-text-2">
+          {activeCount > 0
+            ? "Условия применены — они перечислены под картой."
+            : "Имя, город, служение, навык, язык и остальное."}
+        </p>
+      )}
+
+      <div id="people-filters-body" hidden={!open}>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
         <label className="block md:col-span-2">
           <span className={labelClass}>Поиск</span>
           <input
@@ -334,6 +373,7 @@ export function PeopleSearchFiltersPanel({
         >
           Сбросить всё
         </button>
+      </div>
       </div>
     </form>
   );

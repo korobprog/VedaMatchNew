@@ -74,6 +74,16 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+/**
+ * Панель поиска свёрнута по умолчанию, поэтому тесты про её содержимое
+ * сначала раскрывают её — ровно как это делает человек.
+ */
+async function openFilters(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    await screen.findByRole("button", { name: /Поиск и фильтры/ }),
+  );
+}
+
 describe("PeopleSearchView", () => {
   it("shows the exact number of matches when the backend sent one", async () => {
     stubApi(response());
@@ -125,6 +135,7 @@ describe("PeopleSearchView", () => {
 
   /** Блок групп свёрнут целиком, внутри свёрнута ещё и каждая группа. */
   async function openTagGroup(name: RegExp) {
+    await openFilters(userEvent.setup());
     await userEvent.click(
       await screen.findByRole("button", { name: /Этап, ашрам, языки/ }),
     );
@@ -150,6 +161,7 @@ describe("PeopleSearchView", () => {
     // полями поиска и кнопкой «Применить», поэтому блок прячется целиком.
     stubApi(response());
     render(<PeopleSearchView query={currentQuery} />);
+    await openFilters(userEvent.setup());
 
     const block = await screen.findByRole("button", {
       name: /Этап, ашрам, языки/,
@@ -166,6 +178,7 @@ describe("PeopleSearchView", () => {
   it("keeps a group collapsed after the block is opened", async () => {
     stubApi(response());
     render(<PeopleSearchView query={currentQuery} />);
+    await openFilters(userEvent.setup());
 
     await userEvent.click(
       await screen.findByRole("button", { name: /Этап, ашрам, языки/ }),
@@ -184,6 +197,7 @@ describe("PeopleSearchView", () => {
     currentQuery = "tagIds=tag-pujari";
     stubApi(response());
     render(<PeopleSearchView query={currentQuery} />);
+    await openFilters(userEvent.setup());
 
     expect(
       await screen.findByRole("button", { name: /Этап, ашрам, языки/ }),
