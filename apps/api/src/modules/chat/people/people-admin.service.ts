@@ -31,7 +31,6 @@ const MAX_PAGE_SIZE = 100;
 const profileSelect = {
   userId: true,
   headline: true,
-  about: true,
   offers: true,
   status: true,
   visibility: true,
@@ -41,6 +40,8 @@ const profileSelect = {
     select: {
       name: true,
       email: true,
+      // Рассказ о себе портальный — см. контракт сервисного модуля.
+      about: true,
       homeLocation: true,
       lastSeenAt: true,
     },
@@ -318,7 +319,7 @@ export class PeopleAdminService {
       name: row.user.name,
       email: row.user.email,
       headline: row.headline,
-      about: row.about,
+      about: row.user.about,
       offers: row.offers,
       status: row.status,
       visibility: row.visibility,

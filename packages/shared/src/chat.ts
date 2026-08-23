@@ -360,6 +360,11 @@ export type ChatStreamEvent =
       conversation: ChatConversationSummary;
     }
   | {
+      /** Беседу удалил владелец: её надо убрать из списка, а не открывать. */
+      type: 'conversation.removed';
+      conversationId: string;
+    }
+  | {
       /** Закрепили или сняли закрепление: `message` = null — сняли. */
       type: 'pinned';
       conversationId: string;
@@ -410,6 +415,30 @@ export interface AdminChatConversationDto {
 
 export interface AdminChatConversationsState {
   conversations: AdminChatConversationDto[];
+}
+
+/**
+ * Переписка двоих для разбора жалобы.
+ *
+ * Раньше её показывала админка Знакомств из своих таблиц. Переписка переехала
+ * в «Общение», и читать её из чужого модуля Знакомствам нельзя — поэтому
+ * возможность живёт здесь, у владельца данных, вместе со своим журналом
+ * просмотров.
+ */
+export interface AdminChatDirectMessageDto {
+  id: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+  editedAt: string | null;
+  deletedAt: string | null;
+  attachments: number;
+}
+
+export interface AdminChatDirectTranscript {
+  conversationId: string | null;
+  messages: AdminChatDirectMessageDto[];
 }
 
 export interface AdminChatStats {

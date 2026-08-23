@@ -66,6 +66,17 @@ export class ChatAdminController {
     return this.reports.freezeConversation(id, body?.frozen !== false);
   }
 
+  /** Переписка двоих для разбора жалобы: пара людей, а не id беседы. */
+  @Get('direct-transcript')
+  transcript(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('a') a: string,
+    @Query('b') b: string,
+  ) {
+    if (!isAdmin(user)) throw new ForbiddenException('Недостаточно прав');
+    return this.reports.adminDirectTranscript(user.sub, a ?? '', b ?? '');
+  }
+
   @Get('stats')
   stats(@CurrentUser() user: AccessTokenPayload) {
     this.assertAdmin(user);

@@ -507,7 +507,6 @@ export interface UnionAdminProfileDto extends UnionAdminProfileListItem {
     requestsSent: number;
     requestsReceived: number;
     matches: number;
-    messagesSent: number;
   };
 }
 
@@ -527,33 +526,11 @@ export interface UnionAdminHideProfileRequest {
   reason: string;
 }
 
-/** Сообщение переписки, открытой администрации по жалобе. */
-export interface UnionAdminChatMessageDto {
-  id: string;
-  fromUserId: string;
-  fromName: string;
-  body: string;
-  editedAt: string | null;
-  createdAt: string;
-}
-
-/**
- * Переписка пары по конкретной жалобе. Открывается только по id жалобы:
- * без неё у администрации нет повода читать чужую переписку.
- */
-export interface UnionAdminChatResponse {
-  reportId: string;
-  reporter: { id: string; name: string };
-  target: { id: string; name: string };
-  /** Заявки между ними не было — тогда и переписки нет. */
-  messages: UnionAdminChatMessageDto[];
-}
-
 /** Сводка по сервису знакомств для админки. */
 export interface UnionAdminStats {
   profiles: { total: number; active: number; hidden: number };
   /** За последние 7 дней. */
-  week: { swipes: number; likes: number; requests: number; messages: number };
+  week: { swipes: number; likes: number; requests: number };
   matches: { total: number; pending: number };
   boostsActive: number;
 }

@@ -74,16 +74,6 @@ export class UnionAdminController {
     return this.admin.restoreProfile(user.sub, userId);
   }
 
-  /** Переписка пары по жалобе. Просмотр записывается в журнал действий. */
-  @Get('reports/:reportId/chat')
-  chat(
-    @CurrentUser() user: AccessTokenPayload,
-    @Param('reportId') reportId: string,
-  ) {
-    this.assertAdmin(user);
-    return this.admin.chatByReport(user.sub, reportId);
-  }
-
   private assertAdmin(user: AccessTokenPayload): void {
     if (!isAdmin(user)) {
       throw new ForbiddenException('Доступ только для администратора');

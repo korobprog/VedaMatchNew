@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import type { ChatMapState } from "@vedamatch/shared";
-import type { ChatMapHandle } from "./chat-map";
+import type { ChatMapBounds, ChatMapHandle } from "./chat-map";
 import { withPlural } from "./chat-plural";
 
 // Карта грузится только в браузере: Leaflet трогает window при вычислении
@@ -25,6 +25,9 @@ const ChatMap = dynamic(() => import("./chat-map").then((m) => m.ChatMap), {
 export function ChatMapView({ initial }: { initial: ChatMapState }) {
   const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
+  // Что сейчас в кадре. Пока карта не сообщила — показываем всё: список не
+  // должен пустовать, пока грузится Leaflet.
+  const [bounds, setBounds] = useState<ChatMapBounds | null>(null);
   const mapRef = useRef<ChatMapHandle | null>(null);
 
   const communities = useMemo(
@@ -43,6 +46,23 @@ export function ChatMapView({ initial }: { initial: ChatMapState }) {
   const onSelect = useCallback((communityId: string) => {
     setSelected(communityId);
   }, []);
+
+  const onBoundsChange = useCallback((next: ChatMapBounds) => {
+    setBounds(next);
+  }, []);
+
+  const visibleCommunities = useMemo(
+    () => communities.filter((point) => inBounds(point, bounds)),
+    [communities, bounds],
+  );
+  const visibleCities = useMemo(
+    () => cities.filter((point) => inBounds(point, bounds)),
+    [cities, bounds],
+  );
+  const hidden =
+    communities.length -
+    visibleCommunities.length +
+    (cities.length - visibleCities.length);
 
   // Метка города ведёт в справочник, отфильтрованный по нему: карта отвечает
   // «здесь есть люди», а кто именно — уже дело справочника и его видимости.
@@ -69,17 +89,43 @@ export function ChatMapView({ initial }: { initial: ChatMapState }) {
         cities={cities}
         onSelect={onSelect}
         onSelectCity={onSelectCity}
+        onBoundsChange={onBoundsChange}
       />
 
-      {cities.length > 0 && (
-        <p className="text-[13px] text-text-2">
-          Города со счётчиком — участники, включившие метку в своей карточке.
-          Метка стоит в центре города, а не по адресу человека.
+      {/* Списки показывают ровно то, что видно в кадре: иначе карта и список
+          под ней рассказывают о разных местах. */}
+      {hidden > 0 && (
+        <p className="flex flex-wrap items-center gap-2 text-[13px] text-text-2">
+          {visibleCommunities.length + visibleCities.length === 0
+            ? "В этом месте карты пусто."
+            : `Вне кадра осталось: ${hidden}.`}
+          <button
+            type="button"
+            onClick={() => mapRef.current?.fitAll()}
+            className="rounded-xl border border-glass-brd px-3 py-1.5 text-[13px] font-medium text-text-1 hover:text-text-0"
+          >
+            Показать всё
+          </button>
         </p>
       )}
 
+      {visibleCities.length > 0 && (
+        <p className="text-[13px] text-text-2">
+          Города со счётчиком — участники, включившие метку в своей карточке.
+          Метка стоит в центре города, а не по адресу человека. Щелчок по карте
+          отдаёт ей колесо мыши, уход курсора — возвращает странице.
+        </p>
+      )}
+
+      {visibleCommunities.length > 0 && (
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-text-2">
+          Общины
+        </h2>
+      )}
+      {/* Заголовок нужен обоим спискам: без него первый читается как ничей,
+          и метки общин на карте будто не имеют строки под ней. */}
       <ul className="flex flex-col gap-1">
-        {communities.map((point) => {
+        {visibleCommunities.map((point) => {
           const beseds = point.channels + point.groups;
           return (
             <li
@@ -122,7 +168,7 @@ export function ChatMapView({ initial }: { initial: ChatMapState }) {
         })}
       </ul>
 
-      {cities.length > 0 && (
+      {visibleCities.length > 0 && (
         <section>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-2">
             Люди по городам
@@ -130,7 +176,7 @@ export function ChatMapView({ initial }: { initial: ChatMapState }) {
           {/* Список не украшение: на телефоне попасть пальцем в метку трудно,
               а строку нажать легко, и ведут они в одно место. */}
           <ul className="flex flex-col gap-1">
-            {cities.map((point) => (
+            {visibleCities.map((point) => (
               <li
                 key={`${point.city}-${point.country ?? ""}`}
                 className="flex items-center gap-3 rounded-2xl border border-transparent p-2.5 transition-colors hover:bg-white/5"
@@ -162,4 +208,22 @@ export function ChatMapView({ initial }: { initial: ChatMapState }) {
       )}
     </div>
   );
+}
+
+/**
+ * Точка в кадре карты.
+ *
+ * Долгота сравнивается с оглядкой на 180-й меридиан: когда кадр его
+ * пересекает, `west` оказывается больше `east`, и обычное «между» отсекло бы
+ * ровно то, что видно.
+ */
+export function inBounds(
+  point: { lat: number; lon: number },
+  bounds: ChatMapBounds | null,
+): boolean {
+  if (!bounds) return true;
+  if (point.lat > bounds.north || point.lat < bounds.south) return false;
+  return bounds.west <= bounds.east
+    ? point.lon >= bounds.west && point.lon <= bounds.east
+    : point.lon >= bounds.west || point.lon <= bounds.east;
 }

@@ -27,7 +27,7 @@ export default async function AdminUnionPage() {
             >
               Анкеты
             </h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <Tile label="Всего" value={stats.profiles.total} />
               <Tile label="В выдаче" value={stats.profiles.active} />
               <Tile label="Сняты" value={stats.profiles.hidden} />
@@ -56,7 +56,6 @@ export default async function AdminUnionPage() {
               <Tile label="Просмотров колоды" value={stats.week.swipes} />
               <Tile label="Из них симпатий" value={stats.week.likes} />
               <Tile label="Заявок" value={stats.week.requests} />
-              <Tile label="Сообщений" value={stats.week.messages} />
             </div>
           </section>
 

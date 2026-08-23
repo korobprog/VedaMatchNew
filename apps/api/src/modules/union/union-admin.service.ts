@@ -9,7 +9,6 @@ import { UNION_ADMIN_HIDE_REASON_MIN_LENGTH } from '@vedamatch/shared';
 import type {
   AdminAuditEvent,
   ProfileLocation,
-  UnionAdminChatResponse,
   UnionAdminHideProfileRequest,
   UnionAdminProfileDto,
   UnionAdminProfileListItem,
@@ -85,39 +84,34 @@ export class UnionAdminService {
     if (!row) throw new NotFoundException('Анкета не найдена');
 
     const [base] = await this.withCounters([row]);
-    const [
-      swipesMade,
-      likesReceived,
-      requestsSent,
-      requestsReceived,
-      matches,
-      messagesSent,
-    ] = await Promise.all([
-      this.prisma.unionSwipe.count({
-        where: { fromUserId: userId, undoneAt: null },
-      }),
-      this.prisma.unionSwipe.count({
-        where: { toUserId: userId, decision: { in: ['like', 'superlike'] } },
-      }),
-      this.prisma.unionConnectionRequest.count({
-        where: { fromUserId: userId },
-      }),
-      this.prisma.unionConnectionRequest.count({ where: { toUserId: userId } }),
-      this.prisma.unionConnectionRequest.count({
-        where: {
-          status: 'accepted',
-          OR: [{ fromUserId: userId }, { toUserId: userId }],
-        },
-      }),
-      this.prisma.unionChatMessage.count({ where: { fromUserId: userId } }),
-    ]);
+    const [swipesMade, likesReceived, requestsSent, requestsReceived, matches] =
+      await Promise.all([
+        this.prisma.unionSwipe.count({
+          where: { fromUserId: userId, undoneAt: null },
+        }),
+        this.prisma.unionSwipe.count({
+          where: { toUserId: userId, decision: { in: ['like', 'superlike'] } },
+        }),
+        this.prisma.unionConnectionRequest.count({
+          where: { fromUserId: userId },
+        }),
+        this.prisma.unionConnectionRequest.count({
+          where: { toUserId: userId },
+        }),
+        this.prisma.unionConnectionRequest.count({
+          where: {
+            status: 'accepted',
+            OR: [{ fromUserId: userId }, { toUserId: userId }],
+          },
+        }),
+      ]);
 
     return {
       ...base,
-      about: row.about,
+      about: row.user.about,
       status: row.status,
       format: row.format,
-      languages: row.languages,
+      languages: row.user.languages,
       skills: row.skills,
       interests: row.interests,
       values: row.values,
@@ -136,7 +130,6 @@ export class UnionAdminService {
         requestsSent,
         requestsReceived,
         matches,
-        messagesSent,
       },
     };
   }
@@ -176,70 +169,6 @@ export class UnionAdminService {
    * чужой чат — и только по существующей жалобе: без неё повода нет. Сам
    * просмотр пишется в журнал действий, потому что это чтение личного.
    */
-  async chatByReport(
-    adminId: string,
-    reportId: string,
-  ): Promise<UnionAdminChatResponse> {
-    const report = await this.prisma.userReport.findUnique({
-      where: { id: reportId },
-      select: {
-        id: true,
-        reporterId: true,
-        targetId: true,
-        reporter: { select: { name: true, spiritualName: true } },
-        target: { select: { name: true, spiritualName: true } },
-      },
-    });
-    if (!report) throw new NotFoundException('Жалоба не найдена');
-
-    const request = await this.prisma.unionConnectionRequest.findFirst({
-      where: {
-        OR: [
-          { fromUserId: report.reporterId, toUserId: report.targetId },
-          { fromUserId: report.targetId, toUserId: report.reporterId },
-        ],
-      },
-      select: { id: true },
-    });
-
-    const messages = request
-      ? await this.prisma.unionChatMessage.findMany({
-          where: { requestId: request.id },
-          orderBy: { createdAt: 'asc' },
-          take: 500,
-          select: {
-            id: true,
-            fromUserId: true,
-            body: true,
-            editedAt: true,
-            createdAt: true,
-            fromUser: { select: { name: true, spiritualName: true } },
-          },
-        })
-      : [];
-
-    this.audit(adminId, 'union.chat-viewed', report.targetId, {
-      reportId,
-      messages: messages.length,
-    });
-
-    return {
-      reportId: report.id,
-      // Мирское имя: разбор жалобы — то место, где нужно точно понимать, кто
-      // перед тобой, а не под каким именем его видят в сервисе.
-      reporter: { id: report.reporterId, name: report.reporter.name },
-      target: { id: report.targetId, name: report.target.name },
-      messages: messages.map((message) => ({
-        id: message.id,
-        fromUserId: message.fromUserId,
-        fromName: message.fromUser.name,
-        body: message.body,
-        editedAt: message.editedAt?.toISOString() ?? null,
-        createdAt: message.createdAt.toISOString(),
-      })),
-    };
-  }
-
   async stats(now: Date = new Date()): Promise<UnionAdminStats> {
     const since = new Date(now.getTime() - WEEK_MS);
     const [
@@ -248,7 +177,6 @@ export class UnionAdminService {
       swipes,
       likes,
       requests,
-      messages,
       matchesTotal,
       matchesPending,
       boostsActive,
@@ -265,9 +193,6 @@ export class UnionAdminService {
       this.prisma.unionConnectionRequest.count({
         where: { createdAt: { gte: since } },
       }),
-      this.prisma.unionChatMessage.count({
-        where: { createdAt: { gte: since } },
-      }),
       this.prisma.unionConnectionRequest.count({
         where: { status: 'accepted' },
       }),
@@ -279,7 +204,7 @@ export class UnionAdminService {
 
     return {
       profiles: { total, active, hidden: total - active },
-      week: { swipes, likes, requests, messages },
+      week: { swipes, likes, requests },
       matches: { total: matchesTotal, pending: matchesPending },
       boostsActive,
     };
@@ -367,6 +292,9 @@ const profileListSelect = {
       accountStatus: true,
       homeLocation: true,
       lastSeenAt: true,
+      // Рассказ и языки живут в портальном профиле — см. контракт.
+      about: true,
+      languages: true,
     },
   },
 } satisfies Prisma.UnionProfileSelect;
@@ -380,10 +308,8 @@ type ProfileListRow = Prisma.UnionProfileGetPayload<{
  *  выводить тип строки. */
 const profileDetailSelect = {
   ...profileListSelect,
-  about: true,
   status: true,
   format: true,
-  languages: true,
   skills: true,
   interests: true,
   values: true,

@@ -3,6 +3,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Prisma } from '@prisma/client';
 import type {
   AdminChatConversationsState,
+  AdminChatDirectTranscript,
   AdminChatReportDecisionRequest,
   AdminChatReportsState,
   AdminChatStats,
@@ -10,6 +11,7 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toUserSummary } from './chat-dto';
+import { directKey } from './direct-key';
 import { chatUserSelect } from './chat-selects';
 
 /**
@@ -145,6 +147,65 @@ export class ChatReportsService {
    * Беседы для админки. Отдаём заголовки и счётчики, но не переписку:
    * разбор жалобы не повод читать чужие сообщения целиком.
    */
+  /**
+   * Переписка двоих целиком — для разбора жалобы на человека.
+   *
+   * Личный диалог у пары ровно один (его держит `directKey`), поэтому пары
+   * идентификаторов достаточно: искать беседу глазами администратору не нужно.
+   * Удалённые сообщения остаются в выдаче с пометкой: разбирают жалобу как раз
+   * по тому, что человек успел стереть.
+   */
+  async adminDirectTranscript(
+    adminId: string,
+    a: string,
+    b: string,
+  ): Promise<AdminChatDirectTranscript> {
+    const conversation = await this.prisma.chatConversation.findUnique({
+      where: { directKey: directKey(a, b) },
+      select: { id: true },
+    });
+    if (!conversation) return { conversationId: null, messages: [] };
+
+    const rows = await this.prisma.chatMessage.findMany({
+      where: { conversationId: conversation.id },
+      orderBy: { createdAt: 'asc' },
+      take: 500,
+      select: {
+        id: true,
+        authorId: true,
+        body: true,
+        createdAt: true,
+        editedAt: true,
+        deletedAt: true,
+        author: { select: { name: true } },
+        _count: { select: { attachments: true } },
+      },
+    });
+
+    this.bus.emit('admin.action', {
+      actorId: adminId,
+      action: 'chat.transcript-viewed',
+      targetUserId: b,
+      payload: { conversationId: conversation.id, messages: rows.length },
+    });
+
+    return {
+      conversationId: conversation.id,
+      messages: rows.map((row) => ({
+        id: row.id,
+        authorId: row.authorId,
+        // Мирское имя: разбор жалобы — то место, где нужно точно понимать,
+        // кто перед тобой, а не под каким именем его видят в сервисе.
+        authorName: row.author.name,
+        body: row.body ?? '',
+        createdAt: row.createdAt.toISOString(),
+        editedAt: row.editedAt?.toISOString() ?? null,
+        deletedAt: row.deletedAt?.toISOString() ?? null,
+        attachments: row._count.attachments,
+      })),
+    };
+  }
+
   async adminConversations(
     query?: string,
   ): Promise<AdminChatConversationsState> {

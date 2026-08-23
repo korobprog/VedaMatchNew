@@ -259,14 +259,33 @@ export function ChatRoom({
             <path d="M15 5l-7 7 7 7" />
           </svg>
         </Link>
-        <ChatAvatar
-          kind={conversation.kind}
-          user={conversation.companion}
-          title={conversation.title}
-          size={42}
-          imageUrl={conversation.avatarUrl}
-          online={isOnline(conversation.companion?.lastSeenAt)}
-        />
+        {/* Аватар — вход в карточку человека: она отвечает на вопрос «кто
+            это», который возникает прямо посреди переписки. В группе и канале
+            вести некуда: там за знаком беседа, а не человек. */}
+        {conversation.companion ? (
+          <Link
+            href={`/chat/people/users/${conversation.companion.id}`}
+            aria-label={`Карточка: ${conversation.title}`}
+            className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-magenta"
+          >
+            <ChatAvatar
+              kind={conversation.kind}
+              user={conversation.companion}
+              title={conversation.title}
+              size={42}
+              imageUrl={conversation.avatarUrl}
+              online={isOnline(conversation.companion.lastSeenAt)}
+            />
+          </Link>
+        ) : (
+          <ChatAvatar
+            kind={conversation.kind}
+            user={null}
+            title={conversation.title}
+            size={42}
+            imageUrl={conversation.avatarUrl}
+          />
+        )}
         <div className="flex min-w-0 flex-1 flex-col">
           <h1 className="truncate text-base font-bold text-text-0">
             {conversation.title}
@@ -378,12 +397,18 @@ export function ChatRoom({
                   // держится даже у продолжения — иначе подряд идущие
                   // сообщения одного человека прыгают влево.
                   conversation.kind === "direct" ? undefined : showAuthor ? (
-                    <ChatAvatar
-                      kind="direct"
-                      user={message.author}
-                      title={message.author.name}
-                      size={32}
-                    />
+                    <Link
+                      href={`/chat/people/users/${message.author.id}`}
+                      aria-label={`Карточка: ${message.author.name}`}
+                      className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-magenta"
+                    >
+                      <ChatAvatar
+                        kind="direct"
+                        user={message.author}
+                        title={message.author.name}
+                        size={32}
+                      />
+                    </Link>
                   ) : (
                     <span className="block size-8" aria-hidden />
                   )

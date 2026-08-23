@@ -224,17 +224,6 @@ export function PeopleSearchView({ query = "" }: { query?: string }) {
     <div>
       <PeopleMapPanel filters={filters} onApply={pushFilters} />
 
-      <PeopleSearchFiltersPanel
-        // Черновик панели пересобирается, когда фильтры меняются извне:
-        // например, после снятия чипа или перехода «назад» в браузере.
-        key={query}
-        filters={filters}
-        tags={tags}
-        facets={response?.facets ?? []}
-        onApply={pushFilters}
-        onReset={() => router.push("/chat/people")}
-      />
-
       {chips.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           {chips.map((chip) => (
@@ -260,6 +249,19 @@ export function PeopleSearchView({ query = "" }: { query?: string }) {
           </button>
         </div>
       )}
+
+
+      <PeopleSearchFiltersPanel
+        // Черновик панели пересобирается, когда фильтры меняются извне:
+        // например, после снятия чипа или перехода «назад» в браузере.
+        key={query}
+        filters={filters}
+        tags={tags}
+        facets={response?.facets ?? []}
+        activeCount={chips.length}
+        onApply={pushFilters}
+        onReset={() => router.push("/chat/people")}
+      />
 
       {state === "loading" && (
         <p className="glass rounded-2xl border border-glass-brd p-4 text-sm text-text-1">

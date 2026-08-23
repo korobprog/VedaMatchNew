@@ -273,8 +273,6 @@ model User {
   unionBoosts                        UnionBoost[]                 @relation("UnionBoosts")
   unionSwipesMade                    UnionSwipe[]                 @relation("UnionSwipesMade")
   unionSwipesReceived                UnionSwipe[]                 @relation("UnionSwipesReceived")
-  unionChatMessagesSent              UnionChatMessage[]           @relation("UnionChatMessagesSent")
-  unionMessageReactions              UnionMessageReaction[]       @relation("UnionMessageReactionsMade")
   photos                             UserPhoto[]
   blocksMade                         UserBlock[]                  @relation("UserBlocksMade")
   blocksReceived                     UserBlock[]                  @relation("UserBlocksReceived")
@@ -1230,12 +1228,10 @@ model UnionProfile {
   id                       String                     @id @default(uuid())
   userId                   String                     @unique
   user                     User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  about                    String?
   /// Короткая строка-статус поверх анкеты
   status                   String?
   relocationReady          Boolean                    @default(false)
   format                   UnionFormat                @default(any)
-  languages                String[]                   @default([])
   skills                   String[]                   @default([])
   interests                String[]                   @default([])
   values                   String[]                   @default([])
@@ -1339,8 +1335,6 @@ model UnionConnectionRequest {
   message     String?
   createdAt   DateTime              @default(now())
   respondedAt DateTime?
-
-  messages UnionChatMessage[]
 
   @@unique([fromUserId, toUserId])
   @@index([toUserId, status])
@@ -1473,40 +1467,6 @@ model SupportTicketMessage {
   createdAt    DateTime            @default(now())
 
   @@index([ticketId, createdAt])
-}
-
-model UnionChatMessage {
-  id         String                 @id @default(uuid())
-  requestId  String
-  request    UnionConnectionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  fromUserId String
-  fromUser   User                   @relation("UnionChatMessagesSent", fields: [fromUserId], references: [id], onDelete: Cascade)
-  body       String
-  /// Когда собеседник прочитал сообщение; null — ещё не прочитано.
-  readAt     DateTime?
-  /// Когда сообщение было отредактировано; null — не редактировалось.
-  editedAt   DateTime?
-  createdAt  DateTime               @default(now())
-  reactions  UnionMessageReaction[]
-
-  @@index([requestId, createdAt])
-  @@index([fromUserId])
-  @@index([requestId, readAt])
-}
-
-/// Реакция на сообщение чата. Одна реакция на пользователя на сообщение —
-/// повторный выбор того же эмодзи снимает реакцию, другого — заменяет.
-model UnionMessageReaction {
-  id        String           @id @default(uuid())
-  messageId String
-  message   UnionChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User             @relation("UnionMessageReactionsMade", fields: [userId], references: [id], onDelete: Cascade)
-  emoji     String
-  createdAt DateTime         @default(now())
-
-  @@unique([messageId, userId])
-  @@index([messageId])
 }
 
 // ===== Library service =====
@@ -2131,10 +2091,8 @@ model ContactsProfile {
   user                     User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Короткая строка «чем полезен» — заголовок карточки в выдаче.
   headline                 String?
-  about                    String?
   /// Что человек предлагает и с чем готов помочь.
   offers                   String?
-  languages                String[]              @default([])
   ashram                   ContactsAshram?
   format                   ContactsFormat        @default(any)
   visibility               ContactsVisibility    @default(hidden)

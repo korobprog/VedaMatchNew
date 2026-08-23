@@ -1,4 +1,5 @@
 import {
+  canDeleteConversation,
   canDeleteMessage,
   canEditMessage,
   canInvite,
@@ -252,5 +253,53 @@ describe('canDeleteMessage', () => {
       true,
     );
     expect(canDeleteMessage('other', group, member())).toBe(false);
+  });
+});
+
+describe('canDeleteConversation', () => {
+  it('владелец удаляет группу и канал', () => {
+    expect(
+      canDeleteConversation(
+        { kind: 'group', state: 'active' },
+        { userId: 'u1', role: 'owner', leftAt: null },
+      ),
+    ).toBe(true);
+    expect(
+      canDeleteConversation(
+        { kind: 'channel', state: 'active' },
+        { userId: 'u1', role: 'owner', leftAt: null },
+      ),
+    ).toBe(true);
+  });
+
+  it('администратор и участник — нет', () => {
+    for (const role of ['admin', 'member'] as const) {
+      expect(
+        canDeleteConversation(
+          { kind: 'group', state: 'active' },
+          { userId: 'u1', role, leftAt: null },
+        ),
+      ).toBe(false);
+    }
+  });
+
+  it('личный диалог не удаляется даже собеседником', () => {
+    // У него два хозяина: стереть переписку по желанию одного — значит
+    // стереть её и у второго. Оттуда выходят, а не удаляют.
+    expect(
+      canDeleteConversation(
+        { kind: 'direct', state: 'active' },
+        { userId: 'u1', role: 'owner', leftAt: null },
+      ),
+    ).toBe(false);
+  });
+
+  it('ушедший владелец больше не владелец', () => {
+    expect(
+      canDeleteConversation(
+        { kind: 'group', state: 'active' },
+        { userId: 'u1', role: 'owner', leftAt: new Date() },
+      ),
+    ).toBe(false);
   });
 });
