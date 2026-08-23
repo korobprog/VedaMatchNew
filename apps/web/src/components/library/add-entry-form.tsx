@@ -12,6 +12,7 @@ import type {
   LibrarySectionDto,
 } from "@vedamatch/shared";
 import { CategoryCreateForm } from "./category-create-form";
+import { CategoryEditForm } from "./category-edit-form";
 import { entryTypeLabel, pickLocalized, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
 
@@ -90,6 +91,15 @@ export function AddEntryForm({
       current.some((item) => item.id === category.id)
         ? current.filter((item) => item.id !== category.id)
         : [...current, category],
+    );
+  }
+
+  function handleCategoryRenamed(updated: LibraryCategoryDto) {
+    setSectionCategories((current) =>
+      current.map((item) => (item.id === updated.id ? updated : item)),
+    );
+    setSelected((current) =>
+      current.map((item) => (item.id === updated.id ? updated : item)),
     );
   }
 
@@ -328,15 +338,22 @@ export function AddEntryForm({
               en: category.titleEn,
             });
             return (
-              <label key={category.id} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  aria-label={label}
-                  checked={selected.some((item) => item.id === category.id)}
-                  onChange={() => toggleCategory(category)}
+              <span key={category.id} className="flex items-center gap-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    aria-label={label}
+                    checked={selected.some((item) => item.id === category.id)}
+                    onChange={() => toggleCategory(category)}
+                  />
+                  {label}
+                </label>
+                <CategoryEditForm
+                  locale={locale}
+                  category={category}
+                  onSaved={handleCategoryRenamed}
                 />
-                {label}
-              </label>
+              </span>
             );
           })}
         </div>
