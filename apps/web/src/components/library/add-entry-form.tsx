@@ -13,39 +13,18 @@ import type {
 } from "@vedamatch/shared";
 import { CategoryCreateForm } from "./category-create-form";
 import { CategoryEditForm } from "./category-edit-form";
-import { entryTypeLabel, pickLocalized, t, type LibraryTextKey } from "./i18n";
+import { entryTypeLabel, pickLocalized, t } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
+import {
+  badRequestKey,
+  ENTRY_TYPES,
+  MAX_CATEGORIES,
+  MAX_DESCRIPTION_LENGTH,
+  MAX_TITLE_LENGTH,
+  MAX_URL_LENGTH,
+} from "./entry-draft";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-const MAX_URL_LENGTH = 2000;
-const MAX_TITLE_LENGTH = 200;
-const MAX_DESCRIPTION_LENGTH = 1000;
-const MAX_CATEGORIES = 5;
-const TYPES: LibraryEntryType[] = [
-  "website",
-  "article",
-  "video",
-  "audio",
-  "book",
-  "course",
-  "app",
-  "telegram_channel",
-  "community",
-  "other",
-];
-
-/** Коды `400` из API — показываем по ним конкретную причину, а не «ссылка плохая». */
-const ERROR_KEYS: Record<string, LibraryTextKey> = {
-  unsupported_url: "add.unsupportedUrl",
-  url_too_long: "add.urlTooLong",
-  unsupported_type: "add.unsupportedType",
-  title_required: "add.titleRequired",
-  title_too_long: "add.titleTooLong",
-  description_too_long: "add.descriptionTooLong",
-  category_required: "add.categoryRequired",
-  too_many_categories: "add.tooManyCategories",
-  category_not_found: "add.categoryNotFound",
-};
 
 export function AddEntryForm({
   locale,
@@ -221,17 +200,27 @@ export function AddEntryForm({
 
   return (
     <form onSubmit={submit} className="grid gap-4">
-      <label className="text-sm text-text-1">
-        {t(locale, "add.url")}
-        <input
-          value={url}
-          onChange={(event) => setUrl(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
-          placeholder="https://"
-          maxLength={MAX_URL_LENGTH}
-          required
-        />
-      </label>
+      {/* Подсказка — сиблинг label, а не её содержимое: внутри она попадает
+          в доступное имя поля («Адрес ссылки Полный адрес вместе с https://»),
+          и скринридер называет поле целой фразой. Описание вешаем через
+          aria-describedby — оно читается отдельно от имени. */}
+      <div>
+        <label className="text-sm text-text-1">
+          {t(locale, "add.url")}
+          <input
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+            placeholder="https://"
+            maxLength={MAX_URL_LENGTH}
+            aria-describedby="add-url-hint"
+            required
+          />
+        </label>
+        <span id="add-url-hint" className="mt-1 block text-xs text-text-2">
+          {t(locale, "add.hintUrl")}
+        </span>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="text-sm text-text-1">
@@ -241,7 +230,7 @@ export function AddEntryForm({
             onChange={(event) => setType(event.target.value as LibraryEntryType)}
             className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
           >
-            {TYPES.map((value) => (
+            {ENTRY_TYPES.map((value) => (
               <option key={value} value={value}>
                 {entryTypeLabel(locale, value)}
               </option>
@@ -263,15 +252,21 @@ export function AddEntryForm({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="text-sm text-text-1">
-          {t(locale, "add.titleRu")}
-          <input
-            value={titleRu}
-            onChange={(event) => setTitleRu(event.target.value)}
-            maxLength={MAX_TITLE_LENGTH}
-            className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
-          />
-        </label>
+        <div>
+          <label className="text-sm text-text-1">
+            {t(locale, "add.titleRu")}
+            <input
+              value={titleRu}
+              onChange={(event) => setTitleRu(event.target.value)}
+              maxLength={MAX_TITLE_LENGTH}
+              aria-describedby="add-title-hint"
+              className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+            />
+          </label>
+          <span id="add-title-hint" className="mt-1 block text-xs text-text-2">
+            {t(locale, "add.hintTitle")}
+          </span>
+        </div>
         <label className="text-sm text-text-1">
           {t(locale, "add.titleEn")}
           <input
@@ -281,19 +276,26 @@ export function AddEntryForm({
             className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
           />
         </label>
-        <label className="text-sm text-text-1">
-          {t(locale, "add.descriptionRu")}
-          <textarea
-            value={descriptionRu}
-            onChange={(event) => setDescriptionRu(event.target.value)}
-            rows={3}
-            maxLength={MAX_DESCRIPTION_LENGTH}
-            className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
-          />
-          <span className="mt-1 block text-xs text-text-2">
-            {descriptionRu.length}/{MAX_DESCRIPTION_LENGTH}
+        <div>
+          <label className="text-sm text-text-1">
+            {t(locale, "add.descriptionRu")}
+            <textarea
+              value={descriptionRu}
+              onChange={(event) => setDescriptionRu(event.target.value)}
+              rows={3}
+              maxLength={MAX_DESCRIPTION_LENGTH}
+              aria-describedby="add-description-hint"
+              className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+            />
+          </label>
+          <span
+            id="add-description-hint"
+            className="mt-1 block text-xs text-text-2"
+          >
+            {t(locale, "add.hintDescription")} · {descriptionRu.length}/
+            {MAX_DESCRIPTION_LENGTH}
           </span>
-        </label>
+        </div>
         <label className="text-sm text-text-1">
           {t(locale, "add.descriptionEn")}
           <textarea
@@ -415,14 +417,4 @@ export function AddEntryForm({
       </button>
     </form>
   );
-}
-
-async function badRequestKey(response: Response): Promise<LibraryTextKey> {
-  const payload = (await response.json().catch(() => null)) as {
-    message?: unknown;
-  } | null;
-  const code = Array.isArray(payload?.message)
-    ? payload?.message[0]
-    : payload?.message;
-  return (typeof code === "string" && ERROR_KEYS[code]) || "add.failed";
 }
