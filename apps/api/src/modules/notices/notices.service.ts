@@ -4,9 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma, type NoticeStatus } from '@prisma/client';
 import {
   MAX_IMAGES_PER_NOTICE,
+  PORTAL_ACTIVITY_EVENTS,
   NOTICES_PER_DAY,
   type CreateNoticeRequest,
   type NoticeDto,
@@ -17,6 +19,7 @@ import {
   type NoticeImageUploadFailure,
   type NoticeImageUploadResponse,
   type NoticeRubricsResponse,
+  type PortalActivityEvent,
   type ProfileLocation,
   type ReorderNoticeImagesRequest,
   type UpdateNoticeRequest,
@@ -96,7 +99,23 @@ export class NoticesService {
     private readonly moderation: ModerationService,
     private readonly images: NoticeImagesService,
     private readonly subscriptions: NoticesSubscriptionsService,
+    private readonly bus: EventEmitter2,
   ) {}
+
+  /**
+   * Факт «человек опубликовал объявление» для подписчиков портала. Отдельно
+   * от `notices.notice.published`: то уведомление адресовано подписчикам
+   * рубрики и несёт `recipientId`, а здесь важен автор.
+   */
+  private announceActivity(userId: string): void {
+    const event: PortalActivityEvent = {
+      name: PORTAL_ACTIVITY_EVENTS.notices,
+      userId,
+      action: 'notices.notice-created',
+      occurredAt: new Date().toISOString(),
+    };
+    this.bus.emit(event.name, event);
+  }
 
   // ===== Каталог =====
 
@@ -466,6 +485,7 @@ export class NoticesService {
         audience: created.audience,
       })
       .catch(() => undefined);
+    this.announceActivity(userId);
     return toNoticeDto(created, userId, now);
   }
 

@@ -43,6 +43,8 @@ export const ADMIN_AUDIT_ACTIONS = [
   'contacts.profile-restored',
   'platform.registration-changed',
   'astro.generation-resumed',
+  'rewards.entry-revoked',
+  'rewards.settings-changed',
 ] as const;
 
 export type AdminAuditAction = (typeof ADMIN_AUDIT_ACTIONS)[number];

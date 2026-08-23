@@ -14,6 +14,7 @@ import {
 } from "@/components/featured-services";
 import { MemberCountLine } from "@/components/member-count-line";
 import { PortalNews } from "@/components/portal-news";
+import { InviteFriendTeaser } from "@/components/rewards/invite-friend-teaser";
 import {
   getUnionChats,
   getUnionConnectionCounts,
@@ -162,6 +163,10 @@ export default async function Home({
         {/* Новости администрации выше советника: советник говорит о делах
             человека, новость — о портале, и она не должна теряться под ними. */}
         <PortalNews items={news ?? []} />
+        {/* Приглашение стоит рядом с новостями и выше советника: советник
+            говорит о делах человека, а это — предложение портала, как и
+            новость. Ниже сетки сервисов его никто не находил. */}
+        <InviteFriendTeaser userId={user.id} />
         <AdvisorStrip
           cards={advisorCards}
           userId={user.id}

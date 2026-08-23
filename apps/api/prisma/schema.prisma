@@ -350,6 +350,13 @@ model User {
   chatColorTemplates                 ChatColorTemplate[]          @relation("ChatColorTemplates")
   chatConversationThemes             ChatConversationTheme[]      @relation("ChatConversationThemes")
   announcementAcks                   AnnouncementAck[]            @relation("AnnouncementAcks")
+  rewardsAccount                     RewardsAccount?              @relation("RewardsAccount")
+  rewardsReferralsSent               RewardsReferral[]            @relation("RewardsReferralsSent")
+  rewardsReferralReceived            RewardsReferral?             @relation("RewardsReferralsReceived")
+  rewardsLedger                      RewardsLedgerEntry[]         @relation("RewardsLedger")
+  rewardsLedgerActed                 RewardsLedgerEntry[]         @relation("RewardsLedgerActor")
+  rewardsFraudAsInviter              RewardsFraudLog[]            @relation("RewardsFraudInviter")
+  rewardsFraudAsInvitee              RewardsFraudLog[]            @relation("RewardsFraudInvitee")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -3807,7 +3814,6 @@ model ChatColorTemplate {
 /**
  * Какой шаблон применён к какой беседе у какого пользователя — приватная
  * настройка просмотра, не видна другим участникам беседы.
- *
  * `templateId: null` при существующей строке — это явный сброс на
  * оформление по умолчанию, отличается от отсутствия строки («никогда не
  * настраивал»), хотя рендерится одинаково.
@@ -3822,4 +3828,188 @@ model ChatConversationTheme {
   updatedAt DateTime @updatedAt
 
   @@id([userId, conversationId])
+}
+
+// ===== Rewards service (баллы и рефералы) =====
+
+/**
+ * Тип операции в леджере. Баланс — сумма `amount` по строкам; отдельной
+ * колонки баланса нет намеренно, она расходится молча.
+ */
+enum RewardsLedgerType {
+  welcome
+  referral_l1
+  referral_l2
+  admin_revoke
+  reserve
+  commit
+  release
+}
+
+/**
+ * Где приглашённый в своём пути. `qualified` и `awarded` разъезжаются, когда
+ * условие выполнено, но месячный потолок пригласившего уже выбран.
+ */
+enum RewardsReferralStatus {
+  registered
+  qualified
+  awarded
+  rejected
+}
+
+/**
+ * Почему начисление не создано.
+ */
+enum RewardsFraudReason {
+  self_invite
+  email_alias
+  device_match
+  ip_match
+  monthly_cap
+}
+
+/**
+ * Реферальный счёт человека: его собственный код и отпечатки регистрации.
+ * Код нужен стабильный и уникальный на человека, а в `RewardsReferral` лежит
+ * код, по которому пришёл конкретный приглашённый, — это разные вещи.
+ * Отпечатки (`signupIp`, `signupDeviceId`) хранятся здесь, потому что
+ * антифроду не с чем сравнивать сигналы приглашённого: `LoginAudit` —
+ * портальная таблица чужого модуля, читать её контракт не разрешает.
+ */
+model RewardsAccount {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation("RewardsAccount", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Короткий читаемый код. Не userId: тот утекает в ссылку и живёт вечно.
+  code String @unique
+
+  signupIp       String?
+  signupDeviceId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+}
+
+/**
+ * Кто кого пригласил. Уровень (1 или 2) не хранится: он вычисляется по
+ * цепочке `inviteeId -> inviterId` и глубже родителя не читается.
+ */
+model RewardsReferral {
+  id        String @id @default(uuid())
+  inviterId String
+  inviter   User   @relation("RewardsReferralsSent", fields: [inviterId], references: [id], onDelete: Cascade)
+  /// Приглашённым можно стать один раз: первая ссылка выигрывает.
+  inviteeId String @unique
+  invitee   User   @relation("RewardsReferralsReceived", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  /// Код, по которому пришёл этот человек, — снимок на момент регистрации.
+  code   String
+  /// Откуда перешёл: `landing`, `telegram`, `whatsapp`; null — неизвестно.
+  source String?
+
+  status RewardsReferralStatus @default(registered)
+
+  /// Первое осмысленное действие в любом сервисе — из события шины.
+  activityAt     DateTime?
+  /// Какое именно действие; для карточки в админке.
+  activityKind   String?
+  /// Когда чистая функция признала условие выполненным.
+  qualifiedAt    DateTime?
+  /// Когда начисление реально попало в леджер.
+  awardedAt      DateTime?
+  /// Почему отказано, если статус `rejected`.
+  rejectedReason String?
+
+  /// Очередь отложенного начисления: не раньше этого момента.
+  eligibleAt   DateTime?
+  /// Клейм воркером; сбрасывается при восстановлении зависших.
+  claimedAt    DateTime?
+  attemptCount Int       @default(0)
+  lastError    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ledgerEntries RewardsLedgerEntry[]
+
+  @@index([inviterId, status])
+  @@index([status, eligibleAt])
+  @@index([createdAt])
+}
+
+/**
+ * Операция со знаком. Отмена администратором — отдельная строка
+ * `admin_revoke`, ссылающаяся на исходную: история не переписывается.
+ */
+model RewardsLedgerEntry {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation("RewardsLedger", fields: [userId], references: [id], onDelete: Cascade)
+
+  type   RewardsLedgerType
+  /// Со знаком: начисление положительное, отмена и резерв отрицательные.
+  amount Int
+
+  referralId String?
+  referral   RewardsReferral? @relation(fields: [referralId], references: [id], onDelete: SetNull)
+
+  /// Какую строку отменяет эта. Заполнено только у `admin_revoke`.
+  revokesId String?             @unique
+  revokes   RewardsLedgerEntry? @relation("RewardsRevocation", fields: [revokesId], references: [id], onDelete: SetNull)
+  revokedBy RewardsLedgerEntry? @relation("RewardsRevocation")
+
+  /// Кто отменил. SetNull: журнал переживает удаление администратора.
+  actorId String?
+  actor   User?   @relation("RewardsLedgerActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  comment String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@index([createdAt])
+}
+
+/**
+ * Единственная строка настроек модуля. Номиналы правятся из админки, а не
+ * живут константами: экономика беты меняется быстрее релизов.
+ */
+model RewardsSettings {
+  id String @id @default("global")
+
+  levelOnePoints    Int @default(30)
+  levelTwoPoints    Int @default(5)
+  welcomePoints     Int @default(10)
+  monthlyCapPoints  Int @default(300)
+  /// Задержка начисления после выполнения условия, в часах.
+  accrualDelayHours Int @default(24)
+  /// Сколько дней должно пройти с регистрации приглашённого.
+  qualifyMinDays    Int @default(3)
+
+  updatedAt DateTime @updatedAt
+}
+
+/**
+ * Журнал подозрений: начисление не создано, но след остался.
+ */
+model RewardsFraudLog {
+  id     String             @id @default(uuid())
+  reason RewardsFraudReason
+
+  inviterId String?
+  inviter   User?   @relation("RewardsFraudInviter", fields: [inviterId], references: [id], onDelete: SetNull)
+  inviteeId String?
+  invitee   User?   @relation("RewardsFraudInvitee", fields: [inviteeId], references: [id], onDelete: SetNull)
+
+  /// Что именно совпало. Плоская строка: журнал читает человек.
+  details String?
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([reason, createdAt])
 }

@@ -7,7 +7,15 @@ import type { UserProfile } from "@vedamatch/shared";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Home, LifeBuoy, Bell, MoreHorizontal } from "lucide-react";
+import {
+  Menu,
+  X,
+  Home,
+  LifeBuoy,
+  Bell,
+  Gift,
+  MoreHorizontal,
+} from "lucide-react";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { LogoutButton } from "@/components/logout-button";
 import { CartBadge } from "@/components/market/cart-badge";
@@ -345,6 +353,19 @@ export function Header({ user }: { user: UserProfile }) {
                   >
                     <Bell size={20} />
                     <span className="text-sm">{t("notifications")}</span>
+                  </Link>
+                  {/* Баллы — личный пункт, как самоидентификация и
+                      уведомления, а не сервис: в меню «···» рядом с
+                      Знакомствами и Рынком им было бы не место. На телефоне
+                      это единственная навигация, доступная с любой страницы,
+                      — без неё за ссылкой приходилось идти через главную. */}
+                  <Link
+                    href="/rewards"
+                    onClick={closeDrawer}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-cyan hover:bg-glass transition-colors"
+                  >
+                    <Gift size={20} />
+                    <span className="text-sm">{t("rewards")}</span>
                   </Link>
                   <Link
                     href="/support"

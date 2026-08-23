@@ -21,6 +21,8 @@ export * from './notices';
 export * from './audit';
 export * from './chat';
 export * from './pwa';
+export * from './activity';
+export * from './rewards';
 
 import type { BillingMode, SubscriptionState } from './support';
 

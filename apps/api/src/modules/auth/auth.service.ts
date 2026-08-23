@@ -8,10 +8,16 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Request, Response } from 'express';
 import { createHash, randomBytes } from 'node:crypto';
 import * as oidc from 'openid-client';
-import { resolveDisplayName, type Role } from '@vedamatch/shared';
+import {
+  USER_REGISTERED_EVENT,
+  resolveDisplayName,
+  type Role,
+  type UserRegisteredEvent,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { readRegistrationMode } from '../billing/billing-mode';
 import { assertAccountActive } from '../users/account-status';
@@ -49,6 +55,19 @@ export function safeReturnTo(value: unknown): string {
   return trimmed;
 }
 
+/**
+ * Короткая строка из ненадёжного источника (query, cookie) в OIDC-payload.
+ * Ограничение длины здесь, а не в потребителе: payload уезжает в cookie, и
+ * килобайт мусора в query превратил бы вход в 431-ю ошибку.
+ */
+export function shortToken(value: unknown, maxLength = 64): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > maxLength) return null;
+  if (!/^[\w-]+$/.test(trimmed)) return null;
+  return trimmed;
+}
+
 @Injectable()
 export class AuthService implements OnModuleInit {
   private readonly logger = new Logger(AuthService.name);
@@ -59,6 +78,7 @@ export class AuthService implements OnModuleInit {
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly jwt: JwtSignService,
+    private readonly events: EventEmitter2,
   ) {}
 
   async onModuleInit() {
@@ -96,7 +116,12 @@ export class AuthService implements OnModuleInit {
     return this.google;
   }
 
-  async startGoogleLogin(res: Response, returnTo?: string) {
+  async startGoogleLogin(
+    res: Response,
+    returnTo?: string,
+    referralCode?: string,
+    deviceId?: string,
+  ) {
     const google = this.requireGoogle();
     const codeVerifier = oidc.randomPKCECodeVerifier();
     const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
@@ -110,6 +135,10 @@ export class AuthService implements OnModuleInit {
       state,
       nonce,
       returnTo: safeReturnTo(returnTo),
+      // Реферальный код и отпечаток устройства едут тем же путём: до
+      // callback'а их больше негде сохранить, а Google-редирект их бы потерял.
+      ref: shortToken(referralCode),
+      fp: shortToken(deviceId),
     };
     res.cookie(OIDC_COOKIE, JSON.stringify(oidcPayload), {
       httpOnly: true,
@@ -137,11 +166,15 @@ export class AuthService implements OnModuleInit {
     if (!raw) {
       throw new BadRequestException('OAuth-сессия не найдена или истекла');
     }
-    const { codeVerifier, state, nonce, returnTo } = JSON.parse(raw) as {
+    const { codeVerifier, state, nonce, returnTo, ref, fp } = JSON.parse(
+      raw,
+    ) as {
       codeVerifier: string;
       state: string;
       nonce: string;
       returnTo?: string;
+      ref?: string | null;
+      fp?: string | null;
     };
 
     const currentUrl = new URL(`${this.apiUrl}${req.originalUrl}`);
@@ -171,9 +204,13 @@ export class AuthService implements OnModuleInit {
     });
     // Закрытая регистрация не трогает уже заведённых: отказ получает только
     // тот, для кого пришлось бы создать новую запись.
+    let isNewAccount = false;
     if (!byGoogleId) {
       const byEmail = await this.prisma.user.findUnique({ where: { email } });
-      if (!byEmail) await this.assertRegistrationOpen();
+      if (!byEmail) {
+        await this.assertRegistrationOpen();
+        isNewAccount = true;
+      }
     }
     const user = byGoogleId
       ? await this.prisma.user.update({
@@ -206,9 +243,39 @@ export class AuthService implements OnModuleInit {
       },
     });
 
+    if (isNewAccount) {
+      this.announceRegistration(user.id, user.email, req, ref, fp);
+    }
+
     res.clearCookie(OIDC_COOKIE, { path: '/auth', domain: this.cookieDomain });
     await this.issueTokens(user.id, user.email, toRole(user.role), res);
     res.redirect(`${this.webOrigin}${safeReturnTo(returnTo)}`);
+  }
+
+  /**
+   * Единственная точка касания auth с реферальной программой: факт
+   * регистрации со всем, что нужно подписчику. О баллах здесь не знают —
+   * сумма, уровни и антифрод живут в модуле `rewards`, а событие
+   * самодостаточно, чтобы он не дочитывал ничего из чужих таблиц.
+   */
+  private announceRegistration(
+    userId: string,
+    email: string,
+    req: Request,
+    referralCode?: string | null,
+    deviceId?: string | null,
+  ): void {
+    const event: UserRegisteredEvent = {
+      name: USER_REGISTERED_EVENT,
+      userId,
+      email,
+      referralCode: shortToken(referralCode),
+      referralSource: null,
+      ip: req.ip ?? null,
+      deviceId: shortToken(deviceId),
+      occurredAt: new Date().toISOString(),
+    };
+    this.events.emit(event.name, event);
   }
 
   /** Приём новых аккаунтов закрыт — вход существующих это не затрагивает. */

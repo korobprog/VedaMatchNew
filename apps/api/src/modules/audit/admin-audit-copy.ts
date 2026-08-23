@@ -41,6 +41,8 @@ const TEMPLATES: Record<AdminAuditAction, string> = {
   'contacts.profile-restored': 'Карточка справочника возвращена',
   'platform.registration-changed': 'Изменён режим регистрации',
   'astro.generation-resumed': 'Генерация астрологии возобновлена',
+  'rewards.entry-revoked': 'Отменено начисление баллов',
+  'rewards.settings-changed': 'Изменены настройки баллов',
 };
 
 /** Названия полей подробностей. Неизвестный ключ показывается как есть. */

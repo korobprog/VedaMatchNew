@@ -132,6 +132,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         scope: "portal",
       },
       {
+        href: "/admin/rewards",
+        label: "Баллы и рефералы",
+        hint: "Начисления, отмена, журнал подозрений, номиналы",
+        scope: "portal",
+      },
+      {
         href: "/admin/settings",
         label: "Настройки",
         hint: "Режим биллинга и глобальные параметры",

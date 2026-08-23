@@ -1,8 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { PORTAL_ACTIVITY_EVENTS } from '@vedamatch/shared';
 import type {
   AstroBirthDataDto,
   AstroStateDto,
   AstroTimeAccuracy,
+  PortalActivityEvent,
   SaveAstroBirthDataRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -29,7 +32,25 @@ type BirthDataRow = {
 
 @Injectable()
 export class AstroBirthDataService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly bus: EventEmitter2,
+  ) {}
+
+  /**
+   * Факт «человек сохранил натальную карту» для подписчиков портала. Данные
+   * рождения в событие не попадают: подписчику нужен сам факт, а место и
+   * время рождения — чувствительные сведения.
+   */
+  private announceActivity(userId: string): void {
+    const event: PortalActivityEvent = {
+      name: PORTAL_ACTIVITY_EVENTS.astro,
+      userId,
+      action: 'astro.birth-data-saved',
+      occurredAt: new Date().toISOString(),
+    };
+    this.bus.emit(event.name, event);
+  }
 
   async state(userId: string): Promise<AstroStateDto> {
     const [row, user] = await Promise.all([
@@ -86,6 +107,8 @@ export class AstroBirthDataService {
       where: { id: userId },
       select: { birthDate: true },
     });
+
+    this.announceActivity(userId);
 
     return this.toState(row, user?.birthDate ?? null);
   }

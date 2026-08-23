@@ -110,4 +110,54 @@ describe("proxy", () => {
       expect(response.headers.get("location"), path).toBeNull();
     }
   });
+
+  describe("реферальная cookie", () => {
+    it("запоминает код из ?ref= на лендинге", () => {
+      const response = proxy(
+        new NextRequest("https://vedamatch.ru/?ref=ACDEFGH"),
+      );
+
+      expect(response.cookies.get("vm_ref")?.value).toBe("ACDEFGH");
+    });
+
+    it("приводит код к верхнему регистру", () => {
+      const response = proxy(
+        new NextRequest("https://vedamatch.ru/?ref=acdefgh"),
+      );
+
+      expect(response.cookies.get("vm_ref")?.value).toBe("ACDEFGH");
+    });
+
+    // Первый код выигрывает: иначе приглашённый достаётся тому, кто последним
+    // прислал ссылку.
+    it("не перезаписывает уже сохранённый код", () => {
+      const response = proxy(
+        new NextRequest("https://vedamatch.ru/?ref=QRTUVWX", {
+          headers: { cookie: "vm_ref=ACDEFGH" },
+        }),
+      );
+
+      expect(response.cookies.get("vm_ref")).toBeUndefined();
+    });
+
+    it("не записывает мусор из адресной строки", () => {
+      const response = proxy(
+        new NextRequest("https://vedamatch.ru/?ref=<script>"),
+      );
+
+      expect(response.cookies.get("vm_ref")).toBeUndefined();
+    });
+
+    it("заводит отпечаток устройства один раз", () => {
+      const fresh = proxy(new NextRequest("https://vedamatch.ru/"));
+      expect(fresh.cookies.get("vm_fp")?.value).toBeTruthy();
+
+      const repeat = proxy(
+        new NextRequest("https://vedamatch.ru/", {
+          headers: { cookie: "vm_fp=already-here" },
+        }),
+      );
+      expect(repeat.cookies.get("vm_fp")).toBeUndefined();
+    });
+  });
 });

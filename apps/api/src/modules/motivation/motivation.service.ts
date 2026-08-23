@@ -13,10 +13,13 @@ import {
   MotivationVideoStatus,
   SpiritualStage,
 } from '@prisma/client';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   MOTIVATION_VOICES,
+  PORTAL_ACTIVITY_EVENTS,
   resolveDisplayName,
   type MotivationVoice,
+  type PortalActivityEvent,
 } from '@vedamatch/shared';
 import type {
   MotivationAdminCandidateDto,
@@ -99,6 +102,9 @@ export class MotivationService {
     // Необязательный: сервис создаётся в тестах позиционно, а порог жалоб
     // нужен ровно одному методу — без него берётся значение по умолчанию.
     @Optional() private readonly settingsService?: MotivationSettingsService,
+    // Тоже необязательный и тоже последним: позиционная сборка сервиса в
+    // тестах не должна ломаться из-за шины, которая нужна одному методу.
+    @Optional() private readonly bus?: EventEmitter2,
   ) {}
 
   async preference(userId: string) {
@@ -367,6 +373,20 @@ export class MotivationService {
       await this.prisma.motivationFavorite.deleteMany({
         where: { userId, postId },
       });
+    // Осмысленным действием считается только добавление: снятие отметки
+    // ничего не говорит о том, что человек ожил.
+    if (favorite) this.announceActivity(userId);
+  }
+
+  /** Факт «человек добавил в избранное» для подписчиков портала. */
+  private announceActivity(userId: string): void {
+    const event: PortalActivityEvent = {
+      name: PORTAL_ACTIVITY_EVENTS.motivation,
+      userId,
+      action: 'motivation.favorite-added',
+      occurredAt: new Date().toISOString(),
+    };
+    this.bus?.emit(event.name, event);
   }
   /**
    * Жалоба на рилс участника. Одна на человека: повторное нажатие ничего не

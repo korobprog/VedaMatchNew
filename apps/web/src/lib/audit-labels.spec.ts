@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ADMIN_AUDIT_ACTIONS } from "@vedamatch/shared";
 import {
   auditActionLabels,
   auditTargetHref,
@@ -10,7 +11,12 @@ describe("auditActionLabels", () => {
     expect(auditActionLabels["user.purged"]).toBe(
       "Аккаунт удалён безвозвратно",
     );
-    expect(Object.keys(auditActionLabels)).toHaveLength(35);
+    // Сверяемся со списком из @vedamatch/shared, а не с числом: число
+    // приходилось править руками при каждом новом действии, и правка
+    // забывалась ровно тогда, когда подпись и была нужна.
+    expect(Object.keys(auditActionLabels).sort()).toEqual(
+      [...ADMIN_AUDIT_ACTIONS].sort(),
+    );
   });
 });
 

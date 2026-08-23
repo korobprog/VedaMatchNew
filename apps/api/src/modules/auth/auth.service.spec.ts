@@ -27,6 +27,7 @@ function makeService(stored: Record<string, unknown> | null, rotatedCount = 1) {
     config as never,
     prisma as never,
     jwt as never,
+    { emit: jest.fn() } as never,
   );
   const res = { cookie: jest.fn(), clearCookie: jest.fn() };
   const req = { cookies: { refresh_token: 'raw-token' } };

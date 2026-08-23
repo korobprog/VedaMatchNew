@@ -2,6 +2,7 @@
 import type { PricingPlan, SubscriptionState } from "@vedamatch/shared";
 import { redirectToLogin } from "@/lib/require-user";
 import { getBillingPlan, getProfile } from "@/lib/api";
+import { getRewardsMe } from "@/lib/rewards-api";
 import { PLAN as DEFAULT_PLAN } from "@/lib/plan";
 import { formatDate, subscriptionStatusLabels } from "@/lib/support-labels";
 import { Header } from "@/components/header";
@@ -11,6 +12,7 @@ import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { LogoutButton } from "@/components/logout-button";
 import { DeleteAccountSection } from "@/components/delete-account-section";
+import { RewardsProfileCard } from "@/components/rewards/rewards-profile-card";
 import { InstallButton } from "@/components/pwa/install-button";
 import { NotificationSettings } from "@/components/pwa/notification-settings";
 
@@ -32,9 +34,11 @@ const verificationLabels: Record<string, string> = {
 };
 
 export default async function ProfilePage() {
-  const [user, fetchedPlan] = await Promise.all([
+  const [user, fetchedPlan, rewards] = await Promise.all([
     getProfile(),
     getBillingPlan().catch(() => null),
+    // Упавший сервис баллов убирает одну карточку, а не весь профиль.
+    getRewardsMe().catch(() => null),
   ]);
   if (!user) redirectToLogin("/profile");
   const plan: PricingPlan = fetchedPlan ?? {
@@ -138,6 +142,8 @@ export default async function ProfilePage() {
           />
         </div>
         <SubscriptionCard subscription={user.subscription} plan={plan} />
+        {/* Сразу после подписки: баллы тратятся именно на неё. */}
+        <RewardsProfileCard data={rewards} />
         <div className="mb-6">
           <NotificationSettings />
         </div>

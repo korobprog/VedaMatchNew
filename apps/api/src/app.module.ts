@@ -26,6 +26,7 @@ import { CommunitiesModule } from './modules/communities/communities.module';
 import { NoticesModule } from './modules/notices/notices.module';
 import { HealthModule } from './modules/health/health.module';
 import { TelemetryModule } from './modules/telemetry/telemetry.module';
+import { RewardsModule } from './modules/rewards/rewards.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { TelemetryModule } from './modules/telemetry/telemetry.module';
     CommunitiesModule,
     NoticesModule,
     TelemetryModule,
+    RewardsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

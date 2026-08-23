@@ -205,7 +205,7 @@ export const SERVICE_CONTENT: ServiceContent[] = [
     route: "/market",
     name: "Рынок",
     nameEn: "Market",
-    tagline: "Объявления комерческие и услуги в благости",
+    tagline: "Коммерческие объявления и услуги в благости",
     taglineEn: "Commercial listings and services in goodness",
     description:
       "Полноценная площадка: витрина с товарами и услугами, корзина, заказы, чат с продавцом и собственный магазин для каждого продавца.",

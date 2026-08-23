@@ -20,9 +20,20 @@ import { JwtSignService } from './jwt.service';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
+  /**
+   * `ref` и `fp` приезжают из веба: реферальный код из cookie `vm_ref` и
+   * отпечаток устройства из `vm_fp`. Отдельными параметрами, а не cookie:
+   * веб и API живут на разных доменах, и общая cookie есть не во всякой
+   * установке. Оба уезжают в ту же OIDC-cookie, что и `returnTo`.
+   */
   @Get('google')
-  google(@Res() res: Response, @Query('returnTo') returnTo?: string) {
-    return this.auth.startGoogleLogin(res, returnTo);
+  google(
+    @Res() res: Response,
+    @Query('returnTo') returnTo?: string,
+    @Query('ref') ref?: string,
+    @Query('fp') fp?: string,
+  ) {
+    return this.auth.startGoogleLogin(res, returnTo, ref, fp);
   }
 
   @Get('google/callback')

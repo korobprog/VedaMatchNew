@@ -41,6 +41,26 @@ const SESSION_MARKER = "vm_session";
 /** Зеркало PATHNAME_HEADER в lib/require-user.ts (proxy не импортирует серверный код). */
 const PATHNAME_HEADER = "x-pathname";
 
+/**
+ * Реферальная cookie и отпечаток устройства. Зеркало REWARDS_REF_COOKIE и
+ * REWARDS_DEVICE_COOKIE из @vedamatch/shared — proxy держит свои копии
+ * констант по той же причине, что и заголовок выше.
+ *
+ * Код кладётся здесь, а не на странице: человек с реферальной ссылкой чаще
+ * всего сразу уходит смотреть портал, и до рендера лендинга дело может не
+ * дойти. Живёт 30 дней — столько же, сколько человек обычно думает.
+ */
+const REF_COOKIE = "vm_ref";
+const DEVICE_COOKIE = "vm_fp";
+const REF_COOKIE_MAX_AGE = 30 * 24 * 60 * 60;
+const DEVICE_COOKIE_MAX_AGE = 365 * 24 * 60 * 60;
+/**
+ * Грубая проверка формы кода: семь символов из латиницы и цифр. Точный
+ * алфавит знает API (rewards-code.ts) — здесь важно только не записывать в
+ * cookie произвольную строку из адресной строки.
+ */
+const REF_CODE = /^[A-Za-z0-9]{7}$/;
+
 export function proxy(req: NextRequest) {
   const hasAccess = req.cookies.has("access_token");
   const hasSessionMarker = req.cookies.has(SESSION_MARKER);
@@ -68,7 +88,38 @@ export function proxy(req: NextRequest) {
     PATHNAME_HEADER,
     `${req.nextUrl.pathname}${req.nextUrl.search}`,
   );
-  return NextResponse.next({ request: { headers: requestHeaders } });
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  rememberReferral(req, response);
+  return response;
+}
+
+/**
+ * Запомнить реферальный код из `?ref=` и завести отпечаток устройства.
+ *
+ * Обе cookie не httpOnly: их читает карточка входа, чтобы передать код в
+ * `/auth/google` — веб и API живут на разных доменах, и общей cookie между
+ * ними может не быть. Секрета в них нет: код и так стоит в адресной строке,
+ * а отпечаток — случайный идентификатор без данных о человеке.
+ *
+ * Первый код выигрывает: перезаписывать его вторым переходом значило бы
+ * отдавать приглашённого тому, кто последним прислал ссылку.
+ */
+export function rememberReferral(req: NextRequest, res: NextResponse): void {
+  const ref = req.nextUrl.searchParams.get("ref");
+  if (ref && REF_CODE.test(ref) && !req.cookies.has(REF_COOKIE)) {
+    res.cookies.set(REF_COOKIE, ref.toUpperCase(), {
+      path: "/",
+      maxAge: REF_COOKIE_MAX_AGE,
+      sameSite: "lax",
+    });
+  }
+  if (!req.cookies.has(DEVICE_COOKIE)) {
+    res.cookies.set(DEVICE_COOKIE, crypto.randomUUID(), {
+      path: "/",
+      maxAge: DEVICE_COOKIE_MAX_AGE,
+      sameSite: "lax",
+    });
+  }
 }
 
 export const config = {

@@ -6,10 +6,12 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
+  PORTAL_ACTIVITY_EVENTS,
   resolveDisplayName,
   type ChatMessageDto,
   type ChatThreadState,
   type NotificationEvent,
+  type PortalActivityEvent,
   type SendChatMessageRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -151,8 +153,24 @@ export class ChatMessagesService {
       message: dtoOut,
     });
     this.notify(conversation, userId, body || 'Вложение', conversationId);
+    this.announceActivity(userId);
 
     return dtoOut;
+  }
+
+  /**
+   * Факт «человек написал сообщение» для подписчиков портала. Отдельно от
+   * уведомления: то адресовано получателю (`recipientId`), а здесь важен
+   * автор. Событие самодостаточно — текст переписки в него не попадает.
+   */
+  private announceActivity(userId: string): void {
+    const event: PortalActivityEvent = {
+      name: PORTAL_ACTIVITY_EVENTS.chat,
+      userId,
+      action: 'chat.message-sent',
+      occurredAt: new Date().toISOString(),
+    };
+    this.bus.emit(event.name, event);
   }
 
   /**

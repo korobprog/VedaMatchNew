@@ -29,7 +29,10 @@ describe('AstroBirthDataService', () => {
       findUnique: jest.fn(),
     },
   };
-  const service = new AstroBirthDataService(prisma as unknown as PrismaService);
+  const service = new AstroBirthDataService(
+    prisma as unknown as PrismaService,
+    { emit: jest.fn() } as never,
+  );
 
   /** Данные, ушедшие в БД при последнем upsert. */
   const written = () => {

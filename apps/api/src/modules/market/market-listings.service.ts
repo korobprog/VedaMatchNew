@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { PORTAL_ACTIVITY_EVENTS } from '@vedamatch/shared';
 import type {
   AdminAuditEvent,
   CreateMarketListingRequest,
@@ -14,6 +15,7 @@ import type {
   MarketListingImagesResponse,
   MarketListingSummary,
   MarketLocationDto,
+  PortalActivityEvent,
   ReorderMarketImagesRequest,
   SetMarketListingShelvesRequest,
   UpdateMarketListingRequest,
@@ -300,8 +302,24 @@ export class MarketListingsService {
     // Рассылка подписчикам — побочный эффект: она не должна ни задерживать
     // ответ, ни отменять уже созданное объявление, если упадёт.
     void this.subscriptions.notifyNewListing(created.id);
+    this.announceActivity(userId);
 
     return this.byId(created.id, userId, false);
+  }
+
+  /**
+   * Факт «человек выставил товар» для подписчиков портала. Отдельно от
+   * `market.listing.published`: то уведомление адресовано подписчикам
+   * магазина и несёт `recipientId`, а здесь важен автор.
+   */
+  private announceActivity(userId: string): void {
+    const event: PortalActivityEvent = {
+      name: PORTAL_ACTIVITY_EVENTS.market,
+      userId,
+      action: 'market.listing-created',
+      occurredAt: new Date().toISOString(),
+    };
+    this.events.emit(event.name, event);
   }
 
   async update(

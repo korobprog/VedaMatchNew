@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import type { MouseEvent } from "react";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { DevLoginForm } from "@/components/dev-login-form";
@@ -9,16 +10,48 @@ import { DevLoginForm } from "@/components/dev-login-form";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const DEV_AUTH = process.env.NEXT_PUBLIC_DEV_AUTH === "true";
 
+/** Значение cookie по имени; на сервере — пусто. */
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(
+    new RegExp(`(?:^|; )${name}=([^;]*)`),
+  );
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 /**
  * Карточка входа. `returnTo` — уже проверенный внутренний путь: он уезжает
  * в `/auth/google?returnTo=` (API кладёт его в OIDC-cookie и вернёт после
  * callback) и в dev-форму.
+ *
+ * Туда же уезжают реферальный код и отпечаток устройства из cookie, которые
+ * положил proxy.ts. Параметрами, а не cookie: веб и API живут на разных
+ * доменах, и общей cookie между ними может не быть.
  */
 export function LoginCard({ returnTo }: { returnTo?: string }) {
   const googleHref =
     returnTo && returnTo !== "/"
       ? `${API_URL}/auth/google?returnTo=${encodeURIComponent(returnTo)}`
       : `${API_URL}/auth/google`;
+
+  /**
+   * Код и отпечаток дописываются в момент нажатия, а не в разметке: cookie
+   * доступны только в браузере, и рендер с ними разошёлся бы с серверным.
+   * Без JS ссылка остаётся рабочей — просто без реферальной привязки.
+   */
+  function withCookies(event: MouseEvent<HTMLAnchorElement>) {
+    const extra = new URLSearchParams();
+    const ref = readCookie("vm_ref");
+    if (ref) extra.set("ref", ref);
+    const device = readCookie("vm_fp");
+    if (device) extra.set("fp", device);
+    if ([...extra.keys()].length === 0) return;
+
+    event.preventDefault();
+    const url = new URL(googleHref);
+    extra.forEach((value, key) => url.searchParams.set(key, value));
+    window.location.href = url.toString();
+  }
   return (
     <div className="relative flex min-h-dvh items-center justify-center bg-bg-0">
       <BackgroundOrbs />
@@ -61,6 +94,7 @@ export function LoginCard({ returnTo }: { returnTo?: string }) {
 
         <a
           href={googleHref}
+          onClick={withCookies}
           className="flex w-full items-center justify-center gap-3 rounded-xl bg-white/10 border border-glass-brd py-3 text-sm font-medium text-text-0 transition hover:bg-white/20 hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
