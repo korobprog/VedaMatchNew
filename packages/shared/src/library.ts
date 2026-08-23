@@ -129,6 +129,15 @@ export interface UpdateLibrarySectionRequest {
   iconKey?: string | null;
 }
 
+/** Новый раздел встаёт последним по `position` — порядок правится не отсюда. */
+export interface SaveLibrarySectionRequest {
+  titleRu: string;
+  titleEn: string;
+  descriptionRu?: string | null;
+  descriptionEn?: string | null;
+  iconKey?: string | null;
+}
+
 /** Тело ответа `422` при похожей существующей категории. */
 export interface CreateLibraryCategoryConflict {
   code: 'similar_category_exists';

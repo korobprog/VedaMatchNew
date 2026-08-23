@@ -1,8 +1,10 @@
 import { LibraryAdminTabs } from "@/components/library/admin/admin-tabs";
 import { LibraryDuplicateMerge } from "@/components/library/admin/duplicate-merge";
+import { LibraryTaxonomyManager } from "@/components/library/admin/taxonomy-manager";
 import {
   getLibraryAdminDuplicates,
   getLibraryAdminStats,
+  getLibrarySections,
 } from "@/lib/library-api";
 
 export const metadata = {
@@ -11,9 +13,10 @@ export const metadata = {
 };
 
 export default async function AdminLibraryPage() {
-  const [stats, duplicates] = await Promise.all([
+  const [stats, duplicates, sections] = await Promise.all([
     getLibraryAdminStats(),
     getLibraryAdminDuplicates(),
+    getLibrarySections(),
   ]);
   const groups = duplicates ?? [];
 
@@ -29,6 +32,8 @@ export default async function AdminLibraryPage() {
           <Tile label="Слито" value={stats.categories.merged} />
         </div>
       )}
+
+      <LibraryTaxonomyManager initialSections={sections ?? []} />
 
       <h2 className="mb-2 font-display text-lg font-semibold text-text-0">
         Дубли категорий

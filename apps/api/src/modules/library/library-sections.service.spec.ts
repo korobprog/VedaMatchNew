@@ -86,3 +86,63 @@ describe('LibrarySectionsService', () => {
     expect(result[0].canEdit).toBe(true);
   });
 });
+
+describe('LibrarySectionsService.create', () => {
+  function prismaStub() {
+    return {
+      librarySection: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'section-new',
+            slug: 'novyy-razdel',
+            titleRu: 'Новый раздел',
+            titleEn: 'New section',
+            descriptionRu: null,
+            descriptionEn: null,
+            iconKey: null,
+            position: 3,
+          },
+        ]),
+        findFirst: jest.fn().mockResolvedValue(null),
+        aggregate: jest.fn().mockResolvedValue({ _max: { position: 2 } }),
+        create: jest.fn().mockResolvedValue({ id: 'section-new' }),
+      },
+      libraryEntry: { count: jest.fn().mockResolvedValue(0) },
+      libraryCategory: { count: jest.fn().mockResolvedValue(0) },
+    };
+  }
+
+  it('отказывает не-админу', async () => {
+    const service = new LibrarySectionsService(prismaStub() as never);
+    await expect(
+      service.create(false, { titleRu: 'Новый раздел', titleEn: 'New section' }),
+    ).rejects.toThrow('not_admin');
+  });
+
+  it('требует оба названия', async () => {
+    const service = new LibrarySectionsService(prismaStub() as never);
+    await expect(
+      service.create(true, { titleRu: '', titleEn: 'New section' }),
+    ).rejects.toThrow('title_required');
+  });
+
+  it('создаёт раздел последним по позиции', async () => {
+    const prisma = prismaStub();
+    const service = new LibrarySectionsService(prisma as never);
+
+    const result = await service.create(true, {
+      titleRu: 'Новый раздел',
+      titleEn: 'New section',
+    });
+
+    expect(prisma.librarySection.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        slug: 'new-section',
+        position: 3,
+        titleRu: 'Новый раздел',
+        titleEn: 'New section',
+      }),
+    });
+    expect(result.id).toBe('section-new');
+  });
+});
