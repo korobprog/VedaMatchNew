@@ -95,7 +95,10 @@ export default async function LibraryEntryPage({
           />
         ) : (
           entry.previewUrl &&
-          entry.url && (
+          // Без адреса обложка остаётся картинкой без ссылки: открывать
+          // нечего, но показать её надо — у материала из книги она вообще
+          // единственное изображение, и загружали её вручную.
+          (entry.url ? (
             <a
               href={entry.url}
               target="_blank"
@@ -109,7 +112,16 @@ export default async function LibraryEntryPage({
                 className="aspect-video w-full object-cover"
               />
             </a>
-          )
+          ) : (
+            <span className="mb-4 block overflow-hidden rounded-2xl border border-glass-brd">
+              {/* eslint-disable-next-line @next/next/no-img-element -- обложка лежит в нашем S3 */}
+              <img
+                src={entry.previewUrl}
+                alt={t(locale, "entry.preview")}
+                className="aspect-video w-full object-cover"
+              />
+            </span>
+          ))
         )}
         <h1 className="mb-3 font-display text-2xl font-bold text-text-0">
           {title}
@@ -148,6 +160,25 @@ export default async function LibraryEntryPage({
             initialBookmarked={entry.bookmarked}
             initialCount={entry.bookmarkCount}
           />
+
+          {/* Куда материал попал: сразу после добавления это единственный
+              способ увидеть его в общем ряду, а не поодиночке. Ведём в первую
+              категорию — она же задаёт раздел. */}
+          {entry.categories[0] && (
+            <Link
+              href={`/library/${entry.categories[0].sectionSlug}/${entry.categories[0].slug}`}
+              className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1 hover:text-text-0"
+            >
+              {t(locale, "entry.openCategory")}
+            </Link>
+          )}
+
+          <Link
+            href="/library/add"
+            className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1 hover:text-text-0"
+          >
+            {t(locale, "entry.addMore")}
+          </Link>
         </div>
 
         <section className="glass rounded-2xl border border-glass-brd p-4 text-sm text-text-1">

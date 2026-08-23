@@ -95,6 +95,8 @@ const ui = {
     "add.stepWhere": "Где найти и как называется",
     "add.stepWhereHint":
       "Материал в сети — дайте ссылку; из книги — укажите источник",
+    "entry.openCategory": "Где опубликовано",
+    "entry.addMore": "Добавить ещё материал",
     "add.cover": "Обложка",
     "add.coverHint":
       "У материала без ссылки картинку взять неоткуда — можно загрузить свою",
@@ -253,6 +255,8 @@ const ui = {
     "add.stepWhere": "Where to find it and what it is called",
     "add.stepWhereHint":
       "Material on the web — give a link; from a book — name the source",
+    "entry.openCategory": "Where it is published",
+    "entry.addMore": "Add another material",
     "add.cover": "Cover",
     "add.coverHint":
       "There is no picture to take for a material without a link — upload your own",

@@ -42,17 +42,21 @@ export function EntryCard({
               </span>
             </span>
           </Link>
+        ) : entry.url ? (
+          <a
+            href={entry.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mb-3 block overflow-hidden rounded-xl border border-glass-brd"
+          >
+            <PreviewImage locale={locale} src={entry.previewUrl} />
+          </a>
         ) : (
-          entry.url && (
-            <a
-              href={entry.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mb-3 block overflow-hidden rounded-xl border border-glass-brd"
-            >
-              <PreviewImage locale={locale} src={entry.previewUrl} />
-            </a>
-          )
+          // Без адреса открывать нечего, но обложку показываем: у материала
+          // из книги она единственное изображение и загружена вручную.
+          <span className="mb-3 block overflow-hidden rounded-xl border border-glass-brd">
+            <PreviewImage locale={locale} src={entry.previewUrl} />
+          </span>
         ))}
 
       <div className="mb-2 flex items-center gap-2 text-xs text-text-2">
