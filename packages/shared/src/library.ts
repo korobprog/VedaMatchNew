@@ -62,8 +62,11 @@ export interface LibraryCategorySuggestion {
 
 export interface LibraryEntryDto {
   id: string;
-  url: string;
-  domain: string;
+  /** `null` у материала без адреса — тогда заполнен `source`. */
+  url: string | null;
+  domain: string | null;
+  /** Откуда материал, когда ссылки нет: «Бхагавад-гита 9.22». */
+  source: string | null;
   type: LibraryEntryType;
   contentLanguage: string;
   titleRu: string | null;
@@ -129,14 +132,66 @@ export interface UpdateLibrarySectionRequest {
   iconKey?: string | null;
 }
 
+export type LibrarySectionRequestStatus = 'pending' | 'approved' | 'rejected';
+
+/**
+ * Заявка на новый раздел. Разделы заводит администрация, но участнику,
+ * которому не нашлось подходящего, нужен способ попросить.
+ */
+export interface LibrarySectionRequestDto {
+  id: string;
+  titleRu: string;
+  titleEn: string;
+  reason: string | null;
+  status: LibrarySectionRequestStatus;
+  /** Кто просил — админу решать по человеку, а не по одному названию. */
+  requestedByName: string | null;
+  /** Комментарий администратора к решению. */
+  decision: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+}
+
+export interface LibrarySectionRequestsState {
+  requests: LibrarySectionRequestDto[];
+  /** Сколько ждёт решения — значок на вкладке админки. */
+  pendingCount: number;
+}
+
+export interface CreateLibrarySectionRequestBody {
+  titleRu: string;
+  titleEn: string;
+  reason?: string | null;
+}
+
+export interface DecideLibrarySectionRequestBody {
+  action: 'approve' | 'reject';
+  comment?: string | null;
+}
+
+/** Новый раздел встаёт последним по `position` — порядок правится не отсюда. */
+export interface SaveLibrarySectionRequest {
+  titleRu: string;
+  titleEn: string;
+  descriptionRu?: string | null;
+  descriptionEn?: string | null;
+  iconKey?: string | null;
+}
+
 /** Тело ответа `422` при похожей существующей категории. */
 export interface CreateLibraryCategoryConflict {
   code: 'similar_category_exists';
   suggestions: LibraryCategorySuggestion[];
 }
 
+/**
+ * Заполнено должно быть хотя бы одно из `url` / `source`: у цитаты из книги
+ * адреса нет, у видео — наоборот, обязателен. Проверяют и сервис, и
+ * CHECK-ограничение в базе.
+ */
 export interface CreateLibraryEntryRequest {
-  url: string;
+  url?: string | null;
+  source?: string | null;
   type: LibraryEntryType;
   contentLanguage: string;
   titleRu?: string | null;
@@ -211,7 +266,13 @@ export type LibraryCategoryStatus =
   | 'merged'
   | 'removed';
 
-export type LibraryEnrichmentStatus = 'pending' | 'queued' | 'ready' | 'failed';
+/** `not_applicable` — обогащать нечего: у материала нет ссылки, только источник. */
+export type LibraryEnrichmentStatus =
+  | 'pending'
+  | 'queued'
+  | 'ready'
+  | 'failed'
+  | 'not_applicable';
 
 /** Категория глазами администрации: с автором, статусом и счётчиками. */
 export interface LibraryAdminCategoryDto {
@@ -250,8 +311,9 @@ export interface MergeLibraryCategoryRequest {
 /** Запись каталога глазами администрации. */
 export interface LibraryAdminEntryDto {
   id: string;
-  url: string;
-  domain: string;
+  /** `null` у материала без адреса — у него заполнен `source`. */
+  url: string | null;
+  domain: string | null;
   type: LibraryEntryType;
   titleRu: string | null;
   titleEn: string | null;

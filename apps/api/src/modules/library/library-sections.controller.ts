@@ -4,10 +4,12 @@ import {
   Get,
   Param,
   Patch,
+  Post,
   UseGuards,
 } from '@nestjs/common';
 import type {
   AccessTokenPayload,
+  SaveLibrarySectionRequest,
   UpdateLibrarySectionRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
@@ -22,6 +24,14 @@ export class LibrarySectionsController {
   @Get()
   list(@CurrentUser() user: AccessTokenPayload) {
     return this.sections.list(isAdmin(user));
+  }
+
+  @Post()
+  create(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: SaveLibrarySectionRequest,
+  ) {
+    return this.sections.create(isAdmin(user), body);
   }
 
   @Patch(':id')

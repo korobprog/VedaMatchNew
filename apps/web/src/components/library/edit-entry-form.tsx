@@ -10,6 +10,7 @@ import type {
   LibrarySectionDto,
   UpdateLibraryEntryRequest,
 } from "@vedamatch/shared";
+import { CategoryEditForm } from "./category-edit-form";
 import { entryTypeLabel, pickLocalized, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
 
@@ -221,6 +222,15 @@ function EntryFieldsForm({
     );
   }
 
+  function handleCategoryRenamed(updated: LibraryCategoryDto) {
+    setSectionCategories((current) =>
+      current.map((item) => (item.id === updated.id ? updated : item)),
+    );
+    setSelected((current) =>
+      current.map((item) => (item.id === updated.id ? updated : item)),
+    );
+  }
+
   async function changeSection(slug: string) {
     setSectionSlug(slug);
     if (!slug) return;
@@ -409,15 +419,22 @@ function EntryFieldsForm({
               en: category.titleEn,
             });
             return (
-              <label key={category.id} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  aria-label={label}
-                  checked={selected.some((item) => item.id === category.id)}
-                  onChange={() => toggleCategory(category)}
+              <span key={category.id} className="flex items-center gap-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    aria-label={label}
+                    checked={selected.some((item) => item.id === category.id)}
+                    onChange={() => toggleCategory(category)}
+                  />
+                  {label}
+                </label>
+                <CategoryEditForm
+                  locale={locale}
+                  category={category}
+                  onSaved={handleCategoryRenamed}
                 />
-                {label}
-              </label>
+              </span>
             );
           })}
         </div>

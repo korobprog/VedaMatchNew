@@ -115,6 +115,12 @@ function AnnouncementCard({ item }: { item: AdminAnnouncementDto }) {
           {item.expiresAt && `Снимется ${formatWhen(item.expiresAt)}.`}
         </p>
       )}
+      {item.status === "published" && (
+        <p className="mt-2 text-xs text-text-2">
+          Ознакомились: <span className="font-mono text-text-1">{item.acknowledgedCount}</span>
+          {item.broadcastCount > 0 && ` из ${item.broadcastCount} получивших рассылку`}
+        </p>
+      )}
       {item.status === "published" && <Broadcast item={item} />}
       {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
     </div>

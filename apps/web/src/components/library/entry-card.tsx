@@ -24,7 +24,7 @@ export function EntryCard({
     en: entry.descriptionEn,
   });
   // Видео открываем у себя — там плеер; для остального ведём к источнику.
-  const playable = videoEmbedUrl(entry.url) !== null;
+  const playable = entry.url !== null && videoEmbedUrl(entry.url) !== null;
 
   return (
     <article className="glass rounded-2xl border border-glass-brd p-4">
@@ -42,7 +42,7 @@ export function EntryCard({
               </span>
             </span>
           </Link>
-        ) : (
+        ) : entry.url ? (
           <a
             href={entry.url}
             target="_blank"
@@ -51,10 +51,17 @@ export function EntryCard({
           >
             <PreviewImage locale={locale} src={entry.previewUrl} />
           </a>
+        ) : (
+          // Без адреса открывать нечего, но обложку показываем: у материала
+          // из книги она единственное изображение и загружена вручную.
+          <span className="mb-3 block overflow-hidden rounded-xl border border-glass-brd">
+            <PreviewImage locale={locale} src={entry.previewUrl} />
+          </span>
         ))}
 
       <div className="mb-2 flex items-center gap-2 text-xs text-text-2">
-        <span>{entry.domain}</span>
+        {/* У материала без адреса домена нет — на его месте источник. */}
+        <span>{entry.domain ?? entry.source}</span>
         <span aria-hidden>·</span>
         <span className="rounded-full border border-glass-brd px-2 py-0.5">
           {entryTypeLabel(locale, entry.type)}
@@ -68,15 +75,21 @@ export function EntryCard({
       </div>
 
       <h3 className="mb-1 font-display text-base font-semibold text-text-0">
-        <a
-          href={entry.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 hover:underline"
-        >
-          {title}
-          <ExternalLink aria-hidden className="h-3.5 w-3.5" />
-        </a>
+        {/* Без адреса открывать нечего — заголовок остаётся текстом, а куда
+            смотреть, говорит строка источника выше. */}
+        {entry.url ? (
+          <a
+            href={entry.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 hover:underline"
+          >
+            {title}
+            <ExternalLink aria-hidden className="h-3.5 w-3.5" />
+          </a>
+        ) : (
+          title
+        )}
       </h3>
 
       {description && (

@@ -34,6 +34,8 @@ describe('Library Prisma schema', () => {
       'queued',
       'ready',
       'failed',
+      // Материал без адреса: обогащать нечего, но и «в очереди» он не висит.
+      'not_applicable',
     ]);
     expect(Object.values(LibraryCategoryStatus)).toEqual([
       'active',

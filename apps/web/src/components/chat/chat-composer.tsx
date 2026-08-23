@@ -7,6 +7,7 @@ import type {
 } from "@vedamatch/shared";
 import { uploadChatFile } from "@/lib/chat-client";
 import { ChatAttachSheet } from "./chat-attach-sheet";
+import { formatDuration } from "./chat-time";
 import { ChatVoiceRecorder } from "./chat-voice-recorder";
 
 /** Быстрый ряд смайликов — те же, что были в чате Знакомств. */
@@ -46,6 +47,8 @@ export function ChatComposer({
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [recordedSeconds, setRecordedSeconds] = useState(0);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const imageInput = useRef<HTMLInputElement | null>(null);
 
@@ -283,22 +286,35 @@ export function ChatComposer({
           </svg>
         </button>
 
-        <textarea
-          value={text}
-          rows={1}
-          onChange={(event) => {
-            setText(event.target.value);
-            onTyping();
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void submit();
-            }
-          }}
-          placeholder={editing ? "Новый текст сообщения" : "Сообщение…"}
-          className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border border-glass-brd bg-glass px-3.5 py-3 text-[15px] text-text-0 outline-none placeholder:text-text-2"
-        />
+        {recording ? (
+          // Поле ввода прячется на время записи: печатать и говорить в
+          // микрофон разом всё равно нельзя, а таймер честнее показывает,
+          // что происходит, чем неподвижный плейсхолдер позади кнопки.
+          <span className="flex min-h-11 flex-1 items-center gap-2 rounded-2xl border border-magenta/30 bg-magenta/10 px-3.5 py-3 text-[15px] text-magenta">
+            <span className="relative flex size-2.5 shrink-0">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-magenta/60" />
+              <span className="relative inline-flex size-2.5 rounded-full bg-magenta" />
+            </span>
+            Идёт запись… {formatDuration(recordedSeconds)}
+          </span>
+        ) : (
+          <textarea
+            value={text}
+            rows={1}
+            onChange={(event) => {
+              setText(event.target.value);
+              onTyping();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void submit();
+              }
+            }}
+            placeholder={editing ? "Новый текст сообщения" : "Сообщение…"}
+            className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border border-glass-brd bg-glass px-3.5 py-3 text-[15px] text-text-0 outline-none placeholder:text-text-2"
+          />
+        )}
 
         {text.trim() || attachments.length > 0 || editing ? (
           <button
@@ -330,6 +346,10 @@ export function ChatComposer({
               setAttachments((current) => [...current, attachment])
             }
             onError={setError}
+            onRecordingChange={(active, seconds) => {
+              setRecording(active);
+              setRecordedSeconds(seconds);
+            }}
           />
         )}
       </div>

@@ -28,6 +28,12 @@ export interface PublicAnnouncementDto {
   publishedAt: string;
   /** Закреплённая новость идёт первой и показывается на главной крупно. */
   pinned: boolean;
+  /**
+   * Человек нажал «ознакомлен». Новость уходит с главной только по этой
+   * отметке — сама она не пропадает. Для гостя и публичного списка всегда
+   * false: отмечать нечего и некому.
+   */
+  acknowledged: boolean;
 }
 
 export interface PublicRoadmapItemDto {
@@ -72,6 +78,8 @@ export interface AdminAnnouncementDto {
   /** Когда рассылали и скольким: чтобы не отправить дважды вслепую. */
   broadcastAt: string | null;
   broadcastCount: number;
+  /** Сколько человек нажали «ознакомлен»: копится с публикации. */
+  acknowledgedCount: number;
 }
 
 export interface AdminRoadmapItemDto {

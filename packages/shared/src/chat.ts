@@ -450,3 +450,42 @@ export interface AdminChatStats {
   messagesLast7Days: number;
   openReports: number;
 }
+
+/**
+ * Конструктор цвета чата: именованные шаблоны оформления переписки.
+ * Приватная настройка просмотра — см. docs/superpowers/specs/2026-08-23-chat-color-templates-design.md.
+ */
+export const CHAT_COLOR_HEX_PATTERN = /^#[0-9a-fA-F]{6}$/;
+export const CHAT_COLOR_TEMPLATE_MAX_NAME_LENGTH = 40;
+
+export interface ChatColorTemplateDto {
+  id: string;
+  name: string;
+  bubbleMine: string;
+  bubbleTheirs: string;
+  accent: string;
+  background: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatColorTemplatesState {
+  templates: ChatColorTemplateDto[];
+}
+
+export interface SaveChatColorTemplateRequest {
+  name: string;
+  bubbleMine: string;
+  bubbleTheirs: string;
+  accent: string;
+  background: string;
+}
+
+/** `templateId: null` — оформление по умолчанию. */
+export interface ChatConversationThemeState {
+  templateId: string | null;
+}
+
+export interface SetChatConversationThemeRequest {
+  templateId: string | null;
+}

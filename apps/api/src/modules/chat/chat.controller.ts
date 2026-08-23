@@ -21,7 +21,9 @@ import type {
   CreateChatConversationRequest,
   CreateChatReportRequest,
   EditChatMessageRequest,
+  SaveChatColorTemplateRequest,
   SendChatMessageRequest,
+  SetChatConversationThemeRequest,
   SetChatReactionRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
@@ -29,6 +31,8 @@ import {
   ChatSignedUrlsInterceptor,
   RawStorageUrls,
 } from './chat-signed-urls.interceptor';
+import { ChatColorTemplatesService } from './chat-color-templates.service';
+import { ChatConversationThemeService } from './chat-conversation-theme.service';
 import { ChatConversationsService } from './chat-conversations.service';
 import { ChatMessagesService } from './chat-messages.service';
 import { ChatReportsService } from './chat-reports.service';
@@ -49,6 +53,8 @@ export class ChatController {
     private readonly reports: ChatReportsService,
     private readonly uploads: ChatUploadsService,
     private readonly directory: PeopleService,
+    private readonly colorTemplates: ChatColorTemplatesService,
+    private readonly conversationTheme: ChatConversationThemeService,
   ) {}
 
   @Get('conversations')
@@ -350,5 +356,52 @@ export class ChatController {
     @Body() body: CreateChatReportRequest,
   ) {
     return this.reports.create(user.sub, body);
+  }
+
+  @Get('color-templates')
+  listColorTemplates(@CurrentUser() user: AccessTokenPayload) {
+    return this.colorTemplates.list(user.sub);
+  }
+
+  @Post('color-templates')
+  createColorTemplate(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: SaveChatColorTemplateRequest,
+  ) {
+    return this.colorTemplates.create(user.sub, body);
+  }
+
+  @Post('color-templates/:id')
+  updateColorTemplate(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: SaveChatColorTemplateRequest,
+  ) {
+    return this.colorTemplates.update(user.sub, id, body);
+  }
+
+  @Delete('color-templates/:id')
+  removeColorTemplate(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.colorTemplates.remove(user.sub, id);
+  }
+
+  @Get('conversations/:id/theme')
+  getConversationTheme(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.conversationTheme.get(user.sub, id);
+  }
+
+  @Post('conversations/:id/theme')
+  setConversationTheme(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: SetChatConversationThemeRequest,
+  ) {
+    return this.conversationTheme.set(user.sub, id, body?.templateId ?? null);
   }
 }

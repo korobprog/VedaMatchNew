@@ -6,12 +6,15 @@ import {
 } from '@nestjs/common';
 import type {
   LibrarySectionDto,
+  SaveLibrarySectionRequest,
   UpdateLibrarySectionRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { buildCategorySlug, withSlugSuffix } from './category-slug';
 
 const MAX_TITLE_LENGTH = 120;
 const MAX_DESCRIPTION_LENGTH = 500;
+const MAX_SLUG_ATTEMPTS = 20;
 
 @Injectable()
 export class LibrarySectionsService {
@@ -106,6 +109,66 @@ export class LibrarySectionsService {
 
     const sections = await this.list(true);
     return sections.find((section) => section.id === id)!;
+  }
+
+  /**
+   * Новый раздел — тоже только админ: см. комментарий у update() про
+   * фиксированный список рубрик. Встаёт последним по позиции.
+   */
+  async create(
+    viewerIsAdmin: boolean,
+    body: SaveLibrarySectionRequest,
+  ): Promise<LibrarySectionDto> {
+    if (!viewerIsAdmin) throw new ForbiddenException('not_admin');
+
+    const titleRu = body.titleRu?.trim();
+    const titleEn = body.titleEn?.trim();
+    if (!titleRu || !titleEn) throw new BadRequestException('title_required');
+    if (titleRu.length > MAX_TITLE_LENGTH || titleEn.length > MAX_TITLE_LENGTH) {
+      throw new BadRequestException('title_too_long');
+    }
+
+    const descriptionRu = trimOrNull(body.descriptionRu);
+    const descriptionEn = trimOrNull(body.descriptionEn);
+    for (const description of [descriptionRu, descriptionEn]) {
+      if (description && description.length > MAX_DESCRIPTION_LENGTH) {
+        throw new BadRequestException('description_too_long');
+      }
+    }
+
+    const baseSlug = buildCategorySlug({ titleRu, titleEn });
+    const slug = await this.findFreeSlug(baseSlug);
+    const lastPosition = await this.prisma.librarySection.aggregate({
+      _max: { position: true },
+    });
+
+    const created = await this.prisma.librarySection.create({
+      data: {
+        slug,
+        titleRu,
+        titleEn,
+        descriptionRu,
+        descriptionEn,
+        iconKey: body.iconKey ?? null,
+        position: (lastPosition._max.position ?? -1) + 1,
+      },
+    });
+
+    const sections = await this.list(true);
+    return sections.find((section) => section.id === created.id)!;
+  }
+
+  /** В отличие от категории, слаг раздела уникален на всю таблицу. */
+  private async findFreeSlug(baseSlug: string): Promise<string> {
+    for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
+      const candidate = withSlugSuffix(baseSlug, attempt);
+      const taken = await this.prisma.librarySection.findFirst({
+        where: { slug: candidate },
+        select: { id: true },
+      });
+      if (!taken) return candidate;
+    }
+    throw new BadRequestException('slug_conflict');
   }
 }
 

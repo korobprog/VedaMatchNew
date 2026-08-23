@@ -184,6 +184,13 @@ export const getCurrentRelease = (lang: Locale) =>
   apiGetPublic<PublicReleaseDto>(`/changelog/releases/current?lang=${lang}`);
 export const getAnnouncements = (lang: Locale) =>
   apiGetPublic<PublicAnnouncementDto[]>(`/changelog/announcements?lang=${lang}`);
+/**
+ * Новости с отметкой «ознакомлен» текущего человека. Главная берёт именно их:
+ * новость висит, пока её не отметили, и отметка живёт на сервере — иначе она
+ * терялась бы при смене устройства и не давала бы статистики.
+ */
+export const getMyAnnouncements = (lang: Locale) =>
+  apiGet<PublicAnnouncementDto[]>(`/changelog/announcements/mine?lang=${lang}`);
 export const getRoadmap = (lang: Locale) =>
   apiGetPublic<PublicRoadmapItemDto[]>(`/changelog/roadmap?lang=${lang}`);
 

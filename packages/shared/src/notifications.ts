@@ -166,6 +166,21 @@ export type NotificationEvent =
       reelId: string;
     }
   | {
+      /**
+       * Решение по заявке на раздел справочника. Без него человек не узнает
+       * ни об отказе, ни о том, что раздел уже можно использовать.
+       */
+      name: 'library.section-request.decided';
+      recipientId: string;
+      requestId: string;
+      titleRu: string;
+      approved: boolean;
+      /** Слаг созданного раздела — ведём сразу в него. Пусто при отказе. */
+      sectionSlug?: string;
+      /** Комментарий администратора; при отказе это причина. */
+      comment?: string;
+    }
+  | {
       /** Сообщение в сервисе «Общение»: личный диалог, группа или канал. */
       name: 'chat.message-sent';
       recipientId: string;

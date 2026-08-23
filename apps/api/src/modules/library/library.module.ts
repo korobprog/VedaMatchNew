@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { LibraryAdminController } from './library-admin.controller';
+import { LibrarySectionRequestsController } from './library-section-requests.controller';
+import { LibrarySectionRequestsService } from './library-section-requests.service';
 import { LibraryAdminService } from './library-admin.service';
 import { LibraryCategoriesController } from './library-categories.controller';
 import { LibraryCategoriesService } from './library-categories.service';
@@ -26,6 +28,7 @@ import { LibrarySectionsService } from './library-sections.service';
     LibraryCommentsController,
     LibraryPreferencesController,
     LibraryAdminController,
+    LibrarySectionRequestsController,
   ],
   providers: [
     LibrarySectionsService,
@@ -36,6 +39,7 @@ import { LibrarySectionsService } from './library-sections.service';
     LibraryBookmarksService,
     LibraryCommentsService,
     LibraryAdminService,
+    LibrarySectionRequestsService,
   ],
 })
 export class LibraryModule {}

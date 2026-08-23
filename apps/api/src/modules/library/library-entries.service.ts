@@ -31,6 +31,8 @@ const PAGE_SIZE = 20;
 const MAX_TITLE_LENGTH = 200;
 const MAX_DESCRIPTION_LENGTH = 1000;
 const MAX_CATEGORIES = 5;
+/** «Бхагавад-гита 9.22, комментарий Прабхупады» и подобное — не реферат. */
+const MAX_SOURCE_LENGTH = 300;
 const MAX_PREVIEW_UPLOAD_SIZE = 5 * 1024 * 1024;
 const PREVIEW_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ENTRY_TYPES: LibraryEntryType[] = [
@@ -68,6 +70,7 @@ const ENTRY_SELECT = {
   id: true,
   url: true,
   domain: true,
+  source: true,
   type: true,
   contentLanguage: true,
   titleRu: true,
@@ -111,14 +114,26 @@ export class LibraryEntriesService {
     userId: string,
     body: CreateLibraryEntryRequest,
   ): Promise<LibraryEntryDto> {
-    if (!body.url || body.url.length > 2000) {
-      throw new BadRequestException('url_too_long');
+    // Адрес есть не у каждого материала: цитата из книги описывается
+    // источником. Пустыми оба быть не могут — того же требует
+    // CHECK-ограничение LibraryEntry_url_or_source в базе.
+    const rawUrl = trimOrNull(body.url);
+    const source = trimOrNull(body.source);
+    if (!rawUrl && !source) {
+      throw new BadRequestException('url_or_source_required');
     }
-    let normalized: ReturnType<typeof normalizeUrl>;
-    try {
-      normalized = normalizeUrl(body.url ?? '');
-    } catch {
-      throw new BadRequestException('unsupported_url');
+    if (source && source.length > MAX_SOURCE_LENGTH) {
+      throw new BadRequestException('source_too_long');
+    }
+
+    let normalized: ReturnType<typeof normalizeUrl> | null = null;
+    if (rawUrl) {
+      if (rawUrl.length > 2000) throw new BadRequestException('url_too_long');
+      try {
+        normalized = normalizeUrl(rawUrl);
+      } catch {
+        throw new BadRequestException('unsupported_url');
+      }
     }
 
     if (!ENTRY_TYPES.includes(body.type)) {
@@ -150,16 +165,21 @@ export class LibraryEntriesService {
       throw new BadRequestException('too_many_categories');
     }
 
-    const existing = await this.prisma.libraryEntry.findUnique({
-      where: { urlNormalized: normalized.normalized },
-      select: ENTRY_SELECT,
-    });
-    if (existing) {
-      const payload: LibraryDuplicateEntryConflict = {
-        code: 'entry_already_exists',
-        entry: toEntryDto(existing),
-      };
-      throw new ConflictException(payload);
+    // Дубли ловятся только по адресу. Ключа у материала с одним источником
+    // нет и быть не должно: «Бхагавад-гита» законно стоит источником у
+    // множества разных материалов.
+    if (normalized) {
+      const existing = await this.prisma.libraryEntry.findUnique({
+        where: { urlNormalized: normalized.normalized },
+        select: ENTRY_SELECT,
+      });
+      if (existing) {
+        const payload: LibraryDuplicateEntryConflict = {
+          code: 'entry_already_exists',
+          entry: toEntryDto(existing),
+        };
+        throw new ConflictException(payload);
+      }
     }
 
     const categories = await this.prisma.libraryCategory.findMany({
@@ -171,14 +191,16 @@ export class LibraryEntriesService {
     }
 
     const language = normalizeLanguage(body.contentLanguage);
-    const previewUrl = await resolvePreviewUrl(normalized.url);
+    // Обложку тянуть неоткуда, когда нет адреса.
+    const previewUrl = normalized ? await resolvePreviewUrl(normalized.url) : null;
 
     const created = await this.prisma.$transaction(async (tx) => {
       const entry = await tx.libraryEntry.create({
         data: {
-          url: normalized.url,
-          urlNormalized: normalized.normalized,
-          domain: normalized.domain,
+          url: normalized?.url ?? null,
+          urlNormalized: normalized?.normalized ?? null,
+          domain: normalized?.domain ?? null,
+          source,
           type: body.type,
           contentLanguage: language,
           titleRu,
@@ -187,7 +209,9 @@ export class LibraryEntriesService {
           descriptionEn,
           previewUrl,
           addedById: userId,
-          enrichmentStatus: 'pending',
+          // Без адреса обогащать нечего — иначе запись навсегда осталась бы
+          // `pending` и числилась проблемной в админке.
+          enrichmentStatus: normalized ? 'pending' : 'not_applicable',
         },
         select: ENTRY_SELECT,
       });
@@ -207,7 +231,7 @@ export class LibraryEntriesService {
 
     // Копию обложки кладём в S3 уже после ответа: пользователю незачем ждать
     // скачивание и сжатие картинки, а ссылка на источник у записи уже есть.
-    if (previewUrl) {
+    if (previewUrl && normalized) {
       this.previews.captureInBackground(created.id, normalized.url, previewUrl);
     }
 
@@ -591,6 +615,7 @@ function toEntryDto(
     id: entry.id,
     url: entry.url,
     domain: entry.domain,
+    source: entry.source,
     type: entry.type,
     contentLanguage: entry.contentLanguage,
     titleRu: entry.titleRu,

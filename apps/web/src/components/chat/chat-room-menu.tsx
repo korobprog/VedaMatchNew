@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ChatConversationDetail } from "@vedamatch/shared";
+import type { ChatColorTemplateDto, ChatConversationDetail } from "@vedamatch/shared";
 import {
   deleteChatConversation,
   leaveChatConversation,
@@ -12,6 +12,7 @@ import {
   setChatPinned,
   subscribeToChannel,
 } from "@/lib/chat-client";
+import { listColorTemplates, setConversationTheme } from "@/lib/chat-appearance-api";
 
 /**
  * Меню беседы: без звука, закрепить, выйти, пожаловаться. Настройки живут
@@ -21,13 +22,31 @@ import {
 export function ChatRoomMenu({
   conversation,
   onChange,
+  onThemeChange,
 }: {
   conversation: ChatConversationDetail;
   onChange: (patch: Partial<ChatConversationDetail>) => void;
+  onThemeChange: (template: ChatColorTemplateDto | null) => void;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [templates, setTemplates] = useState<ChatColorTemplateDto[] | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!appearanceOpen || templates) return;
+    void listColorTemplates().then((state) => setTemplates(state.templates));
+  }, [appearanceOpen, templates]);
+
+  async function applyTheme(template: ChatColorTemplateDto | null) {
+    await setConversationTheme(conversation.id, template?.id ?? null);
+    onThemeChange(template);
+    setAppearanceOpen(false);
+    setOpen(false);
+  }
 
   const isChannel = conversation.kind === "channel";
   const isMember = conversation.myRole !== "member" || !isChannel;
@@ -119,6 +138,12 @@ export function ChatRoomMenu({
 
           <MenuItem
             busy={busy}
+            label="Оформление"
+            onClick={() => setAppearanceOpen(true)}
+          />
+
+          <MenuItem
+            busy={busy}
             label="Пожаловаться"
             tone="warn"
             onClick={() =>
@@ -172,6 +197,39 @@ export function ChatRoomMenu({
                 }
               />
             )}
+        </div>
+      )}
+
+      {appearanceOpen && (
+        <div className="absolute right-0 top-12 z-10 flex w-64 flex-col gap-1 rounded-2xl border border-glass-brd bg-bg-1 p-1.5 shadow-xl shadow-black/40">
+          <button
+            type="button"
+            onClick={() => void applyTheme(null)}
+            className="flex min-h-11 items-center rounded-xl px-3 text-left text-sm text-text-1 transition-colors hover:bg-white/6 hover:text-text-0"
+          >
+            Без шаблона (по умолчанию)
+          </button>
+          {templates?.map((template) => (
+            <button
+              key={template.id}
+              type="button"
+              onClick={() => void applyTheme(template)}
+              className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-left text-sm text-text-1 transition-colors hover:bg-white/6 hover:text-text-0"
+            >
+              <span
+                className="size-4 shrink-0 rounded-full border border-glass-brd"
+                style={{ backgroundColor: template.bubbleMine }}
+                aria-hidden
+              />
+              {template.name}
+            </button>
+          ))}
+          <Link
+            href="/chat/appearance"
+            className="flex min-h-11 items-center rounded-xl px-3 text-sm text-cyan transition-colors hover:bg-white/6"
+          >
+            Создать новый шаблон
+          </Link>
         </div>
       )}
     </div>

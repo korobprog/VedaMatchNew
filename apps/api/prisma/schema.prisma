@@ -305,6 +305,8 @@ model User {
   supportTicketMessages              SupportTicketMessage[]       @relation("SupportTicketMessagesAuthored")
   libraryCategories                  LibraryCategory[]            @relation("LibraryCategoryAuthor")
   libraryEntries                     LibraryEntry[]               @relation("LibraryEntryAuthor")
+  librarySectionRequests             LibrarySectionRequest[]      @relation("LibrarySectionRequests")
+  librarySectionRequestsDecided      LibrarySectionRequest[]      @relation("LibrarySectionRequestsDecided")
   libraryPreference                  LibraryPreference?
   libraryBookmarks                   LibraryBookmark[]
   libraryComments                    LibraryComment[]
@@ -343,6 +345,9 @@ model User {
   chatReportsMade                    ChatReport[]                 @relation("ChatReportsMade")
   chatReportsDecided                 ChatReport[]                 @relation("ChatReportsDecided")
   chatMessageViews                   ChatMessageView[]            @relation("ChatMessageViews")
+  chatColorTemplates                 ChatColorTemplate[]          @relation("ChatColorTemplates")
+  chatConversationThemes             ChatConversationTheme[]      @relation("ChatConversationThemes")
+  announcementAcks                   AnnouncementAck[]            @relation("AnnouncementAcks")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -1495,6 +1500,10 @@ enum LibraryEnrichmentStatus {
   queued
   ready
   failed
+  /// Обогащать нечего: у материала нет ссылки, только источник. Без этого
+  /// такие записи навсегда оставались бы `pending` и числились
+  /// проблемными в плитке «Без обогащения» админки.
+  not_applicable
 }
 
 enum LibraryCategoryStatus {
@@ -1553,11 +1562,23 @@ model LibraryCategory {
 }
 
 model LibraryEntry {
-  id               String                   @id @default(uuid())
-  url              String
-  urlNormalized    String                   @unique
-  canonicalUrl     String?
-  domain           String
+  id String @id @default(uuid())
+
+  /// Адрес есть не у каждого материала: цитата из книги или бумажное
+  /// издание описываются полем `source`. CHECK-ограничение в миграции
+  /// 20260823..._library_entry_source требует заполнить одно из двух.
+  /// NULL-ы в Postgres друг с другом не конфликтуют, поэтому `@unique`
+  /// на `urlNormalized` продолжает ловить дубли ссылок.
+  url           String?
+  urlNormalized String? @unique
+  canonicalUrl  String?
+  domain        String?
+
+  /// Откуда материал, когда ссылки нет: «Бхагавад-гита 9.22, комментарий
+  /// Прабхупады». Свободная строка и намеренно не уникальная — одна книга
+  /// законно стоит источником у множества разных материалов.
+  source String?
+
   type             LibraryEntryType
   contentLanguage  String                   @default("ru") @db.VarChar(8)
   titleRu          String?
@@ -1662,6 +1683,48 @@ model LibraryPreference {
   contentLanguages String[] @default([])
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+enum LibrarySectionRequestStatus {
+  pending
+  approved
+  rejected
+}
+
+/// Заявка на новый раздел справочника.
+///
+/// Разделы заводит только администрация — это заранее продуманный список
+/// рубрик. Но участнику, которому не нашлось подходящего, нужен выход:
+/// иначе он либо кладёт материал не туда, либо не кладёт вовсе.
+model LibrarySectionRequest {
+  id String @id @default(uuid())
+
+  requestedById String
+  requestedBy   User   @relation("LibrarySectionRequests", fields: [requestedById], references: [id], onDelete: Cascade)
+
+  titleRu String
+  titleEn String
+  /// Зачем нужен раздел: по одному названию решение принимать не о чем.
+  reason  String?
+
+  status LibrarySectionRequestStatus @default(pending)
+
+  decidedById String?
+  decidedBy   User?     @relation("LibrarySectionRequestsDecided", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt   DateTime?
+  /// Причина отказа либо комментарий к одобрению — уезжает автору.
+  decision    String?
+
+  /// Раздел, созданный по заявке. Хранится, чтобы повторное одобрение не
+  /// завело второй такой же; FK нет — раздел живёт своей жизнью и его
+  /// удаление не должно трогать историю заявок.
+  createdSectionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([requestedById])
 }
 
 // ===== Notifications (портальная инфраструктура) =====
@@ -2022,8 +2085,29 @@ model Announcement {
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
+  acks AnnouncementAck[]
+
   @@index([status, publishedAt(sort: Desc)])
   @@index([publishAt(sort: Desc)])
+}
+
+/// Отметка «ознакомлен» участника с новостью.
+///
+/// Раньше закрытая новость запоминалась в localStorage: отметка нужна была
+/// одному человеку на одном устройстве. Но администрация обязана видеть, до
+/// скольких людей новость действительно дошла, а браузерная отметка ещё и
+/// теряется при смене устройства — новость исчезала с главной, так и не
+/// прочитанной. Поэтому таблица: она же и статистика.
+model AnnouncementAck {
+  id             String       @id @default(uuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation("AnnouncementAcks", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@unique([announcementId, userId])
+  @@index([userId])
 }
 
 model RoadmapItem {
@@ -3692,4 +3776,48 @@ model ChatReport {
   createdAt DateTime @default(now())
 
   @@index([status, createdAt])
+}
+
+/**
+ * Именованный шаблон цвета переписки. Один пользователь заводит несколько,
+ * каждый можно применить к любой своей беседе — см. ChatConversationTheme.
+ * Цвет — сплошной hex на элемент, без градиентов.
+ */
+model ChatColorTemplate {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("ChatColorTemplates", fields: [userId], references: [id], onDelete: Cascade)
+
+  name         String
+  bubbleMine   String
+  bubbleTheirs String
+  accent       String
+  background   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  themes ChatConversationTheme[]
+
+  @@index([userId])
+}
+
+/**
+ * Какой шаблон применён к какой беседе у какого пользователя — приватная
+ * настройка просмотра, не видна другим участникам беседы.
+ *
+ * `templateId: null` при существующей строке — это явный сброс на
+ * оформление по умолчанию, отличается от отсутствия строки («никогда не
+ * настраивал»), хотя рендерится одинаково.
+ */
+model ChatConversationTheme {
+  userId         String
+  user           User               @relation("ChatConversationThemes", fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String
+  templateId     String?
+  template       ChatColorTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, conversationId])
 }

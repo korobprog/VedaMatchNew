@@ -32,6 +32,7 @@ export const notificationEventNames = {
   motivationReelRejected: 'motivation.reel.rejected',
   motivationVideoReady: 'motivation.video.ready',
   motivationVideoReview: 'motivation.video.review',
+  librarySectionRequestDecided: 'library.section-request.decided',
 } as const satisfies Record<string, NotificationEventName>;
 
 /** Payload веб-пуша ограничен ~4 КБ, да и на экране длинный текст не поместится. */
@@ -232,6 +233,25 @@ export function buildNotification(
         url: '/admin/motivation/queue',
         tag: `motivation-video-review:${event.reelId}`,
         category: 'motivation',
+      };
+    case 'library.section-request.decided':
+      return {
+        title: event.approved
+          ? `Раздел «${event.titleRu}» создан`
+          : `Раздел «${event.titleRu}» не создан`,
+        body: event.comment
+          ? toExcerpt(event.comment)
+          : event.approved
+            ? 'Можно добавлять в него материалы'
+            : 'Администрация отклонила заявку',
+        // При отказе вести некуда — открываем справочник целиком.
+        url: event.sectionSlug
+          ? `/library/${event.sectionSlug}`
+          : '/library',
+        tag: `library-section-request:${event.requestId}`,
+        // Своей категории у Образования нет, а заводить её значит добавлять
+        // тумблер в настройки: решение по заявке ближе всего к поддержке.
+        category: 'support',
       };
     case 'motivation.reel.rejected':
       return {

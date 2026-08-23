@@ -54,8 +54,8 @@ export default async function LibraryEntryPage({
     ru: entry.titleRu,
     en: entry.titleEn,
   });
-  const embedUrl = videoEmbedUrl(entry.url);
-  const provider = videoSource(entry.url)?.provider;
+  const embedUrl = entry.url ? videoEmbedUrl(entry.url) : null;
+  const provider = entry.url ? videoSource(entry.url)?.provider : undefined;
   const primarySectionSlug = entry.categories[0]?.sectionSlug;
   const [comments, sections, editCategories] = await Promise.all([
     getLibraryComments(entry.id),
@@ -71,7 +71,10 @@ export default async function LibraryEntryPage({
       <main className="mx-auto max-w-3xl px-4 py-8 pb-24">
         <BackLink locale={locale} fallbackHref="/library" />
         <p className="mb-2 text-xs text-text-2">
-          {entry.domain} · {entryTypeLabel(locale, entry.type)} ·{" "}
+          {/* Домена нет у материала без адреса — тогда и разделитель перед
+              типом лишний, иначе строка начинается с висящей точки. */}
+          {entry.domain && <>{entry.domain} · </>}
+          {entryTypeLabel(locale, entry.type)} ·{" "}
           {entry.contentLanguage.toUpperCase()}
           {entry.hasCustomPreview && (
             <>
@@ -91,7 +94,11 @@ export default async function LibraryEntryPage({
             title={title}
           />
         ) : (
-          entry.previewUrl && (
+          entry.previewUrl &&
+          // Без адреса обложка остаётся картинкой без ссылки: открывать
+          // нечего, но показать её надо — у материала из книги она вообще
+          // единственное изображение, и загружали её вручную.
+          (entry.url ? (
             <a
               href={entry.url}
               target="_blank"
@@ -105,7 +112,16 @@ export default async function LibraryEntryPage({
                 className="aspect-video w-full object-cover"
               />
             </a>
-          )
+          ) : (
+            <span className="mb-4 block overflow-hidden rounded-2xl border border-glass-brd">
+              {/* eslint-disable-next-line @next/next/no-img-element -- обложка лежит в нашем S3 */}
+              <img
+                src={entry.previewUrl}
+                alt={t(locale, "entry.preview")}
+                className="aspect-video w-full object-cover"
+              />
+            </span>
+          ))
         )}
         <h1 className="mb-3 font-display text-2xl font-bold text-text-0">
           {title}
@@ -118,22 +134,51 @@ export default async function LibraryEntryPage({
         </p>
 
         <div className="mb-6 flex flex-wrap items-center gap-3">
-          <a
-            href={entry.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-xl bg-glass-brd/40 px-4 py-2 text-sm text-text-0 hover:bg-glass-brd/60"
-          >
-            {provider
-              ? `${t(locale, "entry.watchOn")} ${videoProviderName(provider)}`
-              : t(locale, "entry.open")}
-          </a>
+          {/* У материала без адреса открывать нечего — вместо кнопки
+              показываем, где его искать. */}
+          {entry.url ? (
+            <a
+              href={entry.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-xl bg-glass-brd/40 px-4 py-2 text-sm text-text-0 hover:bg-glass-brd/60"
+            >
+              {provider
+                ? `${t(locale, "entry.watchOn")} ${videoProviderName(provider)}`
+                : t(locale, "entry.open")}
+            </a>
+          ) : (
+            entry.source && (
+              <p className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1">
+                {t(locale, "add.source")}: {entry.source}
+              </p>
+            )
+          )}
           <BookmarkButton
             locale={locale}
             entryId={entry.id}
             initialBookmarked={entry.bookmarked}
             initialCount={entry.bookmarkCount}
           />
+
+          {/* Куда материал попал: сразу после добавления это единственный
+              способ увидеть его в общем ряду, а не поодиночке. Ведём в первую
+              категорию — она же задаёт раздел. */}
+          {entry.categories[0] && (
+            <Link
+              href={`/library/${entry.categories[0].sectionSlug}/${entry.categories[0].slug}`}
+              className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1 hover:text-text-0"
+            >
+              {t(locale, "entry.openCategory")}
+            </Link>
+          )}
+
+          <Link
+            href="/library/add"
+            className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1 hover:text-text-0"
+          >
+            {t(locale, "entry.addMore")}
+          </Link>
         </div>
 
         <section className="glass rounded-2xl border border-glass-brd p-4 text-sm text-text-1">

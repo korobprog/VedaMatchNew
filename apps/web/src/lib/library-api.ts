@@ -12,6 +12,7 @@ import type {
   LibraryFeedResponse,
   LibraryPreferencesDto,
   LibrarySectionDto,
+  LibrarySectionRequestsState,
 } from "@vedamatch/shared";
 import { buildLibraryQuery } from "./library-query";
 
@@ -64,6 +65,10 @@ export const getLibraryAdminStats = () =>
 
 export const getLibraryAdminDuplicates = () =>
   libraryGet<LibraryAdminDuplicateGroup[]>("/library/admin/categories/duplicates");
+
+/** Заявки на разделы, ждущие решения администрации. */
+export const getLibraryAdminSectionRequests = () =>
+  libraryGet<LibrarySectionRequestsState>("/library/admin/section-requests");
 
 export const getLibraryAdminCategories = (sectionId?: string) =>
   libraryGet<LibraryAdminCategoryDto[]>(

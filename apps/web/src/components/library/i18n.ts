@@ -56,6 +56,72 @@ const ui = {
     "add.categoryCancel": "Отмена",
     "add.categoryCreated": "Категория создана и выбрана",
     "add.failed": "Не удалось добавить ссылку, попробуйте позже",
+    "add.modeTitle": "Как заполним карточку?",
+    "add.modeSimple": "Простой",
+    "add.modeSimpleHint":
+      "Четыре коротких шага с подсказками — знать заранее ничего не нужно",
+    "add.modeSimpleAction": "Пройти по шагам",
+    "add.modePro": "Профи",
+    "add.modeProHint":
+      "Все поля одной формой: быстрее, когда уже понятно, что заполнять",
+    "add.modeProAction": "Открыть полную форму",
+    "add.step": "Шаг",
+    "add.stepOf": "из",
+    "add.next": "Далее",
+    "add.prev": "Назад",
+    "add.stepUrl": "Ссылка",
+    "add.stepAbout": "Название и тип",
+    "add.stepPlace": "Раздел и категории",
+    "add.stepReview": "Проверка",
+    "add.stepUrlHint": "Адрес страницы — сайта, статьи, видео или книги",
+    "add.stepAboutHint":
+      "Название увидят в списке, тип помогает отфильтровать выдачу",
+    "add.stepPlaceHint": "Раздел — это полка, категорий можно выбрать до пяти",
+    "add.stepReviewHint": "Всё верно? Описание заполнять не обязательно",
+    "add.optional": "не обязательно",
+    "add.proWhy": "Зачем заполнять подробно",
+    "add.proWhyTitles":
+      "Название на двух языках открывает материал англоязычным читателям",
+    "add.proWhyDescription":
+      "Описание попадает в поиск — карточку находят по смыслу, а не только по названию",
+    "add.proWhyCategories":
+      "Несколько категорий — материал попадает сразу в несколько подборок",
+    "add.hintUrl": "Полный адрес вместе с https://",
+    "add.hintTitle": "Коротко и по делу — так, как назвали бы полку",
+    "add.hintDescription": "Пара предложений: о чём материал и кому пригодится",
+    "add.stepWhat": "Что добавляем",
+    "add.stepWhatHint":
+      "Тип задаёт, что спросим дальше: видео нужен адрес, книге — источник",
+    "add.stepWhere": "Где найти и как называется",
+    "add.stepWhereHint":
+      "Материал в сети — дайте ссылку; из книги — укажите источник",
+    "entry.openCategory": "Где опубликовано",
+    "entry.addMore": "Добавить ещё материал",
+    "add.cover": "Обложка",
+    "add.coverHint":
+      "У материала без ссылки картинку взять неоткуда — можно загрузить свою",
+    "add.coverChosen": "Выбрано",
+    "add.sectionRequest": "Попросить раздел",
+    "add.sectionRequestHint":
+      "Разделы заводит администрация — опишите, какой нужен, и мы рассмотрим",
+    "add.sectionRequestReason": "Зачем он нужен",
+    "add.sectionRequestReasonHint":
+      "Пара слов: какие материалы туда пойдут и почему не подходят имеющиеся",
+    "add.sectionRequestSubmit": "Отправить заявку",
+    "add.sectionRequestSent":
+      "Заявка отправлена — о решении сообщим уведомлением",
+    "add.sectionRequestTitles": "Нужны оба названия — русское и английское",
+    "add.sectionNew": "Новый раздел",
+    "add.sectionCreated": "Раздел создан и выбран",
+    "add.noCategoryFits": "Ничего не подходит?",
+    "add.locatorLegend": "Как указать материал",
+    "add.locatorUrl": "Есть ссылка",
+    "add.locatorSource": "Только источник",
+    "add.source": "Источник",
+    "add.hintSource":
+      "Откуда материал: «Бхагавад-гита 9.22, комментарий Прабхупады»",
+    "add.sourceRequired": "Укажите источник или переключитесь на ссылку",
+    "add.sourceTooLong": "Источник длиннее 300 символов",
     "entry.preview": "Обложка материала",
     "entry.play": "Смотреть здесь",
     "entry.watchOn": "Смотреть на",
@@ -159,6 +225,73 @@ const ui = {
     "add.categoryCancel": "Cancel",
     "add.categoryCreated": "The category is created and selected",
     "add.failed": "Could not add the link, please try again later",
+    "add.modeTitle": "How would you like to fill this in?",
+    "add.modeSimple": "Simple",
+    "add.modeSimpleHint":
+      "Four short steps with hints — no prior knowledge needed",
+    "add.modeSimpleAction": "Go step by step",
+    "add.modePro": "Pro",
+    "add.modeProHint":
+      "Every field in one form: faster when you already know what to fill in",
+    "add.modeProAction": "Open the full form",
+    "add.step": "Step",
+    "add.stepOf": "of",
+    "add.next": "Next",
+    "add.prev": "Back",
+    "add.stepUrl": "Link",
+    "add.stepAbout": "Title and type",
+    "add.stepPlace": "Section and categories",
+    "add.stepReview": "Review",
+    "add.stepUrlHint": "Address of the page — a site, article, video or book",
+    "add.stepAboutHint":
+      "The title shows up in listings, the type helps filter results",
+    "add.stepPlaceHint": "A section is the shelf, pick up to five categories",
+    "add.stepReviewHint": "All good? The description is optional",
+    "add.optional": "optional",
+    "add.proWhy": "Why fill in the details",
+    "add.proWhyTitles":
+      "A title in both languages opens the material to English readers",
+    "add.proWhyDescription":
+      "The description feeds search — the card is found by meaning, not just by title",
+    "add.proWhyCategories":
+      "Several categories put the material into several collections at once",
+    "add.hintUrl": "The full address including https://",
+    "add.hintTitle": "Short and to the point — the way you would name a shelf",
+    "add.hintDescription":
+      "A couple of sentences: what it is about and who it helps",
+    "add.stepWhat": "What are you adding",
+    "add.stepWhatHint":
+      "The type decides what comes next: a video needs an address, a book needs a source",
+    "add.stepWhere": "Where to find it and what it is called",
+    "add.stepWhereHint":
+      "Material on the web — give a link; from a book — name the source",
+    "entry.openCategory": "Where it is published",
+    "entry.addMore": "Add another material",
+    "add.cover": "Cover",
+    "add.coverHint":
+      "There is no picture to take for a material without a link — upload your own",
+    "add.coverChosen": "Chosen",
+    "add.sectionRequest": "Ask for a section",
+    "add.sectionRequestHint":
+      "Sections are created by the admins — describe the one you need and we will consider it",
+    "add.sectionRequestReason": "Why it is needed",
+    "add.sectionRequestReasonHint":
+      "A couple of words: what will go there and why the existing ones do not fit",
+    "add.sectionRequestSubmit": "Send the request",
+    "add.sectionRequestSent":
+      "The request is sent — we will let you know the decision",
+    "add.sectionRequestTitles": "Both titles are needed — Russian and English",
+    "add.sectionNew": "New section",
+    "add.sectionCreated": "The section is created and selected",
+    "add.noCategoryFits": "Nothing fits?",
+    "add.locatorLegend": "How to point to the material",
+    "add.locatorUrl": "There is a link",
+    "add.locatorSource": "Source only",
+    "add.source": "Source",
+    "add.hintSource":
+      "Where the material comes from: “Bhagavad-gita 9.22, Prabhupada’s purport”",
+    "add.sourceRequired": "Name the source or switch to a link",
+    "add.sourceTooLong": "The source is longer than 300 characters",
     "entry.preview": "Material cover",
     "entry.play": "Play here",
     "entry.watchOn": "Watch on",

@@ -17,9 +17,16 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 export function CategoryEditForm({
   locale,
   category,
+  onSaved,
 }: {
   locale: LibraryLocale;
   category: LibraryCategoryDto;
+  /**
+   * Формы добавления/редактирования материала держат свой список категорий
+   * в состоянии — без колбэка переименование становится видно только после
+   * `router.refresh()` пересоздаст их с нуля (следующее открытие формы).
+   */
+  onSaved?: (category: LibraryCategoryDto) => void;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -43,8 +50,7 @@ export function CategoryEditForm({
     );
   }
 
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
+  async function submit() {
     setError(null);
     if (!titleRu.trim() && !titleEn.trim()) {
       setError(t(locale, "add.titleRequired"));
@@ -65,7 +71,9 @@ export function CategoryEditForm({
         setError(t(locale, "add.failed"));
         return;
       }
+      const updated = (await res.json()) as LibraryCategoryDto;
       setOpen(false);
+      onSaved?.(updated);
       router.refresh();
     } catch {
       setError(t(locale, "add.failed"));
@@ -74,10 +82,20 @@ export function CategoryEditForm({
     }
   }
 
+  // Не <form>: этот попап встраивается и внутрь формы добавления/редактирования
+  // материала (add-entry-form.tsx, edit-entry-form.tsx) — вложенный <form> там
+  // невалиден и валит гидратацию, как раньше было с вложенными <button>.
+  function handleKeyDown(event: React.KeyboardEvent) {
+    event.stopPropagation();
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void submit();
+    }
+  }
+
   return (
-    <form
-      onSubmit={submit}
-      onClick={(event) => event.preventDefault()}
+    <div
+      onClick={(event) => event.stopPropagation()}
       className="relative z-10 mt-2 w-64 max-w-full rounded-xl border border-glass-brd bg-bg-1 p-3 text-sm shadow-xl"
     >
       <p className="mb-2 text-text-2">
@@ -93,6 +111,7 @@ export function CategoryEditForm({
           <input
             value={titleRu}
             onChange={(event) => setTitleRu(event.target.value)}
+            onKeyDown={handleKeyDown}
             className="mt-1 w-full rounded-lg border border-glass-brd bg-bg-0 p-1.5 text-text-0"
           />
         </label>
@@ -101,6 +120,7 @@ export function CategoryEditForm({
           <input
             value={titleEn}
             onChange={(event) => setTitleEn(event.target.value)}
+            onKeyDown={handleKeyDown}
             className="mt-1 w-full rounded-lg border border-glass-brd bg-bg-0 p-1.5 text-text-0"
           />
         </label>
@@ -108,8 +128,9 @@ export function CategoryEditForm({
       {error && <p className="mt-2 text-xs text-magenta">{error}</p>}
       <div className="mt-3 flex gap-2">
         <button
-          type="submit"
+          type="button"
           disabled={pending}
+          onClick={() => void submit()}
           className="rounded-lg bg-glass-brd/40 px-3 py-1.5 text-xs text-text-0 hover:bg-glass-brd/60 disabled:opacity-50"
         >
           {t(locale, "entry.save")}
@@ -122,6 +143,6 @@ export function CategoryEditForm({
           {t(locale, "entry.cancel")}
         </button>
       </div>
-    </form>
+    </div>
   );
 }
