@@ -343,6 +343,8 @@ model User {
   chatReportsMade                    ChatReport[]                 @relation("ChatReportsMade")
   chatReportsDecided                 ChatReport[]                 @relation("ChatReportsDecided")
   chatMessageViews                   ChatMessageView[]            @relation("ChatMessageViews")
+  chatColorTemplates                 ChatColorTemplate[]          @relation("ChatColorTemplates")
+  chatConversationThemes             ChatConversationTheme[]      @relation("ChatConversationThemes")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -3692,4 +3694,48 @@ model ChatReport {
   createdAt DateTime @default(now())
 
   @@index([status, createdAt])
+}
+
+/**
+ * Именованный шаблон цвета переписки. Один пользователь заводит несколько,
+ * каждый можно применить к любой своей беседе — см. ChatConversationTheme.
+ * Цвет — сплошной hex на элемент, без градиентов.
+ */
+model ChatColorTemplate {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("ChatColorTemplates", fields: [userId], references: [id], onDelete: Cascade)
+
+  name         String
+  bubbleMine   String
+  bubbleTheirs String
+  accent       String
+  background   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  themes ChatConversationTheme[]
+
+  @@index([userId])
+}
+
+/**
+ * Какой шаблон применён к какой беседе у какого пользователя — приватная
+ * настройка просмотра, не видна другим участникам беседы.
+ *
+ * `templateId: null` при существующей строке — это явный сброс на
+ * оформление по умолчанию, отличается от отсутствия строки («никогда не
+ * настраивал»), хотя рендерится одинаково.
+ */
+model ChatConversationTheme {
+  userId         String
+  user           User               @relation("ChatConversationThemes", fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String
+  templateId     String?
+  template       ChatColorTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, conversationId])
 }
