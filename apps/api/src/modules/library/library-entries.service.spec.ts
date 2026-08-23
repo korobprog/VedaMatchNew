@@ -200,6 +200,62 @@ describe('LibraryEntriesService.create', () => {
     expect(data.enrichmentStatus).toBe('pending');
   });
 
+  it('stores a source-only entry without touching the url columns', async () => {
+    const prisma = prismaMock();
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    await service.create(
+      'user-1',
+      validBody({ url: null, source: 'Бхагавад-гита 9.22' }),
+    );
+
+    const createCalls = prisma.libraryEntry.create.mock.calls as Array<
+      [{ data: Record<string, unknown> }]
+    >;
+    const { data } = createCalls[0][0];
+    expect(data.url).toBeNull();
+    expect(data.urlNormalized).toBeNull();
+    expect(data.domain).toBeNull();
+    expect(data.source).toBe('Бхагавад-гита 9.22');
+    // Обогащать нечего — иначе запись висела бы «pending» вечно.
+    expect(data.enrichmentStatus).toBe('not_applicable');
+  });
+
+  it('does not look for duplicates when there is no url', async () => {
+    const prisma = prismaMock();
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    await service.create(
+      'user-1',
+      validBody({ url: null, source: 'Бхагавад-гита 9.22' }),
+    );
+
+    // Один источник законно стоит у множества материалов — ключа для
+    // дедупликации у таких записей нет.
+    expect(prisma.libraryEntry.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects an entry with neither url nor source', async () => {
+    const prisma = prismaMock();
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+    );
+
+    await expect(
+      service.create('user-1', validBody({ url: null, source: null })),
+    ).rejects.toThrow('url_or_source_required');
+  });
+
   it('stores a youtube cover taken from the link itself', async () => {
     const prisma = prismaMock();
     const service = new LibraryEntriesService(

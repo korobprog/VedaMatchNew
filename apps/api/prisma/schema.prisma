@@ -1497,6 +1497,10 @@ enum LibraryEnrichmentStatus {
   queued
   ready
   failed
+  /// Обогащать нечего: у материала нет ссылки, только источник. Без этого
+  /// такие записи навсегда оставались бы `pending` и числились
+  /// проблемными в плитке «Без обогащения» админки.
+  not_applicable
 }
 
 enum LibraryCategoryStatus {
@@ -1555,11 +1559,23 @@ model LibraryCategory {
 }
 
 model LibraryEntry {
-  id               String                   @id @default(uuid())
-  url              String
-  urlNormalized    String                   @unique
-  canonicalUrl     String?
-  domain           String
+  id String @id @default(uuid())
+
+  /// Адрес есть не у каждого материала: цитата из книги или бумажное
+  /// издание описываются полем `source`. CHECK-ограничение в миграции
+  /// 20260823..._library_entry_source требует заполнить одно из двух.
+  /// NULL-ы в Postgres друг с другом не конфликтуют, поэтому `@unique`
+  /// на `urlNormalized` продолжает ловить дубли ссылок.
+  url           String?
+  urlNormalized String? @unique
+  canonicalUrl  String?
+  domain        String?
+
+  /// Откуда материал, когда ссылки нет: «Бхагавад-гита 9.22, комментарий
+  /// Прабхупады». Свободная строка и намеренно не уникальная — одна книга
+  /// законно стоит источником у множества разных материалов.
+  source String?
+
   type             LibraryEntryType
   contentLanguage  String                   @default("ru") @db.VarChar(8)
   titleRu          String?

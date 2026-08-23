@@ -62,8 +62,11 @@ export interface LibraryCategorySuggestion {
 
 export interface LibraryEntryDto {
   id: string;
-  url: string;
-  domain: string;
+  /** `null` у материала без адреса — тогда заполнен `source`. */
+  url: string | null;
+  domain: string | null;
+  /** Откуда материал, когда ссылки нет: «Бхагавад-гита 9.22». */
+  source: string | null;
   type: LibraryEntryType;
   contentLanguage: string;
   titleRu: string | null;
@@ -144,8 +147,14 @@ export interface CreateLibraryCategoryConflict {
   suggestions: LibraryCategorySuggestion[];
 }
 
+/**
+ * Заполнено должно быть хотя бы одно из `url` / `source`: у цитаты из книги
+ * адреса нет, у видео — наоборот, обязателен. Проверяют и сервис, и
+ * CHECK-ограничение в базе.
+ */
 export interface CreateLibraryEntryRequest {
-  url: string;
+  url?: string | null;
+  source?: string | null;
   type: LibraryEntryType;
   contentLanguage: string;
   titleRu?: string | null;
@@ -220,7 +229,13 @@ export type LibraryCategoryStatus =
   | 'merged'
   | 'removed';
 
-export type LibraryEnrichmentStatus = 'pending' | 'queued' | 'ready' | 'failed';
+/** `not_applicable` — обогащать нечего: у материала нет ссылки, только источник. */
+export type LibraryEnrichmentStatus =
+  | 'pending'
+  | 'queued'
+  | 'ready'
+  | 'failed'
+  | 'not_applicable';
 
 /** Категория глазами администрации: с автором, статусом и счётчиками. */
 export interface LibraryAdminCategoryDto {
@@ -259,8 +274,9 @@ export interface MergeLibraryCategoryRequest {
 /** Запись каталога глазами администрации. */
 export interface LibraryAdminEntryDto {
   id: string;
-  url: string;
-  domain: string;
+  /** `null` у материала без адреса — у него заполнен `source`. */
+  url: string | null;
+  domain: string | null;
   type: LibraryEntryType;
   titleRu: string | null;
   titleEn: string | null;

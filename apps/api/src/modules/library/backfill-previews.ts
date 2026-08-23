@@ -41,7 +41,9 @@ export async function backfillPreviews(argv: string[] = []) {
   try {
     for (;;) {
       const entries = await prisma.libraryEntry.findMany({
-        where: { previewKey: null },
+        // У материала без адреса (заполнен только `source`) обложку тянуть
+        // неоткуда — такие записи в перебор не берём вовсе.
+        where: { previewKey: null, url: { not: null } },
         orderBy: { id: 'asc' },
         take: BATCH_SIZE,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -53,6 +55,9 @@ export async function backfillPreviews(argv: string[] = []) {
       for (const entry of entries) {
         if (scanned >= limit) break;
         scanned += 1;
+
+        // Тип по `where` Prisma не сужает — проверяем ещё раз.
+        if (!entry.url) continue;
 
         const remote = await resolvePreviewUrl(entry.url);
         if (!remote) continue;
