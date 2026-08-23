@@ -151,7 +151,9 @@ enum MotivationPostOrigin {
 
 /// Режим ИИ-модератора пользовательских рилсов: выключен (всё к админу),
 /// подсказывает (пишет вердикт в аудит, решает человек), решает сам в
-/// пределах порогов уверенности.
+/// пределах порогов уверенности. По умолчанию — «решает сам»: рилс участника
+/// проходит ИИ-проверку текста и публикуется без человека, администратор
+/// разбирает только то, в чём модель не уверена.
 enum MotivationAiModerationMode {
   off
   assist
@@ -583,7 +585,7 @@ model MotivationSettings {
   /// модератора и меняются без деплоя.
   userReelsEnabled   Boolean                    @default(true)
   userDailyLimit     Int                        @default(1)
-  aiModerationMode   MotivationAiModerationMode @default(assist)
+  aiModerationMode   MotivationAiModerationMode @default(autonomous)
   aiApproveThreshold Decimal                    @default(0.75) @db.Decimal(3, 2)
   aiRejectThreshold  Decimal                    @default(0.85) @db.Decimal(3, 2)
   aiEditorialRules   String?

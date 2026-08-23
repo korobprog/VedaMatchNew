@@ -27,7 +27,7 @@ export const SETTINGS_FALLBACK = {
   musicModel: 'fal-ai/elevenlabs/music',
   userReelsEnabled: true,
   userDailyLimit: 1,
-  aiModerationMode: 'assist' as MotivationAiModerationMode,
+  aiModerationMode: 'autonomous' as MotivationAiModerationMode,
   aiApproveThreshold: 0.75,
   aiRejectThreshold: 0.85,
   reportsToHide: 3,

@@ -57,6 +57,16 @@ describe('MotivationSettingsService', () => {
     });
   });
 
+  it('без записи в базе рилс участника не ждёт администратора', async () => {
+    // Умолчание — «решает сам»: текст разбирает ИИ, и второй проверяющий на
+    // том же тексте только держит рилс в очереди.
+    const { service } = build(null);
+
+    await expect(service.read()).resolves.toMatchObject({
+      aiModerationMode: 'autonomous',
+    });
+  });
+
   it('пустая строка из формы возвращает наследование, а не пустую модель', async () => {
     // Иначе, очистив поле, администратор получил бы неработающий сервис.
     const { service, saved } = build(null);
