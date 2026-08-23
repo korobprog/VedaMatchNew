@@ -158,8 +158,25 @@ export function ChatMessage({
 
               {message.attachments.length > 0 && (
                 <span className="mb-2 flex flex-col gap-2">
-                  {message.attachments.map((attachment) => (
-                    <Attachment key={attachment.id} attachment={attachment} />
+                  {message.attachments.map((attachment, index) => (
+                    <span
+                      key={attachment.id}
+                      // Тонкий разделитель между вложениями — только когда их
+                      // больше одного, иначе аудио и фото сливаются в один
+                      // блок. currentColor от ink пузыря: сам подстраивается
+                      // под любой цвет фона из шаблона, не только дефолтный.
+                      className={index > 0 ? "border-t pt-2" : undefined}
+                      style={
+                        index > 0
+                          ? {
+                              borderTopColor:
+                                "color-mix(in srgb, currentColor 15%, transparent)",
+                            }
+                          : undefined
+                      }
+                    >
+                      <Attachment attachment={attachment} />
+                    </span>
                   ))}
                 </span>
               )}
