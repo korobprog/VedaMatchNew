@@ -4,6 +4,7 @@ import type {
   AdminChatConversationsState,
   AdminChatReportsState,
   AdminChatStats,
+  ChatColorTemplatesState,
   ChatConversationDetail,
   ChatListState,
   ChatChannelCommunitiesState,
@@ -96,4 +97,9 @@ export function getAdminChatConversations(
 
 export function getAdminChatStats(): Promise<AdminChatStats | null> {
   return chatGet<AdminChatStats>("/admin/chat/stats");
+}
+
+/** Шаблоны цвета — для серверного рендера страницы /chat/appearance. */
+export function getChatColorTemplates(): Promise<ChatColorTemplatesState | null> {
+  return chatGet<ChatColorTemplatesState>("/chat/color-templates");
 }
