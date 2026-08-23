@@ -347,6 +347,7 @@ model User {
   chatMessageViews                   ChatMessageView[]            @relation("ChatMessageViews")
   chatColorTemplates                 ChatColorTemplate[]          @relation("ChatColorTemplates")
   chatConversationThemes             ChatConversationTheme[]      @relation("ChatConversationThemes")
+  announcementAcks                   AnnouncementAck[]            @relation("AnnouncementAcks")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -2084,8 +2085,29 @@ model Announcement {
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
+  acks AnnouncementAck[]
+
   @@index([status, publishedAt(sort: Desc)])
   @@index([publishAt(sort: Desc)])
+}
+
+/// Отметка «ознакомлен» участника с новостью.
+///
+/// Раньше закрытая новость запоминалась в localStorage: отметка нужна была
+/// одному человеку на одном устройстве. Но администрация обязана видеть, до
+/// скольких людей новость действительно дошла, а браузерная отметка ещё и
+/// теряется при смене устройства — новость исчезала с главной, так и не
+/// прочитанной. Поэтому таблица: она же и статистика.
+model AnnouncementAck {
+  id             String       @id @default(uuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation("AnnouncementAcks", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@unique([announcementId, userId])
+  @@index([userId])
 }
 
 model RoadmapItem {

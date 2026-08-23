@@ -45,6 +45,28 @@ export class ChangelogController {
     return this.changelog.listAnnouncements(resolveLang(lang));
   }
 
+  /**
+   * То же, но с отметкой «ознакомлен» текущего человека: по ней главная и
+   * решает, показывать новость или уже нет.
+   */
+  @Get('announcements/mine')
+  @UseGuards(AuthGuard)
+  myAnnouncements(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('lang') lang?: string,
+  ) {
+    return this.changelog.listAnnouncements(resolveLang(lang), user.sub);
+  }
+
+  @Post('announcements/:id/ack')
+  @UseGuards(AuthGuard)
+  acknowledgeAnnouncement(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.changelog.acknowledgeAnnouncement(user.sub, id);
+  }
+
   @Get('roadmap')
   roadmap(@Query('lang') lang?: string) {
     return this.changelog.listRoadmap(resolveLang(lang));

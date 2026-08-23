@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import {
-  getAnnouncements,
   getBillingPlan,
   getCommunityStats,
+  getMyAnnouncements,
   getProfile,
   getServices,
 } from "@/lib/api";
@@ -82,7 +82,7 @@ export default async function Home({
     getMyNoticeResponsesServer().catch(() => null),
     getMyCommunitiesServer().catch(() => null),
     // Новости портала — не повод ронять главную: не пришли, значит их нет.
-    getAnnouncements("ru").catch(() => null),
+    getMyAnnouncements("ru").catch(() => null),
     getChatUnread().catch(() => null),
   ]);
   if (!user || !services) {

@@ -268,3 +268,82 @@ describe('ChangelogService: рассылка новости', () => {
     expect(prisma.user.findMany.mock.calls[0][0].where.deletedAt).toBeNull();
   });
 });
+
+describe('ChangelogService: отметка «ознакомлен»', () => {
+  function build() {
+    const prisma = {
+      announcement: { findMany: jest.fn(), findUnique: jest.fn() },
+      announcementAck: { findMany: jest.fn().mockResolvedValue([]), upsert: jest.fn() },
+    };
+    return {
+      prisma,
+      service: new ChangelogService(
+        prisma as unknown as PrismaService,
+        { emit: jest.fn() } as never,
+      ),
+    };
+  }
+
+  const visible = {
+    id: 'a1',
+    status: 'published',
+    publishAt: null,
+    expiresAt: null,
+    publishedAt: new Date('2026-08-20T09:00:00Z'),
+    createdAt: new Date('2026-08-20T09:00:00Z'),
+    pinned: true,
+    titleRu: 'Открыли Студию',
+    titleEn: 'Studio',
+    bodyRu: 'Текст',
+    bodyEn: 'Body',
+  };
+
+  it('без пользователя отметки не спрашивает и отдаёт acknowledged=false', async () => {
+    const { service, prisma } = build();
+    prisma.announcement.findMany.mockResolvedValue([visible]);
+
+    const items = await service.listAnnouncements('ru');
+
+    expect(items[0].acknowledged).toBe(false);
+    expect(prisma.announcementAck.findMany).not.toHaveBeenCalled();
+  });
+
+  it('отмеченную новость помечает для этого человека', async () => {
+    const { service, prisma } = build();
+    prisma.announcement.findMany.mockResolvedValue([visible]);
+    prisma.announcementAck.findMany.mockResolvedValue([{ announcementId: 'a1' }]);
+
+    const items = await service.listAnnouncements('ru', 'u1');
+
+    expect(items[0].acknowledged).toBe(true);
+  });
+
+  it('повторная отметка не падает и не задваивает счётчик', async () => {
+    const { service, prisma } = build();
+    prisma.announcement.findUnique.mockResolvedValue(visible);
+
+    await expect(service.acknowledgeAnnouncement('u1', 'a1')).resolves.toEqual({
+      ok: true,
+    });
+    // upsert, а не create: вторая вкладка не должна ловить ошибку уникальности.
+    expect(prisma.announcementAck.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { announcementId_userId: { announcementId: 'a1', userId: 'u1' } },
+        update: {},
+      }),
+    );
+  });
+
+  it('снятую с главной новость отметить нельзя', async () => {
+    const { service, prisma } = build();
+    prisma.announcement.findUnique.mockResolvedValue({
+      ...visible,
+      expiresAt: new Date('2020-01-01T00:00:00Z'),
+    });
+
+    await expect(service.acknowledgeAnnouncement('u1', 'a1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(prisma.announcementAck.upsert).not.toHaveBeenCalled();
+  });
+});

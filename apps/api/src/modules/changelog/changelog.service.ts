@@ -62,10 +62,30 @@ export class ChangelogService {
     return release ? this.toPublicRelease(release, lang) : null;
   }
 
-  async listAnnouncements(lang: Lang): Promise<PublicAnnouncementDto[]> {
+  /**
+   * Видимые новости. `userId` заполняет отметку «ознакомлен»: без него —
+   * публичный список, где отмечать нечего и некому.
+   */
+  async listAnnouncements(
+    lang: Lang,
+    userId?: string,
+  ): Promise<PublicAnnouncementDto[]> {
     const announcements = await this.prisma.announcement.findMany({
       where: visibleAnnouncementWhere(new Date()),
     });
+    const acknowledged = userId
+      ? new Set(
+          (
+            await this.prisma.announcementAck.findMany({
+              where: {
+                userId,
+                announcementId: { in: announcements.map((item) => item.id) },
+              },
+              select: { announcementId: true },
+            })
+          ).map((ack) => ack.announcementId),
+        )
+      : new Set<string>();
     // Порядок наводим здесь: у отложенной новости «когда вышла» — назначенное
     // время, а не отметка публикации, и одним `orderBy` эти два поля не свести.
     return announcements
@@ -81,7 +101,33 @@ export class ChangelogService {
         body: lang === 'en' ? item.bodyEn : item.bodyRu,
         publishedAt: announcementSortDate(item).toISOString(),
         pinned: item.pinned,
+        acknowledged: acknowledged.has(item.id),
       }));
+  }
+
+  /**
+   * Отметка «ознакомлен».
+   *
+   * Идемпотентна: повторное нажатие с другой вкладки не должно ни падать, ни
+   * задваивать статистику — поэтому `upsert` по паре, а не `create`.
+   * Отмечать разрешаем только видимую новость: снятую с главной человек не
+   * видел, и её отметка исказила бы счётчик.
+   */
+  async acknowledgeAnnouncement(
+    userId: string,
+    id: string,
+  ): Promise<{ ok: true }> {
+    const announcement = await this.prisma.announcement.findUnique({
+      where: { id },
+    });
+    if (!announcement || !isAnnouncementVisible(announcement, new Date()))
+      throw new NotFoundException('Новость не найдена');
+    await this.prisma.announcementAck.upsert({
+      where: { announcementId_userId: { announcementId: id, userId } },
+      create: { announcementId: id, userId },
+      update: {},
+    });
+    return { ok: true };
   }
 
   async listRoadmap(lang: Lang): Promise<PublicRoadmapItemDto[]> {
@@ -196,6 +242,7 @@ export class ChangelogService {
     this.ensureAdmin(role);
     const items = await this.prisma.announcement.findMany({
       orderBy: { createdAt: 'desc' },
+      include: { _count: { select: { acks: true } } },
     });
     return items.map((item) => this.toAdminAnnouncement(item));
   }
@@ -253,6 +300,7 @@ export class ChangelogService {
         });
       return tx.announcement.update({
         where: { id },
+        include: { _count: { select: { acks: true } } },
         data: {
           titleRu: body.titleRu,
           titleEn: body.titleEn,
@@ -512,6 +560,8 @@ export class ChangelogService {
     expiresAt: Date | null;
     broadcastAt: Date | null;
     broadcastCount: number;
+    /** Приходит из `_count`; у только что созданной новости его ещё нет. */
+    _count?: { acks: number };
   }): AdminAnnouncementDto {
     return {
       id: item.id,
@@ -526,6 +576,7 @@ export class ChangelogService {
       expiresAt: item.expiresAt?.toISOString() ?? null,
       broadcastAt: item.broadcastAt?.toISOString() ?? null,
       broadcastCount: item.broadcastCount,
+      acknowledgedCount: item._count?.acks ?? 0,
     };
   }
 
