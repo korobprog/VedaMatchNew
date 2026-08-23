@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { ChatAdminController } from './chat-admin.controller';
+import { ChatColorTemplatesService } from './chat-color-templates.service';
+import { ChatConversationThemeService } from './chat-conversation-theme.service';
 import { ChatConversationsService } from './chat-conversations.service';
 import { ChatEventsService } from './chat-events.service';
 import { ChatMessagesService } from './chat-messages.service';
@@ -46,6 +48,8 @@ import { PeopleService } from './people/people.service';
     ChatUploadsService,
     ChatSignedUrlsInterceptor,
     ChatPurgeListener,
+    ChatColorTemplatesService,
+    ChatConversationThemeService,
     PeopleService,
     PeopleRequestsService,
     PeopleAdminService,
