@@ -94,12 +94,15 @@ export function AdminDonationForm({ initial }: { initial: DonationSettingsDto })
         <legend className="text-sm font-medium text-text-1">Реквизиты</legend>
         {rows.length === 0 && <p className="text-sm text-text-2">Пока ни одного — добавьте строку.</p>}
         {rows.map((row, index) => (
-          <div key={index} className="grid grid-cols-[7rem_1fr_auto] gap-2 sm:grid-cols-[7rem_10rem_1fr_auto]">
+          <div
+            key={index}
+            className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)_auto] items-start gap-2 rounded-xl border border-glass-brd/60 p-2"
+          >
             <select
               aria-label={`Вид реквизита ${index + 1}`}
               value={row.kind}
               onChange={(e) => updateRow(index, { kind: e.target.value as DonationRequisiteKind })}
-              className="rounded-xl border border-glass-brd bg-bg-0 px-2 py-2 text-sm text-text-0"
+              className="min-w-0 rounded-xl border border-glass-brd bg-bg-0 px-2 py-2 text-sm text-text-0"
             >
               {DONATION_REQUISITE_KINDS.map((kind) => (
                 <option key={kind} value={kind}>
@@ -113,7 +116,7 @@ export function AdminDonationForm({ initial }: { initial: DonationSettingsDto })
               onChange={(e) => updateRow(index, { label: e.target.value })}
               placeholder="Подпись: Перевод по СБП"
               maxLength={60}
-              className="rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
+              className="min-w-0 rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
             />
             <input
               aria-label={`Значение реквизита ${index + 1}`}
@@ -121,13 +124,13 @@ export function AdminDonationForm({ initial }: { initial: DonationSettingsDto })
               onChange={(e) => updateRow(index, { value: e.target.value })}
               placeholder={row.kind === "link" ? "https://…" : "Номер, адрес или телефон"}
               maxLength={200}
-              className="col-span-2 rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 font-mono text-sm text-text-0 sm:col-span-1"
+              className="col-span-2 col-start-1 row-start-2 min-w-0 rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 font-mono text-sm text-text-0"
             />
             <button
               type="button"
               aria-label={`Удалить реквизит ${index + 1}`}
               onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
-              className="rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1 hover:bg-bg-2"
+              className="col-start-3 row-span-2 row-start-1 self-center rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1 hover:bg-bg-2"
             >
               ✕
             </button>
