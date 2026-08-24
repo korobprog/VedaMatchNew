@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
@@ -17,6 +18,7 @@ import type {
 } from "@vedamatch/shared";
 import type { Locale } from "@/lib/locale";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
+import { ListingImagePicker } from "./listing-image-picker";
 import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -103,6 +105,11 @@ export function ListingForm({
   const [delivery, setDelivery] = useState<MarketDeliveryOption[]>(
     listing?.deliveryOptions ?? [],
   );
+  // Фото копятся только при создании: у уже опубликованного объявления ими
+  // управляет ListingImagesUpload на странице редактирования.
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const [uploadWarning, setUploadWarning] = useState<string | null>(null);
 
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -183,6 +190,23 @@ export function ListingForm({
         });
       }
 
+      // Фото уходят следом за созданием: адрес загрузки требует id, а он
+      // появляется только сейчас. Объявление уже создано — молча увести
+      // человека, потеряв сообщение об отказе, нельзя.
+      if (!listing && photos.length) {
+        const form = new FormData();
+        for (const file of photos) form.append("files", file);
+        const uploadRes = await apiFetch(
+          `${API_URL}/market/listings/${saved.id}/images`,
+          { method: "POST", credentials: "include", body: form },
+        );
+        if (!uploadRes.ok) {
+          setCreatedId(saved.id);
+          setUploadWarning(await marketErrorCode(uploadRes));
+          return;
+        }
+      }
+
       router.push(`/market/sell/listings/${saved.id}`);
       router.refresh();
     } catch {
@@ -191,6 +215,24 @@ export function ListingForm({
       setPending(false);
     }
   }
+
+  if (createdId)
+    return (
+      <div className="glass rounded-2xl border border-glass-brd p-6">
+        <p className="font-medium text-text-0">{t("sell.listingCreated")}</p>
+        {uploadWarning && (
+          <p className="mt-2 text-sm text-amber-300">
+            {marketErrorText(t, uploadWarning)}
+          </p>
+        )}
+        <Link
+          href={`/market/sell/listings/${createdId}`}
+          className="mt-4 inline-block rounded-xl bg-glass-brd/40 px-4 py-2 text-sm text-text-0 hover:bg-glass-brd/60"
+        >
+          {t("sell.openListing")}
+        </Link>
+      </div>
+    );
 
   return (
     <form onSubmit={submit} className="glass rounded-2xl border border-glass-brd p-5">
@@ -227,6 +269,12 @@ export function ListingForm({
           </div>
         )}
       </fieldset>
+
+      {!listing && (
+        <div className="mb-4">
+          <ListingImagePicker files={photos} onChange={setPhotos} />
+        </div>
+      )}
 
       <Field label={t("form.titleRu")}>
         <input

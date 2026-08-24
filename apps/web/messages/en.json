@@ -332,6 +332,8 @@
       "edit": "Shop settings",
       "listings": "My listings",
       "newListing": "New listing",
+      "listingCreated": "Listing published",
+      "openListing": "Open the listing",
       "editListing": "Edit listing",
       "name": "Name",
       "tagline": "Short description",
@@ -361,7 +363,13 @@
       "images": "Photos",
       "addImages": "Add photos",
       "removeImage": "Remove",
-      "imagesHint": "Up to 8 photos, JPEG, PNG or WebP, 10 MB each"
+      "imagesHint": "Up to 8 photos, JPEG, PNG or WebP, 10 MB each",
+      "imagesHintCreate": "Up to 5 photos. Crop each one before adding — the server optimizes size and format automatically",
+      "cover": "cover",
+      "cropTitle": "Crop the photo",
+      "cropConfirm": "Crop and add",
+      "cropSkip": "Skip cropping",
+      "cropCancel": "Don't add"
     },
     "stats": {
       "title": "Statistics",
