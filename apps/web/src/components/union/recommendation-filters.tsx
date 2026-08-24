@@ -371,6 +371,17 @@ export function RecommendationFilters({
         Только профили с проверенными фото
       </label>
 
+      <label className="mt-2 flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-1">
+        <input
+          type="checkbox"
+          name="includeSwiped"
+          value="true"
+          defaultChecked={first(params.includeSwiped) === "true"}
+          className="h-4 w-4 accent-magenta"
+        />
+        Показывать уже отсмотренных
+      </label>
+
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button
           type="submit"
@@ -591,6 +602,7 @@ const filterKeys = [
   "childrenStatus",
   "verifiedOnly",
   "photoVerifiedOnly",
+  "includeSwiped",
 ] as const;
 
 function countActiveFilters(
