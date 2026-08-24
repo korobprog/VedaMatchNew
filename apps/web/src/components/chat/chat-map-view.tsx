@@ -155,14 +155,22 @@ export function ChatMapView({ initial }: { initial: ChatMapState }) {
                 </span>
               </button>
 
-              {beseds > 0 && (
+              <div className="flex shrink-0 gap-2">
                 <Link
-                  href={`/chat/discover?communityId=${point.community.id}`}
-                  className="shrink-0 rounded-xl border border-glass-brd px-3.5 py-2.5 text-[13px] font-semibold text-text-1 hover:text-text-0"
+                  href={`/communities/${point.community.slug}`}
+                  className="rounded-xl border border-glass-brd px-3.5 py-2.5 text-[13px] font-semibold text-text-1 hover:text-text-0"
                 >
-                  Беседы
+                  Община
                 </Link>
-              )}
+                {beseds > 0 && (
+                  <Link
+                    href={`/chat/discover?communityId=${point.community.id}`}
+                    className="rounded-xl border border-glass-brd px-3.5 py-2.5 text-[13px] font-semibold text-text-1 hover:text-text-0"
+                  >
+                    Беседы
+                  </Link>
+                )}
+              </div>
             </li>
           );
         })}

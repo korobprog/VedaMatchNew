@@ -55,6 +55,34 @@ describe("ChatMapView", () => {
     );
   });
 
+  it("строка общины всегда ведёт на её страницу, даже без открытых бесед", () => {
+    render(
+      <ChatMapView
+        initial={{
+          communities: [
+            {
+              community: { id: "c2", slug: "khabarovsk-yatra", name: "Хабаровская Ятра" },
+              lat: 48.48,
+              lon: 135.08,
+              city: "Хабаровск",
+              channels: 0,
+              groups: 0,
+            },
+          ],
+          cities: [],
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Община" })).toHaveAttribute(
+      "href",
+      "/communities/khabarovsk-yatra",
+    );
+    expect(
+      screen.queryByRole("link", { name: "Беседы" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("объясняет, что метка города — это согласие, а не адрес", () => {
     render(<ChatMapView initial={state} />);
 
