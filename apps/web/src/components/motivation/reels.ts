@@ -43,7 +43,22 @@ export function shareUrlFor(slug: string, origin: string): string {
 export function attributionLine(
   post: Pick<MotivationPostDto, "attributionSpeaker" | "attributionWork" | "attributionLocator">,
 ): string {
-  return [post.attributionSpeaker, post.attributionWork, post.attributionLocator]
+  const work = post.attributionWork?.trim() || null;
+  const locator = stripWorkPrefix(post.attributionLocator?.trim() || null, work);
+  return [post.attributionSpeaker, work, locator]
     .filter((part): part is string => Boolean(part && part.trim()))
     .join(" · ");
+}
+
+/**
+ * Иногда генерация кладёт название произведения ещё раз в начало главы/стиха
+ * («Бхагавад-гита как она есть 6.1» вместо «6.1») — тогда оно дублируется в
+ * подписи. Сравнение без учёта регистра: разные генерации расходятся в
+ * заглавных буквах чаще, чем в самом тексте.
+ */
+function stripWorkPrefix(locator: string | null, work: string | null): string | null {
+  if (!locator || !work) return locator;
+  if (!locator.toLocaleLowerCase().startsWith(work.toLocaleLowerCase())) return locator;
+  const rest = locator.slice(work.length).replace(/^[·,:\s-]+/, "").trim();
+  return rest || null;
 }
