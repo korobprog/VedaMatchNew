@@ -95,6 +95,9 @@ describe('ChatConversationsService', () => {
       findFirst: fn(),
       findMany: fn(() => Promise.resolve([])),
     },
+    community: {
+      findUnique: fn(),
+    },
   };
 
   const events = { publish: fn() };
@@ -118,6 +121,7 @@ describe('ChatConversationsService', () => {
     prisma.chatConversation.count.mockResolvedValue(0);
     prisma.chatMessage.count.mockResolvedValue(0);
     prisma.chatMessage.findFirst.mockResolvedValue(null);
+    prisma.community.findUnique.mockResolvedValue({ status: 'active' });
   });
 
   describe('requireConversation', () => {
@@ -223,6 +227,22 @@ describe('ChatConversationsService', () => {
   describe('createGroup', () => {
     it('не даёт завести группу в чужой общине', async () => {
       prisma.communityMember.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.create('me', {
+          kind: 'group',
+          title: 'Киртан-кружок',
+          communityId: 'community-1',
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.chatConversation.create).not.toHaveBeenCalled();
+    });
+
+    it('не даёт завести беседу в снятой администрацией общине', async () => {
+      prisma.communityMember.findFirst.mockResolvedValue({ id: 'member-1' });
+      prisma.community.findUnique.mockResolvedValue({
+        status: 'removed_by_admin',
+      });
 
       await expect(
         service.create('me', {

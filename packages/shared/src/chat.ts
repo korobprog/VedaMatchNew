@@ -1,5 +1,7 @@
 /** Сервис «Общение»: личные диалоги, группы и каналы общин. */
 
+import type { CommunityStatus } from './community';
+
 export type ChatConversationKind = 'direct' | 'group' | 'channel';
 
 export type ChatConversationState =
@@ -308,7 +310,12 @@ export interface ChatDiscoverState {
 
 /** Община, в которой смотрящий вправе завести канал. */
 export interface ChatChannelCommunity {
-  community: ChatCommunityRef;
+  /**
+   * `status` тут не для витрины, а чтобы владелец видел: если она не
+   * `active`, ссылка на неё нигде публично не появится — молчаливая пропажа
+   * хуже честного предупреждения в форме создания.
+   */
+  community: ChatCommunityRef & { status: CommunityStatus };
   /** Уже заведённые каналы этой общины — второй такой же обычно не нужен. */
   channels: { id: string; title: string }[];
 }

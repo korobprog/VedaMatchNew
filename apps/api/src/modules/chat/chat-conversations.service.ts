@@ -332,7 +332,8 @@ export class ChatConversationsService {
   ) {
     const title = dto.title?.trim();
     if (!title) throw new BadRequestException('У группы должно быть название');
-    if (dto.communityId) await this.requireCommunityAdmin(userId, dto.communityId);
+    if (dto.communityId)
+      await this.requireCommunityAdmin(userId, dto.communityId);
 
     const memberIds = await this.reachableUserIds(userId, dto.memberIds ?? []);
     const visibility = dto.communityId
@@ -419,6 +420,17 @@ export class ChatConversationsService {
     });
     if (!membership)
       throw new ForbiddenException('Беседу общины заводит администрация');
+    // Общину сняли — новая привязанная беседа всё равно нигде не покажется.
+    // Список общин при создании беседы уже предупреждает об этом заранее;
+    // здесь та же проверка, но она не обойдётся прямым вызовом API.
+    const community = await this.prisma.community.findUnique({
+      where: { id: communityId },
+      select: { status: true },
+    });
+    if (community?.status !== 'active')
+      throw new ForbiddenException(
+        'Община сейчас скрыта администрацией — беседу в неё не завести',
+      );
   }
 
   /** Принять запрос: диалог становится обычным. */
@@ -1051,7 +1063,9 @@ export class ChatConversationsService {
         role: { in: ['owner', 'admin'] },
       },
       select: {
-        community: { select: { id: true, slug: true, name: true } },
+        community: {
+          select: { id: true, slug: true, name: true, status: true },
+        },
       },
       take: 50,
     });

@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type {
   ChatChannelCommunity,
   ChatUserSummary,
+  CommunityDto,
 } from "@vedamatch/shared";
 import { createChatConversation } from "@/lib/chat-client";
+import { searchCommunities } from "@/lib/communities-api";
 import { ChatAvatar } from "./chat-avatar";
 
 type Mode = "group" | "channel";
@@ -33,11 +35,55 @@ export function ChatNewConversation({
   const [description, setDescription] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [communityId, setCommunityId] = useState(
-    communities[0]?.community.id ?? "",
+    communities.find((row) => row.community.status === "active")?.community
+      .id ?? "",
   );
   const [groupCommunityId, setGroupCommunityId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Название группы совпало с чужой общиной, а община при этом не выбрана —
+  // человек мог принять текст за привязку. Предупреждаем заранее, а не
+  // молчим, пока группа не потеряется без следа, как это уже случалось.
+  const [nameCollision, setNameCollision] = useState<CommunityDto | null>(
+    null,
+  );
+
+  useEffect(() => {
+    // Сброс синхронный и в самом эффекте намеренно: подсказка обязана
+    // исчезнуть в тот же кадр, что и условие для неё, иначе на миг мигает
+    // устаревшее предупреждение при переключении вкладки/выборе общины.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (mode !== "group" || groupCommunityId) {
+      setNameCollision(null);
+      return;
+    }
+    const name = title.trim();
+    if (!name) {
+      setNameCollision(null);
+      return;
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      searchCommunities({ q: name, pageSize: 5 }, controller.signal)
+        .then((found) => {
+          const match = found.items.find(
+            (community) =>
+              community.name.trim().toLocaleLowerCase() ===
+              name.toLocaleLowerCase(),
+          );
+          setNameCollision(match ?? null);
+        })
+        .catch((e: unknown) => {
+          if (e instanceof DOMException && e.name === "AbortError") return;
+          setNameCollision(null);
+        });
+    }, 350);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [mode, title, groupCommunityId]);
 
   function toggle(id: string) {
     setSelected((current) =>
@@ -138,6 +184,14 @@ export function ChatNewConversation({
         />
       </label>
 
+      {nameCollision && (
+        <p className="rounded-2xl border border-gold/26 bg-gold/8 px-3.5 py-3 text-xs leading-[17px] text-text-1">
+          Название совпадает с общиной «{nameCollision.name}» — но сама по
+          себе группа с ней не свяжется. Привязать её может только
+          администрация этой общины, выбрав её ниже в поле «Община».
+        </p>
+      )}
+
       {mode === "group" ? (
         <div className="flex flex-col gap-2">
           {communities.length > 0 && (
@@ -150,8 +204,15 @@ export function ChatNewConversation({
               >
                 <option value="">Личная группа (без общины)</option>
                 {communities.map(({ community }) => (
-                  <option key={community.id} value={community.id}>
+                  <option
+                    key={community.id}
+                    value={community.id}
+                    disabled={community.status !== "active"}
+                  >
                     {community.name}
+                    {community.status !== "active"
+                      ? " — не активна, беседы в ней не видны"
+                      : ""}
                   </option>
                 ))}
               </select>
@@ -231,8 +292,15 @@ export function ChatNewConversation({
               className="min-h-11 rounded-2xl border border-glass-brd bg-glass px-3 text-[15px] text-text-0 outline-none"
             >
               {communities.map(({ community }) => (
-                <option key={community.id} value={community.id}>
+                <option
+                  key={community.id}
+                  value={community.id}
+                  disabled={community.status !== "active"}
+                >
                   {community.name}
+                  {community.status !== "active"
+                    ? " — не активна, беседы в ней не видны"
+                    : ""}
                 </option>
               ))}
             </select>
