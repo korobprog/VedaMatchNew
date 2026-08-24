@@ -102,6 +102,15 @@ export function pingChatTyping(conversationId: string): void {
   }).catch(() => undefined);
 }
 
+/** Heartbeat «беседа открыта прямо сейчас» — подавляет пуш получателю,
+ *  пока он реально смотрит в этот чат. */
+export function pingChatPresence(conversationId: string): void {
+  void apiFetch(`${API_URL}/chat/conversations/${conversationId}/presence`, {
+    method: "POST",
+    credentials: "include",
+  }).catch(() => undefined);
+}
+
 export function acceptChatRequest(
   conversationId: string,
 ): Promise<ChatConversationSummary> {

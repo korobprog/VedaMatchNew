@@ -16,6 +16,7 @@ import {
   markChatRead,
   markChatViewed,
   pinChatMessage,
+  pingChatPresence,
   pingChatTyping,
   reportChat,
   sendChatMessage,
@@ -35,6 +36,8 @@ import { pickBubbleInk } from "./chat-contrast-ink";
 const TYPING_TTL_MS = 5000;
 /** Реже слать сигнал набора незачем: собеседник видит его почти сразу. */
 const TYPING_PING_MS = 3000;
+/** Раз в столько шлём «я сейчас смотрю в эту беседу», пока вкладка видима. */
+const PRESENCE_PING_MS = 10_000;
 
 export function ChatRoom({
   initial,
@@ -59,6 +62,38 @@ export function ChatRoom({
   // Открыли переписку — значит прочитали: иначе счётчик висит до перезагрузки.
   useEffect(() => {
     void markChatRead(conversation.id).catch(() => undefined);
+  }, [conversation.id]);
+
+  // Пока вкладка с этой беседой видима — периодический heartbeat, чтобы
+  // сервер не слал получателю пуш поверх сообщения, которое тот и так видит.
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const ping = () => pingChatPresence(conversation.id);
+
+    const start = () => {
+      if (timer) return;
+      ping();
+      timer = setInterval(ping, PRESENCE_PING_MS);
+    };
+    const stop = () => {
+      if (!timer) return;
+      clearInterval(timer);
+      timer = null;
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") start();
+      else stop();
+    };
+
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, [conversation.id]);
 
   useEffect(() => {
