@@ -175,6 +175,15 @@ export class ChatController {
     return this.conversations.typing(user.sub, id);
   }
 
+  /** Heartbeat «беседа открыта прямо сейчас» — подавляет пуш получателю,
+   *  пока он реально смотрит в этот чат. Троттлинг как у «печатает…». */
+  @Post('conversations/:id/presence')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  presence(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.conversations.presence(user.sub, id);
+  }
+
   @Post('conversations/:id/mute')
   mute(
     @CurrentUser() user: AccessTokenPayload,

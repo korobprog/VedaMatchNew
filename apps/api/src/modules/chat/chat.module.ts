@@ -7,6 +7,7 @@ import { ChatConversationThemeService } from './chat-conversation-theme.service'
 import { ChatConversationsService } from './chat-conversations.service';
 import { ChatEventsService } from './chat-events.service';
 import { ChatMessagesService } from './chat-messages.service';
+import { ChatPresenceService } from './chat-presence.service';
 import { ChatPurgeListener } from './chat-purge.listener';
 import { ChatReportsService } from './chat-reports.service';
 import { ChatSignedUrlsInterceptor } from './chat-signed-urls.interceptor';
@@ -45,6 +46,7 @@ import { PeopleService } from './people/people.service';
     ChatMessagesService,
     ChatReportsService,
     ChatEventsService,
+    ChatPresenceService,
     ChatUploadsService,
     ChatSignedUrlsInterceptor,
     ChatPurgeListener,

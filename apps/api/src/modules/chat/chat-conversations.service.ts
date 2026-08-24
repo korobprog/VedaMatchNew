@@ -40,6 +40,7 @@ import {
   type ChatMessageRow,
 } from './chat-dto';
 import { ChatEventsService } from './chat-events.service';
+import { ChatPresenceService } from './chat-presence.service';
 import {
   chatConversationInclude,
   chatMessageInclude,
@@ -60,6 +61,7 @@ export class ChatConversationsService {
     private readonly events: ChatEventsService,
     private readonly bus: EventEmitter2,
     private readonly uploads: ChatUploadsService,
+    private readonly chatPresence: ChatPresenceService,
   ) {}
 
   /** Список бесед: активные диалоги, группы и каналы. Запросы — отдельно. */
@@ -536,6 +538,14 @@ export class ChatConversationsService {
         user: toUserSummary(mine.user),
       },
     );
+    return { ok: true };
+  }
+
+  /** Heartbeat «беседа открыта прямо сейчас»: живёт в реестре присутствия,
+   *  в базу не пишется — как и «печатает…» рядом. */
+  async presence(userId: string, conversationId: string) {
+    await this.requireConversation(conversationId, userId);
+    await this.chatPresence.markViewing(userId, conversationId);
     return { ok: true };
   }
 

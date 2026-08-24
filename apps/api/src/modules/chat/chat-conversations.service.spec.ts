@@ -2,6 +2,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChatConversationsService } from './chat-conversations.service';
 import { ChatEventsService } from './chat-events.service';
+import { ChatPresenceService } from './chat-presence.service';
 
 const createdAt = new Date('2026-08-22T10:00:00.000Z');
 
@@ -99,12 +100,14 @@ describe('ChatConversationsService', () => {
   const events = { publish: fn() };
   const bus = { emit: fn() };
   const uploads = { removeMany: fn() };
+  const chatPresence = { markViewing: fn() };
 
   const service = new ChatConversationsService(
     prisma as unknown as PrismaService,
     events as unknown as ChatEventsService,
     bus as never,
     uploads as never,
+    chatPresence as unknown as ChatPresenceService,
   );
 
   beforeEach(() => {
@@ -423,6 +426,19 @@ describe('ChatConversationsService', () => {
         leftAt: null,
       });
       expect(where.deletedAt).toBeNull();
+    });
+  });
+
+  describe('presence', () => {
+    it('отмечает присутствие через ChatPresenceService', async () => {
+      prisma.chatConversation.findUnique.mockResolvedValue(conversation());
+
+      await service.presence('owner', 'conversation-1');
+
+      expect(chatPresence.markViewing).toHaveBeenCalledWith(
+        'owner',
+        'conversation-1',
+      );
     });
   });
 });
