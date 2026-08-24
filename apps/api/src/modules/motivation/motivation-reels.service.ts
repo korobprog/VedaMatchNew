@@ -46,6 +46,7 @@ import { FalAudioService, voiceSampleKey } from './fal-audio.service';
 import { FalVideoService } from './fal-video.service';
 import { QuoteVerificationService } from './quote-verification.service';
 import { quoteFingerprint } from './quote-normalizer';
+import { stripWorkPrefix } from './postcard-events';
 import { canAppeal, reelStageOf, startOfUtcDay } from './reel-stages';
 import { sortByLocator, toSourceHits } from './reel-source-search';
 import { parseReelVideoOptions } from './reel-video-options';
@@ -988,7 +989,9 @@ export class MotivationReelsService {
     source: MotivationReelSource,
   ): string {
     if (verified)
-      return [verified.work, verified.locator].filter(Boolean).join(' ');
+      return [verified.work, stripWorkPrefix(verified.locator, verified.work)]
+        .filter(Boolean)
+        .join(' ');
     if (source.kind === 'own' && source.author) return source.author;
     return 'Свой рилс';
   }

@@ -531,6 +531,9 @@ export interface MotivationSettingsDto {
   /** Голос, предвыбранный автору; пусто — «без озвучки». */
   userVoiceDefault: MotivationVoice | null;
   reportsToHide: number;
+  /** Ежедневный автоподбор цитат ИИ воркером. Ручная кнопка «Подготовить
+   *  цитаты на сегодня» этим флагом не гасится. */
+  autoQuoteDiscoveryEnabled: boolean;
   userReelsEnabled: boolean;
   userDailyLimit: number;
   aiModerationMode: MotivationAiModerationMode;
@@ -646,6 +649,7 @@ export type MotivationSettingsUpdate = Partial<{
   userVoices: MotivationVoice[];
   userVoiceDefault: MotivationVoice | null;
   reportsToHide: number;
+  autoQuoteDiscoveryEnabled: boolean;
   userReelsEnabled: boolean;
   userDailyLimit: number;
   aiModerationMode: MotivationAiModerationMode;

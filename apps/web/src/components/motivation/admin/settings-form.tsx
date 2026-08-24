@@ -137,6 +137,7 @@ export function MotivationSettingsForm({
       visualStyle: form.visualStyle,
       dailyBudgetUsd: form.dailyBudgetUsd,
       musicModel: form.musicModel,
+      autoQuoteDiscoveryEnabled: form.autoQuoteDiscoveryEnabled,
       userReelsEnabled: form.userReelsEnabled,
       userDailyLimit: form.userDailyLimit,
       aiModerationMode: form.aiModerationMode,
@@ -280,6 +281,27 @@ export function MotivationSettingsForm({
         <p className="mt-2 text-xs text-text-2">
           Треки создаются в библиотеке ниже и переиспользуются: клип длится
           секунды, трек — полминуты, платить за музыку под каждый пост незачем.
+        </p>
+      </section>
+
+      <section className={cardClass}>
+        <h2 className="mb-3 font-display text-lg font-semibold text-text-0">
+          Автоподбор цитат
+        </h2>
+        <label className="flex items-center gap-2 text-sm text-text-1">
+          <input
+            type="checkbox"
+            checked={form.autoQuoteDiscoveryEnabled}
+            onChange={(event) =>
+              set("autoQuoteDiscoveryEnabled", event.target.checked)
+            }
+          />
+          Воркер сам подбирает новые цитаты каждый день
+        </label>
+        <p className="mt-2 text-xs text-text-2">
+          Выключено — очередь на проверку текста больше не растёт сама.
+          Кнопка «Подготовить цитаты на сегодня» выше работает независимо от
+          этой настройки — ей можно запускать подбор вручную в любой момент.
         </p>
       </section>
 

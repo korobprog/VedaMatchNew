@@ -599,6 +599,10 @@ model MotivationSettings {
   aiApproveThreshold Decimal                    @default(0.75) @db.Decimal(3, 2)
   aiRejectThreshold  Decimal                    @default(0.85) @db.Decimal(3, 2)
   aiEditorialRules   String?
+  /// Ежедневный автоподбор цитат ИИ воркером. Выключен по умолчанию:
+  /// редакция решила подбирать цитаты сама. Кнопка «Подготовить цитаты на
+  /// сегодня» в админке — отдельный ручной путь, этим флагом не гасится.
+  autoQuoteDiscoveryEnabled Boolean              @default(false)
   /// Сколько жалоб скрывает рилс участника до решения администратора.
   reportsToHide      Int                        @default(3)
   /// Можно ли участникам оживлять свои рилсы в видео. Выключено по умолчанию:

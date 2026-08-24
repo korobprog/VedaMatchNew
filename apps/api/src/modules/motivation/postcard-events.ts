@@ -65,7 +65,7 @@ export function attributionLine(post: {
  * подписи. Сравнение без учёта регистра: разные генерации расходятся в
  * заглавных буквах чаще, чем в самом тексте.
  */
-function stripWorkPrefix(
+export function stripWorkPrefix(
   locator: string | null,
   work: string | null,
 ): string | null {

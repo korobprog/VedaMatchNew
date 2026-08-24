@@ -249,6 +249,41 @@ describe('MotivationReelsService.create', () => {
     );
   });
 
+  it('не повторяет название произведения в заголовке, если оно уже есть в главе', async () => {
+    const { service, tx, verification } = build();
+    const text = 'Не умывшись и не приняв душа, он сидел, углубившись в работу.';
+    verification.verifyVedabaseCandidate.mockResolvedValue({
+      originalText: text,
+      author: 'А. Ч. Бхактиведанта Свами Прабхупада',
+      work: 'Шримад-Бхагаватам',
+      locator: 'Шримад-Бхагаватам 1.6.21',
+      originalLanguage: 'ru',
+      vedabaseBookSlug: 'sb',
+      vedabaseChapterSlug: '1',
+      contextExcerpt: 'ctx',
+    });
+
+    await service.create('user-1', 'user', {
+      source: { kind: 'vedabase', text, bookSlug: 'sb', chapterSlug: '1' },
+      language: 'ru',
+      audienceTrack: 'universal',
+    });
+
+    expect(tx.motivationPost.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          translations: expect.objectContaining({
+            create: expect.arrayContaining([
+              expect.objectContaining({
+                title: 'Шримад-Бхагаватам 1.6.21',
+              }),
+            ]),
+          }),
+        }),
+      }),
+    );
+  });
+
   it('enforces the daily limit for users but not for admins', async () => {
     const { service } = build({ usedToday: 1, limit: 1 });
 

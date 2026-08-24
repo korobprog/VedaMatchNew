@@ -25,6 +25,7 @@ export const SETTINGS_FALLBACK = {
   imageModel: 'gpt-image-2',
   dailyBudgetUsd: 5,
   musicModel: 'fal-ai/elevenlabs/music',
+  autoQuoteDiscoveryEnabled: false,
   userReelsEnabled: true,
   userDailyLimit: 1,
   aiModerationMode: 'autonomous' as MotivationAiModerationMode,
@@ -45,6 +46,7 @@ export type MotivationSettings = {
   userVoices: MotivationVoice[];
   userVoiceDefault: MotivationVoice | null;
   reportsToHide: number;
+  autoQuoteDiscoveryEnabled: boolean;
   userReelsEnabled: boolean;
   userDailyLimit: number;
   aiModerationMode: MotivationAiModerationMode;
@@ -68,6 +70,7 @@ export type MotivationSettingsUpdate = Partial<{
   userVoiceDefault: MotivationVoice | null;
   userVideoEnabled: boolean;
   reportsToHide: number;
+  autoQuoteDiscoveryEnabled: boolean;
   userReelsEnabled: boolean;
   userDailyLimit: number;
   aiModerationMode: MotivationAiModerationMode;
@@ -117,6 +120,9 @@ export class MotivationSettingsService {
         : SETTINGS_FALLBACK.userVoices) as MotivationVoice[],
       userVoiceDefault: (row?.userVoiceDefault as MotivationVoice) ?? null,
       reportsToHide: row?.reportsToHide ?? SETTINGS_FALLBACK.reportsToHide,
+      autoQuoteDiscoveryEnabled:
+        row?.autoQuoteDiscoveryEnabled ??
+        SETTINGS_FALLBACK.autoQuoteDiscoveryEnabled,
       userReelsEnabled:
         row?.userReelsEnabled ?? SETTINGS_FALLBACK.userReelsEnabled,
       userDailyLimit: row?.userDailyLimit ?? SETTINGS_FALLBACK.userDailyLimit,
@@ -226,6 +232,9 @@ export class MotivationSettingsService {
         : {}),
       ...(input.reportsToHide !== undefined
         ? { reportsToHide: input.reportsToHide }
+        : {}),
+      ...(input.autoQuoteDiscoveryEnabled !== undefined
+        ? { autoQuoteDiscoveryEnabled: Boolean(input.autoQuoteDiscoveryEnabled) }
         : {}),
       ...(input.userReelsEnabled !== undefined
         ? { userReelsEnabled: Boolean(input.userReelsEnabled) }

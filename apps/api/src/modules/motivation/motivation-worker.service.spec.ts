@@ -146,12 +146,16 @@ describe('MotivationWorkerService', () => {
         key === 'MOTIVATION_DAILY_CANDIDATE_COUNT' ? '8' : undefined,
       ),
     } as unknown as ConfigService;
+    const settings = {
+      read: jest.fn().mockResolvedValue({ autoQuoteDiscoveryEnabled: true }),
+    };
     const worker = new MotivationWorkerService(
       prisma as never,
       generation as never,
       config,
       copy as never,
       discovery as never,
+      settings as never,
     );
 
     await (
@@ -169,6 +173,53 @@ describe('MotivationWorkerService', () => {
     expect(
       (worker as unknown as { lastDiscoveryDate?: string }).lastDiscoveryDate,
     ).toBe(new Date().toISOString().slice(0, 10));
+  });
+
+  it('не подбирает цитаты сама, пока автоподбор выключен в настройках', async () => {
+    const discovery = {
+      discoverDaily: jest.fn().mockResolvedValue([{ id: 'quote-1' }]),
+    };
+    const copy = { prepareCandidate: jest.fn() };
+    const { prisma, generation } = createWorker();
+    const settings = {
+      read: jest.fn().mockResolvedValue({ autoQuoteDiscoveryEnabled: false }),
+    };
+    const worker = new MotivationWorkerService(
+      prisma as never,
+      generation as never,
+      new ConfigService(),
+      copy as never,
+      discovery as never,
+      settings as never,
+    );
+
+    await (
+      worker as unknown as { ensureDailyDiscovery(): Promise<void> }
+    ).ensureDailyDiscovery();
+
+    expect(discovery.discoverDaily).not.toHaveBeenCalled();
+    expect(copy.prepareCandidate).not.toHaveBeenCalled();
+  });
+
+  it('без сервиса настроек автоподбор тоже не запускается', async () => {
+    const discovery = {
+      discoverDaily: jest.fn().mockResolvedValue([{ id: 'quote-1' }]),
+    };
+    const copy = { prepareCandidate: jest.fn() };
+    const { prisma, generation } = createWorker();
+    const worker = new MotivationWorkerService(
+      prisma as never,
+      generation as never,
+      new ConfigService(),
+      copy as never,
+      discovery as never,
+    );
+
+    await (
+      worker as unknown as { ensureDailyDiscovery(): Promise<void> }
+    ).ensureDailyDiscovery();
+
+    expect(discovery.discoverDaily).not.toHaveBeenCalled();
   });
 
   it('does not mark discovery done when copy preparation is only partially complete', async () => {
@@ -198,12 +249,16 @@ describe('MotivationWorkerService', () => {
         key === 'MOTIVATION_DAILY_CANDIDATE_COUNT' ? '8' : undefined,
       ),
     } as unknown as ConfigService;
+    const settings = {
+      read: jest.fn().mockResolvedValue({ autoQuoteDiscoveryEnabled: true }),
+    };
     const worker = new MotivationWorkerService(
       prisma as never,
       generation as never,
       config,
       copy as never,
       discovery as never,
+      settings as never,
     );
 
     await expect(
@@ -238,13 +293,21 @@ describe('MotivationWorkerService', () => {
         .fn()
         .mockRejectedValue(new Error('invalid provider response')),
     };
-    const { prisma, generation, motivationPost } = createWorker();
+    const { prisma, generation, motivationPost } = createWorker({
+      // Реального одобрения нет — как и раньше, когда settings отсутствовал
+      // и shouldAutoPublish возвращал false, даже не дойдя до этого запроса.
+      motivationModerationAudit: { findFirst: jest.fn().mockResolvedValue(null) },
+    });
+    const settings = {
+      read: jest.fn().mockResolvedValue({ autoQuoteDiscoveryEnabled: true }),
+    };
     const worker = new MotivationWorkerService(
       prisma as never,
       generation as never,
       new ConfigService(),
       copy as never,
       discovery as never,
+      settings as never,
     );
 
     await expect(worker.tick()).resolves.toBeUndefined();

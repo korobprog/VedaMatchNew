@@ -243,6 +243,11 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
 
   private async ensureDailyDiscovery() {
     if (!this.discovery) return;
+    // Редакция остановила автоподбор — ручная кнопка «Подготовить цитаты
+    // на сегодня» (enqueueDaily в MotivationService) идёт другим путём и
+    // этой настройкой не гасится.
+    const settings = await this.settings?.read();
+    if (!settings?.autoQuoteDiscoveryEnabled) return;
     const dateKey = new Date().toISOString().slice(0, 10);
     const idempotencyKey = `motivation:discovery:${dateKey}`;
     if (this.lastDiscoveryDate === dateKey) return;
