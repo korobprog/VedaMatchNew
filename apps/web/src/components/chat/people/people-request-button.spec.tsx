@@ -52,6 +52,31 @@ describe("PeopleRequestButton", () => {
     expect(
       screen.queryByRole("button", { name: "Запросить контакт" }),
     ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Написать в чат" })).toHaveAttribute(
+      "href",
+      "/chat/with/u2",
+    );
+  });
+
+  it("предлагает написать в чат, даже если способов связи не указано", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(json(state())));
+    render(
+      <PeopleRequestButton
+        userId="u2"
+        viewerId="u1"
+        contacts={{ socialLinks: {}, messengers: {} }}
+      />,
+    );
+
+    expect(
+      await screen.findByText(
+        "Доступ открыт, но человек пока не указал ни одного способа связи.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Написать в чат" })).toHaveAttribute(
+      "href",
+      "/chat/with/u2",
+    );
   });
 
   it("offers the form with a counter when access is closed", async () => {

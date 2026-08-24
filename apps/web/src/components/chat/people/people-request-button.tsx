@@ -121,7 +121,20 @@ function RequestForm({
   // несёт их же — берём то, что есть.
   const open = contacts ?? outgoing?.contacts ?? null;
   if (open) {
-    return <PeopleDetails contacts={open} />;
+    return (
+      <div className="flex flex-col gap-3">
+        <PeopleDetails contacts={open} />
+        {/* Доступ открыт, но способов связи может не быть вовсе (или человек
+            ими просто не пользуется) — своя переписка «Общения» работает
+            всегда, независимо от того, что указано снаружи. */}
+        <Link
+          href={`/chat/with/${userId}`}
+          className="inline-block w-fit rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-4 py-2 text-sm font-medium text-white transition hover:shadow-[0_0_20px_rgba(255,62,158,0.4)]"
+        >
+          Написать в чат
+        </Link>
+      </div>
+    );
   }
 
   if (loading) {
