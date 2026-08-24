@@ -33,6 +33,33 @@ export function RecommendationsView({
   );
   const [modeOverride, setModeOverride] = useState<ViewMode | null>(null);
   const mode: ViewMode = modeOverride ?? (isMobile ? "swipe" : "grid");
+  // На телефоне свайп — полноэкранный фокус-режим без обвязки страницы;
+  // на десктопе тот же режим остаётся инлайн внутри обычной страницы.
+  const focusMode = isMobile && mode === "swipe";
+
+  if (focusMode) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex flex-col bg-bg-0 px-4"
+        style={{
+          paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)",
+          paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setModeOverride("grid")}
+          aria-label="Выйти из фокус-режима"
+          className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl glass border border-glass-brd text-text-1 transition hover:text-text-0"
+        >
+          <span aria-hidden="true">✕</span>
+        </button>
+        <div className="flex flex-1 items-center justify-center overflow-y-auto">
+          <SwipeDeck items={items} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
