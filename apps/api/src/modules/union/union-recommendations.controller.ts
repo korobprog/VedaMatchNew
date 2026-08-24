@@ -45,6 +45,8 @@ function toFilters(query: QueryParams): UnionRecommendationFilters {
     photoVerifiedOnly:
       first(query.photoVerifiedOnly) === 'true' ||
       first(query.photoVerifiedOnly) === '1',
+    includeSwiped:
+      first(query.includeSwiped) === 'true' || first(query.includeSwiped) === '1',
     format: first(query.format) as UnionRecommendationFilters['format'],
     language: first(query.language),
     diet: first(query.diet) as UnionRecommendationFilters['diet'],

@@ -45,4 +45,22 @@ describe('UnionRecommendationsController', () => {
       expect.objectContaining({ city: 'Москва' }),
     );
   });
+
+  it('parses includeSwiped as a boolean', async () => {
+    await controller.recommendations(user, { includeSwiped: 'true' });
+
+    expect(getRecommendations).toHaveBeenCalledWith(
+      'me',
+      expect.objectContaining({ includeSwiped: true }),
+    );
+  });
+
+  it('defaults includeSwiped to false when the parameter is absent', async () => {
+    await controller.recommendations(user, {});
+
+    expect(getRecommendations).toHaveBeenCalledWith(
+      'me',
+      expect.objectContaining({ includeSwiped: false }),
+    );
+  });
 });

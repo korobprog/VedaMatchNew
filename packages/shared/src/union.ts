@@ -358,6 +358,8 @@ export interface UnionRecommendationFilters {
   verifiedOnly?: boolean;
   /** Показывать только профили с проверенными фото. */
   photoVerifiedOnly?: boolean;
+  /** Не исключать из выдачи анкеты, которые уже свайпнули (лайк/пропуск). */
+  includeSwiped?: boolean;
   format?: UnionFormat;
   language?: string;
   /** Порядок выдачи: по совместимости (по умолчанию) или сначала новые анкеты. */
