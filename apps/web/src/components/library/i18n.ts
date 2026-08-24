@@ -169,6 +169,13 @@ const ui = {
     "category.saved": "Категория обновлена",
     "section.edit": "Редактировать раздел",
     "section.saved": "Раздел обновлён",
+    "section.delete": "Удалить раздел",
+    "section.deleteConfirm": "Удалить раздел? Отменить нельзя.",
+    "section.deleteConfirmYes": "Да, удалить",
+    "section.deleting": "Удаляем…",
+    "section.deleteNotEmpty":
+      "В разделе ещё есть категории — сначала перенесите или удалите их",
+    "section.deleteFailed": "Не удалось удалить раздел, попробуйте позже",
   },
   en: {
     "service.title": "Education",
@@ -339,6 +346,13 @@ const ui = {
     "category.saved": "Category updated",
     "section.edit": "Edit section",
     "section.saved": "Section updated",
+    "section.delete": "Delete section",
+    "section.deleteConfirm": "Delete this section? This cannot be undone.",
+    "section.deleteConfirmYes": "Yes, delete",
+    "section.deleting": "Deleting…",
+    "section.deleteNotEmpty":
+      "This section still has categories — move or delete them first",
+    "section.deleteFailed": "Could not delete the section, please try again later",
   },
 } as const;
 

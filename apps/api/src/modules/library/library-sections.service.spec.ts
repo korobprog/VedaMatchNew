@@ -1,3 +1,8 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { LibrarySectionsService } from './library-sections.service';
 
 describe('LibrarySectionsService', () => {
@@ -144,5 +149,60 @@ describe('LibrarySectionsService.create', () => {
       }),
     });
     expect(result.id).toBe('section-new');
+  });
+});
+
+describe('LibrarySectionsService.remove', () => {
+  function prismaStub(overrides: {
+    section?: { id: string } | null;
+    categoriesCount?: number;
+  }) {
+    return {
+      librarySection: {
+        findUnique: jest.fn().mockResolvedValue(overrides.section ?? null),
+        delete: jest.fn().mockResolvedValue({}),
+      },
+      libraryCategory: {
+        count: jest.fn().mockResolvedValue(overrides.categoriesCount ?? 0),
+      },
+    };
+  }
+
+  it('отказывает не-админу', async () => {
+    const service = new LibrarySectionsService(
+      prismaStub({ section: { id: 's1' } }) as never,
+    );
+    await expect(service.remove(false, 's1')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
+  it('404 у несуществующего раздела', async () => {
+    const service = new LibrarySectionsService(
+      prismaStub({ section: null }) as never,
+    );
+    await expect(service.remove(true, 's1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('не даёт удалить раздел с категориями', async () => {
+    const prisma = prismaStub({ section: { id: 's1' }, categoriesCount: 3 });
+    const service = new LibrarySectionsService(prisma as never);
+
+    await expect(service.remove(true, 's1')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(prisma.librarySection.delete).not.toHaveBeenCalled();
+  });
+
+  it('удаляет пустой раздел', async () => {
+    const prisma = prismaStub({ section: { id: 's1' }, categoriesCount: 0 });
+    const service = new LibrarySectionsService(prisma as never);
+
+    await expect(service.remove(true, 's1')).resolves.toEqual({ ok: true });
+    expect(prisma.librarySection.delete).toHaveBeenCalledWith({
+      where: { id: 's1' },
+    });
   });
 });

@@ -158,6 +158,31 @@ export class LibrarySectionsService {
     return sections.find((section) => section.id === created.id)!;
   }
 
+  /**
+   * Удаление раздела — только админ и только пустого: у категории
+   * `onDelete: Cascade` на раздел, и снос непустого раздела молча стёр бы
+   * все её категории и материалы. Сначала перенести или удалить их отдельно.
+   */
+  async remove(viewerIsAdmin: boolean, id: string): Promise<{ ok: true }> {
+    if (!viewerIsAdmin) throw new ForbiddenException('not_admin');
+
+    const existing = await this.prisma.librarySection.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('section_not_found');
+
+    const categoriesCount = await this.prisma.libraryCategory.count({
+      where: { sectionId: id },
+    });
+    if (categoriesCount > 0) {
+      throw new BadRequestException('section_not_empty');
+    }
+
+    await this.prisma.librarySection.delete({ where: { id } });
+    return { ok: true };
+  }
+
   /** В отличие от категории, слаг раздела уникален на всю таблицу. */
   private async findFreeSlug(baseSlug: string): Promise<string> {
     for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {

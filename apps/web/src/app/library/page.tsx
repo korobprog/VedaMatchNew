@@ -47,7 +47,7 @@ export default async function LibraryPage({
             </h1>
             <p className="text-text-1">{t(locale, "service.subtitle")}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/library/favorites"
               className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-2 hover:text-text-0"
@@ -60,12 +60,10 @@ export default async function LibraryPage({
             >
               {t(locale, "nav.add")}
             </Link>
+            <LocaleSwitch locale={locale} />
           </div>
         </div>
 
-        <div className="mb-4 flex justify-end">
-          <LocaleSwitch locale={locale} />
-        </div>
         <SectionStrip sections={sections ?? []} locale={locale} />
         <EntryFilters locale={locale} categories={[]} />
 

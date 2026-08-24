@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -41,5 +42,10 @@ export class LibrarySectionsController {
     @Body() body: UpdateLibrarySectionRequest,
   ) {
     return this.sections.update(isAdmin(user), id, body);
+  }
+
+  @Delete(':id')
+  remove(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.sections.remove(isAdmin(user), id);
   }
 }

@@ -21,17 +21,17 @@ export function LocaleSwitch({ locale }: { locale: LibraryLocale }) {
     if (response.ok) router.refresh();
   }
 
+  // Без видимой подписи «Язык интерфейса»: на мобильном она вытесняла себя
+  // на отдельную строку. Название переключателя остаётся для скринридера.
   return (
-    <label className="inline-flex items-center gap-2 text-xs text-text-2">
-      <span>{t(locale, "locale.switch")}</span>
-      <select
-        value={locale}
-        onChange={(event) => void change(event.target.value as LibraryLocale)}
-        className="rounded-lg border border-glass-brd bg-bg-0 px-2 py-1 text-text-0"
-      >
-        <option value="ru">RU</option>
-        <option value="en">EN</option>
-      </select>
-    </label>
+    <select
+      aria-label={t(locale, "locale.switch")}
+      value={locale}
+      onChange={(event) => void change(event.target.value as LibraryLocale)}
+      className="rounded-xl border border-glass-brd bg-bg-0 px-2 py-2 text-sm text-text-0"
+    >
+      <option value="ru">RU</option>
+      <option value="en">EN</option>
+    </select>
   );
 }
