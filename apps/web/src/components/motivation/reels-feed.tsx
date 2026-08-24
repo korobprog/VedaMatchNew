@@ -222,7 +222,7 @@ export function ReelsFeed({
   }
 
   return (
-    <div className="relative h-full overflow-hidden rounded-[28px] bg-[#0A0614] text-white shadow-2xl">
+    <div className="relative h-full overflow-hidden bg-[#0A0614] text-white sm:rounded-[28px] sm:shadow-2xl">
       {/* Прогресс по ленте — как в макете: тонкая полоса поверх кадра. */}
       <div className="absolute inset-x-0 top-0 z-30 h-[3px] bg-white/20" aria-hidden="true">
         <i

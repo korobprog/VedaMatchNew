@@ -3,6 +3,7 @@ import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { MotivationFeed } from "@/components/motivation/motivation-feed";
 import { MotivationTopBar } from "@/components/motivation/motivation-top-bar";
+import { ReelsChrome } from "@/components/motivation/reels-chrome";
 import { ReelsFeed, type ReelsTab } from "@/components/motivation/reels-feed";
 import { getDonationSettings, getProfile } from "@/lib/api";
 import { getMotivationFeed } from "@/lib/motivation-api";
@@ -58,23 +59,17 @@ export default async function MotivationPage({
   }
 
   return (
-    // Экран ровно в высоту окна: лента занимает всё под шапкой и строкой
-    // навигации, сколько бы строк та ни заняла. На очень низких окнах слайд
-    // не сжимается ниже минимума — тогда прокручивается страница.
-    <div className="relative flex h-dvh min-h-[560px] flex-col bg-bg-0">
+    // Рилс — на весь экран, без общей шапки портала и строки навигации над
+    // ним: они отняли бы у видео как раз ту высоту, ради которой открывают
+    // полноэкранную ленту. Кнопка назад и меню разделов теперь свои,
+    // прозрачным оверлеем поверх кадра — см. ReelsChrome.
+    <div className="relative h-dvh min-h-[560px] bg-bg-0">
       <BackgroundOrbs />
       <NoiseOverlay />
-      <Header user={user} />
-      <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-2 pb-2 pt-1 sm:px-4">
-        <MotivationTopBar
-          active="feed"
-          isAdmin={isAdmin}
-          action={{ href: "/motivation?view=list", label: "Список" }}
-        />
-        <div className="mx-auto mt-1 min-h-0 w-full max-w-[480px] flex-1">
-          <ReelsFeed initial={initial} tab={tab} donation={donation} />
-        </div>
-      </main>
+      <div className="relative mx-auto h-full w-full max-w-[480px]">
+        <ReelsFeed initial={initial} tab={tab} donation={donation} />
+        <ReelsChrome isAdmin={isAdmin} />
+      </div>
     </div>
   );
 }
