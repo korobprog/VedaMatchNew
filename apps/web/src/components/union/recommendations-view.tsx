@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { UnionRecommendation } from "@vedamatch/shared";
 import { RecommendationCard } from "./recommendation-card";
 import { SwipeDeck } from "./swipe-deck";
@@ -37,6 +37,30 @@ export function RecommendationsView({
   // на десктопе тот же режим остаётся инлайн внутри обычной страницы.
   const focusMode = isMobile && mode === "swipe";
 
+  useEffect(() => {
+    if (!focusMode) return;
+    window.history.pushState({ unionFocusMode: true }, "");
+    const onPopState = () => setModeOverride("grid");
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [focusMode]);
+
+  useEffect(() => {
+    if (!focusMode) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [focusMode]);
+
+  function exitFocusMode() {
+    // history.back() запускает popstate-обработчик выше, который и
+    // переключает mode на "grid" — единая точка выхода что для клика,
+    // что для системного «назад», без лишней записи в истории.
+    window.history.back();
+  }
+
   if (focusMode) {
     return (
       <div
@@ -48,7 +72,7 @@ export function RecommendationsView({
       >
         <button
           type="button"
-          onClick={() => setModeOverride("grid")}
+          onClick={exitFocusMode}
           aria-label="Выйти из фокус-режима"
           className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl glass border border-glass-brd text-text-1 transition hover:text-text-0"
         >
