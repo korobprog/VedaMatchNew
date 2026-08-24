@@ -19,38 +19,61 @@ export function ChatRequestsView({ initial }: { initial: ChatRequestsState }) {
   const router = useRouter();
   const [requests, setRequests] = useState(initial.requests);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function accept(request: ChatRequestSummary) {
-    setBusyId(request.conversation.id);
+    const id = request.conversation.id;
+    setBusyId(id);
+    setError(null);
     try {
-      await acceptChatRequest(request.conversation.id);
-      router.push(`/chat/${request.conversation.id}`);
-    } finally {
+      await acceptChatRequest(id);
+      router.push(`/chat/${id}`);
+    } catch (e) {
+      // Запрос мог быть уже принят или отклонён в другой вкладке — тогда
+      // повтор не поможет, и карточку стоит убрать, а не оставлять сломанной.
+      setError(e instanceof Error ? e.message : "Не получилось принять запрос");
+      setRequests((current) =>
+        current.filter((r) => r.conversation.id !== id),
+      );
       setBusyId(null);
     }
   }
 
   async function decline(request: ChatRequestSummary) {
-    setBusyId(request.conversation.id);
+    const id = request.conversation.id;
+    setBusyId(id);
+    setError(null);
     try {
-      await declineChatRequest(request.conversation.id);
+      await declineChatRequest(id);
       setRequests((current) =>
-        current.filter((r) => r.conversation.id !== request.conversation.id),
+        current.filter((r) => r.conversation.id !== id),
       );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не получилось отклонить запрос");
     } finally {
       setBusyId(null);
     }
   }
 
+  const errorBanner = error && (
+    <p className="rounded-xl border border-magenta/30 bg-magenta/10 px-3 py-2 text-sm text-magenta">
+      {error}
+    </p>
+  );
+
   if (requests.length === 0)
     return (
-      <p className="rounded-3xl border border-glass-brd bg-glass p-10 text-center text-sm text-text-1">
-        Запросов нет. Здесь появляется первое сообщение от незнакомых людей.
-      </p>
+      <div className="flex flex-col gap-3">
+        {errorBanner}
+        <p className="rounded-3xl border border-glass-brd bg-glass p-10 text-center text-sm text-text-1">
+          Запросов нет. Здесь появляется первое сообщение от незнакомых людей.
+        </p>
+      </div>
     );
 
   return (
     <div className="flex flex-col gap-3">
+      {errorBanner}
       <p className="flex items-start gap-2.5 rounded-2xl border border-glass-brd bg-white/4 px-3.5 py-3 text-xs leading-[17px] text-text-1">
         <ShieldIcon />
         Пока вы не ответили, человек может отправить только одно сообщение и не

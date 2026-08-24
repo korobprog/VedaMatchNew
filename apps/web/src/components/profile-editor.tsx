@@ -244,6 +244,13 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
               className="block w-full text-sm text-text-1 file:mr-4 file:rounded-lg file:border-0 file:bg-mint file:px-4 file:py-2 file:text-sm file:font-medium file:text-on-mint"
             />
             <p className="text-xs text-text-2">JPG, PNG или WebP до 5 MB. Перед сохранением показывается preview.</p>
+            {!profile.avatarUrl && (
+              <p className="rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-xs text-text-1">
+                Без фото ваши сообщения незнакомым людям сворачиваются в
+                «Скрытый запрос» — так же, как у спам-профилей. С фото
+                сообщение видно сразу.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               <Button
                 onClick={uploadAvatar}
