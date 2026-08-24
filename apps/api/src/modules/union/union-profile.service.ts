@@ -348,7 +348,9 @@ export class UnionProfileService {
     const others = await this.prisma.unionProfile.findMany({
       where: buildRecommendationCandidateWhere({
         userId,
-        excludedUserIds: [...swiped, ...hidden],
+        excludedUserIds: normalizedFilters.includeSwiped
+          ? [...hidden]
+          : [...swiped, ...hidden],
         filters: normalizedFilters,
         myAge: myAgePreference,
       }),
@@ -384,7 +386,9 @@ export class UnionProfileService {
     const myFamilyGender = familyGenderContext(me, me.user.gender);
     const beforeIntentions = others
       .filter((other) => !hidden.has(other.userId))
-      .filter((other) => !swiped.has(other.userId))
+      .filter(
+        (other) => normalizedFilters.includeSwiped || !swiped.has(other.userId),
+      )
       .filter((other) => this.hasCompleteLocation(other.user))
       .filter((other) =>
         this.matchesFilters(
@@ -705,6 +709,7 @@ export class UnionProfileService {
         : undefined,
       verifiedOnly: filters.verifiedOnly === true,
       photoVerifiedOnly: filters.photoVerifiedOnly === true,
+      includeSwiped: filters.includeSwiped === true,
       format: ['online', 'offline', 'any'].includes(String(filters.format))
         ? filters.format
         : undefined,

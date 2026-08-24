@@ -381,6 +381,41 @@ describe('UnionProfileService', () => {
     expect(result.items.map((item) => item.user.id)).toEqual(['fresh']);
   });
 
+  it('shows swiped profiles when includeSwiped is set', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([
+      profile('seen'),
+      profile('fresh'),
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+    prisma.unionSwipe.findMany.mockResolvedValue([{ toUserId: 'seen' }]);
+
+    const result = await service.getRecommendations('me', {
+      includeSwiped: true,
+    });
+
+    expect(result.items.map((item) => item.user.id).sort()).toEqual([
+      'fresh',
+      'seen',
+    ]);
+  });
+
+  it('still hides moderated profiles when includeSwiped is set', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([
+      profile('blocked'),
+      profile('fresh'),
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+    moderation.hiddenUserIds.mockResolvedValue(new Set(['blocked']));
+
+    const result = await service.getRecommendations('me', {
+      includeSwiped: true,
+    });
+
+    expect(result.items.map((item) => item.user.id)).toEqual(['fresh']);
+  });
+
   it('lifts a boosted profile above a better matching one', async () => {
     prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
     prisma.unionProfile.findMany.mockResolvedValue([
