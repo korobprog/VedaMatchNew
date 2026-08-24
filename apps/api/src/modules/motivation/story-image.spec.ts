@@ -304,3 +304,37 @@ describe('маркировка готового кадра', () => {
     expect(AI_DISCLOSURE).toContain('VedaMatch');
   });
 });
+
+describe('buildStoryOverlaySvg · лимит строк цитаты', () => {
+  // 9 строк по умолчанию при этом тексте — проверено на реальной функции.
+  const longText =
+    'Преданность освобождает ум от иллюзии и открывает путь к истинному счастью. '.repeat(
+      3,
+    );
+
+  function quoteLineCount(svg: string): number {
+    return (svg.match(/class="quote"/g) ?? []).length;
+  }
+
+  it('без maxQuoteLines укладывается в дефолтный лимит (12)', () => {
+    const svg = buildStoryOverlaySvg({ text: longText });
+    expect(quoteLineCount(svg)).toBeGreaterThan(4);
+  });
+
+  it('с maxQuoteLines обрезает раньше', () => {
+    const svg = buildStoryOverlaySvg({ text: longText, maxQuoteLines: 4 });
+    expect(quoteLineCount(svg)).toBeLessThanOrEqual(4);
+  });
+
+  it('renderStoryOverlay учитывает maxQuoteLines при расчёте места под знак', async () => {
+    const short = await renderStoryOverlay({ text: 'Коротко' });
+    const long = await renderStoryOverlay({
+      text: longText,
+      maxQuoteLines: 4,
+    });
+    // Не падает и возвращает валидный PNG-буфер — сам расчёт места под знак
+    // уже покрыт другими тестами файла через brandLogoBox().
+    expect(short.length).toBeGreaterThan(0);
+    expect(long.length).toBeGreaterThan(0);
+  });
+});

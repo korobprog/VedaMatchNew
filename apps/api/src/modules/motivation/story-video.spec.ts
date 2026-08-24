@@ -1,7 +1,11 @@
 import {
+  buildReelOverlayInput,
   buildStoryVideoArgs,
   estimateReadingSeconds,
   ffmpegPath,
+  REEL_MAX_QUOTE_LINES,
+  TEXT_APPEAR_DELAY_SECONDS,
+  TEXT_FADE_IN_SECONDS,
 } from './story-video';
 import { STORY_HEIGHT, STORY_WIDTH } from './story-image';
 
@@ -30,7 +34,21 @@ describe('buildStoryVideoArgs', () => {
   });
 
   it('кладёт подпись в левый верхний угол кадра целиком', () => {
-    expect(filter).toContain('[bg][1:v]overlay=0:0[v]');
+    expect(filter).toContain('[bg][ov]overlay=0:0[v]');
+  });
+
+  it('зацикливает единственный кадр подписи на весь ролик', () => {
+    // Без -loop у fade ниже была бы всего одна точка времени на входе, и
+    // подпись не проявлялась бы, а сразу застыла бы прозрачной или нет.
+    expect(args[args.lastIndexOf('-i') - 2]).toBe('-loop');
+    expect(args[args.lastIndexOf('-i') - 1]).toBe('1');
+  });
+
+  it('прячет подпись первые несколько секунд и проявляет её плавно', () => {
+    expect(filter).toContain(
+      `fade=t=in:st=${TEXT_APPEAR_DELAY_SECONDS}:d=${TEXT_FADE_IN_SECONDS}:alpha=1`,
+    );
+    expect(filter.indexOf('fade=')).toBeLessThan(filter.indexOf('overlay='));
   });
 
   it('переносит звук, но не падает на немом ролике', () => {
@@ -119,11 +137,14 @@ describe('своя звуковая дорожка', () => {
     expect(plain[plain.indexOf('-c:a') + 1]).toBe('copy');
   });
 
-  it('зацикливает ролик и обрезает всё по заданной длине', () => {
+  it('зацикливает ролик и обрезает всё по заданной длине плюс задержку подписи', () => {
     // Повтор бесконечный, музыка своей длины — без -t ролик тянулся бы до
-    // конца дорожки или вовсе без конца.
+    // конца дорожки или вовсе без конца. Итоговая длина больше запрошенной
+    // ровно на задержку перед подписью: она не должна красть время на чтение.
     expect(withAudio).toContain('-stream_loop');
-    expect(withAudio[withAudio.indexOf('-t') + 1]).toBe('14');
+    expect(withAudio[withAudio.indexOf('-t') + 1]).toBe(
+      String(14 + TEXT_APPEAR_DELAY_SECONDS),
+    );
   });
 
   it('голос идёт на полной громкости', () => {
@@ -145,6 +166,21 @@ describe('estimateReadingSeconds', () => {
     expect(long).toBeGreaterThan(10);
     // Сторис длиннее полуминуты никто не досматривает.
     expect(long).toBeLessThanOrEqual(30);
+  });
+});
+
+describe('buildReelOverlayInput', () => {
+  it('ограничивает цитату ролика четырьмя строками', () => {
+    const overlay = buildReelOverlayInput('Цитата', 'Автор');
+    expect(overlay).toEqual({
+      text: 'Цитата',
+      attribution: 'Автор',
+      maxQuoteLines: REEL_MAX_QUOTE_LINES,
+    });
+  });
+
+  it('лимит роликов меньше, чем у открытки', () => {
+    expect(REEL_MAX_QUOTE_LINES).toBe(4);
   });
 });
 

@@ -118,8 +118,37 @@ function buildAudioFilter(input: StoryVideoArgs, loop?: number): string {
   return '';
 }
 
+/**
+ * Сколько ролик играет без подписи: сперва смотрят сам кадр, текст мешать
+ * не должен.
+ */
+export const TEXT_APPEAR_DELAY_SECONDS = 5;
+/** Плавность появления подписи после задержки. */
+export const TEXT_FADE_IN_SECONDS = 1;
+
+/** Строк цитаты в кадре ролика — меньше, чем у открытки: кадр не должен
+ *  становиться стеной текста, есть кнопка «Развернуть» в самой ленте. */
+export const REEL_MAX_QUOTE_LINES = 4;
+
+/**
+ * Собирает вход для оверлея ролика.
+ *
+ * Вынесено чистой функцией по той же причине, что и `buildStoryVideoArgs`:
+ * проверить лимит строк можно без мока всего воркера и без запуска ffmpeg.
+ */
+export function buildReelOverlayInput(
+  text: string,
+  attribution: string,
+): StoryOverlayInput {
+  return { text, attribution, maxQuoteLines: REEL_MAX_QUOTE_LINES };
+}
+
 export function buildStoryVideoArgs(input: StoryVideoArgs): string[] {
-  const loop = input.loopToSeconds;
+  // Задержка перед подписью не отнимает время на чтение — она добавляется
+  // к уже рассчитанной длине ролика, а не вычитается из неё.
+  const loop = input.loopToSeconds
+    ? input.loopToSeconds + TEXT_APPEAR_DELAY_SECONDS
+    : undefined;
   return [
     '-y',
     // Повтор задаётся до входа, а не фильтром: так ffmpeg крутит уже
@@ -127,6 +156,10 @@ export function buildStoryVideoArgs(input: StoryVideoArgs): string[] {
     ...(loop ? ['-stream_loop', '-1'] : []),
     '-i',
     input.videoPath,
+    // Подпись — один кадр; без -loop у fade ниже была бы всего одна точка
+    // времени на входе, и прозрачность не менялась бы по ходу ролика.
+    '-loop',
+    '1',
     '-i',
     input.overlayPath,
     ...(input.voicePath ? ['-i', input.voicePath] : []),
@@ -136,7 +169,11 @@ export function buildStoryVideoArgs(input: StoryVideoArgs): string[] {
     // кадр, не совпадёт с картинкой.
     '-filter_complex',
     `[0:v]scale=${STORY_WIDTH}:${STORY_HEIGHT}:force_original_aspect_ratio=increase,` +
-      `crop=${STORY_WIDTH}:${STORY_HEIGHT}[bg];[bg][1:v]overlay=0:0[v]` +
+      `crop=${STORY_WIDTH}:${STORY_HEIGHT}[bg];` +
+      // Первые TEXT_APPEAR_DELAY_SECONDS кадр идёт голым, дальше подпись
+      // мягко проявляется — человек успевает сначала посмотреть на сам кадр.
+      `[1:v]format=yuva420p,fade=t=in:st=${TEXT_APPEAR_DELAY_SECONDS}:d=${TEXT_FADE_IN_SECONDS}:alpha=1[ov];` +
+      `[bg][ov]overlay=0:0[v]` +
       buildAudioFilter(input, loop),
     '-map',
     '[v]',

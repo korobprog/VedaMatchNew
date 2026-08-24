@@ -18,7 +18,11 @@ import { isAutonomousApproval } from './autonomous-approval';
 import { MotivationSettingsService } from './motivation-settings.service';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { resolveVideoPrompt } from './motivation-prompt';
-import { composeStoryVideo, estimateReadingSeconds } from './story-video';
+import {
+  buildReelOverlayInput,
+  composeStoryVideo,
+  estimateReadingSeconds,
+} from './story-video';
 import { estimatePlannedClipUsd } from './video-cost';
 import { BUDGET_CODE_PREFIX } from './funding-error';
 import { CONTENT_POLICY_CODE } from './video-rejection';
@@ -506,7 +510,7 @@ export class MotivationVideoWorkerService
 
       return await composeStoryVideo(
         video,
-        { text, attribution },
+        buildReelOverlayInput(text, attribution),
         { loopToSeconds: seconds, voice: spoken?.audio, music },
       );
     } catch (error) {

@@ -137,6 +137,8 @@ export type StoryOverlayInput = {
    * иначе правка отступов расходилась бы между сторис и открыткой.
    */
   greeting?: string | null;
+  /** Сколько строк цитаты вместить в кадр. По умолчанию — MAX_QUOTE_LINES. */
+  maxQuoteLines?: number;
 };
 
 /**
@@ -195,7 +197,7 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
   const maxWidth = (STORY_WIDTH - SIDE_PADDING * 2) * WIDTH_SAFETY;
   const lines = clampLines(
     wrapText(input.text, QUOTE_SIZE, maxWidth),
-    MAX_QUOTE_LINES,
+    input.maxQuoteLines ?? MAX_QUOTE_LINES,
   );
   // Атрибуция переносится так же, как цитата: одной строкой длинная связка
   // «автор · произведение · глава» уезжала за правый край.
@@ -255,7 +257,7 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
     </linearGradient>
   </defs>
   <style>
-    .quote { font-family: ${FONT_STACK}; font-size: ${QUOTE_SIZE}px; font-weight: 600; fill: #FFFFFF; }
+    .quote { font-family: ${FONT_STACK}; font-size: ${QUOTE_SIZE}px; font-weight: 400; fill: #FFFFFF; }
     .meta  { font-family: ${FONT_STACK}; font-size: ${META_SIZE}px; fill: #D9CCF5; }
     .disclosure { font-family: ${FONT_STACK}; font-size: ${DISCLOSURE_SIZE}px; fill: #B9A9DC; }
     .greeting { font-family: ${FONT_STACK}; font-size: ${GREETING_SIZE}px; font-weight: 700; fill: #FFE2A6; }
@@ -280,8 +282,10 @@ export async function renderStoryOverlay(
 ): Promise<Buffer> {
   const maxWidth = (STORY_WIDTH - SIDE_PADDING * 2) * WIDTH_SAFETY;
   const box = brandLogoBox({
-    quoteLines: clampLines(wrapText(input.text, QUOTE_SIZE, maxWidth), MAX_QUOTE_LINES)
-      .length,
+    quoteLines: clampLines(
+      wrapText(input.text, QUOTE_SIZE, maxWidth),
+      input.maxQuoteLines ?? MAX_QUOTE_LINES,
+    ).length,
     metaLines: input.attribution?.trim()
       ? clampLines(wrapText(input.attribution, META_SIZE, maxWidth), MAX_META_LINES)
           .length
