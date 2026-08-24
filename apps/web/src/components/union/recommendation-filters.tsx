@@ -129,6 +129,10 @@ export function RecommendationFilters({
    * от фильтров — это своя история, и её нужно сбрасывать явно.
    */
   async function handleResetHistory() {
+    const confirmed = window.confirm(
+      "Все пропуски и ещё не отвеченные заявки будут отменены. Состоявшиеся знакомства не затрагиваются. Отменить это действие нельзя.",
+    );
+    if (!confirmed) return;
     setHistoryError(null);
     setResettingHistory(true);
     try {
@@ -408,10 +412,10 @@ export function RecommendationFilters({
           type="button"
           onClick={handleResetHistory}
           disabled={resettingHistory}
-          title="Уже отсмотренные вами анкеты вернутся в колоду. Состоявшиеся знакомства не затрагиваются."
+          title="Все пропуски и ещё не отвеченные заявки будут отменены. Состоявшиеся знакомства не затрагиваются. Отменить это действие нельзя."
           className="text-sm font-medium text-text-2 transition hover:text-text-0 disabled:opacity-50"
         >
-          {resettingHistory ? "Показываем заново…" : "Показать всех заново"}
+          {resettingHistory ? "Стираем…" : "Стереть решения и заявки"}
         </button>
         <span className="text-xs text-text-2">
           Геопоиск: ©{" "}
