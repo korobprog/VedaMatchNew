@@ -10,7 +10,7 @@ import type {
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
-import { splitQuoteAndExplanation } from "./quote-text";
+import { isLongQuote, splitQuoteAndExplanation } from "./quote-text";
 import { ReportDialog } from "./report-dialog";
 import {
   attributionLine,
@@ -539,7 +539,7 @@ function ReelSlide({
         {/* В ролик подпись вшита воркером, и вторая копия поверх кадра
             наезжала бы на первую. Для фото текст рисуем мы. */}
         {kind === "image" && (
-          <p className="font-display text-[17px] font-medium leading-snug drop-shadow-md">{quote}</p>
+          <p className="line-clamp-4 font-display text-[17px] font-medium leading-snug drop-shadow-md">{quote}</p>
         )}
         {kind === "image" && source && (
           <p className="mt-2 text-xs text-white/85">
@@ -550,9 +550,6 @@ function ReelSlide({
               </a>
             ) : (
               source
-            )}
-            {post.sourceVerified && (
-              <span className="ml-2 whitespace-nowrap text-[#9CF7E2]">· источник проверен</span>
             )}
           </p>
         )}
@@ -567,6 +564,7 @@ function ReelSlide({
               {showExplanation ? "Скрыть пояснение" : "Пояснение — нажмите, чтобы раскрыть ›"}
             </button>
           )}
+          {isLongQuote(quote) && <FullQuoteToggle quote={quote} source={source} />}
           {post.origin === "user" && !post.isOwn && <ReportDialog postId={post.id} />}
         </div>
         {/* У ролика подпись не дублируем: авторство и источник воркер вшивает
@@ -590,13 +588,13 @@ function ReelSlide({
 }
 
 /**
- * Кто принёс пост: редакция или участник. У участника — имя и метка
- * проверенного источника, у редакции — подпись сервиса, как в макете.
+ * Кто принёс пост: редакция или участник. У участника — имя, у редакции —
+ * подпись сервиса, как в макете.
  */
 function Byline({ post }: { post: MotivationPostDto }) {
   const mine = post.origin === "user";
   return (
-    <div className="mt-3 flex items-center gap-2 text-xs text-white/85">
+    <div className="mt-3 mb-2 flex items-center gap-2 text-xs text-white/85">
       <span
         aria-hidden="true"
         className={`h-6 w-6 flex-none rounded-full border-[1.5px] border-white ${
@@ -606,12 +604,44 @@ function Byline({ post }: { post: MotivationPostDto }) {
       <span className="truncate">
         {mine ? `${post.author?.name ?? "Участник"} · рилс участника` : "VedaMatch · ежедневная"}
       </span>
-      {mine && post.sourceVerified && (
-        <span className="ml-auto flex-none rounded-full border border-[#23F0C7]/50 bg-[#23F0C7]/20 px-2 py-0.5 text-[10px] font-bold text-[#9CF7E2]">
-          ✓ проверено
-        </span>
-      )}
     </div>
+  );
+}
+
+/**
+ * Кнопка «Читать полностью» и шторка снизу с цитатой целиком — по образцу
+ * уже существующей шторки «Пояснение». Общая для фото и видео: у видео
+ * своей DOM-цитаты нет вовсе (текст вшит в кадр воркером), а полный текст
+ * всё равно есть в данных поста — доставать его из видео не нужно.
+ */
+function FullQuoteToggle({ quote, source }: { quote: string; source: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="underline-offset-4 hover:underline"
+      >
+        Читать полностью ›
+      </button>
+      {open && (
+        <div className="absolute inset-x-0 bottom-0 z-20 max-h-[60%] overflow-y-auto rounded-t-3xl border-t border-white/15 bg-[#1B0F2E]/95 p-5 text-sm leading-6 text-white/90 backdrop-blur">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-display text-sm">Цитата целиком</span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded-lg px-2 py-1 text-xs text-white/70 hover:bg-white/10"
+            >
+              Закрыть
+            </button>
+          </div>
+          <p className="whitespace-pre-line">{quote}</p>
+          {source && <p className="mt-3 text-xs text-white/70">{source}</p>}
+        </div>
+      )}
+    </>
   );
 }
 

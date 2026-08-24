@@ -141,7 +141,7 @@ describe("ReelsFeed", () => {
         initial={{
           items: [
             post("a"),
-            post("b", { origin: "user", author: { name: "Радха-деви" }, sourceVerified: true }),
+            post("b", { origin: "user", author: { name: "Радха-деви" } }),
           ],
           nextCursor: null,
         }}
@@ -152,26 +152,6 @@ describe("ReelsFeed", () => {
 
     expect(screen.getByText("VedaMatch · ежедневная")).toBeInTheDocument();
     expect(screen.getByText("Радха-деви · рилс участника")).toBeInTheDocument();
-    expect(screen.getByText("✓ проверено")).toBeInTheDocument();
-  });
-
-  it("does not claim a verified source when there is none", () => {
-    fetchOk({});
-    render(
-      <ReelsFeed
-        initial={{
-          items: [post("a", { origin: "user", author: { name: "Гопал" }, sourceVerified: false })],
-          nextCursor: null,
-        }}
-        tab="forYou"
-        donation={null}
-      />,
-    );
-
-    // Метка «проверено» — единственное утверждение об источнике на слайде;
-    // у своей цитаты её быть не должно.
-    expect(screen.getByText("Гопал · рилс участника")).toBeInTheDocument();
-    expect(screen.queryByText("✓ проверено")).not.toBeInTheDocument();
   });
 
   it("offers to report someone else's reel but not your own", () => {
@@ -309,5 +289,64 @@ describe("ReelsFeed", () => {
 
     expect(screen.getByText("В избранном пока пусто")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "К ленте" })).toHaveAttribute("href", "/motivation");
+  });
+
+  it("показывает «Читать полностью» у длинной цитаты фото-поста и открывает её целиком", async () => {
+    fetchOk({});
+    const longQuote =
+      "Преданность освобождает ум от иллюзии и открывает путь к истинному счастью. ".repeat(
+        3,
+      );
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a", { text: longQuote })], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    const toggle = screen.getByRole("button", { name: "Читать полностью ›" });
+    await userEvent.click(toggle);
+
+    expect(screen.getByText("Цитата целиком")).toBeInTheDocument();
+  });
+
+  it("не показывает «Читать полностью» у короткой цитаты", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Читать полностью ›" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("показывает «Читать полностью» и у длинной цитаты видео-поста", () => {
+    fetchOk({});
+    const longQuote =
+      "Преданность освобождает ум от иллюзии и открывает путь к истинному счастью. ".repeat(
+        3,
+      );
+    render(
+      <ReelsFeed
+        initial={{
+          items: [
+            post("a", { text: longQuote, videoUrl: "https://cdn/a.mp4" }),
+          ],
+          nextCursor: null,
+        }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Читать полностью ›" }),
+    ).toBeInTheDocument();
   });
 });
