@@ -237,7 +237,7 @@ export interface CreateChatConversationRequest {
   title?: string;
   description?: string;
   memberIds?: string[];
-  /** Канал: чья община. */
+  /** Канал или группа: чья община. */
   communityId?: string;
 }
 

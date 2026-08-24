@@ -217,6 +217,78 @@ describe('ChatConversationsService', () => {
     });
   });
 
+  describe('createGroup', () => {
+    it('не даёт завести группу в чужой общине', async () => {
+      prisma.communityMember.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.create('me', {
+          kind: 'group',
+          title: 'Киртан-кружок',
+          communityId: 'community-1',
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.chatConversation.create).not.toHaveBeenCalled();
+    });
+
+    it('админ общины заводит группу открытой и привязанной к общине', async () => {
+      prisma.communityMember.findFirst.mockResolvedValue({ id: 'member-1' });
+      prisma.chatConversation.create.mockResolvedValue(
+        conversation({ communityId: 'community-1' }),
+      );
+
+      await service.create('me', {
+        kind: 'group',
+        title: 'Киртан-кружок',
+        communityId: 'community-1',
+      });
+
+      const data = (
+        (prisma.chatConversation.create.mock.calls as unknown[][])[0][0] as {
+          data: { communityId: string; visibility: string };
+        }
+      ).data;
+      expect(data.communityId).toBe('community-1');
+      expect(data.visibility).toBe('public');
+    });
+
+    it('явный visibility: private перебивает открытость общины', async () => {
+      prisma.communityMember.findFirst.mockResolvedValue({ id: 'member-1' });
+      prisma.chatConversation.create.mockResolvedValue(
+        conversation({ communityId: 'community-1' }),
+      );
+
+      await service.create('me', {
+        kind: 'group',
+        title: 'Закрытый совет',
+        communityId: 'community-1',
+        visibility: 'private',
+      });
+
+      const data = (
+        (prisma.chatConversation.create.mock.calls as unknown[][])[0][0] as {
+          data: { visibility: string };
+        }
+      ).data;
+      expect(data.visibility).toBe('private');
+    });
+
+    it('группа без общины остаётся закрытой по умолчанию, прав не проверяет', async () => {
+      prisma.chatConversation.create.mockResolvedValue(conversation());
+
+      await service.create('me', { kind: 'group', title: 'Друзья' });
+
+      expect(prisma.communityMember.findFirst).not.toHaveBeenCalled();
+      const data = (
+        (prisma.chatConversation.create.mock.calls as unknown[][])[0][0] as {
+          data: { communityId: string | null; visibility: string };
+        }
+      ).data;
+      expect(data.communityId).toBeNull();
+      expect(data.visibility).toBe('private');
+    });
+  });
+
   describe('accept и decline', () => {
     const request = conversation({
       kind: 'direct',

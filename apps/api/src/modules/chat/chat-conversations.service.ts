@@ -330,16 +330,25 @@ export class ChatConversationsService {
   ) {
     const title = dto.title?.trim();
     if (!title) throw new BadRequestException('У группы должно быть название');
+    if (dto.communityId) await this.requireCommunityAdmin(userId, dto.communityId);
 
     const memberIds = await this.reachableUserIds(userId, dto.memberIds ?? []);
+    const visibility = dto.communityId
+      ? dto.visibility === 'private'
+        ? 'private'
+        : 'public'
+      : dto.visibility === 'public'
+        ? 'public'
+        : 'private';
 
     const created = await this.prisma.chatConversation.create({
       data: {
         kind: 'group',
         state: 'active',
-        visibility: dto.visibility === 'public' ? 'public' : 'private',
+        visibility,
         title,
         description: dto.description?.trim() || null,
+        communityId: dto.communityId ?? null,
         createdById: userId,
         members: {
           create: [
@@ -368,19 +377,7 @@ export class ChatConversationsService {
     if (!dto.communityId)
       throw new BadRequestException('Канал заводится в общине');
 
-    // Право на канал даёт роль в общине: `Community` и `CommunityMember` —
-    // портальные модели, читать их модулю разрешено.
-    const membership = await this.prisma.communityMember.findFirst({
-      where: {
-        communityId: dto.communityId,
-        userId,
-        status: 'active',
-        role: { in: ['owner', 'admin'] },
-      },
-      select: { id: true },
-    });
-    if (!membership)
-      throw new ForbiddenException('Канал заводит администрация общины');
+    await this.requireCommunityAdmin(userId, dto.communityId);
 
     const created = await this.prisma.chatConversation.create({
       data: {
@@ -398,6 +395,28 @@ export class ChatConversationsService {
     });
 
     return this.summary(created, userId);
+  }
+
+  /**
+   * Право заводить беседу общины — тот же гейт для канала и группы:
+   * активная роль владельца или администратора. `Community` и
+   * `CommunityMember` — портальные модели, читать их модулю разрешено.
+   */
+  private async requireCommunityAdmin(
+    userId: string,
+    communityId: string,
+  ): Promise<void> {
+    const membership = await this.prisma.communityMember.findFirst({
+      where: {
+        communityId,
+        userId,
+        status: 'active',
+        role: { in: ['owner', 'admin'] },
+      },
+      select: { id: true },
+    });
+    if (!membership)
+      throw new ForbiddenException('Беседу общины заводит администрация');
   }
 
   /** Принять запрос: диалог становится обычным. */
