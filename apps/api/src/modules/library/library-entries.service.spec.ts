@@ -72,6 +72,10 @@ function bookmarksMock() {
   };
 }
 
+function eventsMock() {
+  return { emit: jest.fn() };
+}
+
 function previewsMock(overrides: Record<string, unknown> = {}) {
   return {
     configured: true,
@@ -104,6 +108,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await expect(
@@ -120,6 +125,7 @@ describe('LibraryEntriesService.create', () => {
       prismaMock() as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await expect(
@@ -132,6 +138,7 @@ describe('LibraryEntriesService.create', () => {
       prismaMock() as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await expect(
@@ -144,6 +151,7 @@ describe('LibraryEntriesService.create', () => {
       prismaMock() as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await expect(
@@ -160,6 +168,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await expect(
@@ -182,6 +191,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await service.create(
@@ -206,6 +216,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await service.create(
@@ -231,6 +242,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await service.create(
@@ -249,6 +261,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await expect(
@@ -262,6 +275,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await service.create(
@@ -287,6 +301,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previews as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await service.create(
@@ -310,6 +325,7 @@ describe('LibraryEntriesService.create', () => {
       prismaMock() as never,
       previews as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await service.create('user-1', validBody());
@@ -324,6 +340,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await expect(service.create('user-1', validBody())).rejects.toBeInstanceOf(
@@ -339,6 +356,7 @@ describe('LibraryEntriesService.feed', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await service.feed({ type: 'video', language: 'en' });
@@ -368,6 +386,7 @@ describe('LibraryEntriesService.feed', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     const result = await service.feed({});
@@ -382,6 +401,7 @@ describe('LibraryEntriesService.feed', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     const result = await service.feed({ cursor: 'garbage' });
@@ -401,6 +421,7 @@ describe('LibraryEntriesService canEdit', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     const result = await service.byId('entry-1', 'user-1');
@@ -417,6 +438,7 @@ describe('LibraryEntriesService canEdit', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     const result = await service.byId('entry-1', 'someone-else');
@@ -433,6 +455,7 @@ describe('LibraryEntriesService canEdit', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     const result = await service.byId('entry-1', 'admin-1', true);
@@ -471,6 +494,7 @@ describe('LibraryEntriesService.update', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     const result = await service.update('user-1', false, 'entry-1', {
@@ -493,6 +517,7 @@ describe('LibraryEntriesService.update', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await expect(
@@ -515,6 +540,7 @@ describe('LibraryEntriesService.update', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     const result = await service.update('admin-1', true, 'entry-1', {
@@ -531,6 +557,7 @@ describe('LibraryEntriesService.update', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await expect(
@@ -564,6 +591,7 @@ describe('LibraryEntriesService.update', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await service.update('user-1', false, 'entry-1', {
@@ -600,6 +628,7 @@ describe('LibraryEntriesService.uploadPreview', () => {
       prisma as never,
       previews as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     const result = await service.uploadPreview(
@@ -628,6 +657,7 @@ describe('LibraryEntriesService.uploadPreview', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await expect(
@@ -649,6 +679,7 @@ describe('LibraryEntriesService.uploadPreview', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await expect(
@@ -691,6 +722,7 @@ describe('LibraryEntriesService.remove', () => {
       prisma as never,
       previews as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await service.remove('user-1', false, 'entry-1');
@@ -716,6 +748,7 @@ describe('LibraryEntriesService.remove', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await expect(
@@ -737,6 +770,7 @@ describe('LibraryEntriesService.remove', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await service.remove('admin-1', true, 'entry-1');
@@ -753,6 +787,7 @@ describe('LibraryEntriesService.remove', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      eventsMock() as never,
     );
 
     await expect(

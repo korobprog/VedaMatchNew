@@ -18,8 +18,8 @@ import type {
   UnionPrivacySettings,
   UnionUserSummary,
 } from '@vedamatch/shared';
-import { resolveDisplayName } from '@vedamatch/shared';
-import type { NotificationEvent } from '@vedamatch/shared';
+import { PORTAL_ACCESS_EVENTS, resolveDisplayName } from '@vedamatch/shared';
+import type { NotificationEvent, PortalAccessEvent } from '@vedamatch/shared';
 import { calculateAge } from '../users/age';
 import { ModerationService } from '../moderation/moderation.service';
 import { toActivityLevel } from './union-activity';
@@ -163,6 +163,7 @@ export class UnionConnectionService {
         companionId: fromUserId,
       } satisfies NotificationEvent;
       this.events.emit(matched.name, matched);
+      this.announceMutualAccess(toUserId, fromUserId);
       return this.toRequestDto(accepted, accepted.fromUser, 'incoming', true);
     }
     if (reverse?.status === 'accepted') {
@@ -230,7 +231,30 @@ export class UnionConnectionService {
       companionId: accepted.toUserId,
     } satisfies NotificationEvent;
     this.events.emit(event.name, event);
+    this.announceMutualAccess(accepted.fromUserId, accepted.toUserId);
     return this.toRequestDto(accepted, accepted.fromUser, 'incoming', true);
+  }
+
+  /**
+   * Мэтч открывает контакты в обе стороны сразу — доступ к чужой активности
+   * в ленте друзей открывается тем же событием, а не отдельным действием.
+   */
+  private announceMutualAccess(userIdA: string, userIdB: string): void {
+    const occurredAt = new Date().toISOString();
+    for (const [granterId, granteeId] of [
+      [userIdA, userIdB],
+      [userIdB, userIdA],
+    ]) {
+      const event: PortalAccessEvent = {
+        name: PORTAL_ACCESS_EVENTS.union,
+        granterId,
+        granteeId,
+        source: 'union',
+        granted: true,
+        occurredAt,
+      };
+      this.events.emit(event.name, event);
+    }
   }
 
   async decline(

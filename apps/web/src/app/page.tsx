@@ -33,6 +33,8 @@ import { buildAdvisorCards } from "@/lib/advisor/advisor-cards";
 import { toAdvisorInput } from "@/lib/advisor/advisor-signals";
 import { AdvisorStrip } from "@/components/advisor/advisor-strip";
 import { UnionQuickAccessWidget } from "@/components/union/union-quick-access-widget";
+import { FriendsActivityWidget } from "@/components/activity/friends-activity-widget";
+import { getActivityFeedServer } from "@/lib/activity-server-api";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { LandingPage } from "@/components/landing";
@@ -68,6 +70,7 @@ export default async function Home({
     myCommunities,
     news,
     chatUnread,
+    activityFeed,
   ] = await Promise.all([
     getProfile(),
     getServices(),
@@ -85,6 +88,7 @@ export default async function Home({
     // Новости портала — не повод ронять главную: не пришли, значит их нет.
     getMyAnnouncements("ru").catch(() => null),
     getChatUnread().catch(() => null),
+    getActivityFeedServer().catch(() => null),
   ]);
   if (!user || !services) {
     // Маркер сессии без access-cookie: человек уже входил, refresh скорее всего
@@ -192,6 +196,11 @@ export default async function Home({
           userId={user.id}
           extras={serviceExtras}
         />
+        {/* Подвал главной, под сеткой: действия людей, которые открыли
+            доступ к себе (мэтч в Знакомствах, раскрытые контакты в
+            Справочнике). Своего блока в разметке не занимает, если открытых
+            доступов нет — виджет тогда не рендерится вовсе. */}
+        <FriendsActivityWidget initialFeed={activityFeed ?? { friends: [] }} />
       </main>
       <InstallBanner />
       {/* Главная лежит вне группы (portal), где висит тот же маячок, — без

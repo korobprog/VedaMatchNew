@@ -362,7 +362,7 @@ export class MotivationService {
     return this.dto({ ...post, favorites: [], views: [] });
   }
   async favorite(userId: string, postId: string, favorite: boolean) {
-    await this.ensurePublished(postId);
+    const post = await this.ensurePublished(postId);
     if (favorite)
       await this.prisma.motivationFavorite.upsert({
         where: { userId_postId: { userId, postId } },
@@ -375,16 +375,18 @@ export class MotivationService {
       });
     // Осмысленным действием считается только добавление: снятие отметки
     // ничего не говорит о том, что человек ожил.
-    if (favorite) this.announceActivity(userId);
+    if (favorite) this.announceActivity(userId, post.id, post.slug);
   }
 
   /** Факт «человек добавил в избранное» для подписчиков портала. */
-  private announceActivity(userId: string): void {
+  private announceActivity(userId: string, postId: string, slug: string): void {
     const event: PortalActivityEvent = {
       name: PORTAL_ACTIVITY_EVENTS.motivation,
       userId,
       action: 'motivation.favorite-added',
       occurredAt: new Date().toISOString(),
+      entityId: postId,
+      link: `/m/${slug}`,
     };
     this.bus?.emit(event.name, event);
   }
@@ -1009,13 +1011,12 @@ export class MotivationService {
       throw new ForbiddenException();
   }
   private async ensurePublished(id: string) {
-    if (
-      !(await this.prisma.motivationPost.findFirst({
-        where: { id, status: 'published' },
-        select: { id: true },
-      }))
-    )
-      throw new NotFoundException();
+    const post = await this.prisma.motivationPost.findFirst({
+      where: { id, status: 'published' },
+      select: { id: true, slug: true },
+    });
+    if (!post) throw new NotFoundException();
+    return post;
   }
   private dto(post: any, viewerId?: string): MotivationPostDto {
     const t = post.translations[0];

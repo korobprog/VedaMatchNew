@@ -357,6 +357,9 @@ model User {
   rewardsLedgerActed                 RewardsLedgerEntry[]         @relation("RewardsLedgerActor")
   rewardsFraudAsInviter              RewardsFraudLog[]            @relation("RewardsFraudInviter")
   rewardsFraudAsInvitee              RewardsFraudLog[]            @relation("RewardsFraudInvitee")
+  activityFollowsGranted             ActivityFollow[]             @relation("ActivityFollowGranter")
+  activityFollowsReceived            ActivityFollow[]             @relation("ActivityFollowGrantee")
+  activityItems                      ActivityItem[]                @relation("ActivityItemActor")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -4012,4 +4015,55 @@ model RewardsFraudLog {
 
   @@index([createdAt])
   @@index([reason, createdAt])
+}
+
+// ===== Activity service =====
+
+/// Кто кому открыл видимость своей активности. Зеркало `PortalAccessEvent`:
+/// Union шлёт обе стороны сразу при мэтче (доступ симметричный), Contacts —
+/// одну при раскрытии контактов, revokedAt ставится при отзыве. Источник не
+/// участвует в бизнес-логике модуля (он всё равно просто зеркалит чужой
+/// факт) — только для диагностики, откуда взялась строка.
+enum ActivityFollowSource {
+  union
+  contacts
+}
+
+model ActivityFollow {
+  id String @id @default(uuid())
+
+  /// Тот, чья активность становится видна.
+  granterId String
+  granter   User   @relation("ActivityFollowGranter", fields: [granterId], references: [id], onDelete: Cascade)
+  /// Тот, кому она видна.
+  granteeId String
+  grantee   User   @relation("ActivityFollowGrantee", fields: [granteeId], references: [id], onDelete: Cascade)
+
+  source    ActivityFollowSource
+  grantedAt DateTime             @default(now())
+  revokedAt DateTime?
+
+  @@unique([granterId, granteeId, source])
+  @@index([granteeId, revokedAt])
+}
+
+/// Зеркало `PortalActivityEvent`: одна строка на осмысленное действие.
+/// `title` собран подписчиком при записи (activity-copy.ts), как у
+/// `NotificationItem`, — сама лента при чтении текст не формулирует.
+model ActivityItem {
+  id String @id @default(uuid())
+
+  actorId String
+  actor   User   @relation("ActivityItemActor", fields: [actorId], references: [id], onDelete: Cascade)
+
+  action String
+  title  String
+  /// Относительный путь на запись; null — событию некуда вести (сейчас такого нет,
+  /// поле на будущее для действий без карточки).
+  link   String?
+
+  occurredAt DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([actorId, occurredAt(sort: Desc)])
 }

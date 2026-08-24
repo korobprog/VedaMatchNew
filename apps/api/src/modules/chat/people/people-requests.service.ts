@@ -5,7 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import type { NotificationEvent } from '@vedamatch/shared';
+import { PORTAL_ACCESS_EVENTS } from '@vedamatch/shared';
+import type { NotificationEvent, PortalAccessEvent } from '@vedamatch/shared';
 import type {
   ContactsCreateRequestBody,
   ContactsDisclosureDto,
@@ -264,6 +265,7 @@ export class PeopleRequestsService {
         senderName: await this.displayName(userId),
         ownerUserId: userId,
       });
+      this.announceAccess(userId, request.fromUserId, true, now);
       return this.list(userId, now);
     }
 
@@ -342,7 +344,7 @@ export class PeopleRequestsService {
   ): Promise<ContactsDisclosuresState> {
     const disclosure = await this.prisma.contactsDisclosure.findUnique({
       where: { id: disclosureId },
-      select: { id: true, ownerId: true, revokedAt: true },
+      select: { id: true, ownerId: true, viewerId: true, revokedAt: true },
     });
     if (!disclosure || disclosure.ownerId !== userId) {
       throw new NotFoundException('Раскрытие не найдено');
@@ -352,6 +354,9 @@ export class PeopleRequestsService {
         where: { id: disclosure.id },
         data: { revokedAt: now },
       });
+      // Только настоящий переход в «отозвано»: повторный отзыв уже отозванного
+      // не должен второй раз гасить строку в ленте друзей.
+      this.announceAccess(userId, disclosure.viewerId, false, now);
     }
     return this.listDisclosures(userId);
   }
@@ -406,6 +411,27 @@ export class PeopleRequestsService {
    * дочитывать недостающее из таблиц справочника, а формулировку собирает сам.
    */
   private emit(event: NotificationEvent): void {
+    this.events.emit(event.name, event);
+  }
+
+  /**
+   * Раскрытие/отзыв контактов — это же событие «доступ к активности в ленте
+   * друзей открыт/закрыт»: справочник не заводит для этого отдельного действия.
+   */
+  private announceAccess(
+    ownerId: string,
+    viewerId: string,
+    granted: boolean,
+    now: Date,
+  ): void {
+    const event: PortalAccessEvent = {
+      name: PORTAL_ACCESS_EVENTS.contacts,
+      granterId: ownerId,
+      granteeId: viewerId,
+      source: 'contacts',
+      granted,
+      occurredAt: now.toISOString(),
+    };
     this.events.emit(event.name, event);
   }
 

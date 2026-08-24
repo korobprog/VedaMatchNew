@@ -6,15 +6,17 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   CreateLibraryEntryRequest,
   LibraryDuplicateEntryConflict,
   LibraryEntryDto,
   LibraryEntryType,
   LibraryFeedResponse,
+  PortalActivityEvent,
   UpdateLibraryEntryRequest,
 } from '@vedamatch/shared';
-import { resolveDisplayName } from '@vedamatch/shared';
+import { PORTAL_ACTIVITY_EVENTS, resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   decodeCursor,
@@ -108,6 +110,7 @@ export class LibraryEntriesService {
     private readonly prisma: PrismaService,
     private readonly previews: LibraryPreviewsService,
     private readonly bookmarks: LibraryBookmarksService,
+    private readonly events: EventEmitter2,
   ) {}
 
   async create(
@@ -234,6 +237,17 @@ export class LibraryEntriesService {
     if (previewUrl && normalized) {
       this.previews.captureInBackground(created.id, normalized.url, previewUrl);
     }
+
+    const event: PortalActivityEvent = {
+      name: PORTAL_ACTIVITY_EVENTS.library,
+      userId,
+      action: 'library.entry-created',
+      occurredAt: new Date().toISOString(),
+      entityId: created.id,
+      entityLabel: titleRu ?? titleEn ?? undefined,
+      link: `/library/entry/${created.id}`,
+    };
+    this.events.emit(event.name, event);
 
     return toEntryDto(created, false, userId, false);
   }

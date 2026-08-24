@@ -341,6 +341,36 @@
   animation: install-banner-ping 1600ms ease-out 1300ms 3;
 }
 
+/* ---------------------------------------------------------------- *
+ * Лента друзей на главной: полоса действий одного друга бежит       *
+ * непрерывно, как титры, вместо того чтобы обрезаться краем строки. *
+ * Наведение курсора/фокус останавливают бег, чтобы дочитать.        *
+ * ---------------------------------------------------------------- */
+@keyframes activity-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.activity-marquee-track {
+  animation: activity-marquee var(--activity-marquee-duration, 22s) linear infinite;
+}
+
+.activity-marquee-track:hover,
+.activity-marquee-track:focus-within {
+  animation-play-state: paused;
+}
+
+/* Строка друга на миг подсвечивается, когда в неё прилетает новое
+   событие по SSE, — так видно, что портал ожил, без перезагрузки. */
+@keyframes activity-row-in {
+  0% { background-color: color-mix(in srgb, var(--vm-cyan) 16%, transparent); }
+  100% { background-color: transparent; }
+}
+
+.activity-row-fresh {
+  animation: activity-row-in 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 @media (prefers-reduced-motion: reduce) {
   @keyframes drift {
     0%, 100% { transform: translate(0, 0) scale(1); }
@@ -363,6 +393,12 @@
   }
   @keyframes install-banner-ping {
     0%, 100% { opacity: 0; transform: scale(1); }
+  }
+  @keyframes activity-marquee {
+    from, to { transform: translateX(0); }
+  }
+  @keyframes activity-row-in {
+    from, to { background-color: transparent; }
   }
 }
 

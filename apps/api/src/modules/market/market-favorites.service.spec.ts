@@ -9,11 +9,14 @@ function prismaMock(
     id: string;
     status: string;
     priceMinor: number | null;
+    titleRu?: string | null;
+    titleEn?: string | null;
     shop: { status: string };
   } | null = {
     id: 'listing-1',
     status: 'published',
     priceMinor: 240000,
+    titleRu: 'Мала из туласи',
     shop: { status: 'active' },
   },
 ) {
@@ -36,8 +39,13 @@ function prismaMock(
   };
 }
 
+const eventsMock = () => ({ emit: jest.fn() });
+
 const service = (mocks: Mocks) =>
-  new MarketFavoritesService(mocks as unknown as PrismaService);
+  new MarketFavoritesService(
+    mocks as unknown as PrismaService,
+    eventsMock() as never,
+  );
 
 describe('add', () => {
   it('creates the row and bumps the counter in one transaction', async () => {

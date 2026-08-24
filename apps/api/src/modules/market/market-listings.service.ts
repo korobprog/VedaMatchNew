@@ -302,22 +302,36 @@ export class MarketListingsService {
     // Рассылка подписчикам — побочный эффект: она не должна ни задерживать
     // ответ, ни отменять уже созданное объявление, если упадёт.
     void this.subscriptions.notifyNewListing(created.id);
-    this.announceActivity(userId);
+    this.announceActivity(
+      userId,
+      'market.listing-created',
+      created.id,
+      trimOrNull(body.titleRu) ?? trimOrNull(body.titleEn) ?? undefined,
+    );
 
     return this.byId(created.id, userId, false);
   }
 
   /**
-   * Факт «человек выставил товар» для подписчиков портала. Отдельно от
-   * `market.listing.published`: то уведомление адресовано подписчикам
-   * магазина и несёт `recipientId`, а здесь важен автор.
+   * Факт «человек выставил товар» (или лайкнул чужой) для подписчиков
+   * портала. Отдельно от `market.listing.published`: то уведомление
+   * адресовано подписчикам магазина и несёт `recipientId`, а здесь важен
+   * автор действия.
    */
-  private announceActivity(userId: string): void {
+  private announceActivity(
+    userId: string,
+    action: 'market.listing-created',
+    listingId: string,
+    title?: string,
+  ): void {
     const event: PortalActivityEvent = {
       name: PORTAL_ACTIVITY_EVENTS.market,
       userId,
-      action: 'market.listing-created',
+      action,
       occurredAt: new Date().toISOString(),
+      entityId: listingId,
+      entityLabel: title,
+      link: `/market/listing/${listingId}`,
     };
     this.events.emit(event.name, event);
   }

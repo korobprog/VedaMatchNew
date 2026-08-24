@@ -1,4 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { PORTAL_ACTIVITY_EVENTS } from '@vedamatch/shared';
+import type { PortalActivityEvent } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isPubliclyVisible } from './market-availability';
 
@@ -11,7 +14,10 @@ import { isPubliclyVisible } from './market-availability';
  */
 @Injectable()
 export class MarketFavoritesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   async add(userId: string, listingId: string): Promise<void> {
     const listing = await this.prisma.marketListing.findUnique({
@@ -20,6 +26,8 @@ export class MarketFavoritesService {
         id: true,
         status: true,
         priceMinor: true,
+        titleRu: true,
+        titleEn: true,
         shop: { select: { status: true } },
       },
     });
@@ -51,6 +59,17 @@ export class MarketFavoritesService {
         data: { favoritesCount: { increment: 1 } },
       });
     });
+
+    const event: PortalActivityEvent = {
+      name: PORTAL_ACTIVITY_EVENTS.market,
+      userId,
+      action: 'market.listing-favorited',
+      occurredAt: new Date().toISOString(),
+      entityId: listingId,
+      entityLabel: listing.titleRu?.trim() || listing.titleEn?.trim() || undefined,
+      link: `/market/listing/${listingId}`,
+    };
+    this.events.emit(event.name, event);
   }
 
   async remove(userId: string, listingId: string): Promise<void> {
