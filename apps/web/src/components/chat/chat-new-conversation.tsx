@@ -35,6 +35,7 @@ export function ChatNewConversation({
   const [communityId, setCommunityId] = useState(
     communities[0]?.community.id ?? "",
   );
+  const [groupCommunityId, setGroupCommunityId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,7 +65,12 @@ export function ChatNewConversation({
     try {
       const conversation = await createChatConversation(
         mode === "group"
-          ? { kind: "group", title: name, memberIds: selected }
+          ? {
+              kind: "group",
+              title: name,
+              memberIds: selected,
+              communityId: groupCommunityId || undefined,
+            }
           : {
               kind: "channel",
               title: name,
@@ -134,6 +140,24 @@ export function ChatNewConversation({
 
       {mode === "group" ? (
         <div className="flex flex-col gap-2">
+          {communities.length > 0 && (
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-text-1">Община</span>
+              <select
+                value={groupCommunityId}
+                onChange={(event) => setGroupCommunityId(event.target.value)}
+                className="min-h-11 rounded-2xl border border-glass-brd bg-glass px-3 text-[15px] text-text-0 outline-none"
+              >
+                <option value="">Личная группа (без общины)</option>
+                {communities.map(({ community }) => (
+                  <option key={community.id} value={community.id}>
+                    {community.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
           <span className="text-xs font-medium text-text-1">
             Кого позвать{" "}
             <span className="text-text-2">(можно и позже, из меню беседы)</span>
