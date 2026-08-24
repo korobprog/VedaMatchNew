@@ -840,7 +840,11 @@ describe('UnionProfileService', () => {
     expect(result.items.map((item) => item.user.id)).toEqual(['older']);
   });
 
-  it('уважает возрастные пожелания кандидата, когда мой возраст известен', async () => {
+  it('не отсекает анкету по её собственным пожеланиям к возрасту партнёра', async () => {
+    // Раньше желаемый возраст партнёра кандидата (например, "30-40") прятал
+    // его от смотрящих старше 40, даже если у смотрящего никаких ограничений
+    // нет — свой диапазон должен сужать то, что видишь ты, а не то, кто
+    // видит тебя.
     const picky = withDetails(withBirthYear(profile('picky'), 1990), {
       ageRangeMin: 40,
     });
@@ -853,18 +857,10 @@ describe('UnionProfileService', () => {
 
     const result = await service.getRecommendations('me');
 
-    expect(result.items.map((item) => item.user.id)).toEqual(['open']);
-  });
-
-  it('не отсекает по чужим пожеланиям, если свой возраст не указан', async () => {
-    const picky = withDetails(profile('picky'), { ageRangeMin: 40 });
-    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
-    prisma.unionProfile.findMany.mockResolvedValue([picky]);
-    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
-
-    const result = await service.getRecommendations('me');
-
-    expect(result.items.map((item) => item.user.id)).toEqual(['picky']);
+    expect(result.items.map((item) => item.user.id).sort()).toEqual([
+      'open',
+      'picky',
+    ]);
   });
 
   it('ranks a confirmed devotee above an equally compatible profile', async () => {
@@ -1421,7 +1417,7 @@ describe('buildRecommendationCandidateWhere', () => {
     userId: 'me',
     excludedUserIds: [],
     filters: {},
-    myAge: { age: null, ageRangeMin: null, ageRangeMax: null },
+    myAge: { ageRangeMin: null, ageRangeMax: null },
     now,
   };
 
@@ -1462,7 +1458,7 @@ describe('buildRecommendationCandidateWhere', () => {
   it('lets unknown age through my own preferred range', () => {
     const where = buildRecommendationCandidateWhere({
       ...base,
-      myAge: { age: null, ageRangeMin: 25, ageRangeMax: null },
+      myAge: { ageRangeMin: 25, ageRangeMax: null },
     });
     expect(where.AND).toEqual([
       {
@@ -1474,14 +1470,15 @@ describe('buildRecommendationCandidateWhere', () => {
     ]);
   });
 
-  it('checks the candidate preferred range against my age only when known', () => {
+  it('does not filter candidates by their own preferred partner age', () => {
+    // Раньше анкета с "желаемым возрастом партнёра" 30-40 не показывалась
+    // 41-летнему смотрящему, даже если у него самого нет ограничений. Это
+    // удивляло людей: свой диапазон должен сужать то, что видишь ты сам,
+    // а не то, кто видит тебя.
     const where = buildRecommendationCandidateWhere({
       ...base,
-      myAge: { age: 33, ageRangeMin: null, ageRangeMax: null },
+      myAge: { ageRangeMin: null, ageRangeMax: null },
     });
-    expect(where.AND).toEqual([
-      { OR: [{ ageRangeMin: null }, { ageRangeMin: { lte: 33 } }] },
-      { OR: [{ ageRangeMax: null }, { ageRangeMax: { gte: 33 } }] },
-    ]);
+    expect(where.AND).toBeUndefined();
   });
 });

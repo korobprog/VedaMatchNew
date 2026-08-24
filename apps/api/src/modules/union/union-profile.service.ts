@@ -145,9 +145,8 @@ type ProfileWithIntentions = UnionProfile & {
 };
 
 const PORTAL_ABOUT_SELECT = { about: true, languages: true } as const;
-/** Возраст смотрящего и его пожелания к возрасту партнёра. */
+/** Пожелания смотрящего к возрасту партнёра. */
 interface MyAgePreference {
-  age: number | null;
   ageRangeMin: number | null;
   ageRangeMax: number | null;
 }
@@ -340,7 +339,6 @@ export class UnionProfileService {
     const swiped = await this.swipes.swipedUserIds(userId);
     const normalizedFilters = this.normalizeFilters(filters);
     const myAgePreference: MyAgePreference = {
-      age: calculateAge(me.user.birthDate),
       ageRangeMin: me.ageRangeMin,
       ageRangeMax: me.ageRangeMax,
     };
@@ -772,10 +770,10 @@ export class UnionProfileService {
       if (filters.ageMax != null && candidateAge > filters.ageMax) return false;
     }
 
-    // Желаемый возраст партнёра из анкет работает в обе стороны: и мой, и его.
-    // Возраст кандидата неизвестен — это неявный, не выбранный им самим
-    // фильтр, поэтому не отсеиваем: явное несоответствие возраста ловится
-    // только когда обе стороны его указали.
+    // Желаемый возраст партнёра — только моё пожелание к кандидату.
+    // Обратного эффекта нет: анкету не прячут от людей по чужому возрасту,
+    // не подходящему её собственному диапазону, — это удивляло людей вроде
+    // Станислава, у которого 30–40 скрывали его от совместимых 41-летних.
     if (
       candidateAge !== null &&
       (myAge.ageRangeMin != null || myAge.ageRangeMax != null)
@@ -784,18 +782,6 @@ export class UnionProfileService {
         return false;
       }
       if (myAge.ageRangeMax != null && candidateAge > myAge.ageRangeMax) {
-        return false;
-      }
-    }
-    // Свой возраст неизвестен — судить о чужих предпочтениях не по чему.
-    if (
-      myAge.age !== null &&
-      (profile.ageRangeMin != null || profile.ageRangeMax != null)
-    ) {
-      if (profile.ageRangeMin != null && myAge.age < profile.ageRangeMin) {
-        return false;
-      }
-      if (profile.ageRangeMax != null && myAge.age > profile.ageRangeMax) {
         return false;
       }
     }
@@ -1468,16 +1454,6 @@ export function buildRecommendationCandidateWhere(input: {
           },
         },
       ],
-    });
-  }
-  // Пожелания кандидата к моему возрасту: судить есть по чему только когда
-  // мой возраст известен; незаполненная граница не ограничивает.
-  if (myAge.age !== null) {
-    and.push({
-      OR: [{ ageRangeMin: null }, { ageRangeMin: { lte: myAge.age } }],
-    });
-    and.push({
-      OR: [{ ageRangeMax: null }, { ageRangeMax: { gte: myAge.age } }],
     });
   }
 
