@@ -27,6 +27,7 @@ import type {
   SetChatReactionRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { AdminUnlimited } from '../auth/admin-unlimited.guard';
 import {
   ChatSignedUrlsInterceptor,
   RawStorageUrls,
@@ -123,9 +124,13 @@ export class ChatController {
     return this.conversations.detail(user.sub, id, before);
   }
 
-  /** Создание беседы ограничено: это главная дверь для спама. */
+  /**
+   * Создание беседы ограничено: это главная дверь для спама. Админу лимит
+   * не считается — он пишет пачками при разборе жалоб и модерации.
+   */
   @Post('conversations')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @AdminUnlimited()
   create(
     @CurrentUser() user: AccessTokenPayload,
     @Body() body: CreateChatConversationRequest,

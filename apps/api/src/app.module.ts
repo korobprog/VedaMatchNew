@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { AdminAwareThrottlerGuard } from './modules/auth/admin-unlimited.guard';
 import { UsersModule } from './modules/users/users.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { SelfIdentificationModule } from './modules/self-identification/self-identification.module';
@@ -62,6 +63,6 @@ import { RewardsModule } from './modules/rewards/rewards.module';
     TelemetryModule,
     RewardsModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [{ provide: APP_GUARD, useClass: AdminAwareThrottlerGuard }],
 })
 export class AppModule {}
