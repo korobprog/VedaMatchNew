@@ -54,12 +54,20 @@ export default async function LibrarySectionPage({
           activeSlug={sectionSlug}
         />
 
-        <h1 className="mb-4 font-display text-2xl font-bold text-text-0">
-          {pickLocalized(locale, {
-            ru: section.titleRu,
-            en: section.titleEn,
-          })}
-        </h1>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <h1 className="font-display text-2xl font-bold text-text-0">
+            {pickLocalized(locale, {
+              ru: section.titleRu,
+              en: section.titleEn,
+            })}
+          </h1>
+          <Link
+            href={`/library/add?section=${encodeURIComponent(sectionSlug)}`}
+            className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)]"
+          >
+            {t(locale, "nav.add")}
+          </Link>
+        </div>
 
         {categories && categories.length > 0 ? (
           <ul className="mb-6 flex flex-wrap gap-2">
@@ -91,6 +99,7 @@ export default async function LibrarySectionPage({
 
         {feed && (
           <EntryList
+            key={JSON.stringify({ ...query, sectionSlug })}
             initialFeed={feed}
             locale={locale}
             query={{ ...query, sectionSlug }}

@@ -56,7 +56,7 @@ export default async function LibraryPage({
             </Link>
             <Link
               href="/library/add"
-              className="rounded-xl bg-glass-brd/40 px-4 py-2 text-sm text-text-0 hover:bg-glass-brd/60"
+              className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)]"
             >
               {t(locale, "nav.add")}
             </Link>
@@ -67,7 +67,14 @@ export default async function LibraryPage({
         <SectionStrip sections={sections ?? []} locale={locale} />
         <EntryFilters locale={locale} categories={[]} />
 
-        {feed && <EntryList initialFeed={feed} locale={locale} query={params} />}
+        {feed && (
+          <EntryList
+            key={JSON.stringify(params)}
+            initialFeed={feed}
+            locale={locale}
+            query={params}
+          />
+        )}
       </main>
     </div>
   );

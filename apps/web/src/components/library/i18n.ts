@@ -6,7 +6,7 @@ const ui = {
     "service.subtitle":
       "Общая база полезных материалов: пополняйте её и находите нужное быстрее",
     "nav.sections": "Разделы",
-    "nav.add": "Добавить ссылку",
+    "nav.add": "Создать пост",
     "nav.back": "Назад",
     "filters.title": "Фильтры",
     "filters.section": "Раздел",
@@ -182,7 +182,7 @@ const ui = {
     "service.subtitle":
       "A shared base of useful materials: contribute and find things faster",
     "nav.sections": "Sections",
-    "nav.add": "Add a link",
+    "nav.add": "Create a post",
     "nav.back": "Back",
     "filters.title": "Filters",
     "filters.section": "Section",

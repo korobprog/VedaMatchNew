@@ -27,9 +27,21 @@ const LANGUAGES = ["ru", "en"];
 export function EntryFilters({
   locale,
   categories,
+  categoryBasePath,
+  currentCategorySlug,
 }: {
   locale: LibraryLocale;
   categories: LibraryCategoryDto[];
+  /**
+   * Заданный на странице одной категории (`/library/[section]/[category]`),
+   * слаг категории — это сегмент пути, а не query. Смена значения в селекте
+   * должна переходить на другой URL, иначе серверный компонент страницы
+   * всё равно переопределит выбор фиксированным `categorySlug` из роута —
+   * выбор в выпадающем списке молча игнорировался бы.
+   */
+  categoryBasePath?: string;
+  /** Слаг текущей категории на странице `/library/[section]/[category]`. */
+  currentCategorySlug?: string;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -42,6 +54,19 @@ export function EntryFilters({
     router.push(`?${next.toString()}`);
   }
 
+  function applyCategory(value: string) {
+    if (!categoryBasePath) {
+      apply("categorySlug", value);
+      return;
+    }
+    const next = new URLSearchParams(params.toString());
+    next.delete("categorySlug");
+    next.delete("cursor");
+    const query = next.toString();
+    const path = value ? `${categoryBasePath}/${value}` : categoryBasePath;
+    router.push(query ? `${path}?${query}` : path);
+  }
+
   return (
     <section className="glass mb-6 grid gap-3 rounded-2xl border border-glass-brd p-4 sm:grid-cols-2 lg:grid-cols-4">
       {categories.length > 0 && (
@@ -49,8 +74,12 @@ export function EntryFilters({
           {t(locale, "filters.category")}
           <select
             className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
-            value={params.get("categorySlug") ?? ""}
-            onChange={(event) => apply("categorySlug", event.target.value)}
+            value={
+              categoryBasePath
+                ? currentCategorySlug ?? ""
+                : params.get("categorySlug") ?? ""
+            }
+            onChange={(event) => applyCategory(event.target.value)}
           >
             <option value="">{t(locale, "filters.all")}</option>
             {categories.map((category) => (

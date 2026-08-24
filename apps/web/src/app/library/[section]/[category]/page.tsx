@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { redirectToLogin } from "@/lib/require-user";
 import { getProfile } from "@/lib/api";
@@ -52,20 +53,34 @@ export default async function LibraryCategoryPage({
           activeSlug={sectionSlug}
         />
 
-        <h1 className="mb-1 font-display text-2xl font-bold text-text-0">
-          {pickLocalized(locale, {
-            ru: category.titleRu,
-            en: category.titleEn,
-          })}
-        </h1>
+        <div className="mb-1 flex flex-wrap items-end justify-between gap-3">
+          <h1 className="font-display text-2xl font-bold text-text-0">
+            {pickLocalized(locale, {
+              ru: category.titleRu,
+              en: category.titleEn,
+            })}
+          </h1>
+          <Link
+            href={`/library/add?section=${encodeURIComponent(sectionSlug)}`}
+            className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)]"
+          >
+            {t(locale, "nav.add")}
+          </Link>
+        </div>
         <p className="mb-6 text-sm text-text-2">
           {category.entriesCount} {t(locale, "category.entries")}
         </p>
 
-        <EntryFilters locale={locale} categories={categories ?? []} />
+        <EntryFilters
+          locale={locale}
+          categories={categories ?? []}
+          categoryBasePath={`/library/${sectionSlug}`}
+          currentCategorySlug={categorySlug}
+        />
 
         {feed && (
           <EntryList
+            key={JSON.stringify({ ...query, categorySlug })}
             initialFeed={feed}
             locale={locale}
             query={{ ...query, categorySlug }}
