@@ -38,6 +38,10 @@ const radiusOptions = [25, 50, 100, 250, 500, 1000, 3000];
 const MIN_AGE = 18;
 const MAX_AGE = 120;
 
+// Ключ хранит только возрастной фильтр — остальные фильтры живут в URL и
+// сами переживают навигацию через defaultValue из searchParams.
+const AGE_STORAGE_KEY = "union.recommendations.ageRange";
+
 const DESKTOP_QUERY = "(min-width: 1024px)";
 
 const desktopQuery = () => window.matchMedia(DESKTOP_QUERY);
@@ -340,34 +344,10 @@ export function RecommendationFilters({
         />
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 md:max-w-md">
-        <label className="block">
-          <span className={labelClass}>Возраст от</span>
-          <input
-            name="ageMin"
-            type="number"
-            min={MIN_AGE}
-            max={MAX_AGE}
-            inputMode="numeric"
-            defaultValue={first(params.ageMin) ?? ""}
-            placeholder={String(MIN_AGE)}
-            className={fieldClass}
-          />
-        </label>
-        <label className="block">
-          <span className={labelClass}>Возраст до</span>
-          <input
-            name="ageMax"
-            type="number"
-            min={MIN_AGE}
-            max={MAX_AGE}
-            inputMode="numeric"
-            defaultValue={first(params.ageMax) ?? ""}
-            placeholder="без ограничения"
-            className={fieldClass}
-          />
-        </label>
-      </div>
+      <AgeRangeFilter
+        initialMin={first(params.ageMin) ?? ""}
+        initialMax={first(params.ageMax) ?? ""}
+      />
 
       <label className="mt-3 flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-1">
         <input
@@ -400,6 +380,15 @@ export function RecommendationFilters({
         </button>
         <a
           href="/union/recommendations"
+          onClick={() => {
+            // Иначе сохранённый возрастной фильтр молча вернётся при следующем
+            // заходе на пустой URL и «Сбросить» не будет ощущаться сброшенным.
+            try {
+              window.localStorage.removeItem(AGE_STORAGE_KEY);
+            } catch {
+              // localStorage недоступен (приватный режим и т.п.) — не критично.
+            }
+          }}
           className="text-sm font-medium text-text-2 transition hover:text-text-0"
         >
           Сбросить
@@ -431,6 +420,127 @@ export function RecommendationFilters({
       )}
       </div>
     </form>
+  );
+}
+
+/**
+ * Диапазон возраста кандидатов. Placeholder «От»/«До» вместо примерных
+ * чисел — иначе плейсхолдер выглядит как уже введённое значение. Выбор
+ * запоминается в localStorage: человек, вернувшийся на пустой URL (клик по
+ * «Знакомства» в навигации), видит тот же диапазон, что задавал раньше, а
+ * не значения по умолчанию заново.
+ */
+function AgeRangeFilter({
+  initialMin,
+  initialMax,
+}: {
+  initialMin: string;
+  initialMax: string;
+}) {
+  const [ageMin, setAgeMin] = useState(initialMin);
+  const [ageMax, setAgeMax] = useState(initialMax);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    // Восстановление из localStorage возможно только после маунта (на
+    // сервере его нет) — синхронного способа получить те же данные к
+    // первому рендеру не существует, это тот случай, ради которого нужен
+    // эффект. Тот же приём для темы см. в ThemeProvider.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (!initialMin && !initialMax) {
+      try {
+        const saved = window.localStorage.getItem(AGE_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved) as { min?: string; max?: string };
+          if (parsed.min) setAgeMin(parsed.min);
+          if (parsed.max) setAgeMax(parsed.max);
+        }
+      } catch {
+        // Битые данные в localStorage — просто остаёмся с пустыми полями.
+      }
+    }
+    setHydrated(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // Восстанавливаем один раз на маунт: дальше запись однонаправленная,
+    // от полей в localStorage, а не наоборот.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      if (!ageMin && !ageMax) {
+        window.localStorage.removeItem(AGE_STORAGE_KEY);
+      } else {
+        window.localStorage.setItem(
+          AGE_STORAGE_KEY,
+          JSON.stringify({ min: ageMin, max: ageMax }),
+        );
+      }
+    } catch {
+      // Приватный режим и т.п. — фильтр всё равно работает в рамках сессии.
+    }
+  }, [ageMin, ageMax, hydrated]);
+
+  const active = Boolean(ageMin || ageMax);
+
+  return (
+    <div
+      className={`mt-3 rounded-xl border p-3 transition md:max-w-md ${
+        active
+          ? "border-magenta/50 bg-magenta/5"
+          : "border-transparent"
+      }`}
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <span className={labelClass}>Возраст партнёра</span>
+        <div className="flex items-center gap-2">
+          {active && (
+            <span className="rounded-full bg-magenta px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+              Применён
+            </span>
+          )}
+          {active && (
+            <button
+              type="button"
+              onClick={() => {
+                setAgeMin("");
+                setAgeMax("");
+              }}
+              className="text-xs font-medium text-text-2 transition hover:text-text-0"
+            >
+              Сбросить
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <input
+          name="ageMin"
+          type="number"
+          min={MIN_AGE}
+          max={MAX_AGE}
+          inputMode="numeric"
+          value={ageMin}
+          onChange={(event) => setAgeMin(event.target.value)}
+          placeholder="От"
+          aria-label="Возраст от"
+          className={fieldClass}
+        />
+        <input
+          name="ageMax"
+          type="number"
+          min={MIN_AGE}
+          max={MAX_AGE}
+          inputMode="numeric"
+          value={ageMax}
+          onChange={(event) => setAgeMax(event.target.value)}
+          placeholder="До"
+          aria-label="Возраст до"
+          className={fieldClass}
+        />
+      </div>
+    </div>
   );
 }
 
