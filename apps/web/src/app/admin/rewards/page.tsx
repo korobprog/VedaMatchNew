@@ -63,7 +63,7 @@ export default async function AdminRewardsPage() {
         <h2 className="mb-3 font-display text-lg font-semibold text-text-0">
           Сводка
         </h2>
-        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
           {[
             { label: "Приглашений", value: summary.invitedTotal },
             { label: "Квалифицировано", value: summary.qualifiedTotal },
@@ -79,7 +79,7 @@ export default async function AdminRewardsPage() {
               key={item.label}
               className="glass rounded-2xl border border-glass-brd p-4"
             >
-              <dt className="text-sm text-text-1">{item.label}</dt>
+              <dt className="break-words text-sm text-text-1">{item.label}</dt>
               <dd className="font-mono text-2xl text-text-0">{item.value}</dd>
             </div>
           ))}
