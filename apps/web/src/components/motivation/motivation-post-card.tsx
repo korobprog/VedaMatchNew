@@ -77,7 +77,7 @@ export function MotivationPostCard({ post }: { post: MotivationPostDto }) {
           </button>
           <button type="button" onClick={share} className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Поделиться</button>
           {/* Отправка внутрь портала — обычная ссылка в «Общение»: сервис
-              «Мотивация» не знает про устройство чата, а чат не читает его
+              «Вдохновение» не знает про устройство чата, а чат не читает его
               таблиц. Всё, что нужно сообщению, уезжает в адресе и хранится
               в переписке снимком. */}
           <Link

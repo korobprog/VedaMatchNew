@@ -24,7 +24,7 @@ describe("DeletePostButton", () => {
     await user.click(screen.getByRole("button", { name: /Удалить/ }));
 
     expect(run).not.toHaveBeenCalled();
-    expect(screen.getByText(/Удалить мотивацию вместе с цитатой/)).toBeInTheDocument();
+    expect(screen.getByText(/Удалить вдохновение вместе с цитатой/)).toBeInTheDocument();
   });
 
   it("sends the delete request after confirmation", async () => {

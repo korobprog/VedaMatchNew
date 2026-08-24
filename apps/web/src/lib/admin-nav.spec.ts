@@ -92,7 +92,7 @@ describe("currentAdminNavLabel", () => {
 
   it("держит название на вложенной вкладке сервиса", () => {
     expect(currentAdminNavLabel(groups, "/admin/motivation/queue")).toBe(
-      "Motivation",
+      "Вдохновение",
     );
   });
 

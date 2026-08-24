@@ -8,7 +8,7 @@ import type { ChatAttachmentKind } from "@vedamatch/shared";
  * сервер вызвать не может.
  */
 export function shareSourceLabel(kind: ChatAttachmentKind): string {
-  if (kind === "story") return "Сторис · Мотивация";
+  if (kind === "story") return "Сторис · Вдохновение";
   if (kind === "notice") return "Объявление";
   if (kind === "listing") return "Товар · Рынок";
   return "Карточка";

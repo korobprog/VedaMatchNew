@@ -5,7 +5,7 @@ import Link from "next/link";
 import { MotivationNav, type MotivationSection } from "./motivation-nav";
 
 /**
- * Шапка сервиса «Мотивация». Свёрнута по умолчанию: заголовок и список
+ * Шапка сервиса «Вдохновение». Свёрнута по умолчанию: заголовок и список
  * разделов забирали около сотни точек высоты, а на телефоне ещё и уезжали в
  * горизонтальную прокрутку. Разделы раскрываются по нажатию и переносятся по
  * строкам — прокручивать ничего не нужно.
@@ -13,7 +13,7 @@ import { MotivationNav, type MotivationSection } from "./motivation-nav";
 export function MotivationTopBar({
   active,
   isAdmin,
-  title = "Мотивация",
+  title = "Вдохновение",
   action,
 }: {
   active: MotivationSection;

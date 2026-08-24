@@ -35,7 +35,7 @@ export interface ModerationPromptInput {
 }
 
 export const DEFAULT_REJECT_REASON =
-  'Текст не подходит для ленты мотивации. Попробуйте переформулировать мысль или выбрать цитату из Библиотеки.';
+  'Текст не подходит для ленты вдохновения. Попробуйте переформулировать мысль или выбрать цитату из Библиотеки.';
 
 const DECISIONS = new Set<string>(['approve', 'reject', 'escalate']);
 const MAX_REASON = 400;

@@ -14,12 +14,12 @@ const SEPARATOR = "\n\n";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const post = await getPublicMotivationPost(slug);
-  if (!post) return { title: "VedaMatch Motivation" };
+  if (!post) return { title: "VedaMatch Inspiration" };
   // Описание — цитата без пояснения: пояснение в карточку всё равно не влезет.
   const description = post.text.split(SEPARATOR)[0].slice(0, 300);
   const poster = post.storyImageUrl || post.imageUrl;
   return {
-    title: `${post.title} — Motivation`,
+    title: `${post.title} — Inspiration`,
     description,
     openGraph: {
       type: post.videoUrl ? "video.other" : "article",

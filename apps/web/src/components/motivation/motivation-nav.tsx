@@ -32,7 +32,7 @@ export function MotivationNav({
   return (
     // Перенос по строкам, а не горизонтальная прокрутка: на телефоне последний
     // раздел иначе прячется за краем, и о нём надо догадаться.
-    <nav className={`flex flex-wrap gap-2 ${compact ? "" : "mb-6"}`} aria-label="Разделы мотивации">
+    <nav className={`flex flex-wrap gap-2 ${compact ? "" : "mb-6"}`} aria-label="Разделы вдохновения">
       {links.map(([key, href, label]) => (
         <Link
           key={key}

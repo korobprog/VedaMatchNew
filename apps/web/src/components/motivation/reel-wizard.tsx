@@ -787,7 +787,7 @@ function ReelStatus({
         <div className="space-y-3 rounded-2xl border border-magenta/40 bg-magenta/5 p-4">
           <div>
             <div className="text-xs font-bold uppercase tracking-wide text-gold">Почему</div>
-            <p className="mt-1 text-sm text-text-0">{reel.reason ?? "Текст не подходит для ленты мотивации."}</p>
+            <p className="mt-1 text-sm text-text-0">{reel.reason ?? "Текст не подходит для ленты вдохновения."}</p>
             <p className="mt-1 text-xs text-text-2">Лимит дня не потрачен: можно исправить и отправить снова.</p>
           </div>
           <div className="flex flex-wrap gap-2">

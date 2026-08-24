@@ -8,14 +8,14 @@ describe("MotivationTopBar", () => {
     const user = userEvent.setup();
     render(<MotivationTopBar active="feed" isAdmin={false} />);
 
-    const toggle = screen.getByRole("button", { name: /Мотивация/ });
+    const toggle = screen.getByRole("button", { name: /Вдохновение/ });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("navigation", { name: "Разделы мотивации" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Разделы вдохновения" })).not.toBeInTheDocument();
 
     await user.click(toggle);
 
     expect(toggle).toHaveAttribute("aria-expanded", "true");
-    const nav = screen.getByRole("navigation", { name: "Разделы мотивации" });
+    const nav = screen.getByRole("navigation", { name: "Разделы вдохновения" });
     expect(nav).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Админ" })).not.toBeInTheDocument();
   });

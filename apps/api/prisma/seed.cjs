@@ -60,7 +60,7 @@ const services = [
   },
   {
     slug: 'motivation',
-    name: 'Мотивация',
+    name: 'Вдохновение',
     description: 'Мудрость в афоризмах и шлоках на каждый день',
     url: '/motivation',
     status: 'active',

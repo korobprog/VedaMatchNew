@@ -158,7 +158,7 @@ export function ManualPostForm({
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Не удалось создать мотивацию",
+          : "Не удалось создать вдохновение",
       );
     } finally {
       setPending(false);
@@ -175,7 +175,7 @@ export function ManualPostForm({
           >
             <p className="flex items-center gap-2 font-medium text-text-0">
               <CheckCircle2 className="h-5 w-5 shrink-0 text-cyan" />
-              Мотивация создана, текст одобрен
+              Вдохновение создано, текст одобрен
             </p>
             <PipelineStages status="image_queued" className="mt-3" />
             <Link href="/admin/motivation/queue" className={`${secondaryButton} mt-3`}>

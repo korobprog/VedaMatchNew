@@ -20,7 +20,7 @@ export default async function AdminMotivationLayout({
   return (
     <>
       <h1 className="font-display text-2xl font-bold text-text-0 sm:text-3xl">
-        Управление motivation
+        Управление Вдохновением
       </h1>
       {children}
     </>

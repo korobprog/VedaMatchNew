@@ -68,7 +68,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
       },
       {
         href: "/admin/motivation",
-        label: "Motivation",
+        label: "Вдохновение",
         hint: "Очередь модерации, категории, музыка, настройки",
         scope: "motivation",
       },

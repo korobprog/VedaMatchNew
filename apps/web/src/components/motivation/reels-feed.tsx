@@ -248,7 +248,7 @@ export function ReelsFeed({
       <div
         ref={containerRef}
         role="feed"
-        aria-label="Лента мотивации"
+        aria-label="Лента вдохновения"
         aria-busy={pending}
         tabIndex={0}
         onKeyDown={onKeyDown}

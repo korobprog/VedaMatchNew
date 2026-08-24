@@ -43,7 +43,7 @@ export function DeletePostButton({
   return (
     <div className="w-full rounded-xl border border-red-400/40 bg-red-500/10 p-3">
       <p className="text-sm text-text-0">
-        Удалить мотивацию вместе с цитатой?
+        Удалить вдохновение вместе с цитатой?
         {isPublished && " Она пропадёт из ленты и из избранного у пользователей."}
         {" "}
         Отменить нельзя.

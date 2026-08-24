@@ -3,7 +3,7 @@ import { shareSourceLabel } from "./chat-share-label";
 
 describe("shareSourceLabel", () => {
   it("называет сервис-источник карточки", () => {
-    expect(shareSourceLabel("story")).toBe("Сторис · Мотивация");
+    expect(shareSourceLabel("story")).toBe("Сторис · Вдохновение");
     expect(shareSourceLabel("notice")).toBe("Объявление");
     expect(shareSourceLabel("listing")).toBe("Товар · Рынок");
   });

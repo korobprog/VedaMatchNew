@@ -93,7 +93,7 @@ export const SERVICE_CONTENT: ServiceContent[] = [
       {
         title: "Голос, фото, файлы и истории",
         description:
-          "Голосовое сообщение с дорожкой, фотографии, файлы и пересланная история из «Мотивации» — всё в одной ленте.",
+          "Голосовое сообщение с дорожкой, фотографии, файлы и пересланная история из «Вдохновения» — всё в одной ленте.",
       },
       {
         title: "Справочник людей",
@@ -171,10 +171,10 @@ export const SERVICE_CONTENT: ServiceContent[] = [
   {
     slug: "motivation",
     route: "/motivation",
-    name: "Мотивация",
-    nameEn: "Motivation",
-    tagline: "Ежедневная мотивация, подобранная под ваш путь",
-    taglineEn: "Daily motivation tailored to your path",
+    name: "Вдохновение",
+    nameEn: "Inspiration",
+    tagline: "Ежедневное вдохновение, подобранное под ваш путь",
+    taglineEn: "Daily inspiration tailored to your path",
     description:
       "Лента цитат и материалов, которая подстраивается под ваш духовный этап и предпочитаемое соотношение вайшнавского и общего контента.",
     features: [

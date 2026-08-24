@@ -401,7 +401,7 @@ function Attachment({ attachment }: { attachment: ChatAttachmentDto }) {
 }
 
 function sourceLabel(attachment: ChatAttachmentDto): string {
-  if (attachment.kind === "story") return "Сторис · Мотивация";
+  if (attachment.kind === "story") return "Сторис · Вдохновение";
   if (attachment.kind === "notice") return "Объявление";
   if (attachment.kind === "listing") return "Товар · Рынок";
   return "Контакт";

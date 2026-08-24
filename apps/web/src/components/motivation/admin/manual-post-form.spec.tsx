@@ -185,7 +185,7 @@ describe("ManualPostForm", () => {
     await user.click(screen.getByRole("button", { name: /Создать/ }));
 
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Мотивация создана, текст одобрен");
+    expect(status).toHaveTextContent("Вдохновение создано, текст одобрен");
     expect(status).toHaveTextContent("Изображение создаётся");
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });

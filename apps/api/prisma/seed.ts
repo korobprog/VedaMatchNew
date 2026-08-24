@@ -90,9 +90,9 @@ const services = [
   },
   {
     slug: 'motivation',
-    nameEn: 'Motivation',
-    name: 'Мотивация',
-    description: 'Ежедневная мотивация и практики саморазвития',
+    nameEn: 'Inspiration',
+    name: 'Вдохновение',
+    description: 'Ежедневное вдохновение и практики саморазвития',
     url: '/motivation',
     status: 'active' as const,
     category: 'lifestyle',

@@ -75,7 +75,7 @@ describe("ReelsFeed", () => {
       />,
     );
 
-    const feed = screen.getByRole("feed", { name: "Лента мотивации" });
+    const feed = screen.getByRole("feed", { name: "Лента вдохновения" });
     const articles = within(feed).getAllByRole("article");
     expect(articles).toHaveLength(3);
     expect(within(articles[0]).getByText("Цитата a")).toBeInTheDocument();
