@@ -3,6 +3,7 @@ import type { Role } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { composeStoryImage } from './story-image';
+import { attributionLine } from './postcard-events';
 
 export interface StoryRebuildResult {
   /** Сколько постов получили новый кадр. */
@@ -90,14 +91,11 @@ export class MotivationStoryRebuildService {
         skipped += 1;
         continue;
       }
-      const attribution = [
-        post.quote?.author ?? post.attributionSpeaker,
-        post.quote?.work ?? post.attributionWork,
-        post.quote?.locator ?? post.attributionLocator,
-      ]
-        .map((part) => part?.trim())
-        .filter(Boolean)
-        .join(' · ');
+      const attribution = attributionLine({
+        attributionSpeaker: post.quote?.author ?? post.attributionSpeaker,
+        attributionWork: post.quote?.work ?? post.attributionWork,
+        attributionLocator: post.quote?.locator ?? post.attributionLocator,
+      });
 
       try {
         const response = await fetch(post.imageUrl);

@@ -18,6 +18,7 @@ import { isAutonomousApproval } from './autonomous-approval';
 import { MotivationSettingsService } from './motivation-settings.service';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { resolveVideoPrompt } from './motivation-prompt';
+import { attributionLine } from './postcard-events';
 import {
   buildReelOverlayInput,
   composeStoryVideo,
@@ -480,14 +481,11 @@ export class MotivationVideoWorkerService
       post.quote?.originalText?.trim();
     if (!text) return video;
 
-    const attribution = [
-      post.quote?.author ?? post.attributionSpeaker,
-      post.quote?.work ?? post.attributionWork,
-      post.quote?.locator ?? post.attributionLocator,
-    ]
-      .map((part) => part?.trim())
-      .filter(Boolean)
-      .join(' · ');
+    const attribution = attributionLine({
+      attributionSpeaker: post.quote?.author ?? post.attributionSpeaker,
+      attributionWork: post.quote?.work ?? post.attributionWork,
+      attributionLocator: post.quote?.locator ?? post.attributionLocator,
+    });
 
     try {
       // Озвучка задаёт длину: ролик у модели пять секунд, за них четыре строки

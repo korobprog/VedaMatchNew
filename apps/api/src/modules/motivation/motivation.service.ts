@@ -48,6 +48,7 @@ import {
   feedPage,
 } from './motivation-feed';
 import { rankFeed } from './feed-ranking';
+import { attributionLine } from './postcard-events';
 import { adminAiVerdictOf, adminAppealOf } from './moderation-audit';
 import { MotivationSettingsService } from './motivation-settings.service';
 
@@ -770,14 +771,11 @@ export class MotivationService {
 
     const meaning =
       post.translations[0]?.text ?? post.quote?.originalText ?? post.category;
-    const attribution = [
-      post.quote?.author ?? post.attributionSpeaker,
-      post.quote?.work ?? post.attributionWork,
-      post.quote?.locator ?? post.attributionLocator,
-    ]
-      .map((part) => part?.trim())
-      .filter(Boolean)
-      .join(' · ');
+    const attribution = attributionLine({
+      attributionSpeaker: post.quote?.author ?? post.attributionSpeaker,
+      attributionWork: post.quote?.work ?? post.attributionWork,
+      attributionLocator: post.quote?.locator ?? post.attributionLocator,
+    });
 
     const raw = await this.generation.generatePlainText(
       buildPromptDraftRequest(input.kind, {
