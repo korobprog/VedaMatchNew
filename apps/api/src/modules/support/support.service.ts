@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -58,6 +59,8 @@ const ticketInclude = {
 
 @Injectable()
 export class SupportService {
+  private readonly logger = new Logger(SupportService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventEmitter2,
@@ -116,12 +119,14 @@ export class SupportService {
         },
       },
       select: {
+        id: true,
         number: true,
         trackToken: true,
         status: true,
         createdAt: true,
       },
     });
+    void this.notifyAdmins(ticket.id);
 
     return {
       number: ticket.number,
@@ -456,6 +461,44 @@ export class SupportService {
     }
 
     await this.prisma.$transaction(writes);
+
+    // Ответ поддержки уже уходит автору отдельным событием (adminReply) —
+    // здесь только гость/пользователь, иначе админ уведомлял бы сам себя.
+    if (!isAdmin) void this.notifyAdmins(ticketId);
+  }
+
+  /**
+   * Сообщить администраторам о новом обращении или сообщении в нём.
+   *
+   * Получателей читаем из `User` — портальная модель, открытая сервисам на
+   * чтение. Без сигнала обращение просто лежит в очереди до случайного
+   * захода в раздел поддержки.
+   */
+  private async notifyAdmins(ticketId: string): Promise<void> {
+    try {
+      const admins = await this.prisma.user.findMany({
+        where: {
+          role: { in: ['admin', 'service_admin'] },
+          accountStatus: 'active',
+        },
+        select: { id: true },
+      });
+      for (const admin of admins) {
+        const event = {
+          name: 'support.ticket.received',
+          recipientId: admin.id,
+          ticketId,
+        } satisfies NotificationEvent;
+        this.events.emit(event.name, event);
+      }
+    } catch (error) {
+      // Не повод ронять создание тикета или сообщения — то же решение, что
+      // и в NotificationsListener.deliver для доставки самого пуша.
+      this.logger.error(
+        `Не удалось уведомить админов об обращении ${ticketId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 }
 

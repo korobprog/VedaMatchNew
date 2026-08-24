@@ -43,6 +43,16 @@ export type NotificationEvent =
     }
   | { name: 'support.ticket.replied'; recipientId: string; ticketId: string }
   | {
+      /**
+       * Пользователь или гость написал в поддержку — новое обращение или
+       * сообщение в уже существующем. Уходит всем активным админам: без
+       * сигнала обращение просто лежит в очереди до случайного захода в раздел.
+       */
+      name: 'support.ticket.received';
+      recipientId: string;
+      ticketId: string;
+    }
+  | {
       name: 'astro.transit.digest-ready';
       recipientId: string;
       /** Готовая фраза дня — самодостаточна, подписчик её не переписывает. */

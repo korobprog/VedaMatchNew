@@ -75,6 +75,11 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.supportReceived)
+  onSupportReceived(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   @OnEvent(notificationEventNames.astroTransitDigestReady)
   onAstroTransitDigestReady(event: NotificationEvent): void {
     void this.deliver(event);

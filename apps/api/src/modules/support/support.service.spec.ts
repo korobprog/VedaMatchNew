@@ -9,6 +9,7 @@ function createService() {
       create: jest.fn(({ data }: { data: Record<string, unknown> }) => {
         created.push(data);
         return Promise.resolve({
+          id: 'ticket-1',
           number: 1,
           trackToken: String(data.trackToken),
           status: 'open',
@@ -16,12 +17,18 @@ function createService() {
         });
       }),
     },
+    user: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   } as unknown as PrismaService;
 
+  const events = { emit: jest.fn() };
+
   return {
-    service: new SupportService(prisma, { emit: jest.fn() } as never),
+    service: new SupportService(prisma, events as never),
     created,
     prisma,
+    events,
   };
 }
 
@@ -71,6 +78,32 @@ describe('SupportService.create', () => {
     expect(created[0]).toMatchObject({
       userId: 'user-1',
       contactEmail: 'user@example.com',
+    });
+  });
+
+  it('уведомляет активных админов о новом обращении', async () => {
+    const { service, events, prisma } = createService();
+    (prisma.user.findMany as jest.Mock).mockResolvedValue([
+      { id: 'admin-1' },
+      { id: 'admin-2' },
+    ]);
+
+    await service.create({ subject: 'Тема', message: 'Текст' }, {
+      sub: 'user-1',
+      email: 'user@example.com',
+    });
+    // notifyAdmins не awaited в create(): даём микрозадачам отработать.
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(events.emit).toHaveBeenCalledWith('support.ticket.received', {
+      name: 'support.ticket.received',
+      recipientId: 'admin-1',
+      ticketId: 'ticket-1',
+    });
+    expect(events.emit).toHaveBeenCalledWith('support.ticket.received', {
+      name: 'support.ticket.received',
+      recipientId: 'admin-2',
+      ticketId: 'ticket-1',
     });
   });
 

@@ -17,6 +17,7 @@ export const notificationEventNames = {
   contactsRequestReceived: 'contacts.request.received',
   contactsRequestAccepted: 'contacts.request.accepted',
   supportReplied: 'support.ticket.replied',
+  supportReceived: 'support.ticket.received',
   astroTransitDigestReady: 'astro.transit.digest-ready',
   marketChatMessageSent: 'market.chat.message-sent',
   marketOrderCreated: 'market.order.created',
@@ -130,6 +131,16 @@ export function buildNotification(
         body: 'Поддержка ответила на ваше обращение',
         url: `/support/${event.ticketId}`,
         tag: `support:${event.ticketId}`,
+        category: 'support',
+      };
+    case 'support.ticket.received':
+      return {
+        title: 'Новое обращение в поддержку',
+        body: 'Кто-то написал в поддержку — откройте и ответьте',
+        url: `/admin/tickets/${event.ticketId}`,
+        // Тег по тикету: несколько сообщений подряд в одном обращении
+        // заменяют плашку, а не выстраиваются стопкой.
+        tag: `support-admin:${event.ticketId}`,
         category: 'support',
       };
     case 'astro.transit.digest-ready':
