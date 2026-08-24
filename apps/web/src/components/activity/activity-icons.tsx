@@ -17,9 +17,19 @@ export function AdminBadgeIcon() {
         strokeWidth={1.3}
         strokeLinejoin="round"
       />
+      {/* Внутри — герб портала: та же пара горных вершин под глобусом, что и
+          в шапке (components/icons/vedamatch-mark.tsx), только без растровой
+          фотографии — глобус на 10 пикселях всё равно превратился бы в кашу,
+          поэтому он упрощён до точки. Щит с гербом читается как «печать
+          портала», а не общий символ охраны. */}
+      <circle cx={10} cy={6.6} r={1.05} fill="currentColor" />
       <path
-        d="M10 6.6 L10.9 8.7 L13 9.6 L10.9 10.5 L10 12.6 L9.1 10.5 L7 9.6 L9.1 8.7 Z"
-        fill="currentColor"
+        d="M6.3 14.6 L8.3 9.6 L10 12.6 L11.7 9.6 L13.7 14.6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.15}
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );
