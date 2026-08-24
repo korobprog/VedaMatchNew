@@ -29,6 +29,7 @@ import {
   type ChatMessageRow,
 } from './chat-dto';
 import { ChatEventsService } from './chat-events.service';
+import { ChatPresenceService } from './chat-presence.service';
 import { chatMessageInclude } from './chat-selects';
 import {
   assertReactionEmoji,
@@ -56,6 +57,7 @@ export class ChatMessagesService {
     private readonly conversations: ChatConversationsService,
     private readonly events: ChatEventsService,
     private readonly bus: EventEmitter2,
+    private readonly presence: ChatPresenceService,
   ) {}
 
   async send(
@@ -152,7 +154,7 @@ export class ChatMessagesService {
       conversationId,
       message: dtoOut,
     });
-    this.notify(conversation, userId, body || 'Вложение', conversationId);
+    void this.notify(conversation, userId, body || 'Вложение', conversationId);
     this.announceActivity(userId);
 
     return dtoOut;
@@ -433,7 +435,7 @@ export class ChatMessagesService {
    * Уведомление порталу. Событие самодостаточно: подписчик не ходит в
    * таблицы чата за именем и текстом.
    */
-  private notify(
+  private async notify(
     conversation: ChatConversationRow,
     senderId: string,
     body: string,
@@ -447,6 +449,7 @@ export class ChatMessagesService {
     for (const member of conversation.members) {
       if (member.userId === senderId || member.leftAt) continue;
       if (member.mutedUntil && member.mutedUntil > now) continue;
+      if (await this.presence.isViewing(member.userId, conversationId)) continue;
 
       const event: NotificationEvent =
         conversation.state === 'request'

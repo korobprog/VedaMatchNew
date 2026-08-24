@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { ChatConversationsService } from './chat-conversations.service';
 import { ChatEventsService } from './chat-events.service';
 import { ChatMessagesService } from './chat-messages.service';
+import { ChatPresenceService } from './chat-presence.service';
 
 const createdAt = new Date('2026-08-22T10:00:00.000Z');
 
@@ -92,16 +93,19 @@ describe('ChatMessagesService', () => {
   };
   const events = { publish: fn() };
   const bus = { emit: fn() };
+  const chatPresence = { isViewing: fn(() => Promise.resolve(false)) };
 
   const service = new ChatMessagesService(
     prisma as unknown as PrismaService,
     conversations as unknown as ChatConversationsService,
     events as unknown as ChatEventsService,
     bus as never,
+    chatPresence as unknown as ChatPresenceService,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
+    chatPresence.isViewing.mockResolvedValue(false);
     prisma.chatMessage.count.mockResolvedValue(0);
     prisma.chatMessage.create.mockResolvedValue(storedMessage());
     prisma.chatMessageReaction.findUnique.mockResolvedValue(null);
@@ -187,10 +191,35 @@ describe('ChatMessagesService', () => {
 
       await service.send('me', 'conversation-1', { body: 'привет' });
 
-      const recipients = bus.emit.mock.calls.map(
-        (call: unknown[]) => (call[1] as { recipientId: string }).recipientId,
-      );
+      // notify() теперь асинхронна и не дожидается своих emit — они
+      // перемежаются с синхронным emit из announceActivity(), у которого
+      // нет recipientId, поэтому его отфильтровываем.
+      const recipients = bus.emit.mock.calls
+        .map((call: unknown[]) => (call[1] as { recipientId?: string }).recipientId)
+        .filter((recipientId): recipientId is string => recipientId !== undefined);
       expect(recipients).toEqual(['other']);
+    });
+
+    it('тому, кто сейчас смотрит в эту беседу, уведомление не уходит', async () => {
+      chatPresence.isViewing.mockImplementation((userId: string) =>
+        Promise.resolve(userId === 'other'),
+      );
+
+      await service.send('me', 'conversation-1', { body: 'привет' });
+
+      expect(chatPresence.isViewing).toHaveBeenCalledWith(
+        'other',
+        'conversation-1',
+      );
+      // bus.emit всё равно срабатывает для announceActivity() (у него нет
+      // recipientId и он не зависит от присутствия) — подавляется только
+      // адресное уведомление, поэтому проверяем именно его отсутствие.
+      const recipients = bus.emit.mock.calls
+        .map((call: unknown[]) => (call[1] as { recipientId?: string }).recipientId)
+        .filter((recipientId): recipientId is string => recipientId !== undefined);
+      expect(recipients).toEqual([]);
+      // Живая доставка в открытый чат остаётся: подавляется только уведомление.
+      expect(events.publish).toHaveBeenCalled();
     });
   });
 
