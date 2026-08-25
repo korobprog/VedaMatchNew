@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -15,6 +15,7 @@ import { ActivityBadge } from "./activity-badge";
 import { ArchiveButton } from "./archive-button";
 import { ProfileDetailsList } from "./profile-details-list";
 import { RecommendationPhotoCarousel } from "./recommendation-photo-carousel";
+import { DeckToast } from "./deck-toast";
 import { SwipeHint } from "./swipe-hint";
 import {
   CompatibilityBreakdown,
@@ -111,8 +112,15 @@ export function SwipeDeck({
   const [canUndo, setCanUndo] = useState(false);
   const [exitDirection, setExitDirection] = useState<SwipeDirection>("left");
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  // Раскрытие живёт здесь, а не в карточке: панель деталей закрывает середину
+  // карточки, и стрелки листания анкет надо на это время убрать — иначе
+  // правая стрелка садится ровно на кнопку сворачивания.
+  const [expanded, setExpanded] = useState(false);
   const [recycling, setRecycling] = useState(false);
   const reduceMotion = useReducedMotion();
+  // Стабильная ссылка: иначе таймер подсказки перезаводился бы на каждом
+  // рендере колоды и она висела бы дольше положенного.
+  const clearSent = useCallback(() => setSent(null), []);
 
   const current = items[index];
   const next = items[index + 1];
@@ -191,6 +199,7 @@ export function SwipeDeck({
 
   function advance(direction: SwipeDirection) {
     setSent(null);
+    setExpanded(false);
     // Разбор относится к конкретной анкете: оставить его открытым над
     // следующей значило бы показать чужие проценты под новым именем.
     setBreakdownOpen(false);
@@ -208,6 +217,7 @@ export function SwipeDeck({
     const target = index + delta;
     if (target < 0 || target >= items.length) return;
     setSent(null);
+    setExpanded(false);
     setBreakdownOpen(false);
     setExitDirection(delta === 1 ? "left" : "right");
     setIndex(target);
@@ -284,6 +294,8 @@ export function SwipeDeck({
             item={current}
             exitDirection={exitDirection}
             reduceMotion={Boolean(reduceMotion)}
+            expanded={expanded}
+            onExpandedChange={setExpanded}
             onLike={() => {
               void swipe(current.user.id, "like");
               advance("right");
@@ -328,22 +340,28 @@ export function SwipeDeck({
           это вспомогательный путь, основной — свайп. Боковые позиции
           освободила карусель фото, которая в варианте `cover` листается
           тапом по половинам снимка.
+
+          В раскрытой анкете стрелки гаснут: панель деталей поднимается до
+          середины карточки, и правая стрелка садилась ровно на кнопку
+          сворачивания. Погашенная стрелка обязана и касания пропускать —
+          прозрачная, но кликабельная, она на первой анкете съедала тап по
+          левой половине фото, и карусель там не листалась.
         */}
         <button
           type="button"
           onClick={() => browse(-1)}
-          disabled={index === 0}
+          disabled={index === 0 || expanded}
           aria-label="Предыдущая анкета"
-          className="absolute left-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-xl text-white/60 backdrop-blur-sm transition hover:bg-black/50 hover:text-white disabled:opacity-0"
+          className="absolute left-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-xl text-white/60 backdrop-blur-sm transition hover:bg-black/50 hover:text-white disabled:pointer-events-none disabled:opacity-0"
         >
           <span aria-hidden="true">‹</span>
         </button>
         <button
           type="button"
           onClick={() => browse(1)}
-          disabled={index >= items.length - 1}
+          disabled={index >= items.length - 1 || expanded}
           aria-label="Следующая анкета"
-          className="absolute right-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-xl text-white/60 backdrop-blur-sm transition hover:bg-black/50 hover:text-white disabled:opacity-0"
+          className="absolute right-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-xl text-white/60 backdrop-blur-sm transition hover:bg-black/50 hover:text-white disabled:pointer-events-none disabled:opacity-0"
         >
           <span aria-hidden="true">›</span>
         </button>
@@ -365,7 +383,20 @@ export function SwipeDeck({
           Стоит она неподвижно — уезжает только карточка, и рука не гонится
           за кнопками между анкетами.
         */}
-        <div className="absolute inset-x-3 bottom-3 z-10 flex items-center justify-between gap-2">
+        {/*
+          Полоса, а не узкий ряд: на телефоне палец промахивался мимо
+          44-пиксельной кнопки и попадал в карточку — она тут же уезжала
+          свайпом, будто решение принято. Теперь весь низ карточки принадлежит
+          панели, и промах не делает ничего. Нижний отступ считается от
+          безопасной зоны: под жестовой полосой системы кнопки не нажать.
+        */}
+        <div
+          className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-between gap-2 px-3 pt-6 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          // Панель лежит поверх карточки, но событие всё равно всплывает к
+          // общему контейнеру: гасим его здесь, чтобы никакой будущий
+          // обработчик жеста снаружи не принял нажатие кнопки за свайп.
+          onPointerDownCapture={(event) => event.stopPropagation()}
+        >
           <button
             type="button"
             onClick={() => {
@@ -431,12 +462,24 @@ export function SwipeDeck({
 
         {/* Поверх карточки и её кнопок: первый экран учит жесту. */}
         <SwipeHint />
-      </div>
 
-      {sent && <p className="mt-3 text-center text-sm text-cyan">{sent}</p>}
-      {error && (
-        <p className="mt-3 text-center text-sm text-red-500">{error}</p>
-      )}
+        {/*
+          Итог решения — по центру колоды и поверх всего. Взаимность идёт с
+          салютом: остальные подсказки сообщают факт, а эта — событие.
+        */}
+        <DeckToast
+          message={sent}
+          celebrate={Boolean(sent && sent.startsWith("Взаимно"))}
+          onDone={clearSent}
+        />
+
+        {/* Ошибка тоже накладкой: в потоке она двигала колоду под рукой. */}
+        {error && (
+          <p className="pointer-events-none absolute inset-x-4 bottom-24 z-40 rounded-xl bg-sheet px-3 py-2 text-center text-sm text-red-500 backdrop-blur-xl">
+            {error}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -600,6 +643,8 @@ function SwipeCard({
   item,
   exitDirection,
   reduceMotion,
+  expanded,
+  onExpandedChange,
   onLike,
   onSkip,
   onSuperlike,
@@ -607,12 +652,17 @@ function SwipeCard({
   item: UnionRecommendation;
   exitDirection: SwipeDirection;
   reduceMotion: boolean;
+  /** Раскрытие держит колода: от него зависят и её собственные стрелки. */
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
   onLike: () => void;
   onSkip: () => void;
   onSuperlike: () => void;
 }) {
-  const { user, profile, compatibility } = item;
-  const [expanded, setExpanded] = useState(false);
+  const { user, profile } = item;
+  // Индекс снимка живёт здесь, а не в карусели: галерея в раскрытой карточке
+  // должна листать ту же обложку, а не заводить вторую.
+  const [photoIndex, setPhotoIndex] = useState(0);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-200, 200], [-14, 14]);
@@ -684,6 +734,8 @@ function SwipeCard({
             photos={user.photos}
             userName={user.name}
             variant="cover"
+            index={photoIndex}
+            onIndexChange={setPhotoIndex}
           />
         ) : user.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -779,7 +831,7 @@ function SwipeCard({
             {!expanded && (
               <button
                 type="button"
-                onClick={() => setExpanded(true)}
+                onClick={() => onExpandedChange(true)}
                 aria-expanded={false}
                 aria-label="Развернуть анкету"
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black/45 text-lg text-white backdrop-blur transition hover:bg-black/60"
@@ -830,7 +882,7 @@ function SwipeCard({
             </p>
             <button
               type="button"
-              onClick={() => setExpanded(false)}
+              onClick={() => onExpandedChange(false)}
               aria-expanded
               aria-label="Свернуть анкету"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-lg text-white transition hover:bg-white/25"
@@ -838,6 +890,50 @@ function SwipeCard({
               <span aria-hidden="true">⌄</span>
             </button>
           </div>
+
+          {/*
+            Все снимки разом. Обложка листается по одному, и человек не
+            обязан догадываться, сколько их всего: здесь видно и сколько, и
+            какой сейчас, а тап ведёт обложку под панелью на нужный.
+          */}
+          {user.photos.length > 1 && (
+            <ul
+              // Сегменты-индикаторы наверху ведут туда же, поэтому имена у
+              // миниатюр другие: два элемента с одинаковой подписью
+              // скринридер читает как повтор одного и того же.
+              aria-label="Все фото"
+              className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
+            >
+              {user.photos.map((photo, photoIndexInList) => (
+                <li key={photo.id}>
+                  <button
+                    type="button"
+                    onClick={() => setPhotoIndex(photoIndexInList)}
+                    aria-label={`Фото ${photoIndexInList + 1}`}
+                    aria-current={
+                      photoIndexInList === photoIndex ? "true" : undefined
+                    }
+                    className={`block h-16 w-12 shrink-0 overflow-hidden rounded-lg border-2 transition ${
+                      photoIndexInList === photoIndex
+                        ? "border-white"
+                        : "border-transparent opacity-60 hover:opacity-100"
+                    }`}
+                  >
+                    {/* Подписанные ссылки галереи ходят с разных хостов —
+                        Next Image не может перечислить их источники. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={photo.url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      referrerPolicy="no-referrer"
+                      draggable={false}
+                    />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           {profile.intentions.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {profile.intentions.slice(0, 3).map((intention) => (

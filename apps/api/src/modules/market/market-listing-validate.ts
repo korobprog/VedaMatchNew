@@ -8,6 +8,14 @@ export const MAX_TITLE_LENGTH = 140;
 export const MAX_DESCRIPTION_LENGTH = 8000;
 export const MAX_CATEGORIES_PER_LISTING = 5;
 export const MAX_QUANTITY = 100_000;
+
+/**
+ * Потолки габаритов. Отсекают не «слишком большой товар», а опечатку в
+ * разряде: 3000 см — это тридцать метров, столько посылкой не отправляют,
+ * зато такое легко получить лишним нулём.
+ */
+export const MAX_DIMENSION_CM = 1000;
+export const MAX_WEIGHT_G = 1_000_000;
 /** Сутки: дольше — это уже не «услуга», а проект, и его обсуждают в чате. */
 export const MAX_SERVICE_DURATION_MINUTES = 1440;
 
@@ -33,6 +41,7 @@ export type ListingValidationError =
   | 'service_format_required'
   | 'service_duration_invalid'
   | 'quantity_invalid'
+  | 'dimensions_invalid'
   | 'prohibited_category';
 
 export interface ListingValidationInput {
@@ -44,6 +53,11 @@ export interface ListingValidationInput {
   condition?: MarketListingCondition | null;
   quantity?: number | null;
   trackStock?: boolean;
+  /** Габариты и вес товара; у услуги должны отсутствовать. */
+  lengthCm?: number | null;
+  widthCm?: number | null;
+  heightCm?: number | null;
+  weightG?: number | null;
   serviceFormat?: MarketServiceFormat | null;
   serviceDurationMinutes?: number | null;
   categoryIds?: string[];
@@ -102,6 +116,8 @@ export function validateListing(
         return 'service_duration_invalid';
       }
     }
+    // Габариты у услуги смысла не имеют: коробку с ней не отправишь.
+    if (hasAnyMeasurement(input)) return 'dimensions_invalid';
     // Остаток у услуги смысла не имеет: она не кончается.
     if (input.trackStock) return 'quantity_invalid';
     if (input.quantity !== null && input.quantity !== undefined) {
@@ -127,5 +143,30 @@ export function validateListing(
     return 'quantity_invalid';
   }
 
+  // Каждый габарит необязателен по отдельности: продавец книги её не мерил,
+  // а продавец мебели укажет всё. Но заполненное должно быть осмысленным.
+  for (const value of [input.lengthCm, input.widthCm, input.heightCm]) {
+    if (!isValidMeasurement(value, MAX_DIMENSION_CM))
+      return 'dimensions_invalid';
+  }
+  if (!isValidMeasurement(input.weightG, MAX_WEIGHT_G)) {
+    return 'dimensions_invalid';
+  }
+
   return null;
+}
+
+/** Пусто — допустимо; заполнено — целое от 1 до потолка. */
+function isValidMeasurement(
+  value: number | null | undefined,
+  max: number,
+): boolean {
+  if (value === null || value === undefined) return true;
+  return Number.isInteger(value) && value > 0 && value <= max;
+}
+
+function hasAnyMeasurement(input: ListingValidationInput): boolean {
+  return [input.lengthCm, input.widthCm, input.heightCm, input.weightG].some(
+    (value) => value !== null && value !== undefined,
+  );
 }

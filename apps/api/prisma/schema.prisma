@@ -2546,6 +2546,16 @@ model MarketListing {
   trackStock Boolean                 @default(false)
   soldCount  Int                     @default(0)
 
+  /// Габариты и вес — только у товара, каждое поле необязательно.
+  /// Целые числа, а не дробные: сантиметры и граммы покрывают любую посылку
+  /// без округлений, а копить ошибку с плавающей точкой в расчёте доставки
+  /// не за чем. Глубины отдельно нет: у коробки это длина, у мебели —
+  /// та же ось под другим именем, и два поля продавец заполнял бы наугад.
+  lengthCm Int?
+  widthCm  Int?
+  heightCm Int?
+  weightG  Int?
+
   /// Только услуга.
   serviceFormat          MarketServiceFormat?
   serviceDurationMinutes Int?

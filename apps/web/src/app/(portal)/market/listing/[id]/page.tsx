@@ -12,6 +12,10 @@ import { ReportButton } from "@/components/market/report-dialog";
 import { StartChatButton } from "@/components/market/start-chat-button";
 import { ListingGallery } from "@/components/market/listing-gallery";
 import { listingTitle } from "@/components/market/listing-card";
+import {
+  formatDimensions,
+  formatWeight,
+} from "@/components/market/listing-dimensions";
 import { MarketNav } from "@/components/market/market-nav";
 import { Price } from "@/components/market/price";
 import { navLabels } from "../../labels";
@@ -32,6 +36,15 @@ export default async function MarketListingPage({
   if (!listing) notFound();
 
   const title = listingTitle(listing, locale);
+  // Габариты и вес — справка для доставки: их место в том же списке фактов,
+  // что остаток и длительность, а не отдельным блоком.
+  const dimensions = formatDimensions(listing, t("unit.cm"));
+  const weight = formatWeight(
+    listing.weightG,
+    t("unit.g"),
+    t("unit.kg"),
+    locale,
+  );
   const description =
     (locale === "en" ? listing.descriptionEn : listing.descriptionRu) ??
     listing.descriptionRu ??
@@ -118,6 +131,10 @@ export default async function MarketListingPage({
                 })}
               </li>
             )}
+            {dimensions && (
+              <li>{t("listing.dimensions", { value: dimensions })}</li>
+            )}
+            {weight && <li>{t("listing.weight", { value: weight })}</li>}
             {listing.city && (
               <li className="inline-flex items-center gap-1">
                 <MapPin aria-hidden className="h-3.5 w-3.5" />

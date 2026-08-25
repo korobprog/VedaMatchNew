@@ -1,8 +1,16 @@
 "use client";
 
 import type { UnionPhoto } from "@vedamatch/shared";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useReducedMotion } from "framer-motion";
 import { isTap, tappedPhotoIndex } from "./photo-tap";
+import {
+  AUTOPLAY_IDLE_MS,
+  AUTOPLAY_STEP_MS,
+  nextPhotoIndex,
+  shouldAutoplay,
+} from "./photo-autoplay";
+import { PhotoTapHint } from "./photo-tap-hint";
 
 /**
  * `thumb` — компактное превью рядом с текстом, `cover` — фото на всю карточку
@@ -14,22 +22,75 @@ export function RecommendationPhotoCarousel({
   photos,
   userName,
   variant = "thumb",
+  index: controlledIndex,
+  onIndexChange,
 }: {
   photos: UnionPhoto[];
   userName: string;
   variant?: RecommendationPhotoCarouselVariant;
+  /**
+   * Индекс снаружи — когда снимок выбирают не здесь: галерея в раскрытой
+   * карточке листает ту же карусель, а не заводит вторую.
+   */
+  index?: number;
+  onIndexChange?: (index: number) => void;
 }): React.ReactNode {
   const photoIdentity = photos.map(({ id, url }) => `${id}:${url}`).join("|");
   const identity = `${userName}|${photoIdentity}`;
   const [navigation, setNavigation] = useState({ identity, index: 0 });
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
+  const reduceMotion = useReducedMotion();
+  /**
+   * Сколько шагов карусель сделала сама подряд. Ноль — либо анкету только
+   * открыли, либо человек только что листнул руками; и в том, и в другом
+   * случае ждём длинную паузу, а не короткий шаг.
+   */
+  const [autoSteps, setAutoSteps] = useState({ identity, count: 0 });
+  const steps = autoSteps.identity === identity ? autoSteps.count : 0;
+
+  const total = photos.length;
+  const uncontrolledIndex =
+    navigation.identity === identity ? navigation.index : 0;
+  const rawIndex = controlledIndex ?? uncontrolledIndex;
+  const safeIndex = total === 0 ? 0 : Math.min(Math.max(0, rawIndex), total - 1);
+
+  /** Ручной выбор снимка: и здесь, и снаружи — через одну дверь. */
+  function choose(index: number, byHand: boolean) {
+    setNavigation({ identity, index });
+    if (byHand) setAutoSteps({ identity, count: 0 });
+    onIndexChange?.(index);
+  }
+
+  // Колбэк наружу держим в ref: иначе таймер перезаводился бы на каждом
+  // рендере родителя и следующий снимок не наступал бы никогда.
+  const notify = useRef(onIndexChange);
+  useEffect(() => {
+    notify.current = onIndexChange;
+  }, [onIndexChange]);
+
+  // Хук нельзя звать после раннего выхода, поэтому пустая галерея
+  // отсеивается ниже, а таймер при `autoplay === false` не заводится.
+  const autoplay = shouldAutoplay(total, Boolean(reduceMotion));
+  useEffect(() => {
+    if (!autoplay) return;
+    // Первая пауза длиннее: человек читает анкету, и подменять снимок под
+    // чтением — то же, что дёрнуть страницу из рук. Дальше шаг короче.
+    const delay = steps === 0 ? AUTOPLAY_IDLE_MS : AUTOPLAY_STEP_MS;
+    const timer = setTimeout(() => {
+      const next = nextPhotoIndex(safeIndex, total);
+      setNavigation({ identity, index: next });
+      setAutoSteps((value) => ({
+        identity,
+        count: (value.identity === identity ? value.count : 0) + 1,
+      }));
+      // Индекс может держать родитель — тогда без этого вызова карусель
+      // осталась бы на прежнем снимке.
+      notify.current?.(next);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [autoplay, identity, total, steps, safeIndex]);
 
   if (photos.length === 0) return null;
-
-  const safeIndex =
-    navigation.identity === identity
-      ? Math.min(navigation.index, photos.length - 1)
-      : 0;
   const photo = photos[safeIndex];
   const hasControls = photos.length > 1;
   const isCover = variant === "cover";
@@ -63,10 +124,7 @@ export function RecommendationPhotoCarousel({
                 type="button"
                 aria-label="Предыдущее фото"
                 onClick={() =>
-                  setNavigation({
-                    identity,
-                    index: (safeIndex - 1 + photos.length) % photos.length,
-                  })
+                  choose((safeIndex - 1 + photos.length) % photos.length, true)
                 }
                 className="absolute left-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-xl text-white shadow-sm transition hover:bg-black/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-magenta"
               >
@@ -76,7 +134,7 @@ export function RecommendationPhotoCarousel({
                 type="button"
                 aria-label="Следующее фото"
                 onClick={() =>
-                  setNavigation({ identity, index: (safeIndex + 1) % photos.length })
+                  choose((safeIndex + 1) % photos.length, true)
                 }
                 className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-xl text-white shadow-sm transition hover:bg-black/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-magenta"
               >
@@ -106,23 +164,29 @@ export function RecommendationPhotoCarousel({
                 if (!start) return;
                 if (!isTap(start, { x: event.clientX, y: event.clientY })) return;
                 const bounds = event.currentTarget.getBoundingClientRect();
-                setNavigation({
-                  identity,
-                  index: tappedPhotoIndex({
+                choose(
+                  tappedPhotoIndex({
                     currentIndex: safeIndex,
                     total: photos.length,
                     tapX: event.clientX,
                     boundsLeft: bounds.left,
                     boundsWidth: bounds.width,
                   }),
-                });
+                  true,
+                );
               }}
             />
           )}
+          {/*
+            Сегменты в полной карточке лежали в 8px от верха — на телефоне это
+            ровно под вырезом, и о том, что снимков несколько, никто не узнавал.
+            Ушли ниже безопасной зоны, стали толще и получили подложку: на
+            светлом снимке белая полоска сама по себе не читалась.
+          */}
           <div
             className={
               isCover
-                ? "absolute inset-x-2 top-2 flex gap-1"
+                ? "absolute inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] flex items-center gap-1.5"
                 : "absolute inset-x-1 bottom-1 flex justify-center overflow-x-auto"
             }
             aria-label="Выбор фото"
@@ -133,10 +197,10 @@ export function RecommendationPhotoCarousel({
                 type="button"
                 aria-label={`Показать фото ${photoIndex + 1} из ${photos.length}`}
                 aria-current={photoIndex === safeIndex ? "true" : undefined}
-                onClick={() => setNavigation({ identity, index: photoIndex })}
+                onClick={() => choose(photoIndex, true)}
                 className={
                   isCover
-                    ? "h-4 flex-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-magenta"
+                    ? "h-5 flex-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-magenta"
                     : "flex h-7 w-7 shrink-0 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-magenta"
                 }
               >
@@ -144,8 +208,10 @@ export function RecommendationPhotoCarousel({
                   aria-hidden="true"
                   className={
                     isCover
-                      ? `block h-1 w-full rounded-full shadow-sm ${
-                          photoIndex === safeIndex ? "bg-white" : "bg-white/35"
+                      ? `block h-1.5 w-full rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${
+                          photoIndex === safeIndex
+                            ? "bg-white"
+                            : "bg-white/30 ring-1 ring-inset ring-black/25"
                         }`
                       : `h-3 w-3 rounded-full border border-white shadow-sm ${
                           photoIndex === safeIndex ? "bg-white" : "bg-black/45"
@@ -154,7 +220,23 @@ export function RecommendationPhotoCarousel({
                 />
               </button>
             ))}
+            {/*
+              Цифрами — то же, что полосками: на трёх снимках полоски широкие
+              и понятны, на восьми превращаются в частокол, и счётчик остаётся
+              единственным, что читается с одного взгляда.
+            */}
+            {isCover && (
+              <span
+                aria-hidden="true"
+                className="ml-1 shrink-0 font-mono text-[11px] font-bold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]"
+              >
+                {safeIndex + 1}/{photos.length}
+              </span>
+            )}
           </div>
+
+          {/* Учит тапу по краю — один раз и не перехватывая касания. */}
+          {isCover && <PhotoTapHint />}
         </>
       )}
     </div>
