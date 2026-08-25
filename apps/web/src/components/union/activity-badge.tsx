@@ -25,6 +25,11 @@ export function ActivityBadge({
   const [label, setLabel] = useState(() => lastSeenLabel(activity, null));
 
   useEffect(() => {
+    // Тот же случай, ради которого эффект и нужен: значение зависит от
+    // «сейчас», а синхронно получить его к первому рендеру нельзя — на
+    // сервере время другое, и разметка разошлась бы при гидратации. Тот же
+    // приём у возрастного фильтра, см. recommendation-filters.tsx.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLabel(lastSeenLabel(activity, lastSeenAt));
   }, [activity, lastSeenAt]);
 
