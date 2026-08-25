@@ -49,6 +49,7 @@ import {
   UnionRangeEditor,
   UnionTextEditor,
 } from "./union-field-row";
+import { UnionHelpToggle } from "./union-help-toggle";
 import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -661,22 +662,41 @@ export function UnionProfileForm({
           </p>
         )}
 
-        <label className="mt-3 flex items-center gap-2 text-sm text-text-1">
-          <input
-            type="checkbox"
-            checked={draft.requestsFromVerifiedOnly}
-            onChange={(event) =>
-              update("requestsFromVerifiedOnly", event.target.checked)
-            }
-            className="h-4 w-4 accent-magenta"
-          />
-          Принимать запросы только от подтверждённых преданных
-        </label>
-        <p className="mt-1 pl-6 text-xs text-text-2">
-          Остальные увидят ваш профиль в поиске, но отправить запрос на
-          знакомство смогут только те, чей статус преданного подтвердила
-          администрация.
-        </p>
+        <UnionHelpToggle
+          label="Подробнее о запросах только от подтверждённых"
+          control={
+            <label className="flex items-center gap-2 text-sm text-text-1">
+              <input
+                type="checkbox"
+                checked={draft.requestsFromVerifiedOnly}
+                onChange={(event) =>
+                  update("requestsFromVerifiedOnly", event.target.checked)
+                }
+                className="h-4 w-4 shrink-0 accent-magenta"
+              />
+              Принимать запросы только от подтверждённых администрацией
+            </label>
+          }
+        >
+          <p>
+            Подтверждение выдаёт администрация портала после проверки — у таких
+            людей в карточке стоит значок «Проверен».
+          </p>
+          <p>
+            С включённой настройкой ваш профиль остаётся в рекомендациях и виден
+            всем, но отправить вам запрос на знакомство смогут только
+            подтверждённые. Остальные увидят отказ с объяснением причины.
+          </p>
+          <p>
+            Настройка касается только новых запросов: уже существующие связи и
+            переписки останутся на месте, а вы сами по-прежнему сможете писать
+            кому угодно.
+          </p>
+          <p>
+            В справочнике людей приём обращений настраивается отдельно — эта
+            галка на него не влияет.
+          </p>
+        </UnionHelpToggle>
 
         <div className="mt-4">
           <label

@@ -1,26 +1,13 @@
 import Link from "next/link";
-import type {
-  UnionCompatibilityCriterion,
-  UnionRecommendation,
-} from "@vedamatch/shared";
+import type { UnionRecommendation } from "@vedamatch/shared";
 import { ActivityBadge } from "./activity-badge";
 import { ContactList } from "./contact-list";
 import { ProfileDetailsList } from "./profile-details-list";
 import { ConnectionActions } from "./connection-actions";
-import { intentionLabels, yearsSuffix } from "./labels";
+import { criterionLabels, intentionLabels, yearsSuffix } from "./labels";
 import { RecommendationPhotoCarousel } from "./recommendation-photo-carousel";
 import { ReportBlockMenu } from "./report-block-menu";
 import { PhotoVerifiedBadge, VerifiedBadge } from "./verified-badge";
-
-const criterionLabels: Record<UnionCompatibilityCriterion, string> = {
-  intentions: "Цели знакомства",
-  stage: "Духовный этап",
-  lifestyle: "Образ жизни",
-  interests: "Интересы",
-  values: "Ценности",
-  location: "Локация",
-  format: "Формат общения",
-};
 
 const stageLabels: Record<string, string> = {
   seeker: "Ищущий",
@@ -94,7 +81,11 @@ export function RecommendationCard({
         </div>
 
         <div className="absolute left-3 top-7">
-          <ActivityBadge activity={user.activity} variant="overlay" />
+          <ActivityBadge
+              activity={user.activity}
+              lastSeenAt={user.lastSeenAt}
+              variant="overlay"
+            />
         </div>
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 p-4">
