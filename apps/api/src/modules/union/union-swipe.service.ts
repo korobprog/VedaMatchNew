@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { UnionSwipe } from '@prisma/client';
 import type {
+  UnionCycleResetResult,
   UnionSwipeDecision,
   UnionSwipeRequest,
   UnionSwipeResetResult,
@@ -213,6 +214,23 @@ export class UnionSwipeService {
     }
 
     return { restoredCount };
+  }
+
+  /**
+   * Новый круг: снимаем только пропуски. Лайки, суперлайки и архив
+   * переживают его — по лайку уже ушла заявка, и отменять её человек не
+   * просил, а архив на то и архив. Этим начало круга отличается от
+   * `resetHistory`, которое стирает вообще всё и отменяет заявки.
+   *
+   * Переиспользуем `undoneAt`: выдача и так считает откатанные свайпы
+   * несуществующими, отдельного признака «круг» заводить не нужно.
+   */
+  async startNewCycle(fromUserId: string): Promise<UnionCycleResetResult> {
+    const { count } = await this.prisma.unionSwipe.updateMany({
+      where: { fromUserId, decision: 'pass', undoneAt: null },
+      data: { undoneAt: new Date() },
+    });
+    return { restoredCount: count };
   }
 
   /** Кого уже отсмотрели: эти анкеты не должны возвращаться в колоду. */
