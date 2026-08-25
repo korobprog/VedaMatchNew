@@ -2,6 +2,15 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { UnionRecommendation } from "@vedamatch/shared";
+import {
+  DEFAULT_DENSITY,
+  DENSITY_STORAGE_KEY,
+  densityClassName,
+  densityLabel,
+  nextDensity,
+  parseDensity,
+  type GridDensity,
+} from "./grid-density";
 import { RecommendationCard } from "./recommendation-card";
 import { RecommendationTile } from "./recommendation-tile";
 import { SwipeDeck } from "./swipe-deck";
@@ -11,6 +20,14 @@ type ViewMode = "grid" | "swipe";
 const MOBILE_QUERY = "(max-width: 767px)";
 
 const mobileQuery = () => window.matchMedia(MOBILE_QUERY);
+
+function readDensity(): string | null {
+  try {
+    return window.localStorage.getItem(DENSITY_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
 
 function subscribeToMobileQuery(onChange: () => void): () => void {
   const query = mobileQuery();
@@ -36,10 +53,28 @@ export function RecommendationsView({
   // С какой анкеты открывать просмотр. Тап по плитке задаёт её позицию,
   // переключатель «Свайпами» начинает с начала.
   const [viewerIndex, setViewerIndex] = useState(0);
+  const [density, setDensity] = useState<GridDensity>(DEFAULT_DENSITY);
   const mode: ViewMode = modeOverride ?? (isMobile ? "swipe" : "grid");
   // На телефоне свайп — полноэкранный фокус-режим без обвязки страницы;
   // на десктопе тот же режим остаётся инлайн внутри обычной страницы.
   const focusMode = isMobile && mode === "swipe";
+
+  useEffect(() => {
+    // Синхронного способа прочитать localStorage к первому рендеру нет, а
+    // на сервере его нет вовсе — это тот случай, ради которого нужен эффект.
+    // Тот же приём у возрастного фильтра и у темы.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDensity(parseDensity(readDensity()));
+  }, []);
+
+  function chooseDensity(value: GridDensity) {
+    setDensity(value);
+    try {
+      window.localStorage.setItem(DENSITY_STORAGE_KEY, String(value));
+    } catch {
+      // Приватный режим — выбор всё равно работает в рамках сессии.
+    }
+  }
 
   useEffect(() => {
     if (!focusMode) return;
@@ -104,6 +139,21 @@ export function RecommendationsView({
         >
           Свайпами
         </ModeButton>
+
+        {/* Плотность — выбор человека, а не наше решение за него: две
+            колонки дают крупные лица, три — вдвое больше людей за экран.
+            Кнопка одна и переключает по кругу, подпись обещает результат
+            нажатия. Только в списке на телефоне: на десктопе места хватает,
+            а в колоде плотности нет вовсе. */}
+        {isMobile && mode === "grid" && (
+          <button
+            type="button"
+            onClick={() => chooseDensity(nextDensity(density))}
+            className="glass ml-auto rounded-xl border border-glass-brd px-3 py-2 text-xs font-medium text-text-1 transition hover:text-text-0"
+          >
+            {densityLabel(density)}
+          </button>
+        )}
       </div>
 
       {mode === "swipe" ? (
@@ -114,7 +164,7 @@ export function RecommendationsView({
           восемь человек вместо полутора, и список выполняет свою работу —
           быстро оглядеться. Подробности открываются тапом, в просмотре.
         */
-        <div className="grid grid-cols-2 gap-2">
+        <div className={densityClassName(density)}>
           {items.map((item, position) => (
             <RecommendationTile
               key={item.user.id}
