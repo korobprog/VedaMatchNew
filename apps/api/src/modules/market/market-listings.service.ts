@@ -167,7 +167,13 @@ export class MarketListingsService {
     const last = items[items.length - 1];
 
     return {
-      items: items.map((row) => toListingSummary(row, favorited.has(row.id))),
+      items: items.map((row) =>
+        toListingSummary(
+          row,
+          favorited.has(row.id),
+          Boolean(viewerId) && row.shop.ownerId === viewerId,
+        ),
+      ),
       nextCursor: hasMore && last ? encodeCursor(sort, last) : null,
       total,
     };
@@ -1079,6 +1085,7 @@ function locationColumns(location: MarketLocationDto | null | undefined) {
 export function toListingSummary(
   row: ListingRow,
   favorited: boolean,
+  canEdit: boolean,
 ): MarketListingSummary {
   return {
     id: row.id,
@@ -1112,6 +1119,7 @@ export function toListingSummary(
       quantity: row.quantity,
       shopStatus: row.shop.status,
     }),
+    canEdit,
   };
 }
 
@@ -1121,7 +1129,7 @@ export function toListingDto(
   canEdit: boolean,
 ): MarketListingDto {
   return {
-    ...toListingSummary(row, favorited),
+    ...toListingSummary(row, favorited, canEdit),
     descriptionRu: row.descriptionRu,
     descriptionEn: row.descriptionEn,
     priceMaxMinor: row.priceMaxMinor,
@@ -1148,7 +1156,6 @@ export function toListingDto(
     viewsCount: row.viewsCount,
     commentsCount: row.commentsCount,
     createdAt: row.createdAt.toISOString(),
-    canEdit,
   };
 }
 
