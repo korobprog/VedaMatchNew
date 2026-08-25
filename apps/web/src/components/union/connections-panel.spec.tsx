@@ -42,6 +42,7 @@ function request(
       spiritualStage: null,
       age: null,
       activity: null,
+      lastSeenAt: null,
       isVerifiedDevotee: false,
       isPhotoVerified: false,
       contacts: null,
