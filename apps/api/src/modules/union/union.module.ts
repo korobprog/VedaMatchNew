@@ -5,6 +5,8 @@ import { ModerationModule } from '../moderation/moderation.module';
 import { MotivationModule } from '../motivation/motivation.module';
 import { UnionAdminController } from './union-admin.controller';
 import { UnionAdminService } from './union-admin.service';
+import { UnionArchiveController } from './union-archive.controller';
+import { UnionArchiveService } from './union-archive.service';
 import { UnionBoostController } from './union-boost.controller';
 import { UnionBoostService } from './union-boost.service';
 import { UnionConnectionController } from './union-connection.controller';
@@ -25,6 +27,7 @@ import { UnionSwipeService } from './union-swipe.service';
     UnionSwipeController,
     UnionBoostController,
     UnionAdminController,
+    UnionArchiveController,
   ],
   providers: [
     UnionProfileService,
@@ -33,6 +36,7 @@ import { UnionSwipeService } from './union-swipe.service';
     UnionSwipeService,
     UnionBoostService,
     UnionAdminService,
+    UnionArchiveService,
   ],
 })
 export class UnionModule {}
