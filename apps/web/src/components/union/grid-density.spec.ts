@@ -46,7 +46,15 @@ describe("densityLabel", () => {
   // Подпись обещает результат нажатия, а не описывает текущее состояние:
   // «Плотнее» на уже плотной сетке сбивало бы с толку.
   it("names what the press will do, not what is shown now", () => {
-    expect(densityLabel(2)).toBe("Показывать плотнее");
-    expect(densityLabel(3)).toBe("Показывать крупнее");
+    expect(densityLabel(2)).toBe("Плотнее");
+    expect(densityLabel(3)).toBe("Крупнее");
+  });
+
+  // Подпись стоит под значком в узкой квадратной кнопке: два слова туда уже
+  // не помещаются и переносом ломают ряд.
+  it("stays short enough to sit under an icon", () => {
+    for (const density of [2, 3] as const) {
+      expect(densityLabel(density).split(" ")).toHaveLength(1);
+    }
   });
 });

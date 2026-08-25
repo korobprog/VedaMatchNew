@@ -123,22 +123,22 @@ export function RecommendationsView({
 
   return (
     <div>
-      <div className="mb-4 flex gap-2">
-        <ModeButton
+      <div className="mb-4 flex items-center gap-2">
+        <IconButton
+          icon={<GridGlyph />}
+          label="Списком"
           active={mode === "grid"}
           onClick={() => setModeOverride("grid")}
-        >
-          Списком
-        </ModeButton>
-        <ModeButton
+        />
+        <IconButton
+          icon={<DeckGlyph />}
+          label="Свайпами"
           active={mode === "swipe"}
           onClick={() => {
             setViewerIndex(0);
             setModeOverride("swipe");
           }}
-        >
-          Свайпами
-        </ModeButton>
+        />
 
         {/* Плотность — выбор человека, а не наше решение за него: две
             колонки дают крупные лица, три — вдвое больше людей за экран.
@@ -146,13 +146,13 @@ export function RecommendationsView({
             нажатия. Только в списке на телефоне: на десктопе места хватает,
             а в колоде плотности нет вовсе. */}
         {isMobile && mode === "grid" && (
-          <button
-            type="button"
+          <IconButton
+            icon={density === 2 ? <DenseGlyph /> : <LargeGlyph />}
+            label={densityLabel(density)}
+            pressable={false}
+            className="ml-auto"
             onClick={() => chooseDensity(nextDensity(density))}
-            className="glass ml-auto rounded-xl border border-glass-brd px-3 py-2 text-xs font-medium text-text-1 transition hover:text-text-0"
-          >
-            {densityLabel(density)}
-          </button>
+          />
         )}
       </div>
 
@@ -187,27 +187,84 @@ export function RecommendationsView({
   );
 }
 
-function ModeButton({
-  active,
+/**
+ * Квадратная кнопка со значком и мелкой подписью — тот же приём, что у
+ * решений в колоде: объём держит сама кнопка (блик по верхней кромке,
+ * затемнение к низу, нажатие вдавливает). Отличие в форме и в цвете: здесь
+ * кнопка лежит на фоне страницы, а не на фотографии, поэтому цвета берутся
+ * из токенов темы, а не из белого с чёрным.
+ */
+function IconButton({
+  icon,
+  label,
+  active = false,
+  pressable = true,
+  className = "",
   onClick,
-  children,
 }: {
-  active: boolean;
+  icon: React.ReactNode;
+  label: string;
+  /** Выбранный режим. У кнопки-действия (плотность) состояния нет. */
+  active?: boolean;
+  /** `false` — это действие, а не выбор: aria-pressed не нужен. */
+  pressable?: boolean;
+  className?: string;
   onClick: () => void;
-  children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-pressed={active}
-      className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
+      aria-pressed={pressable ? active : undefined}
+      className={`flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl border transition active:translate-y-px ${
         active
           ? "border-magenta/40 bg-magenta/10 text-text-0"
-          : "glass border-glass-brd text-text-1 hover:text-text-0"
-      }`}
+          : "glass border-glass-brd text-text-2 hover:text-text-0"
+      } ${className}`}
     >
-      {children}
+      {icon}
+      <span className="text-[10px] font-medium leading-none">{label}</span>
     </button>
   );
+}
+
+/** Сетка плиток — четыре ячейки. */
+function GridGlyph() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="7.5" height="7.5" rx="1.5" />
+      <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" />
+      <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" />
+      <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5" />
+    </svg>
+  );
+}
+
+/** Колода: карточка поверх стопки, со следом уходящей вбок. */
+function DeckGlyph() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+      <rect x="6" y="4" width="12" height="16" rx="2.5" />
+      <path d="M4 7.5 2.6 9a2 2 0 0 0-.3 2.4l3 5.2" />
+      <path d="M20 7.5 21.4 9a2 2 0 0 1 .3 2.4l-3 5.2" />
+    </svg>
+  );
+}
+
+/** Плотнее — девять мелких ячеек. */
+function DenseGlyph() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+      {[3, 9.75, 16.5].map((y) =>
+        [3, 9.75, 16.5].map((x) => (
+          <rect key={`${x}-${y}`} x={x} y={y} width="4.5" height="4.5" rx="1" />
+        )),
+      )}
+    </svg>
+  );
+}
+
+/** Крупнее — те же четыре ячейки, что у списка: возврат к обычному виду. */
+function LargeGlyph() {
+  return <GridGlyph />;
 }

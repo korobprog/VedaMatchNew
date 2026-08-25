@@ -26,6 +26,10 @@ export function densityClassName(density: GridDensity): string {
   return density === 3 ? "grid grid-cols-3 gap-1.5" : "grid grid-cols-2 gap-2";
 }
 
+/**
+ * Подпись обещает результат нажатия, а не текущее состояние. Коротко: под
+ * значком помещается одно слово, а смысл теперь несёт и сам значок.
+ */
 export function densityLabel(density: GridDensity): string {
-  return density === 3 ? "Показывать крупнее" : "Показывать плотнее";
+  return density === 3 ? "Крупнее" : "Плотнее";
 }
