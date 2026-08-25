@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -15,6 +15,7 @@ import { ActivityBadge } from "./activity-badge";
 import { ArchiveButton } from "./archive-button";
 import { ProfileDetailsList } from "./profile-details-list";
 import { RecommendationPhotoCarousel } from "./recommendation-photo-carousel";
+import { DeckToast } from "./deck-toast";
 import { SwipeHint } from "./swipe-hint";
 import {
   CompatibilityBreakdown,
@@ -113,6 +114,9 @@ export function SwipeDeck({
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [recycling, setRecycling] = useState(false);
   const reduceMotion = useReducedMotion();
+  // Стабильная ссылка: иначе таймер подсказки перезаводился бы на каждом
+  // рендере колоды и она висела бы дольше положенного.
+  const clearSent = useCallback(() => setSent(null), []);
 
   const current = items[index];
   const next = items[index + 1];
@@ -365,7 +369,20 @@ export function SwipeDeck({
           Стоит она неподвижно — уезжает только карточка, и рука не гонится
           за кнопками между анкетами.
         */}
-        <div className="absolute inset-x-3 bottom-3 z-10 flex items-center justify-between gap-2">
+        {/*
+          Полоса, а не узкий ряд: на телефоне палец промахивался мимо
+          44-пиксельной кнопки и попадал в карточку — она тут же уезжала
+          свайпом, будто решение принято. Теперь весь низ карточки принадлежит
+          панели, и промах не делает ничего. Нижний отступ считается от
+          безопасной зоны: под жестовой полосой системы кнопки не нажать.
+        */}
+        <div
+          className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-between gap-2 px-3 pt-6 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          // Панель лежит поверх карточки, но событие всё равно всплывает к
+          // общему контейнеру: гасим его здесь, чтобы никакой будущий
+          // обработчик жеста снаружи не принял нажатие кнопки за свайп.
+          onPointerDownCapture={(event) => event.stopPropagation()}
+        >
           <button
             type="button"
             onClick={() => {
@@ -431,12 +448,24 @@ export function SwipeDeck({
 
         {/* Поверх карточки и её кнопок: первый экран учит жесту. */}
         <SwipeHint />
-      </div>
 
-      {sent && <p className="mt-3 text-center text-sm text-cyan">{sent}</p>}
-      {error && (
-        <p className="mt-3 text-center text-sm text-red-500">{error}</p>
-      )}
+        {/*
+          Итог решения — по центру колоды и поверх всего. Взаимность идёт с
+          салютом: остальные подсказки сообщают факт, а эта — событие.
+        */}
+        <DeckToast
+          message={sent}
+          celebrate={Boolean(sent && sent.startsWith("Взаимно"))}
+          onDone={clearSent}
+        />
+
+        {/* Ошибка тоже накладкой: в потоке она двигала колоду под рукой. */}
+        {error && (
+          <p className="pointer-events-none absolute inset-x-4 bottom-24 z-40 rounded-xl bg-sheet px-3 py-2 text-center text-sm text-red-500 backdrop-blur-xl">
+            {error}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -611,7 +640,7 @@ function SwipeCard({
   onSkip: () => void;
   onSuperlike: () => void;
 }) {
-  const { user, profile, compatibility } = item;
+  const { user, profile } = item;
   const [expanded, setExpanded] = useState(false);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
