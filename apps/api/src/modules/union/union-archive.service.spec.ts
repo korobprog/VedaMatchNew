@@ -70,8 +70,6 @@ describe('UnionArchiveService', () => {
           name: 'Пётр',
           spiritualName: 'Кешава дас',
           avatarUrl: null,
-          city: 'Москва',
-          country: 'Россия',
         },
       },
     ]);
@@ -80,5 +78,32 @@ describe('UnionArchiveService', () => {
 
     expect(result.items[0].user.name).toBe('Кешава дас');
     expect(result.items[0].archivedAt).toBe('2026-08-20T10:00:00.000Z');
+  });
+
+  // Риск: город лежит в `homeLocation` и показывается по настройкам
+  // приватности (union-connection.service.ts). Здесь этой проверки нет,
+  // поэтому список архива не должен становиться обходным путём к нему.
+  it('never leaks the city, which is privacy-gated elsewhere', async () => {
+    const prisma = prismaStub();
+    prisma.unionArchive.findMany.mockResolvedValue([
+      {
+        archivedUserId: 'a',
+        createdAt: new Date('2026-08-20T10:00:00.000Z'),
+        archivedUser: {
+          id: 'a',
+          name: 'Пётр',
+          spiritualName: null,
+          avatarUrl: null,
+        },
+      },
+    ]);
+
+    const result = await service(prisma).list('me');
+
+    expect(result.items[0].user.city).toBeNull();
+    expect(result.items[0].user.country).toBeNull();
+    // Запрос тоже не должен тянуть локацию — иначе она однажды утечёт.
+    const select = prisma.unionArchive.findMany.mock.calls[0][0].select;
+    expect(select.archivedUser.select).not.toHaveProperty('homeLocation');
   });
 });

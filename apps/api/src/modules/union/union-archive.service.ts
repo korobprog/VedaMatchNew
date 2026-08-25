@@ -59,8 +59,6 @@ export class UnionArchiveService {
             // Обязателен рядом с name: имя наружу собирает resolveDisplayName.
             spiritualName: true,
             avatarUrl: true,
-            city: true,
-            country: true,
           },
         },
       },
@@ -73,12 +71,14 @@ export class UnionArchiveService {
           id: row.archivedUser.id,
           name: resolveDisplayName(row.archivedUser),
           avatarUrl: row.archivedUser.avatarUrl,
-          // В списке архива хватает имени и города: галерею, возраст и
-          // активность здесь не показываем — человек пришёл решать
-          // «вернуть или нет», а не разглядывать анкету.
+          // В списке архива хватает имени и лица: для решения «вернуть или
+          // нет» этого достаточно. Город сознательно не отдаём — он лежит в
+          // `homeLocation` и показывается по настройкам приватности (см.
+          // union-connection.service.ts), а здесь этой проверки нет, и
+          // список архива стал бы обходным путём к скрытому городу.
           photos: [],
-          city: row.archivedUser.city,
-          country: row.archivedUser.country,
+          city: null,
+          country: null,
           spiritualStage: null,
           age: null,
           activity: null,
