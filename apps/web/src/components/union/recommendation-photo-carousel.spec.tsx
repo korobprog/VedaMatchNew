@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AUTOPLAY_IDLE_MS, AUTOPLAY_STEP_MS } from "./photo-autoplay";
 import type { UnionPhoto } from "@vedamatch/shared";
 import { RecommendationPhotoCarousel } from "./recommendation-photo-carousel";
 
@@ -74,5 +75,84 @@ describe("RecommendationPhotoCarousel", () => {
     expect(
       screen.getByRole("img", { name: "Кришна, фото 1 из 2" }),
     ).toHaveAttribute("src", nextPhotos[0].url);
+  });
+});
+
+describe("RecommendationPhotoCarousel: обложка", () => {
+  beforeEach(() => {
+    window.localStorage.setItem("union:photo-hint-seen", "1");
+  });
+  afterEach(() => {
+    window.localStorage.clear();
+    vi.useRealTimers();
+  });
+
+  // Ради этого счётчик и заводился: полоски сверху терялись под вырезом
+  // телефона, и о втором снимке никто не узнавал.
+  it("говорит, сколько снимков и какой сейчас", () => {
+    render(
+      <RecommendationPhotoCarousel
+        photos={photos}
+        userName="Радха"
+        variant="cover"
+      />,
+    );
+    expect(screen.getByLabelText("Выбор фото")).toHaveTextContent("1/3");
+  });
+
+  it("листает сам: длинная пауза, потом короткий шаг", () => {
+    vi.useFakeTimers();
+    render(
+      <RecommendationPhotoCarousel
+        photos={photos}
+        userName="Радха"
+        variant="cover"
+      />,
+    );
+    expect(screen.getByLabelText("Выбор фото")).toHaveTextContent("1/3");
+
+    // Пока человек читает анкету, снимок не подменяем.
+    act(() => void vi.advanceTimersByTime(AUTOPLAY_IDLE_MS - 1000));
+    expect(screen.getByLabelText("Выбор фото")).toHaveTextContent("1/3");
+
+    act(() => void vi.advanceTimersByTime(1000));
+    expect(screen.getByLabelText("Выбор фото")).toHaveTextContent("2/3");
+
+    // Дальше шаг короче: длинная пауза нужна была один раз.
+    act(() => void vi.advanceTimersByTime(AUTOPLAY_STEP_MS));
+    expect(screen.getByLabelText("Выбор фото")).toHaveTextContent("3/3");
+
+    // И по кругу: последний ведёт к первому.
+    act(() => void vi.advanceTimersByTime(AUTOPLAY_STEP_MS));
+    expect(screen.getByLabelText("Выбор фото")).toHaveTextContent("1/3");
+  });
+
+  it("отдаёт выбранный снимок наружу и слушается внешнего индекса", () => {
+    const onIndexChange = vi.fn();
+    const { rerender } = render(
+      <RecommendationPhotoCarousel
+        photos={photos}
+        userName="Радха"
+        variant="cover"
+        index={0}
+        onIndexChange={onIndexChange}
+      />,
+    );
+    expect(screen.getByLabelText("Выбор фото")).toHaveTextContent("1/3");
+
+    rerender(
+      <RecommendationPhotoCarousel
+        photos={photos}
+        userName="Радха"
+        variant="cover"
+        index={2}
+        onIndexChange={onIndexChange}
+      />,
+    );
+    expect(screen.getByLabelText("Выбор фото")).toHaveTextContent("3/3");
+    expect(screen.getByRole("img", { name: "Радха, фото 3 из 3" })).toHaveAttribute(
+      "src",
+      photos[2].url,
+    );
   });
 });
