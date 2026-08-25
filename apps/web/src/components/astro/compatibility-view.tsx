@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { AstroCompatibilityRequestDto } from "@vedamatch/shared";
 import {
@@ -9,6 +10,7 @@ import {
   listAstroCompatibilityRequests,
   respondAstroCompatibilityRequest,
 } from "@/lib/astro-client-api";
+import { birthDataHint } from "./missing-birth-data";
 
 /**
  * Совместимость двух карт. Список запросов — единственный источник состояния;
@@ -102,11 +104,12 @@ export function CompatibilityView({
     }
   }
 
-  if (error) {
-    return <p className="text-sm text-red-700 dark:text-red-400">{error}</p>;
-  }
   if (requests === null) {
-    return <p className="text-sm text-black/60 dark:text-white/60">Загрузка…</p>;
+    return error ? (
+      <ErrorNote message={error} />
+    ) : (
+      <p className="text-sm text-black/60 dark:text-white/60">Загрузка…</p>
+    );
   }
 
   const incoming = requests.filter((r) => !r.isRequester && r.status === "pending");
@@ -115,6 +118,11 @@ export function CompatibilityView({
 
   return (
     <div className="space-y-10">
+      {/* Ошибка больше не заменяет собой страницу: чаще всего это «заполните
+          данные рождения», и человеку нужны и подсказка, и остальные его
+          запросы, а не одна красная строка вместо всего. */}
+      {error && <ErrorNote message={error} />}
+
       {incoming.length > 0 && (
         <section>
           <h2 className="text-lg font-medium">Входящие запросы</h2>
@@ -250,5 +258,34 @@ function AcceptedCompatibility({ request }: { request: AstroCompatibilityRequest
         {error && <p className="mt-2 text-sm text-red-700 dark:text-red-400">{error}</p>}
       </div>
     </li>
+  );
+}
+
+/**
+ * Ошибка с выходом. Когда дело в незаполненных данных рождения — а это самый
+ * частый случай, особенно у пришедших из Знакомств, — рядом стоит ссылка,
+ * куда идти. На прочих сбоях действия нет намеренно: кнопка, не решающая
+ * проблему, хуже её отсутствия.
+ */
+function ErrorNote({ message }: { message: string }) {
+  const hint = birthDataHint(message);
+
+  return (
+    <div className="rounded-xl border border-red-500/40 bg-red-500/5 p-4">
+      <p className="text-sm text-red-700 dark:text-red-400">{message}</p>
+      {hint && (
+        <>
+          <p className="mt-2 text-sm text-black/70 dark:text-white/70">
+            {hint.text}
+          </p>
+          <Link
+            href={hint.href}
+            className="mt-3 inline-block rounded-lg bg-magenta px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+          >
+            {hint.action}
+          </Link>
+        </>
+      )}
+    </div>
   );
 }
