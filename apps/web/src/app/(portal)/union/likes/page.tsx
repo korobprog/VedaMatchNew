@@ -8,6 +8,7 @@ import {
   getUnionChats,
   getUnionConnectionCounts,
   getUnionConnectionRequests,
+  getUnionFavorites,
 } from "@/lib/union-api";
 import { hasCompleteUnionLocation } from "@/lib/union-location";
 import { BackgroundOrbs } from "@/components/landing/Orb";
@@ -17,10 +18,11 @@ export default async function UnionLikesPage() {
   const user = await requireUser();
   if (!hasCompleteUnionLocation(user)) redirect("/union/location");
 
-  const [requests, counts, chats] = await Promise.all([
+  const [requests, counts, chats, favorites] = await Promise.all([
     getUnionConnectionRequests().catch(() => null),
     getUnionConnectionCounts().catch(() => null),
     getUnionChats().catch(() => null),
+    getUnionFavorites().catch(() => null),
   ]);
 
   return (
@@ -36,7 +38,10 @@ export default async function UnionLikesPage() {
           </p>
         </div>
         <UnionNav incomingPending={counts?.incomingPending ?? 0} />
-        <UnionLikesPanel requests={requests} />
+        <UnionLikesPanel
+          requests={requests}
+          favoriteUserIds={favorites?.userIds ?? []}
+        />
       </main>
       <UnionTabBar
         incomingPending={counts?.incomingPending ?? 0}
