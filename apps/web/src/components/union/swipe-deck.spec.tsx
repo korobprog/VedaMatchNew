@@ -29,6 +29,7 @@ function recommendation(
       spiritualStage: "seeker",
       age: 28,
       activity: "online",
+      lastSeenAt: null,
       isVerifiedDevotee: false,
       isPhotoVerified: false,
       contacts: null,
@@ -83,14 +84,24 @@ describe("SwipeDeck card", () => {
       />,
     );
 
-    expect(screen.getByText("✨ Интересы")).toBeInTheDocument();
-    expect(screen.getByText("🧠 психология")).toBeInTheDocument();
-    expect(screen.queryByText("✨ своё увлечение")).not.toBeInTheDocument();
+    // Значок интереса — нарисованный, поэтому проверяется не по символу, а по
+    // `data-interest-icon`: он называет подобранную иконку.
+    expect(screen.getByText("Интересы")).toBeInTheDocument();
+    expect(
+      screen
+        .getByText("психология")
+        .querySelector("[data-interest-icon]"),
+    ).toHaveAttribute("data-interest-icon", "психология");
+    expect(screen.queryByText("своё увлечение")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Развернуть анкету" }));
 
     // Свой вариант интереса не из справочника получает «искру».
-    expect(screen.getByText("✨ своё увлечение")).toBeInTheDocument();
+    expect(
+      screen
+        .getByText("своё увлечение")
+        .querySelector("[data-interest-icon]"),
+    ).toHaveAttribute("data-interest-icon", "spark");
     expect(screen.getByText("Рассказ о себе")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Свернуть анкету" }),
@@ -117,6 +128,102 @@ describe("SwipeDeck card", () => {
     expect(
       screen.getByRole("button", { name: "Показать фото 2 из 2" }),
     ).toBeInTheDocument();
+  });
+
+  // Список открывает колоду на выбранном человеке, а не на первом: иначе
+  // тап по четвёртой плитке показал бы первую анкету.
+  it("opens at the requested profile", () => {
+    render(
+      <SwipeDeck
+        initialIndex={1}
+        items={[
+          recommendation(),
+          recommendation({ user: { id: "user-2", name: "Сита" } }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("2 из 2")).toBeInTheDocument();
+  });
+
+  it("survives an out-of-range initial index instead of showing an empty deck", () => {
+    render(<SwipeDeck initialIndex={99} items={[recommendation()]} />);
+
+    expect(screen.getByText("1 из 1")).toBeInTheDocument();
+  });
+
+  it("offers a new cycle and the escape hatch when the deck runs out", () => {
+    render(<SwipeDeck items={[]} />);
+
+    expect(
+      screen.getByRole("button", { name: "Показать заново" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Показать вообще всех" }),
+    ).toHaveAttribute("href", "/union/recommendations?includeSwiped=true");
+  });
+
+  it("offers archiving from the deck", () => {
+    render(<SwipeDeck items={[recommendation()]} />);
+
+    expect(
+      screen.getByRole("button", { name: "Убрать в архив" }),
+    ).toBeInTheDocument();
+  });
+
+  // Листание — это просмотр, а не решение: на сервер ничего уходить не должно,
+  // иначе стрелка молча тратила бы анкеты так же, как крестик.
+  it("browses to the next profile without recording a decision", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}"));
+    render(
+      <SwipeDeck
+        items={[
+          recommendation(),
+          recommendation({ user: { id: "user-2", name: "Сита" } }),
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Следующая анкета" }));
+
+    expect(screen.getByText("2 из 2")).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it("disables browsing at both ends of the deck", () => {
+    render(<SwipeDeck items={[recommendation()]} />);
+
+    expect(
+      screen.getByRole("button", { name: "Предыдущая анкета" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Следующая анкета" }),
+    ).toBeDisabled();
+  });
+
+  // Порядок согласован с продуктом: крестик и лайк по краям под большие
+  // пальцы, между ними — вспомогательные действия. `getAllByRole` отдаёт
+  // узлы в порядке DOM, поэтому фильтр по known-подписям и есть проверка
+  // порядка: кольцо совместимости и стрелки листания в список не попадают.
+  it("keeps the agreed action order in the decision row", () => {
+    render(<SwipeDeck items={[recommendation()]} />);
+
+    const order = [
+      "Пропустить",
+      "Вернуть предыдущую анкету",
+      "Суперлайк",
+      "Познакомиться",
+    ];
+    const rendered = screen
+      .getAllByRole("button")
+      .map((button) => button.getAttribute("aria-label"))
+      .filter((label): label is string => order.includes(label ?? ""));
+
+    expect(rendered).toEqual(order);
   });
 
   it("offers pass, superlike and like actions", () => {

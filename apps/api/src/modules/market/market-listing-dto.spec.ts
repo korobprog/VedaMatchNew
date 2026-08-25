@@ -42,7 +42,13 @@ const row = (over: Record<string, unknown> = {}): ListingRow =>
       ownerId: 'user-1',
     },
     images: [
-      { id: 'img-1', url: 'https://cdn/a.webp', width: 800, height: 600, sortOrder: 0 },
+      {
+        id: 'img-1',
+        url: 'https://cdn/a.webp',
+        width: 800,
+        height: 600,
+        sortOrder: 0,
+      },
     ],
     categories: [
       {
@@ -56,20 +62,27 @@ const row = (over: Record<string, unknown> = {}): ListingRow =>
       },
     ],
     shelves: [
-      { shelf: { id: 'shelf-1', slug: 'new', titleRu: 'Новинки', titleEn: null } },
+      {
+        shelf: {
+          id: 'shelf-1',
+          slug: 'new',
+          titleRu: 'Новинки',
+          titleEn: null,
+        },
+      },
     ],
     ...over,
   }) as unknown as ListingRow;
 
 describe('toListingSummary', () => {
   it('serialises dates as ISO strings', () => {
-    expect(toListingSummary(row(), false).publishedAt).toBe(
+    expect(toListingSummary(row(), false, false).publishedAt).toBe(
       '2026-08-15T10:00:00.000Z',
     );
   });
 
   it('folds the price into a single object', () => {
-    expect(toListingSummary(row(), false).price).toEqual({
+    expect(toListingSummary(row(), false, false).price).toEqual({
       mode: 'fixed',
       minor: 2400000,
       maxMinor: null,
@@ -80,37 +93,47 @@ describe('toListingSummary', () => {
   // Риск: поля зрителя не должны утекать как undefined на гостевых маршрутах —
   // веб отличает false от «поля нет», и второе ломает кнопку избранного.
   it('defaults viewer fields to false, never undefined', () => {
-    const summary = toListingSummary(row(), false);
+    const summary = toListingSummary(row(), false, false);
     expect(summary.favorited).toBe(false);
     expect(summary.favorited).not.toBeUndefined();
   });
 
   it('reflects the viewer favourite when there is one', () => {
-    expect(toListingSummary(row(), true).favorited).toBe(true);
+    expect(toListingSummary(row(), true, false).favorited).toBe(true);
   });
 
   it('never leaks the owner id into the summary', () => {
-    const summary = toListingSummary(row(), false);
+    const summary = toListingSummary(row(), false, false);
     expect(JSON.stringify(summary)).not.toContain('user-1');
+  });
+
+  it('reflects canEdit for the owner', () => {
+    expect(toListingSummary(row(), false, false).canEdit).toBe(false);
+    expect(toListingSummary(row(), false, true).canEdit).toBe(true);
   });
 
   describe('availability', () => {
     it('is false when the tracked stock ran out', () => {
       expect(
-        toListingSummary(row({ trackStock: true, quantity: 0 }), false).available,
+        toListingSummary(row({ trackStock: true, quantity: 0 }), false, false)
+          .available,
       ).toBe(false);
     });
 
     it('is true when stock is not tracked', () => {
       expect(
-        toListingSummary(row({ trackStock: false, quantity: null }), false).available,
+        toListingSummary(
+          row({ trackStock: false, quantity: null }),
+          false,
+          false,
+        ).available,
       ).toBe(true);
     });
 
     it('is false for a sold-out listing that is still on display', () => {
-      expect(toListingSummary(row({ status: 'sold_out' }), false).available).toBe(
-        false,
-      );
+      expect(
+        toListingSummary(row({ status: 'sold_out' }), false, false).available,
+      ).toBe(false);
     });
 
     it('is false when the shop itself is not active', () => {
@@ -124,7 +147,7 @@ describe('toListingSummary', () => {
           ownerId: 'user-1',
         },
       });
-      expect(toListingSummary(closed, false).available).toBe(false);
+      expect(toListingSummary(closed, false, false).available).toBe(false);
     });
   });
 });
@@ -159,10 +182,12 @@ describe('toListingDto', () => {
 
   it('keeps everything the summary already exposed', () => {
     const dto = toListingDto(row(), true, true);
-    expect(dto).toMatchObject(toListingSummary(row(), true));
+    expect(dto).toMatchObject(toListingSummary(row(), true, true));
   });
 
   it('returns a null location rather than omitting the field', () => {
-    expect(toListingDto(row({ location: null }), false, false).location).toBeNull();
+    expect(
+      toListingDto(row({ location: null }), false, false).location,
+    ).toBeNull();
   });
 });

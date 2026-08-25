@@ -181,6 +181,9 @@ export interface MarketListingSummary {
   /** Поля зрителя. У гостя всегда `false`, а не undefined. */
   favorited: boolean;
   available: boolean;
+  /** Свой товар: покупка и переписка с собой не имеют смысла, карточка и
+   *  страница объявления прячут их и предлагают редактирование вместо этого. */
+  canEdit: boolean;
 }
 
 export interface MarketListingDto extends MarketListingSummary {
@@ -201,7 +204,6 @@ export interface MarketListingDto extends MarketListingSummary {
   viewsCount: number;
   commentsCount: number;
   createdAt: string;
-  canEdit: boolean;
 }
 
 export interface MarketListingFeedResponse {

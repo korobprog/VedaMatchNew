@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { UsersService } from '../../users/users.service';
 import { AstroGenerationService } from '../astro-generation.service';
@@ -44,6 +45,7 @@ describe('AstroCompatibilityService', () => {
   const generation = { generateCompatibility: jest.fn() };
   const quota = { check: jest.fn(), record: jest.fn() };
   const settings = { get: jest.fn() };
+  const events = { emit: jest.fn() };
 
   const service = new AstroCompatibilityService(
     prisma as unknown as PrismaService,
@@ -52,6 +54,7 @@ describe('AstroCompatibilityService', () => {
     generation as unknown as AstroGenerationService,
     quota as unknown as AstroQuotaService,
     settings as unknown as AstroSettingsService,
+    events as unknown as EventEmitter2,
   );
 
   beforeEach(() => {
@@ -99,6 +102,29 @@ describe('AstroCompatibilityService', () => {
 
       await expect(service.createRequest('u1', 'u2')).resolves.toMatchObject({
         status: 'pending',
+      });
+    });
+
+    // Без уведомления запрос лежал бы молча: адресат узнавал бы о нём, только
+    // случайно заглянув в раздел астрологии.
+    it('уведомляет получателя о запросе', async () => {
+      prisma.astroBirthData.findUnique.mockResolvedValue(BIRTH_A);
+      prisma.astroCompatibilityRequest.findUnique.mockResolvedValue(null);
+      prisma.astroCompatibilityRequest.create.mockResolvedValue({
+        id: 'req-1',
+        requesterId: 'u1',
+        targetId: 'u2',
+        status: 'pending',
+        createdAt: new Date(),
+        respondedAt: null,
+      });
+
+      await service.createRequest('u1', 'u2');
+
+      expect(events.emit).toHaveBeenCalledWith('astro.compatibility.requested', {
+        name: 'astro.compatibility.requested',
+        recipientId: 'u2',
+        senderName: expect.any(String),
       });
     });
 
@@ -175,6 +201,39 @@ describe('AstroCompatibilityService', () => {
       createdAt: new Date(),
       respondedAt: null,
     };
+
+    it('уведомляет просителя о согласии', async () => {
+      prisma.astroCompatibilityRequest.findUnique.mockResolvedValue(pendingRow);
+      prisma.astroBirthData.findUnique.mockResolvedValue(BIRTH_A);
+      prisma.astroCompatibilityRequest.update.mockResolvedValue({
+        ...pendingRow,
+        status: 'accepted',
+        respondedAt: new Date(),
+      });
+
+      await service.respond('u2', 'req-1', true);
+
+      expect(events.emit).toHaveBeenCalledWith('astro.compatibility.accepted', {
+        name: 'astro.compatibility.accepted',
+        recipientId: 'u1',
+        senderName: expect.any(String),
+      });
+    });
+
+    // «Вам отказали» — сообщение, которое ничего не даёт, но задевает.
+    // Проситель увидит статус, когда сам зайдёт.
+    it('об отказе никого не уведомляет', async () => {
+      prisma.astroCompatibilityRequest.findUnique.mockResolvedValue(pendingRow);
+      prisma.astroCompatibilityRequest.update.mockResolvedValue({
+        ...pendingRow,
+        status: 'declined',
+        respondedAt: new Date(),
+      });
+
+      await service.respond('u2', 'req-1', false);
+
+      expect(events.emit).not.toHaveBeenCalled();
+    });
 
     it('ответить может только получатель', async () => {
       prisma.astroCompatibilityRequest.findUnique.mockResolvedValue(pendingRow);

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type {
@@ -13,6 +13,7 @@ import type {
 } from "@vedamatch/shared";
 import type { Locale } from "@/lib/locale";
 import { setCartCount } from "@/lib/market-cart-badge";
+import { deriveCartQuantities, setCartQuantities } from "@/lib/market-cart-items";
 import { listingTitle } from "./listing-card";
 import { formatPriceMinor, priceText } from "./price";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
@@ -36,7 +37,17 @@ export function CartPanel({
   function apply(next: MarketCartDto) {
     setCart(next);
     setCartCount(next.itemsCount);
+    setCartQuantities(deriveCartQuantities(next));
   }
+
+  // Данные с сервера уже под рукой — не ждём опроса значка в шапке, чтобы
+  // карточки товаров сразу знали, что уже лежит в корзине. `cart` тут не
+  // трогаем: он и так стартует с того же `initial` через useState.
+  useEffect(() => {
+    setCartCount(initial.itemsCount);
+    setCartQuantities(deriveCartQuantities(initial));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function mutate(path: string, init: RequestInit) {
     if (pending) return;

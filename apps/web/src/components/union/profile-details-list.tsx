@@ -39,20 +39,44 @@ function toRows(details: UnionProfileDetails): Array<[string, string]> {
 
 export function ProfileDetailsList({
   details,
+  tone = "surface",
 }: {
   details: UnionProfileDetails;
+  /**
+   * `overlay` — поверх фотографии: там под текстом произвольный снимок, а не
+   * подложка темы, поэтому цвета берутся белые, а не токенные.
+   */
+  tone?: "surface" | "overlay";
 }) {
   const rows = toRows(details);
   if (rows.length === 0) return null;
 
+  const overlay = tone === "overlay";
+
   return (
     <details className="text-sm">
-      <summary className="cursor-pointer text-magenta">О человеке</summary>
+      <summary
+        className={`cursor-pointer ${overlay ? "text-cyan" : "text-magenta"}`}
+      >
+        О человеке
+      </summary>
       <dl className="mt-3 space-y-1.5">
         {rows.map(([label, value]) => (
           <div key={label} className="flex gap-3">
-            <dt className="w-40 shrink-0 text-xs text-text-2">{label}</dt>
-            <dd className="flex-1 text-xs text-text-1">{value}</dd>
+            <dt
+              className={`w-40 shrink-0 text-xs ${
+                overlay ? "text-white/60" : "text-text-2"
+              }`}
+            >
+              {label}
+            </dt>
+            <dd
+              className={`flex-1 text-xs ${
+                overlay ? "text-white/85" : "text-text-1"
+              }`}
+            >
+              {value}
+            </dd>
           </div>
         ))}
       </dl>

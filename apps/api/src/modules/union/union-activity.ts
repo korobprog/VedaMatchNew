@@ -20,3 +20,19 @@ export function toActivityLevel(
   if (elapsed < WEEK_MS) return 'week';
   return 'long_ago';
 }
+
+/**
+ * Точное время визита для карточки — «был(а) сегодня в 14:32» вместо просто
+ * «сегодня». Отдаётся только по свежим визитам: у того, кто не заходил
+ * неделю, точная отметка ничего не добавляет к «давно», зато рассказывает о
+ * человеке больше, чем он собирался сообщить.
+ */
+export function toLastSeenAt(
+  lastSeenAt: Date | null | undefined,
+  now: Date = new Date(),
+): string | null {
+  if (!lastSeenAt) return null;
+  const level = toActivityLevel(lastSeenAt, now);
+  if (level === null || level === 'long_ago') return null;
+  return lastSeenAt.toISOString();
+}

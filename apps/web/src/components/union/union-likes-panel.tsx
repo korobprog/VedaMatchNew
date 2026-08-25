@@ -9,6 +9,7 @@ import type {
 } from "@vedamatch/shared";
 import { VerifiedBadge } from "./verified-badge";
 import { yearsSuffix } from "./labels";
+import { sortIncomingLikes } from "./sort-likes";
 import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -17,26 +18,27 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 export function UnionLikesPanel({
   requests,
   loadError,
+  favoriteUserIds = [],
 }: {
   requests: UnionConnectionRequestsState | null;
   loadError?: string | null;
+  /** Кого человек отметил звёздочкой. Отмеченные идут первыми. */
+  favoriteUserIds?: string[];
 }) {
   const router = useRouter();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Локальная копия: звёздочка должна загораться сразу, не дожидаясь
+  // перечитывания страницы с сервера.
+  const [favorites, setFavorites] = useState(() => new Set(favoriteUserIds));
 
   const likes = useMemo(() => {
     if (!requests) return null;
-    return requests.incoming
-      .filter((request) => request.status === "pending")
-      .sort((left, right) => {
-        // Суперлайки — вперёд: человек потратил на вас дневную квоту.
-        if (left.isSuperlike !== right.isSuperlike) {
-          return left.isSuperlike ? -1 : 1;
-        }
-        return Date.parse(right.createdAt) - Date.parse(left.createdAt);
-      });
-  }, [requests]);
+    return sortIncomingLikes(
+      requests.incoming.filter((request) => request.status === "pending"),
+      favorites,
+    );
+  }, [requests, favorites]);
 
   if (!likes) {
     return (
@@ -74,6 +76,35 @@ export function UnionLikesPanel({
     }
   }
 
+  /**
+   * Звёздочка переключается оптимистично и откатывается при отказе сервера:
+   * это личная заметка, ради неё ждать круга до сервера незачем.
+   */
+  async function toggleFavorite(userId: string) {
+    const wasFavorite = favorites.has(userId);
+    setFavorites((current) => {
+      const next = new Set(current);
+      if (wasFavorite) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+    try {
+      const response = await apiFetch(
+        `${API_URL}/union/favorites/${encodeURIComponent(userId)}`,
+        { method: wasFavorite ? "DELETE" : "POST", credentials: "include" },
+      );
+      if (!response.ok) throw new Error(await response.text());
+    } catch {
+      setFavorites((current) => {
+        const next = new Set(current);
+        if (wasFavorite) next.add(userId);
+        else next.delete(userId);
+        return next;
+      });
+      setError("Не удалось изменить избранное");
+    }
+  }
+
   return (
     <section>
       {error && <p className="mb-4 text-sm text-red-500">{error}</p>}
@@ -83,6 +114,8 @@ export function UnionLikesPanel({
             key={like.id}
             like={like}
             busy={pendingId === like.id}
+            favorite={favorites.has(like.user.id)}
+            onToggleFavorite={toggleFavorite}
             onRespond={respond}
           />
         ))}
@@ -94,10 +127,14 @@ export function UnionLikesPanel({
 function LikeCard({
   like,
   busy,
+  favorite,
+  onToggleFavorite,
   onRespond,
 }: {
   like: UnionConnectionRequestDto;
   busy: boolean;
+  favorite: boolean;
+  onToggleFavorite: (userId: string) => void;
   onRespond: (requestId: string, action: "accept" | "decline") => void;
 }) {
   const { user } = like;
@@ -112,7 +149,7 @@ function LikeCard({
 
   return (
     <li
-      className={`glass overflow-hidden rounded-3xl border ${
+      className={`glass relative overflow-hidden rounded-3xl border ${
         like.isSuperlike
           ? "border-[#B23EFF]/50 shadow-[0_0_24px_rgba(178,62,255,0.25)]"
           : "border-glass-brd"
@@ -147,6 +184,24 @@ function LikeCard({
           </div>
         </div>
       </Link>
+
+      {/* Вне <Link>: иначе тап по звёздочке открывал бы анкету. Это личная
+          отметка — отмеченный о ней не узнает. */}
+      <button
+        type="button"
+        onClick={() => onToggleFavorite(user.id)}
+        aria-pressed={favorite}
+        aria-label={
+          favorite ? "Убрать из избранного" : "Отметить как особенно понравившегося"
+        }
+        title={
+          favorite ? "Убрать из избранного" : "Отметить как особенно понравившегося"
+        }
+        className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/45 backdrop-blur transition hover:bg-black/65"
+      >
+        <StarGlyph filled={favorite} />
+      </button>
+
       <div className="space-y-3 p-4">
         <p className="text-sm text-text-1">{subtitle}</p>
         {like.message && (
@@ -172,5 +227,28 @@ function LikeCard({
         </div>
       </div>
     </li>
+  );
+}
+
+/**
+ * Звезда избранного. Своя фигура, а не ★ из шрифта: глиф рисуется системным
+ * шрифтом и на телефоне выходит разного веса от устройства к устройству.
+ * Незакрашенная — контур, отмеченная — заливка золотом.
+ */
+function StarGlyph({ filled }: { filled: boolean }) {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={filled ? "text-gold" : "text-white"}
+    >
+      <path d="M12 3.5l2.6 5.3 5.9.9-4.2 4.1 1 5.8-5.3-2.8-5.3 2.8 1-5.8L3.5 9.7l5.9-.9z" />
+    </svg>
   );
 }

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { MapPin } from "lucide-react";
 import type { MarketListingSummary } from "@vedamatch/shared";
 import type { Locale } from "@/lib/locale";
+import { BuyNowButton } from "./add-to-cart-button";
+import { CartControls } from "./cart-controls";
 import { FavoriteButton } from "./favorite-button";
 import { Price, type PriceLabels } from "./price";
 
@@ -104,6 +106,25 @@ export function ListingCard({
           <p className="text-xs text-text-2">
             {listing.status === "sold_out" ? labels.soldOut : labels.unavailable}
           </p>
+        )}
+
+        {/* Свой товар не заказывают у себя — как на странице объявления,
+            кнопки прячем у владельца вместо неработающей ошибки по клику. */}
+        {!listing.canEdit && (
+          <div className="mt-1 flex items-center gap-2">
+            <CartControls
+              listingId={listing.id}
+              kind={listing.kind}
+              available={listing.available}
+            />
+            <BuyNowButton
+              listingId={listing.id}
+              disabled={!listing.available}
+              compact
+              containerClassName="flex-1"
+              className="inline-flex h-9 w-full items-center justify-center rounded-xl border border-magenta/40 bg-magenta/10 transition-colors hover:bg-magenta/20 disabled:opacity-50"
+            />
+          </div>
         )}
       </div>
     </article>

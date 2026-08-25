@@ -5,7 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { getMarketListing, getMarketListingComments } from "@/lib/market-api";
 import { getServerLocale } from "@/i18n/get-locale";
 import { priceLabels } from "@/components/market/labels";
-import { AddToCartButton } from "@/components/market/add-to-cart-button";
+import { AddToCartButton, BuyNowButton } from "@/components/market/add-to-cart-button";
 import { CommentList } from "@/components/market/comment-list";
 import { FavoriteButton } from "@/components/market/favorite-button";
 import { ReportButton } from "@/components/market/report-dialog";
@@ -84,6 +84,10 @@ export default async function MarketListingPage({
           {!listing.canEdit && (
             <div className="mt-4 flex flex-wrap gap-2">
               <AddToCartButton
+                listingId={listing.id}
+                disabled={!listing.available}
+              />
+              <BuyNowButton
                 listingId={listing.id}
                 disabled={!listing.available}
               />

@@ -81,7 +81,7 @@ export function UnionBoostButton() {
             : "bg-white/90 text-[#FF9500] hover:bg-white"
         }`}
       >
-        ⚡
+        <BoltIcon />
         {active && (
           <span className="text-sm font-semibold tabular-nums">
             {formatLeft(status.secondsLeft)}
@@ -94,15 +94,18 @@ export function UnionBoostButton() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="union-boost-title"
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 backdrop-blur-sm sm:items-center"
           onClick={() => setOpen(false)}
         >
           <div
-            className="glass w-full max-w-sm rounded-3xl border border-glass-brd p-6 text-center"
+            // Матовое стекло в духе iOS: фотография под окном просвечивает, но
+            // сильное размытие и плотная подложка держат текст читаемым.
+            // Обычный --vm-glass для этого слишком прозрачен.
+            className="w-full max-w-sm rounded-3xl border border-sheet-brd bg-sheet p-6 text-center shadow-2xl backdrop-blur-2xl backdrop-saturate-150"
             onClick={(event) => event.stopPropagation()}
           >
-            <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#FFB020]/15 text-3xl">
-              ⚡
+            <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#FFB020]/15 text-[#FF9500]">
+              <BoltIcon size={28} />
             </span>
             <h2
               id="union-boost-title"
@@ -138,6 +141,24 @@ export function UnionBoostButton() {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Молния «внимания». Своя фигура, а не ⚡: эмодзи рисует система, и в ряду
+ * нарисованных значков колоды он выпадал и цветом, и весом.
+ */
+function BoltIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M13.6 2 5 13.4h5.2L9.4 22 19 10.2h-5.8L13.6 2Z" />
+    </svg>
   );
 }
 

@@ -1,10 +1,24 @@
-import type { UnionIntentionType } from "@vedamatch/shared";
+import type {
+  UnionCompatibilityCriterion,
+  UnionIntentionType,
+} from "@vedamatch/shared";
 
 export const intentionLabels: Record<UnionIntentionType, string> = {
   family: "Создание семьи",
   business: "Бизнес и проекты",
   friendship: "Дружба по интересам",
   service: "Совместное служение",
+};
+
+/** Из чего складывается процент совместимости — подписи для разбора. */
+export const criterionLabels: Record<UnionCompatibilityCriterion, string> = {
+  intentions: "Цели знакомства",
+  stage: "Духовный этап",
+  lifestyle: "Образ жизни",
+  interests: "Интересы",
+  values: "Ценности",
+  location: "Локация",
+  format: "Формат общения",
 };
 
 export const intentionTypes = Object.keys(intentionLabels) as UnionIntentionType[];

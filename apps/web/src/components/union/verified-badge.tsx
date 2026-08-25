@@ -1,13 +1,28 @@
 /**
  * Значок преданного, статус которого подтвердила администрация.
- * `overlay` — вариант поверх фото карточки, `inline` — в строке с именем.
+ * `overlay` — вариант поверх фото карточки, `inline` — в строке с именем,
+ * `dot` — только иконка кружком: в колоде рядом с именем нет места под слово,
+ * а подпись остаётся в `title` и `aria-label`.
  */
 export function VerifiedBadge({
   variant = "inline",
 }: {
-  variant?: "inline" | "overlay";
+  variant?: "inline" | "overlay" | "dot";
 }) {
   const label = "Преданный подтверждён администрацией";
+
+  if (variant === "dot") {
+    return (
+      <span
+        title={label}
+        aria-label={label}
+        data-testid="verified-devotee-badge"
+        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan text-[#06231F] shadow-[0_0_12px_var(--vm-glow-cyan)]"
+      >
+        <CheckShieldIcon />
+      </span>
+    );
+  }
 
   return (
     <span
@@ -30,9 +45,22 @@ export function VerifiedBadge({
 export function PhotoVerifiedBadge({
   variant = "inline",
 }: {
-  variant?: "inline" | "overlay";
+  variant?: "inline" | "overlay" | "dot";
 }) {
   const label = "Фото проверено администрацией";
+
+  if (variant === "dot") {
+    return (
+      <span
+        title={label}
+        aria-label={label}
+        data-testid="photo-verified-badge"
+        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gold text-[#2A1B00] shadow-[0_0_12px_var(--vm-glow-gold)]"
+      >
+        <CameraCheckIcon />
+      </span>
+    );
+  }
 
   return (
     <span

@@ -14,6 +14,8 @@ export const notificationEventNames = {
   portalChatRequestReceived: 'chat.request-received',
   connectionRequested: 'union.connection.requested',
   connectionAccepted: 'union.connection.accepted',
+  astroCompatibilityRequested: 'astro.compatibility.requested',
+  astroCompatibilityAccepted: 'astro.compatibility.accepted',
   contactsRequestReceived: 'contacts.request.received',
   contactsRequestAccepted: 'contacts.request.accepted',
   supportReplied: 'support.ticket.replied',
@@ -96,6 +98,22 @@ export function buildNotification(
         body: `${event.senderName} хочет познакомиться`,
         url: '/union/connections',
         tag: 'connections',
+        category: 'connections',
+      };
+    case 'astro.compatibility.requested':
+      return {
+        title: 'Запрос совместимости',
+        body: `${event.senderName} хочет сверить астрологическую совместимость`,
+        url: '/astro/compatibility',
+        tag: 'astro-compatibility',
+        category: 'connections',
+      };
+    case 'astro.compatibility.accepted':
+      return {
+        title: 'Совместимость открыта',
+        body: `${event.senderName} согласился сверить карты — разбор готов`,
+        url: '/astro/compatibility',
+        tag: 'astro-compatibility',
         category: 'connections',
       };
     case 'union.connection.accepted':

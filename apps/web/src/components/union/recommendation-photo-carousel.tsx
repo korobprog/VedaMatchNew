@@ -1,7 +1,8 @@
 "use client";
 
 import type { UnionPhoto } from "@vedamatch/shared";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { isTap, tappedPhotoIndex } from "./photo-tap";
 
 /**
  * `thumb` — компактное превью рядом с текстом, `cover` — фото на всю карточку
@@ -21,6 +22,7 @@ export function RecommendationPhotoCarousel({
   const photoIdentity = photos.map(({ id, url }) => `${id}:${url}`).join("|");
   const identity = `${userName}|${photoIdentity}`;
   const [navigation, setNavigation] = useState({ identity, index: 0 });
+  const pointerStart = useRef<{ x: number; y: number } | null>(null);
 
   if (photos.length === 0) return null;
 
@@ -53,29 +55,70 @@ export function RecommendationPhotoCarousel({
 
       {hasControls && (
         <>
-          <button
-            type="button"
-            aria-label="Предыдущее фото"
-            onClick={() =>
-              setNavigation({
-                identity,
-                index: (safeIndex - 1 + photos.length) % photos.length,
-              })
-            }
-            className="absolute left-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-xl text-white shadow-sm transition hover:bg-black/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-magenta"
-          >
-            <span aria-hidden="true">‹</span>
-          </button>
-          <button
-            type="button"
-            aria-label="Следующее фото"
-            onClick={() =>
-              setNavigation({ identity, index: (safeIndex + 1) % photos.length })
-            }
-            className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-xl text-white shadow-sm transition hover:bg-black/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-magenta"
-          >
-            <span aria-hidden="true">›</span>
-          </button>
+          {/* В превью рядом с текстом тапать по половинам нечего — снимок
+              112px шириной, поэтому там остаются стрелки. */}
+          {!isCover && (
+            <>
+              <button
+                type="button"
+                aria-label="Предыдущее фото"
+                onClick={() =>
+                  setNavigation({
+                    identity,
+                    index: (safeIndex - 1 + photos.length) % photos.length,
+                  })
+                }
+                className="absolute left-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-xl text-white shadow-sm transition hover:bg-black/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-magenta"
+              >
+                <span aria-hidden="true">‹</span>
+              </button>
+              <button
+                type="button"
+                aria-label="Следующее фото"
+                onClick={() =>
+                  setNavigation({ identity, index: (safeIndex + 1) % photos.length })
+                }
+                className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-xl text-white shadow-sm transition hover:bg-black/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-magenta"
+              >
+                <span aria-hidden="true">›</span>
+              </button>
+            </>
+          )}
+
+          {/*
+            На полной карточке боковые позиции отданы листанию анкет, поэтому
+            фото переключается тапом по половинам. Это `div`, а не кнопка:
+            `onPointerDownCapture` в SwipeCard глушит перетаскивание для
+            `button, a`, и кнопка во всю площадь фото сломала бы свайп.
+            Клавиатурный доступ дают точки-индикаторы сверху — здесь
+            `aria-hidden`, чтобы не дублировать их в дереве доступности.
+          */}
+          {isCover && (
+            <div
+              aria-hidden="true"
+              className="absolute inset-0"
+              onPointerDown={(event) => {
+                pointerStart.current = { x: event.clientX, y: event.clientY };
+              }}
+              onPointerUp={(event) => {
+                const start = pointerStart.current;
+                pointerStart.current = null;
+                if (!start) return;
+                if (!isTap(start, { x: event.clientX, y: event.clientY })) return;
+                const bounds = event.currentTarget.getBoundingClientRect();
+                setNavigation({
+                  identity,
+                  index: tappedPhotoIndex({
+                    currentIndex: safeIndex,
+                    total: photos.length,
+                    tapX: event.clientX,
+                    boundsLeft: bounds.left,
+                    boundsWidth: bounds.width,
+                  }),
+                });
+              }}
+            />
+          )}
           <div
             className={
               isCover

@@ -1,6 +1,8 @@
 // API-клиент сервиса Union. См. docs/service-module-contract.md
 import { cookies } from "next/headers";
 import type {
+  UnionArchiveListResponse,
+  UnionFavoritesResponse,
   UnionChatState,
   UnionChatsState,
   UnionConnectionCounts,
@@ -50,6 +52,10 @@ export const getUnionConnectionRequests = () =>
 export const getUnionConnectionCounts = () =>
   unionGet<UnionConnectionCounts>("/union/connection-requests/counts");
 export const getUnionBlocks = () => unionGet<UserBlocksState>("/union/blocks");
+export const getUnionArchive = () =>
+  unionGet<UnionArchiveListResponse>("/union/archive");
+export const getUnionFavorites = () =>
+  unionGet<UnionFavoritesResponse>("/union/favorites");
 export const getUnionChats = () => unionGet<UnionChatsState>("/union/chats");
 export const getUnionChat = (id: string) =>
   unionGet<UnionChatState>(`/union/chats/${encodeURIComponent(id)}`);

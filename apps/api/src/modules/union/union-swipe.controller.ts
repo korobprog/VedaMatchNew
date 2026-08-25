@@ -25,4 +25,10 @@ export class UnionSwipeController {
   resetHistory(@CurrentUser() user: AccessTokenPayload) {
     return this.swipes.resetHistory(user.sub);
   }
+
+  /** Новый круг: снимает пропуски, но не лайки и не архив. */
+  @Post('new-cycle')
+  startNewCycle(@CurrentUser() user: AccessTokenPayload) {
+    return this.swipes.startNewCycle(user.sub);
+  }
 }

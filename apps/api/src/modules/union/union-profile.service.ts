@@ -43,7 +43,7 @@ import { calculateAge, MAX_PROFILE_AGE, MIN_PROFILE_AGE } from '../users/age';
 import { computeCompleteness } from './union-completeness';
 import { MotivationGenerationService } from '../motivation/motivation-generation.service';
 import { ModerationService } from '../moderation/moderation.service';
-import { toActivityLevel } from './union-activity';
+import { toActivityLevel, toLastSeenAt } from './union-activity';
 import { isVerifiedDevotee } from './union-verification';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserGalleryService } from '../users/user-gallery.service';
@@ -53,6 +53,7 @@ import {
   UnionMatchingService,
   UnionMatchInput,
 } from './union-matching.service';
+import { UnionArchiveService } from './union-archive.service';
 import { UnionSwipeService } from './union-swipe.service';
 
 const INTENTION_TYPES: UnionIntentionType[] = [
@@ -183,6 +184,7 @@ export class UnionProfileService {
     private readonly users: UsersService,
     private readonly swipes: UnionSwipeService,
     private readonly boosts: UnionBoostService,
+    private readonly archive: UnionArchiveService,
   ) {}
 
   async getState(userId: string): Promise<UnionProfileState> {
@@ -337,6 +339,10 @@ export class UnionProfileService {
     // множества уходят в SQL как notIn, а JS-фильтр ниже остаётся страховкой.
     const hidden = await this.moderation.hiddenUserIds(userId, 'union');
     const swiped = await this.swipes.swipedUserIds(userId);
+    // Архив прячется всегда, наравне с hidden от модерации: «показывать уже
+    // отсмотренных» на него не распространяется — иначе галочка в фильтрах
+    // молча отменяла бы осознанное «убрать совсем».
+    const archived = await this.archive.archivedUserIds(userId);
     const normalizedFilters = this.normalizeFilters(filters);
     const myAgePreference: MyAgePreference = {
       ageRangeMin: me.ageRangeMin,
@@ -347,8 +353,8 @@ export class UnionProfileService {
       where: buildRecommendationCandidateWhere({
         userId,
         excludedUserIds: normalizedFilters.includeSwiped
-          ? [...hidden]
-          : [...swiped, ...hidden],
+          ? [...hidden, ...archived]
+          : [...swiped, ...hidden, ...archived],
         filters: normalizedFilters,
         myAge: myAgePreference,
       }),
@@ -383,7 +389,9 @@ export class UnionProfileService {
     const myInput = this.toMatchInput(me, me.user);
     const myFamilyGender = familyGenderContext(me, me.user.gender);
     const beforeIntentions = others
-      .filter((other) => !hidden.has(other.userId))
+      .filter(
+        (other) => !hidden.has(other.userId) && !archived.has(other.userId),
+      )
       .filter(
         (other) => normalizedFilters.includeSwiped || !swiped.has(other.userId),
       )
@@ -585,6 +593,7 @@ export class UnionProfileService {
         ? calculateAge(otherUser.birthDate)
         : null,
       activity: toActivityLevel(otherUser.lastSeenAt),
+      lastSeenAt: toLastSeenAt(otherUser.lastSeenAt),
       isVerifiedDevotee: isVerifiedDevotee(otherUser),
       isPhotoVerified: otherUser.photoVerifiedAt !== null,
       photos: [],

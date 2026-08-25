@@ -25,6 +25,7 @@ function recommendation(
       spiritualStage: "seeker",
       age: 28,
       activity: "online",
+      lastSeenAt: null,
       isVerifiedDevotee: false,
       isPhotoVerified: false,
       contacts: null,

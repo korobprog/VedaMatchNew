@@ -34,6 +34,7 @@ describe('UnionSwipeService', () => {
       findMany: jest.fn(),
       upsert: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       delete: jest.fn(),
     },
     unionConnectionRequest: {
@@ -386,5 +387,41 @@ describe('UnionSwipeService', () => {
       where: { fromUserId: 'user-1', undoneAt: null },
       select: { toUserId: true },
     });
+  });
+});
+
+describe('UnionSwipeService.startNewCycle', () => {
+  const prisma = {
+    unionSwipe: { updateMany: jest.fn() },
+    unionConnectionRequest: { findUnique: jest.fn(), update: jest.fn() },
+  };
+  const service = new UnionSwipeService(
+    prisma as unknown as PrismaService,
+    { create: jest.fn() } as unknown as UnionConnectionService,
+  );
+
+  beforeEach(() => jest.resetAllMocks());
+
+  // Главное отличие от resetHistory: лайки и суперлайки переживают новый
+  // круг, а заявки по ним не отменяются. Иначе начало круга рассылало бы
+  // людям отмены, чего человек не просил.
+  it('clears only passes and leaves likes untouched', async () => {
+    prisma.unionSwipe.updateMany.mockResolvedValue({ count: 3 });
+
+    const result = await service.startNewCycle('me');
+
+    expect(prisma.unionSwipe.updateMany).toHaveBeenCalledWith({
+      where: { fromUserId: 'me', decision: 'pass', undoneAt: null },
+      data: { undoneAt: expect.any(Date) },
+    });
+    expect(result.restoredCount).toBe(3);
+  });
+
+  it('does not touch connection requests', async () => {
+    prisma.unionSwipe.updateMany.mockResolvedValue({ count: 0 });
+
+    await service.startNewCycle('me');
+
+    expect(prisma.unionConnectionRequest.update).not.toHaveBeenCalled();
   });
 });

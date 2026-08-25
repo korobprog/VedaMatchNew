@@ -140,10 +140,7 @@ export function Header({ user }: { user: UserProfile }) {
   const tCommon = useTranslations("Common");
   const navItems = useNavItems();
   const [isOpen, setIsOpen] = useState(false);
-  // Корзина принадлежит «Рынку»: в Астрологии или в Книгах она сбивает с толку,
-  // да и опрашивать счётчик там незачем.
   const pathname = usePathname();
-  const inMarket = pathname === "/market" || pathname.startsWith("/market/");
   const drawerId = useId();
   const drawerRef = useRef<HTMLDivElement>(null);
   const burgerRef = useRef<HTMLButtonElement>(null);
@@ -208,8 +205,10 @@ export function Header({ user }: { user: UserProfile }) {
           {/* Right side */}
           <div className="flex items-center gap-2">
             {/* Виден и на мобильном: это основной вход в уведомления,
-                прятать его в бургер — значит прятать и значок. */}
-            {inMarket && <CartBadge />}
+                прятать его в бургер — значит прятать и значок. Сама
+                CartBadge решает, показываться ли — рендерится только
+                когда в корзине что-то лежит, независимо от раздела. */}
+            <CartBadge />
             <NotificationBell />
             <LocaleToggle className="hidden sm:flex" />
             <ThemeToggle className="hidden sm:flex" />

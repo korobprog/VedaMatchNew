@@ -10,6 +10,7 @@ const links = [
   { href: "/union/likes", label: "Лайки" },
   { href: "/chat", label: "Чаты" },
   { href: "/union/connections", label: "Связи" },
+  { href: "/union/hidden", label: "Скрытые" },
   { href: "/union/profile", label: "Профиль" },
 ];
 

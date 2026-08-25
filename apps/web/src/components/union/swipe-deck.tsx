@@ -3,19 +3,68 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion, useMotionValue, useTransform } from "framer-motion";
+import {
+  AnimatePresence,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+} from "framer-motion";
 import type { UnionRecommendation } from "@vedamatch/shared";
 import { ActivityBadge } from "./activity-badge";
+import { ArchiveButton } from "./archive-button";
 import { ProfileDetailsList } from "./profile-details-list";
 import { RecommendationPhotoCarousel } from "./recommendation-photo-carousel";
+import { SwipeHint } from "./swipe-hint";
+import {
+  CompatibilityBreakdown,
+  CompatibilityRing,
+} from "./compatibility-ring";
 import { UnionBoostButton } from "./union-boost-button";
-import { unionInterestIcon } from "./dictionaries";
-import { intentionLabels, yearsSuffix } from "./labels";
+import { SparkGlyph, UnionInterestIcon } from "./interest-icons";
+import { intentionLabels } from "./labels";
+import { EVERYTHING_URL } from "./recommendation-empty-state";
 import { PhotoVerifiedBadge, VerifiedBadge } from "./verified-badge";
 import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+
+/** Насколько далеко надо утащить карточку, чтобы решение засчиталось. */
 const SWIPE_DISTANCE = 110;
+
+/**
+ * Порог броска. Короткий быстрый флик — такое же осознанное решение, как
+ * долгое перетаскивание: без учёта скорости он упирался в SWIPE_DISTANCE и
+ * карточка отпрыгивала назад, хотя жест был уверенным.
+ */
+const SWIPE_VELOCITY = 520;
+
+type SwipeDirection = "left" | "right" | "up";
+
+/**
+ * Куда улетает карточка после решения. Дальше края экрана, чтобы уход не
+ * обрывался на видимой границе.
+ */
+const exitOffsets: Record<SwipeDirection, { x: number; y: number }> = {
+  left: { x: -560, y: 40 },
+  right: { x: 560, y: 40 },
+  up: { x: 0, y: -680 },
+};
+
+/**
+ * Пружина для возврата недоброшенной карточки и для подъёма следующей.
+ * Заметно мягче линейного затухания: рука отпускает — карточка догоняет.
+ */
+const springy = { type: "spring", stiffness: 260, damping: 26 } as const;
+
+/**
+ * Корпус кнопки решения. Подложки под всей панелью больше нет, поэтому объём
+ * держит сама кнопка: блик по верхней кромке, затемнение к низу, светлая
+ * рамка и падающая тень. Без них на светлой фотографии кнопка теряет край и
+ * перестаёт читаться как нажимаемая.
+ */
+const actionButtonClass =
+  "flex shrink-0 items-center justify-center rounded-full border border-white/30 bg-gradient-to-b from-white/25 to-black/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),inset_0_-2px_4px_rgba(0,0,0,0.35),0_6px_16px_rgba(0,0,0,0.5)] backdrop-blur-md transition hover:from-white/35 hover:to-black/25 active:translate-y-px";
 
 const stageLabels: Record<string, string> = {
   seeker: "Ищущий",
@@ -29,15 +78,44 @@ const stageLabels: Record<string, string> = {
  * влево — пропустить. Каждое решение уходит на сервер, поэтому отсмотренные
  * анкеты не возвращаются в колоду после перезагрузки.
  */
-export function SwipeDeck({ items }: { items: UnionRecommendation[] }) {
+export function SwipeDeck({
+  items,
+  fullscreen = false,
+  onExit,
+  initialIndex = 0,
+}: {
+  items: UnionRecommendation[];
+  /**
+   * С какой анкеты открыть колоду. Список отдаёт сюда позицию плитки, по
+   * которой нажали, — иначе тап по четвёртой открывал бы первую.
+   */
+  initialIndex?: number;
+  /**
+   * Фокус-режим: колода занимает всю высоту оверлея вместо фиксированных
+   * 520px. На телефоне разница в треть экрана — при фиксированной высоте
+   * фото сжимается, а под кнопками остаётся пустая полоса.
+   */
+  fullscreen?: boolean;
+  /** Выход из фокус-режима: кнопка рисуется поверх карточки, а не над ней. */
+  onExit?: () => void;
+}) {
   const router = useRouter();
-  const [index, setIndex] = useState(0);
+  // Зажимаем в границы: список мог отдать позицию из прошлой выдачи, а
+  // пустая колода при живых анкетах выглядит как поломка.
+  const [index, setIndex] = useState(() =>
+    Math.min(Math.max(0, initialIndex), Math.max(0, items.length - 1)),
+  );
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
+  const [exitDirection, setExitDirection] = useState<SwipeDirection>("left");
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [recycling, setRecycling] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   const current = items[index];
+  const next = items[index + 1];
 
   async function swipe(
     userId: string,
@@ -91,105 +169,268 @@ export function SwipeDeck({ items }: { items: UnionRecommendation[] }) {
     }
   }
 
-  function advance() {
+  /** Начало нового круга: сервер снимает пропуски, выдача перечитывается. */
+  async function newCycle() {
+    if (recycling) return;
+    setRecycling(true);
+    setError(null);
+    try {
+      const res = await apiFetch(`${API_URL}/union/swipes/new-cycle`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setIndex(0);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось начать круг заново");
+    } finally {
+      setRecycling(false);
+    }
+  }
+
+  function advance(direction: SwipeDirection) {
     setSent(null);
+    // Разбор относится к конкретной анкете: оставить его открытым над
+    // следующей значило бы показать чужие проценты под новым именем.
+    setBreakdownOpen(false);
+    setExitDirection(direction);
     setIndex((value) => value + 1);
+  }
+
+  /**
+   * Листание без решения: двигаем только указатель. На сервер ничего не
+   * уходит — анкета не считается отсмотренной, и по колоде можно пройтись
+   * туда-сюда, ничего не потратив. Откат (↺) этим не заменяется: он снимает
+   * уже записанное решение, а это просто просмотр.
+   */
+  function browse(delta: 1 | -1) {
+    const target = index + delta;
+    if (target < 0 || target >= items.length) return;
+    setSent(null);
+    setBreakdownOpen(false);
+    setExitDirection(delta === 1 ? "left" : "right");
+    setIndex(target);
   }
 
   if (!current) {
     return (
       <div className="glass rounded-3xl border border-glass-brd p-10 text-center">
         <p className="mb-2 font-display text-lg font-bold text-text-0">
-          Колода закончилась
+          Круг пройден
         </p>
         <p className="text-sm text-text-1">
-          Вы просмотрели всех, кто подходит по текущим фильтрам. Расширьте
-          условия поиска или загляните позже.
+          Вы посмотрели всех, кто подходит по текущим фильтрам. Можно начать
+          круг заново — пропущенные вернутся, лайки и архив останутся как есть.
         </p>
-        <button
-          type="button"
-          onClick={() => setIndex(0)}
-          className="mt-4 rounded-xl glass border border-glass-brd px-4 py-2 text-sm font-medium text-text-1 hover:text-text-0"
-        >
-          Пройти заново
-        </button>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+          <button
+            type="button"
+            disabled={recycling}
+            onClick={() => void newCycle()}
+            className="rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-5 py-2.5 text-sm font-semibold text-white transition hover:shadow-[0_0_20px_var(--vm-glow-magenta)] disabled:opacity-50"
+          >
+            {recycling ? "Начинаем…" : "Показать заново"}
+          </button>
+          {/* Второй выход — когда дело не в круге, а в фильтрах. */}
+          <a
+            href={EVERYTHING_URL}
+            className="text-sm font-medium text-text-2 underline-offset-4 transition hover:text-text-0 hover:underline"
+          >
+            Показать вообще всех
+          </a>
+        </div>
+        {error && (
+          <p className="mt-3 text-center text-sm text-red-500">{error}</p>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-sm">
-      <p className="mb-3 text-center text-sm text-text-2">
-        {index + 1} из {items.length}
-      </p>
+    <div
+      className={
+        fullscreen
+          ? "mx-auto flex h-full w-full max-w-sm flex-col"
+          : "mx-auto max-w-sm"
+      }
+    >
+      {!fullscreen && (
+        <p className="mb-2 text-center text-sm text-text-2">
+          {index + 1} из {items.length}
+        </p>
+      )}
 
-      <div className="relative h-[520px]">
-        <AnimatePresence initial={false}>
+      <div
+        className={
+          fullscreen ? "relative min-h-0 flex-1" : "relative h-[520px]"
+        }
+      >
+        {/*
+          Следующая анкета лежит под текущей уменьшенной стопкой. Без неё
+          решение открывало пустой прямоугольник, и колода на секунду
+          выглядела закончившейся.
+        */}
+        {next && <StackPreview key={next.user.id} item={next} />}
+
+        {/*
+          `custom` — единственный способ донести направление до уходящей
+          карточки: её собственные пропсы заморожены на момент, когда решение
+          ещё не принято, и без этого она улетала бы всегда в одну сторону.
+        */}
+        <AnimatePresence initial={false} mode="popLayout" custom={exitDirection}>
           <SwipeCard
             key={current.user.id}
             item={current}
+            exitDirection={exitDirection}
+            reduceMotion={Boolean(reduceMotion)}
             onLike={() => {
               void swipe(current.user.id, "like");
-              advance();
+              advance("right");
             }}
             onSkip={() => {
               void swipe(current.user.id, "pass");
-              advance();
+              advance("left");
             }}
             onSuperlike={() => {
               void swipe(current.user.id, "superlike");
-              advance();
+              advance("up");
             }}
           />
         </AnimatePresence>
 
+        {/*
+          В фокус-режиме верхняя полоса экрана отдана карточке, поэтому выход,
+          счётчик и возврат живут поверх фото: слева — выход, по центру —
+          счётчик, справа — буст. Возврат уходит вниз, к остальным решениям.
+        */}
+        {fullscreen && onExit && (
+          <button
+            type="button"
+            onClick={onExit}
+            aria-label="Выйти из фокус-режима"
+            className="absolute left-3 top-8 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-xl text-white backdrop-blur transition hover:bg-black/60"
+          >
+            <span aria-hidden="true">✕</span>
+          </button>
+        )}
+
+        {fullscreen && (
+          <p className="pointer-events-none absolute inset-x-0 top-8 z-10 flex h-11 items-center justify-center text-sm">
+            <span className="rounded-full bg-black/45 px-3 py-1 font-medium text-white backdrop-blur">
+              {index + 1} из {items.length}
+            </span>
+          </p>
+        )}
+
+        {/*
+          Листание анкет живёт у самых краёв и намеренно почти прозрачно:
+          это вспомогательный путь, основной — свайп. Боковые позиции
+          освободила карусель фото, которая в варианте `cover` листается
+          тапом по половинам снимка.
+        */}
         <button
           type="button"
-          onClick={() => void undo()}
-          disabled={!canUndo || index === 0 || undoing}
-          aria-label="Вернуть предыдущую анкету"
-          className="absolute left-3 top-8 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-xl text-white backdrop-blur transition hover:bg-black/60 disabled:opacity-40"
+          onClick={() => browse(-1)}
+          disabled={index === 0}
+          aria-label="Предыдущая анкета"
+          className="absolute left-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-xl text-white/60 backdrop-blur-sm transition hover:bg-black/50 hover:text-white disabled:opacity-0"
         >
-          ↺
+          <span aria-hidden="true">‹</span>
         </button>
+        <button
+          type="button"
+          onClick={() => browse(1)}
+          disabled={index >= items.length - 1}
+          aria-label="Следующая анкета"
+          className="absolute right-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-xl text-white/60 backdrop-blur-sm transition hover:bg-black/50 hover:text-white disabled:opacity-0"
+        >
+          <span aria-hidden="true">›</span>
+        </button>
+
+        {/* Архив ведёт себя как решение: анкета уходит, колода едет дальше. */}
+        <ArchiveButton
+          userId={current.user.id}
+          onArchived={() => {
+            router.refresh();
+            advance("left");
+          }}
+        />
 
         <UnionBoostButton />
-      </div>
 
-      <div className="mt-4 flex items-center justify-center gap-4">
-        <button
-          type="button"
-          onClick={() => {
-            void swipe(current.user.id, "pass");
-            advance();
-          }}
-          aria-label="Пропустить"
-          className="flex h-14 w-14 items-center justify-center rounded-full glass border border-glass-brd text-2xl text-text-1 transition hover:text-text-0"
-        >
-          ✕
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            void swipe(current.user.id, "superlike");
-            advance();
-          }}
-          aria-label="Суперлайк"
-          className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-r from-[#B23EFF] to-[#5B3EFF] text-2xl text-white shadow-[0_0_24px_rgba(178,62,255,0.45)]"
-        >
-          🔥
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            void swipe(current.user.id, "like");
-            advance();
-          }}
-          aria-label="Познакомиться"
-          className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] text-2xl text-white shadow-[0_0_24px_var(--vm-glow-magenta)]"
-        >
-          ♥
-        </button>
+        {/*
+          Панель решений лежит на самой карточке, а не полосой под ней: под
+          колодой она съедала около 76px высоты, которые честнее отдать фото.
+          Стоит она неподвижно — уезжает только карточка, и рука не гонится
+          за кнопками между анкетами.
+        */}
+        <div className="absolute inset-x-3 bottom-3 z-10 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              void swipe(current.user.id, "pass");
+              advance("left");
+            }}
+            aria-label="Пропустить"
+            className={`${actionButtonClass} h-12 w-12 text-xl text-white`}
+          >
+            ✕
+          </button>
+          <button
+            type="button"
+            onClick={() => void undo()}
+            disabled={!canUndo || index === 0 || undoing}
+            aria-label="Вернуть предыдущую анкету"
+            className={`${actionButtonClass} h-11 w-11 text-lg text-white disabled:opacity-35`}
+          >
+            ↺
+          </button>
+
+          <CompatibilityRing
+            total={current.compatibility.total}
+            size={60}
+            expanded={breakdownOpen}
+            onClick={() => setBreakdownOpen((value) => !value)}
+          />
+
+          <button
+            type="button"
+            onClick={() => {
+              void swipe(current.user.id, "superlike");
+              advance("up");
+            }}
+            aria-label="Суперлайк"
+            // Огонь оранжевый: суперлайк — не то же самое, что обычный
+            // интерес, и в ряду одинаково белых кнопок это терялось.
+            className={`${actionButtonClass} h-12 w-12 text-gold drop-shadow-[0_0_10px_var(--vm-glow-gold)]`}
+          >
+            <FlameIcon />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void swipe(current.user.id, "like");
+              advance("right");
+            }}
+            aria-label="Познакомиться"
+            // Выделяется само решение — зелёное сердце со свечением, а не
+            // заливка кнопки: корпус у неё общий с соседями.
+            className={`${actionButtonClass} h-12 w-12 text-like drop-shadow-[0_0_10px_var(--vm-glow-like)]`}
+          >
+            <HeartIcon />
+          </button>
+        </div>
+
+        {breakdownOpen && (
+          <CompatibilityBreakdown
+            compatibility={current.compatibility}
+            onClose={() => setBreakdownOpen(false)}
+          />
+        )}
+
+        {/* Поверх карточки и её кнопок: первый экран учит жесту. */}
+        <SwipeHint />
       </div>
 
       {sent && <p className="mt-3 text-center text-sm text-cyan">{sent}</p>}
@@ -200,13 +441,172 @@ export function SwipeDeck({ items }: { items: UnionRecommendation[] }) {
   );
 }
 
+/**
+ * Факт об анкете отдельной пилюлей: город, рост, этап. Одной строкой через
+ * точку они сливались в текст, который взгляд пробегает целиком; разбитые по
+ * пилюлям — читаются по одному и находятся глазом за долю секунды.
+ */
+function FactPill({
+  icon,
+  children,
+}: {
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-xs text-white backdrop-blur">
+      <span aria-hidden="true" className="text-white/70">
+        {icon}
+      </span>
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Сердце «познакомиться». Залитая фигура, а не символ ♥ из шрифта: глиф
+ * рисуется системным шрифтом, на телефоне выходил тонким и разного веса от
+ * устройства к устройству.
+ */
+function HeartIcon() {
+  return (
+    <svg
+      width="36"
+      height="36"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M12 21.2c-.4 0-.8-.15-1.1-.42C6.3 16.7 3 13.6 3 9.7 3 6.6 5.4 4.2 8.4 4.2c1.5 0 2.8.62 3.6 1.6.8-.98 2.1-1.6 3.6-1.6 3 0 5.4 2.4 5.4 5.5 0 3.9-3.3 7-7.9 11.08-.3.27-.7.42-1.1.42Z" />
+    </svg>
+  );
+}
+
+/**
+ * Пламя суперлайка. Как и сердце — своя фигура, а не эмодзи: системный 🔥 в
+ * ряду нарисованных кнопок оставался единственным цветным пятном чужого
+ * стиля и менялся от устройства к устройству.
+ */
+function FlameIcon() {
+  return (
+    <svg
+      width="34"
+      height="34"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M13.4 2.2c.3 2.6-.6 4.3-2.3 6-1.9 1.9-3 3.6-3 5.9a6 6 0 0 0 11.5 2.4c1-2.4.4-5-1.2-7.2-.4 1-1.1 1.7-2 2 .5-3.4-.8-6.4-3-9.1Z" />
+      <path d="M9.6 13.8c-1 .9-1.6 2-1.6 3.3a4 4 0 0 0 4 4c-1.3-1-2-2.2-2-3.6 0-1.3.5-2.4 1.4-3.4-.6.2-1.3 0-1.8-.3Z" />
+    </svg>
+  );
+}
+
+function HomeIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 10.5 12 3l9 7.5" />
+      <path d="M5 9.5V20h14V9.5" />
+    </svg>
+  );
+}
+
+function RulerIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 15.5 15.5 4l4.5 4.5L8.5 20z" />
+      <path d="m8 11.5 2 2M11 8.5l2 2M14.5 5.5l2 2" />
+    </svg>
+  );
+}
+
+function LotusIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 20c-4.5 0-8-3-8-6 2 0 3.5.6 4.6 1.5" />
+      <path d="M12 20c4.5 0 8-3 8-6-2 0-3.5.6-4.6 1.5" />
+      <path d="M12 20c-2.5-2-4-4.6-4-7.2S9.5 7 12 4c2.5 3 4 6.2 4 8.8S14.5 18 12 20Z" />
+    </svg>
+  );
+}
+
+/**
+ * Следующая анкета под текущей: только обложка, без каруселей и кнопок.
+ * Полная карточка здесь стоила бы вторую загрузку фотографий и дублировала
+ * интерактив, до которого нельзя дотянуться — она лежит под чужой.
+ */
+function StackPreview({ item }: { item: UnionRecommendation }) {
+  const { user } = item;
+  const cover = user.photos[0]?.url ?? user.avatarUrl;
+
+  return (
+    <motion.div
+      aria-hidden="true"
+      initial={{ opacity: 0, scale: 0.9, y: 24 }}
+      animate={{ opacity: 1, scale: 0.94, y: 14 }}
+      transition={springy}
+      className="absolute inset-0 overflow-hidden rounded-3xl border border-glass-brd bg-bg-2"
+    >
+      {cover ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={cover}
+          alt=""
+          className="h-full w-full object-cover"
+          referrerPolicy="no-referrer"
+          draggable={false}
+        />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-magenta/25 to-[#B23EFF]/25 font-display text-7xl font-bold text-text-0">
+          {user.name.charAt(0).toUpperCase()}
+        </span>
+      )}
+      <span className="absolute inset-0 bg-bg-0/45" />
+    </motion.div>
+  );
+}
+
 function SwipeCard({
   item,
+  exitDirection,
+  reduceMotion,
   onLike,
   onSkip,
   onSuperlike,
 }: {
   item: UnionRecommendation;
+  exitDirection: SwipeDirection;
+  reduceMotion: boolean;
   onLike: () => void;
   onSkip: () => void;
   onSuperlike: () => void;
@@ -220,25 +620,31 @@ function SwipeCard({
   const likeOpacity = useTransform(x, [40, 140], [0, 1]);
   const skipOpacity = useTransform(x, [-140, -40], [1, 0]);
 
-  const subtitle =
-    [
-      user.age != null ? `${user.age} ${yearsSuffix(user.age)}` : null,
-      user.city,
-      user.spiritualStage ? stageLabels[user.spiritualStage] : null,
-    ]
-      .filter(Boolean)
-      .join(" · ") || "—";
+  // Возраст переехал к имени, остальное разошлось по пилюлям, поэтому строки
+  // «26 лет · Алматы · Йог» больше нет.
+  const hasFacts =
+    Boolean(user.city) ||
+    profile.heightCm != null ||
+    Boolean(user.spiritualStage);
 
   return (
     <motion.article
       style={{ x, y, rotate }}
       drag
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-      dragElastic={0.6}
+      dragElastic={0.7}
+      // Недоброшенная карточка возвращается пружиной, а не рывком: палец
+      // отпускает — она догоняет место и слегка успокаивается.
+      dragTransition={{ bounceStiffness: 240, bounceDamping: 24 }}
       onDragEnd={(_event, info) => {
-        if (info.offset.y < -SWIPE_DISTANCE) onSuperlike();
-        else if (info.offset.x > SWIPE_DISTANCE) onLike();
-        else if (info.offset.x < -SWIPE_DISTANCE) onSkip();
+        const { offset, velocity } = info;
+        if (offset.y < -SWIPE_DISTANCE || velocity.y < -SWIPE_VELOCITY) {
+          onSuperlike();
+        } else if (offset.x > SWIPE_DISTANCE || velocity.x > SWIPE_VELOCITY) {
+          onLike();
+        } else if (offset.x < -SWIPE_DISTANCE || velocity.x < -SWIPE_VELOCITY) {
+          onSkip();
+        }
       }}
       // Перетаскивание карточки перехватывает указатель, поэтому вложенным
       // кнопкам и ссылкам (карусель, шеврон, имя) отдаём событие как есть.
@@ -247,7 +653,28 @@ function SwipeCard({
           event.stopPropagation();
         }
       }}
-      exit={{ opacity: 0, scale: 0.95 }}
+      // Приходит снизу из стопки на место ушедшей, уходит в сторону решения —
+      // тем же движением, каким её толкнули. Кнопки внизу дают ту же
+      // анимацию, что и палец: решение выглядит одинаково, чем бы ни приняли.
+      initial={
+        reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.94, y: 18 }
+      }
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      custom={exitDirection}
+      variants={{
+        exit: (direction: SwipeDirection) =>
+          reduceMotion
+            ? { opacity: 0, transition: { duration: 0.15 } }
+            : {
+                // Наклон не задаём: он привязан к x через useTransform и
+                // доедет до предела сам, пока карточка уходит за край.
+                ...exitOffsets[direction],
+                opacity: 0,
+                transition: { duration: 0.38, ease: [0.22, 0.61, 0.36, 1] },
+              },
+      }}
+      exit="exit"
+      transition={reduceMotion ? { duration: 0.15 } : springy}
       className="glass absolute inset-0 flex touch-pan-y flex-col overflow-hidden rounded-3xl border border-glass-brd"
       data-testid="swipe-card"
     >
@@ -294,8 +721,20 @@ function SwipeCard({
 
         <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
 
-        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 p-4">
-          <ActivityBadge activity={user.activity} variant="overlay" />
+        {/*
+          Панель решений занимает нижние 88px, и ещё 20px — воздух над ней:
+          вплотную пилюли интересов читались как её продолжение.
+        */}
+        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 p-4 pb-[108px]">
+          {/* Обёртка, а не класс на самом значке: в колонке flex-элемент
+              растягивается на всю ширину, и пилюля уезжала от края до края. */}
+          <div className="flex">
+            <ActivityBadge
+              activity={user.activity}
+              lastSeenAt={user.lastSeenAt}
+              variant="overlay"
+            />
+          </div>
           <div className="flex items-end justify-between gap-2">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -304,43 +743,70 @@ function SwipeCard({
                   className="truncate font-display text-xl font-bold text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
                 >
                   {user.name}
+                  {user.age != null && `, ${user.age}`}
                 </Link>
-                {user.isVerifiedDevotee && <VerifiedBadge variant="overlay" />}
-                {user.isPhotoVerified && <PhotoVerifiedBadge variant="overlay" />}
+                {/*
+                  Значок стоит только у подтверждённых. Отдельной пометки
+                  «не проверен» нет намеренно: непройденная проверка — не
+                  свойство человека, а отсутствие события, и клеймить им
+                  анкету в ленте знакомств несправедливо.
+                */}
+                {user.isVerifiedDevotee && <VerifiedBadge variant="dot" />}
+                {user.isPhotoVerified && <PhotoVerifiedBadge variant="dot" />}
               </div>
-              <p className="mt-0.5 flex items-center gap-2 truncate text-sm text-white/85 drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
-                <span className="shrink-0 rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] px-2 py-0.5 text-xs font-bold text-white">
-                  {compatibility.total}%
-                </span>
-                <span className="truncate">{subtitle}</span>
-              </p>
+              {/* Процент переехал в кольцо на панели решений — здесь он
+                  дублировал бы сам себя в двух сантиметрах. */}
+              {hasFacts && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {user.city && (
+                    <FactPill icon={<HomeIcon />}>{user.city}</FactPill>
+                  )}
+                  {profile.heightCm != null && (
+                    <FactPill icon={<RulerIcon />}>
+                      {profile.heightCm} см
+                    </FactPill>
+                  )}
+                  {user.spiritualStage && (
+                    <FactPill icon={<LotusIcon />}>
+                      {stageLabels[user.spiritualStage]}
+                    </FactPill>
+                  )}
+                </div>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={() => setExpanded((value) => !value)}
-              aria-expanded={expanded}
-              aria-label={expanded ? "Свернуть анкету" : "Развернуть анкету"}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black/45 text-lg text-white backdrop-blur transition hover:bg-black/60"
-            >
-              <span aria-hidden="true">{expanded ? "⌄" : "⌃"}</span>
-            </button>
+            {/* Развёрнутые детали закрывают эту строку целиком, поэтому
+                кнопка сворачивания живёт в них самих. */}
+            {!expanded && (
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                aria-expanded={false}
+                aria-label="Развернуть анкету"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black/45 text-lg text-white backdrop-blur transition hover:bg-black/60"
+              >
+                <span aria-hidden="true">⌃</span>
+              </button>
+            )}
           </div>
 
           {profile.interests.length > 0 && (
-            <div className="mt-3">
-              <p className="mb-1.5 text-xs font-medium text-white/80">
-                ✨ Интересы
+            <div className="mt-2">
+              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-white/70">
+                <SparkGlyph />
+                Интересы
               </p>
-              <div className="flex flex-wrap gap-1.5">
+              {/* Тот же вид, что у фактов: на одной карточке две разные
+                  пилюли читаются как два разных сорта данных. */}
+              <div className="flex flex-wrap items-center gap-1.5">
                 {profile.interests
                   .slice(0, expanded ? profile.interests.length : 3)
                   .map((interest) => (
-                    <span
+                    <FactPill
                       key={interest}
-                      className="rounded-full bg-white/15 px-2.5 py-1 text-xs text-white backdrop-blur"
+                      icon={<UnionInterestIcon interest={interest} />}
                     >
-                      {unionInterestIcon(interest)} {interest}
-                    </span>
+                      {interest}
+                    </FactPill>
                   ))}
               </div>
             </div>
@@ -349,13 +815,35 @@ function SwipeCard({
       </div>
 
       {expanded && (
-        <div className="max-h-56 space-y-2 overflow-y-auto p-4">
+        /*
+          Детали ложатся поверх фотографии, а не отдельной панелью под ней.
+          Панель отрезала себе кусок карточки: фото сжималось, её собственный
+          фон темы спорил с обложкой, а нижние строки уходили под кнопки.
+          Поверх фото у деталей та же природа, что у имени и пилюль, — белый
+          текст по затемнению.
+        */
+        <div className="absolute inset-x-0 bottom-0 max-h-[70%] space-y-2 overflow-y-auto rounded-b-3xl bg-black/80 p-4 pb-[108px] backdrop-blur-sm">
+          <div className="flex items-start justify-between gap-3">
+            <p className="font-display text-lg font-bold text-white">
+              {user.name}
+              {user.age != null && `, ${user.age}`}
+            </p>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              aria-expanded
+              aria-label="Свернуть анкету"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-lg text-white transition hover:bg-white/25"
+            >
+              <span aria-hidden="true">⌄</span>
+            </button>
+          </div>
           {profile.intentions.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {profile.intentions.slice(0, 3).map((intention) => (
                 <span
                   key={intention.type}
-                  className="rounded-full border border-glass-brd bg-bg-1 px-2.5 py-1 text-xs text-text-1"
+                  className="rounded-full bg-white/15 px-2.5 py-1 text-xs text-white"
                 >
                   {intentionLabels[intention.type]} {intention.weight}%
                 </span>
@@ -363,9 +851,9 @@ function SwipeCard({
             </div>
           )}
           {profile.about && (
-            <p className="text-sm text-text-1">{profile.about}</p>
+            <p className="text-sm text-white/85">{profile.about}</p>
           )}
-          <ProfileDetailsList details={profile} />
+          <ProfileDetailsList details={profile} tone="overlay" />
         </div>
       )}
     </motion.article>

@@ -311,6 +311,12 @@ export interface UnionUserSummary {
   age: number | null;
   /** Активность профиля; null, если человек ни разу не заходил. */
   activity: UnionActivityLevel | null;
+  /**
+   * Время последнего визита, ISO. Отдаётся только для свежих визитов — тех,
+   * что уложились в неделю; у остальных null, как и раньше был только
+   * огрублённый уровень.
+   */
+  lastSeenAt: string | null;
   /** Преданный, чей статус подтвердила администрация. */
   isVerifiedDevotee: boolean;
   /** Администрация сверила публичные фото с живым человеком. */
@@ -538,3 +544,31 @@ export interface UnionAdminStats {
 }
 
 export const UNION_ADMIN_HIDE_REASON_MIN_LENGTH = 5;
+
+/** Анкета, убранная в архив: в выдачу не возвращается, пока не вернут вручную. */
+export interface UnionArchiveEntry {
+  user: UnionUserSummary;
+  /** Когда убрали, ISO. */
+  archivedAt: string;
+}
+
+export interface UnionArchiveListResponse {
+  items: UnionArchiveEntry[];
+}
+
+/**
+ * Итог нового круга. `restoredCount` — сколько пропусков снято; лайки,
+ * суперлайки и архив не входят, они переживают начало круга.
+ */
+export interface UnionCycleResetResult {
+  restoredCount: number;
+}
+
+/**
+ * Избранные среди входящих лайков — личная отметка «этот особенно
+ * понравился». Наружу отдаются только id: карточки рисуются из уже
+ * загруженных заявок, а лишние данные о людях здесь ни к чему.
+ */
+export interface UnionFavoritesResponse {
+  userIds: string[];
+}

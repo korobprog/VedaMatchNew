@@ -6,11 +6,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   AstroCompatibilityReadingDto,
   AstroCompatibilityRequestDto,
   AstroTimeAccuracy,
   GunaMilanScore,
+  NotificationEvent,
 } from '@vedamatch/shared';
 import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -45,6 +47,7 @@ export class AstroCompatibilityService {
     private readonly generation: AstroGenerationService,
     private readonly quota: AstroQuotaService,
     private readonly settings: AstroSettingsService,
+    private readonly events: EventEmitter2,
   ) {}
 
   async createRequest(
@@ -55,9 +58,15 @@ export class AstroCompatibilityService {
       throw new BadRequestException('Нельзя сопоставить карту с самой собой');
     }
 
-    const [requesterBirth, targetUser] = await Promise.all([
+    const [requesterBirth, targetUser, requesterUser] = await Promise.all([
       this.prisma.astroBirthData.findUnique({ where: { userId: requesterId } }),
       this.prisma.user.findUnique({ where: { id: targetUserId } }),
+      // Имя нужно уведомлению: событие обязано быть самодостаточным, чтобы
+      // подписчик не ходил за ним в чужие таблицы.
+      this.prisma.user.findUnique({
+        where: { id: requesterId },
+        select: { name: true, spiritualName: true },
+      }),
     ]);
     if (!requesterBirth) {
       throw new BadRequestException(
@@ -93,6 +102,14 @@ export class AstroCompatibilityService {
     const row = await this.prisma.astroCompatibilityRequest.create({
       data: { requesterId, targetId: targetUserId },
     });
+    if (requesterUser) {
+      const event = {
+        name: 'astro.compatibility.requested',
+        recipientId: targetUserId,
+        senderName: resolveDisplayName(requesterUser),
+      } satisfies NotificationEvent;
+      this.events.emit(event.name, event);
+    }
     return this.toDto(row, requesterId);
   }
 
@@ -130,6 +147,23 @@ export class AstroCompatibilityService {
         respondedAt: new Date(),
       },
     });
+
+    // Об отказе не уведомляем намеренно: «вам отказали» — сообщение, которое
+    // ничего не даёт, но задевает. Проситель увидит статус, когда сам зайдёт.
+    if (accept) {
+      const responder = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, spiritualName: true },
+      });
+      if (responder) {
+        const event = {
+          name: 'astro.compatibility.accepted',
+          recipientId: updated.requesterId,
+          senderName: resolveDisplayName(responder),
+        } satisfies NotificationEvent;
+        this.events.emit(event.name, event);
+      }
+    }
     return this.toDto(updated, userId);
   }
 

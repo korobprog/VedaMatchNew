@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { ShoppingBasket } from "lucide-react";
 import { useEffect, useSyncExternalStore } from "react";
+import type { MarketCartDto } from "@vedamatch/shared";
 import {
   getCartCount,
   getCartCountServerSnapshot,
   setCartCount,
   subscribeCartCount,
 } from "@/lib/market-cart-badge";
+import { deriveCartQuantities, setCartQuantities } from "@/lib/market-cart-items";
 import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -28,10 +30,15 @@ export function CartBadge({ className = "" }: { className?: string }) {
     const refresh = () => {
       // Вкладка в фоне — запрос всё равно отложится браузером, не тратим его.
       if (document.visibilityState === "hidden") return;
-      void apiFetch(`${API_URL}/market/cart/count`, { credentials: "include" })
+      // Берём корзину целиком, а не только счётчик: то же число даёт и
+      // разбивку по товарам для степпера на карточке — второй опрос ради
+      // неё не оправдан.
+      void apiFetch(`${API_URL}/market/cart`, { credentials: "include" })
         .then((res) => (res.ok ? res.json() : null))
-        .then((data: { count: number } | null) => {
-          if (!cancelled && data) setCartCount(data.count);
+        .then((data: MarketCartDto | null) => {
+          if (cancelled || !data) return;
+          setCartCount(data.itemsCount);
+          setCartQuantities(deriveCartQuantities(data));
         })
         .catch(() => {
           // Молча: сломанный значок не повод показывать ошибку в шапке.
@@ -50,7 +57,12 @@ export function CartBadge({ className = "" }: { className?: string }) {
     };
   }, []);
 
-  const label = count > 0 ? `Корзина, позиций: ${count}` : "Корзина";
+  // Пустая корзина не занимает место в шапке: значок появляется только
+  // когда там реально что-то лежит, и не отвлекает на страницах, не
+  // связанных с покупками.
+  if (count === 0) return null;
+
+  const label = `Корзина, позиций: ${count}`;
 
   return (
     <Link
@@ -60,14 +72,12 @@ export function CartBadge({ className = "" }: { className?: string }) {
       className={`relative flex h-9 w-9 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0 ${className}`}
     >
       <ShoppingBasket size={20} aria-hidden="true" />
-      {count > 0 && (
-        <span
-          aria-hidden="true"
-          className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[10px] font-bold leading-none text-bg-0"
-        >
-          {count > 99 ? "99+" : count}
-        </span>
-      )}
+      <span
+        aria-hidden="true"
+        className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[10px] font-bold leading-none text-bg-0"
+      >
+        {count > 99 ? "99+" : count}
+      </span>
     </Link>
   );
 }
