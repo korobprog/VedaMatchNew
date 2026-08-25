@@ -85,6 +85,20 @@ export function ListingForm({
   const [quantity, setQuantity] = useState(
     listing?.quantity != null ? String(listing.quantity) : "1",
   );
+  // Габариты — строки, а не числа: пустое поле это «не мерил», и хранить его
+  // как NaN значит каждый раз вспоминать об этом при отправке.
+  const [lengthCm, setLengthCm] = useState(
+    listing?.lengthCm != null ? String(listing.lengthCm) : "",
+  );
+  const [widthCm, setWidthCm] = useState(
+    listing?.widthCm != null ? String(listing.widthCm) : "",
+  );
+  const [heightCm, setHeightCm] = useState(
+    listing?.heightCm != null ? String(listing.heightCm) : "",
+  );
+  const [weightG, setWeightG] = useState(
+    listing?.weightG != null ? String(listing.weightG) : "",
+  );
   const [serviceFormat, setServiceFormat] = useState<MarketServiceFormat | "">(
     listing?.serviceFormat ?? "offline",
   );
@@ -154,6 +168,10 @@ export function ListingForm({
       condition: kind === "product" && condition ? condition : null,
       trackStock: kind === "product" ? trackStock : false,
       quantity: kind === "product" && trackStock ? numeric(quantity) : null,
+      lengthCm: kind === "product" ? numeric(lengthCm) : null,
+      widthCm: kind === "product" ? numeric(widthCm) : null,
+      heightCm: kind === "product" ? numeric(heightCm) : null,
+      weightG: kind === "product" ? numeric(weightG) : null,
       serviceFormat: kind === "service" ? serviceFormat || null : null,
       serviceDurationMinutes: kind === "service" ? numeric(duration) : null,
       deliveryOptions: delivery,
@@ -402,6 +420,57 @@ export function ListingForm({
               />
             </Field>
           )}
+
+          {/* Габариты в одну строку: три числа читаются как «Д × Ш × В»
+              только рядом, столбиком это три отдельных вопроса. */}
+          <Field label={t("form.dimensions")}>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                aria-label={t("form.lengthCm")}
+                placeholder={t("form.lengthCm")}
+                value={lengthCm}
+                onChange={(event) => setLengthCm(event.target.value)}
+                className={`${inputClass} w-24`}
+              />
+              <span aria-hidden="true" className="text-text-2">
+                ×
+              </span>
+              <input
+                type="number"
+                min={1}
+                aria-label={t("form.widthCm")}
+                placeholder={t("form.widthCm")}
+                value={widthCm}
+                onChange={(event) => setWidthCm(event.target.value)}
+                className={`${inputClass} w-24`}
+              />
+              <span aria-hidden="true" className="text-text-2">
+                ×
+              </span>
+              <input
+                type="number"
+                min={1}
+                aria-label={t("form.heightCm")}
+                placeholder={t("form.heightCm")}
+                value={heightCm}
+                onChange={(event) => setHeightCm(event.target.value)}
+                className={`${inputClass} w-24`}
+              />
+              <span className="text-sm text-text-2">{t("form.cm")}</span>
+            </div>
+          </Field>
+
+          <Field label={t("form.weightG")}>
+            <input
+              type="number"
+              min={1}
+              value={weightG}
+              onChange={(event) => setWeightG(event.target.value)}
+              className={`${inputClass} max-w-[8rem]`}
+            />
+          </Field>
         </>
       ) : (
         <>

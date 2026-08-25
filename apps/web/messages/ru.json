@@ -285,6 +285,11 @@
       "from": "от {price}",
       "range": "от {from} до {to}"
     },
+    "unit": {
+      "cm": "см",
+      "g": "г",
+      "kg": "кг"
+    },
     "listing": {
       "kindProduct": "Товар",
       "kindService": "Услуга",
@@ -297,6 +302,8 @@
       "categories": "Категории",
       "deliveryTitle": "Доставка",
       "duration": "Длительность: {minutes} мин",
+      "dimensions": "Габариты: {value}",
+      "weight": "Вес: {value}",
       "seller": "Продавец",
       "goToShop": "В магазин",
       "empty": "Пока ничего не нашлось",
@@ -398,6 +405,12 @@
       "condition": "Состояние",
       "trackStock": "Учитывать остаток",
       "quantity": "Количество",
+      "dimensions": "Габариты",
+      "lengthCm": "Длина",
+      "widthCm": "Ширина",
+      "heightCm": "Высота",
+      "cm": "см",
+      "weightG": "Вес, г",
       "serviceFormat": "Формат услуги",
       "duration": "Длительность, мин",
       "categories": "Категории (до 5)",
