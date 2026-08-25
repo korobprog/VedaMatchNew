@@ -19,6 +19,18 @@ describe("UnionTabBar", () => {
     );
   });
 
+  // Порядок закреплён тестом намеренно: он согласован с продуктом, и его
+  // легко потерять при любой правке массива вкладок.
+  it("keeps the agreed tab order with chats before collections", () => {
+    render(<UnionTabBar />);
+
+    const labels = screen
+      .getAllByRole("link")
+      .map((link) => link.textContent?.trim().replace(/\d+$/, "") ?? "");
+
+    expect(labels).toEqual(["Анкеты", "Чаты", "Лайки", "Подборки", "Профиль"]);
+  });
+
   it("shows the likes counter and the unread chats dot only when there is something to show", () => {
     const { rerender } = render(<UnionTabBar />);
 
