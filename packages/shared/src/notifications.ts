@@ -29,6 +29,21 @@ export type NotificationEvent =
       companionId: string;
     }
   | {
+      /**
+       * Кто-то просит сверить астрологическую совместимость. Без этого
+       * события запрос лежал бы молча: адресат узнавал бы о нём, только
+       * случайно заглянув в раздел астрологии.
+       */
+      name: 'astro.compatibility.requested';
+      recipientId: string;
+      senderName: string;
+    }
+  | {
+      name: 'astro.compatibility.accepted';
+      recipientId: string;
+      senderName: string;
+    }
+  | {
       name: 'contacts.request.received';
       recipientId: string;
       senderName: string;
