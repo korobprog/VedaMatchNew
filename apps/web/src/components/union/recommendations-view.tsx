@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { UnionRecommendation } from "@vedamatch/shared";
 import { RecommendationCard } from "./recommendation-card";
+import { RecommendationTile } from "./recommendation-tile";
 import { SwipeDeck } from "./swipe-deck";
 
 type ViewMode = "grid" | "swipe";
@@ -32,6 +33,9 @@ export function RecommendationsView({
     () => false,
   );
   const [modeOverride, setModeOverride] = useState<ViewMode | null>(null);
+  // С какой анкеты открывать просмотр. Тап по плитке задаёт её позицию,
+  // переключатель «Свайпами» начинает с начала.
+  const [viewerIndex, setViewerIndex] = useState(0);
   const mode: ViewMode = modeOverride ?? (isMobile ? "swipe" : "grid");
   // На телефоне свайп — полноэкранный фокус-режим без обвязки страницы;
   // на десктопе тот же режим остаётся инлайн внутри обычной страницы.
@@ -64,22 +68,19 @@ export function RecommendationsView({
   if (focusMode) {
     return (
       <div
-        className="fixed inset-0 z-50 flex flex-col bg-bg-0 px-4"
+        className="fixed inset-0 z-50 flex flex-col bg-bg-0 px-3"
         style={{
           paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)",
           paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)",
         }}
       >
-        <button
-          type="button"
-          onClick={exitFocusMode}
-          aria-label="Выйти из фокус-режима"
-          className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl glass border border-glass-brd text-text-1 transition hover:text-text-0"
-        >
-          <span aria-hidden="true">✕</span>
-        </button>
-        <div className="flex flex-1 items-center justify-center overflow-y-auto">
-          <SwipeDeck items={items} />
+        <div className="flex min-h-0 flex-1 justify-center">
+          <SwipeDeck
+            items={items}
+            initialIndex={viewerIndex}
+            fullscreen
+            onExit={exitFocusMode}
+          />
         </div>
       </div>
     );
@@ -96,14 +97,35 @@ export function RecommendationsView({
         </ModeButton>
         <ModeButton
           active={mode === "swipe"}
-          onClick={() => setModeOverride("swipe")}
+          onClick={() => {
+            setViewerIndex(0);
+            setModeOverride("swipe");
+          }}
         >
           Свайпами
         </ModeButton>
       </div>
 
       {mode === "swipe" ? (
-        <SwipeDeck items={items} />
+        <SwipeDeck items={items} initialIndex={viewerIndex} />
+      ) : isMobile ? (
+        /*
+          На телефоне список — плитками в две колонки: так за экран видно
+          восемь человек вместо полутора, и список выполняет свою работу —
+          быстро оглядеться. Подробности открываются тапом, в просмотре.
+        */
+        <div className="grid grid-cols-2 gap-2">
+          {items.map((item, position) => (
+            <RecommendationTile
+              key={item.user.id}
+              item={item}
+              onOpen={() => {
+                setViewerIndex(position);
+                setModeOverride("swipe");
+              }}
+            />
+          ))}
+        </div>
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item) => (

@@ -130,6 +130,28 @@ describe("SwipeDeck card", () => {
     ).toBeInTheDocument();
   });
 
+  // Список открывает колоду на выбранном человеке, а не на первом: иначе
+  // тап по четвёртой плитке показал бы первую анкету.
+  it("opens at the requested profile", () => {
+    render(
+      <SwipeDeck
+        initialIndex={1}
+        items={[
+          recommendation(),
+          recommendation({ user: { id: "user-2", name: "Сита" } }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("2 из 2")).toBeInTheDocument();
+  });
+
+  it("survives an out-of-range initial index instead of showing an empty deck", () => {
+    render(<SwipeDeck initialIndex={99} items={[recommendation()]} />);
+
+    expect(screen.getByText("1 из 1")).toBeInTheDocument();
+  });
+
   it("offers a new cycle and the escape hatch when the deck runs out", () => {
     render(<SwipeDeck items={[]} />);
 

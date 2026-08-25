@@ -82,8 +82,14 @@ export function SwipeDeck({
   items,
   fullscreen = false,
   onExit,
+  initialIndex = 0,
 }: {
   items: UnionRecommendation[];
+  /**
+   * С какой анкеты открыть колоду. Список отдаёт сюда позицию плитки, по
+   * которой нажали, — иначе тап по четвёртой открывал бы первую.
+   */
+  initialIndex?: number;
   /**
    * Фокус-режим: колода занимает всю высоту оверлея вместо фиксированных
    * 520px. На телефоне разница в треть экрана — при фиксированной высоте
@@ -94,7 +100,11 @@ export function SwipeDeck({
   onExit?: () => void;
 }) {
   const router = useRouter();
-  const [index, setIndex] = useState(0);
+  // Зажимаем в границы: список мог отдать позицию из прошлой выдачи, а
+  // пустая колода при живых анкетах выглядит как поломка.
+  const [index, setIndex] = useState(() =>
+    Math.min(Math.max(0, initialIndex), Math.max(0, items.length - 1)),
+  );
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
   const [undoing, setUndoing] = useState(false);
