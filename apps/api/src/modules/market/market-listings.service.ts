@@ -62,6 +62,10 @@ const LISTING_SELECT = {
   quantity: true,
   trackStock: true,
   soldCount: true,
+  lengthCm: true,
+  widthCm: true,
+  heightCm: true,
+  weightG: true,
   serviceFormat: true,
   serviceDurationMinutes: true,
   location: true,
@@ -251,6 +255,10 @@ export class MarketListingsService {
       condition: body.condition,
       quantity: body.quantity,
       trackStock: body.trackStock,
+      lengthCm: body.lengthCm,
+      widthCm: body.widthCm,
+      heightCm: body.heightCm,
+      weightG: body.weightG,
       serviceFormat: body.serviceFormat,
       serviceDurationMinutes: body.serviceDurationMinutes,
       categoryIds,
@@ -281,6 +289,14 @@ export class MarketListingsService {
           quantity: body.trackStock ? (body.quantity ?? 0) : null,
           trackStock:
             body.kind === 'product' ? Boolean(body.trackStock) : false,
+          ...(body.kind === 'product'
+            ? {
+                lengthCm: body.lengthCm ?? null,
+                widthCm: body.widthCm ?? null,
+                heightCm: body.heightCm ?? null,
+                weightG: body.weightG ?? null,
+              }
+            : {}),
           serviceFormat: body.kind === 'service' ? body.serviceFormat! : null,
           serviceDurationMinutes:
             body.kind === 'service'
@@ -393,6 +409,12 @@ export class MarketListingsService {
       body.quantity !== undefined ? body.quantity : listing.quantity;
     const condition =
       body.condition !== undefined ? body.condition : listing.condition;
+    const measurements = {
+      lengthCm: body.lengthCm !== undefined ? body.lengthCm : listing.lengthCm,
+      widthCm: body.widthCm !== undefined ? body.widthCm : listing.widthCm,
+      heightCm: body.heightCm !== undefined ? body.heightCm : listing.heightCm,
+      weightG: body.weightG !== undefined ? body.weightG : listing.weightG,
+    };
     const serviceFormat =
       body.serviceFormat !== undefined
         ? body.serviceFormat
@@ -425,6 +447,7 @@ export class MarketListingsService {
       condition,
       quantity: trackStock ? quantity : null,
       trackStock: kind === 'product' ? trackStock : false,
+      ...measurements,
       serviceFormat,
       serviceDurationMinutes: serviceDuration,
       categoryIds,
@@ -438,6 +461,10 @@ export class MarketListingsService {
       if (body.trackStock !== undefined || body.quantity !== undefined) {
         data.quantity = trackStock ? (quantity ?? 0) : null;
       }
+      if (body.lengthCm !== undefined) data.lengthCm = body.lengthCm;
+      if (body.widthCm !== undefined) data.widthCm = body.widthCm;
+      if (body.heightCm !== undefined) data.heightCm = body.heightCm;
+      if (body.weightG !== undefined) data.weightG = body.weightG;
     } else {
       if (body.serviceFormat !== undefined)
         data.serviceFormat = body.serviceFormat;
@@ -1136,6 +1163,10 @@ export function toListingDto(
     quantity: row.quantity,
     trackStock: row.trackStock,
     soldCount: row.soldCount,
+    lengthCm: row.lengthCm,
+    widthCm: row.widthCm,
+    heightCm: row.heightCm,
+    weightG: row.weightG,
     serviceDurationMinutes: row.serviceDurationMinutes,
     location: (row.location as MarketLocationDto | null) ?? null,
     deliveryOptions: row.deliveryOptions,

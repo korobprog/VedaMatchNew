@@ -2,24 +2,31 @@
 import {
   MAX_CATEGORIES_PER_LISTING,
   MAX_DESCRIPTION_LENGTH,
+  MAX_DIMENSION_CM,
   MAX_TITLE_LENGTH,
+  MAX_WEIGHT_G,
   PROHIBITED_CATEGORY_SLUGS,
   validateListing,
   type ListingValidationInput,
 } from './market-listing-validate';
 
-const { marketCategories } = require('../../../prisma/market-categories-data.js') as {
-  marketCategories: Array<{ slug: string; prohibited?: boolean }>;
-};
+const { marketCategories } =
+  require('../../../prisma/market-categories-data.js') as {
+    marketCategories: Array<{ slug: string; prohibited?: boolean }>;
+  };
 
-const product = (over: Partial<ListingValidationInput> = {}): ListingValidationInput => ({
+const product = (
+  over: Partial<ListingValidationInput> = {},
+): ListingValidationInput => ({
   kind: 'product',
   titleRu: 'Мриданга',
   categoryIds: ['cat-1'],
   ...over,
 });
 
-const service = (over: Partial<ListingValidationInput> = {}): ListingValidationInput => ({
+const service = (
+  over: Partial<ListingValidationInput> = {},
+): ListingValidationInput => ({
   kind: 'service',
   titleRu: 'Настройка мриданги',
   serviceFormat: 'offline',
@@ -29,8 +36,12 @@ const service = (over: Partial<ListingValidationInput> = {}): ListingValidationI
 
 describe('title', () => {
   it('accepts a title in either language alone', () => {
-    expect(validateListing(product({ titleRu: 'Мриданга', titleEn: null }))).toBeNull();
-    expect(validateListing(product({ titleRu: null, titleEn: 'Mridanga' }))).toBeNull();
+    expect(
+      validateListing(product({ titleRu: 'Мриданга', titleEn: null })),
+    ).toBeNull();
+    expect(
+      validateListing(product({ titleRu: null, titleEn: 'Mridanga' })),
+    ).toBeNull();
   });
 
   it('requires at least one language', () => {
@@ -72,7 +83,9 @@ describe('description', () => {
 
 describe('categories', () => {
   it('requires at least one and allows at most five', () => {
-    expect(validateListing(product({ categoryIds: [] }))).toBe('category_required');
+    expect(validateListing(product({ categoryIds: [] }))).toBe(
+      'category_required',
+    );
     expect(
       validateListing(
         product({
@@ -132,7 +145,9 @@ describe('service-only rules', () => {
 
   it('validates the duration when given', () => {
     expect(validateListing(service({ serviceDurationMinutes: 90 }))).toBeNull();
-    expect(validateListing(service({ serviceDurationMinutes: null }))).toBeNull();
+    expect(
+      validateListing(service({ serviceDurationMinutes: null })),
+    ).toBeNull();
     expect(validateListing(service({ serviceDurationMinutes: 0 }))).toBe(
       'service_duration_invalid',
     );
@@ -150,8 +165,12 @@ describe('service-only rules', () => {
 
 describe('product-only rules', () => {
   it('requires a quantity when stock is tracked', () => {
-    expect(validateListing(product({ trackStock: true, quantity: 5 }))).toBeNull();
-    expect(validateListing(product({ trackStock: true, quantity: 0 }))).toBeNull();
+    expect(
+      validateListing(product({ trackStock: true, quantity: 5 })),
+    ).toBeNull();
+    expect(
+      validateListing(product({ trackStock: true, quantity: 0 })),
+    ).toBeNull();
     expect(validateListing(product({ trackStock: true, quantity: null }))).toBe(
       'quantity_invalid',
     );
@@ -172,6 +191,67 @@ describe('product-only rules', () => {
 
   it('allows a condition', () => {
     expect(validateListing(product({ condition: 'like_new' }))).toBeNull();
+  });
+
+  it('accepts dimensions and weight, each on its own', () => {
+    expect(validateListing(product({ lengthCm: 30 }))).toBeNull();
+    expect(
+      validateListing(
+        product({ lengthCm: 30, widthCm: 20, heightCm: 5, weightG: 450 }),
+      ),
+    ).toBeNull();
+    // Незаполненные габариты — обычное дело: продавец книги их не мерил.
+    expect(
+      validateListing(
+        product({
+          lengthCm: null,
+          widthCm: null,
+          heightCm: null,
+          weightG: null,
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it('rejects zero, negative and fractional measurements', () => {
+    for (const bad of [0, -1, 2.5]) {
+      expect(validateListing(product({ lengthCm: bad }))).toBe(
+        'dimensions_invalid',
+      );
+      expect(validateListing(product({ widthCm: bad }))).toBe(
+        'dimensions_invalid',
+      );
+      expect(validateListing(product({ heightCm: bad }))).toBe(
+        'dimensions_invalid',
+      );
+      expect(validateListing(product({ weightG: bad }))).toBe(
+        'dimensions_invalid',
+      );
+    }
+  });
+
+  // Потолок отсекает опечатку в разряде: 3000 см — это 30 метров, столько
+  // не отправляют посылкой, а в поле такое попадает лишним нулём.
+  it('caps the measurements', () => {
+    expect(validateListing(product({ lengthCm: MAX_DIMENSION_CM }))).toBeNull();
+    expect(validateListing(product({ lengthCm: MAX_DIMENSION_CM + 1 }))).toBe(
+      'dimensions_invalid',
+    );
+    expect(validateListing(product({ weightG: MAX_WEIGHT_G }))).toBeNull();
+    expect(validateListing(product({ weightG: MAX_WEIGHT_G + 1 }))).toBe(
+      'dimensions_invalid',
+    );
+  });
+
+  // У услуги нет габаритов: коробку с ней не отправишь, а фильтр по размеру
+  // на неё однажды наткнулся бы.
+  it('forbids dimensions on a service', () => {
+    expect(validateListing(service({ lengthCm: 30 }))).toBe(
+      'dimensions_invalid',
+    );
+    expect(validateListing(service({ weightG: 100 }))).toBe(
+      'dimensions_invalid',
+    );
   });
 });
 

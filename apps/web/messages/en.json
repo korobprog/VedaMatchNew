@@ -285,6 +285,11 @@
       "from": "from {price}",
       "range": "from {from} to {to}"
     },
+    "unit": {
+      "cm": "cm",
+      "g": "g",
+      "kg": "kg"
+    },
     "listing": {
       "kindProduct": "Item",
       "kindService": "Service",
@@ -297,6 +302,8 @@
       "categories": "Categories",
       "deliveryTitle": "Delivery",
       "duration": "Duration: {minutes} min",
+      "dimensions": "Dimensions: {value}",
+      "weight": "Weight: {value}",
       "seller": "Seller",
       "goToShop": "Visit shop",
       "empty": "Nothing found yet",
@@ -398,6 +405,12 @@
       "condition": "Condition",
       "trackStock": "Track stock",
       "quantity": "Quantity",
+      "dimensions": "Dimensions",
+      "lengthCm": "Length",
+      "widthCm": "Width",
+      "heightCm": "Height",
+      "cm": "cm",
+      "weightG": "Weight, g",
       "serviceFormat": "Service format",
       "duration": "Duration, min",
       "categories": "Categories (up to 5)",

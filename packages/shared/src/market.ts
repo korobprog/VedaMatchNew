@@ -192,6 +192,16 @@ export interface MarketListingDto extends MarketListingSummary {
   priceMaxMinor: number | null;
   quantity: number | null;
   trackStock: boolean;
+  /**
+   * Габариты и вес товара, каждое поле необязательно. Сантиметры и граммы
+   * целыми числами: они покрывают любую посылку без округлений. Отдельной
+   * «глубины» нет — у коробки это длина, у мебели та же ось под другим
+   * именем, и два поля продавец заполнял бы наугад.
+   */
+  lengthCm: number | null;
+  widthCm: number | null;
+  heightCm: number | null;
+  weightG: number | null;
   soldCount: number;
   serviceDurationMinutes: number | null;
   location: MarketLocationDto | null;
@@ -302,6 +312,10 @@ export interface CreateMarketListingRequest {
   condition?: MarketListingCondition | null;
   quantity?: number | null;
   trackStock?: boolean;
+  lengthCm?: number | null;
+  widthCm?: number | null;
+  heightCm?: number | null;
+  weightG?: number | null;
   serviceFormat?: MarketServiceFormat | null;
   serviceDurationMinutes?: number | null;
   location?: MarketLocationDto | null;
@@ -325,6 +339,10 @@ export interface UpdateMarketListingRequest {
   condition?: MarketListingCondition | null;
   quantity?: number | null;
   trackStock?: boolean;
+  lengthCm?: number | null;
+  widthCm?: number | null;
+  heightCm?: number | null;
+  weightG?: number | null;
   serviceFormat?: MarketServiceFormat | null;
   serviceDurationMinutes?: number | null;
   location?: MarketLocationDto | null;
