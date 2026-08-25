@@ -165,6 +165,21 @@ export function SwipeDeck({
     setIndex((value) => value + 1);
   }
 
+  /**
+   * Листание без решения: двигаем только указатель. На сервер ничего не
+   * уходит — анкета не считается отсмотренной, и по колоде можно пройтись
+   * туда-сюда, ничего не потратив. Откат (↺) этим не заменяется: он снимает
+   * уже записанное решение, а это просто просмотр.
+   */
+  function browse(delta: 1 | -1) {
+    const target = index + delta;
+    if (target < 0 || target >= items.length) return;
+    setSent(null);
+    setBreakdownOpen(false);
+    setExitDirection(delta === 1 ? "left" : "right");
+    setIndex(target);
+  }
+
   if (!current) {
     return (
       <div className="glass rounded-3xl border border-glass-brd p-10 text-center">
@@ -261,6 +276,31 @@ export function SwipeDeck({
             </span>
           </p>
         )}
+
+        {/*
+          Листание анкет живёт у самых краёв и намеренно почти прозрачно:
+          это вспомогательный путь, основной — свайп. Боковые позиции
+          освободила карусель фото, которая в варианте `cover` листается
+          тапом по половинам снимка.
+        */}
+        <button
+          type="button"
+          onClick={() => browse(-1)}
+          disabled={index === 0}
+          aria-label="Предыдущая анкета"
+          className="absolute left-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-xl text-white/60 backdrop-blur-sm transition hover:bg-black/50 hover:text-white disabled:opacity-0"
+        >
+          <span aria-hidden="true">‹</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => browse(1)}
+          disabled={index >= items.length - 1}
+          aria-label="Следующая анкета"
+          className="absolute right-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-xl text-white/60 backdrop-blur-sm transition hover:bg-black/50 hover:text-white disabled:opacity-0"
+        >
+          <span aria-hidden="true">›</span>
+        </button>
 
         <UnionBoostButton />
 

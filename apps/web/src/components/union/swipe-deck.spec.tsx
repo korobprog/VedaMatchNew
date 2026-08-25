@@ -130,6 +130,40 @@ describe("SwipeDeck card", () => {
     ).toBeInTheDocument();
   });
 
+  // Листание — это просмотр, а не решение: на сервер ничего уходить не должно,
+  // иначе стрелка молча тратила бы анкеты так же, как крестик.
+  it("browses to the next profile without recording a decision", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}"));
+    render(
+      <SwipeDeck
+        items={[
+          recommendation(),
+          recommendation({ user: { id: "user-2", name: "Сита" } }),
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Следующая анкета" }));
+
+    expect(screen.getByText("2 из 2")).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it("disables browsing at both ends of the deck", () => {
+    render(<SwipeDeck items={[recommendation()]} />);
+
+    expect(
+      screen.getByRole("button", { name: "Предыдущая анкета" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Следующая анкета" }),
+    ).toBeDisabled();
+  });
+
   // Порядок согласован с продуктом: крестик и лайк по краям под большие
   // пальцы, между ними — вспомогательные действия. `getAllByRole` отдаёт
   // узлы в порядке DOM, поэтому фильтр по known-подписям и есть проверка
