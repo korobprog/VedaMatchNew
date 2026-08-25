@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UserGalleryService } from '../users/user-gallery.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { MotivationGenerationService } from '../motivation/motivation-generation.service';
+import { UnionArchiveService } from './union-archive.service';
 import { UnionBoostService } from './union-boost.service';
 import { UnionConnectionService } from './union-connection.service';
 import { UnionMatchingService } from './union-matching.service';
@@ -243,6 +244,11 @@ describe('UnionProfileService', () => {
     unionBoost: {
       findMany: jest.fn(() => Promise.resolve([] as { userId: string }[])),
     },
+    unionArchive: {
+      findMany: jest.fn(() =>
+        Promise.resolve([] as { archivedUserId: string }[]),
+      ),
+    },
     $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) =>
       callback(transaction),
     ),
@@ -297,6 +303,7 @@ describe('UnionProfileService', () => {
       {} as UnionConnectionService,
     ),
     new UnionBoostService(prisma as unknown as PrismaService),
+    new UnionArchiveService(prisma as unknown as PrismaService),
   );
 
   beforeEach(() => {
@@ -305,6 +312,7 @@ describe('UnionProfileService', () => {
     prisma.user.findUnique.mockResolvedValue(user('me'));
     prisma.unionSwipe.findMany.mockResolvedValue([]);
     prisma.unionBoost.findMany.mockResolvedValue([]);
+    prisma.unionArchive.findMany.mockResolvedValue([]);
     moderation.hiddenUserIds.mockResolvedValue(new Set<string>());
     moderation.isHidden.mockResolvedValue(false);
   });
@@ -408,6 +416,27 @@ describe('UnionProfileService', () => {
     ]);
     prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
     moderation.hiddenUserIds.mockResolvedValue(new Set(['blocked']));
+
+    const result = await service.getRecommendations('me', {
+      includeSwiped: true,
+    });
+
+    expect(result.items.map((item) => item.user.id)).toEqual(['fresh']);
+  });
+
+  // Риск: считать архив разновидностью «отсмотренного». Тогда галочка
+  // «показывать уже отсмотренных» молча отменяла бы осознанное «убрать
+  // совсем», и человек снова получал бы того, кого убрал.
+  it('keeps archived profiles out even when includeSwiped is set', async () => {
+    prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+    prisma.unionProfile.findMany.mockResolvedValue([
+      profile('archived'),
+      profile('fresh'),
+    ]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+    prisma.unionArchive.findMany.mockResolvedValue([
+      { archivedUserId: 'archived' },
+    ]);
 
     const result = await service.getRecommendations('me', {
       includeSwiped: true,
