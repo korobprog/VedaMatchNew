@@ -31,6 +31,8 @@
   /* Glass colors */
   --color-glass: var(--vm-glass);
   --color-glass-brd: var(--vm-glass-brd);
+  --color-sheet: var(--vm-sheet);
+  --color-sheet-brd: var(--vm-sheet-brd);
 
   /* Accent colors */
   --color-mint: var(--vm-mint-from);
@@ -39,6 +41,7 @@
   --color-magenta: var(--vm-magenta);
   --color-cyan: var(--vm-cyan);
   --color-gold: var(--vm-gold);
+  --color-like: var(--vm-like);
   --color-violet: var(--vm-violet);
   --color-blue: var(--vm-blue);
 
@@ -79,6 +82,11 @@
   --vm-bg-2: #EAE2F8;
 
   --vm-glass: rgba(255, 255, 255, 0.72);
+  /* Материал модальных окон: плотное матовое стекло. --vm-glass для них
+     слишком прозрачен — окно открывается поверх фотографии в колоде, и
+     текст ложился прямо на снимок. */
+  --vm-sheet: rgba(255, 255, 255, 0.86);
+  --vm-sheet-brd: rgba(74, 44, 122, 0.16);
   --vm-glass-brd: rgba(74, 44, 122, 0.14);
   --vm-glass-from: rgba(255, 255, 255, 0.9);
   --vm-glass-to: rgba(255, 255, 255, 0.55);
@@ -106,6 +114,15 @@
   --vm-cyan: #0B826F;
   --vm-gold: #B0770E;
 
+  /* Цвет согласия: сердце «познакомиться» в колоде знакомств. Отдельный
+     токен, а не акцент из палитры — маджента там занята интерфейсом, и
+     решение «да» в ней сливалось с кнопками вокруг.
+
+     Значение одно на обе темы намеренно: сердце живёт на панели поверх
+     фотографии, а она тёмная при любой теме. Мелким текстом на светлом фоне
+     этот токен не годится — там 1,7:1. */
+  --vm-like: #4BE86B;
+
   /* Цвета имён участников в групповых беседах. Отдельные токены, а не
      существующие акценты: маджента занята жалобой, мята — действиями, и
      подписывать ими людей значит путать роль цвета. Значения подобраны
@@ -125,6 +142,7 @@
   --vm-glow-magenta: rgba(215, 26, 128, 0.28);
   --vm-glow-cyan: rgba(11, 130, 111, 0.28);
   --vm-glow-gold: rgba(176, 119, 14, 0.28);
+  --vm-glow-like: rgba(75, 232, 107, 0.5);
   --vm-glow-text-magenta: rgba(215, 26, 128, 0.25);
   --vm-glow-text-cyan: rgba(11, 130, 111, 0.25);
 
@@ -149,6 +167,8 @@
   --vm-bg-2: #1B0F2E;
 
   --vm-glass: rgba(255, 255, 255, 0.06);
+  --vm-sheet: rgba(26, 16, 44, 0.84);
+  --vm-sheet-brd: rgba(255, 255, 255, 0.16);
   --vm-glass-brd: rgba(255, 255, 255, 0.12);
   --vm-glass-from: rgba(255, 255, 255, 0.1);
   --vm-glass-to: rgba(255, 255, 255, 0.02);
@@ -159,6 +179,7 @@
   --vm-magenta: #FF3E9E;
   --vm-cyan: #23F0C7;
   --vm-gold: #FFC85C;
+  --vm-like: #4BE86B;
 
   --vm-violet: #C68BFF;
   --vm-blue: #7FB4FF;
@@ -175,6 +196,7 @@
   --vm-glow-magenta: rgba(255, 62, 158, 0.45);
   --vm-glow-cyan: rgba(35, 240, 199, 0.45);
   --vm-glow-gold: rgba(255, 200, 92, 0.45);
+  --vm-glow-like: rgba(75, 232, 107, 0.5);
   --vm-glow-text-magenta: rgba(255, 62, 158, 0.7);
   --vm-glow-text-cyan: rgba(35, 240, 199, 0.7);
 
@@ -198,6 +220,8 @@
     --vm-bg-2: #1B0F2E;
 
     --vm-glass: rgba(255, 255, 255, 0.06);
+    --vm-sheet: rgba(26, 16, 44, 0.84);
+    --vm-sheet-brd: rgba(255, 255, 255, 0.16);
     --vm-glass-brd: rgba(255, 255, 255, 0.12);
     --vm-glass-from: rgba(255, 255, 255, 0.1);
     --vm-glass-to: rgba(255, 255, 255, 0.02);
@@ -208,6 +232,7 @@
     --vm-magenta: #FF3E9E;
     --vm-cyan: #23F0C7;
     --vm-gold: #FFC85C;
+    --vm-like: #4BE86B;
 
     --vm-violet: #C68BFF;
     --vm-blue: #7FB4FF;
@@ -221,6 +246,7 @@
     --vm-glow-magenta: rgba(255, 62, 158, 0.45);
     --vm-glow-cyan: rgba(35, 240, 199, 0.45);
     --vm-glow-gold: rgba(255, 200, 92, 0.45);
+    --vm-glow-like: rgba(75, 232, 107, 0.5);
     --vm-glow-text-magenta: rgba(255, 62, 158, 0.7);
     --vm-glow-text-cyan: rgba(35, 240, 199, 0.7);
 
