@@ -563,3 +563,12 @@ export interface UnionArchiveListResponse {
 export interface UnionCycleResetResult {
   restoredCount: number;
 }
+
+/**
+ * Избранные среди входящих лайков — личная отметка «этот особенно
+ * понравился». Наружу отдаются только id: карточки рисуются из уже
+ * загруженных заявок, а лишние данные о людях здесь ни к чему.
+ */
+export interface UnionFavoritesResponse {
+  userIds: string[];
+}

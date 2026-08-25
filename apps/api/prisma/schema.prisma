@@ -277,6 +277,8 @@ model User {
   unionSwipesReceived                UnionSwipe[]                 @relation("UnionSwipesReceived")
   unionArchivesMade                  UnionArchive[]               @relation("UnionArchivesMade")
   unionArchivesReceived              UnionArchive[]               @relation("UnionArchivesReceived")
+  unionFavoritesMade                 UnionFavorite[]              @relation("UnionFavoritesMade")
+  unionFavoritesReceived             UnionFavorite[]              @relation("UnionFavoritesReceived")
   photos                             UserPhoto[]
   blocksMade                         UserBlock[]                  @relation("UserBlocksMade")
   blocksReceived                     UserBlock[]                  @relation("UserBlocksReceived")
@@ -1349,6 +1351,21 @@ model UnionArchive {
   createdAt      DateTime @default(now())
 
   @@unique([ownerId, archivedUserId])
+  @@index([ownerId, createdAt(sort: Desc)])
+}
+
+/// Личная отметка «этот особенно понравился» среди входящих лайков. Никак не
+/// видна отмеченному: это заметка для себя, а не второй сорт лайка. Наружу
+/// отдаются только id — карточку рисуют уже загруженные заявки.
+model UnionFavorite {
+  id             String   @id @default(uuid())
+  ownerId        String
+  owner          User     @relation("UnionFavoritesMade", fields: [ownerId], references: [id], onDelete: Cascade)
+  favoriteUserId String
+  favoriteUser   User     @relation("UnionFavoritesReceived", fields: [favoriteUserId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+
+  @@unique([ownerId, favoriteUserId])
   @@index([ownerId, createdAt(sort: Desc)])
 }
 
