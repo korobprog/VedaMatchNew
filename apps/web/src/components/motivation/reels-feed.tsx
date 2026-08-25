@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type {
@@ -388,6 +389,20 @@ function ReelSlide({
   const { quote, explanation } = splitQuoteAndExplanation(post.text);
   const kind = mediaKindOf(post);
   const source = attributionLine(post);
+  const explanationToggle = explanation && (
+    <button
+      type="button"
+      aria-expanded={showExplanation}
+      onClick={() => setShowExplanation((value) => !value)}
+      className={
+        kind === "image"
+          ? "mt-1 block text-xs text-white/85 underline-offset-4 hover:underline"
+          : "underline-offset-4 hover:underline"
+      }
+    >
+      {showExplanation ? "Скрыть пояснение" : "Пояснение — нажмите, чтобы раскрыть ›"}
+    </button>
+  );
 
   // Колбэк в ref: родитель пересоздаёт его каждый рендер, а наблюдатель
   // должен жить один на слайд, иначе при каждом лайке он переподписывается.
@@ -541,6 +556,9 @@ function ReelSlide({
         {kind === "image" && (
           <p className="line-clamp-4 font-display text-[17px] font-medium leading-snug drop-shadow-md">{quote}</p>
         )}
+        {/* У фото — сразу под цитатой, которую раскрывает. У ролика своей
+            цитаты в DOM нет, поэтому кнопка остаётся в общем ряду ниже. */}
+        {kind === "image" && explanationToggle}
         {kind === "image" && source && (
           <p className="mt-2 text-xs text-white/85">
             <span aria-hidden="true">📖 </span>
@@ -554,16 +572,7 @@ function ReelSlide({
           </p>
         )}
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/75">
-          {explanation && (
-            <button
-              type="button"
-              aria-expanded={showExplanation}
-              onClick={() => setShowExplanation((value) => !value)}
-              className="underline-offset-4 hover:underline"
-            >
-              {showExplanation ? "Скрыть пояснение" : "Пояснение — нажмите, чтобы раскрыть ›"}
-            </button>
-          )}
+          {kind !== "image" && explanationToggle}
           {isLongQuote(quote) && <FullQuoteToggle quote={quote} source={source} />}
           {post.origin === "user" && !post.isOwn && <ReportDialog postId={post.id} />}
         </div>
@@ -573,17 +582,50 @@ function ReelSlide({
       </div>
 
       {showExplanation && explanation && (
-        <div className="absolute inset-x-0 bottom-0 z-20 max-h-[60%] overflow-y-auto rounded-t-3xl border-t border-white/15 bg-[#1B0F2E]/95 p-5 text-sm leading-6 text-white/90 backdrop-blur">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="font-display text-sm">Пояснение</span>
-            <button type="button" onClick={() => setShowExplanation(false)} className="rounded-lg px-2 py-1 text-xs text-white/70 hover:bg-white/10">
-              Закрыть
-            </button>
-          </div>
+        <CenteredSheet title="Пояснение" onClose={() => setShowExplanation(false)}>
           <p className="whitespace-pre-line">{explanation}</p>
-        </div>
+        </CenteredSheet>
       )}
     </article>
+  );
+}
+
+/**
+ * Раскрытый текст (пояснение, цитата целиком) — карточкой по центру кадра,
+ * на уровне глаз, а не шторкой снизу: внизу она пряталась под нижним краем
+ * экрана и за постоянным рядом лайк/сохранить/поделиться (тот у ReelsFeed
+ * держит z-30, поэтому здесь z-40 — точно выше). Клик по затемнению тоже
+ * закрывает, как ожидается от модалки.
+ */
+function CenteredSheet({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 p-6"
+      onClick={onClose}
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        className="flex max-h-[70%] w-full max-w-sm flex-col overflow-hidden rounded-3xl border border-white/15 bg-[#1B0F2E]/95 text-sm text-white/90 backdrop-blur"
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-3">
+          <span className="font-display text-sm">{title}</span>
+          <button type="button" onClick={onClose} className="rounded-lg px-2 py-1 text-xs text-white/70 hover:bg-white/10">
+            Закрыть
+          </button>
+        </div>
+        {/* min-h-0 — иначе флекс-item не сжимается до overflow и прокрутка
+            не срабатывает, вся карточка просто растёт за рамки max-h. */}
+        <div className="min-h-0 overflow-y-auto p-5 leading-6">{children}</div>
+      </div>
+    </div>
   );
 }
 
@@ -609,8 +651,8 @@ function Byline({ post }: { post: MotivationPostDto }) {
 }
 
 /**
- * Кнопка «Читать полностью» и шторка снизу с цитатой целиком — по образцу
- * уже существующей шторки «Пояснение». Общая для фото и видео: у видео
+ * Кнопка «Читать полностью» и карточка с цитатой целиком — по образцу
+ * шторки «Пояснение» (см. CenteredSheet). Общая для фото и видео: у видео
  * своей DOM-цитаты нет вовсе (текст вшит в кадр воркером), а полный текст
  * всё равно есть в данных поста — доставать его из видео не нужно.
  */
@@ -626,20 +668,10 @@ function FullQuoteToggle({ quote, source }: { quote: string; source: string }) {
         Читать полностью ›
       </button>
       {open && (
-        <div className="absolute inset-x-0 bottom-0 z-20 max-h-[60%] overflow-y-auto rounded-t-3xl border-t border-white/15 bg-[#1B0F2E]/95 p-5 text-sm leading-6 text-white/90 backdrop-blur">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="font-display text-sm">Цитата целиком</span>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-lg px-2 py-1 text-xs text-white/70 hover:bg-white/10"
-            >
-              Закрыть
-            </button>
-          </div>
+        <CenteredSheet title="Цитата целиком" onClose={() => setOpen(false)}>
           <p className="whitespace-pre-line">{quote}</p>
           {source && <p className="mt-3 text-xs text-white/70">{source}</p>}
-        </div>
+        </CenteredSheet>
       )}
     </>
   );
