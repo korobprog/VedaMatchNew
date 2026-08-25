@@ -15,6 +15,11 @@ import {
 } from "./dictionaries";
 import { IntentionChips } from "./intention-chips";
 import { intentionTypes } from "./labels";
+import {
+  AGE_STORAGE_KEY,
+  countActiveFilters,
+  first,
+} from "./recommendation-empty-state";
 import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -37,10 +42,6 @@ const radiusOptions = [25, 50, 100, 250, 500, 1000, 3000];
 // Совпадает с MIN_PROFILE_AGE / MAX_PROFILE_AGE на стороне API.
 const MIN_AGE = 18;
 const MAX_AGE = 120;
-
-// Ключ хранит только возрастной фильтр — остальные фильтры живут в URL и
-// сами переживают навигацию через defaultValue из searchParams.
-const AGE_STORAGE_KEY = "union.recommendations.ageRange";
 
 const DESKTOP_QUERY = "(min-width: 1024px)";
 
@@ -161,7 +162,16 @@ export function RecommendationFilters({
   return (
     <form
       action="/union/recommendations"
-      className="glass mb-6 rounded-3xl border border-glass-brd p-4 sm:p-5"
+      /*
+        Свёрнутая полоса фильтров прилипает под шапкой: она нужна в любой
+        момент просмотра, а прокручивать сетку обратно наверх ради неё —
+        лишняя работа. `top` считается от высоты шапки (h-14) плюс безопасная
+        зона, иначе на телефонах с вырезом полоса уезжает под неё.
+
+        На lg панель раскрыта целиком и занимает пол-экрана — там липкость
+        только мешала бы, поэтому `lg:static`.
+      */
+      className="sticky z-30 mb-3 rounded-3xl border border-glass-brd bg-bg-1 p-3 backdrop-blur-xl top-[calc(3.5rem+env(safe-area-inset-top))] sm:p-5 lg:static lg:mb-6"
     >
       <input type="hidden" name="page" value="1" />
       {/* Подборка задаёт порядок и порог совместимости — форма их не теряет. */}
@@ -586,37 +596,6 @@ function Select({
       </select>
     </label>
   );
-}
-
-const filterKeys = [
-  "intentions",
-  // Старая ссылка с `intention=` тоже должна зажигать бейдж на мобильном.
-  "intention",
-  "stage",
-  "gender",
-  "format",
-  "country",
-  "city",
-  "radiusKm",
-  "language",
-  "ageMin",
-  "ageMax",
-  "diet",
-  "principlesMin",
-  "childrenStatus",
-  "verifiedOnly",
-  "photoVerifiedOnly",
-  "includeSwiped",
-] as const;
-
-function countActiveFilters(
-  params: Record<string, string | string[] | undefined>,
-): number {
-  return filterKeys.filter((key) => Boolean(first(params[key]))).length;
-}
-
-function first(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
 }
 
 /** Старая ссылка с `intention=` продолжает открываться выбранным чипом. */

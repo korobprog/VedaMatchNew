@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { RecommendationsView } from "@/components/union/recommendations-view";
+import { RecommendationsEmpty } from "@/components/union/recommendations-empty";
+import { countNarrowingFilters } from "@/components/union/recommendation-empty-state";
 import { RecommendationFilters } from "@/components/union/recommendation-filters";
 import { UnionNav } from "@/components/union/union-nav";
 import { UnionTabBar } from "@/components/union/union-tabbar";
@@ -33,11 +35,30 @@ export default async function UnionRecommendationsPage({
   ]);
   if (recommendations === null) redirect("/union/profile");
 
+  // Сколько подходящих анкет скрыто историей показов — считаем только на
+  // пустой выдаче и только когда отсмотренные ещё не показываются: один
+  // лишний запрос в редком случае даёт точное число на кнопке вместо
+  // догадки, а пустая кнопка «показать отсмотренных» вовсе не появится.
+  const includeSwiped = first(params.includeSwiped) === "true";
+  const viewedMatchCount =
+    recommendations.items.length === 0 && !includeSwiped
+      ? ((
+          await getUnionRecommendations({
+            ...params,
+            includeSwiped: "true",
+            page: "1",
+          }).catch(() => null)
+        )?.total ?? 0)
+      : 0;
+
   return (
     <>
       <BackgroundOrbs />
       <NoiseOverlay />
-      <main className="mx-auto max-w-6xl px-4 py-8 pb-28">
+      {/* На телефоне верхний отступ вдвое меньше: там над сеткой и без него
+          набирается три сотни пикселей служебной обвязки, а анкеты — то,
+          ради чего человек пришёл. На десктопе места хватает. */}
+      <main className="mx-auto max-w-6xl px-4 py-4 pb-28 md:py-8">
         <UnionTopBar title="Знакомства" />
         <div className="mb-6 hidden md:block">
           <h1 className="font-display text-2xl font-bold text-text-0 sm:text-3xl">
@@ -57,26 +78,26 @@ export default async function UnionRecommendationsPage({
         <HistoryResetBanner restoredCount={first(params.historyReset)} />
 
         {recommendations.items.length === 0 ? (
-          <div className="glass rounded-3xl border border-glass-brd p-10 text-center text-sm text-text-1">
-            Пока нет подходящих людей по выбранным фильтрам. Попробуйте расширить
-            радиус или сбросить часть условий.
-            <br />
-            Учтите: «Сбросить» очищает только видимые фильтры. Часть
-            подходящих анкет может быть уже отсмотрена — включите
-            «Показывать уже отсмотренных» среди фильтров, а желаемый возраст
-            партнёра задаётся в{" "}
-            <Link href="/union/profile" className="underline hover:text-text-0">
-              настройках профиля
-            </Link>{" "}
-            и тоже сужает выдачу.
-          </div>
+          <RecommendationsEmpty
+            params={params}
+            narrowingFilterCount={countNarrowingFilters(params)}
+            includeSwiped={includeSwiped}
+            viewedMatchCount={viewedMatchCount}
+          />
         ) : (
           <>
-            <div className="mb-4 text-sm text-text-2">
-              Найдено: {recommendations.total}. Страница {recommendations.page} из{" "}
-              {recommendations.totalPages}.
-            </div>
-            <RecommendationsView items={recommendations.items} />
+            {/* «Найдено» переехало в ряд кнопок режима — отдельной строкой
+                оно съедало высоту. «Страница 1 из 1» не показываем вовсе:
+                строка ничего не сообщает. */}
+            {recommendations.totalPages > 1 && (
+              <div className="mb-2 text-sm text-text-2">
+                Страница {recommendations.page} из {recommendations.totalPages}.
+              </div>
+            )}
+            <RecommendationsView
+              items={recommendations.items}
+              total={recommendations.total}
+            />
             <Pagination
               params={params}
               page={recommendations.page}

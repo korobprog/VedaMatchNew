@@ -41,8 +41,12 @@ function subscribeToMobileQuery(onChange: () => void): () => void {
  */
 export function RecommendationsView({
   items,
+  total,
 }: {
   items: UnionRecommendation[];
+  /** Сколько нашлось всего. Стоит в одном ряду с кнопками режима: отдельной
+   *  строкой это съедало высоту, которой на телефоне и так не хватает. */
+  total?: number;
 }) {
   const isMobile = useSyncExternalStore(
     subscribeToMobileQuery,
@@ -145,12 +149,16 @@ export function RecommendationsView({
             Кнопка одна и переключает по кругу, подпись обещает результат
             нажатия. Только в списке на телефоне: на десктопе места хватает,
             а в колоде плотности нет вовсе. */}
+        {total !== undefined && (
+          <span className="ml-auto text-sm text-text-2">Найдено: {total}</span>
+        )}
+
         {isMobile && mode === "grid" && (
           <IconButton
             icon={density === 2 ? <DenseGlyph /> : <LargeGlyph />}
             label={densityLabel(density)}
             pressable={false}
-            className="ml-auto"
+            className={total === undefined ? "ml-auto" : ""}
             onClick={() => chooseDensity(nextDensity(density))}
           />
         )}
@@ -216,7 +224,7 @@ function IconButton({
       type="button"
       onClick={onClick}
       aria-pressed={pressable ? active : undefined}
-      className={`flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl border transition active:translate-y-px ${
+      className={`flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-2xl border transition active:translate-y-px ${
         active
           ? "border-magenta/40 bg-magenta/10 text-text-0"
           : "glass border-glass-brd text-text-2 hover:text-text-0"

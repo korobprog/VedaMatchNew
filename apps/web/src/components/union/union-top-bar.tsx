@@ -8,7 +8,7 @@ import { SlidersHorizontal } from "lucide-react";
  */
 export function UnionTopBar({ title }: { title: string }) {
   return (
-    <div className="mb-4 flex items-center justify-between md:hidden">
+    <div className="mb-3 flex items-center justify-between md:hidden">
       <h1 className="font-display text-xl font-bold text-text-0">{title}</h1>
       <Link
         href="/union/profile"
