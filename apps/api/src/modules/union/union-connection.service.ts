@@ -22,7 +22,7 @@ import { PORTAL_ACCESS_EVENTS, resolveDisplayName } from '@vedamatch/shared';
 import type { NotificationEvent, PortalAccessEvent } from '@vedamatch/shared';
 import { calculateAge } from '../users/age';
 import { ModerationService } from '../moderation/moderation.service';
-import { toActivityLevel } from './union-activity';
+import { toActivityLevel, toLastSeenAt } from './union-activity';
 import { isVerifiedDevotee } from './union-verification';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
@@ -363,6 +363,7 @@ export class UnionConnectionService {
         ? calculateAge(user.birthDate)
         : null,
       activity: toActivityLevel(user.lastSeenAt),
+      lastSeenAt: toLastSeenAt(user.lastSeenAt),
       isVerifiedDevotee: isVerifiedDevotee(user),
       isPhotoVerified: user.photoVerifiedAt !== null,
       photos: [],
