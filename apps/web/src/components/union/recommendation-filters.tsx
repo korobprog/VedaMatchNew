@@ -171,7 +171,7 @@ export function RecommendationFilters({
         На lg панель раскрыта целиком и занимает пол-экрана — там липкость
         только мешала бы, поэтому `lg:static`.
       */
-      className="sticky z-30 mb-3 rounded-3xl border border-glass-brd bg-bg-1 p-3 backdrop-blur-xl top-[calc(3.5rem+env(safe-area-inset-top))] sm:p-5 lg:static lg:mb-6"
+      className="sticky z-30 mb-3 rounded-3xl border border-glass-brd bg-bg-1 p-3 backdrop-blur-xl top-[calc(3.5rem+env(safe-area-inset-top)+0.5rem)] sm:p-5 lg:static lg:mb-6"
     >
       <input type="hidden" name="page" value="1" />
       {/* Подборка задаёт порядок и порог совместимости — форма их не теряет. */}
