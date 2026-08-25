@@ -275,6 +275,8 @@ model User {
   unionBoosts                        UnionBoost[]                 @relation("UnionBoosts")
   unionSwipesMade                    UnionSwipe[]                 @relation("UnionSwipesMade")
   unionSwipesReceived                UnionSwipe[]                 @relation("UnionSwipesReceived")
+  unionArchivesMade                  UnionArchive[]               @relation("UnionArchivesMade")
+  unionArchivesReceived              UnionArchive[]               @relation("UnionArchivesReceived")
   photos                             UserPhoto[]
   blocksMade                         UserBlock[]                  @relation("UserBlocksMade")
   blocksReceived                     UserBlock[]                  @relation("UserBlocksReceived")
@@ -1331,6 +1333,23 @@ model UnionSwipe {
   @@unique([fromUserId, toUserId])
   @@index([toUserId, decision])
   @@index([fromUserId, undoneAt, createdAt])
+}
+
+/// Анкеты, убранные из выдачи «совсем». В отличие от `UnionSwipe` живёт
+/// отдельной таблицей: у свайпа стоит @@unique([fromUserId, toUserId]), и
+/// архивирование того, кому уже отправлен лайк, перезаписало бы сам лайк
+/// вместе с заявкой. Здесь решение и архив сосуществуют, а «новый круг»
+/// структурно не может стереть архив — он чистит только UnionSwipe.
+model UnionArchive {
+  id             String   @id @default(uuid())
+  ownerId        String
+  owner          User     @relation("UnionArchivesMade", fields: [ownerId], references: [id], onDelete: Cascade)
+  archivedUserId String
+  archivedUser   User     @relation("UnionArchivesReceived", fields: [archivedUserId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+
+  @@unique([ownerId, archivedUserId])
+  @@index([ownerId, createdAt(sort: Desc)])
 }
 
 model UnionIntention {
