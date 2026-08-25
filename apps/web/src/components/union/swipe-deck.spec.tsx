@@ -130,6 +130,25 @@ describe("SwipeDeck card", () => {
     ).toBeInTheDocument();
   });
 
+  it("offers a new cycle and the escape hatch when the deck runs out", () => {
+    render(<SwipeDeck items={[]} />);
+
+    expect(
+      screen.getByRole("button", { name: "Показать заново" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Показать вообще всех" }),
+    ).toHaveAttribute("href", "/union/recommendations?includeSwiped=true");
+  });
+
+  it("offers archiving from the deck", () => {
+    render(<SwipeDeck items={[recommendation()]} />);
+
+    expect(
+      screen.getByRole("button", { name: "Убрать в архив" }),
+    ).toBeInTheDocument();
+  });
+
   // Листание — это просмотр, а не решение: на сервер ничего уходить не должно,
   // иначе стрелка молча тратила бы анкеты так же, как крестик.
   it("browses to the next profile without recording a decision", async () => {

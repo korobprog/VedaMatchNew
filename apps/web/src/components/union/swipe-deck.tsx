@@ -12,6 +12,7 @@ import {
 } from "framer-motion";
 import type { UnionRecommendation } from "@vedamatch/shared";
 import { ActivityBadge } from "./activity-badge";
+import { ArchiveButton } from "./archive-button";
 import { ProfileDetailsList } from "./profile-details-list";
 import { RecommendationPhotoCarousel } from "./recommendation-photo-carousel";
 import { SwipeHint } from "./swipe-hint";
@@ -22,6 +23,7 @@ import {
 import { UnionBoostButton } from "./union-boost-button";
 import { SparkGlyph, UnionInterestIcon } from "./interest-icons";
 import { intentionLabels } from "./labels";
+import { EVERYTHING_URL } from "./recommendation-empty-state";
 import { PhotoVerifiedBadge, VerifiedBadge } from "./verified-badge";
 import { apiFetch } from "@/lib/http-client";
 
@@ -99,6 +101,7 @@ export function SwipeDeck({
   const [canUndo, setCanUndo] = useState(false);
   const [exitDirection, setExitDirection] = useState<SwipeDirection>("left");
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [recycling, setRecycling] = useState(false);
   const reduceMotion = useReducedMotion();
 
   const current = items[index];
@@ -156,6 +159,26 @@ export function SwipeDeck({
     }
   }
 
+  /** Начало нового круга: сервер снимает пропуски, выдача перечитывается. */
+  async function newCycle() {
+    if (recycling) return;
+    setRecycling(true);
+    setError(null);
+    try {
+      const res = await apiFetch(`${API_URL}/union/swipes/new-cycle`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setIndex(0);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось начать круг заново");
+    } finally {
+      setRecycling(false);
+    }
+  }
+
   function advance(direction: SwipeDirection) {
     setSent(null);
     // Разбор относится к конкретной анкете: оставить его открытым над
@@ -184,19 +207,32 @@ export function SwipeDeck({
     return (
       <div className="glass rounded-3xl border border-glass-brd p-10 text-center">
         <p className="mb-2 font-display text-lg font-bold text-text-0">
-          Колода закончилась
+          Круг пройден
         </p>
         <p className="text-sm text-text-1">
-          Вы просмотрели всех, кто подходит по текущим фильтрам. Расширьте
-          условия поиска или загляните позже.
+          Вы посмотрели всех, кто подходит по текущим фильтрам. Можно начать
+          круг заново — пропущенные вернутся, лайки и архив останутся как есть.
         </p>
-        <button
-          type="button"
-          onClick={() => setIndex(0)}
-          className="mt-4 rounded-xl glass border border-glass-brd px-4 py-2 text-sm font-medium text-text-1 hover:text-text-0"
-        >
-          Пройти заново
-        </button>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+          <button
+            type="button"
+            disabled={recycling}
+            onClick={() => void newCycle()}
+            className="rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-5 py-2.5 text-sm font-semibold text-white transition hover:shadow-[0_0_20px_var(--vm-glow-magenta)] disabled:opacity-50"
+          >
+            {recycling ? "Начинаем…" : "Показать заново"}
+          </button>
+          {/* Второй выход — когда дело не в круге, а в фильтрах. */}
+          <a
+            href={EVERYTHING_URL}
+            className="text-sm font-medium text-text-2 underline-offset-4 transition hover:text-text-0 hover:underline"
+          >
+            Показать вообще всех
+          </a>
+        </div>
+        {error && (
+          <p className="mt-3 text-center text-sm text-red-500">{error}</p>
+        )}
       </div>
     );
   }
@@ -301,6 +337,15 @@ export function SwipeDeck({
         >
           <span aria-hidden="true">›</span>
         </button>
+
+        {/* Архив ведёт себя как решение: анкета уходит, колода едет дальше. */}
+        <ArchiveButton
+          userId={current.user.id}
+          onArchived={() => {
+            router.refresh();
+            advance("left");
+          }}
+        />
 
         <UnionBoostButton />
 
