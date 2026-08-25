@@ -29,6 +29,7 @@ function recommendation(
       spiritualStage: "seeker",
       age: 28,
       activity: "online",
+      lastSeenAt: null,
       isVerifiedDevotee: false,
       isPhotoVerified: false,
       contacts: null,
@@ -83,14 +84,24 @@ describe("SwipeDeck card", () => {
       />,
     );
 
-    expect(screen.getByText("✨ Интересы")).toBeInTheDocument();
-    expect(screen.getByText("🧠 психология")).toBeInTheDocument();
-    expect(screen.queryByText("✨ своё увлечение")).not.toBeInTheDocument();
+    // Значок интереса — нарисованный, поэтому проверяется не по символу, а по
+    // `data-interest-icon`: он называет подобранную иконку.
+    expect(screen.getByText("Интересы")).toBeInTheDocument();
+    expect(
+      screen
+        .getByText("психология")
+        .querySelector("[data-interest-icon]"),
+    ).toHaveAttribute("data-interest-icon", "психология");
+    expect(screen.queryByText("своё увлечение")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Развернуть анкету" }));
 
     // Свой вариант интереса не из справочника получает «искру».
-    expect(screen.getByText("✨ своё увлечение")).toBeInTheDocument();
+    expect(
+      screen
+        .getByText("своё увлечение")
+        .querySelector("[data-interest-icon]"),
+    ).toHaveAttribute("data-interest-icon", "spark");
     expect(screen.getByText("Рассказ о себе")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Свернуть анкету" }),
@@ -117,6 +128,27 @@ describe("SwipeDeck card", () => {
     expect(
       screen.getByRole("button", { name: "Показать фото 2 из 2" }),
     ).toBeInTheDocument();
+  });
+
+  // Порядок согласован с продуктом: крестик и лайк по краям под большие
+  // пальцы, между ними — вспомогательные действия. `getAllByRole` отдаёт
+  // узлы в порядке DOM, поэтому фильтр по known-подписям и есть проверка
+  // порядка: кольцо совместимости и стрелки листания в список не попадают.
+  it("keeps the agreed action order in the decision row", () => {
+    render(<SwipeDeck items={[recommendation()]} />);
+
+    const order = [
+      "Пропустить",
+      "Вернуть предыдущую анкету",
+      "Суперлайк",
+      "Познакомиться",
+    ];
+    const rendered = screen
+      .getAllByRole("button")
+      .map((button) => button.getAttribute("aria-label"))
+      .filter((label): label is string => order.includes(label ?? ""));
+
+    expect(rendered).toEqual(order);
   });
 
   it("offers pass, superlike and like actions", () => {
