@@ -7,9 +7,10 @@ import { ArrowRight, Play } from "lucide-react";
 import type { PricingPlan } from "@vedamatch/shared";
 import { Navbar } from "./Navbar";
 import { BackgroundOrbs } from "./Orb";
+import { HexScales } from "./HexScales";
 import { NoiseOverlay } from "./NoiseOverlay";
 import { Iris } from "./Iris";
-import { PhoneMockup } from "./PhoneMockup";
+import { PortalPreview } from "./PortalPreview";
 import { Services } from "./Services";
 import { HowItWorks } from "./HowItWorks";
 import { Features } from "./Features";
@@ -36,9 +37,10 @@ export function LandingPage({
 }) {
   const t = useTranslations("Landing");
   return (
-    <div className="relative min-h-dvh bg-bg-0">
+    <div className="hex-cursor relative min-h-dvh bg-bg-0">
       <SilentRefresh returnTo={returnTo} />
       {/* Background elements */}
+      <HexScales />
       <BackgroundOrbs />
       <NoiseOverlay />
 
@@ -48,8 +50,9 @@ export function LandingPage({
       {/* Hero Section */}
       <section className="relative min-h-dvh flex items-center pt-20 pb-32 md:pt-24 md:pb-40 overflow-hidden">
         <div className="mx-auto max-w-7xl px-4 md:px-6 w-full">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            {/* Left side - Text content */}
+          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+            {/* Текст героя. Справа — копия кабинета: макет телефона с колодой
+                знакомств уехал на страницу своего сервиса. */}
             <motion.div
               initial={{ opacity: 0, x: -30 }}
               animate={{ opacity: 1, x: 0 }}
@@ -120,7 +123,11 @@ export function LandingPage({
                 href="#services"
                 className="mt-6 inline-flex items-center gap-2 text-sm text-text-2 hover:text-text-0 transition-colors"
               >
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan/15 text-cyan text-xs font-bold">
+                {/* Цифра обычным цветом текста, а не мятой: мята на светлой
+                    теме давала 4.53:1 — впритык к норме, и любой фон под
+                    полупрозрачной подложкой уводил её ниже. Кружок остаётся
+                    мятным, читается по-прежнему как счётчик. */}
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan/15 text-text-0 text-xs font-bold">
                   8
                 </span>
                 {t("hero.ecosystem")}
@@ -139,7 +146,7 @@ export function LandingPage({
                       <MemberCounter total={totalMembers} />
                     </div>
                   )}
-                  <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">{t("hero.statUsers")}</div>
+                  <div className="text-text-1 text-xs sm:text-sm whitespace-nowrap">{t("hero.statUsers")}</div>
                 </div>
                 {/* Числа берутся из базы, а не рисуются: статистика портала
                     открыта участникам, и придуманные «500+ совпадений» рядом
@@ -151,7 +158,7 @@ export function LandingPage({
                       <div className="font-display text-2xl md:text-3xl font-bold text-text-0">
                         {totalCities}
                       </div>
-                      <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">
+                      <div className="text-text-1 text-xs sm:text-sm whitespace-nowrap">
                         {t("hero.statCities")}
                       </div>
                     </div>
@@ -164,7 +171,7 @@ export function LandingPage({
                       <div className="font-display text-2xl md:text-3xl font-bold text-text-0">
                         {totalCommunities}
                       </div>
-                      <div className="text-text-2 text-xs sm:text-sm whitespace-nowrap">
+                      <div className="text-text-1 text-xs sm:text-sm whitespace-nowrap">
                         {t("hero.statCommunities")}
                       </div>
                     </div>
@@ -173,14 +180,14 @@ export function LandingPage({
               </motion.div>
             </motion.div>
 
-            {/* Right side - Phone mockup */}
+            {/* Справа — как выглядит портал изнутри */}
             <motion.div
               initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8, delay: 0.4 }}
               className="relative flex min-w-0 justify-center lg:justify-end"
             >
-              <PhoneMockup />
+              <PortalPreview />
             </motion.div>
           </div>
         </div>
@@ -192,7 +199,9 @@ export function LandingPage({
           transition={{ delay: 1 }}
           className="absolute bottom-8 left-1/2 -translate-x-1/2"
         >
-          <div className="flex flex-col items-center gap-2 text-text-2">
+          {/* Тоном выше, чем text-2: подсказка стоит у нижнего края, где
+              чешуя в полную силу, и на приглушённом тоне давала 4.36:1. */}
+          <div className="flex flex-col items-center gap-2 text-text-1">
             <span className="text-sm font-medium">{t("hero.scroll")}</span>
             <motion.div
               animate={{ y: [0, 8, 0] }}

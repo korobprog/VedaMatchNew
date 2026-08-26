@@ -148,6 +148,25 @@
 
   --vm-orb-opacity: 0.2;
   --vm-noise-opacity: 0.02;
+  /* Чешуя на светлом рисуется тёмными акцентами по светлому фону, то есть
+     контуром, а не свечением: при доле тёмной темы её просто не видно. */
+  /* Чешуя на светлом рисуется тёмными акцентами по светлому фону, то есть
+     контуром, а не свечением: доли тёмной темы здесь не видно вовсе. Текст
+     она не задевает — из-под него узор убран маской ниже. */
+  --vm-hex-opacity: 0.45;
+  /* Затенённая грань соты. На светлом чистый чёрный читается разлиновкой,
+     поэтому это приглушённый сиреневый — тень, а не контур. */
+  --vm-hex-shadow: rgba(74, 44, 104, 0.34);
+  --vm-hex-lit: 0.38;
+  /* Лицо плитки: подложка, поднимающая её над фоном. Без неё торец не с чем
+     сравнить — тень читается как случайная клякса, а не как толщина. */
+  --vm-hex-face: rgba(74, 44, 104, 0.035);
+  /* Курсор-чешуйка лендинга: тот же шестиугольник, что и в фоне. Цвет
+     вписан в data-URI числом, а не токеном: внутрь такой ссылки var() не
+     подставляется, поэтому у каждой темы своя копия — светлая берёт тёмную
+     мадженту #D71A80, тёмная светлую #FF3E9E. Меняешь --vm-magenta —
+     поправь и здесь. */
+  --vm-cursor-hex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M9 3.5h10L24 12l-5 8.5H9L4 12z' fill='none' stroke='%23D71A80' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") 14 12, auto;
   /* На светлом фоне те же акценты темнее и читаются сильнее — кромка тише. */
   --vm-edge-opacity: 0.28;
   --vm-edge-opacity-hover: 0.7;
@@ -202,6 +221,13 @@
 
   --vm-orb-opacity: 0.4;
   --vm-noise-opacity: 0.03;
+  --vm-hex-opacity: 0.6;
+  /* На почти чёрном фоне торец должен быть чернее фона, иначе его не видно
+     вовсе, а лицо — светлее, иначе не с чем сравнивать. */
+  --vm-hex-shadow: rgba(0, 0, 0, 0.85);
+  --vm-hex-lit: 0.42;
+  --vm-hex-face: rgba(255, 255, 255, 0.04);
+  --vm-cursor-hex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M9 3.5h10L24 12l-5 8.5H9L4 12z' fill='none' stroke='%23FF3E9E' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") 14 12, auto;
   --vm-edge-opacity: 0.45;
   --vm-edge-opacity-hover: 0.9;
   /* На тёмном мята ярче, поэтому доля меньше — иначе кромка слепит. */
@@ -252,6 +278,11 @@
 
     --vm-orb-opacity: 0.4;
     --vm-noise-opacity: 0.03;
+    --vm-hex-opacity: 0.6;
+    --vm-hex-shadow: rgba(0, 0, 0, 0.85);
+    --vm-hex-lit: 0.42;
+    --vm-hex-face: rgba(255, 255, 255, 0.04);
+    --vm-cursor-hex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M9 3.5h10L24 12l-5 8.5H9L4 12z' fill='none' stroke='%23FF3E9E' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") 14 12, auto;
     --vm-edge-opacity: 0.45;
     --vm-edge-opacity-hover: 0.9;
     --vm-service-edge-opacity: 0.34;
@@ -675,6 +706,48 @@ select option {
 
 .noise-layer {
   opacity: var(--vm-noise-opacity);
+}
+
+.hex-layer {
+  opacity: var(--vm-hex-opacity);
+}
+
+/* Курсор-чешуйка. Только на лендинге: внутри портала люди работают, и
+   подменять там системный указатель ради украшения незачем. */
+.hex-cursor {
+  cursor: var(--vm-cursor-hex);
+}
+
+/* На том, что можно нажать, остаётся привычная рука: чешуйка одинакова
+   везде и сама по себе не говорит «сюда можно нажать». */
+.hex-cursor a,
+.hex-cursor button,
+.hex-cursor [role="button"],
+.hex-cursor summary,
+.hex-cursor label {
+  cursor: pointer;
+}
+
+.hex-cursor input,
+.hex-cursor textarea,
+.hex-cursor select {
+  cursor: auto;
+}
+
+/* Указатель увеличенного размера — системная настройка доступности, и
+   картинкой её не масштабировать: там, где человек её включил, отдаём
+   обычный курсор. */
+@media (prefers-reduced-motion: reduce) {
+  .hex-cursor,
+  .hex-cursor a,
+  .hex-cursor button {
+    cursor: auto;
+  }
+  .hex-cursor a,
+  .hex-cursor button,
+  .hex-cursor [role="button"] {
+    cursor: pointer;
+  }
 }
 
 /* Safe area padding for iOS */
