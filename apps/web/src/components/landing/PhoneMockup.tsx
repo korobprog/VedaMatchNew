@@ -1,19 +1,41 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
+import { useCallback, useEffect, useState } from "react";
+import { useReducedMotion } from "framer-motion";
+import type { UnionShowcaseCard } from "@vedamatch/shared";
 import { VedaMatchMark } from "@/components/icons/vedamatch-mark";
 import { SwipeCard } from "./SwipeCard";
 import { cn } from "@/lib/utils";
 
 interface PhoneMockupProps {
   className?: string;
+  /**
+   * Анкеты тех, кто согласился на публичный показ. Пусто или не передано —
+   * витрина падает на демонстрационные карточки: страница сервиса не должна
+   * пустовать, пока согласившихся нет.
+   */
+  cards?: UnionShowcaseCard[];
 }
 
-// Demo data for cards
-const demoProfiles = [
+interface DeckCard {
+  id: string;
+  name: string;
+  age: number | null;
+  location: string | null;
+  description: string | null;
+  imageUrl: string;
+  /** Считается относительно смотрящего, поэтому есть только у демо-карточек. */
+  compatibility?: number;
+  tags: string[];
+}
+
+/** Пауза между автоматическими перелистываниями карточек витрины. */
+const AUTOPLAY_INTERVAL_MS = 5000;
+
+/** Запасная колода: показывается, пока никто не согласился на витрину. */
+const demoProfiles: DeckCard[] = [
   {
-    id: 1,
+    id: "demo-1",
     name: "Александра",
     age: 28,
     location: "Москва, Россия",
@@ -23,7 +45,7 @@ const demoProfiles = [
     tags: ["Йога", "Медитация", "Киртан"],
   },
   {
-    id: 2,
+    id: "demo-2",
     name: "Мария",
     age: 32,
     location: "Санкт-Петербург, Россия",
@@ -33,7 +55,7 @@ const demoProfiles = [
     tags: ["Крия", "Аюрведа", "Философия"],
   },
   {
-    id: 3,
+    id: "demo-3",
     name: "Екатерина",
     age: 26,
     location: "Казань, Россия",
@@ -44,22 +66,57 @@ const demoProfiles = [
   },
 ];
 
-export function PhoneMockup({ className }: PhoneMockupProps) {
+/** Город и страна одной строкой; пусто, когда закрыты приватностью. */
+function toLocationLine(card: UnionShowcaseCard): string | null {
+  return [card.city, card.country].filter(Boolean).join(", ") || null;
+}
+
+export function PhoneMockup({ className, cards }: PhoneMockupProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
+  const reduceMotion = useReducedMotion();
+
+  const deck: DeckCard[] =
+    cards && cards.length > 0
+      ? cards.map((card) => ({
+          id: card.id,
+          name: card.name,
+          age: card.age,
+          location: toLocationLine(card),
+          description: card.about,
+          imageUrl: card.photoUrl,
+          tags: card.interests,
+        }))
+      : demoProfiles;
+
+  const advance = useCallback(() => {
+    setIsAnimating(true);
+    setTimeout(() => {
+      setCurrentIndex((prev) => (prev + 1) % deck.length);
+      setIsAnimating(false);
+    }, 300);
+  }, [deck.length]);
 
   const handleSwipe = () => {
     if (isAnimating) return;
-    setIsAnimating(true);
-    
-    setTimeout(() => {
-      setCurrentIndex((prev) => (prev + 1) % demoProfiles.length);
-      setIsAnimating(false);
-    }, 300);
+    advance();
   };
 
-  const currentProfile = demoProfiles[currentIndex];
-  const nextProfile = demoProfiles[(currentIndex + 1) % demoProfiles.length];
+  // Витрина листается сама: гость видит несколько анкет, ничего не нажимая.
+  // Зависимость от currentIndex перезапускает отсчёт после ручного свайпа —
+  // иначе следующая карточка успевала бы уехать сразу после его собственной.
+  // prefers-reduced-motion отключает автолистание: движение здесь
+  // декоративное, и остаётся ручное управление кнопками карточки.
+  useEffect(() => {
+    if (reduceMotion) return;
+    const timer = window.setInterval(advance, AUTOPLAY_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [advance, currentIndex, reduceMotion]);
+
+  // Колода могла смениться (данные приехали) — индекс из прошлой длиннее.
+  const safeIndex = currentIndex % deck.length;
+  const currentProfile = deck[safeIndex];
+  const nextProfile = deck[(safeIndex + 1) % deck.length];
 
   return (
     <div className={cn("relative", className)}>
@@ -112,12 +169,14 @@ export function PhoneMockup({ className }: PhoneMockupProps) {
             <div className="relative h-[420px] mx-3 mb-3">
               {/* Next card (behind) */}
               <div className="absolute inset-0 scale-[0.95] translate-y-2 rounded-3xl overflow-hidden opacity-50">
-                <Image
+                {/* Подписанные ссылки витрины приходят с разных хостов
+                    хранилища — см. комментарий в SwipeCard. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
                   src={nextProfile.imageUrl}
-                  alt={nextProfile.name}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 276px, 296px"
+                  alt=""
+                  className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
                 />
               </div>
 
@@ -134,13 +193,13 @@ export function PhoneMockup({ className }: PhoneMockupProps) {
 
             {/* Bottom tab indicator */}
             <div className="flex justify-center gap-2 pb-4">
-              {demoProfiles.map((_, idx) => (
+              {deck.map((card, idx) => (
                 <div
-                  key={idx}
+                  key={card.id}
                   className={cn(
                     "w-2 h-2 rounded-full transition-all duration-300",
-                    idx === currentIndex 
-                      ? "bg-magenta w-4" 
+                    idx === safeIndex
+                      ? "bg-magenta w-4"
                       : "bg-text-2"
                   )}
                 />

@@ -39,16 +39,71 @@ describe("landing branding", () => {
   });
 
   it("uses the product logo and local profile photos in the phone mockup", () => {
-    render(<PhoneMockup />);
+    const { container } = render(<PhoneMockup />);
 
     expect(mark()).toHaveAttribute("src", "/brand/mark.png");
-    expect(screen.getByAltText("Александра")).toHaveAttribute(
-      "src",
-      "/landing/profiles/alexandra.jpg",
-    );
-    expect(screen.getByAltText("Мария")).toHaveAttribute(
-      "src",
-      "/landing/profiles/maria.jpg",
+    // Карточка позади колоды декоративна и подписи не имеет, поэтому
+    // проверяем именно источники: обе демо-фотографии лежат локально.
+    expect(sources(container)).toEqual(
+      expect.arrayContaining([
+        "/landing/profiles/alexandra.jpg",
+        "/landing/profiles/maria.jpg",
+      ]),
     );
   });
+
+  it("shows real showcase profiles instead of the demo deck", () => {
+    const { container } = render(
+      <PhoneMockup
+        cards={[
+          {
+            id: "user-1",
+            name: "Ямуна",
+            age: 36,
+            city: "Новосибирск",
+            country: "Россия",
+            about: "Психолог, веду группы поддержки.",
+            photoUrl: "https://storage.example/union/yamuna.jpg",
+            interests: ["психология"],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Ямуна, 36")).toBeInTheDocument();
+    expect(screen.getByText("Новосибирск, Россия")).toBeInTheDocument();
+    expect(sources(container)).toContain(
+      "https://storage.example/union/yamuna.jpg",
+    );
+    // Демо-колода уступила место настоящим анкетам целиком.
+    expect(screen.queryByText(/Александра/)).not.toBeInTheDocument();
+  });
+
+  it("hides the age when privacy closed it", () => {
+    render(
+      <PhoneMockup
+        cards={[
+          {
+            id: "user-1",
+            name: "Ямуна",
+            age: null,
+            city: null,
+            country: null,
+            about: null,
+            photoUrl: "https://storage.example/union/yamuna.jpg",
+            interests: [],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Ямуна")).toBeInTheDocument();
+  });
 });
+
+/** Все src картинок отрисованного макета. */
+function sources(container: HTMLElement): string[] {
+  return [...container.querySelectorAll("img")].map(
+    (img) => img.getAttribute("src") ?? "",
+  );
+}

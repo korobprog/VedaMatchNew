@@ -2,14 +2,15 @@
 
 import { useRef, useState } from "react";
 import { motion, useMotionValue, useTransform, PanInfo } from "framer-motion";
-import Image from "next/image";
 import { X, Star, Heart } from "lucide-react";
 
 interface SwipeCardProps {
   name: string;
-  age: number;
-  location: string;
-  description: string;
+  /** null — возраст закрыт приватностью; подпись тогда одно имя. */
+  age?: number | null;
+  /** null — город закрыт приватностью; строка под именем не рисуется. */
+  location?: string | null;
+  description?: string | null;
   imageUrl: string;
   compatibility?: number;
   tags?: string[];
@@ -20,9 +21,9 @@ interface SwipeCardProps {
 
 export function SwipeCard({
   name,
-  age,
-  location,
-  description,
+  age = null,
+  location = null,
+  description = null,
   imageUrl,
   compatibility = 0,
   tags = [],
@@ -70,12 +71,15 @@ export function SwipeCard({
       >
         {/* Image */}
         <div className="relative w-full h-[65%]">
-          <Image
+          {/* Ссылки витрины подписаны и приходят с разных хостов хранилища —
+              перечислить их в remotePatterns нельзя, поэтому обычный img,
+              как и в карусели анкеты. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             src={imageUrl}
             alt={name}
-            fill
-            className="object-cover"
-            sizes="(max-width: 768px) 100vw, 400px"
+            className="absolute inset-0 h-full w-full object-cover"
+            referrerPolicy="no-referrer"
           />
           
           {/* Gradient overlay */}
@@ -109,9 +113,9 @@ export function SwipeCard({
           <div className="flex items-start justify-between mb-2">
             <div>
               <h3 className="font-display text-xl font-bold text-text-0">
-                {name}, {age}
+                {age === null ? name : `${name}, ${age}`}
               </h3>
-              <p className="text-text-1 text-sm">{location}</p>
+              {location && <p className="text-text-1 text-sm">{location}</p>}
             </div>
             {compatibility > 0 && (
               <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-cyan/20 border border-cyan/40">
@@ -120,7 +124,9 @@ export function SwipeCard({
             )}
           </div>
           
-          <p className="text-text-1 text-sm mb-3 line-clamp-2">{description}</p>
+          {description && (
+            <p className="text-text-1 text-sm mb-3 line-clamp-2">{description}</p>
+          )}
           
           {/* Tags */}
           {tags.length > 0 && (

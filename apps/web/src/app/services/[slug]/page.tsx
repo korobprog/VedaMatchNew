@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ServiceDetailPage } from "@/components/landing/ServiceDetailPage";
 import { getPublicServices } from "@/lib/api";
+import { getUnionShowcase } from "@/lib/union-api";
 import { SERVICE_CONTENT, getServiceContent } from "@/lib/service-content";
 
 export function generateStaticParams() {
@@ -41,8 +42,19 @@ export default async function ServicePage({
   if (!service) notFound();
 
   const otherServices = SERVICE_CONTENT.filter((s) => s.slug !== slug);
+  // Витрина есть только у Знакомств, и упасть она права не имеет: страница
+  // сервиса обязана открыться, даже когда API недоступен — макет телефона
+  // тогда покажет демонстрационные карточки.
+  const showcase =
+    slug === "union" ? await getUnionShowcase().catch(() => null) : null;
 
-  return <ServiceDetailPage service={service} otherServices={otherServices} />;
+  return (
+    <ServiceDetailPage
+      service={service}
+      otherServices={otherServices}
+      showcase={showcase?.cards ?? []}
+    />
+  );
 }
 
 /** Название из каталога с запасным значением из копирайта. */

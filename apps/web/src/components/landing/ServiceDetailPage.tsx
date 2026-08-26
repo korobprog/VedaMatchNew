@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useLocale, useTranslations } from "next-intl";
+import type { UnionShowcaseCard } from "@vedamatch/shared";
 import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { useServiceNames } from "@/components/service-catalog-provider";
 import { Navbar } from "./Navbar";
 import { BackgroundOrbs } from "./Orb";
 import { NoiseOverlay } from "./NoiseOverlay";
+import { PhoneMockup } from "./PhoneMockup";
 import { Footer } from "./Footer";
 import {
   serviceTagline,
@@ -33,9 +35,12 @@ const itemVariants = {
 export function ServiceDetailPage({
   service,
   otherServices,
+  showcase = [],
 }: {
   service: ServiceContent;
   otherServices: ServiceContent[];
+  /** Анкеты для витрины Знакомств; у остальных сервисов пусто. */
+  showcase?: UnionShowcaseCard[];
 }) {
   const t = useTranslations("Landing.serviceDetail");
   const locale = useLocale();
@@ -150,6 +155,22 @@ export function ServiceDetailPage({
           </motion.div>
         </div>
       </section>
+
+      {/* Витрина колоды — только у Знакомств: у остальных сервисов нет
+          карточек, которые этот макет показывает. */}
+      {service.slug === "union" && (
+        <section className="relative pb-4 md:pb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="flex justify-center px-4 md:px-6"
+          >
+            <PhoneMockup cards={showcase} />
+          </motion.div>
+        </section>
+      )}
 
       {/* Features */}
       <section className="relative py-16 md:py-24">
