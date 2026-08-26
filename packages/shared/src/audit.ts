@@ -32,6 +32,8 @@ export const ADMIN_AUDIT_ACTIONS = [
   'notices.report-resolved',
   'union.profile-hidden',
   'union.profile-restored',
+  'union.showcase-blocked',
+  'union.showcase-unblocked',
   'union.chat-viewed',
   'library.category-merged',
   'library.entry-removed',

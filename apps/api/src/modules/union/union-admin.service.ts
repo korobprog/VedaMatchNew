@@ -19,6 +19,7 @@ import type {
   UnionPrivacySettings,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { toShowcaseState } from './union-showcase';
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
@@ -165,6 +166,48 @@ export class UnionAdminService {
   }
 
   /**
+   * Снять анкету с публичной витрины, не трогая ни саму анкету, ни согласие
+   * человека: витрина — лицо сервиса наружу, и убрать оттуда снимок бывает
+   * нужно раньше, чем разобрана жалоба. Причина обязательна по тем же
+   * соображениям, что и у скрытия анкеты.
+   */
+  async blockShowcase(
+    adminId: string,
+    userId: string,
+    body: UnionAdminHideProfileRequest,
+  ): Promise<UnionAdminProfileDto> {
+    const reason = body?.reason?.trim() ?? '';
+    if (reason.length < UNION_ADMIN_HIDE_REASON_MIN_LENGTH) {
+      throw new BadRequestException(
+        `Укажите причину минимум ${UNION_ADMIN_HIDE_REASON_MIN_LENGTH} символов`,
+      );
+    }
+    await this.setShowcaseBlocked(userId, new Date());
+    this.audit(adminId, 'union.showcase-blocked', userId, { reason });
+    return this.profile(userId);
+  }
+
+  async unblockShowcase(
+    adminId: string,
+    userId: string,
+  ): Promise<UnionAdminProfileDto> {
+    await this.setShowcaseBlocked(userId, null);
+    this.audit(adminId, 'union.showcase-unblocked', userId);
+    return this.profile(userId);
+  }
+
+  private async setShowcaseBlocked(
+    userId: string,
+    at: Date | null,
+  ): Promise<void> {
+    const updated = await this.prisma.unionProfile.updateMany({
+      where: { userId },
+      data: { showcaseBlockedAt: at },
+    });
+    if (updated.count === 0) throw new NotFoundException('Анкета не найдена');
+  }
+
+  /**
    * Переписка пары по жалобе. Единственный способ для администрации увидеть
    * чужой чат — и только по существующей жалобе: без неё повода нет. Сам
    * просмотр пишется в журнал действий, потому что это чтение личного.
@@ -257,6 +300,7 @@ export class UnionAdminService {
       accountBlocked: row.user.accountStatus !== 'active',
       openReports: reportsByUser.get(row.userId) ?? 0,
       photosCount: photosByUser.get(row.userId) ?? 0,
+      showcase: toShowcaseState(row),
       lastSeenAt: row.user.lastSeenAt?.toISOString() ?? null,
       updatedAt: row.updatedAt.toISOString(),
     }));
@@ -282,6 +326,8 @@ export class UnionAdminService {
 const profileListSelect = {
   userId: true,
   isActive: true,
+  showcaseOptIn: true,
+  showcaseBlockedAt: true,
   updatedAt: true,
   user: {
     select: {
@@ -333,6 +379,15 @@ export function buildProfileWhere(
 
   if (query.visibility === 'active') where.isActive = true;
   if (query.visibility === 'hidden') where.isActive = false;
+
+  // «on» — анкета на витрине прямо сейчас, поэтому снятые администрацией в
+  // него не попадают, хотя согласие у них стоит; для них есть «blocked».
+  if (query.showcase === 'on') {
+    where.showcaseOptIn = true;
+    where.showcaseBlockedAt = null;
+  }
+  if (query.showcase === 'off') where.showcaseOptIn = false;
+  if (query.showcase === 'blocked') where.showcaseBlockedAt = { not: null };
 
   const q = query.q?.trim();
   if (q) {

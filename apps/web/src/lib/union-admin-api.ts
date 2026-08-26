@@ -26,3 +26,15 @@ export const hideUnionProfile = (
 
 export const restoreUnionProfile = (userId: string) =>
   command(`/union/admin/profiles/${encodeURIComponent(userId)}/restore`);
+
+export const blockUnionShowcase = (
+  userId: string,
+  body: UnionAdminHideProfileRequest,
+) =>
+  command(
+    `/union/admin/profiles/${encodeURIComponent(userId)}/showcase/block`,
+    body,
+  );
+
+export const unblockUnionShowcase = (userId: string) =>
+  command(`/union/admin/profiles/${encodeURIComponent(userId)}/showcase/unblock`);

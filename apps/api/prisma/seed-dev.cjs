@@ -367,8 +367,17 @@ async function seedPerson(person) {
     interests: person.interests,
     values: person.values,
     familyStatus: person.familyStatus,
-    privacy: { photo: 'everyone', city: 'everyone', contacts: 'after_match' },
+    privacy: {
+      photo: 'everyone',
+      city: 'everyone',
+      age: 'everyone',
+      contacts: 'after_match',
+    },
     isActive: true,
+    // Демо-анкеты соглашаются на публичную витрину: иначе страница
+    // /services/union в dev пуста и проверить её нечем. Настоящие люди
+    // отмечают эту галочку сами, по умолчанию она снята.
+    showcaseOptIn: true,
   };
 
   const profile = await prisma.unionProfile.upsert({

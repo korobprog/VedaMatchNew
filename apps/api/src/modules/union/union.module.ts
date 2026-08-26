@@ -17,6 +17,8 @@ import { UnionMatchingService } from './union-matching.service';
 import { UnionProfileController } from './union-profile.controller';
 import { UnionProfileService } from './union-profile.service';
 import { UnionRecommendationsController } from './union-recommendations.controller';
+import { UnionShowcaseController } from './union-showcase.controller';
+import { UnionShowcaseService } from './union-showcase.service';
 import { UnionSwipeController } from './union-swipe.controller';
 import { UnionSwipeService } from './union-swipe.service';
 
@@ -31,6 +33,7 @@ import { UnionSwipeService } from './union-swipe.service';
     UnionAdminController,
     UnionArchiveController,
     UnionFavoritesController,
+    UnionShowcaseController,
   ],
   providers: [
     UnionProfileService,
@@ -41,6 +44,7 @@ import { UnionSwipeService } from './union-swipe.service';
     UnionAdminService,
     UnionArchiveService,
     UnionFavoritesService,
+    UnionShowcaseService,
   ],
 })
 export class UnionModule {}

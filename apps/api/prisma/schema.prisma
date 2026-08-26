@@ -1278,6 +1278,13 @@ model UnionProfile {
   privacy                  Json?
   // скрыть из рекомендаций без удаления профиля
   isActive                 Boolean                    @default(true)
+  /// Согласие показывать анкету на публичной витрине сервиса — странице,
+  /// открытой гостям и поисковикам. Не заменяется настройкой privacy.photo:
+  /// «everyone» там означает «любому участнику портала», а не всему интернету.
+  showcaseOptIn            Boolean                    @default(false)
+  /// Администрация сняла анкету с витрины. Согласие человека сохраняется:
+  /// если снятие было ошибкой, заново его спрашивать не нужно.
+  showcaseBlockedAt        DateTime?
   // принимать запросы на знакомство только от подтверждённых преданных
   requestsFromVerifiedOnly Boolean                    @default(false)
   /// Кто может начать общение: заявки от всех или только взаимные лайки
@@ -1291,6 +1298,7 @@ model UnionProfile {
   intentions UnionIntention[]
 
   @@index([isActive])
+  @@index([showcaseOptIn])
 }
 
 /// Режим знакомства. `requests` — односторонний лайк приходит как заявка,

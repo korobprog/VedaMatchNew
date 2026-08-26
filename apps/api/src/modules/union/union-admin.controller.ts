@@ -74,6 +74,25 @@ export class UnionAdminController {
     return this.admin.restoreProfile(user.sub, userId);
   }
 
+  @Post('profiles/:userId/showcase/block')
+  blockShowcase(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('userId') userId: string,
+    @Body() body: UnionAdminHideProfileRequest,
+  ) {
+    this.assertAdmin(user);
+    return this.admin.blockShowcase(user.sub, userId, body);
+  }
+
+  @Post('profiles/:userId/showcase/unblock')
+  unblockShowcase(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('userId') userId: string,
+  ) {
+    this.assertAdmin(user);
+    return this.admin.unblockShowcase(user.sub, userId);
+  }
+
   private assertAdmin(user: AccessTokenPayload): void {
     if (!isAdmin(user)) {
       throw new ForbiddenException('Доступ только для администратора');
