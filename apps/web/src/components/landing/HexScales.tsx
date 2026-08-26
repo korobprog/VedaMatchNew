@@ -26,16 +26,36 @@ import {
  */
 
 /**
- * Радиус плитки в CSS-пикселях. Крупные: мелкая сетка читается как узор на
- * обоях, а объём виден только когда торец плитки соизмерим с ней самой.
+ * Радиус плитки в CSS-пикселях. На десктопе крупные: мелкая сетка читается
+ * как узор на обоях, а объём виден только когда торец соизмерим с плиткой.
+ * На телефоне втрое мельче — там в ширину экрана влезает от силы три
+ * крупные соты, и вместо чешуи получаются три пятна.
  */
-const HEX_RADIUS = 132;
+const HEX_RADIUS_DESKTOP = 132;
+const HEX_RADIUS_MOBILE = 44;
+
+/** Граница, с которой считаем экран телефоном. Совпадает с брейкпоинтом md. */
+const MOBILE_MAX_WIDTH = 768;
 
 /** Зазор между плитками — щель, сквозь которую видно фон под чешуёй. */
-const HEX_GAP = 2;
+const HEX_GAP_RATIO = 2 / 132;
 
 /** Высота, на которую плитка приподнята над фоном: толщина торца. */
-const DEPTH = 22;
+const DEPTH_RATIO = 22 / 132;
+
+/** Радиус пятна прижима — во сколько радиусов плитки он укладывается. */
+const LIGHT_RADIUS_RATIO = 420 / 132;
+
+/**
+ * Радиус, внутри которого направление торца перестаёт зависеть от точки
+ * прижима, — тоже в долях плитки, иначе на телефоне «спокойная» зона
+ * накрывала бы пол-экрана.
+ */
+const DIRECTION_STABLE_RATIO = 260 / 132;
+
+function hexRadius(width: number): number {
+  return width < MOBILE_MAX_WIDTH ? HEX_RADIUS_MOBILE : HEX_RADIUS_DESKTOP;
+}
 
 /**
  * Насколько курсор придавливает плитки. `1` — под самым курсором чешуя
@@ -68,9 +88,6 @@ const PARALLAX_PX = 26;
  */
 const TILT = 0.9;
 
-/** Радиус пятна света под курсором. */
-const LIGHT_RADIUS = 420;
-
 /**
  * Доля, на которую свет догоняет курсор за кадр при 60 Гц. Мгновенное
  * следование выглядит дёрганым: поле должно нагонять руку, а не прилипать.
@@ -78,12 +95,27 @@ const LIGHT_RADIUS = 420;
 const EASE = 0.06;
 
 /**
- * Радиус, внутри которого направление торца перестаёт зависеть от курсора.
- * У плитки под самой мышью вектор «от света» почти нулевой, и его
- * направление скачет от кадра к кадру — плитка дёргается. Ближе этого
- * расстояния плавно переходим на общий наклон поля.
+ * Насколько прижим уезжает навстречу пролистыванию. На телефоне курсора
+ * нет, и отзываться чешуе не на что, — роль руки играет скролл: чем резче
+ * листают, тем дальше от центра уходит прижатая полоса.
  */
-const DIRECTION_STABLE_PX = 260;
+const SCROLL_PRESS = 4;
+
+/** Доля, на которую прижим возвращается к центру за кадр после скролла. */
+const SCROLL_RETURN = 0.04;
+
+/**
+ * Насколько шире становится пятно прижима на быстром пролистывании.
+ * Одного сдвига полосы мало: за короткий флик она не успевает уехать
+ * далеко, а вот расширение видно сразу.
+ */
+const SCROLL_SPREAD = 0.9;
+
+/** Пролистывание за кадр, на котором расширение выходит на максимум. */
+const SCROLL_FULL_DELTA = 90;
+
+/** Доля, на которую расширение спадает за кадр, когда листать перестали. */
+const SCROLL_SPREAD_DECAY = 0.06;
 
 /** Цвет затенённой грани. Канвас принимает любую строку CSS-цвета, поэтому
  *  токен уходит в strokeStyle как есть — разбирать rgba() незачем. */
@@ -161,6 +193,8 @@ export function HexScales({ className }: { className?: string }) {
     // тогда чешуя освещена ровно и не выглядит наполовину погасшей.
     let targetX = 0;
     let targetY = 0;
+    // 0..1 — насколько сильно сейчас листают; расширяет пятно прижима.
+    let spread = 0;
     let lightX = 0;
     let lightY = 0;
 
@@ -176,7 +210,12 @@ export function HexScales({ className }: { className?: string }) {
       // Порядок отрисовки — сверху вниз и слева направо, и он не зависит от
       // курсора: сортировка вслед за мышью заставляла соседние плитки
       // меняться местами по глубине, и чешуя щёлкала при проходе руки.
-      const cells = hexCenters(width, height, HEX_RADIUS).sort(
+      const radius = hexRadius(width);
+      const gap = radius * HEX_GAP_RATIO;
+      const lightRadius =
+        radius * LIGHT_RADIUS_RATIO * (1 + spread * SCROLL_SPREAD);
+      const directionStable = radius * DIRECTION_STABLE_RATIO;
+      const cells = hexCenters(width, height, radius).sort(
         (a, b) => a.y - b.y || a.x - b.x,
       );
 
@@ -185,7 +224,7 @@ export function HexScales({ className }: { className?: string }) {
         const y = cell.y + parallaxY;
 
         const wave = shimmer(cell.x, cell.y, seconds);
-        const glow = lightFalloff(x - lightX, y - lightY, LIGHT_RADIUS);
+        const glow = lightFalloff(x - lightX, y - lightY, lightRadius);
         // Придавленная плитка не бликует: level ведём от волны, а свечение
         // под курсором отдаём «прижиму», а не яркости.
         const level = Math.min(1, wave * 0.85 * (1 - glow * 0.7));
@@ -197,18 +236,19 @@ export function HexScales({ className }: { className?: string }) {
         const rawX = x - lightX;
         const rawY = y - lightY;
         const distance = Math.hypot(rawX, rawY);
-        const near = Math.min(1, distance / DIRECTION_STABLE_PX);
+        const near = Math.min(1, distance / directionStable);
         const dirX = rawX * near + (x - width / 2) * (1 - near);
         const dirY = rawY * near + (y - height / 2) * (1 - near);
         const length = Math.hypot(dirX, dirY) || 1;
         // Разная высота плиток: одинаковые торцы читаются как печать по
         // трафарету, а не как набранная руками чешуя. Под курсором высота
         // уходит в ноль — плитка придавлена.
-        const depth = DEPTH * (0.55 + wave * 0.75) * (1 - glow * PRESS);
+        const depth =
+          radius * DEPTH_RATIO * (0.55 + wave * 0.75) * (1 - glow * PRESS);
         const ox = (dirX / length) * depth * TILT;
         const oy = (dirY / length) * depth * TILT;
 
-        const corners = hexCorners(x, y, HEX_RADIUS - HEX_GAP);
+        const corners = hexCorners(x, y, radius - gap);
 
         // Торец
         context.fillStyle = shadow;
@@ -276,6 +316,13 @@ export function HexScales({ className }: { className?: string }) {
       if (!visible) return;
       if (now - lastDrawnAt < FRAME_INTERVAL_MS) return;
       lastDrawnAt = now;
+      // Без курсора прижим держится только скроллом, поэтому между
+      // пролистываниями он сам расходится к центру — иначе полоса
+      // застывала бы там, где человек остановил палец.
+      if (!finePointer) {
+        targetY += (height / 2 - targetY) * SCROLL_RETURN;
+        spread = Math.max(0, spread - SCROLL_SPREAD_DECAY);
+      }
       lightX += (targetX - lightX) * EASE;
       lightY += (targetY - lightY) * EASE;
       draw(now / 1000);
@@ -284,6 +331,22 @@ export function HexScales({ className }: { className?: string }) {
     function onPointerMove(event: PointerEvent) {
       targetX = event.clientX;
       targetY = event.clientY;
+    }
+
+    let lastScrollY = window.scrollY;
+
+    function onScroll() {
+      const y = window.scrollY;
+      const delta = y - lastScrollY;
+      lastScrollY = y;
+      // Прижатая полоса уезжает навстречу пролистыванию и сама возвращается
+      // к центру в tick(), когда листать перестали.
+      targetX = width / 2;
+      targetY = Math.min(
+        height,
+        Math.max(0, height / 2 - delta * SCROLL_PRESS),
+      );
+      spread = Math.min(1, Math.abs(delta) / SCROLL_FULL_DELTA);
     }
 
     function onVisibility() {
@@ -317,6 +380,8 @@ export function HexScales({ className }: { className?: string }) {
         window.addEventListener("pointermove", onPointerMove, {
           passive: true,
         });
+      } else {
+        window.addEventListener("scroll", onScroll, { passive: true });
       }
       frame = window.requestAnimationFrame(tick);
     }
@@ -325,6 +390,7 @@ export function HexScales({ className }: { className?: string }) {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", resize);
       window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("scroll", onScroll);
       document.removeEventListener("visibilitychange", onVisibility);
       themeObserver.disconnect();
     };
