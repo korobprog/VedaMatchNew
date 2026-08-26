@@ -58,9 +58,6 @@ export function Pricing({
                     <span className="font-display text-xl sm:text-2xl md:text-3xl font-medium text-text-2 line-through decoration-2">
                       {PLAN.priceRub} ₽
                     </span>
-                    <div className="min-w-0 max-w-full break-words font-display text-3xl sm:text-5xl md:text-6xl font-bold leading-tight text-text-0">
-                      {t("free")}
-                    </div>
                   </div>
                   <p className="mt-3 text-text-1">{t("betaNote")}</p>
                   <p className="mt-4 text-sm text-text-2 leading-relaxed">

@@ -14,6 +14,19 @@ const VISIBILITY = [
   { value: "hidden", label: "Сняты" },
 ];
 
+const SHOWCASE = [
+  { value: "all", label: "Все" },
+  { value: "on", label: "На витрине" },
+  { value: "off", label: "Без согласия" },
+  { value: "blocked", label: "Сняты с витрины" },
+];
+
+/** Подпись состояния публичной витрины в строке списка. */
+const SHOWCASE_BADGE: Record<string, { label: string; alert?: boolean }> = {
+  on: { label: "на витрине" },
+  blocked: { label: "снята с витрины", alert: true },
+};
+
 export default async function AdminUnionProfilesPage({
   searchParams,
 }: {
@@ -23,6 +36,7 @@ export default async function AdminUnionProfilesPage({
   const q = single(raw.q) ?? "";
   const visibility = single(raw.visibility) ?? "all";
   const reportedOnly = single(raw.reportedOnly) === "true";
+  const showcase = single(raw.showcase) ?? "all";
   const page = Number(single(raw.page)) || 1;
 
   const list = await getUnionAdminProfiles({
@@ -32,6 +46,9 @@ export default async function AdminUnionProfilesPage({
       ? { visibility }
       : {}),
     ...(reportedOnly ? { reportedOnly: true } : {}),
+    ...(showcase === "on" || showcase === "off" || showcase === "blocked"
+      ? { showcase }
+      : {}),
   });
   if (!list) throw new Error("Не удалось загрузить анкеты");
 
@@ -57,6 +74,20 @@ export default async function AdminUnionProfilesPage({
             className="mt-1 block w-40 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
           >
             {VISIBILITY.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm font-medium text-text-1">
+          Публичная витрина
+          <select
+            name="showcase"
+            defaultValue={showcase}
+            className="mt-1 block w-48 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
+          >
+            {SHOWCASE.map((item) => (
               <option key={item.value} value={item.value}>
                 {item.label}
               </option>
@@ -123,6 +154,15 @@ export default async function AdminUnionProfilesPage({
                   )}
                   {item.city && <Badge>{item.city}</Badge>}
                   <Badge>фото: {item.photosCount}</Badge>
+                  {SHOWCASE_BADGE[item.showcase] && (
+                    <Badge
+                      tone={
+                        SHOWCASE_BADGE[item.showcase].alert ? "alert" : undefined
+                      }
+                    >
+                      {SHOWCASE_BADGE[item.showcase].label}
+                    </Badge>
+                  )}
                 </div>
 
                 <p className="mt-2 text-xs text-text-2">
@@ -186,7 +226,7 @@ function PageLink({
   label: string;
 }) {
   const params = new URLSearchParams();
-  for (const key of ["q", "visibility", "reportedOnly"]) {
+  for (const key of ["q", "visibility", "reportedOnly", "showcase"]) {
     const value = single(raw[key]);
     if (value) params.set(key, value);
   }

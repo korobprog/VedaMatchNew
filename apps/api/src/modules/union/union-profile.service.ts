@@ -1004,6 +1004,12 @@ export class UnionProfileService {
       data.privacy = this.validatePrivacy(body.privacy);
     }
     if (body.isActive !== undefined) data.isActive = body.isActive;
+    // Согласие на публичную витрину человек снимает и даёт сам. Снятое
+    // администрацией здесь не трогаем: showcaseBlockedAt — её решение, и
+    // повторная отметка галочки его не отменяет.
+    if (body.showcaseOptIn !== undefined) {
+      data.showcaseOptIn = body.showcaseOptIn;
+    }
     if (body.requestsFromVerifiedOnly !== undefined) {
       data.requestsFromVerifiedOnly = body.requestsFromVerifiedOnly;
     }
@@ -1230,6 +1236,8 @@ export class UnionProfileService {
       ageRangeMax: profile.ageRangeMax,
       privacy: (profile.privacy as UnionPrivacySettings | null) ?? null,
       isActive: profile.isActive,
+      showcaseOptIn: profile.showcaseOptIn,
+      showcaseBlocked: profile.showcaseBlockedAt !== null,
       requestsFromVerifiedOnly: profile.requestsFromVerifiedOnly,
       contactMode: profile.contactMode,
       familySeeksGender: profile.familySeeksGender,

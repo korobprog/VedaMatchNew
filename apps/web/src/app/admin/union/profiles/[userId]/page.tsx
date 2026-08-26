@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { UnionAdminTabs } from "@/components/union/admin/admin-tabs";
+import { UnionProfileShowcaseForm } from "@/components/union/admin/profile-showcase-form";
 import { UnionProfileVisibilityForm } from "@/components/union/admin/profile-visibility-form";
 import { intentionLabels } from "@/components/union/labels";
 import { formatDate, stageLabels } from "@/lib/admin-labels";
@@ -117,6 +118,11 @@ export default async function AdminUnionProfilePage({
           <UnionProfileVisibilityForm
             userId={profile.userId}
             isActive={profile.isActive}
+          />
+
+          <UnionProfileShowcaseForm
+            userId={profile.userId}
+            showcase={profile.showcase}
           />
 
           <div className="glass rounded-2xl border border-glass-brd p-4 text-sm text-text-1">

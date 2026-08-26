@@ -60,6 +60,8 @@ const profile: UnionProfileDto = {
   ageRangeMax: null,
   privacy: null,
   isActive: true,
+  showcaseOptIn: false,
+  showcaseBlocked: false,
   requestsFromVerifiedOnly: false,
   contactMode: "requests",
   familySeeksGender: null,

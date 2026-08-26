@@ -340,6 +340,10 @@ async function seedPerson(person) {
     homeLocation: person.location,
     messengers: { telegram: `@${person.slug}_demo` },
     socialLinks: {},
+    // Рассказ и языки живут в портальном профиле, а не в анкете сервиса —
+    // см. docs/service-module-contract.md.
+    about: person.about,
+    languages: person.languages,
   };
 
   const user = await prisma.user.upsert({
@@ -357,16 +361,23 @@ async function seedPerson(person) {
   });
 
   const profileData = {
-    about: person.about,
     relocationReady: person.relocationReady,
     format: person.format,
-    languages: person.languages,
     skills: person.skills,
     interests: person.interests,
     values: person.values,
     familyStatus: person.familyStatus,
-    privacy: { photo: 'everyone', city: 'everyone', contacts: 'after_match' },
+    privacy: {
+      photo: 'everyone',
+      city: 'everyone',
+      age: 'everyone',
+      contacts: 'after_match',
+    },
     isActive: true,
+    // Демо-анкеты соглашаются на публичную витрину: иначе страница
+    // /services/union в dev пуста и проверить её нечем. Настоящие люди
+    // отмечают эту галочку сами, по умолчанию она снята.
+    showcaseOptIn: true,
   };
 
   const profile = await prisma.unionProfile.upsert({

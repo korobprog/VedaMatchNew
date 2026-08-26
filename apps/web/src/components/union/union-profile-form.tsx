@@ -87,12 +87,14 @@ type Draft = Omit<
   | "intentions"
   | "privacy"
   | "isActive"
+  | "showcaseOptIn"
   | "requestsFromVerifiedOnly"
   | "contactMode"
   | "familySeeksGender"
 > & {
   privacy: UnionPrivacySettings;
   isActive: boolean;
+  showcaseOptIn: boolean;
   requestsFromVerifiedOnly: boolean;
   contactMode: UnionContactMode;
   familySeeksGender: Gender | null;
@@ -122,6 +124,7 @@ function toDraft(profile: UnionProfileDto | null): Draft {
     ageRangeMax: profile?.ageRangeMax ?? null,
     privacy: profile?.privacy ?? {},
     isActive: profile?.isActive ?? true,
+    showcaseOptIn: profile?.showcaseOptIn ?? false,
     requestsFromVerifiedOnly: profile?.requestsFromVerifiedOnly ?? false,
     contactMode: profile?.contactMode ?? "requests",
     familySeeksGender: profile?.familySeeksGender ?? null,
@@ -661,6 +664,43 @@ export function UnionProfileForm({
             останутся доступными.
           </p>
         )}
+
+        {/* Согласие на публичную витрину. Отдельно от настроек приватности
+            ниже: те открывают данные участникам портала, а здесь речь про
+            страницу, которую видит любой в интернете. */}
+        <UnionHelpToggle
+          label="Подробнее о публичной странице"
+          control={
+            <label className="flex items-center gap-2 text-sm text-text-1">
+              <input
+                type="checkbox"
+                checked={draft.showcaseOptIn}
+                onChange={(event) =>
+                  update("showcaseOptIn", event.target.checked)
+                }
+                className="h-4 w-4 shrink-0 accent-magenta"
+              />
+              Показывать мою анкету на публичной странице Знакомств
+            </label>
+          }
+        >
+          <p>
+            Страницу сервиса видят гости и поисковики — без входа на портал.
+            Это отдельное согласие: настройки приватности ниже открывают данные
+            участникам портала, а не всему интернету.
+          </p>
+          <p>
+            На страницу попадают только фото, проверенные администрацией, и
+            только те поля, которые вы открыли «всем». Галочку можно снять в
+            любой момент.
+          </p>
+          {profile?.showcaseBlocked && (
+            <p className="text-gold">
+              Администрация временно сняла анкету с публичной страницы. Ваше
+              согласие сохранено — на портале анкета показывается как обычно.
+            </p>
+          )}
+        </UnionHelpToggle>
 
         <UnionHelpToggle
           label="Подробнее о запросах только от подтверждённых"

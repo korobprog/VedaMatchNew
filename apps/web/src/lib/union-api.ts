@@ -14,6 +14,7 @@ import type {
   UnionProfileState,
   UnionRecommendation,
   UnionRecommendationsResponse,
+  UnionShowcaseResponse,
   UserBlocksState,
 } from "@vedamatch/shared";
 
@@ -33,6 +34,18 @@ async function unionGet<T>(path: string): Promise<T | null> {
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`);
   return (await res.json()) as T;
+}
+
+/**
+ * Витрина публичной страницы сервиса. Без cookie: её запрашивает гость, и
+ * `unionGet` вернул бы ему null, не дойдя до API. `no-store` обязателен —
+ * ссылки на фото подписаны и живут минуты, закэшированная страница отдала бы
+ * посетителю картинки с истёкшей подписью.
+ */
+export async function getUnionShowcase(): Promise<UnionShowcaseResponse | null> {
+  const res = await fetch(`${API_URL}/union/showcase`, { cache: "no-store" });
+  if (!res.ok) return null;
+  return (await res.json()) as UnionShowcaseResponse;
 }
 
 export const getUnionProfileState = () =>

@@ -112,6 +112,18 @@ export interface UnionProfileDto extends UnionProfileDetails {
   familyStatus: string | null;
   privacy: UnionPrivacySettings | null;
   isActive: boolean;
+  /**
+   * Согласие показывать анкету на публичной витрине Знакомств — странице
+   * сервиса, открытой гостям и поисковикам. Отдельно от `privacy`: та
+   * настройка открывает данные участникам портала, а не всему интернету,
+   * и «everyone» в ней такого согласия не заменяет.
+   */
+  showcaseOptIn: boolean;
+  /**
+   * Администрация сняла анкету с витрины. Согласие человека при этом
+   * сохраняется: если снятие было ошибкой, заново его спрашивать не нужно.
+   */
+  showcaseBlocked: boolean;
   /** Принимать запросы только от преданных, подтверждённых администрацией */
   requestsFromVerifiedOnly: boolean;
   /** Кто может начать общение: заявки от всех или только взаимные лайки */
@@ -192,6 +204,7 @@ export interface UnionProfileUpdateRequest extends Partial<UnionProfileDetails> 
   familyStatus?: string | null;
   privacy?: UnionPrivacySettings | null;
   isActive?: boolean;
+  showcaseOptIn?: boolean;
   requestsFromVerifiedOnly?: boolean;
   contactMode?: UnionContactMode;
   familySeeksGender?: Gender | null;
@@ -480,9 +493,17 @@ export interface UnionAdminProfileListItem {
   /** Открытых жалоб на человека. */
   openReports: number;
   photosCount: number;
+  /** Состояние публичной витрины: согласие человека и решение администрации. */
+  showcase: UnionAdminShowcaseState;
   lastSeenAt: string | null;
   updatedAt: string;
 }
+
+/**
+ * `off` — согласия нет; `on` — человек согласился и анкета на витрине;
+ * `blocked` — согласие есть, но администрация сняла анкету с витрины.
+ */
+export type UnionAdminShowcaseState = 'off' | 'on' | 'blocked';
 
 export interface UnionAdminProfileListResponse {
   items: UnionAdminProfileListItem[];
@@ -525,6 +546,8 @@ export interface UnionAdminProfileQuery {
   visibility?: 'all' | 'active' | 'hidden';
   /** Только те, на кого есть открытые жалобы. */
   reportedOnly?: boolean;
+  /** Отбор по состоянию публичной витрины. */
+  showcase?: 'all' | UnionAdminShowcaseState;
   page?: number;
   pageSize?: number;
 }
@@ -571,4 +594,31 @@ export interface UnionCycleResetResult {
  */
 export interface UnionFavoritesResponse {
   userIds: string[];
+}
+
+// ===== Публичная витрина Знакомств =====
+
+/**
+ * Карточка витрины на публичной странице сервиса. Её видят гости и
+ * поисковики, поэтому здесь только то, что человек согласился показать
+ * всему интернету: он поставил `showcaseOptIn`, а каждое отдельное поле
+ * дополнительно прошло его же настройку приватности на уровне «everyone».
+ *
+ * Процента совместимости здесь нет намеренно: он считается относительно
+ * смотрящего, а у гостя анкеты нет — нарисованное число рядом с настоящим
+ * лицом было бы враньём.
+ */
+export interface UnionShowcaseCard {
+  id: string;
+  name: string;
+  age: number | null;
+  city: string | null;
+  country: string | null;
+  about: string | null;
+  photoUrl: string;
+  interests: string[];
+}
+
+export interface UnionShowcaseResponse {
+  cards: UnionShowcaseCard[];
 }

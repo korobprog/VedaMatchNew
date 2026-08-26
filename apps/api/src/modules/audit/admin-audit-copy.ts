@@ -30,6 +30,8 @@ const TEMPLATES: Record<AdminAuditAction, string> = {
   'notices.report-resolved': 'Разобрана жалоба на объявление',
   'union.profile-hidden': 'Анкета знакомств снята с выдачи',
   'union.profile-restored': 'Анкета знакомств возвращена в выдачу',
+  'union.showcase-blocked': 'Анкета снята с публичной витрины Знакомств',
+  'union.showcase-unblocked': 'Анкета возвращена на публичную витрину',
   'union.chat-viewed': 'Просмотрена переписка по жалобе',
   'library.category-merged': 'Слиты категории Образования',
   'library.entry-removed': 'Запись Образования снята с публикации',
