@@ -8,6 +8,7 @@ import type {
   CreateMusicReportRequest,
   MusicReportKind,
 } from '@vedamatch/shared';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   MUSIC_REVIEW_EXPIRED_NOTE,
@@ -32,7 +33,10 @@ const MAX_TEXT_LENGTH = 1000;
 export class MusicReportsService {
   private readonly logger = new Logger(MusicReportsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   /**
    * Пожаловаться. Один человек жалуется на запись один раз: повторная
@@ -41,7 +45,7 @@ export class MusicReportsService {
   async create(userId: string, body: CreateMusicReportRequest) {
     const track = await this.prisma.musicTrack.findUnique({
       where: { id: body.trackId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, title: true, uploadedById: true },
     });
     if (!track) throw new NotFoundException('Запись не найдена');
 
@@ -66,6 +70,19 @@ export class MusicReportsService {
     });
 
     const hidden = await this.hideIfThresholdCrossed(track.id, body.kind);
+    // Автор узнаёт о скрытии сразу: без этого запись «пропадает сама».
+    // Загрузивший мог быть удалён (uploadedById — SetNull) — тогда некому.
+    if (hidden && track.uploadedById) {
+      this.events.emit('music.track.hidden-by-reports', {
+        // `name` в самой нагрузке, а не только в имени события: подписчик
+        // получает один аргумент и по нему выбирает формулировку.
+        name: 'music.track.hidden-by-reports',
+        recipientId: track.uploadedById,
+        trackId: track.id,
+        title: track.title,
+        kind: body.kind,
+      });
+    }
     return { accepted: true as const, alreadyReported: false as const, hidden };
   }
 
@@ -117,6 +134,8 @@ export class MusicReportsService {
       },
       select: {
         id: true,
+        title: true,
+        uploadedById: true,
         reports: {
           where: { status: 'open' },
           orderBy: { createdAt: 'asc' },
@@ -142,6 +161,14 @@ export class MusicReportsService {
           data: { moderationNote: MUSIC_REVIEW_EXPIRED_NOTE },
         }),
       ]);
+      if (track.uploadedById) {
+        this.events.emit('music.track.review-expired', {
+          name: 'music.track.review-expired',
+          recipientId: track.uploadedById,
+          trackId: track.id,
+          title: track.title,
+        });
+      }
       closed += 1;
     }
 

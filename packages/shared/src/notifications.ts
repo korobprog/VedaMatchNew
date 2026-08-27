@@ -222,6 +222,40 @@ export type NotificationEvent =
       senderName: string;
       body: string;
       conversationId: string;
+    }
+  | {
+      /** Запись прошла проверку и появилась в общем каталоге. */
+      name: 'music.track.published';
+      recipientId: string;
+      trackId: string;
+      title: string;
+    }
+  | {
+      /** Редакция отказала. Причина обязательна — без неё человек зальёт то же. */
+      name: 'music.track.rejected';
+      recipientId: string;
+      trackId: string;
+      title: string;
+      reason: string;
+    }
+  | {
+      /**
+       * Запись скрыта жалобами слушателей и ждёт решения редакции. Скрытие
+       * обратимо: сообщаем факт, а не приговор.
+       */
+      name: 'music.track.hidden-by-reports';
+      recipientId: string;
+      trackId: string;
+      title: string;
+      /** Вид жалобы, перешедшей порог: по нему подписчик выбирает слова. */
+      kind: 'copyright' | 'content' | 'quality';
+    }
+  | {
+      /** Неделя прошла, решения не было — запись вернулась автору. */
+      name: 'music.track.review-expired';
+      recipientId: string;
+      trackId: string;
+      title: string;
     };
 
 /**
@@ -230,6 +264,7 @@ export type NotificationEvent =
  * заставит Node грузить сырой TypeScript и уронит сервис при старте.
  * Имена событий поэтому — строковые литералы, проверяемые типом выше.
  */
+
 export type NotificationEventName = NotificationEvent['name'];
 
 /** Категории совпадают с тумблерами в NotificationPreferencesDto. */
@@ -242,7 +277,7 @@ export type NotificationCategory =
   | 'transits'
   | 'market'
   | 'motivation'
-  | 'announcements';
+  | 'music';
 
 /** Уведомление в колокольчике. Живёт до прочтения, потом удаляется — это
  *  список непрочитанного, а не архив. */
@@ -273,7 +308,18 @@ export interface NotificationUnreadCountResponse {
   unreadCount: number;
 }
 
-export interface NotificationPreferencesDto {
+/**
+ * Тумблеры колокольчика.
+ *
+ * Наследование от `Record<NotificationCategory, boolean>` — не украшение:
+ * доставка отсеивает по `preferences[content.category]`, и категория без
+ * своего поля даёт `undefined`, то есть молчание вместо уведомления. Так
+ * однажды и вышло с «Музыкой»: события уходили, подписчик их принимал, а до
+ * человека не доходило ничего. Теперь новая категория, не заведя себе поле,
+ * не даст собраться ни этому файлу, ни значениям по умолчанию.
+ */
+export interface NotificationPreferencesDto
+  extends Record<NotificationCategory, boolean> {
   enabled: boolean;
   chat: boolean;
   connections: boolean;
@@ -290,6 +336,9 @@ export interface NotificationPreferencesDto {
   notices: boolean;
   /** Судьба своих рилсов в «Мотивации»: опубликован или отклонён. */
   motivation: boolean;
+  /** Судьба своих записей в «Музыке»: разбор редакции, скрытие по жалобам,
+   *  возврат без разбора. Каталог сам по себе не пишет — только про своё. */
+  music: boolean;
   /** Новости от администрации портала. Под этой же категорией идут рассылки
    *  из админки: выключение гасит пуш, а важная рассылка всё равно появится
    *  в колокольчике — см. `important` у рассылки. */

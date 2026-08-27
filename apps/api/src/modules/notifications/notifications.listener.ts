@@ -187,10 +187,35 @@ export class NotificationsListener {
         `${event.name} для ${event.recipientId}: доставлено ${delivered} из ${subscriptions.length}`,
       );
     } catch (error) {
+      // Вместе с именем — поля нагрузки: у безымянного события (издатель забыл
+      // продублировать `name`) одно только `undefined` в логе не говорит даже
+      // о том, какой сервис его прислал.
       this.logger.error(
-        `Не удалось доставить уведомление ${event.name}`,
+        `Не удалось доставить уведомление ${event.name} (поля: ${Object.keys(
+          event ?? {},
+        ).join(', ')})`,
         error instanceof Error ? error.stack : String(error),
       );
     }
   }
+  @OnEvent(notificationEventNames.musicTrackPublished)
+  onMusicTrackPublished(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.musicTrackRejected)
+  onMusicTrackRejected(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.musicTrackHiddenByReports)
+  onMusicTrackHidden(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.musicTrackReviewExpired)
+  onMusicTrackReviewExpired(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
 }

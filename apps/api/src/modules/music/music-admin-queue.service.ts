@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   MusicAdminAlbumsDto,
   MusicAdminArtistsDto,
@@ -41,6 +42,7 @@ export class MusicAdminQueueService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly events: EventEmitter2,
     config: ConfigService,
   ) {
     this.publicBaseUrl = config.get<string>('S3_PUBLIC_URL') || undefined;
@@ -146,7 +148,7 @@ export class MusicAdminQueueService {
 
     const track = await this.prisma.musicTrack.findUnique({
       where: { id: trackId },
-      select: { id: true, publishedAt: true },
+      select: { id: true, publishedAt: true, title: true, uploadedById: true },
     });
     if (!track) throw new NotFoundException('Запись не найдена');
 
@@ -162,7 +164,7 @@ export class MusicAdminQueueService {
           ? ('rejected' as const)
           : ('hidden' as const);
 
-    return this.prisma.musicTrack.update({
+    const updated = await this.prisma.musicTrack.update({
       where: { id: trackId },
       data: {
         status,
@@ -174,6 +176,32 @@ export class MusicAdminQueueService {
           : {}),
       },
     });
+
+    // Решение редакции — то, ради чего человек и ждал. Молчание здесь
+    // превращает проверку в чёрный ящик.
+    if (track.uploadedById) {
+      // `name` дублируется в нагрузке: подписчик получает один аргумент и по
+      // нему выбирает формулировку, имя события до него не доходит.
+      const base = {
+        recipientId: track.uploadedById,
+        trackId: track.id,
+        title: track.title,
+      };
+      if (status === 'published') {
+        this.events.emit('music.track.published', {
+          name: 'music.track.published',
+          ...base,
+        });
+      } else {
+        this.events.emit('music.track.rejected', {
+          name: 'music.track.rejected',
+          ...base,
+          reason: note!,
+        });
+      }
+    }
+
+    return updated;
   }
 
   // ---------- Справочники для форм админки ----------

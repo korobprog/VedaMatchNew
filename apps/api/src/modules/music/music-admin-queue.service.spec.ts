@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { MusicAdminQueueService } from './music-admin-queue.service';
 
@@ -12,7 +13,12 @@ const config = { get: jest.fn(() => undefined) } as unknown as ConfigService;
 function prismaMock() {
   return {
     musicTrack: {
-      findUnique: jest.fn().mockResolvedValue({ id: 't1', publishedAt: null }),
+      findUnique: jest.fn().mockResolvedValue({
+        id: 't1',
+        publishedAt: null,
+        title: 'Гаура-арати',
+        uploadedById: 'автор',
+      }),
       findMany: jest.fn().mockResolvedValue([]),
       update: jest
         .fn()
@@ -37,8 +43,17 @@ function prismaMock() {
   };
 }
 
-const service = (prisma: ReturnType<typeof prismaMock>) =>
-  new MusicAdminQueueService(prisma as unknown as PrismaService, config);
+const шина = () => ({ emit: jest.fn() });
+
+const service = (
+  prisma: ReturnType<typeof prismaMock>,
+  events: ReturnType<typeof шина> = шина(),
+) =>
+  new MusicAdminQueueService(
+    prisma as unknown as PrismaService,
+    events as unknown as EventEmitter2,
+    config,
+  );
 
 describe('MusicAdminQueueService.decide', () => {
   it('не пускает не-администратора', async () => {
@@ -235,5 +250,54 @@ describe('MusicAdminQueueService.queue', () => {
     expect(prisma.musicTrack.findMany.mock.calls[0][0].orderBy).toEqual({
       createdAt: 'asc',
     });
+  });
+});
+
+describe('уведомления о решении', () => {
+  it('публикация доходит до автора', async () => {
+    const prisma = prismaMock();
+    const events = шина();
+
+    await service(prisma, events).decide(true, 't1', { decision: 'publish' });
+
+    expect(events.emit).toHaveBeenCalledWith('music.track.published', {
+      name: 'music.track.published',
+      recipientId: 'автор',
+      trackId: 't1',
+      title: 'Гаура-арати',
+    });
+  });
+
+  it('отказ доходит вместе с причиной', async () => {
+    const prisma = prismaMock();
+    const events = шина();
+
+    await service(prisma, events).decide(true, 't1', {
+      decision: 'reject',
+      note: 'Чужая запись',
+    });
+
+    expect(events.emit).toHaveBeenCalledWith('music.track.rejected', {
+      name: 'music.track.rejected',
+      recipientId: 'автор',
+      trackId: 't1',
+      title: 'Гаура-арати',
+      reason: 'Чужая запись',
+    });
+  });
+
+  it('записи без автора никто не ждёт', async () => {
+    const prisma = prismaMock();
+    const events = шина();
+    prisma.musicTrack.findUnique.mockResolvedValue({
+      id: 't1',
+      publishedAt: null,
+      title: 'Гаура-арати',
+      uploadedById: null,
+    });
+
+    await service(prisma, events).decide(true, 't1', { decision: 'publish' });
+
+    expect(events.emit).not.toHaveBeenCalled();
   });
 });

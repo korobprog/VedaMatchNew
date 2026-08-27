@@ -1,13 +1,20 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { MusicReportsService } from './music-reports.service';
+
+/** Шина: проверяем, что факт уходит, а формулировку строит подписчик. */
+const шина = () => ({ emit: jest.fn() });
 
 function prismaMock() {
   return {
     musicTrack: {
-      findUnique: jest
-        .fn()
-        .mockResolvedValue({ id: 't1', status: 'published' }),
+      findUnique: jest.fn().mockResolvedValue({
+        id: 't1',
+        status: 'published',
+        title: 'Гаура-арати',
+        uploadedById: 'автор',
+      }),
       findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -22,8 +29,14 @@ function prismaMock() {
   };
 }
 
-const service = (p: ReturnType<typeof prismaMock>) =>
-  new MusicReportsService(p as unknown as PrismaService);
+const service = (
+  p: ReturnType<typeof prismaMock>,
+  events: ReturnType<typeof шина> = шина(),
+) =>
+  new MusicReportsService(
+    p as unknown as PrismaService,
+    events as unknown as EventEmitter2,
+  );
 
 const body = (over = {}) => ({
   trackId: 't1',
@@ -189,5 +202,74 @@ describe('MusicReportsService.closeOverdue', () => {
     prisma.musicTrack.findMany.mockResolvedValue([{ id: 't1', reports: [] }]);
 
     expect(await service(prisma).closeOverdue(now)).toBe(0);
+  });
+});
+
+describe('уведомления', () => {
+  it('о скрытии автор узнаёт сразу', async () => {
+    const prisma = prismaMock();
+    const events = шина();
+    prisma.musicReport.count.mockResolvedValue(3);
+
+    await service(prisma, events).create('u1', body());
+
+    expect(events.emit).toHaveBeenCalledWith('music.track.hidden-by-reports', {
+      name: 'music.track.hidden-by-reports',
+      recipientId: 'автор',
+      trackId: 't1',
+      title: 'Гаура-арати',
+      kind: 'content',
+    });
+  });
+
+  it('пока порог не перейдён — молчим', async () => {
+    const prisma = prismaMock();
+    const events = шина();
+    prisma.musicReport.count.mockResolvedValue(1);
+
+    await service(prisma, events).create('u1', body());
+
+    expect(events.emit).not.toHaveBeenCalled();
+  });
+
+  it('у записи без автора уведомлять некого', async () => {
+    // uploadedById — SetNull: аккаунт могли удалить, запись осталась.
+    const prisma = prismaMock();
+    const events = шина();
+    prisma.musicTrack.findUnique.mockResolvedValue({
+      id: 't1',
+      status: 'published',
+      title: 'Гаура-арати',
+      uploadedById: null,
+    });
+    prisma.musicReport.count.mockResolvedValue(3);
+
+    await service(prisma, events).create('u1', body());
+
+    expect(events.emit).not.toHaveBeenCalled();
+  });
+
+  it('о возврате через неделю автор тоже узнаёт', async () => {
+    const prisma = prismaMock();
+    const events = шина();
+    prisma.musicTrack.findMany.mockResolvedValue([
+      {
+        id: 't1',
+        title: 'Гаура-арати',
+        uploadedById: 'автор',
+        reports: [{ createdAt: new Date('2026-08-19T12:00:00.000Z') }],
+      },
+    ]);
+
+    await service(prisma, events).closeOverdue(
+      new Date('2026-08-27T12:00:00.000Z'),
+    );
+
+    expect(events.emit).toHaveBeenCalledWith('music.track.review-expired', {
+      name: 'music.track.review-expired',
+      recipientId: 'автор',
+      trackId: 't1',
+      title: 'Гаура-арати',
+    });
   });
 });

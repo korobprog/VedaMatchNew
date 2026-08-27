@@ -18,6 +18,7 @@ const defaults: NotificationPreferencesDto = {
   market: true,
   notices: true,
   motivation: true,
+  music: true,
   announcements: true,
 };
 
@@ -114,6 +115,7 @@ export class NotificationsService {
       market: row.market,
       notices: row.notices,
       motivation: row.motivation,
+      music: row.music,
       announcements: row.announcements,
     };
   }
@@ -132,6 +134,7 @@ export class NotificationsService {
       market: patch.market ?? current.market,
       notices: patch.notices ?? current.notices,
       motivation: patch.motivation ?? current.motivation,
+      music: patch.music ?? current.music,
       announcements: patch.announcements ?? current.announcements,
     };
     await this.prisma.notificationPreference.upsert({
