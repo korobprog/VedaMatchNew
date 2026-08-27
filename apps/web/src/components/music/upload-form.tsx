@@ -76,10 +76,8 @@ export function MusicUploadForm() {
         Загрузить запись
       </h3>
       <p className="mt-1 text-sm text-text-2">
-        Принимаем mp3 и m4a. Запись попадёт в очередь проверки, а не сразу в
-        каталог: правило одинаково для всех, включая редакцию. Название и
-        исполнителя редакция поправит при проверке — если в файле они записаны
-        неточно, переделывать и перезаливать не нужно.
+        Принимаем mp3 и m4a. Название и исполнителя редакция поправит — если в
+        файле они записаны неточно, переделывать и перезаливать не нужно.
       </p>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -97,7 +95,7 @@ export function MusicUploadForm() {
 
         <label className="block">
           <span className="mb-1 block text-xs text-text-2">
-            Основание — отметьте сами
+            Основание — от него зависит, попадёт ли запись в каталог сразу
           </span>
           <select
             value={basis}
@@ -161,6 +159,13 @@ export function MusicUploadForm() {
         {file && !basis && (
           <span className="text-xs text-text-2">
             Осталось отметить основание
+          </span>
+        )}
+        {basis && (
+          <span className="text-xs text-text-2">
+            {basis === "open_program"
+              ? "Чужое исполнение — запись пойдёт на проверку редакцией."
+              : "Появится в каталоге сразу. Жалобы слушателей её скроют."}
           </span>
         )}
       </div>

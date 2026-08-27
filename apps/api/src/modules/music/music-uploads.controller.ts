@@ -10,10 +10,12 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type {
   AccessTokenPayload,
+  CreateMusicReportRequest,
   CreateMusicUploadRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { MusicUploadsService } from './music-uploads.service';
+import { MusicReportsService } from './music-reports.service';
 
 /**
  * Загрузка записей. Файл через эти маршруты не проходит: API выдаёт
@@ -65,5 +67,27 @@ export class MusicUploadsController {
     @Param('trackId') trackId: string,
   ) {
     return this.uploads.deleteMyTrack(user.sub, trackId);
+  }
+}
+
+/**
+ * Жалобы на записи. Первый рубеж модерации — люди, которые каталог слушают:
+ * чужой концерт или битый файл они заметят раньше, чем единственный
+ * администратор дойдёт до очереди.
+ *
+ * Лимит жёсткий: жалоба — не то действие, которое совершают десятками.
+ */
+@Controller('music/reports')
+@UseGuards(AuthGuard)
+@Throttle({ default: { ttl: 3_600_000, limit: 20 } })
+export class MusicReportsController {
+  constructor(private readonly reports: MusicReportsService) {}
+
+  @Post()
+  create(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: CreateMusicReportRequest,
+  ) {
+    return this.reports.create(user.sub, body);
   }
 }

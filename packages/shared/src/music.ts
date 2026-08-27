@@ -397,3 +397,19 @@ export interface MusicSettingsDto {
 }
 
 export type UpdateMusicSettingsRequest = Partial<MusicSettingsDto>;
+
+// ===== Жалобы (этап 7) =====
+
+export interface CreateMusicReportRequest {
+  trackId: string;
+  kind: MusicReportKind;
+  text: string;
+}
+
+export interface MusicReportResultDto {
+  accepted: true;
+  /** Повторная жалоба от того же человека веса не добавляет. */
+  alreadyReported: boolean;
+  /** Скрылась ли запись прямо сейчас. */
+  hidden?: boolean;
+}

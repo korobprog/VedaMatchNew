@@ -10,7 +10,9 @@
 // буфере не пройдёт.
 import type {
   CompleteMusicUploadResponse,
+  CreateMusicReportRequest,
   CreateMusicUploadResponse,
+  MusicReportResultDto,
   MusicUploadRightsBasis,
 } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
@@ -62,6 +64,13 @@ export async function uploadMusicTrack(
     { method: "POST", body: JSON.stringify({ fileName: file.name }) },
   );
 }
+
+/** Пожаловаться на запись. Три обычные жалобы скрывают её, одна о правах — сразу. */
+export const reportMusicTrack = (body: CreateMusicReportRequest) =>
+  send<MusicReportResultDto>("/music/reports", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 
 /** Снять свою неопубликованную запись и освободить место. */
 export const deleteMyMusicTrack = (trackId: string) =>

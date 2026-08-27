@@ -5,9 +5,11 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { MusicUploadsService } from './music-uploads.service';
+import { MusicReportsService } from './music-reports.service';
 
 /**
- * Фоновая стадия сервиса: чистка брошенных загрузок.
+ * Фоновая стадия сервиса: чистка брошенных загрузок и записи, по которым
+ * редакция не решила в срок.
  *
  * Образец — `MotivationWorkerService`, но без Redis-лиза. Лиз там нужен,
  * потому что стадия тратит деньги на внешние модели, и второй экземпляр
@@ -27,7 +29,10 @@ export class MusicWorkerService implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
   private running = false;
 
-  constructor(private readonly uploads: MusicUploadsService) {}
+  constructor(
+    private readonly uploads: MusicUploadsService,
+    private readonly reports: MusicReportsService,
+  ) {}
 
   onModuleInit() {
     this.timer = setInterval(() => void this.tick(), TICK_MS);
@@ -45,6 +50,9 @@ export class MusicWorkerService implements OnModuleInit, OnModuleDestroy {
     this.running = true;
     try {
       await this.uploads.cleanupStale();
+      // Записи, по которым редакция не решила за неделю: не удаляем, а
+      // возвращаем автору с честной причиной.
+      await this.reports.closeOverdue();
     } catch (error) {
       // Упавшая чистка не должна ронять процесс: объекты просто останутся
       // в бакете до следующего тика.

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMusicTrack } from "@/lib/music-api";
 import { MusicCover } from "@/components/music/music-cover";
+import { MusicReportForm } from "@/components/music/music-report-form";
 import { formatTrackDuration } from "@/lib/music-duration";
 
 export async function generateMetadata({
@@ -120,10 +121,7 @@ export default async function MusicTrackPage({
         </div>
       </div>
 
-      <p className="mt-8 rounded-2xl border border-glass-brd bg-glass p-4 text-sm text-text-1">
-        Слушать можно будет, когда появится плеер портала. Пока сервис
-        показывает каталог.
-      </p>
+      <MusicReportForm trackId={track.id} />
     </main>
   );
 }

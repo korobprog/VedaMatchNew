@@ -180,9 +180,10 @@ describe('MusicUploadsService.completeUpload', () => {
     status: 'pending',
     mime: 'audio/mpeg',
     sizeBytes: 4_000_000,
+    rightsBasis: 'own_recording' as const,
   };
 
-  it('заводит запись в pending — до модератора её слышит только автор', async () => {
+  it('свою запись публикует сразу — риск на том, кто её принёс', async () => {
     const prisma = prismaMock();
     const storage = storageMock();
     prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
@@ -193,15 +194,49 @@ describe('MusicUploadsService.completeUpload', () => {
       'gaura.mp3',
     );
 
-    expect(result.status).toBe('pending');
+    expect(result.status).toBe('published');
     expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        status: 'pending',
+        status: 'published',
         uploadedById: 'u1',
         durationSeconds: 198,
         bitrateKbps: 192,
       }),
     });
+  });
+
+  it('опубликованная сразу получает дату публикации', async () => {
+    // Без неё запись не попадёт в «Новое в каталоге» и повиснет невидимкой.
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+
+    await service(prisma, storage).completeUpload('u1', 'up1', 'gaura.mp3');
+
+    expect(
+      prisma.tx.musicTrack.create.mock.calls[0][0].data.publishedAt,
+    ).toBeInstanceOf(Date);
+  });
+
+  it('запись с открытой программы ждёт проверки', async () => {
+    // Чужое исполнение: отвечать за него будет портал.
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue({
+      ...pending,
+      rightsBasis: 'open_program',
+    });
+
+    const result = await service(prisma, storage).completeUpload(
+      'u1',
+      'up1',
+      'gaura.mp3',
+    );
+
+    expect(result.status).toBe('pending');
+    expect(
+      prisma.tx.musicTrack.create.mock.calls[0][0].data.publishedAt,
+    ).toBeUndefined();
   });
 
   it('верит размеру из бакета, а не обещанному браузером', async () => {

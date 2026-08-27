@@ -32,6 +32,7 @@ import {
   readId3v2Size,
   resolveDurationSeconds,
 } from './music-duration-estimate';
+import { initialStatusFor } from './music-publish-policy';
 
 /** Расширение по типу: имя файла от браузера может быть любым. */
 const EXTENSION_BY_MIME: Record<string, string> = {
@@ -327,6 +328,7 @@ export class MusicUploadsService {
     }
 
     const title = fallbackTrackTitle(metadata, fileName ?? upload.storageKey);
+    const status = initialStatusFor(upload.rightsBasis);
 
     const track = await this.prisma.$transaction(async (tx) => {
       const created = await tx.musicTrack.create({
@@ -340,7 +342,11 @@ export class MusicUploadsService {
           language: metadata.language,
           // Исполнителя из тега в каталог не заводим: справочником владеет
           // редакция, а тег — всего лишь подсказка модератору.
-          status: 'pending',
+          //
+          // А вот статус решает основание прав: своё и свободное идут в
+          // каталог сразу, чужое исполнение — через проверку.
+          status,
+          ...(status === 'published' ? { publishedAt: new Date() } : {}),
           uploadedById: userId,
         },
       });
@@ -359,7 +365,7 @@ export class MusicUploadsService {
 
     return {
       trackId: track.id,
-      status: 'pending',
+      status,
       title: track.title,
       durationSeconds: track.durationSeconds,
     };
