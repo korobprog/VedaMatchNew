@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   getMusicCatalog,
   getMusicTracks,
+  getMyMusicFavorites,
   getMyMusicUploads,
 } from "@/lib/music-api";
 import { MusicArtistBubble } from "@/components/music/music-artist-bubble";
@@ -48,7 +49,7 @@ export default async function MusicPage({
 
   // Витрина нужна всегда — из неё чипы разделов; выборка догружается только
   // когда стоит фильтр или задан запрос.
-  const [catalog, filtered, mine] = await Promise.all([
+  const [catalog, filtered, mine, favorites] = await Promise.all([
     getMusicCatalog(),
     category || query || showAll
       ? getMusicTracks({
@@ -57,8 +58,9 @@ export default async function MusicPage({
           limit: showAll && !category && !query ? 60 : 30,
         })
       : Promise.resolve(null),
-    // Счётчик рельса. Гостю отдаётся null и рельс просто без числа.
+    // Счётчики рельса. Гостю отдаётся null и рельс просто без чисел.
     getMyMusicUploads(),
+    getMyMusicFavorites(),
   ]);
 
   if (!catalog) {
@@ -84,7 +86,11 @@ export default async function MusicPage({
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10 lg:flex-row">
-      <MusicRail active="catalog" uploadsCount={pendingUploads} />
+      <MusicRail
+        active="catalog"
+        uploadsCount={pendingUploads}
+        favoritesCount={favorites?.items.length ?? 0}
+      />
 
       <div className="min-w-0 flex-1">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

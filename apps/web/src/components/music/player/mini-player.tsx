@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicCover } from "@/components/music/music-cover";
 import { SEEK_STEP_SECONDS, useMusicPlayer } from "./player-provider";
+import { MusicQueuePanel } from "./queue-panel";
 
 /**
  * Полоса плеера внизу экрана. См. макет `.design/music/MiniPlayer.dc.html`.
@@ -32,6 +34,7 @@ const icon = {
 
 export function MiniPlayer() {
   const player = useMusicPlayer();
+  const [queueOpen, setQueueOpen] = useState(false);
 
   // Полосы нет ни у гостя, ни когда слушать нечего.
   if (!player?.current) return null;
@@ -248,15 +251,30 @@ export function MiniPlayer() {
             </svg>
           </button>
 
+          <div className="relative">
+            <button
+              type="button"
+              aria-label="Очередь"
+              aria-expanded={queueOpen}
+              onClick={() => setQueueOpen((was) => !was)}
+              className={`${ctrl} h-8 w-8 ${queueOpen ? "text-violet" : "text-text-2"}`}
+            >
+              <svg {...icon} className="h-4 w-4">
+                <path d="M3 6h11M3 12h8M3 18h8M17 12v8M13 16h8" />
+              </svg>
+            </button>
+            {queueOpen && <MusicQueuePanel onClose={() => setQueueOpen(false)} />}
+          </div>
+
           {/* Плейлисты — этап 4. До него это ссылка на карточку записи: тот же
               портально-безопасный адрес, что у кнопки в ленте друзей. */}
           <Link
             href={`/music/tracks/${current.id}?add=1`}
             aria-label="В плейлист"
-            className={`${ctrl} hidden h-8 w-8 text-text-2 sm:flex`}
+            className={`${ctrl} hidden h-8 w-8 text-text-2 lg:flex`}
           >
             <svg {...icon} className="h-4 w-4">
-              <path d="M3 6h11M3 12h8M3 18h8M17 12v8M13 16h8" />
+              <path d="M12 5v14M5 12h14" />
             </svg>
           </Link>
 

@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 /**
  * Левый рельс сервиса — «своя музыка». См. макет `.design/music/Catalog.dc.html`.
  *
- * Разделы, которых ещё нет (Избранное, Плейлисты, История приезжают этапами
- * 3–4), показываются, но не кликаются: место в раскладке они занимают с
+ * Разделы, которых ещё нет (Плейлисты и История приезжают этапами 4 и 9),
+ * показываются, но не кликаются: место в раскладке они занимают с
  * первого дня, иначе рельс будет перестраиваться под человеком каждый раз.
  * Ссылкой они при этом не притворяются — неактивный пункт помечен `скоро`,
  * не получает фокус и не читается скринридером как ссылка. Приглушённая
@@ -42,7 +42,7 @@ export function MusicRail({
   favoritesCount = 0,
   playlistsCount = 0,
 }: {
-  active: "catalog" | "uploads";
+  active: "catalog" | "favorites" | "uploads";
   uploadsCount?: number;
   favoritesCount?: number;
   playlistsCount?: number;
@@ -63,6 +63,7 @@ export function MusicRail({
     {
       key: "favorites",
       label: "Избранное",
+      href: "/music/favorites",
       count: favoritesCount,
       icon: (
         <svg {...iconProps} className={`${iconProps.className} text-magenta`}>
