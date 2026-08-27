@@ -9,10 +9,12 @@ import { ServiceIcon } from "@/components/icons/service-icons";
 import { useServiceNames } from "@/components/service-catalog-provider";
 import { Navbar } from "./Navbar";
 import { BackgroundOrbs } from "./Orb";
+import { HexScales } from "./HexScales";
 import { NoiseOverlay } from "./NoiseOverlay";
 import { PhoneMockup } from "./PhoneMockup";
 import { CommunitiesMap } from "./CommunitiesMap";
 import { CommunityMapStats } from "./CommunityMapStats";
+import { AstroMockup } from "./AstroMockup";
 import { Footer } from "./Footer";
 import {
   serviceTagline,
@@ -57,7 +59,11 @@ export function ServiceDetailPage({
   const ctaHref = service.route;
 
   return (
-    <div className="relative min-h-dvh bg-bg-0">
+    <div className="hex-cursor relative min-h-dvh bg-bg-0">
+      {/* Фон и курсор те же, что на главной: страница сервиса — её
+          продолжение, и переход по «Узнать больше» не должен выглядеть
+          уходом на чужой сайт. */}
+      <HexScales />
       <BackgroundOrbs />
       <NoiseOverlay />
       <Navbar returnTo={service.route} />
@@ -173,6 +179,22 @@ export function ServiceDetailPage({
             className="flex justify-center px-4 md:px-6"
           >
             <PhoneMockup cards={showcase} />
+          </motion.div>
+        </section>
+      )}
+
+      {/* Витрина сверки карт — только у Астрологии: у остальных сервисов
+          нет расчёта, который этот макет показывает. */}
+      {service.slug === "astro" && (
+        <section className="relative pb-4 md:pb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="flex justify-center px-4 md:px-6"
+          >
+            <AstroMockup />
           </motion.div>
         </section>
       )}

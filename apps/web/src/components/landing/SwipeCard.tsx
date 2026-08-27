@@ -2,7 +2,19 @@
 
 import { useRef, useState } from "react";
 import { motion, useMotionValue, useTransform, PanInfo } from "framer-motion";
-import { X, Star, Heart } from "lucide-react";
+import type { AstroCompatibilityPurpose } from "@vedamatch/shared";
+import { DeckAstroMenu } from "./deck-astro-menu";
+import { DeckAstroPanel } from "./deck-astro-panel";
+import { StarsIcon } from "./deck-controls";
+import {
+  COMPATIBILITY_CRITERIA,
+  CompatibilityBreakdown,
+  CompatibilityRing,
+  DECK_BUTTON,
+  FlameIcon,
+  HeartIcon,
+  type BreakdownRow,
+} from "./deck-controls";
 
 interface SwipeCardProps {
   name: string;
@@ -17,6 +29,25 @@ interface SwipeCardProps {
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
   onLike?: () => void;
+  /** Возврат предыдущей анкеты — кнопка «↺», как в колоде сервиса. */
+  onUndo?: () => void;
+  /**
+   * Разбор совместимости открыт. Состояние снаружи: им управляет и нажатие
+   * на кольцо, и ролик витрины, который это нажатие показывает.
+   */
+  breakdownOpen?: boolean;
+  onToggleBreakdown?: () => void;
+  /** Строки разбора: с оценками у демо-анкет, с одними весами — у витрины. */
+  breakdown?: BreakdownRow[];
+  /** Открыть или закрыть меню целей сверки карт. */
+  onAstro?: () => void;
+  /** Меню целей раскрыто. */
+  astroMenuOpen?: boolean;
+  /** Выбрана цель — показываем сверку по ней. */
+  onPickPurpose?: (purpose: AstroCompatibilityPurpose) => void;
+  onCloseAstro?: () => void;
+  astroOpen?: boolean;
+  astroPurpose?: AstroCompatibilityPurpose;
 }
 
 export function SwipeCard({
@@ -30,6 +61,16 @@ export function SwipeCard({
   onSwipeLeft,
   onSwipeRight,
   onLike,
+  onUndo,
+  breakdownOpen = false,
+  onToggleBreakdown,
+  breakdown,
+  onAstro,
+  astroMenuOpen = false,
+  onPickPurpose,
+  onCloseAstro,
+  astroOpen = false,
+  astroPurpose = "family",
 }: SwipeCardProps) {
   const [isDragging, setIsDragging] = useState(false);
   const constraintsRef = useRef(null);
@@ -109,21 +150,16 @@ export function SwipeCard({
         </div>
 
         {/* Info section — its own scrim keeps the text legible in both themes */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-bg-0 via-bg-0/90 to-transparent p-5 pt-10">
-          <div className="flex items-start justify-between mb-2">
-            <div>
-              <h3 className="font-display text-xl font-bold text-text-0">
-                {age === null ? name : `${name}, ${age}`}
-              </h3>
-              {location && <p className="text-text-1 text-sm">{location}</p>}
-            </div>
-            {compatibility > 0 && (
-              <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-cyan/20 border border-cyan/40">
-                <span className="text-cyan font-bold text-sm">{compatibility}%</span>
-              </div>
-            )}
+        {/* Нижний отступ держит текст над панелью решений: она лежит поверх
+            карточки и без него накрывала бы интересы. */}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-bg-0 via-bg-0/90 to-transparent p-5 pt-10 pb-[4.5rem]">
+          <div className="mb-2">
+            <h3 className="font-display text-xl font-bold text-text-0">
+              {age === null ? name : `${name}, ${age}`}
+            </h3>
+            {location && <p className="text-text-1 text-sm">{location}</p>}
           </div>
-          
+
           {description && (
             <p className="text-text-1 text-sm mb-3 line-clamp-2">{description}</p>
           )}
@@ -144,38 +180,110 @@ export function SwipeCard({
         </div>
       </motion.div>
 
-      {/* Action buttons */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 z-20">
+      {/*
+        Панель решений — та же, что в колоде Знакомств: пропустить, вернуть
+        анкету, кольцо совместимости, суперлайк и знакомство. Раскладка тоже
+        её: `justify-between` во всю ширину карточки, а не кучка по центру.
+
+        `data-deck-action` — метка для ролика витрины: курсор ищет кнопку по
+        ней, а не по aria-label, чтобы правка подписи для скринридера не
+        уводила курсор в пустоту.
+      */}
+      <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between gap-1.5 px-3 pb-3 pt-6">
         <motion.button
-          whileHover={{ scale: 1.1 }}
+          data-deck-action="pass"
           whileTap={{ scale: 0.9 }}
           onClick={() => onSwipeLeft?.()}
-          className="w-14 h-14 rounded-full bg-glass backdrop-blur-sm border border-glass-brd flex items-center justify-center text-text-1 hover:text-red-500 hover:border-red-500/50 transition-colors"
-          aria-label="Не нравится"
+          className={`${DECK_BUTTON} h-12 w-12 text-xl text-white`}
+          aria-label="Пропустить"
         >
-          <X size={28} />
+          ✕
         </motion.button>
-        
+
         <motion.button
-          whileHover={{ scale: 1.1 }}
+          data-deck-action="undo"
+          whileTap={{ scale: 0.9 }}
+          onClick={() => onUndo?.()}
+          className={`${DECK_BUTTON} h-11 w-11 text-lg text-white`}
+          aria-label="Вернуть предыдущую анкету"
+        >
+          ↺
+        </motion.button>
+
+        {/* Кольцо стоит всегда — оно центр панели и в сервисе. Процент
+            считается относительно смотрящего, поэтому у анкет витрины его
+            нет: кольцо тогда пустое, а разбор показывает веса критериев. */}
+        <CompatibilityRing
+          total={compatibility > 0 ? compatibility : null}
+          size={56}
+          expanded={breakdownOpen}
+          onClick={() => onToggleBreakdown?.()}
+        />
+
+        <motion.button
+          data-deck-action="superlike"
           whileTap={{ scale: 0.9 }}
           onClick={() => onLike?.()}
-          className="w-12 h-12 rounded-full bg-glass backdrop-blur-sm border border-glass-brd flex items-center justify-center text-text-1 hover:text-cyan hover:border-cyan/50 transition-colors"
-          aria-label="Нравится"
+          // Огонь золотой: суперлайк — не то же, что обычный интерес, и в
+          // ряду одинаково белых кнопок это терялось.
+          className={`${DECK_BUTTON} h-12 w-12 text-gold drop-shadow-[0_0_10px_var(--vm-glow-gold)]`}
+          aria-label="Суперлайк"
         >
-          <Star size={24} />
+          <FlameIcon />
         </motion.button>
-        
+
         <motion.button
-          whileHover={{ scale: 1.1 }}
+          data-deck-action="like"
           whileTap={{ scale: 0.9 }}
           onClick={() => onSwipeRight?.()}
-          className="w-14 h-14 rounded-full bg-gradient-to-br from-magenta to-[#B23EFF] flex items-center justify-center text-white shadow-[0_0_24px_rgba(255,62,158,0.45)]"
-          aria-label="Люблю"
+          // Выделяется само решение — зелёное сердце со свечением, а не
+          // заливка кнопки: корпус у неё общий с соседями.
+          className={`${DECK_BUTTON} h-12 w-12 text-like drop-shadow-[0_0_10px_var(--vm-glow-like)]`}
+          aria-label="Познакомиться"
         >
-          <Heart size={28} />
+          <HeartIcon />
         </motion.button>
       </div>
+
+      {/* Сверка карт по звёздам — соседний сервис, и попасть в него можно
+          прямо отсюда. Кнопкой в углу, а не строкой под тегами: там ссылка
+          налезала на интересы. */}
+      <button
+        type="button"
+        data-deck-action="astro"
+        onClick={() => onAstro?.()}
+        aria-label="Проверить совместимость по звёздам"
+        className={`${DECK_BUTTON} absolute right-3 top-3 z-20 h-9 w-9 text-gold`}
+      >
+        <StarsIcon />
+      </button>
+
+      {astroMenuOpen && (
+        <DeckAstroMenu
+          onPick={(purpose) => onPickPurpose?.(purpose)}
+          onClose={() => onAstro?.()}
+        />
+      )}
+
+      {astroOpen && (
+        <DeckAstroPanel
+          purpose={astroPurpose}
+          onClose={() => onCloseAstro?.()}
+        />
+      )}
+
+      {breakdownOpen && (
+        <CompatibilityBreakdown
+          total={compatibility > 0 ? compatibility : null}
+          // Без разбора анкеты остаются одни веса — они про алгоритм, а не
+          // про человека, и правдивы для любой карточки.
+          rows={
+            breakdown ??
+            COMPATIBILITY_CRITERIA.map((row) => ({ ...row, score: null }))
+          }
+          onClose={() => onToggleBreakdown?.()}
+        />
+      )}
     </div>
   );
 }
