@@ -2,6 +2,7 @@ import type {
   UnionPhoto,
   UnionProfileUpdateRequest,
   UnionRecommendation,
+  UnionSwipeDecision,
 } from '@vedamatch/shared';
 import { BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -239,7 +240,11 @@ describe('UnionProfileService', () => {
       findFirst: jest.fn(),
     },
     unionSwipe: {
-      findMany: jest.fn(() => Promise.resolve([] as { toUserId: string }[])),
+      findMany: jest.fn(() =>
+        Promise.resolve(
+          [] as Array<{ toUserId: string; decision?: UnionSwipeDecision }>,
+        ),
+      ),
     },
     unionBoost: {
       findMany: jest.fn(() => Promise.resolve([] as { userId: string }[])),
@@ -387,6 +392,155 @@ describe('UnionProfileService', () => {
     const result = await service.getRecommendations('me');
 
     expect(result.items.map((item) => item.user.id)).toEqual(['fresh']);
+  });
+
+  /*
+    «Показать всех» — не пятый чип целей, а обещание. Оно нарушалось молча:
+    человек читал «Все · 4» при двенадцати анкетах и искал остальных в
+    фильтрах экрана, где их не было, — резали история показов, желаемый
+    возраст партнёра из анкеты и пол под целью «Создание семьи».
+  */
+  describe('showAll', () => {
+    beforeEach(() => {
+      prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+    });
+
+    it('возвращает в выдачу уже отсмотренных', async () => {
+      prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+      prisma.unionProfile.findMany.mockResolvedValue([
+        profile('seen'),
+        profile('fresh'),
+      ]);
+      prisma.unionSwipe.findMany.mockResolvedValue([{ toUserId: 'seen' }]);
+
+      const result = await service.getRecommendations('me', { showAll: true });
+
+      expect(result.items.map((item) => item.user.id).sort()).toEqual([
+        'fresh',
+        'seen',
+      ]);
+    });
+
+    it('называет решение по отсмотренной анкете', async () => {
+      // Иначе человек решает второй раз вслепую: ставит лайк тому, кому
+      // запрос уже отправлен, и ждёт ответа дважды.
+      prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+      prisma.unionProfile.findMany.mockResolvedValue([profile('seen')]);
+      prisma.unionSwipe.findMany.mockResolvedValue([
+        { toUserId: 'seen', decision: 'like' },
+      ]);
+
+      const result = await service.getRecommendations('me', { showAll: true });
+
+      expect(result.items[0].myDecision).toBe('like');
+    });
+
+    it('по анкете без решения пометки нет', async () => {
+      prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+      prisma.unionProfile.findMany.mockResolvedValue([profile('fresh')]);
+      prisma.unionSwipe.findMany.mockResolvedValue([]);
+
+      const result = await service.getRecommendations('me', { showAll: true });
+
+      expect(result.items[0].myDecision).toBeNull();
+    });
+
+    it('снимает мой диапазон возраста партнёра из анкеты', async () => {
+      // Он стоит в анкете, а режет ленту — на экране фильтров его нет вовсе.
+      const me = withDetails(profile('me'), {
+        ageRangeMin: 30,
+        ageRangeMax: 40,
+      });
+      prisma.unionProfile.findUnique.mockResolvedValue(me);
+      prisma.unionProfile.findMany.mockResolvedValue([
+        withBirthYear(profile('older'), 1960),
+      ]);
+      prisma.unionSwipe.findMany.mockResolvedValue([]);
+
+      const narrowed = await service.getRecommendations('me');
+      const everyone = await service.getRecommendations('me', {
+        showAll: true,
+      });
+
+      expect(narrowed.items).toEqual([]);
+      expect(everyone.items.map((item) => item.user.id)).toEqual(['older']);
+    });
+
+    it('не тащит мой диапазон возраста в запрос к базе', async () => {
+      // Проверка не для красоты: то же сужение продублировано в SQL, и без
+      // него JS-фильтр снял бы ограничение, а строк из базы всё равно не
+      // пришло бы.
+      prisma.unionProfile.findUnique.mockResolvedValue(
+        withDetails(profile('me'), { ageRangeMin: 30, ageRangeMax: 40 }),
+      );
+      prisma.unionProfile.findMany.mockResolvedValue([]);
+      prisma.unionSwipe.findMany.mockResolvedValue([]);
+
+      await service.getRecommendations('me', { showAll: true });
+
+      const where = (
+        prisma.unionProfile.findMany.mock.calls as unknown as [
+          { where: { AND?: unknown[] } },
+        ][]
+      )[0][0].where;
+      expect(where.AND ?? []).toEqual([]);
+    });
+
+    it('снимает мой отбор по полу под целью «Создание семьи»', async () => {
+      const me = withDetails(
+        withGender(withIntentions(profile('me'), [{ type: 'family', weight: 100 }]), 'male'),
+        { familySeeksGender: 'female' },
+      );
+      prisma.unionProfile.findUnique.mockResolvedValue(me);
+      prisma.unionProfile.findMany.mockResolvedValue([
+        withGender(profile('man'), 'male'),
+      ]);
+      prisma.unionSwipe.findMany.mockResolvedValue([]);
+
+      const narrowed = await service.getRecommendations('me');
+      const everyone = await service.getRecommendations('me', {
+        showAll: true,
+      });
+
+      expect(narrowed.items).toEqual([]);
+      expect(everyone.items.map((item) => item.user.id)).toEqual(['man']);
+    });
+
+    it('чужой выбор не снимает и честно его считает', async () => {
+      // Человек, который ищет семью с определённым полом, не должен попадать
+      // в ленту тех, кому заведомо не подходит. Но тогда «все» обязано быть
+      // проверяемым — недостачу называем числом, а не умалчиваем.
+      const me = withGender(profile('me'), 'male');
+      prisma.unionProfile.findUnique.mockResolvedValue(me);
+      prisma.unionProfile.findMany.mockResolvedValue([
+        withDetails(
+          withGender(
+            withIntentions(profile('picky'), [{ type: 'family', weight: 100 }]),
+            'female',
+          ),
+          { familySeeksGender: 'female' },
+        ),
+        profile('open'),
+      ]);
+      prisma.unionSwipe.findMany.mockResolvedValue([]);
+
+      const result = await service.getRecommendations('me', { showAll: true });
+
+      expect(result.items.map((item) => item.user.id)).toEqual(['open']);
+      expect(result.hiddenByOthers).toBe(1);
+    });
+
+    it('вне режима «все» недостачу не считает', async () => {
+      // Число нужно ровно там, где обещано «все»; в обычной ленте это лишний
+      // проход и лишний повод объясняться.
+      prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
+      prisma.unionProfile.findMany.mockResolvedValue([profile('other')]);
+      prisma.unionSwipe.findMany.mockResolvedValue([]);
+
+      const result = await service.getRecommendations('me');
+
+      expect(result.hiddenByOthers).toBe(0);
+    });
   });
 
   it('shows swiped profiles when includeSwiped is set', async () => {

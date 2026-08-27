@@ -55,6 +55,7 @@ function recommendation(
     },
     compatibility: { total: 85, breakdown: [] },
     connection: null,
+  myDecision: null,
   };
 }
 

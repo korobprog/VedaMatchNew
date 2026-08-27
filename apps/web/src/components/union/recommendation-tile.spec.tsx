@@ -27,6 +27,7 @@ function item(
     profile: {} as UnionRecommendation["profile"],
     compatibility: { total: 85, breakdown: [] },
     connection: null,
+  myDecision: null,
   };
 }
 

@@ -19,12 +19,26 @@ export function RecommendationTile({
   const { user, compatibility } = item;
   const cover = user.photos[0]?.url ?? user.avatarUrl;
   const title = user.age != null ? `${user.name}, ${user.age}` : user.name;
+  /*
+    Плитка мелкая, и фразе здесь места нет — только галочка в углу. Но
+    скринридеру угол ничего не говорит, поэтому то же самое уходит словами в
+    подпись кнопки: в режиме «показать всех» отсмотренные лежат вперемешку с
+    новыми, и отличить их иначе нельзя.
+  */
+  const decisionLabel =
+    item.myDecision === "pass"
+      ? ", вы пропускали эту анкету"
+      : item.myDecision === "superlike"
+        ? ", вы отправили суперлайк"
+        : item.myDecision === "like"
+          ? ", вы отправили запрос"
+          : "";
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      aria-label={`${title} — совместимость ${compatibility.total}%`}
+      aria-label={`${title} — совместимость ${compatibility.total}%${decisionLabel}`}
       className="group relative block aspect-square w-full overflow-hidden rounded-2xl border border-glass-brd bg-bg-2 text-left"
     >
       {cover ? (
@@ -56,6 +70,26 @@ export function RecommendationTile({
       >
         {compatibility.total}%
       </span>
+
+      {item.myDecision && (
+        <span
+          aria-hidden="true"
+          className="absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur"
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m4 12.5 5 5L20 6.5" />
+          </svg>
+        </span>
+      )}
 
       <span
         aria-hidden="true"

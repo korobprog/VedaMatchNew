@@ -147,7 +147,10 @@ describe("EVERYTHING_URL", () => {
     const url = new URL(EVERYTHING_URL, "https://example.test");
 
     expect(url.pathname).toBe("/union/recommendations");
-    expect(url.searchParams.get("includeSwiped")).toBe("true");
-    expect([...url.searchParams.keys()]).toEqual(["includeSwiped"]);
+    // Именно showAll, а не includeSwiped: второй снимает только историю
+    // показов, а желаемый возраст партнёра и пол под целью «Создание семьи»
+    // продолжали бы резать выдачу — и «вообще все» оказывались не всеми.
+    expect(url.searchParams.get("showAll")).toBe("true");
+    expect([...url.searchParams.keys()]).toEqual(["showAll"]);
   });
 });

@@ -351,6 +351,12 @@ export interface UnionRecommendation {
     UnionProfileDetails & { intentions: UnionIntentionDto[] };
   compatibility: UnionCompatibility;
   connection: UnionConnectionSummary | null;
+  /**
+   * Моё действующее решение по этой анкете, если оно есть. Нужно там, где
+   * выдача намеренно показывает уже отсмотренных: без пометки человек решает
+   * второй раз вслепую, не помня, что запрос он уже отправил.
+   */
+  myDecision: UnionSwipeDecision | null;
 }
 
 export interface UnionRecommendationFilters {
@@ -379,6 +385,14 @@ export interface UnionRecommendationFilters {
   photoVerifiedOnly?: boolean;
   /** Не исключать из выдачи анкеты, которые уже свайпнули (лайк/пропуск). */
   includeSwiped?: boolean;
+  /**
+   * «Показать всех»: снимает не только фильтры экрана, но и мои собственные
+   * молчаливые сужения — историю показов, желаемый возраст партнёра из анкеты
+   * и пол под целью «Создание семьи». Чужой выбор не снимает: если человек
+   * ищет семью с определённым полом, его анкета остаётся скрытой от
+   * несоответствующих, а сколько таких — сообщает `hiddenByOthers`.
+   */
+  showAll?: boolean;
   format?: UnionFormat;
   language?: string;
   /** Порядок выдачи: по совместимости (по умолчанию) или сначала новые анкеты. */
@@ -407,6 +421,12 @@ export interface UnionRecommendationsResponse {
   pageSize: number;
   totalPages: number;
   intentionCounts: UnionIntentionCounts;
+  /**
+   * Сколько анкет осталось скрыто чужим выбором — их владельцы ищут семью с
+   * определённым полом. Считается только при `showAll`: там «все» обязано
+   * быть проверяемым, а молча недосчитаться нельзя.
+   */
+  hiddenByOthers: number;
 }
 
 export interface UnionConnectionSummary {

@@ -10,17 +10,27 @@ const activeChip = "border-magenta bg-magenta/15 text-text-0";
 const idleChip = "border-glass-brd text-text-1 hover:text-text-0";
 
 /**
- * Цели выбираются несколькими сразу (ИЛИ). «Все» — не пятая категория, а
- * сброс именно целей: город, возраст и прочее он не трогает.
+ * Цели выбираются несколькими сразу (ИЛИ).
+ *
+ * «Все» — не пятая категория и не просто сброс целей: это «показать всех».
+ * Раньше он снимал фильтр целей, а лента при этом продолжала молча прятать
+ * уже отсмотренных, желаемый возраст партнёра из анкеты и пол под целью
+ * «Создание семьи» — человек читал «Все · 4» и искал остальных восьмерых в
+ * фильтрах, где их не было. Теперь кнопка снимает всё, что скрывает мой
+ * собственный выбор, и подсвечена ровно тогда, когда режим включён.
  */
 export function IntentionChips({
   counts,
   selected,
+  showAll,
 }: {
   counts: UnionIntentionCounts;
   selected: UnionIntentionType[];
+  /** Режим «показать всех» уже включён — тогда чип горит и знает своё число. */
+  showAll: boolean;
 }) {
   const [chosen, setChosen] = useState<UnionIntentionType[]>(selected);
+  const [everyone, setEveryone] = useState(showAll);
   const containerRef = useRef<HTMLDivElement>(null);
   const isFirstRender = useRef(true);
 
@@ -32,9 +42,11 @@ export function IntentionChips({
       return;
     }
     containerRef.current?.closest("form")?.requestSubmit();
-  }, [chosen]);
+  }, [chosen, everyone]);
 
   function toggle(type: UnionIntentionType) {
+    // Выбор конкретной цели — уже сужение, и «показать всех» ему противоречит.
+    setEveryone(false);
     setChosen((current) =>
       current.includes(type)
         ? current.filter((item) => item !== type)
@@ -50,13 +62,25 @@ export function IntentionChips({
         Цель
       </span>
       <div className="flex flex-wrap gap-2">
+        {/* Значение уходит на сервер только во включённом состоянии: пустое
+            поле в GET-запросе оставило бы в ссылке `showAll=` без смысла. */}
+        {everyone && <input type="hidden" name="showAll" value="true" />}
         <button
           type="button"
-          onClick={() => setChosen([])}
-          aria-pressed={chosen.length === 0}
-          className={`${chipClass} ${chosen.length === 0 ? activeChip : idleChip}`}
+          onClick={() => {
+            setChosen([]);
+            setEveryone(true);
+          }}
+          aria-pressed={everyone}
+          className={`${chipClass} ${everyone ? activeChip : idleChip}`}
         >
-          Все · {counts.all}
+          {/*
+            Пока режим выключен, числа на кнопке нет намеренно: counts.all
+            считается по текущей выдаче и показал бы то самое «Все · 4»,
+            из-за которого и завёлся весь разговор. Обещать число, которого
+            человек не увидит, хуже, чем не обещать никакого.
+          */}
+          {everyone ? `Все · ${counts.all}` : "Показать всех"}
         </button>
         {intentionTypes.map((type) => (
           <label

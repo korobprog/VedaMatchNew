@@ -10,8 +10,12 @@ export const AGE_STORAGE_KEY = "union.recommendations.ageRange";
  * Аварийный выход с пустой выдачи: ни одного условия и вместе с уже
  * отсмотренными. Это единственный адрес, после которого список гарантированно
  * не пуст, если на портале вообще есть анкеты.
+ *
+ * Раньше здесь стоял `includeSwiped=true`, и обещание было ложным: история
+ * показов снималась, а желаемый возраст партнёра из анкеты и пол под целью
+ * «Создание семьи» продолжали резать выдачу молча. `showAll` снимает и их.
  */
-export const EVERYTHING_URL = "/union/recommendations?includeSwiped=true";
+export const EVERYTHING_URL = "/union/recommendations?showAll=true";
 
 export const filterKeys = [
   "intentions",
@@ -32,6 +36,7 @@ export const filterKeys = [
   "verifiedOnly",
   "photoVerifiedOnly",
   "includeSwiped",
+  "showAll",
 ] as const;
 
 export function first(value: string | string[] | undefined): string | undefined {
@@ -44,17 +49,20 @@ export function countActiveFilters(
   return filterKeys.filter((key) => Boolean(first(params[key]))).length;
 }
 
+/** Условия, которые выдачу расширяют, а не сужают: сбрасывать их бессмысленно. */
+const WIDENING_KEYS: ReadonlySet<string> = new Set(["includeSwiped", "showAll"]);
+
 /**
- * Сколько условий реально сужает выдачу. `includeSwiped` в счёт не идёт: он
- * выдачу расширяет, и сброс такого «фильтра» на пустом экране не помог бы, а
- * дал бы ещё меньше. Для бейджа на мобильном по-прежнему нужен полный счёт —
- * там это просто «настройка отличается от умолчания», см. countActiveFilters.
+ * Сколько условий реально сужает выдачу. Расширяющие в счёт не идут: сброс
+ * такого «фильтра» на пустом экране не помог бы, а дал бы ещё меньше. Для
+ * бейджа на мобильном по-прежнему нужен полный счёт — там это просто
+ * «настройка отличается от умолчания», см. countActiveFilters.
  */
 export function countNarrowingFilters(
   params: Record<string, string | string[] | undefined>,
 ): number {
   return filterKeys.filter(
-    (key) => key !== "includeSwiped" && Boolean(first(params[key])),
+    (key) => !WIDENING_KEYS.has(key) && Boolean(first(params[key])),
   ).length;
 }
 
