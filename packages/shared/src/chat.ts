@@ -297,6 +297,18 @@ export interface ChatMapState {
   cities: ChatMapCity[];
 }
 
+/**
+ * Карта для гостя: то, что видно на публичной странице сервиса, до входа.
+ *
+ * Городов здесь нет намеренно. Община — организация, и её адрес публичен по
+ * замыслу («у храма он публичный, в отличие от дома человека», см.
+ * Community.address в схеме). Счётчик людей по городу — данные своих: человек
+ * соглашался показываться участникам портала, а не всему интернету.
+ */
+export interface ChatPublicMapState {
+  communities: ChatMapCommunity[];
+}
+
 /** Открытая беседа в каталоге: то, на что можно подписаться самому. */
 export interface ChatDiscoverItem {
   conversation: ChatConversationSummary;

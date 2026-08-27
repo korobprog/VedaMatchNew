@@ -11,6 +11,7 @@ import type {
   ChatChannelCommunitiesState,
   ChatDiscoverState,
   ChatMapState,
+  ChatPublicMapState,
   ChatRequestsState,
   ChatUnreadState,
   ChatUserSummary,
@@ -44,6 +45,16 @@ export function getChatUnread(): Promise<ChatUnreadState | null> {
 /** Карта общин: точки и число их открытых бесед. */
 export function getChatMap(): Promise<ChatMapState | null> {
   return chatGet<ChatMapState>("/chat/map");
+}
+
+/**
+ * Та же карта для публичной страницы сервиса: без cookie, потому что гость
+ * запрашивает её до входа. Городов в ответе нет — см. ChatPublicMapState.
+ */
+export async function getChatPublicMap(): Promise<ChatPublicMapState | null> {
+  const res = await fetch(`${API_URL}/chat/public-map`, { cache: "no-store" });
+  if (!res.ok) return null;
+  return (await res.json()) as ChatPublicMapState;
 }
 
 /** Каталог открытых бесед — витрина общин. */

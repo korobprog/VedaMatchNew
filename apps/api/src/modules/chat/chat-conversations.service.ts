@@ -12,6 +12,7 @@ import type {
   ChatListState,
   ChatMapCity,
   ChatMapState,
+  ChatPublicMapState,
   ChatRequestsState,
   ChatRequestSummary,
   ChatSearchState,
@@ -729,6 +730,16 @@ export class ChatConversationsService {
       .filter((row): row is NonNullable<typeof row> => row !== null);
 
     return { communities, cities };
+  }
+
+  /**
+   * Та же карта, но для гостя: только общины. Города со счётчиком людей
+   * наружу не уходят — согласие показываться давалось участникам портала, а
+   * не всему интернету (см. ChatPublicMapState).
+   */
+  async publicMap(): Promise<ChatPublicMapState> {
+    const { communities } = await this.map();
+    return { communities };
   }
 
   /**
