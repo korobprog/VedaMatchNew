@@ -74,7 +74,7 @@ function SectionCard({
   const blocked = section.blockedBy !== null;
 
   return (
-    <div className="border-b border-black/10 dark:border-white/15">
+    <div className="border-b border-glass-brd">
       <button
         type="button"
         onClick={reveal}
@@ -82,20 +82,20 @@ function SectionCard({
         className="flex w-full items-center justify-between gap-4 py-4 text-left"
       >
         <span className="font-medium">{section.title}</span>
-        <span className="text-sm text-black/50 dark:text-white/50">
+        <span className="text-sm text-text-2">
           {section.text ? "готово" : blocked ? "недоступно" : "открыть"}
         </span>
       </button>
 
       {open && (
         <div className="pb-4 text-sm leading-relaxed">
-          {loading && <p className="text-black/60 dark:text-white/60">Готовим разбор…</p>}
-          {error && <p className="text-red-700 dark:text-red-400">{error}</p>}
+          {loading && <p className="text-text-2">Готовим разбор…</p>}
+          {error && <p className="text-magenta">{error}</p>}
           {!loading && !error && section.text && (
             <div className="space-y-3 whitespace-pre-line">{section.text}</div>
           )}
           {!loading && !error && !section.text && blocked && (
-            <p className="text-black/60 dark:text-white/60">
+            <p className="text-text-2">
               {blockedMessage(section)}
             </p>
           )}
@@ -112,10 +112,13 @@ export function ReadingsAccordion({ initial }: { initial: AstroReadingsDto }) {
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-lg font-medium">Разбор карты</h2>
-        <p className="text-sm text-black/55 dark:text-white/55">
-          {initial.quota.aiAvailable
-            ? `Осталось сегодня: ${readingsLeft} из ${initial.quota.readingsPerDay}`
-            : "Разборы временно недоступны"}
+        <p className="text-sm text-text-2">
+          {!initial.quota.aiAvailable
+            ? "Разборы временно недоступны"
+            : initial.quota.readingsPerDay === 0
+              ? // Ноль — без лимита. Показывать «0 из 0» было бы прямой ложью.
+                "Без ограничения на бете"
+              : `Осталось сегодня: ${readingsLeft} из ${initial.quota.readingsPerDay}`}
         </p>
       </div>
 
@@ -129,7 +132,7 @@ export function ReadingsAccordion({ initial }: { initial: AstroReadingsDto }) {
         ))}
       </div>
 
-      <p className="mt-4 text-xs text-black/45 dark:text-white/45">
+      <p className="mt-4 text-xs text-text-2">
         Тексты составлены ИИ по рассчитанной карте. Расчёт детерминирован, а
         толкование — лишь одно из возможных: относитесь к нему как к поводу
         подумать, а не как к предсказанию.

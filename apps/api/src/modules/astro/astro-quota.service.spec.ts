@@ -152,6 +152,65 @@ describe('AstroQuotaService', () => {
     });
   });
 
+  describe('без лимита (ноль в настройках)', () => {
+    it('пропускает разбор, сколько бы их сегодня ни было', async () => {
+      // На бете личный счётчик не ведётся; расход сдерживает общий бюджет.
+      withSettings({ dailyReadingsPerUser: 0 });
+      prisma.astroUsage.findUnique.mockResolvedValue({
+        readings: 999,
+        tokensIn: 0,
+        tokensOut: 0,
+      });
+
+      await expect(service.check('user-1', NOW)).resolves.toEqual({
+        allowed: true,
+      });
+    });
+
+    it('не считает потраченные токены, когда их потолок снят', async () => {
+      withSettings({ dailyTokensPerUser: 0 });
+      prisma.astroUsage.findUnique.mockResolvedValue({
+        readings: 0,
+        tokensIn: 10_000_000,
+        tokensOut: 10_000_000,
+      });
+
+      await expect(service.check('user-1', NOW)).resolves.toEqual({
+        allowed: true,
+      });
+    });
+
+    it('общий бюджет продолжает останавливать генерацию', async () => {
+      // Снятый личный лимит не должен открывать бесконтрольный расход.
+      withSettings({ dailyReadingsPerUser: 0 });
+      prisma.astroBudgetDay.findUnique.mockResolvedValue({
+        haltedAt: new Date('2026-08-27T00:00:00.000Z'),
+        tokensIn: 0,
+        tokensOut: 0,
+        costUsdCents: 0,
+      });
+
+      await expect(service.check('user-1', NOW)).resolves.toEqual({
+        allowed: false,
+        reason: 'ai_unavailable',
+      });
+    });
+
+    it('в состоянии отдаёт ноль потолком — интерфейс покажет «без лимита»', async () => {
+      withSettings({ dailyReadingsPerUser: 0 });
+      prisma.astroUsage.findUnique.mockResolvedValue({
+        readings: 42,
+        tokensIn: 0,
+        tokensOut: 0,
+      });
+
+      const state = await service.state('user-1', NOW);
+      expect(state.readingsPerDay).toBe(0);
+      // Остаток не уходит в минус и не притворяется исчерпанным.
+      expect(state.readingsLeft).toBe(0);
+    });
+  });
+
   describe('запись расхода', () => {
     beforeEach(() => {
       prisma.astroBudgetDay.upsert.mockResolvedValue({
