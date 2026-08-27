@@ -29,6 +29,7 @@ import { HealthModule } from './modules/health/health.module';
 import { TelemetryModule } from './modules/telemetry/telemetry.module';
 import { RewardsModule } from './modules/rewards/rewards.module';
 import { ActivityModule } from './modules/activity/activity.module';
+import { MusicModule } from './modules/music/music.module';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { ActivityModule } from './modules/activity/activity.module';
     TelemetryModule,
     RewardsModule,
     ActivityModule,
+    MusicModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: AdminAwareThrottlerGuard }],
 })

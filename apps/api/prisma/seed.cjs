@@ -25,6 +25,7 @@ const { contactsTags } = require('./contacts-tags-data.js');
 const { marketSections } = require('./market-sections-data.js');
 const { marketCategories } = require('./market-categories-data.js');
 const { noticeRubrics } = require('./notice-rubrics-data.js');
+const { musicCategories } = require('./music-categories-data.js');
 const { geoCities } = require('./geo-cities-data.js');
 
 const services = [
@@ -140,6 +141,25 @@ const services = [
     devoteeVerifiedVisible: true,
   },
   {
+    slug: 'music',
+    name: 'Музыка',
+    nameEn: 'Music',
+    description:
+      'Киртаны, бхаджаны и записи с программ: каталог, плейлисты и плеер на весь портал',
+    url: '/music',
+    // coming_soon: этап 0 — каркас модуля и схема. Сервис включается
+    // ('active') после этапа 6, когда каталог наполнен и работает плеер;
+    // до тех пор карточка в портале показывает «Скоро» и никуда не ведёт.
+    status: 'coming_soon',
+    category: 'lifestyle',
+    public: true,
+    seekerVisible: true,
+    practitionerVisible: true,
+    yogiVisible: true,
+    devoteeSelfIdentifiedVisible: true,
+    devoteeVerifiedVisible: true,
+  },
+  {
     slug: 'notices',
     name: 'Объявления',
     description:
@@ -236,6 +256,17 @@ async function main() {
       });
     }
 
+    // Разделы каталога Музыки. `position` — из порядка в файле, как у рубрик
+    // доски: держать номер отдельным полем значит однажды его рассинхронить.
+    for (const [index, category] of musicCategories.entries()) {
+      const fields = { ...category, position: index };
+      await transaction.musicCategory.upsert({
+        where: { slug: category.slug },
+        update: fields,
+        create: fields,
+      });
+    }
+
     // Справочник городов перезаписывается целиком: файл — источник истины,
     // и правка алиаса в нём обязана доехать до базы, а не остаться рядом
     // со старым значением.
@@ -280,7 +311,7 @@ async function main() {
     }
   });
   console.log(
-    `Seeded ${services.length} services, ${librarySections.length} library sections, ${contactsTags.length} contacts tags, ${marketSections.length} market sections, ${marketCategories.length} market categories ${noticeRubrics.length} notice rubrics and ${geoCities.length} cities`,
+    `Seeded ${services.length} services, ${librarySections.length} library sections, ${contactsTags.length} contacts tags, ${marketSections.length} market sections, ${marketCategories.length} market categories ${noticeRubrics.length} notice rubrics, ${musicCategories.length} music categories and ${geoCities.length} cities`,
   );
 }
 

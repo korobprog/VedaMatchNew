@@ -103,6 +103,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         scope: "notices",
       },
       {
+        href: "/admin/music",
+        label: "Музыка",
+        hint: "Очередь разбора записей, исполнители, разделы, загрузка",
+        scope: "music",
+      },
+      {
         href: "/admin/astro",
         label: "Astro",
         hint: "Расход токенов и пауза генерации",

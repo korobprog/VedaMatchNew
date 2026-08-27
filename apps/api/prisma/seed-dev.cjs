@@ -723,6 +723,100 @@ async function seedChat() {
   return count;
 }
 
+/*
+ * Демо-каталог «Музыки». Нужен, чтобы витрину и страницы записи было на чём
+ * посмотреть до того, как редакция начнёт наполнять каталог по-настоящему.
+ *
+ * Файлов за этими записями нет: `storageKey` указывает в никуда, и слушать
+ * их будет нечего, когда появится плеер. Это осознанно — демо-данные врут
+ * про наличие каталога, а не про наличие звука, и подсовывать сюда чужие
+ * записи ради красоты нельзя ровно по той причине, из-за которой у сервиса
+ * вообще есть модерация загрузок.
+ */
+const musicArtists = [
+  ['audarya-dhama-das', 'Аударья Дхама дас', 'kirtaneer', true],
+  ['minsk-yatra-choir', 'Хор Минской ятры', 'group', false],
+  ['prema-bhakti-dd', 'Према Бхакти д. д.', 'kirtaneer', true],
+  ['gaurachandra-das', 'Гаурачандра дас', 'kirtaneer', false],
+  ['yatra-sankirtan', 'Ятра Санкиртан', 'temple', false],
+];
+
+const musicTracks = [
+  ['Джая Радха-Мадхава', 'audarya-dhama-das', 'kirtan', 198, true, 'sa'],
+  ['Гаура-арати', 'minsk-yatra-choir', 'kirtan', 422, true, 'sa'],
+  ['Шри Туласи-киртан', 'prema-bhakti-dd', 'bhajan', 330, false, 'sa'],
+  ['Нрисимха-пранама', 'gaurachandra-das', 'mantra', 285, false, 'sa'],
+  ['Према-дхвани', 'yatra-sankirtan', 'guru-puja', 132, true, 'sa'],
+  ['Вечерняя арати целиком', 'minsk-yatra-choir', 'kirtan', 2460, true, 'ru'],
+  ['Фон для джапы', 'gaurachandra-das', 'instrumental', 3720, false, null],
+];
+
+async function seedMusic() {
+  const categories = new Map(
+    (await prisma.musicCategory.findMany()).map((row) => [row.slug, row.id]),
+  );
+  if (categories.size === 0) {
+    console.log('Категории Музыки не засеяны — сначала `pnpm seed`.');
+    return 0;
+  }
+
+  const artists = new Map();
+  for (const [slug, name, kind, isVerified] of musicArtists) {
+    const row = await prisma.musicArtist.upsert({
+      where: { slug },
+      update: { name, kind, isVerified },
+      create: { slug, name, kind, isVerified },
+    });
+    artists.set(slug, row.id);
+  }
+
+  const album = await prisma.musicAlbum.upsert({
+    where: { slug: 'evening-program-minsk' },
+    update: {},
+    create: {
+      slug: 'evening-program-minsk',
+      title: 'Вечерняя программа, Минск',
+      kind: 'live',
+      year: 2026,
+      artistId: artists.get('minsk-yatra-choir'),
+    },
+  });
+
+  let created = 0;
+  for (const [index, track] of musicTracks.entries()) {
+    const [title, artistSlug, categorySlug, seconds, isLive, language] = track;
+    const storageKey = `music/demo/${index + 1}.mp3`;
+    // `storageKey` уникален — по нему и узнаём, что запись уже засеяна.
+    const existing = await prisma.musicTrack.findUnique({
+      where: { storageKey },
+      select: { id: true },
+    });
+    if (existing) continue;
+
+    await prisma.musicTrack.create({
+      data: {
+        title,
+        artistId: artists.get(artistSlug),
+        albumId: artistSlug === 'minsk-yatra-choir' ? album.id : null,
+        storageKey,
+        mime: 'audio/mpeg',
+        sizeBytes: seconds * 24000,
+        durationSeconds: seconds,
+        bitrateKbps: 192,
+        language,
+        isLiveRecording: isLive,
+        status: 'published',
+        // Разводим по времени, чтобы «Новое в каталоге» имело порядок.
+        publishedAt: new Date(Date.now() - (index + 1) * 3600_000),
+        categories: { create: [{ categoryId: categories.get(categorySlug) }] },
+      },
+    });
+    created += 1;
+  }
+
+  return created;
+}
+
 async function main() {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('seed:dev нельзя запускать в production');
@@ -739,6 +833,8 @@ async function main() {
     `\nСоздано демо-аккаунтов: ${people.length + 1}. Пароль у всех: ${DEMO_PASSWORD}`,
   );
   console.log(`Демо-бесед в «Общении»: ${conversations}`);
+  const musicCreated = await seedMusic();
+  console.log(`Демо-записей в «Музыке»: ${musicCreated}`);
 }
 
 main()
