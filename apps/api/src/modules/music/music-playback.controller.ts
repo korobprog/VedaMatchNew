@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type {
   AccessTokenPayload,
@@ -8,6 +17,7 @@ import type {
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { MusicPlaybackService } from './music-playback.service';
+import { MusicFavoritesService } from './music-favorites.service';
 
 /**
  * Плеер: состояние, тик и остановка.
@@ -71,5 +81,36 @@ export class MusicSettingsController {
     @Body() body: UpdateMusicSettingsRequest,
   ) {
     return this.playback.updateSettings(user.sub, body);
+  }
+}
+
+/**
+ * Избранное. Обе команды идемпотентны: сердце нажимают дважды, и ошибка в
+ * ответ на это — худшее, что может сделать интерфейс.
+ */
+@Controller('music/favorites')
+@UseGuards(AuthGuard)
+export class MusicFavoritesController {
+  constructor(private readonly favorites: MusicFavoritesService) {}
+
+  @Get()
+  list(@CurrentUser() user: AccessTokenPayload) {
+    return this.favorites.list(user.sub);
+  }
+
+  @Post(':trackId')
+  add(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('trackId') trackId: string,
+  ) {
+    return this.favorites.add(user.sub, trackId);
+  }
+
+  @Delete(':trackId')
+  remove(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('trackId') trackId: string,
+  ) {
+    return this.favorites.remove(user.sub, trackId);
   }
 }
