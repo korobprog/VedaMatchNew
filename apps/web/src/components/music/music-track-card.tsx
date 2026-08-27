@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { MusicTrackDto } from "@vedamatch/shared";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicCover } from "./music-cover";
+import { MusicPlayButton } from "./player/play-button";
 
 /**
  * Карточка записи в сетке каталога.
@@ -10,7 +11,14 @@ import { MusicCover } from "./music-cover";
  * этапом 3. Рисуем её сразу, а не добавляем потом, потому что от неё зависит
  * вся раскладка плитки — вставить её позже значит переверстать сетку.
  */
-export function MusicTrackCard({ track }: { track: MusicTrackDto }) {
+export function MusicTrackCard({
+  track,
+  queue,
+}: {
+  track: MusicTrackDto;
+  /** Записи секции: «дальше» ведёт по тому, что человек видит на экране. */
+  queue?: string[];
+}) {
   const meta = [track.artist?.name, formatTrackDuration(track.durationSeconds)]
     .filter(Boolean)
     .join(" · ");
@@ -20,7 +28,9 @@ export function MusicTrackCard({ track }: { track: MusicTrackDto }) {
       {/* Обложка кликается мышью, но для скринридера скрыта: она ведёт туда
           же, куда название, и вторая ссылка на ту же запись — лишний узел в
           обходе. Без этого она объявлялась как безымянная «ссылка», а там,
-          где есть значок, — как «С программы». */}
+          где есть значок, — как «С программы».
+          Кнопка запуска вынесена из ссылки: внутри скрытого от читалки узла
+          она бы тоже пропала, а это главное действие карточки. */}
       <Link
         href={`/music/tracks/${track.id}`}
         aria-hidden="true"
@@ -32,12 +42,9 @@ export function MusicTrackCard({ track }: { track: MusicTrackDto }) {
           seed={track.id}
           alt={`Обложка: ${track.title}`}
         />
-        <span className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none">
-          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor">
-            <path d="M7 4l13 8-13 8z" />
-          </svg>
-        </span>
       </Link>
+
+      <MusicPlayButton trackId={track.id} title={track.title} queue={queue} />
 
       {/* Значок вынесен из ссылки: внутри скрытой от скринридера обложки он
           пропал бы, а «запись с программы» — сведения, а не украшение. */}

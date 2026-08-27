@@ -161,7 +161,10 @@ export default async function MusicPage({
           <ul className="mt-4 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
             {tracks.map((track) => (
               <li key={track.id}>
-                <MusicTrackCard track={track} />
+                <MusicTrackCard
+                  track={track}
+                  queue={tracks.map((item) => item.id)}
+                />
               </li>
             ))}
           </ul>
