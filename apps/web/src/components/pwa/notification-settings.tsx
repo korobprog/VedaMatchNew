@@ -167,7 +167,7 @@ export function NotificationSettings() {
 
       {preferences && (
         <div className="mt-5 border-t border-glass-brd pt-5">
-          <label className="flex items-center justify-between gap-4 text-sm font-semibold text-text-0">
+          <label className="flex cursor-pointer items-center justify-between gap-4 text-sm font-semibold text-text-0">
             Все уведомления
             <input
               type="checkbox"
@@ -191,7 +191,9 @@ export function NotificationSettings() {
             {categories.map((category) => (
               <label
                 key={category.key}
-                className="flex items-center justify-between gap-4 text-sm text-text-1"
+                // Запертая строка курсор-руку не показывает: рука обещает
+                // нажатие, а нажимать здесь пока нечего.
+                className="flex cursor-pointer items-center justify-between gap-4 text-sm text-text-1 has-[:disabled]:cursor-default"
               >
                 {category.label}
                 <input
