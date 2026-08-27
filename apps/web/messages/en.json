@@ -156,6 +156,11 @@
       "register": "Sign up for free",
       "pricing": "Pricing",
       "otherServices": "More platform services",
+      "mapTitle": "Communities on the map",
+      "mapDescription": "Open community channels and groups are visible before you sign in. A pin is a community; the number beside it is how many conversations you can join yourself.",
+      "statCommunities": "Communities on the map",
+      "statCities": "Cities",
+      "statTalks": "Open conversations",
       "readyTitle": "Ready to try “{name}”?",
       "readyDescription": "First month free, with access to all 8 platform services in one account.",
       "createAccount": "Create an account"

@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { AstroCompatibilityRequestDto } from "@vedamatch/shared";
+import type {
+  AstroCompatibilityPurpose,
+  AstroCompatibilityRequestDto,
+} from "@vedamatch/shared";
+import {
+  ASTRO_COMPATIBILITY_PURPOSES,
+  ASTRO_PURPOSE_TITLES,
+} from "@vedamatch/shared";
 import {
   AstroReadingError,
   createAstroCompatibilityRequest,
@@ -19,8 +26,15 @@ import { birthDataHint } from "./missing-birth-data";
  */
 export function CompatibilityView({
   autoRequestUserId,
+  presetPurpose = null,
 }: {
   autoRequestUserId: string | null;
+  /**
+   * Цель, выбранная ещё в карточке Знакомств. Она не отправляет запрос сама:
+   * человек уже нажал на неё в меню, но подтверждение остаётся здесь — из
+   * адресной строки нельзя понять, дошёл ли он сюда осознанно.
+   */
+  presetPurpose?: AstroCompatibilityPurpose | null;
 }) {
   const [requests, setRequests] = useState<AstroCompatibilityRequestDto[] | null>(
     null,
@@ -61,36 +75,30 @@ export function CompatibilityView({
     };
   }, []);
 
-  useEffect(() => {
-    if (!autoRequestUserId || requests === null) return undefined;
-    const already = requests.some((r) => r.counterpart.userId === autoRequestUserId);
-    if (already) return undefined;
-
-    let cancelled = false;
-    Promise.resolve()
-      .then(() => {
-        if (!cancelled) setPendingAction(autoRequestUserId);
-      })
-      .then(() => createAstroCompatibilityRequest(autoRequestUserId))
-      .then(() => listAstroCompatibilityRequests())
-      .then((loaded) => {
-        if (!cancelled) setRequests(loaded);
-      })
-      .catch((cause) => {
-        if (!cancelled) {
-          setError(
-            cause instanceof AstroReadingError ? cause.message : "Не удалось отправить запрос",
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setPendingAction(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRequestUserId, requests !== null]);
+  /**
+   * Запрос по ссылке из Знакомств отправляется не сам, а после выбора цели.
+   *
+   * Цель знает только отправитель: сверяют карты ради семьи, дела, дружбы или
+   * служения, и от этого зависит, какие куты вообще считать. Заодно уходит
+   * прежнее поведение, при котором переход по ссылке слал запрос живому
+   * человеку, ни о чём не спросив.
+   */
+  async function send(purpose: AstroCompatibilityPurpose) {
+    if (!autoRequestUserId) return;
+    setPendingAction(autoRequestUserId);
+    try {
+      await createAstroCompatibilityRequest(autoRequestUserId, purpose);
+      await refresh();
+    } catch (cause) {
+      setError(
+        cause instanceof AstroReadingError
+          ? cause.message
+          : "Не удалось отправить запрос",
+      );
+    } finally {
+      setPendingAction(null);
+    }
+  }
 
   async function respond(id: string, accept: boolean) {
     setPendingAction(id);
@@ -108,7 +116,7 @@ export function CompatibilityView({
     return error ? (
       <ErrorNote message={error} />
     ) : (
-      <p className="text-sm text-black/60 dark:text-white/60">Загрузка…</p>
+      <p className="text-sm text-text-2">Загрузка…</p>
     );
   }
 
@@ -123,6 +131,41 @@ export function CompatibilityView({
           запросы, а не одна красная строка вместо всего. */}
       {error && <ErrorNote message={error} />}
 
+      {/* Пришли по ссылке с карточки участника, и запроса к нему ещё нет */}
+      {autoRequestUserId &&
+        !requests.some((r) => r.counterpart.userId === autoRequestUserId) && (
+          <section className="rounded-xl border border-glass-brd p-4">
+            <h2 className="text-lg font-medium">Ради чего сверяем карты?</h2>
+            <p className="mt-1 text-sm text-text-2">
+              От цели зависит, какие куты идут в расчёт: сватовской гуна-милан
+              считает все восемь, делу и служению часть из них отвечает не на
+              тот вопрос.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {ASTRO_COMPATIBILITY_PURPOSES.map((purpose) => (
+                <button
+                  key={purpose}
+                  type="button"
+                  disabled={pendingAction === autoRequestUserId}
+                  onClick={() => void send(purpose)}
+                  className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${
+                    purpose === presetPurpose
+                      ? "border-mint-edge font-medium"
+                      : "border-glass-brd hover:border-mint-edge"
+                  }`}
+                >
+                  {ASTRO_PURPOSE_TITLES[purpose]}
+                  {purpose === presetPurpose && (
+                    <span className="ml-1.5 font-mono text-xs text-text-2">
+                      из Знакомств
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
       {incoming.length > 0 && (
         <section>
           <h2 className="text-lg font-medium">Входящие запросы</h2>
@@ -130,7 +173,7 @@ export function CompatibilityView({
             {incoming.map((request) => (
               <li
                 key={request.id}
-                className="flex items-center justify-between gap-4 rounded-xl border border-black/10 p-3 dark:border-white/15"
+                className="flex items-center justify-between gap-4 rounded-xl border border-glass-brd p-3"
               >
                 <span>{request.counterpart.name}</span>
                 <span className="flex gap-2">
@@ -138,7 +181,7 @@ export function CompatibilityView({
                     type="button"
                     disabled={pendingAction === request.id}
                     onClick={() => void respond(request.id, true)}
-                    className="rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-medium text-black disabled:opacity-50"
+                    className="rounded-lg btn-mint px-3 py-1.5 text-sm font-medium disabled:opacity-50"
                   >
                     Принять
                   </button>
@@ -146,7 +189,7 @@ export function CompatibilityView({
                     type="button"
                     disabled={pendingAction === request.id}
                     onClick={() => void respond(request.id, false)}
-                    className="rounded-lg border border-black/15 px-3 py-1.5 text-sm dark:border-white/20"
+                    className="rounded-lg border border-glass-brd px-3 py-1.5 text-sm"
                   >
                     Отклонить
                   </button>
@@ -171,7 +214,7 @@ export function CompatibilityView({
       {outgoing.length > 0 && (
         <section>
           <h2 className="text-lg font-medium">Ожидают ответа</h2>
-          <ul className="mt-3 space-y-2 text-sm text-black/60 dark:text-white/60">
+          <ul className="mt-3 space-y-2 text-sm text-text-2">
             {outgoing.map((request) => (
               <li key={request.id}>{request.counterpart.name}</li>
             ))}
@@ -180,7 +223,7 @@ export function CompatibilityView({
       )}
 
       {incoming.length === 0 && accepted.length === 0 && outgoing.length === 0 && (
-        <p className="text-sm text-black/60 dark:text-white/60">
+        <p className="text-sm text-text-2">
           Запросов на совместимость пока нет. Отправить их можно с карточки
           участника в Знакомствах.
         </p>
@@ -215,10 +258,10 @@ function AcceptedCompatibility({ request }: { request: AstroCompatibilityRequest
   }
 
   return (
-    <li className="rounded-xl border border-black/10 p-4 dark:border-white/15">
+    <li className="rounded-xl border border-glass-brd p-4">
       <div className="flex items-baseline justify-between gap-4">
         <span className="font-medium">{request.counterpart.name}</span>
-        <span className="tabular-nums text-black/60 dark:text-white/60">
+        <span className="tabular-nums text-text-2">
           {score.totalPoints} из {score.maxPoints} ({score.percent}%)
         </span>
       </div>
@@ -226,15 +269,15 @@ function AcceptedCompatibility({ request }: { request: AstroCompatibilityRequest
       <ul className="mt-3 space-y-1 text-sm">
         {score.kootas.map((koota) => (
           <li key={koota.key} className="flex items-center justify-between gap-4">
-            <span className="text-black/70 dark:text-white/70">{koota.title}</span>
+            <span className="text-text-1">{koota.title}</span>
             <span className="flex items-center gap-2">
-              <span className="h-1.5 w-24 overflow-hidden rounded-full bg-black/10 dark:bg-white/15">
+              <span className="h-1.5 w-24 overflow-hidden rounded-full bg-bg-2">
                 <span
-                  className="block h-full bg-amber-500"
+                  className="block h-full bg-gold"
                   style={{ width: `${(koota.points / koota.maxPoints) * 100}%` }}
                 />
               </span>
-              <span className="w-10 text-right tabular-nums text-black/60 dark:text-white/60">
+              <span className="w-10 text-right tabular-nums text-text-2">
                 {koota.points}/{koota.maxPoints}
               </span>
             </span>
@@ -255,7 +298,7 @@ function AcceptedCompatibility({ request }: { request: AstroCompatibilityRequest
             {loading ? "Готовим разбор…" : "Прочитать разбор"}
           </button>
         )}
-        {error && <p className="mt-2 text-sm text-red-700 dark:text-red-400">{error}</p>}
+        {error && <p className="mt-2 text-sm text-magenta">{error}</p>}
       </div>
     </li>
   );
@@ -271,11 +314,11 @@ function ErrorNote({ message }: { message: string }) {
   const hint = birthDataHint(message);
 
   return (
-    <div className="rounded-xl border border-red-500/40 bg-red-500/5 p-4">
-      <p className="text-sm text-red-700 dark:text-red-400">{message}</p>
+    <div className="rounded-xl border border-magenta/40 bg-magenta/5 p-4">
+      <p className="text-sm text-magenta">{message}</p>
       {hint && (
         <>
-          <p className="mt-2 text-sm text-black/70 dark:text-white/70">
+          <p className="mt-2 text-sm text-text-1">
             {hint.text}
           </p>
           <Link

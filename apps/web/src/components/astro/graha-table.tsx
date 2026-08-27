@@ -18,7 +18,7 @@ export function GrahaTable({ chart }: { chart: VedicChart }) {
     <div className="overflow-x-auto">
       <table className="w-full min-w-[34rem] border-collapse text-sm">
         <thead>
-          <tr className="border-b border-black/15 text-left dark:border-white/20">
+          <tr className="border-b border-glass-brd text-left">
             <th className="py-2 pr-3 font-medium">Граха</th>
             <th className="py-2 pr-3 font-medium">Знак</th>
             <th className="py-2 pr-3 text-right font-medium">Градус</th>
@@ -34,13 +34,13 @@ export function GrahaTable({ chart }: { chart: VedicChart }) {
           {chart.grahas.map((graha) => (
             <tr
               key={graha.graha}
-              className="border-b border-black/[0.07] dark:border-white/10"
+              className="border-b border-glass-brd"
             >
               <td className="py-2 pr-3">
                 {GRAHA_NAMES[graha.graha]}
                 {graha.retrograde && (
                   <span
-                    className="ml-1 text-black/50 dark:text-white/50"
+                    className="ml-1 text-text-2"
                     title="Ретроградное движение"
                   >
                     R
@@ -48,7 +48,7 @@ export function GrahaTable({ chart }: { chart: VedicChart }) {
                 )}
                 {graha.combust && (
                   <span
-                    className="ml-1 text-amber-700 dark:text-amber-400"
+                    className="ml-1 text-gold"
                     title="Астангата — сожжение близостью к Солнцу"
                   >
                     ☉

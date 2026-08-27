@@ -12,6 +12,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import sharp from 'sharp';
+import { MAX_IMAGE_DIMENSION } from './gallery-image';
 import {
   UserGalleryService,
   UploadedGalleryFile,
@@ -127,6 +128,73 @@ describe('UserGalleryService', () => {
     ]);
 
     expect(result.uploaded[0].photo).toMatchObject({ width: 3, height: 2 });
+  });
+
+  describe('предел размера снимка', () => {
+    /** Кадр заданных сторон, шумом — чтобы его нельзя было сжать в ничто. */
+    const frame = (width: number, height: number) =>
+      sharp({
+        create: {
+          width,
+          height,
+          channels: 3,
+          background: '#808080',
+          noise: { type: 'gaussian', mean: 128, sigma: 40 },
+        },
+      })
+        .jpeg({ quality: 92 })
+        .toBuffer();
+
+    it('ужимает кадр с телефона до предела, сохраняя пропорции', async () => {
+      // 4032×3024 ложился в хранилище как есть, и карточка шириной 360px
+      // тянула его целиком.
+      const result = await service.uploadMany(USER_ID, [
+        file({ mimetype: 'image/jpeg', buffer: await frame(4032, 3024) }),
+      ]);
+
+      expect(result.uploaded[0].photo).toMatchObject({
+        width: MAX_IMAGE_DIMENSION,
+        height: 1200,
+      });
+    });
+
+    it('не растягивает снимок меньше предела', async () => {
+      // Увеличенный пиксель не станет лучше, а весить будет больше исходного.
+      const result = await service.uploadMany(USER_ID, [
+        file({ mimetype: 'image/jpeg', buffer: await frame(800, 600) }),
+      ]);
+
+      expect(result.uploaded[0].photo).toMatchObject({
+        width: 800,
+        height: 600,
+      });
+    });
+
+    it('предел считается по длинной стороне, а не по ширине', async () => {
+      // Портрет с телефона выше, чем шире: ограничивать только ширину значило
+      // бы пропустить в хранилище кадр вдвое тяжелее нужного.
+      const result = await service.uploadMany(USER_ID, [
+        file({ mimetype: 'image/jpeg', buffer: await frame(3024, 4032) }),
+      ]);
+
+      expect(result.uploaded[0].photo).toMatchObject({
+        width: 1200,
+        height: MAX_IMAGE_DIMENSION,
+      });
+    });
+
+    it('снимок в хранилище весит заметно меньше исходного', async () => {
+      // Проверяем не пропорции, а то, ради чего всё затевалось.
+      const source = await frame(4032, 3024);
+      const result = await service.uploadMany(USER_ID, [
+        file({ mimetype: 'image/jpeg', buffer: source }),
+      ]);
+      expect(result.uploaded).toHaveLength(1);
+
+      const put = send.mock.calls.at(-1)?.[0] as PutObjectCommand;
+      const stored = put.input.Body as Buffer;
+      expect(stored.length).toBeLessThan(source.length / 4);
+    });
   });
 
   it('uploads private objects without an ACL and uses unique keys', async () => {
@@ -480,7 +548,9 @@ describe('UserGalleryService', () => {
   });
 
   it('does not promote anything when the deleted photo was private', async () => {
-    prisma.userPhoto.findFirst.mockResolvedValueOnce(photo({ isPublic: false }));
+    prisma.userPhoto.findFirst.mockResolvedValueOnce(
+      photo({ isPublic: false }),
+    );
 
     await service.remove(USER_ID, 'photo-id');
 

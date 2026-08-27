@@ -13,6 +13,7 @@ describe('AstroAdminService', () => {
   const prisma = {
     astroBudgetDay: { findMany: jest.fn() },
     astroUsage: { groupBy: jest.fn() },
+    astroSubject: { groupBy: jest.fn(), count: jest.fn() },
     user: { findMany: jest.fn() },
   };
   const settings = { get: jest.fn(), update: jest.fn() };
@@ -40,6 +41,8 @@ describe('AstroAdminService', () => {
     prisma.astroBudgetDay.findMany.mockResolvedValue([]);
     prisma.astroUsage.groupBy.mockResolvedValue([]);
     prisma.user.findMany.mockResolvedValue([]);
+    prisma.astroSubject.groupBy.mockResolvedValue([]);
+    prisma.astroSubject.count.mockResolvedValue(0);
   });
 
   describe('правка лимитов', () => {
@@ -187,5 +190,69 @@ describe('AstroAdminService', () => {
     const usage = await service.resume(NOW);
     expect(quota.resume).toHaveBeenCalledWith(NOW);
     expect(usage.today.halted).toBe(false);
+  });
+
+  describe('книги карт', () => {
+    /** Владелец с указанным числом записей. */
+    const owner = (ownerId: string, records: number) => ({
+      ownerId,
+      _count: { _all: records },
+    });
+
+    it('складывает записи по владельцам и находит самую большую книгу', async () => {
+      // Лимита на число записей нет, поэтому рост видно только отсюда.
+      prisma.astroSubject.groupBy.mockResolvedValue([
+        owner('a', 3),
+        owner('b', 12),
+        owner('c', 1),
+      ]);
+      prisma.astroSubject.count.mockResolvedValue(5);
+
+      const usage = await service.usage(30, NOW);
+
+      expect(usage.subjects).toEqual({
+        total: 16,
+        owners: 3,
+        createdInWindow: 5,
+        largestBook: 12,
+      });
+    });
+
+    it('на пустом портале не падает и не выдумывает максимум', async () => {
+      // Math.max без аргументов вернул бы -Infinity.
+      const usage = await service.usage(30, NOW);
+      expect(usage.subjects).toEqual({
+        total: 0,
+        owners: 0,
+        createdInWindow: 0,
+        largestBook: 0,
+      });
+    });
+
+    it('считает заведённые за тот же период, что и расход', async () => {
+      await service.usage(7, NOW);
+      const args = (
+        prisma.astroSubject.count.mock.calls as unknown as [
+          { where: { createdAt: { gte: Date } } },
+        ][]
+      )[0][0];
+      expect(args.where.createdAt.gte).toEqual(findManyArgs().where.day.gte);
+    });
+
+    it('не читает содержимое записей — только считает', async () => {
+      // Иначе «видно лишь владельцу» перестало бы быть правдой.
+      prisma.astroSubject.groupBy.mockResolvedValue([owner('a', 2)]);
+      await service.usage(30, NOW);
+
+      const args = (
+        prisma.astroSubject.groupBy.mock.calls as unknown as [
+          Record<string, unknown>,
+        ][]
+      )[0][0];
+      // Мок не умеет findMany: попытка вычитать строки уронила бы все тесты
+      // выше. Здесь же проверяем, что и группировка не тянет полей.
+      expect(args.select).toBeUndefined();
+      expect(args._count).toEqual({ _all: true });
+    });
   });
 });

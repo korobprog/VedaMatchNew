@@ -9,8 +9,11 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   AstroCompatibilityReadingDto,
+  AstroSubjectPairDto,
+  AstroCompatibilityPurpose,
   AstroCompatibilityRequestDto,
   AstroTimeAccuracy,
+  Gender,
   GunaMilanScore,
   NotificationEvent,
 } from '@vedamatch/shared';
@@ -53,6 +56,7 @@ export class AstroCompatibilityService {
   async createRequest(
     requesterId: string,
     targetUserId: string,
+    purpose: AstroCompatibilityPurpose = 'family',
   ): Promise<AstroCompatibilityRequestDto> {
     if (requesterId === targetUserId) {
       throw new BadRequestException('Нельзя сопоставить карту с самой собой');
@@ -100,7 +104,7 @@ export class AstroCompatibilityService {
     }
 
     const row = await this.prisma.astroCompatibilityRequest.create({
-      data: { requesterId, targetId: targetUserId },
+      data: { requesterId, targetId: targetUserId, purpose },
     });
     if (requesterUser) {
       const event = {
@@ -181,7 +185,11 @@ export class AstroCompatibilityService {
     locale = 'ru',
   ): Promise<AstroCompatibilityReadingDto> {
     const { row, score } = await this.acceptedRequestFor(userId, requestId);
-    const pairKey = await this.pairKeyFor(row.requesterId, row.targetId);
+    const pairKey = await this.pairKeyFor(
+      row.requesterId,
+      row.targetId,
+      row.purpose,
+    );
 
     const cached = await this.prisma.astroCompatibilityReading.findUnique({
       where: {
@@ -262,7 +270,11 @@ export class AstroCompatibilityService {
       );
     }
 
-    const score = await this.scoreFor(row.requesterId, row.targetId);
+    const score = await this.scoreFor(
+      row.requesterId,
+      row.targetId,
+      row.purpose,
+    );
     if (!score) {
       throw new ConflictException('Не удалось рассчитать совместимость');
     }
@@ -272,13 +284,80 @@ export class AstroCompatibilityService {
   private async scoreFor(
     userAId: string,
     userBId: string,
+    purpose: AstroCompatibilityPurpose,
   ): Promise<GunaMilanScore | null> {
     const [placementA, placementB] = await Promise.all([
       this.moonPlacementOf(userAId),
       this.moonPlacementOf(userBId),
     ]);
     if (!placementA || !placementB) return null;
-    return computeGunaMilan(placementA, placementB);
+    return computeGunaMilan(placementA, placementB, purpose);
+  }
+
+  /**
+   * Сверка двух записей астролога.
+   *
+   * Согласия не спрашиваем и спрашивать не у кого: обе записи принадлежат
+   * тому, кто сверяет. Владелец — в условии запроса, поэтому чужая запись не
+   * находится вовсе, и «сверить свою с чужой» невозможно по построению.
+   *
+   * Пол у записей не хранится, а гана-кута считается по нему: тогда берётся
+   * более благоприятное из двух направлений таблицы — тот же запасной путь,
+   * что и для участников без указанного пола.
+   */
+  async compareSubjects(
+    ownerId: string,
+    aId: string,
+    bId: string,
+    purpose: AstroCompatibilityPurpose = 'family',
+  ): Promise<AstroSubjectPairDto> {
+    if (aId === bId) {
+      throw new BadRequestException('Нельзя сверить запись саму с собой');
+    }
+
+    const [a, b] = await Promise.all([
+      this.prisma.astroSubject.findFirst({ where: { id: aId, ownerId } }),
+      this.prisma.astroSubject.findFirst({ where: { id: bId, ownerId } }),
+    ]);
+    if (!a || !b) throw new NotFoundException('Запись не найдена');
+
+    const score = computeGunaMilan(
+      this.subjectMoon(a),
+      this.subjectMoon(b),
+      purpose,
+    );
+
+    return {
+      a: { id: a.id, name: a.name },
+      b: { id: b.id, name: b.name },
+      purpose,
+      score,
+      // Хотя бы у одной записи пол не указан — значит гана-кута посчитана по
+      // благоприятному варианту, и об этом надо сказать.
+      genderUnknown: a.gender === null || b.gender === null,
+    };
+  }
+
+  /** Луна записи: тот же расчёт, только момент из другой строки. */
+  private subjectMoon(subject: {
+    bornAtUtc: Date;
+    latitude: number;
+    longitude: number;
+    timeAccuracy: AstroTimeAccuracy;
+    gender: Gender | null;
+  }): MoonPlacement {
+    const chart = buildVedicChart(this.ephemeris, {
+      bornAtUtc: subject.bornAtUtc,
+      latitude: subject.latitude,
+      longitude: subject.longitude,
+      timeAccuracy: subject.timeAccuracy,
+    });
+    const moon = chart.grahas.find((g) => g.graha === 'moon')!;
+    return {
+      rashi: moon.rashi,
+      nakshatra: moon.nakshatra,
+      gender: subject.gender,
+    };
   }
 
   private async moonPlacementOf(userId: string): Promise<MoonPlacement | null> {
@@ -305,8 +384,18 @@ export class AstroCompatibilityService {
     };
   }
 
-  /** Ключ кэша ИИ-текста: сортировка отпечатков карт убирает направление пары. */
-  private async pairKeyFor(userAId: string, userBId: string): Promise<string> {
+  /**
+   * Ключ кэша ИИ-текста: сортировка отпечатков карт убирает направление пары.
+   *
+   * Цель входит в ключ: у одной и той же пары разбор ради семьи и ради дела —
+   * разные тексты, собранные по разным кутам. Без неё второй запрос получил
+   * бы из кэша чужой разбор про брак.
+   */
+  private async pairKeyFor(
+    userAId: string,
+    userBId: string,
+    purpose: AstroCompatibilityPurpose,
+  ): Promise<string> {
     const [birthA, birthB] = await Promise.all([
       this.prisma.astroBirthData.findUniqueOrThrow({
         where: { userId: userAId },
@@ -317,7 +406,7 @@ export class AstroCompatibilityService {
     ]);
     const fpA = this.fingerprintOf(birthA);
     const fpB = this.fingerprintOf(birthB);
-    return [fpA, fpB].sort().join(':');
+    return [...[fpA, fpB].sort(), purpose].join(':');
   }
 
   private fingerprintOf(birth: {
@@ -340,6 +429,7 @@ export class AstroCompatibilityService {
       requesterId: string;
       targetId: string;
       status: string;
+      purpose: AstroCompatibilityPurpose;
       createdAt: Date;
       respondedAt: Date | null;
     },
@@ -353,12 +443,13 @@ export class AstroCompatibilityService {
 
     const score =
       row.status === 'accepted'
-        ? await this.scoreFor(row.requesterId, row.targetId)
+        ? await this.scoreFor(row.requesterId, row.targetId, row.purpose)
         : null;
 
     return {
       id: row.id,
       status: row.status as AstroCompatibilityRequestDto['status'],
+      purpose: row.purpose,
       createdAt: row.createdAt.toISOString(),
       respondedAt: row.respondedAt?.toISOString() ?? null,
       isRequester,

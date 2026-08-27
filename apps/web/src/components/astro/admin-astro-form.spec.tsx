@@ -20,6 +20,7 @@ const usage = (overrides: Partial<AstroAdminUsageDto> = {}): AstroAdminUsageDto 
   days: [],
   today: { tokensIn: 0, tokensOut: 0, costUsdCents: 0, halted: false },
   topConsumers: [],
+  subjects: { total: 0, owners: 0, createdInWindow: 0, largestBook: 0 },
   ...overrides,
 });
 
@@ -165,5 +166,26 @@ describe("AdminAstroForm", () => {
     );
     expect(screen.getByText("Иван")).toBeInTheDocument();
     expect(screen.getByText("ivan@example.com")).toBeInTheDocument();
+  });
+
+  it("показывает объём книг карт, но не их содержимое", () => {
+    render(
+      <AdminAstroForm
+        initialSettings={settings}
+        usage={usage({
+          subjects: {
+            total: 16,
+            owners: 3,
+            createdInWindow: 5,
+            largestBook: 12,
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Всего записей")).toBeInTheDocument();
+    expect(screen.getByText("16")).toBeInTheDocument();
+    expect(screen.getByText("Самая большая книга")).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument();
   });
 });

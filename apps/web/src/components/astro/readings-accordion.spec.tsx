@@ -39,6 +39,18 @@ describe("ReadingsAccordion", () => {
     expect(screen.getByText(/Осталось сегодня: 3 из 3/)).toBeInTheDocument();
   });
 
+  it("при снятом лимите не пишет «0 из 0»", () => {
+    // Ноль в потолке означает «без лимита»; показать его числом было бы ложью.
+    render(
+      <ReadingsAccordion
+        initial={dto([], { readingsPerDay: 0, readingsLeft: 0 })}
+      />,
+    );
+
+    expect(screen.getByText(/Без ограничения на бете/)).toBeInTheDocument();
+    expect(screen.queryByText(/Осталось сегодня/)).toBeNull();
+  });
+
   it("при недоступном ИИ не обещает генерацию", () => {
     render(
       <ReadingsAccordion

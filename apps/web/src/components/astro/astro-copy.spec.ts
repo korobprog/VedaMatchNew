@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AstroCompleteness } from "@vedamatch/shared";
 import { featuresUnlockedBy, nextStepHint } from "./astro-copy";
-import { formatUtcOffset } from "./birth-data-form";
+import { formatUtcOffset } from "./utc-offset";
 
 function completeness(
   overrides: Partial<AstroCompleteness> = {},

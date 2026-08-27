@@ -210,6 +210,7 @@ export function RecommendationFilters({
         <IntentionChips
           counts={intentionCounts}
           selected={selectedIntentions(params)}
+          showAll={first(params.showAll) === "true"}
         />
       )}
       <div className="grid gap-3 md:grid-cols-3">

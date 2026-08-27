@@ -1,6 +1,11 @@
 // Клиентская часть Astro API: запросы из браузера идут с NEXT_PUBLIC_API_URL и
 // cookie, а не через серверные хелперы lib/astro-api.ts.
 import type {
+  AstroCompatibilityPurpose,
+  AstroSubjectDto,
+  AstroSubjectPairDto,
+  AstroSubjectsDto,
+  SaveAstroSubjectRequest,
   AstroCompatibilityReadingDto,
   AstroCompatibilityRequestDto,
   AstroSection,
@@ -67,11 +72,15 @@ export const listAstroCompatibilityRequests = () =>
     method: "GET",
   });
 
-export const createAstroCompatibilityRequest = (targetUserId: string) =>
+/** Цель выбирает отправитель: от неё зависит, какие куты идут в расчёт. */
+export const createAstroCompatibilityRequest = (
+  targetUserId: string,
+  purpose: AstroCompatibilityPurpose,
+) =>
   requestJson<AstroCompatibilityRequestDto>("/astro/compatibility/requests", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ targetUserId }),
+    body: JSON.stringify({ targetUserId, purpose }),
   });
 
 export const respondAstroCompatibilityRequest = (id: string, accept: boolean) =>
@@ -85,4 +94,42 @@ export const generateAstroCompatibilityReading = (id: string) =>
   requestJson<AstroCompatibilityReadingDto>(
     `/astro/compatibility/requests/${id}/reading`,
     { method: "POST" },
+  );
+
+/**
+ * Записи астролога. Владелец нигде не передаётся — сервер берёт его из
+ * токена, и подставить чужой отсюда невозможно.
+ */
+export const listAstroSubjects = () =>
+  requestJson<AstroSubjectsDto>("/astro/subjects", { method: "GET" });
+
+export const createAstroSubject = (body: SaveAstroSubjectRequest) =>
+  requestJson<AstroSubjectDto>("/astro/subjects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+export const updateAstroSubject = (id: string, body: SaveAstroSubjectRequest) =>
+  requestJson<AstroSubjectDto>(`/astro/subjects/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+export const deleteAstroSubject = (id: string) =>
+  requestJson<{ ok: true }>(`/astro/subjects/${id}`, { method: "DELETE" });
+
+/**
+ * Сверка двух записей. Согласия не спрашивают: обе принадлежат тому, кто
+ * сверяет, — обмен между участниками портала идёт своим путём.
+ */
+export const compareAstroSubjects = (
+  id: string,
+  otherId: string,
+  purpose: AstroCompatibilityPurpose,
+) =>
+  requestJson<AstroSubjectPairDto>(
+    `/astro/subjects/${id}/compare/${otherId}?purpose=${purpose}`,
+    { method: "GET" },
   );

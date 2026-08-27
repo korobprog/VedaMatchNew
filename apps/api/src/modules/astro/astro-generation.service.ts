@@ -9,6 +9,7 @@ import {
   GRAHA_NAMES,
   NAKSHATRA_NAMES,
   RASHI_NAMES,
+  type AstroCompatibilityPurpose,
   type AstroSection,
   type GunaMilanScore,
   type VedicChart,
@@ -24,7 +25,10 @@ import {
  * пользователи будут видеть тексты, собранные по старым правилам, и понять это по
  * содержимому невозможно.
  */
-export const ASTRO_PROMPT_VERSION = 'v1';
+// v2 — разбор совместимости стал зависеть от цели: модель получает только
+// учтённые куты и словарь под цель, поэтому тексты, собранные по v1, для
+// нового расчёта уже неверны.
+export const ASTRO_PROMPT_VERSION = 'v2';
 
 export interface GeneratedReading {
   text: string;
@@ -68,7 +72,7 @@ export class AstroGenerationService {
     locale = 'ru',
   ): Promise<GeneratedReading> {
     return this.complete(
-      compatibilitySystemPrompt(locale),
+      compatibilitySystemPrompt(locale, score.purpose),
       compatibilityUserPrompt(score),
     );
   }
@@ -227,14 +231,36 @@ function userPrompt(section: AstroSection, chart: VedicChart): string {
   return lines.join('\n');
 }
 
-function compatibilitySystemPrompt(locale: string): string {
+/**
+ * Чем занята сверка. От неё зависит и словарь разбора: для дела и служения
+ * говорить «пара» и «отношения» неуместно, а после появления целей модель
+ * получает и меньше кут — обещать ей восемь стало неправдой.
+ */
+const PURPOSE_FRAMING: Record<AstroCompatibilityPurpose, string> = {
+  family:
+    'Люди сверяют карты ради создания семьи. Уместно говорить о паре и о совместной жизни.',
+  business:
+    'Люди сверяют карты ради общего дела и деловых договорённостей. НЕ пиши о браке, романтике и совместной жизни — речь о рабочем партнёрстве.',
+  friendship:
+    'Люди сверяют карты ради дружбы. НЕ пиши о браке и романтике — речь о дружеской близости.',
+  service:
+    'Люди сверяют карты ради совместного служения. НЕ пиши о браке и романтике — речь о том, насколько им вместе идёт служение.',
+};
+
+function compatibilitySystemPrompt(
+  locale: string,
+  purpose: AstroCompatibilityPurpose,
+): string {
   return [
-    'Ты помощник по ведической астрологии (джйотиш) в сервисе знакомств VedaMatch.',
-    'Тебе передан ГОТОВЫЙ результат гуна-милана — расчёта совместимости по Луне —',
-    'в виде очков по восьми критериям. Он верен и окончателен: не пересчитывай очки,',
+    'Ты помощник по ведической астрологии (джйотиш) в портале VedaMatch.',
+    'Тебе передан ГОТОВЫЙ результат гуна-милана — расчёта совместимости по Луне.',
+    'Он верен и окончателен: не пересчитывай очки,',
     'не выдумывай знаки, накшатры или другие детали карт, которых нет во входных',
     'данных. Твоя работа — истолковать переданные числа человеческим языком.',
-    'Не давай прогнозов на будущее пары и не предсказывай исход отношений — только',
+    PURPOSE_FRAMING[purpose],
+    'Часть критериев для этой цели не считается — они перечислены отдельно.',
+    'Не приписывай им очков и не делай выводов из того, чего нет в расчёте.',
+    'Не давай прогнозов на будущее и не предсказывай исход — только',
     'мягкое описание того, что означает этот баланс критериев.',
     'Запрещено обесценивать человека из-за низкого балла: подчёркивай, что гуна-милан',
     'описывает один срез совместимости, а не приговор, и что решение всегда за людьми.',
@@ -245,14 +271,27 @@ function compatibilitySystemPrompt(locale: string): string {
 }
 
 function compatibilityUserPrompt(score: GunaMilanScore): string {
+  const counted = score.kootas.filter((koota) => koota.counted);
+  const skipped = score.kootas.filter((koota) => !koota.counted);
+
   const lines = [
     `Итог: ${score.totalPoints} из ${score.maxPoints} (${score.percent}%).`,
     '',
-    'По критериям:',
+    'Учтённые критерии:',
   ];
-  for (const koota of score.kootas) {
+  for (const koota of counted) {
     lines.push(
       `- ${koota.title}: ${koota.points} из ${koota.maxPoints}. ${koota.note}.`,
+    );
+  }
+
+  // Снятые уходят одними названиями, без очков: модель должна знать, что
+  // расчёт короче сватовского, но не иметь чисел, из которых можно сделать
+  // вывод о том, чего в расчёте нет.
+  if (skipped.length > 0) {
+    lines.push(
+      '',
+      `Для этой цели не считаются: ${skipped.map((k) => k.title).join(', ')}.`,
     );
   }
   return lines.join('\n');

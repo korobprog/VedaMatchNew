@@ -16,6 +16,7 @@ import { ArchiveButton } from "./archive-button";
 import { ProfileDetailsList } from "./profile-details-list";
 import { RecommendationPhotoCarousel } from "./recommendation-photo-carousel";
 import { DeckToast } from "./deck-toast";
+import { DecisionBadge } from "./decision-badge";
 import { SwipeHint } from "./swipe-hint";
 import {
   CompatibilityBreakdown,
@@ -58,6 +59,16 @@ const exitOffsets: Record<SwipeDirection, { x: number; y: number }> = {
  */
 const springy = { type: "spring", stiffness: 260, damping: 26 } as const;
 
+/*
+  Ни у одного элемента колоды нет backdrop-filter, и это не небрежность.
+
+  Всё здесь лежит поверх фотографии, которая едет под пальцем: пока карточка
+  движется, браузер обязан пересчитывать размытие фона для каждого такого
+  элемента в каждом кадре. Их было девятнадцать — на Android это и есть те
+  самые рывки при перелистывании. Читаемость держит плотность подложки: там,
+  где было `bg-black/45` со стеклом, теперь `bg-black/60` без него.
+*/
+
 /**
  * Корпус кнопки решения. Подложки под всей панелью больше нет, поэтому объём
  * держит сама кнопка: блик по верхней кромке, затемнение к низу, светлая
@@ -65,7 +76,7 @@ const springy = { type: "spring", stiffness: 260, damping: 26 } as const;
  * перестаёт читаться как нажимаемая.
  */
 const actionButtonClass =
-  "flex shrink-0 items-center justify-center rounded-full border border-white/30 bg-gradient-to-b from-white/25 to-black/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),inset_0_-2px_4px_rgba(0,0,0,0.35),0_6px_16px_rgba(0,0,0,0.5)] backdrop-blur-md transition hover:from-white/35 hover:to-black/25 active:translate-y-px";
+  "flex shrink-0 items-center justify-center rounded-full border border-white/30 bg-gradient-to-b from-white/25 to-black/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),inset_0_-2px_4px_rgba(0,0,0,0.35),0_6px_16px_rgba(0,0,0,0.5)] transition hover:from-white/35 hover:to-black/35 active:translate-y-px";
 
 const stageLabels: Record<string, string> = {
   seeker: "Ищущий",
@@ -101,9 +112,19 @@ export function SwipeDeck({
   onExit?: () => void;
 }) {
   const router = useRouter();
+  /*
+    Колода помнит решённых по id, а не текущую позицию по счёту.
+
+    По счёту было нельзя: решение уходит на сервер, следом идёт
+    router.refresh(), выдача возвращается уже без этой анкеты — список
+    съезжает на единицу, а указатель остаётся, и на экран попадает не
+    следующий человек, а тот, что за ним. Одно нажатие «познакомиться»
+    съедало двоих, причём второй пролетал вообще без решения.
+  */
+  const [decided, setDecided] = useState<string[]>([]);
   // Зажимаем в границы: список мог отдать позицию из прошлой выдачи, а
   // пустая колода при живых анкетах выглядит как поломка.
-  const [index, setIndex] = useState(() =>
+  const [cursor, setCursor] = useState(() =>
     Math.min(Math.max(0, initialIndex), Math.max(0, items.length - 1)),
   );
   const [error, setError] = useState<string | null>(null);
@@ -122,8 +143,11 @@ export function SwipeDeck({
   // рендере колоды и она висела бы дольше положенного.
   const clearSent = useCallback(() => setSent(null), []);
 
-  const current = items[index];
-  const next = items[index + 1];
+  // Решённые уходят из колоды сразу и не возвращаются, даже если выдача
+  // принесла их снова (в режиме «показать всех» она так и делает).
+  const visible = items.filter((item) => !decided.includes(item.user.id));
+  const current = visible[cursor];
+  const next = visible[cursor + 1];
 
   async function swipe(
     userId: string,
@@ -157,7 +181,7 @@ export function SwipeDeck({
 
   /** Возврат последней анкеты: сервер снимает решение, колода отматывается назад. */
   async function undo() {
-    if (index === 0 || undoing) return;
+    if (decided.length === 0 || undoing) return;
     setUndoing(true);
     setError(null);
     try {
@@ -168,7 +192,15 @@ export function SwipeDeck({
       if (!res.ok) throw new Error(await res.text());
       setSent(null);
       setCanUndo(false);
-      setIndex((value) => Math.max(0, value - 1));
+      // Возвращённый встаёт на своё прежнее место в порядке выдачи, и курсор
+      // идёт к нему: иначе откат показывал бы соседа, а не того, кого вернули.
+      const restored = decided[decided.length - 1];
+      const rest = decided.slice(0, -1);
+      const restoredPosition = items
+        .filter((item) => !rest.includes(item.user.id))
+        .findIndex((item) => item.user.id === restored);
+      setDecided(rest);
+      setCursor(restoredPosition < 0 ? 0 : restoredPosition);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось вернуть анкету");
@@ -188,7 +220,8 @@ export function SwipeDeck({
         credentials: "include",
       });
       if (!res.ok) throw new Error(await res.text());
-      setIndex(0);
+      setDecided([]);
+      setCursor(0);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось начать круг заново");
@@ -204,7 +237,9 @@ export function SwipeDeck({
     // следующей значило бы показать чужие проценты под новым именем.
     setBreakdownOpen(false);
     setExitDirection(direction);
-    setIndex((value) => value + 1);
+    // Позиция не двигается: решённый уходит из колоды, и на его место встаёт
+    // следующий. Двигать ещё и указатель значило бы перескочить через одного.
+    if (current) setDecided((value) => [...value, current.user.id]);
   }
 
   /**
@@ -214,13 +249,13 @@ export function SwipeDeck({
    * уже записанное решение, а это просто просмотр.
    */
   function browse(delta: 1 | -1) {
-    const target = index + delta;
-    if (target < 0 || target >= items.length) return;
+    const target = cursor + delta;
+    if (target < 0 || target >= visible.length) return;
     setSent(null);
     setExpanded(false);
     setBreakdownOpen(false);
     setExitDirection(delta === 1 ? "left" : "right");
-    setIndex(target);
+    setCursor(target);
   }
 
   if (!current) {
@@ -261,13 +296,17 @@ export function SwipeDeck({
     <div
       className={
         fullscreen
-          ? "mx-auto flex h-full w-full max-w-sm flex-col"
+          ? // Ширина колоды на десктопе считается от высоты: портретная
+            // пропорция 3:4 занимает экран настолько, насколько он высокий,
+            // и карточка выходит вдвое крупнее прежних 384px. На телефоне
+            // ширины и так ровно столько, сколько есть, — там всё по-старому.
+            "mx-auto flex h-full w-full max-w-sm flex-col md:aspect-[3/4] md:w-auto md:max-w-none"
           : "mx-auto max-w-sm"
       }
     >
       {!fullscreen && (
         <p className="mb-2 text-center text-sm text-text-2">
-          {index + 1} из {items.length}
+          {cursor + 1} из {visible.length}
         </p>
       )}
 
@@ -321,16 +360,21 @@ export function SwipeDeck({
             type="button"
             onClick={onExit}
             aria-label="Выйти из фокус-режима"
-            className="absolute left-3 top-8 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-xl text-white backdrop-blur transition hover:bg-black/60"
+            // Отступ сверху — от той же базы, что и полоски-индикаторы
+            // карусели: они стоят на max(0.75rem, safe-area) и вместе со
+            // счётчиком «1/3» занимают 21px. Фиксированный top-8 оставлял до
+            // них 0.7px, а на экране с вырезом полоски уезжали вниз и
+            // наползали на кнопки.
+            className="absolute left-3 top-[calc(max(0.75rem,env(safe-area-inset-top))+1.75rem)] z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-xl text-white transition hover:bg-black/75"
           >
             <span aria-hidden="true">✕</span>
           </button>
         )}
 
         {fullscreen && (
-          <p className="pointer-events-none absolute inset-x-0 top-8 z-10 flex h-11 items-center justify-center text-sm">
-            <span className="rounded-full bg-black/45 px-3 py-1 font-medium text-white backdrop-blur">
-              {index + 1} из {items.length}
+          <p className="pointer-events-none absolute inset-x-0 top-[calc(max(0.75rem,env(safe-area-inset-top))+1.75rem)] z-10 flex h-11 items-center justify-center text-sm">
+            <span className="rounded-full bg-black/60 px-3 py-1 font-medium text-white">
+              {cursor + 1} из {visible.length}
             </span>
           </p>
         )}
@@ -350,18 +394,18 @@ export function SwipeDeck({
         <button
           type="button"
           onClick={() => browse(-1)}
-          disabled={index === 0 || expanded}
+          disabled={cursor === 0 || expanded}
           aria-label="Предыдущая анкета"
-          className="absolute left-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-xl text-white/60 backdrop-blur-sm transition hover:bg-black/50 hover:text-white disabled:pointer-events-none disabled:opacity-0"
+          className="absolute left-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-xl text-white/60 transition hover:bg-black/55 hover:text-white disabled:pointer-events-none disabled:opacity-0"
         >
           <span aria-hidden="true">‹</span>
         </button>
         <button
           type="button"
           onClick={() => browse(1)}
-          disabled={index >= items.length - 1 || expanded}
+          disabled={cursor >= visible.length - 1 || expanded}
           aria-label="Следующая анкета"
-          className="absolute right-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-xl text-white/60 backdrop-blur-sm transition hover:bg-black/50 hover:text-white disabled:pointer-events-none disabled:opacity-0"
+          className="absolute right-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-xl text-white/60 transition hover:bg-black/55 hover:text-white disabled:pointer-events-none disabled:opacity-0"
         >
           <span aria-hidden="true">›</span>
         </button>
@@ -411,7 +455,7 @@ export function SwipeDeck({
           <button
             type="button"
             onClick={() => void undo()}
-            disabled={!canUndo || index === 0 || undoing}
+            disabled={!canUndo || decided.length === 0 || undoing}
             aria-label="Вернуть предыдущую анкету"
             className={`${actionButtonClass} h-11 w-11 text-lg text-white disabled:opacity-35`}
           >
@@ -475,7 +519,7 @@ export function SwipeDeck({
 
         {/* Ошибка тоже накладкой: в потоке она двигала колоду под рукой. */}
         {error && (
-          <p className="pointer-events-none absolute inset-x-4 bottom-24 z-40 rounded-xl bg-sheet px-3 py-2 text-center text-sm text-red-500 backdrop-blur-xl">
+          <p className="pointer-events-none absolute inset-x-4 bottom-24 z-40 rounded-xl bg-sheet px-3 py-2 text-center text-sm text-red-500">
             {error}
           </p>
         )}
@@ -497,7 +541,7 @@ function FactPill({
   children: React.ReactNode;
 }) {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-xs text-white backdrop-blur">
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-xs text-white">
       <span aria-hidden="true" className="text-white/70">
         {icon}
       </span>
@@ -725,7 +769,7 @@ function SwipeCard({
       }}
       exit="exit"
       transition={reduceMotion ? { duration: 0.15 } : springy}
-      className="glass absolute inset-0 flex touch-pan-y flex-col overflow-hidden rounded-3xl border border-glass-brd"
+      className="absolute inset-0 flex touch-pan-y flex-col overflow-hidden rounded-3xl border border-glass-brd bg-bg-2"
       data-testid="swipe-card"
     >
       <div className="relative flex-1 overflow-hidden bg-bg-2">
@@ -780,12 +824,15 @@ function SwipeCard({
         <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 p-4 pb-[108px]">
           {/* Обёртка, а не класс на самом значке: в колонке flex-элемент
               растягивается на всю ширину, и пилюля уезжала от края до края. */}
-          <div className="flex">
+          <div className="flex flex-wrap items-center gap-2">
             <ActivityBadge
               activity={user.activity}
               lastSeenAt={user.lastSeenAt}
               variant="overlay"
             />
+            {/* В режиме «показать всех» отсмотренные возвращаются в колоду —
+                карточка обязана сказать, что решение по ней уже принято. */}
+            <DecisionBadge decision={item.myDecision} variant="overlay" />
           </div>
           <div className="flex items-end justify-between gap-2">
             <div className="min-w-0">
@@ -834,7 +881,7 @@ function SwipeCard({
                 onClick={() => onExpandedChange(true)}
                 aria-expanded={false}
                 aria-label="Развернуть анкету"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black/45 text-lg text-white backdrop-blur transition hover:bg-black/60"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black/60 text-lg text-white transition hover:bg-black/75"
               >
                 <span aria-hidden="true">⌃</span>
               </button>
@@ -874,7 +921,7 @@ function SwipeCard({
           Поверх фото у деталей та же природа, что у имени и пилюль, — белый
           текст по затемнению.
         */
-        <div className="absolute inset-x-0 bottom-0 max-h-[70%] space-y-2 overflow-y-auto rounded-b-3xl bg-black/80 p-4 pb-[108px] backdrop-blur-sm">
+        <div className="absolute inset-x-0 bottom-0 max-h-[70%] space-y-2 overflow-y-auto rounded-b-3xl bg-black/85 p-4 pb-[108px]">
           <div className="flex items-start justify-between gap-3">
             <p className="font-display text-lg font-bold text-white">
               {user.name}

@@ -60,6 +60,7 @@ function recommendation(
     },
     compatibility: { total: 85, breakdown: [] },
     connection: null,
+  myDecision: null,
   };
 }
 
@@ -160,7 +161,7 @@ describe("SwipeDeck card", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Показать вообще всех" }),
-    ).toHaveAttribute("href", "/union/recommendations?includeSwiped=true");
+    ).toHaveAttribute("href", "/union/recommendations?showAll=true");
   });
 
   it("offers archiving from the deck", () => {
@@ -191,6 +192,54 @@ describe("SwipeDeck card", () => {
 
     expect(screen.getByText("2 из 2")).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it("после решения обновлённая выдача не проматывает следующего", async () => {
+    /*
+      Настоящая потеря людей, а не косметика. Решение уходит на сервер, следом
+      идёт router.refresh(), и выдача возвращается уже без решённой анкеты.
+      Пока колода помнила позицию по счёту, список съезжал на единицу под
+      неподвижным указателем: одно нажатие «познакомиться» съедало двоих, и
+      второй пролетал вообще без решения.
+    */
+    const user = userEvent.setup();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}"));
+    const first = recommendation();
+    const second = recommendation({ user: { id: "user-2", name: "Сита" } });
+    const third = recommendation({ user: { id: "user-3", name: "Лалита" } });
+
+    const { rerender } = render(
+      <SwipeDeck items={[first, second, third]} />,
+    );
+    await user.click(screen.getByRole("button", { name: "Познакомиться" }));
+
+    // Ровно то, что делает refresh: решённая анкета из выдачи исчезла.
+    rerender(<SwipeDeck items={[second, third]} />);
+
+    expect(screen.getByRole("link", { name: /Сита/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Лалита/ })).toBeNull();
+    fetchSpy.mockRestore();
+  });
+
+  it("решённая анкета не возвращается, даже если выдача принесла её снова", async () => {
+    // Режим «показать всех» приносит отсмотренных обратно — но ту, по которой
+    // решение принято только что, колода показывать второй раз не должна.
+    const user = userEvent.setup();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}"));
+    const first = recommendation();
+    const second = recommendation({ user: { id: "user-2", name: "Сита" } });
+
+    const { rerender } = render(<SwipeDeck items={[first, second]} />);
+    await user.click(screen.getByRole("button", { name: "Пропустить" }));
+    rerender(<SwipeDeck items={[first, second]} />);
+
+    expect(screen.getByRole("link", { name: /Сита/ })).toBeInTheDocument();
+    expect(screen.getByText("1 из 1")).toBeInTheDocument();
     fetchSpy.mockRestore();
   });
 

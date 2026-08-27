@@ -60,10 +60,10 @@ export class AstroQuotaService {
     const budgetHalted = this.isHalted(settings, budget);
 
     return {
-      readingsLeft: Math.max(
-        0,
-        settings.dailyReadingsPerUser - (usage?.readings ?? 0),
-      ),
+      readingsLeft:
+        settings.dailyReadingsPerUser === 0
+          ? 0
+          : Math.max(0, settings.dailyReadingsPerUser - (usage?.readings ?? 0)),
       readingsPerDay: settings.dailyReadingsPerUser,
       aiAvailable: settings.aiEnabled && !budgetHalted,
       budgetHalted,
@@ -88,12 +88,19 @@ export class AstroQuotaService {
     if (this.isHalted(settings, budget)) {
       return { allowed: false, reason: 'ai_unavailable' };
     }
-    if ((usage?.readings ?? 0) >= settings.dailyReadingsPerUser) {
+    // Ноль — без лимита. Личный счётчик тогда не ведётся вовсе, а от
+    // бесконтрольного расхода остаётся общий бюджет: он проверен выше и
+    // останавливает генерацию для всех сразу.
+    if (
+      settings.dailyReadingsPerUser > 0 &&
+      (usage?.readings ?? 0) >= settings.dailyReadingsPerUser
+    ) {
       return { allowed: false, reason: 'quota_exhausted' };
     }
     if (
+      settings.dailyTokensPerUser > 0 &&
       (usage?.tokensIn ?? 0) + (usage?.tokensOut ?? 0) >=
-      settings.dailyTokensPerUser
+        settings.dailyTokensPerUser
     ) {
       return { allowed: false, reason: 'quota_exhausted' };
     }

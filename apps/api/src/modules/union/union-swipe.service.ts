@@ -234,6 +234,21 @@ export class UnionSwipeService {
   }
 
   /** Кого уже отсмотрели: эти анкеты не должны возвращаться в колоду. */
+  /**
+   * Действующие решения по анкетам: кому что поставлено. Нужны выдаче, когда
+   * она намеренно показывает отсмотренных — карточка обязана сказать, что
+   * решение по ней уже принято.
+   */
+  async swipeDecisions(
+    fromUserId: string,
+  ): Promise<Map<string, UnionSwipeDecision>> {
+    const rows = await this.prisma.unionSwipe.findMany({
+      where: { fromUserId, undoneAt: null },
+      select: { toUserId: true, decision: true },
+    });
+    return new Map(rows.map((row) => [row.toUserId, row.decision]));
+  }
+
   async swipedUserIds(fromUserId: string): Promise<Set<string>> {
     const rows = await this.prisma.unionSwipe.findMany({
       where: { fromUserId, undoneAt: null },

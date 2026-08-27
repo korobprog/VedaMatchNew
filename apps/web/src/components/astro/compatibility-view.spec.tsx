@@ -6,12 +6,27 @@ import { CompatibilityView } from "./compatibility-view";
 import * as clientApi from "@/lib/astro-client-api";
 
 const score = (): GunaMilanScore => ({
+  purpose: "family",
   totalPoints: 27,
   maxPoints: 36,
   percent: 75,
   kootas: [
-    { key: "nadi", title: "Жизненная энергия", points: 8, maxPoints: 8, note: "" },
-    { key: "bhakoot", title: "Совместимость знаков", points: 7, maxPoints: 7, note: "" },
+    {
+      key: "nadi",
+      title: "Жизненная энергия",
+      points: 8,
+      maxPoints: 8,
+      note: "",
+      counted: true,
+    },
+    {
+      key: "bhakoot",
+      title: "Совместимость знаков",
+      points: 7,
+      maxPoints: 7,
+      note: "",
+      counted: true,
+    },
   ],
 });
 
@@ -20,6 +35,7 @@ const request = (
 ): AstroCompatibilityRequestDto => ({
   id: "req-1",
   status: "pending",
+  purpose: "family",
   createdAt: "2026-08-10T00:00:00.000Z",
   respondedAt: null,
   isRequester: false,
@@ -122,21 +138,50 @@ describe("CompatibilityView", () => {
     expect(screen.queryByRole("button", { name: "Принять" })).not.toBeInTheDocument();
   });
 
-  it("автозапрос из карточки Union отправляется один раз, если такого запроса ещё нет", async () => {
-    vi.spyOn(clientApi, "listAstroCompatibilityRequests")
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([request({ isRequester: true, counterpart: { userId: "u9", name: "Гита", avatarUrl: null } })]);
+  it("по ссылке из карточки Union ничего не отправляет, пока не выбрана цель", async () => {
+    // Цель знает только отправитель, а сам переход по ссылке — ещё не
+    // согласие слать запрос живому человеку.
+    vi.spyOn(clientApi, "listAstroCompatibilityRequests").mockResolvedValue([]);
     const create = vi
       .spyOn(clientApi, "createAstroCompatibilityRequest")
       .mockResolvedValue(request({ isRequester: true }));
 
     render(<CompatibilityView autoRequestUserId="u9" />);
 
-    await waitFor(() => expect(create).toHaveBeenCalledWith("u9"));
+    expect(await screen.findByText("Ради чего сверяем карты?")).toBeInTheDocument();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("отправляет запрос с выбранной целью", async () => {
+    vi.spyOn(clientApi, "listAstroCompatibilityRequests")
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        request({
+          isRequester: true,
+          counterpart: { userId: "u9", name: "Гита", avatarUrl: null },
+        }),
+      ]);
+    const create = vi
+      .spyOn(clientApi, "createAstroCompatibilityRequest")
+      .mockResolvedValue(request({ isRequester: true }));
+
+    render(<CompatibilityView autoRequestUserId="u9" />);
+    await userEvent.click(await screen.findByRole("button", { name: "Дело" }));
+
+    await waitFor(() => expect(create).toHaveBeenCalledWith("u9", "business"));
     expect(create).toHaveBeenCalledTimes(1);
   });
 
-  it("не дублирует автозапрос, если он уже есть в списке", async () => {
+  it("предлагает все четыре цели сверки", async () => {
+    vi.spyOn(clientApi, "listAstroCompatibilityRequests").mockResolvedValue([]);
+    render(<CompatibilityView autoRequestUserId="u9" />);
+
+    for (const title of ["Семья", "Дело", "Дружба", "Служение"]) {
+      expect(await screen.findByRole("button", { name: title })).toBeInTheDocument();
+    }
+  });
+
+  it("не предлагает цель, если запрос к этому человеку уже есть", async () => {
     vi.spyOn(clientApi, "listAstroCompatibilityRequests").mockResolvedValue([
       request({ isRequester: true, counterpart: { userId: "u9", name: "Гита", avatarUrl: null } }),
     ]);
@@ -146,6 +191,7 @@ describe("CompatibilityView", () => {
     await screen.findByText("Гита");
 
     expect(create).not.toHaveBeenCalled();
+    expect(screen.queryByText("Ради чего сверяем карты?")).toBeNull();
   });
 
   it("ошибка загрузки показывается пользователю", async () => {

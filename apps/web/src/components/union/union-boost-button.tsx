@@ -75,7 +75,9 @@ export function UnionBoostButton() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label={active ? "Внимание активно" : "Включить внимание"}
-        className={`absolute right-3 top-8 z-10 flex h-11 items-center justify-center gap-1.5 rounded-full px-3 text-lg backdrop-blur transition ${
+        // Кнопка висит над едущей карточкой: backdrop-filter здесь стоил бы
+        // пересчёта размытия в каждом кадре жеста. Подложка и так плотная.
+        className={`absolute right-3 top-[calc(max(0.75rem,env(safe-area-inset-top))+1.75rem)] z-10 flex h-11 items-center justify-center gap-1.5 rounded-full px-3 text-lg transition ${
           active
             ? "bg-gradient-to-r from-[#FFB020] to-[#FF7A00] text-white shadow-[0_0_20px_rgba(255,140,0,0.45)]"
             : "bg-white/90 text-[#FF9500] hover:bg-white"

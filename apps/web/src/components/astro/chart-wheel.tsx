@@ -17,6 +17,18 @@ import { CHART_CELLS, bhavaOf, grahasByRashi } from "./chart-layout";
 const CELL = 100;
 const SIZE = CELL * 4;
 
+/**
+ * Прозрачность линий и подписей карты. Числа не на глаз: цвет здесь —
+ * `currentColor`, то есть --vm-text-0, и на светлой теме прежние 0.35 и 0.4
+ * давали 2.25:1 и 2.58:1 — ниже порогов WCAG (3:1 для графики, 4.5:1 для
+ * мелкого текста). Карта на светлой теме читалась с трудом.
+ *
+ * 0.5 даёт линиям 3.46:1, 0.62 подписям — 5.11:1. На тёмной теме те же доли
+ * только добавляют контраста: там текст светлый на тёмном фоне.
+ */
+export const CHART_LINE_OPACITY = 0.5;
+export const CHART_LABEL_OPACITY = 0.62;
+
 export function ChartWheel({ chart }: { chart: VedicChart }) {
   const byRashi = grahasByRashi(chart);
   const lagnaRashi = chart.lagna?.rashi ?? null;
@@ -24,7 +36,7 @@ export function ChartWheel({ chart }: { chart: VedicChart }) {
   return (
     <svg
       viewBox={`0 0 ${SIZE} ${SIZE}`}
-      className="w-full max-w-md text-black dark:text-white"
+      className="w-full max-w-md text-text-0"
       role="img"
       aria-label="Ведическая карта рождения, южноиндийский стиль"
     >
@@ -44,7 +56,7 @@ export function ChartWheel({ chart }: { chart: VedicChart }) {
               height={CELL}
               fill="none"
               stroke="currentColor"
-              strokeOpacity={0.35}
+              strokeOpacity={CHART_LINE_OPACITY}
               strokeWidth={1}
             />
 
@@ -63,7 +75,7 @@ export function ChartWheel({ chart }: { chart: VedicChart }) {
               y={y + 14}
               fontSize={9}
               fill="currentColor"
-              fillOpacity={0.55}
+              fillOpacity={CHART_LABEL_OPACITY}
             >
               {RASHI_NAMES[cell.rashi - 1]}
             </text>
@@ -75,7 +87,7 @@ export function ChartWheel({ chart }: { chart: VedicChart }) {
                 fontSize={9}
                 textAnchor="end"
                 fill="currentColor"
-                fillOpacity={0.4}
+                fillOpacity={CHART_LABEL_OPACITY}
               >
                 {bhava}
               </text>
@@ -90,7 +102,7 @@ export function ChartWheel({ chart }: { chart: VedicChart }) {
                 fill="currentColor"
               >
                 {GRAHA_ABBR[graha.graha]}
-                <tspan fontSize={9} fillOpacity={0.6}>
+                <tspan fontSize={9} fillOpacity={CHART_LABEL_OPACITY}>
                   {" "}
                   {Math.floor(graha.degreeInRashi)}°
                   {graha.retrograde ? " R" : ""}
@@ -108,7 +120,7 @@ export function ChartWheel({ chart }: { chart: VedicChart }) {
         fontSize={11}
         textAnchor="middle"
         fill="currentColor"
-        fillOpacity={0.55}
+        fillOpacity={CHART_LABEL_OPACITY}
       >
         Раши D1
       </text>
@@ -118,7 +130,7 @@ export function ChartWheel({ chart }: { chart: VedicChart }) {
         fontSize={10}
         textAnchor="middle"
         fill="currentColor"
-        fillOpacity={0.4}
+        fillOpacity={CHART_LABEL_OPACITY}
       >
         аянамша {formatDegrees(chart.ayanamsa)}
       </text>

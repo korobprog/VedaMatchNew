@@ -44,7 +44,11 @@ export function ActivityBadge({
       // именем — такая же справка об анкете, а не заголовок.
       className={`inline-flex shrink-0 items-center gap-1.5 text-xs ${
         variant === "overlay"
-          ? "text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]"
+          ? // h-7 — общая высота строки для всего, что лежит поверх фото:
+            // подложки у этой справки нет, но её строка обязана попадать в
+            // тот же ряд, что процент и пилюли справа, иначе углы карточки
+            // разъезжаются на пару пикселей и это видно.
+            "h-7 text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]"
           : "rounded-full border border-glass-brd px-2 py-0.5 font-medium text-text-1"
       }`}
     >

@@ -33,6 +33,7 @@ import type {
   UnionProfileUpdateRequest,
   UnionRecommendation,
   UnionRecommendationFilters,
+  UnionSwipeDecision,
   UnionRecommendationsResponse,
   UnionRegulativePrinciple,
   UnionSpiritualEducation,
@@ -344,10 +345,16 @@ export class UnionProfileService {
     // молча отменяла бы осознанное «убрать совсем».
     const archived = await this.archive.archivedUserIds(userId);
     const normalizedFilters = this.normalizeFilters(filters);
-    const myAgePreference: MyAgePreference = {
-      ageRangeMin: me.ageRangeMin,
-      ageRangeMax: me.ageRangeMax,
-    };
+    /*
+      Мои молчаливые сужения. Желаемый возраст партнёра стоит в анкете, а
+      режет он ленту — человек об этом не знает и ищет причину в фильтрах
+      экрана, где её нет. «Показать всех» снимает и его, и мой собственный
+      отбор по полу под целью «Создание семьи»: это мои пожелания, мне их и
+      отменять.
+    */
+    const myAgePreference: MyAgePreference = normalizedFilters.showAll
+      ? { ageRangeMin: null, ageRangeMax: null }
+      : { ageRangeMin: me.ageRangeMin, ageRangeMax: me.ageRangeMax };
 
     const others = await this.prisma.unionProfile.findMany({
       where: buildRecommendationCandidateWhere({
@@ -384,11 +391,19 @@ export class UnionProfileService {
     });
 
     const connections = await this.connectionMap(userId);
+    // Что я уже решил по этим анкетам: в режиме «показать всех» отсмотренные
+    // возвращаются в ленту, и карточка обязана об этом сказать.
+    const decisions = await this.swipes.swipeDecisions(userId);
     // Чьи анкеты подняты «Вниманием» — знает сервис бустов.
     const boosted = await this.boosts.boostedUserIds();
     const myInput = this.toMatchInput(me, me.user);
-    const myFamilyGender = familyGenderContext(me, me.user.gender);
-    const beforeIntentions = others
+    const myFamilyGender = normalizedFilters.showAll
+      ? // Своё ограничение снято, чужое — нет: человек, который ищет семью с
+        // определённым полом, не должен попадать в ленту тех, кому он заведомо
+        // не подходит. Сколько таких осталось скрыто, посчитаем ниже.
+        { gender: me.user.gender, hasFamilyGoal: false, seeksGender: null }
+      : familyGenderContext(me, me.user.gender);
+    const afterFilters = others
       .filter(
         (other) => !hidden.has(other.userId) && !archived.has(other.userId),
       )
@@ -403,9 +418,27 @@ export class UnionProfileService {
           normalizedFilters,
           myInput,
           myAgePreference,
-          myFamilyGender,
         ),
-      )
+      );
+
+    /*
+      Отбор по полу под целью «Создание семьи» стоит отдельным шагом, а не
+      внутри matchesFilters: только так видно, сколько анкет он забрал. В
+      обычной ленте это число никому не нужно, а в режиме «показать всех» —
+      единственное, что мешает слову «все» быть правдой, и умолчать о нём
+      значит соврать.
+    */
+    const passesGender = (other: (typeof afterFilters)[number]) =>
+      passesFamilyGenderRestriction(
+        myFamilyGender,
+        familyGenderContext(other, other.user.gender),
+      );
+    const hiddenByOthers = normalizedFilters.showAll
+      ? afterFilters.filter((other) => !passesGender(other)).length
+      : 0;
+
+    const beforeIntentions = afterFilters
+      .filter(passesGender)
       .map((other) => ({
         other,
         recommendation: this.toRecommendation(
@@ -414,6 +447,7 @@ export class UnionProfileService {
           other,
           other.user,
           connections.get(other.userId) ?? null,
+          decisions.get(other.userId) ?? null,
         ),
       }))
       .filter(
@@ -488,6 +522,7 @@ export class UnionProfileService {
       pageSize,
       totalPages,
       intentionCounts,
+      hiddenByOthers,
     };
   }
 
@@ -543,6 +578,7 @@ export class UnionProfileService {
       other,
       other.user,
       connection,
+      (await this.swipes.swipeDecisions(userId)).get(targetUserId) ?? null,
     );
     return this.withPublicPhotos(recommendation, other, other.user);
   }
@@ -575,6 +611,8 @@ export class UnionProfileService {
     other: ProfileWithIntentions,
     otherUser: User,
     connection: ConnectionForUser | null,
+    /** Моё действующее решение по этой анкете, если оно есть. */
+    myDecision: UnionSwipeDecision | null = null,
   ): UnionRecommendation {
     const location = this.location(otherUser);
     const privacy = (other.privacy as UnionPrivacySettings | null) ?? null;
@@ -633,6 +671,7 @@ export class UnionProfileService {
       connection: connection
         ? this.toConnectionSummary(connection, currentUserId)
         : null,
+      myDecision,
     };
   }
 
@@ -716,7 +755,10 @@ export class UnionProfileService {
         : undefined,
       verifiedOnly: filters.verifiedOnly === true,
       photoVerifiedOnly: filters.photoVerifiedOnly === true,
-      includeSwiped: filters.includeSwiped === true,
+      // «Показать всех» включает и отсмотренных: иначе кнопка обещает всех, а
+      // показывает тех, по кому решения ещё не приняты.
+      includeSwiped: filters.includeSwiped === true || filters.showAll === true,
+      showAll: filters.showAll === true,
       format: ['online', 'offline', 'any'].includes(String(filters.format))
         ? filters.format
         : undefined,
@@ -754,19 +796,10 @@ export class UnionProfileService {
     filters: UnionRecommendationFilters,
     myInput: UnionMatchInput,
     myAge: MyAgePreference,
-    myFamilyGender: FamilyGenderContext,
   ): boolean {
     if (filters.stage && user.spiritualStage !== filters.stage) return false;
     // Пол не указан — профиль не проходит явно заданный фильтр, как и с возрастом.
     if (filters.gender && user.gender !== filters.gender) return false;
-    if (
-      !passesFamilyGenderRestriction(
-        myFamilyGender,
-        familyGenderContext(profile, user.gender),
-      )
-    ) {
-      return false;
-    }
     if (filters.verifiedOnly && !isVerifiedDevotee(user)) return false;
     if (filters.photoVerifiedOnly && user.photoVerifiedAt === null)
       return false;

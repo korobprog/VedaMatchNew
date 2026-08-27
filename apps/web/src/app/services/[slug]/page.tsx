@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ServiceDetailPage } from "@/components/landing/ServiceDetailPage";
 import { getPublicServices } from "@/lib/api";
 import { getUnionShowcase } from "@/lib/union-api";
+import { getChatPublicMap } from "@/lib/chat-api";
 import { SERVICE_CONTENT, getServiceContent } from "@/lib/service-content";
 
 export function generateStaticParams() {
@@ -47,12 +48,17 @@ export default async function ServicePage({
   // тогда покажет демонстрационные карточки.
   const showcase =
     slug === "union" ? await getUnionShowcase().catch(() => null) : null;
+  // Карта общин — только у «Общения», и по той же причине не имеет права
+  // ронять страницу: нет ответа — секции карты просто не будет.
+  const communities =
+    slug === "chat" ? await getChatPublicMap().catch(() => null) : null;
 
   return (
     <ServiceDetailPage
       service={service}
       otherServices={otherServices}
       showcase={showcase?.cards ?? []}
+      communities={communities?.communities ?? []}
     />
   );
 }

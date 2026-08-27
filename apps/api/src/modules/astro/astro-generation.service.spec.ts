@@ -3,7 +3,11 @@ import {
   BadGatewayException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import type { VedicChart } from '@vedamatch/shared';
+import type {
+  AstroCompatibilityPurpose,
+  GunaMilanScore,
+  VedicChart,
+} from '@vedamatch/shared';
 import { AstroGenerationService } from './astro-generation.service';
 
 const chart = {
@@ -185,6 +189,86 @@ describe('AstroGenerationService', () => {
       expect(user).toMatch(/Время рождения неизвестно/);
       expect(user).toMatch(/Не упоминай дома/);
       expect(user).not.toContain('бхава');
+    });
+  });
+
+  describe('разбор совместимости', () => {
+    beforeEach(() => fetchMock.mockReturnValue(okResponse('{"text":"ок"}')));
+
+    /** Гуна-милан для цели: две куты учтены, одна снята. */
+    const score = (purpose: AstroCompatibilityPurpose): GunaMilanScore => ({
+      purpose,
+      totalPoints: 9,
+      maxPoints: 10,
+      percent: 90,
+      kootas: [
+        {
+          key: 'gana',
+          title: 'Склад характера',
+          points: 6,
+          maxPoints: 6,
+          note: 'Складом характера близки',
+          counted: true,
+        },
+        {
+          key: 'tara',
+          title: 'Звёздная совместимость',
+          points: 3,
+          maxPoints: 3,
+          note: 'Благоприятная в обе стороны',
+          counted: true,
+        },
+        {
+          key: 'yoni',
+          title: 'Природная близость',
+          points: 4,
+          maxPoints: 4,
+          note: 'Природная близость высокая',
+          counted: false,
+        },
+      ],
+    });
+
+    it('не отдаёт модели очков по неучтённым кутам', async () => {
+      // Иначе она сделает вывод из того, чего в расчёте нет.
+      await service.generateCompatibility(score('business'));
+      const user = sentBody().messages[1].content;
+      expect(user).toContain('Склад характера: 6 из 6');
+      expect(user).not.toContain('Природная близость: 4');
+    });
+
+    it('всё же называет снятые куты — расчёт короче, и это видно', async () => {
+      await service.generateCompatibility(score('business'));
+      const user = sentBody().messages[1].content;
+      expect(user).toMatch(/не считаются: Природная близость/i);
+    });
+
+    it('запрещает брачный словарь, когда сверяются ради дела', async () => {
+      await service.generateCompatibility(score('business'));
+      const system = sentBody().messages[0].content;
+      expect(system).toMatch(/общего дела/i);
+      expect(system).toMatch(/НЕ пиши о браке/i);
+    });
+
+    it('для служения тоже уводит от романтики', async () => {
+      await service.generateCompatibility(score('service'));
+      const system = sentBody().messages[0].content;
+      expect(system).toMatch(/служения/i);
+      expect(system).toMatch(/НЕ пиши о браке/i);
+    });
+
+    it('семье, наоборот, разрешает говорить о паре', async () => {
+      await service.generateCompatibility(score('family'));
+      const system = sentBody().messages[0].content;
+      expect(system).toMatch(/создания семьи/i);
+      expect(system).not.toMatch(/НЕ пиши о браке/i);
+    });
+
+    it('больше не обещает модели ровно восемь критериев', async () => {
+      // У дела их шесть, у служения четыре: обещание восьми стало неправдой.
+      await service.generateCompatibility(score('service'));
+      const system = sentBody().messages[0].content;
+      expect(system).not.toMatch(/восьми критериям/i);
     });
   });
 

@@ -14,6 +14,7 @@ import { ChatSignedUrlsInterceptor } from './chat-signed-urls.interceptor';
 import { ChatStreamController } from './chat-stream.controller';
 import { ChatUploadsService } from './chat-uploads.service';
 import { ChatController } from './chat.controller';
+import { ChatPublicMapController } from './chat-public-map.controller';
 import { PeopleAdminController } from './people/people-admin.controller';
 import { PeopleAdminService } from './people/people-admin.service';
 import { PeopleAvatarService } from './people/people-avatar.service';
@@ -36,6 +37,7 @@ import { PeopleService } from './people/people.service';
   imports: [AuthModule, ModerationModule],
   controllers: [
     ChatController,
+    ChatPublicMapController,
     ChatStreamController,
     ChatAdminController,
     PeopleController,

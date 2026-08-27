@@ -428,6 +428,41 @@
   animation: activity-row-in 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* Мини-экран сервиса в макете портала на лендинге: подъезжает снизу, как
+   настоящий переход внутрь раздела. Сам ролик под prefers-reduced-motion не
+   запускается вовсе, но кадр обезврежен и здесь — на случай, если экран
+   когда-нибудь начнут показывать статикой. */
+@keyframes preview-screen-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.preview-screen-in {
+  animation: preview-screen-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Место снимка, пока снимок не пришёл.
+
+   Не «ещё одна анимация ради красоты»: фотографии в галерее лежат в том
+   разрешении, в каком их сняли, и на медленной связи блок стоит пустым
+   заметное время. Пустота читается как поломка, мерцающая подложка — как
+   ожидание. Лежит под изображением, поэтому гасить её не нужно: пришедшее
+   фото просто перекрывает её собой. */
+@keyframes photo-skeleton {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.9; }
+}
+
+.photo-skeleton {
+  background: linear-gradient(
+    110deg,
+    var(--vm-bg-2) 0%,
+    var(--vm-bg-1) 50%,
+    var(--vm-bg-2) 100%
+  );
+  animation: photo-skeleton 1.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   @keyframes drift {
     0%, 100% { transform: translate(0, 0) scale(1); }
@@ -451,11 +486,17 @@
   @keyframes install-banner-ping {
     0%, 100% { opacity: 0; transform: scale(1); }
   }
+  @keyframes photo-skeleton {
+    0%, 100% { opacity: 0.75; }
+  }
   @keyframes activity-marquee {
     from, to { transform: translateX(0); }
   }
   @keyframes activity-row-in {
     from, to { background-color: transparent; }
+  }
+  @keyframes preview-screen-in {
+    from, to { opacity: 1; transform: none; }
   }
 }
 
@@ -554,11 +595,20 @@ select option {
   background: var(--vm-text-1);
 }
 
-/* Glass effect utility */
+/* Glass effect utility.
+ *
+ * Порядок строк с `backdrop-filter` менять нельзя: `-webkit-` идёт первым,
+ * стандартное свойство — последним. Lightning CSS (CSS-конвейер Next 16)
+ * считает префиксную и стандартную запись одним свойством. При обратном
+ * порядке он видит стандартную строку как перекрытую следующей за ней
+ * префиксной и выбрасывает её из сборки — в браузер уезжает только
+ * `-webkit-backdrop-filter`, которого Chrome не понимает, и стекло молча
+ * превращается в прозрачную плашку. Тот же порядок держат маски у
+ * `.glass-edge` и `.service-edge`. */
 .glass {
   background: linear-gradient(135deg, var(--vm-glass-from) 0%, var(--vm-glass-to) 100%);
-  backdrop-filter: blur(24px) saturate(150%);
   -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
   border: 1px solid var(--vm-glass-brd);
 }
 
@@ -589,8 +639,8 @@ select option {
 
 .glass-light {
   background: linear-gradient(135deg, var(--vm-glass-light-from) 0%, var(--vm-glass-light-to) 100%);
-  backdrop-filter: blur(16px) saturate(120%);
   -webkit-backdrop-filter: blur(16px) saturate(120%);
+  backdrop-filter: blur(16px) saturate(120%);
   border: 1px solid var(--vm-glass-light-brd);
 }
 

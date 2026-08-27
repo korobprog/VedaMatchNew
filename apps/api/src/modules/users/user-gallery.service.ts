@@ -26,10 +26,12 @@ import type {
 } from '@vedamatch/shared';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
+import { isDirectUrl, toStorageImage } from './gallery-image';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RESET_PHOTO_VERIFICATION } from './photo-verification';
 
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
+
 export const MAX_FILES_PER_UPLOAD = 50;
 const DEFAULT_QUOTA_MB = 250;
 const SIGNED_URL_TTL_SECONDS = 15 * 60;
@@ -367,20 +369,11 @@ export class UserGalleryService {
     }
 
     try {
-      const output = await sharp(file.buffer, {
-        failOn: 'error',
-        limitInputPixels: true,
-      })
-        .rotate()
-        .webp()
-        .toBuffer({ resolveWithObject: true });
-      if (!output.info.width || !output.info.height) {
-        throw new Error('Missing output dimensions');
-      }
+      const output = await toStorageImage(file.buffer);
       return {
         data: output.data,
-        width: output.info.width,
-        height: output.info.height,
+        width: output.width,
+        height: output.height,
       };
     } catch {
       return {
@@ -516,13 +509,6 @@ export class UserGalleryService {
 }
 
 /** Ключи загруженных файлов всегда относительные (`users/...`), URL — только у демо-данных. */
-function isDirectUrl(storageKey: string): boolean {
-  return (
-    storageKey.startsWith('/') ||
-    storageKey.startsWith('http://') ||
-    storageKey.startsWith('https://')
-  );
-}
 
 function resolveQuotaBytes(value: string | undefined): number {
   const quotaMb = Number(value);

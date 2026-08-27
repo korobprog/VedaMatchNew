@@ -36,7 +36,7 @@ export function CompatibilityRing({
       style={{ width: size, height: size }}
       // Тот же корпус, что у кнопок решений рядом: блик сверху, затемнение
       // к низу, светлая рамка и падающая тень.
-      className="relative flex shrink-0 items-center justify-center rounded-full border border-white/30 bg-gradient-to-b from-white/25 to-black/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),inset_0_-2px_4px_rgba(0,0,0,0.35),0_6px_16px_rgba(0,0,0,0.5)] backdrop-blur-md transition hover:from-white/35 active:translate-y-px"
+      className="relative flex shrink-0 items-center justify-center rounded-full border border-white/30 bg-gradient-to-b from-white/25 to-black/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),inset_0_-2px_4px_rgba(0,0,0,0.35),0_6px_16px_rgba(0,0,0,0.5)] transition hover:from-white/35 active:translate-y-px"
     >
       <svg viewBox="0 0 64 64" className="absolute inset-0 h-full w-full">
         <circle
@@ -81,7 +81,7 @@ export function CompatibilityBreakdown({
   onClose: () => void;
 }) {
   return (
-    <div className="absolute inset-0 z-20 flex flex-col rounded-3xl bg-black/80 p-5 backdrop-blur-sm">
+    <div className="absolute inset-0 z-20 flex flex-col rounded-3xl bg-black/85 p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="font-display text-lg font-bold text-white">
           Почему {compatibility.total}%
