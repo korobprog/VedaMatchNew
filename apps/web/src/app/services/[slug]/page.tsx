@@ -4,6 +4,7 @@ import { ServiceDetailPage } from "@/components/landing/ServiceDetailPage";
 import { getPublicServices } from "@/lib/api";
 import { getUnionShowcase } from "@/lib/union-api";
 import { getChatPublicMap } from "@/lib/chat-api";
+import { getMarketShowcase } from "@/lib/market-api";
 import { SERVICE_CONTENT, getServiceContent } from "@/lib/service-content";
 
 export function generateStaticParams() {
@@ -52,6 +53,10 @@ export default async function ServicePage({
   // ронять страницу: нет ответа — секции карты просто не будет.
   const communities =
     slug === "chat" ? await getChatPublicMap().catch(() => null) : null;
+  // Витрина Рынка — только у него, и ронять страницу она права не имеет:
+  // нет ответа — макет покажет запасные карточки.
+  const marketListings =
+    slug === "market" ? await getMarketShowcase().catch(() => null) : null;
 
   return (
     <ServiceDetailPage
@@ -59,6 +64,7 @@ export default async function ServicePage({
       otherServices={otherServices}
       showcase={showcase?.cards ?? []}
       communities={communities?.communities ?? []}
+      marketListings={marketListings?.items ?? null}
     />
   );
 }

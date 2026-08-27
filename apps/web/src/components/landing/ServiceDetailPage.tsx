@@ -15,6 +15,8 @@ import { PhoneMockup } from "./PhoneMockup";
 import { CommunitiesMap } from "./CommunitiesMap";
 import { CommunityMapStats } from "./CommunityMapStats";
 import { AstroMockup } from "./AstroMockup";
+import { MarketMockup } from "./MarketMockup";
+import type { MarketListingSummary } from "@vedamatch/shared";
 import { Footer } from "./Footer";
 import {
   serviceTagline,
@@ -41,6 +43,7 @@ export function ServiceDetailPage({
   otherServices,
   showcase = [],
   communities = [],
+  marketListings = null,
 }: {
   service: ServiceContent;
   otherServices: ServiceContent[];
@@ -48,6 +51,8 @@ export function ServiceDetailPage({
   showcase?: UnionShowcaseCard[];
   /** Общины для карты «Общения»; у остальных сервисов пусто. */
   communities?: ChatMapCommunity[];
+  /** Объявления для витрины Рынка; `null` — API молчит, покажем запасные. */
+  marketListings?: MarketListingSummary[] | null;
 }) {
   const t = useTranslations("Landing.serviceDetail");
   const locale = useLocale();
@@ -179,6 +184,24 @@ export function ServiceDetailPage({
             className="flex justify-center px-4 md:px-6"
           >
             <PhoneMockup cards={showcase} />
+          </motion.div>
+        </section>
+      )}
+
+      {/* Витрина Рынка — только у него: макет показывает объявления, и у
+          остальных сервисов их нет. Раньше страница Рынка была сплошным
+          текстом, и рядом с роликами соседей площадка читалась как
+          обещание, а не как работающий магазин. */}
+      {service.slug === "market" && (
+        <section className="relative pb-4 md:pb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="flex justify-center px-4 md:px-6"
+          >
+            <MarketMockup listings={marketListings} />
           </motion.div>
         </section>
       )}
