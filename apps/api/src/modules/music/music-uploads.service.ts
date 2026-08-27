@@ -28,6 +28,10 @@ import {
   normalizeAudioMetadata,
 } from './music-metadata-parse';
 import { MusicMetadataReader } from './music-metadata-reader';
+import {
+  readId3v2Size,
+  resolveDurationSeconds,
+} from './music-duration-estimate';
 
 /** Расширение по типу: имя файла от браузера может быть любым. */
 const EXTENSION_BY_MIME: Record<string, string> = {
@@ -271,9 +275,25 @@ export class MusicUploadsService {
       throw new BadRequestException('Файл не догрузился. Попробуйте ещё раз.');
     }
 
+    const prefix = await this.storage.readPrefix(upload.storageKey);
     const metadata = normalizeAudioMetadata(
-      await this.readMetadata(upload.storageKey, upload.mime, object.sizeBytes),
+      prefix
+        ? await this.metadata.read(prefix, upload.mime, object.sizeBytes)
+        : null,
     );
+
+    /**
+     * Длительность считаем сами, когда прочитан не весь файл: пакет
+     * возвращает длительность **префикса**, а не записи, и делает это молча.
+     * Поймано на настоящей записи — в базу уходило 24 секунды вместо 154.
+     */
+    const durationSeconds = resolveDurationSeconds({
+      parsedSeconds: metadata.durationSeconds,
+      bitrateKbps: metadata.bitrateKbps,
+      sizeBytes: object.sizeBytes,
+      tagBytes: prefix ? readId3v2Size(prefix) : 0,
+      readBytes: prefix ? prefix.length : 0,
+    });
 
     const duplicate = object.etag
       ? Boolean(
@@ -291,7 +311,7 @@ export class MusicUploadsService {
     const rejection = validateMusicUploadCompletion(
       {
         sizeBytes: object.sizeBytes,
-        durationSeconds: metadata.durationSeconds,
+        durationSeconds,
         bitrateKbps: metadata.bitrateKbps,
         duplicate,
       },
@@ -315,7 +335,7 @@ export class MusicUploadsService {
           storageKey: upload.storageKey,
           mime: upload.mime,
           sizeBytes: object.sizeBytes,
-          durationSeconds: metadata.durationSeconds!,
+          durationSeconds: durationSeconds!,
           bitrateKbps: metadata.bitrateKbps,
           language: metadata.language,
           // Исполнителя из тега в каталог не заводим: справочником владеет
@@ -343,16 +363,6 @@ export class MusicUploadsService {
       title: track.title,
       durationSeconds: track.durationSeconds,
     };
-  }
-
-  /**
-   * Теги записи. Читаем начало объекта, а не весь файл: длительность для CBR
-   * считается из общего размера, который известен из HEAD.
-   */
-  private async readMetadata(key: string, mime: string, totalBytes: number) {
-    const prefix = await this.storage.readPrefix(key);
-    if (!prefix) return null;
-    return this.metadata.read(prefix, mime, totalBytes);
   }
 
   private async fail(uploadId: string, reason: string): Promise<void> {

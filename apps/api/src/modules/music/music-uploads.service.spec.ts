@@ -206,16 +206,16 @@ describe('MusicUploadsService.completeUpload', () => {
 
   it('верит размеру из бакета, а не обещанному браузером', async () => {
     const prisma = prismaMock();
+    // Объект целиком помещается в прочитанный кусок — длительности из
+    // разбора можно верить, и проверка остаётся про размер.
     const storage = storageMock({
-      head: jest.fn().mockResolvedValue({ sizeBytes: 123, etag: 'x' }),
+      head: jest.fn().mockResolvedValue({ sizeBytes: 3, etag: 'x' }),
     });
     prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
 
     await service(prisma, storage).completeUpload('u1', 'up1', 'gaura.mp3');
 
-    expect(prisma.tx.musicTrack.create.mock.calls[0][0].data.sizeBytes).toBe(
-      123,
-    );
+    expect(prisma.tx.musicTrack.create.mock.calls[0][0].data.sizeBytes).toBe(3);
   });
 
   it('чужую загрузку не показывает даже кодом ответа', async () => {
