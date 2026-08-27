@@ -57,7 +57,7 @@ export function MusicUploadForm() {
         basis as MusicUploadRightsBasis,
         setProgress,
       );
-      setDone(`«${result.title}» ушла в очередь разбора.`);
+      setDone(`«${result.title}» ушла в очередь проверки.`);
       setFile(null);
       if (inputRef.current) inputRef.current.value = "";
       router.refresh();
@@ -76,9 +76,9 @@ export function MusicUploadForm() {
         Загрузить запись
       </h3>
       <p className="mt-1 text-sm text-text-2">
-        Принимаем mp3 и m4a. Запись попадёт в очередь разбора, а не сразу в
+        Принимаем mp3 и m4a. Запись попадёт в очередь проверки, а не сразу в
         каталог: правило одинаково для всех, включая редакцию. Название и
-        исполнителя редакция поправит при разборе — если в файле они записаны
+        исполнителя редакция поправит при проверке — если в файле они записаны
         неточно, переделывать и перезаливать не нужно.
       </p>
 

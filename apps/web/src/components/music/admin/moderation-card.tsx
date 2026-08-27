@@ -80,7 +80,7 @@ export function MusicModerationCard({
     <li className="glass rounded-2xl border border-glass-brd p-4">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="rounded-full border border-gold/40 px-2 py-0.5 text-gold">
-          Ждёт разбора
+          Ждёт проверки
         </span>
         {item.rightsBasis && (
           <span className="rounded-full border border-glass-brd px-2 py-0.5 text-text-1">

@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { canAdminService } from "@vedamatch/shared";
 import { MusicRail } from "@/components/music/music-rail";
 import { MyMusicUploadsList } from "@/components/music/my-uploads-list";
 import { MusicUploadForm } from "@/components/music/upload-form";
 import { getMyMusicUploads } from "@/lib/music-api";
+import { getProfile } from "@/lib/api";
 import { formatBytes } from "@/lib/music-duration";
 
 export const metadata: Metadata = {
@@ -23,7 +26,22 @@ export const metadata: Metadata = {
  * повторную заливку того же файла завтра.
  */
 export default async function MyMusicUploadsPage() {
-  const data = await getMyMusicUploads();
+  const [data, user] = await Promise.all([getMyMusicUploads(), getProfile()]);
+
+  /**
+   * Проверяет записи редакция — и на маленьком портале это тот же человек,
+   * который их грузит. Он видит «ждёт проверки» и не догадывается, что ждут
+   * его самого: очередь лежит в админке, а туда со страницы загрузок нет ни
+   * одной двери. Показываем её тем, у кого есть право.
+   */
+  const canReview = user
+    ? canAdminService(
+        { role: user.role, adminServices: user.adminServices },
+        "music",
+      )
+    : false;
+  const waiting =
+    data?.items.filter((item) => item.status === "pending").length ?? 0;
 
   const pending =
     data?.items.filter((item) => item.status !== "published").length ?? 0;
@@ -38,7 +56,7 @@ export default async function MyMusicUploadsPage() {
           Мои загрузки
         </h1>
         <p className="text-sm text-text-2">
-          Каждая запись проходит разбор редакции. До него её слышите только вы —
+          Каждая запись проходит проверку редакцией. До неё запись слышите только вы —
           кнопкой «Послушать» ниже.
         </p>
       </header>
@@ -55,16 +73,30 @@ export default async function MyMusicUploadsPage() {
         <MusicUploadForm />
       </div>
 
+      {canReview && waiting > 0 && (
+        <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl border border-gold/40 bg-gold/10 p-4">
+          <p className="min-w-0 flex-1 text-sm text-text-1">
+            Проверяете записи вы: {waiting} ждёт вашего решения.
+          </p>
+          <Link
+            href="/admin/music"
+            className="btn-mint h-9 shrink-0 rounded-xl px-4 text-sm font-semibold leading-9"
+          >
+            Открыть очередь
+          </Link>
+        </div>
+      )}
+
       <h2 className="mb-2 mt-8 font-display text-lg font-bold text-text-0">
         Что вы загрузили
       </h2>
       {/* Что происходит после загрузки, человеку не говорил никто: он видел
-          «Ждёт разбора» и всё. Без этого ожидание превращается в вопрос
+          «Ждёт проверки» и всё. Без этого ожидание превращается в вопрос
           «сломалось или нет». */}
       <p className="mb-4 max-w-2xl text-sm text-text-2">
         Редакция слушает запись, поправляет название и исполнителя и
         публикует — или отклоняет с причиной. Причина появится здесь же, на
-        карточке. Пока запись ждёт разбора, её можно снять и освободить место.
+        карточке. Пока запись ждёт проверки, её можно снять и освободить место.
       </p>
       {data ? (
         <MyMusicUploadsList items={data.items} />

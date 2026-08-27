@@ -31,7 +31,7 @@ export default async function AdminMusicQueuePage() {
   const items = queue ?? [];
 
   const stats = summary && [
-    { label: "Ждут разбора", value: String(summary.pending) },
+    { label: "Ждут проверки", value: String(summary.pending) },
     { label: "В каталоге", value: String(summary.published) },
     { label: "Скрыто", value: String(summary.hidden) },
     { label: "Исполнителей", value: String(summary.artists) },

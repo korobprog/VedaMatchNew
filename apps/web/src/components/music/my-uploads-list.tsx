@@ -10,16 +10,40 @@ import { formatBytes, formatTrackDuration } from "@/lib/music-duration";
 import { Alert } from "@/components/ui/alert";
 
 /**
- * Статусы словами. `pending` пишем «ждёт разбора», а не «на модерации»:
+ * Статусы словами. `pending` пишем «ждёт проверки», а не «на модерации»:
  * второе звучит как подозрение, хотя через очередь проходит каждая запись,
  * включая залитые редакцией.
  */
-const STATUS: Record<MusicTrackStatus, { label: string; tone: string }> = {
-  draft: { label: "Черновик", tone: "border-glass-brd text-text-2" },
-  pending: { label: "Ждёт разбора", tone: "border-gold/40 text-gold" },
-  published: { label: "В каталоге", tone: "border-cyan/40 text-cyan" },
-  rejected: { label: "Отклонена", tone: "border-magenta/50 text-magenta" },
-  hidden: { label: "Снята с витрины", tone: "border-magenta/50 text-magenta" },
+const STATUS: Record<
+  MusicTrackStatus,
+  { label: string; tone: string; meaning: string }
+> = {
+  draft: {
+    label: "Черновик",
+    tone: "border-glass-brd text-text-2",
+    meaning: "Загрузка не завершена — запись никуда не отправлена.",
+  },
+  pending: {
+    label: "Ждёт проверки",
+    tone: "border-gold/40 text-gold",
+    meaning:
+      "Запись загружена, но её ещё никто не слушал. В общем каталоге она не появится, пока редакция не решит: опубликовать или отклонить.",
+  },
+  published: {
+    label: "В каталоге",
+    tone: "border-cyan/40 text-cyan",
+    meaning: "Запись в общем каталоге — её слышат все.",
+  },
+  rejected: {
+    label: "Отклонена",
+    tone: "border-magenta/50 text-magenta",
+    meaning: "В каталог не пошла. Причина ниже.",
+  },
+  hidden: {
+    label: "Снята с витрины",
+    tone: "border-magenta/50 text-magenta",
+    meaning: "Была в каталоге, но её убрали. Причина ниже.",
+  },
 };
 
 export function MyMusicUploadsList({ items }: { items: MyMusicUploadDto[] }) {
@@ -29,7 +53,7 @@ export function MyMusicUploadsList({ items }: { items: MyMusicUploadDto[] }) {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Своё можно слушать до разбора — это и есть смысл «до него её слышите
+   * Своё можно слушать до проверки — это и есть смысл «до него её слышите
    * только вы». Без кнопки человек залил мегабайты и не может проверить,
    * что доехало то и целиком; а узнать это через неделю от модератора —
    * худший из возможных способов.
@@ -52,7 +76,7 @@ export function MyMusicUploadsList({ items }: { items: MyMusicUploadDto[] }) {
   if (items.length === 0) {
     return (
       <p className="glass rounded-2xl border border-glass-brd p-6 text-sm text-text-1">
-        Вы пока ничего не загружали. Записи проходят разбор редакции, и до него
+        Вы пока ничего не загружали. Записи проходят проверку редакцией, и до него
         их слышите только вы.
       </p>
     );
@@ -82,6 +106,8 @@ export function MyMusicUploadsList({ items }: { items: MyMusicUploadDto[] }) {
                   {formatBytes(item.sizeBytes)}
                 </span>
               </div>
+
+              <p className="mt-2 text-xs text-text-2">{status.meaning}</p>
 
               <p className="mt-2 text-sm font-semibold text-text-0">
                 {item.status === "published" ? (
