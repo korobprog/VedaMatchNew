@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import type {
   AstroAdminUsageDto,
   AstroSettingsDto,
+  AstroSubjectsStats,
   UpdateAstroSettingsRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -55,7 +56,7 @@ export class AstroAdminService {
     const today = usageDay(now);
     const from = new Date(today.getTime() - (window - 1) * DAY_MS);
 
-    const [budgetDays, consumers] = await Promise.all([
+    const [budgetDays, consumers, subjects] = await Promise.all([
       this.prisma.astroBudgetDay.findMany({
         where: { day: { gte: from } },
         orderBy: { day: 'desc' },
@@ -67,6 +68,7 @@ export class AstroAdminService {
         orderBy: { _sum: { tokensIn: 'desc' } },
         take: TOP_CONSUMERS,
       }),
+      this.subjectStats(from),
     ]);
 
     // Портальный профиль читается только на чтение — так велит контракт сервиса.
@@ -101,6 +103,30 @@ export class AstroAdminService {
         readings: row._sum.readings ?? 0,
         tokens: (row._sum.tokensIn ?? 0) + (row._sum.tokensOut ?? 0),
       })),
+      subjects,
+    };
+  }
+
+  /**
+   * Объём книг карт: сколько записей, у скольких владельцев и какая книга самая
+   * большая. Содержимое не читается — записи видны только владельцу, а лимита
+   * на их число нет, поэтому админке нужен хотя бы счётчик роста.
+   */
+  private async subjectStats(from: Date): Promise<AstroSubjectsStats> {
+    const [byOwner, createdInWindow] = await Promise.all([
+      this.prisma.astroSubject.groupBy({
+        by: ['ownerId'],
+        _count: { _all: true },
+      }),
+      this.prisma.astroSubject.count({ where: { createdAt: { gte: from } } }),
+    ]);
+
+    const counts = byOwner.map((row) => row._count._all);
+    return {
+      total: counts.reduce((sum, value) => sum + value, 0),
+      owners: counts.length,
+      createdInWindow,
+      largestBook: counts.length === 0 ? 0 : Math.max(...counts),
     };
   }
 

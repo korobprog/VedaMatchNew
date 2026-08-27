@@ -116,7 +116,7 @@ export function AdminAstroForm({
         </p>
 
         {usage.today.halted && (
-          <div className="mt-3 rounded-xl bg-amber-500/15 p-3 text-sm">
+          <div className="mt-3 rounded-xl bg-gold/15 p-3 text-sm">
             <p className="font-medium">Генерация остановлена автоматически.</p>
             <p className="mt-1 text-text-2">
               Дневной бюджет исчерпан. Карта, даши и готовые разборы работают;
@@ -126,7 +126,7 @@ export function AdminAstroForm({
               type="button"
               disabled={pending}
               onClick={() => void send("/admin/astro/resume", { method: "POST" })}
-              className="mt-2 rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-medium text-black disabled:opacity-50"
+              className="mt-2 rounded-lg btn-mint px-3 py-1.5 text-sm font-medium disabled:opacity-50"
             >
               Снять остановку
             </button>
@@ -189,7 +189,7 @@ export function AdminAstroForm({
         </section>
 
         {error && (
-          <p className="rounded-xl bg-red-100 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-200">
+          <p className="rounded-xl bg-magenta/10 p-3 text-sm text-magenta">
             {error}
           </p>
         )}
@@ -226,7 +226,7 @@ export function AdminAstroForm({
                     <span
                       className={
                         day.halted
-                          ? "block h-full bg-amber-500"
+                          ? "block h-full bg-gold"
                           : "block h-full bg-magenta"
                       }
                       style={{ width: `${(total / peakTokens) * 100}%` }}
@@ -280,6 +280,34 @@ export function AdminAstroForm({
             </table>
           </div>
         )}
+      </section>
+
+      <section>
+        <h3 className="font-semibold text-text-0">Книги карт астрологов</h3>
+        {/* Только объём. Сами записи видит лишь их владелец, и админка их не
+            читает — иначе «карта человека, которого я веду» перестала бы быть
+            личной заметкой. */}
+        <p className="mt-1 text-sm text-text-2">
+          Числа, и ничего кроме: ни имён, ни дат рождения из записей здесь нет.
+        </p>
+        <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: "Всего записей", value: usage.subjects.total },
+            { label: "Владельцев", value: usage.subjects.owners },
+            { label: "Заведено за период", value: usage.subjects.createdInWindow },
+            { label: "Самая большая книга", value: usage.subjects.largestBook },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="rounded-xl border border-glass-brd p-3"
+            >
+              <dt className="text-xs text-text-2">{item.label}</dt>
+              <dd className="mt-0.5 font-mono text-xl font-bold tabular-nums text-text-0">
+                {item.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
       </section>
     </div>
   );

@@ -32,6 +32,23 @@ export interface AstroTopConsumer {
   tokens: number;
 }
 
+/**
+ * Книги карт астрологов — только счётчики.
+ *
+ * Записи о людях, которых ведёт астролог, видны лишь владельцу. Админке нужно
+ * знать объём, а не содержимое: ни имён, ни дат рождения здесь нет и не будет.
+ */
+export interface AstroSubjectsStats {
+  /** Всего записей на портале. */
+  total: number;
+  /** Сколько людей завели хотя бы одну. */
+  owners: number;
+  /** Заведено за показанный период. */
+  createdInWindow: number;
+  /** Самая большая книга: лимита нет, и рост стоит видеть заранее. */
+  largestBook: number;
+}
+
 export interface AstroAdminUsageDto {
   /** По дню на строку, от свежего к старому. */
   days: AstroUsageDay[];
@@ -43,4 +60,5 @@ export interface AstroAdminUsageDto {
   };
   /** Кто расходует больше всех за период — первый признак злоупотребления. */
   topConsumers: AstroTopConsumer[];
+  subjects: AstroSubjectsStats;
 }
