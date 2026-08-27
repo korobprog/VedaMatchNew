@@ -554,11 +554,20 @@ select option {
   background: var(--vm-text-1);
 }
 
-/* Glass effect utility */
+/* Glass effect utility.
+ *
+ * Порядок строк с `backdrop-filter` менять нельзя: `-webkit-` идёт первым,
+ * стандартное свойство — последним. Lightning CSS (CSS-конвейер Next 16)
+ * считает префиксную и стандартную запись одним свойством. При обратном
+ * порядке он видит стандартную строку как перекрытую следующей за ней
+ * префиксной и выбрасывает её из сборки — в браузер уезжает только
+ * `-webkit-backdrop-filter`, которого Chrome не понимает, и стекло молча
+ * превращается в прозрачную плашку. Тот же порядок держат маски у
+ * `.glass-edge` и `.service-edge`. */
 .glass {
   background: linear-gradient(135deg, var(--vm-glass-from) 0%, var(--vm-glass-to) 100%);
-  backdrop-filter: blur(24px) saturate(150%);
   -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
   border: 1px solid var(--vm-glass-brd);
 }
 
@@ -589,8 +598,8 @@ select option {
 
 .glass-light {
   background: linear-gradient(135deg, var(--vm-glass-light-from) 0%, var(--vm-glass-light-to) 100%);
-  backdrop-filter: blur(16px) saturate(120%);
   -webkit-backdrop-filter: blur(16px) saturate(120%);
+  backdrop-filter: blur(16px) saturate(120%);
   border: 1px solid var(--vm-glass-light-brd);
 }
 
