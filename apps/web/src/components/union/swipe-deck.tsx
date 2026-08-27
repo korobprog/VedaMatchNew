@@ -671,6 +671,7 @@ function StackPreview({ item }: { item: UnionRecommendation }) {
           alt=""
           className="h-full w-full object-cover"
           referrerPolicy="no-referrer"
+          decoding="async"
           draggable={false}
         />
       ) : (
@@ -788,6 +789,7 @@ function SwipeCard({
             alt={user.name}
             className="h-full w-full object-cover"
             referrerPolicy="no-referrer"
+            decoding="async"
             draggable={false}
           />
         ) : (
@@ -974,6 +976,7 @@ function SwipeCard({
                       alt=""
                       className="h-full w-full object-cover"
                       referrerPolicy="no-referrer"
+                      decoding="async"
                       draggable={false}
                     />
                   </button>
