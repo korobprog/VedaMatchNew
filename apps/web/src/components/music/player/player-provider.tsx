@@ -26,6 +26,13 @@ import {
   trackStreamUrl,
 } from "@/lib/music-playback-api";
 import {
+  applyMediaHandlers,
+  applyMediaMetadata,
+  applyMediaPlaybackState,
+  applyMediaPosition,
+  clearMediaSession,
+} from "./media-session";
+import {
   PLAYER_RATE_MAX,
   PLAYER_RATE_MIN,
   PLAYER_STATE_VERSION,
@@ -354,6 +361,27 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("pagehide", onHide);
   }, [current, positionSeconds, isPlaying]);
 
+  // ---------- Media Session ----------
+
+  // Карточка в системе: обложка и название на экране блокировки.
+  useEffect(() => {
+    if (!current) {
+      clearMediaSession();
+      return;
+    }
+    applyMediaMetadata(current);
+  }, [current]);
+
+  useEffect(() => {
+    applyMediaPlaybackState(isPlaying);
+  }, [isPlaying]);
+
+  // Положение на дорожке: без него перемотка с экрана блокировки не работает,
+  // а ползунок в системной карточке стоит на нуле.
+  useEffect(() => {
+    applyMediaPosition(positionSeconds, durationSeconds, rate);
+  }, [positionSeconds, durationSeconds, rate]);
+
   // ---------- Команды ----------
 
   const play = useCallback(
@@ -432,6 +460,32 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       else setIsFavorite(!wanted);
     });
   }, [current, isFavorite]);
+
+  /**
+   * Кнопки системной карточки. Ставятся после объявления команд: система
+   * запоминает обработчики и зовёт их, даже когда вкладка усыплена, поэтому
+   * они обязаны ссылаться на актуальные функции.
+   */
+  useEffect(() => {
+    const audio = audioRef.current;
+    applyMediaHandlers(
+      {
+        play: () => {
+          void audio?.play();
+          setIsPlaying(true);
+        },
+        pause: () => {
+          audio?.pause();
+          setIsPlaying(false);
+        },
+        nextTrack: next,
+        previousTrack: prev,
+        seekTo: seek,
+        seekBy: skip,
+      },
+      SEEK_STEP_SECONDS,
+    );
+  }, [next, prev, seek, skip]);
 
   const value = useMemo<MusicPlayerApi>(
     () => ({
