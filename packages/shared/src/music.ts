@@ -347,3 +347,53 @@ export interface MyMusicUploadsDto {
   items: MyMusicUploadDto[];
   usage: MusicStorageUsageDto;
 }
+
+// ===== Плеер (этап 3) =====
+
+/**
+ * Повтор очереди. Тот же набор, что в `music-queue.ts` на обеих сторонах —
+ * оттуда он и импортируется, чтобы не разъехаться.
+ */
+export type MusicRepeatMode = 'off' | 'all' | 'one';
+
+/**
+ * Состояние плеера, переживающее переход между устройствами.
+ *
+ * Очередь — идентификаторами, а не карточками: страница дочитает их сама, а
+ * гонять полсотни DTO в каждом heartbeat незачем.
+ */
+export interface MusicPlaybackStateDto {
+  trackId: string | null;
+  positionSeconds: number;
+  queue: string[];
+  repeat: MusicRepeatMode;
+  shuffle: boolean;
+  updatedAt: string | null;
+}
+
+export interface UpdateMusicPlaybackStateRequest {
+  trackId: string | null;
+  positionSeconds?: number;
+  queue?: string[];
+  repeat?: MusicRepeatMode;
+  shuffle?: boolean;
+}
+
+/**
+ * Тик плеера, раз в 30 секунд. `listenedSeconds` — сколько реально
+ * прослушано с прошлого тика, а не разница позиций: перемотка не должна
+ * засчитываться как прослушивание.
+ */
+export interface MusicHeartbeatRequest {
+  trackId: string;
+  positionSeconds: number;
+  listenedSeconds: number;
+  isPrivateSession: boolean;
+}
+
+export interface MusicSettingsDto {
+  nowPlayingVisibility: MusicNowPlayingVisibility;
+  autoplay: boolean;
+}
+
+export type UpdateMusicSettingsRequest = Partial<MusicSettingsDto>;

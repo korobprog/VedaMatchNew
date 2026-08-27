@@ -10,7 +10,9 @@
  * получился». По той же причине перестановка не той длины игнорируется —
  * очередь могли сменить, и выдавать позиции от прежней значит играть не то.
  */
-export type MusicRepeatMode = 'off' | 'all' | 'one';
+import type { MusicRepeatMode } from '@vedamatch/shared';
+
+export type { MusicRepeatMode };
 
 export interface QueueState {
   length: number;

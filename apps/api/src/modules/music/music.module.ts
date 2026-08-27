@@ -9,6 +9,11 @@ import { MusicAdminQueueService } from './music-admin-queue.service';
 import { MusicCatalogController } from './music-catalog.controller';
 import { MusicCatalogService } from './music-catalog.service';
 import { MusicMetadataReader } from './music-metadata-reader';
+import {
+  MusicPlaybackController,
+  MusicSettingsController,
+} from './music-playback.controller';
+import { MusicPlaybackService } from './music-playback.service';
 import { MusicPurgeListener } from './music-purge.listener';
 import { MusicStorageService } from './music-storage.service';
 import { MusicStreamController } from './music-stream.controller';
@@ -25,8 +30,8 @@ import { MusicWorkerService } from './music-worker.service';
  * (`is-admin.ts`, транслитерация слага, обвязка S3) продублированы внутри
  * папки.
  *
- * Этапы 1–2: каталог, справочники, загрузка мимо API и подписанная отдача.
- * Плеер — этап 3, плейлисты — этап 4.
+ * Этапы 1–3: каталог, справочники, загрузка мимо API, подписанная отдача и
+ * серверная половина плеера. Плейлисты — этап 4.
  */
 @Module({
   imports: [AuthModule],
@@ -34,6 +39,8 @@ import { MusicWorkerService } from './music-worker.service';
     MusicCatalogController,
     MusicStreamController,
     MusicUploadsController,
+    MusicPlaybackController,
+    MusicSettingsController,
     MusicAdminCatalogController,
     MusicAdminQueueController,
   ],
@@ -44,6 +51,7 @@ import { MusicWorkerService } from './music-worker.service';
     MusicStorageService,
     MusicMetadataReader,
     MusicUploadsService,
+    MusicPlaybackService,
     MusicWorkerService,
     MusicPurgeListener,
   ],

@@ -49,7 +49,9 @@ export interface MusicPurgeResult {
  * Незавершённые и отклонённые загрузки уходят: они никому, кроме автора, не
  * были доступны.
  */
-export function collectMusicPurgeKeys(input: MusicPurgeInput): MusicPurgeResult {
+export function collectMusicPurgeKeys(
+  input: MusicPurgeInput,
+): MusicPurgeResult {
   const kept = input.tracks.filter((track) => track.publishedAt !== null);
   const removed = input.tracks.filter((track) => track.publishedAt === null);
 
