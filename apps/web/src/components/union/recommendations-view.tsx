@@ -59,9 +59,14 @@ export function RecommendationsView({
   const [viewerIndex, setViewerIndex] = useState(0);
   const [density, setDensity] = useState<GridDensity>(DEFAULT_DENSITY);
   const mode: ViewMode = modeOverride ?? (isMobile ? "swipe" : "grid");
-  // На телефоне свайп — полноэкранный фокус-режим без обвязки страницы;
-  // на десктопе тот же режим остаётся инлайн внутри обычной страницы.
-  const focusMode = isMobile && mode === "swipe";
+  /*
+    Свайп — всегда полноэкранный фокус-режим, и на телефоне, и на десктопе.
+    Инлайн внутри страницы колода делила экран с меню сервиса, фильтрами и
+    заголовком: под саму карточку оставалась полоса в треть высоты, а
+    листать анкеты приходилось, глядя мимо всего остального. Здесь у экрана
+    ровно одна задача, и обвязка ей мешает.
+  */
+  const focusMode = mode === "swipe";
 
   useEffect(() => {
     // Синхронного способа прочитать localStorage к первому рендеру нет, а
@@ -97,6 +102,17 @@ export function RecommendationsView({
     };
   }, [focusMode]);
 
+  useEffect(() => {
+    if (!focusMode) return;
+    // На десктопе у полноэкранного режима есть клавиатура, и Esc — то, чем
+    // такой режим закрывают не глядя. На телефоне обработчик просто молчит.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") window.history.back();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [focusMode]);
+
   function exitFocusMode() {
     // history.back() запускает popstate-обработчик выше, который и
     // переключает mode на "grid" — единая точка выхода что для клика,
@@ -107,7 +123,7 @@ export function RecommendationsView({
   if (focusMode) {
     return (
       <div
-        className="fixed inset-0 z-50 flex flex-col bg-bg-0 px-3"
+        className="fixed inset-0 z-50 flex flex-col bg-bg-0 px-3 md:px-6"
         style={{
           paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)",
           paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)",
@@ -128,16 +144,13 @@ export function RecommendationsView({
   return (
     <div>
       <div className="mb-4 flex items-center gap-2">
-        <IconButton
-          icon={<GridGlyph />}
-          label="Списком"
-          active={mode === "grid"}
-          onClick={() => setModeOverride("grid")}
-        />
+        {/* Кнопки «Списком» здесь больше нет: списком мы и так смотрим, а
+            свайп стал отдельным экраном — не второй режим этой страницы, а
+            выход в него. Поэтому и aria-pressed у кнопки нет: это действие. */}
         <IconButton
           icon={<DeckGlyph />}
           label="Свайпами"
-          active={mode === "swipe"}
+          pressable={false}
           onClick={() => {
             setViewerIndex(0);
             setModeOverride("swipe");
@@ -153,7 +166,7 @@ export function RecommendationsView({
           <span className="ml-auto text-sm text-text-2">Найдено: {total}</span>
         )}
 
-        {isMobile && mode === "grid" && (
+        {isMobile && (
           <IconButton
             icon={density === 2 ? <DenseGlyph /> : <LargeGlyph />}
             label={densityLabel(density)}
@@ -164,9 +177,7 @@ export function RecommendationsView({
         )}
       </div>
 
-      {mode === "swipe" ? (
-        <SwipeDeck items={items} initialIndex={viewerIndex} />
-      ) : isMobile ? (
+      {isMobile ? (
         /*
           На телефоне список — плитками в две колонки: так за экран видно
           восемь человек вместо полутора, и список выполняет свою работу —
