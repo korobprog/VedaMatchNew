@@ -89,7 +89,7 @@ export function SwipeHint() {
       role="dialog"
       aria-label="Как листать анкеты"
       onClick={() => rememberSwipeHintSeen(window.localStorage)}
-      className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 rounded-3xl bg-black/75 p-6 text-center backdrop-blur-sm"
+      className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 rounded-3xl bg-black/85 p-6 text-center"
     >
       <SwipeGestureIcon animate={!reduceMotion} />
       <div className="space-y-1">

@@ -43,7 +43,7 @@ export function ArchiveButton({
       disabled={pending}
       aria-label="Убрать в архив"
       title="Убрать в архив — вернуть можно в разделе «Скрытые»"
-      className="absolute left-3 top-20 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur transition hover:bg-black/65 disabled:opacity-50"
+      className="absolute left-3 top-[calc(max(0.75rem,env(safe-area-inset-top))+5rem)] z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white transition hover:bg-black/65 disabled:opacity-50"
     >
       <BoxIcon />
     </button>

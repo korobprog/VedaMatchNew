@@ -31,7 +31,7 @@ export function VerifiedBadge({
       data-testid="verified-devotee-badge"
       className={`inline-flex shrink-0 items-center gap-1 rounded-full text-xs font-semibold ${
         variant === "overlay"
-          ? "bg-cyan/90 px-2 py-1 text-[#06231F] shadow-[0_0_14px_var(--vm-glow-cyan)]"
+          ? "h-7 bg-cyan/90 px-2.5 text-[#06231F] shadow-[0_0_14px_var(--vm-glow-cyan)]"
           : "border border-cyan/40 bg-cyan/10 px-2 py-0.5 text-cyan"
       }`}
     >
@@ -69,7 +69,7 @@ export function PhotoVerifiedBadge({
       data-testid="photo-verified-badge"
       className={`inline-flex shrink-0 items-center gap-1 rounded-full text-xs font-semibold ${
         variant === "overlay"
-          ? "bg-gold/90 px-2 py-1 text-[#2A1B00] shadow-[0_0_14px_var(--vm-glow-gold)]"
+          ? "h-7 bg-gold/90 px-2.5 text-[#2A1B00] shadow-[0_0_14px_var(--vm-glow-gold)]"
           : "border border-gold/40 bg-gold/10 px-2 py-0.5 text-gold"
       }`}
     >
