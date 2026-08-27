@@ -20,6 +20,7 @@ import {
   type BirthDateParts,
 } from "./birth-date";
 import { BirthTimeHelp } from "./birth-time-help";
+import { formatUtcOffset } from "./utc-offset";
 import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -31,17 +32,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const FIELD =
   "mt-1.5 min-h-[2.5rem] w-full rounded-lg border border-glass-brd bg-bg-1 px-3 py-2 text-text-0 transition focus:border-mint-edge";
 
-/** Смещение в минутах → «UTC+5:30». Получасовые пояса встречаются чаще, чем кажется. */
-export function formatUtcOffset(minutes: number): string {
-  const sign = minutes < 0 ? "−" : "+";
-  const abs = Math.abs(minutes);
-  const hours = Math.floor(abs / 60);
-  const rest = abs % 60;
-  return rest === 0
-    ? `UTC${sign}${hours}`
-    : `UTC${sign}${hours}:${String(rest).padStart(2, "0")}`;
-}
-
 export function BirthDataForm({ initial }: { initial: AstroStateDto }) {
   const router = useRouter();
   const saved = initial.birthData;
@@ -51,6 +41,9 @@ export function BirthDataForm({ initial }: { initial: AstroStateDto }) {
   );
   const birthDate = toIso(dateParts) ?? "";
   const years = yearOptions(new Date());
+  const todayIso = new Date().toISOString().slice(0, 10);
+  /** Нижняя граница нативного барабана — тот же разумный возраст, что в списке лет. */
+  const minIso = `${years[years.length - 1]}-01-01`;
   /**
    * Список дней укорачивается под выбранный месяц: 31 февраля выбрать нельзя,
    * если его там просто нет. Без года февраль показываем високосным — 29-е
@@ -187,23 +180,54 @@ export function BirthDataForm({ initial }: { initial: AstroStateDto }) {
     <div className="grid gap-6 md:grid-cols-[1fr_20rem]">
       <form onSubmit={submit} className="space-y-5">
         {/*
-          Три списка вместо `input[type=date]`: пикер открывается на текущем
-          годе, и до года рождения приходится крутить его десятилетиями.
-          Списки — родные элементы: клавиатура, скринридер и подстановка
-          работают без единой строки ARIA.
+          Дата вводится по-разному на телефоне и на десктопе — потому что
+          удобное там разное.
+
+          На десктопе `input[type=date]` открывает календарь на текущем годе,
+          и до года рождения его крутят десятилетиями; три списка выбирают
+          год одним движением.
+
+          На телефоне наоборот: там `input[type=date]` — это системный
+          барабан (на iOS сразу трёхколоночный), и он привычнее и удобнее
+          трёх отдельных колёс.
+
+          Обе раскладки — родные элементы: клавиатура, скринридер и
+          подстановка работают без единой строки ARIA. Показана всегда ровно
+          одна, вторая скрыта `display:none` и в дерево доступности не
+          попадает, так что метка не задваивается.
         */}
         <fieldset>
           <legend className="text-sm font-medium text-text-0">
             Дата рождения
           </legend>
-          <div className="mt-1.5 grid grid-cols-[5rem_1fr_6rem] gap-2">
+          {/*
+            На телефоне — нативный `input[type=date]`: iOS открывает по нему
+            трёхколоночный барабан, а Android — свой календарь. Это и есть
+            привычный там способ ввести дату, и системный он всегда удобнее
+            нарисованного нами.
+
+            `required` здесь нет намеренно ни у одного поля: спрятанное
+            `display:none` поле с `required` роняет отправку формы ошибкой
+            «invalid form control is not focusable». Дату проверяет
+            birthDateProblem при отправке — одинаково для обеих раскладок.
+          */}
+          <input
+            type="date"
+            aria-label="Дата рождения"
+            value={birthDate}
+            max={todayIso}
+            min={minIso}
+            onChange={(event) => setDateParts(toParts(event.target.value))}
+            className={`${FIELD} md:hidden`}
+          />
+
+          <div className="mt-1.5 hidden grid-cols-[5rem_1fr_6rem] gap-2 md:grid">
             <span>
               <label htmlFor="astro-day" className="sr-only">
                 День рождения
               </label>
               <select
                 id="astro-day"
-                required
                 value={dateParts.day}
                 onChange={(event) =>
                   setDateParts((parts) => withPart(parts, "day", event.target.value))
@@ -225,7 +249,6 @@ export function BirthDataForm({ initial }: { initial: AstroStateDto }) {
               </label>
               <select
                 id="astro-month"
-                required
                 value={dateParts.month}
                 onChange={(event) =>
                   setDateParts((parts) =>
@@ -249,7 +272,6 @@ export function BirthDataForm({ initial }: { initial: AstroStateDto }) {
               </label>
               <select
                 id="astro-year"
-                required
                 value={dateParts.year}
                 onChange={(event) =>
                   setDateParts((parts) => withPart(parts, "year", event.target.value))
