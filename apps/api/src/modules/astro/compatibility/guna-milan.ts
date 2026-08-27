@@ -1,4 +1,12 @@
+import {
+  GUNA_MILAN_KOOTA_MAX,
+  GUNA_MILAN_KOOTA_TITLES,
+  GUNA_MILAN_MAX_TOTAL,
+  PURPOSE_KOOTAS,
+  gunaMilanMaxFor,
+} from '@vedamatch/shared';
 import type {
+  AstroCompatibilityPurpose,
   Gender,
   GunaMilanKoota,
   GunaMilanKootaKey,
@@ -32,37 +40,30 @@ export interface MoonPlacement {
   gender: Gender | null;
 }
 
-const KOOTA_MAX: Record<GunaMilanKootaKey, number> = {
-  temperament: 1,
-  vashya: 2,
-  tara: 3,
-  yoni: 4,
-  grahaMaitri: 5,
-  gana: 6,
-  bhakoot: 7,
-  nadi: 8,
-};
+/**
+ * Веса, набор кут по целям и названия живут в общем пакете: по ним же
+ * витрина на лендинге показывает, чем расчёт для дела короче сватовского.
+ */
+const KOOTA_TITLES = GUNA_MILAN_KOOTA_TITLES;
 
-export const GUNA_MILAN_MAX_TOTAL = Object.values(KOOTA_MAX).reduce(
-  (sum, value) => sum + value,
-  0,
-); // 36
+/** Максимум очков для цели: сумма весов её кут. */
+export const maxPointsFor = gunaMilanMaxFor;
 
-const KOOTA_TITLES: Record<GunaMilanKootaKey, string> = {
-  temperament: 'Темперамент',
-  vashya: 'Взаимное притяжение',
-  tara: 'Звёздная совместимость',
-  yoni: 'Природная близость',
-  grahaMaitri: 'Дружба владык знаков',
-  gana: 'Склад характера',
-  bhakoot: 'Совместимость знаков',
-  nadi: 'Жизненная энергия',
-};
+// Переэкспорт для соседей модуля и тестов: таблицы общие, но обращаться к
+// ним из астрологии естественнее через её же файл расчёта.
+export { GUNA_MILAN_KOOTA_MAX, GUNA_MILAN_MAX_TOTAL, PURPOSE_KOOTAS };
 
+/**
+ * Считает все восемь кут и складывает те, что относятся к цели. Неучтённые
+ * остаются в ответе с `counted: false`: человеку видно и что посчитали, и
+ * что для этой цели считать не стали.
+ */
 export function computeGunaMilan(
   a: MoonPlacement,
   b: MoonPlacement,
+  purpose: AstroCompatibilityPurpose = 'family',
 ): GunaMilanScore {
+  const counted = new Set(PURPOSE_KOOTAS[purpose]);
   const kootas: GunaMilanKoota[] = [
     scoreTemperament(a, b),
     scoreVashya(a, b),
@@ -72,34 +73,41 @@ export function computeGunaMilan(
     scoreGana(a, b),
     scoreBhakoot(a, b),
     scoreNadi(a, b),
-  ];
+  ].map((row) => ({ ...row, counted: counted.has(row.key) }));
 
-  const totalPoints = kootas.reduce((sum, k) => sum + k.points, 0);
+  const totalPoints = kootas
+    .filter((row) => row.counted)
+    .reduce((sum, row) => sum + row.points, 0);
+  const maxPoints = maxPointsFor(purpose);
 
   return {
+    purpose,
     kootas,
     totalPoints,
-    maxPoints: GUNA_MILAN_MAX_TOTAL,
-    percent: Math.round((totalPoints / GUNA_MILAN_MAX_TOTAL) * 100),
+    maxPoints,
+    percent: maxPoints === 0 ? 0 : Math.round((totalPoints / maxPoints) * 100),
   };
 }
 
-function koota(
-  key: GunaMilanKootaKey,
-  points: number,
-  note: string,
-): GunaMilanKoota {
+/**
+ * Кута до того, как стало известно, идёт ли она в итог: `counted` проставляет
+ * computeGunaMilan, когда узнает цель. Сами счётчики про цель не знают —
+ * астрономия от неё не зависит.
+ */
+type Koota = Omit<GunaMilanKoota, 'counted'>;
+
+function koota(key: GunaMilanKootaKey, points: number, note: string): Koota {
   return {
     key,
     title: KOOTA_TITLES[key],
     points,
-    maxPoints: KOOTA_MAX[key],
+    maxPoints: GUNA_MILAN_KOOTA_MAX[key],
     note,
   };
 }
 
 /** Переосмысленная варна: та же группа стихии — 1 очко, разная — 0. Без иерархии. */
-function scoreTemperament(a: MoonPlacement, b: MoonPlacement): GunaMilanKoota {
+function scoreTemperament(a: MoonPlacement, b: MoonPlacement): Koota {
   const same = temperamentOf(a.rashi) === temperamentOf(b.rashi);
   return koota(
     'temperament',
@@ -109,7 +117,7 @@ function scoreTemperament(a: MoonPlacement, b: MoonPlacement): GunaMilanKoota {
 }
 
 /** Совпадение природной группы знака: 2 очка при совпадении, иначе 0. */
-function scoreVashya(a: MoonPlacement, b: MoonPlacement): GunaMilanKoota {
+function scoreVashya(a: MoonPlacement, b: MoonPlacement): Koota {
   const same = vashyaGroupOf(a.rashi) === vashyaGroupOf(b.rashi);
   return koota(
     'vashya',
@@ -131,7 +139,7 @@ function taraPosition(fromNakshatra: number, toNakshatra: number): number {
 }
 
 /** Считается в обе стороны и суммируется: направление имеет значение. */
-function scoreTara(a: MoonPlacement, b: MoonPlacement): GunaMilanKoota {
+function scoreTara(a: MoonPlacement, b: MoonPlacement): Koota {
   const forward = taraPosition(a.nakshatra, b.nakshatra);
   const backward = taraPosition(b.nakshatra, a.nakshatra);
   const scoreOf = (position: number) => (GOOD_TARA.has(position) ? 1.5 : 0);
@@ -148,7 +156,7 @@ function scoreTara(a: MoonPlacement, b: MoonPlacement): GunaMilanKoota {
   );
 }
 
-function scoreYoni(a: MoonPlacement, b: MoonPlacement): GunaMilanKoota {
+function scoreYoni(a: MoonPlacement, b: MoonPlacement): Koota {
   const yoniA = yoniOf(a.nakshatra);
   const yoniB = yoniOf(b.nakshatra);
 
@@ -186,7 +194,7 @@ function combineFriendship(x: Friendship, y: Friendship): number {
   return FRIENDSHIP_SCORE[`${x}:${y}`];
 }
 
-function scoreGrahaMaitri(a: MoonPlacement, b: MoonPlacement): GunaMilanKoota {
+function scoreGrahaMaitri(a: MoonPlacement, b: MoonPlacement): Koota {
   const lordA = RASHI_LORD[a.rashi - 1];
   const lordB = RASHI_LORD[b.rashi - 1];
   if (lordA === lordB) {
@@ -220,7 +228,7 @@ function ganaSymmetric(x: Gana, y: Gana): number {
   return Math.max(GANA_ASYMMETRIC[x][y], GANA_ASYMMETRIC[y][x]);
 }
 
-function scoreGana(a: MoonPlacement, b: MoonPlacement): GunaMilanKoota {
+function scoreGana(a: MoonPlacement, b: MoonPlacement): Koota {
   const ganaA = ganaOf(a.nakshatra);
   const ganaB = ganaOf(b.nakshatra);
 
@@ -247,7 +255,7 @@ function scoreGana(a: MoonPlacement, b: MoonPlacement): GunaMilanKoota {
 /** Позиции 2/12, 5/9, 6/8 друг от друга — традиционно неблагоприятны. */
 const BHAKOOT_DOSHA_POSITIONS = new Set([2, 12, 5, 9, 6, 8]);
 
-function scoreBhakoot(a: MoonPlacement, b: MoonPlacement): GunaMilanKoota {
+function scoreBhakoot(a: MoonPlacement, b: MoonPlacement): Koota {
   const position = ((b.rashi - a.rashi + 12) % 12) + 1;
   const dosha = BHAKOOT_DOSHA_POSITIONS.has(position);
   return koota(
@@ -259,7 +267,7 @@ function scoreBhakoot(a: MoonPlacement, b: MoonPlacement): GunaMilanKoota {
   );
 }
 
-function scoreNadi(a: MoonPlacement, b: MoonPlacement): GunaMilanKoota {
+function scoreNadi(a: MoonPlacement, b: MoonPlacement): Koota {
   const same = nadiOf(a.nakshatra) === nadiOf(b.nakshatra);
   return koota(
     'nadi',

@@ -131,7 +131,7 @@ describe("RecommendationCard photo fallback", () => {
     expect(screen.queryByText(/^\d+%$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Почему \d+%/)).not.toBeInTheDocument();
     expect(
-      screen.queryByText("Проверить совместимость по звёздам"),
+      screen.queryByText("Совместимость по звёздам"),
     ).not.toBeInTheDocument();
   });
 
@@ -140,5 +140,50 @@ describe("RecommendationCard photo fallback", () => {
     render(<RecommendationCard item={item} />);
 
     expect(screen.getByText(`${item.compatibility.total}%`)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Сверка карт уходит в Астрологию вместе с целью: от неё зависит, какие куты
+ * пойдут в расчёт. Спрашивать об этом уже на чужой странице — лишний шаг, а
+ * потерять цель по дороге — значит посчитать по-сватовски то, что просили
+ * посчитать для дела.
+ */
+describe("RecommendationCard: сверка карт по звёздам", () => {
+  it("предлагает все четыре цели", () => {
+    render(<RecommendationCard item={recommendation()} />);
+
+    for (const title of [
+      "Создание семьи",
+      "Бизнес и проекты",
+      "Дружба по интересам",
+      "Совместное служение",
+    ]) {
+      expect(screen.getAllByText(title).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("передаёт выбранную цель в адрес сверки", () => {
+    const item = recommendation();
+    render(<RecommendationCard item={item} />);
+
+    const link = screen
+      .getAllByRole("link")
+      .find((node) =>
+        node.getAttribute("href")?.includes("purpose=business"),
+      );
+    expect(link).toHaveAttribute(
+      "href",
+      `/astro/compatibility?with=${item.user.id}&purpose=business`,
+    );
+  });
+
+  it("подписывает потолок каждой цели — им расчёты и различаются", () => {
+    render(<RecommendationCard item={recommendation()} />);
+
+    // 36 у семьи, 24 у дела, 17 у дружбы, 15 у служения — из общей таблицы кут.
+    for (const max of ["до 36", "до 24", "до 17", "до 15"]) {
+      expect(screen.getByText(max)).toBeInTheDocument();
+    }
   });
 });

@@ -1,6 +1,7 @@
 // Клиентская часть Astro API: запросы из браузера идут с NEXT_PUBLIC_API_URL и
 // cookie, а не через серверные хелперы lib/astro-api.ts.
 import type {
+  AstroCompatibilityPurpose,
   AstroCompatibilityReadingDto,
   AstroCompatibilityRequestDto,
   AstroSection,
@@ -67,11 +68,15 @@ export const listAstroCompatibilityRequests = () =>
     method: "GET",
   });
 
-export const createAstroCompatibilityRequest = (targetUserId: string) =>
+/** Цель выбирает отправитель: от неё зависит, какие куты идут в расчёт. */
+export const createAstroCompatibilityRequest = (
+  targetUserId: string,
+  purpose: AstroCompatibilityPurpose,
+) =>
   requestJson<AstroCompatibilityRequestDto>("/astro/compatibility/requests", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ targetUserId }),
+    body: JSON.stringify({ targetUserId, purpose }),
   });
 
 export const respondAstroCompatibilityRequest = (id: string, accept: boolean) =>

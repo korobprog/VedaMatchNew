@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { AstroCompatibilityRequestDto } from "@vedamatch/shared";
+import type {
+  AstroCompatibilityPurpose,
+  AstroCompatibilityRequestDto,
+} from "@vedamatch/shared";
+import {
+  ASTRO_COMPATIBILITY_PURPOSES,
+  ASTRO_PURPOSE_TITLES,
+} from "@vedamatch/shared";
 import {
   AstroReadingError,
   createAstroCompatibilityRequest,
@@ -19,8 +26,15 @@ import { birthDataHint } from "./missing-birth-data";
  */
 export function CompatibilityView({
   autoRequestUserId,
+  presetPurpose = null,
 }: {
   autoRequestUserId: string | null;
+  /**
+   * Цель, выбранная ещё в карточке Знакомств. Она не отправляет запрос сама:
+   * человек уже нажал на неё в меню, но подтверждение остаётся здесь — из
+   * адресной строки нельзя понять, дошёл ли он сюда осознанно.
+   */
+  presetPurpose?: AstroCompatibilityPurpose | null;
 }) {
   const [requests, setRequests] = useState<AstroCompatibilityRequestDto[] | null>(
     null,
@@ -61,36 +75,30 @@ export function CompatibilityView({
     };
   }, []);
 
-  useEffect(() => {
-    if (!autoRequestUserId || requests === null) return undefined;
-    const already = requests.some((r) => r.counterpart.userId === autoRequestUserId);
-    if (already) return undefined;
-
-    let cancelled = false;
-    Promise.resolve()
-      .then(() => {
-        if (!cancelled) setPendingAction(autoRequestUserId);
-      })
-      .then(() => createAstroCompatibilityRequest(autoRequestUserId))
-      .then(() => listAstroCompatibilityRequests())
-      .then((loaded) => {
-        if (!cancelled) setRequests(loaded);
-      })
-      .catch((cause) => {
-        if (!cancelled) {
-          setError(
-            cause instanceof AstroReadingError ? cause.message : "Не удалось отправить запрос",
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setPendingAction(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRequestUserId, requests !== null]);
+  /**
+   * Запрос по ссылке из Знакомств отправляется не сам, а после выбора цели.
+   *
+   * Цель знает только отправитель: сверяют карты ради семьи, дела, дружбы или
+   * служения, и от этого зависит, какие куты вообще считать. Заодно уходит
+   * прежнее поведение, при котором переход по ссылке слал запрос живому
+   * человеку, ни о чём не спросив.
+   */
+  async function send(purpose: AstroCompatibilityPurpose) {
+    if (!autoRequestUserId) return;
+    setPendingAction(autoRequestUserId);
+    try {
+      await createAstroCompatibilityRequest(autoRequestUserId, purpose);
+      await refresh();
+    } catch (cause) {
+      setError(
+        cause instanceof AstroReadingError
+          ? cause.message
+          : "Не удалось отправить запрос",
+      );
+    } finally {
+      setPendingAction(null);
+    }
+  }
 
   async function respond(id: string, accept: boolean) {
     setPendingAction(id);
@@ -122,6 +130,41 @@ export function CompatibilityView({
           данные рождения», и человеку нужны и подсказка, и остальные его
           запросы, а не одна красная строка вместо всего. */}
       {error && <ErrorNote message={error} />}
+
+      {/* Пришли по ссылке с карточки участника, и запроса к нему ещё нет */}
+      {autoRequestUserId &&
+        !requests.some((r) => r.counterpart.userId === autoRequestUserId) && (
+          <section className="rounded-xl border border-black/10 p-4 dark:border-white/15">
+            <h2 className="text-lg font-medium">Ради чего сверяем карты?</h2>
+            <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+              От цели зависит, какие куты идут в расчёт: сватовской гуна-милан
+              считает все восемь, делу и служению часть из них отвечает не на
+              тот вопрос.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {ASTRO_COMPATIBILITY_PURPOSES.map((purpose) => (
+                <button
+                  key={purpose}
+                  type="button"
+                  disabled={pendingAction === autoRequestUserId}
+                  onClick={() => void send(purpose)}
+                  className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${
+                    purpose === presetPurpose
+                      ? "border-amber-500 font-medium"
+                      : "border-black/15 hover:border-amber-500 dark:border-white/20"
+                  }`}
+                >
+                  {ASTRO_PURPOSE_TITLES[purpose]}
+                  {purpose === presetPurpose && (
+                    <span className="ml-1.5 font-mono text-xs text-black/50 dark:text-white/50">
+                      из Знакомств
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
       {incoming.length > 0 && (
         <section>

@@ -35,7 +35,13 @@ export class AstroCompatibilityController {
     @CurrentUser() user: AccessTokenPayload,
     @Body() body: CreateAstroCompatibilityRequest,
   ): Promise<AstroCompatibilityRequestDto> {
-    return this.compatibility.createRequest(user.sub, body.targetUserId);
+    // Цель приходит из карточки Знакомств вместе с намерением анкеты; её
+    // отсутствие — семья, как было до появления целей.
+    return this.compatibility.createRequest(
+      user.sub,
+      body.targetUserId,
+      body.purpose,
+    );
   }
 
   @Patch('requests/:id')

@@ -2013,6 +2013,16 @@ enum AstroCompatibilityStatus {
   declined
 }
 
+/// Ради чего сверяют карты. Значения повторяют намерения Знакомств, чтобы
+/// запрос из карточки анкеты передавал свою цель без перевода. От цели
+/// зависит не астрономия, а состав кут в итоге — см. PURPOSE_KOOTAS.
+enum AstroCompatibilityPurpose {
+  family
+  business
+  friendship
+  service
+}
+
 /// Запрос на сопоставление карт двух пользователей. Обе карты закрыты, пока
 /// получатель не примет запрос явно — точка входа из Union передаёт только id
 /// человека, дальнейшее согласие целиком в astro.
@@ -2023,6 +2033,9 @@ model AstroCompatibilityRequest {
   targetId    String
   target      User                     @relation("AstroCompatibilityTarget", fields: [targetId], references: [id], onDelete: Cascade)
   status      AstroCompatibilityStatus @default(pending)
+  /// Цель выбирает отправитель. `family` по умолчанию: с неё сервис
+  /// начинался, и у всех запросов, созданных до появления целей, она и есть.
+  purpose     AstroCompatibilityPurpose @default(family)
   createdAt   DateTime                 @default(now())
   respondedAt DateTime?
 

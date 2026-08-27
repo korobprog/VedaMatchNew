@@ -9,6 +9,7 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   AstroCompatibilityReadingDto,
+  AstroCompatibilityPurpose,
   AstroCompatibilityRequestDto,
   AstroTimeAccuracy,
   GunaMilanScore,
@@ -53,6 +54,7 @@ export class AstroCompatibilityService {
   async createRequest(
     requesterId: string,
     targetUserId: string,
+    purpose: AstroCompatibilityPurpose = 'family',
   ): Promise<AstroCompatibilityRequestDto> {
     if (requesterId === targetUserId) {
       throw new BadRequestException('Нельзя сопоставить карту с самой собой');
@@ -100,7 +102,7 @@ export class AstroCompatibilityService {
     }
 
     const row = await this.prisma.astroCompatibilityRequest.create({
-      data: { requesterId, targetId: targetUserId },
+      data: { requesterId, targetId: targetUserId, purpose },
     });
     if (requesterUser) {
       const event = {
@@ -181,7 +183,11 @@ export class AstroCompatibilityService {
     locale = 'ru',
   ): Promise<AstroCompatibilityReadingDto> {
     const { row, score } = await this.acceptedRequestFor(userId, requestId);
-    const pairKey = await this.pairKeyFor(row.requesterId, row.targetId);
+    const pairKey = await this.pairKeyFor(
+      row.requesterId,
+      row.targetId,
+      row.purpose,
+    );
 
     const cached = await this.prisma.astroCompatibilityReading.findUnique({
       where: {
@@ -262,7 +268,11 @@ export class AstroCompatibilityService {
       );
     }
 
-    const score = await this.scoreFor(row.requesterId, row.targetId);
+    const score = await this.scoreFor(
+      row.requesterId,
+      row.targetId,
+      row.purpose,
+    );
     if (!score) {
       throw new ConflictException('Не удалось рассчитать совместимость');
     }
@@ -272,13 +282,14 @@ export class AstroCompatibilityService {
   private async scoreFor(
     userAId: string,
     userBId: string,
+    purpose: AstroCompatibilityPurpose,
   ): Promise<GunaMilanScore | null> {
     const [placementA, placementB] = await Promise.all([
       this.moonPlacementOf(userAId),
       this.moonPlacementOf(userBId),
     ]);
     if (!placementA || !placementB) return null;
-    return computeGunaMilan(placementA, placementB);
+    return computeGunaMilan(placementA, placementB, purpose);
   }
 
   private async moonPlacementOf(userId: string): Promise<MoonPlacement | null> {
@@ -305,8 +316,18 @@ export class AstroCompatibilityService {
     };
   }
 
-  /** Ключ кэша ИИ-текста: сортировка отпечатков карт убирает направление пары. */
-  private async pairKeyFor(userAId: string, userBId: string): Promise<string> {
+  /**
+   * Ключ кэша ИИ-текста: сортировка отпечатков карт убирает направление пары.
+   *
+   * Цель входит в ключ: у одной и той же пары разбор ради семьи и ради дела —
+   * разные тексты, собранные по разным кутам. Без неё второй запрос получил
+   * бы из кэша чужой разбор про брак.
+   */
+  private async pairKeyFor(
+    userAId: string,
+    userBId: string,
+    purpose: AstroCompatibilityPurpose,
+  ): Promise<string> {
     const [birthA, birthB] = await Promise.all([
       this.prisma.astroBirthData.findUniqueOrThrow({
         where: { userId: userAId },
@@ -317,7 +338,7 @@ export class AstroCompatibilityService {
     ]);
     const fpA = this.fingerprintOf(birthA);
     const fpB = this.fingerprintOf(birthB);
-    return [fpA, fpB].sort().join(':');
+    return [...[fpA, fpB].sort(), purpose].join(':');
   }
 
   private fingerprintOf(birth: {
@@ -340,6 +361,7 @@ export class AstroCompatibilityService {
       requesterId: string;
       targetId: string;
       status: string;
+      purpose: AstroCompatibilityPurpose;
       createdAt: Date;
       respondedAt: Date | null;
     },
@@ -353,12 +375,13 @@ export class AstroCompatibilityService {
 
     const score =
       row.status === 'accepted'
-        ? await this.scoreFor(row.requesterId, row.targetId)
+        ? await this.scoreFor(row.requesterId, row.targetId, row.purpose)
         : null;
 
     return {
       id: row.id,
       status: row.status as AstroCompatibilityRequestDto['status'],
+      purpose: row.purpose,
       createdAt: row.createdAt.toISOString(),
       respondedAt: row.respondedAt?.toISOString() ?? null,
       isRequester,
