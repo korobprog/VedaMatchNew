@@ -12,7 +12,7 @@ export function BirthTimeHelp() {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="rounded-xl bg-black/[0.03] p-4 dark:bg-white/[0.06]">
+    <div className="rounded-xl bg-glass p-4">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -23,7 +23,7 @@ export function BirthTimeHelp() {
       </button>
 
       {open && (
-        <div className="mt-3 space-y-3 text-sm text-black/75 dark:text-white/75">
+        <div className="mt-3 space-y-3 text-sm text-text-1">
           <p>Чаще всего оно находится в одном из этих мест:</p>
           <ul className="space-y-1.5">
             {BIRTH_TIME_SOURCES.map((source) => (

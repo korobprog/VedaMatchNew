@@ -1,6 +1,4 @@
 import { ASTRO_COMPATIBILITY_PURPOSES } from "@vedamatch/shared";
-import { getProfile } from "@/lib/api";
-import { redirectToLogin } from "@/lib/require-user";
 import { CompatibilityView } from "@/components/astro/compatibility-view";
 
 export const metadata = {
@@ -13,8 +11,6 @@ export default async function AstroCompatibilityPage({
 }: {
   searchParams: Promise<{ with?: string; purpose?: string }>;
 }) {
-  const user = await getProfile();
-  if (!user) redirectToLogin("/astro/compatibility");
 
   const { with: withUserId, purpose } = await searchParams;
   // Цель приходит из карточки Знакомств вместе со ссылкой. Чужое значение в
@@ -25,7 +21,7 @@ export default async function AstroCompatibilityPage({
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-8">
       <h1 className="text-2xl font-semibold">Совместимость по звёздам</h1>
-      <p className="mt-2 max-w-xl text-black/70 dark:text-white/70">
+      <p className="mt-2 max-w-xl text-text-1">
         Гуна-милан сравнивает положение Луны в двух картах. Сколько критериев
         пойдёт в расчёт, зависит от цели: сватовской счёт ведётся по всем
         восьми, а делу, дружбе и служению часть из них отвечает не на тот
@@ -40,7 +36,7 @@ export default async function AstroCompatibilityPage({
         />
       </div>
 
-      <p className="mt-10 text-sm text-black/50 dark:text-white/50">
+      <p className="mt-10 text-sm text-text-2">
         Материалы сервиса предназначены для самопознания и размышления и не
         заменяют медицинскую, юридическую или финансовую консультацию.
       </p>

@@ -17,14 +17,14 @@ function PeriodRow({
     <li
       className={
         current
-          ? "flex justify-between gap-4 rounded-lg bg-amber-500/15 px-3 py-2"
+          ? "flex justify-between gap-4 rounded-lg bg-gold/15 px-3 py-2"
           : "flex justify-between gap-4 px-3 py-2"
       }
     >
       <span className={current ? "font-medium" : undefined}>
         {GRAHA_NAMES[period.lord]}
       </span>
-      <span className="tabular-nums text-black/60 dark:text-white/60">
+      <span className="tabular-nums text-text-2">
         {formatPeriodDate(period.startsAt)} — {formatPeriodDate(period.endsAt)}
       </span>
     </li>
@@ -39,7 +39,7 @@ export function DashaPanel({ dasha }: { dasha: DashaState }) {
   return (
     <div className="grid gap-6 sm:grid-cols-2">
       <section>
-        <h3 className="text-sm font-medium text-black/60 dark:text-white/60">
+        <h3 className="text-sm font-medium text-text-2">
           Махадаши
         </h3>
         <ul className="mt-2 text-sm">
@@ -54,7 +54,7 @@ export function DashaPanel({ dasha }: { dasha: DashaState }) {
       </section>
 
       <section>
-        <h3 className="text-sm font-medium text-black/60 dark:text-white/60">
+        <h3 className="text-sm font-medium text-text-2">
           Антардаши внутри {GRAHA_NAMES[dasha.currentMahadasha.lord]}
         </h3>
         <ul className="mt-2 text-sm">

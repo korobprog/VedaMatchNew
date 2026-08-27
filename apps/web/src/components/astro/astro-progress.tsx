@@ -16,7 +16,7 @@ export function AstroProgress({
   const hint = nextStepHint(completeness);
 
   return (
-    <section className="rounded-2xl border border-black/10 p-5 dark:border-white/15">
+    <section className="rounded-2xl border border-glass-brd p-5">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-lg font-medium">Карта готова</h2>
         <span className="text-2xl font-semibold tabular-nums">
@@ -25,7 +25,7 @@ export function AstroProgress({
       </div>
 
       <div
-        className="mt-3 h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/15"
+        className="mt-3 h-2 overflow-hidden rounded-full bg-bg-2"
         role="progressbar"
         aria-valuenow={completeness.percent}
         aria-valuemin={0}
@@ -33,14 +33,14 @@ export function AstroProgress({
         aria-label="Готовность карты"
       >
         <div
-          className="h-full rounded-full bg-amber-500 transition-[width] duration-500"
+          className="h-full rounded-full bg-gold transition-[width] duration-500"
           style={{ width: `${completeness.percent}%` }}
         />
       </div>
 
       {unlocked.length > 0 && (
         <div className="mt-5">
-          <h3 className="text-sm font-medium text-black/60 dark:text-white/60">
+          <h3 className="text-sm font-medium text-text-2">
             Уже доступно
           </h3>
           <ul className="mt-2 space-y-1 text-sm">
@@ -56,10 +56,10 @@ export function AstroProgress({
 
       {locked.length > 0 && (
         <div className="mt-5">
-          <h3 className="text-sm font-medium text-black/60 dark:text-white/60">
+          <h3 className="text-sm font-medium text-text-2">
             Откроется дальше
           </h3>
-          <ul className="mt-2 space-y-1 text-sm text-black/60 dark:text-white/60">
+          <ul className="mt-2 space-y-1 text-sm text-text-2">
             {locked.map((feature) => (
               <li key={feature.key} className="flex gap-2">
                 <span aria-hidden="true">•</span>
@@ -77,7 +77,7 @@ export function AstroProgress({
       )}
 
       {hint && (
-        <p className="mt-5 text-sm text-black/70 dark:text-white/70">
+        <p className="mt-5 text-sm text-text-1">
           {hint.reason}
         </p>
       )}
