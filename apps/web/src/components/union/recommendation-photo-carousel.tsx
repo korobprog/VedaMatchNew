@@ -18,12 +18,16 @@ import { PhotoTapHint } from "./photo-tap-hint";
  */
 export type RecommendationPhotoCarouselVariant = "thumb" | "cover";
 
+/** Общий пустой набор: новый на каждый рендер сбрасывал бы мемоизацию ниже. */
+const НЕТ_ЗАГРУЖЕННЫХ: ReadonlySet<string> = new Set<string>();
+
 export function RecommendationPhotoCarousel({
   photos,
   userName,
   variant = "thumb",
   index: controlledIndex,
   onIndexChange,
+  paused = false,
 }: {
   photos: UnionPhoto[];
   userName: string;
@@ -34,7 +38,14 @@ export function RecommendationPhotoCarousel({
    */
   index?: number;
   onIndexChange?: (index: number) => void;
+  /**
+   * Не листать самим: палец на карточке или раскрытая анкета. Без этого
+   * таймер срабатывал прямо во время свайпа и подменял снимок под рукой —
+   * фото «прыгало» ровно в тот момент, когда карточку тянут.
+   */
+  paused?: boolean;
 }): React.ReactNode {
+  const isCover = variant === "cover";
   const photoIdentity = photos.map(({ id, url }) => `${id}:${url}`).join("|");
   const identity = `${userName}|${photoIdentity}`;
   const [navigation, setNavigation] = useState({ identity, index: 0 });
@@ -47,21 +58,15 @@ export function RecommendationPhotoCarousel({
    */
   const [autoSteps, setAutoSteps] = useState({ identity, count: 0 });
   /**
-   * Адрес снимка, который уже пришёл. Держим именно адрес, а не флаг: при
-   * листании снимок меняется, и флаг остался бы поднятым от прошлого — новый
-   * показался бы «загруженным» до того, как загрузился.
+   * Адреса снимков, которые уже пришли. Набор, а не один адрес: на полной
+   * карточке рядом висят соседние снимки, и про каждый нужно знать отдельно —
+   * готов он или под ним ещё держать подложку.
    */
-  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
-  /**
-   * Последний пришедший снимок этой анкеты. Пока следующий грузится, этот
-   * остаётся видимым под ним: раньше листание пересоздавало <img> целиком,
-   * и между снимками вспыхивал скелетон — на Android это читалось рывком.
-   * Привязан к анкете: подложка из чужой анкеты хуже скелетона.
-   */
-  const [settled, setSettled] = useState<{
+  const [loaded, setLoaded] = useState<{
     identity: string;
-    url: string;
-  } | null>(null);
+    urls: ReadonlySet<string>;
+  }>({ identity, urls: НЕТ_ЗАГРУЖЕННЫХ });
+  const loadedUrls = loaded.identity === identity ? loaded.urls : НЕТ_ЗАГРУЖЕННЫХ;
   const steps = autoSteps.identity === identity ? autoSteps.count : 0;
 
   const total = photos.length;
@@ -69,6 +74,17 @@ export function RecommendationPhotoCarousel({
     navigation.identity === identity ? navigation.index : 0;
   const rawIndex = controlledIndex ?? uncontrolledIndex;
   const safeIndex = total === 0 ? 0 : Math.min(Math.max(0, rawIndex), total - 1);
+
+  /** Отметить снимок пришедшим. Прежний набор, когда он уже отмечен: новая
+   *  ссылка на каждый вызов зацикливала бы рендер из ref-колбэка. */
+  function markLoaded(url: string) {
+    setLoaded((prev) => {
+      if (prev.identity === identity && prev.urls.has(url)) return prev;
+      const urls = new Set(prev.identity === identity ? prev.urls : []);
+      urls.add(url);
+      return { identity, urls };
+    });
+  }
 
   /** Ручной выбор снимка: и здесь, и снаружи — через одну дверь. */
   function choose(index: number, byHand: boolean) {
@@ -85,36 +101,26 @@ export function RecommendationPhotoCarousel({
   }, [onIndexChange]);
 
   /*
-    Следующий снимок тянем заранее. Иначе он начинает грузиться в момент, когда
-    человек листнул, — и пустоту он видит ровно тогда, когда просил показать.
+    В превью рядом с текстом снимок один, и следующий тянем заранее: иначе он
+    начинает грузиться в момент, когда человек листнул, — и пустоту он видит
+    ровно тогда, когда просил показать.
 
-    Один снимок вперёд, а не вся галерея, и только после того, как пришёл
-    текущий: в ленте каруселей столько, сколько анкет, и запущенная сразу
-    предзагрузка отбирала бы канал у тех снимков, которые человек видит
-    прямо сейчас.
+    На полной карточке этого не нужно: там соседние снимки смонтированы
+    по-настоящему (см. `окно` ниже), и браузер грузит их сам.
   */
-  const currentLoaded = loadedUrl === photos[safeIndex]?.url;
+  const currentLoaded = loadedUrls.has(photos[safeIndex]?.url ?? "");
   useEffect(() => {
-    if (total < 2 || !currentLoaded) return;
-    // Оба соседа, а не только следующий: тап по левой половине ведёт назад,
-    // и до этой предзагрузки предыдущий снимок начинал грузиться в момент
-    // тапа — ровно тогда, когда его просили показать.
-    const neighbors = new Set([
-      nextPhotoIndex(safeIndex, total),
-      (safeIndex - 1 + total) % total,
-    ]);
-    for (const neighborIndex of neighbors) {
-      const neighbor = photos[neighborIndex];
-      if (!neighbor) continue;
-      const preload = new window.Image();
-      preload.referrerPolicy = "no-referrer";
-      preload.src = neighbor.url;
-    }
-  }, [photos, safeIndex, total, currentLoaded]);
+    if (isCover || total < 2 || !currentLoaded) return;
+    const next = photos[nextPhotoIndex(safeIndex, total)];
+    if (!next) return;
+    const preload = new window.Image();
+    preload.referrerPolicy = "no-referrer";
+    preload.src = next.url;
+  }, [isCover, photos, safeIndex, total, currentLoaded]);
 
   // Хук нельзя звать после раннего выхода, поэтому пустая галерея
   // отсеивается ниже, а таймер при `autoplay === false` не заводится.
-  const autoplay = shouldAutoplay(total, Boolean(reduceMotion));
+  const autoplay = shouldAutoplay(total, Boolean(reduceMotion), paused);
   useEffect(() => {
     if (!autoplay) return;
     // Первая пауза длиннее: человек читает анкету, и подменять снимок под
@@ -136,13 +142,30 @@ export function RecommendationPhotoCarousel({
 
   if (photos.length === 0) return null;
   const photo = photos[safeIndex];
-  const isLoaded = loadedUrl === photo.url;
-  const underlay =
-    settled && settled.identity === identity && settled.url !== photo.url
-      ? settled.url
-      : null;
+  const isLoaded = loadedUrls.has(photo.url);
   const hasControls = photos.length > 1;
-  const isCover = variant === "cover";
+
+  /*
+    Какие снимки держим смонтированными.
+
+    На полной карточке — три: предыдущий, текущий и следующий. Это тот же
+    приём, которым живёт лента роликов «Вдохновения», и по той же причине:
+    там все ролики смонтированы, а прокрутка между ними — дело компоновщика
+    браузера, поэтому на Android она идёт гладко.
+
+    Раньше здесь было наоборот: `key={photo.url}` на единственной картинке
+    заставлял React выбрасывать её и монтировать новую при каждом листании.
+    Новая приходила пустой, декодировалась и проявлялась через `opacity` —
+    то есть каждое листание стоило загрузки, декодирования и перерисовки
+    полноэкранного слоя. Это и мигало.
+
+    Теперь листание не заводит картинку: соседние уже загружены и
+    отрисованы, переключается только видимость. Окно из трёх, а не вся
+    галерея, — чтобы память не росла с числом снимков в анкете.
+  */
+  const окно = isCover
+    ? [...new Set([(safeIndex - 1 + total) % total, safeIndex, (safeIndex + 1) % total])]
+    : [safeIndex];
 
   return (
     <div
@@ -154,73 +177,57 @@ export function RecommendationPhotoCarousel({
       data-testid="recommendation-carousel"
     >
       {/*
-        Скелетон лежит ПОД снимком, а не поверх: пришедшее фото перекрывает его
-        само, и гасить отдельным состоянием нечего. Прозрачность у самого
-        снимка — только ради плавного появления.
+        Скелетон лежит ПОД снимками: пришедшее фото перекрывает его само, и
+        гасить отдельным состоянием нечего. Виден только пока не пришёл первый
+        снимок — при листании соседний уже готов, и подложка не нужна.
       */}
-      {!isLoaded && !underlay && (
+      {!isLoaded && (
         <span aria-hidden="true" className="photo-skeleton absolute inset-0" />
       )}
 
-      {/* Прошлый снимок под новым: новый проявляется поверх него кросс-фейдом,
-          и между кадрами не мигает пустота. Для скринридера это дубль — он
-          скрыт, подписан остаётся текущий снимок. */}
-      {underlay && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={underlay}
-          alt=""
-          aria-hidden="true"
-          className="absolute inset-0 h-full w-full object-cover"
-          referrerPolicy="no-referrer"
-          draggable={false}
-        />
-      )}
-
-      {/* Signed gallery URLs can use varying storage hosts, so Next Image cannot
-          safely enumerate their remote origins. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        key={photo.url}
-        ref={(element) => {
-          // Снимок из кэша бывает готов уже к монтированию, и onLoad по нему
-          // не наступает — без этой проверки он остался бы прозрачным навсегда.
-          if (element?.complete && element.naturalWidth > 0) {
-            setLoadedUrl(photo.url);
-            // Тот же объект, когда ничего не изменилось: ref-колбэк зовётся
-            // на каждый рендер, и новая ссылка здесь зацикливала рендеры.
-            setSettled((prev) =>
-              prev?.identity === identity && prev.url === photo.url
-                ? prev
-                : { identity, url: photo.url },
-            );
-          }
-        }}
-        src={photo.url}
-        alt={`${userName}, фото ${safeIndex + 1} из ${photos.length}`}
-        // Размеры известны из галереи — отдаём их браузеру: он узнаёт
-        // пропорции снимка до того, как получит сам снимок.
-        width={photo.width || undefined}
-        height={photo.height || undefined}
-        // В ленте карточек снимков по числу анкет, и грузить их все разом
-        // незачем: браузер сам возьмёт те, что в поле зрения.
-        loading="lazy"
-        decoding="async"
-        onLoad={() => {
-          setLoadedUrl(photo.url);
-          setSettled((prev) =>
-            prev?.identity === identity && prev.url === photo.url
-              ? prev
-              : { identity, url: photo.url },
-          );
-        }}
-        // `relative` поднимает снимок над абсолютной подложкой: без него
-        // позиционированный слой рисовался бы поверх текущего кадра.
-        className={`relative h-full w-full object-cover transition-opacity duration-300 ${
-          isLoaded ? "opacity-100" : "opacity-0"
-        }`}
-        referrerPolicy="no-referrer"
-      />
+      {окно.map((photoIndex) => {
+        const item = photos[photoIndex];
+        const current = photoIndex === safeIndex;
+        return (
+          /* Signed gallery URLs can use varying storage hosts, so Next Image
+             cannot safely enumerate their remote origins. */
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            // Ключ по адресу: при листании React переносит уже смонтированные
+            // соседние картинки, а не пересоздаёт их.
+            key={item.url}
+            ref={(element) => {
+              // Снимок из кэша бывает готов уже к монтированию, и onLoad по
+              // нему не наступает — без этой проверки он остался бы скрытым.
+              if (element?.complete && element.naturalWidth > 0) {
+                markLoaded(item.url);
+              }
+            }}
+            src={item.url}
+            alt={current ? `${userName}, фото ${safeIndex + 1} из ${total}` : ""}
+            // Соседей скринридер не читает: снимок на экране один.
+            aria-hidden={current ? undefined : "true"}
+            // Размеры известны из галереи — отдаём их браузеру: он узнаёт
+            // пропорции снимка до того, как получит сам снимок.
+            width={item.width || undefined}
+            height={item.height || undefined}
+            // В ленте карточек каруселей столько, сколько анкет, и грузить их
+            // все разом незачем. На полной карточке карусель одна, и соседи
+            // нужны заранее — иначе смысл окна теряется.
+            loading={isCover ? "eager" : "lazy"}
+            decoding="async"
+            onLoad={() => markLoaded(item.url)}
+            // Переключение мгновенное, без перехода: плавное проявление и было
+            // тем миганием — полкадра человек смотрел сквозь полупрозрачный
+            // снимок на фон карточки.
+            className={`absolute inset-0 h-full w-full object-cover ${
+              current && isLoaded ? "opacity-100" : "opacity-0"
+            }`}
+            referrerPolicy="no-referrer"
+            draggable={false}
+          />
+        );
+      })}
 
       {hasControls && (
         <>

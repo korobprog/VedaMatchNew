@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -708,12 +708,32 @@ function SwipeCard({
   // Индекс снимка живёт здесь, а не в карусели: галерея в раскрытой карточке
   // должна листать ту же обложку, а не заводить вторую.
   const [photoIndex, setPhotoIndex] = useState(0);
+  /**
+   * Палец на карточке. Нужен автолистанию фото: его таймер срабатывал прямо
+   * во время свайпа и подменял снимок под рукой — фото прыгало ровно тогда,
+   * когда карточку тянут. Параметр паузы у `shouldAutoplay` был заведён с
+   * самого начала, но передать его забыли.
+   */
+  const [touching, setTouching] = useState(false);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-200, 200], [-14, 14]);
   const superOpacity = useTransform(y, [-140, -40], [1, 0]);
   const likeOpacity = useTransform(x, [40, 140], [0, 1]);
   const skipOpacity = useTransform(x, [-140, -40], [1, 0]);
+
+  useEffect(() => {
+    if (!touching) return;
+    // Перетаскивание захватывает указатель, и отпускание до карточки может не
+    // дойти — слушаем окно, иначе пауза залипла бы навсегда.
+    const release = () => setTouching(false);
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", release);
+    return () => {
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", release);
+    };
+  }, [touching]);
 
   // Возраст переехал к имени, остальное разошлось по пилюлям, поэтому строки
   // «26 лет · Алматы · Йог» больше нет.
@@ -744,6 +764,7 @@ function SwipeCard({
       // Перетаскивание карточки перехватывает указатель, поэтому вложенным
       // кнопкам и ссылкам (карусель, шеврон, имя) отдаём событие как есть.
       onPointerDownCapture={(event) => {
+        setTouching(true);
         if ((event.target as HTMLElement).closest("button, a")) {
           event.stopPropagation();
         }
@@ -770,7 +791,10 @@ function SwipeCard({
       }}
       exit="exit"
       transition={reduceMotion ? { duration: 0.15 } : springy}
-      className="absolute inset-0 flex touch-pan-y flex-col overflow-hidden rounded-3xl border border-glass-brd bg-bg-2"
+      // `will-change-transform` — не украшение: карточка едет и поворачивается
+      // каждый кадр, и без своего слоя Android растеризует её заново на
+      // каждый из них.
+      className="absolute inset-0 flex touch-pan-y flex-col overflow-hidden rounded-3xl border border-glass-brd bg-bg-2 will-change-transform"
       data-testid="swipe-card"
     >
       <div className="relative flex-1 overflow-hidden bg-bg-2">
@@ -781,6 +805,9 @@ function SwipeCard({
             variant="cover"
             index={photoIndex}
             onIndexChange={setPhotoIndex}
+            // Раскрытая анкета — тоже пауза: под панелью деталей человек
+            // выбирает снимок миниатюрами, и автолистание с ним спорило.
+            paused={touching || expanded}
           />
         ) : user.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -800,19 +827,21 @@ function SwipeCard({
 
         <motion.span
           style={{ opacity: likeOpacity }}
-          className="absolute left-4 top-24 rounded-xl border-2 border-cyan px-3 py-1 font-display text-lg font-bold text-cyan"
+          // Своя прозрачность на каждый кадр перетаскивания: без
+          // собственного слоя это перекрашивало бы всю карточку.
+          className="absolute left-4 top-24 rounded-xl border-2 border-cyan px-3 py-1 font-display text-lg font-bold text-cyan will-change-[opacity]"
         >
           ЗНАКОМИМСЯ
         </motion.span>
         <motion.span
           style={{ opacity: superOpacity }}
-          className="absolute inset-x-0 top-16 text-center font-display text-lg font-bold text-[#C88BFF]"
+          className="absolute inset-x-0 top-16 text-center font-display text-lg font-bold text-[#C88BFF] will-change-[opacity]"
         >
           СУПЕРЛАЙК
         </motion.span>
         <motion.span
           style={{ opacity: skipOpacity }}
-          className="absolute right-4 top-24 rounded-xl border-2 border-text-2 px-3 py-1 font-display text-lg font-bold text-text-2"
+          className="absolute right-4 top-24 rounded-xl border-2 border-text-2 px-3 py-1 font-display text-lg font-bold text-text-2 will-change-[opacity]"
         >
           ПРОПУСК
         </motion.span>
