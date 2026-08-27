@@ -33,18 +33,30 @@ export function MusicUploadForm() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [basis, setBasis] = useState<MusicUploadRightsBasis>("open_program");
+  /**
+   * Пусто по умолчанию, и это не забывчивость.
+   *
+   * Основание прав — утверждение человека, а не поле формы: отвечать перед
+   * правообладателем будет портал. Предвыбранное значение означает, что
+   * утверждение сделано за него, пока он выбирал файл. План сервиса требует
+   * ровно этого: «без отметки кнопка загрузки неактивна».
+   */
+  const [basis, setBasis] = useState<MusicUploadRightsBasis | "">("");
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
   async function submit() {
-    if (!file) return;
+    if (!file || !basis) return;
     setProgress(0);
     setError(null);
     setDone(null);
     try {
-      const result = await uploadMusicTrack(file, basis, setProgress);
+      const result = await uploadMusicTrack(
+        file,
+        basis as MusicUploadRightsBasis,
+        setProgress,
+      );
       setDone(`«${result.title}» ушла в очередь разбора.`);
       setFile(null);
       if (inputRef.current) inputRef.current.value = "";
@@ -65,7 +77,9 @@ export function MusicUploadForm() {
       </h3>
       <p className="mt-1 text-sm text-text-2">
         Принимаем mp3 и m4a. Запись попадёт в очередь разбора, а не сразу в
-        каталог: правило одинаково для всех, включая редакцию.
+        каталог: правило одинаково для всех, включая редакцию. Название и
+        исполнителя редакция поправит при разборе — если в файле они записаны
+        неточно, переделывать и перезаливать не нужно.
       </p>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -82,15 +96,18 @@ export function MusicUploadForm() {
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-xs text-text-2">Основание</span>
+          <span className="mb-1 block text-xs text-text-2">
+            Основание — отметьте сами
+          </span>
           <select
             value={basis}
             disabled={busy}
             onChange={(event) =>
-              setBasis(event.target.value as MusicUploadRightsBasis)
+              setBasis(event.target.value as MusicUploadRightsBasis | "")
             }
             className="h-9 w-full rounded-lg border border-glass-brd bg-bg-1 px-2.5 text-sm text-text-0"
           >
+            <option value="">Не выбрано</option>
             {BASES.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -132,14 +149,21 @@ export function MusicUploadForm() {
         </div>
       )}
 
-      <button
-        type="button"
-        disabled={!file || busy}
-        onClick={() => void submit()}
-        className="btn-mint mt-4 h-9 rounded-xl px-4 text-sm font-semibold disabled:opacity-50"
-      >
-        {busy ? "Загружаем…" : "Загрузить"}
-      </button>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          disabled={!file || !basis || busy}
+          onClick={() => void submit()}
+          className="btn-mint h-9 rounded-xl px-4 text-sm font-semibold disabled:opacity-50"
+        >
+          {busy ? "Загружаем…" : "Загрузить"}
+        </button>
+        {file && !basis && (
+          <span className="text-xs text-text-2">
+            Осталось отметить основание
+          </span>
+        )}
+      </div>
     </section>
   );
 }

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { MusicTrackStatus, MyMusicUploadDto } from "@vedamatch/shared";
 import { deleteMyMusicTrack } from "@/lib/music-client-api";
+import { useMusicPlayer } from "@/components/music/player/player-provider";
 import { formatBytes, formatTrackDuration } from "@/lib/music-duration";
 import { Alert } from "@/components/ui/alert";
 
@@ -23,8 +24,17 @@ const STATUS: Record<MusicTrackStatus, { label: string; tone: string }> = {
 
 export function MyMusicUploadsList({ items }: { items: MyMusicUploadDto[] }) {
   const router = useRouter();
+  const player = useMusicPlayer();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Своё можно слушать до разбора — это и есть смысл «до него её слышите
+   * только вы». Без кнопки человек залил мегабайты и не может проверить,
+   * что доехало то и целиком; а узнать это через неделю от модератора —
+   * худший из возможных способов.
+   */
+  const queue = items.map((item) => item.trackId);
 
   async function remove(trackId: string) {
     setBusy(trackId);
@@ -93,16 +103,54 @@ export function MyMusicUploadsList({ items }: { items: MyMusicUploadDto[] }) {
                 </p>
               )}
 
-              {item.canDelete && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  disabled={busy === item.trackId}
-                  onClick={() => void remove(item.trackId)}
-                  className="mt-3 h-8 rounded-lg border border-glass-brd px-3 text-xs font-semibold text-text-1 hover:text-text-0 disabled:opacity-50"
+                  aria-label={
+                    player?.current?.id === item.trackId && player.isPlaying
+                      ? `Пауза: ${item.title}`
+                      : `Послушать: ${item.title}`
+                  }
+                  onClick={() =>
+                    player?.current?.id === item.trackId
+                      ? player.toggle()
+                      : player?.play(item.trackId, queue)
+                  }
+                  className="flex h-8 items-center gap-1.5 rounded-lg border border-mint-edge bg-mint px-3 text-xs font-bold text-on-mint"
                 >
-                  {busy === item.trackId ? "Снимаем…" : "Снять и освободить место"}
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-3 w-3"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    {player?.current?.id === item.trackId && player.isPlaying ? (
+                      <>
+                        <rect x="6" y="4" width="4" height="16" rx="1" />
+                        <rect x="14" y="4" width="4" height="16" rx="1" />
+                      </>
+                    ) : (
+                      <path d="M7 4l13 8-13 8z" />
+                    )}
+                  </svg>
+                  {player?.current?.id === item.trackId && player.isPlaying
+                    ? "Пауза"
+                    : "Послушать"}
                 </button>
-              )}
+
+                {item.canDelete && (
+                  <button
+                    type="button"
+                    disabled={busy === item.trackId}
+                    onClick={() => void remove(item.trackId)}
+                    className="h-8 rounded-lg border border-glass-brd px-3 text-xs font-semibold text-text-1 hover:text-text-0 disabled:opacity-50"
+                  >
+                    {busy === item.trackId
+                      ? "Снимаем…"
+                      : "Снять и освободить место"}
+                  </button>
+                )}
+              </div>
             </li>
           );
         })}

@@ -38,7 +38,8 @@ export default async function MyMusicUploadsPage() {
           Мои загрузки
         </h1>
         <p className="text-sm text-text-2">
-          Каждая запись проходит разбор редакции. До него её слышите только вы.
+          Каждая запись проходит разбор редакции. До него её слышите только вы —
+          кнопкой «Послушать» ниже.
         </p>
       </header>
 
@@ -54,9 +55,17 @@ export default async function MyMusicUploadsPage() {
         <MusicUploadForm />
       </div>
 
-      <h2 className="mb-3 mt-8 font-display text-lg font-bold text-text-0">
+      <h2 className="mb-2 mt-8 font-display text-lg font-bold text-text-0">
         Что вы загрузили
       </h2>
+      {/* Что происходит после загрузки, человеку не говорил никто: он видел
+          «Ждёт разбора» и всё. Без этого ожидание превращается в вопрос
+          «сломалось или нет». */}
+      <p className="mb-4 max-w-2xl text-sm text-text-2">
+        Редакция слушает запись, поправляет название и исполнителя и
+        публикует — или отклоняет с причиной. Причина появится здесь же, на
+        карточке. Пока запись ждёт разбора, её можно снять и освободить место.
+      </p>
       {data ? (
         <MyMusicUploadsList items={data.items} />
       ) : (
