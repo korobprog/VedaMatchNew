@@ -13,6 +13,7 @@ export * from './astro-chart';
 export * from './astro-reading';
 export * from './astro-admin';
 export * from './astro-compatibility';
+export * from './astro-subject';
 export * from './astro-transit';
 export * from './changelog';
 export * from './market';

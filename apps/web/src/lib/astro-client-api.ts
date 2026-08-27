@@ -2,6 +2,10 @@
 // cookie, а не через серверные хелперы lib/astro-api.ts.
 import type {
   AstroCompatibilityPurpose,
+  AstroSubjectDto,
+  AstroSubjectPairDto,
+  AstroSubjectsDto,
+  SaveAstroSubjectRequest,
   AstroCompatibilityReadingDto,
   AstroCompatibilityRequestDto,
   AstroSection,
@@ -90,4 +94,42 @@ export const generateAstroCompatibilityReading = (id: string) =>
   requestJson<AstroCompatibilityReadingDto>(
     `/astro/compatibility/requests/${id}/reading`,
     { method: "POST" },
+  );
+
+/**
+ * Записи астролога. Владелец нигде не передаётся — сервер берёт его из
+ * токена, и подставить чужой отсюда невозможно.
+ */
+export const listAstroSubjects = () =>
+  requestJson<AstroSubjectsDto>("/astro/subjects", { method: "GET" });
+
+export const createAstroSubject = (body: SaveAstroSubjectRequest) =>
+  requestJson<AstroSubjectDto>("/astro/subjects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+export const updateAstroSubject = (id: string, body: SaveAstroSubjectRequest) =>
+  requestJson<AstroSubjectDto>(`/astro/subjects/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+export const deleteAstroSubject = (id: string) =>
+  requestJson<{ ok: true }>(`/astro/subjects/${id}`, { method: "DELETE" });
+
+/**
+ * Сверка двух записей. Согласия не спрашивают: обе принадлежат тому, кто
+ * сверяет, — обмен между участниками портала идёт своим путём.
+ */
+export const compareAstroSubjects = (
+  id: string,
+  otherId: string,
+  purpose: AstroCompatibilityPurpose,
+) =>
+  requestJson<AstroSubjectPairDto>(
+    `/astro/subjects/${id}/compare/${otherId}?purpose=${purpose}`,
+    { method: "GET" },
   );

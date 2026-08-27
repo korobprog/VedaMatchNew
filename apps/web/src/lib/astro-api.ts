@@ -5,6 +5,8 @@ import type {
   AstroReadingsDto,
   AstroSettingsDto,
   AstroStateDto,
+  AstroSubjectDto,
+  AstroSubjectsDto,
   AstroTodayDto,
   VedicChart,
 } from "@vedamatch/shared";
@@ -56,3 +58,15 @@ export const getAdminAstroSettings = () =>
 
 export const getAdminAstroUsage = (days = 30) =>
   astroGet<AstroAdminUsageDto>(`/admin/astro/usage?days=${days}`);
+
+/** Записи астролога для первой отрисовки страницы. */
+export const getAstroSubjects = () =>
+  astroGet<AstroSubjectsDto>("/astro/subjects");
+
+/** Одна запись астролога. */
+export const getAstroSubject = (id: string) =>
+  astroGet<AstroSubjectDto>(`/astro/subjects/${id}`);
+
+/** Карта записи: тот же расчёт, что у своей карты. */
+export const getAstroSubjectChart = (id: string) =>
+  astroGet<VedicChart>(`/astro/subjects/${id}/chart`);

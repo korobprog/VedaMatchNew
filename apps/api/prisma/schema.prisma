@@ -262,6 +262,7 @@ model User {
   astroUsage                         AstroUsage[]
   astroCompatibilityRequestsSent     AstroCompatibilityRequest[]  @relation("AstroCompatibilityRequester")
   astroCompatibilityRequestsReceived AstroCompatibilityRequest[]  @relation("AstroCompatibilityTarget")
+  astroSubjects                      AstroSubject[]               @relation("AstroSubjectOwner")
   notificationPreference             NotificationPreference?
   notificationItems                  NotificationItem[]
   notificationBroadcasts             NotificationBroadcast[]      @relation("NotificationBroadcastsCreated")
@@ -2045,6 +2046,51 @@ model AstroCompatibilityRequest {
 
 /// ИИ-разбор сопоставления. Ключ — отсортированная пара отпечатков карт, поэтому
 /// не важно, кто из двоих инициатор: разбор одной и той же пары карт один.
+/// Запись астролога: карта человека, которого он ведёт.
+///
+/// Это НЕ пользователь портала и НЕ вторая копия собственной карты владельца:
+/// своя карта живёт в AstroBirthData и остаётся единственной — на ней держатся
+/// персональный день и сверка совместимости.
+///
+/// Приватность: строка принадлежит владельцу, читается только им, ни с каким
+/// профилем портала не связывается и уходит вместе с аккаунтом (Cascade).
+model AstroSubject {
+  id      String @id @default(uuid())
+  ownerId String
+  owner   User   @relation("AstroSubjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  /// Как владелец назвал человека: ФИО или любая понятная ему пометка.
+  name String
+
+  /// Момент рождения в UTC — единственный источник истины для расчёта карты.
+  bornAtUtc      DateTime
+  /// Дата и время так, как их ввели, по месту рождения. Хранятся отдельно по той
+  /// же причине, что и в AstroBirthData: чтобы показать введённое обратно без
+  /// обратного пересчёта.
+  birthDateLocal DateTime          @db.Date
+  birthTimeLocal String?
+  timeAccuracy   AstroTimeAccuracy @default(exact)
+
+  placeLabel String
+  latitude   Float
+  longitude  Float
+  timezone   String
+
+  /// Пол. Нужен гана-куте: её традиционная таблица асимметрична, и без пола
+  /// берётся более благоприятное из двух направлений — счёт выходит завышенным.
+  /// null — не указан, и оговорка об этом идёт вместе с результатом сверки.
+  gender Gender?
+
+  /// Заметки астролога по этой карте.
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Список открывается свежими сверху — по нему и индекс.
+  @@index([ownerId, updatedAt])
+}
+
 model AstroCompatibilityReading {
   id            String   @id @default(uuid())
   /// `${меньший отпечаток}:${больший отпечаток}` — сортировка убирает направление.

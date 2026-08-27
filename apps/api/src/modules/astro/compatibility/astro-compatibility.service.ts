@@ -9,9 +9,11 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   AstroCompatibilityReadingDto,
+  AstroSubjectPairDto,
   AstroCompatibilityPurpose,
   AstroCompatibilityRequestDto,
   AstroTimeAccuracy,
+  Gender,
   GunaMilanScore,
   NotificationEvent,
 } from '@vedamatch/shared';
@@ -290,6 +292,72 @@ export class AstroCompatibilityService {
     ]);
     if (!placementA || !placementB) return null;
     return computeGunaMilan(placementA, placementB, purpose);
+  }
+
+  /**
+   * Сверка двух записей астролога.
+   *
+   * Согласия не спрашиваем и спрашивать не у кого: обе записи принадлежат
+   * тому, кто сверяет. Владелец — в условии запроса, поэтому чужая запись не
+   * находится вовсе, и «сверить свою с чужой» невозможно по построению.
+   *
+   * Пол у записей не хранится, а гана-кута считается по нему: тогда берётся
+   * более благоприятное из двух направлений таблицы — тот же запасной путь,
+   * что и для участников без указанного пола.
+   */
+  async compareSubjects(
+    ownerId: string,
+    aId: string,
+    bId: string,
+    purpose: AstroCompatibilityPurpose = 'family',
+  ): Promise<AstroSubjectPairDto> {
+    if (aId === bId) {
+      throw new BadRequestException('Нельзя сверить запись саму с собой');
+    }
+
+    const [a, b] = await Promise.all([
+      this.prisma.astroSubject.findFirst({ where: { id: aId, ownerId } }),
+      this.prisma.astroSubject.findFirst({ where: { id: bId, ownerId } }),
+    ]);
+    if (!a || !b) throw new NotFoundException('Запись не найдена');
+
+    const score = computeGunaMilan(
+      this.subjectMoon(a),
+      this.subjectMoon(b),
+      purpose,
+    );
+
+    return {
+      a: { id: a.id, name: a.name },
+      b: { id: b.id, name: b.name },
+      purpose,
+      score,
+      // Хотя бы у одной записи пол не указан — значит гана-кута посчитана по
+      // благоприятному варианту, и об этом надо сказать.
+      genderUnknown: a.gender === null || b.gender === null,
+    };
+  }
+
+  /** Луна записи: тот же расчёт, только момент из другой строки. */
+  private subjectMoon(subject: {
+    bornAtUtc: Date;
+    latitude: number;
+    longitude: number;
+    timeAccuracy: AstroTimeAccuracy;
+    gender: Gender | null;
+  }): MoonPlacement {
+    const chart = buildVedicChart(this.ephemeris, {
+      bornAtUtc: subject.bornAtUtc,
+      latitude: subject.latitude,
+      longitude: subject.longitude,
+      timeAccuracy: subject.timeAccuracy,
+    });
+    const moon = chart.grahas.find((g) => g.graha === 'moon')!;
+    return {
+      rashi: moon.rashi,
+      nakshatra: moon.nakshatra,
+      gender: subject.gender,
+    };
   }
 
   private async moonPlacementOf(userId: string): Promise<MoonPlacement | null> {

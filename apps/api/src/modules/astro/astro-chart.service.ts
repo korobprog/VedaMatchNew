@@ -34,4 +34,30 @@ export class AstroChartService {
       now,
     });
   }
+
+  /**
+   * Карта записи астролога. Владелец — в условии запроса, а не в проверке
+   * после: чужая запись не находится вовсе, как и во всём модуле записей.
+   *
+   * Расчёт тот же самый: хранится момент рождения, а из чьей он строки —
+   * астрономии безразлично.
+   */
+  async subjectChart(
+    ownerId: string,
+    subjectId: string,
+    now: Date = new Date(),
+  ): Promise<VedicChart> {
+    const subject = await this.prisma.astroSubject.findFirst({
+      where: { id: subjectId, ownerId },
+    });
+    if (!subject) throw new NotFoundException('Запись не найдена');
+
+    return buildVedicChart(this.ephemeris, {
+      bornAtUtc: subject.bornAtUtc,
+      latitude: subject.latitude,
+      longitude: subject.longitude,
+      timeAccuracy: subject.timeAccuracy,
+      now,
+    });
+  }
 }

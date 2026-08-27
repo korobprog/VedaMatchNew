@@ -6,6 +6,8 @@ import { AstroAdminService } from './astro-admin.service';
 import { AstroBirthDataController } from './astro-birth-data.controller';
 import { AstroBirthDataService } from './astro-birth-data.service';
 import { AstroChartController } from './astro-chart.controller';
+import { AstroSubjectsController } from './astro-subjects.controller';
+import { AstroSubjectsService } from './astro-subjects.service';
 import { AstroChartService } from './astro-chart.service';
 import { AstroGenerationService } from './astro-generation.service';
 import { AstroQuotaService } from './astro-quota.service';
@@ -27,12 +29,14 @@ import { AstroTransitWorkerService } from './transits/astro-transit-worker.servi
   controllers: [
     AstroBirthDataController,
     AstroChartController,
+    AstroSubjectsController,
     AstroReadingController,
     AstroAdminController,
     AstroCompatibilityController,
     AstroTransitController,
   ],
   providers: [
+    AstroSubjectsService,
     AstroAdminService,
     AstroBirthDataService,
     AstroChartService,
