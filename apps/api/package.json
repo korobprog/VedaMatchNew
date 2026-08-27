@@ -32,7 +32,8 @@
     "seed:vedabase": "node prisma/seed-vedabase-dev.cjs",
     "test:ai": "node scripts/test-motivation-ai.mjs",
     "purge:user": "node scripts/purge-user.mjs",
-    "library:previews": "ts-node -T src/modules/library/backfill-previews.ts"
+    "library:previews": "ts-node -T src/modules/library/backfill-previews.ts",
+    "gallery:shrink": "ts-node -T src/modules/users/backfill-gallery-sizes.ts"
   },
   "prisma": {
     "seed": "node prisma/seed.cjs"

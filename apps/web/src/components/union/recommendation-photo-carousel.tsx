@@ -46,6 +46,12 @@ export function RecommendationPhotoCarousel({
    * случае ждём длинную паузу, а не короткий шаг.
    */
   const [autoSteps, setAutoSteps] = useState({ identity, count: 0 });
+  /**
+   * Адрес снимка, который уже пришёл. Держим именно адрес, а не флаг: при
+   * листании снимок меняется, и флаг остался бы поднятым от прошлого — новый
+   * показался бы «загруженным» до того, как загрузился.
+   */
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
   const steps = autoSteps.identity === identity ? autoSteps.count : 0;
 
   const total = photos.length;
@@ -67,6 +73,25 @@ export function RecommendationPhotoCarousel({
   useEffect(() => {
     notify.current = onIndexChange;
   }, [onIndexChange]);
+
+  /*
+    Следующий снимок тянем заранее. Иначе он начинает грузиться в момент, когда
+    человек листнул, — и пустоту он видит ровно тогда, когда просил показать.
+
+    Один снимок вперёд, а не вся галерея, и только после того, как пришёл
+    текущий: в ленте каруселей столько, сколько анкет, и запущенная сразу
+    предзагрузка отбирала бы канал у тех снимков, которые человек видит
+    прямо сейчас.
+  */
+  const currentLoaded = loadedUrl === photos[safeIndex]?.url;
+  useEffect(() => {
+    if (total < 2 || !currentLoaded) return;
+    const next = photos[nextPhotoIndex(safeIndex, total)];
+    if (!next) return;
+    const preload = new window.Image();
+    preload.referrerPolicy = "no-referrer";
+    preload.src = next.url;
+  }, [photos, safeIndex, total, currentLoaded]);
 
   // Хук нельзя звать после раннего выхода, поэтому пустая галерея
   // отсеивается ниже, а таймер при `autoplay === false` не заводится.
@@ -92,6 +117,7 @@ export function RecommendationPhotoCarousel({
 
   if (photos.length === 0) return null;
   const photo = photos[safeIndex];
+  const isLoaded = loadedUrl === photo.url;
   const hasControls = photos.length > 1;
   const isCover = variant === "cover";
 
@@ -104,13 +130,41 @@ export function RecommendationPhotoCarousel({
       }
       data-testid="recommendation-carousel"
     >
+      {/*
+        Скелетон лежит ПОД снимком, а не поверх: пришедшее фото перекрывает его
+        само, и гасить отдельным состоянием нечего. Прозрачность у самого
+        снимка — только ради плавного появления.
+      */}
+      {!isLoaded && (
+        <span aria-hidden="true" className="photo-skeleton absolute inset-0" />
+      )}
+
       {/* Signed gallery URLs can use varying storage hosts, so Next Image cannot
           safely enumerate their remote origins. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
+        key={photo.url}
+        ref={(element) => {
+          // Снимок из кэша бывает готов уже к монтированию, и onLoad по нему
+          // не наступает — без этой проверки он остался бы прозрачным навсегда.
+          if (element?.complete && element.naturalWidth > 0) {
+            setLoadedUrl(photo.url);
+          }
+        }}
         src={photo.url}
         alt={`${userName}, фото ${safeIndex + 1} из ${photos.length}`}
-        className="h-full w-full object-cover"
+        // Размеры известны из галереи — отдаём их браузеру: он узнаёт
+        // пропорции снимка до того, как получит сам снимок.
+        width={photo.width || undefined}
+        height={photo.height || undefined}
+        // В ленте карточек снимков по числу анкет, и грузить их все разом
+        // незачем: браузер сам возьмёт те, что в поле зрения.
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setLoadedUrl(photo.url)}
+        className={`h-full w-full object-cover transition-opacity duration-300 ${
+          isLoaded ? "opacity-100" : "opacity-0"
+        }`}
         referrerPolicy="no-referrer"
       />
 

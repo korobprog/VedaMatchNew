@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AUTOPLAY_IDLE_MS, AUTOPLAY_STEP_MS } from "./photo-autoplay";
@@ -29,6 +29,58 @@ describe("RecommendationPhotoCarousel", () => {
 
     await user.click(screen.getByRole("button", { name: "Предыдущее фото" }));
     expect(screen.getByRole("img", { name: "Радха, фото 1 из 3" })).toBeInTheDocument();
+  });
+
+  it("держит место снимка, пока снимок не пришёл", () => {
+    // Пустой блок читается как поломка, а подложка — как ожидание. Иначе на
+    // медленной связи человек смотрит на дыру там, где должно быть фото.
+    const { container } = render(
+      <RecommendationPhotoCarousel photos={photos} userName="Радха" />,
+    );
+
+    expect(container.querySelector(".photo-skeleton")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /фото 1 из 3/ })).toHaveClass(
+      "opacity-0",
+    );
+  });
+
+  it("убирает подложку, когда снимок пришёл", () => {
+    const { container } = render(
+      <RecommendationPhotoCarousel photos={photos} userName="Радха" />,
+    );
+
+    fireEvent.load(screen.getByRole("img", { name: /фото 1 из 3/ }));
+
+    expect(container.querySelector(".photo-skeleton")).toBeNull();
+    expect(screen.getByRole("img", { name: /фото 1 из 3/ })).toHaveClass(
+      "opacity-100",
+    );
+  });
+
+  it("следующий снимок снова ждёт под подложкой", async () => {
+    // Признак загрузки привязан к адресу, а не к флагу: флаг остался бы
+    // поднятым от прошлого снимка, и новый показался бы готовым до времени.
+    const user = userEvent.setup();
+    const { container } = render(
+      <RecommendationPhotoCarousel photos={photos} userName="Радха" />,
+    );
+    fireEvent.load(screen.getByRole("img", { name: /фото 1 из 3/ }));
+
+    await user.click(screen.getByRole("button", { name: "Следующее фото" }));
+
+    expect(container.querySelector(".photo-skeleton")).toBeInTheDocument();
+  });
+
+  it("отдаёт браузеру размеры снимка и не грузит всю ленту разом", () => {
+    // Размеры известны из галереи — по ним браузер знает пропорции до того,
+    // как получит сам файл. lazy нужен ленте: каруселей столько, сколько анкет.
+    render(<RecommendationPhotoCarousel photos={photos} userName="Радха" />);
+
+    const image = screen.getByRole("img", { name: /фото 1 из 3/ });
+    expect(image).toHaveAttribute("width", "1200");
+    expect(image).toHaveAttribute("height", "800");
+    expect(image).toHaveAttribute("loading", "lazy");
+    expect(image).toHaveAttribute("decoding", "async");
   });
 
   it("selects an exact photo with Russian-labelled dot buttons", async () => {

@@ -441,6 +441,28 @@
   animation: preview-screen-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* Место снимка, пока снимок не пришёл.
+
+   Не «ещё одна анимация ради красоты»: фотографии в галерее лежат в том
+   разрешении, в каком их сняли, и на медленной связи блок стоит пустым
+   заметное время. Пустота читается как поломка, мерцающая подложка — как
+   ожидание. Лежит под изображением, поэтому гасить её не нужно: пришедшее
+   фото просто перекрывает её собой. */
+@keyframes photo-skeleton {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.9; }
+}
+
+.photo-skeleton {
+  background: linear-gradient(
+    110deg,
+    var(--vm-bg-2) 0%,
+    var(--vm-bg-1) 50%,
+    var(--vm-bg-2) 100%
+  );
+  animation: photo-skeleton 1.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   @keyframes drift {
     0%, 100% { transform: translate(0, 0) scale(1); }
@@ -463,6 +485,9 @@
   }
   @keyframes install-banner-ping {
     0%, 100% { opacity: 0; transform: scale(1); }
+  }
+  @keyframes photo-skeleton {
+    0%, 100% { opacity: 0.75; }
   }
   @keyframes activity-marquee {
     from, to { transform: translateX(0); }
