@@ -13,6 +13,7 @@ import type {
   MusicTrackDetailDto,
   MusicTrackListDto,
   MusicTrackListQuery,
+  MusicSettingsDto,
   MusicTrackDto,
   MyMusicUploadsDto,
 } from "@vedamatch/shared";
@@ -94,4 +95,9 @@ export function getMyMusicUploads(): Promise<MyMusicUploadsDto | null> {
 /** Своё избранное. `null` — гость. */
 export function getMyMusicFavorites(): Promise<{ items: MusicTrackDto[] } | null> {
   return musicGet<{ items: MusicTrackDto[] }>("/music/favorites");
+}
+
+/** Настройки прослушивания. `null` — гость. */
+export function getMusicSettingsServer(): Promise<MusicSettingsDto | null> {
+  return musicGet<MusicSettingsDto>("/music/settings");
 }
