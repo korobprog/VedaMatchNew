@@ -1,60 +1,23 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Курсор роликов на лендинге: пухлый и мятный. Обводка `--vm-on-mint` поверх
- * мятной заливки читается и на светлой теме, и на тёмной — мята одинакова в
- * обеих, поэтому цвет не приходится разводить по темам.
+ * Указатель роликов на лендинге: пухлый мятный палец. Обводка `--vm-on-mint`
+ * поверх мятной заливки читается и на светлой теме, и на тёмной — мята
+ * одинакова в обеих, поэтому цвет не приходится разводить по темам.
  *
- * Общий для макета портала и для колоды Знакомств: оба ролика живут в
- * `components/landing`, и второй такой же курсор рядом расходился бы с первым
- * при первой же правке формы.
+ * Один на все ролики: макет портала, колоду Знакомств и астрологию. Раньше у
+ * макета портала была своя стрелка мыши — он нарисован окном, а не телефоном,
+ * и стрелка казалась там уместнее. Но ролики идут на одной странице друг за
+ * другом, и два разных указателя читались как два разных интерфейса вместо
+ * одного портала.
  *
- * Позицию задаёт родитель — курсор рисуется от левого верхнего угла своего
+ * Позицию задаёт родитель — палец рисуется от левого верхнего угла своего
  * контейнера, а ездит внешний слой с `transform`.
- */
-export function TourCursor({ pressing }: { pressing: boolean }) {
-  return (
-    <span className="pointer-events-none absolute left-0 top-0">
-      {/* Кольцо клика: расходится в момент нажатия и гаснет вместе с ним. */}
-      <span
-        className={cn(
-          "absolute left-0 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-mint transition-all duration-200 ease-out",
-          pressing ? "size-9 opacity-0" : "size-3 opacity-70",
-        )}
-      />
-      <svg
-        viewBox="0 0 24 24"
-        className={cn(
-          "relative size-6 transition-transform duration-150 ease-out",
-          pressing && "scale-[0.82]",
-        )}
-        style={{ filter: "drop-shadow(0 3px 7px var(--vm-glow-mint))" }}
-      >
-        {/* Толстая обводка с круглыми стыками и даёт ту самую пухлость:
-            один и тот же контур, обведённый по кругу, скругляет острые углы
-            стрелки, не переписывая её путь. */}
-        <path
-          d="M6 3.4 L6 18.2 L9.9 14.6 L12.4 20.2 L15.2 19 L12.7 13.5 L18 13.1 Z"
-          fill="var(--vm-mint-from)"
-          stroke="var(--vm-on-mint)"
-          strokeWidth="2.6"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          paintOrder="stroke"
-        />
-      </svg>
-    </span>
-  );
-}
-
-/**
- * То же самое, но пальцем: в макете телефона стрелка мыши читается как чужой
- * предмет — по телефону тапают. Кончик пальца сдвинут в точку нажатия, иначе
- * палец «жал» бы мимо кнопки на половину своей ширины.
  */
 export function TourFinger({ pressing }: { pressing: boolean }) {
   return (
     <span className="pointer-events-none absolute left-0 top-0">
+      {/* Кольцо клика: расходится в момент нажатия и гаснет вместе с ним. */}
       <span
         className={cn(
           "absolute left-0 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-mint transition-all duration-200 ease-out",
