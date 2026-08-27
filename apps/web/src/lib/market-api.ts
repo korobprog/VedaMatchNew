@@ -25,6 +25,25 @@ import { buildMarketQuery } from "./market-query";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
+/**
+ * Витрина публичной страницы сервиса. Без cookie: её запрашивает гость, а
+ * лента Рынка открыта и ему. `no-store` обязателен — ссылки на фото
+ * подписаны и живут минуты, закэшированная страница отдала бы посетителю
+ * картинки с истёкшей подписью.
+ *
+ * Молчание API не имеет права ронять страницу сервиса: `null` здесь значит
+ * «показать запасные карточки», и решает это `showcaseCards`.
+ */
+export async function getMarketShowcase(): Promise<MarketListingFeedResponse | null> {
+  try {
+    const res = await fetch(`${API_URL}/market/listings`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as MarketListingFeedResponse;
+  } catch {
+    return null;
+  }
+}
+
 /** Server-side запрос к Market API с access_token из cookie. null — нет доступа. */
 async function marketGet<T>(path: string): Promise<T | null> {
   const cookieStore = await cookies();
