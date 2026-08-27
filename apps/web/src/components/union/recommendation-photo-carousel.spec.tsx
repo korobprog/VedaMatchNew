@@ -57,9 +57,10 @@ describe("RecommendationPhotoCarousel", () => {
     );
   });
 
-  it("следующий снимок снова ждёт под подложкой", async () => {
-    // Признак загрузки привязан к адресу, а не к флагу: флаг остался бы
-    // поднятым от прошлого снимка, и новый показался бы готовым до времени.
+  it("при листании прошлый снимок остаётся до прихода нового", async () => {
+    // Раньше между кадрами вспыхивал скелетон: <img> пересоздавался, и на
+    // Android это читалось рывком при каждом листании. Теперь новый снимок
+    // проявляется поверх прошлого, а скелетон — только у самого первого.
     const user = userEvent.setup();
     const { container } = render(
       <RecommendationPhotoCarousel photos={photos} userName="Радха" />,
@@ -68,7 +69,80 @@ describe("RecommendationPhotoCarousel", () => {
 
     await user.click(screen.getByRole("button", { name: "Следующее фото" }));
 
+    expect(container.querySelector(".photo-skeleton")).toBeNull();
+    const подложка = container.querySelector('img[aria-hidden="true"]');
+    expect(подложка).toHaveAttribute("src", photos[0].url);
+    // Новый снимок ещё не пришёл — он прозрачен и ждёт своего onLoad.
+    expect(screen.getByRole("img", { name: /фото 2 из 3/ })).toHaveClass(
+      "opacity-0",
+    );
+  });
+
+  it("пришедший снимок сменяет подложку", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <RecommendationPhotoCarousel photos={photos} userName="Радха" />,
+    );
+    fireEvent.load(screen.getByRole("img", { name: /фото 1 из 3/ }));
+    await user.click(screen.getByRole("button", { name: "Следующее фото" }));
+
+    fireEvent.load(screen.getByRole("img", { name: /фото 2 из 3/ }));
+
+    // Текущий кадр пришёл — дублировать его подложкой больше нечего.
+    expect(container.querySelector('img[aria-hidden="true"]')).toBeNull();
+    expect(screen.getByRole("img", { name: /фото 2 из 3/ })).toHaveClass(
+      "opacity-100",
+    );
+  });
+
+  it("подложка не переезжает в чужую анкету", async () => {
+    // Снимок прошлой анкеты под новой хуже скелетона: полсекунды человек
+    // смотрел бы на другого человека.
+    const user = userEvent.setup();
+    const { container, rerender } = render(
+      <RecommendationPhotoCarousel photos={photos} userName="Радха" />,
+    );
+    fireEvent.load(screen.getByRole("img", { name: /фото 1 из 3/ }));
+    await user.click(screen.getByRole("button", { name: "Следующее фото" }));
+
+    rerender(
+      <RecommendationPhotoCarousel
+        photos={[
+          { id: "other", url: "https://example.com/other.webp", width: 900, height: 1200 },
+          photos[0],
+        ]}
+        userName="Кришна"
+      />,
+    );
+
+    expect(container.querySelector('img[aria-hidden="true"]')).toBeNull();
     expect(container.querySelector(".photo-skeleton")).toBeInTheDocument();
+  });
+
+  it("заранее тянет обоих соседей, а не только следующий", () => {
+    // Тап по левой половине ведёт назад; без предзагрузки предыдущий снимок
+    // начинал грузиться ровно в момент тапа.
+    const created: string[] = [];
+    const RealImage = window.Image;
+    vi.stubGlobal(
+      "Image",
+      class {
+        referrerPolicy = "";
+        set src(value: string) {
+          created.push(value);
+        }
+      },
+    );
+    try {
+      render(<RecommendationPhotoCarousel photos={photos} userName="Радха" />);
+      fireEvent.load(screen.getByRole("img", { name: /фото 1 из 3/ }));
+
+      expect(created).toContain(photos[1].url);
+      expect(created).toContain(photos[2].url);
+    } finally {
+      vi.stubGlobal("Image", RealImage);
+      vi.unstubAllGlobals();
+    }
   });
 
   it("отдаёт браузеру размеры снимка и не грузит всю ленту разом", () => {

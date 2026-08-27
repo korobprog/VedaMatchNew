@@ -24,6 +24,7 @@ export * from './chat';
 export * from './pwa';
 export * from './activity';
 export * from './rewards';
+export * from './music';
 
 import type { BillingMode, SubscriptionState } from './support';
 
@@ -44,6 +45,7 @@ export const ADMIN_SERVICE_SLUGS = [
   'notices',
   'astro',
   'vedabase',
+  'music',
 ] as const;
 
 export type AdminServiceSlug = (typeof ADMIN_SERVICE_SLUGS)[number];

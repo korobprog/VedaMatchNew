@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useId } from "react";
+import { Music } from "lucide-react";
 import { ServiceIcon } from "./service-icons";
 import type { NotificationCategory } from "@vedamatch/shared";
 
@@ -38,6 +39,10 @@ export function NotificationIcon({
   if (slug) return <ServiceIcon slug={slug} className={className} />;
   if (category === "support") return <SupportIcon className={className} />;
   if (category === "announcements") return <PortalIcon className={className} />;
+  // У Музыки своего рисунка в наборе ещё нет, и подставлять чужой хуже, чем
+  // взять тот же знак, что стоит на её плитке портала: человек узнаёт строку
+  // по нему, а не по тому, нарисован он от руки или взят из библиотеки.
+  if (category === "music") return <Music className={className} aria-hidden="true" />;
   return <ChatIcon className={className} />;
 }
 

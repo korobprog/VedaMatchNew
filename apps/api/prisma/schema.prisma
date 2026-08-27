@@ -364,7 +364,17 @@ model User {
   rewardsFraudAsInvitee              RewardsFraudLog[]            @relation("RewardsFraudInvitee")
   activityFollowsGranted             ActivityFollow[]             @relation("ActivityFollowGranter")
   activityFollowsReceived            ActivityFollow[]             @relation("ActivityFollowGrantee")
-  activityItems                      ActivityItem[]                @relation("ActivityItemActor")
+  activityItems                      ActivityItem[]               @relation("ActivityItemActor")
+  musicTracksUploaded                MusicTrack[]                 @relation("MusicTracksUploaded")
+  musicPlaylists                     MusicPlaylist[]              @relation("MusicPlaylistsOwned")
+  musicFavorites                     MusicFavorite[]              @relation("MusicFavorites")
+  musicPlayStates                    MusicPlayState[]             @relation("MusicPlayStates")
+  musicNowPlaying                    MusicNowPlaying?             @relation("MusicNowPlaying")
+  musicListens                       MusicListen[]                @relation("MusicListens")
+  musicUploads                       MusicUpload[]                @relation("MusicUploads")
+  musicReportsMade                   MusicReport[]                @relation("MusicReportsMade")
+  musicReportsDecided                MusicReport[]                @relation("MusicReportsDecided")
+  musicSettings                      MusicSettings?               @relation("MusicSettings")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -1830,6 +1840,10 @@ model NotificationPreference {
   /// Судьба своих рилсов в «Мотивации». Отдельно от остальных: человек может
   /// не хотеть ничего от сервиса, кроме ответа по собственной публикации.
   motivation    Boolean  @default(true)
+  /// Судьба своих записей в «Музыке»: опубликовали, скрыли по жалобам,
+  /// вернули без разбора. Своя колонка по той же причине, что у мотивации —
+  /// это ответы по собственной загрузке, а не новости сервиса.
+  music         Boolean  @default(true)
   updatedAt     DateTime @updatedAt
 }
 
@@ -4183,4 +4197,396 @@ model ActivityItem {
   createdAt  DateTime @default(now())
 
   @@index([actorId, occurredAt(sort: Desc)])
+}
+
+// ===== Music service =====
+//
+// Киртаны, бхаджаны и записи с программ: каталог на своём S3, плейлисты,
+// портальный плеер. См. docs/music-service-plan.md.
+//
+// Про соседство имён: в схеме уже живёт `MotivationTrack` — сгенерённая
+// нейросетью подложка под рилсы «Вдохновения». Это чужой сервис: ни FK, ни
+// импорта, ни переезда. Совпадение слова «трек» разводится префиксом.
+//
+// Файлы в S3 каскадом не удаляются: ключи отдаёт `music-purge.listener.ts`
+// на `portal.user.purge-requested`, чистит бакет портал. Поэтому
+// `uploadedById` — SetNull (опубликованное в общий каталог переживает
+// удаление аккаунта), а личные и непроверенные загрузки — Cascade.
+
+/// Кто исполняет. `unknown` — не заглушка на время, а честный ответ для
+/// записей с программ, где исполнитель на плёнке не назван.
+enum MusicArtistKind {
+  kirtaneer
+  group
+  temple
+  unknown
+}
+
+/// Вид сборки. `live` — запись программы целиком, она же чаще всего и
+/// приходит в каталог; `album` — студийная работа.
+enum MusicAlbumKind {
+  album
+  live
+  compilation
+  single
+}
+
+/// Состояние записи в каталоге.
+///
+/// `pending` — загрузка обычного человека до разбора модератором: слышит её
+/// только он сам. Обратный порядок («сначала публикуем, потом разбираем»)
+/// для аудио не работает — правообладатель приходит быстрее модератора.
+/// `hidden` снимает запись с витрины без удаления файла: по жалобе на
+/// копирайт это делается одной кнопкой до разбора.
+enum MusicTrackStatus {
+  draft
+  pending
+  published
+  rejected
+  hidden
+}
+
+/// Кому виден плейлист. `friends` — тем, кому уже открыта активность
+/// (мэтч в Знакомствах, раскрытые контакты в Общении).
+enum MusicPlaylistVisibility {
+  private
+  friends
+  public
+}
+
+/// Кому видно «слушает сейчас». Отдельно от видимости плейлистов: лекции и
+/// мантры на ночь — не то, о чём хочется отчитываться.
+enum MusicNowPlayingVisibility {
+  friends
+  nobody
+}
+
+/// Жизненный цикл загрузки. Строка появляется до файла — при выдаче
+/// подписанного PUT, — поэтому `pending` здесь значит «URL выдан, файла ещё
+/// нет», а не «ждёт модерации». Незавершённые чистит фоновая стадия.
+enum MusicUploadStatus {
+  pending
+  completed
+  failed
+  expired
+}
+
+/// Основание, на котором человек заливает запись. Без отметки кнопка
+/// загрузки неактивна: отвечать перед правообладателем будет портал, и
+/// модератору нужно видеть, что именно человек утверждает.
+enum MusicUploadRightsBasis {
+  own_recording
+  open_program
+  freely_distributed
+}
+
+/// Повод для жалобы. `copyright` поднимается в очереди наверх и позволяет
+/// снять запись в `hidden` до разбора.
+enum MusicReportKind {
+  copyright
+  content
+  quality
+}
+
+enum MusicReportStatus {
+  open
+  resolved
+  rejected
+}
+
+/// Исполнитель: киртанья, группа или храм.
+model MusicArtist {
+  id         String          @id @default(uuid())
+  slug       String          @unique
+  name       String
+  kind       MusicArtistKind @default(unknown)
+  bio        String?
+  /// Ключ обложки в S3. Обложки, в отличие от аудио, публичные: их кеширует
+  /// CDN и они нужны в SSR-разметке.
+  coverKey   String?
+  /// Отметка редакции «это тот самый человек», а не значок портала.
+  isVerified Boolean         @default(false)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  albums MusicAlbum[]
+  tracks MusicTrack[]
+
+  @@index([kind])
+}
+
+/// Альбом или программа целиком.
+model MusicAlbum {
+  id        String         @id @default(uuid())
+  slug      String         @unique
+  title     String
+  artistId  String?
+  artist    MusicArtist?   @relation(fields: [artistId], references: [id], onDelete: SetNull)
+  kind      MusicAlbumKind @default(album)
+  /// Год записи, а не год загрузки. Пусто — у записей с программ его часто
+  /// просто нет.
+  year      Int?
+  coverKey  String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  tracks MusicTrack[]
+
+  @@index([artistId])
+}
+
+/// Раздел каталога: киртан, бхаджан, мантра, гуру-пуджа, инструментал.
+/// Таблица, а не enum: набор растёт, и каждое добавление миграцией — тупик
+/// (то же решение, что у `NoticeRubric` и `ContactsTag`).
+model MusicCategory {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  title     String
+  titleEn   String?
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tracks MusicTrackCategory[]
+
+  @@index([position])
+}
+
+/// Запись в каталоге.
+model MusicTrack {
+  id       String       @id @default(uuid())
+  title    String
+  artistId String?
+  artist   MusicArtist? @relation(fields: [artistId], references: [id], onDelete: SetNull)
+  albumId  String?
+  album    MusicAlbum?  @relation(fields: [albumId], references: [id], onDelete: SetNull)
+
+  /// Ключ объекта в S3. Файл приватный, наружу уходит подписанной ссылкой
+  /// с TTL 6 часов: иначе каталог выкачивается одним `wget` по CDN-адресам.
+  storageKey      String  @unique
+  /// Только `audio/mpeg` и `audio/mp4` — в v1 нет транскодирования, а эти
+  /// два играют везде.
+  mime            String
+  sizeBytes       Int
+  /// Длительность и битрейт читает сервер пакетом `music-metadata`: числу из
+  /// браузера доверять нельзя.
+  durationSeconds Int
+  bitrateKbps     Int?
+  coverKey        String?
+
+  status       MusicTrackStatus @default(draft)
+  uploadedById String?
+  uploadedBy   User?            @relation("MusicTracksUploaded", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  /// Язык записи в BCP-47 (`ru`, `en`, `sa`). Санскрит у киртанов — норма,
+  /// поэтому поле не про интерфейс, а про содержание.
+  language String?
+
+  /// Запись с программы, а не студийная работа. Признак у трека, а не у
+  /// альбома: киртан, вырезанный из программы, живёт в каталоге сам по себе,
+  /// без альбома, и значок «Запись с программы» на карточке носит всё равно.
+  /// `MusicUpload.rightsBasis` эту роль занять не может — это основание прав
+  /// для модератора, наружу оно не показывается.
+  isLiveRecording Boolean @default(false)
+
+  /// Тексты бхаджанов. Поля заложены сразу, показываются с этапа 9: добавлять
+  /// три колонки в живую таблицу дороже, чем завести их пустыми.
+  lyrics          String?
+  transliteration String?
+  translation     String?
+
+  /// Решение модератора словами: почему отклонили или что поправили.
+  /// Живёт у записи, а не у загрузки, потому что снять с публикации могут и
+  /// то, что уже висело в каталоге месяц, — а загрузки к тому времени нет.
+  moderationNote String?
+
+  /// Денормализованный счётчик — для витрины «чаще всего слушают».
+  playCount   Int       @default(0)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  categories MusicTrackCategory[]
+  items      MusicPlaylistItem[]
+  favorites  MusicFavorite[]
+  playStates MusicPlayState[]
+  nowPlaying MusicNowPlaying[]
+  listens    MusicListen[]
+  reports    MusicReport[]
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([artistId])
+  @@index([albumId])
+  @@index([uploadedById, status])
+}
+
+/// Связь трека с разделами каталога. Обычно их у записи одна-две.
+model MusicTrackCategory {
+  trackId    String
+  track      MusicTrack    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   MusicCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([trackId, categoryId])
+  @@index([categoryId])
+}
+
+/// Плейлист. `isSystem` — собранные редакцией подборки вроде «утренний
+/// киртан»: их нельзя править владельцу и они не считаются личными.
+model MusicPlaylist {
+  id          String                  @id @default(uuid())
+  ownerId     String
+  owner       User                    @relation("MusicPlaylistsOwned", fields: [ownerId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  coverKey    String?
+  visibility  MusicPlaylistVisibility @default(private)
+  /// Денормализованный счётчик: список плейлистов рисуется без подзапроса.
+  trackCount  Int                     @default(0)
+  isSystem    Boolean                 @default(false)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  items MusicPlaylistItem[]
+
+  @@index([ownerId, updatedAt(sort: Desc)])
+  @@index([visibility])
+}
+
+model MusicPlaylistItem {
+  id         String        @id @default(uuid())
+  playlistId String
+  playlist   MusicPlaylist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  trackId    String
+  track      MusicTrack    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  /// Разреженная позиция: вставка в середину не переписывает весь список.
+  position   Int
+  addedAt    DateTime      @default(now())
+
+  @@unique([playlistId, trackId])
+  @@index([playlistId, position])
+}
+
+model MusicFavorite {
+  userId    String
+  user      User       @relation("MusicFavorites", fields: [userId], references: [id], onDelete: Cascade)
+  trackId   String
+  track     MusicTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@id([userId, trackId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([trackId])
+}
+
+/// Где человек остановился. Для получасовой лекции это не украшение, а
+/// основная функция: начал в метро с телефона — дослушал дома с ноутбука.
+model MusicPlayState {
+  userId          String
+  user            User       @relation("MusicPlayStates", fields: [userId], references: [id], onDelete: Cascade)
+  trackId         String
+  track           MusicTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  positionSeconds Int        @default(0)
+  updatedAt       DateTime   @updatedAt
+
+  @@id([userId, trackId])
+  @@index([userId, updatedAt(sort: Desc)])
+}
+
+/// Одна строка на человека, а не журнал: вопрос «что он слушает сейчас»
+/// имеет ровно один ответ, а история для этого не нужна.
+///
+/// Строка протухает: старше `durationSeconds + 2 мин` без heartbeat —
+/// считается несуществующей, иначе человек «слушает» третьи сутки.
+model MusicNowPlaying {
+  userId           String     @id
+  user             User       @relation("MusicNowPlaying", fields: [userId], references: [id], onDelete: Cascade)
+  trackId          String
+  track            MusicTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  startedAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  /// «Невидимый сеанс» кнопкой в плеере, сбрасывается при закрытии вкладки.
+  isPrivateSession Boolean    @default(false)
+
+  @@index([trackId])
+  @@index([updatedAt])
+}
+
+/// История прослушиваний. Живёт отдельно от `MusicNowPlaying` и чистится
+/// ретеншеном (90 дней), иначе таблица растёт быстрее всех остальных в
+/// портале вместе взятых.
+model MusicListen {
+  id         String     @id @default(uuid())
+  userId     String
+  user       User       @relation("MusicListens", fields: [userId], references: [id], onDelete: Cascade)
+  trackId    String
+  track      MusicTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  /// Сколько секунд реально прослушано, а не длительность трека.
+  seconds    Int
+  listenedAt DateTime   @default(now())
+
+  @@index([userId, listenedAt(sort: Desc)])
+  @@index([trackId, listenedAt])
+  @@index([listenedAt])
+}
+
+/// Загрузка файла. Строка заводится при выдаче подписанного PUT, до того
+/// как файл появился в бакете; `POST music/uploads/:id/complete` дочитывает
+/// метаданные и создаёт `MusicTrack`.
+model MusicUpload {
+  id            String                 @id @default(uuid())
+  uploaderId    String
+  uploader      User                   @relation("MusicUploads", fields: [uploaderId], references: [id], onDelete: Cascade)
+  storageKey    String                 @unique
+  status        MusicUploadStatus      @default(pending)
+  /// Заявленные браузером размер и тип. Сервер сверяет их с фактическим
+  /// объектом на `complete` — присланному значению веры нет.
+  sizeBytes     Int
+  mime          String
+  rightsBasis   MusicUploadRightsBasis
+  /// ETag объекта из S3, читается на `complete`. Для загрузки одним PUT это
+  /// MD5 содержимого, и он достаётся бесплатно из HEAD — честная SHA-256
+  /// потребовала бы выкачать сотню мегабайт обратно в API ради дедупликации.
+  /// По нему ловятся дубли: один и тот же киртан приходит с разных сторон.
+  checksum      String?
+  failureReason String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@index([uploaderId, status])
+  @@index([status, createdAt])
+  @@index([checksum])
+}
+
+/// Жалоба на запись, включая претензию правообладателя.
+model MusicReport {
+  id          String            @id @default(uuid())
+  trackId     String
+  track       MusicTrack        @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  /// SetNull, а не Cascade: претензия правообладателя переживает удаление
+  /// аккаунта заявителя — разбирать её всё равно придётся.
+  reporterId  String?
+  reporter    User?             @relation("MusicReportsMade", fields: [reporterId], references: [id], onDelete: SetNull)
+  kind        MusicReportKind
+  text        String
+  status      MusicReportStatus @default(open)
+  decidedAt   DateTime?
+  decidedById String?
+  decidedBy   User?             @relation("MusicReportsDecided", fields: [decidedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime          @default(now())
+
+  @@index([status, kind])
+  @@index([trackId])
+}
+
+/// Настройки человека в сервисе. Отдельной моделью, а не полями в `User`:
+/// это сервисные предпочтения, портальному профилю они не нужны.
+model MusicSettings {
+  userId               String                    @id
+  user                 User                      @relation("MusicSettings", fields: [userId], references: [id], onDelete: Cascade)
+  nowPlayingVisibility MusicNowPlayingVisibility @default(friends)
+  /// Автоматически ставить следующий трек, когда очередь закончилась.
+  autoplay             Boolean                   @default(true)
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
 }

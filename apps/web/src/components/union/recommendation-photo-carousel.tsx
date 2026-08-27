@@ -52,6 +52,16 @@ export function RecommendationPhotoCarousel({
    * показался бы «загруженным» до того, как загрузился.
    */
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  /**
+   * Последний пришедший снимок этой анкеты. Пока следующий грузится, этот
+   * остаётся видимым под ним: раньше листание пересоздавало <img> целиком,
+   * и между снимками вспыхивал скелетон — на Android это читалось рывком.
+   * Привязан к анкете: подложка из чужой анкеты хуже скелетона.
+   */
+  const [settled, setSettled] = useState<{
+    identity: string;
+    url: string;
+  } | null>(null);
   const steps = autoSteps.identity === identity ? autoSteps.count : 0;
 
   const total = photos.length;
@@ -86,11 +96,20 @@ export function RecommendationPhotoCarousel({
   const currentLoaded = loadedUrl === photos[safeIndex]?.url;
   useEffect(() => {
     if (total < 2 || !currentLoaded) return;
-    const next = photos[nextPhotoIndex(safeIndex, total)];
-    if (!next) return;
-    const preload = new window.Image();
-    preload.referrerPolicy = "no-referrer";
-    preload.src = next.url;
+    // Оба соседа, а не только следующий: тап по левой половине ведёт назад,
+    // и до этой предзагрузки предыдущий снимок начинал грузиться в момент
+    // тапа — ровно тогда, когда его просили показать.
+    const neighbors = new Set([
+      nextPhotoIndex(safeIndex, total),
+      (safeIndex - 1 + total) % total,
+    ]);
+    for (const neighborIndex of neighbors) {
+      const neighbor = photos[neighborIndex];
+      if (!neighbor) continue;
+      const preload = new window.Image();
+      preload.referrerPolicy = "no-referrer";
+      preload.src = neighbor.url;
+    }
   }, [photos, safeIndex, total, currentLoaded]);
 
   // Хук нельзя звать после раннего выхода, поэтому пустая галерея
@@ -118,6 +137,10 @@ export function RecommendationPhotoCarousel({
   if (photos.length === 0) return null;
   const photo = photos[safeIndex];
   const isLoaded = loadedUrl === photo.url;
+  const underlay =
+    settled && settled.identity === identity && settled.url !== photo.url
+      ? settled.url
+      : null;
   const hasControls = photos.length > 1;
   const isCover = variant === "cover";
 
@@ -135,8 +158,23 @@ export function RecommendationPhotoCarousel({
         само, и гасить отдельным состоянием нечего. Прозрачность у самого
         снимка — только ради плавного появления.
       */}
-      {!isLoaded && (
+      {!isLoaded && !underlay && (
         <span aria-hidden="true" className="photo-skeleton absolute inset-0" />
+      )}
+
+      {/* Прошлый снимок под новым: новый проявляется поверх него кросс-фейдом,
+          и между кадрами не мигает пустота. Для скринридера это дубль — он
+          скрыт, подписан остаётся текущий снимок. */}
+      {underlay && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={underlay}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover"
+          referrerPolicy="no-referrer"
+          draggable={false}
+        />
       )}
 
       {/* Signed gallery URLs can use varying storage hosts, so Next Image cannot
@@ -149,6 +187,13 @@ export function RecommendationPhotoCarousel({
           // не наступает — без этой проверки он остался бы прозрачным навсегда.
           if (element?.complete && element.naturalWidth > 0) {
             setLoadedUrl(photo.url);
+            // Тот же объект, когда ничего не изменилось: ref-колбэк зовётся
+            // на каждый рендер, и новая ссылка здесь зацикливала рендеры.
+            setSettled((prev) =>
+              prev?.identity === identity && prev.url === photo.url
+                ? prev
+                : { identity, url: photo.url },
+            );
           }
         }}
         src={photo.url}
@@ -161,8 +206,17 @@ export function RecommendationPhotoCarousel({
         // незачем: браузер сам возьмёт те, что в поле зрения.
         loading="lazy"
         decoding="async"
-        onLoad={() => setLoadedUrl(photo.url)}
-        className={`h-full w-full object-cover transition-opacity duration-300 ${
+        onLoad={() => {
+          setLoadedUrl(photo.url);
+          setSettled((prev) =>
+            prev?.identity === identity && prev.url === photo.url
+              ? prev
+              : { identity, url: photo.url },
+          );
+        }}
+        // `relative` поднимает снимок над абсолютной подложкой: без него
+        // позиционированный слой рисовался бы поверх текущего кадра.
+        className={`relative h-full w-full object-cover transition-opacity duration-300 ${
           isLoaded ? "opacity-100" : "opacity-0"
         }`}
         referrerPolicy="no-referrer"

@@ -7,6 +7,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import { SessionGuard } from "@/components/session-guard";
 import { ServiceCatalogProvider } from "@/components/service-catalog-provider";
+import { MusicPlayerProvider } from "@/components/music/player/player-provider";
+import { MiniPlayer } from "@/components/music/player/mini-player";
 import { getPublicServices } from "@/lib/api";
 import { isThemePreference, THEME_COOKIE_NAME } from "@/lib/theme";
 import "./globals.css";
@@ -122,7 +124,16 @@ export default async function RootLayout({
         <NextIntlClientProvider>
           <ServiceCatalogProvider services={services}>
             <ThemeProvider initialPreference={preference}>
-              {children}
+              {/* Вторая и последняя точка касания портала сервисом «Музыка»
+                  (первая — строка в app.module.ts на бэкенде). Объявлена
+                  заранее в docs/music-service-plan.md, решение 6: звук обязан
+                  пережить переход между разделами, а плеер, смонтированный
+                  внутри /music, умирает на первом же клике в шапке.
+                  Полоса рисуется, только когда есть что играть. */}
+              <MusicPlayerProvider>
+                {children}
+                <MiniPlayer />
+              </MusicPlayerProvider>
             </ThemeProvider>
           </ServiceCatalogProvider>
         </NextIntlClientProvider>

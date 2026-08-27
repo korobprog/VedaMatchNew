@@ -169,6 +169,7 @@ describe('NotificationsService.getPreferences', () => {
       market: true,
       notices: true,
       motivation: true,
+      music: true,
       announcements: true,
     });
   });
@@ -208,6 +209,7 @@ describe('NotificationsService.updatePreferences', () => {
       market: true,
       notices: true,
       motivation: true,
+      music: true,
       announcements: true,
     });
   });

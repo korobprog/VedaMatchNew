@@ -16,6 +16,7 @@ export const adminServiceLabels: Record<AdminServiceSlug, string> = {
   notices: 'Notices — доска объявлений',
   astro: 'Astro — ведическая астрология',
   vedabase: 'Vedabase — священные тексты',
+  music: 'Music — киртаны и бхаджаны',
 };
 
 export const stageLabels: Record<SpiritualStage, string> = {

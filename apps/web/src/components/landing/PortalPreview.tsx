@@ -20,7 +20,7 @@ import {
   UnionScreen,
   VedabaseScreen,
 } from "@/components/landing/portal-preview-screens";
-import { TourCursor } from "@/components/landing/tour-cursor";
+import { TourFinger } from "@/components/landing/tour-cursor";
 import { SERVICE_CONTENT } from "@/lib/service-content";
 import {
   CURSOR_TRAVEL,
@@ -346,7 +346,7 @@ export function PortalPreview({ className }: { className?: string }) {
                     transitionDuration: `${CURSOR_TRAVEL[tour.phase]}ms`,
                   }}
                 >
-                  <TourCursor pressing={pressing} />
+                  <TourFinger pressing={pressing} />
                 </div>
               )}
             </div>

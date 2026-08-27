@@ -13,3 +13,8 @@ apps/api/scripts/test-motivation-ai-output.png
 
 # Локальные дампы БД (docker-compose backup)
 backups/
+
+# Исходники холста Claude Design. Мокапы публикуются артефактом, а холст —
+# рабочий черновик на мегабайты с вшитыми картинками; в репозитории ему
+# делать нечего.
+.design/

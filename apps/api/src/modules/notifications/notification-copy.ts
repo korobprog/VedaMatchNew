@@ -36,6 +36,10 @@ export const notificationEventNames = {
   motivationVideoReady: 'motivation.video.ready',
   motivationVideoReview: 'motivation.video.review',
   librarySectionRequestDecided: 'library.section-request.decided',
+  musicTrackPublished: 'music.track.published',
+  musicTrackRejected: 'music.track.rejected',
+  musicTrackHiddenByReports: 'music.track.hidden-by-reports',
+  musicTrackReviewExpired: 'music.track.review-expired',
 } as const satisfies Record<string, NotificationEventName>;
 
 /** Payload веб-пуша ограничен ~4 КБ, да и на экране длинный текст не поместится. */
@@ -282,6 +286,43 @@ export function buildNotification(
         // тумблер в настройки: решение по заявке ближе всего к поддержке.
         category: 'support',
       };
+    case 'music.track.published':
+      return {
+        title: 'Запись в каталоге',
+        body: `«${toExcerpt(event.title)}» прошла проверку и появилась в Музыке.`,
+        url: `/music/tracks/${event.trackId}`,
+        tag: `music-track:${event.trackId}`,
+        category: 'music',
+      };
+    case 'music.track.rejected':
+      return {
+        title: 'Запись не пошла в каталог',
+        // Причина в теле, а не в заголовке: заголовок человек видит в шторке
+        // целиком, а причина бывает длинной и там обрежется на полуслове.
+        body: toExcerpt(event.reason),
+        url: '/music/uploads',
+        tag: `music-track:${event.trackId}`,
+        category: 'music',
+      };
+    case 'music.track.hidden-by-reports':
+      return {
+        title: 'Запись скрыта по жалобам',
+        body:
+          event.kind === 'copyright'
+            ? `«${toExcerpt(event.title)}»: пришла претензия о нарушении прав. Запись убрана из каталога до разбора.`
+            : `«${toExcerpt(event.title)}» убрана из каталога до разбора редакцией.`,
+        url: '/music/uploads',
+        tag: `music-track:${event.trackId}`,
+        category: 'music',
+      };
+    case 'music.track.review-expired':
+      return {
+        title: 'Запись вернулась вам',
+        body: `«${toExcerpt(event.title)}»: за неделю жалобы никто не разобрал. Файл на месте, место в квоте занято.`,
+        url: '/music/uploads',
+        tag: `music-track:${event.trackId}`,
+        category: 'music',
+      };
     case 'motivation.reel.rejected':
       return {
         title: 'Рилс не прошёл проверку',
@@ -330,6 +371,15 @@ export function buildNotification(
         category: 'notices',
       };
   }
+
+  // Тип обещает `NotificationContent`, а `switch` без этой строки молча вернул
+  // бы `undefined` — и падение уехало бы к тому, кто читает `content.category`,
+  // с сообщением «уведомление undefined». Такое уже случилось с «Музыкой»:
+  // издатель забыл продублировать `name` в нагрузке, событие пришло безымянным,
+  // и час ушёл на поиск. Здесь имя видно сразу.
+  throw new Error(
+    `Нет текста для события уведомления: ${JSON.stringify((event as { name?: unknown }).name)}`,
+  );
 }
 
 const CURRENCY_SYMBOL: Record<string, string> = {
