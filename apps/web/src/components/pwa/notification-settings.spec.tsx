@@ -46,6 +46,9 @@ vi.mock("./use-install-prompt", () => ({
 describe("NotificationSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks сбрасывает вызовы, но не реализацию: без этой строки
+    // `mockResolvedValue` из одного теста утёк бы в следующий.
+    vi.mocked(fetchPreferences).mockResolvedValue({ ...всеВключены });
   });
 
   it("объясняет, что уведомления заблокированы, и не пытается спросить снова", async () => {
@@ -109,6 +112,56 @@ describe("NotificationSettings", () => {
 
     await screen.findByRole("checkbox", { name: "Сообщения" });
     const категории = Object.keys(всеВключены).filter((k) => k !== "enabled");
-    expect(screen.getAllByRole("checkbox")).toHaveLength(категории.length);
+    const тумблеры = screen
+      .getAllByRole("checkbox")
+      .filter((b) => b.getAttribute("aria-label") !== "Все уведомления");
+    expect(тумблеры).toHaveLength(категории.length);
+  });
+
+  describe("общий рубильник", () => {
+    it("выключается и сохраняется", async () => {
+      vi.mocked(detectPushSupport).mockReturnValue("granted");
+      render(<NotificationSettings />);
+
+      await userEvent.click(
+        await screen.findByRole("checkbox", { name: "Все уведомления" }),
+      );
+
+      expect(savePreferences).toHaveBeenCalledWith({ enabled: false });
+    });
+
+    it("выключённый запирает категории, но не стирает их", async () => {
+      // Спрятанное выглядит как потерянное: человек должен видеть, что его
+      // выбор на месте и вернётся вместе с рубильником.
+      vi.mocked(detectPushSupport).mockReturnValue("granted");
+      vi.mocked(fetchPreferences).mockResolvedValue({
+        ...всеВключены,
+        enabled: false,
+        chat: false,
+      });
+      render(<NotificationSettings />);
+
+      const сообщения = await screen.findByRole("checkbox", {
+        name: "Сообщения",
+      });
+      expect(сообщения).toBeDisabled();
+      expect(сообщения).not.toBeChecked();
+      expect(
+        screen.getByRole("checkbox", { name: "Заявки и совпадения" }),
+      ).toBeChecked();
+      expect(screen.getByText(/не придёт ничего/i)).toBeInTheDocument();
+    });
+
+    it("при выключенном рубильнике не обещает доставку на устройство", async () => {
+      vi.mocked(detectPushSupport).mockReturnValue("granted");
+      vi.mocked(fetchPreferences).mockResolvedValue({
+        ...всеВключены,
+        enabled: false,
+      });
+      render(<NotificationSettings />);
+
+      await screen.findByRole("checkbox", { name: "Все уведомления" });
+      expect(screen.queryByText(/приходят и на это устройство/i)).toBeNull();
+    });
   });
 });

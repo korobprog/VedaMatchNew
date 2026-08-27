@@ -125,7 +125,7 @@ export function NotificationSettings() {
             </p>
           )}
 
-          {support === "granted" && (
+          {support === "granted" && preferences?.enabled !== false && (
             <p className="mt-3 text-sm text-text-1">
               Уведомления приходят и на это устройство.
             </p>
@@ -167,11 +167,27 @@ export function NotificationSettings() {
 
       {preferences && (
         <div className="mt-5 border-t border-glass-brd pt-5">
-          <p className="text-sm text-text-1">
-            О чём уведомлять. Выключенное не придёт ни на устройство, ни в
-            колокольчик.
+          <label className="flex items-center justify-between gap-4 text-sm font-semibold text-text-0">
+            Все уведомления
+            <input
+              type="checkbox"
+              aria-label="Все уведомления"
+              checked={preferences.enabled}
+              onChange={(event) => void update({ enabled: event.target.checked })}
+              className="h-6 w-6 shrink-0"
+            />
+          </label>
+
+          <p className="mt-2 text-sm text-text-1">
+            {preferences.enabled
+              ? "О чём уведомлять. Выключенное не придёт ни на устройство, ни в колокольчик."
+              : "Пока выключено, не придёт ничего. Категории ниже сохранены и заработают снова, как только включите."}
           </p>
-          <div className="mt-3 space-y-3">
+
+          {/* Категории не прячем и не приглушаем: спрятанное выглядит как
+              потерянное, а приглушённый текст роняет контраст ниже 4.5:1 —
+              состояние несёт слово выше и `disabled` у самих полей. */}
+          <div className="mt-4 space-y-3">
             {categories.map((category) => (
               <label
                 key={category.key}
@@ -182,6 +198,7 @@ export function NotificationSettings() {
                   type="checkbox"
                   aria-label={category.label}
                   checked={preferences[category.key]}
+                  disabled={!preferences.enabled}
                   onChange={(event) =>
                     void update({ [category.key]: event.target.checked })
                   }
