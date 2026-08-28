@@ -6,10 +6,11 @@ import {
 } from '@nestjs/common';
 import { MusicUploadsService } from './music-uploads.service';
 import { MusicReportsService } from './music-reports.service';
+import { MusicPlaybackService } from './music-playback.service';
 
 /**
- * Фоновая стадия сервиса: чистка брошенных загрузок и записи, по которым
- * редакция не решила в срок.
+ * Фоновая стадия сервиса: чистка брошенных загрузок, записи, по которым
+ * редакция не решила в срок, протухшее «слушает сейчас» и ретеншен истории.
  *
  * Образец — `MotivationWorkerService`, но без Redis-лиза. Лиз там нужен,
  * потому что стадия тратит деньги на внешние модели, и второй экземпляр
@@ -32,6 +33,7 @@ export class MusicWorkerService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly uploads: MusicUploadsService,
     private readonly reports: MusicReportsService,
+    private readonly playback: MusicPlaybackService,
   ) {}
 
   onModuleInit() {
@@ -49,16 +51,39 @@ export class MusicWorkerService implements OnModuleInit, OnModuleDestroy {
     if (this.running) return;
     this.running = true;
     try {
-      await this.uploads.cleanupStale();
+      await this.stage('чистка брошенных загрузок', () =>
+        this.uploads.cleanupStale(),
+      );
       // Записи, по которым редакция не решила за неделю: не удаляем, а
       // возвращаем автору с честной причиной.
-      await this.reports.closeOverdue();
-    } catch (error) {
-      // Упавшая чистка не должна ронять процесс: объекты просто останутся
-      // в бакете до следующего тика.
-      this.logger.warn(`Чистка загрузок не удалась: ${String(error)}`);
+      await this.stage('разбор просроченных жалоб', () =>
+        this.reports.closeOverdue(),
+      );
+      // Строки «слушает сейчас», по которым heartbeat уже не придёт: вкладку
+      // убили мимо `pagehide`. Без этой стадии человек «слушает» третьи сутки.
+      await this.stage('снятие протухшего «слушает сейчас»', () =>
+        this.playback.sweepStaleNowPlaying(),
+      );
+      await this.stage('ретеншен истории', () =>
+        this.playback.purgeOldListens(),
+      );
     } finally {
       this.running = false;
+    }
+  }
+
+  /**
+   * Стадия падает сама по себе и не уносит соседей.
+   *
+   * Общий `try` на весь тик означал бы, что упавшая чистка бакета лишает
+   * работы снятие протухшего «слушает сейчас», — а это уже не мусор в
+   * хранилище, а неверный факт о человеке в чужой ленте.
+   */
+  private async stage(name: string, run: () => Promise<unknown>): Promise<void> {
+    try {
+      await run();
+    } catch (error) {
+      this.logger.warn(`Стадия «${name}» не удалась: ${String(error)}`);
     }
   }
 }

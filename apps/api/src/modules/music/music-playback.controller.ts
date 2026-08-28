@@ -58,6 +58,12 @@ export class MusicPlaybackController {
   stop(@CurrentUser() user: AccessTokenPayload) {
     return this.playback.stop(user.sub);
   }
+
+  /** Наслушано за неделю — для сводки в карточке на широком экране. */
+  @Get('stats')
+  stats(@CurrentUser() user: AccessTokenPayload) {
+    return this.playback.getStats(user.sub);
+  }
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   prevIndex as queuePrev,
 } from "@/lib/music-queue";
 import {
+  getMusicSettings,
   getPlaybackState,
   getTrack,
   savePlaybackPosition,
@@ -59,6 +60,17 @@ const HEARTBEAT_MS = 30_000;
 
 /** Шаг кнопок ±: лекции и киртаны длинные, пальцем по ползунку не попасть. */
 export const SEEK_STEP_SECONDS = 15;
+
+/**
+ * Настройки прослушивания изменились в `/music/settings`.
+ *
+ * Событием, а не общим состоянием: форма настроек и плеер живут в разных
+ * поддеревьях, и поднимать ради одного флажка провайдер над обоими значило бы
+ * перерисовывать портал на каждый тик плеера. Переключатель обязан
+ * действовать сразу — иначе человек снимает автопереход, дослушивает запись и
+ * видит, что портал его не послушал.
+ */
+export const MUSIC_SETTINGS_CHANGED_EVENT = "vedamatch:music-settings-changed";
 
 export interface MusicPlayerApi {
   current: MusicTrackDto | null;
@@ -125,6 +137,14 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const [muted, setMuted] = useState(false);
   const [isPrivateSession, setPrivateSession] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  /**
+   * Идти ли к следующей записи, когда текущая кончилась.
+   *
+   * `true` до ответа сервера — это значение по умолчанию, и совпадать оно
+   * обязано с `DEFAULT_SETTINGS` на стороне API: иначе первая же запись,
+   * дослушанная до ответа, повела бы себя не так, как обещает форма настроек.
+   */
+  const [autoplay, setAutoplay] = useState(true);
 
   /**
    * Позиция, с которой надо начать после загрузки записи. Применяется один
@@ -236,6 +256,29 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ---------- Настройки прослушивания ----------
+
+  /**
+   * Читаем на монтировании и перечитываем, когда форма настроек сообщила о
+   * сохранении. Гостю запрос вернёт `null` — остаётся значение по умолчанию.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      void getMusicSettings().then((settings) => {
+        if (cancelled) return;
+        setAutoplay(settings?.autoplay ?? true);
+      });
+    };
+
+    load();
+    window.addEventListener(MUSIC_SETTINGS_CHANGED_EVENT, load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(MUSIC_SETTINGS_CHANGED_EVENT, load);
+    };
+  }, []);
+
   // ---------- Элемент audio ----------
 
   useEffect(() => {
@@ -332,8 +375,19 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       }
       return;
     }
+
+    // Человек снял автопереход в настройках: останавливаемся на дослушанной
+    // записи, а не уходим к следующей. Строку «слушает сейчас» снимаем сразу
+    // — иначе друзья видели бы запись, которая давно кончилась.
+    if (!autoplay) {
+      setIsPlaying(false);
+      if (current) void savePlaybackPosition(current.id, positionSeconds);
+      void stopPlayback();
+      return;
+    }
+
     next();
-  }, [repeat, next]);
+  }, [repeat, autoplay, current, positionSeconds, next]);
 
   // ---------- Тик ----------
 

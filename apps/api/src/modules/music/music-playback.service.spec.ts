@@ -6,6 +6,11 @@ import { MusicPlaybackService } from './music-playback.service';
 
 function prismaMock() {
   return {
+    // `$transaction` списком: сервис пишет строку истории и очко записи
+    // вместе, чтобы счётчик и история не разъезжались.
+    $transaction: jest
+      .fn()
+      .mockImplementation((ops: unknown[]) => Promise.all(ops)),
     musicTrack: {
       findUnique: jest.fn().mockResolvedValue({
         id: 't1',
@@ -16,6 +21,7 @@ function prismaMock() {
         status: 'published',
         uploadedById: null,
       }),
+      update: jest.fn().mockResolvedValue({}),
     },
     musicPlayState: {
       findFirst: jest.fn().mockResolvedValue(null),
@@ -24,13 +30,17 @@ function prismaMock() {
     },
     musicNowPlaying: {
       findUnique: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
       upsert: jest.fn().mockResolvedValue({}),
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     musicListen: {
       findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn().mockResolvedValue({ id: 'l1' }),
       update: jest.fn().mockResolvedValue({}),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      aggregate: jest.fn().mockResolvedValue({ _sum: { seconds: null } }),
     },
     musicSettings: {
       findUnique: jest.fn().mockResolvedValue(null),
@@ -141,6 +151,38 @@ describe('MusicPlaybackService.heartbeat', () => {
       expect(prisma.musicListen.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'l1' }, data: { seconds: 70 } }),
       );
+    });
+  });
+
+  describe('счётчик прослушиваний', () => {
+    it('одно прослушивание — одно очко', async () => {
+      const prisma = prismaMock();
+
+      await service(prisma).heartbeat('u1', beat({ listenedSeconds: 35 }));
+
+      expect(prisma.musicTrack.update).toHaveBeenCalledWith({
+        where: { id: 't1' },
+        data: { playCount: { increment: 1 } },
+      });
+    });
+
+    // Иначе счётчик стал бы секундомером, а сортировка «популярное» —
+    // сортировкой «самое длинное».
+    it('следующие тики того же прослушивания очков не добавляют', async () => {
+      const prisma = prismaMock();
+      prisma.musicListen.findFirst.mockResolvedValue({ id: 'l1', seconds: 35 });
+
+      await service(prisma).heartbeat('u1', beat({ listenedSeconds: 35 }));
+
+      expect(prisma.musicTrack.update).not.toHaveBeenCalled();
+    });
+
+    it('пролистывание каталога очка не даёт', async () => {
+      const prisma = prismaMock();
+
+      await service(prisma).heartbeat('u1', beat({ listenedSeconds: 10 }));
+
+      expect(prisma.musicTrack.update).not.toHaveBeenCalled();
     });
   });
 
@@ -344,5 +386,143 @@ describe('MusicPlaybackService — «слушает сейчас»', () => {
     await service(prisma, bus).stop('u1');
 
     expect(bus.emit).not.toHaveBeenCalled();
+  });
+});
+
+describe('MusicPlaybackService.sweepStaleNowPlaying', () => {
+  const updatedAt = new Date('2026-08-29T10:00:00.000Z');
+  const row = {
+    userId: 'u1',
+    updatedAt,
+    track: { durationSeconds: 200 },
+  };
+
+  // Вкладку убили мимо `pagehide` — heartbeat уже не придёт, и без обхода
+  // человек «слушает» третьи сутки.
+  it('снимает строку, по которой тик не пришёл', async () => {
+    const prisma = prismaMock();
+    prisma.musicNowPlaying.findMany.mockResolvedValue([row]);
+    prisma.musicNowPlaying.deleteMany.mockResolvedValue({ count: 1 });
+    const bus = busMock();
+
+    const swept = await service(prisma, bus).sweepStaleNowPlaying(
+      new Date('2026-08-31T10:00:00.000Z'),
+    );
+
+    expect(swept).toBe(1);
+    expect(bus.emit).toHaveBeenCalledWith(
+      'music.user.now-playing',
+      expect.objectContaining({ userId: 'u1', nowPlaying: null }),
+    );
+  });
+
+  it('живую строку не трогает', async () => {
+    const prisma = prismaMock();
+    prisma.musicNowPlaying.findMany.mockResolvedValue([row]);
+    const bus = busMock();
+
+    const swept = await service(prisma, bus).sweepStaleNowPlaying(
+      new Date('2026-08-29T10:00:30.000Z'),
+    );
+
+    expect(swept).toBe(0);
+    expect(prisma.musicNowPlaying.deleteMany).not.toHaveBeenCalled();
+    expect(bus.emit).not.toHaveBeenCalled();
+  });
+
+  // Запас в две минуты поверх длительности переживает усыплённую вкладку и
+  // моргнувший канал: без него человек «переставал слушать» в метро.
+  it('в запасе поверх длительности строка ещё жива', async () => {
+    const prisma = prismaMock();
+    prisma.musicNowPlaying.findMany.mockResolvedValue([row]);
+
+    const swept = await service(prisma).sweepStaleNowPlaying(
+      // 200 секунд длительности + минута: до порога в 200 + 120 не дотянули.
+      new Date(updatedAt.getTime() + 260_000),
+    );
+
+    expect(swept).toBe(0);
+  });
+
+  // Между выборкой и удалением мог прийти тик: человек снова слушает, и
+  // гасить строку у друзей нечего.
+  it('перехваченную тиком строку не гасит', async () => {
+    const prisma = prismaMock();
+    prisma.musicNowPlaying.findMany.mockResolvedValue([row]);
+    prisma.musicNowPlaying.deleteMany.mockResolvedValue({ count: 0 });
+    const bus = busMock();
+
+    const swept = await service(prisma, bus).sweepStaleNowPlaying(
+      new Date('2026-08-31T10:00:00.000Z'),
+    );
+
+    expect(swept).toBe(0);
+    expect(bus.emit).not.toHaveBeenCalled();
+  });
+
+  it('клеймит строку по времени последнего тика', async () => {
+    const prisma = prismaMock();
+    prisma.musicNowPlaying.findMany.mockResolvedValue([row]);
+    prisma.musicNowPlaying.deleteMany.mockResolvedValue({ count: 1 });
+
+    await service(prisma).sweepStaleNowPlaying(
+      new Date('2026-08-31T10:00:00.000Z'),
+    );
+
+    expect(prisma.musicNowPlaying.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'u1', updatedAt },
+    });
+  });
+});
+
+describe('MusicPlaybackService.purgeOldListens', () => {
+  it('уносит строки старше девяноста дней', async () => {
+    const prisma = prismaMock();
+    prisma.musicListen.findMany.mockResolvedValue([{ id: 'l1' }, { id: 'l2' }]);
+    prisma.musicListen.deleteMany.mockResolvedValue({ count: 2 });
+
+    const count = await service(prisma).purgeOldListens(
+      new Date('2026-08-29T00:00:00.000Z'),
+    );
+
+    expect(count).toBe(2);
+    expect(prisma.musicListen.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['l1', 'l2'] } },
+    });
+  });
+
+  it('на пустом хвосте в базу за удалением не ходит', async () => {
+    const prisma = prismaMock();
+
+    expect(await service(prisma).purgeOldListens()).toBe(0);
+    expect(prisma.musicListen.deleteMany).not.toHaveBeenCalled();
+  });
+
+  // Первый обход после включения ретеншена пойдёт по всему хвосту сразу.
+  it('за раз берёт ограниченную пачку', async () => {
+    const prisma = prismaMock();
+    prisma.musicListen.findMany.mockResolvedValue([{ id: 'l1' }]);
+
+    await service(prisma).purgeOldListens();
+
+    expect(prisma.musicListen.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 1000 }),
+    );
+  });
+});
+
+describe('MusicPlaybackService.getStats', () => {
+  it('складывает прослушанное за неделю', async () => {
+    const prisma = prismaMock();
+    prisma.musicListen.aggregate.mockResolvedValue({ _sum: { seconds: 252 } });
+
+    expect(await service(prisma).getStats('u1')).toEqual({ weekSeconds: 252 });
+  });
+
+  // Человек ничего не слушал — это ноль, а не пустота: карточке нужно число.
+  it('без истории отдаёт ноль', async () => {
+    const prisma = prismaMock();
+
+    expect(await service(prisma).getStats('u1')).toEqual({ weekSeconds: 0 });
   });
 });

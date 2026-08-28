@@ -4,6 +4,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   PORTAL_NOW_PLAYING_EVENT,
   type ActivityNowPlayingDto,
+  type MusicListenStatsDto,
   type MusicPlaybackStateDto,
   type MusicHeartbeatRequest,
   type MusicSettingsDto,
@@ -13,6 +14,7 @@ import {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { mayShareMusicActivity } from './music-activity-share';
+import { isNowPlayingStale } from './now-playing-visibility';
 
 /**
  * Состояние плеера, тик воспроизведения и настройки прослушивания.
@@ -37,6 +39,27 @@ const LISTEN_THRESHOLD_SECONDS = 30;
  * лекции дописывалось бы в сегодняшнюю строку.
  */
 const LISTEN_WINDOW_MS = 6 * 60 * 60 * 1000;
+
+/** Окно недельной сводки. */
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Ретеншен истории. Девяносто дней — срок из «Модели данных» плана сервиса.
+ * Без чистки `MusicListen` растёт быстрее всех остальных таблиц портала: по
+ * строке на каждое прослушивание каждого человека, навсегда.
+ */
+const LISTEN_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * Сколько строк истории уносим за тик. Ограничение есть, потому что первый
+ * обход после включения ретеншена пойдёт по всему хвосту сразу, а держать
+ * долгую транзакцию на самой быстрорастущей таблице незачем: остальное
+ * доберёт следующий тик через десять минут.
+ */
+const LISTEN_PURGE_BATCH = 1000;
+
+/** Сколько строк «слушает сейчас» осматриваем за тик. */
+const NOW_PLAYING_SWEEP_BATCH = 200;
 
 const DEFAULT_SETTINGS: MusicSettingsDto = {
   nowPlayingVisibility: 'friends',
@@ -212,9 +235,17 @@ export class MusicPlaybackService {
       return;
     }
 
-    await this.prisma.musicListen.create({
-      data: { userId, trackId, seconds },
-    });
+    // Заведение строки — единственное место, где растёт `playCount`: одно
+    // прослушивание даёт одно очко. Инкремент на каждом тике превратил бы
+    // счётчик в секундомер, а сортировку «популярное» — в «самое длинное».
+    // Транзакцией, чтобы счётчик и история не разъезжались.
+    await this.prisma.$transaction([
+      this.prisma.musicListen.create({ data: { userId, trackId, seconds } }),
+      this.prisma.musicTrack.update({
+        where: { id: trackId },
+        data: { playCount: { increment: 1 } },
+      }),
+    ]);
   }
 
   /**
@@ -229,6 +260,90 @@ export class MusicPlaybackService {
     // `stop` и на закрытии вкладки, где ничего не играло.
     if (count > 0) await this.announceNowPlaying(userId, null);
     return { ok: true as const };
+  }
+
+  /**
+   * Снять протухшие строки «слушает сейчас».
+   *
+   * Плеер зовёт `stop` на `pagehide`, но убитая вкладка, разряженный телефон
+   * и упавший браузер этого события не дают. Без обхода человек «слушает»
+   * третьи сутки: строка висит, а лента друзей повторяет её как правду.
+   *
+   * Порог — общий с проверкой видимости (`isNowPlayingStale`), чтобы «уже не
+   * показываем» и «уже сняли» не разъехались на две разные величины.
+   */
+  async sweepStaleNowPlaying(now = new Date()): Promise<number> {
+    // Самые давние сверху: протухшие — именно там, и обходить всю таблицу
+    // ради десятка строк незачем.
+    const rows = await this.prisma.musicNowPlaying.findMany({
+      orderBy: { updatedAt: 'asc' },
+      take: NOW_PLAYING_SWEEP_BATCH,
+      select: {
+        userId: true,
+        updatedAt: true,
+        track: { select: { durationSeconds: true } },
+      },
+    });
+
+    let swept = 0;
+    for (const row of rows) {
+      const stale = isNowPlayingStale(
+        {
+          updatedAt: row.updatedAt,
+          durationSeconds: row.track.durationSeconds,
+        },
+        now,
+      );
+      if (!stale) continue;
+
+      // Клейм по `updatedAt`: между выборкой и удалением мог прийти тик —
+      // человек снова слушает, и гасить строку у друзей нечего. Он же
+      // защищает от второго процесса, который шлёт то же событие.
+      const { count } = await this.prisma.musicNowPlaying.deleteMany({
+        where: { userId: row.userId, updatedAt: row.updatedAt },
+      });
+      if (count === 0) continue;
+
+      await this.announceNowPlaying(row.userId, null);
+      swept += 1;
+    }
+
+    return swept;
+  }
+
+  /**
+   * Ретеншен истории. Отбираем идентификаторы пачкой и удаляем по ним:
+   * `deleteMany` по условию снёс бы весь хвост одной транзакцией, а первый
+   * обход после включения ретеншена пойдёт как раз по всему хвосту.
+   */
+  async purgeOldListens(now = new Date()): Promise<number> {
+    const cutoff = new Date(now.getTime() - LISTEN_RETENTION_MS);
+    const stale = await this.prisma.musicListen.findMany({
+      where: { listenedAt: { lt: cutoff } },
+      select: { id: true },
+      take: LISTEN_PURGE_BATCH,
+    });
+    if (stale.length === 0) return 0;
+
+    const { count } = await this.prisma.musicListen.deleteMany({
+      where: { id: { in: stale.map((row) => row.id) } },
+    });
+    return count;
+  }
+
+  /**
+   * Наслушано за неделю. Считаем по истории, а не отдельным счётчиком:
+   * история и так пишется, а счётчик пришлось бы пересчитывать каждый раз,
+   * когда ретеншен подрезает хвост.
+   */
+  async getStats(userId: string): Promise<MusicListenStatsDto> {
+    const since = new Date(Date.now() - WEEK_MS);
+    const sum = await this.prisma.musicListen.aggregate({
+      where: { userId, listenedAt: { gte: since } },
+      _sum: { seconds: true },
+    });
+
+    return { weekSeconds: sum._sum.seconds ?? 0 };
   }
 
   /**

@@ -398,6 +398,18 @@ export interface MusicSettingsDto {
 
 export type UpdateMusicSettingsRequest = Partial<MusicSettingsDto>;
 
+/**
+ * Сколько человек наслушал за неделю.
+ *
+ * Отдельным маршрутом, а не полем в состоянии плеера: сводку показывает одна
+ * карточка на широком экране, и считать сумму по истории в каждом тике ради
+ * неё незачем.
+ */
+export interface MusicListenStatsDto {
+  /** Сумма прослушанного за последние семь суток, в секундах. */
+  weekSeconds: number;
+}
+
 // ===== Жалобы (этап 7) =====
 
 export interface CreateMusicReportRequest {
