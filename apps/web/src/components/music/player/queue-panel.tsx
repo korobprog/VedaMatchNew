@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type { MusicTrackDto } from "@vedamatch/shared";
-import { getTrack } from "@/lib/music-playback-api";
+import { useEffect, useRef } from "react";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { useMusicPlayer } from "./player-provider";
+import { useQueueTracks } from "./use-queue-tracks";
 
 /**
  * Очередь: что играет и что дальше.
@@ -19,15 +18,9 @@ import { useMusicPlayer } from "./player-provider";
  */
 export function MusicQueuePanel({ onClose }: { onClose: () => void }) {
   const player = useMusicPlayer();
-  const [tracks, setTracks] = useState<Record<string, MusicTrackDto>>({});
-  /**
-   * Записи, которых больше нет. Очередь переживает удаление из каталога —
-   * без этой отметки строка висела бы вечным «…», и человек ждал бы
-   * загрузки, которой не будет.
-   */
-  const [missing, setMissing] = useState<Set<string>>(new Set());
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const queue = player?.queue ?? [];
+  const { tracks, missing } = useQueueTracks(queue);
 
   // Фокус переходит в панель: иначе Tab уводит по странице под ней, и
   // закрыть её с клавиатуры не получится.
@@ -42,28 +35,6 @@ export function MusicQueuePanel({ onClose }: { onClose: () => void }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      for (const id of queue) {
-        if (cancelled) return;
-        // Уже дочитанное не запрашиваем второй раз.
-        if (tracks[id]) continue;
-        const track = await getTrack(id);
-        if (cancelled) return;
-        if (!track) {
-          setMissing((was) => new Set(was).add(id));
-          continue;
-        }
-        setTracks((was) => ({ ...was, [id]: track }));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queue.join(",")]);
 
   if (!player) return null;
 
