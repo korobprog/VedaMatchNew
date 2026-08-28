@@ -413,3 +413,56 @@ export interface MusicReportResultDto {
   /** Скрылась ли запись прямо сейчас. */
   hidden?: boolean;
 }
+
+// ===== Плейлисты (этап 4) =====
+
+/**
+ * Плейлист человека. `totalSeconds` едет рядом со счётчиком записей: подпись
+ * «14 записей · 58 мин» нужна в каждом списке, а считать её на вебе значит
+ * тянуть туда длительности всех записей.
+ */
+export interface MusicPlaylistDto {
+  id: string;
+  title: string;
+  description: string | null;
+  coverUrl: string | null;
+  visibility: MusicPlaylistVisibility;
+  trackCount: number;
+  totalSeconds: number;
+  /** Подборка редакции: её нельзя править и удалять. */
+  isSystem: boolean;
+  updatedAt: string;
+}
+
+/**
+ * Строка шторки «В плейлист»: плейлист плюс признак, что запись уже в нём.
+ * Отдельный тип, а не флаг в общем DTO, — галочка нужна ровно на одном
+ * экране, и таскать её по всем спискам незачем.
+ */
+export interface MusicPlaylistPickDto extends MusicPlaylistDto {
+  containsTrack: boolean;
+}
+
+export interface MyMusicPlaylistsDto {
+  items: MusicPlaylistDto[];
+}
+
+export interface MusicPlaylistPickerDto {
+  items: MusicPlaylistPickDto[];
+}
+
+export interface CreateMusicPlaylistRequest {
+  title: string;
+  description?: string | null;
+  visibility?: MusicPlaylistVisibility;
+}
+
+export type UpdateMusicPlaylistRequest = Partial<CreateMusicPlaylistRequest>;
+
+/** Ответ на добавление и снятие: интерфейс перерисовывает одну строку. */
+export interface MusicPlaylistTrackResultDto {
+  playlistId: string;
+  trackId: string;
+  containsTrack: boolean;
+  trackCount: number;
+}

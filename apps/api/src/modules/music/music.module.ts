@@ -16,6 +16,8 @@ import {
 } from './music-playback.controller';
 import { MusicPlaybackService } from './music-playback.service';
 import { MusicFavoritesService } from './music-favorites.service';
+import { MusicPlaylistsController } from './music-playlists.controller';
+import { MusicPlaylistsService } from './music-playlists.service';
 import { MusicPurgeListener } from './music-purge.listener';
 import { MusicStorageService } from './music-storage.service';
 import { MusicStreamController } from './music-stream.controller';
@@ -49,6 +51,7 @@ import { MusicWorkerService } from './music-worker.service';
     MusicPlaybackController,
     MusicSettingsController,
     MusicFavoritesController,
+    MusicPlaylistsController,
     MusicAdminCatalogController,
     MusicAdminQueueController,
   ],
@@ -62,6 +65,7 @@ import { MusicWorkerService } from './music-worker.service';
     MusicReportsService,
     MusicPlaybackService,
     MusicFavoritesService,
+    MusicPlaylistsService,
     MusicWorkerService,
     MusicPurgeListener,
   ],
