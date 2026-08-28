@@ -12,6 +12,7 @@ import {
 import type {
   AccessTokenPayload,
   CreateMusicPlaylistRequest,
+  MoveMusicPlaylistTrackRequest,
   UpdateMusicPlaylistRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
@@ -52,6 +53,15 @@ export class MusicPlaylistsController {
     return this.playlists.create(user.sub, body);
   }
 
+  /**
+   * Страница плейлиста. Ниже `@Get()` и выше остальных `:id` — порядок здесь
+   * не случаен: Nest берёт первый подошедший маршрут.
+   */
+  @Get(':id')
+  getOne(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.playlists.getOne(user.sub, id);
+  }
+
   @Patch(':id')
   update(
     @CurrentUser() user: AccessTokenPayload,
@@ -73,6 +83,22 @@ export class MusicPlaylistsController {
     @Param('trackId') trackId: string,
   ) {
     return this.playlists.addTrack(user.sub, id, trackId);
+  }
+
+  /** Перенос записи внутри плейлиста. */
+  @Patch(':id/tracks/:trackId/position')
+  moveTrack(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Param('trackId') trackId: string,
+    @Body() body: MoveMusicPlaylistTrackRequest,
+  ) {
+    return this.playlists.moveTrack(
+      user.sub,
+      id,
+      trackId,
+      Math.trunc(Number(body?.toIndex) || 0),
+    );
   }
 
   @Delete(':id/tracks/:trackId')

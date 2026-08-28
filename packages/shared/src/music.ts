@@ -457,6 +457,20 @@ export interface MusicListenStatsDto {
   weekSeconds: number;
 }
 
+/**
+ * Строка истории. Одна на прослушивание, а не на тик: подряд идущие тики
+ * одной записи сливаются в неё же, и `seconds` растёт.
+ */
+export interface MusicListenDto {
+  track: MusicTrackDto;
+  seconds: number;
+  listenedAt: string;
+}
+
+export interface MusicHistoryDto {
+  items: MusicListenDto[];
+}
+
 // ===== Жалобы (этап 7) =====
 
 export interface CreateMusicReportRequest {
@@ -519,6 +533,24 @@ export interface CreateMusicPlaylistRequest {
 }
 
 export type UpdateMusicPlaylistRequest = Partial<CreateMusicPlaylistRequest>;
+
+/**
+ * Страница плейлиста.
+ *
+ * `canEdit` приходит с сервера, а не выводится на клиенте сравнением
+ * идентификаторов: подборку портала не правит и её «владелец», и повторять
+ * это правило во второй раз в браузере значит однажды их разойтись.
+ */
+export interface MusicPlaylistPageDto {
+  playlist: MusicPlaylistDto;
+  tracks: MusicTrackDto[];
+  canEdit: boolean;
+}
+
+/** Перенос записи внутри плейлиста. Индекс с нуля, как его видит человек. */
+export interface MoveMusicPlaylistTrackRequest {
+  toIndex: number;
+}
 
 /** Ответ на добавление и снятие: интерфейс перерисовывает одну строку. */
 export interface MusicPlaylistTrackResultDto {

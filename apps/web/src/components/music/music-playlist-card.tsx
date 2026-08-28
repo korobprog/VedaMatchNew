@@ -1,19 +1,20 @@
+import Link from "next/link";
 import type { MusicPlaylistCardDto } from "@vedamatch/shared";
 import { formatTotalDuration } from "@/lib/music-duration";
 import { plural } from "@/lib/plural";
 import { MusicCover } from "./music-cover";
 
-/**
- * Плитка подборки редакции. Пока не ссылка: страницы плейлиста нет до
- * этапа 4, а ссылка в никуда хуже её отсутствия.
- */
+/** Плитка подборки редакции. */
 export function MusicPlaylistCard({
   playlist,
 }: {
   playlist: MusicPlaylistCardDto;
 }) {
   return (
-    <article className="glass flex items-center gap-3 rounded-2xl p-2.5">
+    <Link
+      href={`/music/playlists/${playlist.id}`}
+      className="glass flex items-center gap-3 rounded-2xl p-2.5 hover:border-violet/40"
+    >
       <span className="h-12 w-12 shrink-0 overflow-hidden rounded-xl">
         <MusicCover
           url={playlist.coverUrl}
@@ -33,6 +34,6 @@ export function MusicPlaylistCard({
             ` · ${formatTotalDuration(playlist.totalSeconds)}`}
         </span>
       </span>
-    </article>
+    </Link>
   );
 }

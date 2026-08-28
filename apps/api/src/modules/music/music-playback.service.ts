@@ -4,6 +4,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   PORTAL_NOW_PLAYING_EVENT,
   type ActivityNowPlayingDto,
+  type MusicHistoryDto,
   type MusicListenStatsDto,
   type MusicPlaybackStateDto,
   type MusicHeartbeatRequest,
@@ -14,6 +15,7 @@ import {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { mayShareMusicActivity } from './music-activity-share';
+import { toMusicTrackDto } from './music-track-dto';
 import { isNowPlayingStale } from './now-playing-visibility';
 
 /**
@@ -60,6 +62,20 @@ const LISTEN_PURGE_BATCH = 1000;
 
 /** Сколько строк «слушает сейчас» осматриваем за тик. */
 const NOW_PLAYING_SWEEP_BATCH = 200;
+
+/** Сколько строк истории показываем. Дальше нужна не история, а поиск. */
+const HISTORY_PAGE_SIZE = 60;
+
+/**
+ * `include` карточки записи. Копия константы из `music-catalog.service.ts`:
+ * сборщик DTO у них общий, и недостающее поле всплыло бы в истории как
+ * `undefined`, а не как ошибка типов.
+ */
+const TRACK_CARD_INCLUDE = {
+  artist: true,
+  album: { include: { artist: true } },
+  categories: { include: { category: true } },
+} as const;
 
 const DEFAULT_SETTINGS: MusicSettingsDto = {
   nowPlayingVisibility: 'friends',
@@ -344,6 +360,32 @@ export class MusicPlaybackService {
     });
 
     return { weekSeconds: sum._sum.seconds ?? 0 };
+  }
+
+  /**
+   * История прослушиваний, свежие сверху.
+   *
+   * Запись могли снять с витрины после того, как её слушали, — такие строки
+   * пропускаем: вести человека по ссылке в 404 хуже, чем показать историю
+   * короче. Саму строку не удаляем, её унесёт ретеншен.
+   */
+  async history(userId: string): Promise<MusicHistoryDto> {
+    const rows = await this.prisma.musicListen.findMany({
+      where: { userId },
+      orderBy: { listenedAt: 'desc' },
+      take: HISTORY_PAGE_SIZE,
+      include: { track: { include: TRACK_CARD_INCLUDE } },
+    });
+
+    return {
+      items: rows
+        .filter((row) => row.track.status === 'published')
+        .map((row) => ({
+          track: toMusicTrackDto(row.track, this.publicBaseUrl),
+          seconds: row.seconds,
+          listenedAt: row.listenedAt.toISOString(),
+        })),
+    };
   }
 
   /**

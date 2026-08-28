@@ -4,14 +4,17 @@ import {
   getMusicCatalog,
   getMusicTracks,
   getMyMusicFavorites,
+  getMyMusicPlaylists,
   getMyMusicUploads,
 } from "@/lib/music-api";
 import { MusicArtistBubble } from "@/components/music/music-artist-bubble";
 import { MusicCategoryChips } from "@/components/music/music-category-chips";
+import { MusicCover } from "@/components/music/music-cover";
 import { MusicPlaylistCard } from "@/components/music/music-playlist-card";
 import { MusicRail } from "@/components/music/music-rail";
 import { MusicSearchField } from "@/components/music/music-search-field";
 import { MusicTrackCard } from "@/components/music/music-track-card";
+import { plural } from "@/lib/plural";
 
 // Суффикс «— VedaMatch» подставляет шаблон в корневом layout; дублировать
 // его здесь значит получить его дважды в заголовке вкладки.
@@ -49,7 +52,7 @@ export default async function MusicPage({
 
   // Витрина нужна всегда — из неё чипы разделов; выборка догружается только
   // когда стоит фильтр или задан запрос.
-  const [catalog, filtered, mine, favorites] = await Promise.all([
+  const [catalog, filtered, mine, favorites, playlists] = await Promise.all([
     getMusicCatalog(),
     category || query || showAll
       ? getMusicTracks({
@@ -61,6 +64,7 @@ export default async function MusicPage({
     // Счётчики рельса. Гостю отдаётся null и рельс просто без чисел.
     getMyMusicUploads(),
     getMyMusicFavorites(),
+    getMyMusicPlaylists(),
   ]);
 
   if (!catalog) {
@@ -83,14 +87,54 @@ export default async function MusicPage({
 
   const pendingUploads =
     mine?.items.filter((item) => item.status !== "published").length ?? 0;
+  const myPlaylists = playlists?.items ?? [];
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10 lg:flex-row">
-      <MusicRail
-        active="catalog"
-        uploadsCount={pendingUploads}
-        favoritesCount={favorites?.items.length ?? 0}
-      />
+      {/* Рельс и свои плейлисты — одна колонка, как в макете каталога:
+          «своя музыка» стоит слева целиком, а не разъезжается по экрану. */}
+      <div className="flex shrink-0 flex-col gap-4 lg:w-56">
+        <MusicRail
+          active="catalog"
+          uploadsCount={pendingUploads}
+          favoritesCount={favorites?.items.length ?? 0}
+          playlistsCount={myPlaylists.length}
+        />
+        {myPlaylists.length > 0 && (
+          <section className="glass hidden flex-col gap-2 rounded-2xl border border-glass-brd p-3 lg:flex">
+            <h2 className="text-xs font-bold text-text-1">Мои плейлисты</h2>
+            {myPlaylists.slice(0, 3).map((playlist) => (
+              <Link
+                key={playlist.id}
+                href={`/music/playlists/${playlist.id}`}
+                className="flex items-center gap-2.5 text-text-1 hover:text-text-0"
+              >
+                <MusicCover
+                  url={playlist.coverUrl}
+                  seed={playlist.id}
+                  alt=""
+                  className="size-8 shrink-0"
+                  rounded="rounded-[9px]"
+                />
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-xs font-semibold">
+                    {playlist.title}
+                  </span>
+                  <span className="text-[11px] text-text-2">
+                    {playlist.trackCount}{" "}
+                    {plural(
+                      playlist.trackCount,
+                      "запись",
+                      "записи",
+                      "записей",
+                    )}
+                  </span>
+                </span>
+              </Link>
+            ))}
+          </section>
+        )}
+      </div>
 
       <div className="min-w-0 flex-1">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

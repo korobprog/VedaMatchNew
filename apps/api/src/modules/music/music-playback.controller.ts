@@ -67,6 +67,21 @@ export class MusicPlaybackController {
 }
 
 /**
+ * История прослушиваний. Под своим префиксом, а не под `music/playback`: это
+ * про человека и его прошлое, а не про то, что играет сейчас.
+ */
+@Controller('music/listens')
+@UseGuards(AuthGuard)
+export class MusicHistoryController {
+  constructor(private readonly playback: MusicPlaybackService) {}
+
+  @Get()
+  list(@CurrentUser() user: AccessTokenPayload) {
+    return this.playback.history(user.sub);
+  }
+}
+
+/**
  * Настройки прослушивания. Отдельный контроллер под своим префиксом:
  * `music/settings` — это про человека, а не про плеер, и меняется раз в
  * жизни, а не раз в тридцать секунд.

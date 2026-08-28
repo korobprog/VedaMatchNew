@@ -13,6 +13,7 @@ import { MusicCoversService } from './music-covers.service';
 import { MusicMetadataReader } from './music-metadata-reader';
 import {
   MusicFavoritesController,
+  MusicHistoryController,
   MusicPlaybackController,
   MusicSettingsController,
 } from './music-playback.controller';
@@ -53,6 +54,7 @@ import { MusicWorkerService } from './music-worker.service';
     MusicReportsController,
     MusicPlaybackController,
     MusicSettingsController,
+    MusicHistoryController,
     MusicFavoritesController,
     MusicPlaylistsController,
     MusicAdminCatalogController,
