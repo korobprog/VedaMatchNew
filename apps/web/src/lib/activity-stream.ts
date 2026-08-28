@@ -1,6 +1,6 @@
 "use client";
 
-import type { ActivityStreamEvent } from "@vedamatch/shared";
+import type { ActivityStreamMessage } from "@vedamatch/shared";
 import { API_URL, refreshSession } from "@/lib/http-client";
 
 /**
@@ -9,7 +9,7 @@ import { API_URL, refreshSession } from "@/lib/http-client";
  * тихое обновление сессии и переподключение при разрыве.
  */
 export function subscribeToActivity(
-  onEvent: (event: ActivityStreamEvent) => void,
+  onEvent: (event: ActivityStreamMessage) => void,
 ): () => void {
   let source: EventSource | null = null;
   let closed = false;
@@ -25,7 +25,7 @@ export function subscribeToActivity(
     source.addEventListener("activity", (event) => {
       try {
         onEvent(
-          JSON.parse((event as MessageEvent<string>).data) as ActivityStreamEvent,
+          JSON.parse((event as MessageEvent<string>).data) as ActivityStreamMessage,
         );
       } catch {
         // Битое событие пропускаем: следующее придёт целым.
