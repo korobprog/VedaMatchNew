@@ -132,7 +132,10 @@ export function MiniPlayer() {
               type="button"
               aria-label={`Назад на ${SEEK_STEP_SECONDS} секунд`}
               onClick={() => player.skip(-SEEK_STEP_SECONDS)}
-              className={`${ctrl} hidden h-8 w-8 sm:flex`}
+              // Видно и на телефоне: лекцию и киртан на сорок минут слушают
+              // именно с телефона, а попасть пальцем в нужную секунду на
+              // трёхпиксельной дорожке нельзя.
+              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M11 4L3 12l8 8" />
@@ -190,7 +193,7 @@ export function MiniPlayer() {
               type="button"
               aria-label={`Вперёд на ${SEEK_STEP_SECONDS} секунд`}
               onClick={() => player.skip(SEEK_STEP_SECONDS)}
-              className={`${ctrl} hidden h-8 w-8 sm:flex`}
+              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M13 4l8 8-8 8" />
@@ -233,11 +236,13 @@ export function MiniPlayer() {
           />
         </div>
 
-        {/* Скорость, сердце, очередь, громкость.
-            На телефоне из группы остаётся одно сердце и встаёт перед
-            кнопкой пуска, как в макете: очередь, невидимый сеанс и звук
-            туда не влезают, и все трое доступны на странице записи и в
-            настройках сервиса. */}
+        {/* Скорость, сердце, очередь, невидимый сеанс, громкость.
+            На телефоне остаются скорость, сердце и невидимый сеанс: первые
+            две — из макета, третья — потому что «сейчас меня не видно» надо
+            уметь нажать там же, где слушаешь, а не уходить за этим в
+            настройки. Очередь и громкость не влезают: очередь есть на
+            широком экране и в карточке на главной, громкость на телефоне
+            системная. */}
         <div className="order-2 flex shrink-0 items-center gap-2 sm:order-none sm:w-56 sm:justify-end sm:gap-2.5">
           <button
             type="button"
@@ -245,7 +250,9 @@ export function MiniPlayer() {
             onClick={() =>
               player.setRate(RATES[(RATES.indexOf(rate as 1) + 1) % RATES.length])
             }
-            className="hidden h-7 items-center rounded-full border border-glass-brd px-2.5 text-[11px] font-semibold text-text-1 hover:text-text-0 sm:flex"
+            // Видно и на телефоне: лекцию слушают на 1.5×, и это ровно тот
+            // случай, когда переключатель нужен под рукой.
+            className="flex h-8 items-center rounded-full border border-glass-brd px-2.5 text-[11px] font-semibold text-text-1 hover:text-text-0 sm:h-7"
           >
             {rate.toFixed(2).replace(/0$/, "").replace(/\.$/, "")}×
           </button>
@@ -307,7 +314,7 @@ export function MiniPlayer() {
             }
             aria-pressed={isPrivateSession}
             onClick={player.togglePrivateSession}
-            className={`${ctrl} hidden h-8 w-8 sm:flex ${isPrivateSession ? "text-gold" : "text-text-2"}`}
+            className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8 ${isPrivateSession ? "text-gold" : "text-text-2"}`}
           >
             <svg {...icon} className="h-4 w-4">
               {isPrivateSession ? (
