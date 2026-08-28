@@ -119,6 +119,19 @@ export class MusicFavoritesController {
     return this.favorites.list(user.sub);
   }
 
+  /**
+   * Только идентификаторы — для сердец в списках.
+   *
+   * Отдельным маршрутом, а не полем в `MusicTrackDto`: карточку каталога
+   * видит и гость, ответ витрины общий на всех, и признак «в моём избранном»
+   * внутри него сделал бы его персональным. Список короткий: двести строк по
+   * тридцать шесть знаков.
+   */
+  @Get('ids')
+  ids(@CurrentUser() user: AccessTokenPayload) {
+    return this.favorites.listIds(user.sub);
+  }
+
   @Post(':trackId')
   add(
     @CurrentUser() user: AccessTokenPayload,

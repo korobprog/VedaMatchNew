@@ -10,6 +10,11 @@ import {
 import { MusicArtistBubble } from "@/components/music/music-artist-bubble";
 import { MusicCategoryChips } from "@/components/music/music-category-chips";
 import { MusicCover } from "@/components/music/music-cover";
+import {
+  MusicFilters,
+  countMusicFilters,
+  musicFilterHref,
+} from "@/components/music/music-filters";
 import { MusicPlaylistCard } from "@/components/music/music-playlist-card";
 import { MusicRail } from "@/components/music/music-rail";
 import { MusicSearchField } from "@/components/music/music-search-field";
@@ -40,6 +45,11 @@ export default async function MusicPage({
     category?: string | string[];
     q?: string | string[];
     all?: string | string[];
+    artist?: string | string[];
+    duration?: string | string[];
+    live?: string | string[];
+    sort?: string | string[];
+    cursor?: string | string[];
   }>;
 }) {
   const params = await searchParams;
@@ -47,18 +57,41 @@ export default async function MusicPage({
     (Array.isArray(value) ? value[0] : value)?.trim() || null;
   const category = first(params.category);
   const query = first(params.q);
+  const artist = first(params.artist);
+  const duration = first(params.duration);
+  const live = first(params.live);
+  const sort = first(params.sort);
+  const cursor = first(params.cursor);
   // «Все записи» — та же страница, но без среза «Новое в каталоге».
   const showAll = first(params.all) !== null;
 
-  // Витрина нужна всегда — из неё чипы разделов; выборка догружается только
-  // когда стоит фильтр или задан запрос.
+  const filterState = {
+    category,
+    q: query,
+    artist,
+    duration,
+    live,
+    sort,
+    cursor,
+  };
+  const hasFilter = Boolean(
+    category || query || artist || duration || live || sort || cursor,
+  );
+
+  // Витрина нужна всегда — из неё чипы разделов и исполнители для фильтра;
+  // выборка догружается только когда стоит фильтр или задан запрос.
   const [catalog, filtered, mine, favorites, playlists] = await Promise.all([
     getMusicCatalog(),
-    category || query || showAll
+    hasFilter || showAll
       ? getMusicTracks({
           ...(category ? { category } : {}),
           ...(query ? { q: query } : {}),
-          limit: showAll && !category && !query ? 60 : 30,
+          ...(artist ? { artist } : {}),
+          ...(duration ? { duration: duration as never } : {}),
+          ...(live ? { live: live === "true" } : {}),
+          ...(sort ? { sort: sort as never } : {}),
+          ...(cursor ? { cursor } : {}),
+          limit: showAll && !hasFilter ? 60 : 30,
         })
       : Promise.resolve(null),
     // Счётчики рельса — украшение, и падать из-за них каталог не должен.
@@ -84,9 +117,17 @@ export default async function MusicPage({
   const activeCategory =
     catalog.categories.find((item) => item.slug === category) ?? null;
   const tracks = filtered ? filtered.items : catalog.fresh;
+  // Заголовок обязан отвечать на «что я сейчас вижу». «Новое в каталоге» над
+  // отобранным по длительности списком — прямое враньё, и человек читает его
+  // как «фильтр не сработал».
   const heading = query
     ? `Найдено по запросу «${query}»`
-    : (activeCategory?.title ?? (showAll ? "Все записи" : "Новое в каталоге"));
+    : (activeCategory?.title ??
+      (countMusicFilters(filterState) > 0
+        ? "Отобранное"
+        : showAll
+          ? "Все записи"
+          : "Новое в каталоге"));
 
   const pendingUploads =
     mine?.items.filter((item) => item.status !== "published").length ?? 0;
@@ -177,11 +218,12 @@ export default async function MusicPage({
         </div>
       </header>
 
-      <div className="mt-6">
+      <div className="mt-6 flex flex-col gap-3">
         <MusicCategoryChips
           categories={catalog.categories}
           active={activeCategory?.slug ?? null}
         />
+        <MusicFilters state={filterState} artists={catalog.artists} />
       </div>
 
       <section className="mt-8" aria-labelledby="music-tracks">
@@ -192,7 +234,7 @@ export default async function MusicPage({
           >
             {heading}
           </h2>
-          {!query && !activeCategory && !showAll && catalog.fresh.length > 0 && (
+          {!hasFilter && !showAll && catalog.fresh.length > 0 && (
             <Link
               href="/music?all=1"
               className="shrink-0 py-1 text-xs text-cyan hover:text-magenta"
@@ -221,6 +263,21 @@ export default async function MusicPage({
               </li>
             ))}
           </ul>
+        )}
+
+        {/* «Показать ещё», а не бесконечная прокрутка: план сервиса прямо
+            называет бесконечную ленту маркером расползания Музыки во
+            «Вдохновение». Ссылка, а не кнопка, — новая страница читается с
+            сервера и работает без JavaScript. */}
+        {filtered?.nextCursor && (
+          <Link
+            href={musicFilterHref(filterState, {
+              cursor: filtered.nextCursor,
+            })}
+            className="mt-6 inline-flex h-10 items-center rounded-xl border border-glass-brd px-4 text-sm font-semibold text-text-1 hover:text-text-0"
+          >
+            Показать ещё
+          </Link>
         )}
       </section>
 
