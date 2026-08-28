@@ -78,7 +78,12 @@ export interface MusicPlayerApi {
   hasNext: boolean;
   hasPrev: boolean;
 
-  play(trackId: string, queue?: string[]): void;
+  /**
+   * `resumeFrom` — начать не с нуля, а с этой секунды. Нужен там, где
+   * позиция уже показана человеку («осталось 4:12» в карточке на главной):
+   * без неё кнопка пуска противоречила бы собственной подписи.
+   */
+  play(trackId: string, queue?: string[], resumeFrom?: number): void;
   toggle(): void;
   next(): void;
   prev(): void;
@@ -385,14 +390,18 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   // ---------- Команды ----------
 
   const play = useCallback(
-    (trackId: string, nextQueue?: string[]) => {
+    (trackId: string, nextQueue?: string[], resumeFrom?: number) => {
       const list = nextQueue && nextQueue.length > 0 ? nextQueue : [trackId];
       const at = Math.max(0, list.indexOf(trackId));
       setQueue(list);
       setIndex(at);
       // Новая запись начинается с начала: возобновление — про возврат к
-      // прежней, а не про «всегда с середины».
-      resumeToRef.current = null;
+      // прежней, а не про «всегда с середины». Исключение — когда зовущий
+      // сам показал позицию и обещал её человеку: так делает карточка
+      // «Продолжить» на главной, где под названием написано, сколько
+      // осталось. Начать там с нуля значит соврать подписью.
+      resumeToRef.current =
+        resumeFrom !== undefined && resumeFrom > 0 ? resumeFrom : null;
       setIsPlaying(true);
       void loadTrack(trackId);
     },

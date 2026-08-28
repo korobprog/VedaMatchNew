@@ -10,6 +10,7 @@ import type {
   MusicAlbumPageDto,
   MusicArtistPageDto,
   MusicCatalogDto,
+  MusicPlaybackStateDto,
   MusicTrackDetailDto,
   MusicTrackListDto,
   MusicTrackListQuery,
@@ -100,4 +101,15 @@ export function getMyMusicFavorites(): Promise<{ items: MusicTrackDto[] } | null
 /** Настройки прослушивания. `null` — гость. */
 export function getMusicSettingsServer(): Promise<MusicSettingsDto | null> {
   return musicGet<MusicSettingsDto>("/music/settings");
+}
+
+/**
+ * Состояние плеера для серверной отрисовки. Нужно карточке «Продолжить» на
+ * главной портала: она должна попасть в разметку сразу, а не появиться
+ * после гидратации — иначе главная дёргается на каждом входе.
+ *
+ * `null` — гость или слушать пока нечего.
+ */
+export function getMusicPlaybackStateServer(): Promise<MusicPlaybackStateDto | null> {
+  return musicGet<MusicPlaybackStateDto>("/music/playback/state");
 }
