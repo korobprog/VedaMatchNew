@@ -800,6 +800,28 @@ select option {
   }
 }
 
+/* Место под полосу плеера.
+ *
+ * Полоса лежит `fixed bottom-0` поверх страницы, и без этого отступа
+ * последняя строка любого раздела портала оказывается под ней — на телефоне
+ * это особенно заметно, там полоса в две строки. Отступ появляется только
+ * когда полоса есть: `[data-music-player]` рисуется, лишь когда есть что
+ * играть, и `:has()` снимает отступ вместе с ней.
+ *
+ * Числа привязаны к самой полосе: телефон — две строки (44 + дорожка 24 +
+ * py-2) плюс её нижний отступ, широкий экран — одна строка h-16 плюс он же.
+ * Меняешь высоту полосы в mini-player.tsx — поправь и здесь.
+ */
+body:has([data-music-player]) {
+  padding-bottom: calc(96px + max(0.75rem, env(safe-area-inset-bottom)));
+}
+
+@media (min-width: 640px) {
+  body:has([data-music-player]) {
+    padding-bottom: calc(64px + max(0.75rem, env(safe-area-inset-bottom)));
+  }
+}
+
 /* Safe area padding for iOS */
 .safe-top {
   padding-top: env(safe-area-inset-top);
