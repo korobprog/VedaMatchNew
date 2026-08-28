@@ -205,6 +205,8 @@ export interface CreateMusicArtistRequest {
   kind?: MusicArtistKind;
   bio?: string | null;
   isVerified?: boolean;
+  /** Ключ залитой обложки. `null` — снять. */
+  coverKey?: string | null;
 }
 
 export type UpdateMusicArtistRequest = Partial<CreateMusicArtistRequest>;
@@ -214,6 +216,8 @@ export interface CreateMusicAlbumRequest {
   artistId?: string | null;
   kind?: MusicAlbumKind;
   year?: number | null;
+  /** Ключ залитой обложки. `null` — снять. */
+  coverKey?: string | null;
 }
 
 export type UpdateMusicAlbumRequest = Partial<CreateMusicAlbumRequest>;
@@ -241,6 +245,8 @@ export interface UpdateMusicTrackRequest {
   lyrics?: string | null;
   transliteration?: string | null;
   translation?: string | null;
+  /** Ключ залитой обложки. `null` — снять и вернуться к обложке альбома. */
+  coverKey?: string | null;
 }
 
 // ===== Загрузка (этап 2) =====
@@ -271,6 +277,47 @@ export interface CompleteMusicUploadResponse {
   status: MusicTrackStatus;
   title: string;
   durationSeconds: number;
+}
+
+// ===== Обложки =====
+
+/**
+ * Что принимаем обложкой.
+ *
+ * Три формата, все без анимации: обложка — это статичная картинка в сетке
+ * каталога, и гифка там означала бы десяток одновременно дёргающихся плиток.
+ */
+export const MUSIC_COVER_ACCEPTED_MIME = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+] as const;
+
+export type MusicCoverMime = (typeof MUSIC_COVER_ACCEPTED_MIME)[number];
+
+/**
+ * Чему принадлежит обложка. Входит в ключ объекта, поэтому выписанной под
+ * плейлист ссылкой нельзя подменить обложку записи в каталоге.
+ */
+export type MusicCoverScope = 'track' | 'artist' | 'album' | 'playlist';
+
+export interface CreateMusicCoverUploadRequest {
+  scope: MusicCoverScope;
+  mime: string;
+  sizeBytes: number;
+}
+
+export interface CreateMusicCoverUploadResponse {
+  /**
+   * Ключ объекта. Его же надо прислать обратно в `coverKey` при сохранении
+   * карточки: до этого залитый файл ничей и ни на что не влияет.
+   */
+  coverKey: string;
+  /** Подписанный PUT. Браузер льёт картинку сюда, минуя API. */
+  url: string;
+  /** Заголовки, которые обязаны совпасть с подписью. */
+  headers: Record<string, string>;
+  expiresInSeconds: number;
 }
 
 /** Сколько места занято и сколько всего разрешено. */
@@ -467,6 +514,8 @@ export interface CreateMusicPlaylistRequest {
   title: string;
   description?: string | null;
   visibility?: MusicPlaylistVisibility;
+  /** Ключ залитой обложки. `null` — снять. */
+  coverKey?: string | null;
 }
 
 export type UpdateMusicPlaylistRequest = Partial<CreateMusicPlaylistRequest>;

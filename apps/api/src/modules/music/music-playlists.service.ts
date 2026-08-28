@@ -15,6 +15,7 @@ import {
   type UpdateMusicPlaylistRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MusicCoversService } from './music-covers.service';
 import { mayShareMusicActivity } from './music-activity-share';
 import { nextPosition } from './playlist-order';
 
@@ -51,9 +52,31 @@ export class MusicPlaylistsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bus: EventEmitter2,
+    private readonly covers: MusicCoversService,
     config: ConfigService,
   ) {
     this.publicBaseUrl = config.get<string>('S3_PUBLIC_URL') || undefined;
+  }
+
+  /**
+   * Часть `data` с обложкой — или пустая, когда о ней не говорили.
+   *
+   * Владелец здесь обязателен, в отличие от каталога: плейлист правит кто
+   * угодно, и без сверки человек присылает чужой ключ и ставит себе чужую
+   * картинку, ни разу ничего не залив.
+   */
+  private coverPatch(
+    userId: string,
+    next: string | null | undefined,
+    current: string | null,
+  ): { coverKey?: string | null } {
+    const value = this.covers.resolveKey({
+      next,
+      current,
+      scope: 'playlist',
+      ownerId: userId,
+    });
+    return value === undefined ? {} : { coverKey: value };
   }
 
   /** Свои плейлисты, свежие сверху. */
@@ -117,6 +140,7 @@ export class MusicPlaylistsService {
         title: title.slice(0, 120),
         description: body.description?.trim().slice(0, 500) || null,
         visibility: body.visibility ?? 'private',
+        ...this.coverPatch(userId, body.coverKey, null),
       },
       select: PLAYLIST_SELECT,
     });
@@ -135,13 +159,14 @@ export class MusicPlaylistsService {
     // переименование показывалось бы друзьям как новый плейлист.
     const before = await this.prisma.musicPlaylist.findUnique({
       where: { id },
-      select: { visibility: true },
+      select: { visibility: true, coverKey: true },
     });
 
     const title = body.title?.trim();
     const row = await this.prisma.musicPlaylist.update({
       where: { id },
       data: {
+        ...this.coverPatch(userId, body.coverKey, before?.coverKey ?? null),
         ...(title ? { title: title.slice(0, 120) } : {}),
         ...(body.description !== undefined
           ? { description: body.description?.trim().slice(0, 500) || null }

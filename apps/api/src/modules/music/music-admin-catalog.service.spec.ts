@@ -3,8 +3,11 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { MusicAdminCatalogService } from './music-admin-catalog.service';
+import { MusicCoversService } from './music-covers.service';
+import { MusicStorageService } from './music-storage.service';
 
 function prismaMock() {
   const tx = {
@@ -62,8 +65,24 @@ function prismaMock() {
   };
 }
 
+/**
+ * Обложки — настоящим сервисом поверх ненастроенного хранилища: он чистый,
+ * в базу и в S3 не ходит, а подменять его заглушкой значило бы проверять
+ * ключи не тем кодом, который работает в проде.
+ */
+function coversService() {
+  return new MusicCoversService(
+    new MusicStorageService({
+      get: () => undefined,
+    } as unknown as ConfigService),
+  );
+}
+
 function service(mock: ReturnType<typeof prismaMock>) {
-  return new MusicAdminCatalogService(mock.prisma as unknown as PrismaService);
+  return new MusicAdminCatalogService(
+    mock.prisma as unknown as PrismaService,
+    coversService(),
+  );
 }
 
 describe('MusicAdminCatalogService', () => {

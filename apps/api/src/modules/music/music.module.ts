@@ -8,6 +8,8 @@ import { MusicAdminCatalogService } from './music-admin-catalog.service';
 import { MusicAdminQueueService } from './music-admin-queue.service';
 import { MusicCatalogController } from './music-catalog.controller';
 import { MusicCatalogService } from './music-catalog.service';
+import { MusicCoversController } from './music-covers.controller';
+import { MusicCoversService } from './music-covers.service';
 import { MusicMetadataReader } from './music-metadata-reader';
 import {
   MusicFavoritesController,
@@ -46,6 +48,7 @@ import { MusicWorkerService } from './music-worker.service';
   controllers: [
     MusicCatalogController,
     MusicStreamController,
+    MusicCoversController,
     MusicUploadsController,
     MusicReportsController,
     MusicPlaybackController,
@@ -60,6 +63,7 @@ import { MusicWorkerService } from './music-worker.service';
     MusicAdminCatalogService,
     MusicAdminQueueService,
     MusicStorageService,
+    MusicCoversService,
     MusicMetadataReader,
     MusicUploadsService,
     MusicReportsService,

@@ -15,6 +15,12 @@ export interface PurgeableTrack {
    * `null` — в общий каталог она не попадала ни разу.
    */
   publishedAt: Date | null;
+  /**
+   * Обложка. Уходит вместе с записью и только с ней: у оставшейся в каталоге
+   * записи картинку забирать не за что — автора у неё больше нет, а сама она
+   * никуда не делась.
+   */
+  coverKey?: string | null;
 }
 
 export interface PurgeableUpload {
@@ -57,6 +63,9 @@ export function collectMusicPurgeKeys(
 
   const keys = [
     ...removed.map((track) => track.storageKey),
+    ...removed
+      .map((track) => track.coverKey)
+      .filter((key): key is string => Boolean(key)),
     ...input.uploads.map((upload) => upload.storageKey),
     ...input.playlists
       .map((playlist) => playlist.coverKey)

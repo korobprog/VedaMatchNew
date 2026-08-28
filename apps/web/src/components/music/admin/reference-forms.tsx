@@ -8,6 +8,7 @@ import {
   createMusicArtist,
   createMusicCategory,
 } from "@/lib/music-admin-client-api";
+import { MusicCoverField } from "@/components/music/cover-field";
 import { Alert } from "@/components/ui/alert";
 
 const KINDS: { value: MusicArtistKind; label: string }[] = [
@@ -89,6 +90,7 @@ function ArtistForm() {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<MusicArtistKind>("kirtaneer");
   const [isVerified, setIsVerified] = useState(false);
+  const [coverKey, setCoverKey] = useState<string | null>(null);
   const { pending, error, done, run } = useSubmit();
 
   return (
@@ -124,15 +126,23 @@ function ArtistForm() {
         />
         Отметка редакции «это тот самый»
       </label>
+      <MusicCoverField scope="artist" value={coverKey} onChange={setCoverKey} />
       <button
         type="button"
         disabled={pending || !name.trim()}
         onClick={() =>
           void run(
-            () => createMusicArtist({ name: name.trim(), kind, isVerified }),
+            () =>
+              createMusicArtist({
+                name: name.trim(),
+                kind,
+                isVerified,
+                coverKey,
+              }),
             () => {
               setName("");
               setIsVerified(false);
+              setCoverKey(null);
             },
           )
         }
@@ -148,6 +158,7 @@ function AlbumForm({ artists }: { artists: MusicArtistDto[] }) {
   const [title, setTitle] = useState("");
   const [artistId, setArtistId] = useState("");
   const [year, setYear] = useState("");
+  const [coverKey, setCoverKey] = useState<string | null>(null);
   const { pending, error, done, run } = useSubmit();
 
   return (
@@ -188,6 +199,7 @@ function AlbumForm({ artists }: { artists: MusicArtistDto[] }) {
           placeholder="2026"
         />
       </label>
+      <MusicCoverField scope="album" value={coverKey} onChange={setCoverKey} />
       <button
         type="button"
         disabled={pending || !title.trim()}
@@ -199,10 +211,12 @@ function AlbumForm({ artists }: { artists: MusicArtistDto[] }) {
                 artistId: artistId || null,
                 kind: "live",
                 year: year.trim() ? Number(year) : null,
+                coverKey,
               }),
             () => {
               setTitle("");
               setYear("");
+              setCoverKey(null);
             },
           )
         }

@@ -11,6 +11,7 @@ import type {
 import { API_URL } from "@/lib/http-client";
 import { decideMusicTrack, updateMusicTrack } from "@/lib/music-admin-client-api";
 import { formatBytes, formatTrackDuration } from "@/lib/music-duration";
+import { MusicCoverField } from "@/components/music/cover-field";
 import { Alert } from "@/components/ui/alert";
 
 const RIGHTS_LABELS: Record<MusicUploadRightsBasis, string> = {
@@ -44,6 +45,7 @@ export function MusicModerationCard({
   const [categoryId, setCategoryId] = useState(track.categories[0]?.id ?? "");
   const [title, setTitle] = useState(track.title);
   const [isLive, setIsLive] = useState(track.isLiveRecording);
+  const [coverKey, setCoverKey] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +62,9 @@ export function MusicModerationCard({
           artistId: artistId || null,
           categoryIds: categoryId ? [categoryId] : [],
           isLiveRecording: isLive,
+          // Только когда обложку выбрали: `null` здесь означал бы «снять», а
+          // модератор её просто не трогал.
+          ...(coverKey ? { coverKey } : {}),
         });
       }
       await decideMusicTrack(track.id, {
@@ -159,6 +164,15 @@ export function MusicModerationCard({
         />
         Запись с программы
       </label>
+
+      <div className="mt-3">
+        <MusicCoverField
+          scope="track"
+          value={coverKey}
+          onChange={setCoverKey}
+          label="Обложка записи"
+        />
+      </div>
 
       <label className="mt-3 block">
         <span className="mb-1 block text-xs text-text-2">

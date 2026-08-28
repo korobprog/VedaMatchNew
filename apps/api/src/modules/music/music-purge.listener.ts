@@ -41,7 +41,7 @@ export class MusicPurgeListener {
     const [tracks, uploads, playlists] = await Promise.all([
       this.prisma.musicTrack.findMany({
         where: { uploadedById: event.userId },
-        select: { storageKey: true, publishedAt: true },
+        select: { storageKey: true, publishedAt: true, coverKey: true },
       }),
       this.prisma.musicUpload.findMany({
         where: { uploaderId: event.userId },

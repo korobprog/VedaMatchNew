@@ -10,8 +10,10 @@
 // буфере не пройдёт.
 import type {
   CompleteMusicUploadResponse,
+  CreateMusicCoverUploadResponse,
   CreateMusicReportRequest,
   CreateMusicUploadResponse,
+  MusicCoverScope,
   MusicReportResultDto,
   MusicUploadRightsBasis,
 } from "@vedamatch/shared";
@@ -63,6 +65,32 @@ export async function uploadMusicTrack(
     `/music/uploads/${created.uploadId}/complete`,
     { method: "POST", body: JSON.stringify({ fileName: file.name }) },
   );
+}
+
+/**
+ * Заливка обложки: заявка → PUT в бакет → ключ.
+ *
+ * «Завершения» здесь нет намеренно: ключ ничего не значит, пока его не
+ * сохранят в карточке. Поэтому вызывающий обязан положить возвращённое в
+ * `coverKey` своей формы — иначе картинка останется лежать ничьей.
+ */
+export async function uploadMusicCover(
+  file: File,
+  scope: MusicCoverScope,
+  onProgress?: (fraction: number) => void,
+): Promise<string> {
+  const created = await send<CreateMusicCoverUploadResponse>("/music/covers", {
+    method: "POST",
+    body: JSON.stringify({
+      scope,
+      mime: file.type,
+      sizeBytes: file.size,
+    }),
+  });
+
+  await putWithProgress(created.url, file, onProgress);
+
+  return created.coverKey;
 }
 
 /** Пожаловаться на запись. Три обычные жалобы скрывают её, одна о правах — сразу. */

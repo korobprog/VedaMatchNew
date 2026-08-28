@@ -8,12 +8,14 @@ import type {
   CreateMusicAlbumRequest,
   CreateMusicArtistRequest,
   CreateMusicCategoryRequest,
+  MusicCoverScope,
   UpdateMusicAlbumRequest,
   UpdateMusicArtistRequest,
   UpdateMusicCategoryRequest,
   UpdateMusicTrackRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MusicCoversService } from './music-covers.service';
 import { buildMusicSlug, withMusicSlugSuffix } from './music-slug';
 
 const MAX_NAME_LENGTH = 160;
@@ -32,12 +34,32 @@ const MAX_YEAR = 2200;
  */
 @Injectable()
 export class MusicAdminCatalogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly covers: MusicCoversService,
+  ) {}
 
   private assertAdmin(viewerIsAdmin: boolean): void {
     if (!viewerIsAdmin) {
       throw new ForbiddenException('Доступ только для администратора сервиса');
     }
+  }
+
+  /**
+   * Часть `data` с обложкой — или пустая, когда о ней не говорили.
+   *
+   * Владельца не сверяем: сюда доходит только администратор, а он и так
+   * вправе снять или опубликовать любую запись. Сверять там ещё и того, кто
+   * залил картинку, значило бы запретить второму администратору доделать
+   * начатое первым.
+   */
+  private coverPatch(
+    next: string | null | undefined,
+    current: string | null,
+    scope: MusicCoverScope,
+  ): { coverKey?: string | null } {
+    const value = this.covers.resolveKey({ next, current, scope });
+    return value === undefined ? {} : { coverKey: value };
   }
 
   private text(
@@ -99,6 +121,7 @@ export class MusicAdminCatalogService {
         kind: body.kind ?? 'unknown',
         bio: this.text(body.bio, 'Описание', MAX_BIO_LENGTH, false),
         isVerified: body.isVerified ?? false,
+        ...this.coverPatch(body.coverKey, null, 'artist'),
       },
     });
   }
@@ -111,13 +134,14 @@ export class MusicAdminCatalogService {
     this.assertAdmin(viewerIsAdmin);
     const existing = await this.prisma.musicArtist.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, coverKey: true },
     });
     if (!existing) throw new NotFoundException('Исполнитель не найден');
 
     return this.prisma.musicArtist.update({
       where: { id },
       data: {
+        ...this.coverPatch(body.coverKey, existing.coverKey, 'artist'),
         // Слаг не переписываем вслед за именем: по нему уже ушли ссылки.
         ...(body.name === undefined
           ? {}
@@ -156,6 +180,7 @@ export class MusicAdminCatalogService {
         artistId: body.artistId ?? null,
         kind: body.kind ?? 'album',
         year: this.year(body.year),
+        ...this.coverPatch(body.coverKey, null, 'album'),
       },
     });
   }
@@ -168,7 +193,7 @@ export class MusicAdminCatalogService {
     this.assertAdmin(viewerIsAdmin);
     const existing = await this.prisma.musicAlbum.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, coverKey: true },
     });
     if (!existing) throw new NotFoundException('Альбом не найден');
     if (body.artistId !== undefined)
@@ -177,6 +202,7 @@ export class MusicAdminCatalogService {
     return this.prisma.musicAlbum.update({
       where: { id },
       data: {
+        ...this.coverPatch(body.coverKey, existing.coverKey, 'album'),
         ...(body.title === undefined
           ? {}
           : {
@@ -306,7 +332,7 @@ export class MusicAdminCatalogService {
     this.assertAdmin(viewerIsAdmin);
     const existing = await this.prisma.musicTrack.findUnique({
       where: { id },
-      select: { id: true, status: true, publishedAt: true },
+      select: { id: true, status: true, publishedAt: true, coverKey: true },
     });
     if (!existing) throw new NotFoundException('Запись не найдена');
 
@@ -334,6 +360,9 @@ export class MusicAdminCatalogService {
       return tx.musicTrack.update({
         where: { id },
         data: {
+          // Снятая обложка записи возвращает её к обложке альбома, а та — к
+          // обложке исполнителя: цепочку строит `resolveTrackCoverKey`.
+          ...this.coverPatch(body.coverKey, existing.coverKey, 'track'),
           ...(body.title === undefined
             ? {}
             : {
