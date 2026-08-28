@@ -28,6 +28,8 @@ export const ACTIVITY_FEED_ACTIONS = [
   'library.entry-created',
   'market.listing-created',
   'market.listing-favorited',
+  'music.track-favorited',
+  'music.playlist-published',
 ] as const satisfies readonly PortalActivityAction[];
 
 export type ActivityFeedAction = (typeof ACTIVITY_FEED_ACTIONS)[number];
@@ -57,5 +59,15 @@ export function buildActivityTitle(
       return entityLabel
         ? `Лайк лота «${toExcerpt(entityLabel)}»`
         : 'Лайк лота на Рынке';
+    // Не «лайк»: этим словом уже подписаны Вдохновение и Рынок, и третье
+    // одинаковое начало в одной бегущей полосе не различить.
+    case 'music.track-favorited':
+      return entityLabel
+        ? `В избранное: «${toExcerpt(entityLabel)}»`
+        : 'Новая запись в избранном Музыки';
+    case 'music.playlist-published':
+      return entityLabel
+        ? `Плейлист «${toExcerpt(entityLabel)}»`
+        : 'Новый плейлист в Музыке';
   }
 }

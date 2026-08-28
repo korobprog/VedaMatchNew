@@ -21,6 +21,8 @@ const ACTION_META: Record<string, { glyph: string; className: string }> = {
   "library.entry-created": { glyph: "▤", className: "bg-gold/15 text-gold" },
   "market.listing-created": { glyph: "▢", className: "bg-cyan/15 text-cyan" },
   "market.listing-favorited": { glyph: "♡", className: "bg-cyan/15 text-cyan" },
+  "music.track-favorited": { glyph: "♪", className: "bg-violet/15 text-violet" },
+  "music.playlist-published": { glyph: "▤", className: "bg-violet/15 text-violet" },
 };
 
 const SOURCE_META: Record<"union" | "contacts", { glyph: string; label: string }> = {

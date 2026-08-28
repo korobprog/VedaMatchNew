@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { MusicFavoritesService } from './music-favorites.service';
 
@@ -10,6 +11,7 @@ function prismaMock() {
     musicTrack: {
       findUnique: jest.fn().mockResolvedValue({
         id: 't1',
+        title: 'Шри Гуру-вандана',
         status: 'published',
         uploadedById: null,
       }),
@@ -18,13 +20,28 @@ function prismaMock() {
       upsert: jest.fn().mockResolvedValue({}),
       deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
       findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(null),
       count: jest.fn().mockResolvedValue(0),
+    },
+    musicSettings: {
+      findUnique: jest.fn().mockResolvedValue(null),
     },
   };
 }
 
-const service = (p: ReturnType<typeof prismaMock>) =>
-  new MusicFavoritesService(p as unknown as PrismaService, config);
+function busMock() {
+  return { emit: jest.fn() };
+}
+
+const service = (
+  p: ReturnType<typeof prismaMock>,
+  bus: ReturnType<typeof busMock> = busMock(),
+) =>
+  new MusicFavoritesService(
+    p as unknown as PrismaService,
+    bus as unknown as EventEmitter2,
+    config,
+  );
 
 describe('MusicFavoritesService.add', () => {
   it('добавляет запись в избранное', async () => {
@@ -140,5 +157,49 @@ describe('MusicFavoritesService.list', () => {
 
     const where = prisma.musicFavorite.findMany.mock.calls[0][0].where;
     expect(where.track).toEqual({ status: 'published' });
+  });
+});
+
+describe('MusicFavoritesService.add — событие для ленты друзей', () => {
+  it('сообщает о первом нажатии, с названием и ссылкой', async () => {
+    const prisma = prismaMock();
+    const bus = busMock();
+
+    await service(prisma, bus).add('u1', 't1');
+
+    expect(bus.emit).toHaveBeenCalledWith(
+      'music.user.activity',
+      expect.objectContaining({
+        userId: 'u1',
+        action: 'music.track-favorited',
+        entityId: 't1',
+        entityLabel: 'Шри Гуру-вандана',
+        link: '/music/tracks/t1',
+      }),
+    );
+  });
+
+  // Сердце жмут дважды: второй раз — исправление промаха, а не новое
+  // действие, и лента не должна показывать его друзьям ещё раз.
+  it('молчит, когда запись уже была в избранном', async () => {
+    const prisma = prismaMock();
+    prisma.musicFavorite.findUnique.mockResolvedValue({ trackId: 't1' });
+    const bus = busMock();
+
+    await service(prisma, bus).add('u1', 't1');
+
+    expect(bus.emit).not.toHaveBeenCalled();
+  });
+
+  it('молчит, когда человек выключил видимость', async () => {
+    const prisma = prismaMock();
+    prisma.musicSettings.findUnique.mockResolvedValue({
+      nowPlayingVisibility: 'nobody',
+    });
+    const bus = busMock();
+
+    await service(prisma, bus).add('u1', 't1');
+
+    expect(bus.emit).not.toHaveBeenCalled();
   });
 });

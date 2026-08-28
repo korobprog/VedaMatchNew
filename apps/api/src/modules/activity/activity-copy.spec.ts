@@ -47,3 +47,30 @@ describe('buildActivityTitle', () => {
     expect(title.length).toBeLessThan(long.length);
   });
 });
+
+describe('buildActivityTitle — Музыка', () => {
+  // «Лайк» уже занят Вдохновением и Рынком: третье одинаковое начало в одной
+  // бегущей полосе человек не различит.
+  it('does not start a music card with the word already used twice', () => {
+    const title = buildActivityTitle(
+      'music.track-favorited',
+      'Джая Радха-Мадхава',
+    );
+    expect(title).toBe('В избранное: «Джая Радха-Мадхава»');
+    expect(title.startsWith('Лайк')).toBe(false);
+  });
+
+  it('names the playlist and falls back without a title', () => {
+    expect(
+      buildActivityTitle('music.playlist-published', 'Вечерняя арати'),
+    ).toBe('Плейлист «Вечерняя арати»');
+    expect(buildActivityTitle('music.playlist-published', undefined)).toBe(
+      'Новый плейлист в Музыке',
+    );
+  });
+
+  it('accepts both music actions into the feed', () => {
+    expect(isActivityFeedAction('music.track-favorited')).toBe(true);
+    expect(isActivityFeedAction('music.playlist-published')).toBe(true);
+  });
+});

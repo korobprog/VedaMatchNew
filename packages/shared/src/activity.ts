@@ -21,6 +21,8 @@ export const PORTAL_ACTIVITY_ACTIONS = [
   'astro.birth-data-saved',
   'motivation.favorite-added',
   'library.entry-created',
+  'music.track-favorited',
+  'music.playlist-published',
 ] as const;
 
 export type PortalActivityAction = (typeof PORTAL_ACTIVITY_ACTIONS)[number];
@@ -40,6 +42,7 @@ export const PORTAL_ACTIVITY_EVENTS = {
   astro: 'astro.user.activity',
   motivation: 'motivation.user.activity',
   library: 'library.user.activity',
+  music: 'music.user.activity',
 } as const;
 
 export type PortalActivityEventName =

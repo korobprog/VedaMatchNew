@@ -4,14 +4,18 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type {
-  CreateMusicPlaylistRequest,
-  MusicPlaylistDto,
-  MusicPlaylistPickDto,
-  MusicPlaylistTrackResultDto,
-  UpdateMusicPlaylistRequest,
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import {
+  PORTAL_ACTIVITY_EVENTS,
+  type CreateMusicPlaylistRequest,
+  type MusicPlaylistDto,
+  type MusicPlaylistPickDto,
+  type MusicPlaylistTrackResultDto,
+  type PortalActivityEvent,
+  type UpdateMusicPlaylistRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { mayShareMusicActivity } from './music-activity-share';
 import { nextPosition } from './playlist-order';
 
 /** Сколько плейлистов у человека имеет смысл: дальше это не список, а свалка. */
@@ -46,6 +50,7 @@ export class MusicPlaylistsService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly bus: EventEmitter2,
     config: ConfigService,
   ) {
     this.publicBaseUrl = config.get<string>('S3_PUBLIC_URL') || undefined;
@@ -125,6 +130,14 @@ export class MusicPlaylistsService {
   ): Promise<MusicPlaylistDto> {
     await this.own(userId, id);
 
+    // Запоминаем видимость до правки: в ленту идёт переход «был закрытым —
+    // стал открытым», а не каждое сохранение открытого плейлиста. Иначе
+    // переименование показывалось бы друзьям как новый плейлист.
+    const before = await this.prisma.musicPlaylist.findUnique({
+      where: { id },
+      select: { visibility: true },
+    });
+
     const title = body.title?.trim();
     const row = await this.prisma.musicPlaylist.update({
       where: { id },
@@ -138,8 +151,40 @@ export class MusicPlaylistsService {
       select: PLAYLIST_SELECT,
     });
 
+    if (before?.visibility === 'private' && row.visibility !== 'private') {
+      await this.announcePublished(userId, row.id, row.title);
+    }
+
     const totals = await this.totalsOf([id]);
     return this.toDto(row, totals);
+  }
+
+  /**
+   * Факт для ленты друзей: человек открыл свой плейлист. Событие
+   * самодостаточно — подписчик не имеет права дочитывать название из таблиц
+   * Музыки. Ссылки на страницу плейлиста пока нет, и `link` не выдумывается:
+   * карточка без ссылки честнее ссылки в 404.
+   */
+  private async announcePublished(
+    userId: string,
+    playlistId: string,
+    title: string,
+  ): Promise<void> {
+    const settings = await this.prisma.musicSettings.findUnique({
+      where: { userId },
+      select: { nowPlayingVisibility: true },
+    });
+    if (!mayShareMusicActivity(settings?.nowPlayingVisibility)) return;
+
+    const event: PortalActivityEvent = {
+      name: PORTAL_ACTIVITY_EVENTS.music,
+      userId,
+      action: 'music.playlist-published',
+      occurredAt: new Date().toISOString(),
+      entityId: playlistId,
+      entityLabel: title,
+    };
+    this.bus.emit(event.name, event);
   }
 
   async remove(userId: string, id: string): Promise<{ removed: true }> {
