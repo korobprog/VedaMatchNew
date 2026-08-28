@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type {
-  ActivityFeedItem,
-  ActivityFeedResponse,
-  ActivityFriendRow,
-  ActivityStreamEvent,
+import {
+  isNowPlayingMessage,
+  type ActivityFeedItem,
+  type ActivityFeedResponse,
+  type ActivityFriendRow,
+  type ActivityNowPlayingDto,
+  type ActivityStreamMessage,
 } from "@vedamatch/shared";
 import { subscribeToActivity } from "@/lib/activity-stream";
 import { formatActivityTime } from "./activity-time";
@@ -21,6 +23,8 @@ const ACTION_META: Record<string, { glyph: string; className: string }> = {
   "library.entry-created": { glyph: "▤", className: "bg-gold/15 text-gold" },
   "market.listing-created": { glyph: "▢", className: "bg-cyan/15 text-cyan" },
   "market.listing-favorited": { glyph: "♡", className: "bg-cyan/15 text-cyan" },
+  "music.track-favorited": { glyph: "♪", className: "bg-violet/15 text-violet" },
+  "music.playlist-published": { glyph: "▤", className: "bg-violet/15 text-violet" },
 };
 
 const SOURCE_META: Record<"union" | "contacts", { glyph: string; label: string }> = {
@@ -42,11 +46,42 @@ export function FriendsActivityWidget({
   initialFeed: ActivityFeedResponse;
 }) {
   const [rows, setRows] = useState<ActivityFriendRow[]>(initialFeed.friends);
+  // «Слушает сейчас» живёт отдельно от карточек: это не запись в ленте, а
+  // состояние, которое гаснет само. В `rows` его класть нельзя — там
+  // постоянные действия, и «слушает» вытеснило бы их из полосы.
+  const [nowPlaying, setNowPlaying] = useState<
+    Record<string, ActivityNowPlayingDto | null>
+  >({});
   const [freshFriendId, setFreshFriendId] = useState<string | null>(null);
   const freshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const unsubscribe = subscribeToActivity((event: ActivityStreamEvent) => {
+    const unsubscribe = subscribeToActivity((message: ActivityStreamMessage) => {
+      if (isNowPlayingMessage(message)) {
+        setNowPlaying((was) => ({
+          ...was,
+          [message.friend.id]: message.nowPlaying,
+        }));
+        // Друг может слушать, ничего до этого не сделав: тогда строки в
+        // ленте ещё нет, и её надо завести — иначе живого «слушает» не
+        // увидит никто.
+        setRows((prev) =>
+          prev.some((row) => row.friend.id === message.friend.id) ||
+          !message.nowPlaying
+            ? prev
+            : [
+                {
+                  friend: message.friend,
+                  items: [],
+                  lastActivityAt: new Date().toISOString(),
+                },
+                ...prev,
+              ].slice(0, MAX_ROWS),
+        );
+        return;
+      }
+
+      const event = message;
       setRows((prev) => {
         const existing = prev.find((row) => row.friend.id === event.friend.id);
         const items = [event.item, ...(existing?.items ?? [])].slice(
@@ -86,6 +121,7 @@ export function FriendsActivityWidget({
           <FriendRow
             key={row.friend.id}
             row={row}
+            nowPlaying={nowPlaying[row.friend.id] ?? null}
             isFresh={row.friend.id === freshFriendId}
           />
         ))}
@@ -94,7 +130,15 @@ export function FriendsActivityWidget({
   );
 }
 
-function FriendRow({ row, isFresh }: { row: ActivityFriendRow; isFresh: boolean }) {
+function FriendRow({
+  row,
+  nowPlaying,
+  isFresh,
+}: {
+  row: ActivityFriendRow;
+  nowPlaying: ActivityNowPlayingDto | null;
+  isFresh: boolean;
+}) {
   const { friend, items } = row;
   const letter = friend.name.trim().charAt(0).toUpperCase() || "?";
   // Чем длиннее полоса, тем медленнее бег — иначе короткие строки листаются
@@ -171,6 +215,45 @@ function FriendRow({ row, isFresh }: { row: ActivityFriendRow; isFresh: boolean 
         </div>
       </div>
 
+      {nowPlaying ? (
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <Link
+            href={nowPlaying.link}
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-text-1 hover:text-text-0"
+          >
+            <span
+              aria-hidden
+              className="flex size-[17px] shrink-0 items-center justify-center rounded-md bg-violet/15 text-[10px] text-violet"
+            >
+              ♪
+            </span>
+            <span className="truncate">
+              слушает «{nowPlaying.title}»
+            </span>
+          </Link>
+          {/* Обычная ссылка, а не общая модалка: этот компонент портальный, и
+              импортировать компоненты Музыки ему нельзя. Адрес приезжает
+              готовым в самом событии. */}
+          <Link
+            href={nowPlaying.addLink}
+            title="В плейлист"
+            aria-label={`В плейлист: ${nowPlaying.title}`}
+            className="flex size-8 shrink-0 items-center justify-center rounded-[10px] border border-violet/40 bg-violet/12 text-violet"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="size-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="M3 6h11M3 12h8M3 18h8M17 12v8M13 16h8" />
+            </svg>
+          </Link>
+        </div>
+      ) : items.length === 0 ? null : (
       <div
         className="min-w-0 flex-1 overflow-hidden py-0.5"
         style={{
@@ -200,6 +283,7 @@ function FriendRow({ row, isFresh }: { row: ActivityFriendRow; isFresh: boolean 
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

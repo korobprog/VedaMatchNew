@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { Observable, Subject, filter, map } from 'rxjs';
-import type { ActivityStreamEvent } from '@vedamatch/shared';
+import type { ActivityStreamMessage } from '@vedamatch/shared';
 
 /**
  * Доставка живых карточек ленты друзей подписчикам SSE. Устройство скопировано
@@ -19,7 +19,7 @@ const CHANNEL_PREFIX = 'activity:user:';
 
 interface Envelope {
   userId: string;
-  event: ActivityStreamEvent;
+  event: ActivityStreamMessage;
 }
 
 @Injectable()
@@ -61,7 +61,7 @@ export class ActivityEventsService implements OnModuleInit, OnModuleDestroy {
         try {
           this.stream.next({
             userId,
-            event: JSON.parse(payload) as ActivityStreamEvent,
+            event: JSON.parse(payload) as ActivityStreamMessage,
           });
         } catch (error) {
           this.logger.warn(`Событие ленты не разобрано: ${String(error)}`);
@@ -79,7 +79,7 @@ export class ActivityEventsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Разослать карточку тем, кому открыта активность автора. */
-  publish(granteeIds: string[], event: ActivityStreamEvent): void {
+  publish(granteeIds: string[], event: ActivityStreamMessage): void {
     const unique = [...new Set(granteeIds)];
     if (this.publisher?.status === 'ready') {
       const payload = JSON.stringify(event);
@@ -95,7 +95,7 @@ export class ActivityEventsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Поток живых карточек одного человека — то, что подписывает SSE-контроллер. */
-  streamFor(userId: string): Observable<ActivityStreamEvent> {
+  streamFor(userId: string): Observable<ActivityStreamMessage> {
     return this.stream.pipe(
       filter((envelope) => envelope.userId === userId),
       map((envelope) => envelope.event),

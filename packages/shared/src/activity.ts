@@ -21,6 +21,8 @@ export const PORTAL_ACTIVITY_ACTIONS = [
   'astro.birth-data-saved',
   'motivation.favorite-added',
   'library.entry-created',
+  'music.track-favorited',
+  'music.playlist-published',
 ] as const;
 
 export type PortalActivityAction = (typeof PORTAL_ACTIVITY_ACTIONS)[number];
@@ -40,6 +42,7 @@ export const PORTAL_ACTIVITY_EVENTS = {
   astro: 'astro.user.activity',
   motivation: 'motivation.user.activity',
   library: 'library.user.activity',
+  music: 'music.user.activity',
 } as const;
 
 export type PortalActivityEventName =
@@ -142,6 +145,61 @@ export interface ActivityFriendFeedResponse {
 export interface ActivityStreamEvent {
   friend: ActivityFriendSummary;
   item: ActivityFeedItem;
+}
+
+// ===== «Слушает сейчас»: эфемерный канал =====
+
+/**
+ * Имя эфемерного события. Издатель — Музыка, и она одна.
+ *
+ * Отдельно от `PORTAL_ACTIVITY_EVENTS`: те факты подписчик записывает в
+ * `ActivityItem`, а этот записывать нельзя. Запись, которую человек слушает
+ * две минуты, забила бы ленту за вечер сотней строк, и «сейчас» в ней
+ * потерялось бы среди «час назад».
+ */
+export const PORTAL_NOW_PLAYING_EVENT = 'music.user.now-playing';
+
+/**
+ * Что человек слушает прямо сейчас. Самодостаточно, как всё в этой шине:
+ * подписчик не имеет права дочитывать название и обложку из таблиц Музыки.
+ */
+export interface ActivityNowPlayingDto {
+  trackId: string;
+  title: string;
+  artistName: string | null;
+  coverUrl: string | null;
+  /** Куда ведёт нажатие на карточку. */
+  link: string;
+  /** Адрес шторки «в плейлист»: портальный компонент открыть её не может. */
+  addLink: string;
+}
+
+export interface PortalNowPlayingEvent {
+  name: typeof PORTAL_NOW_PLAYING_EVENT;
+  userId: string;
+  occurredAt: string;
+  /** `null` — перестал слушать или ушёл в невидимый сеанс. */
+  nowPlaying: ActivityNowPlayingDto | null;
+}
+
+/** Живое событие SSE второго рода: не карточка в полосу, а строка «слушает». */
+export interface ActivityNowPlayingStreamEvent {
+  friend: ActivityFriendSummary;
+  nowPlaying: ActivityNowPlayingDto | null;
+}
+
+/**
+ * Что вообще приходит подписчику SSE. Различаются по наличию поля: у
+ * карточки есть `item`, у «слушает» — `nowPlaying`.
+ */
+export type ActivityStreamMessage =
+  | ActivityStreamEvent
+  | ActivityNowPlayingStreamEvent;
+
+export function isNowPlayingMessage(
+  message: ActivityStreamMessage,
+): message is ActivityNowPlayingStreamEvent {
+  return 'nowPlaying' in message;
 }
 
 /** Имя события регистрации. Издатель — `auth`, и он один. */

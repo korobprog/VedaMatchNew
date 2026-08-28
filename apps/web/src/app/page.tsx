@@ -22,6 +22,13 @@ import {
   getUnionRecommendations,
 } from "@/lib/union-api";
 import { buildUnionQuickAccessData } from "@/lib/union-quick-access";
+import {
+  getMusicPlaybackStateServer,
+  getMusicTrack,
+  getMyMusicFavorites,
+} from "@/lib/music-api";
+import { buildMusicQuickAccess } from "@/lib/music-quick-access";
+import { MusicQuickWidget } from "@/components/music/music-quick-widget";
 import { getAstroState, getAstroToday } from "@/lib/astro-api";
 import { getChatUnread } from "@/lib/chat-api";
 import {
@@ -71,6 +78,8 @@ export default async function Home({
     news,
     chatUnread,
     activityFeed,
+    musicPlayback,
+    musicFavorites,
   ] = await Promise.all([
     getProfile(),
     getServices(),
@@ -89,6 +98,8 @@ export default async function Home({
     getMyAnnouncements("ru").catch(() => null),
     getChatUnread().catch(() => null),
     getActivityFeedServer().catch(() => null),
+    getMusicPlaybackStateServer().catch(() => null),
+    getMyMusicFavorites().catch(() => null),
   ]);
   if (!user || !services) {
     // Маркер сессии без access-cookie: человек уже входил, refresh скорее всего
@@ -110,6 +121,19 @@ export default async function Home({
   // и города и с прогрессом. Страница анкеты остаётся для повторного
   // прохождения, её не редирект открывает, а ссылка из профиля.
   if (!user.spiritualStage) redirect("/welcome");
+
+  // Карточка Музыки. Запись догружается вторым запросом: состояние плеера
+  // несёт только идентификатор, а карточке нужны название, обложка и
+  // длительность. Запрос идёт, лишь когда есть что продолжать, и падение
+  // Музыки обязано убрать одну карточку, а не главную портала.
+  const musicTrack = musicPlayback?.trackId
+    ? await getMusicTrack(musicPlayback.trackId).catch(() => null)
+    : null;
+  const musicQuickAccess = buildMusicQuickAccess({
+    state: musicPlayback,
+    track: musicTrack,
+    favoritesCount: musicFavorites?.items.length ?? 0,
+  });
 
   const unionQuickAccess = buildUnionQuickAccessData(
     unionChats,
@@ -191,6 +215,10 @@ export default async function Home({
         {/* Ходовые сервисы отдельной строкой над сеткой: за ними заходят
             чаще всего, и искать их среди равных плиток не нужно. */}
         <FeaturedServices unread={chatBadge} />
+        {/* Сразу под ходовыми сервисами, как в макете Main.dc.html: карточка
+            возвращает к недослушанному, не заходя в Музыку. Её нет вовсе,
+            когда возвращаться не к чему и избранное пусто. */}
+        {musicQuickAccess && <MusicQuickWidget data={musicQuickAccess} />}
         <ServiceGrid
           services={gridServices}
           userId={user.id}

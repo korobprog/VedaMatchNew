@@ -2,9 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import {
   PORTAL_ACTIVITY_EVENTS,
+  PORTAL_NOW_PLAYING_EVENT,
   resolveDisplayName,
   type ActivityAccessSource,
+  type ActivityFriendSummary,
   type PortalActivityEvent,
+  type PortalNowPlayingEvent,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityAvatarService } from './activity-avatar.service';
@@ -13,10 +16,16 @@ import { buildActivityTitle, isActivityFeedAction } from './activity-copy';
 import { isRecentlyOnline } from './activity-presence';
 
 /**
- * Зеркалит `PortalActivityEvent` в `ActivityItem` и толкает карточку живым
- * подписчикам SSE. Слушает только источники, чьи действия попадают в ленту
- * друзей (см. `ACTIVITY_FEED_ACTIONS`) — остальные события той же шины
- * (chat, notices, astro) идут мимо, для них здесь нет подписки.
+ * Два канала ленты друзей, и разница между ними принципиальна.
+ *
+ * Постоянный: `PortalActivityEvent` зеркалится в `ActivityItem` и уходит
+ * живым подписчикам SSE. Слушаются только источники, чьи действия попадают
+ * в ленту (см. `ACTIVITY_FEED_ACTIONS`) — остальные события той же шины
+ * (chat, astro) идут мимо, для них здесь нет подписки.
+ *
+ * Эфемерный: `PortalNowPlayingEvent` рассылается тем же подписчикам, но
+ * **не пишется никуда**. Запись, которую человек слушает две минуты, забила
+ * бы ленту за вечер сотней строк, и «сейчас» потерялось бы среди «час назад».
  */
 @Injectable()
 export class ActivityItemsListener {
@@ -31,6 +40,7 @@ export class ActivityItemsListener {
   @OnEvent(PORTAL_ACTIVITY_EVENTS.motivation)
   @OnEvent(PORTAL_ACTIVITY_EVENTS.library)
   @OnEvent(PORTAL_ACTIVITY_EVENTS.market)
+  @OnEvent(PORTAL_ACTIVITY_EVENTS.music)
   onActivity(event: PortalActivityEvent): void {
     if (!isActivityFeedAction(event.action)) return;
     void this.apply(event).catch((error) =>
@@ -57,16 +67,74 @@ export class ActivityItemsListener {
       select: { id: true },
     });
 
+    const audience = await this.audienceOf(event.userId);
+    if (!audience) return;
+
+    const itemPayload = {
+      id: item.id,
+      action: event.action,
+      title,
+      link: event.link ?? null,
+      occurredAt: event.occurredAt,
+    };
+
+    for (const { friend, granteeIds } of audience) {
+      this.events.publish(granteeIds, { friend, item: itemPayload });
+    }
+  }
+
+  /**
+   * «Слушает сейчас» — эфемерный канал.
+   *
+   * В `ActivityItem` не пишется намеренно: запись, которую человек слушает
+   * две минуты, забила бы ленту за вечер сотней строк, и «сейчас» в ней
+   * потерялось бы среди «час назад». Поэтому здесь только рассылка живым
+   * подписчикам — кто не смотрит ленту в эту минуту, ничего и не пропустил.
+   *
+   * Рассылка живёт тут, а не в Музыке, потому что граф «кто кому открыл
+   * активность» — таблица этого модуля, и читать её из чужого модуля
+   * контракт запрещает. Своя копия графа в Музыке разъехалась бы с
+   * оригиналом на первом же отзыве доступа.
+   */
+  @OnEvent(PORTAL_NOW_PLAYING_EVENT)
+  onNowPlaying(event: PortalNowPlayingEvent): void {
+    void this.applyNowPlaying(event).catch((error) =>
+      this.logger.error(
+        'Не удалось разослать «слушает сейчас»',
+        error instanceof Error ? error.stack : String(error),
+      ),
+    );
+  }
+
+  private async applyNowPlaying(event: PortalNowPlayingEvent): Promise<void> {
+    const audience = await this.audienceOf(event.userId);
+    if (!audience) return;
+
+    for (const { friend, granteeIds } of audience) {
+      this.events.publish(granteeIds, {
+        friend,
+        nowPlaying: event.nowPlaying,
+      });
+    }
+  }
+
+  /**
+   * Кому и от чьего имени рассылать. `null` — рассылать некому.
+   *
+   * Источник влияет на то, что зритель видит на значке (мэтч vs раскрытые
+   * контакты), поэтому событие уходит отдельно на каждую группу зрителей со
+   * своим значением `source` — см. ту же логику в `ActivityFeedService.getFeed`.
+   */
+  private async audienceOf(userId: string): Promise<Array<{
+    friend: ActivityFriendSummary;
+    granteeIds: string[];
+  }> | null> {
     const follows = await this.prisma.activityFollow.findMany({
-      where: { granterId: event.userId, revokedAt: null },
+      where: { granterId: userId, revokedAt: null },
       select: { granteeId: true, source: true },
     });
-    if (follows.length === 0) return;
+    if (follows.length === 0) return null;
 
-    // Источник влияет на то, что зритель видит на значке (мэтч vs
-    // раскрытые контакты), поэтому карточка рассылается отдельно на каждую
-    // группу зрителей с их собственным значением `source` — см. ту же
-    // логику в `ActivityFeedService.getFeed`.
     const granteesBySource = new Map<ActivityAccessSource, Set<string>>();
     for (const follow of follows) {
       const set = granteesBySource.get(follow.source) ?? new Set<string>();
@@ -82,7 +150,7 @@ export class ActivityItemsListener {
     }
 
     const actor = await this.prisma.user.findUnique({
-      where: { id: event.userId },
+      where: { id: userId },
       select: {
         id: true,
         name: true,
@@ -94,21 +162,18 @@ export class ActivityItemsListener {
         lastSeenAt: true,
       },
     });
-    if (!actor) return;
+    if (!actor) return null;
 
     const avatarUrl = await this.avatars.resolveAvatarUrl(actor);
     const isOnline = isRecentlyOnline(actor.lastSeenAt);
-    const itemPayload = {
-      id: item.id,
-      action: event.action,
-      title,
-      link: event.link ?? null,
-      occurredAt: event.occurredAt,
-    };
 
+    const groups: Array<{
+      friend: ActivityFriendSummary;
+      granteeIds: string[];
+    }> = [];
     for (const [source, granteeIds] of granteesBySource) {
       if (granteeIds.size === 0) continue;
-      this.events.publish([...granteeIds], {
+      groups.push({
         friend: {
           id: actor.id,
           name: resolveDisplayName(actor),
@@ -118,8 +183,9 @@ export class ActivityItemsListener {
           source,
           isOnline,
         },
-        item: itemPayload,
+        granteeIds: [...granteeIds],
       });
     }
+    return groups.length > 0 ? groups : null;
   }
 }

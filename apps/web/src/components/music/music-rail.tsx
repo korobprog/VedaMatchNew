@@ -118,18 +118,23 @@ export function MusicRail({
     },
   ];
 
+  // На телефоне рельс — горизонтальная лента, а не столбик. Столбиком он
+  // вставал шестью строками НАД каталогом: человек открывал Музыку и видел
+  // меню вместо музыки. Лентой он занимает одну строку и прокручивается
+  // пальцем. Высота 44px — минимальная цель на телефоне; на широком экране,
+  // где целятся курсором, остаются прежние 40.
   const row =
-    "flex h-10 items-center gap-2.5 rounded-xl px-2.5 text-[13px] font-semibold";
+    "flex h-11 shrink-0 items-center gap-2.5 whitespace-nowrap rounded-xl px-3 text-[13px] font-semibold lg:h-10 lg:px-2.5";
 
   return (
     <nav aria-label="Своя музыка" className="w-full lg:w-56 lg:shrink-0">
-      <ul className="glass flex flex-col gap-0.5 rounded-2xl p-2.5">
+      <ul className="glass scroll-slim flex gap-1.5 overflow-x-auto rounded-2xl p-2 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:p-2.5">
         {items.map((item) => {
           const current = item.key === active;
           const badge =
             item.count !== undefined && item.count > 0 ? (
               <span
-                className={`ml-auto rounded-full px-1.5 font-mono text-[11px] ${
+                className={`ml-1 rounded-full px-1.5 font-mono text-[11px] lg:ml-auto ${
                   item.accentCount
                     ? "bg-gold/20 text-gold"
                     : "text-text-2"
@@ -141,11 +146,11 @@ export function MusicRail({
 
           if (!item.href) {
             return (
-              <li key={item.key}>
+              <li key={item.key} className="shrink-0">
                 <span aria-disabled="true" className={`${row} text-text-2`}>
                   {item.icon}
                   {item.label}
-                  <span className="ml-auto rounded-full border border-glass-brd px-1.5 text-[11px] font-medium">
+                  <span className="ml-1 rounded-full border border-glass-brd px-1.5 text-[11px] font-medium lg:ml-auto">
                     скоро
                   </span>
                 </span>
@@ -154,7 +159,7 @@ export function MusicRail({
           }
 
           return (
-            <li key={item.key}>
+            <li key={item.key} className="shrink-0">
               <Link
                 href={item.href}
                 aria-current={current ? "page" : undefined}

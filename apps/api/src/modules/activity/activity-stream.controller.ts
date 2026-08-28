@@ -2,7 +2,7 @@ import { Controller, Header, Sse, UseGuards } from '@nestjs/common';
 import { map, merge, Observable, timer } from 'rxjs';
 import type {
   AccessTokenPayload,
-  ActivityStreamEvent,
+  ActivityStreamMessage,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { ActivityEventsService } from './activity-events.service';
@@ -28,7 +28,7 @@ export class ActivityStreamController {
   @Header('Cache-Control', 'no-cache, no-transform')
   stream(@CurrentUser() user: AccessTokenPayload): Observable<SseMessage> {
     const events = this.events.streamFor(user.sub).pipe(
-      map((event: ActivityStreamEvent) => ({
+      map((event: ActivityStreamMessage) => ({
         type: 'activity',
         data: JSON.stringify(event),
       })),

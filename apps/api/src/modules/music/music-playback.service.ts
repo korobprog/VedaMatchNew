@@ -1,12 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type {
-  MusicPlaybackStateDto,
-  MusicHeartbeatRequest,
-  MusicSettingsDto,
-  UpdateMusicPlaybackStateRequest,
-  UpdateMusicSettingsRequest,
+import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import {
+  PORTAL_NOW_PLAYING_EVENT,
+  type ActivityNowPlayingDto,
+  type MusicPlaybackStateDto,
+  type MusicHeartbeatRequest,
+  type MusicSettingsDto,
+  type PortalNowPlayingEvent,
+  type UpdateMusicPlaybackStateRequest,
+  type UpdateMusicSettingsRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { mayShareMusicActivity } from './music-activity-share';
 
 /**
  * Состояние плеера, тик воспроизведения и настройки прослушивания.
@@ -39,7 +45,15 @@ const DEFAULT_SETTINGS: MusicSettingsDto = {
 
 @Injectable()
 export class MusicPlaybackService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly publicBaseUrl: string | undefined;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly bus: EventEmitter2,
+    config: ConfigService,
+  ) {
+    this.publicBaseUrl = config.get<string>('S3_PUBLIC_URL') || undefined;
+  }
 
   /**
    * Запись, которую человеку разрешено слушать. Неопубликованную слышит
@@ -53,9 +67,12 @@ export class MusicPlaybackService {
       where: { id: trackId },
       select: {
         id: true,
+        title: true,
+        coverKey: true,
         durationSeconds: true,
         status: true,
         uploadedById: true,
+        artist: { select: { name: true } },
       },
     });
 
@@ -82,6 +99,14 @@ export class MusicPlaybackService {
       track.durationSeconds,
     );
 
+    // Что было до тика: событие «слушает» уходит только на смену записи или
+    // на вход-выход из невидимого сеанса. Тик приходит раз в 30 секунд, и
+    // рассылать одно и то же полсотни раз за киртан незачем.
+    const before = await this.prisma.musicNowPlaying.findUnique({
+      where: { userId },
+      select: { trackId: true, isPrivateSession: true },
+    });
+
     await Promise.all([
       this.prisma.musicPlayState.upsert({
         where: { userId_trackId: { userId, trackId: track.id } },
@@ -103,7 +128,60 @@ export class MusicPlaybackService {
       this.recordListen(userId, track.id, body.listenedSeconds),
     ]);
 
+    const isPrivate = Boolean(body.isPrivateSession);
+    const changed =
+      before?.trackId !== track.id || before.isPrivateSession !== isPrivate;
+    if (changed) {
+      await this.announceNowPlaying(
+        userId,
+        isPrivate
+          ? null
+          : {
+              trackId: track.id,
+              title: track.title,
+              artistName: track.artist?.name ?? null,
+              coverUrl:
+                track.coverKey && this.publicBaseUrl
+                  ? `${this.publicBaseUrl.replace(/\/$/, '')}/${track.coverKey}`
+                  : null,
+              link: `/music/tracks/${track.id}`,
+              addLink: `/music/tracks/${track.id}?add=1`,
+            },
+      );
+    }
+
     return { ok: true as const, positionSeconds: position };
+  }
+
+  /**
+   * Эфемерный факт «слушает сейчас» для ленты друзей.
+   *
+   * Не пишется никуда: рассылку по графу доступа делает модуль `activity`,
+   * которому этот граф и принадлежит. Своя копия графа здесь разъехалась бы
+   * с оригиналом на первом же отзыве доступа.
+   *
+   * `null` — перестал слушать или ушёл в невидимый сеанс: строка у друзей
+   * должна погаснуть, а не залипнуть на последней записи.
+   */
+  private async announceNowPlaying(
+    userId: string,
+    nowPlaying: ActivityNowPlayingDto | null,
+  ): Promise<void> {
+    if (nowPlaying) {
+      const settings = await this.prisma.musicSettings.findUnique({
+        where: { userId },
+        select: { nowPlayingVisibility: true },
+      });
+      if (!mayShareMusicActivity(settings?.nowPlayingVisibility)) return;
+    }
+
+    const event: PortalNowPlayingEvent = {
+      name: PORTAL_NOW_PLAYING_EVENT,
+      userId,
+      occurredAt: new Date().toISOString(),
+      nowPlaying,
+    };
+    this.bus.emit(event.name, event);
   }
 
   /**
@@ -144,7 +222,12 @@ export class MusicPlaybackService {
    * сразу, не дожидаясь протухания: пауза — это уже «не слушает».
    */
   async stop(userId: string) {
-    await this.prisma.musicNowPlaying.deleteMany({ where: { userId } });
+    const { count } = await this.prisma.musicNowPlaying.deleteMany({
+      where: { userId },
+    });
+    // Гасим строку у друзей только если было чему гаснуть: плеер зовёт
+    // `stop` и на закрытии вкладки, где ничего не играло.
+    if (count > 0) await this.announceNowPlaying(userId, null);
     return { ok: true as const };
   }
 

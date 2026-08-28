@@ -1,7 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { MusicTrackDto } from '@vedamatch/shared';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import {
+  PORTAL_ACTIVITY_EVENTS,
+  type MusicTrackDto,
+  type PortalActivityEvent,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { mayShareMusicActivity } from './music-activity-share';
 import { toMusicTrackDto } from './music-track-dto';
 
 /**
@@ -21,6 +27,7 @@ export class MusicFavoritesService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly bus: EventEmitter2,
     config: ConfigService,
   ) {
     this.publicBaseUrl = config.get<string>('S3_PUBLIC_URL') || undefined;
@@ -29,7 +36,7 @@ export class MusicFavoritesService {
   async add(userId: string, trackId: string): Promise<{ favorited: true }> {
     const track = await this.prisma.musicTrack.findUnique({
       where: { id: trackId },
-      select: { id: true, status: true, uploadedById: true },
+      select: { id: true, title: true, status: true, uploadedById: true },
     });
 
     // 404 и на «нет записи», и на «не для вас»: иначе по коду ответа
@@ -38,13 +45,53 @@ export class MusicFavoritesService {
       track && (track.status === 'published' || track.uploadedById === userId);
     if (!allowed) throw new NotFoundException('Запись не найдена');
 
+    const before = await this.prisma.musicFavorite.findUnique({
+      where: { userId_trackId: { userId, trackId } },
+      select: { trackId: true },
+    });
+
     await this.prisma.musicFavorite.upsert({
       where: { userId_trackId: { userId, trackId } },
       create: { userId, trackId },
       update: {},
     });
 
+    // Только на первое нажатие: сердце жмут дважды, и второй раз — это не
+    // новое событие, а исправление промаха. Лента не должна показывать его
+    // друзьям как ещё одно действие.
+    if (!before) await this.announceFavorite(userId, track.id, track.title);
+
     return { favorited: true };
+  }
+
+  /**
+   * Факт для ленты друзей. Событие самодостаточно, как требует контракт:
+   * подписчик не имеет права дочитывать название из таблиц Музыки.
+   *
+   * Молчит, когда человек выключил видимость: настройка одна на всё, что
+   * Музыка сообщает наружу, — см. `music-activity-share.ts`.
+   */
+  private async announceFavorite(
+    userId: string,
+    trackId: string,
+    title: string,
+  ): Promise<void> {
+    const settings = await this.prisma.musicSettings.findUnique({
+      where: { userId },
+      select: { nowPlayingVisibility: true },
+    });
+    if (!mayShareMusicActivity(settings?.nowPlayingVisibility)) return;
+
+    const event: PortalActivityEvent = {
+      name: PORTAL_ACTIVITY_EVENTS.music,
+      userId,
+      action: 'music.track-favorited',
+      occurredAt: new Date().toISOString(),
+      entityId: trackId,
+      entityLabel: title,
+      link: `/music/tracks/${trackId}`,
+    };
+    this.bus.emit(event.name, event);
   }
 
   /**

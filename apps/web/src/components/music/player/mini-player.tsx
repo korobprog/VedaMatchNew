@@ -66,14 +66,24 @@ export function MiniPlayer() {
     <div
       // `pointer-events-none` на обёртке, чтобы прозрачные поля по краям не
       // перехватывали клики по странице под полосой.
+      //
+      // `data-music-player` — зацепка для `body:has(...)` в globals.css:
+      // полоса лежит поверх страницы, и без отступа снизу последняя строка
+      // любого раздела портала оказывалась под ней.
+      data-music-player=""
       className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
     >
       <section
         aria-label="Плеер"
-        className="glass pointer-events-auto mx-auto flex h-16 max-w-5xl items-center gap-3 rounded-2xl px-3 sm:gap-5 sm:px-[18px]"
+        // На телефоне полоса в две строки, как в макете Main.dc.html: в одну
+        // строку 390px не помещаются ни девять кнопок, ни дорожка — название
+        // записи сжималось в ноль. Поэтому здесь `flex-wrap` и порядок
+        // элементов задан явно, а с `sm` возвращается однострочная раскладка
+        // из PortalWide.dc.html.
+        className="glass pointer-events-auto mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-3 py-2 sm:h-16 sm:flex-nowrap sm:gap-5 sm:px-[18px] sm:py-0"
       >
         {/* Что играет */}
-        <div className="flex min-w-0 flex-1 items-center gap-3 sm:w-56 sm:flex-none">
+        <div className="order-1 flex min-w-0 flex-1 items-center gap-3 sm:order-none sm:w-56 sm:flex-none">
           <Link
             href={`/music/tracks/${current.id}`}
             aria-label={`Открыть запись: ${current.title}`}
@@ -96,9 +106,13 @@ export function MiniPlayer() {
           </div>
         </div>
 
-        {/* Управление и дорожка */}
-        <div className="flex flex-1 flex-col items-center gap-1.5">
-          <div className="flex items-center gap-1.5 sm:gap-2">
+        {/* Управление и дорожка.
+            `contents` на телефоне: обёртка перестаёт быть коробкой, и кнопки
+            с дорожкой становятся прямыми детьми полосы — только так дорожка
+            может уехать на свою строку во всю ширину. С `sm` обёртка снова
+            коробка, и колонка «кнопки над дорожкой» из макета возвращается. */}
+        <div className="contents sm:flex sm:flex-1 sm:flex-col sm:items-center sm:gap-1.5">
+          <div className="order-3 flex items-center gap-1.5 sm:order-none sm:gap-2">
             <button
               type="button"
               aria-label="Перемешать"
@@ -118,7 +132,7 @@ export function MiniPlayer() {
               type="button"
               aria-label={`Назад на ${SEEK_STEP_SECONDS} секунд`}
               onClick={() => player.skip(-SEEK_STEP_SECONDS)}
-              className={`${ctrl} h-8 w-8`}
+              className={`${ctrl} hidden h-8 w-8 sm:flex`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M11 4L3 12l8 8" />
@@ -131,7 +145,7 @@ export function MiniPlayer() {
               aria-label="Предыдущая запись"
               disabled={!hasPrev}
               onClick={player.prev}
-              className={`${ctrl} h-8 w-8`}
+              className={`${ctrl} hidden h-8 w-8 sm:flex`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M19 4L9 12l10 8z" />
@@ -143,7 +157,9 @@ export function MiniPlayer() {
               type="button"
               aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
               onClick={player.toggle}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint"
+              // 44px на телефоне — и размер из макета, и минимальная цель
+              // пальца; на широком экране полоса всего 64px высотой, там 40.
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint sm:h-10 sm:w-10"
             >
               {isPlaying ? (
                 <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
@@ -162,7 +178,7 @@ export function MiniPlayer() {
               aria-label="Следующая запись"
               disabled={!hasNext}
               onClick={player.next}
-              className={`${ctrl} h-8 w-8`}
+              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M5 4l10 8-10 8z" />
@@ -174,7 +190,7 @@ export function MiniPlayer() {
               type="button"
               aria-label={`Вперёд на ${SEEK_STEP_SECONDS} секунд`}
               onClick={() => player.skip(SEEK_STEP_SECONDS)}
-              className={`${ctrl} h-8 w-8`}
+              className={`${ctrl} hidden h-8 w-8 sm:flex`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M13 4l8 8-8 8" />
@@ -217,8 +233,12 @@ export function MiniPlayer() {
           />
         </div>
 
-        {/* Скорость, сердце, очередь, громкость */}
-        <div className="flex shrink-0 items-center gap-2 sm:w-56 sm:justify-end sm:gap-2.5">
+        {/* Скорость, сердце, очередь, громкость.
+            На телефоне из группы остаётся одно сердце и встаёт перед
+            кнопкой пуска, как в макете: очередь, невидимый сеанс и звук
+            туда не влезают, и все трое доступны на странице записи и в
+            настройках сервиса. */}
+        <div className="order-2 flex shrink-0 items-center gap-2 sm:order-none sm:w-56 sm:justify-end sm:gap-2.5">
           <button
             type="button"
             aria-label={`Скорость ${rate.toFixed(2).replace(/0$/, "")}×, сменить`}
@@ -235,7 +255,7 @@ export function MiniPlayer() {
             aria-label={isFavorite ? "Убрать из избранного" : "В избранное"}
             aria-pressed={isFavorite}
             onClick={player.toggleFavorite}
-            className={`${ctrl} h-8 w-8 ${isFavorite ? "text-magenta" : "text-text-2"}`}
+            className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8 ${isFavorite ? "text-magenta" : "text-text-2"}`}
           >
             <svg
               viewBox="0 0 24 24"
@@ -251,7 +271,7 @@ export function MiniPlayer() {
             </svg>
           </button>
 
-          <div className="relative">
+          <div className="relative hidden sm:block">
             <button
               type="button"
               aria-label="Очередь"
@@ -287,7 +307,7 @@ export function MiniPlayer() {
             }
             aria-pressed={isPrivateSession}
             onClick={player.togglePrivateSession}
-            className={`${ctrl} h-8 w-8 ${isPrivateSession ? "text-gold" : "text-text-2"}`}
+            className={`${ctrl} hidden h-8 w-8 sm:flex ${isPrivateSession ? "text-gold" : "text-text-2"}`}
           >
             <svg {...icon} className="h-4 w-4">
               {isPrivateSession ? (
@@ -311,7 +331,7 @@ export function MiniPlayer() {
             aria-label={muted ? "Включить звук" : "Выключить звук"}
             aria-pressed={muted}
             onClick={player.toggleMuted}
-            className={`${ctrl} h-8 w-8 text-text-2`}
+            className={`${ctrl} hidden h-8 w-8 text-text-2 sm:flex`}
           >
             <svg {...icon} className="h-4 w-4">
               <path d="M11 5L6 9H2v6h4l5 4z" />
@@ -361,7 +381,7 @@ function PositionSlider({
   const percent = total > 0 ? Math.min(100, (position / total) * 100) : 0;
 
   return (
-    <div className="flex w-full items-center gap-2 sm:w-[340px]">
+    <div className="order-4 flex w-full items-center gap-2 sm:order-none sm:w-[340px]">
       <span className="font-mono text-[10px] tabular-nums text-text-2">
         {formatTrackDuration(position)}
       </span>
