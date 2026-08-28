@@ -8,6 +8,7 @@ import type {
   MusicAdminArtistsDto,
   MusicAdminCategoriesDto,
   MusicAdminPlaylistDto,
+  MusicAdminReportsDto,
   MusicAdminSummaryDto,
   MusicModerationItemDto,
 } from "@vedamatch/shared";
@@ -53,3 +54,7 @@ export const getMusicAdminCategories = () =>
 /** Подборки портала — те, что витрина показывает всем. */
 export const getMusicAdminPlaylists = () =>
   adminGet<MusicAdminPlaylistDto[]>("/music/admin/catalog/playlists");
+
+/** Открытые жалобы. Записи по ним уже скрыты и ждут разбора. */
+export const getMusicAdminReports = () =>
+  adminGet<MusicAdminReportsDto>("/music/admin/reports");

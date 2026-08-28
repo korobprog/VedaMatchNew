@@ -8,6 +8,7 @@ import type {
   CreateMusicCategoryRequest,
   CreateMusicPlaylistRequest,
   MusicModerationDecisionRequest,
+  MusicReportDecisionRequest,
   UpdateMusicPlaylistRequest,
   UpdateMusicTrackRequest,
 } from "@vedamatch/shared";
@@ -58,6 +59,16 @@ export const createMusicAlbum = (body: CreateMusicAlbumRequest) =>
 
 export const createMusicCategory = (body: CreateMusicCategoryRequest) =>
   send<unknown>("/music/admin/catalog/categories", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+/** Решение по жалобе. Закрывает все открытые жалобы на эту запись. */
+export const decideMusicReport = (
+  id: string,
+  body: MusicReportDecisionRequest,
+) =>
+  send<{ ok: true }>(`/music/admin/reports/${id}/decide`, {
     method: "POST",
     body: JSON.stringify(body),
   });

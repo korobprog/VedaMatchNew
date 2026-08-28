@@ -18,6 +18,7 @@ import type {
   UpdateMusicAlbumRequest,
   UpdateMusicArtistRequest,
   MusicModerationDecisionRequest,
+  MusicReportDecisionRequest,
   UpdateMusicCategoryRequest,
   UpdateMusicPlaylistRequest,
   UpdateMusicTrackRequest,
@@ -25,6 +26,7 @@ import type {
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { MusicAdminCatalogService } from './music-admin-catalog.service';
 import { MusicAdminQueueService } from './music-admin-queue.service';
+import { MusicReportsService } from './music-reports.service';
 import { isAdmin } from './is-admin';
 
 /**
@@ -180,7 +182,10 @@ export class MusicAdminCatalogController {
 @UseGuards(AuthGuard)
 @Throttle({ default: { ttl: 3_600_000, limit: 300 } })
 export class MusicAdminQueueController {
-  constructor(private readonly queue: MusicAdminQueueService) {}
+  constructor(
+    private readonly queue: MusicAdminQueueService,
+    private readonly reports: MusicReportsService,
+  ) {}
 
   @Get('summary')
   summary(@CurrentUser() user: AccessTokenPayload) {
@@ -199,5 +204,24 @@ export class MusicAdminQueueController {
     @Body() body: MusicModerationDecisionRequest,
   ) {
     return this.queue.decide(isAdmin(user), trackId, body);
+  }
+
+  /**
+   * Жалобы. Отдельно от очереди, и это не дублирование: очередь показывает
+   * `pending` — то, что ещё никто не слышал, — а скрытая по жалобам запись в
+   * `pending` не попадает никогда и без этого списка терялась насовсем.
+   */
+  @Get('reports')
+  listReports(@CurrentUser() user: AccessTokenPayload) {
+    return this.reports.list(isAdmin(user));
+  }
+
+  @Post('reports/:id/decide')
+  decideReport(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: MusicReportDecisionRequest,
+  ) {
+    return this.reports.decide(isAdmin(user), user.sub, id, body);
   }
 }

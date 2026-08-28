@@ -479,6 +479,42 @@ export interface CreateMusicReportRequest {
   text: string;
 }
 
+/**
+ * Жалоба в разборе. Имя жалобщика наружу не идёт вовсе: модератор решает по
+ * записи и тексту, а не по тому, кто пожаловался, — иначе разбор превращается
+ * в счёт репутаций.
+ */
+export interface MusicAdminReportDto {
+  id: string;
+  kind: MusicReportKind;
+  text: string;
+  createdAt: string;
+  track: {
+    id: string;
+    title: string;
+    status: MusicTrackStatus;
+    artistName: string | null;
+  };
+  /** Сколько всего открытых жалоб на эту запись. */
+  openOnTrack: number;
+}
+
+export interface MusicAdminReportsDto {
+  items: MusicAdminReportDto[];
+}
+
+/**
+ * Решение по жалобе.
+ *
+ * `resolved` — жалоба справедлива, запись остаётся скрытой; `rejected` —
+ * жалоба не подтвердилась, и запись возвращается в каталог. Удаления здесь
+ * нет и не будет: три аккаунта не должны становиться кнопкой «удалить чужое».
+ */
+export interface MusicReportDecisionRequest {
+  decision: 'resolved' | 'rejected';
+  note?: string;
+}
+
 export interface MusicReportResultDto {
   accepted: true;
   /** Повторная жалоба от того же человека веса не добавляет. */

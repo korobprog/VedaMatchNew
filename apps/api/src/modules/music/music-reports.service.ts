@@ -1,11 +1,14 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import type {
   CreateMusicReportRequest,
+  MusicAdminReportsDto,
+  MusicReportDecisionRequest,
   MusicReportKind,
 } from '@vedamatch/shared';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -17,6 +20,9 @@ import {
 } from './music-publish-policy';
 
 const MAX_TEXT_LENGTH = 1000;
+
+/** Сколько жалоб показываем за раз. Больше — это уже не разбор, а поток. */
+const REPORTS_PAGE_SIZE = 50;
 
 /**
  * Жалобы на записи — первый рубеж модерации.
@@ -176,5 +182,143 @@ export class MusicReportsService {
       this.logger.log(`Возвращено авторам без разбора за неделю: ${closed}`);
     }
     return closed;
+  }
+
+  // ---------- Разбор ----------
+
+  /**
+   * Открытые жалобы, старые сверху.
+   *
+   * Отдельно от очереди модерации, и это не дублирование: очередь показывает
+   * `pending` — то, что ещё никто не слышал. Запись, скрытая по жалобам, в
+   * `pending` не попадает никогда, и без этого списка она выпадала из поля
+   * зрения навсегда: счётчик `openReports` в сводке был, а открыть его было
+   * нечем.
+   *
+   * Имя жалобщика наружу не идёт: решают по записи и тексту, а не по тому,
+   * кто пожаловался.
+   */
+  async list(viewerIsAdmin: boolean): Promise<MusicAdminReportsDto> {
+    this.assertAdmin(viewerIsAdmin);
+
+    const rows = await this.prisma.musicReport.findMany({
+      where: { status: 'open' },
+      orderBy: { createdAt: 'asc' },
+      take: REPORTS_PAGE_SIZE,
+      select: {
+        id: true,
+        kind: true,
+        text: true,
+        createdAt: true,
+        track: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            artist: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    // Сколько открытых жалоб на каждую запись — одним запросом, а не по
+    // жалобе: на одну запись их обычно несколько, и N+1 здесь сам собой.
+    const counts = await this.prisma.musicReport.groupBy({
+      by: ['trackId'],
+      where: {
+        status: 'open',
+        trackId: { in: rows.map((row) => row.track.id) },
+      },
+      _count: { id: true },
+    });
+    const openByTrack = new Map(
+      counts.map((row) => [row.trackId, row._count.id]),
+    );
+
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        text: row.text,
+        createdAt: row.createdAt.toISOString(),
+        track: {
+          id: row.track.id,
+          title: row.track.title,
+          status: row.track.status,
+          artistName: row.track.artist?.name ?? null,
+        },
+        openOnTrack: openByTrack.get(row.track.id) ?? 1,
+      })),
+    };
+  }
+
+  /**
+   * Решение по жалобе.
+   *
+   * Решение принимается по всем открытым жалобам на запись сразу: они об
+   * одном и том же, и закрывать их поштучно значит скрывать запись заново на
+   * каждой следующей.
+   *
+   * `rejected` возвращает запись в каталог — но только если она скрыта
+   * именно по жалобам. Снятую администратором руками не трогаем: жалоба не
+   * должна отменять чужое решение.
+   */
+  async decide(
+    viewerIsAdmin: boolean,
+    adminId: string,
+    reportId: string,
+    body: MusicReportDecisionRequest,
+  ): Promise<{ ok: true }> {
+    this.assertAdmin(viewerIsAdmin);
+
+    const decision =
+      body?.decision === 'rejected' ? 'rejected' : ('resolved' as const);
+
+    const report = await this.prisma.musicReport.findUnique({
+      where: { id: reportId },
+      select: { id: true, status: true, trackId: true },
+    });
+    if (!report) throw new NotFoundException('Жалоба не найдена');
+    if (report.status !== 'open') {
+      throw new BadRequestException('По этой жалобе уже решили');
+    }
+
+    const track = await this.prisma.musicTrack.findUnique({
+      where: { id: report.trackId },
+      select: { id: true, status: true },
+    });
+
+    const now = new Date();
+    const note = body?.note?.trim().slice(0, MAX_TEXT_LENGTH) || null;
+
+    await this.prisma.$transaction([
+      this.prisma.musicReport.updateMany({
+        where: { trackId: report.trackId, status: 'open' },
+        data: { status: decision, decidedAt: now, decidedById: adminId },
+      }),
+      ...(decision === 'rejected' && track?.status === 'hidden'
+        ? [
+            this.prisma.musicTrack.update({
+              where: { id: report.trackId },
+              data: { status: 'published', moderationNote: note },
+            }),
+          ]
+        : note
+          ? [
+              this.prisma.musicTrack.update({
+                where: { id: report.trackId },
+                data: { moderationNote: note },
+              }),
+            ]
+          : []),
+    ]);
+
+    return { ok: true };
+  }
+
+  private assertAdmin(viewerIsAdmin: boolean): void {
+    if (!viewerIsAdmin) {
+      throw new ForbiddenException('Доступ только для администратора сервиса');
+    }
   }
 }
