@@ -1,9 +1,11 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMusicTrack } from "@/lib/music-api";
 import { MusicCover } from "@/components/music/music-cover";
 import { MusicReportForm } from "@/components/music/music-report-form";
+import { MusicAddToPlaylist } from "@/components/music/music-add-to-playlist";
 import { formatTrackDuration } from "@/lib/music-duration";
 
 export async function generateMetadata({
@@ -23,15 +25,13 @@ export async function generateMetadata({
 /**
  * Карточка записи. См. макет `.design/music/Track.dc.html`.
  *
- * Этап 1 — только сведения о записи. Дорожки плеера и шторки «В плейлист»
- * из макета здесь ещё нет: плеер приезжает этапом 3, плейлисты — этапом 4.
- * Кнопки-обманки, которая ничего не делает, тоже нет — она хуже её
- * отсутствия.
+ * Ссылка из ленты друзей и из полосы плеера приходит сюда с `?add=1`
+ * («добавить себе в плейлист») и сразу открывает шторку. Параметр в адресе,
+ * а не состояние кнопки, именно поэтому: компонент портала не имеет права
+ * импортировать компоненты Музыки, и обе точки входа — обычные ссылки.
  *
- * Ссылка из ленты друзей приходит сюда с `?add=1` («добавить себе в
- * плейлист»). Параметр пока не обрабатывается: обрабатывать его будет
- * этап 4, а до тех пор человек попадает на карточку записи — то есть туда,
- * куда и хотел.
+ * `Suspense` вокруг кнопки обязателен: внутри `useSearchParams`, и без
+ * границы Next роняет сборку страницы на предрендере.
  */
 export default async function MusicTrackPage({
   params,
@@ -109,6 +109,16 @@ export default async function MusicTrackPage({
               </li>
             )}
           </ul>
+
+          <div className="mt-1">
+            <Suspense fallback={<div className="h-11" />}>
+              <MusicAddToPlaylist
+                trackId={track.id}
+                trackTitle={track.title}
+                artistName={track.artist?.name ?? null}
+              />
+            </Suspense>
+          </div>
 
           <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
             {facts.map((fact) => (
