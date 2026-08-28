@@ -8,7 +8,10 @@ function prismaMock() {
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     musicUpload: { findMany: jest.fn().mockResolvedValue([]) },
-    musicPlaylist: { findMany: jest.fn().mockResolvedValue([]) },
+    musicPlaylist: {
+      findMany: jest.fn().mockResolvedValue([]),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
   };
 }
 
@@ -79,5 +82,39 @@ describe('MusicPurgeListener', () => {
       'music/uploads/abandoned.mp3',
       'music/covers/p1.jpg',
     ]);
+  });
+
+  describe('плейлисты', () => {
+    /**
+     * Связь с человеком стала `SetNull` ради подборок портала: они обязаны
+     * пережить уход заведшего их администратора. Личные подборки после этого
+     * каскад уже не заберёт, и снимать их обязан слушатель.
+     */
+    it('снимает свои плейлисты сам', async () => {
+      const prisma = prismaMock();
+
+      await listener(prisma).collectStorageKeys({ userId: 'u1' });
+
+      expect(prisma.musicPlaylist.deleteMany).toHaveBeenCalledWith({
+        where: { ownerId: 'u1', isSystem: false },
+      });
+    });
+
+    it('подборку портала не трогает — ни в плане ключей, ни в удалении', async () => {
+      const prisma = prismaMock();
+
+      await listener(prisma).collectStorageKeys({ userId: 'u1' });
+
+      expect(prisma.musicPlaylist.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { ownerId: 'u1', isSystem: false },
+        }),
+      );
+      expect(prisma.musicPlaylist.deleteMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ isSystem: false }),
+        }),
+      );
+    });
   });
 });

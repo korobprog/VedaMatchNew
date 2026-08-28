@@ -8,15 +8,18 @@ import type {
   CreateMusicAlbumRequest,
   CreateMusicArtistRequest,
   CreateMusicCategoryRequest,
+  CreateMusicPlaylistRequest,
   MusicCoverScope,
   UpdateMusicAlbumRequest,
   UpdateMusicArtistRequest,
   UpdateMusicCategoryRequest,
+  UpdateMusicPlaylistRequest,
   UpdateMusicTrackRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MusicCoversService } from './music-covers.service';
 import { buildMusicSlug, withMusicSlugSuffix } from './music-slug';
+import { nextPosition } from './playlist-order';
 
 const MAX_NAME_LENGTH = 160;
 const MAX_BIO_LENGTH = 2000;
@@ -315,6 +318,165 @@ export class MusicAdminCatalogService {
 
     await this.prisma.musicCategory.delete({ where: { id } });
     return { ok: true };
+  }
+
+  // ---------- Подборки портала ----------
+
+  /**
+   * Подборки редакции. Живут в тех же таблицах, что личные плейлисты, но
+   * заводятся и правятся только отсюда: витрина показывает их всем, и
+   * пользовательский плейлист, случайно ставший общим, — это не опечатка, а
+   * чужая подборка на главной странице сервиса.
+   *
+   * Владельцем записывается заведший её администратор. Связь `SetNull`, так
+   * что его уход подборку не унесёт.
+   */
+  async listSystemPlaylists(viewerIsAdmin: boolean) {
+    this.assertAdmin(viewerIsAdmin);
+    return this.prisma.musicPlaylist.findMany({
+      where: { isSystem: true },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        coverKey: true,
+        trackCount: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async createSystemPlaylist(
+    viewerIsAdmin: boolean,
+    adminId: string,
+    body: CreateMusicPlaylistRequest,
+  ) {
+    this.assertAdmin(viewerIsAdmin);
+    const title = this.text(body.title, 'Название', MAX_NAME_LENGTH, true)!;
+
+    return this.prisma.musicPlaylist.create({
+      data: {
+        ownerId: adminId,
+        title,
+        description: this.text(body.description, 'Описание', 500, false),
+        // Подборка портала на то и портальная: видна всем и без отдельного
+        // переключателя видимости.
+        visibility: 'public',
+        isSystem: true,
+        ...this.coverPatch(body.coverKey, null, 'playlist'),
+      },
+    });
+  }
+
+  async updateSystemPlaylist(
+    viewerIsAdmin: boolean,
+    id: string,
+    body: UpdateMusicPlaylistRequest,
+  ) {
+    this.assertAdmin(viewerIsAdmin);
+    const existing = await this.systemPlaylist(id);
+
+    return this.prisma.musicPlaylist.update({
+      where: { id },
+      data: {
+        ...this.coverPatch(body.coverKey, existing.coverKey, 'playlist'),
+        ...(body.title === undefined
+          ? {}
+          : {
+              title: this.text(body.title, 'Название', MAX_NAME_LENGTH, true)!,
+            }),
+        ...(body.description === undefined
+          ? {}
+          : {
+              description: this.text(body.description, 'Описание', 500, false),
+            }),
+      },
+    });
+  }
+
+  async deleteSystemPlaylist(viewerIsAdmin: boolean, id: string) {
+    this.assertAdmin(viewerIsAdmin);
+    await this.systemPlaylist(id);
+    // Записи уходят каскадом: подборка — это порядок ссылок, а не владелец
+    // записей, и «удалить киртан вместе с подборкой» было бы катастрофой
+    // в один клик. Тот же счёт, что у категорий.
+    await this.prisma.musicPlaylist.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  /** Добавление идемпотентно: кнопку нажимают дважды. */
+  async addSystemTrack(viewerIsAdmin: boolean, id: string, trackId: string) {
+    this.assertAdmin(viewerIsAdmin);
+    await this.systemPlaylist(id);
+
+    const track = await this.prisma.musicTrack.findUnique({
+      where: { id: trackId },
+      select: { id: true, status: true },
+    });
+    // В общую подборку кладём только опубликованное: иначе человек с витрины
+    // упирается в запись, которую ему слушать нельзя.
+    if (!track || track.status !== 'published') {
+      throw new BadRequestException('Запись не опубликована');
+    }
+
+    const existing = await this.prisma.musicPlaylistItem.findUnique({
+      where: { playlistId_trackId: { playlistId: id, trackId } },
+      select: { id: true },
+    });
+    if (existing) return { ok: true };
+
+    const last = await this.prisma.musicPlaylistItem.findFirst({
+      where: { playlistId: id },
+      orderBy: { position: 'desc' },
+      select: { position: true },
+    });
+
+    await this.prisma.$transaction([
+      this.prisma.musicPlaylistItem.create({
+        data: {
+          playlistId: id,
+          trackId,
+          position: nextPosition(last?.position ?? null),
+        },
+      }),
+      this.prisma.musicPlaylist.update({
+        where: { id },
+        data: { trackCount: { increment: 1 } },
+      }),
+    ]);
+
+    return { ok: true };
+  }
+
+  async removeSystemTrack(viewerIsAdmin: boolean, id: string, trackId: string) {
+    this.assertAdmin(viewerIsAdmin);
+    await this.systemPlaylist(id);
+
+    const { count } = await this.prisma.musicPlaylistItem.deleteMany({
+      where: { playlistId: id, trackId },
+    });
+    if (count > 0) {
+      await this.prisma.musicPlaylist.update({
+        where: { id },
+        data: { trackCount: { decrement: count } },
+      });
+    }
+
+    return { ok: true };
+  }
+
+  /** Существует и именно подборка: личный плейлист отсюда не правится. */
+  private async systemPlaylist(id: string) {
+    const row = await this.prisma.musicPlaylist.findUnique({
+      where: { id },
+      select: { id: true, isSystem: true, coverKey: true },
+    });
+    if (!row) throw new NotFoundException('Подборка не найдена');
+    if (!row.isSystem) {
+      throw new ForbiddenException('Это личный плейлист, а не подборка');
+    }
+    return row;
   }
 
   // ---------- Карточка записи ----------

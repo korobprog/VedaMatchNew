@@ -11,7 +11,7 @@ export function MusicAdminTabs({
   active,
   pendingCount = 0,
 }: {
-  active: "queue" | "catalog";
+  active: "queue" | "catalog" | "playlists";
   pendingCount?: number;
 }) {
   const tabs = [
@@ -20,6 +20,11 @@ export function MusicAdminTabs({
       key: "catalog" as const,
       href: "/admin/music/catalog",
       label: "Справочники",
+    },
+    {
+      key: "playlists" as const,
+      href: "/admin/music/playlists",
+      label: "Подборки",
     },
   ];
 

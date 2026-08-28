@@ -21,7 +21,7 @@ export const metadata: Metadata = {
  * молча пропавшая позавчерашняя запись читается как поломка.
  */
 export default async function MusicHistoryPage() {
-  const history = await getMusicHistory();
+  const history = await getMusicHistory().catch(() => null);
   const items = history?.items ?? [];
   const queue = items.map((item) => item.track.id);
 

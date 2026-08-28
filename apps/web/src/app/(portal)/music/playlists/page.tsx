@@ -27,7 +27,7 @@ const VISIBILITY_LABEL = {
  * остаётся пустым.
  */
 export default async function MusicPlaylistsPage() {
-  const playlists = await getMyMusicPlaylists();
+  const playlists = await getMyMusicPlaylists().catch(() => null);
   const items = playlists?.items ?? [];
 
   return (

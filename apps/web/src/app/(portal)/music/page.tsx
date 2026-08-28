@@ -61,10 +61,13 @@ export default async function MusicPage({
           limit: showAll && !category && !query ? 60 : 30,
         })
       : Promise.resolve(null),
-    // Счётчики рельса. Гостю отдаётся null и рельс просто без чисел.
-    getMyMusicUploads(),
-    getMyMusicFavorites(),
-    getMyMusicPlaylists(),
+    // Счётчики рельса — украшение, и падать из-за них каталог не должен.
+    // Гостю приходит `null` и рельс просто без чисел; у вошедшего запрос
+    // может упереться в лимит частоты или в упавший маршрут — тогда тоже
+    // `null`, а не страница с ошибкой вместо всего каталога.
+    getMyMusicUploads().catch(() => null),
+    getMyMusicFavorites().catch(() => null),
+    getMyMusicPlaylists().catch(() => null),
   ]);
 
   if (!catalog) {

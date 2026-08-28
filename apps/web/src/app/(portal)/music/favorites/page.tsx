@@ -18,7 +18,7 @@ export const metadata: Metadata = {
  * сервер, страница ничего не фильтрует.
  */
 export default async function MusicFavoritesPage() {
-  const favorites = await getMyMusicFavorites();
+  const favorites = await getMyMusicFavorites().catch(() => null);
   const items = favorites?.items ?? [];
   const queue = items.map((track) => track.id);
 

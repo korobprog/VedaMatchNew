@@ -547,6 +547,19 @@ export interface MusicPlaylistPageDto {
   canEdit: boolean;
 }
 
+/**
+ * Строка подборки портала в админке. Без видимости и `isSystem`: у подборок
+ * они всегда одни и те же, и показывать их значит предлагать поменять.
+ */
+export interface MusicAdminPlaylistDto {
+  id: string;
+  title: string;
+  description: string | null;
+  coverKey: string | null;
+  trackCount: number;
+  updatedAt: string;
+}
+
 /** Перенос записи внутри плейлиста. Индекс с нуля, как его видит человек. */
 export interface MoveMusicPlaylistTrackRequest {
   toIndex: number;
