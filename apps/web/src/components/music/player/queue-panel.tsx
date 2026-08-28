@@ -45,14 +45,25 @@ export function MusicQueuePanel({ onClose }: { onClose: () => void }) {
       aria-label="Очередь"
       className="glass pointer-events-auto absolute bottom-full right-0 mb-2 max-h-[60vh] w-80 overflow-y-auto rounded-2xl p-3"
     >
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="font-display text-sm font-bold text-text-0">Очередь</h2>
+        {/* «Очистить» оставляет играющую запись: убрать её значит оборвать
+            звук, а человек просил прибраться в списке. */}
+        {queue.length > 1 && (
+          <button
+            type="button"
+            onClick={player.clearQueue}
+            className="ml-auto rounded-lg px-2 py-1 text-[11px] font-semibold text-text-2 hover:text-magenta"
+          >
+            Очистить
+          </button>
+        )}
         <button
           ref={closeRef}
           type="button"
           onClick={onClose}
           aria-label="Закрыть очередь"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-text-2 hover:text-text-0"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-2 hover:text-text-0"
         >
           <svg
             viewBox="0 0 24 24"
@@ -77,13 +88,13 @@ export function MusicQueuePanel({ onClose }: { onClose: () => void }) {
             const gone = missing.has(id);
             const isCurrent = at === player.index;
             return (
-              <li key={`${id}-${at}`}>
+              <li key={`${id}-${at}`} className="group flex items-center">
                 <button
                   type="button"
                   disabled={gone}
                   onClick={() => player.play(id, queue)}
                   aria-current={isCurrent ? "true" : undefined}
-                  className={`flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors hover:bg-glass disabled:hover:bg-transparent ${
+                  className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors hover:bg-glass disabled:hover:bg-transparent ${
                     isCurrent ? "text-text-0" : "text-text-1"
                   }`}
                 >
@@ -113,6 +124,30 @@ export function MusicQueuePanel({ onClose }: { onClose: () => void }) {
                     </span>
                   )}
                 </button>
+
+                {/* Играющую запись убрать нельзя — там кнопки просто нет,
+                    а не заблокированная: объяснять «почему не нажимается»
+                    в списке из десяти строк негде. */}
+                {!isCurrent && (
+                  <button
+                    type="button"
+                    onClick={() => player.removeFromQueue(at)}
+                    aria-label={`Убрать из очереди: ${track?.title ?? "запись"}`}
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-2 opacity-0 transition-opacity hover:text-magenta focus-visible:opacity-100 group-hover:opacity-100 motion-reduce:transition-none"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="size-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                  </button>
+                )}
               </li>
             );
           })}

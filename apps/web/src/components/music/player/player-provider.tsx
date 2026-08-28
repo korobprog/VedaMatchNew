@@ -96,6 +96,14 @@ export interface MusicPlayerApi {
    * без неё кнопка пуска противоречила бы собственной подписи.
    */
   play(trackId: string, queue?: string[], resumeFrom?: number): void;
+  /** Поставить сразу за текущей записью. */
+  playNext(trackId: string): void;
+  /** Дописать в конец очереди. */
+  addToQueue(trackId: string): void;
+  /** Убрать из очереди по месту. Играющую запись не трогает. */
+  removeFromQueue(at: number): void;
+  /** Очистить очередь, оставив то, что звучит. */
+  clearQueue(): void;
   toggle(): void;
   next(): void;
   prev(): void;
@@ -462,6 +470,66 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     [loadTrack],
   );
 
+  /**
+   * «Слушать дальше» — сразу за текущей записью, не трогая остальное.
+   *
+   * Запись, уже стоящую в очереди, переносим, а не дублируем: два одинаковых
+   * пункта в списке человек читает как сбой, а `repeat: one` на дубле ведёт
+   * себя необъяснимо.
+   */
+  const playNext = useCallback(
+    (trackId: string) => {
+      setQueue((was) => {
+        const at = was.indexOf(trackId);
+        const without = at < 0 ? was : was.filter((_, i) => i !== at);
+        // Индекс текущей записи мог сдвинуться, если убрали то, что стояло
+        // выше неё: считаем место вставки уже по укороченному списку.
+        const currentAt = current ? without.indexOf(current.id) : -1;
+        const insertAt = currentAt < 0 ? without.length : currentAt + 1;
+        return [
+          ...without.slice(0, insertAt),
+          trackId,
+          ...without.slice(insertAt),
+        ];
+      });
+    },
+    [current],
+  );
+
+  /** «В конец очереди». Уже стоящую в ней запись не двигаем. */
+  const addToQueue = useCallback((trackId: string) => {
+    setQueue((was) => (was.includes(trackId) ? was : [...was, trackId]));
+  }, []);
+
+  /**
+   * Убрать из очереди. Играющую запись не трогаем: убрать её значит оборвать
+   * звук, а человек просил прибраться в списке, а не выключить музыку.
+   */
+  const removeFromQueue = useCallback(
+    (at: number) => {
+      setQueue((was) => {
+        if (at < 0 || at >= was.length) return was;
+        if (was[at] === current?.id) return was;
+        return was.filter((_, i) => i !== at);
+      });
+      // Указатель на текущую запись сдвигается вместе со списком, иначе
+      // «дальше» уводит не туда после первой же уборки.
+      setIndex((was) => (at < was ? was - 1 : was));
+    },
+    [current],
+  );
+
+  /** Очистить очередь, оставив то, что звучит. */
+  const clearQueue = useCallback(() => {
+    if (!current) {
+      setQueue([]);
+      setIndex(0);
+      return;
+    }
+    setQueue([current.id]);
+    setIndex(0);
+  }, [current]);
+
   const toggle = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || !current) return;
@@ -568,6 +636,10 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       hasNext,
       hasPrev,
       play,
+      playNext,
+      addToQueue,
+      removeFromQueue,
+      clearQueue,
       toggle,
       next,
       prev,
@@ -602,6 +674,10 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       hasNext,
       hasPrev,
       play,
+      playNext,
+      addToQueue,
+      removeFromQueue,
+      clearQueue,
       toggle,
       next,
       prev,
