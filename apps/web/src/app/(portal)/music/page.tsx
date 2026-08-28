@@ -102,7 +102,7 @@ export default async function MusicPage({
             Киртаны, бхаджаны и записи с программ
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
           <MusicSearchField value={query} category={category} />
           {/* Загружать может любой вошедший: сервис наполняется записями с
               программ, а редакция их разбирает. Кнопка стоит на виду, а не

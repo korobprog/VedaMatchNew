@@ -20,7 +20,10 @@ export function MusicSearchField({
       action="/music"
       method="get"
       role="search"
-      className="flex w-full items-center gap-2 sm:w-auto"
+      // `flex-1 min-w-0`, а не `w-full`: рядом в той же строке стоит кнопка
+      // «Загрузить», и форма шириной в сто процентов выталкивала её за экран
+      // на телефоне — страница становилась шире окна на её ширину.
+      className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none"
     >
       {category && <input type="hidden" name="category" value={category} />}
       {/* Обводка фокуса переехала на обёртку: у самого поля она снята, и
