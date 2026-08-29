@@ -80,6 +80,89 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
         </svg>
       );
 
+    case "music":
+      // Mridanga with a pair of karatalas above it - kirtan and bhajan. The
+      // barrel lying on its side reads differently from the round planet of
+      // Astro even at nav size, so the two violet icons stay distinguishable.
+      return (
+        <svg
+          viewBox="0 0 32 32"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className={className}
+        >
+          {/* Karatalas: brass hand cymbals */}
+          <circle
+            cx="8.5"
+            cy="8"
+            r="3.8"
+            fill={`url(#${gid("karatala")})`}
+            stroke="#FDE047"
+            strokeWidth="1.2"
+          />
+          <circle cx="8.5" cy="8" r="1.2" fill="#FEF9C3" />
+          <circle
+            cx="14.6"
+            cy="6.2"
+            r="3.2"
+            fill={`url(#${gid("karatala")})`}
+            stroke="#FDE047"
+            strokeWidth="1.2"
+          />
+          <circle cx="14.6" cy="6.2" r="1" fill="#FEF9C3" />
+          {/* Mridanga body: tapered barrel, small head left, big head right */}
+          <path
+            d="M8.5 16.2C13.5 13.9 20.5 13.7 25 15V24.6C20.5 25.9 13.5 25.7 8.5 23.4V16.2Z"
+            fill={`url(#${gid("drum")})`}
+            stroke={`url(#${gid("stroke")})`}
+            strokeWidth="1.5"
+            strokeLinejoin="round"
+          />
+          {/* Lacing across the shell */}
+          <path
+            d="M13.5 15.2V24.6M17.5 14.7V25M21.5 14.7V25"
+            stroke="#EDE9FE"
+            strokeWidth="1.1"
+            strokeOpacity="0.55"
+            strokeLinecap="round"
+          />
+          {/* Heads */}
+          <ellipse
+            cx="8.5"
+            cy="19.8"
+            rx="2"
+            ry="3.6"
+            fill="#EDE9FE"
+            stroke={`url(#${gid("stroke")})`}
+            strokeWidth="1.3"
+          />
+          <ellipse
+            cx="25"
+            cy="19.8"
+            rx="2.6"
+            ry="4.8"
+            fill="#DDD6FE"
+            stroke={`url(#${gid("stroke")})`}
+            strokeWidth="1.3"
+          />
+          <circle cx="25" cy="19.8" r="1.4" fill="#4C1D95" fillOpacity="0.7" />
+          <defs>
+            <linearGradient id={gid("drum")} x1="8.5" y1="14" x2="25" y2="25.9" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#5B21B6" stopOpacity="0.9" />
+              <stop offset="1" stopColor="#A855F7" stopOpacity="0.85" />
+            </linearGradient>
+            <linearGradient id={gid("stroke")} x1="8.5" y1="14" x2="25" y2="25.9" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#C4B5FD" />
+              <stop offset="1" stopColor="#F5D0FE" />
+            </linearGradient>
+            <linearGradient id={gid("karatala")} x1="5" y1="4" x2="18" y2="12" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#B45309" />
+              <stop offset="1" stopColor="#FBBF24" />
+            </linearGradient>
+          </defs>
+        </svg>
+      );
+
     case "union":
       // Joined hands forming a heart / lotus - Conscious Relationships & Devotee Union
       return (

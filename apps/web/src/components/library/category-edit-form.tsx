@@ -12,7 +12,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 /**
  * Правится только название/описание — раздел (sectionId) в этой форме не
  * трогаем: перенос категории между разделами ломает уже выданные ссылки
- * на `/library/[section]/[category]` чаще, чем того стоит компактная форма.
+ * на `/library/[slug]` чаще, чем того стоит компактная форма.
  */
 export function CategoryEditForm({
   locale,

@@ -33,14 +33,14 @@ export function EntryFilters({
   locale: LibraryLocale;
   categories: LibraryCategoryDto[];
   /**
-   * Заданный на странице одной категории (`/library/[section]/[category]`),
+   * Заданный на странице одной категории (`/library/[slug]`),
    * слаг категории — это сегмент пути, а не query. Смена значения в селекте
    * должна переходить на другой URL, иначе серверный компонент страницы
    * всё равно переопределит выбор фиксированным `categorySlug` из роута —
    * выбор в выпадающем списке молча игнорировался бы.
    */
   categoryBasePath?: string;
-  /** Слаг текущей категории на странице `/library/[section]/[category]`. */
+  /** Слаг текущей категории на странице `/library/[slug]`. */
   currentCategorySlug?: string;
 }) {
   const router = useRouter();
