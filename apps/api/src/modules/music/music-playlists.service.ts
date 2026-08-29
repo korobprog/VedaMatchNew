@@ -8,6 +8,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   PORTAL_ACTIVITY_EVENTS,
   type CreateMusicPlaylistRequest,
+  resolveDisplayName,
+  type MusicFriendPlaylistDto,
   type MusicPlaylistDto,
   type MusicPlaylistPageDto,
   type MusicPlaylistPickDto,
@@ -20,7 +22,8 @@ import { PortalAccessService } from '../access/access.service';
 import { MusicCoversService } from './music-covers.service';
 import { mayShareMusicActivity } from './music-activity-share';
 import { toMusicTrackDto } from './music-track-dto';
-import { nextPosition, positionForMove, renumber } from './playlist-order';
+import {
+  POSITION_STEP, nextPosition, positionForMove, renumber } from './playlist-order';
 
 /** Сколько плейлистов у человека имеет смысл: дальше это не список, а свалка. */
 const MAX_PLAYLISTS_PER_USER = 100;
@@ -105,6 +108,152 @@ export class MusicPlaylistsService {
 
     const totals = await this.totalsOf(rows.map((row) => row.id));
     return { items: rows.map((row) => this.toDto(row, totals)) };
+  }
+
+  /**
+   * Плейлисты тех, кто открыл мне доступ. См. docs/music-service-plan.md.
+   *
+   * Граф спрашивается у портального `PortalAccessService` — своей копии у
+   * Музыки нет и быть не должно: она разъехалась бы с оригиналом на первом
+   * же отзыве доступа.
+   *
+   * Видимость `public` тоже берём: плейлист, открытый всем, друг увидеть
+   * вправе тем более. Личные (`private`) не показываются никому, кроме
+   * владельца, а подборки редакции живут на витрине и в этот список не идут —
+   * иначе они забили бы его собой у каждого.
+   */
+  async listFriendPlaylists(
+    viewerId: string,
+  ): Promise<{ items: MusicFriendPlaylistDto[] }> {
+    const granters = await this.access.grantersFor(viewerId);
+    const ownerIds = Array.from(new Set(granters.map((row) => row.granterId)));
+    if (ownerIds.length === 0) return { items: [] };
+
+    const rows = await this.prisma.musicPlaylist.findMany({
+      where: {
+        ownerId: { in: ownerIds },
+        isSystem: false,
+        visibility: { in: ['friends', 'public'] },
+        // Пустой плейлист в чужом списке — это строка, по которой нечего
+        // слушать: показывать её значит звать в никуда.
+        trackCount: { gt: 0 },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: MAX_PLAYLISTS_PER_USER,
+      select: {
+        ...PLAYLIST_SELECT,
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            spiritualName: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    // Владелец у плейлиста необязателен: связь `SetNull`, чтобы уход
+    // администратора не унёс подборку. Плейлист без владельца в списке «у
+    // друзей» показывать не от кого — пропускаем.
+    const owned = rows.filter(
+      (row): row is typeof row & { owner: NonNullable<typeof row.owner> } =>
+        row.owner !== null,
+    );
+
+    const totals = await this.totalsOf(owned.map((row) => row.id));
+    return {
+      items: owned.map((row) => ({
+        ...this.toDto(row, totals),
+        owner: {
+          id: row.owner.id,
+          name: resolveDisplayName(row.owner),
+          avatarUrl: row.owner.avatarUrl,
+        },
+      })),
+    };
+  }
+
+  /**
+   * Забрать чужой плейлист себе копией.
+   *
+   * Копия, а не подписка: смысл разный. Копия — «возьму и переделаю под
+   * своё», и она сразу отвязана от оригинала; подписка была бы про «хочу
+   * быть в курсе» и требует своей таблицы. Одно другому не мешает.
+   *
+   * Забираем и записи, и порядок. Название с пометкой, чей он: через неделю
+   * три «Утренних киртана» в списке не различить.
+   */
+  async copyToSelf(
+    viewerId: string,
+    playlistId: string,
+  ): Promise<MusicPlaylistDto> {
+    const source = await this.prisma.musicPlaylist.findUnique({
+      where: { id: playlistId },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        visibility: true,
+        isSystem: true,
+        ownerId: true,
+        owner: { select: { name: true, spiritualName: true } },
+      },
+    });
+
+    // 404 и на «нет», и на «не для вас» — как везде в сервисе.
+    const visible =
+      source &&
+      (source.ownerId === viewerId ||
+        source.isSystem ||
+        source.visibility === 'public' ||
+        (source.visibility === 'friends' &&
+          source.ownerId !== null &&
+          (await this.access.canSeeActivity(viewerId, source.ownerId))));
+    if (!source || !visible) throw new NotFoundException('Плейлист не найден');
+
+    const count = await this.prisma.musicPlaylist.count({
+      where: { ownerId: viewerId },
+    });
+    if (count >= MAX_PLAYLISTS_PER_USER) {
+      throw new ForbiddenException(
+        `Больше ${MAX_PLAYLISTS_PER_USER} плейлистов — это уже не список`,
+      );
+    }
+
+    const items = await this.prisma.musicPlaylistItem.findMany({
+      where: { playlistId },
+      orderBy: { position: 'asc' },
+      select: { trackId: true },
+    });
+
+    // Подборка редакции и своя копия обходятся без «от кого».
+    const from =
+      source.ownerId === viewerId || !source.owner
+        ? null
+        : resolveDisplayName(source.owner);
+    const created = await this.prisma.musicPlaylist.create({
+      data: {
+        ownerId: viewerId,
+        title: from
+          ? `${source.title} — от ${from}`.slice(0, 120)
+          : `${source.title} — копия`.slice(0, 120),
+        description: source.description,
+        // Копия всегда личная: чужой плейлист, ставший у меня открытым,
+        // разошёлся бы по кругу без ведома того, кто его собрал.
+        visibility: 'private',
+        trackCount: items.length,
+        items: {
+          create: items.map((item, index) => ({
+            trackId: item.trackId,
+            position: (index + 1) * POSITION_STEP,
+          })),
+        },
+      },
+      select: PLAYLIST_SELECT,
+    });
+
+    return this.toDto(created, await this.totalsOf([created.id]));
   }
 
   /**

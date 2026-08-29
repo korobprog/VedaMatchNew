@@ -59,3 +59,10 @@ export const removeTrackFromPlaylist = (playlistId: string, trackId: string) =>
     `/music/playlists/${encodeURIComponent(playlistId)}/tracks/${encodeURIComponent(trackId)}`,
     { method: "DELETE" },
   );
+
+/** Забрать чужой плейлист себе копией. */
+export const copyPlaylistToSelf = (id: string) =>
+  send<MusicPlaylistDto>(
+    `/music/playlists/${encodeURIComponent(id)}/copy`,
+    { method: "POST" },
+  );
