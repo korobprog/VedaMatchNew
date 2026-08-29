@@ -6,6 +6,8 @@ import { getMusicTrack } from "@/lib/music-api";
 import { MusicCover } from "@/components/music/music-cover";
 import { MusicReportForm } from "@/components/music/music-report-form";
 import { MusicAddToPlaylist } from "@/components/music/music-add-to-playlist";
+import { MusicTrackLyrics } from "@/components/music/music-track-lyrics";
+import { MusicQueueActions } from "@/components/music/player/queue-actions";
 import { formatTrackDuration } from "@/lib/music-duration";
 
 export async function generateMetadata({
@@ -110,7 +112,7 @@ export default async function MusicTrackPage({
             )}
           </ul>
 
-          <div className="mt-1">
+          <div className="mt-1 flex flex-col gap-2">
             <Suspense fallback={<div className="h-11" />}>
               <MusicAddToPlaylist
                 trackId={track.id}
@@ -118,6 +120,7 @@ export default async function MusicTrackPage({
                 artistName={track.artist?.name ?? null}
               />
             </Suspense>
+            <MusicQueueActions trackId={track.id} />
           </div>
 
           <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
@@ -130,6 +133,8 @@ export default async function MusicTrackPage({
           </dl>
         </div>
       </div>
+
+      <MusicTrackLyrics lyrics={track.lyrics} />
 
       <MusicReportForm trackId={track.id} />
     </main>

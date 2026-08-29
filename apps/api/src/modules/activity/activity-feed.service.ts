@@ -6,6 +6,7 @@ import type {
 } from '@vedamatch/shared';
 import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PortalAccessService } from '../access/access.service';
 import { ActivityAvatarService } from './activity-avatar.service';
 import { isRecentlyOnline } from './activity-presence';
 
@@ -33,13 +34,14 @@ export class ActivityFeedService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly avatars: ActivityAvatarService,
+    private readonly access: PortalAccessService,
   ) {}
 
   async getFeed(viewerId: string): Promise<ActivityFeedResponse> {
-    const follows = await this.prisma.activityFollow.findMany({
-      where: { granteeId: viewerId, revokedAt: null },
-      select: { granterId: true, source: true },
-    });
+    // Граф доступа читается через портальный сервис, а не отсюда: он нужен не
+    // одной ленте, и второй читатель той же таблицы — это второй набор правил
+    // «что считать открытым доступом».
+    const follows = await this.access.grantersFor(viewerId);
     if (follows.length === 0) return { friends: [] };
 
     // Один и тот же человек мог открыть доступ и мэтчем, и раскрытием

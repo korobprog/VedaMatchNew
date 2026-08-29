@@ -7,14 +7,20 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
- * Зеркалит `PortalAccessEvent` в `ActivityFollow` — локальную копию графа
- * «кто кому открыл видимость активности». Модуль не имеет права читать
- * таблицы Union/Contacts напрямую (контракт сервисного модуля), поэтому
- * единственный источник правды здесь — событие, а не чужая база.
+ * Зеркалит `PortalAccessEvent` в `ActivityFollow` — граф «кто кому открыл
+ * видимость активности».
+ *
+ * Первоисточник доступа — Знакомства и Общение, и читать их таблицы никому
+ * нельзя (контракт сервисного модуля), поэтому единственный источник правды
+ * здесь — событие, а не чужая база.
+ *
+ * Живёт в портальном модуле, а не в ленте друзей: граф нужен не одной ленте.
+ * Пока он лежал внутри `activity`, Музыке пришлось закрыть видимость
+ * плейлистов «для друзей» совсем — спросить было не у кого.
  */
 @Injectable()
-export class ActivityFollowsListener {
-  private readonly logger = new Logger(ActivityFollowsListener.name);
+export class PortalAccessFollowsListener {
+  private readonly logger = new Logger(PortalAccessFollowsListener.name);
 
   constructor(private readonly prisma: PrismaService) {}
 

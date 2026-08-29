@@ -4,12 +4,9 @@ import type { ReactNode } from "react";
 /**
  * Левый рельс сервиса — «своя музыка». См. макет `.design/music/Catalog.dc.html`.
  *
- * Разделы, которых ещё нет (Плейлисты и История приезжают этапами 4 и 9),
- * показываются, но не кликаются: место в раскладке они занимают с
- * первого дня, иначе рельс будет перестраиваться под человеком каждый раз.
- * Ссылкой они при этом не притворяются — неактивный пункт помечен `скоро`,
- * не получает фокус и не читается скринридером как ссылка. Приглушённая
- * ссылка, ведущая в 404, хуже честной заглушки.
+ * Все шесть пунктов теперь ведут на живые страницы. Механика заглушки
+ * (пункт без `href` показывается словом «скоро», а не приглушённой ссылкой в
+ * 404) оставлена намеренно: следующий раздел появится тем же способом.
  *
  * Затемнения у неактивных пунктов нет намеренно: `opacity` поверх
  * `--vm-text-2` давала 2.3:1 вместо нормы 4.5:1 — замерено в обеих темах.
@@ -42,7 +39,13 @@ export function MusicRail({
   favoritesCount = 0,
   playlistsCount = 0,
 }: {
-  active: "catalog" | "favorites" | "uploads" | "settings";
+  active:
+    | "catalog"
+    | "favorites"
+    | "playlists"
+    | "history"
+    | "uploads"
+    | "settings";
   uploadsCount?: number;
   favoritesCount?: number;
   playlistsCount?: number;
@@ -74,6 +77,7 @@ export function MusicRail({
     {
       key: "playlists",
       label: "Плейлисты",
+      href: "/music/playlists",
       count: playlistsCount,
       icon: (
         <svg {...iconProps}>
@@ -84,6 +88,7 @@ export function MusicRail({
     {
       key: "history",
       label: "История",
+      href: "/music/history",
       icon: (
         <svg {...iconProps}>
           <circle cx="12" cy="12" r="9" />

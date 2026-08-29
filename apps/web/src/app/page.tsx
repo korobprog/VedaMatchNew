@@ -28,7 +28,7 @@ import {
   getMyMusicFavorites,
 } from "@/lib/music-api";
 import { buildMusicQuickAccess } from "@/lib/music-quick-access";
-import { MusicQuickWidget } from "@/components/music/music-quick-widget";
+import { MusicFriendsBridge } from "@/components/activity/music-friends-bridge";
 import { getAstroState, getAstroToday } from "@/lib/astro-api";
 import { getChatUnread } from "@/lib/chat-api";
 import {
@@ -218,7 +218,7 @@ export default async function Home({
         {/* Сразу под ходовыми сервисами, как в макете Main.dc.html: карточка
             возвращает к недослушанному, не заходя в Музыку. Её нет вовсе,
             когда возвращаться не к чему и избранное пусто. */}
-        {musicQuickAccess && <MusicQuickWidget data={musicQuickAccess} />}
+        {musicQuickAccess && <MusicFriendsBridge data={musicQuickAccess} />}
         <ServiceGrid
           services={gridServices}
           userId={user.id}

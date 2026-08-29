@@ -17,6 +17,7 @@ import {
   prevIndex as queuePrev,
 } from "@/lib/music-queue";
 import {
+  getMusicSettings,
   getPlaybackState,
   getTrack,
   savePlaybackPosition,
@@ -54,11 +55,48 @@ import {
 
 const STORAGE_KEY = "vedamatch:music-player";
 
+/**
+ * Отметка «полосу закрыли в этом браузере».
+ *
+ * Нужна, чтобы крестик пережил перезагрузку: без неё возобновление с сервера
+ * поднимало полосу обратно на первой же открытой странице. Снимается сама,
+ * как только человек что-нибудь запустил.
+ */
+const CLOSED_KEY = "vedamatch:music-player-closed";
+
+function wasClosedHere(): boolean {
+  try {
+    return window.localStorage.getItem(CLOSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function rememberClosed(closed: boolean): void {
+  try {
+    if (closed) window.localStorage.setItem(CLOSED_KEY, "1");
+    else window.localStorage.removeItem(CLOSED_KEY);
+  } catch {
+    // Приватный режим и запрет хранилища — не повод не работать.
+  }
+}
+
 /** Тик плеера. Реже — теряется позиция, чаще — лишний шум в базе. */
 const HEARTBEAT_MS = 30_000;
 
 /** Шаг кнопок ±: лекции и киртаны длинные, пальцем по ползунку не попасть. */
 export const SEEK_STEP_SECONDS = 15;
+
+/**
+ * Настройки прослушивания изменились в `/music/settings`.
+ *
+ * Событием, а не общим состоянием: форма настроек и плеер живут в разных
+ * поддеревьях, и поднимать ради одного флажка провайдер над обоими значило бы
+ * перерисовывать портал на каждый тик плеера. Переключатель обязан
+ * действовать сразу — иначе человек снимает автопереход, дослушивает запись и
+ * видит, что портал его не послушал.
+ */
+export const MUSIC_SETTINGS_CHANGED_EVENT = "vedamatch:music-settings-changed";
 
 export interface MusicPlayerApi {
   current: MusicTrackDto | null;
@@ -84,6 +122,16 @@ export interface MusicPlayerApi {
    * без неё кнопка пуска противоречила бы собственной подписи.
    */
   play(trackId: string, queue?: string[], resumeFrom?: number): void;
+  /** Поставить сразу за текущей записью. */
+  playNext(trackId: string): void;
+  /** Дописать в конец очереди. */
+  addToQueue(trackId: string): void;
+  /** Убрать из очереди по месту. Играющую запись не трогает. */
+  removeFromQueue(at: number): void;
+  /** Очистить очередь, оставив то, что звучит. */
+  clearQueue(): void;
+  /** Остановить и убрать полосу совсем. Позиция сохраняется. */
+  close(): void;
   toggle(): void;
   next(): void;
   prev(): void;
@@ -125,6 +173,14 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const [muted, setMuted] = useState(false);
   const [isPrivateSession, setPrivateSession] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  /**
+   * Идти ли к следующей записи, когда текущая кончилась.
+   *
+   * `true` до ответа сервера — это значение по умолчанию, и совпадать оно
+   * обязано с `DEFAULT_SETTINGS` на стороне API: иначе первая же запись,
+   * дослушанная до ответа, повела бы себя не так, как обещает форма настроек.
+   */
+  const [autoplay, setAutoplay] = useState(true);
 
   /**
    * Позиция, с которой надо начать после загрузки записи. Применяется один
@@ -220,6 +276,13 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      // Человек закрыл полосу — не поднимаем её обратно перезагрузкой.
+      // Возобновление с сервера нужно для другого устройства, а не для того,
+      // чтобы отменять только что нажатый крестик. Запись при этом не
+      // потеряна: карточка «Продолжить» на главной читает то же состояние
+      // сервера напрямую и вернёт её с той же секунды.
+      if (wasClosedHere()) return;
+
       const state = await getPlaybackState();
       if (cancelled || !state?.trackId) return;
       // Локальное зеркало важнее: оно свежее и уже показано человеку.
@@ -234,6 +297,29 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---------- Настройки прослушивания ----------
+
+  /**
+   * Читаем на монтировании и перечитываем, когда форма настроек сообщила о
+   * сохранении. Гостю запрос вернёт `null` — остаётся значение по умолчанию.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      void getMusicSettings().then((settings) => {
+        if (cancelled) return;
+        setAutoplay(settings?.autoplay ?? true);
+      });
+    };
+
+    load();
+    window.addEventListener(MUSIC_SETTINGS_CHANGED_EVENT, load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(MUSIC_SETTINGS_CHANGED_EVENT, load);
+    };
   }, []);
 
   // ---------- Элемент audio ----------
@@ -332,8 +418,19 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       }
       return;
     }
+
+    // Человек снял автопереход в настройках: останавливаемся на дослушанной
+    // записи, а не уходим к следующей. Строку «слушает сейчас» снимаем сразу
+    // — иначе друзья видели бы запись, которая давно кончилась.
+    if (!autoplay) {
+      setIsPlaying(false);
+      if (current) void savePlaybackPosition(current.id, positionSeconds);
+      void stopPlayback();
+      return;
+    }
+
     next();
-  }, [repeat, next]);
+  }, [repeat, autoplay, current, positionSeconds, next]);
 
   // ---------- Тик ----------
 
@@ -391,6 +488,9 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
 
   const play = useCallback(
     (trackId: string, nextQueue?: string[], resumeFrom?: number) => {
+      // Запустили — значит полоса снова нужна, и прежний крестик забыт.
+      rememberClosed(false);
+
       const list = nextQueue && nextQueue.length > 0 ? nextQueue : [trackId];
       const at = Math.max(0, list.indexOf(trackId));
       setQueue(list);
@@ -407,6 +507,97 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     },
     [loadTrack],
   );
+
+  /**
+   * «Слушать дальше» — сразу за текущей записью, не трогая остальное.
+   *
+   * Запись, уже стоящую в очереди, переносим, а не дублируем: два одинаковых
+   * пункта в списке человек читает как сбой, а `repeat: one` на дубле ведёт
+   * себя необъяснимо.
+   */
+  const playNext = useCallback(
+    (trackId: string) => {
+      setQueue((was) => {
+        const at = was.indexOf(trackId);
+        const without = at < 0 ? was : was.filter((_, i) => i !== at);
+        // Индекс текущей записи мог сдвинуться, если убрали то, что стояло
+        // выше неё: считаем место вставки уже по укороченному списку.
+        const currentAt = current ? without.indexOf(current.id) : -1;
+        const insertAt = currentAt < 0 ? without.length : currentAt + 1;
+        return [
+          ...without.slice(0, insertAt),
+          trackId,
+          ...without.slice(insertAt),
+        ];
+      });
+    },
+    [current],
+  );
+
+  /** «В конец очереди». Уже стоящую в ней запись не двигаем. */
+  const addToQueue = useCallback((trackId: string) => {
+    setQueue((was) => (was.includes(trackId) ? was : [...was, trackId]));
+  }, []);
+
+  /**
+   * Убрать из очереди. Играющую запись не трогаем: убрать её значит оборвать
+   * звук, а человек просил прибраться в списке, а не выключить музыку.
+   */
+  const removeFromQueue = useCallback(
+    (at: number) => {
+      setQueue((was) => {
+        if (at < 0 || at >= was.length) return was;
+        if (was[at] === current?.id) return was;
+        return was.filter((_, i) => i !== at);
+      });
+      // Указатель на текущую запись сдвигается вместе со списком, иначе
+      // «дальше» уводит не туда после первой же уборки.
+      setIndex((was) => (at < was ? was - 1 : was));
+    },
+    [current],
+  );
+
+  /**
+   * Закрыть плеер: остановить и убрать полосу совсем.
+   *
+   * Позицию сохраняем перед остановкой — закрытая запись не теряется,
+   * карточка «Продолжить» на главной вернёт её с той же секунды. Поэтому
+   * случайное закрытие не стоит человеку ничего.
+   *
+   * Зеркало в `localStorage` стираем: иначе следующее открытие портала
+   * подняло бы полосу обратно, хотя человек её убрал.
+   */
+  const close = useCallback(() => {
+    const audio = audioRef.current;
+    audio?.pause();
+
+    if (current) void savePlaybackPosition(current.id, positionSeconds);
+    void stopPlayback();
+
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Запрет хранилища не повод не закрыться.
+    }
+    rememberClosed(true);
+
+    setIsPlaying(false);
+    setCurrent(null);
+    setQueue([]);
+    setIndex(0);
+    setPositionSeconds(0);
+  }, [current, positionSeconds]);
+
+  /** Очистить очередь, оставив то, что звучит. */
+  const clearQueue = useCallback(() => {
+    if (!current) {
+      setQueue([]);
+      setIndex(0);
+      return;
+    }
+    setQueue([current.id]);
+    setIndex(0);
+  }, [current]);
 
   const toggle = useCallback(() => {
     const audio = audioRef.current;
@@ -514,6 +705,11 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       hasNext,
       hasPrev,
       play,
+      playNext,
+      addToQueue,
+      removeFromQueue,
+      clearQueue,
+      close,
       toggle,
       next,
       prev,
@@ -548,6 +744,11 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       hasNext,
       hasPrev,
       play,
+      playNext,
+      addToQueue,
+      removeFromQueue,
+      clearQueue,
+      close,
       toggle,
       next,
       prev,

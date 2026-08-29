@@ -205,6 +205,8 @@ export interface CreateMusicArtistRequest {
   kind?: MusicArtistKind;
   bio?: string | null;
   isVerified?: boolean;
+  /** Ключ залитой обложки. `null` — снять. */
+  coverKey?: string | null;
 }
 
 export type UpdateMusicArtistRequest = Partial<CreateMusicArtistRequest>;
@@ -214,6 +216,8 @@ export interface CreateMusicAlbumRequest {
   artistId?: string | null;
   kind?: MusicAlbumKind;
   year?: number | null;
+  /** Ключ залитой обложки. `null` — снять. */
+  coverKey?: string | null;
 }
 
 export type UpdateMusicAlbumRequest = Partial<CreateMusicAlbumRequest>;
@@ -241,6 +245,8 @@ export interface UpdateMusicTrackRequest {
   lyrics?: string | null;
   transliteration?: string | null;
   translation?: string | null;
+  /** Ключ залитой обложки. `null` — снять и вернуться к обложке альбома. */
+  coverKey?: string | null;
 }
 
 // ===== Загрузка (этап 2) =====
@@ -271,6 +277,47 @@ export interface CompleteMusicUploadResponse {
   status: MusicTrackStatus;
   title: string;
   durationSeconds: number;
+}
+
+// ===== Обложки =====
+
+/**
+ * Что принимаем обложкой.
+ *
+ * Три формата, все без анимации: обложка — это статичная картинка в сетке
+ * каталога, и гифка там означала бы десяток одновременно дёргающихся плиток.
+ */
+export const MUSIC_COVER_ACCEPTED_MIME = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+] as const;
+
+export type MusicCoverMime = (typeof MUSIC_COVER_ACCEPTED_MIME)[number];
+
+/**
+ * Чему принадлежит обложка. Входит в ключ объекта, поэтому выписанной под
+ * плейлист ссылкой нельзя подменить обложку записи в каталоге.
+ */
+export type MusicCoverScope = 'track' | 'artist' | 'album' | 'playlist';
+
+export interface CreateMusicCoverUploadRequest {
+  scope: MusicCoverScope;
+  mime: string;
+  sizeBytes: number;
+}
+
+export interface CreateMusicCoverUploadResponse {
+  /**
+   * Ключ объекта. Его же надо прислать обратно в `coverKey` при сохранении
+   * карточки: до этого залитый файл ничей и ни на что не влияет.
+   */
+  coverKey: string;
+  /** Подписанный PUT. Браузер льёт картинку сюда, минуя API. */
+  url: string;
+  /** Заголовки, которые обязаны совпасть с подписью. */
+  headers: Record<string, string>;
+  expiresInSeconds: number;
 }
 
 /** Сколько места занято и сколько всего разрешено. */
@@ -398,12 +445,74 @@ export interface MusicSettingsDto {
 
 export type UpdateMusicSettingsRequest = Partial<MusicSettingsDto>;
 
+/**
+ * Сколько человек наслушал за неделю.
+ *
+ * Отдельным маршрутом, а не полем в состоянии плеера: сводку показывает одна
+ * карточка на широком экране, и считать сумму по истории в каждом тике ради
+ * неё незачем.
+ */
+export interface MusicListenStatsDto {
+  /** Сумма прослушанного за последние семь суток, в секундах. */
+  weekSeconds: number;
+}
+
+/**
+ * Строка истории. Одна на прослушивание, а не на тик: подряд идущие тики
+ * одной записи сливаются в неё же, и `seconds` растёт.
+ */
+export interface MusicListenDto {
+  track: MusicTrackDto;
+  seconds: number;
+  listenedAt: string;
+}
+
+export interface MusicHistoryDto {
+  items: MusicListenDto[];
+}
+
 // ===== Жалобы (этап 7) =====
 
 export interface CreateMusicReportRequest {
   trackId: string;
   kind: MusicReportKind;
   text: string;
+}
+
+/**
+ * Жалоба в разборе. Имя жалобщика наружу не идёт вовсе: модератор решает по
+ * записи и тексту, а не по тому, кто пожаловался, — иначе разбор превращается
+ * в счёт репутаций.
+ */
+export interface MusicAdminReportDto {
+  id: string;
+  kind: MusicReportKind;
+  text: string;
+  createdAt: string;
+  track: {
+    id: string;
+    title: string;
+    status: MusicTrackStatus;
+    artistName: string | null;
+  };
+  /** Сколько всего открытых жалоб на эту запись. */
+  openOnTrack: number;
+}
+
+export interface MusicAdminReportsDto {
+  items: MusicAdminReportDto[];
+}
+
+/**
+ * Решение по жалобе.
+ *
+ * `resolved` — жалоба справедлива, запись остаётся скрытой; `rejected` —
+ * жалоба не подтвердилась, и запись возвращается в каталог. Удаления здесь
+ * нет и не будет: три аккаунта не должны становиться кнопкой «удалить чужое».
+ */
+export interface MusicReportDecisionRequest {
+  decision: 'resolved' | 'rejected';
+  note?: string;
 }
 
 export interface MusicReportResultDto {
@@ -455,9 +564,42 @@ export interface CreateMusicPlaylistRequest {
   title: string;
   description?: string | null;
   visibility?: MusicPlaylistVisibility;
+  /** Ключ залитой обложки. `null` — снять. */
+  coverKey?: string | null;
 }
 
 export type UpdateMusicPlaylistRequest = Partial<CreateMusicPlaylistRequest>;
+
+/**
+ * Страница плейлиста.
+ *
+ * `canEdit` приходит с сервера, а не выводится на клиенте сравнением
+ * идентификаторов: подборку портала не правит и её «владелец», и повторять
+ * это правило во второй раз в браузере значит однажды их разойтись.
+ */
+export interface MusicPlaylistPageDto {
+  playlist: MusicPlaylistDto;
+  tracks: MusicTrackDto[];
+  canEdit: boolean;
+}
+
+/**
+ * Строка подборки портала в админке. Без видимости и `isSystem`: у подборок
+ * они всегда одни и те же, и показывать их значит предлагать поменять.
+ */
+export interface MusicAdminPlaylistDto {
+  id: string;
+  title: string;
+  description: string | null;
+  coverKey: string | null;
+  trackCount: number;
+  updatedAt: string;
+}
+
+/** Перенос записи внутри плейлиста. Индекс с нуля, как его видит человек. */
+export interface MoveMusicPlaylistTrackRequest {
+  toIndex: number;
+}
 
 /** Ответ на добавление и снятие: интерфейс перерисовывает одну строку. */
 export interface MusicPlaylistTrackResultDto {

@@ -6,6 +6,7 @@ import type {
   MusicSettingsDto,
 } from "@vedamatch/shared";
 import { saveMusicSettings } from "@/lib/music-playback-api";
+import { MUSIC_SETTINGS_CHANGED_EVENT } from "@/components/music/player/player-provider";
 import { Alert } from "@/components/ui/alert";
 
 /**
@@ -35,6 +36,9 @@ export function MusicSettingsForm({ initial }: { initial: MusicSettingsDto }) {
     if (result) {
       setSettings(result);
       setSaved(true);
+      // Плеер смонтирован в корневом layout и об этой форме не знает:
+      // без сигнала автопереход менялся бы только после перезагрузки.
+      window.dispatchEvent(new Event(MUSIC_SETTINGS_CHANGED_EVENT));
     } else {
       // Не сохранилось — возвращаем как было. Показывать «выключено» там,
       // где на сервере включено, здесь опаснее всего.

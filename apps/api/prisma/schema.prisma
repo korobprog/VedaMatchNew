@@ -4435,8 +4435,12 @@ model MusicTrackCategory {
 /// киртан»: их нельзя править владельцу и они не считаются личными.
 model MusicPlaylist {
   id          String                  @id @default(uuid())
-  ownerId     String
-  owner       User                    @relation("MusicPlaylistsOwned", fields: [ownerId], references: [id], onDelete: Cascade)
+  // Владелец необязателен, и это про подборки портала: у них тоже есть
+  // автор-администратор, но его уход не должен уносить общую подборку —
+  // ровно как опубликованная запись переживает удаление того, кто её принёс.
+  // Свои плейлисты человека при удалении аккаунта снимает purge-слушатель.
+  ownerId     String?
+  owner       User?                   @relation("MusicPlaylistsOwned", fields: [ownerId], references: [id], onDelete: SetNull)
   title       String
   description String?
   coverKey    String?

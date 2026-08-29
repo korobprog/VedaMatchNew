@@ -2,14 +2,15 @@ import Link from "next/link";
 import type { MusicTrackDto } from "@vedamatch/shared";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicCover } from "./music-cover";
+import { MusicFavoriteButton } from "./favorites-provider";
 import { MusicPlayButton } from "./player/play-button";
 
 /**
  * Карточка записи в сетке каталога.
  *
- * Кнопка воспроизведения нарисована, но пока не нажимается: плеер приезжает
- * этапом 3. Рисуем её сразу, а не добавляем потом, потому что от неё зависит
- * вся раскладка плитки — вставить её позже значит переверстать сетку.
+ * Сердце стоит в углу обложки и появляется вместе с кнопкой запуска: без него
+ * снять отметку можно было только из полосы плеера, то есть запустив запись,
+ * которую как раз и хочешь убрать.
  */
 export function MusicTrackCard({
   track,
@@ -45,6 +46,15 @@ export function MusicTrackCard({
       </Link>
 
       <MusicPlayButton trackId={track.id} title={track.title} queue={queue} />
+
+      {/* Сердце — в правом верхнем углу обложки, подальше от кнопки запуска:
+          рядом их путают пальцем, а «отметил вместо послушал» человек
+          замечает не сразу. */}
+      <MusicFavoriteButton
+        trackId={track.id}
+        title={track.title}
+        className="absolute right-1 top-1 bg-bg-0/50 backdrop-blur-sm"
+      />
 
       {/* Значок вынесен из ссылки: внутри скрытой от скринридера обложки он
           пропал бы, а «запись с программы» — сведения, а не украшение. */}

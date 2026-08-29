@@ -41,14 +41,14 @@ export class MusicPurgeListener {
     const [tracks, uploads, playlists] = await Promise.all([
       this.prisma.musicTrack.findMany({
         where: { uploadedById: event.userId },
-        select: { storageKey: true, publishedAt: true },
+        select: { storageKey: true, publishedAt: true, coverKey: true },
       }),
       this.prisma.musicUpload.findMany({
         where: { uploaderId: event.userId },
         select: { storageKey: true },
       }),
       this.prisma.musicPlaylist.findMany({
-        where: { ownerId: event.userId },
+        where: { ownerId: event.userId, isSystem: false },
         select: { coverKey: true },
       }),
     ]);
@@ -62,6 +62,14 @@ export class MusicPurgeListener {
         where: { uploadedById: event.userId, publishedAt: null },
       });
     }
+
+    // Свои плейлисты — тоже сами, и по той же причине: связь с человеком
+    // стала `SetNull` ради подборок портала, которые обязаны пережить уход
+    // заведшего их администратора. Без этой строки личные подборки остались
+    // бы висеть ничьими.
+    await this.prisma.musicPlaylist.deleteMany({
+      where: { ownerId: event.userId, isSystem: false },
+    });
 
     if (plan.storageKeys.length > 0 || plan.counts.musicTracksKept > 0) {
       this.logger.log(

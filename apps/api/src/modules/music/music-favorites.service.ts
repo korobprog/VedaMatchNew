@@ -21,6 +21,14 @@ import { toMusicTrackDto } from './music-track-dto';
  * Обе команды идемпотентны: сердце нажимают дважды, и ошибка в ответ на это
  * — худшее, что может сделать интерфейс.
  */
+
+/**
+ * Потолок выдачи избранного. Одной константой на список записей и на список
+ * идентификаторов: разойдутся — и сердца на карточках перестанут совпадать с
+ * содержимым страницы «Избранное» ровно на двухсотой записи.
+ */
+const MAX_FAVORITES = 200;
+
 @Injectable()
 export class MusicFavoritesService {
   private readonly publicBaseUrl: string | undefined;
@@ -115,7 +123,7 @@ export class MusicFavoritesService {
     const rows = await this.prisma.musicFavorite.findMany({
       where: { userId, track: { status: 'published' } },
       orderBy: { createdAt: 'desc' },
-      take: 200,
+      take: MAX_FAVORITES,
       select: {
         track: {
           include: {
@@ -130,6 +138,24 @@ export class MusicFavoritesService {
     return {
       items: rows.map((row) => toMusicTrackDto(row.track, this.publicBaseUrl)),
     };
+  }
+
+  /**
+   * Все отмеченные — для сердец в списках.
+   *
+   * Целиком, а не по показанным: список короткий (потолок избранного — двести
+   * записей), и один запрос на открытие страницы дешевле запроса на каждую
+   * прокрутку каталога.
+   */
+  async listIds(userId: string): Promise<{ ids: string[] }> {
+    const rows = await this.prisma.musicFavorite.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: MAX_FAVORITES,
+      select: { trackId: true },
+    });
+
+    return { ids: rows.map((row) => row.trackId) };
   }
 
   /** Что из показанного человек уже отметил — для сердец в списке. */

@@ -10,12 +10,15 @@ import type {
   MusicAlbumPageDto,
   MusicArtistPageDto,
   MusicCatalogDto,
+  MusicHistoryDto,
   MusicPlaybackStateDto,
+  MusicPlaylistPageDto,
   MusicTrackDetailDto,
   MusicTrackListDto,
   MusicTrackListQuery,
   MusicSettingsDto,
   MusicTrackDto,
+  MyMusicPlaylistsDto,
   MyMusicUploadsDto,
 } from "@vedamatch/shared";
 
@@ -45,6 +48,23 @@ async function musicGet<T>(path: string): Promise<T | null> {
 
 export function getMusicCatalog(): Promise<MusicCatalogDto | null> {
   return musicGet<MusicCatalogDto>("/music/catalog");
+}
+
+/** Свои плейлисты — для рельса, каталога и страницы списка. */
+export function getMyMusicPlaylists(): Promise<MyMusicPlaylistsDto | null> {
+  return musicGet<MyMusicPlaylistsDto>("/music/playlists");
+}
+
+/** Страница плейлиста. `null` — чужой закрытый или несуществующий. */
+export function getMusicPlaylist(
+  id: string,
+): Promise<MusicPlaylistPageDto | null> {
+  return musicGet<MusicPlaylistPageDto>(`/music/playlists/${id}`);
+}
+
+/** История прослушиваний, свежие сверху. */
+export function getMusicHistory(): Promise<MusicHistoryDto | null> {
+  return musicGet<MusicHistoryDto>("/music/listens");
 }
 
 /**

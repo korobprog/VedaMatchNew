@@ -10,16 +10,28 @@ import Link from "next/link";
 export function MusicAdminTabs({
   active,
   pendingCount = 0,
+  openReports = 0,
 }: {
-  active: "queue" | "catalog";
+  active: "queue" | "catalog" | "playlists" | "reports";
   pendingCount?: number;
+  openReports?: number;
 }) {
   const tabs = [
     { key: "queue" as const, href: "/admin/music", label: "Очередь" },
     {
+      key: "reports" as const,
+      href: "/admin/music/reports",
+      label: "Жалобы",
+    },
+    {
       key: "catalog" as const,
       href: "/admin/music/catalog",
       label: "Справочники",
+    },
+    {
+      key: "playlists" as const,
+      href: "/admin/music/playlists",
+      label: "Подборки",
     },
   ];
 
@@ -42,6 +54,13 @@ export function MusicAdminTabs({
             {tab.key === "queue" && pendingCount > 0 && (
               <span className="rounded-full bg-gold/20 px-1.5 font-mono text-[11px] text-gold">
                 {pendingCount}
+              </span>
+            )}
+            {/* Жалобы горят иначе: запись по ним уже скрыта, и счётчик
+                показывает не «ждёт прослушивания», а «висит снятым». */}
+            {tab.key === "reports" && openReports > 0 && (
+              <span className="rounded-full bg-magenta/20 px-1.5 font-mono text-[11px] text-magenta">
+                {openReports}
               </span>
             )}
           </Link>

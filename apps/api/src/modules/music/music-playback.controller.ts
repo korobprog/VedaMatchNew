@@ -58,6 +58,27 @@ export class MusicPlaybackController {
   stop(@CurrentUser() user: AccessTokenPayload) {
     return this.playback.stop(user.sub);
   }
+
+  /** Наслушано за неделю — для сводки в карточке на широком экране. */
+  @Get('stats')
+  stats(@CurrentUser() user: AccessTokenPayload) {
+    return this.playback.getStats(user.sub);
+  }
+}
+
+/**
+ * История прослушиваний. Под своим префиксом, а не под `music/playback`: это
+ * про человека и его прошлое, а не про то, что играет сейчас.
+ */
+@Controller('music/listens')
+@UseGuards(AuthGuard)
+export class MusicHistoryController {
+  constructor(private readonly playback: MusicPlaybackService) {}
+
+  @Get()
+  list(@CurrentUser() user: AccessTokenPayload) {
+    return this.playback.history(user.sub);
+  }
 }
 
 /**
@@ -96,6 +117,19 @@ export class MusicFavoritesController {
   @Get()
   list(@CurrentUser() user: AccessTokenPayload) {
     return this.favorites.list(user.sub);
+  }
+
+  /**
+   * Только идентификаторы — для сердец в списках.
+   *
+   * Отдельным маршрутом, а не полем в `MusicTrackDto`: карточку каталога
+   * видит и гость, ответ витрины общий на всех, и признак «в моём избранном»
+   * внутри него сделал бы его персональным. Список короткий: двести строк по
+   * тридцать шесть знаков.
+   */
+  @Get('ids')
+  ids(@CurrentUser() user: AccessTokenPayload) {
+    return this.favorites.listIds(user.sub);
   }
 
   @Post(':trackId')

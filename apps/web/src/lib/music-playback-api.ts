@@ -8,6 +8,7 @@ import type {
   MusicHeartbeatRequest,
   MusicPlaybackStateDto,
   MusicSettingsDto,
+  MusicListenStatsDto,
   MusicTrackDetailDto,
   UpdateMusicSettingsRequest,
 } from "@vedamatch/shared";
@@ -57,6 +58,14 @@ export const getTrack = (id: string) =>
 
 export const getMusicSettings = () =>
   quiet<MusicSettingsDto>("/music/settings");
+
+/** Только идентификаторы отмеченного — для сердец в списках. */
+export const getFavoriteIds = () =>
+  quiet<{ ids: string[] }>("/music/favorites/ids");
+
+/** Наслушано за неделю — для сводки в карточке на широком экране. */
+export const getListenStats = () =>
+  quiet<MusicListenStatsDto>("/music/playback/stats");
 
 export const saveMusicSettings = (body: UpdateMusicSettingsRequest) =>
   quiet<MusicSettingsDto>("/music/settings", {

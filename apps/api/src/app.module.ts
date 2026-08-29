@@ -13,6 +13,7 @@ import { UnionModule } from './modules/union/union.module';
 import { VedabaseModule } from './modules/vedabase/vedabase.module';
 import { MotivationModule } from './modules/motivation/motivation.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
+import { PortalAccessModule } from './modules/access/access.module';
 import { SupportModule } from './modules/support/support.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { LibraryModule } from './modules/library/library.module';
@@ -50,6 +51,9 @@ import { MusicModule } from './modules/music/music.module';
     VedabaseModule,
     MotivationModule,
     ModerationModule,
+    // Граф доступа портала: «открыл ли человек свою активность этому
+    // зрителю». Спрашивают лента друзей и сервисы с видимостью «для друзей».
+    PortalAccessModule,
     SupportModule,
     BillingModule,
     LibraryModule,

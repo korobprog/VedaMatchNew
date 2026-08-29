@@ -9,20 +9,35 @@ import {
   PORTAL_ACTIVITY_EVENTS,
   type CreateMusicPlaylistRequest,
   type MusicPlaylistDto,
+  type MusicPlaylistPageDto,
   type MusicPlaylistPickDto,
   type MusicPlaylistTrackResultDto,
   type PortalActivityEvent,
   type UpdateMusicPlaylistRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PortalAccessService } from '../access/access.service';
+import { MusicCoversService } from './music-covers.service';
 import { mayShareMusicActivity } from './music-activity-share';
-import { nextPosition } from './playlist-order';
+import { toMusicTrackDto } from './music-track-dto';
+import { nextPosition, positionForMove, renumber } from './playlist-order';
 
 /** Сколько плейлистов у человека имеет смысл: дальше это не список, а свалка. */
 const MAX_PLAYLISTS_PER_USER = 100;
 
 /** Потолок записей в одном плейлисте. */
 const MAX_ITEMS_PER_PLAYLIST = 500;
+
+/**
+ * `include` карточки записи. Копия константы из `music-catalog.service.ts`:
+ * сборщик DTO у них общий, и недостающее поле всплыло бы на странице
+ * плейлиста как `undefined`, а не как ошибка типов.
+ */
+const TRACK_CARD_INCLUDE = {
+  artist: true,
+  album: { include: { artist: true } },
+  categories: { include: { category: true } },
+} as const;
 
 const PLAYLIST_SELECT = {
   id: true,
@@ -51,9 +66,32 @@ export class MusicPlaylistsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bus: EventEmitter2,
+    private readonly covers: MusicCoversService,
+    private readonly access: PortalAccessService,
     config: ConfigService,
   ) {
     this.publicBaseUrl = config.get<string>('S3_PUBLIC_URL') || undefined;
+  }
+
+  /**
+   * Часть `data` с обложкой — или пустая, когда о ней не говорили.
+   *
+   * Владелец здесь обязателен, в отличие от каталога: плейлист правит кто
+   * угодно, и без сверки человек присылает чужой ключ и ставит себе чужую
+   * картинку, ни разу ничего не залив.
+   */
+  private coverPatch(
+    userId: string,
+    next: string | null | undefined,
+    current: string | null,
+  ): { coverKey?: string | null } {
+    const value = this.covers.resolveKey({
+      next,
+      current,
+      scope: 'playlist',
+      ownerId: userId,
+    });
+    return value === undefined ? {} : { coverKey: value };
   }
 
   /** Свои плейлисты, свежие сверху. */
@@ -117,6 +155,7 @@ export class MusicPlaylistsService {
         title: title.slice(0, 120),
         description: body.description?.trim().slice(0, 500) || null,
         visibility: body.visibility ?? 'private',
+        ...this.coverPatch(userId, body.coverKey, null),
       },
       select: PLAYLIST_SELECT,
     });
@@ -135,13 +174,14 @@ export class MusicPlaylistsService {
     // переименование показывалось бы друзьям как новый плейлист.
     const before = await this.prisma.musicPlaylist.findUnique({
       where: { id },
-      select: { visibility: true },
+      select: { visibility: true, coverKey: true },
     });
 
     const title = body.title?.trim();
     const row = await this.prisma.musicPlaylist.update({
       where: { id },
       data: {
+        ...this.coverPatch(userId, body.coverKey, before?.coverKey ?? null),
         ...(title ? { title: title.slice(0, 120) } : {}),
         ...(body.description !== undefined
           ? { description: body.description?.trim().slice(0, 500) || null }
@@ -162,8 +202,12 @@ export class MusicPlaylistsService {
   /**
    * Факт для ленты друзей: человек открыл свой плейлист. Событие
    * самодостаточно — подписчик не имеет права дочитывать название из таблиц
-   * Музыки. Ссылки на страницу плейлиста пока нет, и `link` не выдумывается:
-   * карточка без ссылки честнее ссылки в 404.
+   * Музыки.
+   *
+   * Ссылка ставится всегда: карточку ленты получают ровно те, кому владелец
+   * открыл активность, а страница плейлиста «для друзей» спрашивает о том же
+   * у портального графа доступа. Раньше ссылки у `friends` не было — граф
+   * лежал внутри `activity`, и проверить было нечем.
    */
   private async announcePublished(
     userId: string,
@@ -183,6 +227,7 @@ export class MusicPlaylistsService {
       occurredAt: new Date().toISOString(),
       entityId: playlistId,
       entityLabel: title,
+      link: `/music/playlists/${playlistId}`,
     };
     this.bus.emit(event.name, event);
   }
@@ -286,6 +331,114 @@ export class MusicPlaylistsService {
       containsTrack: false,
       trackCount: await this.count(playlistId),
     };
+  }
+
+  /**
+   * Страница плейлиста.
+   *
+   * Кому открыт: владельцу, всем на подборку портала, всем на `public` и
+   * тем, кому владелец открыл активность, — на `friends`. Последнее
+   * спрашивается у `PortalAccessService`: граф доступа портальный, своей
+   * копии здесь нет и быть не должно — она разъехалась бы с оригиналом на
+   * первом же отзыве доступа.
+   *
+   * 404, а не 403: иначе по коду ответа перебираются чужие плейлисты.
+   */
+  async getOne(
+    viewerId: string,
+    id: string,
+  ): Promise<MusicPlaylistPageDto> {
+    const row = await this.prisma.musicPlaylist.findUnique({
+      where: { id },
+      select: { ...PLAYLIST_SELECT, ownerId: true },
+    });
+    if (!row) throw new NotFoundException('Плейлист не найден');
+
+    const isOwner = row.ownerId === viewerId;
+    const open =
+      isOwner ||
+      row.isSystem ||
+      row.visibility === 'public' ||
+      (row.visibility === 'friends' &&
+        row.ownerId !== null &&
+        (await this.access.canSeeActivity(viewerId, row.ownerId)));
+    if (!open) throw new NotFoundException('Плейлист не найден');
+
+    const items = await this.prisma.musicPlaylistItem.findMany({
+      where: { playlistId: id },
+      orderBy: { position: 'asc' },
+      take: MAX_ITEMS_PER_PLAYLIST,
+      include: { track: { include: TRACK_CARD_INCLUDE } },
+    });
+
+    // Чужому показываем только опубликованное: в плейлисте владельца могут
+    // лежать его собственные записи, ещё не прошедшие модерацию.
+    const visible = items
+      .map((item) => item.track)
+      .filter((track) => isOwner || track.status === 'published');
+
+    const totals = await this.totalsOf([id]);
+
+    return {
+      playlist: this.toDto(row, totals),
+      tracks: visible.map((track) => toMusicTrackDto(track, this.publicBaseUrl)),
+      canEdit: isOwner && !row.isSystem,
+    };
+  }
+
+  /**
+   * Перенос записи внутри плейлиста.
+   *
+   * Позиции разрежённые, поэтому обычный перенос — одна строка. Когда зазор
+   * между соседями кончился, список перенумеровывается целиком и перенос
+   * повторяется: это редкий случай, а не каждое перетаскивание.
+   */
+  async moveTrack(
+    userId: string,
+    playlistId: string,
+    trackId: string,
+    toIndex: number,
+  ): Promise<{ ok: true }> {
+    await this.own(userId, playlistId);
+
+    const items = await this.prisma.musicPlaylistItem.findMany({
+      where: { playlistId },
+      orderBy: { position: 'asc' },
+      select: { id: true, trackId: true, position: true },
+    });
+
+    const fromIndex = items.findIndex((item) => item.trackId === trackId);
+    if (fromIndex < 0) throw new NotFoundException('Запись не в плейлисте');
+
+    const positions = items.map((item) => item.position);
+    let target = positionForMove(positions, fromIndex, toIndex);
+
+    if (target === null) {
+      // Зазор кончился: раздвигаем весь список и считаем заново.
+      const fresh = renumber(items.length);
+      await this.prisma.$transaction(
+        items.map((item, index) =>
+          this.prisma.musicPlaylistItem.update({
+            where: { id: item.id },
+            data: { position: fresh[index] },
+          }),
+        ),
+      );
+      target = positionForMove(fresh, fromIndex, toIndex);
+    }
+
+    if (target === null) {
+      // После перенумерации зазор есть всегда — сюда попасть нечем, но
+      // молча оставить запись на месте хуже, чем сказать об этом.
+      throw new ForbiddenException('Не удалось переставить запись');
+    }
+
+    await this.prisma.musicPlaylistItem.update({
+      where: { id: items[fromIndex].id },
+      data: { position: target },
+    });
+
+    return { ok: true };
   }
 
   /** Свой и не подборка редакции. 404 вместо 403 на чужой — по той же причине. */

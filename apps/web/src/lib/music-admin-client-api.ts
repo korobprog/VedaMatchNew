@@ -6,7 +6,10 @@ import type {
   CreateMusicAlbumRequest,
   CreateMusicArtistRequest,
   CreateMusicCategoryRequest,
+  CreateMusicPlaylistRequest,
   MusicModerationDecisionRequest,
+  MusicReportDecisionRequest,
+  UpdateMusicPlaylistRequest,
   UpdateMusicTrackRequest,
 } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
@@ -58,4 +61,47 @@ export const createMusicCategory = (body: CreateMusicCategoryRequest) =>
   send<unknown>("/music/admin/catalog/categories", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+
+/** Решение по жалобе. Закрывает все открытые жалобы на эту запись. */
+export const decideMusicReport = (
+  id: string,
+  body: MusicReportDecisionRequest,
+) =>
+  send<{ ok: true }>(`/music/admin/reports/${id}/decide`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+// ---------- Подборки портала ----------
+
+export const createMusicSystemPlaylist = (body: CreateMusicPlaylistRequest) =>
+  send<{ id: string }>("/music/admin/catalog/playlists", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const updateMusicSystemPlaylist = (
+  id: string,
+  body: UpdateMusicPlaylistRequest,
+) =>
+  send<unknown>(`/music/admin/catalog/playlists/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+
+export const deleteMusicSystemPlaylist = (id: string) =>
+  send<unknown>(`/music/admin/catalog/playlists/${id}`, { method: "DELETE" });
+
+export const addTrackToMusicSystemPlaylist = (id: string, trackId: string) =>
+  send<unknown>(`/music/admin/catalog/playlists/${id}/tracks/${trackId}`, {
+    method: "POST",
+  });
+
+export const removeTrackFromMusicSystemPlaylist = (
+  id: string,
+  trackId: string,
+) =>
+  send<unknown>(`/music/admin/catalog/playlists/${id}/tracks/${trackId}`, {
+    method: "DELETE",
   });
