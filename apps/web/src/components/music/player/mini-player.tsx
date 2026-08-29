@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicCover } from "@/components/music/music-cover";
 import { MusicMarqueeText } from "@/components/music/marquee-text";
@@ -43,6 +44,7 @@ const COLLAPSED_KEY = "vedamatch:music-player-collapsed";
 
 export function MiniPlayer() {
   const player = useMusicPlayer();
+  const pathname = usePathname();
   const [queueOpen, setQueueOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -79,6 +81,13 @@ export function MiniPlayer() {
 
   // Полосы нет ни у гостя, ни когда слушать нечего.
   if (!player?.current) return null;
+
+  // На главной портала полосу не рисуем: там стоит карточка Музыки со своим
+  // управлением, и две панели одного плеера на одном экране спорят друг с
+  // другом. Прячем по пути, а не пропсом из layout: полоса монтируется в
+  // корневом layout один раз на всё приложение, и там про страницы ничего
+  // не известно.
+  if (pathname === "/") return null;
 
   const {
     current,
