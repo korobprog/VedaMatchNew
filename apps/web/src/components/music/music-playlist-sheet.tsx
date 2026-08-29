@@ -104,7 +104,14 @@ export function MusicPlaylistSheet({
     setBusyId("new");
     setError(null);
     try {
-      const playlist = await createPlaylist({ title });
+      // Новая подборка сразу видна друзьям. Смысл собирать её на портале, где
+      // люди слушают друг у друга, — а не в закрытом ящике: подборка, которую
+      // никто не увидит, ничем не отличается от списка «нравится», который уже
+      // есть. Круг узкий и уже согласованный человеком: видят только те, кто
+      // открыл ему доступ мэтчем или контактами, — не «все в интернете».
+      // Закрыть её обратно — три кнопки на странице плейлиста, и об этом
+      // сказано прямо здесь, а не мелким шрифтом в настройках.
+      const playlist = await createPlaylist({ title, visibility: "friends" });
       // Человек создал плейлист, стоя на записи: он хочет её туда положить,
       // а не получить пустой список и нажать ещё раз.
       const result = await addTrackToPlaylist(playlist.id, trackId);
@@ -236,7 +243,8 @@ export function MusicPlaylistSheet({
         )}
 
         {creating ? (
-          <div className="flex items-center gap-2 border-t border-glass-brd pt-3">
+          <div className="flex flex-col gap-2 border-t border-glass-brd pt-3">
+          <div className="flex items-center gap-2">
             <input
               autoFocus
               value={newTitle}
@@ -257,6 +265,13 @@ export function MusicPlaylistSheet({
             >
               Создать
             </button>
+          </div>
+          {/* Сказано до нажатия, а не после: доступ по умолчанию — не то, что
+              человек должен обнаружить, увидев свою подборку у друга. */}
+          <p className="text-xs text-text-2">
+            Новый плейлист виден друзьям. Закрыть или открыть всем — на его
+            странице.
+          </p>
           </div>
         ) : (
           <button
