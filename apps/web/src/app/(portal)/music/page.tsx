@@ -18,7 +18,7 @@ import {
 import { MusicPlaylistCard } from "@/components/music/music-playlist-card";
 import { MusicRail } from "@/components/music/music-rail";
 import { MusicSearchField } from "@/components/music/music-search-field";
-import { MusicTrackCard } from "@/components/music/music-track-card";
+import { MusicTrackList } from "@/components/music/music-track-list";
 import { plural } from "@/lib/plural";
 
 // Суффикс «— VedaMatch» подставляет шаблон в корневом layout; дублировать
@@ -253,16 +253,7 @@ export default async function MusicPage({
                 : "Каталог пока пуст. Записи появятся, как только редакция начнёт его наполнять."}
           </p>
         ) : (
-          <ul className="mt-4 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
-            {tracks.map((track) => (
-              <li key={track.id}>
-                <MusicTrackCard
-                  track={track}
-                  queue={tracks.map((item) => item.id)}
-                />
-              </li>
-            ))}
-          </ul>
+          <MusicTrackList tracks={tracks} />
         )}
 
         {/* «Показать ещё», а не бесконечная прокрутка: план сервиса прямо

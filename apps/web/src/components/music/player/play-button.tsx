@@ -16,10 +16,17 @@ export function MusicPlayButton({
   trackId,
   title,
   queue,
+  className,
 }: {
   trackId: string;
   title: string;
   queue?: string[];
+  /**
+   * Расположение и размер. По умолчанию — кружок в углу обложки карточки;
+   * строке каталога нужен другой, и заводить ради этого вторую такую же
+   * кнопку значит развести поведение «текущая запись» по двум местам.
+   */
+  className?: string;
 }) {
   const player = useMusicPlayer();
   const isCurrent = player?.current?.id === trackId;
@@ -37,11 +44,14 @@ export function MusicPlayButton({
         if (isCurrent) player?.toggle();
         else player?.play(trackId, queue);
       }}
-      className={`absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint transition-opacity duration-200 motion-reduce:transition-none ${
-        isCurrent
-          ? "opacity-100"
-          : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-      }`}
+      className={
+        className ??
+        `absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint transition-opacity duration-200 motion-reduce:transition-none ${
+          isCurrent
+            ? "opacity-100"
+            : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+        }`
+      }
     >
       {isPlaying ? (
         <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">

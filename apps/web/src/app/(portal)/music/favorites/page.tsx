@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { MusicRail } from "@/components/music/music-rail";
-import { MusicTrackCard } from "@/components/music/music-track-card";
+import { MusicTrackList } from "@/components/music/music-track-list";
 import { getMyMusicFavorites } from "@/lib/music-api";
 
 export const metadata: Metadata = {
@@ -20,7 +20,6 @@ export const metadata: Metadata = {
 export default async function MusicFavoritesPage() {
   const favorites = await getMyMusicFavorites().catch(() => null);
   const items = favorites?.items ?? [];
-  const queue = items.map((track) => track.id);
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10 lg:flex-row">
@@ -41,13 +40,7 @@ export default async function MusicFavoritesPage() {
             Пока пусто. Сердце есть на карточке записи и в полосе плеера.
           </p>
         ) : (
-          <ul className="mt-6 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
-            {items.map((track) => (
-              <li key={track.id}>
-                <MusicTrackCard track={track} queue={queue} />
-              </li>
-            ))}
-          </ul>
+          <MusicTrackList tracks={items} />
         )}
       </div>
     </main>
