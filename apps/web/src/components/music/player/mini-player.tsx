@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicCover } from "@/components/music/music-cover";
 import { MusicMarqueeText } from "@/components/music/marquee-text";
+import { MusicPlayingBars } from "./playing-bars";
 import { SEEK_STEP_SECONDS, useMusicPlayer } from "./player-provider";
 import { MusicQueuePanel } from "./queue-panel";
 
@@ -234,6 +235,16 @@ export function MiniPlayer() {
                 <span className="absolute mt-4 font-mono text-[8px]">1</span>
               )}
             </button>
+
+            {/* Столбики занимают пустоту справа от кнопок — она есть только
+                на телефоне: на широком экране ряд стоит по центру, и место
+                справа занято скоростью, сердцем и очередью. `ml-auto`
+                прижимает их к краю, `sm:hidden` убирает там, где пустоты
+                нет. */}
+            <MusicPlayingBars
+              playing={isPlaying}
+              className="ml-auto mr-1 h-4 sm:hidden"
+            />
           </div>
 
           <PositionSlider
