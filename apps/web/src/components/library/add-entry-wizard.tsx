@@ -7,11 +7,11 @@ import type {
   LibraryCategoryDto,
   LibraryDuplicateEntryConflict,
   LibraryEntryType,
+  LibraryCategoryTreeNode,
   LibraryLocale,
-  LibrarySectionDto,
 } from "@vedamatch/shared";
-import { CategoryCreateForm } from "./category-create-form";
-import { SectionCreateForm } from "./section-create-form";
+import { CategoryPicker } from "./category-picker";
+import { insertIntoTree, renameInTree } from "./category-tree";
 import { SectionRequestForm } from "./section-request-form";
 import { entryTypeLabel, pickLocalized, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
@@ -51,36 +51,26 @@ const STEPS: { title: LibraryTextKey; hint: LibraryTextKey }[] = [
  */
 export function AddEntryWizard({
   locale,
-  sections,
-  categories,
-  initialSectionSlug,
+  tree,
+  initialCategorySlug,
+  canCreateRoot = false,
 }: {
   locale: LibraryLocale;
-  sections: LibrarySectionDto[];
-  categories: LibraryCategoryDto[];
-  initialSectionSlug?: string;
+  tree: LibraryCategoryTreeNode[];
+  initialCategorySlug?: string;
+  canCreateRoot?: boolean;
 }) {
   const router = useRouter();
   const [step, setStep] = useState(1);
-  const [sectionSlug, setSectionSlug] = useState(
-    initialSectionSlug ?? sections[0]?.slug ?? "",
-  );
-  const [sectionCategories, setSectionCategories] = useState(categories);
+  const [categories, setCategories] = useState(tree);
   const [selected, setSelected] = useState<LibraryCategoryDto[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [duplicateId, setDuplicateId] = useState<string | null>(null);
   const [locatorTouched, setLocatorTouched] = useState(false);
-  const [categoryFormOpen, setCategoryFormOpen] = useState(false);
-  const [sectionFormOpen, setSectionFormOpen] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
-  // Заведённые прямо здесь разделы дописываются к пришедшим с сервера:
-  // иначе новый раздел не появился бы в пикере до перезагрузки страницы.
-  const [knownSections, setKnownSections] = useState(sections);
-
-  /** Заводить разделы вправе только администрация — `canEdit` это и значит. */
-  const canCreateSection = knownSections.some((section) => section.canEdit);
 
   const [draft, setDraft] = useState<LibraryEntryDraft>({
     url: "",
@@ -123,12 +113,15 @@ export function AddEntryWizard({
     });
   }
 
-  function handleCategoryCreated(category: LibraryCategoryDto) {
-    setSectionCategories((current) =>
-      current.some((item) => item.id === category.id)
-        ? current
-        : [...current, category],
+  function handleCategoryRenamed(updated: LibraryCategoryDto) {
+    setCategories((current) => renameInTree(current, updated));
+    setSelected((current) =>
+      current.map((item) => (item.id === updated.id ? updated : item)),
     );
+  }
+
+  function handleCategoryCreated(category: LibraryCategoryDto) {
+    setCategories((current) => insertIntoTree(current, category));
     // Свежесозданную сразу отмечаем: её ради этого и заводили.
     setSelected((current) => {
       if (current.some((item) => item.id === category.id)) return current;
@@ -136,29 +129,9 @@ export function AddEntryWizard({
       patch({ categoryIds: next.map((item) => item.id) });
       return next;
     });
-    setCategoryFormOpen(false);
     setNotice(t(locale, "add.categoryCreated"));
   }
 
-  function handleSectionCreated(section: LibrarySectionDto) {
-    setKnownSections((current) => [...current, section]);
-    setSectionFormOpen(false);
-    setNotice(t(locale, "add.sectionCreated"));
-    // Переходим в новый раздел: категорий в нём пока нет, и следующим шагом
-    // человек заведёт первую — ради этого раздел и создавался.
-    void changeSection(section.slug);
-  }
-
-  async function changeSection(slug: string) {
-    setSectionSlug(slug);
-    if (!slug) return;
-    const response = await apiFetch(
-      `${API_URL}/library/categories/section/${encodeURIComponent(slug)}`,
-      { credentials: "include" },
-    ).catch(() => null);
-    if (!response?.ok) return;
-    setSectionCategories((await response.json()) as LibraryCategoryDto[]);
-  }
 
   async function submit() {
     setError(null);
@@ -386,111 +359,42 @@ export function AddEntryWizard({
 
         {step === 3 && (
           <>
-            <label className="text-sm text-text-1">
-              {t(locale, "add.section")}
-              <select
-                value={sectionSlug}
-                onChange={(event) => void changeSection(event.target.value)}
-                className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
-              >
-                {knownSections.map((section) => (
-                  <option key={section.id} value={section.slug}>
-                    {pickLocalized(locale, {
-                      ru: section.titleRu,
-                      en: section.titleEn,
-                    })}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <CategoryPicker
+              locale={locale}
+              tree={categories}
+              selected={selected}
+              onToggle={toggleCategory}
+              onRenamed={handleCategoryRenamed}
+              onCreated={handleCategoryCreated}
+              initialParentSlug={initialCategorySlug}
+              canCreateRoot={canCreateRoot}
+            />
 
-            <fieldset className="text-sm text-text-1">
-              <legend className="mb-2">{t(locale, "add.categories")}</legend>
-              <div className="flex flex-wrap gap-3">
-                {sectionCategories.map((category) => {
-                  const label = pickLocalized(locale, {
-                    ru: category.titleRu,
-                    en: category.titleEn,
-                  });
-                  return (
-                    <label
-                      key={category.id}
-                      className="flex items-center gap-2"
-                    >
-                      <input
-                        type="checkbox"
-                        aria-label={label}
-                        checked={selected.some(
-                          (item) => item.id === category.id,
-                        )}
-                        onChange={() => toggleCategory(category)}
-                      />
-                      {label}
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
-
-            {/* Подходящей категории может не оказаться — тупик посреди
-                мастера хуже, чем лишняя кнопка. Раздел заводит только
-                администрация: это заранее продуманный список рубрик, а не
-                пользовательский контент, и бэкенд отказал бы остальным. */}
+            {/* Подходящей рубрики может не оказаться, а тупик посреди мастера
+                хуже лишней кнопки. Верхний уровень заводит администрация —
+                остальным остаётся заявка, и бэкенд отказал бы им всё равно. */}
             <div className="flex flex-col gap-2">
-              <p className="text-xs text-text-2">
-                {t(locale, "add.noCategoryFits")}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCategoryFormOpen((open) => !open);
-                    setSectionFormOpen(false);
-                  }}
-                  className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-0 hover:bg-glass-brd/40"
-                >
-                  {categoryFormOpen
-                    ? t(locale, "add.categoryCancel")
-                    : `+ ${t(locale, "add.categoryNew")}`}
-                </button>
-
-                {/* Админ заводит раздел сам, остальные — просят: бэкенд
-                    откажет им, и кнопка «создать» вела бы в тупик. */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSectionFormOpen((open) => !open);
-                    setCategoryFormOpen(false);
-                  }}
-                  className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-0 hover:bg-glass-brd/40"
-                >
-                  {sectionFormOpen
-                    ? t(locale, "add.categoryCancel")
-                    : canCreateSection
-                      ? `+ ${t(locale, "add.sectionNew")}`
+              {!canCreateRoot && (
+                <>
+                  <p className="text-xs text-text-2">
+                    {t(locale, "add.noCategoryFits")}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setRequestOpen((open) => !open)}
+                    className="self-start rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-0 hover:bg-glass-brd/40"
+                  >
+                    {requestOpen
+                      ? t(locale, "add.categoryCancel")
                       : t(locale, "add.sectionRequest")}
-                </button>
-              </div>
+                  </button>
 
-              {categoryFormOpen && (
-                <div className="rounded-xl border border-glass-brd p-3">
-                  <CategoryCreateForm
-                    locale={locale}
-                    sections={knownSections}
-                    initialSectionSlug={sectionSlug}
-                    onCreated={handleCategoryCreated}
-                  />
-                </div>
-              )}
-
-              {sectionFormOpen && (
-                <div className="rounded-xl border border-glass-brd p-3">
-                  {canCreateSection ? (
-                    <SectionCreateForm onCreated={handleSectionCreated} />
-                  ) : (
-                    <SectionRequestForm locale={locale} />
+                  {requestOpen && (
+                    <div className="rounded-xl border border-glass-brd p-3">
+                      <SectionRequestForm locale={locale} />
+                    </div>
                   )}
-                </div>
+                </>
               )}
 
               {notice && <p className="text-xs text-cyan">{notice}</p>}

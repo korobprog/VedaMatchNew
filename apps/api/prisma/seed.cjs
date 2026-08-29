@@ -20,7 +20,20 @@ async function upsertAdminEditable(model, where, fields) {
   return model.create({ data: fields });
 }
 
-const { librarySections } = require('./library-sections-data.js');
+/**
+ * Приведение названия к виду, по которому ищут дубли. Копия того, что делает
+ * сервис Библиотеки: сид его исходников не подключает — см. комментарий у
+ * корней ниже.
+ */
+function normalizeSeedTitle(value) {
+  return value
+    .toLocaleLowerCase('ru-RU')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const { libraryRoots } = require('./library-roots-data.js');
 const { contactsTags } = require('./contacts-tags-data.js');
 const { marketSections } = require('./market-sections-data.js');
 const { marketCategories } = require('./market-categories-data.js');
@@ -200,11 +213,24 @@ async function main() {
         create: service,
       });
     }
-    for (const section of librarySections) {
+    // Разделы Библиотеки стали корнями дерева категорий: отдельной модели
+    // `LibrarySection` больше нет. Корень — та же категория, у которой нет
+    // родителя и пустой путь.
+    //
+    // `normalizedRu/En` заполняются здесь, а не берутся из сервиса: сид —
+    // отдельная точка входа и исходников не подключает, а без этих полей
+    // дубль рубрики верхнего уровня не находился бы поиском похожих.
+    for (const root of libraryRoots) {
       await upsertAdminEditable(
-        transaction.librarySection,
-        { slug: section.slug },
-        section,
+        transaction.libraryCategory,
+        { slug: root.slug },
+        {
+          ...root,
+          parentId: null,
+          path: '',
+          normalizedRu: normalizeSeedTitle(root.titleRu),
+          normalizedEn: normalizeSeedTitle(root.titleEn),
+        },
       );
     }
     // Пользовательские теги сюда не попадают: upsert идёт по slug, а список
@@ -311,7 +337,7 @@ async function main() {
     }
   });
   console.log(
-    `Seeded ${services.length} services, ${librarySections.length} library sections, ${contactsTags.length} contacts tags, ${marketSections.length} market sections, ${marketCategories.length} market categories ${noticeRubrics.length} notice rubrics, ${musicCategories.length} music categories and ${geoCities.length} cities`,
+    `Seeded ${services.length} services, ${libraryRoots.length} library roots, ${contactsTags.length} contacts tags, ${marketSections.length} market sections, ${marketCategories.length} market categories ${noticeRubrics.length} notice rubrics, ${musicCategories.length} music categories and ${geoCities.length} cities`,
   );
 }
 

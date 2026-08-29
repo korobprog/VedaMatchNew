@@ -13,6 +13,7 @@ import type {
   LibraryAdminEntryListResponse,
   LibraryAdminEntryQuery,
   LibraryAdminStats,
+  LibraryCategoryAncestor,
   MergeLibraryCategoryRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -23,7 +24,8 @@ const MAX_PAGE_SIZE = 100;
 
 const categorySelect = {
   id: true,
-  sectionId: true,
+  parentId: true,
+  path: true,
   slug: true,
   titleRu: true,
   titleEn: true,
@@ -33,7 +35,6 @@ const categorySelect = {
   normalizedRu: true,
   mergedIntoId: true,
   createdAt: true,
-  section: { select: { slug: true, titleRu: true } },
   createdBy: { select: { name: true } },
 } satisfies Prisma.LibraryCategorySelect;
 
@@ -84,7 +85,7 @@ export class LibraryAdminService {
       categoriesTotal,
       active,
       merged,
-      sections,
+      roots,
       duplicates,
     ] = await Promise.all([
       this.prisma.libraryEntry.count(),
@@ -96,7 +97,7 @@ export class LibraryAdminService {
       this.prisma.libraryCategory.count(),
       this.prisma.libraryCategory.count({ where: { status: 'active' } }),
       this.prisma.libraryCategory.count({ where: { status: 'merged' } }),
-      this.prisma.librarySection.count(),
+      this.prisma.libraryCategory.count({ where: { parentId: null } }),
       this.duplicates().then((groups) => groups.length),
     ]);
 
@@ -108,21 +109,43 @@ export class LibraryAdminService {
         merged,
         duplicates,
       },
-      sections,
+      roots,
     };
   }
 
-  async listCategories(sectionId?: string): Promise<LibraryAdminCategoryDto[]> {
+  async listCategories(parentId?: string): Promise<LibraryAdminCategoryDto[]> {
     const rows = await this.prisma.libraryCategory.findMany({
       where: {
         status: 'active',
-        ...(sectionId ? { sectionId } : {}),
+        ...(parentId ? { parentId } : {}),
       },
       orderBy: [{ entriesCount: 'desc' }, { createdAt: 'asc' }],
       take: 500,
       select: categorySelect,
     });
-    return rows.map(toCategoryDto);
+    const ancestors = await this.ancestorsFor(rows);
+    return rows.map((row) => toCategoryDto(row, ancestors));
+  }
+
+  /**
+   * Предки для хлебных крошек в админском списке.
+   *
+   * Одним запросом на страницу: без пути две одноимённые рубрики из разных
+   * веток в списке дублей неразличимы, а именно их там и разводят.
+   */
+  private async ancestorsFor(
+    rows: Array<{ path: string }>,
+  ): Promise<Map<string, LibraryCategoryAncestor>> {
+    const ids = [
+      ...new Set(rows.flatMap((row) => row.path.split('.').filter(Boolean))),
+    ];
+    if (ids.length === 0) return new Map();
+
+    const found = await this.prisma.libraryCategory.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, slug: true, titleRu: true, titleEn: true },
+    });
+    return new Map(found.map((row) => [row.id, row]));
   }
 
   /**
@@ -136,11 +159,12 @@ export class LibraryAdminService {
       orderBy: [{ entriesCount: 'desc' }, { createdAt: 'asc' }],
       select: categorySelect,
     });
+    const ancestors = await this.ancestorsFor(rows);
     return groupDuplicates(
       rows.map((row) => ({ row, key: row.normalizedRu })),
     ).map((group) => ({
       normalized: group.key,
-      categories: group.rows.map(toCategoryDto),
+      categories: group.rows.map((row) => toCategoryDto(row, ancestors)),
     }));
   }
 
@@ -218,7 +242,7 @@ export class LibraryAdminService {
       where: { id },
       select: categorySelect,
     });
-    return toCategoryDto(row);
+    return toCategoryDto(row, await this.ancestorsFor([row]));
   }
 
   async listEntries(
@@ -289,12 +313,18 @@ export class LibraryAdminService {
   }
 }
 
-function toCategoryDto(row: CategoryRow): LibraryAdminCategoryDto {
+function toCategoryDto(
+  row: CategoryRow,
+  ancestorsById: Map<string, LibraryCategoryAncestor>,
+): LibraryAdminCategoryDto {
   return {
     id: row.id,
-    sectionId: row.sectionId,
-    sectionSlug: row.section.slug,
-    sectionTitleRu: row.section.titleRu,
+    parentId: row.parentId,
+    ancestors: row.path
+      .split('.')
+      .filter(Boolean)
+      .map((id) => ancestorsById.get(id))
+      .filter((value): value is LibraryCategoryAncestor => Boolean(value)),
     slug: row.slug,
     titleRu: row.titleRu,
     titleEn: row.titleEn,

@@ -14,15 +14,15 @@ import { t } from "@/components/library/i18n";
 export default async function LibraryAddPage({
   searchParams,
 }: {
-  searchParams: Promise<{ section?: string }>;
+  searchParams: Promise<{ category?: string }>;
 }) {
   const user = await getProfile();
   if (!user) redirectToLogin("/library/add");
 
-  const { section } = await searchParams;
+  const { category } = await searchParams;
   const preferences = await getLibraryPreferences();
   const locale = preferences?.uiLanguage ?? "ru";
-  const query = section ? `?section=${encodeURIComponent(section)}` : "";
+  const query = category ? `?category=${encodeURIComponent(category)}` : "";
 
   return (
     <div className="relative min-h-dvh bg-bg-0">

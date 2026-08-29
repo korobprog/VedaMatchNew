@@ -13,7 +13,7 @@ import type {
   NotificationEvent,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import { LibrarySectionsService } from './library-sections.service';
+import { LibraryCategoriesService } from './library-categories.service';
 
 const MAX_TITLE_LENGTH = 120;
 const MAX_REASON_LENGTH = 1000;
@@ -71,7 +71,7 @@ const REQUEST_SELECT = {
 export class LibrarySectionRequestsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly sections: LibrarySectionsService,
+    private readonly categories: LibraryCategoriesService,
     private readonly bus: EventEmitter2,
   ) {}
 
@@ -179,12 +179,17 @@ export class LibrarySectionRequestsService {
     let createdSectionSlug: string | undefined;
     let createdSectionId: string | null = null;
     if (approved) {
-      const section = await this.sections.create(true, {
+      // `parentId: null` — рубрика верхнего уровня, ровно то, о чём просили.
+      // `force` обязателен: заявку админ уже прочитал глазами, и упасть на
+      // «есть похожая» после нажатия «Одобрить» было бы тупиком.
+      const category = await this.categories.create(adminId, true, {
+        parentId: null,
         titleRu: existing.titleRu,
         titleEn: existing.titleEn,
+        force: true,
       });
-      createdSectionSlug = section.slug;
-      createdSectionId = section.id;
+      createdSectionSlug = category.slug;
+      createdSectionId = category.id;
     }
 
     const updated = await this.prisma.librarySectionRequest.update({

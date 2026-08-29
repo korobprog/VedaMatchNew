@@ -20,44 +20,82 @@ export type LibraryLocale = 'ru' | 'en';
 /** Сортировки ленты. `actual` и `popular` наполняются данными в фазе B. */
 export type LibraryFeedSort = 'new' | 'actual' | 'popular';
 
-export interface LibrarySectionDto {
-  id: string;
-  slug: string;
-  titleRu: string;
-  titleEn: string;
-  descriptionRu: string | null;
-  descriptionEn: string | null;
-  iconKey: string | null;
-  position: number;
-  categoriesCount: number;
-  entriesCount: number;
-  /** `true` — текущий пользователь может переименовать раздел (только админ). */
-  canEdit: boolean;
-}
+/** Корень (0) → потомок (1) → потомок потомка (2). Дублирует MAX_DEPTH
+ *  сервера: интерфейсу нужно гасить недопустимые цели ещё до запроса. */
+export const LIBRARY_MAX_DEPTH = 2;
 
+/**
+ * Рубрика справочника — узел одного дерева.
+ *
+ * Разделов как отдельной сущности больше нет: бывший раздел — это узел с
+ * `parentId === null`. Адрес узла `/library/<slug>` не зависит от места в
+ * дереве, поэтому перемещение не рвёт чужие ссылки.
+ */
 export interface LibraryCategoryDto {
   id: string;
-  sectionId: string;
-  sectionSlug: string;
+  parentId: string | null;
   slug: string;
   titleRu: string | null;
   titleEn: string | null;
   descriptionRu: string | null;
   descriptionEn: string | null;
+  iconKey: string | null;
+  /** Порядок среди соседей; сплошной от нуля. */
+  position: number;
+  /** 0 — верхний уровень. */
+  depth: number;
+  /** Материалы самой рубрики, без потомков. */
   entriesCount: number;
+  /** Материалы рубрики вместе с потомками; дубли между ветками не двоятся. */
+  subtreeEntriesCount: number;
+  childrenCount: number;
   createdAt: string;
-  /** `true` — текущий пользователь создал категорию либо является админом. */
+  /** `true` — текущий пользователь создал рубрику либо является админом. */
   canEdit: boolean;
+  /** `true` — рубрику можно перетаскивать (админ и модератор). */
+  canMove: boolean;
+}
+
+export interface LibraryCategoryTreeNode extends LibraryCategoryDto {
+  children: LibraryCategoryTreeNode[];
+}
+
+/** Предок в хлебных крошках: узлу нужен путь, а не только имя родителя. */
+export interface LibraryCategoryAncestor {
+  id: string;
+  slug: string;
+  titleRu: string | null;
+  titleEn: string | null;
+}
+
+export interface LibraryCategoryPageDto {
+  category: LibraryCategoryDto;
+  /** От корня к родителю; сама рубрика не входит. */
+  ancestors: LibraryCategoryAncestor[];
+  children: LibraryCategoryDto[];
 }
 
 export interface LibraryCategorySuggestion {
   id: string;
-  sectionSlug: string;
   slug: string;
   titleRu: string | null;
   titleEn: string | null;
+  /** Путь от корня к родителю — иначе двух «Лекций» не различить. */
+  ancestors: LibraryCategoryAncestor[];
   entriesCount: number;
   similarity: number;
+}
+
+/**
+ * Перемещение рубрики: новый родитель и сосед, перед которым встать.
+ *
+ * `parentId: null` — вынести на верхний уровень, `beforeId: null` — встать
+ * последним среди соседей. Одним запросом описываются оба намерения
+ * перетаскивания: и смена уровня, и перестановка.
+ */
+export interface MoveLibraryCategoryRequest {
+  parentId: string | null;
+  beforeId?: string | null;
 }
 
 export interface LibraryEntryDto {
@@ -84,10 +122,7 @@ export interface LibraryEntryDto {
   bookmarked: boolean;
   publishedAt: string;
   categories: Array<
-    Pick<
-      LibraryCategoryDto,
-      'id' | 'slug' | 'sectionSlug' | 'titleRu' | 'titleEn'
-    >
+    Pick<LibraryCategoryDto, 'id' | 'slug' | 'titleRu' | 'titleEn'>
   >;
   addedBy: { id: string; name: string } | null;
   /** `true` — текущий пользователь добавил ссылку либо является админом. */
@@ -104,7 +139,8 @@ export interface LibraryFeedResponse {
 }
 
 export interface CreateLibraryCategoryRequest {
-  sectionId: string;
+  /** `null` — рубрика верхнего уровня; такую заводит только админ. */
+  parentId: string | null;
   titleRu?: string | null;
   titleEn?: string | null;
   descriptionRu?: string | null;
@@ -113,20 +149,14 @@ export interface CreateLibraryCategoryRequest {
   force?: boolean;
 }
 
-/** Все поля необязательны — меняются только переданные. Раздел (sectionId)
- *  можно сменить, слаг при этом не пересчитывается: ссылки на категорию не рвутся. */
+/**
+ * Все поля необязательны — меняются только переданные. Слаг не
+ * пересчитывается: на него уже могли сослаться извне. Место в дереве
+ * меняет отдельный `move`, а не это тело.
+ */
 export interface UpdateLibraryCategoryRequest {
-  sectionId?: string;
   titleRu?: string | null;
   titleEn?: string | null;
-  descriptionRu?: string | null;
-  descriptionEn?: string | null;
-}
-
-/** Разделы правит только администрация; порядок (position) здесь не меняется. */
-export interface UpdateLibrarySectionRequest {
-  titleRu?: string;
-  titleEn?: string;
   descriptionRu?: string | null;
   descriptionEn?: string | null;
   iconKey?: string | null;
@@ -167,15 +197,6 @@ export interface CreateLibrarySectionRequestBody {
 export interface DecideLibrarySectionRequestBody {
   action: 'approve' | 'reject';
   comment?: string | null;
-}
-
-/** Новый раздел встаёт последним по `position` — порядок правится не отсюда. */
-export interface SaveLibrarySectionRequest {
-  titleRu: string;
-  titleEn: string;
-  descriptionRu?: string | null;
-  descriptionEn?: string | null;
-  iconKey?: string | null;
 }
 
 /** Тело ответа `422` при похожей существующей категории. */
@@ -277,9 +298,10 @@ export type LibraryEnrichmentStatus =
 /** Категория глазами администрации: с автором, статусом и счётчиками. */
 export interface LibraryAdminCategoryDto {
   id: string;
-  sectionId: string;
-  sectionSlug: string;
-  sectionTitleRu: string;
+  parentId: string | null;
+  /** Путь от корня к родителю: без него две одноимённые рубрики из разных
+   *  веток в админском списке неразличимы. */
+  ancestors: LibraryCategoryAncestor[];
   slug: string;
   titleRu: string | null;
   titleEn: string | null;
@@ -349,5 +371,6 @@ export interface LibraryAdminEntryQuery {
 export interface LibraryAdminStats {
   entries: { total: number; published: number; removed: number; notEnriched: number };
   categories: { total: number; active: number; merged: number; duplicates: number };
-  sections: number;
+  /** Рубрик верхнего уровня — бывший счётчик разделов. */
+  roots: number;
 }

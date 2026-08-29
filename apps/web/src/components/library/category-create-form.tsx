@@ -6,9 +6,11 @@ import type {
   CreateLibraryCategoryConflict,
   LibraryCategoryDto,
   LibraryCategorySuggestion,
+  LibraryCategoryTreeNode,
   LibraryLocale,
-  LibrarySectionDto,
 } from "@vedamatch/shared";
+import { LIBRARY_MAX_DEPTH } from "@vedamatch/shared";
+import { flattenTree } from "./category-tree";
 import { pickLocalized, t } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
 
@@ -16,20 +18,29 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export function CategoryCreateForm({
   locale,
-  sections,
-  initialSectionSlug,
+  tree,
+  initialParentSlug,
+  canCreateRoot = false,
   onCreated,
 }: {
   locale: LibraryLocale;
-  sections: LibrarySectionDto[];
-  initialSectionSlug?: string;
-  /** Задан — остаёмся на странице и отдаём категорию вызывающей форме. */
+  tree: LibraryCategoryTreeNode[];
+  /** Куда предлагать положить новую рубрику по умолчанию. */
+  initialParentSlug?: string;
+  /** Верхний уровень заводит только администрация — см. сервис. */
+  canCreateRoot?: boolean;
+  /** Задан — остаёмся на странице и отдаём рубрику вызывающей форме. */
   onCreated?: (category: LibraryCategoryDto) => void;
 }) {
   const router = useRouter();
-  const [sectionId, setSectionId] = useState(
-    sections.find((section) => section.slug === initialSectionSlug)?.id ??
-      sections[0]?.id ??
+  // Родителем может быть не всякая рубрика: на предельной глубине вкладывать
+  // уже некуда, и такие в списке не показываем.
+  const parents = flattenTree(tree).filter(
+    (row) => row.depth + 1 <= LIBRARY_MAX_DEPTH,
+  );
+  const [parentId, setParentId] = useState(
+    parents.find((row) => row.node.slug === initialParentSlug)?.id ??
+      parents[0]?.id ??
       "",
   );
   const [titleRu, setTitleRu] = useState("");
@@ -72,7 +83,7 @@ export function CategoryCreateForm({
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sectionId,
+          parentId: parentId || null,
           titleRu: titleRu.trim() || null,
           titleEn: titleEn.trim() || null,
           force,
@@ -101,7 +112,7 @@ export function CategoryCreateForm({
         onCreated(created);
         return;
       }
-      router.push(`/library/${created.sectionSlug}/${created.slug}`);
+      router.push(`/library/${created.slug}`);
     } catch {
       setError(t(locale, "add.failed"));
     } finally {
@@ -114,16 +125,19 @@ export function CategoryCreateForm({
       <label className="text-sm text-text-1">
         {t(locale, "filters.section")}
         <select
-          value={sectionId}
-          onChange={(event) => setSectionId(event.target.value)}
+          value={parentId}
+          onChange={(event) => setParentId(event.target.value)}
           className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
         >
-          {sections.map((section) => (
-            <option key={section.id} value={section.id}>
-              {pickLocalized(locale, {
-                ru: section.titleRu,
-                en: section.titleEn,
-              })}
+          {canCreateRoot && (
+            <option value="">{t(locale, "tree.moveToRoot")}</option>
+          )}
+          {parents.map((row) => (
+            <option key={row.id} value={row.id}>
+              {`${"  ".repeat(row.depth)}${pickLocalized(locale, {
+                ru: row.node.titleRu,
+                en: row.node.titleEn,
+              })}`}
             </option>
           ))}
         </select>
@@ -156,9 +170,22 @@ export function CategoryCreateForm({
                 {suggestions.map((suggestion) => (
                   <li key={suggestion.id}>
                     <a
-                      href={`/library/${suggestion.sectionSlug}/${suggestion.slug}`}
+                      href={`/library/${suggestion.slug}`}
                       className="underline"
                     >
+                      {suggestion.ancestors.length > 0 && (
+                        <span className="text-text-2">
+                          {suggestion.ancestors
+                            .map((ancestor) =>
+                              pickLocalized(locale, {
+                                ru: ancestor.titleRu,
+                                en: ancestor.titleEn,
+                              }),
+                            )
+                            .join(" / ")}
+                          {" / "}
+                        </span>
+                      )}
                       {pickLocalized(locale, {
                         ru: suggestion.titleRu,
                         en: suggestion.titleEn,

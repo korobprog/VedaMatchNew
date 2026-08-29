@@ -3,15 +3,15 @@ import { redirectToLogin } from "@/lib/require-user";
 import type { Metadata } from "next";
 import { getProfile } from "@/lib/api";
 import {
+  getLibraryCategoryTree,
   getLibraryFeed,
   getLibraryPreferences,
-  getLibrarySections,
 } from "@/lib/library-api";
 import { Header } from "@/components/header";
+import { CategoryNavigator } from "@/components/library/category-navigator";
 import { EntryFilters } from "@/components/library/entry-filters";
 import { EntryList } from "@/components/library/entry-list";
 import { LocaleSwitch } from "@/components/library/locale-switch";
-import { SectionStrip } from "@/components/library/section-strip";
 import { t } from "@/components/library/i18n";
 
 export const metadata: Metadata = {
@@ -29,12 +29,13 @@ export default async function LibraryPage({
   if (!user) redirectToLogin("/library");
 
   const params = await searchParams;
-  const [sections, preferences, feed] = await Promise.all([
-    getLibrarySections(),
+  const [tree, preferences, feed] = await Promise.all([
+    getLibraryCategoryTree(),
     getLibraryPreferences(),
     getLibraryFeed(params),
   ]);
   const locale = preferences?.uiLanguage ?? "ru";
+  const roots = tree ?? [];
 
   return (
     <div className="relative min-h-dvh bg-bg-0">
@@ -64,7 +65,12 @@ export default async function LibraryPage({
           </div>
         </div>
 
-        <SectionStrip sections={sections ?? []} locale={locale} />
+        <CategoryNavigator
+          locale={locale}
+          categories={roots}
+          tree={roots}
+          canOrganize={roots.some((root) => root.canMove)}
+        />
         <EntryFilters locale={locale} categories={[]} />
 
         {feed && (

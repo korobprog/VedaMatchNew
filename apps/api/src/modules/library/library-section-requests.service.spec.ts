@@ -32,11 +32,11 @@ function prismaMock(over: Record<string, unknown> = {}) {
   };
 }
 
-function sectionsMock() {
+function categoriesMock() {
   return {
     create: jest
       .fn()
-      .mockResolvedValue({ id: 'section-9', slug: 'service-and-seva' }),
+      .mockResolvedValue({ id: 'category-9', slug: 'service-and-seva' }),
   };
 }
 
@@ -54,7 +54,7 @@ describe('LibrarySectionRequestsService.create', () => {
   it('требует оба названия', async () => {
     const service = new LibrarySectionRequestsService(
       prismaMock() as never,
-      sectionsMock() as never,
+      categoriesMock() as never,
       busMock() as never,
     );
 
@@ -68,7 +68,7 @@ describe('LibrarySectionRequestsService.create', () => {
     prisma.librarySectionRequest.count.mockResolvedValue(5);
     const service = new LibrarySectionRequestsService(
       prisma as never,
-      sectionsMock() as never,
+      categoriesMock() as never,
       busMock() as never,
     );
 
@@ -81,7 +81,7 @@ describe('LibrarySectionRequestsService.create', () => {
     const prisma = prismaMock();
     const service = new LibrarySectionRequestsService(
       prisma as never,
-      sectionsMock() as never,
+      categoriesMock() as never,
       busMock() as never,
     );
 
@@ -103,7 +103,7 @@ describe('LibrarySectionRequestsService.decide', () => {
   it('не пускает не-админа', async () => {
     const service = new LibrarySectionRequestsService(
       prismaMock() as never,
-      sectionsMock() as never,
+      categoriesMock() as never,
       busMock() as never,
     );
 
@@ -112,23 +112,25 @@ describe('LibrarySectionRequestsService.decide', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('одобрение заводит раздел и шлёт событие автору', async () => {
+  it('одобрение заводит рубрику и шлёт событие автору', async () => {
     const prisma = prismaMock();
-    const sections = sectionsMock();
+    const categories = categoriesMock();
     const bus = busMock();
     const service = new LibrarySectionRequestsService(
       prisma as never,
-      sections as never,
+      categories as never,
       bus as never,
     );
 
     await service.decide('admin-1', true, 'request-1', { action: 'approve' });
 
-    // Раздел заводится названиями из заявки — переписывать их руками значит
-    // получить раздел, не совпадающий с одобренным.
-    expect(sections.create).toHaveBeenCalledWith(true, {
+    // Рубрика заводится названиями из заявки — переписывать их руками значит
+    // получить рубрику, не совпадающую с одобренной.
+    expect(categories.create).toHaveBeenCalledWith('admin-1', true, {
+      parentId: null,
       titleRu: 'Служение и сева',
       titleEn: 'Service and seva',
+      force: true,
     });
     expect(bus.emit).toHaveBeenCalledWith(
       'library.section-request.decided',
@@ -142,11 +144,11 @@ describe('LibrarySectionRequestsService.decide', () => {
 
   it('при отказе раздел не заводится, но автор всё равно узнаёт', async () => {
     const prisma = prismaMock();
-    const sections = sectionsMock();
+    const categories = categoriesMock();
     const bus = busMock();
     const service = new LibrarySectionRequestsService(
       prisma as never,
-      sections as never,
+      categories as never,
       bus as never,
     );
 
@@ -155,7 +157,7 @@ describe('LibrarySectionRequestsService.decide', () => {
       comment: 'Уже есть «Практика и садхана»',
     });
 
-    expect(sections.create).not.toHaveBeenCalled();
+    expect(categories.create).not.toHaveBeenCalled();
     expect(bus.emit).toHaveBeenCalledWith(
       'library.section-request.decided',
       expect.objectContaining({
@@ -172,7 +174,7 @@ describe('LibrarySectionRequestsService.decide', () => {
     );
     const service = new LibrarySectionRequestsService(
       prisma as never,
-      sectionsMock() as never,
+      categoriesMock() as never,
       busMock() as never,
     );
 

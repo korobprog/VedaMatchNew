@@ -3,8 +3,8 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { librarySections } = require('./library-sections-data.js') as {
-  librarySections: Array<{
+const { libraryRoots } = require('./library-roots-data.js') as {
+  libraryRoots: Array<{
     slug: string;
     titleRu: string;
     titleEn: string;
@@ -194,6 +194,19 @@ const services = [
   },
 ];
 
+/**
+ * Повторяет normalizeTitle() из modules/library/category-slug.ts: сид —
+ * отдельная точка входа и исходники сервиса не подключает, а без этого поля
+ * дубль рубрики верхнего уровня не находился бы поиском похожих.
+ */
+function normalizeSeedTitle(value: string): string {
+  return value
+    .toLocaleLowerCase('ru-RU')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 async function main() {
   await prisma.$transaction(async (transaction) => {
     await transaction.service.deleteMany({
@@ -212,11 +225,23 @@ async function main() {
         create: service,
       });
     }
-    for (const section of librarySections) {
-      await transaction.librarySection.upsert({
-        where: { slug: section.slug },
-        update: section,
-        create: section,
+    // Рубрики верхнего уровня справочника. `path` у корня пустой, родителя
+    // нет; вложенность и порядок дальше правит администрация из интерфейса,
+    // поэтому upsert обновляет только названия и значок, но не position —
+    // иначе повторный сид сбрасывал бы вручную разложенное дерево.
+    for (const root of libraryRoots) {
+      const { position, ...rest } = root;
+      await transaction.libraryCategory.upsert({
+        where: { slug: root.slug },
+        update: rest,
+        create: {
+          ...rest,
+          position,
+          parentId: null,
+          path: '',
+          normalizedRu: normalizeSeedTitle(root.titleRu),
+          normalizedEn: normalizeSeedTitle(root.titleEn),
+        },
       });
     }
     // Пользовательские теги сюда не попадают: upsert идёт по slug, а список
@@ -267,7 +292,7 @@ async function main() {
     }
   });
   console.log(
-    `Seeded ${services.length} services, ${librarySections.length} library sections, ${contactsTags.length} contacts tags, ${marketSections.length} market sections, ${marketCategories.length} market categories and ${noticeRubrics.length} notice rubrics`,
+    `Seeded ${services.length} services, ${libraryRoots.length} library roots, ${contactsTags.length} contacts tags, ${marketSections.length} market sections, ${marketCategories.length} market categories and ${noticeRubrics.length} notice rubrics`,
   );
 }
 
