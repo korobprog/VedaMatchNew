@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { fetchAllowedOfflineIds } from "@/lib/music/offline-api";
+import { dropRevokedTracks } from "@/lib/music/offline-manager";
 import { useMusicPlayer } from "./player-provider";
 
 /**
@@ -22,6 +24,15 @@ export function MusicOfflineIdentity({ userId }: { userId: string }) {
     setOfflineUserId(userId);
     return () => setOfflineUserId(null);
   }, [setOfflineUserId, userId]);
+
+  // Сверка при старте: запись могли снять по жалобе, пока человека не было,
+  // и обещание её убрать действует и на сохранённых копиях. Молча — это
+  // уборка, а не его действие, сообщать не о чем.
+  useEffect(() => {
+    void dropRevokedTracks(userId, fetchAllowedOfflineIds).catch(() => {
+      // Нет сети или запрет хранилища — ничего не трогаем.
+    });
+  }, [userId]);
 
   return null;
 }

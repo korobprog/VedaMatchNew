@@ -145,6 +145,8 @@ export interface MusicPlayerApi {
   toggleMuted(): void;
   togglePrivateSession(): void;
   toggleFavorite(): void;
+  /** Чьё офлайн-хранилище открыто; `null` — вне портала. */
+  offlineUserId: string | null;
   /** Сообщить плееру, чьё офлайн-хранилище использовать. */
   setOfflineUserId(userId: string | null): void;
 }
@@ -768,6 +770,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         setVolumeState(Math.min(1, Math.max(0, value))),
       toggleMuted: () => setMuted((was) => !was),
       togglePrivateSession: () => setPrivateSession((was) => !was),
+      offlineUserId,
       setOfflineUserId,
       toggleFavorite,
     }),

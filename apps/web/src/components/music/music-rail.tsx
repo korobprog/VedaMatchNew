@@ -44,6 +44,7 @@ export function MusicRail({
     | "favorites"
     | "playlists"
     | "history"
+    | "offline"
     | "uploads"
     | "settings";
   uploadsCount?: number;
@@ -93,6 +94,18 @@ export function MusicRail({
         <svg {...iconProps}>
           <circle cx="12" cy="12" r="9" />
           <path d="M12 7v5l3 2" />
+        </svg>
+      ),
+    },
+    {
+      key: "offline",
+      label: "На устройстве",
+      href: "/music/offline",
+      icon: (
+        <svg {...iconProps} className={`${iconProps.className} text-cyan`}>
+          <path d="M12 4v12" />
+          <path d="M8 12l4 4 4-4" />
+          <path d="M4 19h16" />
         </svg>
       ),
     },
