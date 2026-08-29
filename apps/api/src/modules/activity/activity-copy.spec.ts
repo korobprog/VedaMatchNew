@@ -1,16 +1,18 @@
 import { buildActivityTitle, isActivityFeedAction } from './activity-copy';
 
 describe('isActivityFeedAction', () => {
-  it('accepts the four actions shown in the friends feed', () => {
+  it('accepts the public actions shown in the friends feed', () => {
     expect(isActivityFeedAction('motivation.favorite-added')).toBe(true);
     expect(isActivityFeedAction('library.entry-created')).toBe(true);
     expect(isActivityFeedAction('market.listing-created')).toBe(true);
     expect(isActivityFeedAction('market.listing-favorited')).toBe(true);
+    expect(isActivityFeedAction('notices.notice-created')).toBe(true);
   });
 
-  it('rejects actions kept out of the feed for now', () => {
+  // Граница проходит по публичности результата, а не по числу сервисов:
+  // переписка и дата рождения приватны, и в чужой ленте им делать нечего.
+  it('rejects private actions', () => {
     expect(isActivityFeedAction('chat.message-sent')).toBe(false);
-    expect(isActivityFeedAction('notices.notice-created')).toBe(false);
     expect(isActivityFeedAction('astro.birth-data-saved')).toBe(false);
   });
 });
@@ -38,6 +40,25 @@ describe('buildActivityTitle', () => {
     expect(
       buildActivityTitle('market.listing-favorited', 'Мала из туласи'),
     ).toBe('Лайк лота «Мала из туласи»');
+  });
+
+  // Обе карточки говорят о новой записи, но словом «объявление» уже подписан
+  // лот Рынка — в одной полосе они обязаны читаться по-разному.
+  it('does not repeat the market wording for a notices card', () => {
+    const market = buildActivityTitle(
+      'market.listing-created',
+      'Мала из туласи',
+    );
+    const notice = buildActivityTitle(
+      'notices.notice-created',
+      'Нужны руки на переезд',
+    );
+    expect(notice).toBe('Новое на доске: «Нужны руки на переезд»');
+    expect(notice.startsWith('Новое объявление')).toBe(false);
+    expect(notice).not.toBe(market);
+    expect(buildActivityTitle('notices.notice-created', undefined)).toBe(
+      'Новая запись на доске объявлений',
+    );
   });
 
   it('truncates an overlong title with an ellipsis', () => {
