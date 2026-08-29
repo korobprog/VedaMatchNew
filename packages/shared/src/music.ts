@@ -608,3 +608,21 @@ export interface MusicPlaylistTrackResultDto {
   containsTrack: boolean;
   trackCount: number;
 }
+
+// ===== Офлайн (этап 9) =====
+
+/**
+ * Сверка сохранённого на устройстве: клиент присылает свои идентификаторы,
+ * сервер отвечает теми, что ещё разрешены.
+ *
+ * Именно разрешёнными, а не отозванными: тогда неизвестный сервером
+ * идентификатор — мусор из старой версии, чужая ссылка — попадает в «убрать»
+ * сам собой, а не живёт на устройстве вечно.
+ */
+export interface MusicOfflineAllowedRequest {
+  ids: string[];
+}
+
+export interface MusicOfflineAllowedResponse {
+  ids: string[];
+}

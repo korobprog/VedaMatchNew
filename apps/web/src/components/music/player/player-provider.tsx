@@ -26,6 +26,7 @@ import {
   stopPlayback,
   trackStreamUrl,
 } from "@/lib/music-playback-api";
+import { findSavedTrack } from "@/lib/music/offline-db";
 import {
   applyMediaHandlers,
   applyMediaMetadata,
@@ -144,6 +145,8 @@ export interface MusicPlayerApi {
   toggleMuted(): void;
   togglePrivateSession(): void;
   toggleFavorite(): void;
+  /** Сообщить плееру, чьё офлайн-хранилище использовать. */
+  setOfflineUserId(userId: string | null): void;
 }
 
 const MusicPlayerContext = createContext<MusicPlayerApi | null>(null);
@@ -172,6 +175,13 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const [volume, setVolumeState] = useState(1);
   const [muted, setMuted] = useState(false);
   const [isPrivateSession, setPrivateSession] = useState(false);
+  /**
+   * Чьё офлайн-хранилище открывать. Приходит из портального layout, где
+   * человек уже известен: тянуть профиль в корневой layout ради одного
+   * идентификатора значит добавить запрос к каждой странице, включая
+   * лендинг. Пусто — офлайна нет, играем из сети.
+   */
+  const [offlineUserId, setOfflineUserId] = useState<string | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   /**
    * Идти ли к следующей записи, когда текущая кончилась.
@@ -328,12 +338,45 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     const audio = audioRef.current;
     if (!audio || !current) return;
 
-    audio.src = trackStreamUrl(current.id);
-    audio.load();
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    // Сначала своё, потом сеть. Локальный блоб выигрывает не только в
+    // самолёте: по нему браузер перематывает сам, без похода за подписанной
+    // ссылкой и без диапазонных запросов к S3.
+    const play = async () => {
+      let src = trackStreamUrl(current.id);
+      if (offlineUserId) {
+        try {
+          const saved = await findSavedTrack(offlineUserId, current.id);
+          if (saved) {
+            objectUrl = URL.createObjectURL(saved.body);
+            src = objectUrl;
+          }
+        } catch {
+          // Хранилище недоступно (приватный режим, запрет) — идём в сеть.
+        }
+      }
+      if (cancelled) {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        return;
+      }
+      audio.src = src;
+      audio.load();
+    };
+
+    void play();
     setPositionSeconds(0);
     lastTickPositionRef.current = 0;
     listenedRef.current = 0;
-  }, [current]);
+
+    return () => {
+      cancelled = true;
+      // Ссылку на блоб обязательно отзываем: иначе каждая смена записи
+      // оставляет в памяти вкладки копию файла на сотню мегабайт.
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [current, offlineUserId]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -725,6 +768,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         setVolumeState(Math.min(1, Math.max(0, value))),
       toggleMuted: () => setMuted((was) => !was),
       togglePrivateSession: () => setPrivateSession((was) => !was),
+      setOfflineUserId,
       toggleFavorite,
     }),
     [
