@@ -57,7 +57,11 @@ export function MusicPlayButton({
         `absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint transition-opacity duration-200 motion-reduce:transition-none ${
           isCurrent
             ? "opacity-100"
-            : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+            : // На сенсорном экране наведения не бывает: `group-hover` там не
+              // наступает никогда, и кнопка запуска была невидима — с
+              // телефона плитку нельзя было включить, только открыть. Прячем
+              // её только там, где мышь есть.
+              "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
         }`
       }
     >

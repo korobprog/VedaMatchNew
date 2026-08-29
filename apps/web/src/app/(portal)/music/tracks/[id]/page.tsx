@@ -9,6 +9,7 @@ import { MusicAddToPlaylist } from "@/components/music/music-add-to-playlist";
 import { MusicOfflineButton } from "@/components/music/offline-button";
 import { MusicSleepTimerButton } from "@/components/music/sleep-timer-button";
 import { MusicTrackLyrics } from "@/components/music/music-track-lyrics";
+import { MusicListenButton } from "@/components/music/player/listen-button";
 import { MusicQueueActions } from "@/components/music/player/queue-actions";
 import { formatTrackDuration } from "@/lib/music-duration";
 
@@ -115,6 +116,10 @@ export default async function MusicTrackPage({
           </ul>
 
           <div className="mt-1 flex flex-col gap-2">
+            {/* Первым и отдельно от остальных: это то, зачем страницу
+                открывают, а «в плейлист» и «на устройство» — что делают с
+                записью потом. */}
+            <MusicListenButton trackId={track.id} title={track.title} />
             <Suspense fallback={<div className="h-11" />}>
               <MusicAddToPlaylist
                 trackId={track.id}
