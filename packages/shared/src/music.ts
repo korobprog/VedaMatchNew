@@ -627,6 +627,22 @@ export interface MusicOfflineAllowedResponse {
   ids: string[];
 }
 
+/**
+ * Подписанная ссылка на сам файл, выданная отдельным ответом.
+ *
+ * Плееру хватает 302 с маршрута `music/tracks/:id/stream`: `<audio src>` не
+ * подчиняется CORS и спокойно ходит по редиректу. Скачиванию на устройство —
+ * не хватает: `fetch` к порталу идёт с cookie (`credentials: "include"`), и
+ * после редиректа то же требование переносится на бакет, а S3 никогда не
+ * отвечает `Access-Control-Allow-Credentials`. Поэтому адрес берут заранее
+ * этим маршрутом, а за байтами идут уже анонимно — ровно как при заливке.
+ */
+export interface MusicTrackStreamUrlDto {
+  url: string;
+  /** Сколько секунд ссылка ещё действительна. */
+  expiresInSeconds: number;
+}
+
 // ===== Плейлисты друзей =====
 
 /**

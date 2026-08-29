@@ -1,6 +1,5 @@
 import type { MusicTrackDto } from "@vedamatch/shared";
-import { apiFetch } from "@/lib/http-client";
-import { trackStreamUrl } from "@/lib/music-playback-api";
+import { fetchTrackStreamUrl } from "@/lib/music-playback-api";
 import { canFitOffline } from "./offline-capacity";
 import {
   deleteOfflineTrack,
@@ -78,7 +77,17 @@ export async function saveTrackOffline(
 
   await requestPersistence();
 
-  const response = await apiFetch(trackStreamUrl(track.id));
+  // Двумя шагами, а не одним запросом по редиректу. Обращение к порталу
+  // обязано идти с cookie, а браузер переносит это требование и на цель
+  // редиректа: бакет на запрос с учётными данными не отвечает
+  // `Access-Control-Allow-Credentials`, и скачивание падает на CORS —
+  // именно так оно и падало в проде, пока плеер играл нормально (`<audio>`
+  // редирект проходит без CORS вовсе). Поэтому адрес берём отдельно, а за
+  // байтами идём анонимно — как заливка ходит подписанным PUT.
+  const { url } = await fetchTrackStreamUrl(track.id);
+
+  const response = await fetch(url, { credentials: "omit" }).catch(() => null);
+  if (!response) throw new Error("Не удалось скачать запись: нет связи с хранилищем");
   if (!response.ok) {
     throw new Error(
       response.status === 404
