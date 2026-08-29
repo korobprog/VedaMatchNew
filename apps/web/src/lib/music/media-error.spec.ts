@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mediaErrorText } from "./media-error";
+import { mediaErrorText, stalledVerdict } from "./media-error";
 
 const err = (code: number) => ({ code }) as MediaError;
 
@@ -31,5 +31,25 @@ describe("mediaErrorText", () => {
 
   it("незнакомый код не роняет и не молчит", () => {
     expect(mediaErrorText(err(99))).toBe("Не удалось включить запись");
+  });
+});
+
+describe("stalledVerdict", () => {
+  it("начало не пришло — это отказ", () => {
+    expect(stalledVerdict({ readyState: 0, currentTime: 0 })).toBe("failed");
+  });
+
+  it("играло и упёрлось в пустой буфер — не отказ", () => {
+    // Звук вернётся сам; сообщение об ошибке убило бы то, что ещё живо.
+    expect(stalledVerdict({ readyState: 1, currentTime: 42 })).toBe(
+      "buffering",
+    );
+  });
+
+  it("данные есть, но с нулевой секунды — тоже не отказ", () => {
+    // Перемотка в самое начало обнуляет `currentTime`, а буфер остаётся.
+    expect(stalledVerdict({ readyState: 3, currentTime: 0 })).toBe(
+      "buffering",
+    );
   });
 });
