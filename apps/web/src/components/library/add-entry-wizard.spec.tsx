@@ -1,16 +1,17 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { LibraryCategoryDto, LibrarySectionDto } from "@vedamatch/shared";
+import type { LibraryCategoryTreeNode } from "@vedamatch/shared";
 import { AddEntryWizard } from "./add-entry-wizard";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
-const sections: LibrarySectionDto[] = [
+const tree: LibraryCategoryTreeNode[] = [
   {
     id: "s1",
+    parentId: null,
     slug: "philosophy",
     titleRu: "Философия и писания",
     titleEn: "Philosophy",
@@ -18,36 +19,40 @@ const sections: LibrarySectionDto[] = [
     descriptionEn: null,
     iconKey: null,
     position: 0,
-    categoriesCount: 1,
+    depth: 0,
     entriesCount: 0,
-    canEdit: false,
-  },
-];
-
-const categories: LibraryCategoryDto[] = [
-  {
-    id: "c1",
-    sectionId: "s1",
-    sectionSlug: "philosophy",
-    slug: "prabhupada",
-    titleRu: "Шрила Прабхупада",
-    titleEn: "Srila Prabhupada",
-    descriptionRu: null,
-    descriptionEn: null,
-    entriesCount: 0,
+    subtreeEntriesCount: 0,
+    childrenCount: 1,
     createdAt: "2026-08-23T00:00:00.000Z",
     canEdit: false,
+    canMove: false,
+    children: [
+      {
+        id: "c1",
+        parentId: "s1",
+        slug: "prabhupada",
+        titleRu: "Шрила Прабхупада",
+        titleEn: "Srila Prabhupada",
+        descriptionRu: null,
+        descriptionEn: null,
+        iconKey: null,
+        position: 0,
+        depth: 1,
+        entriesCount: 0,
+        subtreeEntriesCount: 0,
+        childrenCount: 0,
+        createdAt: "2026-08-23T00:00:00.000Z",
+        canEdit: false,
+        canMove: false,
+        children: [],
+      },
+    ],
   },
 ];
 
 function setup() {
   return render(
-    <AddEntryWizard
-      locale="ru"
-      sections={sections}
-      categories={categories}
-      initialSectionSlug="philosophy"
-    />,
+    <AddEntryWizard locale="ru" tree={tree} />,
   );
 }
 

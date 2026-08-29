@@ -6,12 +6,12 @@ import type {
   LibraryAdminEntryListResponse,
   LibraryAdminEntryQuery,
   LibraryAdminStats,
-  LibraryCategoryDto,
+  LibraryCategoryPageDto,
+  LibraryCategoryTreeNode,
   LibraryCommentsResponse,
   LibraryEntryDto,
   LibraryFeedResponse,
   LibraryPreferencesDto,
-  LibrarySectionDto,
   LibrarySectionRequestsState,
 } from "@vedamatch/shared";
 import { buildLibraryQuery } from "./library-query";
@@ -34,12 +34,14 @@ async function libraryGet<T>(path: string): Promise<T | null> {
   return (await res.json()) as T;
 }
 
-export const getLibrarySections = () =>
-  libraryGet<LibrarySectionDto[]>("/library/sections");
+/** Всё дерево рубрик: разделов как отдельной сущности больше нет. */
+export const getLibraryCategoryTree = () =>
+  libraryGet<LibraryCategoryTreeNode[]>("/library/categories/tree");
 
-export const getLibraryCategories = (sectionSlug: string) =>
-  libraryGet<LibraryCategoryDto[]>(
-    `/library/categories/section/${encodeURIComponent(sectionSlug)}`,
+/** Рубрика с хлебными крошками и прямыми детьми. */
+export const getLibraryCategoryPage = (slug: string) =>
+  libraryGet<LibraryCategoryPageDto>(
+    `/library/categories/${encodeURIComponent(slug)}`,
   );
 
 export const getLibraryFeed = (
@@ -70,9 +72,9 @@ export const getLibraryAdminDuplicates = () =>
 export const getLibraryAdminSectionRequests = () =>
   libraryGet<LibrarySectionRequestsState>("/library/admin/section-requests");
 
-export const getLibraryAdminCategories = (sectionId?: string) =>
+export const getLibraryAdminCategories = (parentId?: string) =>
   libraryGet<LibraryAdminCategoryDto[]>(
-    `/library/admin/categories${sectionId ? `?sectionId=${encodeURIComponent(sectionId)}` : ""}`,
+    `/library/admin/categories${parentId ? `?parentId=${encodeURIComponent(parentId)}` : ""}`,
   );
 
 export const getLibraryAdminEntries = (query: LibraryAdminEntryQuery) => {

@@ -16,13 +16,10 @@ import { LibraryEntriesService } from './library-entries.service';
 import { LibraryPreferencesController } from './library-preferences.controller';
 import { LibraryPreferencesService } from './library-preferences.service';
 import { LibraryPreviewsService } from './library-previews.service';
-import { LibrarySectionsController } from './library-sections.controller';
-import { LibrarySectionsService } from './library-sections.service';
 
 @Module({
   imports: [AuthModule],
   controllers: [
-    LibrarySectionsController,
     LibraryCategoriesController,
     LibraryEntriesController,
     LibraryCommentsController,
@@ -31,7 +28,6 @@ import { LibrarySectionsService } from './library-sections.service';
     LibrarySectionRequestsController,
   ],
   providers: [
-    LibrarySectionsService,
     LibraryCategoriesService,
     LibraryEntriesService,
     LibraryPreferencesService,

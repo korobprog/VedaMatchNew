@@ -1,45 +1,52 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type {
-  LibraryCategoryDto,
-  LibrarySectionDto,
-} from "@vedamatch/shared";
+import type { LibraryCategoryTreeNode } from "@vedamatch/shared";
 import { AddEntryForm } from "./add-entry-form";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
-const categories: LibraryCategoryDto[] = [
+const tree: LibraryCategoryTreeNode[] = [
   {
-    id: "category-1",
-    sectionId: "section-1",
-    sectionSlug: "philosophy",
-    slug: "gita",
-    titleRu: "Гита",
-    titleEn: null,
-    descriptionRu: null,
-    descriptionEn: null,
-    entriesCount: 2,
-    createdAt: "2026-07-29T10:00:00.000Z",
-    canEdit: false,
-  },
-];
-
-const sections: LibrarySectionDto[] = [
-  {
-    id: "section-1",
+    id: "root-1",
+    parentId: null,
     slug: "philosophy",
     titleRu: "Философия и писания",
     titleEn: "Philosophy",
     descriptionRu: null,
     descriptionEn: null,
     iconKey: null,
-    position: 1,
-    categoriesCount: 1,
-    entriesCount: 2,
+    position: 0,
+    depth: 0,
+    entriesCount: 0,
+    subtreeEntriesCount: 2,
+    childrenCount: 1,
+    createdAt: "2026-07-29T10:00:00.000Z",
     canEdit: false,
+    canMove: false,
+    children: [
+      {
+        id: "category-1",
+        parentId: "root-1",
+        slug: "gita",
+        titleRu: "Гита",
+        titleEn: null,
+        descriptionRu: null,
+        descriptionEn: null,
+        iconKey: null,
+        position: 0,
+        depth: 1,
+        entriesCount: 2,
+        subtreeEntriesCount: 2,
+        childrenCount: 0,
+        createdAt: "2026-07-29T10:00:00.000Z",
+        canEdit: false,
+        canMove: false,
+        children: [],
+      },
+    ],
   },
 ];
 
@@ -62,7 +69,7 @@ describe("AddEntryForm", () => {
       }),
     );
 
-    render(<AddEntryForm locale="ru" categories={categories} />);
+    render(<AddEntryForm locale="ru" tree={tree} />);
 
     await userEvent.type(
       screen.getByLabelText("Адрес ссылки"),
@@ -94,7 +101,7 @@ describe("AddEntryForm", () => {
       }),
     );
 
-    render(<AddEntryForm locale="ru" categories={categories} />);
+    render(<AddEntryForm locale="ru" tree={tree} />);
 
     await userEvent.type(
       screen.getByLabelText("Адрес ссылки"),
@@ -134,9 +141,7 @@ describe("AddEntryForm", () => {
     render(
       <AddEntryForm
         locale="ru"
-        categories={categories}
-        sections={sections}
-        initialSectionSlug="philosophy"
+        tree={tree}
       />,
     );
 
@@ -170,7 +175,7 @@ describe("AddEntryForm", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AddEntryForm locale="ru" categories={categories} />);
+    render(<AddEntryForm locale="ru" tree={tree} />);
 
     await userEvent.type(
       screen.getByLabelText("Адрес ссылки"),

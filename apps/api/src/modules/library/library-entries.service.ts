@@ -25,6 +25,7 @@ import {
   resolveSort,
 } from './library-feed-query';
 import { LibraryBookmarksService } from './library-bookmarks.service';
+import { LibraryCategoriesService } from './library-categories.service';
 import { LibraryPreviewsService } from './library-previews.service';
 import { resolvePreviewUrl } from './preview-url';
 import { normalizeUrl } from './url-normalize';
@@ -57,8 +58,9 @@ export interface UploadedPreviewFile {
 }
 
 export interface LibraryFeedFilters {
-  sectionSlug?: string;
   categorySlug?: string;
+  /** `'false'` — только сама рубрика, без вложенных. */
+  withDescendants?: string;
   type?: string;
   language?: string;
   sort?: string;
@@ -97,7 +99,6 @@ const ENTRY_SELECT = {
           slug: true,
           titleRu: true,
           titleEn: true,
-          section: { select: { slug: true } },
         },
       },
     },
@@ -110,6 +111,7 @@ export class LibraryEntriesService {
     private readonly prisma: PrismaService,
     private readonly previews: LibraryPreviewsService,
     private readonly bookmarks: LibraryBookmarksService,
+    private readonly categories: LibraryCategoriesService,
     private readonly events: EventEmitter2,
   ) {}
 
@@ -493,12 +495,17 @@ export class LibraryEntriesService {
     if (filters.language) {
       where.contentLanguage = normalizeLanguage(filters.language);
     }
+    // Рубрика фильтрует лентой всё своё поддерево: иначе вложение прятало бы
+    // материалы — человек убирает рубрику внутрь другой и видит пустую
+    // ленту родителя. `withDescendants=false` сужает до самой рубрики.
     if (filters.categorySlug) {
-      where.categories = { some: { category: { slug: filters.categorySlug } } };
-    } else if (filters.sectionSlug) {
-      where.categories = {
-        some: { category: { section: { slug: filters.sectionSlug } } },
-      };
+      const ids =
+        filters.withDescendants === 'false'
+          ? null
+          : await this.categories.subtreeIds(filters.categorySlug);
+      where.categories = ids
+        ? { some: { categoryId: { in: ids } } }
+        : { some: { category: { slug: filters.categorySlug } } };
     }
     if (cursor && sort === 'new') {
       where.OR = [
@@ -648,7 +655,6 @@ function toEntryDto(
     categories: entry.categories.map((link) => ({
       id: link.category.id,
       slug: link.category.slug,
-      sectionSlug: link.category.section.slug,
       titleRu: link.category.titleRu,
       titleEn: link.category.titleEn,
     })),

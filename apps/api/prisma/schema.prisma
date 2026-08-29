@@ -590,45 +590,45 @@ model MotivationPost {
 /// Пустое поле означает «взять из окружения», поэтому настройки можно вводить
 /// постепенно, ничего не ломая.
 model MotivationSettings {
-  id                 String                     @id @default("global")
-  videoModel         String?
-  videoSeconds       Int?
-  videoAudio         Boolean?
-  voiceModel         String?
-  voiceName          String?
-  imageModel         String?
+  id                        String                     @id @default("global")
+  videoModel                String?
+  videoSeconds              Int?
+  videoAudio                Boolean?
+  voiceModel                String?
+  voiceName                 String?
+  imageModel                String?
   /// Стиль по умолчанию. Пусто — подбирать автоматически по смыслу и источнику.
-  visualStyle        MotivationVisualStyle?
+  visualStyle               MotivationVisualStyle?
   /// Дневной потолок расхода в долларах. Меняться должен без перевыкладки.
-  dailyBudgetUsd     Decimal?                   @db.Decimal(10, 2)
-  musicModel         String?
+  dailyBudgetUsd            Decimal?                   @db.Decimal(10, 2)
+  musicModel                String?
   /// Трек по умолчанию. Пусто — ролики выходят без подложки.
-  defaultTrackId     String?
+  defaultTrackId            String?
   /// Пользовательские рилсы: рубильник, дневной лимит на человека (админам
   /// лимит не считается) и ИИ-модерация с порогами уверенности. Между
   /// порогами — эскалация к админу. Правила редакции дописываются к промпту
   /// модератора и меняются без деплоя.
-  userReelsEnabled   Boolean                    @default(true)
-  userDailyLimit     Int                        @default(1)
-  aiModerationMode   MotivationAiModerationMode @default(autonomous)
-  aiApproveThreshold Decimal                    @default(0.75) @db.Decimal(3, 2)
-  aiRejectThreshold  Decimal                    @default(0.85) @db.Decimal(3, 2)
-  aiEditorialRules   String?
+  userReelsEnabled          Boolean                    @default(true)
+  userDailyLimit            Int                        @default(1)
+  aiModerationMode          MotivationAiModerationMode @default(autonomous)
+  aiApproveThreshold        Decimal                    @default(0.75) @db.Decimal(3, 2)
+  aiRejectThreshold         Decimal                    @default(0.85) @db.Decimal(3, 2)
+  aiEditorialRules          String?
   /// Ежедневный автоподбор цитат ИИ воркером. Выключен по умолчанию:
   /// редакция решила подбирать цитаты сама. Кнопка «Подготовить цитаты на
   /// сегодня» в админке — отдельный ручной путь, этим флагом не гасится.
-  autoQuoteDiscoveryEnabled Boolean              @default(false)
+  autoQuoteDiscoveryEnabled Boolean                    @default(false)
   /// Сколько жалоб скрывает рилс участника до решения администратора.
-  reportsToHide      Int                        @default(3)
+  reportsToHide             Int                        @default(3)
   /// Можно ли участникам оживлять свои рилсы в видео. Выключено по умолчанию:
   /// ролик стоит заметно дороже картинки, и включать его — решение редакции.
-  userVideoEnabled   Boolean                    @default(false)
+  userVideoEnabled          Boolean                    @default(false)
   /// Голоса, из которых выбирает автор рилса, и предвыбранный. Пустой список —
   /// небольшой набор по умолчанию: показывать человеку два десятка имён
   /// провайдера бессмысленно.
-  userVoices         String[]
-  userVoiceDefault   String?
-  updatedAt          DateTime                   @updatedAt
+  userVoices                String[]
+  userVoiceDefault          String?
+  updatedAt                 DateTime                   @updatedAt
 }
 
 /// Трек музыкальной подложки.
@@ -1584,28 +1584,30 @@ enum LibraryCategoryStatus {
   removed
 }
 
-model LibrarySection {
-  id            String   @id @default(uuid())
-  slug          String   @unique
-  titleRu       String
-  titleEn       String
-  descriptionRu String?
-  descriptionEn String?
-  iconKey       String?
-  position      Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  categories LibraryCategory[]
-
-  @@index([position])
-}
-
+/// Рубрики справочника — одно дерево, а не два уровня «раздел/категория».
+/// Узел верхнего уровня (`parentId = null`) — это бывший LibrarySection;
+/// заводить и выносить наверх такие узлы по-прежнему может только админ.
 model LibraryCategory {
-  id               String                @id @default(uuid())
-  sectionId        String
-  section          LibrarySection        @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  slug             String
+  id       String            @id @default(uuid())
+  parentId String?
+  parent   LibraryCategory?  @relation("LibraryCategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children LibraryCategory[] @relation("LibraryCategoryTree")
+
+  /// Материализованный путь предков вида `.<id>.<id>.` — свой id не входит.
+  /// Даёт поддерево одним `LIKE`, проверку цикла сравнением префиксов
+  /// и глубину без рекурсии. Переезд узла переписывает префикс у него
+  /// и потомков — это десятки строк, не миллионы.
+  path String @default("")
+
+  /// Порядок среди соседей. Ручной: дерево раскладывает администрация,
+  /// и алфавит здесь хуже осмысленной последовательности рубрик.
+  position Int     @default(0)
+  iconKey  String?
+
+  /// Слаг уникален глобально, а не внутри родителя: адрес узла
+  /// `/library/<slug>` не зависит от места в дереве, поэтому перемещение
+  /// не рвёт чужие ссылки и закладки.
+  slug             String                @unique
   titleRu          String?
   titleEn          String?
   descriptionRu    String?
@@ -1618,6 +1620,9 @@ model LibraryCategory {
   mergedIntoId     String?
   mergedInto       LibraryCategory?      @relation("LibraryCategoryMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
   mergedFrom       LibraryCategory[]     @relation("LibraryCategoryMerge")
+  /// Материалы, привязанные к самой рубрике, без потомков. Итог по
+  /// поддереву считает сервис по `path` — держать его здесь значило бы
+  /// обновлять всю цепочку предков на каждую запись.
   entriesCount     Int                   @default(0)
   followersCount   Int                   @default(0)
   openReportsCount Int                   @default(0)
@@ -1627,8 +1632,8 @@ model LibraryCategory {
 
   entries LibraryEntryCategory[]
 
-  @@unique([sectionId, slug])
-  @@index([sectionId, status])
+  @@index([parentId, position])
+  @@index([path])
   @@index([status, entriesCount])
 }
 
@@ -1762,11 +1767,15 @@ enum LibrarySectionRequestStatus {
   rejected
 }
 
-/// Заявка на новый раздел справочника.
+/// Заявка на новую рубрику верхнего уровня.
 ///
-/// Разделы заводит только администрация — это заранее продуманный список
-/// рубрик. Но участнику, которому не нашлось подходящего, нужен выход:
-/// иначе он либо кладёт материал не туда, либо не кладёт вовсе.
+/// Корень дерева заводит только администрация — это заранее продуманный
+/// список рубрик. Но участнику, которому не нашлось подходящей, нужен
+/// выход: иначе он либо кладёт материал не туда, либо не кладёт вовсе.
+///
+/// Известный долг: таблица и поля сохранили слово «Section» с тех пор,
+/// когда разделы были отдельной моделью. Переименование — отдельная
+/// миграция, к смыслу заявки оно ничего не добавляет.
 model LibrarySectionRequest {
   id String @id @default(uuid())
 
@@ -1786,9 +1795,9 @@ model LibrarySectionRequest {
   /// Причина отказа либо комментарий к одобрению — уезжает автору.
   decision    String?
 
-  /// Раздел, созданный по заявке. Хранится, чтобы повторное одобрение не
-  /// завело второй такой же; FK нет — раздел живёт своей жизнью и его
-  /// удаление не должно трогать историю заявок.
+  /// Рубрика верхнего уровня, созданная по заявке. Хранится, чтобы
+  /// повторное одобрение не завело вторую такую же; FK нет — рубрика живёт
+  /// своей жизнью и её удаление не должно трогать историю заявок.
   createdSectionId String?
 
   createdAt DateTime @default(now())
@@ -2042,16 +2051,16 @@ enum AstroCompatibilityPurpose {
 /// получатель не примет запрос явно — точка входа из Union передаёт только id
 /// человека, дальнейшее согласие целиком в astro.
 model AstroCompatibilityRequest {
-  id          String                   @id @default(uuid())
+  id          String                    @id @default(uuid())
   requesterId String
-  requester   User                     @relation("AstroCompatibilityRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  requester   User                      @relation("AstroCompatibilityRequester", fields: [requesterId], references: [id], onDelete: Cascade)
   targetId    String
-  target      User                     @relation("AstroCompatibilityTarget", fields: [targetId], references: [id], onDelete: Cascade)
-  status      AstroCompatibilityStatus @default(pending)
+  target      User                      @relation("AstroCompatibilityTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  status      AstroCompatibilityStatus  @default(pending)
   /// Цель выбирает отправитель. `family` по умолчанию: с неё сервис
   /// начинался, и у всех запросов, созданных до появления целей, она и есть.
   purpose     AstroCompatibilityPurpose @default(family)
-  createdAt   DateTime                 @default(now())
+  createdAt   DateTime                  @default(now())
   respondedAt DateTime?
 
   @@unique([requesterId, targetId])

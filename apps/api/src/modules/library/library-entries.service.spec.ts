@@ -101,6 +101,11 @@ function validBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** Сервису записей от рубрик нужен только список поддерева для фильтра. */
+function categoriesMock() {
+  return { subtreeIds: jest.fn().mockResolvedValue(['category-1']) };
+}
+
 describe('LibraryEntriesService.create', () => {
   it('rejects an overlong url before database access', async () => {
     const prisma = prismaMock();
@@ -108,6 +113,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -125,6 +131,7 @@ describe('LibraryEntriesService.create', () => {
       prismaMock() as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -138,6 +145,7 @@ describe('LibraryEntriesService.create', () => {
       prismaMock() as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -151,6 +159,7 @@ describe('LibraryEntriesService.create', () => {
       prismaMock() as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -168,6 +177,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -191,6 +201,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -216,6 +227,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -242,6 +254,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -261,6 +274,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -275,6 +289,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -301,6 +316,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previews as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -325,6 +341,7 @@ describe('LibraryEntriesService.create', () => {
       prismaMock() as never,
       previews as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -340,6 +357,7 @@ describe('LibraryEntriesService.create', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -356,6 +374,7 @@ describe('LibraryEntriesService.feed', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -386,6 +405,7 @@ describe('LibraryEntriesService.feed', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -401,6 +421,7 @@ describe('LibraryEntriesService.feed', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -421,6 +442,7 @@ describe('LibraryEntriesService canEdit', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -438,6 +460,7 @@ describe('LibraryEntriesService canEdit', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -455,6 +478,7 @@ describe('LibraryEntriesService canEdit', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -494,6 +518,7 @@ describe('LibraryEntriesService.update', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -517,6 +542,7 @@ describe('LibraryEntriesService.update', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -540,6 +566,7 @@ describe('LibraryEntriesService.update', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -557,6 +584,7 @@ describe('LibraryEntriesService.update', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -591,6 +619,7 @@ describe('LibraryEntriesService.update', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -628,6 +657,7 @@ describe('LibraryEntriesService.uploadPreview', () => {
       prisma as never,
       previews as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -657,6 +687,7 @@ describe('LibraryEntriesService.uploadPreview', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -679,6 +710,7 @@ describe('LibraryEntriesService.uploadPreview', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -722,6 +754,7 @@ describe('LibraryEntriesService.remove', () => {
       prisma as never,
       previews as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -748,6 +781,7 @@ describe('LibraryEntriesService.remove', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -770,6 +804,7 @@ describe('LibraryEntriesService.remove', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 
@@ -787,6 +822,7 @@ describe('LibraryEntriesService.remove', () => {
       prisma as never,
       previewsMock() as never,
       bookmarksMock() as never,
+      categoriesMock() as never,
       eventsMock() as never,
     );
 

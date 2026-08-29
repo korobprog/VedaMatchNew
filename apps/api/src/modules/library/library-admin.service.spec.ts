@@ -29,10 +29,16 @@ function createService(categories: Record<string, unknown>) {
       findUnique: jest.fn(({ where }: { where: { id: string } }) =>
         Promise.resolve(categories[where.id] ?? null),
       ),
+      findMany: jest.fn(() =>
+        Promise.resolve([
+          { id: 'root-1', slug: 'main', titleRu: 'Основной', titleEn: 'Main' },
+        ]),
+      ),
       findUniqueOrThrow: jest.fn(() =>
         Promise.resolve({
           id: 'c-1',
-          sectionId: 's-1',
+          parentId: 'root-1',
+          path: '.root-1.',
           slug: 'c-1',
           titleRu: 'Книги',
           titleEn: null,
@@ -42,7 +48,6 @@ function createService(categories: Record<string, unknown>) {
           normalizedRu: 'книги',
           mergedIntoId: 'c-2',
           createdAt: new Date('2026-08-01T00:00:00.000Z'),
-          section: { slug: 'main', titleRu: 'Основной' },
           createdBy: null,
         }),
       ),

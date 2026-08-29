@@ -2,11 +2,10 @@ import Link from "next/link";
 import { redirectToLogin } from "@/lib/require-user";
 import { getProfile } from "@/lib/api";
 import {
-  getLibraryCategories,
+  getLibraryCategoryTree,
   getLibraryComments,
   getLibraryEntry,
   getLibraryPreferences,
-  getLibrarySections,
 } from "@/lib/library-api";
 import { videoEmbedUrl, videoProviderName, videoSource } from "@vedamatch/shared";
 import { Header } from "@/components/header";
@@ -56,13 +55,9 @@ export default async function LibraryEntryPage({
   });
   const embedUrl = entry.url ? videoEmbedUrl(entry.url) : null;
   const provider = entry.url ? videoSource(entry.url)?.provider : undefined;
-  const primarySectionSlug = entry.categories[0]?.sectionSlug;
-  const [comments, sections, editCategories] = await Promise.all([
+  const [comments, tree] = await Promise.all([
     getLibraryComments(entry.id),
-    entry.canEdit ? getLibrarySections() : Promise.resolve(null),
-    entry.canEdit && primarySectionSlug
-      ? getLibraryCategories(primarySectionSlug)
-      : Promise.resolve(null),
+    entry.canEdit ? getLibraryCategoryTree() : Promise.resolve(null),
   ]);
 
   return (
@@ -162,11 +157,10 @@ export default async function LibraryEntryPage({
           />
 
           {/* Куда материал попал: сразу после добавления это единственный
-              способ увидеть его в общем ряду, а не поодиночке. Ведём в первую
-              категорию — она же задаёт раздел. */}
+              способ увидеть его в общем ряду, а не поодиночке. */}
           {entry.categories[0] && (
             <Link
-              href={`/library/${entry.categories[0].sectionSlug}/${entry.categories[0].slug}`}
+              href={`/library/${entry.categories[0].slug}`}
               className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1 hover:text-text-0"
             >
               {t(locale, "entry.openCategory")}
@@ -188,7 +182,7 @@ export default async function LibraryEntryPage({
               <span key={category.id}>
                 {index > 0 && ", "}
                 <Link
-                  href={`/library/${category.sectionSlug}/${category.slug}`}
+                  href={`/library/${category.slug}`}
                   className="hover:text-text-0"
                 >
                   {pickLocalized(locale, {
@@ -211,8 +205,7 @@ export default async function LibraryEntryPage({
             <EditEntryForm
               locale={locale}
               entry={entry}
-              sections={sections ?? []}
-              initialCategories={editCategories ?? []}
+              tree={tree ?? []}
             />
             <div className="mb-6">
               <DeleteEntryButton

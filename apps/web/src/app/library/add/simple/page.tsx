@@ -1,9 +1,8 @@
 import { getProfile } from "@/lib/api";
 import { redirectToLogin } from "@/lib/require-user";
 import {
-  getLibraryCategories,
+  getLibraryCategoryTree,
   getLibraryPreferences,
-  getLibrarySections,
 } from "@/lib/library-api";
 import { Header } from "@/components/header";
 import { BackLink } from "@/components/library/back-link";
@@ -13,21 +12,21 @@ import { t } from "@/components/library/i18n";
 export default async function LibraryAddSimplePage({
   searchParams,
 }: {
-  searchParams: Promise<{ section?: string }>;
+  searchParams: Promise<{ category?: string }>;
 }) {
   const user = await getProfile();
   if (!user) redirectToLogin("/library/add/simple");
 
-  const { section } = await searchParams;
-  const [sections, preferences] = await Promise.all([
-    getLibrarySections(),
+  const { category } = await searchParams;
+  const [tree, preferences] = await Promise.all([
+    getLibraryCategoryTree(),
     getLibraryPreferences(),
   ]);
   const locale = preferences?.uiLanguage ?? "ru";
-  const activeSection = section ?? sections?.[0]?.slug;
-  const categories = activeSection
-    ? await getLibraryCategories(activeSection)
-    : [];
+  const roots = tree ?? [];
+  // Завести рубрику верхнего уровня может только администрация: у неё
+  // единственной есть право двигать дерево, `canMove` это и означает.
+  const canCreateRoot = roots.some((root) => root.canMove);
 
   return (
     <div className="relative min-h-dvh bg-bg-0">
@@ -41,9 +40,9 @@ export default async function LibraryAddSimplePage({
         <section className="glass rounded-2xl border border-glass-brd p-4">
           <AddEntryWizard
             locale={locale}
-            sections={sections ?? []}
-            categories={categories ?? []}
-            initialSectionSlug={activeSection}
+            tree={roots}
+            initialCategorySlug={category}
+            canCreateRoot={canCreateRoot}
           />
         </section>
       </main>
