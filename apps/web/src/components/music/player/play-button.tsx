@@ -1,6 +1,7 @@
 "use client";
 
 import { useMusicPlayer } from "./player-provider";
+import { MusicPlayGlyph, playButtonLabel } from "./play-glyph";
 
 /**
  * Кнопка запуска на карточке каталога.
@@ -31,11 +32,18 @@ export function MusicPlayButton({
   const player = useMusicPlayer();
   const isCurrent = player?.current?.id === trackId;
   const isPlaying = isCurrent && player?.isPlaying;
+  // Ожидание — только у той записи, которую включили. Соседние карточки
+  // крутиться не должны: грузится одна.
+  const state = isCurrent && player?.isLoading
+    ? "loading"
+    : isPlaying
+      ? "playing"
+      : "paused";
 
   return (
     <button
       type="button"
-      aria-label={isPlaying ? `Пауза: ${title}` : `Слушать: ${title}`}
+      aria-label={playButtonLabel(state, title)}
       onClick={(event) => {
         // Кнопка лежит поверх ссылки-обложки: без этого клик заодно уводил
         // бы на страницу записи.
@@ -53,16 +61,7 @@ export function MusicPlayButton({
         }`
       }
     >
-      {isPlaying ? (
-        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
-          <rect x="6" y="4" width="4" height="16" rx="1" />
-          <rect x="14" y="4" width="4" height="16" rx="1" />
-        </svg>
-      ) : (
-        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
-          <path d="M7 4l13 8-13 8z" />
-        </svg>
-      )}
+      <MusicPlayGlyph state={state} />
     </button>
   );
 }

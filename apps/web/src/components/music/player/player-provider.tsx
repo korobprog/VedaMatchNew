@@ -26,6 +26,7 @@ import {
   stopPlayback,
   trackStreamUrl,
 } from "@/lib/music-playback-api";
+import { mediaErrorText } from "@/lib/music/media-error";
 import { findSavedTrack } from "@/lib/music/offline-db";
 import {
   SLEEP_TIMER_OFF,
@@ -110,6 +111,21 @@ export interface MusicPlayerApi {
   queue: string[];
   index: number;
   isPlaying: boolean;
+  /**
+   * Запись просили включить, а звука ещё нет: идём за подписанной ссылкой,
+   * тянем начало файла, ждём буфер. На медленном канале это единственный
+   * промежуток, когда человеку кажется, что нажатие не сработало.
+   */
+  isLoading: boolean;
+  /**
+   * Почему не заиграло. `null` — всё в порядке.
+   *
+   * Молчаливый отказ здесь стоит дороже всего: кнопка возвращается в
+   * «слушать», и человек нажимает её снова и снова, считая, что промахнулся
+   * пальцем. Так пришла жалоба «загрузил записи, они не воспроизводятся» —
+   * без единого слова о причине ни у него, ни у нас.
+   */
+  loadError: string | null;
   positionSeconds: number;
   durationSeconds: number;
   repeat: MusicRepeatMode;
@@ -176,6 +192,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const [queue, setQueue] = useState<string[]>([]);
   const [index, setIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [positionSeconds, setPositionSeconds] = useState(0);
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [repeat, setRepeatState] = useState<MusicRepeatMode>("off");
@@ -609,6 +627,11 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       resumeToRef.current =
         resumeFrom !== undefined && resumeFrom > 0 ? resumeFrom : null;
       setIsPlaying(true);
+      // Ждём с этой секунды, а не с первого `waiting` у элемента: до того
+      // как появится `src`, элемент вообще не знает, что его о чём-то
+      // просили, и кнопка успевала простоять безответной секунду и больше.
+      setIsLoading(true);
+      setLoadError(null);
       void loadTrack(trackId);
     },
     [loadTrack],
@@ -688,6 +711,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     rememberClosed(true);
 
     setIsPlaying(false);
+    setIsLoading(false);
     setCurrent(null);
     setQueue([]);
     setIndex(0);
@@ -711,9 +735,13 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     if (audio.paused) {
       void audio.play();
       setIsPlaying(true);
+      // Готовому буферу вертушка не нужна: мигание на возобновлении паузы
+      // читается как сбой, а не как загрузка.
+      if (audio.readyState < audio.HAVE_FUTURE_DATA) setIsLoading(true);
     } else {
       audio.pause();
       setIsPlaying(false);
+      setIsLoading(false);
       void savePlaybackPosition(current.id, Math.floor(audio.currentTime));
       void stopPlayback();
     }
@@ -799,6 +827,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       queue,
       index,
       isPlaying,
+      isLoading,
+      loadError,
       positionSeconds,
       durationSeconds,
       repeat,
@@ -842,6 +872,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       queue,
       index,
       isPlaying,
+      isLoading,
+      loadError,
       positionSeconds,
       durationSeconds,
       repeat,
@@ -884,7 +916,27 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         onTimeUpdate={handleTimeUpdate}
         onEnded={handleEnded}
         onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
+        /* `playing`, а не `canplay`: первое означает, что звук пошёл, второе
+           — что данных хватает. Между ними на медленном канале умещается
+           заметная пауза, и снимать вертушку на `canplay` значит показать
+           «играет» раньше, чем зазвучало. */
+        onPlaying={() => {
+          setIsLoading(false);
+          setLoadError(null);
+        }}
+        /* Буфер кончился посреди записи — то же ожидание, что и в начале. */
+        onWaiting={() => setIsLoading(true)}
+        onPause={() => {
+          setIsPlaying(false);
+          setIsLoading(false);
+        }}
+        /* Отказ сети или битый файл: вертушка иначе крутится вечно и врёт,
+           что вот-вот заиграет. */
+        onError={() => {
+          setIsPlaying(false);
+          setIsLoading(false);
+          setLoadError(mediaErrorText(audioRef.current?.error ?? null));
+        }}
       />
     </MusicPlayerContext.Provider>
   );
