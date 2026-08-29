@@ -9,6 +9,9 @@ import type {
   CreateMusicPlaylistRequest,
   MusicModerationDecisionRequest,
   MusicReportDecisionRequest,
+  UpdateMusicAlbumRequest,
+  UpdateMusicArtistRequest,
+  UpdateMusicCategoryRequest,
   UpdateMusicPlaylistRequest,
   UpdateMusicTrackRequest,
 } from "@vedamatch/shared";
@@ -61,6 +64,48 @@ export const createMusicCategory = (body: CreateMusicCategoryRequest) =>
   send<unknown>("/music/admin/catalog/categories", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+
+// ---------- Правка и удаление справочников ----------
+//
+// API умел это с самого начала (`PATCH` у всех трёх, `DELETE` у раздела), но
+// клиент звал только `create*` — опечатку в имени исполнителя нельзя было
+// исправить ничем, кроме запроса в базу.
+
+export const updateMusicArtist = (id: string, body: UpdateMusicArtistRequest) =>
+  send<unknown>(`/music/admin/catalog/artists/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+
+export const deleteMusicArtist = (id: string) =>
+  send<unknown>(`/music/admin/catalog/artists/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+
+export const updateMusicAlbum = (id: string, body: UpdateMusicAlbumRequest) =>
+  send<unknown>(`/music/admin/catalog/albums/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+
+export const deleteMusicAlbum = (id: string) =>
+  send<unknown>(`/music/admin/catalog/albums/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+
+export const updateMusicCategory = (
+  id: string,
+  body: UpdateMusicCategoryRequest,
+) =>
+  send<unknown>(`/music/admin/catalog/categories/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+
+export const deleteMusicCategory = (id: string) =>
+  send<unknown>(`/music/admin/catalog/categories/${encodeURIComponent(id)}`, {
+    method: "DELETE",
   });
 
 /** Решение по жалобе. Закрывает все открытые жалобы на эту запись. */

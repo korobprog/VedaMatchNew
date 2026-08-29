@@ -122,6 +122,14 @@ export class MusicAdminCatalogController {
     return this.catalog.updateArtist(isAdmin(user), id, body);
   }
 
+  @Delete('artists/:id')
+  deleteArtist(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.catalog.deleteArtist(isAdmin(user), id);
+  }
+
   @Post('albums')
   createAlbum(
     @CurrentUser() user: AccessTokenPayload,
@@ -137,6 +145,14 @@ export class MusicAdminCatalogController {
     @Body() body: UpdateMusicAlbumRequest,
   ) {
     return this.catalog.updateAlbum(isAdmin(user), id, body);
+  }
+
+  @Delete('albums/:id')
+  deleteAlbum(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.catalog.deleteAlbum(isAdmin(user), id);
   }
 
   @Post('categories')
