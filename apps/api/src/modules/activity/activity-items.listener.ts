@@ -40,6 +40,7 @@ export class ActivityItemsListener {
   @OnEvent(PORTAL_ACTIVITY_EVENTS.motivation)
   @OnEvent(PORTAL_ACTIVITY_EVENTS.library)
   @OnEvent(PORTAL_ACTIVITY_EVENTS.market)
+  @OnEvent(PORTAL_ACTIVITY_EVENTS.notices)
   @OnEvent(PORTAL_ACTIVITY_EVENTS.music)
   onActivity(event: PortalActivityEvent): void {
     if (!isActivityFeedAction(event.action)) return;

@@ -14,6 +14,7 @@ import {
   type NoticeDto,
   type NoticeCalendarResponse,
   type NoticeFeedResponse,
+  type NoticeAudience,
   type NoticeMapResponse,
   type NoticeOccurrenceDto,
   type NoticeImageUploadFailure,
@@ -106,13 +107,30 @@ export class NoticesService {
    * Факт «человек опубликовал объявление» для подписчиков портала. Отдельно
    * от `notices.notice.published`: то уведомление адресовано подписчикам
    * рубрики и несёт `recipientId`, а здесь важен автор.
+   *
+   * Событие самодостаточно, как требует контракт: заголовок и ссылка едут в
+   * нём, потому что подписчик (лента друзей) не имеет права дочитать их из
+   * таблиц Объявлений.
+   *
+   * Объявления с сужённой аудиторией в шину не идут. Лента друзей не знает
+   * ни города зрителя, ни его общин, а проверить это ей негде: карточка
+   * «Нужны руки на переезд» привела бы человека из другой ятры на чужую
+   * запись, которую он и открыть не может. Издатель решает сам — это его
+   * знание, а не подписчика.
    */
-  private announceActivity(userId: string): void {
+  private announceActivity(
+    userId: string,
+    notice: { id: string; title: string | null; audience: NoticeAudience },
+  ): void {
+    if (notice.audience !== 'everyone') return;
     const event: PortalActivityEvent = {
       name: PORTAL_ACTIVITY_EVENTS.notices,
       userId,
       action: 'notices.notice-created',
       occurredAt: new Date().toISOString(),
+      entityId: notice.id,
+      entityLabel: notice.title ?? undefined,
+      link: `/notices/${notice.id}`,
     };
     this.bus.emit(event.name, event);
   }
@@ -485,7 +503,11 @@ export class NoticesService {
         audience: created.audience,
       })
       .catch(() => undefined);
-    this.announceActivity(userId);
+    this.announceActivity(userId, {
+      id: created.id,
+      title: created.titleRu ?? created.titleEn,
+      audience: created.audience,
+    });
     return toNoticeDto(created, userId, now);
   }
 
