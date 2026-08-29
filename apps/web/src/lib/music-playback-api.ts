@@ -10,6 +10,7 @@ import type {
   MusicSettingsDto,
   MusicListenStatsDto,
   MusicTrackDetailDto,
+  MusicTrackStreamUrlDto,
   UpdateMusicSettingsRequest,
 } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
@@ -86,3 +87,26 @@ export const setTrackFavorite = (trackId: string, favorited: boolean) =>
  */
 export const trackStreamUrl = (trackId: string) =>
   `${API_URL}/music/tracks/${encodeURIComponent(trackId)}/stream`;
+
+/**
+ * Подписанный адрес файла ответом, а не редиректом.
+ *
+ * Нужен скачиванию на устройство: за самими байтами идут анонимным `fetch`,
+ * потому что запрос с cookie после редиректа упирается в бакет, который на
+ * учётные данные отвечает без `Access-Control-Allow-Credentials`.
+ */
+export const fetchTrackStreamUrl = async (
+  trackId: string,
+): Promise<MusicTrackStreamUrlDto> => {
+  const res = await apiFetch(
+    `${API_URL}/music/tracks/${encodeURIComponent(trackId)}/stream-url`,
+  );
+  if (!res.ok) {
+    throw new Error(
+      res.status === 404
+        ? "Запись больше не доступна"
+        : `Не удалось скачать запись (${res.status})`,
+    );
+  }
+  return (await res.json()) as MusicTrackStreamUrlDto;
+};
