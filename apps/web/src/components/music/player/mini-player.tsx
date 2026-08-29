@@ -202,7 +202,7 @@ export function MiniPlayer() {
         className="glass pointer-events-auto mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-3 py-2 sm:h-16 sm:flex-nowrap sm:gap-5 sm:px-[18px] sm:py-0"
       >
         {/* Что играет */}
-        <div className="order-1 flex min-w-0 flex-1 items-center gap-3 sm:order-none sm:w-56 sm:flex-none">
+        <div className="order-1 flex min-w-0 flex-1 items-center gap-3 sm:order-none sm:w-40 sm:flex-none lg:w-56">
           <Link
             href={`/music/tracks/${current.id}`}
             aria-label={`Открыть запись: ${current.title}`}
@@ -236,7 +236,7 @@ export function MiniPlayer() {
             с дорожкой становятся прямыми детьми полосы — только так дорожка
             может уехать на свою строку во всю ширину. С `sm` обёртка снова
             коробка, и колонка «кнопки над дорожкой» из макета возвращается. */}
-        <div className="contents sm:flex sm:flex-1 sm:flex-col sm:items-center sm:gap-1.5">
+        <div className="contents sm:flex sm:min-w-0 sm:flex-1 sm:flex-col sm:items-center sm:gap-1.5">
           {/* На телефоне ряд занимает всю строку: иначе он сжимается по
               содержимому, справа остаётся дыра, и растягивать столбикам
               внутри него нечего. На `sm` ширина снова по содержимому — там
@@ -247,7 +247,7 @@ export function MiniPlayer() {
               aria-label="Перемешать"
               aria-pressed={shuffle}
               onClick={player.toggleShuffle}
-              className={`${ctrl} hidden h-7 w-7 sm:flex ${shuffle ? "text-violet" : "text-text-2"}`}
+              className={`${ctrl} hidden h-7 w-7 lg:flex ${shuffle ? "text-violet" : "text-text-2"}`}
             >
               <svg {...icon} className="h-[15px] w-[15px]">
                 <path d="M16 3l4 4-4 4" />
@@ -277,7 +277,7 @@ export function MiniPlayer() {
               aria-label="Предыдущая запись"
               disabled={!hasPrev}
               onClick={player.prev}
-              className={`${ctrl} hidden h-8 w-8 sm:flex`}
+              className={`${ctrl} hidden h-8 w-8 lg:flex`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M19 4L9 12l10 8z" />
@@ -344,7 +344,7 @@ export function MiniPlayer() {
                   repeat === "off" ? "all" : repeat === "all" ? "one" : "off",
                 )
               }
-              className={`${ctrl} hidden h-7 w-7 sm:flex ${repeat === "off" ? "text-text-2" : "text-violet"}`}
+              className={`${ctrl} relative hidden h-7 w-7 lg:flex ${repeat === "off" ? "text-text-2" : "text-violet"}`}
             >
               <svg {...icon} className="h-[15px] w-[15px]">
                 <path d="M17 2l4 4-4 4" />
@@ -382,7 +382,7 @@ export function MiniPlayer() {
             настройки. Очередь и громкость не влезают: очередь есть на
             широком экране и в карточке на главной, громкость на телефоне
             системная. */}
-        <div className="order-2 flex shrink-0 items-center gap-2 sm:order-none sm:w-56 sm:justify-end sm:gap-2.5">
+        <div className="order-2 flex shrink-0 items-center gap-2 sm:order-none sm:w-auto sm:justify-end sm:gap-2.5 lg:w-56">
           <button
             type="button"
             aria-label={`Скорость ${rate.toFixed(2).replace(/0$/, "")}×, сменить`}
@@ -417,7 +417,7 @@ export function MiniPlayer() {
             </svg>
           </button>
 
-          <div className="relative hidden sm:block">
+          <div className="relative hidden lg:block">
             <button
               type="button"
               aria-label="Очередь"
@@ -477,7 +477,7 @@ export function MiniPlayer() {
             aria-label={muted ? "Включить звук" : "Выключить звук"}
             aria-pressed={muted}
             onClick={player.toggleMuted}
-            className={`${ctrl} hidden h-8 w-8 text-text-2 sm:flex`}
+            className={`${ctrl} hidden h-8 w-8 text-text-2 lg:flex`}
           >
             <svg {...icon} className="h-4 w-4">
               <path d="M11 5L6 9H2v6h4l5 4z" />
@@ -555,7 +555,7 @@ function PositionSlider({
   const percent = total > 0 ? Math.min(100, (position / total) * 100) : 0;
 
   return (
-    <div className="order-4 flex w-full items-center gap-2 sm:order-none sm:w-[340px]">
+    <div className="order-4 flex w-full min-w-0 items-center gap-2 sm:order-none sm:w-full sm:max-w-[340px]">
       <span className="font-mono text-[10px] tabular-nums text-text-2">
         {formatTrackDuration(position)}
       </span>
