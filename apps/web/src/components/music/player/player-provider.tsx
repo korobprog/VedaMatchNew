@@ -28,6 +28,12 @@ import {
 } from "@/lib/music-playback-api";
 import { findSavedTrack } from "@/lib/music/offline-db";
 import {
+  SLEEP_TIMER_OFF,
+  shouldStopNow,
+  shouldStopOnEnded,
+  type MusicSleepTimer,
+} from "@/lib/music/sleep-timer";
+import {
   applyMediaHandlers,
   applyMediaMetadata,
   applyMediaPlaybackState,
@@ -147,6 +153,8 @@ export interface MusicPlayerApi {
   toggleFavorite(): void;
   /** Чьё офлайн-хранилище открыто; `null` — вне портала. */
   offlineUserId: string | null;
+  sleepTimer: MusicSleepTimer;
+  setSleepTimer(timer: MusicSleepTimer): void;
   /** Сообщить плееру, чьё офлайн-хранилище использовать. */
   setOfflineUserId(userId: string | null): void;
 }
@@ -184,6 +192,12 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
    * лендинг. Пусто — офлайна нет, играем из сети.
    */
   const [offlineUserId, setOfflineUserId] = useState<string | null>(null);
+  /**
+   * Сон-таймер. В localStorage не зеркалим намеренно: «выключить через
+   * тридцать минут» — про этот вечер, и восстанавливать его через сутки при
+   * открытии вкладки значит остановить музыку без спроса.
+   */
+  const [sleepTimer, setSleepTimer] = useState<MusicSleepTimer>(SLEEP_TIMER_OFF);
   const [isFavorite, setIsFavorite] = useState(false);
   /**
    * Идти ли к следующей записи, когда текущая кончилась.
@@ -452,6 +466,23 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     void loadTrack(queue[target]);
   }, [queue, index, repeat, shuffle, order, loadTrack]);
 
+  /**
+   * Срабатывание сон-таймера. Проверяем секундами, а не одним `setTimeout` на
+   * тридцать минут: вкладку усыпляют, таймеры в фоне растягивают, и заснувший
+   * таймер разбудил бы человека музыкой вместо тишины.
+   */
+  useEffect(() => {
+    if (sleepTimer.mode !== "at") return;
+    const tick = () => {
+      if (!shouldStopNow(sleepTimer, Date.now())) return;
+      audioRef.current?.pause();
+      setIsPlaying(false);
+      setSleepTimer(SLEEP_TIMER_OFF);
+    };
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [sleepTimer]);
+
   const handleEnded = useCallback(() => {
     // `repeat: one` возвращает ту же позицию — перезапускаем вручную, иначе
     // повтор одного трека не сработал бы вовсе.
@@ -461,6 +492,16 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         audio.currentTime = 0;
         void audio.play();
       }
+      return;
+    }
+
+    // Сон-таймер сильнее автоперехода: человек просил тишины после этой
+    // записи, и «следующая» здесь — прямое нарушение просьбы.
+    if (shouldStopOnEnded(sleepTimer, Date.now())) {
+      setIsPlaying(false);
+      setSleepTimer(SLEEP_TIMER_OFF);
+      if (current) void savePlaybackPosition(current.id, positionSeconds);
+      void stopPlayback();
       return;
     }
 
@@ -475,7 +516,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     }
 
     next();
-  }, [repeat, autoplay, current, positionSeconds, next]);
+  }, [repeat, autoplay, current, positionSeconds, next, sleepTimer]);
 
   // ---------- Тик ----------
 
@@ -772,6 +813,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       togglePrivateSession: () => setPrivateSession((was) => !was),
       offlineUserId,
       setOfflineUserId,
+      sleepTimer,
+      setSleepTimer,
       toggleFavorite,
     }),
     [
@@ -803,6 +846,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       skip,
       toggleShuffle,
       toggleFavorite,
+      offlineUserId,
+      sleepTimer,
     ],
   );
 

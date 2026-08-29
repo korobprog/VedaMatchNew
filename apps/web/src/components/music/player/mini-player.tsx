@@ -8,6 +8,7 @@ import { MusicCover } from "@/components/music/music-cover";
 import { MusicMarqueeText } from "@/components/music/marquee-text";
 import { MusicPlayingBars } from "./playing-bars";
 import { SEEK_STEP_SECONDS, useMusicPlayer } from "./player-provider";
+import { MusicSleepCountdown } from "./sleep-countdown";
 import { MusicQueuePanel } from "./queue-panel";
 
 /**
@@ -510,6 +511,12 @@ export function MiniPlayer() {
               className="h-6 w-16 cursor-pointer appearance-none bg-transparent [&::-webkit-slider-runnable-track]:h-[3px] [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-glass-brd [&::-webkit-slider-thumb]:mt-[-4.5px] [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-text-1"
             />
           </label>
+
+          {/* Отсчёт сон-таймера: не кнопка, а состояние. Появляется, только
+              когда таймер заведён, поэтому места в обычной полосе не
+              занимает и наложения не возвращает. Ставят таймер на карточке
+              записи. */}
+          <MusicSleepCountdown />
 
           {/* Свернуть и закрыть — последними в группе, у самого края: это
               действия над самой полосой, а не над записью, и ставить их
