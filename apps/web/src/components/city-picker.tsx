@@ -323,6 +323,9 @@ export function CityPicker({
 }
 
 function CityMap({ location }: { location: ProfileLocation }) {
+  const [open, setOpen] = useState(false);
+  const mapId = useId();
+
   const bbox = [
     location.lon - 0.08,
     location.lat - 0.04,
@@ -337,16 +340,40 @@ function CityMap({ location }: { location: ProfileLocation }) {
 
   return (
     <div className="mt-4 overflow-hidden rounded-xl border border-glass-brd">
-      <div className="bg-bg-1 p-3 text-sm text-text-1">
-        Выбран город: <span className="font-medium">{location.city}</span>
-        {location.country ? `, ${location.country}` : ""}
+      {/* Строка с названием отвечает на вопрос «тот ли город я выбрал» в
+          девяти случаях из десяти, и она бесплатна. Карта нужна там, где
+          названия мало: два Ростова, Маяпур против Маяпури. Поэтому она
+          сложена, а не развёрнута.
+
+          Свёрнута она вместе с `iframe`, а не спрятана классом: карту рисует
+          openstreetmap.org, и незакрытая рамка отправляет туда обращение с
+          координатами человека до того, как он о карте попросил. Заодно с
+          шага онбординга уходят почти три сотни точек по высоте — там под
+          картой пряталась кнопка «Дальше». */}
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-bg-1 p-3 text-sm text-text-1">
+        <span>
+          Выбран город: <span className="font-medium">{location.city}</span>
+          {location.country ? `, ${location.country}` : ""}
+        </span>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={mapId}
+          onClick={() => setOpen((was) => !was)}
+          className="shrink-0 rounded-full border border-glass-brd px-2.5 py-1 text-xs text-text-1 transition hover:text-text-0"
+        >
+          {open ? "Скрыть карту" : "Показать на карте"}
+        </button>
       </div>
-      <iframe
-        title="Карта города проживания"
-        src={`https://www.openstreetmap.org/export/embed.html?${params}`}
-        className="h-72 w-full border-0"
-        loading="lazy"
-      />
+      {open && (
+        <iframe
+          id={mapId}
+          title="Карта города проживания"
+          src={`https://www.openstreetmap.org/export/embed.html?${params}`}
+          className="h-56 w-full border-0 sm:h-72"
+          loading="lazy"
+        />
+      )}
     </div>
   );
 }

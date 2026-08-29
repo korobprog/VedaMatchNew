@@ -170,7 +170,12 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
 
       {error && <Alert tone="error">{error}</Alert>}
 
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Панель шага липнет к низу: на «Городе» под подсказками, чипами,
+          двумя кнопками и картой «Дальше» уезжала за экран, и человек читал
+          это как тупик. Сплошная подложка и рамка сверху — иначе текст
+          проезжает сквозь кнопки. Отрицательные поля растягивают её на всю
+          ширину карточки, как в `review-actions.tsx`. */}
+      <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center gap-3 border-t border-glass-brd bg-bg-0/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
         {step > 0 && (
           <Button
             variant="secondary"
