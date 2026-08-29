@@ -76,17 +76,27 @@ export function MusicQuickWidget({
                 </span>
               </div>
 
+              {/* Пауза, а не только пуск. На главной портала полосы плеера
+                  нет — она спрятана, чтобы две панели одного плеера не
+                  спорили, — и эта кнопка остаётся единственной на экране
+                  телефона. Если бы она всегда звала `play()`, играющую
+                  запись здесь было бы нечем остановить, а нажатие
+                  перезапускало бы её с сохранённой секунды. */}
               <button
                 type="button"
-                aria-label={`Продолжить запись: ${resume.title}`}
-                disabled={!player}
-                onClick={() =>
-                  player?.play(
-                    resume.trackId,
-                    undefined,
-                    resume.positionSeconds,
-                  )
+                aria-label={
+                  player?.isPlaying ? "Пауза" : `Продолжить запись: ${resume.title}`
                 }
+                disabled={!player}
+                onClick={() => {
+                  if (player?.current) player.toggle();
+                  else
+                    player?.play(
+                      resume.trackId,
+                      undefined,
+                      resume.positionSeconds,
+                    );
+                }}
                 className="flex size-11 shrink-0 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint disabled:opacity-40"
               >
                 <svg
@@ -95,7 +105,14 @@ export function MusicQuickWidget({
                   fill="currentColor"
                   aria-hidden="true"
                 >
-                  <path d="M7 4l13 8-13 8z" />
+                  {player?.isPlaying ? (
+                    <>
+                      <rect x="6" y="4" width="4" height="16" rx="1" />
+                      <rect x="14" y="4" width="4" height="16" rx="1" />
+                    </>
+                  ) : (
+                    <path d="M7 4l13 8-13 8z" />
+                  )}
                 </svg>
               </button>
             </div>
