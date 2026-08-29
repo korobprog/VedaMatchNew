@@ -261,25 +261,44 @@ function AcceptedCompatibility({ request }: { request: AstroCompatibilityRequest
     <li className="rounded-xl border border-glass-brd p-4">
       <div className="flex items-baseline justify-between gap-4">
         <span className="font-medium">{request.counterpart.name}</span>
+        {/* Цель рядом с суммой: без неё «21 из 24» выглядит как обычный
+            гуна-милан с потерянными очками, а не как расчёт под дело. */}
         <span className="tabular-nums text-text-2">
-          {score.totalPoints} из {score.maxPoints} ({score.percent}%)
+          {ASTRO_PURPOSE_TITLES[score.purpose]} · {score.totalPoints} из{" "}
+          {score.maxPoints} ({score.percent}%)
         </span>
       </div>
 
       <ul className="mt-3 space-y-1 text-sm">
+        {/* Неучтённые куты остаются на экране, но помечены словом «не в счёт»:
+            для дела и дружбы расчёт короче сватовского, и человек должен
+            видеть, что именно из него выпало. Помечать одной лишь
+            приглушённостью нельзя — состояние обязано читаться текстом
+            (WCAG 1.4.1), в том числе скринридером. */}
         {score.kootas.map((koota) => (
           <li key={koota.key} className="flex items-center justify-between gap-4">
-            <span className="text-text-1">{koota.title}</span>
+            <span className={koota.counted ? "text-text-1" : "text-text-2"}>
+              {koota.title}
+            </span>
             <span className="flex items-center gap-2">
               <span className="h-1.5 w-24 overflow-hidden rounded-full bg-bg-2">
                 <span
-                  className="block h-full bg-gold"
+                  className={`block h-full ${koota.counted ? "bg-gold" : "bg-text-2/40"}`}
                   style={{ width: `${(koota.points / koota.maxPoints) * 100}%` }}
                 />
               </span>
-              <span className="w-10 text-right tabular-nums text-text-2">
-                {koota.points}/{koota.maxPoints}
-              </span>
+              {koota.counted ? (
+                <span className="w-16 text-right tabular-nums text-text-2">
+                  {koota.points}/{koota.maxPoints}
+                </span>
+              ) : (
+                <span
+                  className="w-16 text-right text-xs text-text-2"
+                  title={`Не входит в итог для цели «${ASTRO_PURPOSE_TITLES[score.purpose]}»`}
+                >
+                  не в счёт
+                </span>
+              )}
             </span>
           </li>
         ))}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { Map as LeafletMap, LayerGroup } from "leaflet";
 import type { ChatMapCommunity } from "@vedamatch/shared";
 // Стили Leaflet обязательны: без них слои плиток позиционируются как обычные
@@ -34,6 +35,9 @@ export function CommunitiesMap({
 }: {
   communities: ChatMapCommunity[];
 }) {
+  // Подпись карты идёт через next-intl, как и остальной текст секции: на
+  // английской локали скринридер иначе читал бы русскую строку.
+  const t = useTranslations("Landing.serviceDetail");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<LayerGroup | null>(null);
@@ -144,7 +148,7 @@ export function CommunitiesMap({
     <div
       ref={containerRef}
       role="application"
-      aria-label="Карта общин портала"
+      aria-label={t("mapAriaLabel")}
       className="h-[420px] w-full overflow-hidden rounded-3xl border border-glass-brd"
     />
   );
