@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicCover } from "@/components/music/music-cover";
+import { MusicMarqueeText } from "@/components/music/marquee-text";
 import { SEEK_STEP_SECONDS, useMusicPlayer } from "./player-provider";
 import { MusicQueuePanel } from "./queue-panel";
 
@@ -97,9 +98,15 @@ export function MiniPlayer() {
             />
           </Link>
           <div className="flex min-w-0 flex-col">
-            <span className="truncate text-[13px] font-semibold text-text-0">
-              {current.title}
-            </span>
+            {/* Название едет титрами, когда не помещается: полоса узкая, а
+                «Мир Прокисший (Prod. by…» не даёт узнать запись. Ключ по
+                названию — чтобы при смене записи строка начинала сначала, а
+                не доезжала остаток предыдущей. */}
+            <MusicMarqueeText
+              key={current.id}
+              text={current.title}
+              className="text-[13px] font-semibold text-text-0"
+            />
             <span className="truncate text-[11px] text-text-2">
               {current.artist?.name ?? "Исполнитель не указан"}
             </span>
