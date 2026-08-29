@@ -17,7 +17,10 @@ import type {
   GunaMilanScore,
   NotificationEvent,
 } from '@vedamatch/shared';
-import { resolveDisplayName } from '@vedamatch/shared';
+import {
+  ASTRO_COMPATIBILITY_PURPOSES,
+  resolveDisplayName,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { UsersService } from '../../users/users.service';
 import {
@@ -60,6 +63,13 @@ export class AstroCompatibilityService {
   ): Promise<AstroCompatibilityRequestDto> {
     if (requesterId === targetUserId) {
       throw new BadRequestException('Нельзя сопоставить карту с самой собой');
+    }
+    // `CreateAstroCompatibilityRequest` — интерфейс TypeScript, а не
+    // class-validator: в рантайме сюда доходит что угодно из тела запроса.
+    // Без этой проверки произвольная строка уезжала в Prisma-энум и давала
+    // 500 вместо честного 400.
+    if (!ASTRO_COMPATIBILITY_PURPOSES.includes(purpose)) {
+      throw new BadRequestException('Неизвестная цель сверки карт');
     }
 
     const [requesterBirth, targetUser, requesterUser] = await Promise.all([
