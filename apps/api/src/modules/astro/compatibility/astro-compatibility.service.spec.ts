@@ -78,6 +78,16 @@ describe('AstroCompatibilityService', () => {
       );
     });
 
+    // `CreateAstroCompatibilityRequest` — интерфейс TypeScript, а не
+    // class-validator: в рантайме сюда доходит что угодно из тела запроса, и
+    // произвольная строка раньше уезжала в Prisma-энум, давая 500.
+    it('отбивает неизвестную цель четырьмястами, а не пятьюстами', async () => {
+      await expect(
+        service.createRequest('u1', 'u2', 'свадьба' as never),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.astroCompatibilityRequest.create).not.toHaveBeenCalled();
+    });
+
     it('требует собственные данные рождения у инициатора', async () => {
       prisma.astroBirthData.findUnique.mockResolvedValue(null);
       await expect(service.createRequest('u1', 'u2')).rejects.toThrow(

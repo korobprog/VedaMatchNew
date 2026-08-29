@@ -163,7 +163,8 @@
       "statTalks": "Open conversations",
       "readyTitle": "Ready to try “{name}”?",
       "readyDescription": "First month free, with access to all 8 platform services in one account.",
-      "createAccount": "Create an account"
+      "createAccount": "Create an account",
+      "mapAriaLabel": "Map of portal communities"
     }
   },
   "Updates": {

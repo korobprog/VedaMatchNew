@@ -20,14 +20,19 @@ function toExcerpt(text: string): string {
 
 /**
  * Действия, которые попадают в ленту друзей. Список короче, чем
- * `PORTAL_ACTIVITY_ACTIONS`: чат, объявления-Notices и Астро остаются только
- * в шине баллов (`rewards`) — в первой версии ленты их не показываем.
+ * `PORTAL_ACTIVITY_ACTIONS`, и граница проходит по публичности результата:
+ * лента показывает то, что человек и так выложил на общий обзор.
+ *
+ * Чат и Астро сюда не попадут никогда — переписка и дата рождения приватны,
+ * и «написал сообщение» в чужой ленте это утечка поведения, а не новость.
+ * Они остаются только в шине баллов (`rewards`).
  */
 export const ACTIVITY_FEED_ACTIONS = [
   'motivation.favorite-added',
   'library.entry-created',
   'market.listing-created',
   'market.listing-favorited',
+  'notices.notice-created',
   'music.track-favorited',
   'music.playlist-published',
 ] as const satisfies readonly PortalActivityAction[];
@@ -59,6 +64,13 @@ export function buildActivityTitle(
       return entityLabel
         ? `Лайк лота «${toExcerpt(entityLabel)}»`
         : 'Лайк лота на Рынке';
+    // Не «новое объявление»: этими словами уже подписан лот Рынка, и две
+    // одинаковые карточки из разных сервисов в одной полосе не различить.
+    // Разводим по месту, а не по слову.
+    case 'notices.notice-created':
+      return entityLabel
+        ? `Новое на доске: «${toExcerpt(entityLabel)}»`
+        : 'Новая запись на доске объявлений';
     // Не «лайк»: этим словом уже подписаны Вдохновение и Рынок, и третье
     // одинаковое начало в одной бегущей полосе не различить.
     case 'music.track-favorited':
