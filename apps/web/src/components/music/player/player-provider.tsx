@@ -55,6 +55,32 @@ import {
 
 const STORAGE_KEY = "vedamatch:music-player";
 
+/**
+ * Отметка «полосу закрыли в этом браузере».
+ *
+ * Нужна, чтобы крестик пережил перезагрузку: без неё возобновление с сервера
+ * поднимало полосу обратно на первой же открытой странице. Снимается сама,
+ * как только человек что-нибудь запустил.
+ */
+const CLOSED_KEY = "vedamatch:music-player-closed";
+
+function wasClosedHere(): boolean {
+  try {
+    return window.localStorage.getItem(CLOSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function rememberClosed(closed: boolean): void {
+  try {
+    if (closed) window.localStorage.setItem(CLOSED_KEY, "1");
+    else window.localStorage.removeItem(CLOSED_KEY);
+  } catch {
+    // Приватный режим и запрет хранилища — не повод не работать.
+  }
+}
+
 /** Тик плеера. Реже — теряется позиция, чаще — лишний шум в базе. */
 const HEARTBEAT_MS = 30_000;
 
@@ -104,6 +130,8 @@ export interface MusicPlayerApi {
   removeFromQueue(at: number): void;
   /** Очистить очередь, оставив то, что звучит. */
   clearQueue(): void;
+  /** Остановить и убрать полосу совсем. Позиция сохраняется. */
+  close(): void;
   toggle(): void;
   next(): void;
   prev(): void;
@@ -248,6 +276,13 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      // Человек закрыл полосу — не поднимаем её обратно перезагрузкой.
+      // Возобновление с сервера нужно для другого устройства, а не для того,
+      // чтобы отменять только что нажатый крестик. Запись при этом не
+      // потеряна: карточка «Продолжить» на главной читает то же состояние
+      // сервера напрямую и вернёт её с той же секунды.
+      if (wasClosedHere()) return;
+
       const state = await getPlaybackState();
       if (cancelled || !state?.trackId) return;
       // Локальное зеркало важнее: оно свежее и уже показано человеку.
@@ -453,6 +488,9 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
 
   const play = useCallback(
     (trackId: string, nextQueue?: string[], resumeFrom?: number) => {
+      // Запустили — значит полоса снова нужна, и прежний крестик забыт.
+      rememberClosed(false);
+
       const list = nextQueue && nextQueue.length > 0 ? nextQueue : [trackId];
       const at = Math.max(0, list.indexOf(trackId));
       setQueue(list);
@@ -518,6 +556,37 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     },
     [current],
   );
+
+  /**
+   * Закрыть плеер: остановить и убрать полосу совсем.
+   *
+   * Позицию сохраняем перед остановкой — закрытая запись не теряется,
+   * карточка «Продолжить» на главной вернёт её с той же секунды. Поэтому
+   * случайное закрытие не стоит человеку ничего.
+   *
+   * Зеркало в `localStorage` стираем: иначе следующее открытие портала
+   * подняло бы полосу обратно, хотя человек её убрал.
+   */
+  const close = useCallback(() => {
+    const audio = audioRef.current;
+    audio?.pause();
+
+    if (current) void savePlaybackPosition(current.id, positionSeconds);
+    void stopPlayback();
+
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Запрет хранилища не повод не закрыться.
+    }
+    rememberClosed(true);
+
+    setIsPlaying(false);
+    setCurrent(null);
+    setQueue([]);
+    setIndex(0);
+    setPositionSeconds(0);
+  }, [current, positionSeconds]);
 
   /** Очистить очередь, оставив то, что звучит. */
   const clearQueue = useCallback(() => {
@@ -640,6 +709,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       addToQueue,
       removeFromQueue,
       clearQueue,
+      close,
       toggle,
       next,
       prev,
@@ -678,6 +748,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       addToQueue,
       removeFromQueue,
       clearQueue,
+      close,
       toggle,
       next,
       prev,

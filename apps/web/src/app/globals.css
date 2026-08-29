@@ -890,6 +890,17 @@ body:has([data-music-player]) {
   }
 }
 
+/* Свёрнутая полоса — одна строка h-12 на любой ширине.
+ *
+ * Правило одно на оба брейкпоинта и без медиазапроса: свёрнутый вид не
+ * зависит от ширины. Побеждает оно за счёт специфичности — два атрибута
+ * против одного, — а не за счёт места в файле, так что переставить его
+ * куда-нибудь выше безопасно.
+ */
+body:has([data-music-player][data-collapsed="true"]) {
+  padding-bottom: calc(48px + max(0.75rem, env(safe-area-inset-bottom)));
+}
+
 /* Safe area padding for iOS */
 .safe-top {
   padding-top: env(safe-area-inset-top);

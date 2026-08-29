@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicCover } from "@/components/music/music-cover";
@@ -34,9 +34,48 @@ const icon = {
   "aria-hidden": true,
 };
 
+/**
+ * Свёрнута ли полоса. Помним между переходами и перезагрузками: иначе
+ * человек сворачивает её на каждой странице заново, и сворачивание теряет
+ * весь смысл.
+ */
+const COLLAPSED_KEY = "vedamatch:music-player-collapsed";
+
 export function MiniPlayer() {
   const player = useMusicPlayer();
   const [queueOpen, setQueueOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
+  /* Читаем эффектом, а не ленивым `useState`: на сервере `localStorage` нет,
+     инициализатор вернул бы «развёрнута», а на клиенте — «свёрнута», и это
+     расхождение гидратации. Тем же способом читает своё значение провайдер
+     плеера и `theme-provider`. */
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- см. комментарий
+       выше: ленивый useState здесь даёт расхождение гидратации. Тот же
+       приём и та же причина, что в `player-provider.tsx` и
+       `theme-provider.tsx`. */
+    try {
+      if (window.localStorage.getItem(COLLAPSED_KEY) === "1") {
+        setCollapsed(true);
+      }
+    } catch {
+      // Приватный режим и запрет хранилища — не повод не работать.
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((was) => {
+      const next = !was;
+      try {
+        window.localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        // см. выше
+      }
+      return next;
+    });
+  };
 
   // Полосы нет ни у гостя, ни когда слушать нечего.
   if (!player?.current) return null;
@@ -73,8 +112,86 @@ export function MiniPlayer() {
       // полоса лежит поверх страницы, и без отступа снизу последняя строка
       // любого раздела портала оказывалась под ней.
       data-music-player=""
+      // Свёрнутой полосе нужно меньше места, и отступ страницы обязан
+      // следовать за ней: иначе под полоской в 48 точек остаётся дыра в 150.
+      // Правило — в globals.css рядом с основным.
+      data-collapsed={collapsed ? "true" : "false"}
       className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
     >
+      {collapsed ? (
+        /* Свёрнутая полоска: обложка, название и пуск. Всё остальное — в
+           развёрнутом виде и на странице записи. Смысл ровно один: «не
+           мешай, но играй», поэтому здесь нет ни дорожки, ни перемотки. */
+        <section
+          aria-label="Плеер, свёрнут"
+          className="glass pointer-events-auto mx-auto flex h-12 max-w-5xl items-center gap-2.5 rounded-2xl px-2.5"
+        >
+          <Link
+            href={`/music/tracks/${current.id}`}
+            aria-label={`Открыть запись: ${current.title}`}
+            className="size-8 shrink-0 overflow-hidden rounded-lg"
+          >
+            <MusicCover
+              url={current.coverUrl}
+              seed={current.id}
+              alt=""
+              rounded="rounded-lg"
+            />
+          </Link>
+
+          <MusicMarqueeText
+            key={current.id}
+            text={current.title}
+            className="min-w-0 flex-1 text-[13px] font-semibold text-text-0"
+          />
+
+          <MusicPlayingBars
+            playing={isPlaying}
+            className="h-3.5 w-14 shrink-0 max-[380px]:hidden"
+          />
+
+          <button
+            type="button"
+            aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
+            onClick={player.toggle}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint"
+          >
+            {isPlaying ? (
+              <svg viewBox="0 0 24 24" className="size-3" fill="currentColor" aria-hidden="true">
+                <rect x="6" y="4" width="4" height="16" rx="1" />
+                <rect x="14" y="4" width="4" height="16" rx="1" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" className="size-3" fill="currentColor" aria-hidden="true">
+                <path d="M7 4l13 8-13 8z" />
+              </svg>
+            )}
+          </button>
+
+          <button
+            type="button"
+            aria-label="Развернуть плеер"
+            aria-expanded={false}
+            onClick={toggleCollapsed}
+            className={`${ctrl} size-8`}
+          >
+            <svg {...icon} className="size-4">
+              <path d="M18 15l-6-6-6 6" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            aria-label="Закрыть плеер"
+            onClick={player.close}
+            className={`${ctrl} size-8`}
+          >
+            <svg {...icon} className="size-4">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </section>
+      ) : (
       <section
         aria-label="Плеер"
         // На телефоне полоса в две строки, как в макете Main.dc.html: в одну
@@ -384,8 +501,36 @@ export function MiniPlayer() {
               className="h-6 w-16 cursor-pointer appearance-none bg-transparent [&::-webkit-slider-runnable-track]:h-[3px] [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-glass-brd [&::-webkit-slider-thumb]:mt-[-4.5px] [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-text-1"
             />
           </label>
+
+          {/* Свернуть и закрыть — последними в группе, у самого края: это
+              действия над самой полосой, а не над записью, и ставить их
+              вперемешку с сердцем и скоростью значит путать два разных
+              предмета. */}
+          <button
+            type="button"
+            aria-label="Свернуть плеер"
+            aria-expanded={true}
+            onClick={toggleCollapsed}
+            className={`${ctrl} h-9 w-9 text-text-2 sm:h-8 sm:w-8`}
+          >
+            <svg {...icon} className="h-4 w-4">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            aria-label="Закрыть плеер"
+            onClick={player.close}
+            className={`${ctrl} h-9 w-9 text-text-2 sm:h-8 sm:w-8`}
+          >
+            <svg {...icon} className="h-4 w-4">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
         </div>
       </section>
+      )}
     </div>
   );
 }
