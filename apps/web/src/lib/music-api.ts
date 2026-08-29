@@ -18,6 +18,7 @@ import type {
   MusicTrackListQuery,
   MusicSettingsDto,
   MusicTrackDto,
+  MusicFriendPlaylistsDto,
   MyMusicPlaylistsDto,
   MyMusicUploadsDto,
 } from "@vedamatch/shared";
@@ -53,6 +54,16 @@ export function getMusicCatalog(): Promise<MusicCatalogDto | null> {
 /** Свои плейлисты — для рельса, каталога и страницы списка. */
 export function getMyMusicPlaylists(): Promise<MyMusicPlaylistsDto | null> {
   return musicGet<MyMusicPlaylistsDto>("/music/playlists");
+}
+
+/**
+ * Плейлисты тех, кто открыл мне доступ. `null` — гость.
+ *
+ * Серверный запрос, а не браузерный: список рисуется сразу с именами и
+ * обложками, без прыжка после гидратации.
+ */
+export function getFriendMusicPlaylists(): Promise<MusicFriendPlaylistsDto | null> {
+  return musicGet<MusicFriendPlaylistsDto>("/music/playlists/friends");
 }
 
 /** Страница плейлиста. `null` — чужой закрытый или несуществующий. */

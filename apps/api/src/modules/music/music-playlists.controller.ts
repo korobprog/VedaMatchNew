@@ -54,6 +54,15 @@ export class MusicPlaylistsController {
   }
 
   /**
+   * Плейлисты тех, кто открыл мне доступ. Выше `@Get(':id')` намеренно:
+   * иначе Nest примет «friends» за идентификатор.
+   */
+  @Get('friends')
+  listFriends(@CurrentUser() user: AccessTokenPayload) {
+    return this.playlists.listFriendPlaylists(user.sub);
+  }
+
+  /**
    * Страница плейлиста. Ниже `@Get()` и выше остальных `:id` — порядок здесь
    * не случаен: Nest берёт первый подошедший маршрут.
    */
@@ -69,6 +78,12 @@ export class MusicPlaylistsController {
     @Body() body: UpdateMusicPlaylistRequest,
   ) {
     return this.playlists.update(user.sub, id, body);
+  }
+
+  /** Забрать чужой плейлист себе копией. */
+  @Post(':id/copy')
+  copy(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.playlists.copyToSelf(user.sub, id);
   }
 
   @Delete(':id')

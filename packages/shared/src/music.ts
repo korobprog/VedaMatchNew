@@ -626,3 +626,23 @@ export interface MusicOfflineAllowedRequest {
 export interface MusicOfflineAllowedResponse {
   ids: string[];
 }
+
+// ===== Плейлисты друзей =====
+
+/**
+ * Чужой плейлист в списке «У друзей»: сам плейлист плюс тот, чей он.
+ *
+ * Владелец едет рядом, а не дочитывается отдельным запросом: список без имён
+ * бесполезен, а имя портальное — его отдаёт `resolveDisplayName`.
+ */
+export interface MusicFriendPlaylistDto extends MusicPlaylistDto {
+  owner: {
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+  };
+}
+
+export interface MusicFriendPlaylistsDto {
+  items: MusicFriendPlaylistDto[];
+}

@@ -191,7 +191,23 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
    * идентификатора значит добавить запрос к каждой странице, включая
    * лендинг. Пусто — офлайна нет, играем из сети.
    */
-  const [offlineUserId, setOfflineUserId] = useState<string | null>(null);
+  const [offlineUserId, setOfflineUserIdState] = useState<string | null>(null);
+  /**
+   * То же значение в ref — и это не дублирование ради удобства.
+   *
+   * Эффект ниже присваивает `audio.src` и зовёт `load()`, а `load()` сбрасывает
+   * воспроизведение в начало. Если этот эффект зависит от идентификатора,
+   * любой его перещёлк останавливает музыку — а он щёлкает на каждом уходе со
+   * страницы портала: идентификатор приходит из портального layout, и тот
+   * размонтируется, когда человек открывает страницу вне группы `(portal)`.
+   * Через ref эффект читает актуальное значение, но не перезапускается от
+   * него.
+   */
+  const offlineUserIdRef = useRef<string | null>(null);
+  const setOfflineUserId = useCallback((next: string | null) => {
+    offlineUserIdRef.current = next;
+    setOfflineUserIdState(next);
+  }, []);
   /**
    * Сон-таймер. В localStorage не зеркалим намеренно: «выключить через
    * тридцать минут» — про этот вечер, и восстанавливать его через сутки при
@@ -362,9 +378,10 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     // ссылкой и без диапазонных запросов к S3.
     const play = async () => {
       let src = trackStreamUrl(current.id);
-      if (offlineUserId) {
+      const savedFor = offlineUserIdRef.current;
+      if (savedFor) {
         try {
-          const saved = await findSavedTrack(offlineUserId, current.id);
+          const saved = await findSavedTrack(savedFor, current.id);
           if (saved) {
             objectUrl = URL.createObjectURL(saved.body);
             src = objectUrl;
@@ -392,7 +409,10 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       // оставляет в памяти вкладки копию файла на сотню мегабайт.
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [current, offlineUserId]);
+    // Зависимость только от записи. Идентификатор читается из ref намеренно:
+    // см. комментарий к `offlineUserIdRef` — иначе музыка обрывается при
+    // каждом переходе между сервисами.
+  }, [current]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -847,6 +867,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       toggleShuffle,
       toggleFavorite,
       offlineUserId,
+      setOfflineUserId,
       sleepTimer,
     ],
   );

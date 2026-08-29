@@ -59,7 +59,10 @@ function prismaMock() {
     },
     musicSettings: { findUnique: jest.fn().mockResolvedValue(null) },
     // Портальный граф доступа: `null` — доступ не открыт.
-    activityFollow: { findFirst: jest.fn().mockResolvedValue(null) },
+    activityFollow: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     $transaction: jest
       .fn()
       .mockImplementation((ops: unknown[]) => Promise.all(ops)),
@@ -312,5 +315,157 @@ describe('MusicPlaylistsService.moveTrack', () => {
     await expect(service(prisma).moveTrack('u1', 'p1', 't1', 0)).rejects.toThrow(
       ForbiddenException,
     );
+  });
+});
+
+describe('MusicPlaylistsService.listFriendPlaylists', () => {
+  const friendRow = (over = {}) => ({
+    id: 'p-friend',
+    title: 'Утренний киртан',
+    description: null,
+    coverKey: null,
+    visibility: 'friends',
+    trackCount: 3,
+    isSystem: false,
+    updatedAt: new Date('2026-08-29T00:00:00Z'),
+    owner: {
+      id: 'friend-1',
+      name: 'Мирское имя',
+      spiritualName: 'Говинда прия д. д.',
+      avatarUrl: null,
+    },
+    ...over,
+  });
+
+  it('без открытых доступов не ходит в базу вовсе', async () => {
+    const prisma = prismaMock();
+
+    await expect(service(prisma).listFriendPlaylists('u1')).resolves.toEqual({
+      items: [],
+    });
+    expect(prisma.musicPlaylist.findMany).not.toHaveBeenCalled();
+  });
+
+  it('спрашивает только у тех, кто открыл доступ', async () => {
+    const prisma = prismaMock();
+    prisma.activityFollow.findMany.mockResolvedValue([
+      { granterId: 'friend-1', source: 'union' },
+      { granterId: 'friend-1', source: 'contacts' },
+    ]);
+    prisma.musicPlaylist.findMany.mockResolvedValue([friendRow()]);
+
+    await service(prisma).listFriendPlaylists('u1');
+
+    const where = prisma.musicPlaylist.findMany.mock.calls[0][0].where;
+    // Дубль по двум источникам доступа схлопнут: один человек — один раз.
+    expect(where.ownerId.in).toEqual(['friend-1']);
+    expect(where.visibility.in).toEqual(['friends', 'public']);
+    expect(where.isSystem).toBe(false);
+    // Пустой плейлист зовёт в никуда.
+    expect(where.trackCount).toEqual({ gt: 0 });
+  });
+
+  it('наружу отдаёт духовное имя, а не мирское', async () => {
+    const prisma = prismaMock();
+    prisma.activityFollow.findMany.mockResolvedValue([
+      { granterId: 'friend-1', source: 'union' },
+    ]);
+    prisma.musicPlaylist.findMany.mockResolvedValue([friendRow()]);
+
+    const { items } = await service(prisma).listFriendPlaylists('u1');
+
+    expect(items[0].owner.name).toBe('Говинда прия д. д.');
+  });
+
+  // Связь `SetNull`: уход администратора не уносит подборку, но показывать
+  // её в списке «у друзей» не от кого.
+  it('плейлист без владельца пропускает', async () => {
+    const prisma = prismaMock();
+    prisma.activityFollow.findMany.mockResolvedValue([
+      { granterId: 'friend-1', source: 'union' },
+    ]);
+    prisma.musicPlaylist.findMany.mockResolvedValue([friendRow({ owner: null })]);
+
+    const { items } = await service(prisma).listFriendPlaylists('u1');
+
+    expect(items).toEqual([]);
+  });
+});
+
+describe('MusicPlaylistsService.copyToSelf', () => {
+  const source = (over = {}) => ({
+    id: 'p-friend',
+    title: 'Утренний киртан',
+    description: null,
+    visibility: 'friends',
+    isSystem: false,
+    ownerId: 'friend-1',
+    owner: { name: 'Мирское имя', spiritualName: 'Говинда прия д. д.' },
+    ...over,
+  });
+
+  it('чужой закрытый не копируется — 404, а не 403', async () => {
+    const prisma = prismaMock();
+    prisma.musicPlaylist.findUnique.mockResolvedValue(
+      source({ visibility: 'private' }),
+    );
+
+    await expect(service(prisma).copyToSelf('u1', 'p-friend')).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(prisma.musicPlaylist.create).not.toHaveBeenCalled();
+  });
+
+  it('при открытом доступе копирует записи и их порядок', async () => {
+    const prisma = prismaMock();
+    prisma.musicPlaylist.findUnique.mockResolvedValue(source());
+    prisma.activityFollow.findFirst.mockResolvedValue({ id: 'f1' });
+    // Один и тот же мок обслуживает и копирование, и подсчёт длительности:
+    // отдаём обе формы сразу, чтобы не подменять его посреди вызова.
+    prisma.musicPlaylistItem.findMany.mockResolvedValue([
+      { trackId: 't1', playlistId: 'p-new', track: { durationSeconds: 100 } },
+      { trackId: 't2', playlistId: 'p-new', track: { durationSeconds: 200 } },
+    ]);
+
+    await service(prisma).copyToSelf('u1', 'p-friend');
+
+    const data = prisma.musicPlaylist.create.mock.calls[0][0].data;
+    expect(data.ownerId).toBe('u1');
+    expect(data.trackCount).toBe(2);
+    expect(data.items.create.map((i: { trackId: string }) => i.trackId)).toEqual(
+      ['t1', 't2'],
+    );
+    // Позиции разрежённые и по возрастанию — порядок оригинала сохранён.
+    const positions = data.items.create.map(
+      (i: { position: number }) => i.position,
+    );
+    expect(positions[0]).toBeLessThan(positions[1]);
+  });
+
+  // Чужой плейлист, ставший у меня открытым, разошёлся бы по кругу без ведома
+  // того, кто его собрал.
+  it('копия всегда личная и подписана, от кого', async () => {
+    const prisma = prismaMock();
+    prisma.musicPlaylist.findUnique.mockResolvedValue(source());
+    prisma.activityFollow.findFirst.mockResolvedValue({ id: 'f1' });
+
+    await service(prisma).copyToSelf('u1', 'p-friend');
+
+    const data = prisma.musicPlaylist.create.mock.calls[0][0].data;
+    expect(data.visibility).toBe('private');
+    expect(data.title).toBe('Утренний киртан — от Говинда прия д. д.');
+  });
+
+  it('подборку редакции копировать можно и без доступа', async () => {
+    const prisma = prismaMock();
+    prisma.musicPlaylist.findUnique.mockResolvedValue(
+      source({ isSystem: true, ownerId: null, owner: null }),
+    );
+
+    await service(prisma).copyToSelf('u1', 'p-sys');
+
+    expect(prisma.musicPlaylist.create).toHaveBeenCalled();
+    const data = prisma.musicPlaylist.create.mock.calls[0][0].data;
+    expect(data.title).toBe('Утренний киртан — копия');
   });
 });

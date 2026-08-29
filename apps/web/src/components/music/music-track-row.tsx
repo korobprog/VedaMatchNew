@@ -3,6 +3,7 @@ import type { MusicTrackDto } from "@vedamatch/shared";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicCover } from "./music-cover";
 import { MusicFavoriteButton } from "./favorites-provider";
+import { MusicPlayButton } from "./player/play-button";
 
 /**
  * Запись строкой — для списков внутри альбома, исполнителя и очереди.
@@ -12,10 +13,17 @@ import { MusicFavoriteButton } from "./favorites-provider";
 export function MusicTrackRow({
   track,
   position,
+  queue,
 }: {
   track: MusicTrackDto;
   /** Номер в программе. Без него порядок записи читается как случайный. */
   position?: number;
+  /**
+   * Записи секции. Со списком каталога строку надо уметь запустить прямо
+   * отсюда: человек выбрал список ровно затем, чтобы не открывать каждую
+   * запись по очереди.
+   */
+  queue?: string[];
 }) {
   return (
     // Сердце — сосед ссылки, а не её содержимое: кнопка внутри ссылки это
@@ -51,6 +59,22 @@ export function MusicTrackRow({
           {formatTrackDuration(track.durationSeconds)}
         </span>
       </Link>
+
+      {/* Кнопка запуска поверх обложки и снаружи ссылки — по той же причине,
+          что и сердце: вложенные интерактивные элементы клавиатура и
+          скринридер разбирают по-разному. Видна всегда, а не по наведению:
+          на телефоне наведения нет, а список выбирают как раз на телефоне.
+          Отступ слева считается от `pl-2` ссылки и номера, если он есть. */}
+      {queue && (
+        <MusicPlayButton
+          trackId={track.id}
+          title={track.title}
+          queue={queue}
+          className={`absolute ${
+            position !== undefined ? "left-11" : "left-2"
+          } flex h-10 w-10 items-center justify-center rounded-lg bg-black/45 text-white`}
+        />
+      )}
 
       <MusicFavoriteButton
         trackId={track.id}
