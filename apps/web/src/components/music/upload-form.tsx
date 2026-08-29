@@ -32,7 +32,15 @@ const BASES: { value: MusicUploadRightsBasis; label: string }[] = [
 export function MusicUploadForm() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  /**
+   * Что стало с каждым файлом. Ключ — имя: очередь короткая и своя, а
+   * тащить в неё синтетические идентификаторы ради красоты незачем.
+   */
+  const [results, setResults] = useState<
+    Record<string, { state: "ok" | "failed"; note: string }>
+  >({});
+  const [currentName, setCurrentName] = useState<string | null>(null);
   /**
    * Пусто по умолчанию, и это не забывчивость.
    *
@@ -46,26 +54,60 @@ export function MusicUploadForm() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
+  /**
+   * Файлы уходят по одному, а не разом. Параллельная заливка десятка
+   * киртанов забивает канал так, что не отвечает и сама страница, а
+   * подписанный PUT у каждой записи свой — очередь тут ничего не теряет.
+   *
+   * Неудача одного файла не останавливает остальные, в отличие от скачивания
+   * в офлайн: там причина почти всегда общая (кончилось место), а здесь —
+   * своя у каждого файла: не тот формат, слишком длинный, битые теги.
+   * Останавливать всю пачку из-за одного значит заставить редакцию начинать
+   * заново.
+   */
   async function submit() {
-    if (!file || !basis) return;
-    setProgress(0);
+    if (files.length === 0 || !basis) return;
     setError(null);
     setDone(null);
-    try {
-      const result = await uploadMusicTrack(
-        file,
-        basis as MusicUploadRightsBasis,
-        setProgress,
-      );
-      setDone(`«${result.title}» ушла в очередь проверки.`);
-      setFile(null);
-      if (inputRef.current) inputRef.current.value = "";
-      router.refresh();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Не удалось загрузить");
-    } finally {
-      setProgress(null);
+    setResults({});
+
+    let ok = 0;
+    for (const file of files) {
+      setCurrentName(file.name);
+      setProgress(0);
+      try {
+        const result = await uploadMusicTrack(
+          file,
+          basis as MusicUploadRightsBasis,
+          setProgress,
+        );
+        ok += 1;
+        setResults((was) => ({
+          ...was,
+          [file.name]: { state: "ok", note: result.title },
+        }));
+      } catch (cause) {
+        setResults((was) => ({
+          ...was,
+          [file.name]: {
+            state: "failed",
+            note:
+              cause instanceof Error ? cause.message : "Не удалось загрузить",
+          },
+        }));
+      }
     }
+
+    setCurrentName(null);
+    setProgress(null);
+    setDone(
+      files.length === 1
+        ? "Запись ушла в очередь проверки."
+        : `Готово: ${ok} из ${files.length} ушли в очередь проверки.`,
+    );
+    setFiles([]);
+    if (inputRef.current) inputRef.current.value = "";
+    router.refresh();
   }
 
   const busy = progress !== null;
@@ -78,17 +120,23 @@ export function MusicUploadForm() {
       <p className="mt-1 text-sm text-text-2">
         Принимаем mp3 и m4a. Название и исполнителя редакция поправит — если в
         файле они записаны неточно, переделывать и перезаливать не нужно.
+        Файлы уходят по очереди; неудача одного не останавливает остальные.
       </p>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-1 block text-xs text-text-2">Файл</span>
+          <span className="mb-1 block text-xs text-text-2">
+            Файлы — можно выбрать сразу несколько
+          </span>
           <input
             ref={inputRef}
             type="file"
+            multiple
             accept={MUSIC_ACCEPTED_MIME.join(",")}
             disabled={busy}
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+            onChange={(event) =>
+              setFiles(Array.from(event.target.files ?? []))
+            }
             className="w-full text-sm text-text-1 file:mr-3 file:h-9 file:rounded-lg file:border file:border-glass-brd file:bg-bg-1 file:px-3 file:text-sm file:text-text-0"
           />
         </label>
@@ -122,7 +170,7 @@ export function MusicUploadForm() {
             aria-valuenow={Math.round((progress ?? 0) * 100)}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-label="Загрузка файла"
+            aria-label={currentName ? `Загрузка: ${currentName}` : "Загрузка файла"}
             className="h-1.5 w-full overflow-hidden rounded-full bg-glass-brd"
           >
             <div
@@ -130,10 +178,48 @@ export function MusicUploadForm() {
               style={{ width: `${Math.round((progress ?? 0) * 100)}%` }}
             />
           </div>
-          <p className="mt-1 font-mono text-xs text-text-2">
-            {Math.round((progress ?? 0) * 100)}%
+          <p className="mt-1 truncate text-xs text-text-2">
+            <span className="font-mono">{Math.round((progress ?? 0) * 100)}%</span>
+            {currentName && ` · ${currentName}`}
           </p>
         </div>
+      )}
+
+      {(files.length > 0 || Object.keys(results).length > 0) && (
+        <ul className="mt-3 flex flex-col gap-1">
+          {(files.length > 0 ? files.map((f) => f.name) : Object.keys(results)).map(
+            (name) => {
+              const result = results[name];
+              return (
+                <li
+                  key={name}
+                  className="flex items-baseline gap-2 text-xs"
+                >
+                  <span className="min-w-0 flex-1 truncate text-text-1">
+                    {name}
+                  </span>
+                  <span
+                    className={
+                      result?.state === "failed"
+                        ? "shrink-0 text-magenta"
+                        : result?.state === "ok"
+                          ? "shrink-0 text-cyan"
+                          : "shrink-0 text-text-2"
+                    }
+                  >
+                    {result?.state === "failed"
+                      ? result.note
+                      : result?.state === "ok"
+                        ? "в очереди"
+                        : currentName === name
+                          ? "загружается"
+                          : "ждёт"}
+                  </span>
+                </li>
+              );
+            },
+          )}
+        </ul>
       )}
 
       {error && (
@@ -150,13 +236,17 @@ export function MusicUploadForm() {
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button
           type="button"
-          disabled={!file || !basis || busy}
+          disabled={files.length === 0 || !basis || busy}
           onClick={() => void submit()}
           className="btn-mint h-9 rounded-xl px-4 text-sm font-semibold disabled:opacity-50"
         >
-          {busy ? "Загружаем…" : "Загрузить"}
+          {busy
+            ? "Загружаем…"
+            : files.length > 1
+              ? `Загрузить ${files.length}`
+              : "Загрузить"}
         </button>
-        {file && !basis && (
+        {files.length > 0 && !basis && (
           <span className="text-xs text-text-2">
             Осталось отметить основание
           </span>

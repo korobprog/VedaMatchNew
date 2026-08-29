@@ -87,6 +87,9 @@ export default async function RootLayout({
   const cookieStore = await cookies();
   const stored = cookieStore.get(THEME_COOKIE_NAME)?.value;
   const preference = isThemePreference(stored) ? stored : "system";
+  // Есть ли вообще сессия. Ровно тот же признак, по которому режет доступ
+  // proxy.ts, — чтобы плеер и портал считали вошедшим одного и того же.
+  const hasSession = Boolean(cookieStore.get("access_token")?.value);
   // Для «как в системе» атрибут не ставим — тему подхватит prefers-color-scheme.
   const resolved = preference === "system" ? null : preference;
   const locale = await getLocale();
@@ -129,11 +132,22 @@ export default async function RootLayout({
                   заранее в docs/music-service-plan.md, решение 6: звук обязан
                   пережить переход между разделами, а плеер, смонтированный
                   внутри /music, умирает на первом же клике в шапке.
-                  Полоса рисуется, только когда есть что играть. */}
-              <MusicPlayerProvider>
-                {children}
-                <MiniPlayer />
-              </MusicPlayerProvider>
+                  Полоса рисуется, только когда есть что играть.
+
+                  Гостю плеера нет вовсе. Провайдер восстанавливает последнюю
+                  запись из localStorage, а оно переживает выход из аккаунта —
+                  и полоса всплывала поверх лендинга у человека, который
+                  когда-то слушал в этом браузере. Признак сессии берём здесь,
+                  в серверном компоненте: cookie httpOnly, из браузера её не
+                  видно, и решить это на клиенте нечем. */}
+              {hasSession ? (
+                <MusicPlayerProvider>
+                  {children}
+                  <MiniPlayer />
+                </MusicPlayerProvider>
+              ) : (
+                children
+              )}
             </ThemeProvider>
           </ServiceCatalogProvider>
         </NextIntlClientProvider>

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -317,6 +318,55 @@ export class MusicAdminCatalogService {
     if (!existing) throw new NotFoundException('Категория не найдена');
 
     await this.prisma.musicCategory.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  /**
+   * Удаление исполнителя — только когда за ним ничего не числится.
+   *
+   * Каскада здесь нет намеренно: FK у альбома и записи `SetNull`, то есть
+   * удаление живого исполнителя не унесло бы записи, а молча обезличило их —
+   * полсотни киртанов вдруг «без исполнителя», и восстановить связь нечем.
+   * Пусть редакция сперва перевесит записи, а потом удаляет справочник.
+   */
+  async deleteArtist(viewerIsAdmin: boolean, id: string) {
+    this.assertAdmin(viewerIsAdmin);
+    const existing = await this.prisma.musicArtist.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        _count: { select: { tracks: true, albums: true } },
+      },
+    });
+    if (!existing) throw new NotFoundException('Исполнитель не найден');
+
+    const { tracks, albums } = existing._count;
+    if (tracks > 0 || albums > 0) {
+      throw new ConflictException(
+        `Сначала перевесьте на другого исполнителя: записей — ${tracks}, альбомов — ${albums}`,
+      );
+    }
+
+    await this.prisma.musicArtist.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  /** Удаление альбома — по той же причине только у пустого. */
+  async deleteAlbum(viewerIsAdmin: boolean, id: string) {
+    this.assertAdmin(viewerIsAdmin);
+    const existing = await this.prisma.musicAlbum.findUnique({
+      where: { id },
+      select: { id: true, _count: { select: { tracks: true } } },
+    });
+    if (!existing) throw new NotFoundException('Альбом не найден');
+
+    if (existing._count.tracks > 0) {
+      throw new ConflictException(
+        `Сначала перевесьте записи на другой альбом: их ${existing._count.tracks}`,
+      );
+    }
+
+    await this.prisma.musicAlbum.delete({ where: { id } });
     return { ok: true };
   }
 

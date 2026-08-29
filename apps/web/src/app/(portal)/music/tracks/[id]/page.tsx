@@ -6,6 +6,8 @@ import { getMusicTrack } from "@/lib/music-api";
 import { MusicCover } from "@/components/music/music-cover";
 import { MusicReportForm } from "@/components/music/music-report-form";
 import { MusicAddToPlaylist } from "@/components/music/music-add-to-playlist";
+import { MusicOfflineButton } from "@/components/music/offline-button";
+import { MusicSleepTimerButton } from "@/components/music/sleep-timer-button";
 import { MusicTrackLyrics } from "@/components/music/music-track-lyrics";
 import { MusicQueueActions } from "@/components/music/player/queue-actions";
 import { formatTrackDuration } from "@/lib/music-duration";
@@ -121,6 +123,8 @@ export default async function MusicTrackPage({
               />
             </Suspense>
             <MusicQueueActions trackId={track.id} />
+            <MusicOfflineButton track={track} />
+            <MusicSleepTimerButton />
           </div>
 
           <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-2">

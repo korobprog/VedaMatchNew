@@ -30,6 +30,7 @@ function prismaMock() {
     prisma: {
       musicArtist: {
         findUnique: jest.fn().mockResolvedValue(null),
+        delete: jest.fn().mockResolvedValue({}),
         create: jest
           .fn()
           .mockImplementation(({ data }) => ({ id: 'a1', ...data })),
@@ -39,6 +40,7 @@ function prismaMock() {
       },
       musicAlbum: {
         findUnique: jest.fn().mockResolvedValue(null),
+        delete: jest.fn().mockResolvedValue({}),
         create: jest
           .fn()
           .mockImplementation(({ data }) => ({ id: 'al1', ...data })),
@@ -216,6 +218,72 @@ describe('MusicAdminCatalogService', () => {
       expect(mock.prisma.musicCategory.delete).toHaveBeenCalledWith({
         where: { id: 'c1' },
       });
+    });
+  });
+
+  describe('удаление справочников', () => {
+    // Каскада нет намеренно: FK у записи `SetNull`, и удаление живого
+    // исполнителя не унесло бы записи, а молча обезличило их.
+    it('исполнителя с записями не удаляет, а объясняет почему', async () => {
+      const mock = prismaMock();
+      mock.prisma.musicArtist.findUnique.mockResolvedValue({
+        id: 'a1',
+        _count: { tracks: 12, albums: 2 },
+      });
+
+      await expect(service(mock).deleteArtist(true, 'a1')).rejects.toThrow(
+        /перевесьте/,
+      );
+      expect(mock.prisma.musicArtist.delete).not.toHaveBeenCalled();
+    });
+
+    it('пустого исполнителя удаляет', async () => {
+      const mock = prismaMock();
+      mock.prisma.musicArtist.findUnique.mockResolvedValue({
+        id: 'a1',
+        _count: { tracks: 0, albums: 0 },
+      });
+
+      await service(mock).deleteArtist(true, 'a1');
+
+      expect(mock.prisma.musicArtist.delete).toHaveBeenCalledWith({
+        where: { id: 'a1' },
+      });
+    });
+
+    it('альбом с записями не удаляет', async () => {
+      const mock = prismaMock();
+      mock.prisma.musicAlbum.findUnique.mockResolvedValue({
+        id: 'al1',
+        _count: { tracks: 3 },
+      });
+
+      await expect(service(mock).deleteAlbum(true, 'al1')).rejects.toThrow(
+        /перевесьте/,
+      );
+      expect(mock.prisma.musicAlbum.delete).not.toHaveBeenCalled();
+    });
+
+    it('пустой альбом удаляет', async () => {
+      const mock = prismaMock();
+      mock.prisma.musicAlbum.findUnique.mockResolvedValue({
+        id: 'al1',
+        _count: { tracks: 0 },
+      });
+
+      await service(mock).deleteAlbum(true, 'al1');
+
+      expect(mock.prisma.musicAlbum.delete).toHaveBeenCalledWith({
+        where: { id: 'al1' },
+      });
+    });
+
+    it('несуществующего не выдумывает', async () => {
+      const mock = prismaMock();
+
+      await expect(service(mock).deleteArtist(true, 'нет')).rejects.toThrow(
+        /не найден/,
+      );
     });
   });
 
