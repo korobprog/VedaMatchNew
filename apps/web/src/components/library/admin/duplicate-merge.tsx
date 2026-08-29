@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { LibraryAdminDuplicateGroup } from "@vedamatch/shared";
+import type {
+  LibraryAdminCategoryDto,
+  LibraryAdminDuplicateGroup,
+} from "@vedamatch/shared";
 import { Alert } from "@/components/ui/alert";
 import { mergeLibraryCategory } from "@/lib/library-admin-api";
 
@@ -71,7 +74,7 @@ export function LibraryDuplicateMerge({
               <p className="mt-1 text-sm text-text-1">
                 Оставляем{" "}
                 <b className="text-text-0">{main.titleRu ?? main.slug}</b> (
-                {main.entriesCount} записей, раздел «{main.sectionTitleRu}»)
+                {main.entriesCount} записей, {pathOf(main)})
               </p>
 
               <ul className="mt-3 space-y-2">
@@ -83,8 +86,7 @@ export function LibraryDuplicateMerge({
                     <span className="text-sm text-text-0">
                       {category.titleRu ?? category.slug}
                       <span className="ml-2 font-mono text-xs text-text-2">
-                        {category.entriesCount} записей · раздел «
-                        {category.sectionTitleRu}»
+                        {category.entriesCount} записей · {pathOf(category)}
                         {category.createdByName &&
                           ` · завёл ${category.createdByName}`}
                       </span>
@@ -112,4 +114,15 @@ export function LibraryDuplicateMerge({
       </ul>
     </>
   );
+}
+
+/**
+ * Путь рубрики словами: две одноимённые рубрики из разных веток иначе
+ * неразличимы, а разводят в этом списке именно их.
+ */
+function pathOf(category: LibraryAdminCategoryDto): string {
+  if (category.ancestors.length === 0) return "верхний уровень";
+  return category.ancestors
+    .map((ancestor) => ancestor.titleRu ?? ancestor.slug)
+    .join(" / ");
 }

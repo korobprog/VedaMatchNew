@@ -114,7 +114,7 @@ export function EntryCard({
         {entry.categories.map((category) => (
           <Link
             key={category.id}
-            href={`/library/${category.sectionSlug}/${category.slug}`}
+            href={`/library/${category.slug}`}
             className="rounded-full bg-glass-brd/40 px-2 py-0.5 hover:text-text-0"
           >
             {pickLocalized(locale, {

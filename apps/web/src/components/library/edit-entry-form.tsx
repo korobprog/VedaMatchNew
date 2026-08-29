@@ -4,14 +4,15 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
   LibraryCategoryDto,
+  LibraryCategoryTreeNode,
   LibraryEntryDto,
   LibraryEntryType,
   LibraryLocale,
-  LibrarySectionDto,
   UpdateLibraryEntryRequest,
 } from "@vedamatch/shared";
-import { CategoryEditForm } from "./category-edit-form";
-import { entryTypeLabel, pickLocalized, t, type LibraryTextKey } from "./i18n";
+import { CategoryPicker } from "./category-picker";
+import { flattenTree, insertIntoTree, renameInTree } from "./category-tree";
+import { entryTypeLabel, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -49,13 +50,11 @@ const ERROR_KEYS: Record<string, LibraryTextKey> = {
 export function EditEntryForm({
   locale,
   entry,
-  sections,
-  initialCategories,
+  tree,
 }: {
   locale: LibraryLocale;
   entry: LibraryEntryDto;
-  sections: LibrarySectionDto[];
-  initialCategories: LibraryCategoryDto[];
+  tree: LibraryCategoryTreeNode[];
 }) {
   const [open, setOpen] = useState(false);
 
@@ -75,8 +74,7 @@ export function EditEntryForm({
           <EntryFieldsForm
             locale={locale}
             entry={entry}
-            sections={sections}
-            initialCategories={initialCategories}
+            tree={tree}
             onDone={() => setOpen(false)}
           />
         </div>
@@ -177,14 +175,12 @@ function PreviewUploader({
 function EntryFieldsForm({
   locale,
   entry,
-  sections,
-  initialCategories,
+  tree,
   onDone,
 }: {
   locale: LibraryLocale;
   entry: LibraryEntryDto;
-  sections: LibrarySectionDto[];
-  initialCategories: LibraryCategoryDto[];
+  tree: LibraryCategoryTreeNode[];
   onDone: () => void;
 }) {
   const router = useRouter();
@@ -194,25 +190,17 @@ function EntryFieldsForm({
   const [titleEn, setTitleEn] = useState(entry.titleEn ?? "");
   const [descriptionRu, setDescriptionRu] = useState(entry.descriptionRu ?? "");
   const [descriptionEn, setDescriptionEn] = useState(entry.descriptionEn ?? "");
-  const [sectionSlug, setSectionSlug] = useState(
-    entry.categories[0]?.sectionSlug ?? sections[0]?.slug ?? "",
-  );
-  const [sectionCategories, setSectionCategories] = useState(initialCategories);
-  const [selected, setSelected] = useState<LibraryCategoryDto[]>(
-    initialCategories.filter((category) =>
-      entry.categories.some((item) => item.id === category.id),
-    ),
+  const [categories, setCategories] = useState(tree);
+  // Рубрики материала берём из него самого: в дереве они лежат вперемешку по
+  // веткам, и искать их обходом ради того же результата незачем.
+  const [selected, setSelected] = useState<LibraryCategoryDto[]>(() =>
+    flattenTree(tree)
+      .filter((row) => entry.categories.some((item) => item.id === row.id))
+      .map((row) => row.node),
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-
-  const visibleCategories = [
-    ...sectionCategories,
-    ...selected.filter(
-      (item) => !sectionCategories.some((known) => known.id === item.id),
-    ),
-  ];
 
   function toggleCategory(category: LibraryCategoryDto) {
     setSelected((current) =>
@@ -223,23 +211,19 @@ function EntryFieldsForm({
   }
 
   function handleCategoryRenamed(updated: LibraryCategoryDto) {
-    setSectionCategories((current) =>
-      current.map((item) => (item.id === updated.id ? updated : item)),
-    );
+    setCategories((current) => renameInTree(current, updated));
     setSelected((current) =>
       current.map((item) => (item.id === updated.id ? updated : item)),
     );
   }
 
-  async function changeSection(slug: string) {
-    setSectionSlug(slug);
-    if (!slug) return;
-    const response = await apiFetch(
-      `${API_URL}/library/categories/section/${encodeURIComponent(slug)}`,
-      { credentials: "include" },
-    ).catch(() => null);
-    if (!response?.ok) return;
-    setSectionCategories((await response.json()) as LibraryCategoryDto[]);
+  function handleCategoryCreated(created: LibraryCategoryDto) {
+    setCategories((current) => insertIntoTree(current, created));
+    setSelected((current) =>
+      current.some((item) => item.id === created.id)
+        ? current
+        : [...current, created],
+    );
   }
 
   async function submit(event: React.FormEvent) {
@@ -390,55 +374,14 @@ function EntryFieldsForm({
         </label>
       </div>
 
-      {sections.length > 0 && (
-        <label className="text-sm text-text-1">
-          {t(locale, "add.section")}
-          <select
-            value={sectionSlug}
-            onChange={(event) => void changeSection(event.target.value)}
-            className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
-          >
-            {sections.map((section) => (
-              <option key={section.id} value={section.slug}>
-                {pickLocalized(locale, {
-                  ru: section.titleRu,
-                  en: section.titleEn,
-                })}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-
-      <fieldset className="text-sm text-text-1">
-        <legend className="mb-2">{t(locale, "add.categories")}</legend>
-        <div className="flex flex-wrap gap-3">
-          {visibleCategories.map((category) => {
-            const label = pickLocalized(locale, {
-              ru: category.titleRu,
-              en: category.titleEn,
-            });
-            return (
-              <span key={category.id} className="flex items-center gap-2">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    aria-label={label}
-                    checked={selected.some((item) => item.id === category.id)}
-                    onChange={() => toggleCategory(category)}
-                  />
-                  {label}
-                </label>
-                <CategoryEditForm
-                  locale={locale}
-                  category={category}
-                  onSaved={handleCategoryRenamed}
-                />
-              </span>
-            );
-          })}
-        </div>
-      </fieldset>
+      <CategoryPicker
+        locale={locale}
+        tree={categories}
+        selected={selected}
+        onToggle={toggleCategory}
+        onRenamed={handleCategoryRenamed}
+        onCreated={handleCategoryCreated}
+      />
 
       {notice && (
         <p className="glass rounded-xl border border-glass-brd p-3 text-sm text-text-1">

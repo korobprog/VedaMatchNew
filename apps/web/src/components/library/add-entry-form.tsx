@@ -7,13 +7,13 @@ import type {
   CreateLibraryEntryRequest,
   LibraryCategoryDto,
   LibraryDuplicateEntryConflict,
+  LibraryCategoryTreeNode,
   LibraryEntryType,
   LibraryLocale,
-  LibrarySectionDto,
 } from "@vedamatch/shared";
-import { CategoryCreateForm } from "./category-create-form";
-import { CategoryEditForm } from "./category-edit-form";
-import { entryTypeLabel, pickLocalized, t } from "./i18n";
+import { CategoryPicker } from "./category-picker";
+import { insertIntoTree, renameInTree } from "./category-tree";
+import { entryTypeLabel, t } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
 import {
   badRequestKey,
@@ -31,14 +31,15 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export function AddEntryForm({
   locale,
-  categories,
-  sections = [],
-  initialSectionSlug,
+  tree,
+  initialCategorySlug,
+  canCreateRoot = false,
 }: {
   locale: LibraryLocale;
-  categories: LibraryCategoryDto[];
-  sections?: LibrarySectionDto[];
-  initialSectionSlug?: string;
+  tree: LibraryCategoryTreeNode[];
+  /** Рубрика, с которой пришли: её и предлагаем родителем для новой. */
+  initialCategorySlug?: string;
+  canCreateRoot?: boolean;
 }) {
   const router = useRouter();
   const [url, setUrl] = useState("");
@@ -53,25 +54,12 @@ export function AddEntryForm({
   const [titleEn, setTitleEn] = useState("");
   const [descriptionRu, setDescriptionRu] = useState("");
   const [descriptionEn, setDescriptionEn] = useState("");
-  const [sectionSlug, setSectionSlug] = useState(
-    initialSectionSlug ?? sections[0]?.slug ?? "",
-  );
-  const [sectionCategories, setSectionCategories] = useState(categories);
-  // Выбранные держим целиком: категория из другого раздела должна остаться
-  // видимой в списке после переключения раздела.
+  const [categories, setCategories] = useState(tree);
   const [selected, setSelected] = useState<LibraryCategoryDto[]>([]);
-  const [categoryFormOpen, setCategoryFormOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [duplicateId, setDuplicateId] = useState<string | null>(null);
-
-  const visibleCategories = [
-    ...sectionCategories,
-    ...selected.filter(
-      (item) => !sectionCategories.some((known) => known.id === item.id),
-    ),
-  ];
 
   function toggleCategory(category: LibraryCategoryDto) {
     setSelected((current) =>
@@ -82,37 +70,19 @@ export function AddEntryForm({
   }
 
   function handleCategoryRenamed(updated: LibraryCategoryDto) {
-    setSectionCategories((current) =>
-      current.map((item) => (item.id === updated.id ? updated : item)),
-    );
+    setCategories((current) => renameInTree(current, updated));
     setSelected((current) =>
       current.map((item) => (item.id === updated.id ? updated : item)),
     );
-  }
-
-  async function changeSection(slug: string) {
-    setSectionSlug(slug);
-    if (!slug) return;
-    const response = await apiFetch(
-      `${API_URL}/library/categories/section/${encodeURIComponent(slug)}`,
-      { credentials: "include" },
-    ).catch(() => null);
-    if (!response?.ok) return;
-    setSectionCategories((await response.json()) as LibraryCategoryDto[]);
   }
 
   function handleCategoryCreated(category: LibraryCategoryDto) {
-    setSectionCategories((current) =>
-      current.some((item) => item.id === category.id)
-        ? current
-        : [...current, category],
-    );
+    setCategories((current) => insertIntoTree(current, category));
     setSelected((current) =>
       current.some((item) => item.id === category.id)
         ? current
         : [...current, category],
     );
-    setCategoryFormOpen(false);
     setNotice(t(locale, "add.categoryCreated"));
   }
 
@@ -382,82 +352,16 @@ export function AddEntryForm({
         </label>
       </div>
 
-      {sections.length > 0 && (
-        <label className="text-sm text-text-1">
-          {t(locale, "add.section")}
-          <select
-            value={sectionSlug}
-            onChange={(event) => void changeSection(event.target.value)}
-            className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
-          >
-            {sections.map((section) => (
-              <option key={section.id} value={section.slug}>
-                {pickLocalized(locale, {
-                  ru: section.titleRu,
-                  en: section.titleEn,
-                })}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-
-      <fieldset className="text-sm text-text-1">
-        <legend className="mb-2">{t(locale, "add.categories")}</legend>
-        <div className="flex flex-wrap gap-3">
-          {visibleCategories.map((category) => {
-            const label = pickLocalized(locale, {
-              ru: category.titleRu,
-              en: category.titleEn,
-            });
-            return (
-              <span key={category.id} className="flex items-center gap-2">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    aria-label={label}
-                    checked={selected.some((item) => item.id === category.id)}
-                    onChange={() => toggleCategory(category)}
-                  />
-                  {label}
-                </label>
-                <CategoryEditForm
-                  locale={locale}
-                  category={category}
-                  onSaved={handleCategoryRenamed}
-                />
-              </span>
-            );
-          })}
-        </div>
-
-        {sections.length > 0 && (
-          <div className="mt-3">
-            <button
-              type="button"
-              onClick={() => setCategoryFormOpen((open) => !open)}
-              className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-0 hover:bg-glass-brd/40"
-            >
-              {categoryFormOpen
-                ? t(locale, "add.categoryCancel")
-                : `+ ${t(locale, "add.categoryNew")}`}
-            </button>
-
-            {/* Форма живёт внутри карточки добавления: заполненные поля
-                ссылки при создании категории не теряются. */}
-            {categoryFormOpen && (
-              <div className="mt-3 rounded-xl border border-glass-brd p-3">
-                <CategoryCreateForm
-                  locale={locale}
-                  sections={sections}
-                  initialSectionSlug={sectionSlug}
-                  onCreated={handleCategoryCreated}
-                />
-              </div>
-            )}
-          </div>
-        )}
-      </fieldset>
+      <CategoryPicker
+        locale={locale}
+        tree={categories}
+        selected={selected}
+        onToggle={toggleCategory}
+        onRenamed={handleCategoryRenamed}
+        onCreated={handleCategoryCreated}
+        initialParentSlug={initialCategorySlug}
+        canCreateRoot={canCreateRoot}
+      />
 
       {notice && (
         <p className="glass rounded-xl border border-glass-brd p-3 text-sm text-text-1">

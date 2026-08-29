@@ -31,7 +31,6 @@ const entry: LibraryEntryDto = {
     {
       id: "category-1",
       slug: "gita",
-      sectionSlug: "philosophy",
       titleRu: "Гита",
       titleEn: null,
     },

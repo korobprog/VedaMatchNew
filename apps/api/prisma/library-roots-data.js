@@ -1,4 +1,4 @@
-const librarySections = [
+const libraryRoots = [
   {
     slug: 'philosophy',
     titleRu: 'Философия и писания',
@@ -57,4 +57,4 @@ const librarySections = [
   },
 ];
 
-module.exports = { librarySections };
+module.exports = { libraryRoots };
