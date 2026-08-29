@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { MusicRail } from "@/components/music/music-rail";
 import { MusicSettingsForm } from "@/components/music/music-settings-form";
+import { MusicOfflineUsage } from "@/components/music/offline-usage";
 import { getMusicSettingsServer } from "@/lib/music-api";
 
 export const metadata: Metadata = {
@@ -39,6 +40,13 @@ export default async function MusicSettingsPage() {
             Настройки сейчас недоступны. Попробуйте обновить страницу.
           </p>
         )}
+
+        {/* Отдельно от формы: занятое место читается из хранилища браузера и
+            не зависит от того, ответил ли сервер. Когда сохранять нечего,
+            блок не рисуется вовсе. */}
+        <div className="mt-4">
+          <MusicOfflineUsage />
+        </div>
       </div>
     </main>
   );

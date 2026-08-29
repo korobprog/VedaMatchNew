@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { MusicCover } from "@/components/music/music-cover";
 import { MusicPlayAllButton } from "@/components/music/player/play-all-button";
 import { MusicTrackRow } from "@/components/music/music-track-row";
+import { MusicOfflinePlaylistButton } from "@/components/music/offline-playlist-button";
 import { formatTotalDuration } from "@/lib/music-duration";
 import { getMusicPlaylist } from "@/lib/music-api";
 import { plural } from "@/lib/plural";
@@ -90,6 +91,7 @@ export default async function MusicPlaylistPage({
               ? " · подборка портала"
               : ` · ${VISIBILITY_LABEL[playlist.visibility]}`}
           </p>
+          <MusicOfflinePlaylistButton tracks={tracks} />
         </div>
       </header>
 
