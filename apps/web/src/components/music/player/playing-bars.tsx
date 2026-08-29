@@ -12,19 +12,27 @@
  */
 
 /**
- * Высоты и темпы столбиков.
+ * Узоры высот, темпов и смещений.
  *
- * Подобраны разными и не кратными друг другу: с одинаковыми столбики ходят
- * строем, и значок читается как заставка «загрузка», а не как звучащая
- * музыка. Смещение старта — чтобы они не начинали с одной точки.
+ * Три разной длины и взаимно простые (7, 5, 4): перебирая их по кругу, ни
+ * один столбик не повторяет соседа целиком, и полоса не распадается на
+ * заметный повтор. С одинаковыми значениями столбики ходят строем, и это
+ * читается как заставка «загрузка», а не как звучащая музыка.
+ *
+ * Значения заданы списком, а не случайные: компонент рисуется и на сервере,
+ * и в браузере, и `Math.random()` дал бы разные высоты в двух рендерах —
+ * то есть расхождение гидратации на ровном месте.
  */
-const BARS = [
-  { height: 7, duration: 780, delay: 0 },
-  { height: 13, duration: 1080, delay: 160 },
-  { height: 9, duration: 900, delay: 320 },
-  { height: 15, duration: 1240, delay: 80 },
-  { height: 8, duration: 840, delay: 240 },
-];
+const HEIGHTS = [7, 13, 9, 16, 8, 12, 10];
+const DURATIONS = [780, 1080, 900, 1240, 840];
+const DELAYS = [0, 160, 320, 80];
+
+/**
+ * Сколько столбиков рисуем. Ширину полоса занимает всю свободную, поэтому
+ * число подобрано под самый узкий телефон: на 320 точках они ещё не
+ * слипаются, на широком — просто становятся реже.
+ */
+const BAR_COUNT = 14;
 
 export function MusicPlayingBars({
   playing,
@@ -36,16 +44,16 @@ export function MusicPlayingBars({
   return (
     <span
       aria-hidden="true"
-      className={`flex items-end gap-[3px] ${playing ? "" : "music-eq-paused"} ${className}`}
+      className={`flex items-end justify-between ${playing ? "" : "music-eq-paused"} ${className}`}
     >
-      {BARS.map((bar, at) => (
+      {Array.from({ length: BAR_COUNT }, (_, at) => (
         <span
           key={at}
-          className="music-eq-bar w-[3px] rounded-full bg-violet"
+          className="music-eq-bar w-[3px] shrink-0 rounded-full bg-violet"
           style={{
-            height: bar.height,
-            animationDuration: `${bar.duration}ms`,
-            animationDelay: `${bar.delay}ms`,
+            height: HEIGHTS[at % HEIGHTS.length],
+            animationDuration: `${DURATIONS[at % DURATIONS.length]}ms`,
+            animationDelay: `${DELAYS[at % DELAYS.length]}ms`,
           }}
         />
       ))}
