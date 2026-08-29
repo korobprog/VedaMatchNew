@@ -8,6 +8,7 @@ import { MusicCover } from "@/components/music/music-cover";
 import { MusicMarqueeText } from "@/components/music/marquee-text";
 import { MusicPlayingBars } from "./playing-bars";
 import { SEEK_STEP_SECONDS, useMusicPlayer } from "./player-provider";
+import { MusicPlayGlyph, playButtonLabel } from "./play-glyph";
 import { MusicSleepCountdown } from "./sleep-countdown";
 import { MusicQueuePanel } from "./queue-panel";
 
@@ -93,6 +94,8 @@ export function MiniPlayer() {
   const {
     current,
     isPlaying,
+    isLoading,
+    loadError,
     positionSeconds,
     durationSeconds,
     repeat,
@@ -105,6 +108,10 @@ export function MiniPlayer() {
     hasNext,
     hasPrev,
   } = player;
+
+  // Ожидание важнее «играет»: пока звука нет, полоса не должна показывать
+  // паузу — это единственная кнопка, по которой судят, сработало ли нажатие.
+  const playState = isLoading ? "loading" : isPlaying ? "playing" : "paused";
 
   const total = durationSeconds || current.durationSeconds;
   // `shrink-0` не для красоты: без него флекс ужимал кнопки в правой группе
@@ -162,20 +169,11 @@ export function MiniPlayer() {
 
           <button
             type="button"
-            aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
+            aria-label={playButtonLabel(playState)}
             onClick={player.toggle}
             className="flex size-9 shrink-0 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint"
           >
-            {isPlaying ? (
-              <svg viewBox="0 0 24 24" className="size-3" fill="currentColor" aria-hidden="true">
-                <rect x="6" y="4" width="4" height="16" rx="1" />
-                <rect x="14" y="4" width="4" height="16" rx="1" />
-              </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" className="size-3" fill="currentColor" aria-hidden="true">
-                <path d="M7 4l13 8-13 8z" />
-              </svg>
-            )}
+            <MusicPlayGlyph state={playState} className="size-3" />
           </button>
 
           <button
@@ -235,9 +233,24 @@ export function MiniPlayer() {
               text={current.title}
               className="text-[13px] font-semibold text-text-0"
             />
-            <span className="truncate text-[11px] text-text-2">
-              {current.artist?.name ?? "Исполнитель не указан"}
-            </span>
+            {/* Причина отказа вытесняет исполнителя, а не приписывается
+                рядом: место под ней одно, и в ту секунду, когда запись не
+                играет, имя исполнителя человеку не нужно. `role="status"` —
+                чтобы отказ прочитал и скринридер: для него молчащая кнопка
+                вообще ничем не отличается от работающей. */}
+            {loadError ? (
+              <span
+                role="status"
+                className="truncate text-[11px] text-magenta"
+                title={loadError}
+              >
+                {loadError}
+              </span>
+            ) : (
+              <span className="truncate text-[11px] text-text-2">
+                {current.artist?.name ?? "Исполнитель не указан"}
+              </span>
+            )}
           </div>
         </div>
 
@@ -297,22 +310,13 @@ export function MiniPlayer() {
 
             <button
               type="button"
-              aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
+              aria-label={playButtonLabel(playState)}
               onClick={player.toggle}
               // 44px на телефоне — и размер из макета, и минимальная цель
               // пальца; на широком экране полоса всего 64px высотой, там 40.
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint sm:h-10 sm:w-10"
             >
-              {isPlaying ? (
-                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
-                  <rect x="6" y="4" width="4" height="16" rx="1" />
-                  <rect x="14" y="4" width="4" height="16" rx="1" />
-                </svg>
-              ) : (
-                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
-                  <path d="M7 4l13 8-13 8z" />
-                </svg>
-              )}
+              <MusicPlayGlyph state={playState} />
             </button>
 
             <button

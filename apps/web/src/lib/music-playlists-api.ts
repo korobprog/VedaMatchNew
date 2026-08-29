@@ -10,6 +10,7 @@ import type {
   MusicPlaylistDto,
   MusicPlaylistPickerDto,
   MusicPlaylistTrackResultDto,
+  UpdateMusicPlaylistRequest,
   MyMusicPlaylistsDto,
 } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
@@ -45,6 +46,16 @@ export const getPlaylistsForTrack = (trackId: string) =>
 export const createPlaylist = (body: CreateMusicPlaylistRequest) =>
   send<MusicPlaylistDto>("/music/playlists", {
     method: "POST",
+    body: JSON.stringify(body),
+  });
+
+/** Название, описание, обложка, доступ. */
+export const updatePlaylist = (
+  id: string,
+  body: UpdateMusicPlaylistRequest,
+) =>
+  send<MusicPlaylistDto>(`/music/playlists/${encodeURIComponent(id)}`, {
+    method: "PATCH",
     body: JSON.stringify(body),
   });
 
