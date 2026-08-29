@@ -10,6 +10,7 @@ import {
   type PortalNowPlayingEvent,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PortalAccessService } from '../access/access.service';
 import { ActivityAvatarService } from './activity-avatar.service';
 import { ActivityEventsService } from './activity-events.service';
 import { buildActivityTitle, isActivityFeedAction } from './activity-copy';
@@ -35,6 +36,7 @@ export class ActivityItemsListener {
     private readonly prisma: PrismaService,
     private readonly avatars: ActivityAvatarService,
     private readonly events: ActivityEventsService,
+    private readonly access: PortalAccessService,
   ) {}
 
   @OnEvent(PORTAL_ACTIVITY_EVENTS.motivation)
@@ -129,10 +131,7 @@ export class ActivityItemsListener {
     friend: ActivityFriendSummary;
     granteeIds: string[];
   }> | null> {
-    const follows = await this.prisma.activityFollow.findMany({
-      where: { granterId: userId, revokedAt: null },
-      select: { granteeId: true, source: true },
-    });
+    const follows = await this.access.granteesOf(userId);
     if (follows.length === 0) return null;
 
     const granteesBySource = new Map<ActivityAccessSource, Set<string>>();

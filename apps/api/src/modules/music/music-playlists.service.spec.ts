@@ -2,6 +2,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { PortalAccessService } from '../access/access.service';
 import { MusicCoversService } from './music-covers.service';
 import { MusicPlaylistsService } from './music-playlists.service';
 import { MusicStorageService } from './music-storage.service';
@@ -57,6 +58,8 @@ function prismaMock() {
       count: jest.fn().mockResolvedValue(0),
     },
     musicSettings: { findUnique: jest.fn().mockResolvedValue(null) },
+    // Портальный граф доступа: `null` — доступ не открыт.
+    activityFollow: { findFirst: jest.fn().mockResolvedValue(null) },
     $transaction: jest
       .fn()
       .mockImplementation((ops: unknown[]) => Promise.all(ops)),
@@ -68,11 +71,17 @@ const covers = () =>
     new MusicStorageService({ get: () => undefined } as unknown as ConfigService),
   );
 
+/**
+ * Портальный граф доступа настоящим сервисом поверх того же мока Prisma:
+ * подменять его заглушкой значило бы проверять видимость «для друзей» не тем
+ * кодом, который отвечает на этот вопрос в проде.
+ */
 const service = (p: ReturnType<typeof prismaMock>) =>
   new MusicPlaylistsService(
     p as unknown as PrismaService,
     { emit: jest.fn() } as unknown as EventEmitter2,
     covers(),
+    new PortalAccessService(p as unknown as PrismaService),
     config,
   );
 
@@ -111,19 +120,68 @@ describe('MusicPlaylistsService.getOne', () => {
     expect(page.canEdit).toBe(false);
   });
 
-  /**
-   * Граф доступа принадлежит модулю `activity`, и проверить «зритель — друг»
-   * в Музыке нечем. Открыть на всякий случай значит показать закрытое.
-   */
-  it('видимость «для друзей» чужому не открывается', async () => {
-    const prisma = prismaMock();
-    prisma.musicPlaylist.findUnique.mockResolvedValue(
-      playlistRow({ visibility: 'friends' }),
-    );
+  describe('видимость «для друзей»', () => {
+    const friendsRow = () => playlistRow({ visibility: 'friends' });
 
-    await expect(service(prisma).getOne('u2', 'p1')).rejects.toThrow(
-      NotFoundException,
-    );
+    it('открывается тому, кому владелец открыл активность', async () => {
+      const prisma = prismaMock();
+      prisma.musicPlaylist.findUnique.mockResolvedValue(friendsRow());
+      prisma.activityFollow.findFirst.mockResolvedValue({ granterId: 'u1' });
+
+      const page = await service(prisma).getOne('u2', 'p1');
+
+      expect(page.playlist.id).toBe('p1');
+      expect(page.canEdit).toBe(false);
+    });
+
+    // Спрашиваем именно про пару «владелец → зритель», а не наоборот: доступ
+    // односторонний, и перепутанные местами идентификаторы открыли бы чужое.
+    it('спрашивает граф про владельца и зрителя в правильном порядке', async () => {
+      const prisma = prismaMock();
+      prisma.musicPlaylist.findUnique.mockResolvedValue(friendsRow());
+      prisma.activityFollow.findFirst.mockResolvedValue({ granterId: 'u1' });
+
+      await service(prisma).getOne('u2', 'p1');
+
+      expect(prisma.activityFollow.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { granterId: 'u1', granteeId: 'u2', revokedAt: null },
+        }),
+      );
+    });
+
+    it('постороннему не открывается', async () => {
+      const prisma = prismaMock();
+      prisma.musicPlaylist.findUnique.mockResolvedValue(friendsRow());
+
+      await expect(service(prisma).getOne('u2', 'p1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    // Доступ отозвали — плейлист закрывается вместе с лентой.
+    it('после отзыва доступа закрывается', async () => {
+      const prisma = prismaMock();
+      prisma.musicPlaylist.findUnique.mockResolvedValue(friendsRow());
+      prisma.activityFollow.findFirst.mockResolvedValue(null);
+
+      await expect(service(prisma).getOne('u2', 'p1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    // Подборка портала осталась без автора: спрашивать графу не о ком.
+    it('без владельца в граф не ходит', async () => {
+      const prisma = prismaMock();
+      prisma.musicPlaylist.findUnique.mockResolvedValue(
+        playlistRow({ visibility: 'friends', ownerId: null }),
+      );
+
+      await expect(service(prisma).getOne('u2', 'p1')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prisma.activityFollow.findFirst).not.toHaveBeenCalled();
+    });
   });
 
   it('подборку портала видят все и не правит никто', async () => {

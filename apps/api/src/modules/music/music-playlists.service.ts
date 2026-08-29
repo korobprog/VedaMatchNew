@@ -16,6 +16,7 @@ import {
   type UpdateMusicPlaylistRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PortalAccessService } from '../access/access.service';
 import { MusicCoversService } from './music-covers.service';
 import { mayShareMusicActivity } from './music-activity-share';
 import { toMusicTrackDto } from './music-track-dto';
@@ -66,6 +67,7 @@ export class MusicPlaylistsService {
     private readonly prisma: PrismaService,
     private readonly bus: EventEmitter2,
     private readonly covers: MusicCoversService,
+    private readonly access: PortalAccessService,
     config: ConfigService,
   ) {
     this.publicBaseUrl = config.get<string>('S3_PUBLIC_URL') || undefined;
@@ -190,12 +192,7 @@ export class MusicPlaylistsService {
     });
 
     if (before?.visibility === 'private' && row.visibility !== 'private') {
-      await this.announcePublished(
-        userId,
-        row.id,
-        row.title,
-        row.visibility === 'public',
-      );
+      await this.announcePublished(userId, row.id, row.title);
     }
 
     const totals = await this.totalsOf([id]);
@@ -207,16 +204,15 @@ export class MusicPlaylistsService {
    * самодостаточно — подписчик не имеет права дочитывать название из таблиц
    * Музыки.
    *
-   * Ссылка ставится только у публичного плейлиста. У `friends` страница
-   * чужому не открывается: граф доступа принадлежит модулю `activity`, и
-   * проверить «этот зритель — друг» в Музыке нечем. Ссылка в 404 хуже
-   * карточки без ссылки, поэтому её здесь просто нет.
+   * Ссылка ставится всегда: карточку ленты получают ровно те, кому владелец
+   * открыл активность, а страница плейлиста «для друзей» спрашивает о том же
+   * у портального графа доступа. Раньше ссылки у `friends` не было — граф
+   * лежал внутри `activity`, и проверить было нечем.
    */
   private async announcePublished(
     userId: string,
     playlistId: string,
     title: string,
-    isPublic: boolean,
   ): Promise<void> {
     const settings = await this.prisma.musicSettings.findUnique({
       where: { userId },
@@ -231,7 +227,7 @@ export class MusicPlaylistsService {
       occurredAt: new Date().toISOString(),
       entityId: playlistId,
       entityLabel: title,
-      ...(isPublic ? { link: `/music/playlists/${playlistId}` } : {}),
+      link: `/music/playlists/${playlistId}`,
     };
     this.bus.emit(event.name, event);
   }
@@ -340,12 +336,11 @@ export class MusicPlaylistsService {
   /**
    * Страница плейлиста.
    *
-   * Кому открыт: владельцу, всем на подборку портала и всем на `public`.
-   * Видимость `friends` **чужому не открывается**, и это не забывчивость:
-   * граф доступа (`ActivityFollow`) принадлежит модулю `activity`, а контракт
-   * сервисного модуля запрещает Музыке в него заглядывать. Проверить «этот
-   * зритель — друг» здесь нечем, а открыть на всякий случай значит показать
-   * то, что человек закрыл. Поэтому `friends` пока читает только владелец.
+   * Кому открыт: владельцу, всем на подборку портала, всем на `public` и
+   * тем, кому владелец открыл активность, — на `friends`. Последнее
+   * спрашивается у `PortalAccessService`: граф доступа портальный, своей
+   * копии здесь нет и быть не должно — она разъехалась бы с оригиналом на
+   * первом же отзыве доступа.
    *
    * 404, а не 403: иначе по коду ответа перебираются чужие плейлисты.
    */
@@ -360,7 +355,13 @@ export class MusicPlaylistsService {
     if (!row) throw new NotFoundException('Плейлист не найден');
 
     const isOwner = row.ownerId === viewerId;
-    const open = isOwner || row.isSystem || row.visibility === 'public';
+    const open =
+      isOwner ||
+      row.isSystem ||
+      row.visibility === 'public' ||
+      (row.visibility === 'friends' &&
+        row.ownerId !== null &&
+        (await this.access.canSeeActivity(viewerId, row.ownerId)));
     if (!open) throw new NotFoundException('Плейлист не найден');
 
     const items = await this.prisma.musicPlaylistItem.findMany({
