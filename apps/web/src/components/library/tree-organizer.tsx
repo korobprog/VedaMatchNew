@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { ChevronRight, GripVertical, CornerUpRight, X } from "lucide-react";
 import type { LibraryCategoryTreeNode, LibraryLocale } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
-import { pickLocalized, t } from "./i18n";
+import { categoryCountLabel, pickLocalized, t } from "./i18n";
 import {
   applyMove,
+  categoryCounter,
   flattenTree,
   forbiddenTargets,
   isNoopMove,
@@ -327,8 +328,16 @@ export function LibraryTreeOrganizer({
                 })}
               </span>
 
-              <span className="shrink-0 font-mono text-xs text-text-2">
-                {row.node.subtreeEntriesCount}
+              {/* То же правило, что и в полосе рубрик: строка показывает
+                  то, что лежит прямо в ней. Иначе в упорядочивании число у
+                  родителя менялось бы при переносе чужого материала между
+                  его подразделами — и выглядело бы как сбой. */}
+              <span
+                aria-label={categoryCountLabel(locale, row.node)}
+                title={categoryCountLabel(locale, row.node)}
+                className="shrink-0 font-mono text-xs text-text-2"
+              >
+                {categoryCounter(row.node).value}
               </span>
 
               {row.node.canMove && (

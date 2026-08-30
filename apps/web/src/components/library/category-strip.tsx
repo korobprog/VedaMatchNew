@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { FolderTree } from "lucide-react";
+import { FileText, FolderTree } from "lucide-react";
 import type { LibraryCategoryDto, LibraryLocale } from "@vedamatch/shared";
 import { CategoryEditForm } from "./category-edit-form";
-import { pickLocalized, t } from "./i18n";
+import { categoryCounter } from "./category-tree";
+import { categoryCountLabel, pickLocalized, t } from "./i18n";
 
 /**
  * Рубрики одного уровня — сеткой, а не лентой: их немного, и все должны
@@ -30,6 +31,8 @@ export function CategoryStrip({
     >
       {categories.map((category) => {
         const active = category.slug === activeSlug;
+        const counter = categoryCounter(category);
+        const counterLabel = categoryCountLabel(locale, category);
         return (
           <div key={category.id} className="relative">
             <Link
@@ -41,24 +44,28 @@ export function CategoryStrip({
                   : "border-transparent text-text-1 hover:text-text-0"
               } ${category.canEdit ? "pr-8" : ""}`}
             >
-              <span className="flex min-w-0 items-center gap-1.5">
-                {/* Значок вложенности вместо счётчика детей: число рядом с
-                    числом материалов читалось бы как вторая метрика. */}
-                {category.childrenCount > 0 && (
-                  <FolderTree
-                    aria-hidden
-                    className="h-3.5 w-3.5 shrink-0 text-text-2"
-                  />
-                )}
-                <span className="truncate font-medium">
-                  {pickLocalized(locale, {
-                    ru: category.titleRu,
-                    en: category.titleEn,
-                  })}
-                </span>
+              <span className="truncate font-medium">
+                {pickLocalized(locale, {
+                  ru: category.titleRu,
+                  en: category.titleEn,
+                })}
               </span>
-              <span className="shrink-0 font-mono text-xs text-text-2">
-                {category.subtreeEntriesCount}
+              {/* Значок стоит вплотную к числу, а не у названия: он и есть
+                  единица измерения. Папка — подразделы, лист — материалы;
+                  «4» без него одинаково читается и так, и так, а места под
+                  слово в плитке шириной в пол-экрана нет. Полная подпись
+                  уходит в `aria-label` и во всплывающую — там место есть. */}
+              <span
+                aria-label={counterLabel}
+                title={counterLabel}
+                className="flex shrink-0 items-center gap-1 font-mono text-xs text-text-2"
+              >
+                {counter.kind === "children" ? (
+                  <FolderTree aria-hidden className="h-3.5 w-3.5" />
+                ) : (
+                  <FileText aria-hidden className="h-3.5 w-3.5" />
+                )}
+                {counter.value}
               </span>
             </Link>
             {category.canEdit && (
