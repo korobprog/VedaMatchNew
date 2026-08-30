@@ -102,7 +102,11 @@ describe('ChatConversationsService', () => {
 
   const events = { publish: fn() };
   const bus = { emit: fn() };
-  const uploads = { removeMany: fn() };
+  const uploads = {
+    removeMany: fn(),
+    /** Начало адресов бакета — как у настроенного ChatUploadsService. */
+    storagePrefix: 'https://cdn.vedamatch.ru/',
+  };
   const chatPresence = { markViewing: fn() };
 
   const service = new ChatConversationsService(
@@ -401,6 +405,25 @@ describe('ChatConversationsService', () => {
       };
       expect(call.where).toMatchObject({ userId: 'guest' });
       expect(call.data.leftAt).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('updateConversation', () => {
+    it('не принимает картинку с чужого адреса', async () => {
+      // Она рисуется у всех участников беседы: чужой сервер иначе узнаёт их
+      // адреса и время, когда беседу открыли.
+      prisma.chatConversation.findUnique.mockResolvedValue(
+        conversation({
+          members: [member('me', { role: 'owner' }), member('guest')],
+        }),
+      );
+
+      await expect(
+        service.updateConversation('me', 'conversation-1', {
+          avatarUrl: 'https://чужой/pixel.gif',
+        }),
+      ).rejects.toThrow('Картинка не из нашего хранилища');
+      expect(prisma.chatConversation.update).not.toHaveBeenCalled();
     });
   });
 

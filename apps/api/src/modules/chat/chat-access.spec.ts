@@ -49,6 +49,16 @@ describe('denyWrite', () => {
     expect(denyWrite(direct(), member({ leftAt: new Date() }))).toBe('left');
   });
 
+  it('блокировка закрывает и уже начатую переписку', () => {
+    expect(denyWrite(direct({ blocked: true }), member())).toBe('blocked');
+  });
+
+  it('заблокированному отвечает блокировка, а не состояние беседы', () => {
+    // Иначе по разнице ответов видно, отклонили запрос или заблокировали.
+    const declined = direct({ blocked: true, state: 'declined' });
+    expect(denyWrite(declined, member())).toBe('blocked');
+  });
+
   it('запрос даёт автору ровно одно сообщение', () => {
     const conversation = direct({ state: 'request', requestedById: 'me' });
     expect(

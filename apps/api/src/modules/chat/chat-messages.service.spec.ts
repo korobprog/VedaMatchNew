@@ -4,6 +4,7 @@ import type { ChatConversationsService } from './chat-conversations.service';
 import { ChatEventsService } from './chat-events.service';
 import { ChatMessagesService } from './chat-messages.service';
 import { ChatPresenceService } from './chat-presence.service';
+import type { ChatUploadsService } from './chat-uploads.service';
 
 const createdAt = new Date('2026-08-22T10:00:00.000Z');
 
@@ -77,6 +78,7 @@ describe('ChatMessagesService', () => {
       count: fn(() => Promise.resolve(0)),
     },
     chatConversation: { update: fn() },
+    userBlock: { findFirst: fn(() => Promise.resolve(null)) },
     chatMember: { updateMany: fn() },
     chatMessageReaction: {
       findUnique: fn(() => Promise.resolve(null)),
@@ -94,6 +96,8 @@ describe('ChatMessagesService', () => {
   const events = { publish: fn() };
   const bus = { emit: fn() };
   const chatPresence = { isViewing: fn(() => Promise.resolve(false)) };
+  /** Начало адресов бакета — как у настроенного ChatUploadsService. */
+  const uploads = { storagePrefix: 'https://cdn.vedamatch.ru/' };
 
   const service = new ChatMessagesService(
     prisma as unknown as PrismaService,
@@ -101,6 +105,7 @@ describe('ChatMessagesService', () => {
     events as unknown as ChatEventsService,
     bus as never,
     chatPresence as unknown as ChatPresenceService,
+    uploads as unknown as ChatUploadsService,
   );
 
   beforeEach(() => {
@@ -110,6 +115,7 @@ describe('ChatMessagesService', () => {
     prisma.chatMessage.create.mockResolvedValue(storedMessage());
     prisma.chatMessageReaction.findUnique.mockResolvedValue(null);
     prisma.chatMessageReaction.findMany.mockResolvedValue([]);
+    prisma.userBlock.findFirst.mockResolvedValue(null);
     conversations.requireConversation.mockResolvedValue(conversation());
   });
 
@@ -140,6 +146,37 @@ describe('ChatMessagesService', () => {
       await expect(
         service.send('me', 'conversation-1', { body: 'ответ' }),
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('заблокированному в личном диалоге писать нельзя', async () => {
+      // Блокируют посреди переписки: диалог к этому времени уже есть, и
+      // проверки при его заведении для защиты не хватает.
+      prisma.userBlock.findFirst.mockResolvedValue({ id: 'block-1' });
+
+      await expect(
+        service.send('me', 'conversation-1', { body: 'привет' }),
+      ).rejects.toThrow('Переписка недоступна');
+      expect(prisma.chatMessage.create).not.toHaveBeenCalled();
+    });
+
+    it('в группе блокировка не спрашивается: людей там больше двоих', async () => {
+      conversations.requireConversation.mockResolvedValue(
+        conversation({ kind: 'group' }),
+      );
+
+      await service.send('me', 'conversation-1', { body: 'привет' });
+
+      expect(prisma.userBlock.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('чужой адрес вложения не принимается', async () => {
+      await expect(
+        service.send('me', 'conversation-1', {
+          body: '',
+          attachments: [{ kind: 'image', url: 'https://чужой/pixel.gif' }],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.chatMessage.create).not.toHaveBeenCalled();
     });
 
     it('в канал рядовой участник не пишет', async () => {
@@ -231,6 +268,15 @@ describe('ChatMessagesService', () => {
         authorId: 'other',
         deletedAt: null,
       });
+    });
+
+    it('заблокированный не ставит реакции', async () => {
+      prisma.userBlock.findFirst.mockResolvedValue({ id: 'block-1' });
+
+      await expect(
+        service.setReaction('me', 'message-1', '🙏'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.chatMessageReaction.create).not.toHaveBeenCalled();
     });
 
     it('не принимает эмодзи вне белого списка', async () => {

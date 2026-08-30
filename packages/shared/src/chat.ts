@@ -457,7 +457,16 @@ export interface AdminChatDirectMessageDto {
 
 export interface AdminChatDirectTranscript {
   conversationId: string | null;
+  /**
+   * Последние сообщения переписки, по возрастанию времени. Именно последние:
+   * жалоба всегда про недавнее, а начало долгого диалога к делу не относится.
+   */
   messages: AdminChatDirectMessageDto[];
+  /**
+   * Показано не всё: сообщений больше предела. Модератор обязан это видеть —
+   * молчаливая обрезка читается как «вот вся переписка».
+   */
+  truncated: boolean;
 }
 
 export interface AdminChatStats {

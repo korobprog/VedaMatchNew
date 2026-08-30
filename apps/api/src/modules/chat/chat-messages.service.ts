@@ -30,6 +30,7 @@ import {
 } from './chat-dto';
 import { ChatEventsService } from './chat-events.service';
 import { ChatPresenceService } from './chat-presence.service';
+import { ChatUploadsService } from './chat-uploads.service';
 import { chatMessageInclude } from './chat-selects';
 import {
   assertReactionEmoji,
@@ -43,6 +44,9 @@ import {
 const WRITE_DENIAL_TEXT: Record<WriteDenial, string> = {
   not_member: 'Беседа недоступна',
   left: 'Вы вышли из этой беседы',
+  // Та же формулировка, что при заведении диалога с заблокированным: по
+  // отказу не должно быть видно, кто кого заблокировал и было ли это вообще.
+  blocked: 'Переписка недоступна',
   declined: 'Человек отклонил переписку',
   archived: 'Беседа в архиве',
   request_awaiting_answer: 'Запрос даёт одно сообщение — дождитесь ответа',
@@ -58,6 +62,7 @@ export class ChatMessagesService {
     private readonly events: ChatEventsService,
     private readonly bus: EventEmitter2,
     private readonly presence: ChatPresenceService,
+    private readonly uploads: ChatUploadsService,
   ) {}
 
   async send(
@@ -72,7 +77,7 @@ export class ChatMessagesService {
 
     const body = this.validated(() => normalizeMessageBody(dto.body));
     const attachments = this.validated(() =>
-      normalizeAttachments(dto.attachments),
+      normalizeAttachments(dto.attachments, this.uploads.storagePrefix),
     );
     this.validated(() => assertSendable(body, attachments));
 
@@ -87,6 +92,7 @@ export class ChatMessagesService {
         state: conversation.state,
         requestedById: conversation.requestedById,
         messageCount,
+        blocked: await this.blockedWithCompanion(userId, conversation),
         // Ответ на пост канала — комментарий: читателю он разрешён, хотя
         // писать в саму ленту он не может.
         isComment: Boolean(dto.replyToId),
@@ -158,6 +164,34 @@ export class ChatMessagesService {
     this.announceActivity(userId);
 
     return dtoOut;
+  }
+
+  /**
+   * Блокировка между собеседниками личного диалога — в любую сторону.
+   *
+   * Запрос на каждую отправку и только для диалога: в группе и канале
+   * блокировка не закрывает беседу, там людей больше двоих, и уйти от одного
+   * человека можно выходом. `UserBlock` — портальная модель, читать её модулю
+   * разрешено.
+   */
+  private async blockedWithCompanion(
+    userId: string,
+    conversation: ChatConversationRow,
+  ): Promise<boolean> {
+    if (conversation.kind !== 'direct') return false;
+    const companion = conversation.members.find((m) => m.userId !== userId);
+    if (!companion) return false;
+
+    const block = await this.prisma.userBlock.findFirst({
+      where: {
+        OR: [
+          { blockerId: userId, blockedId: companion.userId },
+          { blockerId: companion.userId, blockedId: userId },
+        ],
+      },
+      select: { id: true },
+    });
+    return Boolean(block);
   }
 
   /**
@@ -296,6 +330,11 @@ export class ChatMessagesService {
       message.conversationId,
       userId,
     );
+    // Реакция — тот же способ дотянуться до человека, что и сообщение:
+    // без этой проверки заблокированный продолжал ставить эмодзи в диалоге,
+    // куда писать ему уже нельзя.
+    if (await this.blockedWithCompanion(userId, conversation))
+      throw new ForbiddenException(WRITE_DENIAL_TEXT.blocked);
 
     const existing = await this.prisma.chatMessageReaction.findUnique({
       where: { messageId_userId: { messageId, userId } },

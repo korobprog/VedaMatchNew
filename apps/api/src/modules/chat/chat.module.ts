@@ -10,6 +10,7 @@ import { ChatMessagesService } from './chat-messages.service';
 import { ChatPresenceService } from './chat-presence.service';
 import { ChatPurgeListener } from './chat-purge.listener';
 import { ChatReportsService } from './chat-reports.service';
+import { ChatRetentionService } from './chat-retention.service';
 import { ChatSignedUrlsInterceptor } from './chat-signed-urls.interceptor';
 import { ChatStreamController } from './chat-stream.controller';
 import { ChatUploadsService } from './chat-uploads.service';
@@ -52,6 +53,7 @@ import { PeopleService } from './people/people.service';
     ChatUploadsService,
     ChatSignedUrlsInterceptor,
     ChatPurgeListener,
+    ChatRetentionService,
     ChatColorTemplatesService,
     ChatConversationThemeService,
     PeopleService,

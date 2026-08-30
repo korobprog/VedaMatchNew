@@ -25,6 +25,14 @@ export interface ConversationAccessInput {
   requestedById?: string | null;
   /** Сколько сообщений уже в беседе — запрос даёт ровно одно. */
   messageCount?: number;
+  /**
+   * Блокировка между собеседниками личного диалога — в любую сторону.
+   *
+   * Проверять её только при заведении диалога недостаточно: блокируют чаще
+   * всего посреди переписки, а диалог к этому времени уже есть, и без этого
+   * флага заблокированный продолжал писать в него как ни в чём не бывало.
+   */
+  blocked?: boolean;
 }
 
 export interface MemberAccessInput {
@@ -37,6 +45,7 @@ export interface MemberAccessInput {
 export type WriteDenial =
   | 'not_member'
   | 'left'
+  | 'blocked'
   | 'declined'
   | 'archived'
   | 'request_awaiting_answer'
@@ -61,6 +70,9 @@ export function denyWrite(
 ): WriteDenial | null {
   if (!member) return 'not_member';
   if (member.leftAt) return 'left';
+  // Раньше состояния беседы: заблокированному незачем знать, приняли его
+  // запрос или отклонили, — ответ одинаковый в любом случае.
+  if (conversation.blocked) return 'blocked';
   if (conversation.state === 'declined') return 'declined';
   if (conversation.state === 'archived') return 'archived';
 
