@@ -117,6 +117,46 @@ export async function saveTrackOffline(
 }
 
 /**
+ * Оставить на устройстве только что залитую запись.
+ *
+ * Файл уже в браузере — тот самый, который человек выбрал в форме. Гонять его
+ * обратно из хранилища через `saveTrackOffline` значит скачать сотню мегабайт,
+ * которые минуту назад сами туда и уехали.
+ *
+ * Проверку «только опубликованное» здесь не применяем осознанно: это
+ * собственный файл человека, а не чужая запись с витрины. Если модерация её
+ * отклонит, сверка `dropRevokedTracks` при следующем открытии портала сотрёт
+ * копию сама — тот же механизм, что и для отозванных по жалобе.
+ *
+ * Место проверяем по настоящему размеру, а не по битрейту: он известен точно.
+ */
+export async function keepUploadedTrackOffline(
+  userId: string,
+  track: MusicTrackDto,
+  file: Blob,
+): Promise<MusicOfflineTrack> {
+  const estimate = await currentEstimate();
+  const verdict = canFitOffline(estimate, file.size);
+  if (!verdict.ok) throw new Error(verdict.reason);
+
+  await requestPersistence();
+
+  const record: MusicOfflineTrack = {
+    trackId: track.id,
+    track,
+    body: file,
+    sizeBytes: file.size,
+    // У файла с диска тип бывает пустым — браузер не всегда его определяет.
+    mime: file.type || "audio/mpeg",
+    savedAt: new Date().toISOString(),
+  };
+
+  const db = await openMusicDb(userId);
+  await putOfflineTrack(db, record);
+  return record;
+}
+
+/**
  * Чтение с показом прогресса. `response.blob()` отдал бы файл целиком и
  * молча: киртан на сотню мегабайт без полосы выглядит как зависшая
  * страница — тот же довод, что у заливки.
