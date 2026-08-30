@@ -56,17 +56,25 @@ describe("ServiceGrid", () => {
   it("до первого открытия сервиса показывает подробные карточки", () => {
     render(grid());
     expect(screen.getByText("Осознанные знакомства и сотрудничество")).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Открыть" })).toHaveLength(2);
+    // Открывает сервис его название: отдельной кнопки «Открыть» нет ни в
+    // подробном виде, ни в компактном.
+    expect(screen.getByRole("link", { name: /Знакомства/ })).toHaveAttribute(
+      "href",
+      "/union",
+    );
+    expect(screen.getByRole("link", { name: /Астрология/ })).toHaveAttribute(
+      "href",
+      "/astro",
+    );
   });
 
-  it("в компактном режиме описаний и кнопок «Открыть» нет", () => {
+  it("в компактном режиме описаний нет", () => {
     writeLayout(USER, { mode: "compact" });
     render(grid());
 
     expect(
       screen.queryByText("Осознанные знакомства и сотрудничество"),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Открыть" })).toBeNull();
     // Нажимается вся плитка целиком.
     expect(screen.getByRole("link", { name: /Знакомства/ })).toHaveAttribute(
       "href",
@@ -80,11 +88,16 @@ describe("ServiceGrid", () => {
 
     await user.click(screen.getByRole("button", { name: "Плитками" }));
 
-    expect(screen.queryByRole("link", { name: "Открыть" })).toBeNull();
+    // Вид различается описаниями: ссылка на сервис есть в обоих.
+    expect(
+      screen.queryByText("Осознанные знакомства и сотрудничество"),
+    ).not.toBeInTheDocument();
     expect(readLayout(USER).mode).toBe("compact");
 
     await user.click(screen.getByRole("button", { name: "Подробно" }));
-    expect(screen.getAllByRole("link", { name: "Открыть" }).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Осознанные знакомства и сотрудничество"),
+    ).toBeInTheDocument();
     expect(readLayout(USER).mode).toBe("detailed");
   });
 
@@ -96,7 +109,7 @@ describe("ServiceGrid", () => {
     const user = userEvent.setup();
     render(grid());
 
-    await user.click(screen.getAllByRole("link", { name: "Открыть" })[0]);
+    await user.click(screen.getByRole("link", { name: /Знакомства/ }));
 
     expect(effectiveMode(readLayout(USER))).toBe("compact");
   });
@@ -140,8 +153,8 @@ describe("ServiceGrid", () => {
         .map((node) => node.getAttribute("href"))
         .filter((href): href is string => href !== null);
 
-    // «Рынок» ещё не запущен: в подробном виде у него нет ссылки «Открыть»,
-    // в компактном плитка не ссылка вовсе — потому его нет ни в одном списке.
+    // «Рынок» ещё не запущен: его название не ссылка ни в подробном виде, ни
+    // в компактном — потому его нет ни в одном списке.
     expect(order()).toEqual(["/astro", "/union"]);
 
     await user.click(screen.getByRole("button", { name: "Плитками" }));
