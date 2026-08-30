@@ -123,9 +123,26 @@ export function EntryCard({
             })}
           </Link>
         ))}
+        {/* Одна ссылка, а не две под разные экраны: спрятать лишнюю классом
+            значит оставить её в дереве доступности, и скринридер прочитал бы
+            «Открыть» дважды подряд на каждой карточке.
+
+            На телефоне `w-full` в flex-wrap уводит её на свою строку — во всю
+            ширину, с рамкой и по центру. В общей строке она оказывалась за
+            чипами рубрик: те переносятся, и «Открыть» уезжало то на вторую
+            строку, то к самому правому краю, куда большой палец не
+            дотягивается. Да и текстовая ссылка среди счётчиков просмотров и
+            комментариев не читалась как главное действие карточки, хотя она
+            им и является.
+
+            На широком экране всё это снимается: место есть, и кнопка во всю
+            ширину карточки там выглядела бы грубо.
+
+            Рамка, а не заливка: на экране пять-шесть карточек подряд, и
+            столько сплошных кнопок превратили бы ленту в лестницу. */}
         <Link
           href={`/library/entry/${entry.id}`}
-          className="ml-auto hover:text-text-0"
+          className="order-last ml-auto flex min-h-11 w-full items-center justify-center rounded-xl border border-glass-brd text-sm font-semibold text-text-1 transition-colors hover:text-text-0 sm:order-none sm:min-h-0 sm:w-auto sm:rounded-none sm:border-0 sm:text-xs sm:font-normal sm:text-text-2 sm:hover:text-text-0"
         >
           {t(locale, "entry.open")}
         </Link>
