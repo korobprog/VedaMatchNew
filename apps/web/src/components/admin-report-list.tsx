@@ -112,12 +112,23 @@ function ReportCard({ report }: { report: AdminUserReportDto }) {
         </p>
       )}
 
-      <ChatReportTranscript
-        reporterId={report.reporter.id}
-        targetId={report.target.id}
-        reporterName={report.reporter.name}
-        targetName={report.target.name}
-      />
+      {/* Переписку открывает только жалоба в работе — так же считает и API.
+          По разобранной кнопку не показываем: она отвечала бы отказом, а
+          нужно посмотреть снова — жалоба возвращается в работу, и это
+          остаётся в журнале. */}
+      {report.status === "open" ? (
+        <ChatReportTranscript
+          reporterId={report.reporter.id}
+          targetId={report.target.id}
+          reporterName={report.reporter.name}
+          targetName={report.target.name}
+        />
+      ) : (
+        <p className="mt-3 border-t border-glass-brd pt-3 text-xs text-text-2">
+          По разобранной жалобе переписка закрыта — верните её в работу, если
+          нужно посмотреть снова.
+        </p>
+      )}
 
       <label className="mt-3 block">
         <span className="mb-1 block text-xs uppercase tracking-wide text-text-2">

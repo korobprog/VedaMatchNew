@@ -1,7 +1,12 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Prisma } from '@prisma/client';
 import type {
+  AdminAuditEvent,
   AdminChatConversationsState,
   AdminChatDirectTranscript,
   AdminChatReportDecisionRequest,
@@ -10,9 +15,22 @@ import type {
   CreateChatReportRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ModerationService } from '../moderation/moderation.service';
 import { toUserSummary } from './chat-dto';
 import { directKey } from './direct-key';
 import { chatUserSelect } from './chat-selects';
+
+/**
+ * Сколько сообщений отдаёт расшифровка. Предел есть, потому что переписка
+ * бывает в тысячи сообщений, а разбирают жалобу по последним.
+ */
+const TRANSCRIPT_LIMIT = 500;
+
+/**
+ * Чем оправдан просмотр — уезжает в журнал. Строка, а не булево: «смотрел»
+ * без «на каком основании» разобрать потом невозможно.
+ */
+type TranscriptBasis = 'portal-report' | 'chat-report';
 
 /**
  * Жалобы и админский раздел сервиса. Живут в модуле чата: общей модерации
@@ -23,6 +41,9 @@ export class ChatReportsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bus: EventEmitter2,
+    // Портальная инфраструктура — её контракт сервисного модуля разрешает
+    // наравне с AuthModule.
+    private readonly moderation: ModerationService,
   ) {}
 
   async create(userId: string, dto: CreateChatReportRequest) {
@@ -148,28 +169,53 @@ export class ChatReportsService {
    * разбор жалобы не повод читать чужие сообщения целиком.
    */
   /**
-   * Переписка двоих целиком — для разбора жалобы на человека.
+   * Переписка двоих — для разбора жалобы на человека.
    *
    * Личный диалог у пары ровно один (его держит `directKey`), поэтому пары
    * идентификаторов достаточно: искать беседу глазами администратору не нужно.
-   * Удалённые сообщения остаются в выдаче с пометкой: разбирают жалобу как раз
-   * по тому, что человек успел стереть.
+   *
+   * Открывается только по неразобранной жалобе — портальной на человека либо
+   * своей на эту беседу. Без этой проверки права администратора сервиса
+   * означали чтение переписки любой пары по двум идентификаторам.
+   *
+   * Удалённые сообщения приходят с текстом и пометкой `deletedAt`. Это
+   * осознанно: типовая травля — написать и стереть, и без стёртого разбирать
+   * жалобу нечего. Границы у этого доступа три, и все три на сервере: живая
+   * жалоба, запись в журнал ниже и срок хранения (ChatRetentionService), после
+   * которого текста нет уже ни у кого. Прятать его на клиенте бессмысленно —
+   * ответ всё равно виден тому, кто откроет средства разработчика.
    */
   async adminDirectTranscript(
     adminId: string,
     a: string,
     b: string,
   ): Promise<AdminChatDirectTranscript> {
+    if (!a || !b || a === b)
+      throw new BadRequestException('Не указана пара собеседников');
+
+    const key = directKey(a, b);
+    // Повод спрашиваем до поиска беседы: иначе по ответу «переписки нет»
+    // перебором пар видно, кто с кем вообще говорил.
+    const basis = await this.transcriptBasis(a, b, key);
+    if (!basis)
+      throw new ForbiddenException(
+        'Переписку открывают по неразобранной жалобе',
+      );
+
     const conversation = await this.prisma.chatConversation.findUnique({
-      where: { directKey: directKey(a, b) },
+      where: { directKey: key },
       select: { id: true },
     });
-    if (!conversation) return { conversationId: null, messages: [] };
+    if (!conversation)
+      return { conversationId: null, messages: [], truncated: false };
 
+    // Свежие, а не первые: в долгой переписке `asc` показывал начало
+    // знакомства и обрезал ровно то, на что жалуются. Берём на одно больше
+    // предела, чтобы отличить «ровно предел» от «есть ещё».
     const rows = await this.prisma.chatMessage.findMany({
       where: { conversationId: conversation.id },
-      orderBy: { createdAt: 'asc' },
-      take: 500,
+      orderBy: { createdAt: 'desc' },
+      take: TRANSCRIPT_LIMIT + 1,
       select: {
         id: true,
         authorId: true,
@@ -181,17 +227,31 @@ export class ChatReportsService {
         _count: { select: { attachments: true } },
       },
     });
+    const truncated = rows.length > TRANSCRIPT_LIMIT;
+    const page = rows.slice(0, TRANSCRIPT_LIMIT).reverse();
 
-    this.bus.emit('admin.action', {
+    // Типизированное событие, а не литерал: без типа сюда уехало действие,
+    // которого нет в списке журнала, и запись молча не создавалась — при том
+    // что администратору обещано обратное.
+    const event: AdminAuditEvent = {
       actorId: adminId,
       action: 'chat.transcript-viewed',
-      targetUserId: b,
-      payload: { conversationId: conversation.id, messages: rows.length },
-    });
+      targetType: 'user',
+      targetId: b,
+      details: {
+        conversationId: conversation.id,
+        messages: page.length,
+        // По какой именно жалобе смотрели — иначе журнал говорит «смотрел»,
+        // но не говорит «на каком основании».
+        basis,
+      },
+    };
+    this.bus.emit('admin.action', event);
 
     return {
       conversationId: conversation.id,
-      messages: rows.map((row) => ({
+      truncated,
+      messages: page.map((row) => ({
         id: row.id,
         authorId: row.authorId,
         // Мирское имя: разбор жалобы — то место, где нужно точно понимать,
@@ -204,6 +264,38 @@ export class ChatReportsService {
         attachments: row._count.attachments,
       })),
     };
+  }
+
+  /**
+   * Чем оправдан просмотр переписки пары. Два повода, и оба должны быть
+   * живыми:
+   *
+   * — портальная жалоба на человека в работе: с неё модератор и приходит,
+   *   кнопка стоит на карточке жалобы. `UserReport` — чужая таблица, поэтому
+   *   спрашиваем `ModerationService`, портальную инфраструктуру, а не читаем
+   *   её сами;
+   * — своя жалоба на эту беседу или на сообщение в ней: в разделе жалоб
+   *   сервиса портальной может не быть вовсе.
+   */
+  private async transcriptBasis(
+    a: string,
+    b: string,
+    key: string,
+  ): Promise<TranscriptBasis | null> {
+    if (await this.moderation.hasOpenReportBetween(a, b))
+      return 'portal-report';
+
+    const own = await this.prisma.chatReport.findFirst({
+      where: {
+        status: 'open',
+        OR: [
+          { conversation: { directKey: key } },
+          { message: { conversation: { directKey: key } } },
+        ],
+      },
+      select: { id: true },
+    });
+    return own ? 'chat-report' : null;
   }
 
   async adminConversations(

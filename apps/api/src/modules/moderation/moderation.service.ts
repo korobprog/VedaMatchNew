@@ -251,6 +251,30 @@ export class ModerationService {
     return { ok: true };
   }
 
+  /**
+   * Есть ли неразобранная жалоба на эту пару — в любую сторону.
+   *
+   * Спрашивают сервисы, которым для разбора нужно заглянуть в чужое: там
+   * должно быть чем оправдать просмотр, а `UserReport` — портальная таблица,
+   * читать её у себя они не вправе. Только `open`: решение по жалобе
+   * закрывает и повод. Понадобилось посмотреть снова — жалоба возвращается в
+   * работу через `adminUpdate`, и это видно в журнале.
+   */
+  async hasOpenReportBetween(a: string, b: string): Promise<boolean> {
+    if (!a || !b || a === b) return false;
+    const report = await this.prisma.userReport.findFirst({
+      where: {
+        status: 'open',
+        OR: [
+          { reporterId: a, targetId: b },
+          { reporterId: b, targetId: a },
+        ],
+      },
+      select: { id: true },
+    });
+    return Boolean(report);
+  }
+
   async adminList(
     role: Role,
     status?: string,

@@ -61,7 +61,8 @@ export function ChatReportTranscript({
           {pending ? "Загружаем…" : "Показать переписку"}
         </button>
         <p className="mt-1.5 text-xs text-text-2">
-          Открытие чужой переписки записывается в журнал действий.
+          Открытие чужой переписки записывается в журнал действий. Видны и
+          удалённые сообщения — пока не истёк срок их хранения.
         </p>
       </div>
     );
@@ -72,6 +73,12 @@ export function ChatReportTranscript({
       <p className="mb-2 text-xs uppercase tracking-wide text-text-2">
         Переписка · {reporterName} и {targetName}
       </p>
+      {chat.truncated && (
+        <p className="mb-2 text-xs text-gold">
+          Показаны последние {chat.messages.length} сообщений — в переписке их
+          больше.
+        </p>
+      )}
       {chat.messages.length === 0 ? (
         <p className="text-sm text-text-1">
           Личной переписки между ними нет.
@@ -87,12 +94,26 @@ export function ChatReportTranscript({
                 {message.authorName} ·{" "}
                 {new Date(message.createdAt).toLocaleString("ru-RU")}
                 {message.editedAt && " · изменено"}
-                {message.deletedAt && " · удалено автором"}
                 {message.attachments > 0 &&
                   ` · вложений: ${message.attachments}`}
               </p>
-              <p className="mt-1 whitespace-pre-line text-sm text-text-0">
-                {message.deletedAt ? "— сообщение удалено —" : message.body}
+              {/* Удалённое показываем с текстом и пометкой. Прятать его здесь
+                  было нечестно вдвойне: типовая травля — написать и стереть,
+                  а сам текст всё равно приходил в ответе и был виден в
+                  средствах разработчика. Границы этому доступу ставит сервер —
+                  живая жалоба, журнал и срок хранения. */}
+              {message.deletedAt && (
+                <p className="mt-1 text-xs font-semibold text-gold">
+                  Удалено автором{" "}
+                  {new Date(message.deletedAt).toLocaleString("ru-RU")}
+                </p>
+              )}
+              <p
+                className={`mt-1 whitespace-pre-line text-sm ${
+                  message.deletedAt ? "text-text-1 italic" : "text-text-0"
+                }`}
+              >
+                {message.body || "— без текста —"}
               </p>
             </li>
           ))}

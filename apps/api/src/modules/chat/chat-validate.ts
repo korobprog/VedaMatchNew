@@ -38,6 +38,34 @@ export function normalizeMessageBody(raw: string | undefined): string {
   return body;
 }
 
+/**
+ * Ведёт ли адрес в наше хранилище. `prefix` — начало адресов бакета
+ * (`ChatUploadsService.storagePrefix`); `null` означает, что S3 не настроен, и
+ * тогда своего файла не бывает вовсе.
+ */
+export function isStorageUrl(url: string, prefix: string | null): boolean {
+  return Boolean(prefix) && url.startsWith(prefix!);
+}
+
+/**
+ * Адрес вложения обязан вести в наше хранилище.
+ *
+ * В сообщение ссылку кладёт браузер — тем, что вернула загрузка, — и до этой
+ * проверки принималась любая строка. Прямым вызовом API отправитель клал в
+ * `url` чужой адрес, а веб рисует его как `<img src>` и `<a href>`: чужой
+ * сервер узнавал IP получателя, его браузер и точное время, когда переписку
+ * открыли, а «файл» вёл куда угодно. Поэтому проверяем начало адреса, а не
+ * просто наличие строки.
+ */
+export function assertStorageUrl(
+  url: string | null | undefined,
+  prefix: string | null,
+): void {
+  if (!url) return;
+  if (!isStorageUrl(url, prefix))
+    throw new ChatValidationError('Вложение не из нашего хранилища');
+}
+
 export function assertReactionEmoji(emoji: string): void {
   if (!(CHAT_REACTION_EMOJIS as readonly string[]).includes(emoji))
     throw new ChatValidationError('Такой реакции нет');
@@ -50,6 +78,8 @@ export function assertReactionEmoji(emoji: string): void {
  */
 export function normalizeAttachments(
   input: ChatAttachmentInput[] | undefined,
+  /** Начало адресов нашего бакета: чужие ссылки дальше не проходят. */
+  storagePrefix: string | null,
 ): ChatAttachmentInput[] {
   const list = input ?? [];
   if (list.length > CHAT_MAX_ATTACHMENTS)
@@ -62,6 +92,11 @@ export function normalizeAttachments(
       throw new ChatValidationError('У вложения нет ссылки на файл');
     if (CARD_KINDS.has(item.kind) && !item.title?.trim())
       throw new ChatValidationError('У карточки нет заголовка');
+
+    // И файл, и картинка карточки чужого сервиса лежат в нашем бакете:
+    // карточка уезжает снимком, а снимок с чужого адреса — не снимок.
+    assertStorageUrl(item.url, storagePrefix);
+    assertStorageUrl(item.previewUrl, storagePrefix);
 
     const waveform = (item.waveform ?? [])
       .slice(0, MAX_WAVEFORM_POINTS)

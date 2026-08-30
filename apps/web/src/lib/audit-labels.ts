@@ -36,7 +36,10 @@ export const auditActionLabels: Record<AdminAuditAction, string> = {
   "union.profile-restored": "Анкета знакомств возвращена в выдачу",
   "union.showcase-blocked": "Анкета снята с публичной витрины Знакомств",
   "union.showcase-unblocked": "Анкета возвращена на публичную витрину",
+  // Осталось от времён, когда переписка жила в Знакомствах: старые строки
+  // журнала ссылаются на это действие и должны читаться.
   "union.chat-viewed": "Просмотрена переписка по жалобе",
+  "chat.transcript-viewed": "Просмотрена переписка по жалобе",
   "library.category-merged": "Слиты категории Образования",
   "library.entry-removed": "Запись Образования снята с публикации",
   "library.entry-restored": "Запись Образования возвращена",
@@ -56,6 +59,8 @@ const DETAIL_LABELS: Record<string, string> = {
   to: "стало",
   reason: "причина",
   reportId: "жалоба",
+  basis: "основание",
+  conversationId: "беседа",
   kind: "вид",
   messages: "сообщений",
   status: "статус",

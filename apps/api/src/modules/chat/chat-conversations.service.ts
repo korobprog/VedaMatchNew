@@ -48,6 +48,7 @@ import {
   chatUserSelect,
 } from './chat-selects';
 import { directKey } from './direct-key';
+import { isStorageUrl } from './chat-validate';
 
 /** Сколько сообщений отдаём одной страницей переписки. */
 const PAGE_SIZE = 40;
@@ -888,6 +889,13 @@ export class ChatConversationsService {
     const title = patch.title?.trim();
     if (title !== undefined && !title)
       throw new BadRequestException('Название не может быть пустым');
+    // Картинка беседы — та же история, что и вложение: адрес приходит из
+    // браузера, а рисуется он у всех участников.
+    if (
+      patch.avatarUrl &&
+      !isStorageUrl(patch.avatarUrl, this.uploads.storagePrefix)
+    )
+      throw new BadRequestException('Картинка не из нашего хранилища');
 
     const updated = await this.prisma.chatConversation.update({
       where: { id: conversationId },

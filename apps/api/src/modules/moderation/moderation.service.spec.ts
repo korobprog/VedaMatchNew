@@ -15,6 +15,7 @@ describe('ModerationService', () => {
       create: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
       count: jest.fn(),
       groupBy: jest.fn(),
@@ -42,6 +43,31 @@ describe('ModerationService', () => {
     prisma.userBlock.findFirst.mockResolvedValue(null);
     prisma.userHiddenFrom.findMany.mockResolvedValue([]);
     prisma.userHiddenFrom.findFirst.mockResolvedValue(null);
+  });
+
+  describe('hasOpenReportBetween', () => {
+    it('находит жалобу в любую сторону и просит только неразобранную', async () => {
+      prisma.userReport.findFirst.mockResolvedValue({ id: 'report-1' });
+
+      await expect(service.hasOpenReportBetween('a', 'b')).resolves.toBe(true);
+      expect(prisma.userReport.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: 'open' }),
+        }),
+      );
+    });
+
+    it('без жалобы повода нет', async () => {
+      prisma.userReport.findFirst.mockResolvedValue(null);
+
+      await expect(service.hasOpenReportBetween('a', 'b')).resolves.toBe(false);
+    });
+
+    it('пара из одного человека и пустые id — не повод, и без запроса', async () => {
+      await expect(service.hasOpenReportBetween('a', 'a')).resolves.toBe(false);
+      await expect(service.hasOpenReportBetween('', 'b')).resolves.toBe(false);
+      expect(prisma.userReport.findFirst).not.toHaveBeenCalled();
+    });
   });
 
   it('hides both directions of a block', async () => {
