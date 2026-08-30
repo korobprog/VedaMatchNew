@@ -7,6 +7,7 @@ export * from './motivation';
 export * from './moderation';
 export * from './contacts';
 export * from './support';
+export * from './team-applications';
 export * from './notifications';
 export * from './astro';
 export * from './astro-chart';
