@@ -15,6 +15,7 @@ import { MotivationModule } from './modules/motivation/motivation.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
 import { PortalAccessModule } from './modules/access/access.module';
 import { SupportModule } from './modules/support/support.module';
+import { TeamApplicationsModule } from './modules/team-applications/team-applications.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { LibraryModule } from './modules/library/library.module';
 import { ChatModule } from './modules/chat/chat.module';
@@ -55,6 +56,7 @@ import { MusicModule } from './modules/music/music.module';
     // зрителю». Спрашивают лента друзей и сервисы с видимостью «для друзей».
     PortalAccessModule,
     SupportModule,
+    TeamApplicationsModule,
     BillingModule,
     LibraryModule,
     ChatModule,
