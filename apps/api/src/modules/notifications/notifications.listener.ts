@@ -40,6 +40,16 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.astroCompatibilityRequested)
+  onAstroCompatibilityRequested(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.astroCompatibilityAccepted)
+  onAstroCompatibilityAccepted(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   @OnEvent(notificationEventNames.noticePublished)
   onNoticePublished(event: NotificationEvent): void {
     void this.deliver(event);
@@ -120,6 +130,16 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.motivationVideoReady)
+  onMotivationVideoReady(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.motivationVideoReview)
+  onMotivationVideoReview(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   @OnEvent(notificationEventNames.marketReviewReceived)
   onMarketReviewReceived(event: NotificationEvent): void {
     void this.deliver(event);
@@ -127,6 +147,11 @@ export class NotificationsListener {
 
   @OnEvent(notificationEventNames.librarySectionRequestDecided)
   onLibrarySectionRequestDecided(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.teamApplicationReceived)
+  onTeamApplicationReceived(event: NotificationEvent): void {
     void this.deliver(event);
   }
 
