@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import type {
   AdminSupportTicketDto,
   AdminSupportTicketListResponse,
+  AdminTeamApplicationListResponse,
+  TeamApplicationDto,
   SupportTicketDto,
   SupportTicketListResponse,
   AdminVerificationRequest,
@@ -157,6 +159,14 @@ export const getAdminSupportTickets = (status?: string) => {
 };
 export const getAdminSupportTicket = (id: string) =>
   apiGet<AdminSupportTicketDto>(`/admin/support/tickets/${id}`);
+export const getAdminTeamApplications = (status?: string) => {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return apiGet<AdminTeamApplicationListResponse>(
+    `/admin/team/applications${query}`,
+  );
+};
+export const getAdminTeamApplication = (id: string) =>
+  apiGet<TeamApplicationDto>(`/admin/team/applications/${id}`);
 /** Публичный тариф, включает текущий режим биллинга (beta/business). */
 export const getBillingPlan = () => apiGetPublic<PricingPlan>("/billing/plan");
 /** Подробная статистика портала; доступна только вошедшим. */
