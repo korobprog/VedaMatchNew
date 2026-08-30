@@ -36,41 +36,44 @@ describe("entryTypeLabel", () => {
 });
 
 describe("categoryPageSummary", () => {
-  const node = (
-    childrenCount: number,
-    entriesCount: number,
-    subtreeEntriesCount: number,
-  ) => ({ childrenCount, entriesCount, subtreeEntriesCount });
-
-  it("у листа — только его материалы, без оговорок", () => {
-    expect(categoryPageSummary("ru", node(0, 12, 12), true)).toBe(
-      "12 материалов",
-    );
+  it("раздел показывает подразделы, а не материалы внутри них", () => {
+    // Ровно тот случай, из-за которого правка: своих материалов ноль, во
+    // вложенных три, и «3 материала» над лентой читались как «здесь три».
+    expect(
+      categoryPageSummary("ru", { childrenCount: 4, entriesCount: 0 }),
+    ).toBe("4 подраздела");
   });
 
-  it("у раздела с подразделами число материалов названо чужим", () => {
-    // Ровно тот случай, из-за которого правка: своих материалов ноль, а
-    // «3 материала» над лентой читались как «здесь три».
-    expect(categoryPageSummary("ru", node(4, 0, 3), true)).toBe(
-      "4 подраздела · 3 материала включая подразделы",
-    );
+  it("свои материалы раздела в число не подмешиваются", () => {
+    expect(
+      categoryPageSummary("ru", { childrenCount: 4, entriesCount: 12 }),
+    ).toBe("4 подраздела");
   });
 
-  it("выключенные вложенные показывают собственный ноль честно", () => {
-    expect(categoryPageSummary("ru", node(4, 0, 3), false)).toBe(
-      "4 подраздела · 0 материалов в самой рубрике",
-    );
+  it("подраздел показывает свои материалы", () => {
+    expect(
+      categoryPageSummary("ru", { childrenCount: 0, entriesCount: 12 }),
+    ).toBe("12 материалов");
   });
 
   it("склонения не разъезжаются на единице", () => {
-    expect(categoryPageSummary("ru", node(1, 1, 1), false)).toBe(
-      "1 подраздел · 1 материал в самой рубрике",
-    );
+    expect(
+      categoryPageSummary("ru", { childrenCount: 1, entriesCount: 0 }),
+    ).toBe("1 подраздел");
+    expect(
+      categoryPageSummary("ru", { childrenCount: 0, entriesCount: 1 }),
+    ).toBe("1 материал");
+  });
+
+  it("и на одиннадцати, где правило склонения другое", () => {
+    expect(
+      categoryPageSummary("ru", { childrenCount: 11, entriesCount: 0 }),
+    ).toBe("11 подразделов");
   });
 
   it("по-английски единственное число тоже не ломается", () => {
-    expect(categoryPageSummary("en", node(1, 1, 1), false)).toBe(
-      "1 subsection · 1 material in this category only",
-    );
+    expect(
+      categoryPageSummary("en", { childrenCount: 1, entriesCount: 0 }),
+    ).toBe("1 subsection");
   });
 });

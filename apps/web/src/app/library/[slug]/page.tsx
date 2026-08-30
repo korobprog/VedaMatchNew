@@ -89,11 +89,12 @@ export default async function LibraryCategoryPage({
             {t(locale, "nav.add")}
           </Link>
         </div>
-        {/* Строка называет, что посчитано. Голое «3 материалов» над лентой
-            рубрики, у которой своих материалов нет, читалось как «здесь
-            три» — а все три лежат в подразделах. */}
+        {/* То же одно число, что и в плитке: раздел — свои подразделы,
+            подраздел — свои материалы. Голое «3 материалов» над лентой
+            раздела, у которого своих материалов нет, читалось как «здесь
+            три» — а все три лежали в подразделах. */}
         <p className="mb-6 text-sm text-text-2">
-          {categoryPageSummary(locale, category, withDescendants)}
+          {categoryPageSummary(locale, category)}
         </p>
 
         <CategoryNavigator

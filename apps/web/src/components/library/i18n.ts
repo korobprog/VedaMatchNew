@@ -474,55 +474,40 @@ export function categoryCountLabel(
 }
 
 /**
- * Строка под названием рубрики.
+ * Строка под названием рубрики — то же одно число, что и в плитке.
  *
- * Голое «3 материалов» над лентой рубрики, у которой своих материалов нет ни
- * одного, читается как «здесь три материала» — а все три лежат в
- * подразделах. Поэтому у числа теперь названо, что именно посчитано, и
- * рядом стоит то, что в рубрике действительно лежит: её подразделы.
+ * Раздел показывает свои подразделы, подраздел — свои материалы, и ничего
+ * чужого. Двух чисел здесь нет намеренно: «4 подраздела · 3 материала»
+ * заставляет выбирать, какое из них про эту страницу, а ответ нужен один.
  *
- * Число материалов остаётся тем же, что показано в ленте ниже: переключатель
- * «со вложенными / только здесь» правит и её, и его разом. Разойтись им
- * нельзя — иначе подпись снова обещала бы не то, что видно.
+ * Число материалов раздела не показывается вовсе — ни своё, ни вложенных.
+ * Своё почти всегда ноль и выглядит как поломка; вложенных — то самое чужое,
+ * из-за которого правка и начиналась. Что лежит в подразделах, видно на них
+ * самих, строкой ниже.
  */
 export function categoryPageSummary(
   locale: LibraryLocale,
-  category: { childrenCount: number; entriesCount: number; subtreeEntriesCount: number },
-  withDescendants: boolean,
+  category: { childrenCount: number; entriesCount: number },
 ): string {
-  const entries = withDescendants
-    ? category.subtreeEntriesCount
-    : category.entriesCount;
+  const counter = categoryCounter(category);
 
-  const entriesPart =
-    locale === "ru"
-      ? `${entries} ${plural(entries, "материал", "материала", "материалов")}`
-      : `${entries} material${entries === 1 ? "" : "s"}`;
-
-  if (category.childrenCount === 0) return entriesPart;
-
-  const childrenPart =
-    locale === "ru"
-      ? `${category.childrenCount} ${plural(
-          category.childrenCount,
+  if (counter.kind === "children") {
+    return locale === "ru"
+      ? `${counter.value} ${plural(
+          counter.value,
           "подраздел",
           "подраздела",
           "подразделов",
         )}`
-      : `${category.childrenCount} subsection${
-          category.childrenCount === 1 ? "" : "s"
-        }`;
+      : `${counter.value} subsection${counter.value === 1 ? "" : "s"}`;
+  }
 
-  // Уточнение нужно только там, где есть подразделы: у листа «включая
-  // подразделы» нечего включать, а «в самой рубрике» противопоставлять.
-  const scope =
-    locale === "ru"
-      ? withDescendants
-        ? "включая подразделы"
-        : "в самой рубрике"
-      : withDescendants
-        ? "including subsections"
-        : "in this category only";
-
-  return `${childrenPart} · ${entriesPart} ${scope}`;
+  return locale === "ru"
+    ? `${counter.value} ${plural(
+        counter.value,
+        "материал",
+        "материала",
+        "материалов",
+      )}`
+    : `${counter.value} material${counter.value === 1 ? "" : "s"}`;
 }
