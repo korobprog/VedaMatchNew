@@ -26,7 +26,13 @@ import {
   stopPlayback,
   trackStreamUrl,
 } from "@/lib/music-playback-api";
-import { mediaErrorText } from "@/lib/music/media-error";
+import {
+  MUSIC_STALL_TEXT,
+  MUSIC_STALL_TIMEOUT_MS,
+  mediaErrorText,
+  playRejectionText,
+  stalledVerdict,
+} from "@/lib/music/media-error";
 import { findSavedTrack } from "@/lib/music/offline-db";
 import {
   SLEEP_TIMER_OFF,
@@ -269,7 +275,16 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const loadTrack = useCallback(async (trackId: string | null) => {
     if (!trackId) return;
     const track = await getTrack(trackId);
-    if (track) setCurrent(track);
+    if (track) {
+      setCurrent(track);
+      return;
+    }
+    // Карточка не пришла — значит `src` элементу так и не достанется, и ни
+    // одного события от него не будет: ни `playing`, ни `error`. Без этой
+    // ветки ожидание оставалось бы включённым навсегда.
+    setIsLoading(false);
+    setIsPlaying(false);
+    setLoadError("Запись не открывается: её могли снять с публикации");
   }, []);
 
   // ---------- Зеркало в localStorage ----------
@@ -444,6 +459,44 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       audio.muted = muted;
     }
   }, [volume, muted]);
+
+  /**
+   * Сторож зависшей загрузки.
+   *
+   * Отказ хранилища браузер сообщает событием `error` за доли секунды —
+   * проверено на 503. А вот запрос, который приняли и не ответили, не
+   * сообщается никак: элемент остаётся в загрузке навсегда, и вертушка
+   * вместе с ним. Ровно это и выглядит как «крутится и не грузится».
+   *
+   * Останавливаем сами, но только когда начало так и не пришло: провал
+   * буфера посреди записи проходит через то же ожидание, и обрывать его
+   * ошибкой значит убить звук, который вот-вот вернётся.
+   */
+  useEffect(() => {
+    if (!isLoading) return;
+    const timer = window.setTimeout(() => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      if (stalledVerdict(audio) === "buffering") {
+        setIsLoading(false);
+        return;
+      }
+      audio.pause();
+      setIsPlaying(false);
+      setIsLoading(false);
+      setLoadError(MUSIC_STALL_TEXT);
+      // Единственная строка в консоль на весь плеер, и она заслуженная: у
+      // зависшего запроса нет ни кода ответа, ни события, и без адреса,
+      // который не ответил, жалоба «крутится и не грузится» неотличима от
+      // десятка других причин.
+      console.warn(
+        `[music] запись ${current?.id ?? "?"} не пошла за ${
+          MUSIC_STALL_TIMEOUT_MS / 1000
+        } с: ${audio.currentSrc || audio.src || "источник не назначен"}`,
+      );
+    }, MUSIC_STALL_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [isLoading, current]);
 
   const handleLoadedMetadata = useCallback(() => {
     const audio = audioRef.current;
@@ -733,7 +786,15 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     const audio = audioRef.current;
     if (!audio || !current) return;
     if (audio.paused) {
-      void audio.play();
+      // Тот же тупик, что и при смене записи: отклонённый `play()` не
+      // приходит ни `playing`, ни `error`, и включённое ниже ожидание
+      // снять было бы некому.
+      void audio.play().catch((error: unknown) => {
+        setIsPlaying(false);
+        setIsLoading(false);
+        const text = playRejectionText(error);
+        if (text) setLoadError(text);
+      });
       setIsPlaying(true);
       // Готовому буферу вертушка не нужна: мигание на возобновлении паузы
       // читается как сбой, а не как загрузка.
@@ -751,10 +812,27 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !current || !isPlaying) return;
-    void audio.play().catch(() => {
-      // Браузер может не дать автозапуск без жеста — это не ошибка.
+
+    let cancelled = false;
+    void audio.play().catch((error: unknown) => {
+      // Запись успели переключить — отказ относится к прежней, и трогать
+      // состояние новой он права не имеет.
+      if (cancelled) return;
+
+      // Ожидание снимаем обязательно. Отклонённый `play()` — тупик без
+      // событий: `playing` не придёт, `error` у элемента не будет, и
+      // вертушка в кнопке крутилась бы до конца жизни вкладки. Ровно так
+      // выглядел запрет автозапуска: файл скачан, длительность в полосе
+      // уже стоит, а звука нет и причины не видно.
       setIsPlaying(false);
+      setIsLoading(false);
+      const text = playRejectionText(error);
+      if (text) setLoadError(text);
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [current, isPlaying]);
 
   const seek = useCallback((seconds: number) => {
