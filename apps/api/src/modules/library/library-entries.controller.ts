@@ -21,6 +21,7 @@ import type {
   UpdateLibraryEntryRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { AdminUnlimited } from '../auth/admin-unlimited.guard';
 import { LibraryBookmarksService } from './library-bookmarks.service';
 import { LibraryCommentsService } from './library-comments.service';
 import {
@@ -52,8 +53,13 @@ export class LibraryEntriesController {
     return this.entries.byId(id, user.sub, isAdmin(user));
   }
 
+  /**
+   * Добавление материала ограничено против спама. Админу лимит не считается —
+   * он наполняет каталог пачками, как в чате при разборе жалоб.
+   */
   @Post()
   @Throttle({ default: { ttl: 3_600_000, limit: 20 } })
+  @AdminUnlimited('library')
   create(
     @CurrentUser() user: AccessTokenPayload,
     @Body() body: CreateLibraryEntryRequest,
@@ -79,6 +85,7 @@ export class LibraryEntriesController {
 
   @Post(':id/preview')
   @Throttle({ default: { ttl: 3_600_000, limit: 20 } })
+  @AdminUnlimited('library')
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }),
   )
