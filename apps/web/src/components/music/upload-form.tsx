@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import type { MusicUploadRightsBasis } from "@vedamatch/shared";
 import { MUSIC_ACCEPTED_MIME } from "@vedamatch/shared";
 import { uploadMusicTrack } from "@/lib/music-client-api";
+import { getTrack } from "@/lib/music-playback-api";
+import { keepUploadedTrackOffline } from "@/lib/music/offline-manager";
 import { Alert } from "@/components/ui/alert";
+import { useMusicPlayer } from "./player/player-provider";
 
 const BASES: { value: MusicUploadRightsBasis; label: string }[] = [
   { value: "own_recording", label: "Своя запись" },
@@ -38,7 +41,7 @@ export function MusicUploadForm() {
    * тащить в неё синтетические идентификаторы ради красоты незачем.
    */
   const [results, setResults] = useState<
-    Record<string, { state: "ok" | "failed"; note: string }>
+    Record<string, { state: "ok" | "failed"; note: string; kept?: boolean }>
   >({});
   const [currentName, setCurrentName] = useState<string | null>(null);
   /**
@@ -50,6 +53,20 @@ export function MusicUploadForm() {
    * ровно этого: «без отметки кнопка загрузки неактивна».
    */
   const [basis, setBasis] = useState<MusicUploadRightsBasis | "">("");
+  /**
+   * Чьё офлайн-хранилище открыто. Берём у плеера — он единственный, кто знает
+   * человека в этом поддереве, и ровно так же спрашивает кнопка «скачать».
+   */
+  const offlineUserId = useMusicPlayer()?.offlineUserId ?? null;
+  /**
+   * Оставлять ли копию на устройстве.
+   *
+   * Отмечено по умолчанию: файл уже здесь, и класть его в хранилище стоит
+   * ноль трафика — а без этого человек, которому запись нужна в дороге,
+   * скачивает обратно то, что сам залил. Снять отметку можно: на телефоне с
+   * забитой памятью копия десятка киртанов не нужна никому.
+   */
+  const [keepCopy, setKeepCopy] = useState(true);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -82,9 +99,27 @@ export function MusicUploadForm() {
           setProgress,
         );
         ok += 1;
+        // Копию кладём тем же файлом, что только что уехал в бакет: байты уже
+        // в браузере, и качать их обратно незачем. Карточку приходится
+        // спросить — в ответе на завершение заливки её нет, а в хранилище без
+        // неё запись негде подписать.
+        let kept = false;
+        if (keepCopy && offlineUserId) {
+          try {
+            const card = await getTrack(result.trackId);
+            if (card) {
+              await keepUploadedTrackOffline(offlineUserId, card, file);
+              kept = true;
+            }
+          } catch {
+            // Не хватило места или запрещено хранилище. Заливка при этом
+            // удалась, и объявлять её неудачной из-за копии нельзя: запись
+            // на портале есть, друзья её услышат.
+          }
+        }
         setResults((was) => ({
           ...was,
-          [file.name]: { state: "ok", note: result.title },
+          [file.name]: { state: "ok", note: result.title, kept },
         }));
       } catch (cause) {
         setResults((was) => ({
@@ -185,6 +220,27 @@ export function MusicUploadForm() {
         </div>
       )}
 
+      {offlineUserId && (
+        <label className="mt-3 flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            checked={keepCopy}
+            disabled={busy}
+            onChange={(event) => setKeepCopy(event.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0"
+          />
+          <span className="flex flex-col">
+            <span className="text-sm text-text-0">
+              Оставить копию на этом устройстве
+            </span>
+            <span className="text-xs text-text-2">
+              Запись будет играть без сети. Трафика это не стоит — файл уже
+              здесь, качать его обратно не придётся.
+            </span>
+          </span>
+        </label>
+      )}
+
       {(files.length > 0 || Object.keys(results).length > 0) && (
         <ul className="mt-3 flex flex-col gap-1">
           {(files.length > 0 ? files.map((f) => f.name) : Object.keys(results)).map(
@@ -210,7 +266,9 @@ export function MusicUploadForm() {
                     {result?.state === "failed"
                       ? result.note
                       : result?.state === "ok"
-                        ? "в очереди"
+                        ? result.kept
+                          ? "в очереди · копия здесь"
+                          : "в очереди"
                         : currentName === name
                           ? "загружается"
                           : "ждёт"}

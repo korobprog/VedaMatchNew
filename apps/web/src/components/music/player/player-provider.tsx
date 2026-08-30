@@ -17,6 +17,7 @@ import {
   prevIndex as queuePrev,
 } from "@/lib/music-queue";
 import {
+  fetchTrackStreamUrl,
   getMusicSettings,
   getPlaybackState,
   getTrack,
@@ -27,13 +28,21 @@ import {
   trackStreamUrl,
 } from "@/lib/music-playback-api";
 import {
+  forgetStreamUrl,
+  freshStreamUrl,
+  rememberStreamUrl,
+} from "@/lib/music/stream-url-cache";
+import {
   MUSIC_STALL_TEXT,
   MUSIC_STALL_TIMEOUT_MS,
   mediaErrorText,
   playRejectionText,
   stalledVerdict,
 } from "@/lib/music/media-error";
-import { findSavedTrack } from "@/lib/music/offline-db";
+import {
+  findSavedTrack,
+  type MusicOfflineTrack,
+} from "@/lib/music/offline-db";
 import {
   SLEEP_TIMER_OFF,
   shouldStopNow,
@@ -100,6 +109,14 @@ const HEARTBEAT_MS = 30_000;
 
 /** Шаг кнопок ±: лекции и киртаны длинные, пальцем по ползунку не попасть. */
 export const SEEK_STEP_SECONDS = 15;
+
+/**
+ * Через сколько после старта спрашивать адрес следующей записи.
+ *
+ * Не сразу: первые секунды канал занят началом текущей. И не под конец —
+ * «дальше» жмут в любой момент, а не только на последней минуте.
+ */
+const STREAM_PREFETCH_DELAY_MS = 5_000;
 
 /**
  * Настройки прослушивания изменились в `/music/settings`.
@@ -195,6 +212,32 @@ export function useMusicPlayer(): MusicPlayerApi | null {
 export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [current, setCurrent] = useState<MusicTrackDto | null>(null);
+  /**
+   * Что звучит — идентификатором, отдельно от карточки.
+   *
+   * Элементу `<audio>` карточка не нужна вовсе: адрес потока строится по
+   * идентификатору, а название и обложка — подпись в полосе. Пока источник
+   * назначался по `current`, старт упирался в ответ `GET /music/tracks/:id`,
+   * и скачанная на устройство запись всё равно ждала сеть. Ценой этому —
+   * короткий промежуток, когда звук уже пошёл, а подпись ещё прежняя; на
+   * сохранённой записи его нет, там карточка приходит из того же хранилища,
+   * что и файл.
+   */
+  const [currentId, setCurrentId] = useState<string | null>(null);
+  /**
+   * Счётчик попыток назначить источник. Меняется, когда подписанный адрес из
+   * запаса не заиграл: эффект источника обязан пройти заново, а запись при
+   * этом та же самая, и по одному `currentId` он бы не перезапустился.
+   */
+  const [sourceAttempt, setSourceAttempt] = useState(0);
+  /**
+   * Играем по адресу из запаса, а не через редирект портала.
+   *
+   * Нужно обработчику `error`: отказ по заготовленной ссылке — это не «файла
+   * нет», а «подпись не подошла», и правильный ответ на него не сообщение
+   * человеку, а один заход обычным путём.
+   */
+  const usedCachedUrlRef = useRef(false);
   const [queue, setQueue] = useState<string[]>([]);
   const [index, setIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -216,6 +259,17 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
    * лендинг. Пусто — офлайна нет, играем из сети.
    */
   const [offlineUserId, setOfflineUserIdState] = useState<string | null>(null);
+  /**
+   * Чей источник фактически назначен элементу.
+   *
+   * Без этой отметки переключение записи ломалось на портальных страницах.
+   * Назначение `src` уходит в `await` — поиск офлайн-копии в IndexedDB, — а
+   * эффект автозапуска ниже успевает позвать `play()` раньше, на источнике
+   * прежней записи. Приходящий следом `load()` отклоняет начатое
+   * воспроизведение `AbortError`, и обработчик отказа гасит `isPlaying`:
+   * звук встаёт, кнопка «дальше» выглядит нерабочей.
+   */
+  const [srcTrackId, setSrcTrackId] = useState<string | null>(null);
   /**
    * То же значение в ref — и это не дублирование ради удобства.
    *
@@ -268,22 +322,57 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     queuePrev({ length: queue.length, index, repeat, shuffle, order }) !== null;
 
   /**
-   * Подгрузка карточки записи. Объявлена выше эффектов намеренно: они её
-   * зовут, и объявление ниже по файлу работало бы только по счастливой
-   * случайности — эффект успевает выполниться после присваивания.
+   * Последняя запрошенная запись.
+   *
+   * Ответ сервера про прежнюю не имеет права перебить новую: два быстрых
+   * нажатия «дальше» — и в полосе оказывалась карточка от записи, которая уже
+   * не звучит.
+   */
+  const wantedTrackRef = useRef<string | null>(null);
+
+  /**
+   * Переключение на запись. Объявлена выше эффектов намеренно: они её зовут,
+   * и объявление ниже по файлу работало бы только по счастливой случайности —
+   * эффект успевает выполниться после присваивания.
+   *
+   * Идентификатор проставляется первой строкой, до всякого ожидания: звуку
+   * нужен ровно он. Карточка догоняет — сначала из офлайн-хранилища, где она
+   * лежит рядом с файлом, и только потом из сети.
    */
   const loadTrack = useCallback(async (trackId: string | null) => {
     if (!trackId) return;
+    wantedTrackRef.current = trackId;
+    setCurrentId(trackId);
+
+    // Своё хранилище первым. В самолёте это единственный источник карточки,
+    // а на медленном канале — просто быстрее сети на целый запрос.
+    let saved: MusicOfflineTrack | undefined;
+    const savedFor = offlineUserIdRef.current;
+    if (savedFor) {
+      try {
+        saved = await findSavedTrack(savedFor, trackId);
+      } catch {
+        // Хранилище недоступно (приватный режим, запрет) — идём в сеть.
+      }
+      if (saved && wantedTrackRef.current === trackId) setCurrent(saved.track);
+    }
+
     const track = await getTrack(trackId);
+    // Успели переключить — ответ относится к прежней записи, и трогать
+    // состояние новой он права не имеет.
+    if (wantedTrackRef.current !== trackId) return;
     if (track) {
       setCurrent(track);
       return;
     }
-    // Карточка не пришла — значит `src` элементу так и не достанется, и ни
-    // одного события от него не будет: ни `playing`, ни `error`. Без этой
-    // ветки ожидание оставалось бы включённым навсегда.
+    // Сеть карточку не дала, а копия на устройстве есть: играем по ней и
+    // подписываем сохранённой карточкой. Ровно этот случай — «скачал, чтобы
+    // слушать без сети».
+    if (saved) return;
+
     setIsLoading(false);
     setIsPlaying(false);
+    audioRef.current?.pause();
     setLoadError("Запись не открывается: её могли снять с публикации");
   }, []);
 
@@ -401,23 +490,33 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !current) return;
+    if (!audio || !currentId) return;
 
     let cancelled = false;
     let objectUrl: string | null = null;
 
-    // Сначала своё, потом сеть. Локальный блоб выигрывает не только в
-    // самолёте: по нему браузер перематывает сам, без похода за подписанной
-    // ссылкой и без диапазонных запросов к S3.
+    // Три источника по убыванию скорости: своя копия, заготовленный адрес
+    // хранилища, обычный редирект портала. Локальный блоб выигрывает не
+    // только в самолёте — по нему браузер перематывает сам, без похода за
+    // подписанной ссылкой и без диапазонных запросов к S3.
     const play = async () => {
-      let src = trackStreamUrl(current.id);
+      let src = trackStreamUrl(currentId);
+      let fromCache = false;
+
+      const ready = freshStreamUrl(currentId, Date.now());
+      if (ready) {
+        src = ready;
+        fromCache = true;
+      }
+
       const savedFor = offlineUserIdRef.current;
       if (savedFor) {
         try {
-          const saved = await findSavedTrack(savedFor, current.id);
+          const saved = await findSavedTrack(savedFor, currentId);
           if (saved) {
             objectUrl = URL.createObjectURL(saved.body);
             src = objectUrl;
+            fromCache = false;
           }
         } catch {
           // Хранилище недоступно (приватный режим, запрет) — идём в сеть.
@@ -427,8 +526,10 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         if (objectUrl) URL.revokeObjectURL(objectUrl);
         return;
       }
+      usedCachedUrlRef.current = fromCache;
       audio.src = src;
       audio.load();
+      setSrcTrackId(currentId);
     };
 
     void play();
@@ -442,10 +543,11 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       // оставляет в памяти вкладки копию файла на сотню мегабайт.
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-    // Зависимость только от записи. Идентификатор читается из ref намеренно:
-    // см. комментарий к `offlineUserIdRef` — иначе музыка обрывается при
-    // каждом переходе между сервисами.
-  }, [current]);
+    // Зависимость только от записи и от повторной попытки. Идентификатор
+    // человека читается из ref намеренно: см. комментарий к
+    // `offlineUserIdRef` — иначе музыка обрывается при каждом переходе между
+    // сервисами.
+  }, [currentId, sourceAttempt]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -490,13 +592,13 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       // который не ответил, жалоба «крутится и не грузится» неотличима от
       // десятка других причин.
       console.warn(
-        `[music] запись ${current?.id ?? "?"} не пошла за ${
+        `[music] запись ${currentId ?? "?"} не пошла за ${
           MUSIC_STALL_TIMEOUT_MS / 1000
         } с: ${audio.currentSrc || audio.src || "источник не назначен"}`,
       );
     }, MUSIC_STALL_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
-  }, [isLoading, current]);
+  }, [isLoading, currentId]);
 
   const handleLoadedMetadata = useCallback(() => {
     const audio = audioRef.current;
@@ -556,6 +658,51 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     setIndex(target);
     void loadTrack(queue[target]);
   }, [queue, index, repeat, shuffle, order, loadTrack]);
+
+  /**
+   * Прогрев следующей записи.
+   *
+   * Пока звучит текущая, спрашиваем подписанный адрес той, что пойдёт за ней.
+   * На переключении он уже в запасе, и `<audio>` идёт прямо в хранилище — без
+   * запроса к порталу и без редиректа. Это тот самый провал тишины, который
+   * человек читает как «плеер думает».
+   *
+   * С задержкой, а не сразу: первые секунды канал занят началом текущей
+   * записи, и лезть туда со служебным запросом — значит замедлить ровно то,
+   * что человек слушает сейчас. Байты при этом не тянем, только адрес.
+   */
+  useEffect(() => {
+    if (!isPlaying) return;
+    const target = queueNext({
+      length: queue.length,
+      index,
+      repeat,
+      shuffle,
+      order,
+    });
+    if (target === null) return;
+    const nextId = queue[target];
+    if (!nextId) return;
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void fetchTrackStreamUrl(nextId)
+        .then(({ url, expiresInSeconds }) => {
+          if (!cancelled) {
+            rememberStreamUrl(nextId, url, expiresInSeconds, Date.now());
+          }
+        })
+        .catch(() => {
+          // Нет сети или запись сняли — обычный путь через редирект разберётся
+          // сам и скажет человеку то же, что сказал бы всегда.
+        });
+    }, STREAM_PREFETCH_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [isPlaying, queue, index, repeat, shuffle, order]);
 
   /**
    * Срабатывание сон-таймера. Проверяем секундами, а не одним `setTimeout` на
@@ -766,6 +913,11 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     setIsPlaying(false);
     setIsLoading(false);
     setCurrent(null);
+    // Идентификатор и отметку источника снимаем вместе с карточкой: иначе
+    // эффект источника считает, что играть по-прежнему есть что.
+    wantedTrackRef.current = null;
+    setCurrentId(null);
+    setSrcTrackId(null);
     setQueue([]);
     setIndex(0);
     setPositionSeconds(0);
@@ -811,7 +963,11 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   // Запись сменилась и человек нажимал play — продолжаем сами.
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !current || !isPlaying) return;
+    if (!audio || !currentId || !isPlaying) return;
+    // Источник ещё от прежней записи: поиск офлайн-копии не закончился.
+    // Позвать `play()` сейчас значит запустить не то и получить `AbortError`
+    // от следующего `load()` — см. комментарий к `srcTrackId`.
+    if (srcTrackId !== currentId) return;
 
     let cancelled = false;
     void audio.play().catch((error: unknown) => {
@@ -833,7 +989,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [current, isPlaying]);
+  }, [currentId, isPlaying, srcTrackId, sourceAttempt]);
 
   const seek = useCallback((seconds: number) => {
     const audio = audioRef.current;
@@ -1011,9 +1167,23 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         /* Отказ сети или битый файл: вертушка иначе крутится вечно и врёт,
            что вот-вот заиграет. */
         onError={() => {
+          const audio = audioRef.current;
+          // Не подошёл заготовленный адрес — это про подпись, а не про
+          // запись. Один заход обычным путём, через редирект портала, и
+          // только если и он не вышел — говорим человеку.
+          if (usedCachedUrlRef.current && currentId) {
+            usedCachedUrlRef.current = false;
+            forgetStreamUrl(currentId);
+            // Позицию не теряем: оборваться могло и посреди записи, а
+            // повторное назначение источника начинает её с нуля.
+            const at = Math.floor(audio?.currentTime ?? 0);
+            if (at > 0) resumeToRef.current = at;
+            setSourceAttempt((was) => was + 1);
+            return;
+          }
           setIsPlaying(false);
           setIsLoading(false);
-          setLoadError(mediaErrorText(audioRef.current?.error ?? null));
+          setLoadError(mediaErrorText(audio?.error ?? null));
         }}
       />
     </MusicPlayerContext.Provider>
