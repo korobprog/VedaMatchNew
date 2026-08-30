@@ -209,6 +209,15 @@ export type NotificationEvent =
       comment?: string;
     }
   | {
+      /** Кандидат подал заявку в команду проекта. Уходит активным админам:
+       *  без сигнала заявка лежит в очереди до случайного захода в раздел. */
+      name: 'team.application.received';
+      recipientId: string;
+      applicationId: string;
+      /** Название роли для текста уведомления — без похода в БД получателем. */
+      roleLabel: string;
+    }
+  | {
       /** Сообщение в сервисе «Общение»: личный диалог, группа или канал. */
       name: 'chat.message-sent';
       recipientId: string;
