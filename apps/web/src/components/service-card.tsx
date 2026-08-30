@@ -27,17 +27,26 @@ export function ServiceCard({
 
   return (
     <div
-      className={`group flex h-full flex-col rounded-2xl glass border p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_24px_rgba(255,62,158,0.18)] sm:p-5 ${
+      className={`group relative flex h-full flex-col rounded-2xl glass border p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_24px_rgba(255,62,158,0.18)] sm:p-5 ${
         isPinned
           ? "border-gold/50 shadow-[0_0_20px_rgba(250,204,21,0.12)]"
           : "service-edge"
       }`}
     >
+      {/* Перелив живёт в globals.css: движение — забота стилей, а не разметки.
+          Для читалки его нет вовсе.
+
+          `relative` на соседних блоках не ставим: область нажатия названия
+          растянута через `after:inset-0` и отсчитывается от ближайшего
+          позиционированного предка. Стоит сделать позиционированной шапку —
+          и нажимаемой останется она одна, а не карточка. */}
+      <span aria-hidden className="service-sheen" />
+
       <div className="mb-3 flex items-center gap-3">
         {dragHandleProps && (
           <span
             {...dragHandleProps}
-            className="hidden shrink-0 cursor-grab touch-none select-none items-center text-text-2 hover:text-text-0 active:cursor-grabbing sm:flex"
+            className="relative z-10 hidden shrink-0 cursor-grab touch-none select-none items-center text-text-2 hover:text-text-0 active:cursor-grabbing sm:flex"
             aria-label="Перетащить карточку"
           >
             <GripVertical size={16} />
@@ -52,8 +61,29 @@ export function ServiceCard({
           )}
         </span>
         <div className="min-w-0 flex-1">
+          {/* Открывает сервис само название, а областью нажатия ему служит вся
+              карточка: `after:inset-0` растягивает невидимый прямоугольник от
+              края до края. Кнопки «Открыть» под описанием больше нет — она
+              занимала строку в каждой из десяти карточек и повторяла то, что
+              карточка и так обещает.
+
+              Обёртывать в ссылку всю карточку нельзя: внутри ручка
+              перетаскивания и булавка, а интерактивное внутри ссылки
+              клавиатура и скринридер разбирают по-разному. Поэтому ссылка
+              одна и на названии — её и объявляет читалка, — а те двое подняты
+              над накладкой через `z-10` и остаются нажимаемыми. */}
           <h3 className="font-semibold text-text-0">
-            {service.name}
+            {comingSoon ? (
+              service.name
+            ) : (
+              <Link
+                href={service.url}
+                onClick={onOpen}
+                className="after:absolute after:inset-0 after:rounded-2xl after:content-['']"
+              >
+                {service.name}
+              </Link>
+            )}
           </h3>
           {comingSoon && (
             <span className="inline-block rounded-full bg-glass px-2 py-0.5 text-xs font-medium text-text-1 mt-1">
@@ -81,7 +111,7 @@ export function ServiceCard({
             aria-pressed={isPinned}
             aria-label={isPinned ? "Открепить карточку" : "Закрепить карточку сверху"}
             title={isPinned ? "Открепить" : "Закрепить сверху"}
-            className={`shrink-0 rounded-lg p-1.5 transition-colors ${
+            className={`relative z-10 shrink-0 rounded-lg p-1.5 transition-colors ${
               isPinned ? "text-gold" : "text-text-2/60 hover:text-text-0"
             }`}
           >
@@ -93,21 +123,12 @@ export function ServiceCard({
         {service.description}
       </p>
       {extra}
-      {comingSoon ? (
-        <button
-          disabled
-          className="w-full cursor-not-allowed rounded-xl bg-glass px-4 py-3 text-sm font-medium text-text-2"
-        >
+      {/* У недоступного сервиса строка остаётся: «В разработке» сообщает то,
+          чего карточка иначе не скажет, — почему нажатие ничего не делает. */}
+      {comingSoon && (
+        <span className="w-full rounded-xl bg-glass px-4 py-3 text-center text-sm font-medium text-text-2">
           В разработке
-        </button>
-      ) : (
-        <Link
-          href={service.url}
-          onClick={onOpen}
-          className="btn-mint self-start rounded-xl px-6 py-2 text-center text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-magenta/60"
-        >
-          Открыть
-        </Link>
+        </span>
       )}
     </div>
   );

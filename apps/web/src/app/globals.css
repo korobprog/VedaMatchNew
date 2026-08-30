@@ -109,6 +109,10 @@
   --vm-mint-edge: #2AB5B5;
   --vm-on-mint: #14212C;
   --vm-glow-mint: rgba(51, 204, 204, 0.45);
+  /* Полоса перелива по карточке сервиса. На светлой теме белый по белому
+     стеклу не виден, поэтому здесь подкрашенный: тот же акцент портала,
+     разведённый до намёка. */
+  --vm-sheen: rgba(215, 26, 128, 0.12);
 
   --vm-magenta: #D71A80;
   --vm-cyan: #0B826F;
@@ -179,6 +183,9 @@
 }
 
 [data-theme="dark"] {
+  /* На тёмном стекле работает обычный белый: подкрашенный на нём читается
+     как цветное пятно, а не как блик. */
+  --vm-sheen: rgba(255, 255, 255, 0.16);
   color-scheme: dark;
 
   --vm-bg-0: #0A0614;
@@ -519,6 +526,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Обезврежен целиком, а не замедлен: неподвижная светлая полоса поперёк
+     карточки — это не «спокойнее», это дефект вёрстки. */
+  .group:hover .service-sheen::after,
+  .group:active .service-sheen::after,
+  .group:focus-within .service-sheen::after {
+    opacity: 0;
+    animation: none;
+  }
+
   @keyframes drift {
     0%, 100% { transform: translate(0, 0) scale(1); }
     50% { transform: translate(10px, -10px) scale(1); }
@@ -792,6 +808,52 @@ select option {
 
 .service-edge:hover::before {
   opacity: var(--vm-service-edge-opacity-hover, 0.8);
+}
+
+/* Перелив по карточке сервиса: наведение и касание прогоняют по ней узкую
+   светлую полосу.
+ *
+ * Отдельным элементом, а не `::before` карточки: у `.service-edge` этот
+ * псевдоэлемент занят неоновой кромкой, а закреплённая карточка кромки не
+ * имеет вовсе — перелив обязан работать у обеих.
+ *
+ * `:active` рядом с `:hover` не для красоты: на сенсорном экране наведения
+ * нет, и без него перелива на телефоне не было бы никогда — а просили именно
+ * про касание.
+ *
+ * Полоса едет `transform`, а не `background-position`: первое считает
+ * композитор, второе перерисовывает слой на каждом кадре, и на десяти
+ * карточках это заметно. */
+@keyframes service-sheen {
+  from { transform: translateX(-140%) skewX(-12deg); }
+  to { transform: translateX(240%) skewX(-12deg); }
+}
+
+.service-sheen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.service-sheen::after {
+  content: '';
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  width: 45%;
+  background: linear-gradient(90deg, transparent, var(--vm-sheen), transparent);
+  transform: translateX(-140%) skewX(-12deg);
+  opacity: 0;
+}
+
+.group:hover .service-sheen::after,
+.group:active .service-sheen::after,
+.group:focus-within .service-sheen::after {
+  opacity: 1;
+  animation: service-sheen 850ms cubic-bezier(0.25, 0.6, 0.3, 1);
 }
 
 /* Neon glow utilities */
