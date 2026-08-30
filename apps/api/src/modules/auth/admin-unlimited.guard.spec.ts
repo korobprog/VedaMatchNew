@@ -16,7 +16,11 @@ function context(cookies: Record<string, string>): ExecutionContext {
   } as unknown as ExecutionContext;
 }
 
-function buildGuard(exempt: boolean, roleFromToken?: string) {
+function buildGuard(
+  exempt: boolean | string,
+  roleFromToken?: string,
+  scopedServices: string[] = [],
+) {
   const reflector = { getAllAndOverride: jest.fn().mockReturnValue(exempt) };
   const jwt = {
     verifyAccessToken: jest.fn().mockImplementation(() =>
@@ -25,11 +29,23 @@ function buildGuard(exempt: boolean, roleFromToken?: string) {
         : Promise.reject(new Error('bad token')),
     ),
   };
+  const prisma = {
+    serviceAdmin: {
+      findFirst: jest.fn().mockImplementation(({ where }) =>
+        Promise.resolve(
+          scopedServices.includes(where.service.slug)
+            ? { userId: where.userId }
+            : null,
+        ),
+      ),
+    },
+  };
   const guard = new AdminAwareThrottlerGuard(
     {} as never,
     {} as never,
     reflector as never,
     jwt as never,
+    prisma as never,
   );
   return guard as unknown as Shoulder;
 }
@@ -65,6 +81,27 @@ describe('AdminAwareThrottlerGuard.shouldSkip', () => {
     const guard = buildGuard(true);
     await expect(
       guard.shouldSkip(context({ access_token: 'bad' })),
+    ).resolves.toBe(false);
+  });
+
+  it('пропускает service-admin, которому назначен указанный сервис', async () => {
+    const guard = buildGuard('library', 'service-admin', ['library']);
+    await expect(
+      guard.shouldSkip(context({ access_token: 't' })),
+    ).resolves.toBe(true);
+  });
+
+  it('не пропускает service-admin без прав на указанный сервис', async () => {
+    const guard = buildGuard('library', 'service-admin', ['motivation']);
+    await expect(
+      guard.shouldSkip(context({ access_token: 't' })),
+    ).resolves.toBe(false);
+  });
+
+  it('не пропускает service-admin, когда метка без слага сервиса', async () => {
+    const guard = buildGuard(true, 'service-admin', ['library']);
+    await expect(
+      guard.shouldSkip(context({ access_token: 't' })),
     ).resolves.toBe(false);
   });
 });
