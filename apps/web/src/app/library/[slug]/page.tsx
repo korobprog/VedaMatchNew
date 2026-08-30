@@ -15,7 +15,11 @@ import { CategoryNavigator } from "@/components/library/category-navigator";
 import { DescendantsToggle } from "@/components/library/descendants-toggle";
 import { EntryFilters } from "@/components/library/entry-filters";
 import { EntryList } from "@/components/library/entry-list";
-import { pickLocalized, t } from "@/components/library/i18n";
+import {
+  categoryPageSummary,
+  pickLocalized,
+  t,
+} from "@/components/library/i18n";
 
 /**
  * Страница рубрики — одна на все уровни дерева.
@@ -85,9 +89,11 @@ export default async function LibraryCategoryPage({
             {t(locale, "nav.add")}
           </Link>
         </div>
+        {/* Строка называет, что посчитано. Голое «3 материалов» над лентой
+            рубрики, у которой своих материалов нет, читалось как «здесь
+            три» — а все три лежат в подразделах. */}
         <p className="mb-6 text-sm text-text-2">
-          {withDescendants ? category.subtreeEntriesCount : category.entriesCount}{" "}
-          {t(locale, "category.entries")}
+          {categoryPageSummary(locale, category, withDescendants)}
         </p>
 
         <CategoryNavigator

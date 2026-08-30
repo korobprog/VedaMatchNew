@@ -1,4 +1,5 @@
 import type { LibraryEntryType, LibraryLocale } from "@vedamatch/shared";
+import { plural } from "@/lib/plural";
 import { categoryCounter } from "./category-tree";
 
 const ui = {
@@ -470,4 +471,58 @@ export function categoryCountLabel(
   const counter = categoryCounter(category);
   const kind = counter.kind === "children" ? "count.children" : "count.entries";
   return `${t(locale, kind)}: ${counter.value}`;
+}
+
+/**
+ * Строка под названием рубрики.
+ *
+ * Голое «3 материалов» над лентой рубрики, у которой своих материалов нет ни
+ * одного, читается как «здесь три материала» — а все три лежат в
+ * подразделах. Поэтому у числа теперь названо, что именно посчитано, и
+ * рядом стоит то, что в рубрике действительно лежит: её подразделы.
+ *
+ * Число материалов остаётся тем же, что показано в ленте ниже: переключатель
+ * «со вложенными / только здесь» правит и её, и его разом. Разойтись им
+ * нельзя — иначе подпись снова обещала бы не то, что видно.
+ */
+export function categoryPageSummary(
+  locale: LibraryLocale,
+  category: { childrenCount: number; entriesCount: number; subtreeEntriesCount: number },
+  withDescendants: boolean,
+): string {
+  const entries = withDescendants
+    ? category.subtreeEntriesCount
+    : category.entriesCount;
+
+  const entriesPart =
+    locale === "ru"
+      ? `${entries} ${plural(entries, "материал", "материала", "материалов")}`
+      : `${entries} material${entries === 1 ? "" : "s"}`;
+
+  if (category.childrenCount === 0) return entriesPart;
+
+  const childrenPart =
+    locale === "ru"
+      ? `${category.childrenCount} ${plural(
+          category.childrenCount,
+          "подраздел",
+          "подраздела",
+          "подразделов",
+        )}`
+      : `${category.childrenCount} subsection${
+          category.childrenCount === 1 ? "" : "s"
+        }`;
+
+  // Уточнение нужно только там, где есть подразделы: у листа «включая
+  // подразделы» нечего включать, а «в самой рубрике» противопоставлять.
+  const scope =
+    locale === "ru"
+      ? withDescendants
+        ? "включая подразделы"
+        : "в самой рубрике"
+      : withDescendants
+        ? "including subsections"
+        : "in this category only";
+
+  return `${childrenPart} · ${entriesPart} ${scope}`;
 }
