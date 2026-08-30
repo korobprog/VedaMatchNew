@@ -1,4 +1,6 @@
 import type { LibraryEntryType, LibraryLocale } from "@vedamatch/shared";
+import { plural } from "@/lib/plural";
+import { categoryCounter } from "./category-tree";
 
 const ui = {
   ru: {
@@ -147,6 +149,10 @@ const ui = {
     "category.forceCreate": "Всё равно создать новую",
     "category.empty": "В этом разделе ещё нет категорий",
     "category.entries": "материалов",
+    // Подпись у числа рядом с рубрикой. Без неё «4» одинаково читается и как
+    // четыре подраздела, и как четыре материала.
+    "count.children": "Подразделов внутри",
+    "count.entries": "Материалов",
     "locale.switch": "Язык интерфейса",
     "entry.edit": "Редактировать",
     "entry.save": "Сохранить",
@@ -345,6 +351,8 @@ const ui = {
     "category.forceCreate": "Create a new one anyway",
     "category.empty": "This section has no categories yet",
     "category.entries": "materials",
+    "count.children": "Subcategories inside",
+    "count.entries": "Materials",
     "locale.switch": "Interface language",
     "entry.edit": "Edit",
     "entry.save": "Save",
@@ -448,4 +456,58 @@ export function entryTypeLabel(
   type: LibraryEntryType,
 ): string {
   return entryTypes[locale][type];
+}
+
+/**
+ * Подпись к числу рядом с рубрикой: «Подразделов внутри: 4».
+ *
+ * Одна на все списки — иначе полоса рубрик и режим упорядочивания однажды
+ * скажут об одном и том же числе разными словами.
+ */
+export function categoryCountLabel(
+  locale: LibraryLocale,
+  category: { childrenCount: number; entriesCount: number },
+): string {
+  const counter = categoryCounter(category);
+  const kind = counter.kind === "children" ? "count.children" : "count.entries";
+  return `${t(locale, kind)}: ${counter.value}`;
+}
+
+/**
+ * Строка под названием рубрики — то же одно число, что и в плитке.
+ *
+ * Раздел показывает свои подразделы, подраздел — свои материалы, и ничего
+ * чужого. Двух чисел здесь нет намеренно: «4 подраздела · 3 материала»
+ * заставляет выбирать, какое из них про эту страницу, а ответ нужен один.
+ *
+ * Число материалов раздела не показывается вовсе — ни своё, ни вложенных.
+ * Своё почти всегда ноль и выглядит как поломка; вложенных — то самое чужое,
+ * из-за которого правка и начиналась. Что лежит в подразделах, видно на них
+ * самих, строкой ниже.
+ */
+export function categoryPageSummary(
+  locale: LibraryLocale,
+  category: { childrenCount: number; entriesCount: number },
+): string {
+  const counter = categoryCounter(category);
+
+  if (counter.kind === "children") {
+    return locale === "ru"
+      ? `${counter.value} ${plural(
+          counter.value,
+          "подраздел",
+          "подраздела",
+          "подразделов",
+        )}`
+      : `${counter.value} subsection${counter.value === 1 ? "" : "s"}`;
+  }
+
+  return locale === "ru"
+    ? `${counter.value} ${plural(
+        counter.value,
+        "материал",
+        "материала",
+        "материалов",
+      )}`
+    : `${counter.value} material${counter.value === 1 ? "" : "s"}`;
 }

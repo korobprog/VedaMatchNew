@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { entryTypeLabel, pickLocalized, t } from "./i18n";
+import { categoryPageSummary, entryTypeLabel, pickLocalized, t } from "./i18n";
 
 describe("pickLocalized", () => {
   it("prefers the current locale", () => {
@@ -32,5 +32,48 @@ describe("entryTypeLabel", () => {
   it("localizes every entry type", () => {
     expect(entryTypeLabel("ru", "video")).toBe("Видео");
     expect(entryTypeLabel("en", "telegram_channel")).toBe("Telegram channel");
+  });
+});
+
+describe("categoryPageSummary", () => {
+  it("раздел показывает подразделы, а не материалы внутри них", () => {
+    // Ровно тот случай, из-за которого правка: своих материалов ноль, во
+    // вложенных три, и «3 материала» над лентой читались как «здесь три».
+    expect(
+      categoryPageSummary("ru", { childrenCount: 4, entriesCount: 0 }),
+    ).toBe("4 подраздела");
+  });
+
+  it("свои материалы раздела в число не подмешиваются", () => {
+    expect(
+      categoryPageSummary("ru", { childrenCount: 4, entriesCount: 12 }),
+    ).toBe("4 подраздела");
+  });
+
+  it("подраздел показывает свои материалы", () => {
+    expect(
+      categoryPageSummary("ru", { childrenCount: 0, entriesCount: 12 }),
+    ).toBe("12 материалов");
+  });
+
+  it("склонения не разъезжаются на единице", () => {
+    expect(
+      categoryPageSummary("ru", { childrenCount: 1, entriesCount: 0 }),
+    ).toBe("1 подраздел");
+    expect(
+      categoryPageSummary("ru", { childrenCount: 0, entriesCount: 1 }),
+    ).toBe("1 материал");
+  });
+
+  it("и на одиннадцати, где правило склонения другое", () => {
+    expect(
+      categoryPageSummary("ru", { childrenCount: 11, entriesCount: 0 }),
+    ).toBe("11 подразделов");
+  });
+
+  it("по-английски единственное число тоже не ломается", () => {
+    expect(
+      categoryPageSummary("en", { childrenCount: 1, entriesCount: 0 }),
+    ).toBe("1 subsection");
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { LibraryCategoryTreeNode } from "@vedamatch/shared";
 import {
   applyMove,
+  categoryCounter,
   flattenTree,
   forbiddenTargets,
   insertIntoTree,
@@ -267,5 +268,34 @@ describe("renameInTree и insertIntoTree", () => {
       "music",
       "astro",
     ]);
+  });
+});
+
+describe("categoryCounter", () => {
+  it("у рубрики с подразделами считает подразделы", () => {
+    expect(
+      categoryCounter({ childrenCount: 4, entriesCount: 0 }),
+    ).toEqual({ kind: "children", value: 4 });
+  });
+
+  it("материалы самой рубрики не подмешиваются к числу подразделов", () => {
+    // «Философия» может держать и свои материалы, и подразделы. Показываем
+    // подразделы: по клику человек попадёт именно в них.
+    expect(
+      categoryCounter({ childrenCount: 3, entriesCount: 12 }),
+    ).toEqual({ kind: "children", value: 3 });
+  });
+
+  it("у листа считает его собственные материалы", () => {
+    expect(
+      categoryCounter({ childrenCount: 0, entriesCount: 12 }),
+    ).toEqual({ kind: "entries", value: 12 });
+  });
+
+  it("пустой лист показывает ноль, а не прячет число", () => {
+    // Ноль — это ответ «тут пусто», и он полезнее отсутствия числа.
+    expect(
+      categoryCounter({ childrenCount: 0, entriesCount: 0 }),
+    ).toEqual({ kind: "entries", value: 0 });
   });
 });

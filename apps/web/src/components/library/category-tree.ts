@@ -281,3 +281,28 @@ export function insertIntoTree(
       : { ...item, children: insertIntoTree(item.children, created) },
   );
 }
+
+/**
+ * Что за число стоит рядом с рубрикой.
+ *
+ * Правило одно на все списки: рубрика показывает то, что лежит **прямо в
+ * ней**, и ничего больше. Есть подразделы — их и считаем; подразделов нет —
+ * считаем материалы.
+ *
+ * До этого везде стоял `subtreeEntriesCount`, и корень показывал материалы,
+ * которых в нём самом нет: «Философия · 47», где все сорок семь лежат в
+ * подразделах, а по клику открывается пустой список. Число обещало одно, а
+ * страница показывала другое.
+ *
+ * Оба смысла не смешиваются в одну цифру намеренно: «4 подраздела» и
+ * «4 материала» — разные вещи, и складывать их в «4» значит снова врать.
+ * Поэтому наружу уходит и вид, и величина — подпись рядом называет вид.
+ */
+export function categoryCounter(category: {
+  childrenCount: number;
+  entriesCount: number;
+}): { kind: "children" | "entries"; value: number } {
+  return category.childrenCount > 0
+    ? { kind: "children", value: category.childrenCount }
+    : { kind: "entries", value: category.entriesCount };
+}
