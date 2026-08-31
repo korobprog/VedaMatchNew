@@ -13,6 +13,7 @@ import type {
   AdminBlockUserRequest,
   AdminDeleteUserRequest,
   AdminManualStageUpdateRequest,
+  AdminProfileUpdateRequest,
   AdminPurgeUserRequest,
   AdminRoleUpdateRequest,
   AdminServiceScopeUpdateRequest,
@@ -49,6 +50,16 @@ export class AdminUsersController {
     @Body() body: { verified?: boolean },
   ) {
     return this.users.setPhotoVerification(user, id, body?.verified === true);
+  }
+
+  /** Портальные поля профиля: имя, пол, дата рождения, город, о себе, языки. */
+  @Patch(':id/profile')
+  updateProfile(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: AdminProfileUpdateRequest,
+  ) {
+    return this.adminUsers.updateProfile(user, id, body);
   }
 
   @Patch(':id/stage')

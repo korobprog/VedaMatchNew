@@ -16,6 +16,7 @@ export const ADMIN_AUDIT_ACTIONS = [
   'user.deleted',
   'user.purged',
   'user.restored',
+  'user.profile-edited',
   'user.photo-verified',
   'user.photo-unverified',
   'user.subscription-changed',

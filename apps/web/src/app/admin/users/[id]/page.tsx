@@ -1,6 +1,7 @@
 ﻿import Link from "next/link";
 import { redirect } from "next/navigation";
 import { redirectToLogin } from "@/lib/require-user";
+import { AdminUserProfileForm } from "@/components/admin-user-profile-form";
 import { AdminUserStageForm } from "@/components/admin-user-stage-form";
 import { AdminUserRoleForm } from "@/components/admin-user-role-form";
 import { AdminUserServicesForm } from "@/components/admin-user-services-form";
@@ -10,7 +11,7 @@ import { AdminUserPurgeForm } from "@/components/admin-user-purge-form";
 import { AdminPhotoVerification } from "@/components/admin-photo-verification";
 import { AdminSubscriptionForm } from "@/components/admin-subscription-form";
 import { getAdminUser, getProfile } from "@/lib/api";
-import { actorLabels, formatBool, formatDate, roleLabels, stageLabels, verificationLabels } from "@/lib/admin-labels";
+import { actorLabels, formatBool, formatDate, genderLabels, roleLabels, stageLabels, verificationLabels } from "@/lib/admin-labels";
 import { cn } from "@/lib/utils";
 
 export default async function AdminUserDetailPage({
@@ -72,12 +73,26 @@ export default async function AdminUserDetailPage({
               <Info label="Создан" value={formatDate(profile.createdAt)} />
               <Info label="Обновлён" value={formatDate(profile.updatedAt)} />
               <Info label="Последняя анкета" value={formatDate(profile.lastSelfIdentificationAt)} />
+              <Info label="Пол" value={profile.gender ? genderLabels[profile.gender] : null} />
+              <Info label="Возраст" value={profile.age != null ? String(profile.age) : null} />
               <Info label="Город" value={profile.homeLocation?.city} />
               <Info label="Страна" value={profile.homeLocation?.country} />
               <Info label="Координаты" value={profile.homeLocation ? `${profile.homeLocation.lat}, ${profile.homeLocation.lon}` : null} />
             </dl>
             <JsonBlock title="Соцсети" value={profile.socialLinks} />
             <JsonBlock title="Мессенджеры" value={profile.messengers} />
+          </Section>
+
+          <Section title="Данные профиля">
+            <p className="mb-4 text-sm text-text-1">
+              Имя, пол, дата рождения, город, рассказ и языки — портальные поля.
+              Знакомства, справочник и астрология читают их отсюда, своих копий
+              не держат, и править пол в анкете Знакомств нечего.
+            </p>
+            <AdminUserProfileForm
+              profile={profile}
+              isSelf={currentUser.id === profile.id}
+            />
           </Section>
 
           <Section title="Проверка фото">

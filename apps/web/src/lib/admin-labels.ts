@@ -1,4 +1,10 @@
-﻿import type { AdminServiceSlug, DevoteeVerificationStatus, Role, SpiritualStage, StageChangeActor, UserAccountStatus } from '@vedamatch/shared';
+﻿import type { AdminServiceSlug, DevoteeVerificationStatus, Gender, Role, SpiritualStage, StageChangeActor, UserAccountStatus } from '@vedamatch/shared';
+
+/** Пол. Необязателен у `User`, поэтому «не указан» показывается прочерком. */
+export const genderLabels: Record<Gender, string> = {
+  male: 'Мужской',
+  female: 'Женский',
+};
 
 export const roleLabels: Record<Role, string> = {
   user: 'Пользователь',

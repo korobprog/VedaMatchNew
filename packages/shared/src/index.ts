@@ -255,6 +255,16 @@ export interface ProfileUpdateRequest {
   messengers?: ProfileMessengers;
 }
 
+/**
+ * Правка портального профиля администрацией. Поля те же, что человек правит
+ * сам: единая точка валидации — `UsersService.updateProfile`. Причина
+ * необязательна, но уходит в журнал и в уведомление человеку: без неё правка
+ * выглядит для него как чужое вмешательство без объяснений.
+ */
+export interface AdminProfileUpdateRequest extends ProfileUpdateRequest {
+  reason?: string;
+}
+
 export interface GeoSearchResult extends ProfileLocation {
   type?: string;
 }

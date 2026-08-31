@@ -154,6 +154,19 @@ export type NotificationEvent =
       shopSlug: string;
     }
   | {
+      /**
+       * Администрация изменила портальный профиль человека. Событие несёт
+       * коды изменённых полей, а не готовую фразу: подписи собирает модуль
+       * уведомлений — см. docs/service-module-contract.md.
+       */
+      name: 'portal.profile.edited-by-admin';
+      recipientId: string;
+      /** `name`, `spiritualName`, `birthDate`, `gender`, `about`, `languages`, `homeLocation`, `socialLinks`, `messengers`. */
+      fields: string[];
+      /** Пояснение администратора; null — не оставил. */
+      reason: string | null;
+    }
+  | {
       /** Новость от администрации портала: рассылает админ вручную. */
       name: 'portal.announcement.published';
       recipientId: string;

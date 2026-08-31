@@ -4,7 +4,7 @@ import { UnionAdminTabs } from "@/components/union/admin/admin-tabs";
 import { UnionProfileShowcaseForm } from "@/components/union/admin/profile-showcase-form";
 import { UnionProfileVisibilityForm } from "@/components/union/admin/profile-visibility-form";
 import { intentionLabels } from "@/components/union/labels";
-import { formatDate, stageLabels } from "@/lib/admin-labels";
+import { formatDate, genderLabels, stageLabels } from "@/lib/admin-labels";
 import { getUnionAdminProfile } from "@/lib/union-api";
 
 export const metadata = {
@@ -47,7 +47,7 @@ export default async function AdminUnionProfilePage({
           href={`/admin/users/${profile.userId}`}
           className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0"
         >
-          Карточка аккаунта
+          Карточка аккаунта — правка профиля
         </Link>
       </div>
 
@@ -55,6 +55,10 @@ export default async function AdminUnionProfilePage({
         <div className="space-y-6">
           <Section title="Анкета">
             <Field label="О себе" value={profile.about} multiline />
+            <Field
+              label="Пол"
+              value={profile.gender ? genderLabels[profile.gender] : null}
+            />
             <Field label="Статус" value={profile.status} />
             <Field label="Семейное положение" value={profile.familyStatus} />
             <Field label="Формат" value={FORMAT[profile.format] ?? profile.format} />
@@ -71,6 +75,17 @@ export default async function AdminUnionProfilePage({
                 )
                 .join(", ")}
             />
+            <p className="pt-2 text-xs text-text-2">
+              Пол, имя, рассказ, языки и город — портальные поля аккаунта.
+              Знакомства их только читают; изменить можно в{" "}
+              <Link
+                href={`/admin/users/${profile.userId}`}
+                className="underline underline-offset-2 hover:text-text-0"
+              >
+                карточке аккаунта
+              </Link>
+              .
+            </p>
           </Section>
 
           <Section title="Настройки">

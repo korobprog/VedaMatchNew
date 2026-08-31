@@ -15,6 +15,7 @@ import type {
   AdminPurgeUserRequest,
   AdminPurgeUserResponse,
   AdminManualStageUpdateRequest,
+  AdminProfileUpdateRequest,
   AdminMentorVerificationRequest,
   AdminAuditAction,
   AdminAuditDetails,
@@ -28,6 +29,7 @@ import type {
   SelfIdentificationAnswers,
   ServiceCard,
   SpiritualStage,
+  NotificationEvent,
   StageHistoryItem,
   UserAccountStatus,
 } from '@vedamatch/shared';
@@ -40,6 +42,7 @@ import {
   parseLocation,
 } from './profile-parsers';
 import { calculateAge, toBirthDateInput } from './age';
+import { changedProfileFields } from './admin-profile-edit';
 import { toPhotoVerificationState } from './photo-verification';
 import { toSubscriptionState } from '../billing/subscription';
 import { readBillingMode } from '../billing/billing-mode';
@@ -54,6 +57,9 @@ import { UsersService } from './users.service';
  * Имя дублируется в каждом сервисе — модули не импортируют друг друга.
  */
 const USER_PURGE_REQUESTED = 'portal.user.purge-requested';
+
+/** Пояснение к правке профиля: строка журнала и текст уведомления, не письмо. */
+const PROFILE_EDIT_REASON_MAX_LENGTH = 300;
 
 /** Предел DeleteObjects в S3-совместимых хранилищах. */
 const S3_DELETE_BATCH = 1000;
@@ -359,6 +365,55 @@ export class AdminUsersService {
       from: toRole(user.role),
       to: body.role,
     });
+    return this.getUser(admin.role, userId);
+  }
+
+  /**
+   * Правка портального профиля администрацией. Значения не разбираются здесь
+   * заново: проверки живут в `UsersService.updateProfile` — той же, что режет
+   * правку самого человека, и второй набор ограничений неизбежно разошёлся бы
+   * с первым.
+   */
+  async updateProfile(
+    admin: { sub: string; role: Role },
+    userId: string,
+    body: AdminProfileUpdateRequest,
+  ): Promise<AdminUserDetail> {
+    this.ensureAdmin(admin.role);
+
+    const { reason, ...payload } = body ?? {};
+    const note = reason?.trim() ?? '';
+    if (note.length > PROFILE_EDIT_REASON_MAX_LENGTH) {
+      throw new BadRequestException(
+        `Пояснение не длиннее ${PROFILE_EDIT_REASON_MAX_LENGTH} символов`,
+      );
+    }
+
+    // Снимок «до» нужен ровно для того, чтобы не написать человеку письмо о
+    // правке, которой не было: форма присылает все поля целиком.
+    const before = await this.users.getProfile(userId);
+    const after = await this.users.updateProfile(userId, payload);
+    const fields = changedProfileFields(before, after);
+
+    if (fields.length > 0) {
+      this.audit(admin.sub, 'user.profile-edited', userId, {
+        fields: fields.join(', '),
+        reason: note || null,
+      });
+
+      // Своя же карточка: уведомлять администратора о собственной правке
+      // незачем, он только что её и сделал.
+      if (admin.sub !== userId) {
+        const event: NotificationEvent = {
+          name: 'portal.profile.edited-by-admin',
+          recipientId: userId,
+          fields,
+          reason: note || null,
+        };
+        this.events.emit('portal.profile.edited-by-admin', event);
+      }
+    }
+
     return this.getUser(admin.role, userId);
   }
 
