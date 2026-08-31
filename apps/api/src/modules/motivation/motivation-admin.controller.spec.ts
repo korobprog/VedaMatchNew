@@ -70,11 +70,7 @@ describe('MotivationAdminController moderation endpoints', () => {
       'post-1',
       'cinematic_nature',
     );
-    expect(service.regenerate).toHaveBeenCalledWith(
-      user,
-      'actor-1',
-      'post-1',
-    );
+    expect(service.regenerate).toHaveBeenCalledWith(user, 'actor-1', 'post-1');
     expect(service.savePrompts).toHaveBeenCalledWith(
       user,
       'actor-1',

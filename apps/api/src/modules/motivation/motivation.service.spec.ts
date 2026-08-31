@@ -851,9 +851,7 @@ describe('MotivationService.adminDelete', () => {
   it('requires an admin or service-admin role', async () => {
     const { service } = buildService({ id: 'post-1', quoteId: 'quote-1' });
 
-    await expect(
-      service.adminDelete(regularUser, 'post-1'),
-    ).rejects.toThrow();
+    await expect(service.adminDelete(regularUser, 'post-1')).rejects.toThrow();
   });
 
   it('allows a service-admin scoped to motivation', async () => {

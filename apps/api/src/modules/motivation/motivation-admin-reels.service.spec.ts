@@ -177,9 +177,7 @@ describe('MotivationAdminReelsService.list', () => {
 
   it('refuses non-admins', async () => {
     const { service } = build();
-    await expect(service.list(regularUser)).rejects.toThrow(
-      ForbiddenException,
-    );
+    await expect(service.list(regularUser)).rejects.toThrow(ForbiddenException);
   });
 
   it('allows a service-admin scoped to motivation', async () => {
@@ -199,9 +197,7 @@ describe('MotivationAdminReelsService.restore', () => {
   it('returns a rejected reel to the review queue and records the override', async () => {
     const { service, prisma } = build();
 
-    await expect(
-      service.restore(admin, 'admin-1', 'post-1'),
-    ).resolves.toEqual({
+    await expect(service.restore(admin, 'admin-1', 'post-1')).resolves.toEqual({
       id: 'post-1',
       reviewStatus: 'text_review',
     });

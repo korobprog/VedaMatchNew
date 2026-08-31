@@ -260,9 +260,9 @@ describe('MotivationManualPostService', () => {
       existingQuote: { id: 'existing' },
     });
 
-    await expect(
-      service.create(admin, 'actor-1', validInput),
-    ).rejects.toThrow('This quote has already been added');
+    await expect(service.create(admin, 'actor-1', validInput)).rejects.toThrow(
+      'This quote has already been added',
+    );
     expect(transaction.motivationPost.create).not.toHaveBeenCalled();
   });
 

@@ -275,7 +275,8 @@ describe('MotivationReelsService.create', () => {
 
   it('не повторяет название произведения в заголовке, если оно уже есть в главе', async () => {
     const { service, tx, verification } = build();
-    const text = 'Не умывшись и не приняв душа, он сидел, углубившись в работу.';
+    const text =
+      'Не умывшись и не приняв душа, он сидел, углубившись в работу.';
     verification.verifyVedabaseCandidate.mockResolvedValue({
       originalText: text,
       author: 'А. Ч. Бхактиведанта Свами Прабхупада',
@@ -311,11 +312,11 @@ describe('MotivationReelsService.create', () => {
   it('enforces the daily limit for users but not for admins', async () => {
     const { service } = build({ usedToday: 1, limit: 1 });
 
-    await expect(service.create('user-1', regularUser, ownInput)).rejects.toThrow(
-      ForbiddenException,
-    );
     await expect(
-      service.create('admin-1', admin,ownInput),
+      service.create('user-1', regularUser, ownInput),
+    ).rejects.toThrow(ForbiddenException);
+    await expect(
+      service.create('admin-1', admin, ownInput),
     ).resolves.toMatchObject({ id: 'post-1' });
   });
 
@@ -357,9 +358,9 @@ describe('MotivationReelsService.create', () => {
   it('refuses when user reels are switched off', async () => {
     const { service } = build({ enabled: false });
 
-    await expect(service.create('user-1', regularUser, ownInput)).rejects.toThrow(
-      'Создание своих рилсов сейчас выключено',
-    );
+    await expect(
+      service.create('user-1', regularUser, ownInput),
+    ).rejects.toThrow('Создание своих рилсов сейчас выключено');
   });
 
   it('verifies a book fragment and copies the attribution', async () => {
@@ -559,9 +560,9 @@ describe('MotivationReelsService.animate', () => {
     const { service, prisma } = build({ videoConfigured: false });
     prisma.motivationPost.findFirst.mockResolvedValue(published);
 
-    await expect(service.animate('user-1', regularUser, 'post-1')).rejects.toThrow(
-      'не настроен',
-    );
+    await expect(
+      service.animate('user-1', regularUser, 'post-1'),
+    ).rejects.toThrow('не настроен');
     expect(prisma.motivationPost.update).not.toHaveBeenCalled();
   });
 
@@ -578,9 +579,9 @@ describe('MotivationReelsService.animate', () => {
     const { service, prisma } = build({ videoEnabled: false });
     prisma.motivationPost.findFirst.mockResolvedValue(published);
 
-    await expect(service.animate('user-1', regularUser, 'post-1')).rejects.toThrow(
-      'выключено',
-    );
+    await expect(
+      service.animate('user-1', regularUser, 'post-1'),
+    ).rejects.toThrow('выключено');
   });
 
   it.each([
@@ -592,9 +593,9 @@ describe('MotivationReelsService.animate', () => {
     const { service, prisma } = build();
     prisma.motivationPost.findFirst.mockResolvedValue(post);
 
-    await expect(service.animate('user-1', regularUser, 'post-1')).rejects.toThrow(
-      fragment,
-    );
+    await expect(
+      service.animate('user-1', regularUser, 'post-1'),
+    ).rejects.toThrow(fragment);
   });
 });
 

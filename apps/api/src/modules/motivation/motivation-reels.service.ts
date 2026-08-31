@@ -649,8 +649,7 @@ export class MotivationReelsService {
     user: AccessTokenPayload,
     postId: string,
   ): Promise<MotivationReelDto> {
-    if (!isAdmin(user))
-      throw new ForbiddenException('Только администратор');
+    if (!isAdmin(user)) throw new ForbiddenException('Только администратор');
     const post = await this.prisma.motivationPost.findFirst({
       where: { id: postId, origin: 'user' },
       include: {
@@ -664,9 +663,14 @@ export class MotivationReelsService {
       );
 
     const translation = post.translations[0];
-    const [text, explanation] = (translation?.storyText
-      ? [translation.storyText, translation.text.slice(translation.storyText.length).trim()]
-      : [translation?.text ?? '', '']) as [string, string];
+    const [text, explanation] = (
+      translation?.storyText
+        ? [
+            translation.storyText,
+            translation.text.slice(translation.storyText.length).trim(),
+          ]
+        : [translation?.text ?? '', '']
+    ) as [string, string];
 
     await this.review(post.id, {
       text,
@@ -741,12 +745,18 @@ export class MotivationReelsService {
     if (!verdict) {
       // Причину сбоя сохраняем: по «сбою модели» без подробностей нельзя
       // решить, ждать и повторить или разбирать текст руками.
-      await this.moderation.aiNote(postId, 'ai_error', aiFailureReason(failure), {
-        mode: settings.aiModerationMode,
-        failure: classifyAiFailure(failure),
-        retryable: isRetryableFailure(classifyAiFailure(failure)),
-        error: failure instanceof Error ? failure.message.slice(0, 500) : null,
-      });
+      await this.moderation.aiNote(
+        postId,
+        'ai_error',
+        aiFailureReason(failure),
+        {
+          mode: settings.aiModerationMode,
+          failure: classifyAiFailure(failure),
+          retryable: isRetryableFailure(classifyAiFailure(failure)),
+          error:
+            failure instanceof Error ? failure.message.slice(0, 500) : null,
+        },
+      );
       return { stage: 'admin_review', reason: null };
     }
     const decision = resolveDecision(verdict, {
@@ -841,46 +851,46 @@ export class MotivationReelsService {
 
   private reelDto(
     post: {
-    id: string;
-    slug: string;
-    contentDate: Date;
-    profileType: MotivationProfileType;
-    audienceTrack: MotivationAudienceTrack;
-    category: string;
-    status: string;
-    reviewStatus: string;
-    generationStage: string | null;
-    imageUrl: string | null;
-    storyImageUrl: string | null;
-    videoUrl: string | null;
-    videoStatus: string;
-    videoVoice: boolean;
-    videoTrackId: string | null;
-    videoErrorCode: string | null;
-    generationErrorCode: string | null;
-    attributionKind: MotivationPostDto['attributionKind'];
-    attributionSpeaker: string | null;
-    attributionWork: string | null;
-    attributionLocator: string | null;
-    attributionSourceUrl: string | null;
-    sourceVerified: boolean;
-    publishedAt: Date | null;
-    likeCount: number;
-    createdAt: Date;
-    translations: {
-      language: string;
-      title: string;
-      text: string;
-      storyText: string;
-    }[];
-    favorites: unknown[];
-    views: unknown[];
-    likes: unknown[];
-    moderationAudits: {
-      action: string;
-      reason: string | null;
+      id: string;
+      slug: string;
+      contentDate: Date;
+      profileType: MotivationProfileType;
+      audienceTrack: MotivationAudienceTrack;
+      category: string;
+      status: string;
+      reviewStatus: string;
+      generationStage: string | null;
+      imageUrl: string | null;
+      storyImageUrl: string | null;
+      videoUrl: string | null;
+      videoStatus: string;
+      videoVoice: boolean;
+      videoTrackId: string | null;
+      videoErrorCode: string | null;
+      generationErrorCode: string | null;
+      attributionKind: MotivationPostDto['attributionKind'];
+      attributionSpeaker: string | null;
+      attributionWork: string | null;
+      attributionLocator: string | null;
+      attributionSourceUrl: string | null;
+      sourceVerified: boolean;
+      publishedAt: Date | null;
+      likeCount: number;
       createdAt: Date;
-    }[];
+      translations: {
+        language: string;
+        title: string;
+        text: string;
+        storyText: string;
+      }[];
+      favorites: unknown[];
+      views: unknown[];
+      likes: unknown[];
+      moderationAudits: {
+        action: string;
+        reason: string | null;
+        createdAt: Date;
+      }[];
     },
     /** Разрешена ли автору видеогенерация: выключатель живёт в админке. */
     videoAllowed = true,
@@ -1040,5 +1050,4 @@ export class MotivationReelsService {
       throw new BadRequestException('Неизвестный визуальный стиль');
     return value as MotivationVisualStyle;
   }
-
 }

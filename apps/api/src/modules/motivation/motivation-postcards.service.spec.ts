@@ -76,7 +76,10 @@ describe('MotivationPostcardsService admin gate', () => {
 
     await expect(service.list(motivationServiceAdmin)).resolves.toEqual([]);
     await expect(
-      service.create(motivationServiceAdmin, { title: 'Джанмаштами', date: '2026-09-05' }),
+      service.create(motivationServiceAdmin, {
+        title: 'Джанмаштами',
+        date: '2026-09-05',
+      }),
     ).resolves.toMatchObject({ title: 'Джанмаштами', date: '2026-09-05' });
     await expect(
       service.remove(motivationServiceAdmin, 'event-1'),
@@ -92,9 +95,9 @@ describe('MotivationPostcardsService admin gate', () => {
     await expect(
       service.create(regularUser, { title: 'x' }),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    await expect(
-      service.remove(regularUser, 'event-1'),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.remove(regularUser, 'event-1')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it('rejects a service-admin scoped to a different service', async () => {
@@ -145,7 +148,7 @@ describe('MotivationPostcardsService.build', () => {
     })) as unknown as typeof fetch;
   }
 
-  it("lets the author build a postcard from their own published reel", async () => {
+  it('lets the author build a postcard from their own published reel', async () => {
     stubImageDownload();
     const { service, prisma } = build();
     prisma.motivationPost.findUnique.mockResolvedValue(publishedOwnPost);
@@ -200,7 +203,7 @@ describe('MotivationPostcardsService.build', () => {
     ).resolves.toMatchObject({ url: 'https://cdn/postcard.png' });
   });
 
-  it("does not let a service-admin of another service bypass the ownership check", async () => {
+  it('does not let a service-admin of another service bypass the ownership check', async () => {
     const { service, prisma } = build();
     prisma.motivationPost.findUnique.mockResolvedValue({
       ...publishedOwnPost,

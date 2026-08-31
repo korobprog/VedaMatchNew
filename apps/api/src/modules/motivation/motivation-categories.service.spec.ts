@@ -86,7 +86,7 @@ describe('MotivationCategoriesService', () => {
       }),
     );
 
-    const created = await buildService(prisma).create(admin,{
+    const created = await buildService(prisma).create(admin, {
       title: '  Смирение  ',
     });
 
@@ -121,7 +121,7 @@ describe('MotivationCategoriesService', () => {
       }),
     );
 
-    const created = await buildService(prisma).create(admin,{
+    const created = await buildService(prisma).create(admin, {
       title: 'Утренняя практика',
       parentId: 'cat-1',
     });
@@ -143,7 +143,7 @@ describe('MotivationCategoriesService', () => {
     });
 
     await expect(
-      buildService(prisma).create(admin,{
+      buildService(prisma).create(admin, {
         title: 'Глубже',
         parentId: 'cat-2',
       }),
@@ -160,7 +160,7 @@ describe('MotivationCategoriesService', () => {
     });
 
     await expect(
-      buildService(prisma).update(admin,'cat-1', { parentId: 'cat-3' }),
+      buildService(prisma).update(admin, 'cat-1', { parentId: 'cat-3' }),
     ).rejects.toThrow(
       'Move the subcategories out before nesting this category',
     );
@@ -174,7 +174,7 @@ describe('MotivationCategoriesService', () => {
     });
 
     await expect(
-      buildService(prisma).update(admin,'cat-1', { parentId: 'cat-1' }),
+      buildService(prisma).update(admin, 'cat-1', { parentId: 'cat-1' }),
     ).rejects.toThrow('A category cannot be its own parent');
   });
 
@@ -241,7 +241,7 @@ describe('MotivationCategoriesService', () => {
       }),
     );
 
-    await buildService(prisma).create(admin,{ title: 'Вера' });
+    await buildService(prisma).create(admin, { title: 'Вера' });
 
     expect(prisma.motivationCategory.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ slug: 'vera-2', isDefault: false }),
@@ -262,7 +262,7 @@ describe('MotivationCategoriesService', () => {
       }),
     });
 
-    await buildService(prisma).update(admin,'cat-2', { isDefault: true });
+    await buildService(prisma).update(admin, 'cat-2', { isDefault: true });
 
     expect(prisma.motivationCategory.updateMany).toHaveBeenCalledWith({
       where: { isDefault: true },
@@ -276,7 +276,7 @@ describe('MotivationCategoriesService', () => {
     });
 
     await expect(
-      buildService(prisma).update(admin,'cat-1', { isDefault: false }),
+      buildService(prisma).update(admin, 'cat-1', { isDefault: false }),
     ).rejects.toThrow('Pick another default category');
   });
 
@@ -285,7 +285,7 @@ describe('MotivationCategoriesService', () => {
       findUnique: jest.fn().mockResolvedValue({ id: 'cat-1', isDefault: true }),
     });
 
-    await expect(buildService(prisma).remove(admin,'cat-1')).rejects.toThrow(
+    await expect(buildService(prisma).remove(admin, 'cat-1')).rejects.toThrow(
       'The default category cannot be deleted',
     );
     expect(prisma.motivationCategory.delete).not.toHaveBeenCalled();
@@ -298,7 +298,7 @@ describe('MotivationCategoriesService', () => {
         .mockResolvedValue({ id: 'cat-2', isDefault: false }),
     });
 
-    await buildService(prisma).remove(admin,'cat-2');
+    await buildService(prisma).remove(admin, 'cat-2');
 
     expect(prisma.motivationCategory.delete).toHaveBeenCalledWith({
       where: { id: 'cat-2' },

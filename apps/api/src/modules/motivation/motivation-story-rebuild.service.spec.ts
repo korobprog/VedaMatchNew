@@ -127,8 +127,8 @@ describe('MotivationStoryRebuildService', () => {
   it('не пускает service-admin другого сервиса', async () => {
     const { service } = build([legacy]);
 
-    await expect(
-      service.rebuild(otherServiceAdmin, 20),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.rebuild(otherServiceAdmin, 20)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 });

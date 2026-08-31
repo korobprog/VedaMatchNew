@@ -204,28 +204,18 @@ describe('MotivationModerationService', () => {
   it('rejects an unapproved style at the service boundary', async () => {
     const { service, transaction } = setup();
     await expect(
-      service.approveText(
-        admin,
-        actorId,
-        postId,
-        'neon_advertising' as never,
-      ),
+      service.approveText(admin, actorId, postId, 'neon_advertising' as never),
     ).rejects.toThrow('Visual style is not approved');
     expect(transaction.motivationPost.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects with a required reason and writes it to the audit', async () => {
     const { service, transaction } = setup();
-    await expect(
-      service.reject(admin, actorId, postId, '  '),
-    ).rejects.toThrow('Rejection reason is required');
-
-    await service.reject(
-      admin,
-      actorId,
-      postId,
-      'Source needs another review',
+    await expect(service.reject(admin, actorId, postId, '  ')).rejects.toThrow(
+      'Rejection reason is required',
     );
+
+    await service.reject(admin, actorId, postId, 'Source needs another review');
     expect(transaction.motivationPost.updateMany).toHaveBeenCalledWith({
       where: { id: postId, reviewStatus: 'text_review' },
       data: expect.objectContaining({ reviewStatus: 'rejected' }),
@@ -277,12 +267,7 @@ describe('MotivationModerationService', () => {
       }),
     );
 
-    await service.regenerateImage(
-      admin,
-      actorId,
-      postId,
-      'minimal_symbolism',
-    );
+    await service.regenerateImage(admin, actorId, postId, 'minimal_symbolism');
 
     expect(transaction.motivationPost.updateMany).toHaveBeenCalledWith({
       where: { id: postId, reviewStatus: 'image_review' },

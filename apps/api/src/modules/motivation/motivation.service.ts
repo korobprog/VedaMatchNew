@@ -879,10 +879,7 @@ export class MotivationService {
     });
     return this.authorWatchDto(watch);
   }
-  async deleteAuthorWatch(
-    user: AccessTokenPayload,
-    id: string,
-  ): Promise<void> {
+  async deleteAuthorWatch(user: AccessTokenPayload, id: string): Promise<void> {
     this.admin(user);
     await this.prisma.motivationAuthorWatch
       .delete({ where: { id } })
@@ -971,10 +968,7 @@ export class MotivationService {
     const post = await this.copy.prepareCandidate(quote.id, category);
     return { quoteId: quote.id, postId: post.id };
   }
-  async deleteSourceWatch(
-    user: AccessTokenPayload,
-    id: string,
-  ): Promise<void> {
+  async deleteSourceWatch(user: AccessTokenPayload, id: string): Promise<void> {
     this.admin(user);
     await this.prisma.motivationSourceWatch
       .delete({ where: { id } })
