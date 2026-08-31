@@ -136,6 +136,19 @@ export default async function AdminLibraryEntriesPage({
                   {entry.usefulCount} · комментариев: {entry.commentsCount}
                 </p>
 
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {/* Поля записи (заголовок, описание, рубрики) правит та же
+                      форма, что и автору — на карточке материала: канал
+                      уже проверяет права через entry.canEdit, который
+                      учитывает admin/service-admin, заводить отдельную
+                      форму здесь незачем. */}
+                  <Link
+                    href={`/library/entry/${entry.id}`}
+                    className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0"
+                  >
+                    Редактировать
+                  </Link>
+                </div>
                 <LibraryEntryActions entryId={entry.id} status={entry.status} />
               </li>
             ))}
