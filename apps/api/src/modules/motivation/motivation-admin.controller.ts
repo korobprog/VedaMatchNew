@@ -430,6 +430,6 @@ export class MotivationAdminController {
     @CurrentUser() user: AccessTokenPayload,
     @Query('days') days?: string,
   ) {
-    return this.analytics.read(user.role, days ? Number(days) : undefined);
+    return this.analytics.read(user, days ? Number(days) : undefined);
   }
 }

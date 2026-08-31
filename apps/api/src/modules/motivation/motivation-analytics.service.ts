@@ -1,6 +1,10 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import type { MotivationAnalyticsDto, Role } from '@vedamatch/shared';
+import type {
+  AccessTokenPayload,
+  MotivationAnalyticsDto,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isAdmin } from './is-admin';
 import { startOfUtcDay } from './reel-stages';
 
 /**
@@ -13,9 +17,11 @@ import { startOfUtcDay } from './reel-stages';
 export class MotivationAnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async read(role: Role, days = 7): Promise<MotivationAnalyticsDto> {
-    if (role !== 'admin' && role !== 'service-admin')
-      throw new ForbiddenException();
+  async read(
+    user: AccessTokenPayload,
+    days = 7,
+  ): Promise<MotivationAnalyticsDto> {
+    if (!isAdmin(user)) throw new ForbiddenException();
     const window = Math.max(1, Math.min(90, days));
     const since = new Date(
       startOfUtcDay(new Date()).getTime() - (window - 1) * 24 * 60 * 60 * 1000,
