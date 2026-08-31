@@ -93,7 +93,7 @@ describe('MotivationPostcardsService admin gate', () => {
       ForbiddenException,
     );
     await expect(
-      service.create(regularUser, { title: 'x' }),
+      service.create(regularUser, { title: 'x', date: '2026-09-05' }),
     ).rejects.toBeInstanceOf(ForbiddenException);
     await expect(service.remove(regularUser, 'event-1')).rejects.toBeInstanceOf(
       ForbiddenException,
@@ -107,7 +107,7 @@ describe('MotivationPostcardsService admin gate', () => {
       ForbiddenException,
     );
     await expect(
-      service.create(otherServiceAdmin, { title: 'x' }),
+      service.create(otherServiceAdmin, { title: 'x', date: '2026-09-05' }),
     ).rejects.toBeInstanceOf(ForbiddenException);
     await expect(
       service.remove(otherServiceAdmin, 'event-1'),
