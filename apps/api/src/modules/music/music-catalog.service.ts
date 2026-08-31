@@ -124,7 +124,9 @@ export class MusicCatalogService {
    */
   private async listSystemPlaylists(): Promise<MusicPlaylistCardDto[]> {
     const playlists = await this.prisma.musicPlaylist.findMany({
-      where: { isSystem: true, visibility: 'public' },
+      // Пустая подборка в витрине — обещание, за которым ничего нет: та же
+      // причина, по которой отсюда убраны исполнители без записей.
+      where: { isSystem: true, visibility: 'public', trackCount: { gt: 0 } },
       include: {
         items: { select: { track: { select: { durationSeconds: true } } } },
       },
@@ -252,7 +254,13 @@ export class MusicCatalogService {
 
     const [albums, tracks] = await Promise.all([
       this.prisma.musicAlbum.findMany({
-        where: { artistId: artist.id },
+        // Альбом без единой опубликованной записи не показываем по той же
+        // причине, что и исполнителя без записей в витрине: карточка ведёт
+        // на пустую страницу, то есть врёт о содержимом.
+        where: {
+          artistId: artist.id,
+          tracks: { some: { status: 'published' } },
+        },
         include: {
           artist: true,
           _count: { select: { tracks: { where: { status: 'published' } } } },
