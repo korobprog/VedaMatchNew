@@ -5,12 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type {
+  AccessTokenPayload,
   MotivationCategoryDto,
   MotivationCategoryInput,
   MotivationCategoryUpdate,
-  Role,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isAdmin } from './is-admin';
 import {
   buildMotivationCategorySlug,
   withCategorySlugSuffix,
@@ -36,8 +37,8 @@ export class MotivationCategoriesService {
    * Плоский список в порядке обхода дерева: категория верхнего уровня, следом
    * её подкатегории. Клиенту остаётся сгруппировать по `parentId`.
    */
-  async list(role: Role): Promise<MotivationCategoryDto[]> {
-    this.admin(role);
+  async list(user: AccessTokenPayload): Promise<MotivationCategoryDto[]> {
+    this.admin(user);
     const [categories, counts] = await Promise.all([
       this.prisma.motivationCategory.findMany({
         orderBy: [{ sortOrder: 'asc' }, { title: 'asc' }],
@@ -58,10 +59,10 @@ export class MotivationCategoriesService {
   }
 
   async create(
-    role: Role,
+    user: AccessTokenPayload,
     input: MotivationCategoryInput,
   ): Promise<MotivationCategoryDto> {
-    this.admin(role);
+    this.admin(user);
     const title = input.title?.trim();
     if (!title) throw new BadRequestException('Category title is required');
     const parentId = await this.resolveParentId(input.parentId, null);
@@ -90,11 +91,11 @@ export class MotivationCategoriesService {
   }
 
   async update(
-    role: Role,
+    user: AccessTokenPayload,
     id: string,
     input: MotivationCategoryUpdate,
   ): Promise<MotivationCategoryDto> {
-    this.admin(role);
+    this.admin(user);
     const existing = await this.prisma.motivationCategory.findUnique({
       where: { id },
     });
@@ -144,8 +145,8 @@ export class MotivationCategoriesService {
    * выбора. Подкатегории всплывают на верхний уровень (FK `ON DELETE SET NULL`)
    * — иначе одно нажатие уносило бы целую ветку.
    */
-  async remove(role: Role, id: string): Promise<void> {
-    this.admin(role);
+  async remove(user: AccessTokenPayload, id: string): Promise<void> {
+    this.admin(user);
     const existing = await this.prisma.motivationCategory.findUnique({
       where: { id },
     });
@@ -260,8 +261,7 @@ export class MotivationCategoriesService {
     };
   }
 
-  private admin(role: Role) {
-    if (role !== 'admin' && role !== 'service-admin')
-      throw new ForbiddenException();
+  private admin(user: AccessTokenPayload) {
+    if (!isAdmin(user)) throw new ForbiddenException();
   }
 }

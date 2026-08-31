@@ -22,6 +22,7 @@ import {
   type PortalActivityEvent,
 } from '@vedamatch/shared';
 import type {
+  AccessTokenPayload,
   MotivationAdminCandidateDto,
   MotivationAdminUpdate,
   MotivationAuthorWatchDto,
@@ -39,9 +40,9 @@ import type {
   MotivationSourceWatchDto,
   MotivationSourceWatchInput,
   MotivationVisualStyle,
-  Role,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isAdmin } from './is-admin';
 import {
   decodeMotivationCursor,
   encodeMotivationCursor,
@@ -519,8 +520,10 @@ export class MotivationService {
     });
     return { likeCount: Math.max(0, likeCount), isLiked: liked };
   }
-  async adminList(role: Role): Promise<MotivationAdminCandidateDto[]> {
-    this.admin(role);
+  async adminList(
+    user: AccessTokenPayload,
+  ): Promise<MotivationAdminCandidateDto[]> {
+    this.admin(user);
     const posts = await this.prisma.motivationPost.findMany({
       include: {
         translations: { where: { language: 'ru' } },
@@ -602,8 +605,12 @@ export class MotivationService {
       videoPrompt: post.videoPrompt,
     }));
   }
-  async adminUpdate(role: Role, id: string, input: MotivationAdminUpdate) {
-    this.admin(role);
+  async adminUpdate(
+    user: AccessTokenPayload,
+    id: string,
+    input: MotivationAdminUpdate,
+  ) {
+    this.admin(user);
     return this.prisma.motivationPost.update({
       where: { id },
       data: {
@@ -625,8 +632,8 @@ export class MotivationService {
    * добавить заново» было бы ловушкой. Переводы, избранное, просмотры и аудит
    * подхватываются каскадом.
    */
-  async adminDelete(role: Role, id: string): Promise<void> {
-    this.admin(role);
+  async adminDelete(user: AccessTokenPayload, id: string): Promise<void> {
+    this.admin(user);
     const post = await this.prisma.motivationPost.findUnique({
       where: { id },
       select: { id: true, quoteId: true },
@@ -640,23 +647,23 @@ export class MotivationService {
         });
     });
   }
-  regenerate(role: Role, actorId: string, id: string) {
-    return this.moderation.regenerateImage(role, actorId, id);
+  regenerate(user: AccessTokenPayload, actorId: string, id: string) {
+    return this.moderation.regenerateImage(user, actorId, id);
   }
   approveText(
-    role: Role,
+    user: AccessTokenPayload,
     actorId: string,
     id: string,
     visualStyle?: MotivationVisualStyle,
   ) {
-    return this.moderation.approveText(role, actorId, id, visualStyle);
+    return this.moderation.approveText(user, actorId, id, visualStyle);
   }
   /**
    * Ставит ролик в очередь. Отдельным действием, а не автоматом после
    * картинки: каждый ролик стоит денег, и решение о нём принимает человек.
    */
-  async requestAnimation(role: Role, id: string) {
-    this.admin(role);
+  async requestAnimation(user: AccessTokenPayload, id: string) {
+    this.admin(user);
     const post = await this.prisma.motivationPost.findUnique({
       where: { id },
       select: { imageUrl: true, videoStatus: true },
@@ -694,8 +701,8 @@ export class MotivationService {
    * намеренно короткая и с теми именами, на которых синтез спотыкается: сорок
    * знаков стоят меньше половины цента.
    */
-  async previewVoice(role: Role, voice?: string | null) {
-    this.admin(role);
+  async previewVoice(user: AccessTokenPayload, voice?: string | null) {
+    this.admin(user);
     const name = voice?.trim();
     if (name && !MOTIVATION_VOICES.includes(name as MotivationVoice))
       throw new BadRequestException('Unknown voice');
@@ -726,11 +733,11 @@ export class MotivationService {
    * платный запрос к провайдеру и вернулась ошибкой уже после списания.
    */
   async setVideoVoice(
-    role: Role,
+    user: AccessTokenPayload,
     id: string,
     input: { enabled?: boolean; voice?: string | null },
   ) {
-    this.admin(role);
+    this.admin(user);
     const voice = input.voice?.trim();
     if (voice && !MOTIVATION_VOICES.includes(voice as MotivationVoice))
       throw new BadRequestException('Unknown voice');
@@ -755,11 +762,11 @@ export class MotivationService {
    * и источник проверен — из этого выходит постановка лучше, чем из шаблона.
    */
   async draftPostPrompt(
-    role: Role,
+    user: AccessTokenPayload,
     id: string,
     input: { kind: PromptKind; mood?: string },
   ): Promise<{ prompt: string }> {
-    this.admin(role);
+    this.admin(user);
     const post = await this.prisma.motivationPost.findUnique({
       where: { id },
       include: {
@@ -790,8 +797,8 @@ export class MotivationService {
   }
 
   /** Принимает ролик: до этого он виден только в админке. */
-  async approveVideo(role: Role, id: string) {
-    this.admin(role);
+  async approveVideo(user: AccessTokenPayload, id: string) {
+    this.admin(user);
     const updated = await this.prisma.motivationPost.updateMany({
       where: { id, videoStatus: MotivationVideoStatus.review },
       data: { videoStatus: MotivationVideoStatus.ready },
@@ -807,33 +814,38 @@ export class MotivationService {
     if (post) this.moderation.notifyVideoReady(post);
     return { videoStatus: 'ready' as const };
   }
-  approveImage(role: Role, actorId: string, id: string) {
-    return this.moderation.approveImage(role, actorId, id);
+  approveImage(user: AccessTokenPayload, actorId: string, id: string) {
+    return this.moderation.approveImage(user, actorId, id);
   }
-  rejectModeration(role: Role, actorId: string, id: string, reason: string) {
-    return this.moderation.reject(role, actorId, id, reason);
+  rejectModeration(
+    user: AccessTokenPayload,
+    actorId: string,
+    id: string,
+    reason: string,
+  ) {
+    return this.moderation.reject(user, actorId, id, reason);
   }
   regenerateModerationImage(
-    role: Role,
+    user: AccessTokenPayload,
     actorId: string,
     id: string,
     visualStyle?: MotivationVisualStyle,
   ) {
-    return this.moderation.regenerateImage(role, actorId, id, visualStyle);
+    return this.moderation.regenerateImage(user, actorId, id, visualStyle);
   }
   savePrompts(
-    role: Role,
+    user: AccessTokenPayload,
     actorId: string,
     id: string,
     input: MotivationPromptUpdate,
   ) {
-    return this.moderation.savePrompts(role, actorId, id, input);
+    return this.moderation.savePrompts(user, actorId, id, input);
   }
   async generateDaily(date: Date) {
     return this.discovery.discoverDaily(date, 8);
   }
-  async enqueueDaily(role: Role, rawDate?: string) {
-    this.admin(role);
+  async enqueueDaily(user: AccessTokenPayload, rawDate?: string) {
+    this.admin(user);
     const date = rawDate
       ? new Date(`${rawDate}T00:00:00.000Z`)
       : new Date(new Date().toISOString().slice(0, 10));
@@ -841,19 +853,21 @@ export class MotivationService {
       throw new BadRequestException('Invalid date');
     return this.generateDaily(date);
   }
-  async listAuthorWatches(role: Role): Promise<MotivationAuthorWatchDto[]> {
-    this.admin(role);
+  async listAuthorWatches(
+    user: AccessTokenPayload,
+  ): Promise<MotivationAuthorWatchDto[]> {
+    this.admin(user);
     const watches = await this.prisma.motivationAuthorWatch.findMany({
       orderBy: { createdAt: 'desc' },
     });
     return watches.map((watch) => this.authorWatchDto(watch));
   }
   async addAuthorWatch(
-    role: Role,
+    user: AccessTokenPayload,
     actorId: string,
     input: MotivationAuthorWatchInput,
   ): Promise<MotivationAuthorWatchDto> {
-    this.admin(role);
+    this.admin(user);
     const name = input.name?.trim();
     if (!name) throw new BadRequestException('Author name is required');
     const watch = await this.prisma.motivationAuthorWatch.create({
@@ -865,33 +879,38 @@ export class MotivationService {
     });
     return this.authorWatchDto(watch);
   }
-  async deleteAuthorWatch(role: Role, id: string): Promise<void> {
-    this.admin(role);
+  async deleteAuthorWatch(
+    user: AccessTokenPayload,
+    id: string,
+  ): Promise<void> {
+    this.admin(user);
     await this.prisma.motivationAuthorWatch
       .delete({ where: { id } })
       .catch(() => {
         throw new NotFoundException('Author watch not found');
       });
   }
-  async searchAuthorWatch(role: Role, id: string) {
-    this.admin(role);
+  async searchAuthorWatch(user: AccessTokenPayload, id: string) {
+    this.admin(user);
     const foundCount = await this.authorSearch.searchByWatchId(id);
     return { foundCount };
   }
 
-  async listSourceWatches(role: Role): Promise<MotivationSourceWatchDto[]> {
-    this.admin(role);
+  async listSourceWatches(
+    user: AccessTokenPayload,
+  ): Promise<MotivationSourceWatchDto[]> {
+    this.admin(user);
     const watches = await this.prisma.motivationSourceWatch.findMany({
       orderBy: { createdAt: 'desc' },
     });
     return watches.map((watch) => this.sourceWatchDto(watch));
   }
   async addSourceWatch(
-    role: Role,
+    user: AccessTokenPayload,
     actorId: string,
     input: MotivationSourceWatchInput,
   ): Promise<MotivationSourceWatchDto> {
-    this.admin(role);
+    this.admin(user);
     const url = input.url?.trim();
     if (!url) throw new BadRequestException('Source URL is required');
     try {
@@ -907,10 +926,10 @@ export class MotivationService {
     return this.sourceWatchDto(watch);
   }
   async addManualQuote(
-    role: Role,
+    user: AccessTokenPayload,
     input: MotivationManualQuoteInput,
   ): Promise<MotivationManualQuoteResult> {
-    this.admin(role);
+    this.admin(user);
     const originalText = input.originalText?.trim();
     const originalLanguage = input.originalLanguage?.trim();
     const author = input.author?.trim();
@@ -952,16 +971,19 @@ export class MotivationService {
     const post = await this.copy.prepareCandidate(quote.id, category);
     return { quoteId: quote.id, postId: post.id };
   }
-  async deleteSourceWatch(role: Role, id: string): Promise<void> {
-    this.admin(role);
+  async deleteSourceWatch(
+    user: AccessTokenPayload,
+    id: string,
+  ): Promise<void> {
+    this.admin(user);
     await this.prisma.motivationSourceWatch
       .delete({ where: { id } })
       .catch(() => {
         throw new NotFoundException('Source watch not found');
       });
   }
-  async searchSourceWatch(role: Role, id: string) {
-    this.admin(role);
+  async searchSourceWatch(user: AccessTokenPayload, id: string) {
+    this.admin(user);
     const foundCount = await this.sourceFetch.fetchByWatchId(id);
     return { foundCount };
   }
@@ -1004,9 +1026,8 @@ export class MotivationService {
       lastResultCount: watch.lastResultCount,
     };
   }
-  private admin(role: Role) {
-    if (role !== 'admin' && role !== 'service-admin')
-      throw new ForbiddenException();
+  private admin(user: AccessTokenPayload) {
+    if (!isAdmin(user)) throw new ForbiddenException();
   }
   private async ensurePublished(id: string) {
     const post = await this.prisma.motivationPost.findFirst({

@@ -5,10 +5,11 @@ import {
 } from '@nestjs/common';
 import { VedabaseBookKind } from '@prisma/client';
 import type {
+  AccessTokenPayload,
   MotivationBookDto,
   MotivationBookKind,
-  Role,
 } from '@vedamatch/shared';
+import { isAdmin } from './is-admin';
 import { VedabaseContentRepository } from '../vedabase/vedabase-content.repository';
 
 const allowedKinds = new Set<string>(Object.values(VedabaseBookKind));
@@ -24,8 +25,8 @@ const allowedKinds = new Set<string>(Object.values(VedabaseBookKind));
 export class MotivationBooksService {
   constructor(private readonly repository: VedabaseContentRepository) {}
 
-  async list(role: Role): Promise<MotivationBookDto[]> {
-    this.admin(role);
+  async list(user: AccessTokenPayload): Promise<MotivationBookDto[]> {
+    this.admin(user);
     const books = await this.repository.listBooksForQuoteMining();
     return books.map((book) => ({
       ...book,
@@ -34,19 +35,18 @@ export class MotivationBooksService {
   }
 
   async setKind(
-    role: Role,
+    user: AccessTokenPayload,
     id: string,
     kind: MotivationBookKind,
   ): Promise<MotivationBookDto> {
-    this.admin(role);
+    this.admin(user);
     if (!allowedKinds.has(kind))
       throw new BadRequestException('Unknown book kind');
     const book = await this.repository.setBookKind(id, kind);
     return { ...book, kind: book.kind };
   }
 
-  private admin(role: Role) {
-    if (role !== 'admin' && role !== 'service-admin')
-      throw new ForbiddenException();
+  private admin(user: AccessTokenPayload) {
+    if (!isAdmin(user)) throw new ForbiddenException();
   }
 }

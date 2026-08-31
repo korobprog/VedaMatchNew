@@ -8,8 +8,12 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MotivationReviewStatus, MotivationVisualStyle } from '@prisma/client';
-import type { MotivationPromptUpdate, Role } from '@vedamatch/shared';
+import type {
+  AccessTokenPayload,
+  MotivationPromptUpdate,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isAdmin } from './is-admin';
 import { createImageDirection } from './motivation-image-director';
 import {
   isPromptTooLong,
@@ -73,12 +77,12 @@ export class MotivationModerationService {
   }
 
   async approveText(
-    role: Role,
+    user: AccessTokenPayload,
     actorId: string,
     postId: string,
     styleOverride?: MotivationVisualStyle,
   ) {
-    this.assertAdmin(role);
+    this.assertAdmin(user);
     this.assertApprovedStyle(styleOverride);
     return this.approveTextWith({
       actorId,
@@ -216,8 +220,12 @@ export class MotivationModerationService {
     });
   }
 
-  async approveImage(role: Role, actorId: string, postId: string) {
-    this.assertAdmin(role);
+  async approveImage(
+    user: AccessTokenPayload,
+    actorId: string,
+    postId: string,
+  ) {
+    this.assertAdmin(user);
     const post = await this.loadPost(postId);
     const notify = () => this.notifyPublished(post);
     if (post.reviewStatus !== MotivationReviewStatus.image_review)
@@ -247,8 +255,13 @@ export class MotivationModerationService {
     });
   }
 
-  async reject(role: Role, actorId: string, postId: string, reason: string) {
-    this.assertAdmin(role);
+  async reject(
+    user: AccessTokenPayload,
+    actorId: string,
+    postId: string,
+    reason: string,
+  ) {
+    this.assertAdmin(user);
     const normalizedReason = reason?.trim();
     if (!normalizedReason)
       throw new BadRequestException('Rejection reason is required');
@@ -273,12 +286,12 @@ export class MotivationModerationService {
   }
 
   async regenerateImage(
-    role: Role,
+    user: AccessTokenPayload,
     actorId: string,
     postId: string,
     styleOverride?: MotivationVisualStyle,
   ) {
-    this.assertAdmin(role);
+    this.assertAdmin(user);
     this.assertApprovedStyle(styleOverride);
     const post = await this.loadPost(postId);
     if (post.reviewStatus !== MotivationReviewStatus.image_review)
@@ -347,12 +360,12 @@ export class MotivationModerationService {
    * не годится — он требует ожидаемого и следующего статуса.
    */
   async savePrompts(
-    role: Role,
+    user: AccessTokenPayload,
     actorId: string,
     postId: string,
     input: MotivationPromptUpdate,
   ) {
-    this.assertAdmin(role);
+    this.assertAdmin(user);
     if (input.imagePrompt === undefined && input.videoPrompt === undefined)
       throw new BadRequestException('Nothing to save');
 
@@ -467,9 +480,8 @@ export class MotivationModerationService {
     });
   }
 
-  private assertAdmin(role: Role) {
-    if (role !== 'admin' && role !== 'service-admin')
-      throw new ForbiddenException();
+  private assertAdmin(user: AccessTokenPayload) {
+    if (!isAdmin(user)) throw new ForbiddenException();
   }
 
   private assertApprovedStyle(style?: MotivationVisualStyle) {

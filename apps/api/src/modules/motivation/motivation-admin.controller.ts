@@ -75,7 +75,7 @@ export class MotivationAdminController {
   }
   @Get('posts')
   adminList(@CurrentUser() user: AccessTokenPayload) {
-    return this.service.adminList(user.role);
+    return this.service.adminList(user);
   }
   @Patch('posts/:id')
   adminUpdate(
@@ -83,18 +83,18 @@ export class MotivationAdminController {
     @Param('id') id: string,
     @Body() input: MotivationAdminUpdate,
   ) {
-    return this.service.adminUpdate(user.role, id, input);
+    return this.service.adminUpdate(user, id, input);
   }
   @Delete('posts/:id')
   adminDelete(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
   ) {
-    return this.service.adminDelete(user.role, id);
+    return this.service.adminDelete(user, id);
   }
   @Post('posts/:id/regenerate')
   regenerate(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
-    return this.service.regenerate(user.role, user.sub, id);
+    return this.service.regenerate(user, user.sub, id);
   }
   @Post('posts/:id/approve-text')
   approveText(
@@ -102,14 +102,14 @@ export class MotivationAdminController {
     @Param('id') id: string,
     @Body() input: MotivationApproveTextInput = {},
   ) {
-    return this.service.approveText(user.role, user.sub, id, input.visualStyle);
+    return this.service.approveText(user, user.sub, id, input.visualStyle);
   }
   @Post('posts/:id/approve-image')
   approveImage(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
   ) {
-    return this.service.approveImage(user.role, user.sub, id);
+    return this.service.approveImage(user, user.sub, id);
   }
   /**
    * Сохранение отредактированных промптов. Одним эндпоинтом на оба поля: в
@@ -122,11 +122,11 @@ export class MotivationAdminController {
     @Param('id') id: string,
     @Body() input: MotivationPromptUpdate,
   ) {
-    return this.service.savePrompts(user.role, user.sub, id, input);
+    return this.service.savePrompts(user, user.sub, id, input);
   }
   @Post('posts/:id/animate')
   animate(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
-    return this.service.requestAnimation(user.role, id);
+    return this.service.requestAnimation(user, id);
   }
   @Get('settings')
   readSettings(@CurrentUser() user: AccessTokenPayload) {
@@ -179,7 +179,7 @@ export class MotivationAdminController {
     @CurrentUser() user: AccessTokenPayload,
     @Body() input: { voice?: string | null } = {},
   ) {
-    return this.service.previewVoice(user.role, input.voice);
+    return this.service.previewVoice(user, input.voice);
   }
   @Post('posts/:id/draft-prompt')
   draftPostPrompt(
@@ -187,7 +187,7 @@ export class MotivationAdminController {
     @Param('id') id: string,
     @Body() input: { kind: 'image' | 'video'; mood?: string },
   ) {
-    return this.service.draftPostPrompt(user.role, id, input);
+    return this.service.draftPostPrompt(user, id, input);
   }
   @Post('posts/:id/voice')
   setVideoVoice(
@@ -195,14 +195,14 @@ export class MotivationAdminController {
     @Param('id') id: string,
     @Body() input: { enabled?: boolean; voice?: string | null } = {},
   ) {
-    return this.service.setVideoVoice(user.role, id, input);
+    return this.service.setVideoVoice(user, id, input);
   }
   @Post('posts/:id/approve-video')
   approveVideo(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
   ) {
-    return this.service.approveVideo(user.role, id);
+    return this.service.approveVideo(user, id);
   }
   @Post('posts/:id/reject')
   reject(
@@ -210,7 +210,7 @@ export class MotivationAdminController {
     @Param('id') id: string,
     @Body() input: MotivationRejectInput,
   ) {
-    return this.service.rejectModeration(user.role, user.sub, id, input.reason);
+    return this.service.rejectModeration(user, user.sub, id, input.reason);
   }
   @Post('posts/:id/regenerate-image')
   regenerateImage(
@@ -219,7 +219,7 @@ export class MotivationAdminController {
     @Body() input: MotivationRegenerateImageInput = {},
   ) {
     return this.service.regenerateModerationImage(
-      user.role,
+      user,
       user.sub,
       id,
       input.visualStyle,
@@ -230,7 +230,7 @@ export class MotivationAdminController {
     @CurrentUser() user: AccessTokenPayload,
     @Body() input: { date?: string },
   ) {
-    return this.service.enqueueDaily(user.role, input.date);
+    return this.service.enqueueDaily(user, input.date);
   }
 
   @Post('quotes')
@@ -238,7 +238,7 @@ export class MotivationAdminController {
     @CurrentUser() user: AccessTokenPayload,
     @Body() input: MotivationManualQuoteInput,
   ) {
-    return this.service.addManualQuote(user.role, input);
+    return this.service.addManualQuote(user, input);
   }
 
   @Post('stories/rebuild')
@@ -246,7 +246,7 @@ export class MotivationAdminController {
     @CurrentUser() user: AccessTokenPayload,
     @Body() input: { limit?: number; force?: boolean } = {},
   ) {
-    return this.storyRebuild.rebuild(user.role, input.limit, input.force);
+    return this.storyRebuild.rebuild(user, input.limit, input.force);
   }
 
   @Post('manual-posts')
@@ -254,19 +254,19 @@ export class MotivationAdminController {
     @CurrentUser() user: AccessTokenPayload,
     @Body() input: MotivationManualPostInput,
   ) {
-    return this.manualPosts.create(user.role, user.sub, input);
+    return this.manualPosts.create(user, user.sub, input);
   }
 
   @Get('categories')
   listCategories(@CurrentUser() user: AccessTokenPayload) {
-    return this.categories.list(user.role);
+    return this.categories.list(user);
   }
   @Post('categories')
   createCategory(
     @CurrentUser() user: AccessTokenPayload,
     @Body() input: MotivationCategoryInput,
   ) {
-    return this.categories.create(user.role, input);
+    return this.categories.create(user, input);
   }
   @Patch('categories/:id')
   updateCategory(
@@ -274,19 +274,19 @@ export class MotivationAdminController {
     @Param('id') id: string,
     @Body() input: MotivationCategoryUpdate,
   ) {
-    return this.categories.update(user.role, id, input);
+    return this.categories.update(user, id, input);
   }
   @Delete('categories/:id')
   deleteCategory(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
   ) {
-    return this.categories.remove(user.role, id);
+    return this.categories.remove(user, id);
   }
 
   @Get('books')
   listBooks(@CurrentUser() user: AccessTokenPayload) {
-    return this.books.list(user.role);
+    return this.books.list(user);
   }
   @Patch('books/:id')
   setBookKind(
@@ -294,64 +294,64 @@ export class MotivationAdminController {
     @Param('id') id: string,
     @Body() input: MotivationBookKindInput,
   ) {
-    return this.books.setKind(user.role, id, input.kind);
+    return this.books.setKind(user, id, input.kind);
   }
 
   @Get('authors')
   listAuthorWatches(@CurrentUser() user: AccessTokenPayload) {
-    return this.service.listAuthorWatches(user.role);
+    return this.service.listAuthorWatches(user);
   }
   @Post('authors')
   addAuthorWatch(
     @CurrentUser() user: AccessTokenPayload,
     @Body() input: MotivationAuthorWatchInput,
   ) {
-    return this.service.addAuthorWatch(user.role, user.sub, input);
+    return this.service.addAuthorWatch(user, user.sub, input);
   }
   @Delete('authors/:id')
   deleteAuthorWatch(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
   ) {
-    return this.service.deleteAuthorWatch(user.role, id);
+    return this.service.deleteAuthorWatch(user, id);
   }
   @Post('authors/:id/search')
   searchAuthorWatch(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
   ) {
-    return this.service.searchAuthorWatch(user.role, id);
+    return this.service.searchAuthorWatch(user, id);
   }
 
   @Get('sources')
   listSourceWatches(@CurrentUser() user: AccessTokenPayload) {
-    return this.service.listSourceWatches(user.role);
+    return this.service.listSourceWatches(user);
   }
   @Post('sources')
   addSourceWatch(
     @CurrentUser() user: AccessTokenPayload,
     @Body() input: MotivationSourceWatchInput,
   ) {
-    return this.service.addSourceWatch(user.role, user.sub, input);
+    return this.service.addSourceWatch(user, user.sub, input);
   }
   @Delete('sources/:id')
   deleteSourceWatch(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
   ) {
-    return this.service.deleteSourceWatch(user.role, id);
+    return this.service.deleteSourceWatch(user, id);
   }
   @Post('sources/:id/search')
   searchSourceWatch(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
   ) {
-    return this.service.searchSourceWatch(user.role, id);
+    return this.service.searchSourceWatch(user, id);
   }
 
   @Get('events')
   adminEvents(@CurrentUser() user: AccessTokenPayload) {
-    return this.postcards.list(user.role);
+    return this.postcards.list(user);
   }
 
   @Post('events')
@@ -359,7 +359,7 @@ export class MotivationAdminController {
     @CurrentUser() user: AccessTokenPayload,
     @Body() input: MotivationEventInput,
   ) {
-    return this.postcards.create(user.role, input);
+    return this.postcards.create(user, input);
   }
 
   @Delete('events/:id')
@@ -367,7 +367,7 @@ export class MotivationAdminController {
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
   ) {
-    return this.postcards.remove(user.role, id);
+    return this.postcards.remove(user, id);
   }
 
   /**
@@ -379,7 +379,7 @@ export class MotivationAdminController {
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
   ) {
-    return this.reels.recheck(user.role, id);
+    return this.reels.recheck(user, id);
   }
 
   // ===== Админка: рилсы участников и решения ИИ =====
@@ -388,7 +388,7 @@ export class MotivationAdminController {
     @CurrentUser() user: AccessTokenPayload,
     @Query('filter') filter?: MotivationAdminReelFilter,
   ) {
-    return this.adminReels.list(user.role, filter);
+    return this.adminReels.list(user, filter);
   }
 
   @Post('reels/:id/restore')
@@ -396,7 +396,7 @@ export class MotivationAdminController {
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
   ) {
-    return this.adminReels.restore(user.role, user.sub, id);
+    return this.adminReels.restore(user, user.sub, id);
   }
 
   @Post('reels/:id/hide')
@@ -405,7 +405,7 @@ export class MotivationAdminController {
     @Param('id') id: string,
     @Body() body: { reason?: string },
   ) {
-    return this.adminReels.hide(user.role, user.sub, id, body?.reason ?? '');
+    return this.adminReels.hide(user, user.sub, id, body?.reason ?? '');
   }
 
   @Get('authors/:userId/policy')
@@ -413,7 +413,7 @@ export class MotivationAdminController {
     @CurrentUser() user: AccessTokenPayload,
     @Param('userId') userId: string,
   ) {
-    return this.adminReels.policy(user.role, userId);
+    return this.adminReels.policy(user, userId);
   }
 
   @Patch('authors/:userId/policy')
@@ -422,7 +422,7 @@ export class MotivationAdminController {
     @Param('userId') userId: string,
     @Body() body: MotivationAuthorPolicyUpdate,
   ) {
-    return this.adminReels.savePolicy(user.role, userId, body);
+    return this.adminReels.savePolicy(user, userId, body);
   }
 
   @Get('analytics')

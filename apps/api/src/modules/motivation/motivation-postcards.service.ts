@@ -5,12 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type {
+  AccessTokenPayload,
   MotivationEventDto,
   MotivationEventInput,
   MotivationPostcardResult,
-  Role,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isAdmin } from './is-admin';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { composeStoryImage } from './story-image';
 import {
@@ -52,8 +53,8 @@ export class MotivationPostcardsService {
     return found ? this.dto(found) : null;
   }
 
-  async list(role: Role): Promise<MotivationEventDto[]> {
-    this.assertAdmin(role);
+  async list(user: AccessTokenPayload): Promise<MotivationEventDto[]> {
+    this.assertAdmin(user);
     const rows = await this.prisma.motivationEvent.findMany({
       orderBy: { date: 'asc' },
       take: 200,
@@ -62,10 +63,10 @@ export class MotivationPostcardsService {
   }
 
   async create(
-    role: Role,
+    user: AccessTokenPayload,
     input: MotivationEventInput,
   ): Promise<MotivationEventDto> {
-    this.assertAdmin(role);
+    this.assertAdmin(user);
     const date = this.parseDate(input.date);
     const title = input.title?.trim().slice(0, MAX_TITLE);
     if (!title) throw new BadRequestException('Нужно название события');
@@ -87,8 +88,8 @@ export class MotivationPostcardsService {
     return this.dto(this.toRow(row));
   }
 
-  async remove(role: Role, id: string): Promise<void> {
-    this.assertAdmin(role);
+  async remove(user: AccessTokenPayload, id: string): Promise<void> {
+    this.assertAdmin(user);
     await this.prisma.motivationEvent.delete({ where: { id } }).catch(() => {
       throw new NotFoundException('Событие не найдено');
     });
@@ -101,7 +102,7 @@ export class MotivationPostcardsService {
    */
   async build(
     userId: string,
-    role: Role,
+    user: AccessTokenPayload,
     postId: string,
     greetingInput?: string | null,
   ): Promise<MotivationPostcardResult> {
@@ -121,7 +122,7 @@ export class MotivationPostcardsService {
     });
     if (!post) throw new NotFoundException('Пост не найден');
     const mine = post.authorUserId === userId;
-    if (!mine && !this.isAdmin(role))
+    if (!mine && !isAdmin(user))
       throw new ForbiddenException(
         'Открытку можно собрать только из своего рилса',
       );
@@ -211,11 +212,7 @@ export class MotivationPostcardsService {
     return value;
   }
 
-  private isAdmin(role: Role) {
-    return role === 'admin' || role === 'service-admin';
-  }
-
-  private assertAdmin(role: Role) {
-    if (!this.isAdmin(role)) throw new ForbiddenException();
+  private assertAdmin(user: AccessTokenPayload) {
+    if (!isAdmin(user)) throw new ForbiddenException();
   }
 }
