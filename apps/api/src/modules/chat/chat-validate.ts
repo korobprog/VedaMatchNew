@@ -39,30 +39,43 @@ export function normalizeMessageBody(raw: string | undefined): string {
 }
 
 /**
- * Ведёт ли адрес в наше хранилище. `prefix` — начало адресов бакета
- * (`ChatUploadsService.storagePrefix`); `null` означает, что S3 не настроен, и
- * тогда своего файла не бывает вовсе.
+ * Ведёт ли адрес в наше хранилище — и именно в объект этой беседы. `prefix` —
+ * начало адресов бакета (`ChatUploadsService.storagePrefix`); `null` означает,
+ * что S3 не настроен, и тогда своего файла не бывает вовсе. Мало того что
+ * адрес начинается с адреса бакета — все свои загрузки лежат под
+ * `chat/${conversationId}/...` (см. `ChatUploadsService.store`/`storeImage`),
+ * и ключ обязан начинаться ровно с этого пути: иначе по префиксу бакета
+ * проходит чужой аватар или файл другой беседы.
  */
-export function isStorageUrl(url: string, prefix: string | null): boolean {
-  return Boolean(prefix) && url.startsWith(prefix!);
+export function isStorageUrl(
+  url: string,
+  prefix: string | null,
+  conversationId: string,
+): boolean {
+  if (!prefix || !url.startsWith(prefix)) return false;
+  const key = url.slice(prefix.length);
+  return key.startsWith(`chat/${conversationId}/`);
 }
 
 /**
- * Адрес вложения обязан вести в наше хранилище.
+ * Адрес вложения обязан вести в наше хранилище, в объект именно этой беседы.
  *
  * В сообщение ссылку кладёт браузер — тем, что вернула загрузка, — и до этой
- * проверки принималась любая строка. Прямым вызовом API отправитель клал в
- * `url` чужой адрес, а веб рисует его как `<img src>` и `<a href>`: чужой
- * сервер узнавал IP получателя, его браузер и точное время, когда переписку
- * открыли, а «файл» вёл куда угодно. Поэтому проверяем начало адреса, а не
- * просто наличие строки.
+ * проверки принималась любая строка, начинающаяся с адреса бакета. Прямым
+ * вызовом API отправитель клал в `url` чужой адрес — включая чужой аватар или
+ * файл другой беседы, у которого тот же префикс бакета, — а веб рисует его
+ * как `<img src>` и `<a href>`: чужой сервер узнавал IP получателя, его
+ * браузер и точное время, когда переписку открыли, а «файл» вёл куда угодно.
+ * Поэтому проверяем не только начало адреса, но и что ключ объекта лежит
+ * именно в `chat/${conversationId}/`.
  */
 export function assertStorageUrl(
   url: string | null | undefined,
   prefix: string | null,
+  conversationId: string,
 ): void {
   if (!url) return;
-  if (!isStorageUrl(url, prefix))
+  if (!isStorageUrl(url, prefix, conversationId))
     throw new ChatValidationError('Вложение не из нашего хранилища');
 }
 
@@ -80,6 +93,8 @@ export function normalizeAttachments(
   input: ChatAttachmentInput[] | undefined,
   /** Начало адресов нашего бакета: чужие ссылки дальше не проходят. */
   storagePrefix: string | null,
+  /** Беседа, в которую отправляется сообщение: ключ обязан лежать в её папке. */
+  conversationId: string,
 ): ChatAttachmentInput[] {
   const list = input ?? [];
   if (list.length > CHAT_MAX_ATTACHMENTS)
@@ -95,8 +110,8 @@ export function normalizeAttachments(
 
     // И файл, и картинка карточки чужого сервиса лежат в нашем бакете:
     // карточка уезжает снимком, а снимок с чужого адреса — не снимок.
-    assertStorageUrl(item.url, storagePrefix);
-    assertStorageUrl(item.previewUrl, storagePrefix);
+    assertStorageUrl(item.url, storagePrefix, conversationId);
+    assertStorageUrl(item.previewUrl, storagePrefix, conversationId);
 
     const waveform = (item.waveform ?? [])
       .slice(0, MAX_WAVEFORM_POINTS)

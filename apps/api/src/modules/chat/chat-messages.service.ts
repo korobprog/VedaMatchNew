@@ -77,7 +77,11 @@ export class ChatMessagesService {
 
     const body = this.validated(() => normalizeMessageBody(dto.body));
     const attachments = this.validated(() =>
-      normalizeAttachments(dto.attachments, this.uploads.storagePrefix),
+      normalizeAttachments(
+        dto.attachments,
+        this.uploads.storagePrefix,
+        conversationId,
+      ),
     );
     this.validated(() => assertSendable(body, attachments));
 
