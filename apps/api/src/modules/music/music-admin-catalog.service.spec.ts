@@ -22,6 +22,10 @@ function prismaMock() {
       update: jest
         .fn()
         .mockImplementation(({ data }) => ({ id: 't1', ...data })),
+      delete: jest.fn().mockResolvedValue({ id: 't1' }),
+    },
+    musicUpload: {
+      deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
   };
 
@@ -72,18 +76,24 @@ function prismaMock() {
  * в базу и в S3 не ходит, а подменять его заглушкой значило бы проверять
  * ключи не тем кодом, который работает в проде.
  */
-function coversService() {
-  return new MusicCoversService(
-    new MusicStorageService({
-      get: () => undefined,
-    } as unknown as ConfigService),
-  );
+function storageService() {
+  return new MusicStorageService({
+    get: () => undefined,
+  } as unknown as ConfigService);
 }
 
-function service(mock: ReturnType<typeof prismaMock>) {
+function coversService(storage: MusicStorageService) {
+  return new MusicCoversService(storage);
+}
+
+function service(
+  mock: ReturnType<typeof prismaMock>,
+  storage = storageService(),
+) {
   return new MusicAdminCatalogService(
     mock.prisma as unknown as PrismaService,
-    coversService(),
+    coversService(storage),
+    storage,
   );
 }
 
@@ -102,6 +112,9 @@ describe('MusicAdminCatalogService', () => {
         ForbiddenException,
       );
       await expect(svc.updateTrack(false, 't1', {})).rejects.toThrow(
+        ForbiddenException,
+      );
+      await expect(svc.deleteTrack(false, 't1')).rejects.toThrow(
         ForbiddenException,
       );
     });
@@ -374,6 +387,55 @@ describe('MusicAdminCatalogService', () => {
 
       const data = mock.tx.musicTrack.update.mock.calls[0][0].data;
       expect(data).not.toHaveProperty('storageKey');
+    });
+  });
+
+  describe('deleteTrack', () => {
+    const existing = {
+      id: 't1',
+      storageKey: 'music/t1.mp3',
+      coverKey: 'covers/t1.jpg',
+    };
+
+    it('несуществующую запись не удаляет', async () => {
+      const mock = prismaMock();
+
+      await expect(service(mock).deleteTrack(true, 't1')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mock.tx.musicTrack.delete).not.toHaveBeenCalled();
+    });
+
+    it('уносит строку загрузки: FK на запись у неё нет, каскад её не заберёт', async () => {
+      const mock = prismaMock();
+      mock.prisma.musicTrack.findUnique.mockResolvedValue(existing);
+
+      await service(mock).deleteTrack(true, 't1');
+
+      expect(mock.tx.musicUpload.deleteMany).toHaveBeenCalledWith({
+        where: { storageKey: 'music/t1.mp3' },
+      });
+      expect(mock.tx.musicTrack.delete).toHaveBeenCalledWith({
+        where: { id: 't1' },
+      });
+    });
+
+    it('файл и обложку убирает после базы', async () => {
+      const mock = prismaMock();
+      mock.prisma.musicTrack.findUnique.mockResolvedValue(existing);
+
+      const storage = storageService();
+      const remove = jest.spyOn(storage, 'remove').mockResolvedValue();
+
+      await service(mock, storage).deleteTrack(true, 't1');
+
+      expect(remove).toHaveBeenCalledWith('music/t1.mp3');
+      expect(remove).toHaveBeenCalledWith('covers/t1.jpg');
+      // Порядок важен: осиротевший объект найдёт чистка, а строка,
+      // ссылающаяся в пустоту, останется навсегда.
+      expect(mock.tx.musicTrack.delete.mock.invocationCallOrder[0]).toBeLessThan(
+        remove.mock.invocationCallOrder[0],
+      );
     });
   });
 });

@@ -37,6 +37,7 @@ function node(
     createdAt: "2026-08-29T00:00:00.000Z",
     canEdit: true,
     canMove: true,
+    canDelete: true,
     children,
   };
 }

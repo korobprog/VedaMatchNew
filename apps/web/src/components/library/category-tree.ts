@@ -283,6 +283,28 @@ export function insertIntoTree(
 }
 
 /**
+ * Удалённая рубрика — вон из дерева.
+ *
+ * Только сам узел: сервер удаляет рубрику лишь пустую и бездетную, так что
+ * поддерева у неё нет и уносить с собой ей нечего. Счётчик детей у родителя
+ * уменьшается тут же — иначе строка обещала бы «3 подраздела» там, где их
+ * осталось два, до ближайшей перезагрузки.
+ */
+export function removeFromTree(
+  nodes: LibraryCategoryTreeNode[],
+  id: string,
+): LibraryCategoryTreeNode[] {
+  return nodes
+    .filter((node) => node.id !== id)
+    .map((node) => {
+      const children = removeFromTree(node.children, id);
+      return children.length === node.children.length
+        ? { ...node, children }
+        : { ...node, children, childrenCount: children.length };
+    });
+}
+
+/**
  * Что за число стоит рядом с рубрикой.
  *
  * Правило одно на все списки: рубрика показывает то, что лежит **прямо в

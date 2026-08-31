@@ -36,6 +36,7 @@ function node(
     createdAt: "2026-08-29T00:00:00.000Z",
     canEdit: true,
     canMove: true,
+    canDelete: true,
     children,
   };
 }
@@ -311,5 +312,92 @@ describe("LibraryTreeOrganizer — отмена и ошибки", () => {
         item.textContent?.includes("Музыка"),
       ),
     ).toEqual([false, false, false, true]);
+  });
+});
+
+describe("LibraryTreeOrganizer — удаление", () => {
+  it("одного нажатия мало: сначала вопрос, потом запрос", async () => {
+    const user = userEvent.setup();
+    setup();
+
+    await user.click(
+      within(screen.getAllByRole("treeitem")[3]).getByRole("button", {
+        name: "Удалить рубрику: Музыка",
+      }),
+    );
+
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("Удалить рубрику? Отменить нельзя."),
+    ).toBeInTheDocument();
+  });
+
+  it("подтверждение уносит рубрику из дерева", async () => {
+    const user = userEvent.setup();
+    apiFetch.mockResolvedValue(ok({ ok: true }));
+    setup();
+
+    await user.click(
+      within(screen.getAllByRole("treeitem")[3]).getByRole("button", {
+        name: "Удалить рубрику: Музыка",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Да, удалить" }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
+    const [url, init] = apiFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/library/categories/music");
+    expect(init.method).toBe("DELETE");
+
+    expect(await screen.findByText("Рубрика удалена")).toBeInTheDocument();
+    expect(screen.getAllByRole("treeitem")).toHaveLength(3);
+  });
+
+  it("«Отмена» не трогает ни сервер, ни дерево", async () => {
+    const user = userEvent.setup();
+    setup();
+
+    await user.click(
+      within(screen.getAllByRole("treeitem")[3]).getByRole("button", {
+        name: "Удалить рубрику: Музыка",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Отмена" }));
+
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(screen.getAllByRole("treeitem")).toHaveLength(4);
+  });
+
+  it("непустую рубрику сервер не отдаёт, и это объясняется словами", async () => {
+    const user = userEvent.setup();
+    apiFetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ message: "category_not_empty" }),
+    });
+    setup();
+
+    await user.click(
+      within(screen.getAllByRole("treeitem")[3]).getByRole("button", {
+        name: "Удалить рубрику: Музыка",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Да, удалить" }));
+
+    expect(
+      await screen.findByText(
+        "В рубрике ещё есть материалы — сначала перенесите или удалите их",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("treeitem")).toHaveLength(4);
+  });
+
+  it("без права удаления кнопки нет", () => {
+    const readOnly = tree().map((root) => ({ ...root, canDelete: false }));
+    render(<LibraryTreeOrganizer locale="ru" initialTree={readOnly} />);
+
+    expect(
+      screen.queryByRole("button", { name: "Удалить рубрику: Музыка" }),
+    ).not.toBeInTheDocument();
   });
 });

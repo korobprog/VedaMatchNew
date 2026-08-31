@@ -105,6 +105,12 @@ export class MusicAdminCatalogController {
     return this.queue.listCategories(isAdmin(user));
   }
 
+  /** Весь каталог, любого статуса: очередь показывает только `pending`. */
+  @Get('tracks')
+  listTracks(@CurrentUser() user: AccessTokenPayload) {
+    return this.queue.listTracks(isAdmin(user));
+  }
+
   @Post('artists')
   createArtist(
     @CurrentUser() user: AccessTokenPayload,
@@ -187,6 +193,18 @@ export class MusicAdminCatalogController {
     @Body() body: UpdateMusicTrackRequest,
   ) {
     return this.catalog.updateTrack(isAdmin(user), id, body);
+  }
+
+  /**
+   * Удаление записи вместе с файлом. Снятие с витрины — это `hide` в очереди
+   * решений; сюда доходит то, чему в каталоге не место совсем.
+   */
+  @Delete('tracks/:id')
+  deleteTrack(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.catalog.deleteTrack(isAdmin(user), id);
   }
 }
 

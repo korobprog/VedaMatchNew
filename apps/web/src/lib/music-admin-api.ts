@@ -10,6 +10,7 @@ import type {
   MusicAdminPlaylistDto,
   MusicAdminReportsDto,
   MusicAdminSummaryDto,
+  MusicAdminTracksDto,
   MusicModerationItemDto,
 } from "@vedamatch/shared";
 
@@ -50,6 +51,10 @@ export const getMusicAdminAlbums = () =>
 
 export const getMusicAdminCategories = () =>
   adminGet<MusicAdminCategoriesDto>("/music/admin/catalog/categories");
+
+/** Весь каталог любого статуса — список для правки и удаления. */
+export const getMusicAdminTracks = () =>
+  adminGet<MusicAdminTracksDto>("/music/admin/catalog/tracks");
 
 /** Подборки портала — те, что витрина показывает всем. */
 export const getMusicAdminPlaylists = () =>

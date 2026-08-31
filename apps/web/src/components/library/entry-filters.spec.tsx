@@ -29,6 +29,7 @@ const categories: LibraryCategoryDto[] = [
     createdAt: "2026-08-23T00:00:00.000Z",
     canEdit: false,
     canMove: false,
+    canDelete: false,
   },
   {
     id: "c2",
@@ -47,6 +48,7 @@ const categories: LibraryCategoryDto[] = [
     createdAt: "2026-08-23T00:00:00.000Z",
     canEdit: false,
     canMove: false,
+    canDelete: false,
   },
 ];
 

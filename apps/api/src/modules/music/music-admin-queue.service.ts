@@ -11,6 +11,7 @@ import type {
   MusicAdminArtistsDto,
   MusicAdminCategoriesDto,
   MusicAdminSummaryDto,
+  MusicAdminTracksDto,
   MusicModerationDecisionRequest,
   MusicModerationItemDto,
 } from '@vedamatch/shared';
@@ -24,6 +25,11 @@ import {
 
 const MAX_NOTE_LENGTH = 500;
 const QUEUE_PAGE = 50;
+/**
+ * Сколько записей отдаёт список каталога за раз. Больше на экран всё равно
+ * не помещается, а грузить весь бакет ради страницы справочников незачем.
+ */
+const TRACKS_PAGE = 200;
 
 /**
  * Очередь модерации и сводка раздела.
@@ -229,6 +235,43 @@ export class MusicAdminQueueService {
       items: rows.map((row) =>
         toMusicAlbumDto(row, row._count.tracks, this.publicBaseUrl),
       ),
+    };
+  }
+
+  /**
+   * Все записи каталога — то, чего в админке не было: очередь показывает
+   * только `pending`, и опубликованную или отклонённую запись после решения
+   * увидеть было негде, а значит и убрать нечем.
+   *
+   * Порядок «свежие сверху»: убирают обычно то, что только что залили не
+   * туда. Статус в строке обязателен — по названию не отличить снятое от
+   * живого.
+   */
+  async listTracks(viewerIsAdmin: boolean): Promise<MusicAdminTracksDto> {
+    this.assertAdmin(viewerIsAdmin);
+
+    const [rows, total] = await Promise.all([
+      this.prisma.musicTrack.findMany({
+        include: { artist: true, album: true },
+        orderBy: { createdAt: 'desc' },
+        take: TRACKS_PAGE,
+      }),
+      this.prisma.musicTrack.count(),
+    ]);
+
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        status: row.status,
+        artistName: row.artist?.name ?? null,
+        albumTitle: row.album?.title ?? null,
+        durationSeconds: row.durationSeconds,
+        sizeBytes: row.sizeBytes,
+        createdAt: row.createdAt.toISOString(),
+        publishedAt: row.publishedAt?.toISOString() ?? null,
+      })),
+      total,
     };
   }
 

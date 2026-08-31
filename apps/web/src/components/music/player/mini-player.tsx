@@ -284,10 +284,11 @@ export function MiniPlayer() {
               type="button"
               aria-label={`Назад на ${SEEK_STEP_SECONDS} секунд`}
               onClick={() => player.skip(-SEEK_STEP_SECONDS)}
-              // Видно и на телефоне: лекцию и киртан на сорок минут слушают
-              // именно с телефона, а попасть пальцем в нужную секунду на
-              // трёхпиксельной дорожке нельзя.
-              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8`}
+              // Только на широком экране. На телефоне место в ряду занимает
+              // переход по записям: перемотка там есть и без кнопки — пальцем
+              // по дорожке, — а перейти к соседней записи было нечем, и
+              // единственный способ сменить киртан шёл через список.
+              className={`${ctrl} hidden h-10 w-10 sm:h-8 sm:w-8 lg:flex`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M11 4L3 12l8 8" />
@@ -300,7 +301,9 @@ export function MiniPlayer() {
               aria-label="Предыдущая запись"
               disabled={!hasPrev}
               onClick={player.prev}
-              className={`${ctrl} hidden h-8 w-8 lg:flex`}
+              // Пара к «Следующей»: без неё промах по «дальше» стоил бы
+              // возврата в список, а на телефоне это весь экран.
+              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M19 4L9 12l10 8z" />
@@ -336,7 +339,7 @@ export function MiniPlayer() {
               type="button"
               aria-label={`Вперёд на ${SEEK_STEP_SECONDS} секунд`}
               onClick={() => player.skip(SEEK_STEP_SECONDS)}
-              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8`}
+              className={`${ctrl} hidden h-10 w-10 sm:h-8 sm:w-8 lg:flex`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M13 4l8 8-8 8" />

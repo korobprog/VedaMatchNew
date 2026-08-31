@@ -370,6 +370,32 @@ export interface MusicAdminCategoriesDto {
   items: MusicCategoryDto[];
 }
 
+/**
+ * Запись в списке «Все записи» админки.
+ *
+ * Отдельно от `MusicTrackDto`: витрине не нужен ни статус, ни вес файла, а
+ * редакции без них нечего решать — она смотрит на список именно затем, чтобы
+ * снять лишнее и освободить место. Имена исполнителя и альбома плоские: в
+ * строке списка от ссылок толку нет.
+ */
+export interface MusicAdminTrackDto {
+  id: string;
+  title: string;
+  status: MusicTrackStatus;
+  artistName: string | null;
+  albumTitle: string | null;
+  durationSeconds: number;
+  sizeBytes: number;
+  createdAt: string;
+  publishedAt: string | null;
+}
+
+export interface MusicAdminTracksDto {
+  items: MusicAdminTrackDto[];
+  /** Всего записей в каталоге — список отдаёт только первую страницу. */
+  total: number;
+}
+
 // ===== Свои загрузки (этап 7) =====
 
 /**
