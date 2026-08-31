@@ -62,6 +62,7 @@ export default async function MusicPlaylistsPage() {
                     seed={playlist.id}
                     alt=""
                     className="size-12"
+                    fill={false}
                     rounded="rounded-xl"
                   />
                   <span className="flex min-w-0 flex-col gap-0.5">

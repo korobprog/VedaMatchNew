@@ -51,6 +51,7 @@ export function MusicCover({
   alt,
   className = "",
   rounded = "rounded-2xl",
+  fill = true,
 }: {
   url: string | null;
   /** Постоянный ключ записи — обычно её id. */
@@ -58,7 +59,19 @@ export function MusicCover({
   alt: string;
   className?: string;
   rounded?: string;
+  /**
+   * Растянуть обложку по родителю. Так устроено большинство мест: плитку
+   * размечает сетка, а обложка её заполняет.
+   *
+   * Когда размер задаёт сам вызывающий (`size-8` в списке плейлистов),
+   * `fill` надо снять. Иначе `w-full` из этого файла и `size-8` из вызова
+   * оказываются в одной группе утилит, и кто победит — решает порядок в
+   * собранном CSS, а не порядок в атрибуте: обложка растягивалась на всю
+   * ширину карточки и выдавливала название со счётчиком за её границу.
+   */
+  fill?: boolean;
 }) {
+  const size = fill ? "h-full w-full" : "";
   if (url) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- обложка в нашем S3
@@ -66,7 +79,7 @@ export function MusicCover({
         src={url}
         alt={alt}
         loading="lazy"
-        className={`h-full w-full object-cover ${rounded} ${className}`}
+        className={`${size} object-cover ${rounded} ${className}`}
       />
     );
   }
@@ -77,7 +90,7 @@ export function MusicCover({
       // для скринридера значит читать одно и то же дважды.
       aria-hidden="true"
       style={placeholderStyle(seed)}
-      className={`flex h-full w-full items-center justify-center ${rounded} ${className}`}
+      className={`flex ${size} items-center justify-center ${rounded} ${className}`}
     >
       <svg
         viewBox="0 0 28 28"
