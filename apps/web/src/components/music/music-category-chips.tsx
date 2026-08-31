@@ -7,6 +7,12 @@ import type { MusicCategoryDto } from "@vedamatch/shared";
  * Ссылки, а не кнопки с состоянием: фильтр обязан быть в адресе. Иначе
  * «пришли послушать бхаджаны» некому переслать, а кнопка «назад» уводит со
  * страницы вместо снятия фильтра. Клиентский JS здесь не нужен вовсе.
+ *
+ * Пустой раздел не показывается. Справочник разделов заводит сеятель, и
+ * пока каталог не наполнен, все пять чипов ведут на «в этом разделе пока
+ * пусто»: человек читает ряд названий как обещание содержимого и обходит их
+ * по одному. Исключение — уже выбранный раздел: убрать чип из-под фильтра,
+ * который сейчас применён, значит спрятать способ его снять.
  */
 export function MusicCategoryChips({
   categories,
@@ -20,6 +26,12 @@ export function MusicCategoryChips({
   const idle = "border-glass-brd text-text-1 hover:text-text-0";
   const selected = "border-violet/40 bg-violet/15 text-text-0";
 
+  const shown = categories.filter(
+    (category) => category.trackCount > 0 || category.slug === active,
+  );
+  // Один чип «Всё» — не навигация, а украшение: выбирать не из чего.
+  if (shown.length === 0) return null;
+
   return (
     <nav aria-label="Разделы каталога">
       <ul className="scroll-slim flex gap-2 overflow-x-auto pb-1">
@@ -32,7 +44,7 @@ export function MusicCategoryChips({
             Всё
           </Link>
         </li>
-        {categories.map((category) => (
+        {shown.map((category) => (
           <li key={category.id}>
             <Link
               href={`/music?category=${encodeURIComponent(category.slug)}`}
