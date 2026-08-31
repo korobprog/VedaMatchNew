@@ -1,4 +1,5 @@
 import {
+  extractEmbeddedCover,
   fallbackTrackTitle,
   normalizeAudioMetadata,
 } from './music-metadata-parse';
@@ -149,5 +150,69 @@ describe('fallbackTrackTitle', () => {
   it('когда взять нечего — говорит об этом прямо', () => {
     expect(fallbackTrackTitle(empty, '')).toBe('Без названия');
     expect(fallbackTrackTitle(empty, '.mp3')).toBe('Без названия');
+  });
+});
+
+describe('extractEmbeddedCover', () => {
+  const bytes = (length: number) => new Uint8Array(length).fill(1);
+  const MAX = 2 * 1024 * 1024;
+
+  it('без картинок в теге возвращает null', () => {
+    expect(extractEmbeddedCover({ common: {} }, MAX)).toBeNull();
+    expect(extractEmbeddedCover(null, MAX)).toBeNull();
+  });
+
+  it('берёт картинку и приводит тип к нашему mime', () => {
+    const cover = extractEmbeddedCover(
+      { common: { picture: [{ format: 'JPG', data: bytes(10) }] } },
+      MAX,
+    );
+    expect(cover?.mime).toBe('image/jpeg');
+    expect(cover?.data.byteLength).toBe(10);
+  });
+
+  it('предпочитает переднюю сторону, а не первую по порядку', () => {
+    // В файле бывает несколько картинок — задняя обложка, разворот, фото
+    // исполнителя. Первая по порядку не обязательно та, что нужна плитке.
+    const cover = extractEmbeddedCover(
+      {
+        common: {
+          picture: [
+            { format: 'image/png', type: 'Back Cover', data: bytes(4) },
+            { format: 'image/jpeg', type: 'Cover (front)', data: bytes(9) },
+          ],
+        },
+      },
+      MAX,
+    );
+    expect(cover?.mime).toBe('image/jpeg');
+    expect(cover?.data.byteLength).toBe(9);
+  });
+
+  it('пропускает чужие типы и пустые данные', () => {
+    expect(
+      extractEmbeddedCover(
+        {
+          common: {
+            picture: [
+              { format: 'image/gif', data: bytes(10) },
+              { format: 'image/jpeg', data: bytes(0) },
+            ],
+          },
+        },
+        MAX,
+      ),
+    ).toBeNull();
+  });
+
+  it('не пропускает мимо потолка размера', () => {
+    // Обложка из файла не должна пролезать мимо правила, по которому
+    // отказывают человеку при ручной загрузке.
+    expect(
+      extractEmbeddedCover(
+        { common: { picture: [{ format: 'image/jpeg', data: bytes(50) }] } },
+        10,
+      ),
+    ).toBeNull();
   });
 });

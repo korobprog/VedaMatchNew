@@ -158,6 +158,7 @@ export default async function MusicPage({
                   seed={playlist.id}
                   alt=""
                   className="size-8 shrink-0"
+                  fill={false}
                   rounded="rounded-[9px]"
                 />
                 <span className="flex min-w-0 flex-col">

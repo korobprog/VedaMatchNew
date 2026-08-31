@@ -71,6 +71,7 @@ export default async function MusicPlaylistPage({
           seed={playlist.id}
           alt=""
           className="size-40 shrink-0 sm:size-48"
+        fill={false}
         />
         <div className="flex min-w-0 flex-col gap-2">
           <h1 className="font-display text-2xl font-bold tracking-tight text-text-0 md:text-3xl">

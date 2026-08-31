@@ -124,6 +124,33 @@ export class MusicStorageService {
     );
   }
 
+  /**
+   * Положить объект самим, без подписанной ссылки.
+   *
+   * Нужен обложке, вынутой из тегов записи: байты уже у сервиса, и гонять их
+   * через браузер, чтобы тот залил их обратно, незачем. Возвращает `false`,
+   * когда хранилище не настроено или заливка не удалась: обложка — украшение,
+   * и ронять из-за неё принятую запись нельзя.
+   */
+  async put(key: string, body: Uint8Array, mime: string): Promise<boolean> {
+    if (!this.s3Client || !this.bucket) return false;
+    try {
+      await this.s3Client.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          Body: body,
+          ContentType: mime,
+          ContentLength: body.byteLength,
+        }),
+      );
+      return true;
+    } catch (error) {
+      this.logger.warn(`Обложка не залилась (${key}): ${String(error)}`);
+      return false;
+    }
+  }
+
   /** Подписанная ссылка на прослушивание. */
   async presignGet(key: string): Promise<string | null> {
     if (!this.s3Client || !this.bucket) return null;

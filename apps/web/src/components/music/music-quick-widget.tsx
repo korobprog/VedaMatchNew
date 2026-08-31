@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { MusicQuickAccessData } from "@/lib/music-quick-access";
 import { formatTotalDuration, formatTrackDuration } from "@/lib/music-duration";
+import { MusicMarqueeText } from "@/components/music/marquee-text";
+import { MusicPositionSlider } from "@/components/music/player/position-slider";
 import { getListenStats } from "@/lib/music-playback-api";
 import { MusicCover } from "./music-cover";
 import { useMusicPlayer } from "./player/player-provider";
@@ -226,20 +228,44 @@ function NowPlayingColumn({ data }: { data: MusicQuickAccessData }) {
       </Link>
 
       <div className="flex min-w-0 flex-1 flex-col justify-between">
+        {/* Титрами, а не многоточием: колонка узкая, а «Avantika devi dasi —
+            Kabe…» не отвечает на вопрос, что именно играет. Строка едет
+            только если не помещается, и стоит под `prefers-reduced-motion`. */}
         <div className="flex min-w-0 flex-col gap-1">
           <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-violet">
             {player?.isPlaying ? "Играет сейчас" : "Продолжить"}
           </span>
-          <span className="truncate font-display text-lg font-bold text-text-0">
-            {title}
-          </span>
-          <span className="truncate text-[13px] text-text-1">
-            {artistName ?? "Исполнитель не указан"}
-          </span>
-          <span className="truncate text-xs text-text-2">
-            {albumTitle ?? resume?.remainingLabel ?? ""}
-          </span>
+          <MusicMarqueeText
+            text={title}
+            className="font-display text-lg font-bold text-text-0"
+          />
+          <MusicMarqueeText
+            text={artistName ?? "Исполнитель не указан"}
+            className="text-[13px] text-text-1"
+          />
+          <MusicMarqueeText
+            text={albumTitle ?? resume?.remainingLabel ?? ""}
+            className="text-xs text-text-2"
+          />
         </div>
+
+        {/*
+          Перемотка. Раньше её здесь не было вовсе: виджет умел включить и
+          переключить, а отмотать назад пропущенную строку — нет, и ради
+          этого приходилось уходить на страницу записи.
+
+          Показываем только когда запись действительно загружена в плеер: у
+          `resume` есть сохранённая позиция, но перематывать ещё нечего, и
+          ползунок, который не двигает звук, хуже его отсутствия.
+        */}
+        {player?.current && (
+          <MusicPositionSlider
+            className="mt-2 flex w-full min-w-0 items-center gap-2"
+            position={player.positionSeconds}
+            total={player.durationSeconds || player.current.durationSeconds}
+            onSeek={player.seek}
+          />
+        )}
 
         <div className="flex items-center gap-1.5">
           <button
@@ -408,6 +434,7 @@ function QueueColumn() {
                     seed={id}
                     alt=""
                     className="size-[30px] shrink-0"
+                    fill={false}
                     rounded="rounded-lg"
                   />
                   <span className="flex min-w-0 flex-1 flex-col">

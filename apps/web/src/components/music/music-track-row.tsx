@@ -4,6 +4,7 @@ import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicCover } from "./music-cover";
 import { MusicFavoriteButton } from "./favorites-provider";
 import { MusicPlayButton } from "./player/play-button";
+import { MusicMarqueeText } from "@/components/music/marquee-text";
 
 /**
  * Запись строкой — для списков внутри альбома, исполнителя и очереди.
@@ -47,13 +48,19 @@ export function MusicTrackRow({
             rounded="rounded-lg"
           />
         </span>
+        {/* Титрами, а не многоточием: в списке альбома названия длинные и
+            похожие друг на друга началом — «Avantika devi dasi — …» обрывалось
+            ровно там, где начиналась разница. Строка едет только если не
+            помещается, и стоит под `prefers-reduced-motion`. */}
         <span className="flex min-w-0 flex-col">
-          <span className="truncate text-sm font-semibold text-text-0">
-            {track.title}
-          </span>
-          <span className="truncate text-xs text-text-2">
-            {track.artist?.name ?? "Исполнитель не указан"}
-          </span>
+          <MusicMarqueeText
+            text={track.title}
+            className="text-sm font-semibold text-text-0"
+          />
+          <MusicMarqueeText
+            text={track.artist?.name ?? "Исполнитель не указан"}
+            className="text-xs text-text-2"
+          />
         </span>
         <span className="ml-auto shrink-0 font-mono text-xs text-text-2">
           {formatTrackDuration(track.durationSeconds)}

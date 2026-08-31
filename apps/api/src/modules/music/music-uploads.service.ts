@@ -5,6 +5,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import type {
   CompleteMusicUploadResponse,
@@ -24,9 +25,16 @@ import {
 } from './music-upload-validate';
 import type { MusicUploadLimits } from './music-upload-validate';
 import {
+  extractEmbeddedCover,
   fallbackTrackTitle,
   normalizeAudioMetadata,
 } from './music-metadata-parse';
+import type { EmbeddedCover } from './music-metadata-parse';
+import {
+  buildMusicCoverKey,
+  coverExtensionFor,
+  MUSIC_COVER_MAX_BYTES,
+} from './music-cover-validate';
 import { MusicMetadataReader } from './music-metadata-reader';
 import {
   readId3v2Size,
@@ -277,11 +285,14 @@ export class MusicUploadsService {
     }
 
     const prefix = await this.storage.readPrefix(upload.storageKey);
-    const metadata = normalizeAudioMetadata(
-      prefix
-        ? await this.metadata.read(prefix, upload.mime, object.sizeBytes)
-        : null,
-    );
+    const raw = prefix
+      ? await this.metadata.read(prefix, upload.mime, object.sizeBytes)
+      : null;
+    const metadata = normalizeAudioMetadata(raw);
+    // Обложка, вшитая в файл. Достаём здесь, пока теги под рукой, а кладём
+    // после того, как запись принята: у отклонённой загрузки объекта в
+    // бакете остаться не должно.
+    const embeddedCover = extractEmbeddedCover(raw, MUSIC_COVER_MAX_BYTES);
 
     /**
      * Длительность считаем сами, когда прочитан не весь файл: пакет
@@ -329,6 +340,9 @@ export class MusicUploadsService {
 
     const title = fallbackTrackTitle(metadata, fileName ?? upload.storageKey);
     const status = initialStatusFor(upload.rightsBasis);
+    const coverKey = embeddedCover
+      ? await this.storeEmbeddedCover(userId, embeddedCover)
+      : null;
 
     const track = await this.prisma.$transaction(async (tx) => {
       const created = await tx.musicTrack.create({
@@ -347,6 +361,7 @@ export class MusicUploadsService {
           // каталог сразу, чужое исполнение — через проверку.
           status,
           ...(status === 'published' ? { publishedAt: new Date() } : {}),
+          ...(coverKey ? { coverKey } : {}),
           uploadedById: userId,
         },
       });
@@ -369,6 +384,28 @@ export class MusicUploadsService {
       title: track.title,
       durationSeconds: track.durationSeconds,
     };
+  }
+
+  /**
+   * Положить обложку из тегов в бакет под тем же путём, что и загруженную
+   * руками: вид `track`, владелец — заливший. Так её потом видят те же
+   * проверки принадлежности ключа, и удаляется она вместе с остальными.
+   *
+   * Не удалось — возвращаем `null` и молчим: обложка украшает карточку, но
+   * ронять из-за неё принятую запись нельзя, а модератор поставит свою.
+   */
+  private async storeEmbeddedCover(
+    userId: string,
+    cover: EmbeddedCover,
+  ): Promise<string | null> {
+    const key = buildMusicCoverKey(
+      'track',
+      userId,
+      coverExtensionFor(cover.mime),
+      randomUUID(),
+    );
+    const stored = await this.storage.put(key, cover.data, cover.mime);
+    return stored ? key : null;
   }
 
   private async fail(uploadId: string, reason: string): Promise<void> {

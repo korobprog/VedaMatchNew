@@ -253,6 +253,79 @@ describe('MusicUploadsService.completeUpload', () => {
     expect(prisma.tx.musicTrack.create.mock.calls[0][0].data.sizeBytes).toBe(3);
   });
 
+  it('вшитую в файл обложку кладёт в бакет и ставит записи', async () => {
+    // Люди заливают записи с уже вшитой картинкой, а плитка в каталоге
+    // оставалась градиентной заглушкой: обложку искали и грузили второй раз
+    // руками.
+    const prisma = prismaMock();
+    const storage = storageMock({ put: jest.fn().mockResolvedValue(true) });
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+
+    await service(
+      prisma,
+      storage,
+      metadataMock({
+        read: jest.fn().mockResolvedValue({
+          format: { duration: 198, bitrate: 192000 },
+          common: {
+            title: 'Гаура-арати',
+            picture: [{ format: 'image/jpeg', data: new Uint8Array(64) }],
+          },
+        }),
+      }),
+    ).completeUpload('u1', 'up1', 'gaura.mp3');
+
+    const [key, data, mime] = storage.put.mock.calls[0];
+    // Путь тот же, что и у загруженной руками: вид `track`, владелец —
+    // заливший. Так её видят те же проверки принадлежности ключа.
+    expect(key).toMatch(/^music\/covers\/track\/u1\/.+\.jpg$/);
+    expect(data.byteLength).toBe(64);
+    expect(mime).toBe('image/jpeg');
+    expect(prisma.tx.musicTrack.create.mock.calls[0][0].data.coverKey).toBe(
+      key,
+    );
+  });
+
+  it('без картинки в тегах обложку не выдумывает', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock({ put: jest.fn().mockResolvedValue(true) });
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+
+    await service(prisma, storage).completeUpload('u1', 'up1', 'gaura.mp3');
+
+    expect(storage.put).not.toHaveBeenCalled();
+    expect(
+      prisma.tx.musicTrack.create.mock.calls[0][0].data.coverKey,
+    ).toBeUndefined();
+  });
+
+  it('незалившаяся обложка не роняет принятую запись', async () => {
+    // Обложка украшает карточку, но ронять из-за неё запись нельзя:
+    // модератор поставит свою.
+    const prisma = prismaMock();
+    const storage = storageMock({ put: jest.fn().mockResolvedValue(false) });
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+
+    const result = await service(
+      prisma,
+      storage,
+      metadataMock({
+        read: jest.fn().mockResolvedValue({
+          format: { duration: 198, bitrate: 192000 },
+          common: {
+            title: 'Гаура-арати',
+            picture: [{ format: 'image/jpeg', data: new Uint8Array(64) }],
+          },
+        }),
+      }),
+    ).completeUpload('u1', 'up1', 'gaura.mp3');
+
+    expect(result.trackId).toBe('t1');
+    expect(
+      prisma.tx.musicTrack.create.mock.calls[0][0].data.coverKey,
+    ).toBeUndefined();
+  });
+
   it('чужую загрузку не показывает даже кодом ответа', async () => {
     const prisma = prismaMock();
     const storage = storageMock();
