@@ -397,12 +397,7 @@ export class UnionProfileService {
     // Чьи анкеты подняты «Вниманием» — знает сервис бустов.
     const boosted = await this.boosts.boostedUserIds();
     const myInput = this.toMatchInput(me, me.user);
-    const myFamilyGender = normalizedFilters.showAll
-      ? // Своё ограничение снято, чужое — нет: человек, который ищет семью с
-        // определённым полом, не должен попадать в ленту тех, кому он заведомо
-        // не подходит. Сколько таких осталось скрыто, посчитаем ниже.
-        { gender: me.user.gender, hasFamilyGoal: false, seeksGender: null }
-      : familyGenderContext(me, me.user.gender);
+    const myFamilyGender = familyGenderContext(me, me.user.gender);
     const afterFilters = others
       .filter(
         (other) => !hidden.has(other.userId) && !archived.has(other.userId),
@@ -410,7 +405,17 @@ export class UnionProfileService {
       .filter(
         (other) => normalizedFilters.includeSwiped || !swiped.has(other.userId),
       )
-      .filter((other) => this.hasCompleteLocation(other.user))
+      /*
+        Неполная геометка кандидата — не его выбор и не мой, а дырка в данных:
+        город вписан руками, координаты не подобрались. Вне «показать всех»
+        такую анкету прячем (она всё равно не проходит радиус и не считается
+        по расстоянию), но в режиме «все» она обязана быть видна — иначе
+        человек читает «все» и не понимает, куда делись остальные.
+      */
+      .filter(
+        (other) =>
+          normalizedFilters.showAll || this.hasCompleteLocation(other.user),
+      )
       .filter((other) =>
         this.matchesFilters(
           other,
@@ -423,22 +428,21 @@ export class UnionProfileService {
 
     /*
       Отбор по полу под целью «Создание семьи» стоит отдельным шагом, а не
-      внутри matchesFilters: только так видно, сколько анкет он забрал. В
-      обычной ленте это число никому не нужно, а в режиме «показать всех» —
-      единственное, что мешает слову «все» быть правдой, и умолчать о нём
-      значит соврать.
+      внутри matchesFilters: в режиме «показать всех» он снимается целиком —
+      и мой собственный, и чужой. Раньше чужой оставался, и слово «все»
+      означало у каждого своё число: у одного 31 анкета, у другого 21, у
+      третьего 3, и объяснить разницу человеку было нечем. «Все» значит все:
+      сужает только то, что человек выбрал на экране сам.
     */
-    const passesGender = (other: (typeof afterFilters)[number]) =>
-      passesFamilyGenderRestriction(
-        myFamilyGender,
-        familyGenderContext(other, other.user.gender),
-      );
-    const hiddenByOthers = normalizedFilters.showAll
-      ? afterFilters.filter((other) => !passesGender(other)).length
-      : 0;
-
     const beforeIntentions = afterFilters
-      .filter(passesGender)
+      .filter(
+        (other) =>
+          normalizedFilters.showAll ||
+          passesFamilyGenderRestriction(
+            myFamilyGender,
+            familyGenderContext(other, other.user.gender),
+          ),
+      )
       .map((other) => ({
         other,
         recommendation: this.toRecommendation(
@@ -522,7 +526,6 @@ export class UnionProfileService {
       pageSize,
       totalPages,
       intentionCounts,
-      hiddenByOthers,
     };
   }
 

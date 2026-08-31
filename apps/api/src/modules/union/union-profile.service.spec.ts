@@ -506,10 +506,10 @@ describe('UnionProfileService', () => {
       expect(everyone.items.map((item) => item.user.id)).toEqual(['man']);
     });
 
-    it('чужой выбор не снимает и честно его считает', async () => {
-      // Человек, который ищет семью с определённым полом, не должен попадать
-      // в ленту тех, кому заведомо не подходит. Но тогда «все» обязано быть
-      // проверяемым — недостачу называем числом, а не умалчиваем.
+    it('снимает и чужой отбор по полу', async () => {
+      // «Все» значит все. Пока чужое ограничение оставалось, слово означало
+      // у каждого своё число — у одного 31 анкета, у другого 3, — и разницу
+      // человеку объяснить было нечем.
       const me = withGender(profile('me'), 'male');
       prisma.unionProfile.findUnique.mockResolvedValue(me);
       prisma.unionProfile.findMany.mockResolvedValue([
@@ -524,22 +524,37 @@ describe('UnionProfileService', () => {
       ]);
       prisma.unionSwipe.findMany.mockResolvedValue([]);
 
-      const result = await service.getRecommendations('me', { showAll: true });
+      const narrowed = await service.getRecommendations('me');
+      const everyone = await service.getRecommendations('me', {
+        showAll: true,
+      });
 
-      expect(result.items.map((item) => item.user.id)).toEqual(['open']);
-      expect(result.hiddenByOthers).toBe(1);
+      expect(narrowed.items.map((item) => item.user.id)).toEqual(['open']);
+      expect(everyone.items.map((item) => item.user.id).sort()).toEqual([
+        'open',
+        'picky',
+      ]);
     });
 
-    it('вне режима «все» недостачу не считает', async () => {
-      // Число нужно ровно там, где обещано «все»; в обычной ленте это лишний
-      // проход и лишний повод объясняться.
+    it('показывает анкеты без координат', async () => {
+      // Город вписан руками, координаты не подобрались — это дырка в данных,
+      // а не чей-то выбор. В обычной ленте такая анкета скрыта (радиус по ней
+      // не считается), но в режиме «все» она обязана быть видна.
       prisma.unionProfile.findUnique.mockResolvedValue(profile('me'));
-      prisma.unionProfile.findMany.mockResolvedValue([profile('other')]);
+      prisma.unionProfile.findMany.mockResolvedValue([
+        profile('nogeo', {
+          homeLocation: { city: 'Москва', country: 'Россия' },
+        }),
+      ]);
       prisma.unionSwipe.findMany.mockResolvedValue([]);
 
-      const result = await service.getRecommendations('me');
+      const narrowed = await service.getRecommendations('me');
+      const everyone = await service.getRecommendations('me', {
+        showAll: true,
+      });
 
-      expect(result.hiddenByOthers).toBe(0);
+      expect(narrowed.items).toEqual([]);
+      expect(everyone.items.map((item) => item.user.id)).toEqual(['nogeo']);
     });
   });
 

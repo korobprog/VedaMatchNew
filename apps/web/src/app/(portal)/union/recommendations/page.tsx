@@ -77,11 +77,6 @@ export default async function UnionRecommendationsPage({
 
         <HistoryResetBanner restoredCount={first(params.historyReset)} />
 
-        <HiddenByOthersNote
-          showAll={first(params.showAll) === "true"}
-          count={recommendations.hiddenByOthers}
-        />
-
         {recommendations.items.length === 0 ? (
           <RecommendationsEmpty
             params={params}
@@ -169,33 +164,6 @@ export function withPage(
 
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
-}
-
-/**
- * Что «показать всех» снять не может.
- *
- * Режим снимает мои собственные сужения — историю показов, желаемый возраст
- * партнёра, свой отбор по полу. Чужой выбор он не снимает: человек, который
- * ищет семью с определённым полом, не должен попадать в ленту тех, кому
- * заведомо не подходит. Но тогда слово «все» обязано быть проверяемым —
- * иначе счёт снова не сойдётся, и искать причину человек будет в фильтрах.
- */
-function HiddenByOthersNote({
-  showAll,
-  count,
-}: {
-  showAll: boolean;
-  count: number;
-}) {
-  if (!showAll || count <= 0) return null;
-  return (
-    <p className="mb-4 text-sm text-text-2">
-      Показаны все, кроме {count === 1 ? "одной анкеты" : `${count} анкет`}:{" "}
-      {count === 1 ? "её владелец ищет" : "их владельцы ищут"} семью с
-      определённым полом, и {count === 1 ? "эта анкета" : "эти анкеты"} видна
-      только тем, кто под это подходит.
-    </p>
-  );
 }
 
 function HistoryResetBanner({
