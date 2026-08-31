@@ -17,6 +17,10 @@ function storageMock(over: Record<string, unknown> = {}) {
     presignGet: jest.fn().mockResolvedValue('https://s3.example/get'),
     head: jest.fn().mockResolvedValue({ sizeBytes: 4_000_000, etag: 'abc123' }),
     readPrefix: jest.fn().mockResolvedValue(Buffer.from('id3')),
+    // В базовом наборе, а не только в переопределениях: `...over` не
+    // расширяет выведенный тип, и обращение к `storage.put` в тесте не
+    // прошло бы typecheck, хотя jest его типы не проверяет и тест бы зеленел.
+    put: jest.fn().mockResolvedValue(true),
     remove: jest.fn().mockResolvedValue(undefined),
     coverUrl: jest.fn(() => null),
     ...over,
@@ -258,7 +262,7 @@ describe('MusicUploadsService.completeUpload', () => {
     // оставалась градиентной заглушкой: обложку искали и грузили второй раз
     // руками.
     const prisma = prismaMock();
-    const storage = storageMock({ put: jest.fn().mockResolvedValue(true) });
+    const storage = storageMock();
     prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
 
     await service(
@@ -288,7 +292,7 @@ describe('MusicUploadsService.completeUpload', () => {
 
   it('без картинки в тегах обложку не выдумывает', async () => {
     const prisma = prismaMock();
-    const storage = storageMock({ put: jest.fn().mockResolvedValue(true) });
+    const storage = storageMock();
     prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
 
     await service(prisma, storage).completeUpload('u1', 'up1', 'gaura.mp3');
