@@ -28,7 +28,16 @@ ENV NODE_ENV=production
 # ffmpeg — наложение той же подписи на ролик, оживляющий иллюстрацию
 # (story-video.ts). Кадр модели меньше сторис, поэтому его ещё и
 # докадрируют, а это уже не по силам sharp: он не умеет видео.
-RUN apk add --no-cache fontconfig font-noto font-noto-devanagari ffmpeg \
+# apk иногда попадает на реплику зеркала Alpine в момент синхронизации и не
+# находит транзитивные so:-зависимости ffmpeg (libasound, libxcb-*, json-c),
+# хотя пакеты есть — 5 попыток с паузой пережидают это окно; на второй раз
+# подряд стало ясно, что просто "повторить сборку руками" ненадёжно.
+RUN i=0; until apk add --no-cache fontconfig font-noto font-noto-devanagari ffmpeg; do \
+    i=$((i + 1)); \
+    if [ "$i" -ge 5 ]; then echo "apk add failed after $i attempts" >&2; exit 74; fi; \
+    echo "apk add failed (attempt $i/5), retrying in 10s..." >&2; \
+    sleep 10; \
+  done \
   && fc-cache -f
 # Всё принадлежит непривилегированному пользователю node (uid 1000 в базовом
 # образе); приложение на диск не пишет, так что права только на чтение достаточно.
