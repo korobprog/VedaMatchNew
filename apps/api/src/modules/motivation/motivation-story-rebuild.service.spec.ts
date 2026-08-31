@@ -1,7 +1,31 @@
 import { ForbiddenException } from '@nestjs/common';
+import type { AccessTokenPayload } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { MotivationStoryRebuildService } from './motivation-story-rebuild.service';
+
+const admin: AccessTokenPayload = {
+  sub: 'admin-1',
+  email: 'admin@example.com',
+  role: 'admin',
+};
+const motivationServiceAdmin: AccessTokenPayload = {
+  sub: 'sa-1',
+  email: 'sa@example.com',
+  role: 'service-admin',
+  adminServices: ['motivation'],
+};
+const otherServiceAdmin: AccessTokenPayload = {
+  sub: 'sa-2',
+  email: 'sa2@example.com',
+  role: 'service-admin',
+  adminServices: ['music'],
+};
+const regularUser: AccessTokenPayload = {
+  sub: 'user-1',
+  email: 'user@example.com',
+  role: 'user',
+};
 
 /** Пост со свежей сторис: оформление старое, но файл отдельный и не пустой. */
 const withStory = {
@@ -65,7 +89,7 @@ describe('MotivationStoryRebuildService', () => {
     stubImageDownload();
     const { service, generation } = build([withStory, legacy]);
 
-    const result = await service.rebuild('admin', 20);
+    const result = await service.rebuild(admin, 20);
 
     expect(result.rebuilt).toBe(1);
     expect(generation.uploadStory).toHaveBeenCalledTimes(1);
@@ -77,7 +101,7 @@ describe('MotivationStoryRebuildService', () => {
     stubImageDownload();
     const { service, generation } = build([withStory, legacy]);
 
-    const result = await service.rebuild('admin', 20, true);
+    const result = await service.rebuild(admin, 20, true);
 
     expect(result.rebuilt).toBe(2);
     expect(generation.uploadStory).toHaveBeenCalledTimes(2);
@@ -86,7 +110,24 @@ describe('MotivationStoryRebuildService', () => {
   it('не пускает никого, кроме администратора', async () => {
     const { service } = build([legacy]);
 
-    await expect(service.rebuild('user', 20)).rejects.toBeInstanceOf(
+    await expect(service.rebuild(regularUser, 20)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
+  it('пускает service-admin, которому выдан сервис motivation', async () => {
+    stubImageDownload();
+    const { service } = build([legacy]);
+
+    await expect(
+      service.rebuild(motivationServiceAdmin, 20),
+    ).resolves.toMatchObject({ rebuilt: 1 });
+  });
+
+  it('не пускает service-admin другого сервиса', async () => {
+    const { service } = build([legacy]);
+
+    await expect(service.rebuild(otherServiceAdmin, 20)).rejects.toBeInstanceOf(
       ForbiddenException,
     );
   });

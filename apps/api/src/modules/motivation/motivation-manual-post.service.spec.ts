@@ -1,5 +1,31 @@
 import { MotivationManualPostService } from './motivation-manual-post.service';
-import type { MotivationManualPostInput } from '@vedamatch/shared';
+import type {
+  AccessTokenPayload,
+  MotivationManualPostInput,
+} from '@vedamatch/shared';
+
+const admin: AccessTokenPayload = {
+  sub: 'admin-1',
+  email: 'admin@example.com',
+  role: 'admin',
+};
+const motivationServiceAdmin: AccessTokenPayload = {
+  sub: 'sa-1',
+  email: 'sa@example.com',
+  role: 'service-admin',
+  adminServices: ['motivation'],
+};
+const otherServiceAdmin: AccessTokenPayload = {
+  sub: 'sa-2',
+  email: 'sa2@example.com',
+  role: 'service-admin',
+  adminServices: ['music'],
+};
+const regularUser: AccessTokenPayload = {
+  sub: 'user-1',
+  email: 'user@example.com',
+  role: 'user',
+};
 
 const validInput: MotivationManualPostInput = {
   originalText: 'Не сдавайся на полпути.',
@@ -50,13 +76,13 @@ describe('MotivationManualPostService', () => {
   it('sends the post straight to image generation', async () => {
     const { service, transaction, moderation } = setup();
 
-    const result = await service.create('admin', 'actor-1', validInput);
+    const result = await service.create(admin, 'actor-1', validInput);
 
     // Пост заводится в text_review и тем же путём, что и сгенерированный,
     // проходит одобрение текста — ради промпта и записи в аудите.
     expect(postData(transaction).reviewStatus).toBe('text_review');
     expect(moderation.approveText).toHaveBeenCalledWith(
-      'admin',
+      admin,
       'actor-1',
       'post-1',
       undefined,
@@ -71,7 +97,7 @@ describe('MotivationManualPostService', () => {
   it('glues the quote and the explanation the way the pipeline does', async () => {
     const { service, transaction } = setup();
 
-    await service.create('admin', 'actor-1', validInput);
+    await service.create(admin, 'actor-1', validInput);
 
     const russian = postData(transaction).translations.create.find(
       (item: { language: string }) => item.language === 'ru',
@@ -85,7 +111,7 @@ describe('MotivationManualPostService', () => {
   it('fills untranslated languages from the primary copy', async () => {
     const { service, transaction } = setup();
 
-    await service.create('admin', 'actor-1', {
+    await service.create(admin, 'actor-1', {
       ...validInput,
       translations: {
         en: { title: 'Go all the way', explanation: 'An English explanation.' },
@@ -112,7 +138,7 @@ describe('MotivationManualPostService', () => {
   it('accepts a translation that has only a title', async () => {
     const { service, transaction } = setup();
 
-    await service.create('admin', 'actor-1', {
+    await service.create(admin, 'actor-1', {
       ...validInput,
       translations: { en: { title: 'Go all the way', explanation: '  ' } },
     });
@@ -129,7 +155,7 @@ describe('MotivationManualPostService', () => {
   it('falls back to the primary copy for a translation without a title', async () => {
     const { service, transaction } = setup();
 
-    await service.create('admin', 'actor-1', {
+    await service.create(admin, 'actor-1', {
       ...validInput,
       translations: { en: { title: '  ', explanation: 'Orphan explanation.' } },
     });
@@ -143,7 +169,7 @@ describe('MotivationManualPostService', () => {
   it('keeps the text quote-only when no explanation is given', async () => {
     const { service, transaction } = setup();
 
-    await service.create('admin', 'actor-1', {
+    await service.create(admin, 'actor-1', {
       ...validInput,
       copy: { title: 'Идти до конца', explanation: '' },
     });
@@ -159,7 +185,7 @@ describe('MotivationManualPostService', () => {
   it('stores a quote translation only for the original language', async () => {
     const { service, transaction } = setup();
 
-    await service.create('admin', 'actor-1', validInput);
+    await service.create(admin, 'actor-1', validInput);
 
     const created = transaction.motivationQuote.create.mock.calls[0][0].data;
     expect(created.translations.create).toEqual([
@@ -175,7 +201,7 @@ describe('MotivationManualPostService', () => {
   it('falls back to the explanation when no Stories text is given', async () => {
     const { service, transaction } = setup();
 
-    await service.create('admin', 'actor-1', validInput);
+    await service.create(admin, 'actor-1', validInput);
 
     const russian = postData(transaction).translations.create.find(
       (item: { language: string }) => item.language === 'ru',
@@ -186,7 +212,7 @@ describe('MotivationManualPostService', () => {
   it('records every chosen audience on the quote', async () => {
     const { service, transaction } = setup();
 
-    await service.create('admin', 'actor-1', {
+    await service.create(admin, 'actor-1', {
       ...validInput,
       profileTypes: ['devotee', 'yogi', 'devotee'],
     });
@@ -224,7 +250,7 @@ describe('MotivationManualPostService', () => {
     const { service, transaction } = setup();
 
     await expect(
-      service.create('admin', 'actor-1', { ...validInput, ...patch }),
+      service.create(admin, 'actor-1', { ...validInput, ...patch }),
     ).rejects.toThrow(message);
     expect(transaction.motivationPost.create).not.toHaveBeenCalled();
   });
@@ -234,9 +260,9 @@ describe('MotivationManualPostService', () => {
       existingQuote: { id: 'existing' },
     });
 
-    await expect(
-      service.create('admin', 'actor-1', validInput),
-    ).rejects.toThrow('This quote has already been added');
+    await expect(service.create(admin, 'actor-1', validInput)).rejects.toThrow(
+      'This quote has already been added',
+    );
     expect(transaction.motivationPost.create).not.toHaveBeenCalled();
   });
 
@@ -244,7 +270,25 @@ describe('MotivationManualPostService', () => {
     const { service } = setup();
 
     await expect(
-      service.create('user', 'actor-1', validInput),
+      service.create(regularUser, 'actor-1', validInput),
     ).rejects.toThrow();
+  });
+
+  it('allows a service-admin scoped to motivation', async () => {
+    const { service, transaction } = setup();
+
+    await expect(
+      service.create(motivationServiceAdmin, 'actor-1', validInput),
+    ).resolves.toMatchObject({ postId: 'post-1' });
+    expect(transaction.motivationPost.create).toHaveBeenCalled();
+  });
+
+  it('rejects a service-admin scoped to a different service', async () => {
+    const { service, transaction } = setup();
+
+    await expect(
+      service.create(otherServiceAdmin, 'actor-1', validInput),
+    ).rejects.toThrow();
+    expect(transaction.motivationPost.create).not.toHaveBeenCalled();
   });
 });

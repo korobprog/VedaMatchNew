@@ -4,10 +4,25 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import type { AccessTokenPayload } from '@vedamatch/shared';
 import { MotivationModerationService } from './motivation-moderation.service';
 
 const actorId = 'actor-1';
 const postId = 'post-1';
+
+const userFor = (
+  role: AccessTokenPayload['role'],
+  adminServices?: string[],
+): AccessTokenPayload => ({
+  sub: 'caller-1',
+  email: 'caller@example.com',
+  role,
+  adminServices,
+});
+const admin = userFor('admin');
+const serviceAdmin = userFor('service-admin', ['motivation']);
+const otherServiceAdmin = userFor('service-admin', ['music']);
+const regularUser = userFor('user');
 
 function post(
   reviewStatus = 'text_review',
@@ -73,13 +88,13 @@ function setup(
 describe('MotivationModerationService', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it.each(['admin', 'service-admin'] as const)(
-    'allows %s to approve text without invoking image generation',
-    async (role) => {
+  it.each([admin, serviceAdmin])(
+    'allows $role to approve text without invoking image generation',
+    async (user) => {
       const { service, transaction } = setup();
       const fetchMock = jest.spyOn(global, 'fetch');
 
-      await service.approveText(role, actorId, postId, 'warm_documentary');
+      await service.approveText(user, actorId, postId, 'warm_documentary');
 
       expect(transaction.motivationPost.updateMany).toHaveBeenCalledWith({
         where: { id: postId, reviewStatus: 'text_review' },
@@ -112,7 +127,7 @@ describe('MotivationModerationService', () => {
   it('carries the quote source and its context into the image prompt', async () => {
     const { service, transaction } = setup();
 
-    await service.approveText('admin', actorId, postId);
+    await service.approveText(admin, actorId, postId);
 
     expect(transaction.motivationPost.updateMany).toHaveBeenCalledWith({
       where: { id: postId, reviewStatus: 'text_review' },
@@ -127,7 +142,7 @@ describe('MotivationModerationService', () => {
   it('publishes only from image_review and audits image approval', async () => {
     const { service, transaction } = setup(post('image_review'));
 
-    await service.approveImage('admin', actorId, postId);
+    await service.approveImage(admin, actorId, postId);
 
     expect(transaction.motivationPost.updateMany).toHaveBeenCalledWith({
       where: { id: postId, reviewStatus: 'image_review' },
@@ -146,12 +161,12 @@ describe('MotivationModerationService', () => {
   it('rejects unauthorized roles and invalid transitions', async () => {
     const unauthorized = setup().service;
     await expect(
-      unauthorized.approveText('user', actorId, postId),
+      unauthorized.approveText(regularUser, actorId, postId),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     const textReview = setup(post('text_review'));
     await expect(
-      textReview.service.approveImage('admin', actorId, postId),
+      textReview.service.approveImage(admin, actorId, postId),
     ).rejects.toThrow('Image is not ready for review');
     expect(
       textReview.transaction.motivationPost.updateMany,
@@ -159,14 +174,29 @@ describe('MotivationModerationService', () => {
 
     const imageReview = setup(post('image_review'));
     await expect(
-      imageReview.service.approveText('admin', actorId, postId),
+      imageReview.service.approveText(admin, actorId, postId),
     ).rejects.toThrow('Text is not ready for review');
+  });
+
+  it('rejects a service-admin scoped to a different service', async () => {
+    const { service } = setup();
+    await expect(
+      service.approveText(otherServiceAdmin, actorId, postId),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      service.reject(otherServiceAdmin, actorId, postId, 'reason'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      service.savePrompts(otherServiceAdmin, actorId, postId, {
+        videoPrompt: 'x',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('returns conflict when a concurrent transition wins', async () => {
     const { service, transaction } = setup(post(), 0);
     await expect(
-      service.approveText('admin', actorId, postId),
+      service.approveText(admin, actorId, postId),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(transaction.motivationModerationAudit.create).not.toHaveBeenCalled();
   });
@@ -174,28 +204,18 @@ describe('MotivationModerationService', () => {
   it('rejects an unapproved style at the service boundary', async () => {
     const { service, transaction } = setup();
     await expect(
-      service.approveText(
-        'admin',
-        actorId,
-        postId,
-        'neon_advertising' as never,
-      ),
+      service.approveText(admin, actorId, postId, 'neon_advertising' as never),
     ).rejects.toThrow('Visual style is not approved');
     expect(transaction.motivationPost.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects with a required reason and writes it to the audit', async () => {
     const { service, transaction } = setup();
-    await expect(
-      service.reject('admin', actorId, postId, '  '),
-    ).rejects.toThrow('Rejection reason is required');
-
-    await service.reject(
-      'admin',
-      actorId,
-      postId,
-      'Source needs another review',
+    await expect(service.reject(admin, actorId, postId, '  ')).rejects.toThrow(
+      'Rejection reason is required',
     );
+
+    await service.reject(admin, actorId, postId, 'Source needs another review');
     expect(transaction.motivationPost.updateMany).toHaveBeenCalledWith({
       where: { id: postId, reviewStatus: 'text_review' },
       data: expect.objectContaining({ reviewStatus: 'rejected' }),
@@ -215,7 +235,7 @@ describe('MotivationModerationService', () => {
   it('regenerates only an image-review post by clearing image fields and queueing it', async () => {
     const { service, transaction } = setup(post('image_review'));
     await service.regenerateImage(
-      'service-admin',
+      serviceAdmin,
       actorId,
       postId,
       'cinematic_nature',
@@ -247,12 +267,7 @@ describe('MotivationModerationService', () => {
       }),
     );
 
-    await service.regenerateImage(
-      'admin',
-      actorId,
-      postId,
-      'minimal_symbolism',
-    );
+    await service.regenerateImage(admin, actorId, postId, 'minimal_symbolism');
 
     expect(transaction.motivationPost.updateMany).toHaveBeenCalledWith({
       where: { id: postId, reviewStatus: 'image_review' },
@@ -272,7 +287,7 @@ describe('MotivationModerationService', () => {
       }),
     );
 
-    await service.regenerateImage('admin', actorId, postId, 'indian_miniature');
+    await service.regenerateImage(admin, actorId, postId, 'indian_miniature');
 
     expect(transaction.motivationPost.updateMany).toHaveBeenCalledWith({
       where: { id: postId, reviewStatus: 'image_review' },
@@ -287,7 +302,7 @@ describe('MotivationModerationService', () => {
   it('reports missing posts', async () => {
     const { service } = setup(null);
     await expect(
-      service.approveText('admin', actorId, postId),
+      service.approveText(admin, actorId, postId),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
@@ -296,7 +311,7 @@ describe('MotivationModerationService: правка промптов', () => {
   it('сохраняет промпт иллюстрации и помечает его как правленный руками', async () => {
     const { service, transaction } = setup(post('image_review'));
 
-    const result = await service.savePrompts('admin', actorId, postId, {
+    const result = await service.savePrompts(admin, actorId, postId, {
       imagePrompt: '  Рассвет над Ямуной, тёплый свет  ',
     });
 
@@ -322,7 +337,7 @@ describe('MotivationModerationService: правка промптов', () => {
     // не должно подменяться описанием сцены.
     const { service, transaction } = setup(post('image_review'));
 
-    await service.savePrompts('admin', actorId, postId, {
+    await service.savePrompts(admin, actorId, postId, {
       videoPrompt: 'Gentle breeze in the leaves. Camera almost still.',
     });
 
@@ -337,7 +352,7 @@ describe('MotivationModerationService: правка промптов', () => {
   it('пустой промпт видео возвращает пост к общему дефолту', async () => {
     const { service, transaction } = setup(post('image_review'));
 
-    const result = await service.savePrompts('admin', actorId, postId, {
+    const result = await service.savePrompts(admin, actorId, postId, {
       videoPrompt: '   ',
     });
 
@@ -353,7 +368,7 @@ describe('MotivationModerationService: правка промптов', () => {
     const { service, transaction } = setup(post('image_review'));
 
     await expect(
-      service.savePrompts('admin', actorId, postId, { imagePrompt: '  ' }),
+      service.savePrompts(admin, actorId, postId, { imagePrompt: '  ' }),
     ).rejects.toThrow('Image prompt cannot be empty');
     expect(transaction.motivationPost.update).not.toHaveBeenCalled();
   });
@@ -362,7 +377,7 @@ describe('MotivationModerationService: правка промптов', () => {
     const { service, transaction } = setup(post('image_review'));
 
     await expect(
-      service.savePrompts('admin', actorId, postId, {
+      service.savePrompts(admin, actorId, postId, {
         imagePrompt: 'т'.repeat(4001),
       }),
     ).rejects.toThrow('Image prompt is too long');
@@ -373,7 +388,7 @@ describe('MotivationModerationService: правка промптов', () => {
     const { service, transaction } = setup(post('image_review'));
 
     await expect(
-      service.savePrompts('admin', actorId, postId, {}),
+      service.savePrompts(admin, actorId, postId, {}),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(transaction.motivationPost.update).not.toHaveBeenCalled();
   });
@@ -382,7 +397,7 @@ describe('MotivationModerationService: правка промптов', () => {
     const { service } = setup(post('image_review'));
 
     await expect(
-      service.savePrompts('user', actorId, postId, { videoPrompt: 'x' }),
+      service.savePrompts(regularUser, actorId, postId, { videoPrompt: 'x' }),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
@@ -390,7 +405,7 @@ describe('MotivationModerationService: правка промптов', () => {
     const { service } = setup(null);
 
     await expect(
-      service.savePrompts('admin', actorId, postId, { videoPrompt: 'x' }),
+      service.savePrompts(admin, actorId, postId, { videoPrompt: 'x' }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

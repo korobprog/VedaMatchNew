@@ -69,6 +69,15 @@ export class ChatMessagesService {
     userId: string,
     conversationId: string,
     dto: SendChatMessageRequest,
+    /**
+     * Беседа, чьей папке в бакете обязан принадлежать ключ вложения. Не
+     * равна `conversationId`, только когда сообщение пересылает `forward()`:
+     * вложение там уже загружено в `source.conversationId` и переезжает
+     * копией ссылки, а не файла, — доступ к исходной беседе `forward()`
+     * проверяет сам до вызова. Обычная отправка параметр не передаёт, и
+     * тогда вложение обязано быть из той же беседы, куда летит сообщение.
+     */
+    attachmentsConversationId: string = conversationId,
   ): Promise<ChatMessageDto> {
     const conversation = await this.conversations.requireConversation(
       conversationId,
@@ -77,7 +86,11 @@ export class ChatMessagesService {
 
     const body = this.validated(() => normalizeMessageBody(dto.body));
     const attachments = this.validated(() =>
-      normalizeAttachments(dto.attachments, this.uploads.storagePrefix),
+      normalizeAttachments(
+        dto.attachments,
+        this.uploads.storagePrefix,
+        attachmentsConversationId,
+      ),
     );
     this.validated(() => assertSendable(body, attachments));
 
@@ -230,26 +243,33 @@ export class ChatMessagesService {
     // способом вытащить чужую переписку по одному идентификатору.
     await this.conversations.requireConversation(source.conversationId, userId);
 
-    const dtoOut = await this.send(userId, targetConversationId, {
-      body: source.body,
-      attachments: source.attachments.map((attachment) => ({
-        kind: attachment.kind,
-        url: attachment.url ?? undefined,
-        key: attachment.key ?? undefined,
-        previewUrl: attachment.previewUrl ?? undefined,
-        title: attachment.title ?? undefined,
-        subtitle: attachment.subtitle ?? undefined,
-        body: attachment.body ?? undefined,
-        sourceService: attachment.sourceService ?? undefined,
-        sourceId: attachment.sourceId ?? undefined,
-        mimeType: attachment.mimeType ?? undefined,
-        sizeBytes: attachment.sizeBytes ?? undefined,
-        durationSec: attachment.durationSec ?? undefined,
-        width: attachment.width ?? undefined,
-        height: attachment.height ?? undefined,
-        waveform: attachment.waveform ?? [],
-      })),
-    });
+    const dtoOut = await this.send(
+      userId,
+      targetConversationId,
+      {
+        body: source.body,
+        attachments: source.attachments.map((attachment) => ({
+          kind: attachment.kind,
+          url: attachment.url ?? undefined,
+          key: attachment.key ?? undefined,
+          previewUrl: attachment.previewUrl ?? undefined,
+          title: attachment.title ?? undefined,
+          subtitle: attachment.subtitle ?? undefined,
+          body: attachment.body ?? undefined,
+          sourceService: attachment.sourceService ?? undefined,
+          sourceId: attachment.sourceId ?? undefined,
+          mimeType: attachment.mimeType ?? undefined,
+          sizeBytes: attachment.sizeBytes ?? undefined,
+          durationSec: attachment.durationSec ?? undefined,
+          width: attachment.width ?? undefined,
+          height: attachment.height ?? undefined,
+          waveform: attachment.waveform ?? [],
+        })),
+      },
+      // Вложения физически лежат в бакетной папке исходной беседы: файл при
+      // пересылке не копируется, копируется только ссылка на него.
+      source.conversationId,
+    );
 
     const forwardedFrom = resolveDisplayName(source.author);
     const updated = await this.prisma.chatMessage.update({

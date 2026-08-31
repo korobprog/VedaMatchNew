@@ -1,5 +1,29 @@
 import { ForbiddenException } from '@nestjs/common';
+import type { AccessTokenPayload } from '@vedamatch/shared';
 import { MotivationAnalyticsService } from './motivation-analytics.service';
+
+const admin: AccessTokenPayload = {
+  sub: 'admin-1',
+  email: 'admin@example.com',
+  role: 'admin',
+};
+const motivationServiceAdmin: AccessTokenPayload = {
+  sub: 'sa-1',
+  email: 'sa@example.com',
+  role: 'service-admin',
+  adminServices: ['motivation'],
+};
+const otherServiceAdmin: AccessTokenPayload = {
+  sub: 'sa-2',
+  email: 'sa2@example.com',
+  role: 'service-admin',
+  adminServices: ['music'],
+};
+const regularUser: AccessTokenPayload = {
+  sub: 'user-1',
+  email: 'user@example.com',
+  role: 'user',
+};
 
 function build() {
   const prisma = {
@@ -36,7 +60,7 @@ describe('MotivationAnalyticsService', () => {
   it('sums feed activity, user reels and cost per origin', async () => {
     const { service } = build();
 
-    const result = await service.read('admin', 7);
+    const result = await service.read(admin, 7);
 
     expect(result).toMatchObject({
       days: 7,
@@ -61,11 +85,27 @@ describe('MotivationAnalyticsService', () => {
   it('clamps the window and refuses non-admins', async () => {
     const { service, prisma } = build();
 
-    await expect(service.read('admin', 900)).resolves.toMatchObject({
+    await expect(service.read(admin, 900)).resolves.toMatchObject({
       days: 90,
     });
-    await expect(service.read('admin', 0)).resolves.toMatchObject({ days: 1 });
+    await expect(service.read(admin, 0)).resolves.toMatchObject({ days: 1 });
     expect(prisma.motivationView.count).toHaveBeenCalled();
-    await expect(service.read('user')).rejects.toThrow(ForbiddenException);
+    await expect(service.read(regularUser)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('allows a service-admin scoped to motivation', async () => {
+    const { service } = build();
+
+    await expect(
+      service.read(motivationServiceAdmin, 7),
+    ).resolves.toMatchObject({ days: 7 });
+  });
+
+  it('rejects a service-admin scoped to a different service', async () => {
+    const { service } = build();
+
+    await expect(service.read(otherServiceAdmin, 7)).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 });

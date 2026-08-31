@@ -7,15 +7,16 @@ import {
 } from '@nestjs/common';
 import { MotivationReviewStatus } from '@prisma/client';
 import {
+  type AccessTokenPayload,
   type MotivationAdminReelDto,
   type MotivationAdminReelFilter,
   type MotivationAdminReelsResponse,
   type MotivationAiStatsDto,
   type MotivationAuthorPolicyDto,
   type MotivationAuthorPolicyUpdate,
-  type Role,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isAdmin } from './is-admin';
 import {
   adminAiVerdictOf,
   adminAppealOf,
@@ -44,10 +45,10 @@ export class MotivationAdminReelsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(
-    role: Role,
+    user: AccessTokenPayload,
     filter: MotivationAdminReelFilter = 'all',
   ): Promise<MotivationAdminReelsResponse> {
-    this.assertAdmin(role);
+    this.assertAdmin(user);
     const posts = await this.prisma.motivationPost.findMany({
       where: { origin: 'user', ...this.filterWhere(filter) },
       include: {
@@ -85,8 +86,8 @@ export class MotivationAdminReelsService {
    * Отменить отказ: пост возвращается на проверку текста, а не публикуется
    * сразу — картинки у него ещё нет, и дальше он идёт обычным путём.
    */
-  async restore(role: Role, actorId: string, postId: string) {
-    this.assertAdmin(role);
+  async restore(user: AccessTokenPayload, actorId: string, postId: string) {
+    this.assertAdmin(user);
     const post = await this.prisma.motivationPost.findFirst({
       where: { id: postId, origin: 'user' },
       select: { id: true, reviewStatus: true },
@@ -123,8 +124,13 @@ export class MotivationAdminReelsService {
   }
 
   /** Снять опубликованный рилс из ленты, не удаляя его у автора. */
-  async hide(role: Role, actorId: string, postId: string, reason: string) {
-    this.assertAdmin(role);
+  async hide(
+    user: AccessTokenPayload,
+    actorId: string,
+    postId: string,
+    reason: string,
+  ) {
+    this.assertAdmin(user);
     const normalized = reason?.trim();
     if (!normalized)
       throw new BadRequestException('Нужна причина: её увидит автор');
@@ -146,8 +152,11 @@ export class MotivationAdminReelsService {
     return { id: postId, status: 'hidden' };
   }
 
-  async policy(role: Role, userId: string): Promise<MotivationAuthorPolicyDto> {
-    this.assertAdmin(role);
+  async policy(
+    user: AccessTokenPayload,
+    userId: string,
+  ): Promise<MotivationAuthorPolicyDto> {
+    this.assertAdmin(user);
     const row = await this.prisma.motivationAuthorPolicy.findUnique({
       where: { userId },
     });
@@ -155,11 +164,11 @@ export class MotivationAdminReelsService {
   }
 
   async savePolicy(
-    role: Role,
+    user: AccessTokenPayload,
     userId: string,
     input: MotivationAuthorPolicyUpdate,
   ): Promise<MotivationAuthorPolicyDto> {
-    this.assertAdmin(role);
+    this.assertAdmin(user);
     if (
       input.dailyLimit !== undefined &&
       input.dailyLimit !== null &&
@@ -295,8 +304,7 @@ export class MotivationAdminReelsService {
     };
   }
 
-  private assertAdmin(role: Role) {
-    if (role !== 'admin' && role !== 'service-admin')
-      throw new ForbiddenException();
+  private assertAdmin(user: AccessTokenPayload) {
+    if (!isAdmin(user)) throw new ForbiddenException();
   }
 }

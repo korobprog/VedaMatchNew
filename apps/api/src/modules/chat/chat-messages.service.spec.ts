@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { ChatConversationsService } from './chat-conversations.service';
 import { ChatEventsService } from './chat-events.service';
@@ -257,6 +261,85 @@ describe('ChatMessagesService', () => {
       expect(recipients).toEqual([]);
       // Живая доставка в открытый чат остаётся: подавляется только уведомление.
       expect(events.publish).toHaveBeenCalled();
+    });
+  });
+
+  describe('forward', () => {
+    /**
+     * Пересылаемое сообщение лежит в другой беседе, чем та, куда его несут:
+     * это и есть смысл пересылки. Вложение при этом не переезжает файлом —
+     * ключ в бакете так и остаётся в папке исходной беседы.
+     */
+    const sourceMessage = (over: Record<string, unknown> = {}) => ({
+      id: 'message-1',
+      conversationId: 'source-conversation',
+      author: user('other'),
+      body: 'смотри',
+      attachments: [
+        {
+          kind: 'image',
+          url: 'https://cdn.vedamatch.ru/chat/source-conversation/a.webp',
+          key: 'chat/source-conversation/a.webp',
+          previewUrl: null,
+          title: null,
+          subtitle: null,
+          body: null,
+          sourceService: null,
+          sourceId: null,
+          mimeType: 'image/webp',
+          sizeBytes: 100,
+          durationSec: null,
+          width: 10,
+          height: 10,
+          waveform: [],
+        },
+      ],
+      deletedAt: null,
+      ...over,
+    });
+
+    beforeEach(() => {
+      prisma.chatMessage.findUnique.mockResolvedValue(sourceMessage());
+      prisma.chatMessage.update.mockResolvedValue(storedMessage());
+      conversations.requireConversation.mockResolvedValue(conversation());
+    });
+
+    it('пересылает вложение в другую беседу: ключ остаётся в папке исходной беседы', async () => {
+      await expect(
+        service.forward('me', 'message-1', 'conversation-1'),
+      ).resolves.toBeDefined();
+
+      const data = (
+        (prisma.chatMessage.create.mock.calls as unknown[][])[0][0] as {
+          data: {
+            conversationId: string;
+            attachments: { create: Array<{ url: string | null }> };
+          };
+        }
+      ).data;
+      expect(data.conversationId).toBe('conversation-1');
+      expect(data.attachments.create).toEqual([
+        expect.objectContaining({
+          url: 'https://cdn.vedamatch.ru/chat/source-conversation/a.webp',
+        }),
+      ]);
+    });
+
+    it('без доступа к исходной беседе переслать нельзя', async () => {
+      // requireConversation бросает NotFoundException, когда человек не
+      // состоит в беседе — тем же способом, каким это делает настоящий
+      // ChatConversationsService.
+      conversations.requireConversation.mockImplementation(
+        (conversationId: string) =>
+          conversationId === 'source-conversation'
+            ? Promise.reject(new NotFoundException('Беседа не найдена'))
+            : Promise.resolve(conversation()),
+      );
+
+      await expect(
+        service.forward('me', 'message-1', 'conversation-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.chatMessage.create).not.toHaveBeenCalled();
     });
   });
 

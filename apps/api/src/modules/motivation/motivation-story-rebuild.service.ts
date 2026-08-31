@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
-import type { Role } from '@vedamatch/shared';
+import type { AccessTokenPayload } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isAdmin } from './is-admin';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { composeStoryImage } from './story-image';
 import { attributionLine } from './postcard-events';
@@ -36,11 +37,11 @@ export class MotivationStoryRebuildService {
    * за деньги незачем — фон остаётся прежним, меняется только слой поверх.
    */
   async rebuild(
-    role: Role,
+    user: AccessTokenPayload,
     limit = 20,
     force = false,
   ): Promise<StoryRebuildResult> {
-    this.admin(role);
+    this.admin(user);
     const batch = Math.max(1, Math.min(100, limit));
     const where = {
       storyCaption: true,
@@ -129,8 +130,7 @@ export class MotivationStoryRebuildService {
     };
   }
 
-  private admin(role: Role) {
-    if (role !== 'admin' && role !== 'service-admin')
-      throw new ForbiddenException();
+  private admin(user: AccessTokenPayload) {
+    if (!isAdmin(user)) throw new ForbiddenException();
   }
 }

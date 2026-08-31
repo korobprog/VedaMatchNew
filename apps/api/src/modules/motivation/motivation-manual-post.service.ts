@@ -5,13 +5,14 @@ import {
 } from '@nestjs/common';
 import { MotivationAudienceTrack, MotivationProfileType } from '@prisma/client';
 import type {
+  AccessTokenPayload,
   MotivationLanguage,
   MotivationManualCopy,
   MotivationManualPostInput,
   MotivationManualPostResult,
-  Role,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isAdmin } from './is-admin';
 import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationModerationService } from './motivation-moderation.service';
 import { quoteFingerprint } from './quote-normalizer';
@@ -38,11 +39,11 @@ export class MotivationManualPostService {
    * ждать проверки текста незачем — админ этот текст только что и написал.
    */
   async create(
-    role: Role,
+    user: AccessTokenPayload,
     actorId: string,
     input: MotivationManualPostInput,
   ): Promise<MotivationManualPostResult> {
-    this.admin(role);
+    this.admin(user);
 
     const originalText = input.originalText?.trim();
     const originalLanguage = this.language(input.originalLanguage);
@@ -157,7 +158,7 @@ export class MotivationManualPostService {
     });
 
     const approved = await this.moderation.approveText(
-      role,
+      user,
       actorId,
       created.postId,
       input.visualStyle,
@@ -231,8 +232,7 @@ export class MotivationManualPostService {
     return date;
   }
 
-  private admin(role: Role) {
-    if (role !== 'admin' && role !== 'service-admin')
-      throw new ForbiddenException();
+  private admin(user: AccessTokenPayload) {
+    if (!isAdmin(user)) throw new ForbiddenException();
   }
 }

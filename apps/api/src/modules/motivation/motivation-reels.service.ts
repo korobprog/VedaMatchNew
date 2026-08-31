@@ -15,6 +15,7 @@ import {
 } from '@prisma/client';
 import { MOTIVATION_VOICE_LABELS } from '@vedamatch/shared';
 import type {
+  AccessTokenPayload,
   MotivationLanguage,
   MotivationPostDto,
   MotivationReelAppealInput,
@@ -28,9 +29,9 @@ import type {
   MotivationVoiceOptionDto,
   MotivationReelVideoOptions,
   MotivationReelSource,
-  Role,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isAdmin } from './is-admin';
 import {
   buildModerationPrompt,
   parseAiVerdict,
@@ -129,12 +130,15 @@ export class MotivationReelsService {
     });
   }
 
-  async quota(userId: string, role: Role): Promise<MotivationReelQuotaDto> {
+  async quota(
+    userId: string,
+    user: AccessTokenPayload,
+  ): Promise<MotivationReelQuotaDto> {
     const [settings, policy] = await Promise.all([
       this.settings.read(),
       this.policyOf(userId),
     ]);
-    const unlimited = this.isAdmin(role);
+    const unlimited = isAdmin(user);
     const used = unlimited ? 0 : await this.usedToday(userId);
     // Личный лимит старше общего; запрет автору выключает создание целиком.
     const limit = policy?.dailyLimit ?? settings.userDailyLimit;
@@ -151,7 +155,7 @@ export class MotivationReelsService {
 
   async create(
     userId: string,
-    role: Role,
+    actor: AccessTokenPayload,
     input: MotivationReelCreateInput,
   ): Promise<MotivationReelCreateResult> {
     const [settings, policy] = await Promise.all([
@@ -162,7 +166,7 @@ export class MotivationReelsService {
       throw new ForbiddenException(
         'Создание рилсов для вашего аккаунта закрыто. Напишите в поддержку.',
       );
-    if (!settings.userReelsEnabled && !this.isAdmin(role))
+    if (!settings.userReelsEnabled && !isAdmin(actor))
       throw new ForbiddenException('Создание своих рилсов сейчас выключено');
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -174,7 +178,7 @@ export class MotivationReelsService {
     // отказ модератора не должен сжигать единственную попытку.
     // Личный лимит автора старше общего из настроек сервиса.
     const dailyLimit = policy?.dailyLimit ?? settings.userDailyLimit;
-    if (!this.isAdmin(role)) {
+    if (!isAdmin(actor)) {
       const used = await this.usedToday(userId);
       if (used >= dailyLimit)
         throw new ForbiddenException(
@@ -498,7 +502,7 @@ export class MotivationReelsService {
 
   async animate(
     userId: string,
-    role: Role,
+    user: AccessTokenPayload,
     postId: string,
     options?: MotivationReelVideoOptions,
   ): Promise<MotivationReelDto> {
@@ -510,7 +514,7 @@ export class MotivationReelsService {
         'Оживление кадра сейчас недоступно: сервис видео не настроен',
       );
     const settings = await this.settings.read();
-    if (!settings.userVideoEnabled && !this.isAdmin(role))
+    if (!settings.userVideoEnabled && !isAdmin(user))
       throw new ForbiddenException(
         'Видео из картинки сейчас выключено — рилс останется с кадром',
       );
@@ -562,33 +566,40 @@ export class MotivationReelsService {
     return this.get(userId, postId);
   }
 
-  async list(userId: string, role?: Role): Promise<MotivationReelDto[]> {
+  async list(
+    userId: string,
+    user?: AccessTokenPayload,
+  ): Promise<MotivationReelDto[]> {
     const posts = await this.prisma.motivationPost.findMany({
       where: { authorUserId: userId, origin: 'user' },
       include: this.include(userId),
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
-    const videoAllowed = await this.videoAllowed(role);
+    const videoAllowed = await this.videoAllowed(user);
     return posts.map((post) => this.reelDto(post, videoAllowed));
   }
 
-  async get(userId: string, id: string, role?: Role): Promise<MotivationReelDto> {
+  async get(
+    userId: string,
+    id: string,
+    user?: AccessTokenPayload,
+  ): Promise<MotivationReelDto> {
     const post = await this.prisma.motivationPost.findFirst({
       where: { id, authorUserId: userId, origin: 'user' },
       include: this.include(userId),
     });
     if (!post) throw new NotFoundException('Рилс не найден');
-    return this.reelDto(post, await this.videoAllowed(role));
+    return this.reelDto(post, await this.videoAllowed(user));
   }
 
   /**
-   * Разрешена ли видеогенерация этому человеку. Роль приходит не отовсюду:
-   * внутренние вызовы возвращают DTO после действия, и там она не нужна —
-   * достаточно общего выключателя.
+   * Разрешена ли видеогенерация этому человеку. Пользователь приходит не
+   * отовсюду: внутренние вызовы возвращают DTO после действия, и там он не
+   * нужен — достаточно общего выключателя.
    */
-  private async videoAllowed(role?: Role): Promise<boolean> {
-    if (role && this.isAdmin(role)) return true;
+  private async videoAllowed(user?: AccessTokenPayload): Promise<boolean> {
+    if (user && isAdmin(user)) return true;
     return (await this.settings.read()).userVideoEnabled;
   }
 
@@ -634,9 +645,11 @@ export class MotivationReelsService {
    * Вход собирается из самого поста: всё, что видела модель в первый раз, в
    * нём и лежит. Пересоздавать рилс ради повтора не нужно.
    */
-  async recheck(role: Role, postId: string): Promise<MotivationReelDto> {
-    if (!this.isAdmin(role))
-      throw new ForbiddenException('Только администратор');
+  async recheck(
+    user: AccessTokenPayload,
+    postId: string,
+  ): Promise<MotivationReelDto> {
+    if (!isAdmin(user)) throw new ForbiddenException('Только администратор');
     const post = await this.prisma.motivationPost.findFirst({
       where: { id: postId, origin: 'user' },
       include: {
@@ -650,9 +663,14 @@ export class MotivationReelsService {
       );
 
     const translation = post.translations[0];
-    const [text, explanation] = (translation?.storyText
-      ? [translation.storyText, translation.text.slice(translation.storyText.length).trim()]
-      : [translation?.text ?? '', '']) as [string, string];
+    const [text, explanation] = (
+      translation?.storyText
+        ? [
+            translation.storyText,
+            translation.text.slice(translation.storyText.length).trim(),
+          ]
+        : [translation?.text ?? '', '']
+    ) as [string, string];
 
     await this.review(post.id, {
       text,
@@ -668,7 +686,7 @@ export class MotivationReelsService {
       // повторяем, а не подменяем автоодобрением.
       trusted: false,
     });
-    return this.get(post.authorUserId ?? '', post.id, role);
+    return this.get(post.authorUserId ?? '', post.id, user);
   }
 
   /**
@@ -727,12 +745,18 @@ export class MotivationReelsService {
     if (!verdict) {
       // Причину сбоя сохраняем: по «сбою модели» без подробностей нельзя
       // решить, ждать и повторить или разбирать текст руками.
-      await this.moderation.aiNote(postId, 'ai_error', aiFailureReason(failure), {
-        mode: settings.aiModerationMode,
-        failure: classifyAiFailure(failure),
-        retryable: isRetryableFailure(classifyAiFailure(failure)),
-        error: failure instanceof Error ? failure.message.slice(0, 500) : null,
-      });
+      await this.moderation.aiNote(
+        postId,
+        'ai_error',
+        aiFailureReason(failure),
+        {
+          mode: settings.aiModerationMode,
+          failure: classifyAiFailure(failure),
+          retryable: isRetryableFailure(classifyAiFailure(failure)),
+          error:
+            failure instanceof Error ? failure.message.slice(0, 500) : null,
+        },
+      );
       return { stage: 'admin_review', reason: null };
     }
     const decision = resolveDecision(verdict, {
@@ -827,46 +851,46 @@ export class MotivationReelsService {
 
   private reelDto(
     post: {
-    id: string;
-    slug: string;
-    contentDate: Date;
-    profileType: MotivationProfileType;
-    audienceTrack: MotivationAudienceTrack;
-    category: string;
-    status: string;
-    reviewStatus: string;
-    generationStage: string | null;
-    imageUrl: string | null;
-    storyImageUrl: string | null;
-    videoUrl: string | null;
-    videoStatus: string;
-    videoVoice: boolean;
-    videoTrackId: string | null;
-    videoErrorCode: string | null;
-    generationErrorCode: string | null;
-    attributionKind: MotivationPostDto['attributionKind'];
-    attributionSpeaker: string | null;
-    attributionWork: string | null;
-    attributionLocator: string | null;
-    attributionSourceUrl: string | null;
-    sourceVerified: boolean;
-    publishedAt: Date | null;
-    likeCount: number;
-    createdAt: Date;
-    translations: {
-      language: string;
-      title: string;
-      text: string;
-      storyText: string;
-    }[];
-    favorites: unknown[];
-    views: unknown[];
-    likes: unknown[];
-    moderationAudits: {
-      action: string;
-      reason: string | null;
+      id: string;
+      slug: string;
+      contentDate: Date;
+      profileType: MotivationProfileType;
+      audienceTrack: MotivationAudienceTrack;
+      category: string;
+      status: string;
+      reviewStatus: string;
+      generationStage: string | null;
+      imageUrl: string | null;
+      storyImageUrl: string | null;
+      videoUrl: string | null;
+      videoStatus: string;
+      videoVoice: boolean;
+      videoTrackId: string | null;
+      videoErrorCode: string | null;
+      generationErrorCode: string | null;
+      attributionKind: MotivationPostDto['attributionKind'];
+      attributionSpeaker: string | null;
+      attributionWork: string | null;
+      attributionLocator: string | null;
+      attributionSourceUrl: string | null;
+      sourceVerified: boolean;
+      publishedAt: Date | null;
+      likeCount: number;
       createdAt: Date;
-    }[];
+      translations: {
+        language: string;
+        title: string;
+        text: string;
+        storyText: string;
+      }[];
+      favorites: unknown[];
+      views: unknown[];
+      likes: unknown[];
+      moderationAudits: {
+        action: string;
+        reason: string | null;
+        createdAt: Date;
+      }[];
     },
     /** Разрешена ли автору видеогенерация: выключатель живёт в админке. */
     videoAllowed = true,
@@ -1025,9 +1049,5 @@ export class MotivationReelsService {
     if (typeof value !== 'string' || !allowedStyles.has(value))
       throw new BadRequestException('Неизвестный визуальный стиль');
     return value as MotivationVisualStyle;
-  }
-
-  private isAdmin(role: Role) {
-    return role === 'admin' || role === 'service-admin';
   }
 }

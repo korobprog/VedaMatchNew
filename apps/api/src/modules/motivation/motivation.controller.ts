@@ -137,12 +137,12 @@ export class MotivationController {
     @Param('id') id: string,
     @Body() body: { greeting?: string | null },
   ) {
-    return this.postcards.build(user.sub, user.role, id, body?.greeting);
+    return this.postcards.build(user.sub, user, id, body?.greeting);
   }
   @Get('admin/motivation/events')
   @UseGuards(AuthGuard)
   adminEvents(@CurrentUser() user: AccessTokenPayload) {
-    return this.postcards.list(user.role);
+    return this.postcards.list(user);
   }
   @Post('admin/motivation/events')
   @UseGuards(AuthGuard)
@@ -150,7 +150,7 @@ export class MotivationController {
     @CurrentUser() user: AccessTokenPayload,
     @Body() input: MotivationEventInput,
   ) {
-    return this.postcards.create(user.role, input);
+    return this.postcards.create(user, input);
   }
   @Delete('admin/motivation/events/:id')
   @UseGuards(AuthGuard)
@@ -158,14 +158,14 @@ export class MotivationController {
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
   ) {
-    return this.postcards.remove(user.role, id);
+    return this.postcards.remove(user, id);
   }
 
   // ===== Свой рилс =====
   @Get('motivation/reels/quota')
   @UseGuards(AuthGuard)
   reelQuota(@CurrentUser() user: AccessTokenPayload) {
-    return this.reels.quota(user.sub, user.role);
+    return this.reels.quota(user.sub, user);
   }
   @Get('motivation/reels/books')
   @UseGuards(AuthGuard)
@@ -199,7 +199,7 @@ export class MotivationController {
   @Get('motivation/reels')
   @UseGuards(AuthGuard)
   myReels(@CurrentUser() user: AccessTokenPayload) {
-    return this.reels.list(user.sub, user.role);
+    return this.reels.list(user.sub, user);
   }
   @Post('motivation/reels')
   @UseGuards(AuthGuard)
@@ -207,12 +207,12 @@ export class MotivationController {
     @CurrentUser() user: AccessTokenPayload,
     @Body() input: MotivationReelCreateInput,
   ) {
-    return this.reels.create(user.sub, user.role, input);
+    return this.reels.create(user.sub, user, input);
   }
   @Get('motivation/reels/:id')
   @UseGuards(AuthGuard)
   reel(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
-    return this.reels.get(user.sub, id, user.role);
+    return this.reels.get(user.sub, id, user);
   }
   @Post('motivation/reels/:id/image')
   @UseGuards(AuthGuard)
@@ -236,7 +236,7 @@ export class MotivationController {
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
   ) {
-    return this.reels.recheck(user.role, id);
+    return this.reels.recheck(user, id);
   }
   @Post('motivation/reels/:id/animate')
   @UseGuards(AuthGuard)
@@ -245,7 +245,7 @@ export class MotivationController {
     @Param('id') id: string,
     @Body() options?: MotivationReelVideoOptions,
   ) {
-    return this.reels.animate(user.sub, user.role, id, options);
+    return this.reels.animate(user.sub, user, id, options);
   }
   @Post('motivation/reels/:id/appeal')
   @UseGuards(AuthGuard)

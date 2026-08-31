@@ -1,5 +1,29 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import type { AccessTokenPayload } from '@vedamatch/shared';
 import { MotivationReelsService } from './motivation-reels.service';
+
+const regularUser: AccessTokenPayload = {
+  sub: 'user-1',
+  email: 'user@example.com',
+  role: 'user',
+};
+const admin: AccessTokenPayload = {
+  sub: 'admin-1',
+  email: 'admin@example.com',
+  role: 'admin',
+};
+const motivationServiceAdmin: AccessTokenPayload = {
+  sub: 'sa-1',
+  email: 'sa@example.com',
+  role: 'service-admin',
+  adminServices: ['motivation'],
+};
+const otherServiceAdmin: AccessTokenPayload = {
+  sub: 'sa-2',
+  email: 'sa2@example.com',
+  role: 'service-admin',
+  adminServices: ['music'],
+};
 
 function build(
   options: {
@@ -132,7 +156,7 @@ describe('MotivationReelsService.create', () => {
   it('creates quote and post for own text and lets the AI approve it', async () => {
     const { service, tx, moderation, events } = build();
 
-    const result = await service.create('user-1', 'user', ownInput);
+    const result = await service.create('user-1', regularUser, ownInput);
 
     expect(result).toEqual({ id: 'post-1', stage: 'generating', reason: null });
     expect(tx.motivationQuote.create).toHaveBeenCalledWith(
@@ -173,7 +197,7 @@ describe('MotivationReelsService.create', () => {
       verdict: { decision: 'reject', confidence: 0.95, reason: 'Это реклама.' },
     });
 
-    const result = await service.create('user-1', 'user', ownInput);
+    const result = await service.create('user-1', regularUser, ownInput);
 
     expect(result).toEqual({
       id: 'post-1',
@@ -199,7 +223,7 @@ describe('MotivationReelsService.create', () => {
   it('escalates low-confidence verdicts and model failures', async () => {
     const low = build({ verdict: { decision: 'reject', confidence: 0.6 } });
     await expect(
-      low.service.create('user-1', 'user', ownInput),
+      low.service.create('user-1', regularUser, ownInput),
     ).resolves.toMatchObject({
       stage: 'admin_review',
     });
@@ -212,7 +236,7 @@ describe('MotivationReelsService.create', () => {
 
     const broken = build({ verdict: new Error('provider down') });
     await expect(
-      broken.service.create('user-1', 'user', ownInput),
+      broken.service.create('user-1', regularUser, ownInput),
     ).resolves.toMatchObject({
       stage: 'admin_review',
     });
@@ -229,7 +253,7 @@ describe('MotivationReelsService.create', () => {
 
   it('only suggests in assist mode and skips the model when off', async () => {
     const assist = build({ mode: 'assist' });
-    await assist.service.create('user-1', 'user', ownInput);
+    await assist.service.create('user-1', regularUser, ownInput);
     expect(assist.moderation.aiNote).toHaveBeenCalledWith(
       'post-1',
       'ai_suggest',
@@ -239,7 +263,7 @@ describe('MotivationReelsService.create', () => {
     expect(assist.moderation.aiApproveText).not.toHaveBeenCalled();
 
     const off = build({ mode: 'off' });
-    await off.service.create('user-1', 'user', ownInput);
+    await off.service.create('user-1', regularUser, ownInput);
     expect(off.generation.moderationVerdict).not.toHaveBeenCalled();
     expect(off.moderation.aiNote).toHaveBeenCalledWith(
       'post-1',
@@ -251,7 +275,8 @@ describe('MotivationReelsService.create', () => {
 
   it('не повторяет название произведения в заголовке, если оно уже есть в главе', async () => {
     const { service, tx, verification } = build();
-    const text = 'Не умывшись и не приняв душа, он сидел, углубившись в работу.';
+    const text =
+      'Не умывшись и не приняв душа, он сидел, углубившись в работу.';
     verification.verifyVedabaseCandidate.mockResolvedValue({
       originalText: text,
       author: 'А. Ч. Бхактиведанта Свами Прабхупада',
@@ -263,7 +288,7 @@ describe('MotivationReelsService.create', () => {
       contextExcerpt: 'ctx',
     });
 
-    await service.create('user-1', 'user', {
+    await service.create('user-1', regularUser, {
       source: { kind: 'vedabase', text, bookSlug: 'sb', chapterSlug: '1' },
       language: 'ru',
       audienceTrack: 'universal',
@@ -287,11 +312,11 @@ describe('MotivationReelsService.create', () => {
   it('enforces the daily limit for users but not for admins', async () => {
     const { service } = build({ usedToday: 1, limit: 1 });
 
-    await expect(service.create('user-1', 'user', ownInput)).rejects.toThrow(
-      ForbiddenException,
-    );
     await expect(
-      service.create('admin-1', 'admin', ownInput),
+      service.create('user-1', regularUser, ownInput),
+    ).rejects.toThrow(ForbiddenException);
+    await expect(
+      service.create('admin-1', admin, ownInput),
     ).resolves.toMatchObject({ id: 'post-1' });
   });
 
@@ -303,14 +328,14 @@ describe('MotivationReelsService.create', () => {
       policy: { dailyLimit: 3, trusted: false, blocked: false },
     });
     await expect(
-      generous.service.create('user-1', 'user', ownInput),
+      generous.service.create('user-1', regularUser, ownInput),
     ).resolves.toMatchObject({ id: 'post-1' });
 
     const blocked = build({
       policy: { dailyLimit: null, trusted: false, blocked: true },
     });
     await expect(
-      blocked.service.create('user-1', 'user', ownInput),
+      blocked.service.create('user-1', regularUser, ownInput),
     ).rejects.toThrow('закрыто');
   });
 
@@ -320,7 +345,7 @@ describe('MotivationReelsService.create', () => {
     });
 
     await expect(
-      service.create('user-1', 'user', ownInput),
+      service.create('user-1', regularUser, ownInput),
     ).resolves.toMatchObject({
       stage: 'generating',
     });
@@ -333,15 +358,15 @@ describe('MotivationReelsService.create', () => {
   it('refuses when user reels are switched off', async () => {
     const { service } = build({ enabled: false });
 
-    await expect(service.create('user-1', 'user', ownInput)).rejects.toThrow(
-      'Создание своих рилсов сейчас выключено',
-    );
+    await expect(
+      service.create('user-1', regularUser, ownInput),
+    ).rejects.toThrow('Создание своих рилсов сейчас выключено');
   });
 
   it('verifies a book fragment and copies the attribution', async () => {
     const { service, tx, verification } = build();
 
-    await service.create('user-1', 'user', {
+    await service.create('user-1', regularUser, {
       ...ownInput,
       source: {
         kind: 'vedabase',
@@ -376,7 +401,7 @@ describe('MotivationReelsService.create', () => {
     );
 
     await expect(
-      service.create('user-1', 'user', {
+      service.create('user-1', regularUser, {
         ...ownInput,
         source: {
           kind: 'vedabase',
@@ -400,10 +425,10 @@ describe('MotivationReelsService.create', () => {
   ])('rejects invalid input %#', async (input, fragment) => {
     const { service } = build();
     await expect(
-      service.create('user-1', 'user', input as never),
+      service.create('user-1', regularUser, input as never),
     ).rejects.toThrow(BadRequestException);
     await expect(
-      service.create('user-1', 'user', input as never),
+      service.create('user-1', regularUser, input as never),
     ).rejects.toThrow(fragment);
   });
 });
@@ -507,7 +532,7 @@ describe('MotivationReelsService.animate', () => {
       .mockResolvedValueOnce(published)
       .mockResolvedValueOnce({ ...full, videoStatus: 'queued' });
 
-    const reel = await service.animate('user-1', 'user', 'post-1');
+    const reel = await service.animate('user-1', regularUser, 'post-1');
 
     expect(reel).toMatchObject({ videoState: 'queued', canAnimate: false });
 
@@ -535,9 +560,9 @@ describe('MotivationReelsService.animate', () => {
     const { service, prisma } = build({ videoConfigured: false });
     prisma.motivationPost.findFirst.mockResolvedValue(published);
 
-    await expect(service.animate('user-1', 'user', 'post-1')).rejects.toThrow(
-      'не настроен',
-    );
+    await expect(
+      service.animate('user-1', regularUser, 'post-1'),
+    ).rejects.toThrow('не настроен');
     expect(prisma.motivationPost.update).not.toHaveBeenCalled();
   });
 
@@ -545,7 +570,7 @@ describe('MotivationReelsService.animate', () => {
     const { service, prisma } = build({ videoConfigured: false });
     prisma.motivationPost.findFirst.mockResolvedValue(published);
 
-    await expect(service.animate('admin-1', 'admin', 'post-1')).rejects.toThrow(
+    await expect(service.animate('admin-1', admin, 'post-1')).rejects.toThrow(
       'не настроен',
     );
   });
@@ -554,9 +579,9 @@ describe('MotivationReelsService.animate', () => {
     const { service, prisma } = build({ videoEnabled: false });
     prisma.motivationPost.findFirst.mockResolvedValue(published);
 
-    await expect(service.animate('user-1', 'user', 'post-1')).rejects.toThrow(
-      'выключено',
-    );
+    await expect(
+      service.animate('user-1', regularUser, 'post-1'),
+    ).rejects.toThrow('выключено');
   });
 
   it.each([
@@ -568,9 +593,9 @@ describe('MotivationReelsService.animate', () => {
     const { service, prisma } = build();
     prisma.motivationPost.findFirst.mockResolvedValue(post);
 
-    await expect(service.animate('user-1', 'user', 'post-1')).rejects.toThrow(
-      fragment,
-    );
+    await expect(
+      service.animate('user-1', regularUser, 'post-1'),
+    ).rejects.toThrow(fragment);
   });
 });
 
@@ -650,15 +675,37 @@ describe('MotivationReelsService.quota', () => {
   it('reports unlimited for admins and remaining for users', async () => {
     const { service } = build({ usedToday: 1, limit: 3 });
 
-    await expect(service.quota('u', 'user')).resolves.toMatchObject({
+    await expect(service.quota('u', regularUser)).resolves.toMatchObject({
       used: 1,
       limit: 3,
       remaining: 2,
       unlimited: false,
     });
-    await expect(service.quota('a', 'admin')).resolves.toMatchObject({
+    await expect(service.quota('a', admin)).resolves.toMatchObject({
       unlimited: true,
       used: 0,
+    });
+  });
+
+  it('пускает service-admin, которому выдан сервис motivation', async () => {
+    const { service } = build({ usedToday: 1, limit: 3 });
+
+    await expect(
+      service.quota('sa', motivationServiceAdmin),
+    ).resolves.toMatchObject({
+      unlimited: true,
+      used: 0,
+    });
+  });
+
+  it('не даёт безлимит service-admin другого сервиса', async () => {
+    const { service } = build({ usedToday: 1, limit: 3 });
+
+    await expect(
+      service.quota('sa2', otherServiceAdmin),
+    ).resolves.toMatchObject({
+      unlimited: false,
+      used: 1,
     });
   });
 });

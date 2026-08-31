@@ -893,7 +893,7 @@ export class ChatConversationsService {
     // браузера, а рисуется он у всех участников.
     if (
       patch.avatarUrl &&
-      !isStorageUrl(patch.avatarUrl, this.uploads.storagePrefix)
+      !isStorageUrl(patch.avatarUrl, this.uploads.storagePrefix, conversationId)
     )
       throw new BadRequestException('Картинка не из нашего хранилища');
 

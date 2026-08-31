@@ -1,5 +1,29 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
+import type { AccessTokenPayload } from '@vedamatch/shared';
 import { MotivationAdminReelsService } from './motivation-admin-reels.service';
+
+const admin: AccessTokenPayload = {
+  sub: 'admin-1',
+  email: 'admin@example.com',
+  role: 'admin',
+};
+const motivationServiceAdmin: AccessTokenPayload = {
+  sub: 'sa-1',
+  email: 'sa@example.com',
+  role: 'service-admin',
+  adminServices: ['motivation'],
+};
+const otherServiceAdmin: AccessTokenPayload = {
+  sub: 'sa-2',
+  email: 'sa2@example.com',
+  role: 'service-admin',
+  adminServices: ['music'],
+};
+const regularUser: AccessTokenPayload = {
+  sub: 'user-1',
+  email: 'user@example.com',
+  role: 'user',
+};
 
 const audit = (
   action: string,
@@ -90,7 +114,7 @@ describe('MotivationAdminReelsService.list', () => {
   it('returns user reels with the worldly author name and the AI verdict', async () => {
     const { service, prisma } = build();
 
-    const result = await service.list('admin');
+    const result = await service.list(admin);
 
     expect(prisma.motivationPost.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -120,7 +144,7 @@ describe('MotivationAdminReelsService.list', () => {
     });
     const { service } = build([post(), appealed]);
 
-    const result = await service.list('admin', 'appealed');
+    const result = await service.list(admin, 'appealed');
 
     expect(result.items.map((item) => item.id)).toEqual(['post-2']);
     expect(result.items[0].appeal).toMatchObject({ message: 'Не согласен' });
@@ -139,7 +163,7 @@ describe('MotivationAdminReelsService.list', () => {
       ],
     );
 
-    await expect(service.list('admin')).resolves.toMatchObject({
+    await expect(service.list(admin)).resolves.toMatchObject({
       stats: {
         checked: 10,
         approved: 4,
@@ -153,7 +177,19 @@ describe('MotivationAdminReelsService.list', () => {
 
   it('refuses non-admins', async () => {
     const { service } = build();
-    await expect(service.list('user')).rejects.toThrow(ForbiddenException);
+    await expect(service.list(regularUser)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('allows a service-admin scoped to motivation', async () => {
+    const { service } = build();
+    await expect(service.list(motivationServiceAdmin)).resolves.toBeDefined();
+  });
+
+  it('refuses a service-admin scoped to a different service', async () => {
+    const { service } = build();
+    await expect(service.list(otherServiceAdmin)).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 });
 
@@ -161,9 +197,7 @@ describe('MotivationAdminReelsService.restore', () => {
   it('returns a rejected reel to the review queue and records the override', async () => {
     const { service, prisma } = build();
 
-    await expect(
-      service.restore('admin', 'admin-1', 'post-1'),
-    ).resolves.toEqual({
+    await expect(service.restore(admin, 'admin-1', 'post-1')).resolves.toEqual({
       id: 'post-1',
       reviewStatus: 'text_review',
     });
@@ -184,7 +218,7 @@ describe('MotivationAdminReelsService.restore', () => {
       reviewStatus: 'published',
     });
 
-    await expect(service.restore('admin', 'admin-1', 'post-1')).rejects.toThrow(
+    await expect(service.restore(admin, 'admin-1', 'post-1')).rejects.toThrow(
       ConflictException,
     );
   });
@@ -195,10 +229,10 @@ describe('MotivationAdminReelsService.hide', () => {
     const { service, prisma } = build();
 
     await expect(
-      service.hide('admin', 'admin-1', 'post-1', '  '),
+      service.hide(admin, 'admin-1', 'post-1', '  '),
     ).rejects.toThrow('причина');
     await expect(
-      service.hide('admin', 'admin-1', 'post-1', 'Не по теме'),
+      service.hide(admin, 'admin-1', 'post-1', 'Не по теме'),
     ).resolves.toEqual({
       id: 'post-1',
       status: 'hidden',
@@ -216,7 +250,7 @@ describe('MotivationAdminReelsService.savePolicy', () => {
     const { service, prisma } = build();
 
     await expect(
-      service.savePolicy('admin', 'user-1', { dailyLimit: 5 }),
+      service.savePolicy(admin, 'user-1', { dailyLimit: 5 }),
     ).resolves.toMatchObject({
       dailyLimit: 5,
     });
@@ -226,13 +260,13 @@ describe('MotivationAdminReelsService.savePolicy', () => {
   it.each([[-1], [1000], [1.5]])('rejects limit %p', async (dailyLimit) => {
     const { service } = build();
     await expect(
-      service.savePolicy('admin', 'user-1', { dailyLimit }),
+      service.savePolicy(admin, 'user-1', { dailyLimit }),
     ).rejects.toThrow('лимит');
   });
 
   it('refuses an empty patch', async () => {
     const { service } = build();
-    await expect(service.savePolicy('admin', 'user-1', {})).rejects.toThrow(
+    await expect(service.savePolicy(admin, 'user-1', {})).rejects.toThrow(
       'Нечего обновлять',
     );
   });

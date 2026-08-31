@@ -1,6 +1,32 @@
 import { NotFoundException } from '@nestjs/common';
 import { MotivationService } from './motivation.service';
-import type { MotivationAdminCandidateDto } from '@vedamatch/shared';
+import type {
+  AccessTokenPayload,
+  MotivationAdminCandidateDto,
+} from '@vedamatch/shared';
+
+const admin: AccessTokenPayload = {
+  sub: 'admin-1',
+  email: 'admin@example.com',
+  role: 'admin',
+};
+const motivationServiceAdmin: AccessTokenPayload = {
+  sub: 'sa-1',
+  email: 'sa@example.com',
+  role: 'service-admin',
+  adminServices: ['motivation'],
+};
+const otherServiceAdmin: AccessTokenPayload = {
+  sub: 'sa-2',
+  email: 'sa2@example.com',
+  role: 'service-admin',
+  adminServices: ['music'],
+};
+const regularUser: AccessTokenPayload = {
+  sub: 'user-1',
+  email: 'user@example.com',
+  role: 'user',
+};
 
 describe('MotivationService admin list', () => {
   it('includes verified quotes assigned to the user profile', async () => {
@@ -97,7 +123,7 @@ describe('MotivationService admin list', () => {
       {} as never,
       {} as never,
     );
-    await expect(service.adminList('admin')).resolves.toEqual([
+    await expect(service.adminList(admin)).resolves.toEqual([
       expect.objectContaining({
         id: 'post-1',
         status: 'failed',
@@ -168,7 +194,7 @@ describe('MotivationService admin list', () => {
     );
 
     const [candidate]: MotivationAdminCandidateDto[] = (await service.adminList(
-      'admin',
+      admin,
     )) as never;
 
     expect(candidate).toMatchObject({
@@ -792,7 +818,7 @@ describe('MotivationService.adminDelete', () => {
       quoteId: 'quote-1',
     });
 
-    await service.adminDelete('admin', 'post-1');
+    await service.adminDelete(admin, 'post-1');
 
     expect(transaction.motivationPost.delete).toHaveBeenCalledWith({
       where: { id: 'post-1' },
@@ -808,7 +834,7 @@ describe('MotivationService.adminDelete', () => {
       quoteId: null,
     });
 
-    await service.adminDelete('admin', 'post-1');
+    await service.adminDelete(admin, 'post-1');
 
     expect(transaction.motivationPost.delete).toHaveBeenCalled();
     expect(transaction.motivationQuote.delete).not.toHaveBeenCalled();
@@ -817,7 +843,7 @@ describe('MotivationService.adminDelete', () => {
   it('reports a missing post instead of deleting nothing quietly', async () => {
     const { service } = buildService(null);
 
-    await expect(service.adminDelete('admin', 'ghost')).rejects.toThrow(
+    await expect(service.adminDelete(admin, 'ghost')).rejects.toThrow(
       'Motivation post not found',
     );
   });
@@ -825,7 +851,32 @@ describe('MotivationService.adminDelete', () => {
   it('requires an admin or service-admin role', async () => {
     const { service } = buildService({ id: 'post-1', quoteId: 'quote-1' });
 
-    await expect(service.adminDelete('user', 'post-1')).rejects.toThrow();
+    await expect(service.adminDelete(regularUser, 'post-1')).rejects.toThrow();
+  });
+
+  it('allows a service-admin scoped to motivation', async () => {
+    const { service, transaction } = buildService({
+      id: 'post-1',
+      quoteId: 'quote-1',
+    });
+
+    await service.adminDelete(motivationServiceAdmin, 'post-1');
+
+    expect(transaction.motivationPost.delete).toHaveBeenCalledWith({
+      where: { id: 'post-1' },
+    });
+  });
+
+  it('rejects a service-admin scoped to a different service', async () => {
+    const { service, transaction } = buildService({
+      id: 'post-1',
+      quoteId: 'quote-1',
+    });
+
+    await expect(
+      service.adminDelete(otherServiceAdmin, 'post-1'),
+    ).rejects.toThrow();
+    expect(transaction.motivationPost.delete).not.toHaveBeenCalled();
   });
 });
 
@@ -874,7 +925,7 @@ describe('MotivationService.addManualQuote', () => {
   it('creates a verified manual quote and hands it to the copy pipeline', async () => {
     const { service, prisma, copy } = buildService();
 
-    await expect(service.addManualQuote('admin', validInput)).resolves.toEqual({
+    await expect(service.addManualQuote(admin, validInput)).resolves.toEqual({
       quoteId: 'quote-1',
       postId: 'post-1',
     });
@@ -904,7 +955,7 @@ describe('MotivationService.addManualQuote', () => {
   it('stores empty strings for the optional attribution fields', async () => {
     const { service, prisma, copy } = buildService();
 
-    await service.addManualQuote('admin', {
+    await service.addManualQuote(admin, {
       originalText: 'Only the essentials.',
       originalLanguage: 'ru',
       author: 'Author Name',
@@ -930,7 +981,7 @@ describe('MotivationService.addManualQuote', () => {
     const { service, categories, copy } = buildService();
     categories.resolveSlug.mockResolvedValue('smirenie');
 
-    await service.addManualQuote('admin', {
+    await service.addManualQuote(admin, {
       ...validInput,
       category: 'smirenie',
     });
@@ -944,7 +995,7 @@ describe('MotivationService.addManualQuote', () => {
   it('trims input and stores an optional source URL', async () => {
     const { service, prisma } = buildService();
 
-    await service.addManualQuote('admin', {
+    await service.addManualQuote(admin, {
       ...validInput,
       originalText: `  ${validInput.originalText}  `,
       sourceUrl: '  https://example.com/source  ',
@@ -971,7 +1022,7 @@ describe('MotivationService.addManualQuote', () => {
     const copy = { prepareCandidate: jest.fn() };
     const { service } = buildService({ prisma, copy });
 
-    await expect(service.addManualQuote('admin', validInput)).rejects.toThrow(
+    await expect(service.addManualQuote(admin, validInput)).rejects.toThrow(
       'This quote has already been added',
     );
     expect(prisma.motivationQuote.create).not.toHaveBeenCalled();
@@ -982,14 +1033,38 @@ describe('MotivationService.addManualQuote', () => {
     const { service } = buildService();
 
     await expect(
-      service.addManualQuote('admin', { ...validInput, author: '   ' }),
+      service.addManualQuote(admin, { ...validInput, author: '   ' }),
     ).rejects.toThrow('Quote text, language and author are required');
   });
 
   it('requires an admin or service-admin role', async () => {
     const { service } = buildService();
 
-    await expect(service.addManualQuote('user', validInput)).rejects.toThrow();
+    await expect(
+      service.addManualQuote(regularUser, validInput),
+    ).rejects.toThrow();
+  });
+
+  it('allows a service-admin scoped to motivation', async () => {
+    const { service, copy } = buildService();
+
+    await expect(
+      service.addManualQuote(motivationServiceAdmin, validInput),
+    ).resolves.toEqual({ quoteId: 'quote-1', postId: 'post-1' });
+    expect(
+      (copy as { prepareCandidate: jest.Mock }).prepareCandidate,
+    ).toHaveBeenCalled();
+  });
+
+  it('rejects a service-admin scoped to a different service', async () => {
+    const { service, copy } = buildService();
+
+    await expect(
+      service.addManualQuote(otherServiceAdmin, validInput),
+    ).rejects.toThrow();
+    expect(
+      (copy as { prepareCandidate: jest.Mock }).prepareCandidate,
+    ).not.toHaveBeenCalled();
   });
 });
 
@@ -1022,7 +1097,7 @@ describe('MotivationService.previewVoice', () => {
   it('готовый образец берёт из хранилища и не платит повторно', async () => {
     const { service, audio } = build('https://cdn/Rachel.mp3');
 
-    await expect(service.previewVoice('admin', 'Rachel')).resolves.toEqual({
+    await expect(service.previewVoice(admin, 'Rachel')).resolves.toEqual({
       audio: 'https://cdn/Rachel.mp3',
       cached: true,
     });
@@ -1033,7 +1108,7 @@ describe('MotivationService.previewVoice', () => {
   it('отсутствующий синтезирует и кладёт в хранилище', async () => {
     const { service, audio, generation } = build(null);
 
-    await expect(service.previewVoice('admin', 'George')).resolves.toEqual({
+    await expect(service.previewVoice(admin, 'George')).resolves.toEqual({
       audio: 'https://cdn/new.mp3',
       cached: false,
     });
@@ -1048,8 +1123,25 @@ describe('MotivationService.previewVoice', () => {
   it('неизвестный голос отбивает до обращения к провайдеру', async () => {
     const { service, audio } = build(null);
 
-    await expect(service.previewVoice('admin', 'Валера')).rejects.toThrow();
+    await expect(service.previewVoice(admin, 'Валера')).rejects.toThrow();
     // За неизвестный голос провайдер списал бы деньги так же, как за верный.
+    expect(audio.speak).not.toHaveBeenCalled();
+  });
+
+  it('пускает service-admin, которому выдан сервис motivation', async () => {
+    const { service } = build('https://cdn/Rachel.mp3');
+
+    await expect(
+      service.previewVoice(motivationServiceAdmin, 'Rachel'),
+    ).resolves.toEqual({ audio: 'https://cdn/Rachel.mp3', cached: true });
+  });
+
+  it('не пускает service-admin другого сервиса', async () => {
+    const { service, audio } = build('https://cdn/Rachel.mp3');
+
+    await expect(
+      service.previewVoice(otherServiceAdmin, 'Rachel'),
+    ).rejects.toThrow();
     expect(audio.speak).not.toHaveBeenCalled();
   });
 });

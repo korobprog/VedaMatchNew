@@ -48,35 +48,31 @@ describe('MotivationAdminController moderation endpoints', () => {
     });
 
     expect(service.approveText).toHaveBeenCalledWith(
-      'service-admin',
+      user,
       'actor-1',
       'post-1',
       'warm_documentary',
     );
     expect(service.approveImage).toHaveBeenCalledWith(
-      'service-admin',
+      user,
       'actor-1',
       'post-1',
     );
     expect(service.rejectModeration).toHaveBeenCalledWith(
-      'service-admin',
+      user,
       'actor-1',
       'post-1',
       'Needs review',
     );
     expect(service.regenerateModerationImage).toHaveBeenCalledWith(
-      'service-admin',
+      user,
       'actor-1',
       'post-1',
       'cinematic_nature',
     );
-    expect(service.regenerate).toHaveBeenCalledWith(
-      'service-admin',
-      'actor-1',
-      'post-1',
-    );
+    expect(service.regenerate).toHaveBeenCalledWith(user, 'actor-1', 'post-1');
     expect(service.savePrompts).toHaveBeenCalledWith(
-      'service-admin',
+      user,
       'actor-1',
       'post-1',
       { videoPrompt: 'Gentle natural motion.' },

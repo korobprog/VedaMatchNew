@@ -1,4 +1,28 @@
+import type { AccessTokenPayload } from '@vedamatch/shared';
 import { MotivationCategoriesService } from './motivation-categories.service';
+
+const admin: AccessTokenPayload = {
+  sub: 'admin-1',
+  email: 'admin@example.com',
+  role: 'admin',
+};
+const motivationServiceAdmin: AccessTokenPayload = {
+  sub: 'sa-1',
+  email: 'sa@example.com',
+  role: 'service-admin',
+  adminServices: ['motivation'],
+};
+const otherServiceAdmin: AccessTokenPayload = {
+  sub: 'sa-2',
+  email: 'sa2@example.com',
+  role: 'service-admin',
+  adminServices: ['music'],
+};
+const regularUser: AccessTokenPayload = {
+  sub: 'user-1',
+  email: 'user@example.com',
+  role: 'user',
+};
 
 type PrismaStub = {
   motivationCategory: Record<string, jest.Mock>;
@@ -40,7 +64,17 @@ function buildService(prisma: PrismaStub) {
 describe('MotivationCategoriesService', () => {
   it('rejects non-admin roles', async () => {
     const service = buildService(buildPrisma());
-    await expect(service.list('user')).rejects.toThrow();
+    await expect(service.list(regularUser)).rejects.toThrow();
+  });
+
+  it('allows a service-admin scoped to motivation', async () => {
+    const service = buildService(buildPrisma());
+    await expect(service.list(motivationServiceAdmin)).resolves.toEqual([]);
+  });
+
+  it('rejects a service-admin scoped to a different service', async () => {
+    const service = buildService(buildPrisma());
+    await expect(service.list(otherServiceAdmin)).rejects.toThrow();
   });
 
   it('derives a slug from the title and makes the first category default', async () => {
@@ -52,7 +86,7 @@ describe('MotivationCategoriesService', () => {
       }),
     );
 
-    const created = await buildService(prisma).create('admin', {
+    const created = await buildService(prisma).create(admin, {
       title: '  Смирение  ',
     });
 
@@ -87,7 +121,7 @@ describe('MotivationCategoriesService', () => {
       }),
     );
 
-    const created = await buildService(prisma).create('admin', {
+    const created = await buildService(prisma).create(admin, {
       title: 'Утренняя практика',
       parentId: 'cat-1',
     });
@@ -109,7 +143,7 @@ describe('MotivationCategoriesService', () => {
     });
 
     await expect(
-      buildService(prisma).create('admin', {
+      buildService(prisma).create(admin, {
         title: 'Глубже',
         parentId: 'cat-2',
       }),
@@ -126,7 +160,7 @@ describe('MotivationCategoriesService', () => {
     });
 
     await expect(
-      buildService(prisma).update('admin', 'cat-1', { parentId: 'cat-3' }),
+      buildService(prisma).update(admin, 'cat-1', { parentId: 'cat-3' }),
     ).rejects.toThrow(
       'Move the subcategories out before nesting this category',
     );
@@ -140,7 +174,7 @@ describe('MotivationCategoriesService', () => {
     });
 
     await expect(
-      buildService(prisma).update('admin', 'cat-1', { parentId: 'cat-1' }),
+      buildService(prisma).update(admin, 'cat-1', { parentId: 'cat-1' }),
     ).rejects.toThrow('A category cannot be its own parent');
   });
 
@@ -182,7 +216,7 @@ describe('MotivationCategoriesService', () => {
       ]),
     });
 
-    const listed = await buildService(prisma).list('admin');
+    const listed = await buildService(prisma).list(admin);
 
     expect(listed.map((category) => category.slug)).toEqual([
       'a',
@@ -207,7 +241,7 @@ describe('MotivationCategoriesService', () => {
       }),
     );
 
-    await buildService(prisma).create('admin', { title: 'Вера' });
+    await buildService(prisma).create(admin, { title: 'Вера' });
 
     expect(prisma.motivationCategory.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ slug: 'vera-2', isDefault: false }),
@@ -228,7 +262,7 @@ describe('MotivationCategoriesService', () => {
       }),
     });
 
-    await buildService(prisma).update('admin', 'cat-2', { isDefault: true });
+    await buildService(prisma).update(admin, 'cat-2', { isDefault: true });
 
     expect(prisma.motivationCategory.updateMany).toHaveBeenCalledWith({
       where: { isDefault: true },
@@ -242,7 +276,7 @@ describe('MotivationCategoriesService', () => {
     });
 
     await expect(
-      buildService(prisma).update('admin', 'cat-1', { isDefault: false }),
+      buildService(prisma).update(admin, 'cat-1', { isDefault: false }),
     ).rejects.toThrow('Pick another default category');
   });
 
@@ -251,7 +285,7 @@ describe('MotivationCategoriesService', () => {
       findUnique: jest.fn().mockResolvedValue({ id: 'cat-1', isDefault: true }),
     });
 
-    await expect(buildService(prisma).remove('admin', 'cat-1')).rejects.toThrow(
+    await expect(buildService(prisma).remove(admin, 'cat-1')).rejects.toThrow(
       'The default category cannot be deleted',
     );
     expect(prisma.motivationCategory.delete).not.toHaveBeenCalled();
@@ -264,7 +298,7 @@ describe('MotivationCategoriesService', () => {
         .mockResolvedValue({ id: 'cat-2', isDefault: false }),
     });
 
-    await buildService(prisma).remove('admin', 'cat-2');
+    await buildService(prisma).remove(admin, 'cat-2');
 
     expect(prisma.motivationCategory.delete).toHaveBeenCalledWith({
       where: { id: 'cat-2' },
@@ -319,7 +353,7 @@ describe('MotivationCategoriesService', () => {
       { category: 'smirenie', _count: { _all: 3 } },
     ]);
 
-    await expect(buildService(prisma).list('admin')).resolves.toEqual([
+    await expect(buildService(prisma).list(admin)).resolves.toEqual([
       expect.objectContaining({ slug: 'smirenie', postCount: 3 }),
       expect.objectContaining({ slug: 'vera', postCount: 0 }),
     ]);
