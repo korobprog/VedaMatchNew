@@ -56,4 +56,13 @@ describe('TelemetryController', () => {
     void controller.summary(user('admin'));
     expect(service.installEnvironmentSummary).toHaveBeenCalledTimes(1);
   });
+
+  it('пускает service-admin: сводка портальная, не привязана к сервису', () => {
+    // В отличие от canAdminService(user, slug), здесь isPortalAdmin — сводка
+    // анонимных агрегатов по браузеру/платформе, а не данные конкретного
+    // сервиса, поэтому service-admin любого сервиса видит её так же, как
+    // видит саму админку (apps/web/src/app/admin/layout.tsx).
+    void controller.summary(user('service-admin'));
+    expect(service.installEnvironmentSummary).toHaveBeenCalledTimes(1);
+  });
 });
