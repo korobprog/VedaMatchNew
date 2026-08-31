@@ -375,6 +375,7 @@ model User {
   musicReportsMade                   MusicReport[]                @relation("MusicReportsMade")
   musicReportsDecided                MusicReport[]                @relation("MusicReportsDecided")
   musicSettings                      MusicSettings?               @relation("MusicSettings")
+  teamApplications                   TeamApplication[]
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -4605,4 +4606,46 @@ model MusicSettings {
   autoplay             Boolean                   @default(true)
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
+}
+
+// ===== Team applications =====
+
+enum TeamApplicationRole {
+  security
+  backend
+  frontend
+  devops
+  qa
+  design
+  community
+  mobile
+  other
+}
+
+enum TeamApplicationStatus {
+  submitted
+  reviewing
+  accepted
+  rejected
+  closed
+}
+
+model TeamApplication {
+  id              String                @id @default(uuid())
+  role            TeamApplicationRole
+  /// Обязательно при role = other — формулировка кандидата, которой нет в списке.
+  roleOther       String?
+  contactName     String?
+  contactEmail    String?
+  contactTelegram String?
+  message         String
+  portfolioUrl    String?
+  userId          String?
+  user            User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  status          TeamApplicationStatus @default(submitted)
+  adminNote       String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([status, createdAt])
 }

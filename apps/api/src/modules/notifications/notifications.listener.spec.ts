@@ -1,6 +1,9 @@
+import { Test } from '@nestjs/testing';
+import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
 import { NotificationsListener } from './notifications.listener';
-import type { NotificationsService } from './notifications.service';
-import type { PushSenderService } from './push-sender.service';
+import { notificationEventNames } from './notification-copy';
+import { NotificationsService } from './notifications.service';
+import { PushSenderService } from './push-sender.service';
 
 const chatEvent = {
   name: 'union.chat.message-sent',
@@ -186,5 +189,44 @@ describe('NotificationsListener.deliver', () => {
       .mockRejectedValueOnce(new Error('database is down'));
 
     await expect(listener.deliver(chatEvent)).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * Каждое имя события в notificationEventNames обязано иметь свой @OnEvent
+ * в NotificationsListener — иначе событие эмитится, но никто его не
+ * доставляет, и это молча теряется (ровно так едва не случилось с
+ * team.application.received: событие завели в notification-copy.ts, но
+ * забыли обработчик здесь — заодно нашлись ещё четыре таких же дыры).
+ */
+describe('NotificationsListener wiring', () => {
+  it('has a live @OnEvent handler for every registered event name', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [EventEmitterModule.forRoot()],
+      providers: [
+        NotificationsListener,
+        { provide: NotificationsService, useValue: {} },
+        { provide: PushSenderService, useValue: {} },
+      ],
+    }).compile();
+
+    const app = moduleRef.createNestApplication();
+    await app.init();
+
+    const listener = moduleRef.get(NotificationsListener);
+    const deliverSpy = jest
+      .spyOn(listener, 'deliver')
+      .mockResolvedValue(undefined);
+    const emitter = moduleRef.get(EventEmitter2);
+
+    for (const name of Object.values(notificationEventNames)) {
+      emitter.emit(name, { name, recipientId: 'user-1' });
+    }
+
+    expect(deliverSpy).toHaveBeenCalledTimes(
+      Object.values(notificationEventNames).length,
+    );
+
+    await app.close();
   });
 });

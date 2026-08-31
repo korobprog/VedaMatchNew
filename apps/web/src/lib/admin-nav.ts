@@ -55,6 +55,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         hint: "Обращения пользователей и гостей",
         scope: "portal",
       },
+      {
+        href: "/admin/team-applications",
+        label: "Заявки в команду",
+        hint: "Отклики кандидатов на открытые роли",
+        scope: "portal",
+      },
     ],
   },
   {

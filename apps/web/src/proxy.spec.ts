@@ -24,10 +24,11 @@ describe("proxy", () => {
     );
   });
 
-  it("lets guests reach support, legal, updates and service description pages", () => {
+  it("lets guests reach support, team, legal, updates and service description pages", () => {
     for (const path of [
       "/support",
       "/support/track/abc",
+      "/team",
       "/legal/privacy",
       "/updates",
       "/updates/history",

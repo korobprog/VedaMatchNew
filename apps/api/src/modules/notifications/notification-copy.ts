@@ -36,6 +36,7 @@ export const notificationEventNames = {
   motivationVideoReady: 'motivation.video.ready',
   motivationVideoReview: 'motivation.video.review',
   librarySectionRequestDecided: 'library.section-request.decided',
+  teamApplicationReceived: 'team.application.received',
   musicTrackPublished: 'music.track.published',
   musicTrackRejected: 'music.track.rejected',
   musicTrackHiddenByReports: 'music.track.hidden-by-reports',
@@ -284,6 +285,14 @@ export function buildNotification(
         tag: `library-section-request:${event.requestId}`,
         // Своей категории у Образования нет, а заводить её значит добавлять
         // тумблер в настройки: решение по заявке ближе всего к поддержке.
+        category: 'support',
+      };
+    case 'team.application.received':
+      return {
+        title: 'Новая заявка в команду',
+        body: `Кандидат откликнулся: ${event.roleLabel}`,
+        url: `/admin/team-applications/${event.applicationId}`,
+        tag: `team-application:${event.applicationId}`,
         category: 'support',
       };
     case 'music.track.published':
