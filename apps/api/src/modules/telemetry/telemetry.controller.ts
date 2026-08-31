@@ -11,9 +11,9 @@ import type {
   AccessTokenPayload,
   InstallEnvironmentSummary,
 } from '@vedamatch/shared';
+import { isPortalAdmin } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { parseInstallEnvironmentReport } from './install-environment-dto';
-import { isAdmin } from './is-admin';
 import { TelemetryService } from './telemetry.service';
 
 @Controller('telemetry')
@@ -38,7 +38,8 @@ export class TelemetryController {
   summary(
     @CurrentUser() user: AccessTokenPayload,
   ): Promise<InstallEnvironmentSummary> {
-    if (!isAdmin(user)) throw new ForbiddenException('Только администратор');
+    if (!isPortalAdmin(user))
+      throw new ForbiddenException('Только администратор');
     return this.telemetry.installEnvironmentSummary();
   }
 }
