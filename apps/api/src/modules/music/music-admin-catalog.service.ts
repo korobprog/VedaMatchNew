@@ -19,6 +19,7 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MusicCoversService } from './music-covers.service';
+import { MusicStorageService } from './music-storage.service';
 import { buildMusicSlug, withMusicSlugSuffix } from './music-slug';
 import { nextPosition } from './playlist-order';
 
@@ -41,6 +42,7 @@ export class MusicAdminCatalogService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly covers: MusicCoversService,
+    private readonly storage: MusicStorageService,
   ) {}
 
   private assertAdmin(viewerIsAdmin: boolean): void {
@@ -367,6 +369,46 @@ export class MusicAdminCatalogService {
     }
 
     await this.prisma.musicAlbum.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  /**
+   * Удаление записи — насовсем, вместе с файлом.
+   *
+   * В отличие от справочников, здесь каскад намеренный: связи записи с
+   * категориями, подборками, избранным и историей — это ссылки на неё, а не
+   * содержимое, и держать их после ухода записи не за чем. Схема так и
+   * описана, `onDelete: Cascade` у всех шести.
+   *
+   * Строку загрузки убираем руками: FK на запись у неё нет, связь — по ключу
+   * в бакете, и без этой строки объект остался бы числиться занятым местом в
+   * квоте того, кто его залил.
+   *
+   * Файлы удаляем после базы и по той же причине, что и в своих загрузках:
+   * осиротевший объект найдёт чистка, а строка, ссылающаяся в пустоту,
+   * останется навсегда.
+   */
+  async deleteTrack(viewerIsAdmin: boolean, id: string) {
+    this.assertAdmin(viewerIsAdmin);
+
+    const track = await this.prisma.musicTrack.findUnique({
+      where: { id },
+      select: { id: true, storageKey: true, coverKey: true },
+    });
+    if (!track) throw new NotFoundException('Запись не найдена');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.musicUpload.deleteMany({
+        where: { storageKey: track.storageKey },
+      });
+      await tx.musicTrack.delete({ where: { id } });
+    });
+
+    await this.storage.remove(track.storageKey);
+    // Обложка своя только у записи: у альбомной и исполнительской ключ лежит
+    // на их строках, и снимать их вместе с одной записью нельзя.
+    await this.covers.remove(track.coverKey);
+
     return { ok: true };
   }
 

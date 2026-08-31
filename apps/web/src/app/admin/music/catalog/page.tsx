@@ -1,6 +1,7 @@
 import { MusicAdminTabs } from "@/components/music/admin/admin-tabs";
 import { MusicReferenceForms } from "@/components/music/admin/reference-forms";
 import { MusicReferenceList } from "@/components/music/admin/reference-list";
+import { MusicTrackList } from "@/components/music/admin/track-list";
 import { MusicUploadForm } from "@/components/music/upload-form";
 import { plural } from "@/lib/plural";
 import {
@@ -8,6 +9,7 @@ import {
   getMusicAdminArtists,
   getMusicAdminCategories,
   getMusicAdminSummary,
+  getMusicAdminTracks,
 } from "@/lib/music-admin-api";
 
 export const metadata = {
@@ -17,11 +19,12 @@ export const metadata = {
 
 /** Справочники каталога и загрузка записей редакцией. */
 export default async function AdminMusicCatalogPage() {
-  const [summary, artists, albums, categories] = await Promise.all([
+  const [summary, artists, albums, categories, tracks] = await Promise.all([
     getMusicAdminSummary(),
     getMusicAdminArtists(),
     getMusicAdminAlbums(),
     getMusicAdminCategories(),
+    getMusicAdminTracks(),
   ]);
 
   const artistItems = artists?.items ?? [];
@@ -82,6 +85,16 @@ export default async function AdminMusicCatalogPage() {
             secondary: countLabel(category.trackCount),
             badge: null,
           }))}
+        />
+      </div>
+
+      <h2 className="mb-3 mt-8 font-display text-lg font-bold text-text-0">
+        Записи
+      </h2>
+      <div className="mb-6">
+        <MusicTrackList
+          tracks={tracks?.items ?? []}
+          total={tracks?.total ?? 0}
         />
       </div>
     </>

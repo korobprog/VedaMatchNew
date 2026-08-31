@@ -48,6 +48,16 @@ export const updateMusicTrack = (id: string, body: UpdateMusicTrackRequest) =>
     body: JSON.stringify(body),
   });
 
+/**
+ * Удаление записи вместе с файлом. Не то же самое, что «скрыть» из очереди
+ * решений: скрытая запись остаётся в каталоге и занимает место, а сюда
+ * доходит то, чему в каталоге не место совсем.
+ */
+export const deleteMusicTrack = (id: string) =>
+  send<{ ok: true }>(`/music/admin/catalog/tracks/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+
 export const createMusicArtist = (body: CreateMusicArtistRequest) =>
   send<unknown>("/music/admin/catalog/artists", {
     method: "POST",

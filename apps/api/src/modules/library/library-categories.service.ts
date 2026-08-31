@@ -605,5 +605,6 @@ function toCategoryDto(
       (Boolean(context.viewerId) &&
         category.createdById === context.viewerId),
     canMove: context.viewerCanMove,
+    canDelete: context.viewerIsAdmin,
   };
 }

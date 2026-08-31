@@ -182,6 +182,7 @@ const ui = {
     "category.deleteNotEmpty":
       "В рубрике ещё есть материалы — сначала перенесите или удалите их",
     "category.deleteFailed": "Не удалось удалить рубрику, попробуйте позже",
+    "category.deleteDone": "Рубрика удалена",
     "tree.organize": "Упорядочить",
     "tree.done": "Готово",
     "tree.hint":
@@ -382,6 +383,7 @@ const ui = {
     "category.deleteNotEmpty":
       "This category still holds material — move or delete it first",
     "category.deleteFailed": "Could not delete the category, please try again later",
+    "category.deleteDone": "Category deleted",
     "tree.organize": "Organise",
     "tree.done": "Done",
     "tree.hint":

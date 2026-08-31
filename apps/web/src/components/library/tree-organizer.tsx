@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, GripVertical, CornerUpRight, X } from "lucide-react";
+import {
+  ChevronRight,
+  GripVertical,
+  CornerUpRight,
+  Trash2,
+  X,
+} from "lucide-react";
 import type { LibraryCategoryTreeNode, LibraryLocale } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { categoryCountLabel, pickLocalized, t } from "./i18n";
@@ -13,6 +19,7 @@ import {
   forbiddenTargets,
   isNoopMove,
   projectDrop,
+  removeFromTree,
   subtreeIds,
   withoutSubtree,
   type DropTarget,
@@ -120,6 +127,45 @@ export function LibraryTreeOrganizer({
       }
     },
     [locale, router, rows, tree],
+  );
+
+  /**
+   * Удаление рубрики.
+   *
+   * Спрашиваем в той же полосе внизу, что и «Отменить» у перемещения, а не
+   * в строке дерева: строки здесь ровно по 48 пикселей, по ним считается
+   * жест перетаскивания, и раскрывающийся вопрос посреди списка сбил бы
+   * прицел у соседних.
+   *
+   * Оптимистично не удаляем: отказ сервера здесь — обычное дело («внутри
+   * есть вложенные», «есть материалы»), и исчезнувшая на секунду рубрика
+   * пугала бы зря.
+   */
+  const remove = useCallback(
+    async (id: string) => {
+      try {
+        const res = await apiFetch(`${API_URL}/library/categories/${id}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as
+            | { message?: string }
+            | null;
+          setNotice({
+            kind: "error",
+            message: deleteError(locale, body?.message),
+          });
+          return;
+        }
+        setTree((current) => removeFromTree(current, id));
+        setNotice({ kind: "message", message: t(locale, "category.deleteDone") });
+        router.refresh();
+      } catch {
+        setNotice({ kind: "error", message: t(locale, "category.deleteFailed") });
+      }
+    },
+    [locale, router],
   );
 
   // Указатель ведём на документе: палец легко уходит за пределы строки, а с
@@ -350,6 +396,20 @@ export function LibraryTreeOrganizer({
                   <CornerUpRight aria-hidden className="h-4 w-4" />
                 </button>
               )}
+
+              {row.node.canDelete && (
+                <button
+                  type="button"
+                  onClick={() => setNotice({ kind: "confirm", id: row.id })}
+                  aria-label={`${t(locale, "category.delete")}: ${pickLocalized(
+                    locale,
+                    { ru: row.node.titleRu, en: row.node.titleEn },
+                  )}`}
+                  className="grid h-11 w-9 shrink-0 place-items-center text-text-2 hover:text-magenta"
+                >
+                  <Trash2 aria-hidden className="h-4 w-4" />
+                </button>
+              )}
             </li>
           );
         })}
@@ -376,6 +436,11 @@ export function LibraryTreeOrganizer({
             if (notice.kind !== "done") return;
             setNotice(null);
             void commit(notice.id, notice.undo, true);
+          }}
+          onConfirm={() => {
+            if (notice.kind !== "confirm") return;
+            setNotice(null);
+            void remove(notice.id);
           }}
           onClose={() => setNotice(null)}
         />
@@ -505,6 +570,9 @@ function MovePicker({
 
 type Notice =
   | { kind: "done"; id: string; undo: DropTarget }
+  /** Вопрос перед удалением: рубрика ещё на месте, решение за человеком. */
+  | { kind: "confirm"; id: string }
+  | { kind: "message"; message: string }
   | { kind: "error"; message: string };
 
 /**
@@ -530,25 +598,35 @@ function NoticeBar({
   locale,
   notice,
   onUndo,
+  onConfirm,
   onClose,
 }: {
   locale: LibraryLocale;
   notice: Notice;
   onUndo: () => void;
+  onConfirm: () => void;
   onClose: () => void;
 }) {
+  // Вопрос сам не закрывается: полоса, исчезнувшая, пока человек читает,
+  // означала бы отменённое действие без его ответа.
+  const holds = notice.kind === "confirm";
   useEffect(() => {
+    if (holds) return;
     const timer = window.setTimeout(onClose, 8000);
     return () => window.clearTimeout(timer);
-  }, [onClose]);
+  }, [holds, onClose]);
 
   return (
     <p
-      role="status"
+      role={notice.kind === "confirm" ? "alertdialog" : "status"}
       className="glass mt-3 flex items-center justify-between gap-3 rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1"
     >
       <span>
-        {notice.kind === "done" ? t(locale, "tree.moveDone") : notice.message}
+        {notice.kind === "done"
+          ? t(locale, "tree.moveDone")
+          : notice.kind === "confirm"
+            ? t(locale, "category.deleteConfirm")
+            : notice.message}
       </span>
       {notice.kind === "done" && (
         <button
@@ -559,8 +637,35 @@ function NoticeBar({
           {t(locale, "tree.moveUndo")}
         </button>
       )}
+      {notice.kind === "confirm" && (
+        <span className="flex shrink-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="font-semibold text-magenta hover:text-text-0"
+          >
+            {t(locale, "category.deleteConfirmYes")}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-text-2 hover:text-text-0"
+          >
+            {t(locale, "add.categoryCancel")}
+          </button>
+        </span>
+      )}
     </p>
   );
+}
+
+/** Почему сервер не отдал рубрику: у отказа два разных повода и два ответа. */
+function deleteError(locale: LibraryLocale, code: string | undefined): string {
+  if (code === "category_has_children")
+    return t(locale, "category.deleteHasChildren");
+  if (code === "category_not_empty")
+    return t(locale, "category.deleteNotEmpty");
+  return t(locale, "category.deleteFailed");
 }
 
 function moveError(locale: LibraryLocale, code: string | undefined): string {

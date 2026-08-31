@@ -54,6 +54,11 @@ export interface LibraryCategoryDto {
   canEdit: boolean;
   /** `true` — рубрику можно перетаскивать (админ и модератор). */
   canMove: boolean;
+  /**
+   * `true` — рубрику можно удалить. Только администратор: автор правит свою
+   * рубрику, но удаление задевает чужие материалы и чужие ссылки.
+   */
+  canDelete: boolean;
 }
 
 export interface LibraryCategoryTreeNode extends LibraryCategoryDto {

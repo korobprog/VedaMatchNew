@@ -26,6 +26,7 @@ const tree: LibraryCategoryTreeNode[] = [
     createdAt: "2026-07-29T10:00:00.000Z",
     canEdit: false,
     canMove: false,
+    canDelete: false,
     children: [
       {
         id: "category-1",
@@ -44,6 +45,7 @@ const tree: LibraryCategoryTreeNode[] = [
         createdAt: "2026-07-29T10:00:00.000Z",
         canEdit: false,
         canMove: false,
+        canDelete: false,
         children: [],
       },
     ],
