@@ -59,6 +59,8 @@ export interface NormalizedSearchFilters {
 export interface SearchViewer {
   id: string;
   isVerifiedDevotee: boolean;
+  /** Администрация портала: видит всех, кроме спрятавшихся совсем. */
+  isPortalStaff: boolean;
   /** Город в нормализованном виде (trim + lower); null — не заполнен. */
   cityKey: string | null;
   lat: number | null;
@@ -250,12 +252,24 @@ export function buildVisibilityCondition(
   hiddenUserIds: Iterable<string>,
   now: Date,
 ): Prisma.Sql {
-  const levels: Prisma.Sql[] = [Prisma.sql`p."visibility" = 'everyone'`];
+  const levels: Prisma.Sql[] = [
+    Prisma.sql`p."visibility" = 'everyone'`,
+    // Администрация портала — друг всех: её карточка в выдаче у каждого,
+    // каким бы уровнем она ни была закрыта. `hidden` исключением не
+    // становится: это «меня нет в справочнике», и роль его не отменяет.
+    Prisma.sql`(u."role" = 'admin' AND p."visibility" <> 'hidden')`,
+  ];
 
   // Уровень «только подтверждённым преданным» просто отсутствует в условии,
   // если смотрящий не подтверждён: такие карточки не попадают в выдачу вовсе.
   if (viewer.isVerifiedDevotee) {
     levels.push(Prisma.sql`p."visibility" = 'verified_only'`);
+  }
+
+  // Обратная сторона того же правила: администратору видно всех, иначе
+  // «написать всем» упирается в то, что половину людей он не находит.
+  if (viewer.isPortalStaff) {
+    levels.push(Prisma.sql`p."visibility" <> 'hidden'`);
   }
 
   // Пустой город с любой стороны — не совпадение, иначе «мой город»

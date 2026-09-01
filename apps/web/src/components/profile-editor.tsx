@@ -22,6 +22,7 @@ import {
 import { UserGalleryEditor } from "./user-gallery-editor";
 import { PhotoVerificationPanel } from "./photo-verification-panel";
 import { CityPicker } from "./city-picker";
+import { NameHints } from "./name-hints";
 import { apiFetch } from "@/lib/http-client";
 import { Alert } from "@/components/ui/alert";
 import { Button, buttonClassName } from "@/components/ui/button";
@@ -301,6 +302,8 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
             className="py-3"
           />
         </div>
+        <NameHints value={name} label="обычном имени" />
+        <NameHints value={spiritualName} label="духовном имени" />
         <p className="mt-3 text-sm text-text-2">
           Вас будут видеть как{" "}
           <span className="font-medium text-text-0">
@@ -407,19 +410,24 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
         )}
         <label className="mt-4 block max-w-xs">
           <span className="mb-1 block text-xs text-text-2">Пол</span>
+          {/* Обязательное поле: пустой вариант оставлен только как заглушка
+              для старых профилей, выбрать его заново нельзя. */}
           <select
             value={gender}
             onChange={(event) => setGender(event.target.value)}
             className={fieldClassName}
+            required
           >
-            <option value="">Не указан</option>
+            <option value="" disabled>
+              Выберите
+            </option>
             <option value="male">Мужской</option>
             <option value="female">Женский</option>
           </select>
         </label>
         <p className="mt-2 text-sm text-text-2">
-          Используется в фильтре знакомств. Если не указан, вы не попадёте в
-          выдачу тех, кто ищет по полу.
+          Обязательное поле: по нему работает подбор в Знакомствах и обращения
+          в текстах портала.
         </p>
 
         <div className="mt-6 rounded-xl border border-gold/40 bg-gold/10 p-4">

@@ -63,6 +63,10 @@ function prismaMock() {
       findFirst: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
     },
+    // Роли участников: администрация портала видит всех мимо графа.
+    user: {
+      findMany: jest.fn().mockResolvedValue([{ role: 'user' }, { role: 'user' }]),
+    },
     $transaction: jest
       .fn()
       .mockImplementation((ops: unknown[]) => Promise.all(ops)),

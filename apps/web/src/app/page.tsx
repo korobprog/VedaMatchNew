@@ -22,6 +22,12 @@ import {
   getUnionRecommendations,
 } from "@/lib/union-api";
 import { buildUnionQuickAccessData } from "@/lib/union-quick-access";
+import { needsWelcome } from "@/lib/welcome";
+import {
+  advisorLimitFor,
+  showsInstallPrompts,
+  showsInviteTeaser,
+} from "@/lib/onboarding-pacing";
 import {
   getMusicPlaybackStateServer,
   getMusicTrack,
@@ -120,7 +126,7 @@ export default async function Home({
   // Новичок идёт в мастер: там тот же вопрос об этапе, но после имени
   // и города и с прогрессом. Страница анкеты остаётся для повторного
   // прохождения, её не редирект открывает, а ссылка из профиля.
-  if (!user.spiritualStage) redirect("/welcome");
+  if (needsWelcome(user)) redirect("/welcome");
 
   // Карточка Музыки. Запись догружается вторым запросом: состояние плеера
   // несёт только идентификатор, а карточке нужны название, обложка и
@@ -142,6 +148,9 @@ export default async function Home({
     unionRecommendations,
   );
 
+  // Подсказки новичку раскрываются по одной, а не падают все разом, см.
+  // `advisorLimitFor`. Дальше первых суток это обычная выдача советника.
+  const now = new Date();
   const advisorCards = buildAdvisorCards(
     toAdvisorInput(
       {
@@ -154,8 +163,9 @@ export default async function Home({
         myResponses,
         myCommunities,
       },
-      new Date(),
+      now,
     ),
+    advisorLimitFor(user.createdAt, now),
   );
 
   // «Общение» уже стоит крупной кнопкой выше — в сетке ему делать нечего.
@@ -171,6 +181,7 @@ export default async function Home({
   // его нет намеренно: два одинаковых счётчика на одном экране человек
   // начинает сверять между собой вместо того, чтобы открыть переписку.
   const chatBadge = (chatUnread?.messages ?? 0) + (chatUnread?.requests ?? 0);
+  const installPromptsReady = showsInstallPrompts(user.createdAt, now);
   const serviceExtras = {
     ...(unionService
       ? {
@@ -194,7 +205,9 @@ export default async function Home({
         {/* Приглашение стоит рядом с новостями и выше советника: советник
             говорит о делах человека, а это — предложение портала, как и
             новость. Ниже сетки сервисов его никто не находил. */}
-        <InviteFriendTeaser userId={user.id} />
+        {showsInviteTeaser(user.createdAt, now) && (
+          <InviteFriendTeaser userId={user.id} />
+        )}
         <AdvisorStrip
           cards={advisorCards}
           userId={user.id}
@@ -230,11 +243,13 @@ export default async function Home({
             доступов нет — виджет тогда не рендерится вовсе. */}
         <FriendsActivityWidget initialFeed={activityFeed ?? { friends: [] }} />
       </main>
-      <InstallBanner />
+      {/* Баннер установки и просьба об уведомлениях — самые навязчивые из
+          подсказок, поэтому их черёд последний. */}
+      {installPromptsReady && <InstallBanner />}
       {/* Главная лежит вне группы (portal), где висит тот же маячок, — без
           этой строки самая посещаемая страница в замер не попадает. */}
       <InstallEnvironmentBeacon />
-      <NotificationPermissionPrompt />
+      {installPromptsReady && <NotificationPermissionPrompt />}
       <PushSubscriptionSync />
     </div>
   );

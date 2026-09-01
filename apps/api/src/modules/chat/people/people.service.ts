@@ -30,6 +30,7 @@ import type {
 } from '@vedamatch/shared';
 import {
   CONTACTS_COUNT_THRESHOLD,
+  isPortalStaff,
   resolveDisplayName,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -72,6 +73,8 @@ const FIELD_PRIVACY_KEYS = ['city', 'photo', 'age'] as const;
 /** Пользователь портала в объёме, нужном справочнику (всё — read-only). */
 interface CardUser {
   id: string;
+  /** Роль нужна ровно для одного: администрация портала — друг всех. */
+  role?: string;
   name: string;
   spiritualName: string | null;
   avatarUrl: string | null;
@@ -357,6 +360,7 @@ export class PeopleService {
     const viewer: SearchViewer = {
       id: viewerId,
       isVerifiedDevotee: isVerifiedDevotee(viewerRow),
+      isPortalStaff: isPortalStaff(viewerRow.role),
       cityKey: normalizeLocationKey(location?.city),
       lat: typeof location?.lat === 'number' ? location.lat : null,
       lon: typeof location?.lon === 'number' ? location.lon : null,
@@ -442,6 +446,7 @@ export class PeopleService {
     const viewer: SearchViewer = {
       id: viewerId,
       isVerifiedDevotee: isVerifiedDevotee(viewerRow),
+      isPortalStaff: isPortalStaff(viewerRow.role),
       cityKey: normalizeLocationKey(location?.city),
       lat: typeof location?.lat === 'number' ? location.lat : null,
       lon: typeof location?.lon === 'number' ? location.lon : null,
@@ -525,6 +530,7 @@ export class PeopleService {
     const viewer: SearchViewer = {
       id: viewerId,
       isVerifiedDevotee: isVerifiedDevotee(viewerRow),
+      isPortalStaff: isPortalStaff(viewerRow.role),
       cityKey: normalizeLocationKey(location?.city),
       lat: typeof location?.lat === 'number' ? location.lat : null,
       lon: typeof location?.lon === 'number' ? location.lon : null,
@@ -633,9 +639,13 @@ export class PeopleService {
     // 'by_link' — карточки нет в выдаче, но прямая ссылка (этот маршрут)
     // работает: её человек дал сам.
     if (visibility === 'everyone' || visibility === 'by_link') return;
+    // Администрация портала — друг всех: её карточку открывает любой, и ей
+    // открыта любая. Уровень `hidden` выше это правило не отменяет.
+    if (isPortalStaff(owner.role)) return;
 
     const viewer = await this.loadViewer(viewerId);
     if (!viewer) this.notFound();
+    if (isPortalStaff(viewer.role)) return;
 
     if (visibility === 'verified_only') {
       if (!isVerifiedDevotee(viewer)) this.notFound();
@@ -667,6 +677,7 @@ export class PeopleService {
         spiritualStage: true,
         devoteeVerificationStatus: true,
         photoVerifiedAt: true,
+        role: true,
       },
     });
     return viewer ?? null;

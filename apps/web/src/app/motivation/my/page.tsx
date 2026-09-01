@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { MotivationReelDto, MotivationReelStage } from "@vedamatch/shared";
 import { redirectToLogin } from "@/lib/require-user";
+import { needsWelcome } from "@/lib/welcome";
 import { Header } from "@/components/header";
 import { MotivationTopBar } from "@/components/motivation/motivation-top-bar";
 import { splitQuoteAndExplanation } from "@/components/motivation/quote-text";
@@ -31,7 +32,7 @@ export default async function MyReelsPage() {
   // Новичок идёт в мастер: там тот же вопрос об этапе, но после имени
   // и города и с прогрессом. Страница анкеты остаётся для повторного
   // прохождения, её не редирект открывает, а ссылка из профиля.
-  if (!user.spiritualStage) redirect("/welcome");
+  if (needsWelcome(user)) redirect("/welcome");
   const isAdmin = user.role === "admin" || user.role === "service-admin";
   const items = reels ?? [];
 

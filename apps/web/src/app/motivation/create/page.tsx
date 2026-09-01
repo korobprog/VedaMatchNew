@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { redirectToLogin } from "@/lib/require-user";
+import { needsWelcome } from "@/lib/welcome";
 import { Header } from "@/components/header";
 import { MotivationTopBar } from "@/components/motivation/motivation-top-bar";
 import { ReelWizard } from "@/components/motivation/reel-wizard";
@@ -28,7 +29,7 @@ export default async function MotivationCreatePage({
   // Новичок идёт в мастер: там тот же вопрос об этапе, но после имени
   // и города и с прогрессом. Страница анкеты остаётся для повторного
   // прохождения, её не редирект открывает, а ссылка из профиля.
-  if (!user.spiritualStage) redirect("/welcome");
+  if (needsWelcome(user)) redirect("/welcome");
   const isAdmin = user.role === "admin" || user.role === "service-admin";
   const prefill =
     params.from === "vedabase" && params.book && params.chapter && params.text
