@@ -18,6 +18,7 @@ export const auditActionLabels: Record<AdminAuditAction, string> = {
   "user.deleted": "Аккаунт удалён",
   "user.purged": "Аккаунт удалён безвозвратно",
   "user.restored": "Аккаунт восстановлен",
+  "user.profile-edited": "Изменён профиль",
   "user.photo-verified": "Фото подтверждены",
   "user.photo-unverified": "Подтверждение фото снято",
   "user.subscription-changed": "Изменена подписка",
@@ -55,6 +56,7 @@ export const auditActionLabels: Record<AdminAuditAction, string> = {
 };
 
 const DETAIL_LABELS: Record<string, string> = {
+  fields: "поля",
   from: "было",
   to: "стало",
   reason: "причина",

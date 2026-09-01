@@ -31,6 +31,7 @@ export const notificationEventNames = {
   noticeResponseReceived: 'notices.response.received',
   noticeResponseAccepted: 'notices.response.accepted',
   announcementPublished: 'portal.announcement.published',
+  profileEditedByAdmin: 'portal.profile.edited-by-admin',
   motivationReelPublished: 'motivation.reel.published',
   motivationReelRejected: 'motivation.reel.rejected',
   motivationVideoReady: 'motivation.video.ready',
@@ -42,6 +43,28 @@ export const notificationEventNames = {
   musicTrackHiddenByReports: 'music.track.hidden-by-reports',
   musicTrackReviewExpired: 'music.track.review-expired',
 } as const satisfies Record<string, NotificationEventName>;
+
+/**
+ * Названия портальных полей профиля для уведомления о правке администрацией.
+ * Событие несёт коды — подписи собираются здесь, как и все прочие тексты.
+ * Неизвестный код показывается как есть: событие могло прийти из версии API,
+ * которая знает поле, а эта сборка — ещё нет.
+ */
+const PROFILE_FIELD_LABELS: Record<string, string> = {
+  name: 'имя',
+  spiritualName: 'духовное имя',
+  birthDate: 'дата рождения',
+  gender: 'пол',
+  about: 'рассказ о себе',
+  languages: 'языки',
+  homeLocation: 'город',
+  socialLinks: 'соцсети',
+  messengers: 'мессенджеры',
+};
+
+export function describeProfileFields(fields: string[]): string {
+  return fields.map((field) => PROFILE_FIELD_LABELS[field] ?? field).join(', ');
+}
 
 /** Payload веб-пуша ограничен ~4 КБ, да и на экране длинный текст не поместится. */
 const excerptLength = 120;
@@ -225,6 +248,20 @@ export function buildNotification(
         url: `/market/listing/${event.listingId}`,
         tag: `market-price:${event.listingId}`,
         category: 'market',
+      };
+    case 'portal.profile.edited-by-admin':
+      return {
+        title: 'Администрация изменила ваш профиль',
+        body: toExcerpt(
+          event.reason
+            ? `Изменено: ${describeProfileFields(event.fields)}. ${event.reason}`
+            : `Изменено: ${describeProfileFields(event.fields)}. Откройте профиль и проверьте`,
+        ),
+        url: '/profile',
+        // Тег без даты: несколько правок подряд заменяют плашку, а не копят
+        // её — человеку важно последнее состояние профиля, а не история.
+        tag: 'profile-edited-by-admin',
+        category: 'announcements',
       };
     case 'portal.announcement.published':
       return {

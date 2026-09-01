@@ -531,6 +531,11 @@ export interface UnionAdminProfileListResponse {
  *  показываются как факт, а не применяются — иначе жалобу не разобрать. */
 export interface UnionAdminProfileDto extends UnionAdminProfileListItem {
   about: string | null;
+  /**
+   * Пол из портального `User`, только на просмотр: анкета его не хранит, и
+   * правится он в карточке аккаунта — см. docs/service-module-contract.md.
+   */
+  gender: Gender | null;
   status: string | null;
   format: UnionFormat;
   languages: string[];

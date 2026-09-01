@@ -110,6 +110,7 @@ export class UnionAdminService {
     return {
       ...base,
       about: row.user.about,
+      gender: row.user.gender,
       status: row.status,
       format: row.format,
       languages: row.user.languages,
@@ -338,9 +339,11 @@ const profileListSelect = {
       accountStatus: true,
       homeLocation: true,
       lastSeenAt: true,
-      // Рассказ и языки живут в портальном профиле — см. контракт.
+      // Рассказ, языки и пол живут в портальном профиле — см. контракт.
+      // Сервис их только читает: править пол можно лишь в карточке аккаунта.
       about: true,
       languages: true,
+      gender: true,
     },
   },
 } satisfies Prisma.UnionProfileSelect;

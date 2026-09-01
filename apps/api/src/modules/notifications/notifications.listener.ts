@@ -80,6 +80,11 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.profileEditedByAdmin)
+  onProfileEditedByAdmin(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   @OnEvent(notificationEventNames.supportReplied)
   onSupportReplied(event: NotificationEvent): void {
     void this.deliver(event);

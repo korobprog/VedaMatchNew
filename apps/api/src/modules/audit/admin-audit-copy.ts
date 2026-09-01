@@ -14,6 +14,7 @@ const TEMPLATES: Record<AdminAuditAction, string> = {
   'user.deleted': 'Аккаунт удалён',
   'user.purged': 'Аккаунт удалён безвозвратно',
   'user.restored': 'Аккаунт восстановлен',
+  'user.profile-edited': 'Изменён профиль',
   'user.photo-verified': 'Фото подтверждены',
   'user.photo-unverified': 'Подтверждение фото снято',
   'user.subscription-changed': 'Изменена подписка',
@@ -52,6 +53,7 @@ const TEMPLATES: Record<AdminAuditAction, string> = {
 
 /** Названия полей подробностей. Неизвестный ключ показывается как есть. */
 const DETAIL_LABELS: Record<string, string> = {
+  fields: 'поля',
   from: 'было',
   to: 'стало',
   reason: 'причина',
