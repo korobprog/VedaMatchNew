@@ -9,6 +9,7 @@ import {
   type UserProfile,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
+import { welcomeSteps, type WelcomeStep } from "@/lib/welcome";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
@@ -27,19 +28,6 @@ const GENDER_OPTIONS: Array<[string, string]> = [
   ["male", "Мужской"],
   ["female", "Женский"],
 ];
-
-type WelcomeStep = "Знакомство" | "Город" | "Фото" | "Этап пути";
-
-/**
- * Какие шаги показать этому человеку. Новичку — все: он ничего ещё не
- * заполнял. Старому аккаунту без пола — только «Знакомство»: город, фото и
- * этап пути у него уже есть, и гонять его по ним заново значит предложить
- * переписать анкету, которую он проходил.
- */
-export function welcomeSteps(user: UserProfile): WelcomeStep[] {
-  if (!user.spiritualStage) return ["Знакомство", "Город", "Фото", "Этап пути"];
-  return ["Знакомство"];
-}
 
 /**
  * Первые минуты после регистрации. Раньше человек попадал сразу в анкету
