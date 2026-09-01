@@ -17,7 +17,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   ABOUT_MAX_LENGTH,
   LANGUAGES_MAX,
-  NAME_MAX_LENGTH,
+  findNameError,
   resolveDisplayName,
   type AdminAuditEvent,
   type Gender,
@@ -155,6 +155,7 @@ export class UsersService {
       deletionEligibleAt: user.pendingDeletionAt
         ? deletionEligibleAt(user.pendingDeletionAt).toISOString()
         : null,
+      createdAt: user.createdAt.toISOString(),
     };
   }
 
@@ -215,22 +216,24 @@ export class UsersService {
 
     if ('name' in payload) {
       const name = payload.name?.trim() ?? '';
-      if (!name) {
-        throw new BadRequestException('Имя не может быть пустым');
-      }
-      if (name.length > NAME_MAX_LENGTH) {
-        throw new BadRequestException(
-          `Имя не длиннее ${NAME_MAX_LENGTH} символов`,
-        );
+      // Жёсткая часть проверки — общая с формой на вебе, см. findNameError.
+      // Подсказки о странном написании форма показывает сама: они не повод
+      // отказать, иначе редкое настоящее имя было бы некуда вписать.
+      const error = findNameError(name, 'Имя');
+      if (error) {
+        throw new BadRequestException(error);
       }
       data.name = name;
     }
     if ('spiritualName' in payload) {
       const spiritualName = payload.spiritualName?.trim() ?? '';
-      if (spiritualName.length > NAME_MAX_LENGTH) {
-        throw new BadRequestException(
-          `Духовное имя не длиннее ${NAME_MAX_LENGTH} символов`,
-        );
+      // Духовное имя необязательно, поэтому проверяем только заполненное:
+      // пустая строка ниже означает «убрать».
+      if (spiritualName) {
+        const error = findNameError(spiritualName, 'Духовное имя');
+        if (error) {
+          throw new BadRequestException(error);
+        }
       }
       // Пустая строка — это «убрать», а не «сохранить пустоту»: иначе
       // resolveDisplayName пришлось бы отличать '' от null на каждом вызове.
@@ -244,10 +247,17 @@ export class UsersService {
       data.birthDate = birthDate;
     }
     if ('gender' in payload) {
-      if (payload.gender != null && !GENDERS.includes(payload.gender)) {
+      // Пол обязателен: по нему работает подбор в Знакомствах и обращения в
+      // текстах портала. В базе колонка осталась необязательной ради старых
+      // аккаунтов — их догоняет мастер приветствия, — но убрать уже
+      // указанный пол или сохранить профиль без него нельзя.
+      if (payload.gender == null) {
+        throw new BadRequestException('Укажите пол');
+      }
+      if (!GENDERS.includes(payload.gender)) {
         throw new BadRequestException('Недопустимое значение пола');
       }
-      data.gender = payload.gender ?? null;
+      data.gender = payload.gender;
     }
     if ('about' in payload) {
       const about = payload.about?.trim() ?? '';

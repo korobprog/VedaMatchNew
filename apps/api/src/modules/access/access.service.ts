@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { ActivityAccessSource } from '@vedamatch/shared';
+import { isPortalStaff, type ActivityAccessSource } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
@@ -32,12 +32,29 @@ export class PortalAccessService {
   async canSeeActivity(viewerId: string, ownerId: string): Promise<boolean> {
     if (viewerId === ownerId) return true;
 
+    // Администрация портала — друг всех: её видно каждому, и ей видно всех.
+    // Строк в графе для этого не заводим: их было бы по две на аккаунт, и
+    // при смене роли они остались бы висеть, см. isPortalStaff.
+    if (await this.eitherIsStaff(viewerId, ownerId)) return true;
+
     const follow = await this.prisma.activityFollow.findFirst({
       where: { granterId: ownerId, granteeId: viewerId, revokedAt: null },
       select: { granterId: true },
     });
 
     return Boolean(follow);
+  }
+
+  /** Есть ли среди двоих администратор портала. */
+  private async eitherIsStaff(
+    viewerId: string,
+    ownerId: string,
+  ): Promise<boolean> {
+    const rows = await this.prisma.user.findMany({
+      where: { id: { in: [viewerId, ownerId] } },
+      select: { role: true },
+    });
+    return rows.some((row) => isPortalStaff(row.role));
   }
 
   /** Кому `ownerId` открыл активность. Источник доступа — в значении. */

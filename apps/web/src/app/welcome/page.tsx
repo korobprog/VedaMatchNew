@@ -3,10 +3,9 @@ import { redirect } from "next/navigation";
 import { getProfile } from "@/lib/api";
 import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
-import {
-  WELCOME_STEP_COUNT,
-  WelcomeWizard,
-} from "@/components/welcome-wizard";
+import { WelcomeWizard, welcomeSteps } from "@/components/welcome-wizard";
+import { needsWelcome } from "@/lib/welcome";
+import { plural } from "@/lib/plural";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
@@ -15,9 +14,11 @@ export const metadata: Metadata = { title: "Добро пожаловать" };
 export default async function WelcomePage() {
   const user = await getProfile();
   if (!user) redirectToLogin("/welcome");
-  // Мастер — экран для новичка. Прошедшему анкету он больше не нужен:
-  // имя и город правятся в профиле, анкета переигрывается на своей странице.
-  if (user.spiritualStage) redirect("/");
+  // Мастер — экран для новичка и для старого аккаунта, у которого не хватает
+  // обязательного. Заполнившему он больше не нужен: имя и город правятся в
+  // профиле, анкета переигрывается на своей странице.
+  if (!needsWelcome(user)) redirect("/");
+  const steps = welcomeSteps(user);
 
   return (
     <div className="relative min-h-dvh bg-bg-0">
@@ -29,8 +30,9 @@ export default async function WelcomePage() {
           Добро пожаловать в VedaMatch
         </h1>
         <p className="mb-6 text-text-1">
-          {WELCOME_STEP_COUNT} коротких шага — и портал покажет то, что
-          подходит именно вам.
+          {steps.length}{" "}
+          {plural(steps.length, "короткий шаг", "коротких шага", "коротких шагов")}{" "}
+          — и портал покажет то, что подходит именно вам.
         </p>
         <WelcomeWizard user={user} />
       </main>

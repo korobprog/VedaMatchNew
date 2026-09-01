@@ -26,6 +26,7 @@ export * from './pwa';
 export * from './activity';
 export * from './rewards';
 export * from './music';
+export * from './profile-name';
 
 import type { BillingMode, SubscriptionState } from './support';
 
@@ -54,6 +55,21 @@ export type AdminServiceSlug = (typeof ADMIN_SERVICE_SLUGS)[number];
 /** Есть ли у аккаунта доступ хоть к какой-то части админки. */
 export function isPortalAdmin(user: { role: Role }): boolean {
   return user.role === 'admin' || user.role === 'service-admin';
+}
+
+/**
+ * Администрация портала как собеседник, а не как права в админке.
+ *
+ * Такой аккаунт — «друг всех»: его карточка видна каждому, он видит всех, и
+ * начатый им диалог не проходит через запрос. Иначе поддержка не могла
+ * написать первой, а человек не мог найти, кому пожаловаться.
+ *
+ * Только `admin`: `service-admin` отвечает за один сервис, и портального
+ * доступа к людям ему это не даёт. Значение роли в базе и снаружи совпадает
+ * (`'admin'`), поэтому функция принимает обычную строку.
+ */
+export function isPortalStaff(role: string | null | undefined): boolean {
+  return role === 'admin';
 }
 
 /**
@@ -150,6 +166,12 @@ export interface UserProfile {
   pendingDeletionAt: string | null;
   /** `pendingDeletionAt` + окно на отмену; после этой даты удаление финализируется. */
   deletionEligibleAt: string | null;
+  /**
+   * Когда аккаунт завели. Нужен не админке, а главной: подсказки новичку
+   * показываются по одной и раскрываются по мере взросления аккаунта, см.
+   * `advisorLimitFor` на вебе.
+   */
+  createdAt: string;
 }
 
 /** Состояние проверки фото: заявка пользователя и решение администрации. */
@@ -412,7 +434,6 @@ export interface AdminUserListResponse {
 }
 
 export interface AdminUserProfile extends UserProfile {
-  createdAt: string;
   updatedAt: string;
   statusReason: string | null;
   blockedUntil: string | null;

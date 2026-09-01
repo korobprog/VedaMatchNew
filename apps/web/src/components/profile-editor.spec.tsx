@@ -40,7 +40,9 @@ const profile: UserProfile = {
   avatarKey: null,
   birthDate: null,
   age: null,
-  gender: null,
+  // Пол обязателен: без него форма не отправится, см. `NameHints` и
+  // проверку в `UsersService.updateProfile`.
+  gender: "male",
   photoVerification: { status: "none", requestedAt: null, verifiedAt: null },
   homeLocation: null,
   socialLinks: {},
@@ -61,6 +63,7 @@ const profile: UserProfile = {
   accountStatus: "active",
   pendingDeletionAt: null,
   deletionEligibleAt: null,
+  createdAt: "2026-01-01T00:00:00.000Z",
 };
 
 afterEach(() => {

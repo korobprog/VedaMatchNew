@@ -19,6 +19,9 @@ import { Input, fieldClassName } from "@/components/ui/input";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const REASON_MAX_LENGTH = 300;
 
+// Пустой вариант остался только для старых профилей, у которых пола нет:
+// выбрать его заново нельзя, а сохранение такого профиля просто не трогает
+// поле — сервер очистку пола не принимает, см. `UsersService.updateProfile`.
 const genders: Array<{ value: "" | Gender; label: string }> = [
   { value: "", label: "Не указан" },
   { value: "male", label: "Мужской" },
@@ -68,7 +71,9 @@ export function AdminUserProfileForm({
         body: JSON.stringify({
           name,
           spiritualName,
-          gender: gender || null,
+          // Пол очистить нельзя: он обязателен. Пустое значение означает
+          // «не трогать», иначе правка старого профиля упиралась бы в отказ.
+          ...(gender ? { gender } : {}),
           birthDate: birthDate || null,
           about,
           // Пустые строки из полей ввода — не языки: сервер их не отфильтрует
@@ -121,7 +126,11 @@ export function AdminUserProfileForm({
             className={`mt-1 ${fieldClassName}`}
           >
             {genders.map((item) => (
-              <option key={item.value} value={item.value}>
+              <option
+                key={item.value}
+                value={item.value}
+                disabled={item.value === ""}
+              >
                 {item.label}
               </option>
             ))}

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
 import { redirectToLogin } from "@/lib/require-user";
+import { needsWelcome } from "@/lib/welcome";
 import { MotivationFeed } from "@/components/motivation/motivation-feed";
 import { MotivationTopBar } from "@/components/motivation/motivation-top-bar";
 import { getProfile } from "@/lib/api";
@@ -18,7 +19,7 @@ export default async function MotivationFavoritesPage() {
   // Новичок идёт в мастер: там тот же вопрос об этапе, но после имени
   // и города и с прогрессом. Страница анкеты остаётся для повторного
   // прохождения, её не редирект открывает, а ссылка из профиля.
-  if (!user.spiritualStage) redirect("/welcome");
+  if (needsWelcome(user)) redirect("/welcome");
   const isAdmin = user.role === "admin" || user.role === "service-admin";
 
   return (

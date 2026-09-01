@@ -47,6 +47,7 @@ import {
   chatMessageInclude,
   chatUserSelect,
 } from './chat-selects';
+import { isPortalStaff } from '@vedamatch/shared';
 import { directKey } from './direct-key';
 import { isStorageUrl } from './chat-validate';
 
@@ -285,6 +286,13 @@ export class ChatConversationsService {
     if (!target || target.accountStatus !== 'active')
       throw new NotFoundException('Человек не найден');
 
+    // Администрация портала пишет без запроса, см. isPortalStaff.
+    const author = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    const fromStaff = isPortalStaff(author?.role);
+
     // Блокировка в любую сторону закрывает переписку целиком: и создание,
     // и последующую отправку.
     const blocked = await this.prisma.userBlock.findFirst({
@@ -312,12 +320,14 @@ export class ChatConversationsService {
     const created = await this.prisma.chatConversation.create({
       data: {
         kind: 'direct',
-        // Новый диалог всегда начинается запросом: одно сообщение, без
-        // отметки о прочтении, пока собеседник не ответит.
-        state: 'request',
+        // Новый диалог начинается запросом: одно сообщение, без отметки о
+        // прочтении, пока собеседник не ответит. Исключение — администрация
+        // портала: ей писать людям по делу, и запрос означал бы, что человек
+        // сперва должен принять поддержку, чтобы та могла ответить.
+        state: fromStaff ? 'active' : 'request',
         directKey: key,
         createdById: userId,
-        requestedById: userId,
+        requestedById: fromStaff ? null : userId,
         members: {
           create: [{ userId }, { userId: targetId }],
         },

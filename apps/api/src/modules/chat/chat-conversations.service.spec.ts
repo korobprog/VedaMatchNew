@@ -178,6 +178,35 @@ describe('ChatConversationsService', () => {
       expect(data.directKey).toBe('me:other');
     });
 
+    /**
+     * Администрация портала — друг всех: запрос означал бы, что человек
+     * сперва должен принять поддержку, чтобы та могла ему ответить.
+     */
+    it('диалог от администратора начинается активным', async () => {
+      prisma.user.findUnique
+        .mockResolvedValueOnce({ id: 'other', accountStatus: 'active' })
+        .mockResolvedValueOnce({ role: 'admin' });
+      prisma.chatConversation.findUnique.mockResolvedValue(null);
+      prisma.chatConversation.create.mockResolvedValue(
+        conversation({
+          kind: 'direct',
+          state: 'active',
+          requestedById: null,
+          members: [member('me'), member('other')],
+        }),
+      );
+
+      await service.create('me', { kind: 'direct', userId: 'other' });
+
+      const data = (
+        (prisma.chatConversation.create.mock.calls as unknown[][])[0][0] as {
+          data: { state: string; requestedById: string | null };
+        }
+      ).data;
+      expect(data.state).toBe('active');
+      expect(data.requestedById).toBeNull();
+    });
+
     it('не пускает к заблокированному', async () => {
       prisma.user.findUnique.mockResolvedValue({
         id: 'other',

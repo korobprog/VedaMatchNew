@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type {
-  ProfileLocation,
-  SelfIdentificationAnswers,
-  UserProfile,
+import {
+  findNameError,
+  type ProfileLocation,
+  type SelfIdentificationAnswers,
+  type UserProfile,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { Alert } from "@/components/ui/alert";
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { CityPicker } from "./city-picker";
+import { NameHints } from "./name-hints";
 import { UserGalleryEditor } from "./user-gallery-editor";
 import {
   DEFAULT_ANSWERS,
@@ -21,10 +23,23 @@ import {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
-const STEPS = ["Знакомство", "Город", "Фото", "Этап пути"] as const;
+const GENDER_OPTIONS: Array<[string, string]> = [
+  ["male", "Мужской"],
+  ["female", "Женский"],
+];
 
-/** Чтобы подпись на странице не разошлась с числом шагов: она их и считает. */
-export const WELCOME_STEP_COUNT = STEPS.length;
+type WelcomeStep = "Знакомство" | "Город" | "Фото" | "Этап пути";
+
+/**
+ * Какие шаги показать этому человеку. Новичку — все: он ничего ещё не
+ * заполнял. Старому аккаунту без пола — только «Знакомство»: город, фото и
+ * этап пути у него уже есть, и гонять его по ним заново значит предложить
+ * переписать анкету, которую он проходил.
+ */
+export function welcomeSteps(user: UserProfile): WelcomeStep[] {
+  if (!user.spiritualStage) return ["Знакомство", "Город", "Фото", "Этап пути"];
+  return ["Знакомство"];
+}
 
 /**
  * Первые минуты после регистрации. Раньше человек попадал сразу в анкету
@@ -32,15 +47,18 @@ export const WELCOME_STEP_COUNT = STEPS.length;
  * на главной, поштучно и без объяснения, зачем это. Мастер спрашивает то же
  * самое, но по порядку, с прогрессом и с причиной у каждого шага.
  *
- * Пропустить можно любой шаг, кроме последнего: этап пути определяется по
- * анкете, и без неё портал не знает, что показывать.
+ * Пропустить можно любой шаг, кроме первого и последнего: без пола не
+ * работает подбор в Знакомствах, а этап пути определяется по анкете, и без
+ * неё портал не знает, что показывать.
  */
 export function WelcomeWizard({ user }: { user: UserProfile }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
+  const [steps] = useState(() => welcomeSteps(user));
 
   const [name, setName] = useState(user.name);
   const [spiritualName, setSpiritualName] = useState(user.spiritualName ?? "");
+  const [gender, setGender] = useState<string>(user.gender ?? "");
   const [homeLocation, setHomeLocation] = useState<ProfileLocation | null>(
     user.homeLocation ?? null,
   );
@@ -51,6 +69,15 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
   const [error, setError] = useState<string | null>(null);
 
   const displayName = spiritualName.trim() || name.trim();
+  /**
+   * Уйти с «Знакомства» можно, только когда пол выбран, а имя не мусор.
+   * Странное написание кнопку не держит: это подсказка, а не запрет.
+   */
+  const canLeaveStep =
+    steps[step] !== "Знакомство" ||
+    (Boolean(gender) &&
+      !findNameError(name) &&
+      !(spiritualName.trim() && findNameError(spiritualName)));
 
   async function saveProfile() {
     const res = await apiFetch(`${API_URL}/profile`, {
@@ -60,6 +87,7 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
       body: JSON.stringify({
         name: name.trim(),
         spiritualName: spiritualName.trim() || null,
+        gender,
         homeLocation,
       }),
     });
@@ -76,13 +104,18 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
     setError(null);
     try {
       await saveProfile();
-      const res = await apiFetch(`${API_URL}/self-identification/submit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(answers),
-      });
-      if (!res.ok) throw new Error(await res.text());
+      // Анкету отправляем только если её показывали: у старого аккаунта,
+      // которого мастер догоняет ради пола, этап пути уже определён, и
+      // ответы по умолчанию переписали бы его на чужие.
+      if (steps.includes("Этап пути")) {
+        const res = await apiFetch(`${API_URL}/self-identification/submit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(answers),
+        });
+        if (!res.ok) throw new Error(await res.text());
+      }
       router.push("/");
       router.refresh();
     } catch (e) {
@@ -93,9 +126,9 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
 
   return (
     <div className="space-y-6">
-      <ProgressBar step={step} />
+      <ProgressBar step={step} steps={steps} />
 
-      {step === 0 && (
+      {steps[step] === "Знакомство" && (
         <Card className="p-6">
           <CardTitle className="mb-2 text-xl">Как вас называть</CardTitle>
           <p className="mb-6 text-sm text-text-1">
@@ -116,16 +149,54 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
               onChange={(event) => setSpiritualName(event.target.value)}
             />
           </div>
+          <NameHints value={name} label="обычном имени" />
+          <NameHints value={spiritualName} label="духовном имени" />
           {displayName && (
             <p className="mt-4 text-sm text-text-2">
               Вас будут видеть как{" "}
               <span className="font-medium text-text-0">{displayName}</span>.
             </p>
           )}
+
+          {/* Пол — единственное обязательное поле мастера, кроме анкеты:
+              без него подбор в Знакомствах не показывает человека никому и
+              не знает, кого показать ему. Раньше вопрос жил только в
+              профиле, и половина людей до него не доходила. */}
+          <fieldset className="mt-6">
+            <legend className="mb-1 text-sm font-medium text-text-0">
+              Ваш пол
+            </legend>
+            <p className="mb-3 text-sm text-text-1">
+              По нему работает подбор в Знакомствах и обращения в текстах
+              портала. Этот шаг пропустить нельзя.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {GENDER_OPTIONS.map(([value, label]) => (
+                <label
+                  key={value}
+                  className={`cursor-pointer rounded-xl border px-4 py-2 text-sm transition ${
+                    gender === value
+                      ? "border-magenta bg-magenta/10 text-text-0"
+                      : "border-glass-brd text-text-1 hover:text-text-0"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="gender"
+                    value={value}
+                    checked={gender === value}
+                    onChange={(event) => setGender(event.target.value)}
+                    className="sr-only"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
         </Card>
       )}
 
-      {step === 1 && (
+      {steps[step] === "Город" && (
         <Card className="p-6">
           <CardTitle className="mb-2 text-xl">Откуда вы</CardTitle>
           <p className="mb-6 text-sm text-text-1">
@@ -143,7 +214,7 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
       {/* Фото просят здесь, а не «когда-нибудь потом в профиле»: это
           единственная минута, когда человек настроен заполнять анкету.
           Шаг пропускаемый — но с названной причиной, а не с процентом. */}
-      {step === 2 && (
+      {steps[step] === "Фото" && (
         <Card className="p-6">
           <CardTitle className="mb-2 text-xl">Ваши фото</CardTitle>
           {/* Только причина: как именно всё работает, галерея ниже говорит
@@ -156,7 +227,7 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
         </Card>
       )}
 
-      {step === 3 && (
+      {steps[step] === "Этап пути" && (
         <Card className="p-6">
           <CardTitle className="mb-2 text-xl">Где вы на пути</CardTitle>
           <p className="mb-6 text-sm text-text-1">
@@ -187,19 +258,24 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
             Назад
           </Button>
         )}
-        {step < STEPS.length - 1 ? (
+        {step < steps.length - 1 ? (
           <>
-            <Button onClick={() => setStep(step + 1)}>Дальше</Button>
-            <button
-              type="button"
-              onClick={() => setStep(step + 1)}
-              className="text-sm text-text-2 underline transition hover:text-text-1"
-            >
-              Пропустить шаг
-            </button>
+            <Button onClick={() => setStep(step + 1)} disabled={!canLeaveStep}>
+              Дальше
+            </Button>
+            {/* Первый шаг непропускаемый: пол обязателен. */}
+            {steps[step] !== "Знакомство" && (
+              <button
+                type="button"
+                onClick={() => setStep(step + 1)}
+                className="text-sm text-text-2 underline transition hover:text-text-1"
+              >
+                Пропустить шаг
+              </button>
+            )}
           </>
         ) : (
-          <Button onClick={finish} loading={pending}>
+          <Button onClick={finish} loading={pending} disabled={!canLeaveStep}>
             {pending ? "Сохраняем..." : "Готово, к сервисам портала"}
           </Button>
         )}
@@ -208,11 +284,11 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
   );
 }
 
-function ProgressBar({ step }: { step: number }) {
+function ProgressBar({ step, steps }: { step: number; steps: WelcomeStep[] }) {
   return (
     <div>
       <p className="mb-2 text-sm text-text-2">
-        Шаг {step + 1} из {STEPS.length} · {STEPS[step]}
+        Шаг {step + 1} из {steps.length} · {steps[step]}
       </p>
       {/* Прогресс проговаривается словами выше, поэтому полоска — украшение
           и от скринридера скрыта: дважды одно и то же он читать не должен. */}
@@ -220,7 +296,7 @@ function ProgressBar({ step }: { step: number }) {
         aria-hidden
         className="flex gap-1.5"
       >
-        {STEPS.map((title, index) => (
+        {steps.map((title, index) => (
           <span
             key={title}
             className={`h-1.5 flex-1 rounded-full ${

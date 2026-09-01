@@ -25,6 +25,14 @@ const render = (ui: ReactElement) =>
     </NextIntlClientProvider>,
   );
 
+/**
+ * Пол — единственное обязательное поле первого шага, без него мастер дальше
+ * не пускает. Тесты про порядок шагов выбирают его сразу, чтобы не повторять
+ * этот клик в каждом.
+ */
+const chooseGender = (user: ReturnType<typeof userEvent.setup>) =>
+  user.click(screen.getByRole("radio", { name: "Мужской" }));
+
 const profile = {
   id: "u1",
   email: "user@example.com",
@@ -58,6 +66,7 @@ const profile = {
   accountStatus: "active",
   pendingDeletionAt: null,
   deletionEligibleAt: null,
+  createdAt: "2026-01-01T00:00:00.000Z",
 } as UserProfile;
 
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
@@ -103,6 +112,7 @@ describe("WelcomeWizard", () => {
     render(<WelcomeWizard user={profile} />);
 
     await user.type(screen.getByLabelText("Духовное имя"), "Мадхава дас");
+    await chooseGender(user);
     await user.click(screen.getByRole("button", { name: "Дальше" }));
     expect(screen.getByText("Шаг 2 из 4 · Город")).toBeInTheDocument();
 
@@ -124,6 +134,7 @@ describe("WelcomeWizard", () => {
     const user = userEvent.setup();
     render(<WelcomeWizard user={profile} />);
 
+    await chooseGender(user);
     await user.click(screen.getByRole("button", { name: "Дальше" }));
     await user.click(screen.getByRole("button", { name: "Дальше" }));
     await user.click(screen.getByRole("button", { name: "Дальше" }));
@@ -136,6 +147,7 @@ describe("WelcomeWizard", () => {
     render(<WelcomeWizard user={profile} />);
 
     await user.type(screen.getByLabelText("Духовное имя"), "Мадхава дас");
+    await chooseGender(user);
     await user.click(screen.getByRole("button", { name: "Дальше" }));
     await user.click(screen.getByRole("button", { name: "Дальше" }));
     await user.click(screen.getByRole("button", { name: "Дальше" }));
@@ -149,6 +161,7 @@ describe("WelcomeWizard", () => {
     expect(JSON.parse(String(profileInit?.body))).toMatchObject({
       name: "Гаура Прия",
       spiritualName: "Мадхава дас",
+      gender: "male",
     });
     expect(String(fetchMock.mock.calls[1][0])).toContain(
       "/self-identification/submit",
@@ -163,6 +176,7 @@ describe("WelcomeWizard", () => {
     fetchMock.mockResolvedValue(new Response("Сервис недоступен", { status: 503 }));
     render(<WelcomeWizard user={profile} />);
 
+    await chooseGender(user);
     await user.click(screen.getByRole("button", { name: "Дальше" }));
     await user.click(screen.getByRole("button", { name: "Дальше" }));
     await user.click(screen.getByRole("button", { name: "Дальше" }));
@@ -178,6 +192,7 @@ describe("WelcomeWizard", () => {
     const user = userEvent.setup();
     render(<WelcomeWizard user={profile} />);
 
+    await chooseGender(user);
     await user.click(screen.getByRole("button", { name: "Дальше" }));
     await user.click(screen.getByRole("button", { name: "Пропустить шаг" }));
     await user.click(screen.getByRole("button", { name: "Пропустить шаг" }));
@@ -194,6 +209,7 @@ describe("WelcomeWizard", () => {
     const user = userEvent.setup();
     render(<WelcomeWizard user={profile} />);
 
+    await chooseGender(user);
     await user.click(screen.getByRole("button", { name: "Дальше" }));
     await user.click(screen.getByRole("button", { name: "Дальше" }));
 
@@ -207,6 +223,7 @@ describe("WelcomeWizard", () => {
     const user = userEvent.setup();
     render(<WelcomeWizard user={profile} />);
 
+    await chooseGender(user);
     await user.click(screen.getByRole("button", { name: "Дальше" }));
     await user.click(screen.getByRole("button", { name: "Дальше" }));
     await user.click(screen.getByRole("button", { name: "Пропустить шаг" }));
@@ -220,6 +237,7 @@ describe("WelcomeWizard", () => {
     const user = userEvent.setup();
     render(<WelcomeWizard user={profile} />);
 
+    await chooseGender(user);
     await user.click(screen.getByRole("button", { name: "Дальше" }));
     await user.click(screen.getByRole("button", { name: "Дальше" }));
     await user.click(screen.getByRole("button", { name: "Дальше" }));
@@ -227,5 +245,83 @@ describe("WelcomeWizard", () => {
     expect(
       screen.queryByRole("button", { name: "Пропустить шаг" }),
     ).not.toBeInTheDocument();
+  });
+  /**
+   * Пол спрашивают здесь, а не «когда-нибудь в профиле»: до профиля половина
+   * людей не доходила, а без пола Знакомства не показывают человека никому.
+   */
+  describe("пол", () => {
+    it("без пола дальше не пускает и шаг не пропустить", () => {
+      render(<WelcomeWizard user={profile} />);
+
+      expect(screen.getByRole("button", { name: "Дальше" })).toBeDisabled();
+      expect(
+        screen.queryByRole("button", { name: "Пропустить шаг" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("выбранный пол открывает дорогу дальше", async () => {
+      const user = userEvent.setup();
+      render(<WelcomeWizard user={profile} />);
+
+      await chooseGender(user);
+
+      expect(screen.getByRole("button", { name: "Дальше" })).toBeEnabled();
+    });
+
+    it("мусор в имени тоже держит кнопку", async () => {
+      const user = userEvent.setup();
+      render(<WelcomeWizard user={profile} />);
+
+      await chooseGender(user);
+      await user.clear(screen.getByLabelText("Обычное имя"));
+      await user.type(screen.getByLabelText("Обычное имя"), "Максим228");
+
+      expect(screen.getByRole("button", { name: "Дальше" })).toBeDisabled();
+      expect(screen.getByText(/без цифр/)).toBeInTheDocument();
+    });
+
+    it("странное написание кнопку не держит — это подсказка", async () => {
+      const user = userEvent.setup();
+      render(<WelcomeWizard user={profile} />);
+
+      await chooseGender(user);
+      await user.clear(screen.getByLabelText("Обычное имя"));
+      await user.type(screen.getByLabelText("Обычное имя"), "МАКСИМ");
+
+      expect(screen.getByText(/заглавными/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Дальше" })).toBeEnabled();
+    });
+  });
+
+  /**
+   * Старый аккаунт мастер догоняет ровно ради пола: город, фото и этап пути
+   * у него уже есть, и переспрашивать их значит предложить переписать
+   * анкету, которую он проходил.
+   */
+  describe("аккаунт, у которого не хватает только пола", () => {
+    const settled = { ...profile, spiritualStage: "practitioner" } as UserProfile;
+
+    it("показывает один шаг", () => {
+      render(<WelcomeWizard user={settled} />);
+
+      expect(screen.getByText("Шаг 1 из 1 · Знакомство")).toBeInTheDocument();
+    });
+
+    it("сохраняет профиль и не трогает анкету", async () => {
+      const user = userEvent.setup();
+      render(<WelcomeWizard user={settled} />);
+
+      await chooseGender(user);
+      await user.click(
+        screen.getByRole("button", { name: "Готово, к сервисам портала" }),
+      );
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      expect(String(fetchMock.mock.calls[0][0])).toContain("/profile");
+      expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject(
+        { gender: "male" },
+      );
+    });
   });
 });

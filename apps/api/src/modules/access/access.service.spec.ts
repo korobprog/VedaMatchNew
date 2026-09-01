@@ -7,6 +7,10 @@ function prismaMock() {
       findFirst: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
     },
+    // Роли обоих: администрация портала видна всем и видит всех.
+    user: {
+      findMany: jest.fn().mockResolvedValue([{ role: 'user' }, { role: 'user' }]),
+    },
   };
 }
 
@@ -93,5 +97,44 @@ describe('PortalAccessService — списки', () => {
   it('пустой граф — пустой список, а не отказ', async () => {
     expect(await service(prismaMock()).granteesOf('owner')).toEqual([]);
     expect(await service(prismaMock()).grantersFor('viewer')).toEqual([]);
+  });
+});
+
+/**
+ * Администрация портала — друг всех: поддержке видно человека, а человеку —
+ * поддержку, без взаимного запроса и без строк в графе.
+ */
+describe('PortalAccessService: администрация', () => {
+  it('администратору видно любого', async () => {
+    const prisma = prismaMock();
+    prisma.user.findMany.mockResolvedValue([
+      { role: 'admin' },
+      { role: 'user' },
+    ]);
+
+    expect(await service(prisma).canSeeActivity('admin', 'owner')).toBe(true);
+    expect(prisma.activityFollow.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('администратора видно любому', async () => {
+    const prisma = prismaMock();
+    prisma.user.findMany.mockResolvedValue([
+      { role: 'user' },
+      { role: 'admin' },
+    ]);
+
+    expect(await service(prisma).canSeeActivity('viewer', 'admin')).toBe(true);
+  });
+
+  // service-admin отвечает за один сервис: портального доступа к людям это
+  // ему не даёт.
+  it('администратор сервиса другом всех не становится', async () => {
+    const prisma = prismaMock();
+    prisma.user.findMany.mockResolvedValue([
+      { role: 'service_admin' },
+      { role: 'user' },
+    ]);
+
+    expect(await service(prisma).canSeeActivity('viewer', 'owner')).toBe(false);
   });
 });

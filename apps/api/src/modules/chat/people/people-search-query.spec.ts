@@ -26,6 +26,7 @@ function viewer(overrides: Partial<SearchViewer> = {}): SearchViewer {
   return {
     id: 'viewer',
     isVerifiedDevotee: false,
+    isPortalStaff: false,
     cityKey: null,
     lat: null,
     lon: null,
@@ -165,6 +166,24 @@ describe('buildSearchWhere: видимость', () => {
 
   it('не добавляет NOT IN, когда скрывать некого', () => {
     expect(where()).not.toContain('NOT IN');
+  });
+
+  /**
+   * Администрация портала — друг всех. Иначе поддержка не находит половину
+   * людей, а человек не находит, кому написать.
+   */
+  it('карточка администратора попадает в выдачу мимо уровней', () => {
+    expect(where()).toContain(
+      `(u."role" = 'admin' AND p."visibility" <> 'hidden')`,
+    );
+  });
+
+  it('администратору открыты все уровни, кроме hidden', () => {
+    // Отдельным уровнем, а не внутри условия про роль владельца — поэтому
+    // сверяем с `OR`: без него подстрока нашлась бы и у обычного зрителя.
+    const sql = where({ viewer: { isPortalStaff: true } });
+    expect(sql).toContain(`OR p."visibility" <> 'hidden'`);
+    expect(where()).not.toContain(`OR p."visibility" <> 'hidden'`);
   });
 });
 
