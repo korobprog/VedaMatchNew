@@ -6,6 +6,7 @@ jest.mock('openid-client', () => ({}));
 jest.mock('./jwt.service', () => ({ JwtSignService: class {} }));
 
 import { AuthService, safeReturnTo } from './auth.service';
+import { IdentityService } from './identity.service';
 
 /**
  * refresh: ротация как CAS и reuse-detection. Google/OIDC здесь не трогаем.
@@ -28,6 +29,7 @@ function makeService(stored: Record<string, unknown> | null, rotatedCount = 1) {
     prisma as never,
     jwt as never,
     { emit: jest.fn() } as never,
+    new IdentityService(prisma as never),
   );
   const res = { cookie: jest.fn(), clearCookie: jest.fn() };
   const req = { cookies: { refresh_token: 'raw-token' } };
@@ -174,5 +176,60 @@ describe('safeReturnTo', () => {
     ]) {
       expect(safeReturnTo(bad)).toBe('/');
     }
+  });
+});
+
+/**
+ * Колбэк Google целиком не собрать: openid-client здесь заглушен. Проверяется
+ * та часть, где по claims находят человека, — она вынесена в отдельный метод.
+ */
+function makeGoogleService(prisma: Record<string, unknown>) {
+  const identities = new IdentityService(prisma as never);
+  return new AuthService(
+    { get: jest.fn((_key: string, fallback?: string) => fallback) } as never,
+    prisma as never,
+    { signAccessToken: jest.fn() } as never,
+    { emit: jest.fn() } as never,
+    identities,
+  );
+}
+
+describe('AuthService.resolveGoogleProfile', () => {
+  it('не отдаёт существующий аккаунт при совпадении почты у нового googleId', async () => {
+    // Пользователь с этим адресом есть, но идентичности google с таким sub нет.
+    const service = makeGoogleService({
+      userIdentity: { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn() },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'victim', email: 'a@b.c' }),
+        create: jest.fn(),
+      },
+    });
+
+    await expect(
+      service.resolveGoogleProfile({ sub: 'new-sub', email: 'a@b.c', name: 'Кто-то' }),
+    ).rejects.toThrow(/уже используется/);
+  });
+
+  it('пускает прежнего пользователя по перенесённой идентичности', async () => {
+    const create = jest.fn();
+    const service = makeGoogleService({
+      userIdentity: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'i1', user: { id: 'u-old', email: 'a@b.c' } }),
+        update: jest.fn(),
+      },
+      user: { findUnique: jest.fn(), create },
+    });
+
+    const { user, created } = await service.resolveGoogleProfile({
+      sub: 'old-sub',
+      email: 'a@b.c',
+      name: 'Прежний',
+    });
+
+    expect(created).toBe(false);
+    expect(user.id).toBe('u-old');
+    expect(create).not.toHaveBeenCalled();
   });
 });

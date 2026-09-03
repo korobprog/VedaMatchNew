@@ -21,6 +21,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { readRegistrationMode } from '../billing/billing-mode';
 import { assertAccountActive } from '../users/account-status';
+import { IdentityService } from './identity.service';
 import { JwtSignService } from './jwt.service';
 import { verifyPassword } from './password';
 import { toRole } from './role';
@@ -79,6 +80,7 @@ export class AuthService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtSignService,
     private readonly events: EventEmitter2,
+    private readonly identities: IdentityService,
   ) {}
 
   async onModuleInit() {
@@ -196,39 +198,22 @@ export class AuthService implements OnModuleInit {
     const email = claims.email as string;
     const avatarUrl = (claims.picture as string) ?? null;
 
-    // Сначала ищем по googleId: если человек сменил адрес в Google, upsert по
-    // email создал бы вторую запись и упал на уникальном googleId (P2002 →
-    // 500). Найденному по googleId обновляем email; иначе — по email.
-    const byGoogleId = await this.prisma.user.findUnique({
-      where: { googleId: claims.sub },
-    });
-    // Закрытая регистрация не трогает уже заведённых: отказ получает только
-    // тот, для кого пришлось бы создать новую запись.
-    let isNewAccount = false;
-    if (!byGoogleId) {
-      const byEmail = await this.prisma.user.findUnique({ where: { email } });
-      if (!byEmail) {
-        await this.assertRegistrationOpen();
-        isNewAccount = true;
-      }
-    }
-    const user = byGoogleId
-      ? await this.prisma.user.update({
-          where: { id: byGoogleId.id },
+    const { user: resolved, created: isNewAccount } =
+      await this.resolveGoogleProfile({
+        sub: claims.sub,
+        email,
+        name: claims.name as string | undefined,
+        picture: avatarUrl,
+      });
+
+    // Адрес и аватар Google ведёт у себя, портал их догоняет: человек сменил
+    // почту — вход по прежней идентичности всё равно найдёт его аккаунт.
+    // Имя не трогаем: его правят в профиле, и вход не должен затирать правку.
+    const user = isNewAccount
+      ? resolved
+      : await this.prisma.user.update({
+          where: { id: resolved.id },
           data: { email, avatarUrl },
-        })
-      : await this.prisma.user.upsert({
-          where: { email },
-          // Имя обновляется только при создании аккаунта: человек может
-          // исправить его в профиле, и следующий вход через Google не должен
-          // затирать правку.
-          update: { googleId: claims.sub, avatarUrl },
-          create: {
-            email,
-            googleId: claims.sub,
-            name: (claims.name as string) ?? email,
-            avatarUrl,
-          },
         });
 
     await assertAccountActive(this.prisma, user);
@@ -250,6 +235,35 @@ export class AuthService implements OnModuleInit {
     res.clearCookie(OIDC_COOKIE, { path: '/auth', domain: this.cookieDomain });
     await this.issueTokens(user.id, user.email, toRole(user.role), res);
     res.redirect(`${this.webOrigin}${safeReturnTo(returnTo)}`);
+  }
+
+  /**
+   * Claims Google → аккаунт. Вынесено из колбэка: openid-client ESM-only и в
+   * тестах заглушен, а поиск человека проверять надо.
+   *
+   * Поиск идёт только по паре «google + sub». Совпадение почты аккаунты не
+   * связывает: прежний код дописывал googleId найденному по адресу, и со
+   * вторым провайдером это стало бы способом забрать чужой аккаунт.
+   */
+  async resolveGoogleProfile(claims: {
+    sub: string;
+    email: string;
+    name?: string | null;
+    picture?: string | null;
+  }) {
+    return this.identities.resolve(
+      {
+        provider: 'google',
+        externalId: claims.sub,
+        email: claims.email,
+        name: claims.name ?? claims.email,
+        avatarUrl: claims.picture ?? undefined,
+        residency: 'global',
+      },
+      // Закрытая регистрация не трогает уже заведённых: отказ получает
+      // только тот, для кого пришлось бы создать новую запись.
+      { beforeCreate: () => this.assertRegistrationOpen() },
+    );
   }
 
   /**
