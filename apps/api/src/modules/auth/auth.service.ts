@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   BadRequestException,
   ForbiddenException,
   Injectable,
@@ -18,17 +19,26 @@ import {
   type Role,
   type UserRegisteredEvent,
 } from '@vedamatch/shared';
+import type { User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuthProvidersService } from './auth-providers.service';
 import { readRegistrationMode } from '../billing/billing-mode';
 import { assertAccountActive } from '../users/account-status';
 import { IdentityService } from './identity.service';
 import { JwtSignService } from './jwt.service';
 import { verifyPassword } from './password';
 import { toRole } from './role';
+import {
+  YANDEX_AUTHORIZE,
+  YANDEX_INFO,
+  YANDEX_TOKEN,
+  mapYandexProfile,
+} from './yandex.provider';
 
 export { toRole } from './role';
 
 const OIDC_COOKIE = 'oidc_flow';
+const YANDEX_COOKIE = 'yandex_oidc';
 const ACCESS_COOKIE = 'access_token';
 const REFRESH_COOKIE = 'refresh_token';
 /**
@@ -81,6 +91,7 @@ export class AuthService implements OnModuleInit {
     private readonly jwt: JwtSignService,
     private readonly events: EventEmitter2,
     private readonly identities: IdentityService,
+    private readonly providers: AuthProvidersService,
   ) {}
 
   async onModuleInit() {
@@ -216,13 +227,185 @@ export class AuthService implements OnModuleInit {
           data: { email, avatarUrl },
         });
 
+    res.clearCookie(OIDC_COOKIE, { path: '/auth', domain: this.cookieDomain });
+    await this.issueSessionAndRedirect({
+      req,
+      res,
+      user,
+      provider: 'google',
+      isNewAccount,
+      returnTo,
+      ref,
+      fp,
+    });
+  }
+
+  private requireYandex(): { clientId: string; clientSecret: string } {
+    const clientId = this.config.get<string>('YANDEX_CLIENT_ID');
+    const clientSecret = this.config.get<string>('YANDEX_CLIENT_SECRET');
+    if (!clientId || !clientSecret) {
+      throw new ServiceUnavailableException('Яндекс ID не сконфигурирован');
+    }
+    return { clientId, clientSecret };
+  }
+
+  async startYandexLogin(
+    req: Request,
+    res: Response,
+    returnTo?: string,
+    referralCode?: string,
+    deviceId?: string,
+  ) {
+    // Проверка здесь, а не только при выдаче списка кнопок: спрятанная
+    // кнопка не делает способ недоступным, а важно, что вход невозможен.
+    await this.providers.assertEnabled('yandex', req.hostname);
+    const { clientId } = this.requireYandex();
+
+    const verifier = randomBytes(32).toString('base64url');
+    const challenge = createHash('sha256').update(verifier).digest('base64url');
+    const state = randomBytes(16).toString('base64url');
+
+    // Тот же приём, что и у Google: состояние уезжает в httpOnly cookie, а не
+    // в память процесса — иначе вход развалится при перезапуске и при
+    // нескольких репликах.
+    res.cookie(
+      YANDEX_COOKIE,
+      JSON.stringify({
+        verifier,
+        state,
+        returnTo: safeReturnTo(returnTo),
+        ref: shortToken(referralCode),
+        fp: shortToken(deviceId),
+      }),
+      {
+        httpOnly: true,
+        secure: this.isProd,
+        sameSite: 'lax',
+        domain: this.cookieDomain,
+        maxAge: 10 * 60 * 1000,
+        path: '/auth',
+      },
+    );
+
+    const url = new URL(YANDEX_AUTHORIZE);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('client_id', clientId);
+    url.searchParams.set('redirect_uri', `${this.apiUrl}/auth/yandex/callback`);
+    url.searchParams.set('state', state);
+    url.searchParams.set('code_challenge', challenge);
+    url.searchParams.set('code_challenge_method', 'S256');
+
+    res.redirect(url.toString());
+  }
+
+  async handleYandexCallback(req: Request, res: Response) {
+    await this.providers.assertEnabled('yandex', req.hostname);
+    const { clientId, clientSecret } = this.requireYandex();
+
+    const raw = (req.cookies as Record<string, string> | undefined)?.[
+      YANDEX_COOKIE
+    ];
+    if (!raw) {
+      throw new BadRequestException('OAuth-сессия не найдена или истекла');
+    }
+    res.clearCookie(YANDEX_COOKIE, {
+      path: '/auth',
+      domain: this.cookieDomain,
+    });
+
+    let flow: {
+      verifier: string;
+      state: string;
+      returnTo?: string;
+      ref?: string | null;
+      fp?: string | null;
+    };
+    try {
+      flow = JSON.parse(raw);
+    } catch {
+      throw new BadRequestException('OAuth-сессия повреждена');
+    }
+
+    // Сравнение постоянного времени тут излишне: state не секрет и живёт
+    // одну попытку, но длину проверяем — иначе пустая строка совпадёт с
+    // отсутствующим параметром.
+    if (!flow.state || req.query.state !== flow.state) {
+      throw new BadRequestException('Не совпало состояние запроса');
+    }
+
+    const tokenRes = await fetch(YANDEX_TOKEN, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: String(req.query.code ?? ''),
+        client_id: clientId,
+        client_secret: clientSecret,
+        code_verifier: flow.verifier,
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      throw new BadGatewayException('Яндекс не выдал токен');
+    }
+
+    const { access_token: accessToken } = (await tokenRes.json()) as {
+      access_token?: string;
+    };
+    if (!accessToken) {
+      throw new BadGatewayException('Яндекс не выдал токен');
+    }
+
+    const infoRes = await fetch(YANDEX_INFO, {
+      headers: { authorization: `OAuth ${accessToken}` },
+    });
+
+    if (!infoRes.ok) {
+      throw new BadGatewayException('Яндекс не отдал профиль');
+    }
+
+    const { user, created } = await this.identities.resolve(
+      mapYandexProfile(await infoRes.json()),
+      { beforeCreate: () => this.assertRegistrationOpen() },
+    );
+
+    await this.issueSessionAndRedirect({
+      req,
+      res,
+      user,
+      provider: 'yandex',
+      isNewAccount: created,
+      returnTo: flow.returnTo,
+      ref: flow.ref,
+      fp: flow.fp,
+    });
+  }
+
+  /**
+   * Общий хвост любого входа: проверка статуса аккаунта, справочный профиль,
+   * журнал, реферальное событие, куки и возврат на портал. Общий намеренно —
+   * у каждого нового провайдера иначе тихо теряется то проверка блокировки,
+   * то реферал, и заметно это становится сильно позже.
+   */
+  private async issueSessionAndRedirect(params: {
+    req: Request;
+    res: Response;
+    user: User;
+    provider: string;
+    isNewAccount: boolean;
+    returnTo?: string;
+    ref?: string | null;
+    fp?: string | null;
+  }) {
+    const { req, res, user, provider, isNewAccount, returnTo, ref, fp } = params;
+
     await assertAccountActive(this.prisma, user);
     await this.ensureContactsProfile(user.id);
 
     await this.prisma.loginAudit.create({
       data: {
         userId: user.id,
-        provider: 'google',
+        provider,
         ip: req.ip,
         userAgent: req.headers['user-agent'] ?? null,
       },
@@ -232,7 +415,6 @@ export class AuthService implements OnModuleInit {
       this.announceRegistration(user.id, user.email, req, ref, fp);
     }
 
-    res.clearCookie(OIDC_COOKIE, { path: '/auth', domain: this.cookieDomain });
     await this.issueTokens(user.id, user.email, toRole(user.role), res);
     res.redirect(`${this.webOrigin}${safeReturnTo(returnTo)}`);
   }

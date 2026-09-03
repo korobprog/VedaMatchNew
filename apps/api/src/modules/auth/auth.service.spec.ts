@@ -6,6 +6,7 @@ jest.mock('openid-client', () => ({}));
 jest.mock('./jwt.service', () => ({ JwtSignService: class {} }));
 
 import { AuthService, safeReturnTo } from './auth.service';
+import { AuthProvidersService } from './auth-providers.service';
 import { IdentityService } from './identity.service';
 
 /**
@@ -30,6 +31,7 @@ function makeService(stored: Record<string, unknown> | null, rotatedCount = 1) {
     jwt as never,
     { emit: jest.fn() } as never,
     new IdentityService(prisma as never),
+    new AuthProvidersService(prisma as never),
   );
   const res = { cookie: jest.fn(), clearCookie: jest.fn() };
   const req = { cookies: { refresh_token: 'raw-token' } };
@@ -191,6 +193,7 @@ function makeGoogleService(prisma: Record<string, unknown>) {
     { signAccessToken: jest.fn() } as never,
     { emit: jest.fn() } as never,
     identities,
+    new AuthProvidersService(prisma as never),
   );
 }
 

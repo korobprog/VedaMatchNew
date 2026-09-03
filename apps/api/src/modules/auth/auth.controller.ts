@@ -57,6 +57,24 @@ export class AuthController {
     return this.auth.handleGoogleCallback(req, res);
   }
 
+  // Видимость способа проверяет сам обработчик (assertEnabled): выключенный
+  // Яндекс обязан отказывать, а не просто прятать кнопку.
+  @Get('yandex')
+  yandex(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Query('returnTo') returnTo?: string,
+    @Query('ref') ref?: string,
+    @Query('fp') fp?: string,
+  ) {
+    return this.auth.startYandexLogin(req, res, returnTo, ref, fp);
+  }
+
+  @Get('yandex/callback')
+  yandexCallback(@Req() req: Request, @Res() res: Response) {
+    return this.auth.handleYandexCallback(req, res);
+  }
+
   // Только для локальной разработки: включается DEV_AUTH_ENABLED=true.
   @Post('dev-login')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
