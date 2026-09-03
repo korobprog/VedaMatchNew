@@ -391,6 +391,16 @@ git commit -m "fix(auth): вход через Google больше не связ�
   и `AuthProvidersService.assertEnabled(provider: AuthProvider, host: string): Promise<void>`.
 - Отдаёт: `GET /auth/providers` → `{ providers: AuthProvider[] }`.
 
+> **Выполнено с поправкой (2026-09-03).** Сверять сырой `req.hostname` с
+> `domains` нельзя: в проде API стоит на `api.vedamatch.ru`, а домены в
+> настройках записаны в терминах портала (`vedamatch.ru`) — совпадения не было
+> бы никогда, и список способов оказался бы пустым на всём проде. Добавлена
+> чистая функция `portalHost`, срезающая префикс `api.` и порт; `visibleFor`
+> зовёт её первой строкой. Плюс `GET /auth/providers` принимает домен портала
+> параметром `?host=` — серверный компонент страницы входа ходит к API по
+> внутреннему адресу `http://api:4000`, где хост запроса вообще `api`.
+> Подробности — в спецификации, раздел `AuthProviderSetting`.
+
 - [ ] **Шаг 1: модель настроек**
 
 ```prisma
