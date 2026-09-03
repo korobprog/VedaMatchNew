@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { LoginCard } from "@/components/login-card";
 import { SessionRestore } from "@/components/session-restore";
+import { getAuthProviders } from "@/lib/auth-providers";
 import { getSafeReturnTo } from "@/lib/return-to";
 import { needsSessionRestore } from "@/lib/session-marker";
 
@@ -18,5 +19,8 @@ export default async function LoginPage({
   if (await needsSessionRestore()) {
     return <SessionRestore returnTo={returnTo} />;
   }
-  return <LoginCard returnTo={returnTo} />;
+  // Список способов — с сервера, а не зашит в код: иначе переключение галочки
+  // в настройках требовало бы пересборки фронта. Порядок берётся из ответа.
+  const providers = await getAuthProviders();
+  return <LoginCard providers={providers} returnTo={returnTo} />;
 }

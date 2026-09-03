@@ -27,13 +27,20 @@ export class AuthController {
   /**
    * Какие способы входа показывать. Список приходит с сервера, а не зашит во
    * фронт: иначе каждое переключение галочки требовало бы пересборки.
+   *
+   * `host` — домен портала, под которым открыт сайт. Он нужен явно: список
+   * запрашивает серверный компонент страницы входа по внутреннему адресу
+   * (`http://api:4000`), и `req.hostname` там — `api`, а не домен человека.
+   * Доверять параметру безопасно: он влияет только на состав кнопок, а сам
+   * вход каждый обработчик сверяет по настоящему хосту запроса
+   * (см. assertEnabled).
    */
   // Классовые 10/мин здесь не годятся: список запрашивает серверный компонент
   // страницы входа, и все посетители приходят к API с одного адреса.
   @Throttle({ default: { limit: 120, ttl: 60_000 } })
   @Get('providers')
-  async authProviders(@Req() req: Request) {
-    return { providers: await this.providers.visibleFor(req.hostname) };
+  async authProviders(@Req() req: Request, @Query('host') host?: string) {
+    return { providers: await this.providers.visibleFor(host || req.hostname) };
   }
 
   /**
