@@ -36,6 +36,17 @@ services:
       COOKIE_DOMAIN: ${COOKIE_DOMAIN}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      # Способы входа помимо Google. Со значением по умолчанию: способ может
+      # быть выключен в AuthProviderSetting, и тогда ключей нет вовсе — без
+      # `:-` docker compose ругался бы на каждом подъёме без них.
+      #
+      # Переменную мало положить в .env: в процесс попадает только то, что
+      # перечислено здесь. Иначе requireYandex() не видит ключей и отдаёт 503
+      # «не сконфигурирован» при заполненной панели — искать такое долго.
+      YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID:-}
+      YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
+      VK_CLIENT_ID: ${VK_CLIENT_ID:-}
+      VK_CLIENT_SECRET: ${VK_CLIENT_SECRET:-}
       JWT_PRIVATE_KEY_BASE64: ${JWT_PRIVATE_KEY_BASE64}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL}
       REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS}
