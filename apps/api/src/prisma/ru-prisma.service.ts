@@ -4,43 +4,47 @@ import { PrismaClient as RuPrismaClient } from '@vedamatch/ru-client';
 /**
  * Клиент московской базы российского контура.
  *
- * Не падает при старте без переменных: контур включается не на всякой
- * установке, а в разработке его обычно нет вовсе. Готовность спрашивают через
- * `isConfigured`, и модуль записи по ней решает, можно ли обслуживать `ru`.
- *
  * Включение — **два** условия, а не одно. Наличия строки подключения
  * недостаточно: она может быть заведена заранее, а решение о том, куда едут
  * персональные данные, обязано быть отдельным и осознанным. До уведомления
  * Роскомнадзора о трансграничной передаче контур включать нельзя.
+ *
+ * **Соединение не проверяется при старте.** Иначе недоступная Москва
+ * останавливала бы весь портал, а по спецификации при её недоступности
+ * ломается только запись персональных данных россиян: листать, переписываться
+ * и читать человек продолжает. Prisma подключается лениво, на первом запросе,
+ * и ошибка приходит туда, где её можно осмысленно показать.
  */
 @Injectable()
 export class RuPrismaService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RuPrismaService.name);
   private client?: RuPrismaClient;
 
-  /** Контур включён и клиент готов принимать записи. */
-  get isConfigured(): boolean {
+  /**
+   * Контур включён. Это НЕ обещание, что Москва отвечает: доступность
+   * выясняется на самой записи.
+   */
+  get isEnabled(): boolean {
     return this.client !== undefined;
   }
 
-  /**
-   * Клиент московской базы. Звать только после проверки `isConfigured` —
-   * иначе исключение, а не тихий проход мимо контура.
-   */
+  /** Клиент московской базы. Звать только при `isEnabled`. */
   get db(): RuPrismaClient {
     if (!this.client) {
-      throw new Error('Российский контур не настроен: RU_DATABASE_URL/RU_CONTOUR_ENABLED');
+      throw new Error(
+        'Российский контур не включён: RU_DATABASE_URL и RU_CONTOUR_ENABLED=true',
+      );
     }
     return this.client;
   }
 
-  async onModuleInit() {
-    const url = process.env.RU_DATABASE_URL?.trim();
+  onModuleInit() {
+    const raw = process.env.RU_DATABASE_URL?.trim() ?? '';
     const enabled = process.env.RU_CONTOUR_ENABLED === 'true';
 
-    if (!url) {
+    if (!raw) {
       this.logger.warn(
-        'RU_DATABASE_URL не задан — российский контур выключен, записи идут только в амстердамскую базу',
+        'RU_DATABASE_URL не задан — российский контур выключен, персональные данные пишутся только в основную базу',
       );
       return;
     }
@@ -52,13 +56,11 @@ export class RuPrismaService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Кавычки вокруг значения — не редкость: в .env строку подключения часто
-    // заключают в них, и клиент получает их как часть адреса.
-    const clean = url.replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
+    // заключают в них, и клиент получил бы их как часть адреса.
+    const url = raw.replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
 
-    const client = new RuPrismaClient({ datasources: { db: { url: clean } } });
-    await client.$connect();
-    this.client = client;
-    this.logger.log('Российский контур подключён');
+    this.client = new RuPrismaClient({ datasources: { db: { url } } });
+    this.logger.log('Российский контур включён');
   }
 
   async onModuleDestroy() {

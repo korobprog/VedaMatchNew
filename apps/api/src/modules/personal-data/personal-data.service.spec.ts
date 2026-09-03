@@ -13,23 +13,24 @@ const record = {
 };
 
 /** Мокает московский клиент и записывает порядок вызовов в общий журнал. */
-function make(options: { configured?: boolean; log?: string[] } = {}) {
-  const log = options.log ?? [];
+function make(options: { enabled?: boolean; moscowFails?: boolean } = {}) {
+  const enabled = options.enabled ?? true;
+  const log: string[] = [];
   const upsert = jest.fn(async (_args: unknown) => {
     log.push('москва');
+    if (options.moscowFails) throw new Error('соединение оборвано');
   });
-  const update = jest.fn(async () => {
+  const update = jest.fn(async (_args: unknown) => {
     log.push('отметка');
   });
   const ru = {
-    isConfigured: options.configured ?? true,
+    isEnabled: enabled,
     get db() {
-      if (!(options.configured ?? true)) throw new Error('не настроен');
+      if (!enabled) throw new Error('не включён');
       return { personalRecord: { upsert, update } };
     },
   };
-  const service = new PersonalDataService(ru as never);
-  return { service, log, upsert, update };
+  return { service: new PersonalDataService(ru as never), log, upsert, update };
 }
 
 describe('PersonalDataService.write', () => {
@@ -57,8 +58,21 @@ describe('PersonalDataService.write', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('когда контур недоступен, россиянина не пишем мимо контура', async () => {
-    const { service, log } = make({ configured: false });
+  it('выключенный контур не закрывает регистрацию россиянину', async () => {
+    // До включения контура амстердамская запись — единственный рабочий путь.
+    // Отказ здесь означал бы, что выкат кода закрыл вход через Яндекс всем.
+    const { service, log, upsert } = make({ enabled: false });
+
+    await service.write({ residency: 'ru', record }, async () => {
+      log.push('амстердам');
+    });
+
+    expect(log).toEqual(['амстердам']);
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it('включённый контур с недоступной Москвой — отказ, и мимо контура не пишем', async () => {
+    const { service, log } = make({ moscowFails: true });
 
     await expect(
       service.write({ residency: 'ru', record }, async () => {
@@ -67,8 +81,8 @@ describe('PersonalDataService.write', () => {
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
 
     // Главное: амстердамской записи не случилось. Тихий проход мимо Москвы
-    // хуже отказа — он незаметен и неисправим задним числом.
-    expect(log).toEqual([]);
+    // при включённом контуре незаметен и неисправим задним числом.
+    expect(log).toEqual(['москва']);
   });
 
   it('Москва прошла, Амстердам упал — отметка о копии не ставится', async () => {
@@ -112,5 +126,16 @@ describe('PersonalDataService.write', () => {
       create: { birth?: unknown };
     };
     expect(arg.create.birth).toBeDefined();
+  });
+
+  it('правка сбрасывает отметку о копии', async () => {
+    const { service, upsert } = make();
+
+    await service.write({ residency: 'ru', record }, async () => undefined);
+
+    const arg = upsert.mock.calls[0][0] as unknown as {
+      update: { copiedAt: Date | null };
+    };
+    expect(arg.update.copiedAt).toBeNull();
   });
 });

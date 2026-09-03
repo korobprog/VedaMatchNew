@@ -30,6 +30,8 @@ import {
 } from '@vedamatch/shared';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PersonalDataService } from '../personal-data/personal-data.service';
+import { PERSONAL_SELECT } from '../personal-data/personal-fields';
 import { toRole } from '../auth/role';
 import { toSubscriptionState } from '../billing/subscription';
 import { readBillingMode } from '../billing/billing-mode';
@@ -85,6 +87,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly events: EventEmitter2,
+    private readonly personal: PersonalDataService,
   ) {
     const region = this.config.get<string>('S3_REGION');
     const accessKeyId = this.config.get<string>('S3_ACCESS_KEY');
@@ -206,6 +209,59 @@ export class UsersService {
     return this.getProfile(userId);
   }
 
+  /**
+   * Правка `User` через российский контур: для россиянина персональные поля
+   * обязаны сначала уехать в московскую базу. Напрямую `user.update` с
+   * персональными полями звать нельзя — порядок записи перестанет
+   * соблюдаться там, где о нём забыли.
+   *
+   * Снимок «после» собирается из состояния до правки, наложенного правкой:
+   * в московскую базу уезжает полное состояние, а не дельта.
+   */
+  private async writePersonal(userId: string, data: Prisma.UserUpdateInput) {
+    // Контур выключен — прежний путь без единого лишнего запроса.
+    if (!this.personal.isActive) {
+      return this.prisma.user.update({ where: { id: userId }, data });
+    }
+
+    const before = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { ...PERSONAL_SELECT, dataResidency: true },
+    });
+
+    const pick = <K extends keyof typeof before>(key: K) =>
+      (key in data ? (data as Record<string, unknown>)[key] : before[key]) as
+        | (typeof before)[K]
+        | null;
+
+    return this.personal.write(
+      {
+        residency: before.dataResidency,
+        record: {
+          id: userId,
+          email: pick('email') as string,
+          name: pick('name') as string,
+          spiritualName: pick('spiritualName') as string | null,
+          birthDate: pick('birthDate') as Date | null,
+          gender: (pick('gender') as string | null) ?? null,
+          avatarKey: pick('avatarKey') as string | null,
+          photoKeys: await this.photoKeys(userId),
+        },
+      },
+      () => this.prisma.user.update({ where: { id: userId }, data }),
+    );
+  }
+
+  /** Ключи фотографий галереи — часть персональной записи контура. */
+  private async photoKeys(userId: string): Promise<string[]> {
+    const photos = await this.prisma.userPhoto.findMany({
+      where: { userId },
+      select: { storageKey: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return photos.map((photo) => photo.storageKey);
+  }
+
   async updateProfile(
     userId: string,
     payload: ProfileUpdateRequest,
@@ -293,7 +349,7 @@ export class UsersService {
       ) as unknown as Prisma.InputJsonObject;
     }
 
-    await this.prisma.user.update({ where: { id: userId }, data });
+    await this.writePersonal(userId, data);
     return this.getProfile(userId);
   }
 
@@ -380,10 +436,8 @@ export class UsersService {
 
     // avatarUrl остаётся null для загруженных аватаров: бакет приватный, и
     // рабочую ссылку можно получить только подписью (см. resolveAvatarUrl).
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { avatarKey: key, avatarUrl: null },
-    });
+    // Через контур: ключ аватара — персональные данные.
+    await this.writePersonal(userId, { avatarKey: key, avatarUrl: null });
 
     return this.getProfile(userId);
   }
@@ -391,10 +445,7 @@ export class UsersService {
   async deleteAvatar(userId: string): Promise<UserProfile> {
     const user = await this.ensureUser(userId);
     if (user.avatarKey) await this.deleteAvatarObject(user.avatarKey);
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { avatarKey: null, avatarUrl: null },
-    });
+    await this.writePersonal(userId, { avatarKey: null, avatarUrl: null });
     return this.getProfile(userId);
   }
 

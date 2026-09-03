@@ -6,6 +6,7 @@ import {
   resolveDisplayName,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PersonalDataService } from '../personal-data/personal-data.service';
 import { UsersService } from './users.service';
 
 /**
@@ -157,6 +158,9 @@ describe('UsersService.updateProfile — имена', () => {
       prisma as unknown as PrismaService,
       { get: () => undefined } as unknown as ConfigService,
       { emit: jest.fn() } as never,
+      // Настоящий сервис контура над выключенным контуром: прозрачен, зовёт
+      // амстердамскую запись сразу — тот же путь, что и в проде до включения.
+      new PersonalDataService({ isEnabled: false } as never),
     );
   });
 

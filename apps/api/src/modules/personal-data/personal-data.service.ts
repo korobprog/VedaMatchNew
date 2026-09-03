@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import type { DataResidency } from '@prisma/client';
 import { RuPrismaService } from '../../prisma/ru-prisma.service';
 import type { PersonalBirthSource, PersonalRecordInput } from './personal-fields';
@@ -26,7 +26,18 @@ export type PersonalWrite = {
  */
 @Injectable()
 export class PersonalDataService {
+  private readonly logger = new Logger(PersonalDataService.name);
+
   constructor(private readonly ru: RuPrismaService) {}
+
+  /**
+   * Контур включён. Точки записи спрашивают это ПЕРЕД сбором персональной
+   * записи: собирать её и читать ключи фотографий, когда контура нет, значит
+   * добавить два запроса к каждому сохранению профиля просто так.
+   */
+  get isActive(): boolean {
+    return this.ru.isEnabled;
+  }
 
   /**
    * `applyGlobal` — амстердамская запись, та самая, что и раньше. Вызывается
@@ -37,16 +48,11 @@ export class PersonalDataService {
    * существует, и притворяться, что она есть, хуже, чем оставить отметку.
    */
   async write<T>(write: PersonalWrite, applyGlobal: () => Promise<T>): Promise<T> {
-    if (write.residency !== 'ru') {
+    // Контур выключен — прежнее поведение: всё в основную базу. Отказывать
+    // здесь нельзя: до включения контура это единственный рабочий путь, и
+    // 503 просто закрыл бы регистрацию россиянам.
+    if (write.residency !== 'ru' || !this.ru.isEnabled) {
       return applyGlobal();
-    }
-
-    if (!this.ru.isConfigured) {
-      // Отказ, а не тихий проход в Амстердам: запись мимо контура незаметна и
-      // неисправима задним числом.
-      throw new ServiceUnavailableException(
-        'Хранилище персональных данных недоступно. Попробуйте позже.',
-      );
     }
 
     const birth = write.birth
@@ -63,6 +69,43 @@ export class PersonalDataService {
 
     const { id, ...fields } = write.record;
 
+    try {
+      await this.moscowFirst(id, fields, birth);
+    } catch (error) {
+      // Контур включён, но Москва не ответила. Отказ, а не тихий проход в
+      // Амстердам: запись мимо контура незаметна и неисправима задним числом.
+      // Остальной портал при этом работает — читать и переписываться можно.
+      this.logger.error(
+        `Московская база не приняла запись ${id}: ${(error as Error).message}`,
+      );
+      throw new ServiceUnavailableException(
+        'Хранилище персональных данных недоступно. Попробуйте позже.',
+      );
+    }
+
+    const result = await applyGlobal();
+
+    // Отметка о копии — не критичный шаг: если она не поставилась, досылка
+    // просто отправит запись повторно, а это безопасно.
+    try {
+      await this.ru.db.personalRecord.update({
+        where: { id },
+        data: { copiedAt: new Date() },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Не удалось отметить копию ${id}, досылка подберёт: ${(error as Error).message}`,
+      );
+    }
+
+    return result;
+  }
+
+  private async moscowFirst(
+    id: string,
+    fields: Omit<PersonalRecordInput, 'id'>,
+    birth: PersonalBirthSource | undefined,
+  ) {
     await this.ru.db.personalRecord.upsert({
       where: { id },
       create: {
@@ -79,14 +122,5 @@ export class PersonalDataService {
         ...(birth ? { birth: { upsert: { create: birth, update: birth } } } : {}),
       },
     });
-
-    const result = await applyGlobal();
-
-    await this.ru.db.personalRecord.update({
-      where: { id },
-      data: { copiedAt: new Date() },
-    });
-
-    return result;
   }
 }

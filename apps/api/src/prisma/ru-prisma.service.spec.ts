@@ -19,7 +19,7 @@ describe('RuPrismaService', () => {
 
     await service.onModuleInit();
 
-    expect(service.isConfigured).toBe(false);
+    expect(service.isEnabled).toBe(false);
   });
 
   it('выключен, пока не включён явно, даже со строкой подключения', async () => {
@@ -31,7 +31,7 @@ describe('RuPrismaService', () => {
 
     await service.onModuleInit();
 
-    expect(service.isConfigured).toBe(false);
+    expect(service.isEnabled).toBe(false);
   });
 
   it('пустая строка подключения не считается заданной', async () => {
@@ -41,7 +41,7 @@ describe('RuPrismaService', () => {
 
     await service.onModuleInit();
 
-    expect(service.isConfigured).toBe(false);
+    expect(service.isEnabled).toBe(false);
   });
 
   it('обращение к выключенному клиенту — исключение, а не тихий проход', async () => {
@@ -49,6 +49,6 @@ describe('RuPrismaService', () => {
     const service = new RuPrismaService();
     await service.onModuleInit();
 
-    expect(() => service.db).toThrow(/не настроен/);
+    expect(() => service.db).toThrow(/не включён/);
   });
 });
