@@ -11,6 +11,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type { AccessTokenPayload } from '@vedamatch/shared';
+import { AuthProvidersService } from './auth-providers.service';
 import { AuthService } from './auth.service';
 import { AuthGuard, CurrentUser } from './auth.guard';
 import { JwtSignService } from './jwt.service';
@@ -18,7 +19,29 @@ import { JwtSignService } from './jwt.service';
 @Controller('auth')
 @Throttle({ default: { limit: 10, ttl: 60_000 } })
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly providers: AuthProvidersService,
+  ) {}
+
+  /**
+   * Какие способы входа показывать. Список приходит с сервера, а не зашит во
+   * фронт: иначе каждое переключение галочки требовало бы пересборки.
+   *
+   * `host` — домен портала, под которым открыт сайт. Он нужен явно: список
+   * запрашивает серверный компонент страницы входа по внутреннему адресу
+   * (`http://api:4000`), и `req.hostname` там — `api`, а не домен человека.
+   * Доверять параметру безопасно: он влияет только на состав кнопок, а сам
+   * вход каждый обработчик сверяет по настоящему хосту запроса
+   * (см. assertEnabled).
+   */
+  // Классовые 10/мин здесь не годятся: список запрашивает серверный компонент
+  // страницы входа, и все посетители приходят к API с одного адреса.
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  @Get('providers')
+  async authProviders(@Req() req: Request, @Query('host') host?: string) {
+    return { providers: await this.providers.visibleFor(host || req.hostname) };
+  }
 
   /**
    * `ref` и `fp` приезжают из веба: реферальный код из cookie `vm_ref` и
@@ -39,6 +62,24 @@ export class AuthController {
   @Get('google/callback')
   googleCallback(@Req() req: Request, @Res() res: Response) {
     return this.auth.handleGoogleCallback(req, res);
+  }
+
+  // Видимость способа проверяет сам обработчик (assertEnabled): выключенный
+  // Яндекс обязан отказывать, а не просто прятать кнопку.
+  @Get('yandex')
+  yandex(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Query('returnTo') returnTo?: string,
+    @Query('ref') ref?: string,
+    @Query('fp') fp?: string,
+  ) {
+    return this.auth.startYandexLogin(req, res, returnTo, ref, fp);
+  }
+
+  @Get('yandex/callback')
+  yandexCallback(@Req() req: Request, @Res() res: Response) {
+    return this.auth.handleYandexCallback(req, res);
   }
 
   // Только для локальной разработки: включается DEV_AUTH_ENABLED=true.

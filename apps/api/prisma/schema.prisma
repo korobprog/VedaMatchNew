@@ -254,6 +254,7 @@ model User {
   updatedAt                    DateTime                   @updatedAt
 
   refreshTokens                      RefreshToken[]
+  identities                         UserIdentity[]
   serviceAccess                      ServiceAccess[]
   serviceAdminScopes                 ServiceAdmin[]
   loginAudits                        LoginAudit[]
@@ -864,6 +865,45 @@ model RefreshToken {
   // Под чистку протухших/отозванных (RefreshTokenCleanupService).
   @@index([expiresAt])
   @@index([revoked, createdAt])
+}
+
+// Способ входа. Значение живёт и в UserIdentity, и в AuthProviderSetting.
+enum AuthProvider {
+  google
+  vk
+  yandex
+  email
+}
+
+/// Способ входа, привязанный к аккаунту. Пара «провайдер + внешний
+/// идентификатор» уникальна: по ней IdentityService находит человека.
+/// Совпадение почты аккаунты НЕ связывает — иначе чужой ящик с тем же
+/// адресом у другого провайдера забирал бы чужой аккаунт.
+model UserIdentity {
+  id          String       @id @default(uuid())
+  userId      String
+  provider    AuthProvider
+  externalId  String
+  createdAt   DateTime     @default(now())
+  lastLoginAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalId])
+  @@index([userId])
+}
+
+/// Видимость способа входа. Живёт в базе, а не в коде: переключение галочки
+/// не должно требовать пересборки фронта.
+///
+/// `domains` — хосты портала (`vedamatch.ru`), а не API. Хост запроса перед
+/// сверкой нормализуется, см. portalHost в auth-providers.service.ts.
+model AuthProviderSetting {
+  provider  AuthProvider @id
+  enabled   Boolean      @default(false)
+  domains   String[]     @default([])
+  sortOrder Int          @default(0)
+  updatedAt DateTime     @updatedAt
 }
 
 model Service {

@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
+import { AuthProvidersService } from './auth-providers.service';
 import { AuthController, WellKnownController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthGuard, OptionalAuthGuard } from './auth.guard';
+import { IdentityService } from './identity.service';
 import { JwtSignService } from './jwt.service';
 import { RefreshTokenCleanupService } from './refresh-token-cleanup.service';
 
@@ -9,11 +11,19 @@ import { RefreshTokenCleanupService } from './refresh-token-cleanup.service';
   controllers: [AuthController, WellKnownController],
   providers: [
     AuthService,
+    AuthProvidersService,
+    IdentityService,
     JwtSignService,
     AuthGuard,
     OptionalAuthGuard,
     RefreshTokenCleanupService,
   ],
-  exports: [JwtSignService, AuthGuard, OptionalAuthGuard],
+  exports: [
+    JwtSignService,
+    AuthGuard,
+    OptionalAuthGuard,
+    IdentityService,
+    AuthProvidersService,
+  ],
 })
 export class AuthModule {}
