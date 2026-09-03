@@ -893,6 +893,19 @@ model UserIdentity {
   @@index([userId])
 }
 
+/// Видимость способа входа. Живёт в базе, а не в коде: переключение галочки
+/// не должно требовать пересборки фронта.
+///
+/// `domains` — хосты портала (`vedamatch.ru`), а не API. Хост запроса перед
+/// сверкой нормализуется, см. portalHost в auth-providers.service.ts.
+model AuthProviderSetting {
+  provider  AuthProvider @id
+  enabled   Boolean      @default(false)
+  domains   String[]     @default([])
+  sortOrder Int          @default(0)
+  updatedAt DateTime     @updatedAt
+}
+
 model Service {
   id                           String        @id @default(uuid())
   slug                         String        @unique

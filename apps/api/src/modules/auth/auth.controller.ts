@@ -11,6 +11,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type { AccessTokenPayload } from '@vedamatch/shared';
+import { AuthProvidersService } from './auth-providers.service';
 import { AuthService } from './auth.service';
 import { AuthGuard, CurrentUser } from './auth.guard';
 import { JwtSignService } from './jwt.service';
@@ -18,7 +19,22 @@ import { JwtSignService } from './jwt.service';
 @Controller('auth')
 @Throttle({ default: { limit: 10, ttl: 60_000 } })
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly providers: AuthProvidersService,
+  ) {}
+
+  /**
+   * Какие способы входа показывать. Список приходит с сервера, а не зашит во
+   * фронт: иначе каждое переключение галочки требовало бы пересборки.
+   */
+  // Классовые 10/мин здесь не годятся: список запрашивает серверный компонент
+  // страницы входа, и все посетители приходят к API с одного адреса.
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  @Get('providers')
+  async authProviders(@Req() req: Request) {
+    return { providers: await this.providers.visibleFor(req.hostname) };
+  }
 
   /**
    * `ref` и `fp` приезжают из веба: реферальный код из cookie `vm_ref` и
