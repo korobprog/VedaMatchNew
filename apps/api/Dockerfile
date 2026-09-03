@@ -17,7 +17,10 @@ COPY apps/api apps/api
 # потому, что dev-запуск шёл через ts-node/ts-jest, перехватывающие require ДО
 # нативного загрузчика Node; в проде такого перехвата нет. turbo сам построит
 # shared раньше api благодаря "dependsOn": ["^build"] в turbo.json.
-RUN pnpm --filter @vedamatch/api prisma:generate && pnpm turbo run build --filter=@vedamatch/api
+# prisma:generate:ru — клиент московской базы российского контура. Отдельной
+# командой, а не только в postinstall: там он пропускается, пока исходники не
+# скопированы (pnpm install идёт раньше COPY), и полагаться на один путь мало.
+RUN pnpm --filter @vedamatch/api prisma:generate && pnpm --filter @vedamatch/api prisma:generate:ru && pnpm turbo run build --filter=@vedamatch/api
 RUN pnpm --filter @vedamatch/api deploy --prod /out
 
 FROM base AS runtime
