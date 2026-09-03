@@ -27,8 +27,15 @@ function news(overrides: Partial<PublicAnnouncementDto> = {}): PublicAnnouncemen
 /** Длинный текст: карточка обязана его сократить и предложить окно. */
 const LONG = `Первое предложение новости. ${"ещё немного текста. ".repeat(20)}`;
 
-beforeEach(() => ack.mockResolvedValue(new Response("{}", { status: 200 })));
-afterEach(() => ack.mockReset());
+// Тело в скобках, а не стрелка-выражение: `mockResolvedValue` возвращает сам
+// мок, а функцию из хука vitest считает уборкой и вызовет её после теста —
+// в счётчике вызовов появлялся лишний пустой.
+beforeEach(() => {
+  ack.mockResolvedValue(new Response("{}", { status: 200 }));
+});
+afterEach(() => {
+  ack.mockReset();
+});
 
 describe("PortalNews", () => {
   it("показывает закреплённую новость и не даёт закрыть её крестиком", async () => {
@@ -126,6 +133,75 @@ describe("PortalNews", () => {
     const support = await screen.findByRole("link", { name: /Написать в поддержку/ });
     expect(support).toHaveAttribute("href", "/support");
     expect(screen.queryByText("Все новости")).not.toBeInTheDocument();
+  });
+
+  it("одной кнопкой отмечает все новости разом", async () => {
+    const user = userEvent.setup();
+    render(
+      <PortalNews
+        items={[
+          news({ id: "pin", title: "Главная новость", pinned: true }),
+          news({ id: "a", title: "Первая" }),
+          news({ id: "b", title: "Вторая" }),
+        ]}
+      />,
+    );
+
+    // В счётчике всё неотмеченное, а не только показанные на главной.
+    await user.click(
+      await screen.findByRole("button", { name: /Ознакомлен со всеми \(3\)/ }),
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByText("Главная новость")).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText("Первая")).not.toBeInTheDocument();
+    // Один запрос на всё, а не по одному на новость.
+    expect(ack).toHaveBeenCalledTimes(1);
+    expect(ack).toHaveBeenCalledWith(
+      "http://api.test/changelog/announcements/ack-all",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("считает и те новости, что на главную не поместились", async () => {
+    render(
+      <PortalNews
+        items={Array.from({ length: 6 }, (_, index) =>
+          news({ id: `n${index}`, title: `Новость ${index}` }),
+        )}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: /Ознакомлен со всеми \(6\)/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("ради одной новости кнопку «со всеми» не показывает", async () => {
+    render(<PortalNews items={[news({ pinned: true })]} />);
+
+    expect(await screen.findByText("Открыли Студию")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Ознакомлен со всеми/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("новости остаются, если отметка «со всеми» не прошла", async () => {
+    ack.mockResolvedValue(new Response("нет", { status: 500 }));
+    const user = userEvent.setup();
+    render(
+      <PortalNews
+        items={[news({ id: "a", title: "Первая" }), news({ id: "b", title: "Вторая" })]}
+      />,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: /Ознакомлен со всеми/ }),
+    );
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText("Первая")).toBeInTheDocument();
   });
 
   it("показывает не больше трёх неотмеченных рядом с закреплённой", async () => {

@@ -26,6 +26,7 @@ export function PortalNews({ items }: { items: PublicAnnouncementDto[] }) {
   const [acked, setAcked] = useState<string[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
+  const [ackingAll, setAckingAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function acknowledge(id: string) {
@@ -44,6 +45,35 @@ export function PortalNews({ items }: { items: PublicAnnouncementDto[] }) {
       setError("Не удалось отметить. Попробуйте ещё раз.");
     } finally {
       setPending(null);
+    }
+  }
+
+  /**
+   * «Ознакомлен со всеми».
+   *
+   * Отдельный запрос, а не пробежка по галочкам: у вернувшегося после отпуска
+   * новостей десяток, и щёлкать каждую — работа без смысла. Сервер отмечает
+   * все видимые, в том числе те, что на главную не поместились, поэтому
+   * локально гасим весь список, а не только показанные три.
+   */
+  async function acknowledgeAll() {
+    setAckingAll(true);
+    setError(null);
+    try {
+      const res = await apiFetch(`${API_URL}/changelog/announcements/ack-all`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setAcked((current) => [
+        ...current,
+        ...items.filter((item) => !item.acknowledged).map((item) => item.id),
+      ]);
+      setOpenId(null);
+    } catch {
+      setError("Не удалось отметить. Попробуйте ещё раз.");
+    } finally {
+      setAckingAll(false);
     }
   }
 
@@ -79,7 +109,7 @@ export function PortalNews({ items }: { items: PublicAnnouncementDto[] }) {
             )}
             <AckCheckbox
               item={pinned}
-              pending={pending === pinned.id}
+              pending={pending === pinned.id || ackingAll}
               onAck={() => void acknowledge(pinned.id)}
             />
           </div>
@@ -117,13 +147,27 @@ export function PortalNews({ items }: { items: PublicAnnouncementDto[] }) {
                 </button>
                 <AckCheckbox
                   item={item}
-                  pending={pending === item.id}
+                  pending={pending === item.id || ackingAll}
                   onAck={() => void acknowledge(item.id)}
                 />
               </li>
             ))}
           </ul>
         </div>
+      )}
+
+      {visible.length > 1 && (
+        <button
+          type="button"
+          onClick={() => void acknowledgeAll()}
+          disabled={ackingAll}
+          className="glass flex w-full items-center justify-center gap-2 rounded-2xl border border-gold/40 px-4 py-2.5 text-sm font-medium text-text-0 transition-colors hover:border-gold hover:text-gold disabled:opacity-60"
+        >
+          <span aria-hidden="true">✓</span>
+          {ackingAll
+            ? "Отмечаем…"
+            : `Ознакомлен со всеми (${visible.length})`}
+        </button>
       )}
 
       {error && (
@@ -135,7 +179,7 @@ export function PortalNews({ items }: { items: PublicAnnouncementDto[] }) {
       {opened && (
         <NewsDialog
           item={opened}
-          pending={pending === opened.id}
+          pending={pending === opened.id || ackingAll}
           onAck={() => void acknowledge(opened.id)}
           onClose={() => setOpenId(null)}
         />

@@ -273,7 +273,11 @@ describe('ChangelogService: отметка «ознакомлен»', () => {
   function build() {
     const prisma = {
       announcement: { findMany: jest.fn(), findUnique: jest.fn() },
-      announcementAck: { findMany: jest.fn().mockResolvedValue([]), upsert: jest.fn() },
+      announcementAck: {
+        findMany: jest.fn().mockResolvedValue([]),
+        upsert: jest.fn(),
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
     };
     return {
       prisma,
@@ -345,5 +349,45 @@ describe('ChangelogService: отметка «ознакомлен»', () => {
       NotFoundException,
     );
     expect(prisma.announcementAck.upsert).not.toHaveBeenCalled();
+  });
+
+  it('отмечает все видимые новости одним запросом', async () => {
+    const { service, prisma } = build();
+    prisma.announcement.findMany.mockResolvedValue([{ id: 'a1' }, { id: 'a2' }]);
+    prisma.announcementAck.createMany.mockResolvedValue({ count: 2 });
+
+    await expect(service.acknowledgeAllAnnouncements('u1')).resolves.toEqual({
+      ok: true,
+      count: 2,
+    });
+    expect(prisma.announcementAck.createMany).toHaveBeenCalledWith({
+      data: [
+        { announcementId: 'a1', userId: 'u1' },
+        { announcementId: 'a2', userId: 'u1' },
+      ],
+      // Уже отмеченное пропускаем: повтор с другой вкладки не должен падать.
+      skipDuplicates: true,
+    });
+  });
+
+  it('берёт только видимые: снятая с главной новость в отметку не попадает', async () => {
+    const { service, prisma } = build();
+    prisma.announcement.findMany.mockResolvedValue([{ id: 'a1' }]);
+
+    await service.acknowledgeAllAnnouncements('u1');
+
+    const where = prisma.announcement.findMany.mock.calls[0][0].where;
+    expect(where.status).toBe('published');
+  });
+
+  it('без новостей в базу не ходит', async () => {
+    const { service, prisma } = build();
+    prisma.announcement.findMany.mockResolvedValue([]);
+
+    await expect(service.acknowledgeAllAnnouncements('u1')).resolves.toEqual({
+      ok: true,
+      count: 0,
+    });
+    expect(prisma.announcementAck.createMany).not.toHaveBeenCalled();
   });
 });
