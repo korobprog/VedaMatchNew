@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrismaModule } from './prisma/prisma.module';
+import { RuPrismaModule } from './prisma/ru-prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AdminAwareThrottlerGuard } from './modules/auth/admin-unlimited.guard';
 import { UsersModule } from './modules/users/users.module';
@@ -43,6 +44,7 @@ import { MusicModule } from './modules/music/music.module';
     // Шина доменных событий: сервисы публикуют факты, не зная о подписчиках.
     EventEmitterModule.forRoot(),
     PrismaModule,
+    RuPrismaModule,
     HealthModule,
     AuthModule,
     UsersModule,

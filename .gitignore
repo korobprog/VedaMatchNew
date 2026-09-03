@@ -18,3 +18,6 @@ backups/
 # рабочий черновик на мегабайты с вшитыми картинками; в репозитории ему
 # делать нечего.
 .design/
+
+# Сгенерированный клиент московской базы (prisma/ru/schema.prisma).
+apps/api/node_modules/@vedamatch/ru-client/
