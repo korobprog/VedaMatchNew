@@ -70,4 +70,40 @@ describe('IdentityService', () => {
       data: { lastLoginAt: expect.any(Date) },
     });
   });
+  it('записывает резидентность из профиля провайдера', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'u1' });
+    const prisma = prismaMock({
+      user: { findUnique: jest.fn().mockResolvedValue(null), create },
+    });
+
+    await new IdentityService(prisma).resolve(profile);
+
+    // Проверяется аргумент, а не возврат: признак невосстановим задним числом
+    // у входа по почте, и потерять его в момент создания нельзя.
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ dataResidency: 'ru' }),
+      }),
+    );
+  });
+
+  it('у глобального провайдера резидентность global', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'u2' });
+    const prisma = prismaMock({
+      user: { findUnique: jest.fn().mockResolvedValue(null), create },
+    });
+
+    await new IdentityService(prisma).resolve({
+      ...profile,
+      provider: 'google',
+      externalId: 'g-1',
+      residency: 'global',
+    });
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ dataResidency: 'global' }),
+      }),
+    );
+  });
 });

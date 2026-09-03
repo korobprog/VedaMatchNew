@@ -76,6 +76,10 @@ export class IdentityService {
         name: profile.name,
         avatarUrl: profile.avatarUrl,
         gender: profile.gender,
+        // Проставляется здесь и больше не меняется. У входа по почте признак
+        // задним числом невосстановим: правило смотрит на домен регистрации,
+        // а его не помнят ни адрес, ни идентичность.
+        dataResidency: profile.residency,
         identities: {
           create: {
             provider: profile.provider,

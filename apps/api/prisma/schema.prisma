@@ -222,6 +222,9 @@ model User {
   socialLinks                  Json?
   messengers                   Json?
   role                         Role                       @default(user)
+  // Обязательное и без значения по умолчанию: пусть каждая точка создания
+  // пользователя отвечает осознанно, а не наследует global молча.
+  dataResidency                DataResidency
   googleId                     String?                    @unique
   // scrypt-хеш пароля. Используется только dev-входом (DEV_AUTH_ENABLED).
   passwordHash                 String?
@@ -865,6 +868,16 @@ model RefreshToken {
   // Под чистку протухших/отозванных (RefreshTokenCleanupService).
   @@index([expiresAt])
   @@index([revoked, createdAt])
+}
+
+// Где хранятся персональные данные человека. Определяется способом
+// регистрации и дальше не меняется: VK ID и Яндекс ID — российские
+// информационные системы, Google — нет, у входа по почте признак берётся из
+// домена регистрации. Задним числом для почты он невосстановим, поэтому
+// проставляется в момент создания пользователя.
+enum DataResidency {
+  ru
+  global
 }
 
 // Способ входа. Значение живёт и в UserIdentity, и в AuthProviderSetting.

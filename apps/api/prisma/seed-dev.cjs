@@ -349,7 +349,9 @@ async function seedPerson(person) {
   const user = await prisma.user.upsert({
     where: { email },
     update: userData,
-    create: { email, ...userData },
+    // dataResidency обязателен и без значения по умолчанию. Демо-профили —
+    // global: они не россияне, а декорация для разработки.
+    create: { email, ...userData, dataResidency: 'global' },
   });
 
   await prisma.userPhoto.deleteMany({ where: { userId: user.id } });
@@ -411,7 +413,7 @@ async function seedAdmin() {
   await prisma.user.upsert({
     where: { email },
     update: data,
-    create: { email, ...data },
+    create: { email, ...data, dataResidency: 'global' },
   });
   return email;
 }
