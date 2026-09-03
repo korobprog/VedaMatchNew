@@ -2,6 +2,7 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import type { AuthProvider, Gender, User } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PersonalDataService } from '../personal-data/personal-data.service';
 
 export type ProviderProfile = {
   provider: AuthProvider;
@@ -24,7 +25,10 @@ export type ResolveHooks = {
 
 @Injectable()
 export class IdentityService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly personal: PersonalDataService,
+  ) {}
 
   /**
    * Ищет пользователя по паре «провайдер, идентификатор». Не находит — заводит.
@@ -66,29 +70,50 @@ export class IdentityService {
 
     await hooks.beforeCreate?.();
 
-    // id задаётся явно: в российском контуре тот же идентификатор понадобится
+    // id задаётся явно: в российском контуре тот же идентификатор нужен
     // московской базе, и полагаться на @default(uuid()) со стороны Postgres
     // нельзя — он выдаст там своё значение.
-    const user = await this.prisma.user.create({
-      data: {
-        id: randomUUID(),
-        email: profile.email,
-        name: profile.name,
-        avatarUrl: profile.avatarUrl,
-        gender: profile.gender,
-        // Проставляется здесь и больше не меняется. У входа по почте признак
-        // задним числом невосстановим: правило смотрит на домен регистрации,
-        // а его не помнят ни адрес, ни идентичность.
-        dataResidency: profile.residency,
-        identities: {
-          create: {
-            provider: profile.provider,
-            externalId: profile.externalId,
-            lastLoginAt: new Date(),
-          },
+    const id = randomUUID();
+
+    // Через PersonalDataService, а не напрямую: для россиянина запись обязана
+    // сначала произойти в московской базе. Порядок здесь не деталь
+    // реализации, а то, что делает схему законной.
+    const user = await this.personal.write(
+      {
+        residency: profile.residency,
+        record: {
+          id,
+          email: profile.email,
+          name: profile.name,
+          spiritualName: null,
+          birthDate: null,
+          gender: profile.gender ?? null,
+          avatarKey: null,
+          photoKeys: [],
         },
       },
-    });
+      () =>
+        this.prisma.user.create({
+          data: {
+            id,
+            email: profile.email,
+            name: profile.name,
+            avatarUrl: profile.avatarUrl,
+            gender: profile.gender,
+            // Проставляется здесь и больше не меняется. У входа по почте
+            // признак задним числом невосстановим: правило смотрит на домен
+            // регистрации, а его не помнят ни адрес, ни идентичность.
+            dataResidency: profile.residency,
+            identities: {
+              create: {
+                provider: profile.provider,
+                externalId: profile.externalId,
+                lastLoginAt: new Date(),
+              },
+            },
+          },
+        }),
+    );
 
     return { user, created: true };
   }

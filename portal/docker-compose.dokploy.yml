@@ -51,6 +51,15 @@ services:
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL}
       REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS}
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL не задан в окружении Dokploy}
+      # Российский контур. Персональные данные тех, у кого dataResidency = ru,
+      # пишутся сначала в московскую базу, копия — в амстердамскую.
+      #
+      # Два условия, а не одно: строка подключения может быть заведена заранее,
+      # а решение о том, куда едут персональные данные, обязано быть отдельным.
+      # Включать только после уведомления Роскомнадзора о трансграничной
+      # передаче — оно подаётся ДО первой передачи.
+      RU_DATABASE_URL: ${RU_DATABASE_URL:-}
+      RU_CONTOUR_ENABLED: ${RU_CONTOUR_ENABLED:-false}
       SEED_ON_START: ${SEED_ON_START:-1}
       S3_ENDPOINT: ${S3_ENDPOINT}
       S3_REGION: ${S3_REGION}

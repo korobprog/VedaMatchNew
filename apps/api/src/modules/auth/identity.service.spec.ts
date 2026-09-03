@@ -1,4 +1,14 @@
+import { PersonalDataService } from '../personal-data/personal-data.service';
 import { IdentityService } from './identity.service';
+
+/**
+ * Настоящий PersonalDataService над выключенным контуром: для global он
+ * прозрачен и сразу зовёт амстердамскую запись. Так тесты проверяют реальный
+ * путь, а не заглушку вместо него.
+ */
+function personal() {
+  return new PersonalDataService({ isEnabled: false } as never);
+}
 
 const profile = {
   provider: 'yandex' as const,
@@ -26,7 +36,7 @@ function prismaMock(overrides: Record<string, unknown> = {}) {
 describe('IdentityService', () => {
   it('заводит пользователя, когда идентичности нет', async () => {
     const prisma = prismaMock();
-    const service = new IdentityService(prisma);
+    const service = new IdentityService(prisma, personal());
 
     const { created } = await service.resolve(profile);
 
@@ -40,7 +50,7 @@ describe('IdentityService', () => {
         create: jest.fn(),
       },
     });
-    const service = new IdentityService(prisma);
+    const service = new IdentityService(prisma, personal());
 
     await expect(service.resolve(profile)).rejects.toThrow(/уже используется/);
   });
@@ -56,7 +66,7 @@ describe('IdentityService', () => {
         update,
       },
     });
-    const service = new IdentityService(prisma);
+    const service = new IdentityService(prisma, personal());
 
     const { user, created } = await service.resolve(profile);
 
@@ -76,7 +86,7 @@ describe('IdentityService', () => {
       user: { findUnique: jest.fn().mockResolvedValue(null), create },
     });
 
-    await new IdentityService(prisma).resolve(profile);
+    await new IdentityService(prisma, personal()).resolve(profile);
 
     // Проверяется аргумент, а не возврат: признак невосстановим задним числом
     // у входа по почте, и потерять его в момент создания нельзя.
@@ -93,7 +103,7 @@ describe('IdentityService', () => {
       user: { findUnique: jest.fn().mockResolvedValue(null), create },
     });
 
-    await new IdentityService(prisma).resolve({
+    await new IdentityService(prisma, personal()).resolve({
       ...profile,
       provider: 'google',
       externalId: 'g-1',

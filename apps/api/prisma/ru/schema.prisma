@@ -1,0 +1,88 @@
+// Схема московской базы российского контура.
+//
+// Здесь лежит только то, что идентифицирует человека. Границу проводит
+// спецификация: «идентифицирует человека», а не «принадлежит человеку».
+// Анкета Знакомств, чаты, лента и покупки остаются в амстердамской базе.
+//
+// Состав полей спецификация называет открытым вопросом к юристу. Расширение
+// должно быть правкой в одном месте — перечне PERSONAL_FIELDS в коде и здесь.
+//
+// Генерация и накат:
+//   pnpm prisma:generate:ru
+//   pnpm prisma:deploy:ru
+
+generator client {
+  // Свой output: иначе два клиента перезаписывают друг друга.
+  provider = "prisma-client-js"
+  // Путь как у пакета, чтобы импортировать по имени, а не относительной
+  // дорожкой через node_modules. Генерируется в postinstall.
+  output   = "../../node_modules/@vedamatch/ru-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("RU_DATABASE_URL")
+}
+
+/// Персональная запись человека. Ключ — тот же User.id, что в амстердамской
+/// базе; uuid генерирует приложение, а не база, иначе хранилища разойдутся.
+model PersonalRecord {
+  id            String    @id
+  email         String    @unique
+  name          String
+  spiritualName String?
+  birthDate     DateTime? @db.Date
+  /// Строкой, а не энумом: дублировать энум в две схемы значит поддерживать
+  /// их синхронно, а значение приходит сюда уже проверенным.
+  gender        String?
+  avatarKey     String?
+  /// Ключи файлов в объектном хранилище. Сами файлы здесь не лежат.
+  photoKeys     String[]  @default([])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  /// Отметка «копия уехала в Амстердам». null — досылка не закрыта, разбирает
+  /// фоновая стадия. Источник истины при расхождении — эта база.
+  copiedAt      DateTime?
+
+  birth    PersonalBirthData?
+  consents PersonalConsent[]
+
+  @@index([copiedAt])
+}
+
+/// Данные рождения для астрологии — идентифицирующие сведения, поэтому здесь.
+model PersonalBirthData {
+  recordId       String         @id
+  record         PersonalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  bornAtUtc      DateTime
+  birthDateLocal DateTime       @db.Date
+  birthTimeLocal String?
+  placeLabel     String
+  latitude       Float
+  longitude      Float
+  timeZone       String
+  updatedAt      DateTime       @updatedAt
+}
+
+enum ConsentKind {
+  /// Обработка персональных данных.
+  processing
+  /// Трансграничная передача: копия уезжает в амстердамскую базу.
+  cross_border
+}
+
+/// Согласие с версией текста политики. Версия обязательна: без неё невозможно
+/// доказать, на что именно человек соглашался.
+model PersonalConsent {
+  id            String         @id
+  recordId      String
+  record        PersonalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  kind          ConsentKind
+  policyVersion String
+  grantedAt     DateTime       @default(now())
+  /// Адрес, с которого дано согласие. Для разбора спорных случаев.
+  grantedIp     String?
+
+  @@unique([recordId, kind, policyVersion])
+  @@index([recordId])
+}

@@ -49,6 +49,27 @@ esac
 echo "docker-entrypoint: prisma migrate deploy"
 npx prisma migrate deploy
 
+# Российский контур: своя база, своя схема, свои миграции. Накатываются только
+# когда контур включён обоими условиями. Наличия строки подключения
+# недостаточно: она может быть заведена заранее, а решение о том, куда едут
+# персональные данные, обязано быть отдельным и осознанным.
+#
+# Кавычки вокруг значения снимаем: в .env строку подключения часто заключают в
+# них, и prisma получает их как часть адреса. Подстановкой
+# параметров, а не sed: обратная ссылка в замене — лишний способ незаметно
+# обнулить строку.
+ru_url="${RU_DATABASE_URL:-}"
+case "$ru_url" in
+  '"'*'"') ru_url="${ru_url#?}"; ru_url="${ru_url%?}" ;;
+  "'"*"'") ru_url="${ru_url#?}"; ru_url="${ru_url%?}" ;;
+esac
+if [ -n "$ru_url" ] && [ "${RU_CONTOUR_ENABLED:-}" = "true" ]; then
+  echo "docker-entrypoint: prisma migrate deploy (российский контур)"
+  RU_DATABASE_URL="$ru_url" npx prisma migrate deploy --schema prisma/ru/schema.prisma
+else
+  echo "docker-entrypoint: российский контур выключен, его миграции пропущены"
+fi
+
 if [ "${SEED_ON_START:-1}" != "0" ]; then
   echo "docker-entrypoint: prisma db seed (отключить: SEED_ON_START=0)"
   npx prisma db seed
