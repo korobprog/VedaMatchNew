@@ -5,6 +5,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrismaModule } from './prisma/prisma.module';
 import { RuPrismaModule } from './prisma/ru-prisma.module';
+import { PersonalDataModule } from './modules/personal-data/personal-data.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AdminAwareThrottlerGuard } from './modules/auth/admin-unlimited.guard';
 import { UsersModule } from './modules/users/users.module';
@@ -45,6 +46,7 @@ import { MusicModule } from './modules/music/music.module';
     EventEmitterModule.forRoot(),
     PrismaModule,
     RuPrismaModule,
+    PersonalDataModule,
     HealthModule,
     AuthModule,
     UsersModule,
