@@ -12,11 +12,14 @@ export function MusicAdminTabs({
   pendingCount = 0,
   openReports = 0,
 }: {
-  active: "queue" | "catalog" | "playlists" | "reports";
+  active: "ingest" | "queue" | "catalog" | "playlists" | "reports";
   pendingCount?: number;
   openReports?: number;
 }) {
   const tabs = [
+    // Пополнение первым: за ним сюда заходят ежедневно, а очередь и жалобы
+    // разбирают по мере появления.
+    { key: "ingest" as const, href: "/admin/music/ingest", label: "Пополнение" },
     { key: "queue" as const, href: "/admin/music", label: "Очередь" },
     {
       key: "reports" as const,

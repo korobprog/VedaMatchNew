@@ -3,15 +3,22 @@
 // Загрузка файлов живёт не здесь, а в `music-client-api.ts`: заливать может
 // любой вошедший, а не только редакция, и админского в ней ничего нет.
 import type {
+  AddMusicIngestFilesRequest,
+  AddMusicIngestFilesResponse,
+  AddMusicIngestUrlsRequest,
   CreateMusicAlbumRequest,
   CreateMusicArtistRequest,
   CreateMusicCategoryRequest,
   CreateMusicPlaylistRequest,
+  CreateMusicIngestBatchRequest,
+  MusicIngestBatchDetailDto,
+  MusicIngestBatchDto,
   MusicModerationDecisionRequest,
   MusicReportDecisionRequest,
   UpdateMusicAlbumRequest,
   UpdateMusicArtistRequest,
   UpdateMusicCategoryRequest,
+  UpdateMusicIngestBatchRequest,
   UpdateMusicPlaylistRequest,
   UpdateMusicTrackRequest,
 } from "@vedamatch/shared";
@@ -160,3 +167,75 @@ export const removeTrackFromMusicSystemPlaylist = (
   send<unknown>(`/music/admin/catalog/playlists/${id}/tracks/${trackId}`, {
     method: "DELETE",
   });
+
+// ---------- Редакционное пополнение ----------
+//
+// Списки читает серверный `music-admin-api.ts` — страница рисуется сразу с
+// позициями. Здесь только то, что делает человек нажатием: завести партию,
+// поправить шапку, залить файлы, опубликовать.
+
+export const createIngestBatch = (body: CreateMusicIngestBatchRequest) =>
+  send<MusicIngestBatchDto>("/music/admin/ingest", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const updateIngestBatch = (
+  id: string,
+  body: UpdateMusicIngestBatchRequest,
+) =>
+  send<MusicIngestBatchDetailDto>(
+    `/music/admin/ingest/${encodeURIComponent(id)}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+
+export const deleteIngestBatch = (id: string) =>
+  send<{ ok: true }>(`/music/admin/ingest/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+
+/** Заявка на пачку файлов: в ответе подписанный PUT на каждый. */
+export const addIngestFiles = (id: string, body: AddMusicIngestFilesRequest) =>
+  send<AddMusicIngestFilesResponse>(
+    `/music/admin/ingest/${encodeURIComponent(id)}/files`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+
+/** Браузер долил файл в бакет — позиция уходит в очередь приёма. */
+export const completeIngestFile = (id: string, itemId: string) =>
+  send<{ ok: true }>(
+    `/music/admin/ingest/${encodeURIComponent(id)}/files/${encodeURIComponent(itemId)}/complete`,
+    { method: "POST" },
+  );
+
+export const addIngestUrls = (id: string, body: AddMusicIngestUrlsRequest) =>
+  send<{ added: number }>(
+    `/music/admin/ingest/${encodeURIComponent(id)}/urls`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+
+/** Вся очередь партии заново — включая брошенное перезапуском API. */
+export const startIngestBatch = (id: string) =>
+  send<{ queued: number }>(
+    `/music/admin/ingest/${encodeURIComponent(id)}/start`,
+    { method: "POST" },
+  );
+
+/** Только упавшее. Удавшееся второй раз не качаем. */
+export const retryIngest = (id: string) =>
+  send<{ retried: number }>(
+    `/music/admin/ingest/${encodeURIComponent(id)}/retry`,
+    { method: "POST" },
+  );
+
+export const publishIngestBatch = (id: string, playlistTitle?: string) =>
+  send<{ published: number }>(
+    `/music/admin/ingest/${encodeURIComponent(id)}/publish`,
+    { method: "POST", body: JSON.stringify({ playlistTitle }) },
+  );
+
+export const deleteIngestItem = (id: string, itemId: string) =>
+  send<{ ok: true }>(
+    `/music/admin/ingest/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`,
+    { method: "DELETE" },
+  );

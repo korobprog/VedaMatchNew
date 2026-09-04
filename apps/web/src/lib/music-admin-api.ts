@@ -11,6 +11,8 @@ import type {
   MusicAdminReportsDto,
   MusicAdminSummaryDto,
   MusicAdminTracksDto,
+  MusicIngestBatchDetailDto,
+  MusicIngestBatchDto,
   MusicModerationItemDto,
 } from "@vedamatch/shared";
 
@@ -63,3 +65,13 @@ export const getMusicAdminPlaylists = () =>
 /** Открытые жалобы. Записи по ним уже скрыты и ждут разбора. */
 export const getMusicAdminReports = () =>
   adminGet<MusicAdminReportsDto>("/music/admin/reports");
+
+/** Партии редакционного пополнения, свежие сверху. */
+export const getIngestBatches = () =>
+  adminGet<MusicIngestBatchDto[]>("/music/admin/ingest");
+
+/** Партия с позициями и черновиками. `null` — нет такой или прав нет. */
+export const getIngestBatch = (id: string) =>
+  adminGet<MusicIngestBatchDetailDto>(
+    `/music/admin/ingest/${encodeURIComponent(id)}`,
+  );
