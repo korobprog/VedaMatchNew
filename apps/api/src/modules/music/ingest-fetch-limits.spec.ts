@@ -3,6 +3,8 @@ import {
   checkContentType,
   formatBytesLimit,
   IngestByteMeter,
+  ingestBatchLimitNotice,
+  ingestEntryBudget,
   ingestFetchReason,
   isRedirectStatus,
   isRetryableRejection,
@@ -216,6 +218,11 @@ describe('причины отказа', () => {
     );
     expect(ingestFetchReason('too_large', '150 МБ')).toBe('Файл больше 150 МБ');
     expect(ingestFetchReason('unreachable')).toBe('Сервер не отвечает');
+    // Потолок партии — не размер файла: «файл больше 0 МБ» врёт про обе
+    // величины сразу.
+    expect(ingestFetchReason('batch_full', '20 ГБ')).toBe(
+      'Партия упёрлась в потолок 20 ГБ — опубликуйте её и заведите следующую',
+    );
     // У архива причина приходит готовой строкой: правило, обо что он
     // споткнулся, знает только разбор.
     expect(ingestFetchReason('zip_rejected', 'В архиве больше 200 записей')).toBe(
@@ -228,6 +235,8 @@ describe('причины отказа', () => {
     expect(isRetryableRejection('not_audio')).toBe(false);
     expect(isRetryableRejection('too_large')).toBe(false);
     expect(isRetryableRejection('zip_rejected')).toBe(false);
+    // Пока партию не опубликуют, места в ней не прибавится.
+    expect(isRetryableRejection('batch_full')).toBe(false);
     expect(isRetryableRejection('unreachable')).toBe(true);
     expect(isRetryableRejection('http_error')).toBe(true);
   });
@@ -237,5 +246,86 @@ describe('formatBytesLimit', () => {
   it('переводит предел в мегабайты для строки отказа', () => {
     expect(formatBytesLimit(150 * 1024 * 1024)).toBe('150 МБ');
     expect(formatBytesLimit(20 * 1024 * 1024 * 1024)).toBe('20 ГБ');
+  });
+});
+
+const mb = (count: number): number => count * 1024 * 1024;
+
+describe('ingestEntryBudget', () => {
+  it('берёт ближайший потолок и называет, чей он', () => {
+    expect(
+      ingestEntryBudget({
+        fileBytes: mb(150),
+        batchBytes: mb(4000),
+        archiveBytes: mb(4000),
+      }),
+    ).toEqual({ limitBytes: mb(150), kind: 'file', batchExhausted: false });
+
+    expect(
+      ingestEntryBudget({
+        fileBytes: mb(150),
+        batchBytes: mb(40),
+        archiveBytes: mb(4000),
+      }),
+    ).toEqual({ limitBytes: mb(40), kind: 'batch', batchExhausted: false });
+
+    expect(
+      ingestEntryBudget({
+        fileBytes: mb(150),
+        batchBytes: mb(4000),
+        archiveBytes: mb(20),
+      }),
+    ).toEqual({ limitBytes: mb(20), kind: 'archive', batchExhausted: false });
+  });
+
+  it('выбранный до конца остаток партии — не нулевой предел, а стоп', () => {
+    // Ровно этим кончалась партия, упёршаяся в потолок на середине архива:
+    // предел становился нулём, и первый же байт следующей записи получал
+    // «Запись «03.mp3» больше 0 МБ» — цифру, которой нет ни у файла, ни у
+    // партии.
+    const budget = ingestEntryBudget({
+      fileBytes: mb(150),
+      batchBytes: 0,
+      archiveBytes: mb(4000),
+    });
+    expect(budget.batchExhausted).toBe(true);
+    expect(budget.limitBytes).toBe(0);
+  });
+
+  it('перебранный остаток считается выбранным, а не отрицательным', () => {
+    const budget = ingestEntryBudget({
+      fileBytes: mb(150),
+      batchBytes: -mb(7),
+      archiveBytes: mb(4000),
+    });
+    expect(budget).toEqual({
+      limitBytes: 0,
+      kind: 'batch',
+      batchExhausted: true,
+    });
+  });
+
+  it('бесконечный остаток партии не мешает: у ссылки без партии так и есть', () => {
+    expect(
+      ingestEntryBudget({
+        fileBytes: mb(150),
+        batchBytes: Number.POSITIVE_INFINITY,
+        archiveBytes: Number.POSITIVE_INFINITY,
+      }),
+    ).toEqual({ limitBytes: mb(150), kind: 'file', batchExhausted: false });
+  });
+});
+
+describe('ingestBatchLimitNotice', () => {
+  it('называет настоящие числа: сколько взято и обо что упёрлись', () => {
+    expect(ingestBatchLimitNotice(12, 20 * 1024 * 1024 * 1024)).toBe(
+      'Взято записей: 12. Дальше партия упёрлась в потолок 20 ГБ',
+    );
+  });
+
+  it('не влезло ничего — говорит и это', () => {
+    expect(ingestBatchLimitNotice(0, 20 * 1024 * 1024 * 1024)).toBe(
+      'Партия упёрлась в потолок 20 ГБ — не поместилась ни одна запись архива',
+    );
   });
 });

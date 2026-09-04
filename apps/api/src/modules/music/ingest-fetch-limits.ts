@@ -25,6 +25,12 @@ export type IngestFetchRejection =
   | 'redirect_without_location'
   | 'not_audio'
   | 'too_large'
+  /**
+   * Партия выбрала свой потолок объёма. Не то же, что `too_large`: файл тут
+   * ни при чём, места нет у партии — и вторая попытка ничего не изменит,
+   * пока партию не опубликуют и не заведут следующую.
+   */
+  | 'batch_full'
   | 'empty_body'
   | 'http_error'
   | 'unreachable'
@@ -48,6 +54,7 @@ const TERMINAL: ReadonlySet<IngestFetchRejection> =
     'redirect_without_location',
     'not_audio',
     'too_large',
+    'batch_full',
     'zip_rejected',
   ]);
 
@@ -75,6 +82,8 @@ export function ingestFetchReason(
       return `Не аудио: ${detail ?? 'тип не назван'}`;
     case 'too_large':
       return `Файл больше ${detail ?? 'предела'}`;
+    case 'batch_full':
+      return `Партия упёрлась в потолок ${detail ?? 'объёма'} — опубликуйте её и заведите следующую`;
     case 'empty_body':
       return 'Сервер отдал пустой файл';
     case 'zip_rejected':
@@ -95,6 +104,76 @@ export function formatBytesLimit(bytes: number): string {
   }
   return `${Math.round(mb)} МБ`;
 }
+
+/** Чей потолок оказался ближе всех к записи. */
+export type IngestLimitKind = 'file' | 'batch' | 'archive';
+
+export interface IngestEntryBudget {
+  /** Сколько байт записи разрешено принять. */
+  limitBytes: number;
+  /** Ближайший потолок — его и называем в причине отказа. */
+  kind: IngestLimitKind;
+  /** Партии больше нечего дать: приём пора кончать, а не рвать по нулю. */
+  batchExhausted: boolean;
+}
+
+/**
+ * Сколько байт разрешено принять и обо что позиция споткнётся первым.
+ *
+ * Вынесено сюда из загрузчика, потому что «меньший из трёх» — это не одна
+ * арифметика, а два разных исхода. Файл, переросший **свой** потолок, —
+ * отказ записи: она одна и виновата. Партия, выбравшая **свой**, — не
+ * отказ записи вовсе: место кончилось у партии, и остальные дорожки архива
+ * ни при чём.
+ *
+ * Различать их обязательно: пока предел считался просто минимумом,
+ * выбранный остаток партии превращался в нулевой предел, и первый же байт
+ * следующей записи получал «Запись «03.mp3» больше 0 МБ» — цифру, которой
+ * нет ни у файла, ни у партии, — после чего разбор стирал из бакета всё уже
+ * распакованное.
+ */
+export function ingestEntryBudget(budgets: {
+  fileBytes: number;
+  batchBytes: number;
+  archiveBytes: number;
+}): IngestEntryBudget {
+  const batchBytes = Math.max(0, budgets.batchBytes);
+  const archiveBytes = Math.max(0, budgets.archiveBytes);
+
+  // Порядок сравнений задаёт и разрешение ничьей: при равных остатках
+  // виноватым считается файл, а не партия. Партия «упёрлась» только тогда,
+  // когда её остаток строго меньше всех прочих пределов.
+  let kind: IngestLimitKind = 'file';
+  let limitBytes = Math.max(0, budgets.fileBytes);
+  if (archiveBytes < limitBytes) {
+    limitBytes = archiveBytes;
+    kind = 'archive';
+  }
+  if (batchBytes < limitBytes) {
+    limitBytes = batchBytes;
+    kind = 'batch';
+  }
+
+  return { limitBytes, kind, batchExhausted: batchBytes <= 0 };
+}
+
+/**
+ * Пометка о разборе, прерванном потолком партии.
+ *
+ * Числа настоящие: сколько записей успело попасть в партию и какой именно
+ * потолок её остановил. Уже вынутые дорожки при этом остаются — стирать их
+ * значит наказывать редакцию за то, что архив оказался больше остатка.
+ */
+export function ingestBatchLimitNotice(
+  takenCount: number,
+  quotaBytes: number,
+): string {
+  const quota = formatBytesLimit(quotaBytes);
+  return takenCount > 0
+    ? `Взято записей: ${takenCount}. Дальше партия упёрлась в потолок ${quota}`
+    : `Партия упёрлась в потолок ${quota} — не поместилась ни одна запись архива`;
+}
+
 
 /**
  * Счётчик принятых байтов с MD5 на лету.

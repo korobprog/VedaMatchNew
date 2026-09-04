@@ -12,7 +12,7 @@ import { batchStatusFor, isItemStale } from './ingest-state';
 import {
   IngestFetchError,
   MusicIngestFetchService,
-  type ExtractedArchiveEntry,
+  type ExpandedArchive,
 } from './music-ingest-fetch.service';
 import {
   buildMusicCoverKey,
@@ -282,9 +282,9 @@ export class MusicIngestProcessService {
       return;
     }
 
-    let entries: ExtractedArchiveEntry[];
+    let expanded: ExpandedArchive;
     try {
-      entries = await this.fetcher.expandArchive(
+      expanded = await this.fetcher.expandArchive(
         item.batchId,
         item.storageKey,
         await this.batchRemainingBytes(item.batchId),
@@ -300,10 +300,12 @@ export class MusicIngestProcessService {
       throw error;
     }
 
-    if (entries.length === 0) {
+    if (expanded.entries.length === 0) {
+      // Пометка о потолке партии сильнее общей: «в архиве нет mp3» было бы
+      // неправдой — записи там есть, места нет в партии.
       await this.finishFailed(
         item.id,
-        'В архиве нет ни одной записи mp3 или m4a',
+        expanded.truncatedReason ?? 'В архиве нет ни одной записи mp3 или m4a',
       );
       return;
     }
@@ -312,7 +314,7 @@ export class MusicIngestProcessService {
     // ещё не прочитаны, а таблица заполняется прямо сейчас и должна выглядеть
     // альбомом, а не мешаниной.
     const ordered = orderIngestEntries(
-      entries.map((entry) => ({
+      expanded.entries.map((entry) => ({
         ...entry,
         ref: entry.entryPath,
         trackNumber: null,
@@ -341,7 +343,10 @@ export class MusicIngestProcessService {
         where: { id: item.id },
         data: {
           status: 'skipped',
-          failureReason: 'Архив разобран',
+          // Разбор бывает честно неполным: партия упёрлась в потолок на
+          // середине архива, и админ должен прочитать в таблице, сколько
+          // дорожек в неё вошло, а не «архив разобран».
+          failureReason: expanded.truncatedReason ?? 'Архив разобран',
           // Объект убираем следом, и ключ, ведущий в пустоту, позиции не
           // нужен: по нему уборка партии полезла бы за несуществующим.
           storageKey: null,

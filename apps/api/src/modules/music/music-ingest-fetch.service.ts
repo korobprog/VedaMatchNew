@@ -8,11 +8,14 @@ import {
   checkContentType,
   formatBytesLimit,
   IngestByteMeter,
+  ingestBatchLimitNotice,
+  ingestEntryBudget,
   ingestFetchReason,
   isRedirectStatus,
   isRetryableRejection,
   resolveIngestMime,
   resolveRedirect,
+  type IngestEntryBudget,
   type IngestFetchRejection,
 } from './ingest-fetch-limits';
 import {
@@ -23,7 +26,10 @@ import {
 } from './ingest-zip-entry';
 import { checkIngestUrl, isPrivateAddress } from './ingest-url-guard';
 import { MusicStorageService } from './music-storage.service';
-import { MUSIC_UPLOAD_DEFAULT_LIMITS } from './music-upload-validate';
+import {
+  MUSIC_INGEST_DEFAULT_BATCH_QUOTA_BYTES,
+  MUSIC_UPLOAD_DEFAULT_LIMITS,
+} from './music-upload-validate';
 
 /**
  * Сколько ждём одну позицию целиком: и заголовки, и все её байты.
@@ -70,6 +76,21 @@ export interface ExtractedArchiveEntry {
   mime: string;
 }
 
+/**
+ * Чем кончился разбор архива.
+ *
+ * Отдельным типом, а не просто списком записей, ради `truncatedReason`:
+ * разбор бывает **честно неполным**. Партия упирается в свой потолок на
+ * середине архива, и остаток дорожек в неё уже не влезает — но те, что
+ * влезли, остаются: они законная часть партии, и стирать их значит
+ * наказывать редакцию за размер архива.
+ */
+export interface ExpandedArchive {
+  entries: ExtractedArchiveEntry[];
+  /** `null` — архив разобран целиком. Иначе пометка словами, почему нет. */
+  truncatedReason: string | null;
+}
+
 export interface FetchedIngestObject {
   storageKey: string;
   sizeBytes: number;
@@ -110,6 +131,12 @@ export interface FetchedIngestObject {
 export class MusicIngestFetchService {
   private readonly logger = new Logger(MusicIngestFetchService.name);
   private readonly maxBytes: number;
+  /**
+   * Потолок партии. Загрузчику он нужен только ради причины отказа: сколько
+   * партии осталось, ему говорит зовущий, а вот назвать в причине настоящую
+   * цифру потолка можно только зная её.
+   */
+  private readonly batchQuotaBytes: number;
 
   constructor(
     private readonly storage: MusicStorageService,
@@ -120,6 +147,12 @@ export class MusicIngestFetchService {
       Number.isFinite(raw) && raw > 0
         ? raw
         : MUSIC_UPLOAD_DEFAULT_LIMITS.maxBytes;
+
+    const quota = Number(config.get<string>('MUSIC_INGEST_BATCH_QUOTA_BYTES'));
+    this.batchQuotaBytes =
+      Number.isFinite(quota) && quota > 0
+        ? quota
+        : MUSIC_INGEST_DEFAULT_BATCH_QUOTA_BYTES;
   }
 
   /**
@@ -173,9 +206,14 @@ export class MusicIngestFetchService {
    * - `skip` — обложка, текст, мусор macOS, вложенный архив, каталог:
    *   `autodrain()` и молчание. Чужой архив всегда содержит лишнее, и падать
    *   на `cover.jpg` нельзя;
-   * - `reject` — путь наружу или переполнение потолков: разбор
+   * - `reject` — путь наружу или переполнение потолков самого архива: разбор
    *   останавливается целиком, уже залитое убирается, позиция архива падает
    *   с причиной словами. На `../` падать обязательно.
+   *
+   * Отдельно от `reject` стоит потолок **партии**: он не про архив и не про
+   * запись. Место кончилось у партии, и взятые до этого дорожки ни в чём не
+   * виноваты — разбор кончается, взятое остаётся, а в `truncatedReason`
+   * уходит пометка словами.
    *
    * Возвращает записи в том порядке, в каком они лежали в архиве. Порядок
    * альбома выстраивает обработка — по номерам из тегов, которых до разбора
@@ -185,7 +223,7 @@ export class MusicIngestFetchService {
     batchId: string,
     archiveKey: string,
     remainingBatchBytes = Number.POSITIVE_INFINITY,
-  ): Promise<ExtractedArchiveEntry[]> {
+  ): Promise<ExpandedArchive> {
     if (!this.storage.configured) {
       throw new IngestFetchError('unreachable', 'Хранилище не настроено');
     }
@@ -211,6 +249,7 @@ export class MusicIngestFetchService {
 
     const seen: IngestZipSeen = { count: 0, totalBytes: 0 };
     const taken: ExtractedArchiveEntry[] = [];
+    let truncatedReason: string | null = null;
 
     try {
       for await (const entry of zip as unknown as AsyncIterable<ZipEntry>) {
@@ -235,16 +274,43 @@ export class MusicIngestFetchService {
         }
 
         // Предел записи — меньший из трёх: свой потолок файла, остаток
-        // партии и остаток распакованного объёма архива.
-        const limit = Math.max(
-          0,
-          Math.min(
-            this.maxBytes,
-            remainingBatchBytes - seen.totalBytes,
-            INGEST_ZIP_MAX_TOTAL_BYTES - seen.totalBytes,
-          ),
-        );
-        const stored = await this.storeEntry(batchId, entry, path, limit);
+        // партии и остаток распакованного объёма архива. Кто именно из них
+        // ближе, решает и то, чем кончится перебор.
+        const budget = ingestEntryBudget({
+          fileBytes: this.maxBytes,
+          batchBytes: remainingBatchBytes - seen.totalBytes,
+          archiveBytes: INGEST_ZIP_MAX_TOTAL_BYTES - seen.totalBytes,
+        });
+        // Остаток партии выбран целиком: следующей записи места нет, и
+        // читать архив дальше незачем. Взятое до этого остаётся.
+        if (budget.batchExhausted) {
+          truncatedReason = ingestBatchLimitNotice(
+            taken.length,
+            this.batchQuotaBytes,
+          );
+          break;
+        }
+
+        let stored: ExtractedArchiveEntry;
+        try {
+          stored = await this.storeEntry(batchId, entry, path, budget);
+        } catch (error) {
+          // Запись не влезла в остаток партии — это не отказ архиву, а конец
+          // разбора: её собственный обрывок `storeEntry` уже убрал, а взятые
+          // раньше дорожки остаются в партии.
+          if (
+            error instanceof IngestFetchError &&
+            error.rejection === 'batch_full'
+          ) {
+            truncatedReason = ingestBatchLimitNotice(
+              taken.length,
+              this.batchQuotaBytes,
+            );
+            break;
+          }
+          throw error;
+        }
+
         taken.push(stored);
         seen.count += 1;
         seen.totalBytes += stored.sizeBytes;
@@ -262,7 +328,7 @@ export class MusicIngestFetchService {
       clearTimeout(timer);
     }
 
-    return taken;
+    return { entries: taken, truncatedReason };
   }
 
   /**
@@ -278,11 +344,11 @@ export class MusicIngestFetchService {
     batchId: string,
     entry: ZipEntry,
     path: string,
-    limitBytes: number,
+    budget: IngestEntryBudget,
   ): Promise<ExtractedArchiveEntry> {
     const mime = mimeForEntry(path);
     const key = this.storage.buildIngestKey(batchId, extensionFor(mime));
-    const meter = new IngestByteMeter(limitBytes);
+    const meter = new IngestByteMeter(budget.limitBytes);
     const sink = new PassThrough();
     const upload = this.storage.putStream(key, sink, mime);
     // До конца записи отказ заливки ловить некому, а необработанное
@@ -294,10 +360,15 @@ export class MusicIngestFetchService {
       for await (const chunk of entry) {
         if (!meter.push(chunk)) {
           sink.destroy(new Error('Превышен предел размера'));
-          throw this.reject(
-            'zip_rejected',
-            `Запись «${path}» больше ${formatBytesLimit(limitBytes)}`,
-          );
+          // Две разные новости: запись переросла свой потолок — виновата
+          // запись; партия выбрала свой — виноват размер партии, и разбор
+          // на этом честно кончается, не трогая взятого раньше.
+          throw budget.kind === 'batch'
+            ? this.batchFull()
+            : this.reject(
+                'zip_rejected',
+                `Запись «${path}» больше ${formatBytesLimit(budget.limitBytes)}`,
+              );
         }
         // Обратное давление: без ожидания `drain` распаковщик набьёт буфер
         // теми самыми мегабайтами, которых мы избегали.
@@ -419,14 +490,24 @@ export class MusicIngestFetchService {
     const mime = resolveIngestMime(contentType.mime, url);
 
     // Предел позиции — меньший из двух: свой потолок файла и остаток партии.
-    const limit = Math.max(0, Math.min(this.maxBytes, remainingBatchBytes));
+    const budget = ingestEntryBudget({
+      fileBytes: this.maxBytes,
+      batchBytes: remainingBatchBytes,
+      archiveBytes: Number.POSITIVE_INFINITY,
+    });
+    // Места в партии не осталось вовсе — качать нечего и незачем: иначе
+    // отказ звучал бы «Файл больше 0 МБ», то есть враньём про обе величины.
+    if (budget.batchExhausted) {
+      await response.body?.cancel().catch(() => undefined);
+      throw this.batchFull();
+    }
 
     if (!response.body) {
       throw this.reject('empty_body');
     }
 
     const key = this.storage.buildIngestKey(batchId, extensionFor(mime));
-    const meter = new IngestByteMeter(limit);
+    const meter = new IngestByteMeter(budget.limitBytes);
     const sink = new PassThrough();
     const upload = this.storage.putStream(key, sink, mime);
     // Пока поток не дочитан, отказ заливки ловить некому, а необработанное
@@ -442,14 +523,12 @@ export class MusicIngestFetchService {
           // недоделанную многочастную загрузку.
           controller.abort();
           sink.destroy(new Error('Превышен предел размера'));
-          throw this.reject(
-            'too_large',
-            formatBytesLimit(
-              // В причине называем тот предел, обо что позиция и споткнулась:
-              // «файл больше 150 МБ» и «партия переполнена» — разные новости.
-              limit < this.maxBytes ? limit : this.maxBytes,
-            ),
-          );
+          // «Файл больше 150 МБ» и «партия переполнена» — разные новости, и
+          // называются они разными словами, а не одной строкой, в которую
+          // подставили чужую цифру.
+          throw budget.kind === 'batch'
+            ? this.batchFull()
+            : this.reject('too_large', formatBytesLimit(budget.limitBytes));
         }
         // Обратное давление: без ожидания `drain` быстрый источник набьёт
         // буфер `PassThrough` теми самыми мегабайтами, которых мы избегали.
@@ -516,6 +595,15 @@ export class MusicIngestFetchService {
         throw this.reject('private_address');
       }
     }
+  }
+
+  /**
+   * Партии больше нечего дать. Причина называет настоящий потолок партии, а
+   * не остаток: «осталось 0 МБ» админу не говорит ничего, а «упёрлась в
+   * потолок 20 ГБ» говорит, что делать дальше.
+   */
+  private batchFull(): IngestFetchError {
+    return this.reject('batch_full', formatBytesLimit(this.batchQuotaBytes));
   }
 
   private reject(
