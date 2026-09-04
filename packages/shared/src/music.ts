@@ -688,3 +688,101 @@ export interface MusicFriendPlaylistDto extends MusicPlaylistDto {
 export interface MusicFriendPlaylistsDto {
   items: MusicFriendPlaylistDto[];
 }
+
+// ===== Редакционное пополнение =====
+
+export type MusicIngestBatchStatus =
+  | 'draft'
+  | 'running'
+  | 'ready'
+  | 'published'
+  | 'failed';
+export type MusicIngestSource = 'upload' | 'url' | 'zip';
+export type MusicIngestItemStatus =
+  | 'waiting'
+  | 'fetching'
+  | 'stored'
+  | 'skipped'
+  | 'failed';
+
+/** Партия в списке: без позиций, но с тем, что решает — объём и статус. */
+export interface MusicIngestBatchDto {
+  id: string;
+  title: string;
+  status: MusicIngestBatchStatus;
+  itemCount: number;
+  storedCount: number;
+  failedCount: number;
+  /** Сколько байт уже занято позициями этой партии. */
+  sizeBytes: number;
+  createdByName: string | null;
+  createdAt: string;
+}
+
+/**
+ * Позиция вместе с черновиком, если он уже создан: таблица показывает и
+ * доставку, и метаданные, а два запроса ради одной строки не нужны.
+ */
+export interface MusicIngestItemDto {
+  id: string;
+  source: MusicIngestSource;
+  sourceRef: string;
+  position: number;
+  status: MusicIngestItemStatus;
+  failureReason: string | null;
+  track: MusicTrackDto | null;
+  /** Заполнен, когда позиция `skipped`: на что именно похоже. */
+  duplicateOfTrackId: string | null;
+}
+
+export interface MusicIngestBatchDetailDto extends MusicIngestBatchDto {
+  rightsBasis: MusicUploadRightsBasis;
+  rightsNote: string | null;
+  artistId: string | null;
+  albumId: string | null;
+  categoryIds: string[];
+  language: string | null;
+  isLiveRecording: boolean;
+  quotaBytes: number;
+  items: MusicIngestItemDto[];
+}
+
+export interface CreateMusicIngestBatchRequest {
+  title: string;
+  rightsBasis: MusicUploadRightsBasis;
+  rightsNote?: string;
+}
+
+export interface UpdateMusicIngestBatchRequest {
+  title?: string;
+  rightsBasis?: MusicUploadRightsBasis;
+  rightsNote?: string | null;
+  artistId?: string | null;
+  albumId?: string | null;
+  categoryIds?: string[];
+  language?: string | null;
+  isLiveRecording?: boolean;
+}
+
+/** Заявка на N файлов разом: браузер льёт их параллельно. */
+export interface AddMusicIngestFilesRequest {
+  files: { fileName: string; mime: string; sizeBytes: number }[];
+}
+
+export interface AddMusicIngestFilesResponse {
+  items: {
+    itemId: string;
+    url: string;
+    headers: Record<string, string>;
+  }[];
+}
+
+export interface AddMusicIngestUrlsRequest {
+  /** По адресу на строку; пустые строки отбрасываются на сервере. */
+  urls: string[];
+}
+
+export interface PublishMusicIngestBatchRequest {
+  /** Непусто — из партии собирается системная подборка с этим названием. */
+  playlistTitle?: string;
+}

@@ -379,6 +379,7 @@ model User {
   musicReportsMade                   MusicReport[]                @relation("MusicReportsMade")
   musicReportsDecided                MusicReport[]                @relation("MusicReportsDecided")
   musicSettings                      MusicSettings?               @relation("MusicSettings")
+  musicIngestBatches                 MusicIngestBatch[]           @relation("MusicIngestBatches")
   teamApplications                   TeamApplication[]
 
   @@index([accountStatus])
@@ -4375,8 +4376,9 @@ model MusicArtist {
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
 
-  albums MusicAlbum[]
-  tracks MusicTrack[]
+  albums        MusicAlbum[]
+  tracks        MusicTrack[]
+  ingestBatches MusicIngestBatch[]
 
   @@index([kind])
 }
@@ -4396,7 +4398,8 @@ model MusicAlbum {
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
-  tracks MusicTrack[]
+  tracks        MusicTrack[]
+  ingestBatches MusicIngestBatch[]
 
   @@index([artistId])
 }
@@ -4472,13 +4475,15 @@ model MusicTrack {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  categories MusicTrackCategory[]
-  items      MusicPlaylistItem[]
-  favorites  MusicFavorite[]
-  playStates MusicPlayState[]
-  nowPlaying MusicNowPlaying[]
-  listens    MusicListen[]
-  reports    MusicReport[]
+  categories       MusicTrackCategory[]
+  items            MusicPlaylistItem[]
+  favorites        MusicFavorite[]
+  playStates       MusicPlayState[]
+  nowPlaying       MusicNowPlaying[]
+  listens          MusicListen[]
+  reports          MusicReport[]
+  ingestItem       MusicIngestItem?     @relation("MusicIngestDraft")
+  ingestDuplicates MusicIngestItem[]    @relation("MusicIngestDuplicate")
 
   @@index([status, publishedAt(sort: Desc)])
   @@index([artistId])
@@ -4659,6 +4664,101 @@ model MusicSettings {
   autoplay             Boolean                   @default(true)
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
+}
+
+/// Партия редакционного пополнения: пачка записей, которую админ заводит
+/// разом. Отдельно от `MusicUpload`, потому что у той жёсткий `uploaderId` и
+/// завязка на личную квоту: подмешав редакционное, каждый запрос про квоту и
+/// «мои загрузки» обязан был бы помнить «кроме редакционных».
+model MusicIngestBatch {
+  id          String                 @id @default(uuid())
+  title       String
+  createdById String?
+  createdBy   User?                  @relation("MusicIngestBatches", fields: [createdById], references: [id], onDelete: SetNull)
+  status      MusicIngestBatchStatus @default(draft)
+
+  /// Основание прав редакции и строка «откуда взяли»: когда придёт
+  /// претензия, отвечать придётся по конкретной записи.
+  rightsBasis MusicUploadRightsBasis
+  rightsNote  String?
+
+  /// Что применяется к позициям по умолчанию.
+  artistId        String?
+  artist          MusicArtist? @relation(fields: [artistId], references: [id], onDelete: SetNull)
+  albumId         String?
+  album           MusicAlbum?  @relation(fields: [albumId], references: [id], onDelete: SetNull)
+  categoryIds     String[]
+  language        String?
+  isLiveRecording Boolean      @default(false)
+
+  items MusicIngestItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, updatedAt])
+}
+
+/// Позиция партии — накладная на доставку одного файла. Метаданные живут в
+/// созданном черновом `MusicTrack`, а не здесь: описывать их дважды и писать
+/// второй экран правки незачем.
+model MusicIngestItem {
+  id        String                @id @default(uuid())
+  batchId   String
+  batch     MusicIngestBatch      @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  source    MusicIngestSource
+  /// Адрес, имя файла в архиве или имя выбранного файла — то, что показывают
+  /// админу в строке таблицы.
+  sourceRef String
+  position  Int
+  status    MusicIngestItemStatus @default(waiting)
+
+  storageKey String?
+  /// MD5 содержимого: у `upload` берётся из ETag объекта, у остальных
+  /// считается на лету при потоковой записи. Служит только для поиска
+  /// дублей.
+  checksum   String?
+
+  trackId String?     @unique
+  track   MusicTrack? @relation("MusicIngestDraft", fields: [trackId], references: [id], onDelete: SetNull)
+
+  /// На что похожа пропущенная позиция. Отдельным полем, а не через
+  /// `trackId`: тот уникален и означает «черновик, созданный этой позицией»,
+  /// а дублей одного и того же трека в партии бывает несколько.
+  duplicateOfTrackId String?
+  duplicateOf        MusicTrack? @relation("MusicIngestDuplicate", fields: [duplicateOfTrackId], references: [id], onDelete: SetNull)
+
+  failureReason String?
+  attempts      Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, updatedAt])
+  @@index([batchId, position])
+  @@index([checksum])
+}
+
+enum MusicIngestBatchStatus {
+  draft
+  running
+  ready
+  published
+  failed
+}
+
+enum MusicIngestSource {
+  upload
+  url
+  zip
+}
+
+enum MusicIngestItemStatus {
+  waiting
+  fetching
+  stored
+  skipped
+  failed
 }
 
 // ===== Team applications =====
