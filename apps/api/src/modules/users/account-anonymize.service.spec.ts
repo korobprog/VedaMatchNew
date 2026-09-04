@@ -1,3 +1,4 @@
+import { PersonalDataService } from '../personal-data/personal-data.service';
 import { Prisma } from '@prisma/client';
 import {
   ANONYMIZE_GRACE_MS,
@@ -57,6 +58,7 @@ describe('AccountAnonymizeService', () => {
     const service = new AccountAnonymizeService(
       prisma as never,
       gallery as never,
+      new PersonalDataService(prisma as never, { isEnabled: false } as never),
     );
 
     await expect(service.tick(now)).resolves.toEqual({
@@ -85,6 +87,7 @@ describe('AccountAnonymizeService', () => {
     const service = new AccountAnonymizeService(
       prisma as never,
       gallery as never,
+      new PersonalDataService(prisma as never, { isEnabled: false } as never),
     );
 
     await expect(service.tick(now)).resolves.toEqual({
@@ -156,6 +159,7 @@ describe('AccountAnonymizeService', () => {
     const service = new AccountAnonymizeService(
       prisma as never,
       gallery as never,
+      new PersonalDataService(prisma as never, { isEnabled: false } as never),
     );
 
     await expect(service.tick(now)).resolves.toEqual({
@@ -170,6 +174,7 @@ describe('AccountAnonymizeService', () => {
     const service = new AccountAnonymizeService(
       prisma as never,
       { removeStorageObjects: jest.fn() } as never,
+      new PersonalDataService(prisma as never, { isEnabled: false } as never),
     );
     await expect(service.tick(now)).resolves.toEqual({
       anonymized: 0,

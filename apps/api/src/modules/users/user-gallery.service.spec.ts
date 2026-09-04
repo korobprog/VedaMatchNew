@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+import { PersonalDataService } from '../personal-data/personal-data.service';
 import {
   BadRequestException,
   ConflictException,
@@ -583,7 +584,13 @@ function createService(
   const config = {
     get: jest.fn((key: string) => values[key]),
   } as unknown as ConfigService;
-  return new UserGalleryService(prisma as never, config);
+  // Контур выключен: сервис прозрачен и сразу зовёт основную запись — тот
+  // же путь, что и в проде до включения.
+  return new UserGalleryService(
+    prisma as never,
+    config,
+    new PersonalDataService(prisma as never, { isEnabled: false } as never),
+  );
 }
 
 function prismaMock() {

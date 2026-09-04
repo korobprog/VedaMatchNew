@@ -30,7 +30,19 @@ function make(options: { enabled?: boolean; moscowFails?: boolean } = {}) {
       return { personalRecord: { upsert, update } };
     },
   };
-  return { service: new PersonalDataService(ru as never), log, upsert, update };
+  // Основная база нужна только методу writeFor; низкоуровневый write её не
+  // трогает, поэтому здесь достаточно пустышки.
+  const prisma = {
+    user: { findUnique: jest.fn() },
+    userPhoto: { findMany: jest.fn().mockResolvedValue([]) },
+  };
+  return {
+    service: new PersonalDataService(prisma as never, ru as never),
+    prisma,
+    log,
+    upsert,
+    update,
+  };
 }
 
 describe('PersonalDataService.write', () => {

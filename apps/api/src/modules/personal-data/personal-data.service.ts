@@ -1,7 +1,23 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import type { DataResidency } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 import { RuPrismaService } from '../../prisma/ru-prisma.service';
-import type { PersonalBirthSource, PersonalRecordInput } from './personal-fields';
+import {
+  PERSONAL_SELECT,
+  type PersonalBirthSource,
+  type PersonalRecordInput,
+} from './personal-fields';
+
+/**
+ * Что меняет операция. Всё, чего здесь нет, дочитывается из основной базы:
+ * в Москву уезжает полное состояние, а не дельта.
+ */
+export type PersonalPatch = {
+  fields?: Record<string, unknown>;
+  addPhotoKeys?: string[];
+  removePhotoKeys?: string[];
+  birth?: PersonalBirthSource | null;
+};
 
 export type PersonalWrite = {
   /** Откуда берётся: `User.dataResidency`, а не провайдер и не домен. */
@@ -28,7 +44,10 @@ export type PersonalWrite = {
 export class PersonalDataService {
   private readonly logger = new Logger(PersonalDataService.name);
 
-  constructor(private readonly ru: RuPrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ru: RuPrismaService,
+  ) {}
 
   /**
    * Контур включён. Точки записи спрашивают это ПЕРЕД сбором персональной
@@ -99,6 +118,104 @@ export class PersonalDataService {
     }
 
     return result;
+  }
+
+  /**
+   * Правка персональных данных существующего человека.
+   *
+   * Точки записи не собирают персональную запись сами: перечень полей должен
+   * читаться в одном месте, иначе граница контура разъедется по коду. Сюда
+   * передаётся только то, что операция меняет; остальное дочитывается из
+   * основной базы.
+   *
+   * Ключи фотографий передаются дельтой, а не набором: вызывающий знает, какой
+   * снимок добавляет или убирает, а полный список знаем мы.
+   */
+  async writeFor<T>(
+    userId: string,
+    applyGlobal: () => Promise<T>,
+    patch: PersonalPatch = {},
+  ): Promise<T> {
+    // Контур выключен — прежний путь без единого лишнего запроса.
+    if (!this.isActive) return applyGlobal();
+
+    const before = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { ...PERSONAL_SELECT, dataResidency: true },
+    });
+    if (!before) return applyGlobal();
+
+    const fields = patch.fields ?? {};
+    const value = <K extends keyof typeof before>(key: K) =>
+      (key in fields ? (fields as Record<string, unknown>)[key] : before[key]);
+
+    const photoKeys = await this.nextPhotoKeys(userId, patch);
+
+    return this.write(
+      {
+        residency: before.dataResidency,
+        record: {
+          id: userId,
+          email: value('email') as string,
+          name: value('name') as string,
+          spiritualName: (value('spiritualName') as string | null) ?? null,
+          birthDate: (value('birthDate') as Date | null) ?? null,
+          gender: (value('gender') as string | null) ?? null,
+          avatarKey: (value('avatarKey') as string | null) ?? null,
+          photoKeys,
+        },
+        birth: patch.birth,
+      },
+      applyGlobal,
+    );
+  }
+
+  /**
+   * Пересобрать персональную запись, когда основная база уже изменилась.
+   *
+   * Нужен там, где порядок «Россия первой» неприменим: например при удалении
+   * фотографии, где ключ известен только после транзакции, а стирание
+   * первичной записи за рубежом не создаёт.
+   */
+  async sync(userId: string, patch: PersonalPatch = {}): Promise<void> {
+    await this.writeFor(userId, async () => undefined, patch);
+  }
+
+  /**
+   * Стереть персональную запись в контуре. Право на удаление обязано доходить
+   * до российской базы, иначе «удалённый» аккаунт продолжает там жить.
+   *
+   * Ошибка не пробрасывается: отказать в удалении хуже, чем удалить не везде
+   * сразу. Несостоявшееся стирание видно в журнале и чинится повтором.
+   */
+  async erase(userId: string): Promise<void> {
+    if (!this.isActive) return;
+    try {
+      await this.ru.db.personalRecord.deleteMany({ where: { id: userId } });
+    } catch (error) {
+      this.logger.error(
+        `Не удалось стереть запись ${userId} в контуре: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  private async nextPhotoKeys(
+    userId: string,
+    patch: PersonalPatch,
+  ): Promise<string[]> {
+    const photos = await this.prisma.userPhoto.findMany({
+      where: { userId },
+      select: { storageKey: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+    const removed = new Set(patch.removePhotoKeys ?? []);
+    const keys = photos
+      .map((photo) => photo.storageKey)
+      .filter((key) => !removed.has(key));
+    for (const key of patch.addPhotoKeys ?? []) {
+      if (!keys.includes(key)) keys.push(key);
+    }
+    return keys;
   }
 
   private async moscowFirst(

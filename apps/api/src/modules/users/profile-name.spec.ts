@@ -160,7 +160,7 @@ describe('UsersService.updateProfile — имена', () => {
       { emit: jest.fn() } as never,
       // Настоящий сервис контура над выключенным контуром: прозрачен, зовёт
       // амстердамскую запись сразу — тот же путь, что и в проде до включения.
-      new PersonalDataService({ isEnabled: false } as never),
+      new PersonalDataService(prisma as unknown as PrismaService, { isEnabled: false } as never),
     );
   });
 

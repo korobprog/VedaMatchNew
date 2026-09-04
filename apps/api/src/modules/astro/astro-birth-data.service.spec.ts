@@ -1,3 +1,4 @@
+import { PersonalDataService } from '../personal-data/personal-data.service';
 import { BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AstroBirthDataService } from './astro-birth-data.service';
@@ -32,6 +33,8 @@ describe('AstroBirthDataService', () => {
   const service = new AstroBirthDataService(
     prisma as unknown as PrismaService,
     { emit: jest.fn() } as never,
+    // Контур выключен: сервис прозрачен и сразу зовёт основную запись.
+    new PersonalDataService(prisma as never, { isEnabled: false } as never),
   );
 
   /** Данные, ушедшие в БД при последнем upsert. */
