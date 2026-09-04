@@ -7,6 +7,14 @@ dist/
 !.env.example
 *.log
 coverage/
+
+# Скиллы агентов, поставленные локально: их кладёт инструментарий под
+# конкретную сессию, а не человек под задачу проекта. Рядом уже лежит
+# `.superpowers/` по той же причине. Правило точечное: `.claude/launch.json`
+# и `.claude/settings.json` — рабочие конфиги репозитория и отслеживаются.
+.agents/
+.claude/skills/
+skills-lock.json
 .DS_Store
 apps/api/scripts/test-motivation-ai-output.png
 .superpowers/
