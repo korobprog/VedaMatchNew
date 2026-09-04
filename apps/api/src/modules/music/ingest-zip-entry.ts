@@ -114,9 +114,88 @@ export function acceptZipEntry(
   // обойти оба потолка сразу.
   if (!isAudio(path)) return 'skip';
 
-  const size = Number.isFinite(entry.sizeBytes) ? Math.max(0, entry.sizeBytes) : 0;
+  const size = Number.isFinite(entry.sizeBytes)
+    ? Math.max(0, entry.sizeBytes)
+    : 0;
   if (seen.count >= INGEST_ZIP_MAX_ENTRIES) return 'reject';
   if (seen.totalBytes + size > INGEST_ZIP_MAX_TOTAL_BYTES) return 'reject';
 
   return 'take';
+}
+
+/**
+ * Почему разбор архива остановился. Строка нужна там же, где `reject`:
+ * позиция архива падает, и админ должен прочитать в таблице причину, а не
+ * «не удалось».
+ *
+ * Условия повторяют порядок `acceptZipEntry` — и намеренно живут в том же
+ * модуле: разъедься они по разным файлам, вердикт и его объяснение начали бы
+ * расходиться молча.
+ */
+export function zipRejectionReason(
+  entry: IngestZipEntry,
+  seen: IngestZipSeen,
+): string {
+  const path = typeof entry.path === 'string' ? entry.path : '';
+  if (escapesRoot(path)) {
+    return 'В архиве есть запись с путём наружу — такой архив не разбираем';
+  }
+  if (seen.count >= INGEST_ZIP_MAX_ENTRIES) {
+    return `В архиве больше ${INGEST_ZIP_MAX_ENTRIES} записей`;
+  }
+  return `Распакованный архив больше ${formatArchiveLimit(INGEST_ZIP_MAX_TOTAL_BYTES)}`;
+}
+
+/** «4 ГБ» для причины отказа: байтами админу ничего не сказано. */
+function formatArchiveLimit(bytes: number): string {
+  return `${Math.round(bytes / (1024 * 1024 * 1024))} ГБ`;
+}
+
+/**
+ * Потолок самого архива.
+ *
+ * Стоит на том, что кладут в бакет, а не на распакованном: тот считается
+ * отдельно, по мере разбора. Четыре гигабайта — та же цифра, что и у
+ * распакованного, потому что mp3 не сжимается: архив с альбомом весит
+ * примерно столько же, сколько его содержимое.
+ */
+export const INGEST_ZIP_MAX_ARCHIVE_BYTES = INGEST_ZIP_MAX_TOTAL_BYTES;
+
+export type IngestArchiveRejection =
+  'not_zip' | 'archive_empty' | 'archive_too_large';
+
+export const INGEST_ARCHIVE_REJECTION_TEXT: Record<
+  IngestArchiveRejection,
+  string
+> = {
+  not_zip: 'Принимаем только .zip — rar и 7z разбирать нечем.',
+  archive_empty: 'Архив пустой или не выбран.',
+  archive_too_large: `Архив больше ${formatArchiveLimit(INGEST_ZIP_MAX_ARCHIVE_BYTES)}.`,
+};
+
+export interface IngestArchiveRequest {
+  fileName: string;
+  sizeBytes: number;
+}
+
+/**
+ * Проверка заявки на архив — до выдачи подписанного PUT.
+ *
+ * По имени, а не по заявленному типу: `.zip` в Windows приезжает как
+ * `application/x-zip-compressed`, в Linux — как `application/zip`, а из
+ * менеджера файлов бывает и пустая строка. Имя врёт не реже, но настоящую
+ * проверку всё равно делает разбор: несжимаемый мусор `unzipper` не откроет.
+ */
+export function checkIngestArchive(
+  request: IngestArchiveRequest,
+): IngestArchiveRejection | null {
+  const name = (request.fileName ?? '').trim().toLowerCase();
+  if (!name.endsWith('.zip')) return 'not_zip';
+  if (!Number.isFinite(request.sizeBytes) || request.sizeBytes <= 0) {
+    return 'archive_empty';
+  }
+  if (request.sizeBytes > INGEST_ZIP_MAX_ARCHIVE_BYTES) {
+    return 'archive_too_large';
+  }
+  return null;
 }

@@ -223,6 +223,33 @@ export class MusicStorageService {
     }
   }
 
+  /**
+   * Объект целиком — потоком.
+   *
+   * Нужен разбору архива: `unzipper.Parse` читает zip на лету, и байты не
+   * должны собираться ни в памяти, ни на диске. Четыре гигабайта, поднятые
+   * в буфер ради `Buffer.concat`, роняют API надёжнее любой ошибки в
+   * правилах разбора.
+   *
+   * `null` — объекта нет или хранилище не настроено: у зовущего это отказ
+   * доставки, а не сбой сервиса.
+   */
+  async getStream(key: string): Promise<Readable | null> {
+    if (!this.s3Client || !this.bucket) return null;
+
+    try {
+      const result = await this.s3Client.send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+      // SDK отдаёт `Readable` в Node и `ReadableStream` в браузере — типом
+      // это одно поле, и разделить их можно только приведением.
+      return (result.Body as Readable | undefined) ?? null;
+    } catch (error) {
+      this.logger.warn(`Не удалось открыть объект ${key}: ${String(error)}`);
+      return null;
+    }
+  }
+
   /** Начало объекта — ради тегов. `null`, если прочитать не удалось. */
   async readPrefix(key: string): Promise<Buffer | null> {
     if (!this.s3Client || !this.bucket) return null;

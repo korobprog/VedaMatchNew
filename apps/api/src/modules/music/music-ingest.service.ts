@@ -10,6 +10,8 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import type {
   AccessTokenPayload,
+  AddMusicIngestArchiveRequest,
+  AddMusicIngestArchiveResponse,
   AddMusicIngestFilesRequest,
   AddMusicIngestFilesResponse,
   AddMusicIngestUrlsRequest,
@@ -23,6 +25,10 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { batchStatusFor } from './ingest-state';
+import {
+  checkIngestArchive,
+  INGEST_ARCHIVE_REJECTION_TEXT,
+} from './ingest-zip-entry';
 import { isAdmin } from './is-admin';
 import { MusicIngestProcessService } from './music-ingest-process.service';
 import { MusicStorageService } from './music-storage.service';
@@ -33,6 +39,9 @@ import {
   validateMusicIngestRequest,
   type MusicIngestLimits,
 } from './music-upload-validate';
+
+/** Чем подписываем PUT архива, когда браузер о типе промолчал. */
+const ARCHIVE_MIME = 'application/zip';
 
 const EXTENSION_BY_MIME: Record<string, string> = {
   'audio/mpeg': 'mp3',
@@ -434,7 +443,10 @@ export class MusicIngestService {
 
     const item = batch.items.find((row) => row.id === itemId);
     if (!item) throw new NotFoundException('Позиция не найдена');
-    if (item.source !== 'upload') {
+    // Архив льётся тем же подписанным PUT, что и одиночная запись, и
+    // сообщать о нём браузер обязан так же. Отсекается только `url`: за него
+    // в бакет ходит сервер, и «я залил» от браузера там означало бы ошибку.
+    if (item.source === 'url') {
       throw new BadRequestException('Эту позицию доставляет сервер');
     }
 
@@ -475,6 +487,76 @@ export class MusicIngestService {
     this.kick();
 
     return { queued: queued.count };
+  }
+
+  /**
+   * Архив в партию.
+   *
+   * Принимается тем же подписанным PUT, что и обычные файлы, а не ссылкой:
+   * архив у редакции обычно лежит на диске, и гнать четыре гигабайта через
+   * API ради того, чтобы он оттуда пошёл в бакет, незачем — браузер кладёт
+   * его туда напрямую, как и одиночные записи. Разбор сервер делает потом,
+   * читая объект из бакета потоком.
+   *
+   * Позиция заводится сразу и в `waiting`: она контейнер, и после разбора
+   * станет `skipped` с пометкой «архив разобран». Пока браузер льёт,
+   * обработка будет находить её объект отсутствующим и честно ждать.
+   */
+  async addArchive(
+    user: AccessTokenPayload,
+    batchId: string,
+    body: AddMusicIngestArchiveRequest,
+  ): Promise<AddMusicIngestArchiveResponse> {
+    this.assertAdmin(user);
+    if (!this.storage.configured) {
+      throw new ServiceUnavailableException(
+        'Хранилище не настроено — загрузка недоступна',
+      );
+    }
+    const batch = await this.requireOpenBatch(batchId);
+
+    const fileName = (body?.fileName ?? '').trim();
+    const rejection = checkIngestArchive({
+      fileName,
+      sizeBytes: body?.sizeBytes,
+    });
+    if (rejection) {
+      throw new BadRequestException(INGEST_ARCHIVE_REJECTION_TEXT[rejection]);
+    }
+
+    // Тип берём тот, что назвал браузер: он же уйдёт в подпись и в заголовок
+    // заливки. Windows зовёт zip `application/x-zip-compressed`, и требовать
+    // одну строку значило бы отказывать половине редакции.
+    const mime =
+      body?.mime?.split(';')[0]?.trim().toLowerCase() || ARCHIVE_MIME;
+    const key = this.storage.buildIngestKey(batchId, 'zip');
+    const url = await this.storage.presignPut(key, mime, body.sizeBytes);
+    if (!url) {
+      throw new ServiceUnavailableException('Не удалось подготовить загрузку');
+    }
+
+    const item = await this.prisma.musicIngestItem.create({
+      data: {
+        batchId,
+        source: 'zip',
+        sourceRef: fileName.slice(0, MAX_SOURCE_REF_LENGTH),
+        position: batch.items.length,
+        status: 'waiting',
+        storageKey: key,
+      },
+    });
+    await this.refreshStatus(batchId);
+
+    return {
+      itemId: item.id,
+      url,
+      // Ровно те заголовки, что вошли в подпись: разойдутся — S3 ответит
+      // 403, и разбираться в этом по логам браузера крайне неприятно.
+      headers: {
+        'Content-Type': mime,
+        'Content-Length': String(body.sizeBytes),
+      },
+    };
   }
 
   /**

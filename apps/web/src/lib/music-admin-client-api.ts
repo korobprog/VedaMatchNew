@@ -3,6 +3,8 @@
 // Загрузка файлов живёт не здесь, а в `music-client-api.ts`: заливать может
 // любой вошедший, а не только редакция, и админского в ней ничего нет.
 import type {
+  AddMusicIngestArchiveRequest,
+  AddMusicIngestArchiveResponse,
   AddMusicIngestFilesRequest,
   AddMusicIngestFilesResponse,
   AddMusicIngestUrlsRequest,
@@ -206,6 +208,19 @@ export const completeIngestFile = (id: string, itemId: string) =>
   send<{ ok: true }>(
     `/music/admin/ingest/${encodeURIComponent(id)}/files/${encodeURIComponent(itemId)}/complete`,
     { method: "POST" },
+  );
+
+/**
+ * Заявка на архив: в ответе подписанный PUT и уже заведённая позиция под
+ * него. Разбирает архив сервер, читая его из бакета.
+ */
+export const addIngestArchive = (
+  id: string,
+  body: AddMusicIngestArchiveRequest,
+) =>
+  send<AddMusicIngestArchiveResponse>(
+    `/music/admin/ingest/${encodeURIComponent(id)}/archive`,
+    { method: "POST", body: JSON.stringify(body) },
   );
 
 export const addIngestUrls = (id: string, body: AddMusicIngestUrlsRequest) =>

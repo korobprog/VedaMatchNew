@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
-import type { MusicIngestSource } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { orderIngestEntries, planIngestReorder } from './ingest-order';
 import {
   INGEST_BATCH_SIZE,
   mimeFromStorageKey,
@@ -12,6 +12,7 @@ import { batchStatusFor, isItemStale } from './ingest-state';
 import {
   IngestFetchError,
   MusicIngestFetchService,
+  type ExtractedArchiveEntry,
 } from './music-ingest-fetch.service';
 import {
   buildMusicCoverKey,
@@ -203,7 +204,9 @@ export class MusicIngestProcessService {
   private async deliver(
     item: NonNullable<Awaited<ReturnType<MusicIngestProcessService['claim']>>>,
   ): Promise<DeliveredObject | null> {
-    if (item.source === 'upload') {
+    // Запись, вынутая из архива, приходит сюда с тем же признаком, что и
+    // залитая браузером: объект уже в бакете, и доставлять нечего.
+    if (item.source === 'upload' || item.source === 'zip') {
       if (!item.storageKey) {
         await this.recordFailure(item, 'У позиции нет файла в хранилище');
         return null;
@@ -221,8 +224,10 @@ export class MusicIngestProcessService {
         storageKey: item.storageKey,
         sizeBytes: object.sizeBytes,
         // У однокусочной заливки ETag и есть MD5 содержимого — та же сумма,
-        // что загрузчик по ссылке считает сам.
-        checksum: object.etag,
+        // что загрузчик по ссылке считает сам. У записи из архива она уже
+        // посчитана при распаковке, и ETag брать нельзя: у многочастной
+        // заливки в нём сумма сумм частей, по которой дубли не ловятся.
+        checksum: item.checksum ?? object.etag,
       };
     }
 
@@ -254,11 +259,102 @@ export class MusicIngestProcessService {
       }
     }
 
-    // Распаковку архива делает задача 10. До неё позиция честно падает:
-    // молчаливая заглушка в очереди хуже отказа словами, потому что её никто
-    // не заметит.
-    await this.finishFailed(item.id, PENDING_SOURCE_REASON.zip);
+    // Архив сюда не доходит: его разбирает `expandArchiveItem` до общей
+    // дороги. Ветка остаётся ради нового источника, который заведут завтра:
+    // молчаливый пропуск в очереди хуже отказа словами.
+    await this.finishFailed(item.id, 'Неизвестный источник позиции');
     return null;
+  }
+
+  /**
+   * Позиция-архив: разобрать и завести позиции по его записям.
+   *
+   * Отдельно от `deliver`, потому что исход другой по существу. У остальных
+   * источников позиция становится записью каталога, а архив — контейнер: он
+   * не превращается ни во что, он порождает других. Поэтому после разбора
+   * он `skipped` с пометкой «архив разобран», а не `stored`.
+   */
+  private async expandArchiveItem(
+    item: NonNullable<Awaited<ReturnType<MusicIngestProcessService['claim']>>>,
+  ): Promise<void> {
+    if (!item.storageKey) {
+      await this.recordFailure(item, 'Архив ещё не загружен в хранилище');
+      return;
+    }
+
+    let entries: ExtractedArchiveEntry[];
+    try {
+      entries = await this.fetcher.expandArchive(
+        item.batchId,
+        item.storageKey,
+        await this.batchRemainingBytes(item.batchId),
+      );
+    } catch (error) {
+      if (error instanceof IngestFetchError) {
+        // Приговор не повторяем: путь наружу и переполнение потолков от
+        // второй попытки не изменятся.
+        if (error.retryable) await this.recordFailure(item, error.reason);
+        else await this.finishFailed(item.id, error.reason);
+        return;
+      }
+      throw error;
+    }
+
+    if (entries.length === 0) {
+      await this.finishFailed(
+        item.id,
+        'В архиве нет ни одной записи mp3 или m4a',
+      );
+      return;
+    }
+
+    // Порядок на первое время — человеческий порядок имён: номера из тегов
+    // ещё не прочитаны, а таблица заполняется прямо сейчас и должна выглядеть
+    // альбомом, а не мешаниной.
+    const ordered = orderIngestEntries(
+      entries.map((entry) => ({
+        ...entry,
+        ref: entry.entryPath,
+        trackNumber: null,
+      })),
+    );
+
+    const last = await this.prisma.musicIngestItem.aggregate({
+      where: { batchId: item.batchId },
+      _max: { position: true },
+    });
+    let position = (last._max.position ?? -1) + 1;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.musicIngestItem.createMany({
+        data: ordered.map((entry) => ({
+          batchId: item.batchId,
+          source: 'zip' as const,
+          sourceRef: entry.entryPath.slice(0, MAX_SOURCE_REF_LENGTH),
+          position: position++,
+          status: 'waiting' as const,
+          storageKey: entry.storageKey,
+          checksum: entry.checksum,
+        })),
+      });
+      await tx.musicIngestItem.update({
+        where: { id: item.id },
+        data: {
+          status: 'skipped',
+          failureReason: 'Архив разобран',
+          // Объект убираем следом, и ключ, ведущий в пустоту, позиции не
+          // нужен: по нему уборка партии полезла бы за несуществующим.
+          storageKey: null,
+        },
+      });
+    });
+
+    // Сам архив в бакете больше не нужен: записи из него уже лежат
+    // отдельными объектами, а он занимал бы место второй раз.
+    await this.storage.remove(item.storageKey);
+    this.logger.log(
+      `Архив ${item.sourceRef} разобран: позиций заведено ${ordered.length}`,
+    );
   }
 
   /**
@@ -277,6 +373,13 @@ export class MusicIngestProcessService {
   private async processItem(
     item: NonNullable<Awaited<ReturnType<MusicIngestProcessService['claim']>>>,
   ): Promise<void> {
+    // Архив идёт своей дорогой и общей не касается: он не запись каталога, а
+    // контейнер, и позиции по нему заводятся, а не создаются из него.
+    if (item.source === 'zip' && item.storageKey?.endsWith('.zip')) {
+      await this.expandArchiveItem(item);
+      return;
+    }
+
     const delivered = await this.deliver(item);
     // Доставка сама записала причину отказа: у неё их несколько, и они
     // разные по существу — от «файл ещё не долили» до «адрес ведёт во
@@ -401,6 +504,9 @@ export class MusicIngestProcessService {
           trackId: track.id,
           checksum: object.etag,
           failureReason: null,
+          // Номер из тегов остаётся у позиции: по нему разбор архива
+          // выстраивает дорожки в порядке альбома, когда партия дочитана.
+          trackNumber: metadata.trackNumber,
         },
       });
     });
@@ -488,23 +594,56 @@ export class MusicIngestProcessService {
       where: { batchId },
       select: { status: true },
     });
+    const status = batchStatusFor(items);
     await this.prisma.musicIngestBatch.update({
       where: { id: batchId },
-      data: { status: batchStatusFor(items) },
+      data: { status },
     });
+
+    // Порядок альбома известен только когда прочитаны все теги: пока хоть
+    // одна позиция в очереди, переставлять нечего.
+    if (status !== 'running') await this.reorderArchiveItems(batchId);
+  }
+
+  /**
+   * Выстроить позиции, заведённые архивом, в порядке дорожек.
+   *
+   * Только доставленные и только из архива: у файлов и ссылок порядок задал
+   * человек — тем, в каком порядке их назвал, — и переставлять его по тегам
+   * значит переспорить его без спроса.
+   */
+  private async reorderArchiveItems(batchId: string): Promise<void> {
+    const items = await this.prisma.musicIngestItem.findMany({
+      where: { batchId, source: 'zip', status: 'stored' },
+      select: { id: true, sourceRef: true, position: true, trackNumber: true },
+      orderBy: { position: 'asc' },
+    });
+
+    const changes = planIngestReorder(
+      items.map((item) => ({
+        id: item.id,
+        ref: item.sourceRef,
+        position: item.position,
+        trackNumber: item.trackNumber,
+      })),
+    );
+    if (changes.length === 0) return;
+
+    // Одной транзакцией: половина переставленных позиций — это порядок,
+    // которого не было ни до, ни после.
+    await this.prisma.$transaction(
+      changes.map((change) =>
+        this.prisma.musicIngestItem.update({
+          where: { id: change.id },
+          data: { position: change.position },
+        }),
+      ),
+    );
   }
 }
 
-/**
- * Источники, до которых очередь ещё не дошла. Остался один: распаковку
- * архива делает задача 10, и вместе с ней уйдёт эта таблица.
- */
-const PENDING_SOURCE_REASON: Record<
-  Extract<MusicIngestSource, 'zip'>,
-  string
-> = {
-  zip: 'Импорт архива появится позже — пока добавьте файлы вручную.',
-};
+/** Имя записи архива в строке таблицы — длиннее показывать негде. */
+const MAX_SOURCE_REF_LENGTH = 200;
 
 /**
  * Факты о доставленном объекте — общий язык всех трёх источников. `checksum`

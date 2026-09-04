@@ -216,12 +216,18 @@ describe('причины отказа', () => {
     );
     expect(ingestFetchReason('too_large', '150 МБ')).toBe('Файл больше 150 МБ');
     expect(ingestFetchReason('unreachable')).toBe('Сервер не отвечает');
+    // У архива причина приходит готовой строкой: правило, обо что он
+    // споткнулся, знает только разбор.
+    expect(ingestFetchReason('zip_rejected', 'В архиве больше 200 записей')).toBe(
+      'В архиве больше 200 записей',
+    );
   });
 
   it('приговор не повторяется, сбой связи повторяется', () => {
     expect(isRetryableRejection('private_address')).toBe(false);
     expect(isRetryableRejection('not_audio')).toBe(false);
     expect(isRetryableRejection('too_large')).toBe(false);
+    expect(isRetryableRejection('zip_rejected')).toBe(false);
     expect(isRetryableRejection('unreachable')).toBe(true);
     expect(isRetryableRejection('http_error')).toBe(true);
   });

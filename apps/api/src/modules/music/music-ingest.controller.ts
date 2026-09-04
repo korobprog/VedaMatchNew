@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import type {
   AccessTokenPayload,
+  AddMusicIngestArchiveRequest,
   AddMusicIngestFilesRequest,
   AddMusicIngestUrlsRequest,
   CreateMusicIngestBatchRequest,
@@ -86,6 +87,16 @@ export class MusicIngestController {
     @Body() body: AddMusicIngestUrlsRequest,
   ) {
     return this.ingest.addUrls(user, id, body);
+  }
+
+  /** Архив: подписанный PUT на него и позиция-контейнер под него. */
+  @Post(':id/archive')
+  addArchive(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: AddMusicIngestArchiveRequest,
+  ) {
+    return this.ingest.addArchive(user, id, body);
   }
 
   /**

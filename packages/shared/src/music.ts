@@ -777,6 +777,24 @@ export interface AddMusicIngestFilesResponse {
   }[];
 }
 
+/**
+ * Заявка на архив. Отдаётся тем же подписанным PUT, что и обычные файлы:
+ * архив идёт в бакет мимо API, а сервер потом разбирает его потоком оттуда.
+ */
+export interface AddMusicIngestArchiveRequest {
+  fileName: string;
+  sizeBytes: number;
+  /** Что о типе сказал браузер. У `.zip` он в разных системах разный. */
+  mime?: string;
+}
+
+/** Один подписанный PUT — на архив целиком. Позиция уже заведена. */
+export interface AddMusicIngestArchiveResponse {
+  itemId: string;
+  url: string;
+  headers: Record<string, string>;
+}
+
 export interface AddMusicIngestUrlsRequest {
   /** По адресу на строку; пустые строки отбрасываются на сервере. */
   urls: string[];

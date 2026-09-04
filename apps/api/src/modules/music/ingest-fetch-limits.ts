@@ -27,7 +27,13 @@ export type IngestFetchRejection =
   | 'too_large'
   | 'empty_body'
   | 'http_error'
-  | 'unreachable';
+  | 'unreachable'
+  /**
+   * Разбор архива остановлен: путь наружу или переполнение потолков.
+   * Причина словами приходит от `zipRejectionReason` — здесь только вердикт
+   * «повторять нечего».
+   */
+  | 'zip_rejected';
 
 /**
  * Отказы, которые не пройдут и со второй попытки: адрес не изменится, тип
@@ -42,6 +48,7 @@ const TERMINAL: ReadonlySet<IngestFetchRejection> =
     'redirect_without_location',
     'not_audio',
     'too_large',
+    'zip_rejected',
   ]);
 
 export function isRetryableRejection(rejection: IngestFetchRejection): boolean {
@@ -70,6 +77,8 @@ export function ingestFetchReason(
       return `Файл больше ${detail ?? 'предела'}`;
     case 'empty_body':
       return 'Сервер отдал пустой файл';
+    case 'zip_rejected':
+      return String(detail ?? 'Архив не разобрать');
     case 'http_error':
       return `Сервер ответил ${detail ?? 'ошибкой'}`;
     case 'unreachable':

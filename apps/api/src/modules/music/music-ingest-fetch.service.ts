@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { lookup } from 'node:dns/promises';
 import { PassThrough } from 'node:stream';
 import { once } from 'node:events';
+import { Parse as ParseZip } from 'unzipper';
 import {
   checkContentType,
   formatBytesLimit,
@@ -14,6 +15,12 @@ import {
   resolveRedirect,
   type IngestFetchRejection,
 } from './ingest-fetch-limits';
+import {
+  acceptZipEntry,
+  zipRejectionReason,
+  INGEST_ZIP_MAX_TOTAL_BYTES,
+  type IngestZipSeen,
+} from './ingest-zip-entry';
 import { checkIngestUrl, isPrivateAddress } from './ingest-url-guard';
 import { MusicStorageService } from './music-storage.service';
 import { MUSIC_UPLOAD_DEFAULT_LIMITS } from './music-upload-validate';
@@ -48,6 +55,19 @@ export class IngestFetchError extends Error {
   get retryable(): boolean {
     return isRetryableRejection(this.rejection);
   }
+}
+
+/**
+ * Запись, вынутая из архива и уже лежащая в бакете. Позицию по ней заводит
+ * обработка: доставка в базу не ходит, у неё другая работа.
+ */
+export interface ExtractedArchiveEntry {
+  /** Имя записи в архиве — оно же `sourceRef` позиции. */
+  entryPath: string;
+  storageKey: string;
+  sizeBytes: number;
+  checksum: string;
+  mime: string;
 }
 
 export interface FetchedIngestObject {
@@ -136,6 +156,173 @@ export class MusicIngestFetchService {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /**
+   * Разобрать архив, лежащий в бакете, и разложить его записи туда же по
+   * одной.
+   *
+   * Архив нигде не существует целиком: `unzipper.Parse` читает поток из S3
+   * на лету, каждая взятая запись тем же потоком уходит обратно в бакет.
+   * Ни временного файла, ни `Buffer.concat` — четыре гигабайта, поднятые в
+   * память ради удобства, роняют API вернее любой ошибки в правилах.
+   *
+   * Три исхода записи, и разница между ними принципиальна:
+   *
+   * - `take` — аудио: льём и заводим позицию;
+   * - `skip` — обложка, текст, мусор macOS, вложенный архив, каталог:
+   *   `autodrain()` и молчание. Чужой архив всегда содержит лишнее, и падать
+   *   на `cover.jpg` нельзя;
+   * - `reject` — путь наружу или переполнение потолков: разбор
+   *   останавливается целиком, уже залитое убирается, позиция архива падает
+   *   с причиной словами. На `../` падать обязательно.
+   *
+   * Возвращает записи в том порядке, в каком они лежали в архиве. Порядок
+   * альбома выстраивает обработка — по номерам из тегов, которых до разбора
+   * не знает никто.
+   */
+  async expandArchive(
+    batchId: string,
+    archiveKey: string,
+    remainingBatchBytes = Number.POSITIVE_INFINITY,
+  ): Promise<ExtractedArchiveEntry[]> {
+    if (!this.storage.configured) {
+      throw new IngestFetchError('unreachable', 'Хранилище не настроено');
+    }
+
+    const source = await this.storage.getStream(archiveKey);
+    if (!source) {
+      throw this.reject('unreachable', 'Архив не читается из хранилища');
+    }
+
+    const zip = ParseZip({ forceStream: true });
+    // Ошибка чтения из S3 иначе останется без слушателя и уронит процесс, а
+    // цикл ниже будет ждать записей, которых уже не будет.
+    source.on('error', (error) => zip.destroy(error));
+    source.pipe(zip);
+
+    // Тот же срок, что и у скачивания по ссылке, и по той же причине: без
+    // него архив, чтение которого зависло, держит позицию до порога
+    // «зависших» и получает вторую распаковку поверх первой.
+    const timer = setTimeout(() => {
+      zip.destroy(new Error('Разбор архива не уложился в срок'));
+    }, FETCH_TIMEOUT_MS);
+    timer.unref?.();
+
+    const seen: IngestZipSeen = { count: 0, totalBytes: 0 };
+    const taken: ExtractedArchiveEntry[] = [];
+
+    try {
+      for await (const entry of zip as unknown as AsyncIterable<ZipEntry>) {
+        const path = entry.path ?? '';
+        const declared = declaredEntrySize(entry);
+        const verdict = acceptZipEntry({ path, sizeBytes: declared }, seen);
+
+        if (verdict === 'reject') {
+          // Причину складывает тот же модуль, что вынес вердикт: разъедься
+          // они, админ читал бы «не удалось» вместо «путь наружу».
+          throw this.reject(
+            'zip_rejected',
+            zipRejectionReason({ path, sizeBytes: declared }, seen),
+          );
+        }
+
+        if (verdict === 'skip') {
+          // Запись всё равно надо дочитать: пока её поток не кончился,
+          // разбор стоит на месте.
+          await entry.autodrain().promise();
+          continue;
+        }
+
+        // Предел записи — меньший из трёх: свой потолок файла, остаток
+        // партии и остаток распакованного объёма архива.
+        const limit = Math.max(
+          0,
+          Math.min(
+            this.maxBytes,
+            remainingBatchBytes - seen.totalBytes,
+            INGEST_ZIP_MAX_TOTAL_BYTES - seen.totalBytes,
+          ),
+        );
+        const stored = await this.storeEntry(batchId, entry, path, limit);
+        taken.push(stored);
+        seen.count += 1;
+        seen.totalBytes += stored.sizeBytes;
+      }
+    } catch (error) {
+      // Полуразобранный архив в бакете не нужен: позиций по этим объектам
+      // никто не заведёт, а место они займут навсегда.
+      for (const entry of taken) await this.storage.remove(entry.storageKey);
+      source.destroy();
+      if (!zip.destroyed) zip.destroy();
+      if (error instanceof IngestFetchError) throw error;
+      this.logger.warn(`Архив ${archiveKey} не разобрался: ${String(error)}`);
+      throw this.reject('unreachable', 'Не удалось разобрать архив');
+    } finally {
+      clearTimeout(timer);
+    }
+
+    return taken;
+  }
+
+  /**
+   * Одна запись архива — в бакет потоком.
+   *
+   * Превышение предела рвёт разбор целиком, а не только эту запись: брошенный
+   * на середине поток записи всё равно валит разбор — `unzipper` читает архив
+   * последовательно и хвост пропущенной записи не перескочит. Заявленный
+   * размер из заголовка тут не помощник: у архива, собранного потоком, он
+   * ноль.
+   */
+  private async storeEntry(
+    batchId: string,
+    entry: ZipEntry,
+    path: string,
+    limitBytes: number,
+  ): Promise<ExtractedArchiveEntry> {
+    const mime = mimeForEntry(path);
+    const key = this.storage.buildIngestKey(batchId, extensionFor(mime));
+    const meter = new IngestByteMeter(limitBytes);
+    const sink = new PassThrough();
+    const upload = this.storage.putStream(key, sink, mime);
+    // До конца записи отказ заливки ловить некому, а необработанное
+    // отклонение промиса в Node роняет процесс. Настоящую ошибку достанем
+    // ниже, из `await upload`.
+    upload.catch(() => undefined);
+
+    try {
+      for await (const chunk of entry) {
+        if (!meter.push(chunk)) {
+          sink.destroy(new Error('Превышен предел размера'));
+          throw this.reject(
+            'zip_rejected',
+            `Запись «${path}» больше ${formatBytesLimit(limitBytes)}`,
+          );
+        }
+        // Обратное давление: без ожидания `drain` распаковщик набьёт буфер
+        // теми самыми мегабайтами, которых мы избегали.
+        if (!sink.write(chunk)) await once(sink, 'drain');
+      }
+      sink.end();
+      await upload;
+    } catch (error) {
+      if (!sink.destroyed) sink.destroy();
+      await this.storage.remove(key);
+      throw error;
+    }
+
+    if (meter.sizeBytes === 0) {
+      await this.storage.remove(key);
+      throw this.reject('zip_rejected', `Запись «${path}» пустая`);
+    }
+
+    return {
+      entryPath: path,
+      storageKey: key,
+      sizeBytes: meter.sizeBytes,
+      checksum: meter.checksum,
+      mime,
+    };
   }
 
   /**
@@ -345,4 +532,37 @@ export class MusicIngestFetchService {
 /** Расширение ключа по типу: обработка читает тип обратно именно из ключа. */
 function extensionFor(mime: string): string {
   return mime === 'audio/mp4' ? 'm4a' : 'mp3';
+}
+
+/**
+ * Ровно та часть записи `unzipper`, которой мы пользуемся. Своим типом,
+ * потому что `@types/unzipper` описывает `Parse` как поток без объектной
+ * читающей стороны, а с `forceStream` записи приходят именно оттуда.
+ */
+interface ZipEntry extends AsyncIterable<Uint8Array> {
+  path: string;
+  type: string;
+  vars?: { uncompressedSize?: number };
+  extra?: { uncompressedSize?: number };
+  autodrain(): { promise(): Promise<void> };
+}
+
+/**
+ * Сколько запись обещает весить в распакованном виде.
+ *
+ * Обещание, а не факт: у архива, собранного потоком, в заголовке записи
+ * стоят нули, а настоящий размер приходит уже после данных. Число идёт
+ * только в потолки числа записей и объёма — фактически принятое считает
+ * `IngestByteMeter`.
+ */
+function declaredEntrySize(entry: ZipEntry): number {
+  const zip64 = entry.extra?.uncompressedSize;
+  if (typeof zip64 === 'number' && zip64 > 0) return zip64;
+  const declared = entry.vars?.uncompressedSize;
+  return typeof declared === 'number' && declared > 0 ? declared : 0;
+}
+
+/** Тип записи архива по её расширению: других подсказок у нас нет. */
+function mimeForEntry(path: string): string {
+  return path.toLowerCase().endsWith('.m4a') ? 'audio/mp4' : 'audio/mpeg';
 }

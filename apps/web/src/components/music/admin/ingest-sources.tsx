@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MUSIC_ACCEPTED_MIME } from "@vedamatch/shared";
 import {
+  addIngestArchive,
   addIngestFiles,
   addIngestUrls,
   completeIngestFile,
@@ -60,7 +61,7 @@ export function IngestSources({ batchId }: { batchId: string }) {
 
       {tab === "files" && <FilesTab batchId={batchId} />}
       {tab === "urls" && <UrlsTab batchId={batchId} />}
-      {tab === "zip" && <ZipTab />}
+      {tab === "zip" && <ZipTab batchId={batchId} />}
     </section>
   );
 }
@@ -260,28 +261,93 @@ function UrlsTab({ batchId }: { batchId: string }) {
 }
 
 /**
- * Архив ждёт распаковки на сервере: заявка на `.zip` в API пока не
- * принимается, и кнопка, которая гарантированно отвечает отказом, хуже
- * честной надписи.
+ * Архив с альбомом.
+ *
+ * Льётся тем же подписанным PUT, что и одиночные записи: браузер кладёт его
+ * прямо в бакет, а сервер потом разбирает оттуда потоком. Обложки, тексты и
+ * мусор macOS в архиве пропускаются молча — в чужом архиве они есть всегда.
  */
-function ZipTab() {
+function ZipTab({ batchId }: { batchId: string }) {
+  const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(): Promise<void> {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    setNote(null);
+    setProgress(0);
+
+    try {
+      const created = await addIngestArchive(batchId, {
+        fileName: file.name,
+        sizeBytes: file.size,
+        mime: file.type,
+      });
+      await putSigned(created.url, created.headers, file, setProgress);
+      await completeIngestFile(batchId, created.itemId);
+      setNote(
+        "Архив залит. Сервер разберёт его и заведёт позицию на каждую запись.",
+      );
+      setFile(null);
+      if (inputRef.current) inputRef.current.value = "";
+      router.refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Не удалось залить архив");
+    } finally {
+      setProgress(null);
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <label className="block">
         <span className="mb-1 block text-xs text-text-2">
-          Один архив `.zip` с записями альбома
+          Один архив .zip с записями альбома. Берём из него mp3 и m4a;
+          обложки и служебные файлы пропускаем.
         </span>
         <input
+          ref={inputRef}
           type="file"
-          accept=".zip,application/zip"
-          disabled
-          className="w-full text-sm text-text-2 file:mr-3 file:h-9 file:rounded-lg file:border file:border-glass-brd file:bg-bg-1 file:px-3 file:text-sm file:text-text-1"
+          accept=".zip,application/zip,application/x-zip-compressed"
+          disabled={busy}
+          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+          className="w-full text-sm text-text-1 file:mr-3 file:h-9 file:rounded-lg file:border file:border-glass-brd file:bg-bg-1 file:px-3 file:text-sm file:text-text-0"
         />
       </label>
-      <p className="text-sm text-text-1">
-        Разбор архива на сервере ещё не включён. Пока разложите записи по
-        файлам или добавьте их ссылками.
-      </p>
+
+      {file && (
+        <p className="flex items-baseline gap-2 text-xs">
+          <span className="min-w-0 flex-1 truncate text-text-1">{file.name}</span>
+          <span className="shrink-0 text-text-2">
+            {progress === null
+              ? "ждёт"
+              : progress >= 1
+                ? "залит"
+                : `${Math.round(progress * 100)}%`}
+          </span>
+        </p>
+      )}
+
+      {note && <Alert tone="success">{note}</Alert>}
+      {error && <Alert tone="error">{error}</Alert>}
+
+      <div>
+        <button
+          type="button"
+          disabled={!file || busy}
+          onClick={() => void submit()}
+          className="btn-mint h-9 rounded-xl px-4 text-sm font-semibold disabled:opacity-50"
+        >
+          {busy ? "Заливаем…" : "Залить архив"}
+        </button>
+      </div>
     </div>
   );
 }

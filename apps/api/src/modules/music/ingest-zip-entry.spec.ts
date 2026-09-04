@@ -1,7 +1,10 @@
 import {
+  INGEST_ZIP_MAX_ARCHIVE_BYTES,
   INGEST_ZIP_MAX_ENTRIES,
   INGEST_ZIP_MAX_TOTAL_BYTES,
   acceptZipEntry,
+  checkIngestArchive,
+  zipRejectionReason,
 } from './ingest-zip-entry';
 
 const seen = (over = {}) => ({ count: 0, totalBytes: 0, ...over });
@@ -87,5 +90,54 @@ describe('acceptZipEntry: обходные записи того же пути',
         seen({ count: INGEST_ZIP_MAX_ENTRIES - 1, totalBytes: INGEST_ZIP_MAX_TOTAL_BYTES - 1024 }),
       ),
     ).toBe('take');
+  });
+});
+
+describe('zipRejectionReason', () => {
+  it('называет путь наружу, а не «не удалось»', () => {
+    expect(zipRejectionReason({ path: '../../etc/passwd.mp3', sizeBytes: 10 }, seen())).toContain(
+      'путём наружу',
+    );
+  });
+
+  it('различает переполнение по числу записей и по объёму', () => {
+    // Две разные новости для админа: в первом случае архив не тот, во
+    // втором — его нужно разбить на части.
+    expect(
+      zipRejectionReason({ path: 'a.mp3', sizeBytes: 10 }, seen({ count: INGEST_ZIP_MAX_ENTRIES })),
+    ).toBe(`В архиве больше ${INGEST_ZIP_MAX_ENTRIES} записей`);
+    expect(
+      zipRejectionReason(
+        { path: 'a.mp3', sizeBytes: 1024 },
+        seen({ totalBytes: INGEST_ZIP_MAX_TOTAL_BYTES }),
+      ),
+    ).toBe('Распакованный архив больше 4 ГБ');
+  });
+});
+
+describe('checkIngestArchive', () => {
+  it('пускает .zip любого регистра', () => {
+    expect(checkIngestArchive({ fileName: 'album.zip', sizeBytes: 1024 })).toBeNull();
+    expect(checkIngestArchive({ fileName: 'Album.ZIP', sizeBytes: 1024 })).toBeNull();
+  });
+
+  it('отбивает чужие форматы: разбирать их нечем', () => {
+    expect(checkIngestArchive({ fileName: 'album.rar', sizeBytes: 1024 })).toBe('not_zip');
+    expect(checkIngestArchive({ fileName: 'album.7z', sizeBytes: 1024 })).toBe('not_zip');
+    expect(checkIngestArchive({ fileName: 'album', sizeBytes: 1024 })).toBe('not_zip');
+  });
+
+  it('отбивает пустой и нечисловой размер', () => {
+    expect(checkIngestArchive({ fileName: 'a.zip', sizeBytes: 0 })).toBe('archive_empty');
+    expect(checkIngestArchive({ fileName: 'a.zip', sizeBytes: Number.NaN })).toBe('archive_empty');
+  });
+
+  it('отбивает архив выше потолка, но пускает ровно потолок', () => {
+    expect(
+      checkIngestArchive({ fileName: 'a.zip', sizeBytes: INGEST_ZIP_MAX_ARCHIVE_BYTES + 1 }),
+    ).toBe('archive_too_large');
+    expect(
+      checkIngestArchive({ fileName: 'a.zip', sizeBytes: INGEST_ZIP_MAX_ARCHIVE_BYTES }),
+    ).toBeNull();
   });
 });
