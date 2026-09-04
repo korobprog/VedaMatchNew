@@ -1,7 +1,9 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import type { DataResidency } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RuPrismaService } from '../../prisma/ru-prisma.service';
+import type { ConsentGrant } from './policy-version';
 import {
   PERSONAL_SELECT,
   type PersonalBirthSource,
@@ -26,6 +28,8 @@ export type PersonalWrite = {
   record: PersonalRecordInput;
   /** Данные рождения, если правка их касается. */
   birth?: PersonalBirthSource | null;
+  /** Согласия, данные в этот момент. Хранятся в РФ вместе с самой записью. */
+  consents?: ConsentGrant[];
 };
 
 /**
@@ -100,6 +104,31 @@ export class PersonalDataService {
       throw new ServiceUnavailableException(
         'Хранилище персональных данных недоступно. Попробуйте позже.',
       );
+    }
+
+    // Согласия — отдельным обращением, а не вложенным в upsert: у записи их
+    // может уже не быть (создание) или уже быть (повторный вход), и обе ветки
+    // upsert пришлось бы писать по-разному. Уникальность по паре
+    // «вид + версия» делает повтор безвредным.
+    if (write.consents?.length) {
+      try {
+        await this.ru.db.personalConsent.createMany({
+          data: write.consents.map((consent) => ({
+            id: randomUUID(),
+            recordId: id,
+            kind: consent.kind,
+            policyVersion: consent.policyVersion,
+            grantedIp: consent.grantedIp ?? null,
+          })),
+          skipDuplicates: true,
+        });
+      } catch (error) {
+        // Несохранённое согласие не повод отказать во входе: сам факт
+        // фиксируется журналом, а запись догоняется повтором.
+        this.logger.warn(
+          `Согласия ${id} не записались: ${(error as Error).message}`,
+        );
+      }
     }
 
     const result = await applyGlobal();

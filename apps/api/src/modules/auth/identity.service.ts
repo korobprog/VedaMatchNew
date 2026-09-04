@@ -3,6 +3,7 @@ import type { AuthProvider, DataResidency, Gender, User } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PersonalDataService } from '../personal-data/personal-data.service';
+import { consentsAtRegistration } from '../personal-data/policy-version';
 
 export type ProviderProfile = {
   provider: AuthProvider;
@@ -21,6 +22,8 @@ export type ProviderProfile = {
    * 2026-09-04, до него признак ошибочно выводился из провайдера.
    */
   declaredResidency?: DataResidency;
+  /** Адрес запроса — уходит в запись согласия, данного при регистрации. */
+  requestIp?: string | null;
 };
 
 export type ResolveHooks = {
@@ -104,6 +107,10 @@ export class IdentityService {
           avatarKey: null,
           photoKeys: [],
         },
+        // Согласие даётся ровно здесь: человек прошёл экран входа, где сказано
+        // «Продолжая, вы принимаете условия использования и политику
+        // конфиденциальности».
+        consents: consentsAtRegistration(profile.requestIp),
       },
       () =>
         this.prisma.user.create({
