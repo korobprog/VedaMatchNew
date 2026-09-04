@@ -25,7 +25,11 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { planIngestPlaylist } from './ingest-playlist';
-import { batchStatusFor } from './ingest-state';
+import {
+  batchStatusFor,
+  inFlightCount,
+  ingestInFlightReason,
+} from './ingest-state';
 import {
   checkIngestArchive,
   INGEST_ARCHIVE_REJECTION_TEXT,
@@ -631,6 +635,8 @@ export class MusicIngestService {
    *
    * Пропущенные и упавшие позиции публикации не мешают — партия не обязана
    * сойтись целиком, чтобы сорок скачавшихся записей появились в каталоге.
+   * А вот ждущие и качающиеся мешают: они ещё станут записями, и публикация
+   * поверх них закрыла бы партию до того, как им нашлось место в каталоге.
    *
    * Непустое название собирает из партии системную подборку — в той же
    * транзакции, чтобы на витрине не осталось подборки без записей или
@@ -643,6 +649,15 @@ export class MusicIngestService {
   ): Promise<{ published: number; playlistId: string | null }> {
     this.assertAdmin(user);
     const batch = await this.requireOpenBatch(batchId);
+
+    // Публикация партии, в которой ещё идёт приём, — ловушка: остаток
+    // доедет, но опубликовать его будет уже нельзя, партия закрыта. Кнопка
+    // на вебе в это время неактивна, но отказ обязан жить и здесь: у ручки
+    // есть и другие вызывающие, кроме одной формы.
+    const inFlight = inFlightCount(batch.items);
+    if (inFlight > 0) {
+      throw new BadRequestException(ingestInFlightReason(inFlight));
+    }
 
     const trackIds = batch.items
       .filter((item) => item.status === 'stored' && item.trackId)
@@ -737,15 +752,22 @@ export class MusicIngestService {
     return used._sum.sizeBytes ?? 0;
   }
 
-  /** Статус партии считается по её позициям, а не выставляется руками. */
+  /**
+   * Статус партии считается по её позициям, а не выставляется руками.
+   *
+   * Текущий статус читается тем же запросом и уходит в `batchStatusFor`: там
+   * живёт правило «`published` поглощает», и без него опубликованная партия
+   * открывалась бы заново от любого движения в её позициях.
+   */
   private async refreshStatus(batchId: string): Promise<void> {
-    const items = await this.prisma.musicIngestItem.findMany({
-      where: { batchId },
-      select: { status: true },
+    const batch = await this.prisma.musicIngestBatch.findUnique({
+      where: { id: batchId },
+      select: { status: true, items: { select: { status: true } } },
     });
+    if (!batch) return;
     await this.prisma.musicIngestBatch.update({
       where: { id: batchId },
-      data: { status: batchStatusFor(items) },
+      data: { status: batchStatusFor(batch.items, batch.status) },
     });
   }
 

@@ -219,6 +219,27 @@ describe('MusicIngestService.publish', () => {
     expect(prisma.musicPlaylist.create).not.toHaveBeenCalled();
   });
 
+  it('пока приём идёт, публиковать нельзя: остаток уже не опубликуешь', async () => {
+    const { service, prisma } = build();
+    prisma.musicIngestBatch.findUnique.mockResolvedValue({
+      id: 'b1',
+      status: 'running',
+      items: [
+        { id: 'i1', status: 'stored', trackId: 't1' },
+        { id: 'i2', status: 'waiting', trackId: null },
+        { id: 'i3', status: 'fetching', trackId: null },
+      ],
+    });
+
+    await expect(service.publish(admin, 'b1', {})).rejects.toThrow(
+      'Дождитесь окончания приёма: ещё 2 позиции в работе',
+    );
+    // Ни одной записи в каталог и ни одной подборки: доехавший следом
+    // остаток публиковать было бы уже нечем — партия закрыта.
+    expect(prisma.musicTrack.updateMany).not.toHaveBeenCalled();
+    expect(prisma.musicPlaylist.create).not.toHaveBeenCalled();
+  });
+
   it('партию без единой доставленной позиции публиковать нечем', async () => {
     const { service, prisma } = build();
     prisma.musicIngestBatch.findUnique.mockResolvedValue({

@@ -587,14 +587,19 @@ export class MusicIngestProcessService {
   /**
    * Статус партии считается по её позициям. Правило то же и живёт в том же
    * `ingest-state.ts`, что и у сервиса партий: два разных ответа на вопрос
-   * «партия готова?» — худшее, что здесь можно завести.
+   * «партия готова?» — худшее, что здесь можно завести. Оттуда же и запрет
+   * снимать `published`: доехавший последним файл не должен открывать партию,
+   * записи которой уже в каталоге.
    */
   private async refreshStatus(batchId: string): Promise<void> {
-    const items = await this.prisma.musicIngestItem.findMany({
-      where: { batchId },
-      select: { status: true },
+    const batch = await this.prisma.musicIngestBatch.findUnique({
+      where: { id: batchId },
+      select: { status: true, items: { select: { status: true } } },
     });
-    const status = batchStatusFor(items);
+    if (!batch) return;
+    // Текущий статус уходит в правило вместе с позициями: опубликованную
+    // партию доехавший остаток открывать заново не имеет права.
+    const status = batchStatusFor(batch.items, batch.status);
     await this.prisma.musicIngestBatch.update({
       where: { id: batchId },
       data: { status },

@@ -18,6 +18,7 @@ import {
   updateIngestBatch,
 } from "@/lib/music-admin-client-api";
 import { formatBytes } from "@/lib/music-duration";
+import { plural } from "@/lib/plural";
 import { Alert } from "@/components/ui/alert";
 
 const BASES: { value: MusicUploadRightsBasis; label: string }[] = [
@@ -55,6 +56,15 @@ export function IngestBatchForm({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [playlistTitle, setPlaylistTitle] = useState("");
   const published = batch.status === "published";
+  /**
+   * Позиции, которые ещё в работе. Пока они есть, публиковать нельзя: партия
+   * закроется, а доехавший следом остаток опубликовать будет уже нечем.
+   * Считаем по позициям, а не по `batch.status`: он пересчитывается тиком и
+   * на экране успевает устареть.
+   */
+  const inFlight = batch.items.filter(
+    (item) => item.status === "waiting" || item.status === "fetching",
+  ).length;
 
   async function patch(body: UpdateMusicIngestBatchRequest): Promise<void> {
     setError(null);
@@ -285,7 +295,16 @@ export function IngestBatchForm({
         </label>
         <button
           type="button"
-          disabled={pending || published || batch.storedCount === 0}
+          disabled={
+            pending || published || inFlight > 0 || batch.storedCount === 0
+          }
+          // Подсказка на самой кнопке: неактивная кнопка без объяснения
+          // выглядит поломкой, а не запретом.
+          title={
+            inFlight > 0
+              ? `Приём ещё идёт: ${inFlight} ${plural(inFlight, "позиция", "позиции", "позиций")} в работе`
+              : undefined
+          }
           onClick={() =>
             void run(async () => {
               const title = playlistTitle.trim();
@@ -379,6 +398,15 @@ export function IngestBatchForm({
           </button>
         )}
       </div>
+
+      {!published && inFlight > 0 && (
+        <p className="text-sm text-text-1">
+          Приём ещё идёт: {inFlight}{" "}
+          {plural(inFlight, "позиция", "позиции", "позиций")} в работе.
+          «Опубликовать всё» включится, когда они доедут: опубликованная
+          партия закрывается, и остаток в неё уже не попадёт.
+        </p>
+      )}
 
       {published && (
         <p className="text-sm text-text-1">

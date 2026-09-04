@@ -1,6 +1,8 @@
 import {
   INGEST_STALE_MS,
   batchStatusFor,
+  inFlightCount,
+  ingestInFlightReason,
   isItemStale,
 } from './ingest-state';
 
@@ -45,6 +47,67 @@ describe('batchStatusFor', () => {
 
   it('только пропуски — тоже failed: ни одной новой записи не появилось', () => {
     expect(batchStatusFor([{ status: 'skipped' }])).toBe('failed');
+  });
+});
+
+describe('batchStatusFor: published — поглощающее состояние', () => {
+  it('доехавший остаток не открывает опубликованную партию заново', () => {
+    // Партию из тридцати ссылок публикуют по двенадцати доставленным, а
+    // следующий тик доделывает остальные восемнадцать. Верни он партии
+    // `ready` — админ нажмёт «Опубликовать всё» второй раз и получит вторую
+    // системную подборку с тем же названием.
+    expect(
+      batchStatusFor([{ status: 'stored' }, { status: 'waiting' }], 'published'),
+    ).toBe('published');
+    expect(
+      batchStatusFor([{ status: 'stored' }, { status: 'stored' }], 'published'),
+    ).toBe('published');
+  });
+
+  it('упавшее в опубликованной партии её тоже не расколдовывает', () => {
+    expect(batchStatusFor([{ status: 'failed' }], 'published')).toBe(
+      'published',
+    );
+    expect(batchStatusFor([], 'published')).toBe('published');
+  });
+
+  it('прочие статусы пересчитываются как раньше', () => {
+    expect(batchStatusFor([{ status: 'stored' }], 'running')).toBe('ready');
+    expect(batchStatusFor([{ status: 'waiting' }], 'ready')).toBe('running');
+  });
+});
+
+describe('inFlightCount и текст запрета публикации', () => {
+  it('считает только то, что ещё в работе', () => {
+    expect(
+      inFlightCount([
+        { status: 'waiting' },
+        { status: 'fetching' },
+        { status: 'stored' },
+        { status: 'failed' },
+        { status: 'skipped' },
+      ]),
+    ).toBe(2);
+    expect(inFlightCount([{ status: 'stored' }])).toBe(0);
+  });
+
+  it('склоняет «позицию» по числу: строку читает человек', () => {
+    expect(ingestInFlightReason(1)).toBe(
+      'Дождитесь окончания приёма: ещё 1 позиция в работе',
+    );
+    expect(ingestInFlightReason(3)).toBe(
+      'Дождитесь окончания приёма: ещё 3 позиции в работе',
+    );
+    expect(ingestInFlightReason(18)).toBe(
+      'Дождитесь окончания приёма: ещё 18 позиций в работе',
+    );
+    // 11..14 заканчиваются на 1..4, но склоняются как «много».
+    expect(ingestInFlightReason(12)).toBe(
+      'Дождитесь окончания приёма: ещё 12 позиций в работе',
+    );
+    expect(ingestInFlightReason(21)).toBe(
+      'Дождитесь окончания приёма: ещё 21 позиция в работе',
+    );
   });
 });
 
