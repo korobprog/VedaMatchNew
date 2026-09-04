@@ -1319,13 +1319,16 @@ git commit -m "feat(music): стадия приёма редакционных �
 - [ ] **Шаг 2: Клиент API**
 
 Формы ответов ручек, отличных от `GET` (заданы задачей 4, отдельных DTO под
-них нет): `completeFile`, `remove`, `removeItem`, `start` → `{ ok: true }`;
-`addUrls` → `{ added: number }`; `retryFailed` → `{ retried: number }`;
-`publish` → `{ published: number }`. `addFiles` отдаёт
-`AddMusicIngestFilesResponse`, `create` и `update` — `MusicIngestBatchDto`,
-`detail` — `MusicIngestBatchDetailDto`.
+них нет): `completeFile`, `remove`, `removeItem` → `{ ok: true }`;
+`start` → `{ queued: number }`; `addUrls` → `{ added: number }`;
+`retryFailed` → `{ retried: number }`; `publish` → `{ published: number }`.
+`addFiles` отдаёт `AddMusicIngestFilesResponse`, `create` и `update` —
+`MusicIngestBatchDto`, `detail` — `MusicIngestBatchDetailDto`.
 
-В `apps/web/src/lib/music-api.ts` добавить функции поверх `apiFetch`:
+Клиент разнесён по конвенции репозитория, а не сложен в `music-api.ts`: тот
+серверный (`next/headers`) и из клиентского компонента не импортируется.
+Чтение — в `apps/web/src/lib/music-admin-api.ts`, изменения — в
+`apps/web/src/lib/music-admin-client-api.ts`. Добавить функции:
 `getIngestBatches`, `createIngestBatch`, `getIngestBatch`, `updateIngestBatch`,
 `deleteIngestBatch`, `addIngestFiles`, `completeIngestFile`, `addIngestUrls`,
 `retryIngest`, `publishIngestBatch`, `deleteIngestItem` — по образцу
