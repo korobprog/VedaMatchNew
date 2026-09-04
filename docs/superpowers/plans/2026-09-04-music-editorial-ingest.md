@@ -742,7 +742,6 @@ function build() {
       createMany: jest.fn().mockResolvedValue({ count: 1 }),
       create: jest.fn(),
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-      aggregate: jest.fn().mockResolvedValue({ _sum: { sizeBytes: 0 } }),
     },
     musicTrack: {
       findMany: jest.fn().mockResolvedValue([]),
@@ -1053,7 +1052,9 @@ export class MusicIngestService {
 Остальные методы того же класса:
 
 - `list(user)` — партии с агрегатами (`itemCount`, `storedCount`,
-  `failedCount`, `sizeBytes` через `musicTrack.aggregate` по трекам позиций),
+  `failedCount`, `sizeBytes` через `musicTrack.aggregate({ where: { ingestItem:
+  { batchId } }, _sum: { sizeBytes: true } })` — своего размера у позиции нет,
+  байты живут у трека),
   `orderBy: { createdAt: 'desc' }`, `take: 100`.
 - `create(user, body)` — `title` обязателен и обрезается до 200 символов,
   `rightsBasis` обязателен; статус `draft`, `createdById: user.sub`.
