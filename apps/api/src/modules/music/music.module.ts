@@ -11,6 +11,7 @@ import { MusicCatalogService } from './music-catalog.service';
 import { MusicCoversController } from './music-covers.controller';
 import { MusicCoversService } from './music-covers.service';
 import { MusicIngestController } from './music-ingest.controller';
+import { MusicIngestProcessService } from './music-ingest-process.service';
 import { MusicIngestService } from './music-ingest.service';
 import { MusicMetadataReader } from './music-metadata-reader';
 import {
@@ -78,6 +79,7 @@ import { MusicWorkerService } from './music-worker.service';
     MusicFavoritesService,
     MusicPlaylistsService,
     MusicIngestService,
+    MusicIngestProcessService,
     MusicWorkerService,
     MusicPurgeListener,
   ],

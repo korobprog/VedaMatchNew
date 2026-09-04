@@ -88,6 +88,15 @@ export class MusicIngestController {
     return this.ingest.addUrls(user, id, body);
   }
 
+  /**
+   * Кнопка «Запустить». Отдельно от `retry`: та поднимает только упавшее, а
+   * эта — всю очередь партии, включая позиции, брошенные перезапуском API.
+   */
+  @Post(':id/start')
+  start(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.ingest.start(user, id);
+  }
+
   @Post(':id/retry')
   retry(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.ingest.retryFailed(user, id);

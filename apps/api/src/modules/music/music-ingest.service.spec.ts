@@ -53,12 +53,17 @@ function build() {
     presignPut: jest.fn().mockResolvedValue('https://s3/put'),
     remove: jest.fn().mockResolvedValue(undefined),
   };
+  // Стадия приёма подменяется целиком: сервис партий только дёргает её и не
+  // ждёт ответа, а лезть отсюда в S3 и теги незачем.
+  const process = { processOnce: jest.fn().mockResolvedValue(0) };
   return {
     prisma,
     storage,
+    process,
     service: new MusicIngestService(
       prisma,
       storage as never,
+      process as never,
       { get: () => undefined } as never,
     ),
   };
@@ -172,5 +177,40 @@ describe('MusicIngestService.publish', () => {
       BadRequestException,
     );
     expect(prisma.musicTrack.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('MusicIngestService.start', () => {
+  it('возвращает в очередь ждущее и упавшее и дёргает стадию', async () => {
+    const { service, prisma, process } = build();
+    prisma.musicIngestBatch.findUnique.mockResolvedValue({
+      id: 'b1',
+      status: 'ready',
+      items: [{ id: 'i1', status: 'failed' }],
+    });
+    prisma.musicIngestItem.updateMany.mockResolvedValue({ count: 1 });
+
+    await expect(service.start(admin, 'b1')).resolves.toEqual({ queued: 1 });
+
+    expect(prisma.musicIngestItem.updateMany).toHaveBeenCalledWith({
+      where: { batchId: 'b1', status: { in: ['waiting', 'failed'] } },
+      data: { status: 'waiting', attempts: 0, failureReason: null },
+    });
+    // Без «пинка» партия ждала бы следующего тика, а админ — на экране.
+    expect(process.processOnce).toHaveBeenCalled();
+  });
+
+  it('опубликованную партию запускать нечем', async () => {
+    const { service, prisma, process } = build();
+    prisma.musicIngestBatch.findUnique.mockResolvedValue({
+      id: 'b1',
+      status: 'published',
+      items: [],
+    });
+
+    await expect(service.start(admin, 'b1')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(process.processOnce).not.toHaveBeenCalled();
   });
 });

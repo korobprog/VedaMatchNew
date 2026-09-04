@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -23,6 +24,7 @@ import type {
 import { PrismaService } from '../../prisma/prisma.service';
 import { batchStatusFor } from './ingest-state';
 import { isAdmin } from './is-admin';
+import { MusicIngestProcessService } from './music-ingest-process.service';
 import { MusicStorageService } from './music-storage.service';
 import { toMusicTrackDto } from './music-track-dto';
 import {
@@ -74,12 +76,19 @@ const TRACK_CARD_INCLUDE = {
  */
 @Injectable()
 export class MusicIngestService {
+  private readonly logger = new Logger(MusicIngestService.name);
   private readonly limits: MusicIngestLimits;
   private readonly publicBaseUrl: string | undefined;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: MusicStorageService,
+    /**
+     * Связь односторонняя: учёт зовёт обработку, обработка про учёт не
+     * знает и ходит в базу сама. Поэтому обычная инъекция, без `forwardRef`
+     * и без «пинка», вынесенного в контроллер.
+     */
+    private readonly process: MusicIngestProcessService,
     config: ConfigService,
   ) {
     const quota = Number(config.get<string>('MUSIC_INGEST_BATCH_QUOTA_BYTES'));
@@ -436,8 +445,36 @@ export class MusicIngestService {
       data: { status: 'waiting', attempts: 0, failureReason: null },
     });
     await this.refreshStatus(batchId);
+    this.kick();
 
     return { ok: true };
+  }
+
+  /**
+   * Запустить обработку партии.
+   *
+   * Возвращает в очередь всё, что осталось ждать или упало, и сразу дёргает
+   * стадию. Без этой кнопки партия, собранная и брошенная до перезапуска
+   * API, оживает только следующим тиком, а админ в это время смотрит на
+   * таблицу, где ничего не происходит.
+   */
+  async start(
+    user: AccessTokenPayload,
+    batchId: string,
+  ): Promise<{ queued: number }> {
+    this.assertAdmin(user);
+    await this.requireOpenBatch(batchId);
+
+    const queued = await this.prisma.musicIngestItem.updateMany({
+      // `fetching` не трогаем: позиция уже в работе, и сброс счётчика
+      // посреди обработки означал бы вторую попытку поверх идущей.
+      where: { batchId, status: { in: ['waiting', 'failed'] } },
+      data: { status: 'waiting', attempts: 0, failureReason: null },
+    });
+    await this.refreshStatus(batchId);
+    this.kick();
+
+    return { queued: queued.count };
   }
 
   /**
@@ -480,6 +517,7 @@ export class MusicIngestService {
 
     await this.prisma.musicIngestItem.createMany({ data: rows });
     await this.refreshStatus(batchId);
+    this.kick();
 
     return { added: rows.length };
   }
@@ -567,6 +605,19 @@ export class MusicIngestService {
       throw new BadRequestException('Партия уже опубликована');
     }
     return batch;
+  }
+
+  /**
+   * Дёрнуть стадию приёма, не дожидаясь тика.
+   *
+   * Без `await`: ответ админу не должен ждать, пока прочитается первый файл.
+   * Ошибку глушим логом — очередь всё равно доберёт позицию следующим тиком,
+   * а упавший «пинок» не повод отвечать отказом на удавшийся запрос.
+   */
+  private kick(): void {
+    void this.process.processOnce().catch((error) => {
+      this.logger.warn(`Стадия приёма не запустилась: ${String(error)}`);
+    });
   }
 
   /** Байты партии. Своего размера у позиции нет — он живёт у трека. */
