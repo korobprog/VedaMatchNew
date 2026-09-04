@@ -174,6 +174,33 @@ describe('MusicIngestProcessService: разбор архива', () => {
     expect(storage.remove).toHaveBeenCalledWith('music/portal/b1/album.zip');
   });
 
+  it('приговор разбора после первой записи остаётся в пометке словами', async () => {
+    const { fetcher, service, queueArchive, archiveUpdate } = build();
+    queueArchive();
+    fetcher.expandArchive.mockImplementation(
+      async (
+        _batchId: string,
+        _key: string,
+        _remaining: number,
+        onEntry: ArchiveEntrySink,
+      ): Promise<ExpandedArchive> => {
+        await onEntry(entry('01.mp3', 'music/portal/b1/a.mp3'));
+        throw new IngestFetchError(
+          'zip_rejected',
+          'В архиве есть запись с путём наружу — такой архив не разбираем',
+        );
+      },
+    );
+
+    await service.processOnce();
+
+    expect(archiveUpdate()?.data).toMatchObject({
+      status: 'skipped',
+      failureReason:
+        'Разбор прерван: в партию заведено записей 1. В архиве есть запись с путём наружу — такой архив не разбираем',
+    });
+  });
+
   it('сбой до первой записи оставляет архив на повтор', async () => {
     const { prisma, fetcher, service, queueArchive, archiveUpdate } = build();
     queueArchive();

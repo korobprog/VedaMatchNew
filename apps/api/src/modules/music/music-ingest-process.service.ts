@@ -338,7 +338,15 @@ export class MusicIngestProcessService {
         this.logger.warn(
           `Архив ${item.sourceRef} разобран не до конца: ${String(error)}`,
         );
-        await this.finishExpanded(item, ingestArchiveBreakNotice(created));
+        await this.finishExpanded(
+          item,
+          ingestArchiveBreakNotice(
+            created,
+            // Приговор разбора («путь наружу») админу нужнее числа: сбой
+            // базы ему не объяснить, а испорченный архив — вполне.
+            error instanceof IngestFetchError ? error.reason : null,
+          ),
+        );
         return;
       }
       if (error instanceof IngestFetchError) {
@@ -383,7 +391,7 @@ export class MusicIngestProcessService {
       where: { id: item.id },
       data: {
         status: 'skipped',
-        failureReason: note ?? 'Архив разобран',
+        failureReason: (note ?? 'Архив разобран').slice(0, MAX_REASON_LENGTH),
         storageKey: null,
       },
     });
@@ -685,6 +693,9 @@ export class MusicIngestProcessService {
 
 /** Имя записи архива в строке таблицы — длиннее показывать негде. */
 const MAX_SOURCE_REF_LENGTH = 200;
+
+/** Причина в колонке — строка, а не роман. Та же мера, что у `finishFailed`. */
+const MAX_REASON_LENGTH = 200;
 
 /**
  * Факты о доставленном объекте — общий язык всех трёх источников. `checksum`

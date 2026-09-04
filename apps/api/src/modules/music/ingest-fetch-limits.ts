@@ -171,9 +171,17 @@ export function ingestEntryBudget(budgets: {
  * разбор нельзя: вторая распаковка залила бы те же дорожки новыми ключами, а
  * первый комплект остался бы в партии вторым экземпляром. Поэтому пометка
  * говорит, сколько записей всё-таки вошло, — остальное человек добирает сам.
+ *
+ * `reason` дописывается, когда разбор оборвал не сбой, а приговор: «путь
+ * наружу» админу нужнее, чем голое число.
  */
-export function ingestArchiveBreakNotice(takenCount: number): string {
-  return `Разбор прерван: в партию заведено записей ${takenCount}`;
+export function ingestArchiveBreakNotice(
+  takenCount: number,
+  reason?: string | null,
+): string {
+  const head = `Разбор прерван: в партию заведено записей ${takenCount}`;
+  const tail = (reason ?? '').trim();
+  return tail === '' ? head : `${head}. ${tail}`;
 }
 
 export function ingestBatchLimitNotice(
