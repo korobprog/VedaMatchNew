@@ -148,20 +148,27 @@ describe('MotivationPostcardsService.build', () => {
     })) as unknown as typeof fetch;
   }
 
+  /**
+   * Событие ставим на сегодня, а не фиксированной датой: `upcomingEvent`
+   * держит окно [-1 день; leadDays], и захардкоженная дата рано или поздно
+   * из него выпадает — тест начинал падать сам по себе, без правок в коде.
+   */
+  function eventToday() {
+    return {
+      id: 'event-1',
+      date: new Date(),
+      title: 'Джанмаштами',
+      greeting: 'С праздником!',
+      leadDays: 30,
+      enabled: true,
+    };
+  }
+
   it('lets the author build a postcard from their own published reel', async () => {
     stubImageDownload();
     const { service, prisma } = build();
     prisma.motivationPost.findUnique.mockResolvedValue(publishedOwnPost);
-    prisma.motivationEvent.findMany.mockResolvedValue([
-      {
-        id: 'event-1',
-        date: new Date('2026-09-01T00:00:00.000Z'),
-        title: 'Джанмаштами',
-        greeting: 'С праздником!',
-        leadDays: 30,
-        enabled: true,
-      },
-    ]);
+    prisma.motivationEvent.findMany.mockResolvedValue([eventToday()]);
 
     await expect(
       service.build('user-1', regularUser, 'post-1'),
@@ -187,16 +194,7 @@ describe('MotivationPostcardsService.build', () => {
       ...publishedOwnPost,
       authorUserId: 'someone-else',
     });
-    prisma.motivationEvent.findMany.mockResolvedValue([
-      {
-        id: 'event-1',
-        date: new Date('2026-09-01T00:00:00.000Z'),
-        title: 'Джанмаштами',
-        greeting: 'С праздником!',
-        leadDays: 30,
-        enabled: true,
-      },
-    ]);
+    prisma.motivationEvent.findMany.mockResolvedValue([eventToday()]);
 
     await expect(
       service.build('admin-1', admin, 'post-1'),
