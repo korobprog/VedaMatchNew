@@ -7,8 +7,10 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { MUSIC_STREAM_URL_TTL_SECONDS } from '@vedamatch/shared';
+import type { Readable } from 'node:stream';
 
 /**
  * Объекты Музыки в S3.
@@ -158,6 +160,39 @@ export class MusicStorageService {
       this.logger.warn(`Обложка не залилась (${key}): ${String(error)}`);
       return false;
     }
+  }
+
+  /**
+   * Заливка потоком.
+   *
+   * Нужна редакционному скачиванию по ссылке: длина у скачиваемого потока
+   * заранее неизвестна, а `PutObject` её требует. Собирать файл в буфер ради
+   * длины нельзя — 150 МБ на позицию, три позиции за тик, почти полгигабайта
+   * RSS, и API ляжет на ровном месте. `Upload` из `lib-storage` режет поток
+   * на части сам и досылает их по мере поступления.
+   *
+   * Побочное следствие: у многочастного объекта ETag — уже не MD5
+   * содержимого, а сумма сумм частей. Поэтому загрузчик считает MD5 сам, на
+   * лету, и не пытается взять её из ETag, как это делает личная загрузка
+   * одним PUT.
+   *
+   * Ошибку не глушим, в отличие от `put`: обложку потерять не жалко, а
+   * запись, о которой сказали «доставлена», обязана быть в бакете.
+   */
+  async putStream(key: string, body: Readable, mime: string): Promise<void> {
+    if (!this.s3Client || !this.bucket) {
+      throw new Error('Хранилище не настроено');
+    }
+
+    await new Upload({
+      client: this.s3Client,
+      params: {
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: mime,
+      },
+    }).done();
   }
 
   /** Подписанная ссылка на прослушивание. */

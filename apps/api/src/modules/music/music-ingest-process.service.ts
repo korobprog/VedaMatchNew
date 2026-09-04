@@ -10,6 +10,10 @@ import {
 } from './ingest-process-rules';
 import { batchStatusFor, isItemStale } from './ingest-state';
 import {
+  IngestFetchError,
+  MusicIngestFetchService,
+} from './music-ingest-fetch.service';
+import {
   buildMusicCoverKey,
   coverExtensionFor,
   MUSIC_COVER_MAX_BYTES,
@@ -27,6 +31,7 @@ import type { EmbeddedCover } from './music-metadata-parse';
 import { MusicMetadataReader } from './music-metadata-reader';
 import { MusicStorageService } from './music-storage.service';
 import {
+  MUSIC_INGEST_DEFAULT_BATCH_QUOTA_BYTES,
   MUSIC_UPLOAD_DEFAULT_LIMITS,
   MUSIC_UPLOAD_REJECTION_TEXT,
   validateMusicUploadCompletion,
@@ -50,11 +55,14 @@ import type { MusicUploadLimits } from './music-upload-validate';
 export class MusicIngestProcessService {
   private readonly logger = new Logger(MusicIngestProcessService.name);
   private readonly limits: MusicUploadLimits;
+  /** Потолок партии. Тот же, что показывает админке `MusicIngestService`. */
+  private readonly batchQuotaBytes: number;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: MusicStorageService,
     private readonly metadata: MusicMetadataReader,
+    private readonly fetcher: MusicIngestFetchService,
     config: ConfigService,
   ) {
     // Пределы те же, что у людей, и читаются из окружения так же: потолок
@@ -83,6 +91,10 @@ export class MusicIngestProcessService {
         MUSIC_UPLOAD_DEFAULT_LIMITS.accountQuotaBytes,
       ),
     };
+    this.batchQuotaBytes = num(
+      'MUSIC_INGEST_BATCH_QUOTA_BYTES',
+      MUSIC_INGEST_DEFAULT_BATCH_QUOTA_BYTES,
+    );
   }
 
   /**
@@ -180,30 +192,99 @@ export class MusicIngestProcessService {
     });
   }
 
+  /**
+   * Первый шаг, единственный, который у источников разный: довести байты до
+   * бакета и назвать их факты. Дальше дорога общая.
+   *
+   * `null` — доставка не состоялась и причина уже записана: у неё их
+   * несколько, и решение «повторять или нет» принимается здесь, где известно,
+   * что именно случилось.
+   */
+  private async deliver(
+    item: NonNullable<Awaited<ReturnType<MusicIngestProcessService['claim']>>>,
+  ): Promise<DeliveredObject | null> {
+    if (item.source === 'upload') {
+      if (!item.storageKey) {
+        await this.recordFailure(item, 'У позиции нет файла в хранилище');
+        return null;
+      }
+
+      const object = await this.storage.head(item.storageKey);
+      if (!object) {
+        // Ссылку выдали, а файл не долили: заливку могли оборвать, и
+        // следующая попытка застанет объект на месте.
+        await this.recordFailure(item, 'Файл ещё не загружен в хранилище');
+        return null;
+      }
+
+      return {
+        storageKey: item.storageKey,
+        sizeBytes: object.sizeBytes,
+        // У однокусочной заливки ETag и есть MD5 содержимого — та же сумма,
+        // что загрузчик по ссылке считает сам.
+        checksum: object.etag,
+      };
+    }
+
+    if (item.source === 'url') {
+      try {
+        const fetched = await this.fetcher.fetchUrl(
+          item.batchId,
+          item.sourceRef,
+          await this.batchRemainingBytes(item.batchId),
+        );
+        // Ключ пишем сразу, до разбора тегов: упади процесс на следующей
+        // строке — объект останется в бакете, и убрать его сможет только
+        // тот, кто знает его имя.
+        await this.prisma.musicIngestItem.update({
+          where: { id: item.id },
+          data: { storageKey: fetched.storageKey, checksum: fetched.checksum },
+        });
+        return fetched;
+      } catch (error) {
+        if (error instanceof IngestFetchError) {
+          // Приговор не повторяем: адрес и тип содержимого от второй попытки
+          // не меняются, а три захода за одним и тем же ответом только
+          // растягивают партию.
+          if (error.retryable) await this.recordFailure(item, error.reason);
+          else await this.finishFailed(item.id, error.reason);
+          return null;
+        }
+        throw error;
+      }
+    }
+
+    // Распаковку архива делает задача 10. До неё позиция честно падает:
+    // молчаливая заглушка в очереди хуже отказа словами, потому что её никто
+    // не заметит.
+    await this.finishFailed(item.id, PENDING_SOURCE_REASON.zip);
+    return null;
+  }
+
+  /**
+   * Сколько партии ещё разрешено занять. Загрузчику это нужнее, чем
+   * проверке заявки: у ссылки размер заранее не назван, и единственный
+   * момент, когда партию можно остановить, — счётчик принятых байтов.
+   */
+  private async batchRemainingBytes(batchId: string): Promise<number> {
+    const used = await this.prisma.musicTrack.aggregate({
+      where: { ingestItem: { batchId } },
+      _sum: { sizeBytes: true },
+    });
+    return Math.max(0, this.batchQuotaBytes - (used._sum.sizeBytes ?? 0));
+  }
+
   private async processItem(
     item: NonNullable<Awaited<ReturnType<MusicIngestProcessService['claim']>>>,
   ): Promise<void> {
-    if (item.source !== 'upload') {
-      // Доставку по ссылке делает задача 8, распаковку архива — задача 10.
-      // До них позиция честно падает: молчаливая заглушка в очереди хуже
-      // отказа словами, потому что её никто не заметит.
-      await this.finishFailed(item.id, PENDING_SOURCE_REASON[item.source]);
-      return;
-    }
-    if (!item.storageKey) {
-      await this.recordFailure(item, 'У позиции нет файла в хранилище');
-      return;
-    }
+    const delivered = await this.deliver(item);
+    // Доставка сама записала причину отказа: у неё их несколько, и они
+    // разные по существу — от «файл ещё не долили» до «адрес ведёт во
+    // внутреннюю сеть».
+    if (!delivered) return;
 
-    const object = await this.storage.head(item.storageKey);
-    if (!object) {
-      // Ссылку выдали, а файл не долили: заливку могли оборвать, и следующая
-      // попытка застанет объект на месте.
-      await this.recordFailure(item, 'Файл ещё не загружен в хранилище');
-      return;
-    }
-
-    const mime = mimeFromStorageKey(item.storageKey);
+    const storageKey = delivered.storageKey;
+    const mime = mimeFromStorageKey(storageKey);
     if (!mime) {
       await this.finishFailed(
         item.id,
@@ -212,7 +293,9 @@ export class MusicIngestProcessService {
       return;
     }
 
-    const prefix = await this.storage.readPrefix(item.storageKey);
+    const object = { sizeBytes: delivered.sizeBytes, etag: delivered.checksum };
+
+    const prefix = await this.storage.readPrefix(storageKey);
     const raw = prefix
       ? await this.metadata.read(prefix, mime, object.sizeBytes)
       : null;
@@ -246,7 +329,7 @@ export class MusicIngestProcessService {
       });
       // Объект убираем: место он занимает, а нужен уже никому — запись, на
       // которую он похож, в каталоге и так есть.
-      await this.storage.remove(item.storageKey);
+      await this.storage.remove(storageKey);
       return;
     }
 
@@ -279,7 +362,7 @@ export class MusicIngestProcessService {
           // Тег, иначе имя файла: пустая карточка в таблице хуже неточного
           // названия — админ правит его руками, но искать безымянное нечем.
           title: fallbackTrackTitle(metadata, item.sourceRef),
-          storageKey: item.storageKey!,
+          storageKey,
           mime,
           sizeBytes: object.sizeBytes,
           durationSeconds: durationSeconds!,
@@ -413,14 +496,23 @@ export class MusicIngestProcessService {
 }
 
 /**
- * Источники, до которых очередь ещё не дошла. Ветку заменяет задача 8
- * (доставка по ссылке) и задача 10 (распаковка архива) — вместе с этой
- * таблицей.
+ * Источники, до которых очередь ещё не дошла. Остался один: распаковку
+ * архива делает задача 10, и вместе с ней уйдёт эта таблица.
  */
 const PENDING_SOURCE_REASON: Record<
-  Exclude<MusicIngestSource, 'upload'>,
+  Extract<MusicIngestSource, 'zip'>,
   string
 > = {
-  url: 'Импорт по ссылке появится позже — пока добавьте файл вручную.',
   zip: 'Импорт архива появится позже — пока добавьте файлы вручную.',
 };
+
+/**
+ * Факты о доставленном объекте — общий язык всех трёх источников. `checksum`
+ * бывает `null`: у заливки одним PUT его отдаёт ETag, но хранилище могло
+ * промолчать, и тогда позиция просто не участвует в поиске дублей.
+ */
+interface DeliveredObject {
+  storageKey: string;
+  sizeBytes: number;
+  checksum: string | null;
+}
