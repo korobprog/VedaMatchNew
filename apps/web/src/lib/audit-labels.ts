@@ -50,6 +50,7 @@ export const auditActionLabels: Record<AdminAuditAction, string> = {
   "contacts.profile-hidden": "Карточка справочника снята",
   "contacts.profile-restored": "Карточка справочника возвращена",
   "platform.registration-changed": "Изменён режим регистрации",
+  "auth.provider-changed": "Изменён способ входа",
   "astro.generation-resumed": "Генерация астрологии возобновлена",
   "rewards.entry-revoked": "Отменено начисление баллов",
   "rewards.settings-changed": "Изменены настройки баллов",

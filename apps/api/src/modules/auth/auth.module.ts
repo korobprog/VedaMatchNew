@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthAdminService } from './auth-admin.service';
 import { AuthProvidersService } from './auth-providers.service';
 import { AuthController, WellKnownController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -12,6 +13,7 @@ import { RefreshTokenCleanupService } from './refresh-token-cleanup.service';
   providers: [
     AuthService,
     AuthProvidersService,
+    AuthAdminService,
     IdentityService,
     JwtSignService,
     AuthGuard,

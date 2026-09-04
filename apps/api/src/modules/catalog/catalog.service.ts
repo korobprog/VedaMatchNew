@@ -2,6 +2,18 @@
 import type { Role, ServiceCard } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 
+/**
+ * Записи каталога, которым не место на витрине.
+ *
+ * Карточка обещает сервис, в который заходят пользоваться. «Вход» же в
+ * каталоге заведён ради другого: назначение менеджеру проверяет наличие
+ * слага. Показывать его в общей сетке — обманывать: он ведёт в админку, а не
+ * в сервис, и на главной у администратора выглядел ровно как остальные.
+ *
+ * Признак — адрес: всё, что ведёт в /admin, управляется, а не используется.
+ */
+const SHOWCASE_EXCLUDED = { url: { startsWith: '/admin' } } as const;
+
 @Injectable()
 export class CatalogService {
   constructor(private readonly prisma: PrismaService) {}
@@ -19,16 +31,19 @@ export class CatalogService {
       : [];
 
     const services = await this.prisma.service.findMany({
-      where: isAdmin
-        ? {}
-        : {
-            status: { not: 'disabled' },
-            OR: [
-              { public: true },
-              { access: { some: { userId } } },
-              ...stageFilters,
-            ],
-          },
+      where: {
+        NOT: SHOWCASE_EXCLUDED,
+        ...(isAdmin
+          ? {}
+          : {
+              status: { not: 'disabled' },
+              OR: [
+                { public: true },
+                { access: { some: { userId } } },
+                ...stageFilters,
+              ],
+            }),
+      },
       // Заданный администратором порядок важнее статуса: «скоро» может
       // стоять выше активного, если так решили в каталоге.
       orderBy: [{ sortOrder: 'asc' }, { status: 'asc' }, { name: 'asc' }],
@@ -55,7 +70,11 @@ export class CatalogService {
    */
   async getPublic(): Promise<ServiceCard[]> {
     const services = await this.prisma.service.findMany({
-      where: { public: true, status: { not: 'disabled' } },
+      where: {
+        public: true,
+        status: { not: 'disabled' },
+        NOT: SHOWCASE_EXCLUDED,
+      },
       orderBy: [{ sortOrder: 'asc' }, { status: 'asc' }, { name: 'asc' }],
     });
     return services.map((s) => ({
