@@ -98,6 +98,15 @@ export class MusicStorageService {
   }
 
   /**
+   * Ключ редакционного объекта. Партия в пути, а не человек: по префиксу
+   * видно, что запись портальная, и уборка партии удаляет ровно своё.
+   */
+  buildIngestKey(batchId: string, extension: string): string {
+    const safe = extension.replace(/[^a-z0-9]/gi, '').slice(0, 5) || 'mp3';
+    return `music/portal/${batchId}/${crypto.randomUUID()}.${safe}`;
+  }
+
+  /**
    * Подписанный PUT. `ContentType` и `ContentLength` входят в подпись:
    * иначе выданной ссылкой можно залить что угодно и любого размера, а
    * проверка на `complete` случится уже после того, как байты в бакете.
