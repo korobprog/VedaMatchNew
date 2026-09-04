@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { PersonalCopyWorkerService } from './personal-copy-worker.service';
 import { PersonalDataService } from './personal-data.service';
 
 /**
@@ -9,7 +10,7 @@ import { PersonalDataService } from './personal-data.service';
  */
 @Global()
 @Module({
-  providers: [PersonalDataService],
+  providers: [PersonalDataService, PersonalCopyWorkerService],
   exports: [PersonalDataService],
 })
 export class PersonalDataModule {}

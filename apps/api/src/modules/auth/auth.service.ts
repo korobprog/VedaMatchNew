@@ -215,6 +215,7 @@ export class AuthService implements OnModuleInit {
         email,
         name: claims.name as string | undefined,
         picture: avatarUrl,
+        requestIp: req.ip ?? null,
       });
 
     // Адрес и аватар Google ведёт у себя, портал их догоняет: человек сменил
@@ -365,7 +366,7 @@ export class AuthService implements OnModuleInit {
     }
 
     const { user, created } = await this.identities.resolve(
-      mapYandexProfile(await infoRes.json()),
+      { ...mapYandexProfile(await infoRes.json()), requestIp: req.ip ?? null },
       { beforeCreate: () => this.assertRegistrationOpen() },
     );
 
@@ -432,6 +433,7 @@ export class AuthService implements OnModuleInit {
     email: string;
     name?: string | null;
     picture?: string | null;
+    requestIp?: string | null;
   }) {
     return this.identities.resolve(
       {
@@ -440,6 +442,7 @@ export class AuthService implements OnModuleInit {
         email: claims.email,
         name: claims.name ?? claims.email,
         avatarUrl: claims.picture ?? undefined,
+        requestIp: claims.requestIp,
       },
       // Закрытая регистрация не трогает уже заведённых: отказ получает
       // только тот, для кого пришлось бы создать новую запись.
