@@ -1261,6 +1261,13 @@ const INGEST_TICK_MS = 15 * 1000;
 вызвать `void this.process.processOnce()` — не дожидаясь тика. Ошибку глушить
 логом: очередь всё равно доберёт позицию следующим тиком.
 
+Добавить недостающий маршрут `POST music/admin/ingest/:id/start` (в §7 спеки
+он есть, в контроллер задачи 4 не попал) и метод `start(user, id)`: он
+возвращает в `waiting` всё, что осталось в `failed` и `waiting`, и зовёт
+`processOnce()`. Кнопка «Запустить» в админке ходит именно сюда — без неё
+партия, собранная из ссылок и брошенная до перезапуска API, оживает только
+следующим тиком.
+
 - [ ] **Шаг 4: Проверить руками**
 
 Поднять API и веб через preview, завести партию запросом и залить mp3.
@@ -1310,6 +1317,13 @@ git commit -m "feat(music): стадия приёма редакционных �
 ежедневно, а очередь и жалобы разбирают по мере появления.
 
 - [ ] **Шаг 2: Клиент API**
+
+Формы ответов ручек, отличных от `GET` (заданы задачей 4, отдельных DTO под
+них нет): `completeFile`, `remove`, `removeItem`, `start` → `{ ok: true }`;
+`addUrls` → `{ added: number }`; `retryFailed` → `{ retried: number }`;
+`publish` → `{ published: number }`. `addFiles` отдаёт
+`AddMusicIngestFilesResponse`, `create` и `update` — `MusicIngestBatchDto`,
+`detail` — `MusicIngestBatchDetailDto`.
 
 В `apps/web/src/lib/music-api.ts` добавить функции поверх `apiFetch`:
 `getIngestBatches`, `createIngestBatch`, `getIngestBatch`, `updateIngestBatch`,
@@ -1846,6 +1860,10 @@ git commit -m "feat(music): импорт альбома архивом"
 **Потребляет:** `publish` из задачи 4.
 
 - [ ] **Шаг 1: Собрать подборку при публикации**
+
+Сначала убрать временную заглушку из задачи 4: сейчас непустой
+`playlistTitle` отвергается `BadRequestException` — молча терять параметр было
+нельзя, а собирать подборку было ещё нечем.
 
 В `publish` при непустом `playlistTitle` в той же транзакции создать
 `MusicPlaylist` с `isSystem: true`, `visibility: 'public'`, владельцем —
