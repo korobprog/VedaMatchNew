@@ -349,6 +349,12 @@ export interface MusicAdminSummaryDto {
   openReports: number;
   /** Занято в бакете опубликованным и ждущим, байты. */
   storedBytes: number;
+  /**
+   * Сколько из этого заняла редакция — записи без загрузившего человека.
+   * Личные загрузки держит квота аккаунта, редакционные — только потолок
+   * партии, поэтому их объём виден отдельной строкой.
+   */
+  portalBytes: number;
 }
 
 /** Решение по записи из очереди. */
@@ -687,4 +693,120 @@ export interface MusicFriendPlaylistDto extends MusicPlaylistDto {
 
 export interface MusicFriendPlaylistsDto {
   items: MusicFriendPlaylistDto[];
+}
+
+// ===== Редакционное пополнение =====
+
+export type MusicIngestBatchStatus =
+  | 'draft'
+  | 'running'
+  | 'ready'
+  | 'published'
+  | 'failed';
+export type MusicIngestSource = 'upload' | 'url' | 'zip';
+export type MusicIngestItemStatus =
+  | 'waiting'
+  | 'fetching'
+  | 'stored'
+  | 'skipped'
+  | 'failed';
+
+/** Партия в списке: без позиций, но с тем, что решает — объём и статус. */
+export interface MusicIngestBatchDto {
+  id: string;
+  title: string;
+  status: MusicIngestBatchStatus;
+  itemCount: number;
+  storedCount: number;
+  failedCount: number;
+  /** Сколько байт уже занято позициями этой партии. */
+  sizeBytes: number;
+  createdByName: string | null;
+  createdAt: string;
+}
+
+/**
+ * Позиция вместе с черновиком, если он уже создан: таблица показывает и
+ * доставку, и метаданные, а два запроса ради одной строки не нужны.
+ */
+export interface MusicIngestItemDto {
+  id: string;
+  source: MusicIngestSource;
+  sourceRef: string;
+  position: number;
+  status: MusicIngestItemStatus;
+  failureReason: string | null;
+  track: MusicTrackDto | null;
+  /** Заполнен, когда позиция `skipped`: на что именно похоже. */
+  duplicateOfTrackId: string | null;
+}
+
+export interface MusicIngestBatchDetailDto extends MusicIngestBatchDto {
+  rightsBasis: MusicUploadRightsBasis;
+  rightsNote: string | null;
+  artistId: string | null;
+  albumId: string | null;
+  categoryIds: string[];
+  language: string | null;
+  isLiveRecording: boolean;
+  quotaBytes: number;
+  items: MusicIngestItemDto[];
+}
+
+export interface CreateMusicIngestBatchRequest {
+  title: string;
+  rightsBasis: MusicUploadRightsBasis;
+  rightsNote?: string;
+}
+
+export interface UpdateMusicIngestBatchRequest {
+  title?: string;
+  rightsBasis?: MusicUploadRightsBasis;
+  rightsNote?: string | null;
+  artistId?: string | null;
+  albumId?: string | null;
+  categoryIds?: string[];
+  language?: string | null;
+  isLiveRecording?: boolean;
+}
+
+/** Заявка на N файлов разом: браузер льёт их параллельно. */
+export interface AddMusicIngestFilesRequest {
+  files: { fileName: string; mime: string; sizeBytes: number }[];
+}
+
+export interface AddMusicIngestFilesResponse {
+  items: {
+    itemId: string;
+    url: string;
+    headers: Record<string, string>;
+  }[];
+}
+
+/**
+ * Заявка на архив. Отдаётся тем же подписанным PUT, что и обычные файлы:
+ * архив идёт в бакет мимо API, а сервер потом разбирает его потоком оттуда.
+ */
+export interface AddMusicIngestArchiveRequest {
+  fileName: string;
+  sizeBytes: number;
+  /** Что о типе сказал браузер. У `.zip` он в разных системах разный. */
+  mime?: string;
+}
+
+/** Один подписанный PUT — на архив целиком. Позиция уже заведена. */
+export interface AddMusicIngestArchiveResponse {
+  itemId: string;
+  url: string;
+  headers: Record<string, string>;
+}
+
+export interface AddMusicIngestUrlsRequest {
+  /** По адресу на строку; пустые строки отбрасываются на сервере. */
+  urls: string[];
+}
+
+export interface PublishMusicIngestBatchRequest {
+  /** Непусто — из партии собирается системная подборка с этим названием. */
+  playlistTitle?: string;
 }

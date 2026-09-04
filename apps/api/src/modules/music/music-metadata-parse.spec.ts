@@ -33,6 +33,7 @@ describe('normalizeAudioMetadata', () => {
         album: null,
         year: null,
         language: null,
+        trackNumber: null,
       });
     }
   });
@@ -118,6 +119,36 @@ describe('normalizeAudioMetadata', () => {
       ).toBeNull();
       expect(
         normalizeAudioMetadata({ common: { year: 1826.5 } }).year,
+      ).toBeNull();
+    });
+  });
+
+  describe('номер дорожки', () => {
+    it('берёт номер из пары «который из скольких»', () => {
+      expect(
+        normalizeAudioMetadata({ common: { track: { no: 3, of: 12 } } })
+          .trackNumber,
+      ).toBe(3);
+    });
+
+    it('пустой тег — это отсутствие номера, а не нулевая дорожка', () => {
+      expect(normalizeAudioMetadata({}).trackNumber).toBeNull();
+      expect(
+        normalizeAudioMetadata({ common: { track: { no: null } } })
+          .trackNumber,
+      ).toBeNull();
+      expect(
+        normalizeAudioMetadata({ common: { track: { no: 0 } } }).trackNumber,
+      ).toBeNull();
+    });
+
+    it('отбрасывает год, заехавший в поле номера, и дробь', () => {
+      expect(
+        normalizeAudioMetadata({ common: { track: { no: 2024 } } })
+          .trackNumber,
+      ).toBeNull();
+      expect(
+        normalizeAudioMetadata({ common: { track: { no: 1.5 } } }).trackNumber,
       ).toBeNull();
     });
   });

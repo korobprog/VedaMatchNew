@@ -1,6 +1,8 @@
 import {
+  MUSIC_INGEST_DEFAULT_BATCH_QUOTA_BYTES,
   MUSIC_UPLOAD_DEFAULT_LIMITS,
   MUSIC_UPLOAD_REJECTION_TEXT,
+  validateMusicIngestRequest,
   validateMusicUploadCompletion,
   validateMusicUploadRequest,
 } from './music-upload-validate';
@@ -229,5 +231,62 @@ describe('MUSIC_UPLOAD_REJECTION_TEXT', () => {
       expect(rejection).not.toBeNull();
       expect(MUSIC_UPLOAD_REJECTION_TEXT[rejection!]).toBeTruthy();
     }
+  });
+});
+
+describe('validateMusicIngestRequest', () => {
+  const facts = {
+    mime: 'audio/mpeg',
+    sizeBytes: 10 * 1024 * 1024,
+    batchUsedBytes: 0,
+  };
+
+  it('пропускает обычный файл', () => {
+    expect(validateMusicIngestRequest(facts)).toBeNull();
+  });
+
+  it('не спрашивает основание прав у позиции: оно задано на партии', () => {
+    // Личная загрузка на тех же фактах откажет — основание прав у неё
+    // обязательное. У редакции оно одно на всю партию, и требовать его с
+    // каждой дорожки незачем; сравнение двух проверок это и фиксирует.
+    expect(
+      validateMusicUploadRequest({
+        mime: facts.mime,
+        sizeBytes: facts.sizeBytes,
+        rightsBasis: null,
+        usedBytes: 0,
+      }),
+    ).toBe('rights_basis_required');
+    expect(validateMusicIngestRequest(facts)).toBeNull();
+  });
+
+  it('держит те же пределы по типу и размеру, что и личная загрузка', () => {
+    expect(validateMusicIngestRequest({ ...facts, mime: 'audio/flac' })).toBe(
+      'mime_not_accepted',
+    );
+    expect(
+      validateMusicIngestRequest({ ...facts, sizeBytes: 200 * 1024 * 1024 }),
+    ).toBe('file_too_large');
+    expect(validateMusicIngestRequest({ ...facts, sizeBytes: 0 })).toBe(
+      'file_empty',
+    );
+  });
+
+  it('считает потолок партии, а не личную квоту', () => {
+    expect(
+      validateMusicIngestRequest({
+        ...facts,
+        batchUsedBytes: MUSIC_INGEST_DEFAULT_BATCH_QUOTA_BYTES,
+      }),
+    ).toBe('batch_quota_exceeded');
+  });
+
+  it('пускает файл, ровно укладывающийся в остаток партии', () => {
+    expect(
+      validateMusicIngestRequest({
+        ...facts,
+        batchUsedBytes: MUSIC_INGEST_DEFAULT_BATCH_QUOTA_BYTES - facts.sizeBytes,
+      }),
+    ).toBeNull();
   });
 });

@@ -4,6 +4,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { MusicIngestProcessService } from './music-ingest-process.service';
 import { MusicUploadsService } from './music-uploads.service';
 import { MusicReportsService } from './music-reports.service';
 import { MusicPlaybackService } from './music-playback.service';
@@ -24,26 +25,66 @@ import { MusicPlaybackService } from './music-playback.service';
  */
 const TICK_MS = 10 * 60 * 1000;
 
+/**
+ * Приём смотрят глазами: админ нажал «Запустить» и ждёт. Десятиминутный тик
+ * уборки для этого не годится, поэтому у приёма свой — пятнадцать секунд.
+ * Он дешёвый: первый запрос стадии идёт по индексу `(status, updatedAt)` и
+ * при пустой очереди она сразу выходит.
+ */
+const INGEST_TICK_MS = 15 * 1000;
+
 @Injectable()
 export class MusicWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MusicWorkerService.name);
   private timer?: NodeJS.Timeout;
   private running = false;
+  private ingestTimer?: NodeJS.Timeout;
+  private ingestRunning = false;
 
   constructor(
     private readonly uploads: MusicUploadsService,
     private readonly reports: MusicReportsService,
     private readonly playback: MusicPlaybackService,
+    private readonly ingest: MusicIngestProcessService,
   ) {}
 
   onModuleInit() {
     this.timer = setInterval(() => void this.tick(), TICK_MS);
     // `unref`, иначе таймер держит процесс и тесты не завершаются.
     this.timer.unref();
+
+    // Свой флаг и свой таймер: медленная уборка бакета не должна задерживать
+    // приём, которого ждут на экране, а долгий приём — уборку.
+    this.ingestTimer = setInterval(
+      () => void this.ingestTick(),
+      INGEST_TICK_MS,
+    );
+    this.ingestTimer.unref();
   }
 
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
+    if (this.ingestTimer) clearInterval(this.ingestTimer);
+  }
+
+  /**
+   * Приём редакционных позиций. Сначала возврат зависших, потом очередь:
+   * иначе позиция, брошенная упавшим процессом, ждала бы получаса плюс тик
+   * там, где хватает одного тика.
+   */
+  private async ingestTick(): Promise<void> {
+    if (this.ingestRunning) return;
+    this.ingestRunning = true;
+    try {
+      await this.stage('возврат зависших позиций приёма', () =>
+        this.ingest.reviveStale(),
+      );
+      await this.stage('приём редакционных позиций', () =>
+        this.ingest.processOnce(),
+      );
+    } finally {
+      this.ingestRunning = false;
+    }
   }
 
   /** Пропускаем тик, если предыдущий ещё идёт: очередь тиков не нужна. */
