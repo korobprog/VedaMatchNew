@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import {
   CATALOG_SERVICES,
   CATALOG_SERVICES_WITHOUT_SEED_ENTRY,
+  EXCLUDED_SERVICES,
 } from './changed-paths-to-services.mjs';
 
 const SEED_PATH = fileURLToPath(
@@ -46,7 +47,13 @@ test('seed.cjs действительно содержит записи ката
 });
 
 test('CATALOG_SERVICES синхронизирован с seed.cjs (кроме документированных исключений)', () => {
-  const seedSlugs = catalogSlugsFromSeed();
+  // Служебная строка `Service` в сиде — не сервис каталога: «Вход» (auth)
+  // заведён, чтобы право на раздел можно было назначить менеджеру — карточки
+  // на витрине у него нет и быть не должно (status disabled, public false).
+  // Такие слаги перечислены в EXCLUDED_SERVICES и в паритет не входят.
+  const seedSlugs = catalogSlugsFromSeed().filter(
+    (slug) => !EXCLUDED_SERVICES.includes(slug),
+  );
   const withoutDocumentedExceptions = CATALOG_SERVICES.filter(
     (service) => !CATALOG_SERVICES_WITHOUT_SEED_ENTRY.includes(service),
   );

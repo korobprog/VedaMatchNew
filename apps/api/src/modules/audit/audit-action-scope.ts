@@ -63,6 +63,7 @@ const ACTION_SERVICE: Record<AdminAuditAction, AdminServiceSlug | null> = {
   'contacts.profile-hidden': 'chat',
   'contacts.profile-restored': 'chat',
   'platform.registration-changed': null,
+  'auth.provider-changed': 'auth',
   'astro.generation-resumed': 'astro',
   'assistant.settings-changed': 'assistant',
   'assistant.generation-resumed': 'assistant',

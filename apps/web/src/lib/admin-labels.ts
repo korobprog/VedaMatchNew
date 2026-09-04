@@ -14,6 +14,7 @@ export const roleLabels: Record<Role, string> = {
 
 /** Названия сервисов в форме выдачи прав администратору сервиса. */
 export const adminServiceLabels: Record<AdminServiceSlug, string> = {
+  auth: 'Вход — способы входа на портал',
   union: 'Union — знакомства',
   chat: 'Chat — общение',
   market: 'Market — объявления и магазины',
