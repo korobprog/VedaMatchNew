@@ -2,17 +2,19 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
-import { orderIngestEntries, planIngestReorder } from './ingest-order';
+import { planIngestReorder } from './ingest-order';
 import {
   INGEST_BATCH_SIZE,
   mimeFromStorageKey,
   nextStateAfterFailure,
 } from './ingest-process-rules';
 import { batchStatusFor, isItemStale } from './ingest-state';
+import { ingestArchiveBreakNotice } from './ingest-fetch-limits';
 import {
   IngestFetchError,
   MusicIngestFetchService,
   type ExpandedArchive,
+  type ExtractedArchiveEntry,
 } from './music-ingest-fetch.service';
 import {
   buildMusicCoverKey,
@@ -273,6 +275,19 @@ export class MusicIngestProcessService {
    * источников позиция становится записью каталога, а архив — контейнер: он
    * не превращается ни во что, он порождает других. Поэтому после разбора
    * он `skipped` с пометкой «архив разобран», а не `stored`.
+   *
+   * Позиция заводится на каждую запись **по мере её заливки**, а не общей
+   * транзакцией в конце. Тем же приёмом, что и ключ скачанного по ссылке:
+   * упади процесс между заливкой и записью в базу — объект останется в
+   * бакете, и убрать его сможет только тот, кто знает его имя. Одной
+   * транзакцией на две сотни строк терялся сразу весь комплект, а следующая
+   * попытка распаковывала архив заново с новыми ключами: до трёх попыток —
+   * до трёх осиротевших комплектов.
+   *
+   * Оборотная сторона: разбор, начавший заводить позиции, повторять уже
+   * нельзя — вторая распаковка положила бы те же дорожки вторым экземпляром.
+   * Поэтому после первой заведённой позиции любой исход терминальный, и
+   * пометка говорит, сколько записей всё-таки вошло.
    */
   private async expandArchiveItem(
     item: NonNullable<Awaited<ReturnType<MusicIngestProcessService['claim']>>>,
@@ -282,14 +297,50 @@ export class MusicIngestProcessService {
       return;
     }
 
+    const last = await this.prisma.musicIngestItem.aggregate({
+      where: { batchId: item.batchId },
+      _max: { position: true },
+    });
+    let position = (last._max.position ?? -1) + 1;
+    let created = 0;
+
+    // Порядок здесь — тот, в каком записи лежали в архиве: номера из тегов
+    // ещё не прочитаны, и сортировать нечем. Порядком альбома позиции встанут
+    // сами, когда партия дочитается, — этим занят `reorderArchiveItems`.
+    const takeEntry = async (entry: ExtractedArchiveEntry): Promise<void> => {
+      await this.prisma.musicIngestItem.create({
+        data: {
+          batchId: item.batchId,
+          source: 'zip',
+          sourceRef: entry.entryPath.slice(0, MAX_SOURCE_REF_LENGTH),
+          position: position++,
+          status: 'waiting',
+          storageKey: entry.storageKey,
+          checksum: entry.checksum,
+        },
+      });
+      created += 1;
+    };
+
     let expanded: ExpandedArchive;
     try {
       expanded = await this.fetcher.expandArchive(
         item.batchId,
         item.storageKey,
         await this.batchRemainingBytes(item.batchId),
+        takeEntry,
       );
     } catch (error) {
+      if (created > 0) {
+        // Часть дорожек уже в партии, и повторять разбор нельзя: вторая
+        // распаковка положила бы их вторым экземпляром. Что не вошло —
+        // редакция добирает руками, зато ни одного потерянного ключа.
+        this.logger.warn(
+          `Архив ${item.sourceRef} разобран не до конца: ${String(error)}`,
+        );
+        await this.finishExpanded(item, ingestArchiveBreakNotice(created));
+        return;
+      }
       if (error instanceof IngestFetchError) {
         // Приговор не повторяем: путь наружу и переполнение потолков от
         // второй попытки не изменятся.
@@ -300,7 +351,7 @@ export class MusicIngestProcessService {
       throw error;
     }
 
-    if (expanded.entries.length === 0) {
+    if (created === 0) {
       // Пометка о потолке партии сильнее общей: «в архиве нет mp3» было бы
       // неправдой — записи там есть, места нет в партии.
       await this.finishFailed(
@@ -310,56 +361,36 @@ export class MusicIngestProcessService {
       return;
     }
 
-    // Порядок на первое время — человеческий порядок имён: номера из тегов
-    // ещё не прочитаны, а таблица заполняется прямо сейчас и должна выглядеть
-    // альбомом, а не мешаниной.
-    const ordered = orderIngestEntries(
-      expanded.entries.map((entry) => ({
-        ...entry,
-        ref: entry.entryPath,
-        trackNumber: null,
-      })),
+    await this.finishExpanded(item, expanded.truncatedReason);
+    this.logger.log(
+      `Архив ${item.sourceRef} разобран: позиций заведено ${created}`,
     );
+  }
 
-    const last = await this.prisma.musicIngestItem.aggregate({
-      where: { batchId: item.batchId },
-      _max: { position: true },
-    });
-    let position = (last._max.position ?? -1) + 1;
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.musicIngestItem.createMany({
-        data: ordered.map((entry) => ({
-          batchId: item.batchId,
-          source: 'zip' as const,
-          sourceRef: entry.entryPath.slice(0, MAX_SOURCE_REF_LENGTH),
-          position: position++,
-          status: 'waiting' as const,
-          storageKey: entry.storageKey,
-          checksum: entry.checksum,
-        })),
-      });
-      await tx.musicIngestItem.update({
-        where: { id: item.id },
-        data: {
-          status: 'skipped',
-          // Разбор бывает честно неполным: партия упёрлась в потолок на
-          // середине архива, и админ должен прочитать в таблице, сколько
-          // дорожек в неё вошло, а не «архив разобран».
-          failureReason: expanded.truncatedReason ?? 'Архив разобран',
-          // Объект убираем следом, и ключ, ведущий в пустоту, позиции не
-          // нужен: по нему уборка партии полезла бы за несуществующим.
-          storageKey: null,
-        },
-      });
+  /**
+   * Закрыть позицию архива: он контейнер и записью каталога не станет.
+   *
+   * `note` — пометка словами: «Архив разобран», остановка по потолку партии
+   * или обрыв на полпути. Ключ обнуляется вместе с удалением объекта: ключ,
+   * ведущий в пустоту, позиции не нужен — по нему уборка партии полезла бы
+   * за несуществующим.
+   */
+  private async finishExpanded(
+    item: { id: string; storageKey: string | null },
+    note: string | null,
+  ): Promise<void> {
+    await this.prisma.musicIngestItem.update({
+      where: { id: item.id },
+      data: {
+        status: 'skipped',
+        failureReason: note ?? 'Архив разобран',
+        storageKey: null,
+      },
     });
 
     // Сам архив в бакете больше не нужен: записи из него уже лежат
     // отдельными объектами, а он занимал бы место второй раз.
-    await this.storage.remove(item.storageKey);
-    this.logger.log(
-      `Архив ${item.sourceRef} разобран: позиций заведено ${ordered.length}`,
-    );
+    if (item.storageKey) await this.storage.remove(item.storageKey);
   }
 
   /**

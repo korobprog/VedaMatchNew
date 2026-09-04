@@ -77,16 +77,37 @@ export interface ExtractedArchiveEntry {
 }
 
 /**
+ * Куда уходит каждая вынутая запись — **сразу после того, как её объект лёг
+ * в бакет**, а не общим списком в конце.
+ *
+ * Порядок здесь и есть смысл: пока ключи копились в массиве и попадали в
+ * базу одной транзакцией, любой сбой между заливкой и коммитом оставлял
+ * полный комплект объектов, о которых не знает никто, — уборка партии ищет
+ * их по позициям, а позиций нет. Колбэк заводит позицию по каждому ключу
+ * по мере появления, и в базу он не ходит сам: базой владеет обработка.
+ *
+ * Бросить из него можно: тогда объект этой записи убирается, а разбор
+ * останавливается — ключ без строки не должен пережить вызов.
+ */
+export type ArchiveEntrySink = (
+  entry: ExtractedArchiveEntry,
+) => Promise<void>;
+
+/**
  * Чем кончился разбор архива.
  *
- * Отдельным типом, а не просто списком записей, ради `truncatedReason`:
- * разбор бывает **честно неполным**. Партия упирается в свой потолок на
- * середине архива, и остаток дорожек в неё уже не влезает — но те, что
- * влезли, остаются: они законная часть партии, и стирать их значит
- * наказывать редакцию за размер архива.
+ * Записей здесь нет — они уже ушли в `ArchiveEntrySink` по одной. Осталось
+ * то, чего колбэк не знает: сколько их было всего и почему разбор кончился
+ * раньше архива.
+ *
+ * `truncatedReason` — про **честно неполный** разбор: партия упирается в
+ * свой потолок на середине архива, и остаток дорожек в неё уже не влезает,
+ * но те, что влезли, остаются. Они законная часть партии, и стирать их
+ * значит наказывать редакцию за размер архива.
  */
 export interface ExpandedArchive {
-  entries: ExtractedArchiveEntry[];
+  /** Сколько записей ушло в колбэк — столько позиций и завелось. */
+  takenCount: number;
   /** `null` — архив разобран целиком. Иначе пометка словами, почему нет. */
   truncatedReason: string | null;
 }
@@ -207,22 +228,25 @@ export class MusicIngestFetchService {
    *   `autodrain()` и молчание. Чужой архив всегда содержит лишнее, и падать
    *   на `cover.jpg` нельзя;
    * - `reject` — путь наружу или переполнение потолков самого архива: разбор
-   *   останавливается целиком, уже залитое убирается, позиция архива падает
-   *   с причиной словами. На `../` падать обязательно.
+   *   останавливается целиком, а позиция архива падает с причиной словами.
+   *   На `../` падать обязательно.
    *
    * Отдельно от `reject` стоит потолок **партии**: он не про архив и не про
    * запись. Место кончилось у партии, и взятые до этого дорожки ни в чём не
    * виноваты — разбор кончается, взятое остаётся, а в `truncatedReason`
    * уходит пометка словами.
    *
-   * Возвращает записи в том порядке, в каком они лежали в архиве. Порядок
-   * альбома выстраивает обработка — по номерам из тегов, которых до разбора
-   * не знает никто.
+   * Каждая взятая запись уходит в `onEntry` сразу после заливки — списком в
+   * конце их не собрать: сбой между заливкой и записью в базу оставил бы
+   * полный комплект объектов, о которых не знает никто. Порядок вызовов —
+   * тот, в каком записи лежали в архиве; порядок альбома выстраивает
+   * обработка потом, по номерам из тегов, которых до разбора не знает никто.
    */
   async expandArchive(
     batchId: string,
     archiveKey: string,
-    remainingBatchBytes = Number.POSITIVE_INFINITY,
+    remainingBatchBytes: number,
+    onEntry: ArchiveEntrySink,
   ): Promise<ExpandedArchive> {
     if (!this.storage.configured) {
       throw new IngestFetchError('unreachable', 'Хранилище не настроено');
@@ -248,7 +272,7 @@ export class MusicIngestFetchService {
     timer.unref?.();
 
     const seen: IngestZipSeen = { count: 0, totalBytes: 0 };
-    const taken: ExtractedArchiveEntry[] = [];
+    let takenCount = 0;
     let truncatedReason: string | null = null;
 
     try {
@@ -285,7 +309,7 @@ export class MusicIngestFetchService {
         // читать архив дальше незачем. Взятое до этого остаётся.
         if (budget.batchExhausted) {
           truncatedReason = ingestBatchLimitNotice(
-            taken.length,
+            takenCount,
             this.batchQuotaBytes,
           );
           break;
@@ -303,7 +327,7 @@ export class MusicIngestFetchService {
             error.rejection === 'batch_full'
           ) {
             truncatedReason = ingestBatchLimitNotice(
-              taken.length,
+              takenCount,
               this.batchQuotaBytes,
             );
             break;
@@ -311,14 +335,22 @@ export class MusicIngestFetchService {
           throw error;
         }
 
-        taken.push(stored);
+        try {
+          await onEntry(stored);
+        } catch (error) {
+          // Позиция не завелась — объект без строки в базе не нужен никому
+          // и найтись потом не сможет.
+          await this.storage.remove(stored.storageKey);
+          throw error;
+        }
+
+        takenCount += 1;
         seen.count += 1;
         seen.totalBytes += stored.sizeBytes;
       }
     } catch (error) {
-      // Полуразобранный архив в бакете не нужен: позиций по этим объектам
-      // никто не заведёт, а место они займут навсегда.
-      for (const entry of taken) await this.storage.remove(entry.storageKey);
+      // Взятое до сбоя остаётся: позиции по этим объектам уже заведены, и
+      // стереть их значило бы оставить в партии строки, ведущие в пустоту.
       source.destroy();
       if (!zip.destroyed) zip.destroy();
       if (error instanceof IngestFetchError) throw error;
@@ -328,7 +360,7 @@ export class MusicIngestFetchService {
       clearTimeout(timer);
     }
 
-    return { entries: taken, truncatedReason };
+    return { takenCount, truncatedReason };
   }
 
   /**
