@@ -36,7 +36,6 @@ export function mapYandexProfile(raw: YandexRaw): ProviderProfile {
     name: raw.real_name ?? raw.display_name ?? raw.default_email,
     avatarUrl,
     gender,
-    residency: 'ru',
   };
 }
 

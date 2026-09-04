@@ -19,7 +19,6 @@ describe('mapYandexProfile', () => {
       name: 'Иван Петров',
       avatarUrl: 'https://avatars.yandex.net/get-yapic/abc/islands-200',
       gender: 'male',
-      residency: 'ru',
     });
   });
 

@@ -440,7 +440,6 @@ export class AuthService implements OnModuleInit {
         email: claims.email,
         name: claims.name ?? claims.email,
         avatarUrl: claims.picture ?? undefined,
-        residency: 'global',
       },
       // Закрытая регистрация не трогает уже заведённых: отказ получает
       // только тот, для кого пришлось бы создать новую запись.
