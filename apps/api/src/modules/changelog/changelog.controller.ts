@@ -58,6 +58,17 @@ export class ChangelogController {
     return this.changelog.listAnnouncements(resolveLang(lang), user.sub);
   }
 
+  /**
+   * Отметить все разом. Отдельный маршрут, а не запрос на каждую новость:
+   * десяток параллельных POST с одной страницы — это десяток транзакций и
+   * гонка за уникальным индексом на ровном месте.
+   */
+  @Post('announcements/ack-all')
+  @UseGuards(AuthGuard)
+  acknowledgeAllAnnouncements(@CurrentUser() user: AccessTokenPayload) {
+    return this.changelog.acknowledgeAllAnnouncements(user.sub);
+  }
+
   @Post('announcements/:id/ack')
   @UseGuards(AuthGuard)
   acknowledgeAnnouncement(

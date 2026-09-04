@@ -130,6 +130,29 @@ export class ChangelogService {
     return { ok: true };
   }
 
+  /**
+   * Отметка «ознакомлен» разом по всем видимым новостям.
+   *
+   * Одним `createMany` со `skipDuplicates`, а не циклом отметок по одной:
+   * новостей у вернувшегося после отпуска набирается десяток, а отметка —
+   * голый факт, обновлять в ней нечего. Список берём тем же условием
+   * видимости, что и выдача: отметить можно ровно то, что человек видел.
+   */
+  async acknowledgeAllAnnouncements(
+    userId: string,
+  ): Promise<{ ok: true; count: number }> {
+    const announcements = await this.prisma.announcement.findMany({
+      where: visibleAnnouncementWhere(new Date()),
+      select: { id: true },
+    });
+    if (announcements.length === 0) return { ok: true, count: 0 };
+    const created = await this.prisma.announcementAck.createMany({
+      data: announcements.map((item) => ({ announcementId: item.id, userId })),
+      skipDuplicates: true,
+    });
+    return { ok: true, count: created.count };
+  }
+
   async listRoadmap(lang: Lang): Promise<PublicRoadmapItemDto[]> {
     const items = await this.prisma.roadmapItem.findMany({
       orderBy: { sortOrder: 'asc' },
