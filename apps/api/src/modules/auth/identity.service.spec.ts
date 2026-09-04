@@ -7,7 +7,7 @@ import { IdentityService } from './identity.service';
  * путь, а не заглушку вместо него.
  */
 function personal() {
-  return new PersonalDataService({ isEnabled: false } as never);
+  return new PersonalDataService({} as never, { isEnabled: false } as never);
 }
 
 const profile = {

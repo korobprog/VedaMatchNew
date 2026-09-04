@@ -1,4 +1,4 @@
-import { PERSONAL_FIELDS, toPersonalRecord } from './personal-fields';
+import { PERSONAL_FIELDS, pickPersonal, toPersonalRecord } from './personal-fields';
 
 const user = {
   id: 'u1',
@@ -59,5 +59,28 @@ describe('toPersonalRecord', () => {
   it('гендер отдаёт строкой: в московской схеме он не энум', () => {
     expect(typeof toPersonalRecord(user, []).gender).toBe('string');
     expect(toPersonalRecord({ ...user, gender: null }, []).gender).toBeNull();
+  });
+});
+
+describe('pickPersonal', () => {
+  it('берёт из правки только персональные поля', () => {
+    expect(
+      pickPersonal({
+        name: 'Новое имя',
+        spiritualName: null,
+        about: 'этого в контуре быть не должно',
+        languages: ['ru'],
+        socialLinks: {},
+      }),
+    ).toEqual({ name: 'Новое имя', spiritualName: null });
+  });
+
+  it('идентификатор не берёт: его задаёт вызывающий', () => {
+    expect(pickPersonal({ id: 'подмена', name: 'Имя' })).toEqual({ name: 'Имя' });
+  });
+
+  it('отсутствующее поле не превращает в undefined', () => {
+    // Иначе upsert затёр бы значение в Москве при правке соседнего поля.
+    expect('gender' in pickPersonal({ name: 'Имя' })).toBe(false);
   });
 });

@@ -83,3 +83,21 @@ export function toPersonalRecord(
 export const PERSONAL_SELECT = Object.fromEntries(
   PERSONAL_FIELDS.map((field) => [field, true]),
 ) as Record<PersonalField, true>;
+
+/**
+ * Персональные поля из произвольного объекта правки `User`.
+ *
+ * Точки записи передают в контур свой `data` целиком, а сюда должно уехать
+ * только то, что в перечне: иначе рассказ о себе или языки незаметно окажутся
+ * за его границей. Значения не приводятся и не проверяются — это делает
+ * доменный код до вызова.
+ */
+export function pickPersonal(
+  data: Record<string, unknown>,
+): Partial<Record<Exclude<PersonalField, 'id'>, unknown>> {
+  const out: Record<string, unknown> = {};
+  for (const field of PERSONAL_FIELDS) {
+    if (field !== 'id' && field in data) out[field] = data[field];
+  }
+  return out;
+}

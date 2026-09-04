@@ -28,6 +28,7 @@ import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { isDirectUrl, toStorageImage } from './gallery-image';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PersonalDataService } from '../personal-data/personal-data.service';
 import { RESET_PHOTO_VERIFICATION } from './photo-verification';
 
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -62,6 +63,7 @@ export class UserGalleryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly personal: PersonalDataService,
   ) {
     const region = this.config.get<string>('S3_REGION');
     const accessKeyId = this.config.get<string>('S3_ACCESS_KEY');
@@ -135,7 +137,18 @@ export class UserGalleryService {
       }
 
       try {
-        const photo = await this.prisma.$transaction(async (tx) => {
+        // Ключ файла — персональные данные, и для россиянина он обязан
+        // сначала оказаться в московской базе.
+        //
+        // Порядок здесь слабее, чем в остальных точках: московская запись
+        // происходит до проверки квоты, и если квота не пройдёт, в Москве
+        // останется ключ отвергнутого снимка. Это самоизлечивается — набор
+        // ключей пересобирается из основной базы при следующей же правке, — а
+        // держать транзакцию с блокировкой владельца открытой на время
+        // обращения через полконтинента хуже.
+        const photo = await this.personal.writeFor(
+          userId,
+          () => this.prisma.$transaction(async (tx) => {
           await this.lockOwner(tx, userId);
           const totals = await tx.userPhoto.aggregate({
             where: { userId },
@@ -164,7 +177,9 @@ export class UserGalleryService {
               sortOrder: (totals._max.sortOrder ?? -1) + 1,
             },
           });
-        });
+          }),
+          { addPhotoKeys: [storageKey] },
+        );
 
         await this.resetPhotoVerification(userId);
         uploaded.push({
@@ -295,6 +310,13 @@ export class UserGalleryService {
 
       return photo;
     });
+
+    // Контур синхронизируется ПОСЛЕ, в отличие от остальных точек. Порядок
+    // «Россия первой» относится к первичной записи данных, а стирание её не
+    // создаёт: удалить ключ из Москвы раньше или позже — одинаково законно.
+    // Зато читать фото до взятия блокировки владельца нельзя, а иначе набор
+    // ключей заранее не собрать.
+    await this.personal.sync(userId, { removePhotoKeys: [deleted.storageKey] });
 
     await this.resetPhotoVerification(userId);
     await this.deleteObject(deleted.storageKey, 'удаления фотографии');

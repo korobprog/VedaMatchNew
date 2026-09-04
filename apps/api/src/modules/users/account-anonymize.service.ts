@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserGalleryService } from './user-gallery.service';
+import { PersonalDataService } from '../personal-data/personal-data.service';
 
 /** Раз в час: анонимизация не срочная, а кандидатов единицы. */
 const TICK_MS = 60 * 60 * 1000;
@@ -93,6 +94,7 @@ export class AccountAnonymizeService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gallery: UserGalleryService,
+    private readonly personal: PersonalDataService,
   ) {}
 
   onModuleInit() {
@@ -173,6 +175,11 @@ export class AccountAnonymizeService implements OnModuleInit, OnModuleDestroy {
         data: anonymizedUserData(userId),
       }),
     ]);
+
+    // Право на удаление обязано доходить до российской базы: иначе
+    // «удалённый» аккаунт продолжает там жить. Ошибка не прерывает
+    // анонимизацию — отказать в удалении хуже, чем стереть не везде сразу.
+    await this.personal.erase(userId);
 
     await this.gallery.removeStorageObjects(
       storageKeys,

@@ -1,3 +1,4 @@
+import { PersonalDataService } from '../personal-data/personal-data.service';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PORTAL_ACTIVITY_EVENTS } from '@vedamatch/shared';
@@ -35,6 +36,7 @@ export class AstroBirthDataService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bus: EventEmitter2,
+    private readonly personal: PersonalDataService,
   ) {}
 
   /**
@@ -97,11 +99,28 @@ export class AstroBirthDataService {
       timezone: moment.timezone,
     };
 
-    const row = await this.prisma.astroBirthData.upsert({
-      where: { userId },
-      create: { userId, ...data },
-      update: data,
-    });
+    // Дата, точное время и место рождения идентифицируют человека, поэтому
+    // для россиянина уезжают в московскую базу — и первыми.
+    const row = await this.personal.writeFor(
+      userId,
+      () =>
+        this.prisma.astroBirthData.upsert({
+          where: { userId },
+          create: { userId, ...data },
+          update: data,
+        }),
+      {
+        birth: {
+          bornAtUtc: data.bornAtUtc,
+          birthDateLocal: data.birthDateLocal,
+          birthTimeLocal: data.birthTimeLocal,
+          placeLabel: data.placeLabel,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          timeZone: data.timezone,
+        },
+      },
+    );
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

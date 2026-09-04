@@ -31,7 +31,7 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PersonalDataService } from '../personal-data/personal-data.service';
-import { PERSONAL_SELECT } from '../personal-data/personal-fields';
+import { pickPersonal } from '../personal-data/personal-fields';
 import { toRole } from '../auth/role';
 import { toSubscriptionState } from '../billing/subscription';
 import { readBillingMode } from '../billing/billing-mode';
@@ -218,48 +218,18 @@ export class UsersService {
    * Снимок «после» собирается из состояния до правки, наложенного правкой:
    * в московскую базу уезжает полное состояние, а не дельта.
    */
+  /**
+   * Правка `User` через российский контур: для россиянина персональные поля
+   * обязаны сначала уехать в московскую базу. Напрямую `user.update` с
+   * персональными полями звать нельзя — порядок записи перестанет
+   * соблюдаться там, где о нём забыли.
+   */
   private async writePersonal(userId: string, data: Prisma.UserUpdateInput) {
-    // Контур выключен — прежний путь без единого лишнего запроса.
-    if (!this.personal.isActive) {
-      return this.prisma.user.update({ where: { id: userId }, data });
-    }
-
-    const before = await this.prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-      select: { ...PERSONAL_SELECT, dataResidency: true },
-    });
-
-    const pick = <K extends keyof typeof before>(key: K) =>
-      (key in data ? (data as Record<string, unknown>)[key] : before[key]) as
-        | (typeof before)[K]
-        | null;
-
-    return this.personal.write(
-      {
-        residency: before.dataResidency,
-        record: {
-          id: userId,
-          email: pick('email') as string,
-          name: pick('name') as string,
-          spiritualName: pick('spiritualName') as string | null,
-          birthDate: pick('birthDate') as Date | null,
-          gender: (pick('gender') as string | null) ?? null,
-          avatarKey: pick('avatarKey') as string | null,
-          photoKeys: await this.photoKeys(userId),
-        },
-      },
+    return this.personal.writeFor(
+      userId,
       () => this.prisma.user.update({ where: { id: userId }, data }),
+      { fields: pickPersonal(data as Record<string, unknown>) },
     );
-  }
-
-  /** Ключи фотографий галереи — часть персональной записи контура. */
-  private async photoKeys(userId: string): Promise<string[]> {
-    const photos = await this.prisma.userPhoto.findMany({
-      where: { userId },
-      select: { storageKey: true },
-      orderBy: { sortOrder: 'asc' },
-    });
-    return photos.map((photo) => photo.storageKey);
   }
 
   async updateProfile(

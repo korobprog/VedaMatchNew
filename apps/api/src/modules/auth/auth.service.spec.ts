@@ -31,7 +31,7 @@ function makeService(stored: Record<string, unknown> | null, rotatedCount = 1) {
     prisma as never,
     jwt as never,
     { emit: jest.fn() } as never,
-    new IdentityService(prisma as never, new PersonalDataService({ isEnabled: false } as never)),
+    new IdentityService(prisma as never, new PersonalDataService(prisma as never, { isEnabled: false } as never)),
     new AuthProvidersService(prisma as never),
   );
   const res = { cookie: jest.fn(), clearCookie: jest.fn() };
@@ -187,7 +187,7 @@ describe('safeReturnTo', () => {
  * та часть, где по claims находят человека, — она вынесена в отдельный метод.
  */
 function makeGoogleService(prisma: Record<string, unknown>) {
-  const identities = new IdentityService(prisma as never, new PersonalDataService({ isEnabled: false } as never));
+  const identities = new IdentityService(prisma as never, new PersonalDataService(prisma as never, { isEnabled: false } as never));
   return new AuthService(
     { get: jest.fn((_key: string, fallback?: string) => fallback) } as never,
     prisma as never,
