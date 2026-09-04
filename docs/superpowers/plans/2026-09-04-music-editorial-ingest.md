@@ -1806,8 +1806,13 @@ git commit -m "feat(music): правила разбора архива и пор
 
 **Потребляет:** `acceptZipEntry`, `sortIngestEntries` из задачи 9;
 `putStream` из задачи 8.
-**Отдаёт дальше:** `MusicIngestFetchService.expandArchive(batchId, source):
-Promise<number>` — сколько позиций заведено.
+**Отдаёт дальше:** `MusicIngestFetchService.expandArchive(batchId, archiveKey,
+remainingBatchBytes): Promise<ExtractedArchiveEntry[]>` — что удалось достать.
+Позиции по этому списку заводит `MusicIngestProcessService`: доставка в Prisma
+не ходит вовсе (так же устроен `fetchUrl`), и вторая владелица записей развела
+бы учёт по двум классам. Порядок требует номера дорожки, а он известен только
+после чтения тегов, поэтому у позиции появляется колонка `trackNumber`
+(миграция `20260904140000_music_ingest_track_number`).
 
 - [ ] **Шаг 1: Поставить зависимость**
 
