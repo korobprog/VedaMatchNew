@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
+  Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -11,8 +14,12 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type { AccessTokenPayload } from '@vedamatch/shared';
+import { AuthAdminService } from './auth-admin.service';
+import type { AuthProviderPatch } from './auth-admin.service';
 import { AuthProvidersService } from './auth-providers.service';
+import { isAuthAdmin } from './is-admin';
 import { AuthService } from './auth.service';
+import { AdminUnlimited } from './admin-unlimited.guard';
 import { AuthGuard, CurrentUser } from './auth.guard';
 import { JwtSignService } from './jwt.service';
 
@@ -22,7 +29,37 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly providers: AuthProvidersService,
+    private readonly admin: AuthAdminService,
   ) {}
+
+  /**
+   * Управление способами входа. Права — как у любого сервиса портала: роль
+   * `admin` или назначенный менеджер сервиса `auth`. Отдельных логинов под
+   * сервисы нет, права выдаются участнику портала.
+   */
+  @Get('admin/providers')
+  @UseGuards(AuthGuard)
+  @AdminUnlimited('auth')
+  adminProviders(@CurrentUser() user: AccessTokenPayload) {
+    if (!isAuthAdmin(user)) throw new ForbiddenException('Недостаточно прав');
+    return this.admin.list();
+  }
+
+  @Patch('admin/providers/:provider')
+  @UseGuards(AuthGuard)
+  @AdminUnlimited('auth')
+  adminUpdateProvider(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('provider') provider: string,
+    @Body() body: AuthProviderPatch,
+  ) {
+    if (!isAuthAdmin(user)) throw new ForbiddenException('Недостаточно прав');
+    return this.admin.update(
+      user.sub,
+      provider as Parameters<AuthAdminService['update']>[1],
+      body ?? {},
+    );
+  }
 
   /**
    * Какие способы входа показывать. Список приходит с сервера, а не зашит во

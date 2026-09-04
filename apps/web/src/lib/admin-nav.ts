@@ -67,6 +67,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     title: "Сервисы",
     items: [
       {
+        href: "/admin/auth",
+        label: "Вход",
+        hint: "Способы входа, домены показа и порядок кнопок",
+        scope: "auth",
+      },
+      {
         href: "/admin/union",
         label: "Знакомства",
         hint: "Анкеты, скрытие из выдачи, сводка сервиса",

@@ -173,6 +173,26 @@ const services = [
     devoteeVerifiedVisible: true,
   },
   {
+    slug: 'auth',
+    name: 'Вход',
+    nameEn: 'Sign-in',
+    description:
+      'Способы входа: включение, домены показа и порядок кнопок на экране входа',
+    url: '/admin/auth',
+    // disabled: карточки на витрине у «Входа» нет и быть не должно — сервисом
+    // не пользуются, им управляют. В каталоге он нужен, чтобы права на раздел
+    // можно было назначить менеджеру: назначение проверяет наличие слага.
+    // Администратор портала видит весь каталог, включая выключенные карточки.
+    status: 'disabled',
+    category: 'portal',
+    public: false,
+    seekerVisible: false,
+    practitionerVisible: false,
+    yogiVisible: false,
+    devoteeSelfIdentifiedVisible: false,
+    devoteeVerifiedVisible: false,
+  },
+  {
     slug: 'notices',
     name: 'Объявления',
     description:
