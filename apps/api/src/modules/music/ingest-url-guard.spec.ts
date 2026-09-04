@@ -122,6 +122,14 @@ describe('isPrivateAddress: границы диапазонов и прочие 
   it('разворачивает IPv4 из любой обёртки, а не только из десятичной', () => {
     expect(isPrivateAddress('::ffff:a00:1')).toBe(true);
     expect(isPrivateAddress('64:ff9b::127.0.0.1')).toBe(true);
+    // 6to4: адрес шлюза лежит в битах 16–47, и `2002:7f00:1::` — это та же
+    // петля, записанная третьим способом.
+    expect(isPrivateAddress('2002:7f00:1::')).toBe(true);
+    expect(isPrivateAddress('2002:a00:1::1')).toBe(true);
+    expect(isPrivateAddress('2002:a9fe:a9fe::')).toBe(true);
+    // Публичный шлюз 6to4 остаётся публичным: закрывать надо диапазон, а не
+    // префикс целиком.
+    expect(isPrivateAddress('2002:808:808::')).toBe(false);
     expect(isPrivateAddress('::ffff:8.8.8.8')).toBe(false);
   });
 

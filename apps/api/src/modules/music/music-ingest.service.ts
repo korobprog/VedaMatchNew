@@ -285,7 +285,18 @@ export class MusicIngestService {
         items: {
           select: {
             storageKey: true,
-            track: { select: { id: true, status: true, storageKey: true } },
+            // `coverKey` рядом со `storageKey` не для симметрии: обложка
+            // черновика вынута из тегов и не принадлежит больше никому —
+            // без неё она останется в бакете навсегда, потому что карточки,
+            // которая на неё ссылалась, уже не будет.
+            track: {
+              select: {
+                id: true,
+                status: true,
+                storageKey: true,
+                coverKey: true,
+              },
+            },
           },
         },
       },
@@ -299,6 +310,7 @@ export class MusicIngestService {
       if (item.track) draftTrackIds.push(item.track.id);
       if (item.storageKey) keys.add(item.storageKey);
       if (item.track?.storageKey) keys.add(item.track.storageKey);
+      if (item.track?.coverKey) keys.add(item.track.coverKey);
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -335,7 +347,14 @@ export class MusicIngestService {
       select: {
         id: true,
         storageKey: true,
-        track: { select: { id: true, status: true, storageKey: true } },
+        track: {
+          select: {
+            id: true,
+            status: true,
+            storageKey: true,
+            coverKey: true,
+          },
+        },
       },
     });
     if (!item) throw new NotFoundException('Позиция не найдена');
@@ -347,6 +366,9 @@ export class MusicIngestService {
     if (!item.track || draft) {
       if (item.storageKey) keys.add(item.storageKey);
       if (draft?.storageKey) keys.add(draft.storageKey);
+      // Обложка из тегов уходит вместе с черновиком: своего владельца, кроме
+      // этой карточки, у неё нет.
+      if (draft?.coverKey) keys.add(draft.coverKey);
     }
 
     await this.prisma.$transaction(async (tx) => {

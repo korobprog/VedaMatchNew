@@ -34,12 +34,19 @@ function build() {
       findMany: jest.fn().mockResolvedValue([]),
       createMany: jest.fn().mockResolvedValue({ count: 1 }),
       create: jest.fn(),
+      findFirst: jest.fn(),
+      delete: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     musicTrack: {
       findMany: jest.fn().mockResolvedValue([]),
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      delete: jest.fn().mockResolvedValue({}),
       aggregate: jest.fn().mockResolvedValue({ _sum: { sizeBytes: 0 } }),
+    },
+    musicTrackCategory: {
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     musicPlaylist: {
       create: jest.fn().mockResolvedValue({ id: 'p1' }),
@@ -252,6 +259,82 @@ describe('MusicIngestService.publish', () => {
       BadRequestException,
     );
     expect(prisma.musicTrack.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('MusicIngestService.remove', () => {
+  it('уносит и обложки черновиков: они вынуты из тегов и больше ничьи', async () => {
+    const { service, prisma, storage } = build();
+    prisma.musicIngestBatch.findUnique.mockResolvedValue({
+      id: 'b1',
+      status: 'ready',
+      items: [
+        {
+          storageKey: 'music/portal/b1/a.mp3',
+          track: {
+            id: 't1',
+            status: 'draft',
+            storageKey: 'music/portal/b1/a.mp3',
+            coverKey: 'music/covers/track/b1/a.jpg',
+          },
+        },
+      ],
+    });
+
+    await expect(service.remove(admin, 'b1')).resolves.toEqual({ ok: true });
+
+    expect(storage.remove).toHaveBeenCalledWith('music/portal/b1/a.mp3');
+    // Без этого обложка остаётся в бакете навсегда: карточки, которая на неё
+    // ссылалась, уже нет, и найти её некому.
+    expect(storage.remove).toHaveBeenCalledWith('music/covers/track/b1/a.jpg');
+  });
+
+  it('обложку опубликованной записи не трогает: запись осталась в каталоге', async () => {
+    const { service, prisma, storage } = build();
+    prisma.musicIngestBatch.findUnique.mockResolvedValue({
+      id: 'b1',
+      status: 'published',
+      items: [
+        {
+          storageKey: 'music/portal/b1/a.mp3',
+          track: {
+            id: 't1',
+            status: 'published',
+            storageKey: 'music/portal/b1/a.mp3',
+            coverKey: 'music/covers/track/b1/a.jpg',
+          },
+        },
+      ],
+    });
+
+    await expect(service.remove(admin, 'b1')).resolves.toEqual({ ok: true });
+    expect(storage.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe('MusicIngestService.removeItem', () => {
+  it('одна позиция уносит свою обложку тем же движением', async () => {
+    const { service, prisma, storage } = build();
+    prisma.musicIngestBatch.findUnique.mockResolvedValue({
+      id: 'b1',
+      status: 'ready',
+      items: [],
+    });
+    prisma.musicIngestItem.findFirst.mockResolvedValue({
+      id: 'i1',
+      storageKey: 'music/portal/b1/a.mp3',
+      track: {
+        id: 't1',
+        status: 'draft',
+        storageKey: 'music/portal/b1/a.mp3',
+        coverKey: 'music/covers/track/b1/a.jpg',
+      },
+    });
+
+    await expect(service.removeItem(admin, 'b1', 'i1')).resolves.toEqual({
+      ok: true,
+    });
+    expect(storage.remove).toHaveBeenCalledWith('music/covers/track/b1/a.jpg');
   });
 });
 
