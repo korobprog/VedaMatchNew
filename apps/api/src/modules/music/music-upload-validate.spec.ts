@@ -1,6 +1,8 @@
 import {
+  MUSIC_INGEST_DEFAULT_BATCH_QUOTA_BYTES,
   MUSIC_UPLOAD_DEFAULT_LIMITS,
   MUSIC_UPLOAD_REJECTION_TEXT,
+  validateMusicIngestRequest,
   validateMusicUploadCompletion,
   validateMusicUploadRequest,
 } from './music-upload-validate';
@@ -232,11 +234,6 @@ describe('MUSIC_UPLOAD_REJECTION_TEXT', () => {
   });
 });
 
-import {
-  MUSIC_INGEST_DEFAULT_BATCH_QUOTA_BYTES,
-  validateMusicIngestRequest,
-} from './music-upload-validate';
-
 describe('validateMusicIngestRequest', () => {
   const facts = {
     mime: 'audio/mpeg',
@@ -249,9 +246,18 @@ describe('validateMusicIngestRequest', () => {
   });
 
   it('не спрашивает основание прав у позиции: оно задано на партии', () => {
-    // У личной загрузки это поле обязательно; у редакционной оно одно на всю
-    // партию, и требовать его с каждой дорожки бессмысленно.
-    expect(validateMusicIngestRequest({ ...facts })).toBeNull();
+    // Личная загрузка на тех же фактах откажет — основание прав у неё
+    // обязательное. У редакции оно одно на всю партию, и требовать его с
+    // каждой дорожки незачем; сравнение двух проверок это и фиксирует.
+    expect(
+      validateMusicUploadRequest({
+        mime: facts.mime,
+        sizeBytes: facts.sizeBytes,
+        rightsBasis: null,
+        usedBytes: 0,
+      }),
+    ).toBe('rights_basis_required');
+    expect(validateMusicIngestRequest(facts)).toBeNull();
   });
 
   it('держит те же пределы по типу и размеру, что и личная загрузка', () => {
