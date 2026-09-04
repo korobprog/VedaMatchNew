@@ -55,7 +55,7 @@ export default async function MusicAdminIngestBatchPage({
         </h2>
         <Link
           href="/admin/music/ingest"
-          className="text-sm text-text-2 underline underline-offset-2 hover:text-text-0"
+          className="inline-flex min-h-6 items-center text-sm text-text-2 underline underline-offset-2 hover:text-text-0"
         >
           ко всем партиям
         </Link>

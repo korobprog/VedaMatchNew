@@ -68,7 +68,11 @@ export function IngestBatchList({
                 href={`/admin/music/ingest/${batch.id}`}
                 className="glass flex flex-wrap items-center gap-3 rounded-2xl border border-glass-brd p-4 transition-colors hover:border-violet/40 motion-reduce:transition-none"
               >
-                <span className="min-w-0 flex-1">
+                {/* На телефоне заголовок занимает строку целиком, и чип
+                    состояния переезжает под него: делить 375 px пополам
+                    значит показать «Киртаны с фе…», а по названию партию и
+                    узнают. С `sm` оба снова в одну строку. */}
+                <span className="min-w-0 grow basis-full sm:basis-0">
                   <span className="block truncate font-display text-base font-bold text-text-0">
                     {batch.title}
                   </span>

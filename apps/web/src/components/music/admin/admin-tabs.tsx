@@ -39,7 +39,12 @@ export function MusicAdminTabs({
   ];
 
   return (
-    <nav className="my-5 flex gap-2" aria-label="Разделы админки Музыки">
+    <nav
+      // Пять вкладок в один ряд не помещаются на телефоне и уводили всю
+      // страницу вбок горизонтальной прокруткой.
+      className="my-5 flex flex-wrap gap-2"
+      aria-label="Разделы админки Музыки"
+    >
       {tabs.map((tab) => {
         const current = tab.key === active;
         return (
