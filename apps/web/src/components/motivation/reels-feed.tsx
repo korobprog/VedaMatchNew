@@ -13,6 +13,7 @@ import { apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
 import { isLongQuote, splitQuoteAndExplanation } from "./quote-text";
 import { ReportDialog } from "./report-dialog";
+import { SourceLink } from "./source-link";
 import {
   attributionLine,
   formatCount,
@@ -563,9 +564,9 @@ function ReelSlide({
           <p className="mt-2 text-xs text-white/85">
             <span aria-hidden="true">📖 </span>
             {post.attributionSourceUrl ? (
-              <a href={post.attributionSourceUrl} target="_blank" rel="noopener noreferrer" className="underline decoration-dotted underline-offset-4">
+              <SourceLink href={post.attributionSourceUrl} className="underline decoration-dotted underline-offset-4">
                 {source}
-              </a>
+              </SourceLink>
             ) : (
               source
             )}
