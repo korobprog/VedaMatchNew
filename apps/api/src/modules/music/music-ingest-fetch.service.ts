@@ -89,9 +89,7 @@ export interface ExtractedArchiveEntry {
  * Бросить из него можно: тогда объект этой записи убирается, а разбор
  * останавливается — ключ без строки не должен пережить вызов.
  */
-export type ArchiveEntrySink = (
-  entry: ExtractedArchiveEntry,
-) => Promise<void>;
+export type ArchiveEntrySink = (entry: ExtractedArchiveEntry) => Promise<void>;
 
 /**
  * Чем кончился разбор архива.

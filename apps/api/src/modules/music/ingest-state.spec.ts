@@ -57,7 +57,10 @@ describe('batchStatusFor: published — поглощающее состояни�
     // `ready` — админ нажмёт «Опубликовать всё» второй раз и получит вторую
     // системную подборку с тем же названием.
     expect(
-      batchStatusFor([{ status: 'stored' }, { status: 'waiting' }], 'published'),
+      batchStatusFor(
+        [{ status: 'stored' }, { status: 'waiting' }],
+        'published',
+      ),
     ).toBe('published');
     expect(
       batchStatusFor([{ status: 'stored' }, { status: 'stored' }], 'published'),

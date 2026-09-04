@@ -34,9 +34,10 @@ function build() {
       aggregate: jest.fn().mockResolvedValue({ _max: { position: 2 } }),
     },
     musicIngestBatch: {
-      findUnique: jest
-        .fn()
-        .mockResolvedValue({ status: 'running', items: [{ status: 'waiting' }] }),
+      findUnique: jest.fn().mockResolvedValue({
+        status: 'running',
+        items: [{ status: 'waiting' }],
+      }),
       update: jest.fn().mockResolvedValue({}),
     },
     musicTrack: {
@@ -100,7 +101,9 @@ function build() {
   /** Как позиция архива закончила: последний `update` по её строке. */
   const archiveUpdate = () =>
     prisma.musicIngestItem.update.mock.calls
-      .filter((call) => (call[0] as { where: { id: string } }).where.id === 'zip-1')
+      .filter(
+        (call) => (call[0] as { where: { id: string } }).where.id === 'zip-1',
+      )
       .at(-1)?.[0] as { data: Record<string, unknown> } | undefined;
 
   return { prisma, storage, fetcher, service, queueArchive, archiveUpdate };
@@ -212,8 +215,7 @@ describe('MusicIngestProcessService: разбор архива', () => {
     expect(prisma.musicIngestItem.create).toHaveBeenCalledTimes(1);
     expect(archiveUpdate()?.data).toMatchObject({
       status: 'skipped',
-      failureReason:
-        'Взято записей: 1. Дальше партия упёрлась в потолок 20 ГБ',
+      failureReason: 'Взято записей: 1. Дальше партия упёрлась в потолок 20 ГБ',
     });
   });
 
