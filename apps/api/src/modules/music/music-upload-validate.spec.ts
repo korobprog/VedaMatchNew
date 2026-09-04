@@ -231,3 +231,56 @@ describe('MUSIC_UPLOAD_REJECTION_TEXT', () => {
     }
   });
 });
+
+import {
+  MUSIC_INGEST_DEFAULT_BATCH_QUOTA_BYTES,
+  validateMusicIngestRequest,
+} from './music-upload-validate';
+
+describe('validateMusicIngestRequest', () => {
+  const facts = {
+    mime: 'audio/mpeg',
+    sizeBytes: 10 * 1024 * 1024,
+    batchUsedBytes: 0,
+  };
+
+  it('пропускает обычный файл', () => {
+    expect(validateMusicIngestRequest(facts)).toBeNull();
+  });
+
+  it('не спрашивает основание прав у позиции: оно задано на партии', () => {
+    // У личной загрузки это поле обязательно; у редакционной оно одно на всю
+    // партию, и требовать его с каждой дорожки бессмысленно.
+    expect(validateMusicIngestRequest({ ...facts })).toBeNull();
+  });
+
+  it('держит те же пределы по типу и размеру, что и личная загрузка', () => {
+    expect(validateMusicIngestRequest({ ...facts, mime: 'audio/flac' })).toBe(
+      'mime_not_accepted',
+    );
+    expect(
+      validateMusicIngestRequest({ ...facts, sizeBytes: 200 * 1024 * 1024 }),
+    ).toBe('file_too_large');
+    expect(validateMusicIngestRequest({ ...facts, sizeBytes: 0 })).toBe(
+      'file_empty',
+    );
+  });
+
+  it('считает потолок партии, а не личную квоту', () => {
+    expect(
+      validateMusicIngestRequest({
+        ...facts,
+        batchUsedBytes: MUSIC_INGEST_DEFAULT_BATCH_QUOTA_BYTES,
+      }),
+    ).toBe('batch_quota_exceeded');
+  });
+
+  it('пускает файл, ровно укладывающийся в остаток партии', () => {
+    expect(
+      validateMusicIngestRequest({
+        ...facts,
+        batchUsedBytes: MUSIC_INGEST_DEFAULT_BATCH_QUOTA_BYTES - facts.sizeBytes,
+      }),
+    ).toBeNull();
+  });
+});

@@ -41,6 +41,7 @@ export type MusicUploadRejection =
   | 'file_empty'
   | 'rights_basis_required'
   | 'quota_exceeded'
+  | 'batch_quota_exceeded'
   | 'duration_too_long'
   | 'duration_unknown'
   | 'bitrate_too_high'
@@ -137,9 +138,63 @@ export const MUSIC_UPLOAD_REJECTION_TEXT: Record<MusicUploadRejection, string> =
       'Отметьте, на каком основании публикуете запись: своя, с открытой программы или свободно распространяемая.',
     quota_exceeded:
       'Закончилось место. Удалите старые загрузки или напишите в поддержку.',
+    batch_quota_exceeded:
+      'Партия упёрлась в потолок объёма. Опубликуйте её и заведите следующую.',
     duration_too_long: 'Запись слишком длинная.',
     duration_unknown:
       'Не удалось прочитать длительность. Попробуйте пересохранить файл в mp3.',
     bitrate_too_high: 'Битрейт выше допустимого — пересохраните файл.',
     duplicate: 'Такая запись у вас уже есть.',
   };
+
+/**
+ * Потолок объёма одной партии.
+ *
+ * Двадцать гигабайт — это примерно полторы сотни часовых записей: хватает на
+ * большой архив за раз, но не даёт одной опечаткой в списке ссылок вылить в
+ * бакет всё, что лежало на той стороне. Значение переопределяется
+ * `MUSIC_INGEST_BATCH_QUOTA_BYTES`.
+ */
+export const MUSIC_INGEST_DEFAULT_BATCH_QUOTA_BYTES = 20 * 1024 * 1024 * 1024;
+
+export interface MusicIngestRequestFacts {
+  mime: string;
+  sizeBytes: number;
+  /** Сколько байт уже занято позициями этой партии. */
+  batchUsedBytes: number;
+}
+
+export interface MusicIngestLimits extends MusicUploadLimits {
+  batchQuotaBytes: number;
+}
+
+export const MUSIC_INGEST_DEFAULT_LIMITS: MusicIngestLimits = {
+  ...MUSIC_UPLOAD_DEFAULT_LIMITS,
+  batchQuotaBytes: MUSIC_INGEST_DEFAULT_BATCH_QUOTA_BYTES,
+};
+
+/**
+ * Проверка редакционной позиции — до того, как байты пошли в бакет.
+ *
+ * От личной отличается ровно двумя вещами: основание прав не спрашивается
+ * (оно одно на партию), а вместо квоты аккаунта считается потолок партии.
+ * Остальные пределы общие, поэтому переиспользуются, а не переписываются.
+ */
+export function validateMusicIngestRequest(
+  facts: MusicIngestRequestFacts,
+  limits: MusicIngestLimits = MUSIC_INGEST_DEFAULT_LIMITS,
+): MusicUploadRejection | null {
+  const mime = facts.mime?.split(';')[0]?.trim().toLowerCase() ?? '';
+  if (!ACCEPTED.has(mime)) return 'mime_not_accepted';
+
+  if (!Number.isFinite(facts.sizeBytes) || facts.sizeBytes <= 0) {
+    return 'file_empty';
+  }
+  if (facts.sizeBytes > limits.maxBytes) return 'file_too_large';
+
+  if (facts.batchUsedBytes + facts.sizeBytes > limits.batchQuotaBytes) {
+    return 'batch_quota_exceeded';
+  }
+
+  return null;
+}
