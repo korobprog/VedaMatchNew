@@ -243,8 +243,12 @@ export const retryIngest = (id: string) =>
     { method: "POST" },
   );
 
+/**
+ * Публикация партии. Непустое название — из партии соберётся системная
+ * подборка, и сервер вернёт её идентификатор.
+ */
 export const publishIngestBatch = (id: string, playlistTitle?: string) =>
-  send<{ published: number }>(
+  send<{ published: number; playlistId: string | null }>(
     `/music/admin/ingest/${encodeURIComponent(id)}/publish`,
     { method: "POST", body: JSON.stringify({ playlistTitle }) },
   );

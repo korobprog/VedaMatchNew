@@ -53,6 +53,7 @@ export function IngestBatchForm({
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [playlistTitle, setPlaylistTitle] = useState("");
   const published = batch.status === "published";
 
   async function patch(body: UpdateMusicIngestBatchRequest): Promise<void> {
@@ -266,14 +267,35 @@ export function IngestBatchForm({
       {note && <Alert tone="success">{note}</Alert>}
       {error && <Alert tone="error">{error}</Alert>}
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-end gap-3">
+        {/* Полем рядом с кнопкой, а не окном после неё: решение про подборку
+            принимается до публикации, а модалка ради одной строки вынуждает
+            подтверждать то, что человек чаще всего оставляет пустым. */}
+        <label className="block w-full sm:w-64">
+          <span className="mb-1 block text-xs text-text-2">
+            Подборка из партии — необязательно
+          </span>
+          <input
+            value={playlistTitle}
+            disabled={published}
+            onChange={(event) => setPlaylistTitle(event.target.value)}
+            placeholder="Киртаны с фестиваля"
+            className={field}
+          />
+        </label>
         <button
           type="button"
           disabled={pending || published || batch.storedCount === 0}
           onClick={() =>
             void run(async () => {
-              const result = await publishIngestBatch(batch.id);
-              return `Ушло в каталог: ${result.published}.`;
+              const title = playlistTitle.trim();
+              const result = await publishIngestBatch(
+                batch.id,
+                title || undefined,
+              );
+              return result.playlistId
+                ? `Ушло в каталог: ${result.published}. Подборка «${title}» собрана и видна на витрине.`
+                : `Ушло в каталог: ${result.published}.`;
             })
           }
           className="btn-mint h-9 rounded-xl px-4 text-sm font-semibold disabled:opacity-50"

@@ -72,6 +72,7 @@ export class MusicAdminQueueService {
       categories,
       openReports,
       stored,
+      portal,
     ] = await Promise.all([
       this.prisma.musicTrack.count({ where: { status: 'pending' } }),
       this.prisma.musicTrack.count({ where: { status: 'published' } }),
@@ -81,6 +82,13 @@ export class MusicAdminQueueService {
       this.prisma.musicCategory.count(),
       this.prisma.musicReport.count({ where: { status: 'open' } }),
       this.prisma.musicTrack.aggregate({ _sum: { sizeBytes: true } }),
+      // Записи редакции — те, у кого нет загрузившего. Отдельным счётом,
+      // потому что личные загрузки держит квота аккаунта, а редакционные —
+      // только потолок партии, и бакет про эту разницу ничего не знает.
+      this.prisma.musicTrack.aggregate({
+        where: { uploadedById: null },
+        _sum: { sizeBytes: true },
+      }),
     ]);
 
     return {
@@ -92,6 +100,7 @@ export class MusicAdminQueueService {
       categories,
       openReports,
       storedBytes: stored._sum.sizeBytes ?? 0,
+      portalBytes: portal._sum.sizeBytes ?? 0,
     };
   }
 

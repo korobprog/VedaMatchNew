@@ -41,6 +41,9 @@ function build() {
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       aggregate: jest.fn().mockResolvedValue({ _sum: { sizeBytes: 0 } }),
     },
+    musicPlaylist: {
+      create: jest.fn().mockResolvedValue({ id: 'p1' }),
+    },
     $transaction: jest.fn(async (fn: unknown) =>
       typeof fn === 'function'
         ? (fn as (tx: unknown) => unknown)(prisma)
@@ -163,6 +166,57 @@ describe('MusicIngestService.publish', () => {
         data: expect.objectContaining({ status: 'published' }),
       }),
     );
+  });
+
+  it('непустое название собирает системную подборку в порядке партии', async () => {
+    const { service, prisma } = build();
+    prisma.musicIngestBatch.findUnique.mockResolvedValue({
+      id: 'b1',
+      status: 'ready',
+      items: [
+        { id: 'i1', status: 'stored', trackId: 't1' },
+        { id: 'i2', status: 'skipped', trackId: null },
+        { id: 'i3', status: 'stored', trackId: 't2' },
+      ],
+    });
+
+    await expect(
+      service.publish(admin, 'b1', { playlistTitle: '  Вечерний киртан ' }),
+    ).resolves.toEqual({ published: 2, playlistId: 'p1' });
+
+    expect(prisma.musicPlaylist.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          ownerId: 'admin-1',
+          title: 'Вечерний киртан',
+          isSystem: true,
+          visibility: 'public',
+          // Витрина берёт подборки с `trackCount > 0`: нуль здесь значит
+          // молчаливо невидимую подборку.
+          trackCount: 2,
+          items: {
+            create: [
+              { trackId: 't1', position: 1000 },
+              { trackId: 't2', position: 2000 },
+            ],
+          },
+        }),
+      }),
+    );
+  });
+
+  it('пустое название подборку не собирает', async () => {
+    const { service, prisma } = build();
+    prisma.musicIngestBatch.findUnique.mockResolvedValue({
+      id: 'b1',
+      status: 'ready',
+      items: [{ id: 'i1', status: 'stored', trackId: 't1' }],
+    });
+
+    await expect(
+      service.publish(admin, 'b1', { playlistTitle: '   ' }),
+    ).resolves.toEqual({ published: 1, playlistId: null });
+    expect(prisma.musicPlaylist.create).not.toHaveBeenCalled();
   });
 
   it('партию без единой доставленной позиции публиковать нечем', async () => {

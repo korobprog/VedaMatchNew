@@ -37,6 +37,10 @@ export default async function AdminMusicQueuePage() {
     { label: "Исполнителей", value: String(summary.artists) },
     { label: "Жалоб открыто", value: String(summary.openReports) },
     { label: "Занято", value: formatBytes(summary.storedBytes) },
+    // Рядом с общим объёмом, а не вместо него: редакционные записи не держит
+    // ничья личная квота, и без отдельной строки их рост заметен только по счёту
+    // за бакет.
+    { label: "Из них редакция", value: formatBytes(summary.portalBytes) },
   ];
 
   return (
@@ -44,7 +48,7 @@ export default async function AdminMusicQueuePage() {
       <MusicAdminTabs active="queue" pendingCount={summary?.pending ?? 0} />
 
       {stats && (
-        <dl className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <dl className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
           {stats.map((stat) => (
             <div
               key={stat.label}

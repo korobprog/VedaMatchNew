@@ -24,6 +24,7 @@ import type {
   UpdateMusicIngestBatchRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { planIngestPlaylist } from './ingest-playlist';
 import { batchStatusFor } from './ingest-state';
 import {
   checkIngestArchive,
@@ -630,21 +631,18 @@ export class MusicIngestService {
    *
    * Пропущенные и упавшие позиции публикации не мешают — партия не обязана
    * сойтись целиком, чтобы сорок скачавшихся записей появились в каталоге.
+   *
+   * Непустое название собирает из партии системную подборку — в той же
+   * транзакции, чтобы на витрине не осталось подборки без записей или
+   * записей без подборки, если что-то упадёт на полпути.
    */
   async publish(
     user: AccessTokenPayload,
     batchId: string,
     body: PublishMusicIngestBatchRequest,
-  ): Promise<{ published: number }> {
+  ): Promise<{ published: number; playlistId: string | null }> {
     this.assertAdmin(user);
     const batch = await this.requireOpenBatch(batchId);
-
-    // Сборка подборки из партии — отдельный шаг работы. Пока название
-    // отвергается, а не игнорируется: молча потерянное поле выглядит как
-    // сломанная кнопка.
-    if ((body?.playlistTitle ?? '').trim()) {
-      throw new BadRequestException('Сборка подборки из партии ещё недоступна');
-    }
 
     const trackIds = batch.items
       .filter((item) => item.status === 'stored' && item.trackId)
@@ -655,7 +653,10 @@ export class MusicIngestService {
       );
     }
 
+    const plan = planIngestPlaylist(body?.playlistTitle, trackIds);
     const publishedAt = new Date();
+    let playlistId: string | null = null;
+
     await this.prisma.$transaction(async (tx) => {
       // `status: 'draft'` в условии — не украшение: запись могли опубликовать
       // или снять руками из карточки, пока партия ждала кнопки.
@@ -663,13 +664,38 @@ export class MusicIngestService {
         where: { id: { in: trackIds }, status: 'draft' },
         data: { status: 'published', publishedAt },
       });
+
+      if (plan) {
+        // В той же транзакции, что и публикация: подборка из черновиков — это
+        // пустая карточка на витрине, а публикация без подборки — сорок записей,
+        // которые придётся собирать руками.
+        const playlist = await tx.musicPlaylist.create({
+          data: {
+            // Владелец — публикующий админ, связь `SetNull`: его уход
+            // общую подборку не унесёт.
+            ownerId: user.sub,
+            title: plan.title,
+            // Подборка портала: видна всем и без отдельного переключателя
+            // видимости — те же два поля, что у `createSystemPlaylist`.
+            visibility: 'public',
+            isSystem: true,
+            // Счётчик денормализован, и витрина берёт подборки с `trackCount > 0`:
+            // не заполнив его здесь, мы бы собрали подборку, которой нигде не видно.
+            trackCount: plan.items.length,
+            items: { create: plan.items },
+          },
+          select: { id: true },
+        });
+        playlistId = playlist.id;
+      }
+
       await tx.musicIngestBatch.update({
         where: { id: batchId },
         data: { status: 'published' },
       });
     });
 
-    return { published: trackIds.length };
+    return { published: trackIds.length, playlistId };
   }
 
   /**
