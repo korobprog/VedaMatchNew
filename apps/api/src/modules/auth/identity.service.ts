@@ -1,5 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import type { AuthProvider, Gender, User } from '@prisma/client';
+import type { AuthProvider, DataResidency, Gender, User } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PersonalDataService } from '../personal-data/personal-data.service';
@@ -11,7 +11,16 @@ export type ProviderProfile = {
   name: string;
   avatarUrl?: string;
   gender?: Gender;
-  residency: 'ru' | 'global';
+  /**
+   * Резидентность, ЗАЯВЛЕННАЯ самим человеком. Обычно её нет: мы не
+   * спрашиваем, а способ входа гражданства не устанавливает — у иностранца
+   * бывает VK, у гражданина РФ почта на Google.
+   *
+   * Пусто — значит неизвестно, и тогда `ru`: при неопределённом гражданстве
+   * данные хранятся в России. Правило появилось после правового разбора
+   * 2026-09-04, до него признак ошибочно выводился из провайдера.
+   */
+  declaredResidency?: DataResidency;
 };
 
 export type ResolveHooks = {
@@ -75,12 +84,16 @@ export class IdentityService {
     // нельзя — он выдаст там своё значение.
     const id = randomUUID();
 
+    // Неизвестно — значит Россия. Сомнение трактуется в пользу локализации,
+    // а не в пользу удобства.
+    const residency: DataResidency = profile.declaredResidency ?? 'ru';
+
     // Через PersonalDataService, а не напрямую: для россиянина запись обязана
     // сначала произойти в московской базе. Порядок здесь не деталь
     // реализации, а то, что делает схему законной.
     const user = await this.personal.write(
       {
-        residency: profile.residency,
+        residency,
         record: {
           id,
           email: profile.email,
@@ -100,10 +113,8 @@ export class IdentityService {
             name: profile.name,
             avatarUrl: profile.avatarUrl,
             gender: profile.gender,
-            // Проставляется здесь и больше не меняется. У входа по почте
-            // признак задним числом невосстановим: правило смотрит на домен
-            // регистрации, а его не помнят ни адрес, ни идентичность.
-            dataResidency: profile.residency,
+            // Проставляется здесь и дальше не меняется.
+            dataResidency: residency,
             identities: {
               create: {
                 provider: profile.provider,

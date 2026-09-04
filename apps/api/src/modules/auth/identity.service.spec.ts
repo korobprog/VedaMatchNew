@@ -15,7 +15,6 @@ const profile = {
   externalId: '42',
   email: 'ivan@example.com',
   name: 'Иван',
-  residency: 'ru' as const,
 };
 
 function prismaMock(overrides: Record<string, unknown> = {}) {
@@ -80,7 +79,7 @@ describe('IdentityService', () => {
       data: { lastLoginAt: expect.any(Date) },
     });
   });
-  it('записывает резидентность из профиля провайдера', async () => {
+  it('без заявления резидентность ru: сомнение — в пользу России', async () => {
     const create = jest.fn().mockResolvedValue({ id: 'u1' });
     const prisma = prismaMock({
       user: { findUnique: jest.fn().mockResolvedValue(null), create },
@@ -97,7 +96,7 @@ describe('IdentityService', () => {
     );
   });
 
-  it('у глобального провайдера резидентность global', async () => {
+  it('заявленная резидентность побеждает умолчание', async () => {
     const create = jest.fn().mockResolvedValue({ id: 'u2' });
     const prisma = prismaMock({
       user: { findUnique: jest.fn().mockResolvedValue(null), create },
@@ -107,7 +106,7 @@ describe('IdentityService', () => {
       ...profile,
       provider: 'google',
       externalId: 'g-1',
-      residency: 'global',
+      declaredResidency: 'global' as const,
     });
 
     expect(create).toHaveBeenCalledWith(
