@@ -32,6 +32,7 @@ export const ENTRY_TYPES: LibraryEntryType[] = [
   "course",
   "app",
   "telegram_channel",
+  "vk_group",
   "community",
   "other",
 ];

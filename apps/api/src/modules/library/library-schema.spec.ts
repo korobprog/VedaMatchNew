@@ -17,6 +17,7 @@ describe('Library Prisma schema', () => {
         'course',
         'app',
         'telegram_channel',
+        'vk_group',
         'community',
         'other',
       ]),

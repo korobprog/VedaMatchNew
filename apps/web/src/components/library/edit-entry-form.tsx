@@ -16,6 +16,7 @@ import { entryTypeLabel, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const MAX_URL_LENGTH = 2000;
 const MAX_TITLE_LENGTH = 200;
 const MAX_DESCRIPTION_LENGTH = 1000;
 const MAX_CATEGORIES = 5;
@@ -28,11 +29,15 @@ const TYPES: LibraryEntryType[] = [
   "course",
   "app",
   "telegram_channel",
+  "vk_group",
   "community",
   "other",
 ];
 
 const ERROR_KEYS: Record<string, LibraryTextKey> = {
+  unsupported_url: "add.unsupportedUrl",
+  url_too_long: "add.urlTooLong",
+  url_or_source_required: "entry.urlRequired",
   unsupported_type: "add.unsupportedType",
   title_required: "add.titleRequired",
   title_too_long: "add.titleTooLong",
@@ -184,6 +189,7 @@ function EntryFieldsForm({
   onDone: () => void;
 }) {
   const router = useRouter();
+  const [url, setUrl] = useState(entry.url ?? "");
   const [type, setType] = useState<LibraryEntryType>(entry.type);
   const [contentLanguage, setContentLanguage] = useState(entry.contentLanguage);
   const [titleRu, setTitleRu] = useState(entry.titleRu ?? "");
@@ -259,6 +265,9 @@ function EntryFieldsForm({
     }
 
     const body: UpdateLibraryEntryRequest = {
+      // Адрес отправляем всегда: сервер сам сверит его с нынешним и не
+      // тронет ни обогащение, ни обложку, когда ссылка не изменилась.
+      url: url.trim() || null,
       type,
       contentLanguage,
       titleRu: titleRu.trim() || null,
@@ -288,6 +297,12 @@ function EntryFieldsForm({
         );
         return;
       }
+      // 409 — такой адрес уже занят другой записью: на нём держится
+      // дедупликация справочника.
+      if (res.status === 409) {
+        setError(t(locale, "add.duplicate"));
+        return;
+      }
       if (!res.ok) {
         setError(t(locale, "entry.updateFailed"));
         return;
@@ -304,6 +319,22 @@ function EntryFieldsForm({
 
   return (
     <form onSubmit={submit} className="grid gap-4">
+      <label className="text-sm text-text-1">
+        {t(locale, "add.url")}
+        <input
+          value={url}
+          onChange={(event) => setUrl(event.target.value)}
+          type="url"
+          inputMode="url"
+          maxLength={MAX_URL_LENGTH}
+          placeholder="https://"
+          className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+        />
+        <span className="mt-1 block text-xs text-text-2">
+          {t(locale, "entry.urlHint")}
+        </span>
+      </label>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="text-sm text-text-1">
           {t(locale, "add.type")}
