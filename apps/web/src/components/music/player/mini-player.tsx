@@ -281,17 +281,24 @@ export function MiniPlayer() {
           </div>
         </div>
 
+        {/* Разрыв строки на телефоне. `flex-wrap` переносит только то, что не
+            влезло, а здесь строку надо кончить раньше: иначе управление
+            встаёт рядом с названием и оба сжимаются в ноль. Пустая полоска во
+            всю ширину и нулевой высоты — единственный способ сказать это
+            флексу. */}
+        <span aria-hidden="true" className="order-3 -mb-1.5 h-0 w-full sm:hidden" />
+
         {/* Управление и дорожка.
             `contents` на телефоне: обёртка перестаёт быть коробкой, и кнопки
             с дорожкой становятся прямыми детьми полосы — только так дорожка
             может уехать на свою строку во всю ширину. С `sm` обёртка снова
             коробка, и колонка «кнопки над дорожкой» из макета возвращается. */}
         <div className="contents sm:flex sm:min-w-0 sm:flex-1 sm:flex-col sm:items-center sm:gap-1.5">
-          {/* На телефоне ряд занимает всю строку: иначе он сжимается по
-              содержимому, справа остаётся дыра, и растягивать столбикам
-              внутри него нечего. На `sm` ширина снова по содержимому — там
-              ряд стоит по центру колонки. */}
-          <div className="order-3 flex w-full items-center gap-1.5 sm:order-none sm:w-auto sm:gap-2">
+          {/* На телефоне ряд делит вторую строку с кнопками записи: `flex-1`
+              отдаёт ему остаток места, но не выталкивает соседей на третью
+              строку. На `sm` ширина снова по содержимому — там ряд стоит по
+              центру колонки. */}
+          <div className="order-4 flex min-w-0 flex-1 items-center gap-1.5 sm:order-none sm:w-auto sm:flex-none sm:gap-2">
             <button
               type="button"
               aria-label="Перемешать"
@@ -419,19 +426,10 @@ export function MiniPlayer() {
               )}
             </button>
 
-            {/* Столбики закрывают пустоту справа от кнопок собой: `flex-1`
-                отдаёт им всё оставшееся место, и ряд перестаёт обрываться на
-                середине. Пустота эта только на телефоне — на широком экране
-                ряд стоит по центру, а место справа занято скоростью, сердцем
-                и очередью, поэтому там `sm:hidden`. */}
-            <MusicPlayingBars
-              playing={isPlaying}
-              className="ml-2 mr-1 h-4 flex-1 sm:hidden"
-            />
           </div>
 
           <MusicPositionSlider
-            className="order-4 flex w-full min-w-0 items-center gap-2 sm:order-none sm:w-full sm:max-w-[340px]"
+            className="order-6 flex w-full min-w-0 items-center gap-2 sm:order-none sm:w-full sm:max-w-[340px]"
             position={positionSeconds}
             total={total}
             onSeek={player.seek}
@@ -444,165 +442,178 @@ export function MiniPlayer() {
             играет дальше, спрашивают именно с телефона, а на широкий экран и
             на главную портала за ним не уйти, третья — потому что «сейчас
             меня не видно» надо уметь нажать там же, где слушаешь. Не влезает
-            только громкость: на телефоне она системная. */}
-        <div className="order-2 flex shrink-0 items-center gap-2 sm:order-none sm:w-auto sm:justify-end sm:gap-2.5 lg:w-56">
-          <button
-            type="button"
-            aria-label={`Скорость ${rate.toFixed(2).replace(/0$/, "")}×, сменить`}
-            onClick={() =>
-              player.setRate(RATES[(RATES.indexOf(rate as 1) + 1) % RATES.length])
-            }
-            // Видно и на телефоне: лекцию слушают на 1.5×, и это ровно тот
-            // случай, когда переключатель нужен под рукой.
-            className="flex h-8 items-center rounded-full border border-glass-brd px-2.5 text-[11px] font-semibold text-text-1 hover:text-text-0 sm:h-7"
-          >
-            {rate.toFixed(2).replace(/0$/, "").replace(/\.$/, "")}×
-          </button>
+            только громкость: на телефоне она системная.
 
-          <button
-            type="button"
-            aria-label={isFavorite ? "Убрать из избранного" : "В избранное"}
-            aria-pressed={isFavorite}
-            onClick={player.toggleFavorite}
-            className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8 ${isFavorite ? "text-magenta" : "text-text-2"}`}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              fill={isFavorite ? "currentColor" : "none"}
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+            `contents` на телефоне — тот же приём, что у управления с
+            дорожкой: коробка перестаёт быть коробкой, и две её половины
+            встают в разные строки полосы. Иначе шесть кнопок занимали первую
+            строку целиком и название записи сжималось в ноль. На `sm`
+            коробка снова коробка — правая колонка макета. */}
+        <div className="contents sm:order-none sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:justify-end sm:gap-2.5 lg:w-56">
+          {/* Действия над записью — во второй строке, рядом с управлением:
+              они про то, что играет, и стоят там же, где пуск и перемотка. */}
+          <div className="order-5 flex shrink-0 items-center gap-1.5 sm:contents">
+            <button
+              type="button"
+              aria-label={`Скорость ${rate.toFixed(2).replace(/0$/, "")}×, сменить`}
+              onClick={() =>
+                player.setRate(RATES[(RATES.indexOf(rate as 1) + 1) % RATES.length])
+              }
+              // Видно и на телефоне: лекцию слушают на 1.5×, и это ровно тот
+              // случай, когда переключатель нужен под рукой.
+              className="flex h-8 items-center rounded-full border border-glass-brd px-2.5 text-[11px] font-semibold text-text-1 hover:text-text-0 sm:h-7"
             >
-              <path d="M19 14c1.5-1.5 3-3.3 3-5.5A5.5 5.5 0 0 0 12 5.6 5.5 5.5 0 0 0 2 8.5c0 2.2 1.5 4 3 5.5l7 7z" />
-            </svg>
-          </button>
+              {rate.toFixed(2).replace(/0$/, "").replace(/\.$/, "")}×
+            </button>
 
-          <div className="relative">
+            <button
+              type="button"
+              aria-label={isFavorite ? "Убрать из избранного" : "В избранное"}
+              aria-pressed={isFavorite}
+              onClick={player.toggleFavorite}
+              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8 ${isFavorite ? "text-magenta" : "text-text-2"}`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill={isFavorite ? "currentColor" : "none"}
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M19 14c1.5-1.5 3-3.3 3-5.5A5.5 5.5 0 0 0 12 5.6 5.5 5.5 0 0 0 2 8.5c0 2.2 1.5 4 3 5.5l7 7z" />
+              </svg>
+            </button>
+
+            <div className="relative">
+              <button
+                type="button"
+                aria-label={
+                  queueOpen ? "Закрыть очередь" : `Очередь, записей: ${queueLength}`
+                }
+                aria-expanded={queueOpen}
+                aria-haspopup="dialog"
+                onClick={() => setQueueOpen((was) => !was)}
+                // 40 точек на телефоне — как у соседних кнопок ряда: цель
+                // меньше 24×24 не проходит по WCAG 2.5.8, а 32 из макета
+                // рассчитаны на мышь.
+                className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8 ${queueOpen ? "text-violet" : "text-text-2"}`}
+              >
+                <svg {...icon} className="h-4 w-4">
+                  <path d="M3 6h11M3 12h8M3 18h8M17 12v8M13 16h8" />
+                </svg>
+              </button>
+              {queueOpen && <MusicQueuePanel onClose={() => setQueueOpen(false)} />}
+            </div>
+
+            {/* Плейлисты — этап 4. До него это ссылка на карточку записи: тот же
+                портально-безопасный адрес, что у кнопки в ленте друзей. */}
+            <Link
+              href={`/music/tracks/${current.id}?add=1`}
+              aria-label="В плейлист"
+              className={`${ctrl} hidden h-8 w-8 text-text-2 lg:flex`}
+            >
+              <svg {...icon} className="h-4 w-4">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </Link>
+
             <button
               type="button"
               aria-label={
-                queueOpen ? "Закрыть очередь" : `Очередь, записей: ${queueLength}`
+                isPrivateSession
+                  ? "Невидимый сеанс включён — друзья не видят"
+                  : "Включить невидимый сеанс"
               }
-              aria-expanded={queueOpen}
-              aria-haspopup="dialog"
-              onClick={() => setQueueOpen((was) => !was)}
-              // 40 точек на телефоне — как у соседних кнопок ряда: цель
-              // меньше 24×24 не проходит по WCAG 2.5.8, а 32 из макета
-              // рассчитаны на мышь.
-              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8 ${queueOpen ? "text-violet" : "text-text-2"}`}
+              aria-pressed={isPrivateSession}
+              onClick={player.togglePrivateSession}
+              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8 ${isPrivateSession ? "text-gold" : "text-text-2"}`}
             >
               <svg {...icon} className="h-4 w-4">
-                <path d="M3 6h11M3 12h8M3 18h8M17 12v8M13 16h8" />
+                {isPrivateSession ? (
+                  <>
+                    <path d="M2 2l20 20" />
+                    <path d="M6.7 6.7A10.5 10.5 0 0 0 1 12s4 7 11 7a10.6 10.6 0 0 0 5.3-1.4" />
+                    <path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c7 0 11 7 11 7a17 17 0 0 1-3.3 4" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </>
+                )}
               </svg>
             </button>
-            {queueOpen && <MusicQueuePanel onClose={() => setQueueOpen(false)} />}
+
+            {/* На телефоне громкость системная — ползунок прячем, кнопку нет. */}
+            <button
+              type="button"
+              aria-label={muted ? "Включить звук" : "Выключить звук"}
+              aria-pressed={muted}
+              onClick={player.toggleMuted}
+              className={`${ctrl} hidden h-8 w-8 text-text-2 lg:flex`}
+            >
+              <svg {...icon} className="h-4 w-4">
+                <path d="M11 5L6 9H2v6h4l5 4z" />
+                {muted ? (
+                  <path d="M22 9l-6 6M16 9l6 6" />
+                ) : (
+                  <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                )}
+              </svg>
+            </button>
+
+            <label className="hidden items-center lg:flex">
+              <span className="sr-only">Громкость</span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={muted ? 0 : volume}
+                onChange={(event) => player.setVolume(Number(event.target.value))}
+                className="h-6 w-16 cursor-pointer appearance-none bg-transparent [&::-webkit-slider-runnable-track]:h-[3px] [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-glass-brd [&::-webkit-slider-thumb]:mt-[-4.5px] [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-text-1"
+              />
+            </label>
+
+            {/* Отсчёт сон-таймера: не кнопка, а состояние. Появляется, только
+                когда таймер заведён, поэтому места в обычной полосе не
+                занимает и наложения не возвращает. Ставят таймер на карточке
+                записи. */}
+            <MusicSleepCountdown />
           </div>
-
-          {/* Плейлисты — этап 4. До него это ссылка на карточку записи: тот же
-              портально-безопасный адрес, что у кнопки в ленте друзей. */}
-          <Link
-            href={`/music/tracks/${current.id}?add=1`}
-            aria-label="В плейлист"
-            className={`${ctrl} hidden h-8 w-8 text-text-2 lg:flex`}
-          >
-            <svg {...icon} className="h-4 w-4">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </Link>
-
-          <button
-            type="button"
-            aria-label={
-              isPrivateSession
-                ? "Невидимый сеанс включён — друзья не видят"
-                : "Включить невидимый сеанс"
-            }
-            aria-pressed={isPrivateSession}
-            onClick={player.togglePrivateSession}
-            className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8 ${isPrivateSession ? "text-gold" : "text-text-2"}`}
-          >
-            <svg {...icon} className="h-4 w-4">
-              {isPrivateSession ? (
-                <>
-                  <path d="M2 2l20 20" />
-                  <path d="M6.7 6.7A10.5 10.5 0 0 0 1 12s4 7 11 7a10.6 10.6 0 0 0 5.3-1.4" />
-                  <path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c7 0 11 7 11 7a17 17 0 0 1-3.3 4" />
-                </>
-              ) : (
-                <>
-                  <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-                  <circle cx="12" cy="12" r="3" />
-                </>
-              )}
-            </svg>
-          </button>
-
-          {/* На телефоне громкость системная — ползунок прячем, кнопку нет. */}
-          <button
-            type="button"
-            aria-label={muted ? "Включить звук" : "Выключить звук"}
-            aria-pressed={muted}
-            onClick={player.toggleMuted}
-            className={`${ctrl} hidden h-8 w-8 text-text-2 lg:flex`}
-          >
-            <svg {...icon} className="h-4 w-4">
-              <path d="M11 5L6 9H2v6h4l5 4z" />
-              {muted ? (
-                <path d="M22 9l-6 6M16 9l6 6" />
-              ) : (
-                <path d="M15.5 8.5a5 5 0 0 1 0 7" />
-              )}
-            </svg>
-          </button>
-
-          <label className="hidden items-center lg:flex">
-            <span className="sr-only">Громкость</span>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={muted ? 0 : volume}
-              onChange={(event) => player.setVolume(Number(event.target.value))}
-              className="h-6 w-16 cursor-pointer appearance-none bg-transparent [&::-webkit-slider-runnable-track]:h-[3px] [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-glass-brd [&::-webkit-slider-thumb]:mt-[-4.5px] [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-text-1"
-            />
-          </label>
-
-          {/* Отсчёт сон-таймера: не кнопка, а состояние. Появляется, только
-              когда таймер заведён, поэтому места в обычной полосе не
-              занимает и наложения не возвращает. Ставят таймер на карточке
-              записи. */}
-          <MusicSleepCountdown />
 
           {/* Свернуть и закрыть — последними в группе, у самого края: это
               действия над самой полосой, а не над записью, и ставить их
               вперемешку с сердцем и скоростью значит путать два разных
-              предмета. */}
-          <button
-            type="button"
-            aria-label="Свернуть плеер"
-            aria-expanded={true}
-            onClick={toggleCollapsed}
-            className={`${ctrl} h-9 w-9 text-text-2 sm:h-8 sm:w-8`}
-          >
-            <svg {...icon} className="h-4 w-4">
-              <path d="M6 9l6 6 6-6" />
-            </svg>
-          </button>
+              предмета. На телефоне они по той же причине остаются в первой
+              строке — у названия записи, а не у кнопок управления. */}
+          <div className="order-2 flex shrink-0 items-center gap-1 sm:contents">
+            <button
+              type="button"
+              aria-label="Свернуть плеер"
+              aria-expanded={true}
+              onClick={toggleCollapsed}
+              className={`${ctrl} h-9 w-9 text-text-2 sm:h-8 sm:w-8`}
+            >
+              <svg {...icon} className="h-4 w-4">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
 
-          <button
-            type="button"
-            aria-label="Закрыть плеер"
-            onClick={player.close}
-            className={`${ctrl} h-9 w-9 text-text-2 sm:h-8 sm:w-8`}
-          >
-            <svg {...icon} className="h-4 w-4">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
+            <button
+              type="button"
+              aria-label="Закрыть плеер"
+              onClick={player.close}
+              className={`${ctrl} h-9 w-9 text-text-2 sm:h-8 sm:w-8`}
+            >
+              <svg {...icon} className="h-4 w-4">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
         </div>
       </section>
       )}
