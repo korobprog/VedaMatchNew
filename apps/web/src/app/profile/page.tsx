@@ -8,6 +8,7 @@ import { formatDate, subscriptionStatusLabels } from "@/lib/support-labels";
 import { Header } from "@/components/header";
 import { ProfileEditor } from "@/components/profile-editor";
 import { CommunityPicker } from "@/components/communities/community-picker";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { LogoutButton } from "@/components/logout-button";
@@ -60,19 +61,11 @@ export default async function ProfilePage() {
         </h1>
         <div className="glass rounded-2xl border border-glass-brd p-6 mb-6">
           <div className="mb-6 flex items-center gap-4">
-            {user.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={user.avatarUrl}
-                alt={user.displayName}
-                className="h-16 w-16 rounded-full"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-glass text-2xl font-semibold text-text-0">
-                {user.displayName.charAt(0).toUpperCase()}
-              </span>
-            )}
+            <UserAvatar
+              name={user.displayName}
+              avatarUrl={user.avatarUrl}
+              size={64}
+            />
             <div>
               <p className="text-lg font-semibold text-text-0">
                 {user.displayName}

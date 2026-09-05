@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import type {
   ContactsAshram,
   ContactsFormat,
+  ContactsSearchSort,
   SpiritualStage,
 } from '@vedamatch/shared';
 
@@ -34,6 +35,7 @@ const ASHRAMS: ContactsAshram[] = [
   'sannyasi',
 ];
 const FORMATS: ContactsFormat[] = ['online', 'offline', 'any'];
+const SORTS: ContactsSearchSort[] = ['active', 'alpha', 'new', 'city'];
 
 /** Фильтры после приведения типов и валидации. */
 export interface NormalizedSearchFilters {
@@ -53,6 +55,7 @@ export interface NormalizedSearchFilters {
   photoVerifiedOnly: boolean;
   page: number;
   pageSize: number;
+  sort: ContactsSearchSort;
 }
 
 /** Всё о смотрящем, что влияет на условие видимости. */
@@ -210,6 +213,9 @@ export function normalizeSearchFilters(
     // Страница меньше первой — это опечатка клиента, а не повод для ошибки.
     page: page === null || page < 1 ? 1 : page,
     pageSize: clampPageSize(pageSize),
+    // Незнакомое значение отбивается, как и у остальных перечислений этого
+    // разбора: молча подменять непонятый параметр значит врать выдачей.
+    sort: toEnumList(source.sort, SORTS, 'Порядок').at(-1) ?? 'active',
   };
 }
 
@@ -447,11 +453,38 @@ export function buildSearchWhere(params: {
 }
 
 /**
- * Порядок выдачи. Финальный tiebreak по `id` обязателен: без него у карточек
- * с одинаковыми `lastSeenAt` и `createdAt` порядок между запросами не
+ * Порядок выдачи.
+ *
+ * Финальный tiebreak по `id` обязателен в каждом варианте: без него у
+ * карточек с одинаковым ключом сортировки порядок между запросами не
  * определён, и одна и та же запись может прийти на двух страницах подряд
  * либо не прийти ни на одной.
+ *
+ * По умолчанию — недавно заходившие сверху: справочник открывают, чтобы
+ * найти живого человека, а не самую старую карточку. Остальные три порядка
+ * отвечают на другие вопросы: «найти по имени», «кто у нас новенький», «кто
+ * рядом в моём городе».
+ *
+ * Имя берётся как `COALESCE(spiritualName, name)` — ровно то, что
+ * `resolveDisplayName` показывает в самой карточке: сортировка по скрытому
+ * имени выглядела бы случайной. `COLLATE "ru-RU-x-icu"` ставит «Ё» рядом с
+ * «Е», а не в конец по коду символа.
  */
-export const SEARCH_ORDER_BY = Prisma.sql`
-  ORDER BY u."lastSeenAt" DESC NULLS LAST, p."createdAt" DESC, p."id" DESC
-`;
+export function searchOrderBy(sort: ContactsSearchSort): Prisma.Sql {
+  if (sort === 'alpha')
+    return Prisma.sql`
+      ORDER BY COALESCE(u."spiritualName", u."name") COLLATE "ru-RU-x-icu" ASC,
+        p."id" DESC
+    `;
+  if (sort === 'new')
+    return Prisma.sql`ORDER BY p."createdAt" DESC, p."id" DESC`;
+  if (sort === 'city')
+    return Prisma.sql`
+      ORDER BY p."city" COLLATE "ru-RU-x-icu" ASC NULLS LAST,
+        COALESCE(u."spiritualName", u."name") COLLATE "ru-RU-x-icu" ASC,
+        p."id" DESC
+    `;
+  return Prisma.sql`
+    ORDER BY u."lastSeenAt" DESC NULLS LAST, p."createdAt" DESC, p."id" DESC
+  `;
+}

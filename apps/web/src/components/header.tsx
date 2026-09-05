@@ -280,7 +280,11 @@ export function Header({ user }: { user: UserProfile }) {
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
               className="fixed top-0 right-0 bottom-0 z-50 w-72 overflow-y-auto border-l border-glass-brd bg-bg-1 outline-none md:hidden"
             >
-              <div className="flex flex-col h-full p-6 pt-20">
+              {/* Отступ сверху ровно на шапку (h-14) плюс вырез телефона, а
+                  не круглые 80 точек: лишняя четверть сотни читалась как
+                  пустая полоса над первым пунктом, и панель начиналась
+                  заметно ниже, чем всё остальное на экране. */}
+              <div className="flex h-full flex-col p-6 pt-[calc(3.5rem+env(safe-area-inset-top)+0.75rem)]">
                 <nav aria-label={t("services")} className="flex flex-col gap-1">
                   {navItems.map((item, index) => (
                     <motion.div

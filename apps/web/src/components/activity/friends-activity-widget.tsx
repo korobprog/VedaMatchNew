@@ -13,6 +13,7 @@ import {
 import { subscribeToActivity } from "@/lib/activity-stream";
 import { formatActivityTime } from "./activity-time";
 import { AdminBadgeIcon, STAGE_LABEL, STAGE_TINT, StageIcon } from "./activity-icons";
+import { UserAvatar } from "@/components/ui/user-avatar";
 
 const MAX_ROWS = 8;
 const MAX_ITEMS_PER_FRIEND = 6;
@@ -162,10 +163,11 @@ function FriendRow({
           // Ссылка подписана и может истечь — next/image не годится для
           // произвольно меняющегося домена подписи, как и в аватаре чата.
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={friend.avatarUrl}
-            alt=""
-            className="size-9 rounded-xl object-cover sm:size-10"
+          <UserAvatar
+            name={friend.name}
+            avatarUrl={friend.avatarUrl}
+            size={36}
+            rounded="rounded-xl"
           />
         ) : (
           <span

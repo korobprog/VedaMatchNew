@@ -483,3 +483,27 @@ describe("requests and disclosures endpoints", () => {
     ]);
   });
 });
+
+describe("порядок выдачи в адресе", () => {
+  it("уезжает в запрос выбранным", () => {
+    expect(buildContactsSearchQuery({ sort: "alpha" })).toBe("sort=alpha");
+  });
+
+  it("порядок по умолчанию в адрес не пишется", () => {
+    // Он и так подразумевается, а лишний параметр делает ссылку длиннее.
+    expect(buildContactsSearchQuery({ sort: "active" })).toBe("");
+    expect(buildContactsSearchQuery({})).toBe("");
+  });
+
+  it("читается обратно из адреса", () => {
+    expect(
+      parseContactsSearchFilters(new URLSearchParams("sort=city")).sort,
+    ).toBe("city");
+  });
+
+  it("мусор в адресе читается как порядок по умолчанию", () => {
+    expect(
+      parseContactsSearchFilters(new URLSearchParams("sort=по-городам")).sort,
+    ).toBe("active");
+  });
+});
