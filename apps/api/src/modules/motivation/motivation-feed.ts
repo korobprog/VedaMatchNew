@@ -12,6 +12,11 @@ export interface MotivationCursor {
    */
   since?: number;
   seenBefore?: number | null;
+  /**
+   * Семя случайного порядка. Есть — лента листается вперемешку; его хватает,
+   * чтобы вторая страница увидела ту же перестановку, что и первая.
+   */
+  shuffleSeed?: string;
 }
 export const emptyMotivationCursor = (): MotivationCursor => ({
   universal: 0,
@@ -40,7 +45,12 @@ export function decodeMotivationCursor(value?: string): MotivationCursor {
       (parsed.since !== undefined && !Number.isInteger(parsed.since)) ||
       (parsed.seenBefore !== undefined &&
         parsed.seenBefore !== null &&
-        !Number.isInteger(parsed.seenBefore))
+        !Number.isInteger(parsed.seenBefore)) ||
+      (parsed.shuffleSeed !== undefined &&
+        // Курсор приходит от клиента: семя уходит в хеш, и пускать сюда
+        // строку любой длины и вида незачем.
+        (typeof parsed.shuffleSeed !== 'string' ||
+          !/^[0-9a-f]{1,64}$/.test(parsed.shuffleSeed)))
     )
       throw new Error();
     return parsed;

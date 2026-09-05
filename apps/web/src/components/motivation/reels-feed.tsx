@@ -41,10 +41,17 @@ export function ReelsFeed({
   initial,
   tab,
   donation,
+  order,
 }: {
   initial: MotivationFeedResponse;
   tab: ReelsTab;
   donation: DonationSettingsDto | null;
+  /**
+   * Порядок ленты. Уезжает и в подгрузку: семя перемешивания лежит в курсоре,
+   * но без параметра сервер про случайный порядок на второй странице не
+   * узнает и вернул бы ярусы вперемешку с уже показанным.
+   */
+  order?: "random";
 }) {
   const [items, setItems] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.nextCursor);
@@ -74,6 +81,7 @@ export function ReelsFeed({
     try {
       const query = new URLSearchParams({ cursor });
       if (tab === "saved") query.set("filter", "favorites");
+      if (order) query.set("order", order);
       const response = await apiFetch(`${API_URL}/motivation/feed?${query}`, { credentials: "include" });
       if (!response.ok) throw new Error(await response.text());
       const page = (await response.json()) as MotivationFeedResponse;
@@ -87,7 +95,7 @@ export function ReelsFeed({
     } finally {
       setPending(false);
     }
-  }, [cursor, pending, tab]);
+  }, [cursor, pending, tab, order]);
 
   // Подгрузка запускается из обработчика активации слайда, а не из эффекта:
   // так setState не каскадирует, а момент тот же — человек долистал до конца.

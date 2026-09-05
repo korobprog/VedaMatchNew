@@ -52,10 +52,13 @@ async function motivationGetPublic<T>(path: string): Promise<T | null> {
 export const getMotivationFeed = (
   filter: "all" | "favorites" = "all",
   post?: string,
+  /** `"random"` — вперемешку, без ярусов «свежее → повтор». */
+  order?: "random",
 ) => {
   const query = new URLSearchParams();
   if (filter === "favorites") query.set("filter", "favorites");
   if (post) query.set("post", post);
+  if (order) query.set("order", order);
   const suffix = query.toString();
   return motivationGet<MotivationFeedResponse>(
     `/motivation/feed${suffix ? `?${suffix}` : ""}`,

@@ -86,12 +86,16 @@ export class MotivationController {
     @Query('limit') limit?: string,
     @Query('category') category?: string,
     @Query('post') post?: string,
+    @Query('order') order?: string,
   ) {
     return this.service.feed(user.sub, {
       cursor,
       favorites: filter === 'favorites',
       category,
       post,
+      // Значение, а не булев флаг: порядков со временем станет больше одного,
+      // и `?shuffle=1` пришлось бы держать рядом с остальными.
+      shuffle: order === 'random',
       limit: limit ? Number(limit) : undefined,
     });
   }

@@ -13,6 +13,7 @@ import {
   MotivationVideoStatus,
   SpiritualStage,
 } from '@prisma/client';
+import { randomBytes } from 'node:crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   MOTIVATION_VOICES,
@@ -48,7 +49,7 @@ import {
   encodeMotivationCursor,
   feedPage,
 } from './motivation-feed';
-import { rankFeed } from './feed-ranking';
+import { rankFeed, shuffleFeed } from './feed-ranking';
 import { attributionLine } from './postcard-events';
 import { adminAiVerdictOf, adminAppealOf } from './moderation-audit';
 import { MotivationSettingsService } from './motivation-settings.service';
@@ -177,6 +178,8 @@ export class MotivationService {
       category?: string;
       favorites?: boolean;
       archive?: boolean;
+      /** `true` — показывать вперемешку, без ярусов «свежее → повтор». */
+      shuffle?: boolean;
       /**
        * Slug поста, с которого открывать ленту: переход «Открыть рилс» должен
        * показать созданное в самой ленте, а не на отдельной странице.
@@ -292,19 +295,28 @@ export class MotivationService {
       categoryTitle: categoryTitles.get(post.category) ?? post.category,
     });
     const session = { userId, since, seenBefore };
+    /* Семя случайного порядка живёт в курсоре: первая страница его заводит,
+       следующие берут готовое. Не от пользователя — иначе «случайный»
+       порядок был бы у него всегда один и тот же, и перезапуск ленты ничего
+       бы не менял. */
+    const shuffleSeed = query.shuffle
+      ? (cursor.shuffleSeed ?? randomBytes(8).toString('hex'))
+      : undefined;
     type Loaded = (typeof posts)[number];
     const order = (
       posts: Loaded[],
     ): { post: Loaded; tier?: MotivationFeedTier }[] =>
-      ranked
-        ? rankFeed(
-            posts.map((post) => ({
-              ...post,
-              viewedAt: post.views[0]?.viewedAt ?? null,
-            })),
-            session,
-          )
-        : posts.map((post) => ({ post }));
+      shuffleSeed
+        ? shuffleFeed(posts, shuffleSeed)
+        : ranked
+          ? rankFeed(
+              posts.map((post) => ({
+                ...post,
+                viewedAt: post.views[0]?.viewedAt ?? null,
+              })),
+              session,
+            )
+          : posts.map((post) => ({ post }));
     const page = feedPage(order(posts), cursor, limit);
     // Закреплённый пост берём тем же запросом, что и ленту: у публичного DTO
     // нет ни автора, ни отметок зрителя, и слайд выходил бы обеднённым.
@@ -332,6 +344,7 @@ export class MotivationService {
               ...page.cursor,
               since: since.getTime(),
               seenBefore: seenBefore?.getTime() ?? null,
+              ...(shuffleSeed ? { shuffleSeed } : {}),
             })
           : null,
     };

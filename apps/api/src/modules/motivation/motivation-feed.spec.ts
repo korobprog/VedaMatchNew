@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import {
   decodeMotivationCursor,
   encodeMotivationCursor,
@@ -69,5 +70,30 @@ describe('decodeMotivationCursor', () => {
         ),
       ),
     ).toThrow();
+  });
+});
+
+describe('семя случайного порядка в курсоре', () => {
+  it('переживает круг через кодирование', () => {
+    const cursor = encodeMotivationCursor({
+      ...emptyMotivationCursor(),
+      shuffleSeed: 'a1b2c3d4',
+    });
+
+    expect(decodeMotivationCursor(cursor).shuffleSeed).toBe('a1b2c3d4');
+  });
+
+  it('курсоры без семени по-прежнему читаются', () => {
+    const cursor = encodeMotivationCursor(emptyMotivationCursor());
+
+    expect(decodeMotivationCursor(cursor).shuffleSeed).toBeUndefined();
+  });
+
+  it('не пускает произвольную строку: семя уходит в хеш', () => {
+    const bad = Buffer.from(
+      JSON.stringify({ ...emptyMotivationCursor(), shuffleSeed: '../../etc' }),
+    ).toString('base64url');
+
+    expect(() => decodeMotivationCursor(bad)).toThrow(BadRequestException);
   });
 });
