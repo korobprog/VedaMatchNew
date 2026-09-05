@@ -36,6 +36,7 @@ export function ChatMessage({
   onDelete,
   onReport,
   onPin,
+  pending = false,
 }: {
   message: ChatMessageDto;
   mine: boolean;
@@ -59,6 +60,8 @@ export function ChatMessage({
   onDelete: (message: ChatMessageDto) => void;
   onReport: (message: ChatMessageDto) => void;
   onPin: (message: ChatMessageDto, pinned: boolean) => void;
+  /** Отправлено, но сервер ещё не ответил. */
+  pending?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -92,20 +95,20 @@ export function ChatMessage({
           // реакции идут ниже отдельной строкой и на выравнивание не влияют.
           <span className="w-8 shrink-0">{avatar}</span>
         )}
+        {/*
+          Пузырь — текст, а не кнопка.
+
+          Раньше нажатие по нему разворачивало панель действий: любое касание
+          сообщения «выделяло» его, повторное гасило, а выделить текст пальцем
+          было нельзя вовсе — жест уходил в обработчик. Скринридер при этом
+          читал каждое сообщение как кнопку «Действия с сообщением».
+
+          Панель открывает отдельная кнопка рядом. На устройстве с мышью она
+          по-прежнему появляется при наведении — там это дешевле нажатия.
+        */}
         <div
-          role="button"
-          tabIndex={0}
-          onClick={() => setOpen((current) => !current)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              setOpen((current) => !current);
-            }
-          }}
-          aria-expanded={open}
-          aria-label={open ? "Скрыть действия" : "Действия с сообщением"}
           style={bubbleStyle}
-          className={`max-w-[85%] cursor-default px-3.5 py-2.5 text-left ${bubble} shadow-lg shadow-black/20`}
+          className={`max-w-[85%] select-text px-3.5 py-2.5 text-left ${bubble} shadow-lg shadow-black/20`}
         >
           {deleted ? (
             <span className="block text-[15px] italic leading-[21px] text-text-2">
@@ -178,6 +181,31 @@ export function ChatMessage({
             </>
           )}
         </div>
+
+        {/* Кнопка действий: то, что раньше делало нажатие по самому пузырю.
+            Порядок в строке ставит её со стороны, свободной от аватара, —
+            чтобы она не наезжала на знак собеседника. */}
+        {!deleted && (
+          <button
+            type="button"
+            onClick={() => setOpen((current) => !current)}
+            aria-expanded={open}
+            aria-label={open ? "Скрыть действия" : "Действия с сообщением"}
+            className={`flex size-8 shrink-0 items-center justify-center self-end rounded-full text-text-2 transition-opacity hover:text-text-0 ${
+              mine ? "order-first" : ""
+            } ${
+              open
+                ? "opacity-100"
+                : "opacity-60 group-hover:opacity-100 group-focus-within:opacity-100"
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <circle cx="5" cy="12" r="1.8" />
+              <circle cx="12" cy="12" r="1.8" />
+              <circle cx="19" cy="12" r="1.8" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Время под пузырём, а не внутри: в пузыре оно врезается в последнюю
@@ -196,13 +224,21 @@ export function ChatMessage({
           {message.editedAt && !deleted && (
             <span className="text-[10px] text-text-2">изменено</span>
           )}
-          <span className="font-mono text-[10px] text-text-2">
-            {new Date(message.createdAt).toLocaleTimeString("ru-RU", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </span>
-          {mine && !deleted && <ReadMark read={Boolean(message.readByOthers)} />}
+          {/* У ещё не доехавшего время не показываем: оно проставится
+              сервером, и показанное сейчас разошлось бы с ним на секунды. */}
+          {pending ? (
+            <span className="text-[10px] text-text-2">отправляется…</span>
+          ) : (
+            <span className="font-mono text-[10px] text-text-2">
+              {new Date(message.createdAt).toLocaleTimeString("ru-RU", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          )}
+          {mine && !deleted && !pending && (
+            <ReadMark read={Boolean(message.readByOthers)} />
+          )}
           {typeof message.viewsCount === "number" && message.viewsCount > 0 && (
             <span className="flex items-center gap-1 text-text-2">
               <EyeIcon />
@@ -246,6 +282,7 @@ export function ChatMessage({
           } ${open ? "opacity-100" : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"}`}
           >
             <SmallButton onClick={() => onReply(message)} label="Ответить" />
+            <CopyButton body={message.body} />
             <SmallButton
               onClick={() => setPickerOpen((current) => !current)}
               label="Реакция"
@@ -463,6 +500,38 @@ function ReadMark({ read }: { read: boolean }) {
     >
       <path d="M4 12.5l4.5 4.5L20 6" />
     </svg>
+  );
+}
+
+/**
+ * Копирование текста сообщения.
+ *
+ * Отдельной кнопкой, а не «выделите и скопируйте»: на телефоне выделение
+ * длинного сообщения пальцем — это отдельная задача, и раньше оно вдобавок
+ * не работало вовсе (нажатие уходило в разворот панели). Копируется только
+ * текст: вложения — файлы, их в буфер не положить.
+ */
+function CopyButton({ body }: { body: string }) {
+  const [copied, setCopied] = useState(false);
+
+  if (!body.trim()) return null;
+
+  return (
+    <SmallButton
+      label={copied ? "Скопировано" : "Копировать"}
+      onClick={() => {
+        void navigator.clipboard
+          .writeText(body)
+          .then(() => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 2000);
+          })
+          .catch(() => {
+            // Буфер закрыт настройками браузера — текст на экране, и теперь
+            // его наконец можно выделить руками.
+          });
+      }}
+    />
   );
 }
 
