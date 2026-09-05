@@ -187,6 +187,10 @@ const ui = {
       "В рубрике ещё есть материалы — сначала перенесите или удалите их",
     "category.deleteFailed": "Не удалось удалить рубрику, попробуйте позже",
     "category.deleteDone": "Рубрика удалена",
+    "order.label": "Порядок рубрик",
+    "order.own": "Свой порядок",
+    "order.alpha": "По алфавиту",
+    "order.new": "Сначала новые",
     "tree.organize": "Упорядочить",
     "tree.done": "Готово",
     "tree.hint":
@@ -392,6 +396,10 @@ const ui = {
       "This category still holds material — move or delete it first",
     "category.deleteFailed": "Could not delete the category, please try again later",
     "category.deleteDone": "Category deleted",
+    "order.label": "Category order",
+    "order.own": "Custom order",
+    "order.alpha": "A to Z",
+    "order.new": "Newest first",
     "tree.organize": "Organise",
     "tree.done": "Done",
     "tree.hint":
