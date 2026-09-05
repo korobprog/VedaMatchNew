@@ -181,6 +181,11 @@ export function RecommendationFilters({
       {first(params.minScore) && (
         <input type="hidden" name="minScore" value={first(params.minScore)} />
       )}
+      {/* Сколько анкет за раз — тоже не теряем: человек попросил показывать
+          по сорок восемь, а следующая же правка фильтра вернула бы двенадцать. */}
+      {first(params.pageSize) && (
+        <input type="hidden" name="pageSize" value={first(params.pageSize)} />
+      )}
       {Number.isFinite(selectedCity?.lat) && (
         <input type="hidden" name="lat" value={String(selectedCity?.lat)} />
       )}
