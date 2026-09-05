@@ -5,12 +5,12 @@ const fields: Array<{
   key: Exclude<keyof VedabaseReadingUnit, "id" | "title" | "sourceUrl">;
   label: string;
 }> = [
-  { key: "originalHtml", label: "Original" },
-  { key: "transliterationHtml", label: "Transliteration" },
-  { key: "synonymsHtml", label: "Synonyms" },
-  { key: "translationHtml", label: "Translation" },
-  { key: "purportHtml", label: "Purport" },
-  { key: "bodyHtml", label: "Text" },
+  { key: "originalHtml", label: "Оригинал" },
+  { key: "transliterationHtml", label: "Транслитерация" },
+  { key: "synonymsHtml", label: "Пословный перевод" },
+  { key: "translationHtml", label: "Перевод" },
+  { key: "purportHtml", label: "Комментарий" },
+  { key: "bodyHtml", label: "Текст" },
 ];
 
 const allowedTags = new Set([

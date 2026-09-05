@@ -32,13 +32,33 @@ export function LibraryScreen() {
     resumeBook,
   } = useVedabase();
   const [filter, setFilter] = useState<LibraryFilter>("all");
+  const [author, setAuthor] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+
+  /* Авторы, у которых в библиотеке действительно есть книги. Пока их один,
+     ряд не рисуется вовсе: выбор из одного значения — не выбор. */
+  const authors = useMemo(
+    () =>
+      [
+        ...new Set(
+          library.books
+            .map((book) => book.author?.trim())
+            .filter((name): name is string => Boolean(name)),
+        ),
+      ].sort((left, right) => left.localeCompare(right, "ru")),
+    [library.books],
+  );
+
   const visibleBooks = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("ru-RU");
     return library.books.filter((book) => {
-      if (!book.title.toLocaleLowerCase("ru-RU").includes(normalizedQuery)) {
-        return false;
-      }
+      // Ищем и по автору: книгу чаще помнят по тому, кто её написал, чем по
+      // точному названию — «Прабхупада» найдёт всё его, «Бхагавад» — одну.
+      const haystack = [book.title, book.author ?? ""]
+        .join(" ")
+        .toLocaleLowerCase("ru-RU");
+      if (!haystack.includes(normalizedQuery)) return false;
+      if (author && book.author?.trim() !== author) return false;
       const status = snapshot.downloads[book.slug]?.status;
       if (filter === "downloaded" || filter === "completed") {
         return status === "complete";
@@ -51,14 +71,14 @@ export function LibraryScreen() {
       }
       return true;
     });
-  }, [filter, library.books, query, snapshot.downloads]);
+  }, [author, filter, library.books, query, snapshot.downloads]);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-            Union Vedabase
+            Библиотека
           </h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
             Читайте сохранённые книги даже без подключения к сети.
@@ -74,9 +94,26 @@ export function LibraryScreen() {
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Поиск по названию"
+          placeholder="Поиск по названию или автору"
           className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-amber-600 dark:border-zinc-700 dark:bg-zinc-900"
         />
+        {authors.length > 1 && (
+          <div className="flex flex-wrap gap-2" aria-label="Авторы">
+            <AuthorChip
+              label="Все авторы"
+              active={author === null}
+              onClick={() => setAuthor(null)}
+            />
+            {authors.map((name) => (
+              <AuthorChip
+                key={name}
+                label={name}
+                active={author === name}
+                onClick={() => setAuthor(name)}
+              />
+            ))}
+          </div>
+        )}
         <div className="flex flex-wrap gap-2" aria-label="Фильтры библиотеки">
           {filters.map((item) => (
             <button
@@ -122,5 +159,35 @@ export function LibraryScreen() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Чип автора. Отдельно от фильтров состояния скачивания: те отвечают на «что
+ * у меня уже есть», этот — на «чьё я хочу читать», и смешивать их в один ряд
+ * значит спрашивать два разных вопроса одной строкой.
+ */
+function AuthorChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick(): void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+        active
+          ? "bg-amber-600 text-white"
+          : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200"
+      }`}
+    >
+      {label}
+    </button>
   );
 }

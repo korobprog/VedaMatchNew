@@ -217,7 +217,7 @@ export class VedabaseReaderRepository {
     const database = await this.database;
     const current = await database.get("annotations", id);
     const currentPayload = annotationPayload(current?.payload);
-    if (!current || !currentPayload) throw new Error("The local note no longer exists");
+    if (!current || !currentPayload) throw new Error("Этой заметки больше нет на устройстве");
     const createdAt = new Date().toISOString();
     const payload: AnnotationPayload = { ...currentPayload, noteText };
     const record: ReaderAnnotation = { ...current, payload };
@@ -390,7 +390,7 @@ export function ReaderScreen({
     }
   };
 
-  if (loading) return <p className="p-6 text-sm text-text-2">Loading local chapter…</p>;
+  if (loading) return <p className="p-6 text-sm text-text-2">Загружаем главу…</p>;
   if (error && !chapter)
     return (
       <p role="alert" className="mx-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-700 dark:text-red-300">
@@ -400,7 +400,8 @@ export function ReaderScreen({
   if (!manifest || !chapter) {
     return (
       <p role="alert" className="mx-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-800 dark:text-amber-200">
-        This chapter is not available offline. Download the complete book while online and try again.
+        Этой главы нет на устройстве. Скачайте книгу целиком, пока есть сеть,
+        и попробуйте снова.
       </p>
     );
   }
@@ -426,7 +427,12 @@ export function ReaderScreen({
           onToggleBookmark={toggleBookmark}
           onOpenSearch={() => setSearchOpen(true)}
         />
-        <TableOfContents chapters={orderedChapters} currentChapterSlug={chapterSlug} onNavigate={navigate} />
+        <TableOfContents
+          bookSlug={bookSlug}
+          chapters={orderedChapters}
+          currentChapterSlug={chapterSlug}
+          onNavigate={navigate}
+        />
         {error && (
           <p role="alert" className="reader-danger reader-subtle rounded-xl p-3 text-sm">
             {error}
@@ -559,5 +565,5 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : "The local reader operation failed";
+  return error instanceof Error ? error.message : "Не удалось выполнить действие в читалке";
 }

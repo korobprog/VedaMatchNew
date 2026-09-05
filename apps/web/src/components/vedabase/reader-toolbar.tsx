@@ -42,7 +42,7 @@ export function ReaderToolbar({
         onClick={onPrevious}
         className="reader-hover rounded-lg px-3 py-2 text-sm transition-colors disabled:opacity-40"
       >
-        Previous chapter
+        Предыдущая глава
       </button>
       <button
         type="button"
@@ -50,26 +50,26 @@ export function ReaderToolbar({
         onClick={onNext}
         className="reader-hover rounded-lg px-3 py-2 text-sm transition-colors disabled:opacity-40"
       >
-        Next chapter
+        Следующая глава
       </button>
       <button
         type="button"
         onClick={onToggleBookmark}
         className="reader-accent reader-hover rounded-lg px-3 py-2 text-sm font-medium transition-colors"
       >
-        {bookmarked ? "Remove bookmark" : "Add bookmark"}
+        {bookmarked ? "Убрать закладку" : "Добавить закладку"}
       </button>
       <button
         type="button"
         onClick={onOpenSearch}
         className="reader-hover rounded-lg px-3 py-2 text-sm transition-colors"
       >
-        Search downloaded books
+        Поиск по скачанным книгам
       </button>
       <label className="ml-auto flex items-center gap-2 text-sm">
-        Theme
+        Тема
         <select
-          aria-label="Theme"
+          aria-label="Тема"
           value={preferences.theme}
           onChange={(event) =>
             onPreferencesChange({
@@ -79,34 +79,34 @@ export function ReaderToolbar({
           }
           className="reader-field rounded-lg border px-2 py-1"
         >
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-          <option value="sepia">Sepia</option>
+          <option value="light">Светлая</option>
+          <option value="dark">Тёмная</option>
+          <option value="sepia">Сепия</option>
         </select>
       </label>
       <button
         type="button"
-        aria-label="Decrease font size"
+        aria-label="Уменьшить шрифт"
         onClick={() => fontSize(-1)}
         className="reader-hover rounded-lg px-2 py-1 transition-colors"
       >
         A−
       </button>
-      <span className="min-w-10 text-center text-sm" aria-label="Font size">
+      <span className="min-w-10 text-center text-sm" aria-label="Размер шрифта">
         {preferences.fontSize}px
       </span>
       <button
         type="button"
-        aria-label="Increase font size"
+        aria-label="Увеличить шрифт"
         onClick={() => fontSize(1)}
         className="reader-hover rounded-lg px-2 py-1 transition-colors"
       >
         A+
       </button>
       <label className="flex items-center gap-2 text-sm">
-        Line width
+        Ширина строки
         <select
-          aria-label="Line width"
+          aria-label="Ширина строки"
           value={preferences.lineWidth}
           onChange={(event) =>
             onPreferencesChange({
@@ -116,9 +116,9 @@ export function ReaderToolbar({
           }
           className="reader-field rounded-lg border px-2 py-1"
         >
-          <option value="narrow">Narrow</option>
-          <option value="medium">Medium</option>
-          <option value="wide">Wide</option>
+          <option value="narrow">Узкая</option>
+          <option value="medium">Средняя</option>
+          <option value="wide">Широкая</option>
         </select>
       </label>
     </div>
