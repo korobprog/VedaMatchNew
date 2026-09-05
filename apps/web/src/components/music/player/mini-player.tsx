@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { formatTrackDuration } from "@/lib/music-duration";
@@ -12,6 +12,7 @@ import { SEEK_STEP_SECONDS, useMusicPlayer } from "./player-provider";
 import { MusicPlayGlyph, playButtonLabel } from "./play-glyph";
 import { MusicSleepCountdown } from "./sleep-countdown";
 import { MusicQueuePanel } from "./queue-panel";
+import { useHoldSeek } from "./use-hold-seek";
 
 /**
  * Полоса плеера внизу экрана. См. макет `.design/music/MiniPlayer.dc.html`.
@@ -82,6 +83,27 @@ export function MiniPlayer() {
     });
   };
 
+  /* Перемотка удержанием — до всех ранних возвратов: порядок хуков не
+     зависит от того, есть ли что играть. Обёртка вокруг `player.skip`
+     нужна потому, что провайдер может быть ещё пуст, а хук объявляется
+     раньше проверки. */
+  const seekBy = useCallback(
+    (seconds: number) => player?.skip(seconds),
+    [player],
+  );
+  const holdPrev = useHoldSeek({
+    direction: -1,
+    seekBy,
+    onTap: () => player?.prev(),
+    disabled: !player?.hasPrev,
+  });
+  const holdNext = useHoldSeek({
+    direction: 1,
+    seekBy,
+    onTap: () => player?.next(),
+    disabled: !player?.hasNext,
+  });
+
   // Полосы нет ни у гостя, ни когда слушать нечего.
   if (!player?.current) return null;
 
@@ -114,6 +136,10 @@ export function MiniPlayer() {
   // паузу — это единственная кнопка, по которой судят, сработало ли нажатие.
   const playState = isLoading ? "loading" : isPlaying ? "playing" : "paused";
 
+  /* Длина очереди — в имени кнопки, а не значком поверх неё: значок в углу
+     кружка 40×40 нечитаем, а скринридеру он не говорит вообще ничего. */
+  const queueLength = player.queue.length;
+
   const total = durationSeconds || current.durationSeconds;
   // `shrink-0` не для красоты: без него флекс ужимал кнопки в правой группе
   // до 17px по ширине при заявленных 32, а цель меньше 24×24 не проходит по
@@ -142,7 +168,7 @@ export function MiniPlayer() {
            мешай, но играй», поэтому здесь нет ни дорожки, ни перемотки. */
         <section
           aria-label="Плеер, свёрнут"
-          className="glass pointer-events-auto mx-auto flex h-12 max-w-5xl items-center gap-2.5 rounded-2xl px-2.5"
+          className="player-bar pointer-events-auto mx-auto flex h-12 max-w-5xl items-center gap-2.5 rounded-2xl px-2.5"
         >
           <Link
             href={`/music/tracks/${current.id}`}
@@ -208,7 +234,7 @@ export function MiniPlayer() {
         // записи сжималось в ноль. Поэтому здесь `flex-wrap` и порядок
         // элементов задан явно, а с `sm` возвращается однострочная раскладка
         // из PortalWide.dc.html.
-        className="glass pointer-events-auto mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-3 py-2 sm:h-16 sm:flex-nowrap sm:gap-5 sm:px-[18px] sm:py-0"
+        className="player-bar pointer-events-auto mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-3 py-2 sm:h-16 sm:flex-nowrap sm:gap-5 sm:px-[18px] sm:py-0"
       >
         {/* Что играет */}
         <div className="order-1 flex min-w-0 flex-1 items-center gap-3 sm:order-none sm:w-40 sm:flex-none lg:w-56">
@@ -299,12 +325,23 @@ export function MiniPlayer() {
 
             <button
               type="button"
-              aria-label="Предыдущая запись"
-              disabled={!hasPrev}
-              onClick={player.prev}
+              aria-label={
+                hasPrev
+                  ? "Предыдущая запись, удержание — перемотка назад"
+                  : "Перемотка назад удержанием"
+              }
+              title="Нажать — предыдущая запись, удержать — перемотка назад"
+              // `aria-disabled`, а не `disabled`: перемотка относится к
+              // играющей записи, а не к очереди, и на единственной записи
+              // настоящий `disabled` отнял бы вместе с переходом и её —
+              // отключённая кнопка не получает событий указателя вовсе.
+              aria-disabled={!hasPrev}
+              {...holdPrev.props}
               // Пара к «Следующей»: без неё промах по «дальше» стоил бы
               // возврата в список, а на телефоне это весь экран.
-              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8`}
+              className={`${ctrl} h-10 w-10 touch-none select-none aria-disabled:opacity-40 sm:h-8 sm:w-8 ${
+                holdPrev.seeking ? "text-violet" : ""
+              }`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M19 4L9 12l10 8z" />
@@ -325,10 +362,17 @@ export function MiniPlayer() {
 
             <button
               type="button"
-              aria-label="Следующая запись"
-              disabled={!hasNext}
-              onClick={player.next}
-              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8`}
+              aria-label={
+                hasNext
+                  ? "Следующая запись, удержание — перемотка вперёд"
+                  : "Перемотка вперёд удержанием"
+              }
+              title="Нажать — следующая запись, удержать — перемотка вперёд"
+              aria-disabled={!hasNext}
+              {...holdNext.props}
+              className={`${ctrl} h-10 w-10 touch-none select-none aria-disabled:opacity-40 sm:h-8 sm:w-8 ${
+                holdNext.seeking ? "text-violet" : ""
+              }`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M5 4l10 8-10 8z" />
@@ -395,12 +439,12 @@ export function MiniPlayer() {
         </div>
 
         {/* Скорость, сердце, очередь, невидимый сеанс, громкость.
-            На телефоне остаются скорость, сердце и невидимый сеанс: первые
-            две — из макета, третья — потому что «сейчас меня не видно» надо
-            уметь нажать там же, где слушаешь, а не уходить за этим в
-            настройки. Очередь и громкость не влезают: очередь есть на
-            широком экране и в карточке на главной, громкость на телефоне
-            системная. */}
+            На телефоне остаются скорость, сердце, очередь и невидимый сеанс:
+            первые две — из макета, очередь — потому что список того, что
+            играет дальше, спрашивают именно с телефона, а на широкий экран и
+            на главную портала за ним не уйти, третья — потому что «сейчас
+            меня не видно» надо уметь нажать там же, где слушаешь. Не влезает
+            только громкость: на телефоне она системная. */}
         <div className="order-2 flex shrink-0 items-center gap-2 sm:order-none sm:w-auto sm:justify-end sm:gap-2.5 lg:w-56">
           <button
             type="button"
@@ -436,13 +480,19 @@ export function MiniPlayer() {
             </svg>
           </button>
 
-          <div className="relative hidden lg:block">
+          <div className="relative">
             <button
               type="button"
-              aria-label="Очередь"
+              aria-label={
+                queueOpen ? "Закрыть очередь" : `Очередь, записей: ${queueLength}`
+              }
               aria-expanded={queueOpen}
+              aria-haspopup="dialog"
               onClick={() => setQueueOpen((was) => !was)}
-              className={`${ctrl} h-8 w-8 ${queueOpen ? "text-violet" : "text-text-2"}`}
+              // 40 точек на телефоне — как у соседних кнопок ряда: цель
+              // меньше 24×24 не проходит по WCAG 2.5.8, а 32 из макета
+              // рассчитаны на мышь.
+              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8 ${queueOpen ? "text-violet" : "text-text-2"}`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M3 6h11M3 12h8M3 18h8M17 12v8M13 16h8" />

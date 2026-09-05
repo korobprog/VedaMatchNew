@@ -43,7 +43,10 @@ export function MusicQueuePanel({ onClose }: { onClose: () => void }) {
       role="dialog"
       aria-modal="true"
       aria-label="Очередь"
-      className="glass pointer-events-auto absolute bottom-full right-0 mb-2 max-h-[60vh] w-80 overflow-y-auto rounded-2xl p-3"
+      // Ширина по месту, а не фиксированные 320 точек: панель висит у правого
+      // края полосы, и на экране в 320 точек фиксированная ширина уезжала бы
+      // за левый край вместе с названиями записей.
+      className="player-bar pointer-events-auto absolute bottom-full right-0 mb-2 max-h-[60vh] w-[min(20rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl p-3"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="font-display text-sm font-bold text-text-0">Очередь</h2>
@@ -127,13 +130,18 @@ export function MusicQueuePanel({ onClose }: { onClose: () => void }) {
 
                 {/* Играющую запись убрать нельзя — там кнопки просто нет,
                     а не заблокированная: объяснять «почему не нажимается»
-                    в списке из десяти строк негде. */}
+                    в списке из десяти строк негде.
+
+                    На телефоне крестик виден сразу: наведения там не
+                    существует, и спрятанная под `group-hover` кнопка не
+                    показалась бы никогда — очередь стала бы списком, из
+                    которого нечем ничего убрать. */}
                 {!isCurrent && (
                   <button
                     type="button"
                     onClick={() => player.removeFromQueue(at)}
                     aria-label={`Убрать из очереди: ${track?.title ?? "запись"}`}
-                    className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-2 opacity-0 transition-opacity hover:text-magenta focus-visible:opacity-100 group-hover:opacity-100 motion-reduce:transition-none"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-2 transition-opacity hover:text-magenta focus-visible:opacity-100 motion-reduce:transition-none sm:opacity-0 sm:group-hover:opacity-100"
                   >
                     <svg
                       viewBox="0 0 24 24"
