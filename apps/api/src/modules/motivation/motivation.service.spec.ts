@@ -1145,3 +1145,25 @@ describe('MotivationService.previewVoice', () => {
     expect(audio.speak).not.toHaveBeenCalled();
   });
 });
+
+describe('MotivationService.stats', () => {
+  it('считает всё опубликованное, а не то, что видит спрашивающий', async () => {
+    const count = jest.fn().mockResolvedValue(348);
+    const service = new MotivationService(
+      { motivationPost: { count } } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    expect(await service.stats()).toEqual({ published: 348 });
+    // Настройки направлений у каждого свои, и число, меняющееся от галочки
+    // в настройках, читалось бы как пропажа публикаций.
+    expect(count).toHaveBeenCalledWith({ where: { status: 'published' } });
+  });
+});

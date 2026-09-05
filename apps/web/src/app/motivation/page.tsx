@@ -9,7 +9,7 @@ import { MotivationTopBar } from "@/components/motivation/motivation-top-bar";
 import { ReelsChrome } from "@/components/motivation/reels-chrome";
 import { ReelsFeed, type ReelsTab } from "@/components/motivation/reels-feed";
 import { getDonationSettings, getProfile } from "@/lib/api";
-import { getMotivationFeed } from "@/lib/motivation-api";
+import { getMotivationFeed, getMotivationStats } from "@/lib/motivation-api";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
@@ -35,7 +35,7 @@ export default async function MotivationPage({
      выбирают однажды и надолго, — это «перемешай сейчас», и уходить за ним
      на страницу настроек дороже, чем нажать кнопку над лентой. */
   const order = params.order === "random" ? ("random" as const) : undefined;
-  const [user, feed, donation] = await Promise.all([
+  const [user, feed, donation, stats] = await Promise.all([
     getProfile(),
     // `?post=slug` открывает ленту на конкретном рилсе — так работает переход
     // из мастера и из «Моих рилсов».
@@ -45,6 +45,7 @@ export default async function MotivationPage({
       order,
     ),
     getDonationSettings(),
+    getMotivationStats(),
   ]);
   if (!user) redirectToLogin("/motivation");
   // Новичок идёт в мастер: там тот же вопрос об этапе, но после имени
@@ -70,6 +71,7 @@ export default async function MotivationPage({
               href: order ? "/motivation?order=random" : "/motivation",
               label: "Рилсы",
             }}
+            count={stats?.published}
           />
           <div className="mt-4 px-2">
             {/* Перемешать — и здесь тоже: список и рилсы показывают одну и ту
@@ -107,7 +109,7 @@ export default async function MotivationPage({
           donation={donation}
           order={order}
         />
-        <ReelsChrome isAdmin={isAdmin} order={order} />
+        <ReelsChrome isAdmin={isAdmin} order={order} count={stats?.published} />
       </div>
     </div>
   );

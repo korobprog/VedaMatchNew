@@ -70,6 +70,16 @@ export class MotivationController {
     private readonly analytics: MotivationAnalyticsService,
   ) {}
 
+  /**
+   * Сколько всего опубликовано. Объявлен до `posts/:slug`: Nest сопоставляет
+   * маршруты в порядке объявления, и ниже параметра «stats» читалось бы как
+   * слаг публикации.
+   */
+  @Get('motivation/stats')
+  stats() {
+    return this.service.stats();
+  }
+
   @Get('motivation/posts/:slug') publicPost(
     @Param('slug') slug: string,
     @Query('language') language?: MotivationLanguage,

@@ -16,6 +16,7 @@ import type {
   MotivationAdminReelsResponse,
   MotivationReelDto,
   MotivationSourceWatchDto,
+  MotivationStatsDto,
 } from "@vedamatch/shared";
 
 import { parseJsonBody } from "@/lib/json-body";
@@ -49,6 +50,10 @@ async function motivationGetPublic<T>(path: string): Promise<T | null> {
 }
 
 /** `post` открывает ленту на конкретном рилсе — он придёт первым в списке. */
+/** Сколько вдохновений в сервисе — цифра над лентой. */
+export const getMotivationStats = () =>
+  motivationGet<MotivationStatsDto>("/motivation/stats");
+
 export const getMotivationFeed = (
   filter: "all" | "favorites" = "all",
   post?: string,

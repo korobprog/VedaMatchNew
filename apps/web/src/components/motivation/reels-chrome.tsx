@@ -15,10 +15,13 @@ import { MotivationNav } from "./motivation-nav";
 export function ReelsChrome({
   isAdmin,
   order,
+  count,
 }: {
   isAdmin: boolean;
   /** Текущий порядок ленты: кнопка показывает, чем её сменить. */
   order?: "random";
+  /** Сколько всего вдохновений в сервисе. */
+  count?: number;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -49,6 +52,15 @@ export function ReelsChrome({
           className="absolute right-3 top-16 z-50 w-60 rounded-2xl border border-white/15 bg-black/80 p-3 backdrop-blur-lg"
         >
           <MotivationNav active="feed" isAdmin={isAdmin} compact />
+
+          {/* Полноэкранная лента шапки не показывает, а число «а много ли тут
+              вообще» спрашивают именно здесь — в единственном месте, где
+              видно название сервиса. */}
+          {count !== undefined && count > 0 && (
+            <p className="mt-2 text-center font-mono text-xs text-white/60">
+              {count} вдохновений в сервисе
+            </p>
+          )}
 
           {/* Перемешать. Ссылкой, а не переключателем в настройках: порядок
               ленты выбирают на месте и на один заход, а не однажды и надолго.

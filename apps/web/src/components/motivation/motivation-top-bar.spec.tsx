@@ -41,4 +41,23 @@ describe("MotivationTopBar", () => {
 
     expect(screen.getByRole("link", { name: "Рилсами" })).toHaveAttribute("href", "/motivation?tab=saved");
   });
+
+  it("показывает, сколько вдохновений в сервисе", () => {
+    render(<MotivationTopBar active="feed" isAdmin={false} count={348} />);
+
+    expect(screen.getByText("348")).toBeInTheDocument();
+    // Число рядом с кнопкой, а не внутри: иначе скринридер сообщал бы его
+    // каждый раз, когда до кнопки доходит фокус.
+    expect(
+      screen.getByRole("button", { name: /Вдохновение/ }).textContent,
+    ).not.toContain("348");
+  });
+
+  it("не рисует пустую цифру, пока публикаций нет", () => {
+    const { container } = render(
+      <MotivationTopBar active="feed" isAdmin={false} count={0} />,
+    );
+
+    expect(container.querySelector(".font-mono")).toBeNull();
+  });
 });

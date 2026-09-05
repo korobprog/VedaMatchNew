@@ -242,6 +242,11 @@ export interface MotivationReelCreateResult {
 export interface MotivationFeedResponse { items: MotivationPostDto[]; nextCursor: string | null }
 export interface MotivationLikeResponse { likeCount: number; isLiked: boolean }
 export type MotivationPostStatus = 'draft' | 'generating' | 'published' | 'failed' | 'hidden';
+/** Сколько вдохновений в сервисе — цифра над лентой. */
+export interface MotivationStatsDto {
+  published: number;
+}
+
 export interface MotivationAdminPostDto extends MotivationPostDto {
   status: MotivationPostStatus;
   generationStage: string | null;

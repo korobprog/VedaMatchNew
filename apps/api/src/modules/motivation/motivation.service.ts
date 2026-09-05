@@ -40,6 +40,7 @@ import type {
   MotivationReportResult,
   MotivationSourceWatchDto,
   MotivationSourceWatchInput,
+  MotivationStatsDto,
   MotivationVisualStyle,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -168,6 +169,23 @@ export class MotivationService {
     if (unique.some((profile) => !(profile in stageProfileValues)))
       throw new BadRequestException('Некорректные настройки');
     return unique;
+  }
+
+  /**
+   * Сколько вдохновений в сервисе. Одно число, без разбивки: оно отвечает на
+   * «а много ли там вообще», и «348 · из них 120 вайшнавских» на этот вопрос
+   * отвечает хуже, чем «348».
+   *
+   * Считается по всей ленте, а не по тому, что видит спрашивающий: настройки
+   * направлений у каждого свои, и число, меняющееся от галочки в настройках,
+   * читалось бы как пропажа публикаций.
+   */
+  async stats(): Promise<MotivationStatsDto> {
+    return {
+      published: await this.prisma.motivationPost.count({
+        where: { status: MotivationPostStatus.published },
+      }),
+    };
   }
 
   async feed(
