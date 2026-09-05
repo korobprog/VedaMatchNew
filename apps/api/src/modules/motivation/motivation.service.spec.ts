@@ -1167,3 +1167,80 @@ describe('MotivationService.stats', () => {
     expect(count).toHaveBeenCalledWith({ where: { status: 'published' } });
   });
 });
+
+describe('MotivationService.adminUpdate', () => {
+  function build() {
+    const update = jest.fn().mockResolvedValue({ id: 'post-1' });
+    const upsert = jest.fn().mockResolvedValue({});
+    const service = new MotivationService(
+      {
+        motivationPost: { update },
+        motivationPostTranslation: { upsert },
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    return { service, update, upsert };
+  }
+
+  const admin = { sub: 'admin-1', role: 'admin' } as never;
+
+  it('пишет тексты, а не молча возвращает 200', async () => {
+    const { service, upsert } = build();
+
+    await service.adminUpdate(admin, 'post-1', {
+      translations: { ru: { title: 'Заголовок', text: 'Текст', storyText: 'Подпись' } },
+    });
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { postId_language: { postId: 'post-1', language: 'ru' } },
+        update: { title: 'Заголовок', text: 'Текст', storyText: 'Подпись' },
+      }),
+    );
+  });
+
+  it('правка подписи снимает отметку о проверке источника', async () => {
+    const { service, update } = build();
+
+    await service.adminUpdate(admin, 'post-1', {
+      attribution: { speaker: ' Прабхупада ', work: 'Гита', locator: '2.13' },
+    });
+
+    // Отметка относилась к тому, что сверяли, а не к тому, что переписали.
+    expect(update.mock.calls[0][0].data).toMatchObject({
+      attributionSpeaker: 'Прабхупада',
+      attributionWork: 'Гита',
+      attributionLocator: '2.13',
+      sourceVerified: false,
+    });
+  });
+
+  it('пустая подпись стирается, а не сохраняется пробелами', async () => {
+    const { service, update } = build();
+
+    await service.adminUpdate(admin, 'post-1', {
+      attribution: { speaker: '  ', work: null, locator: undefined },
+    });
+
+    expect(update.mock.calls[0][0].data).toMatchObject({
+      attributionSpeaker: null,
+      attributionWork: null,
+      attributionLocator: null,
+    });
+  });
+
+  it('без правки подписи отметку о проверке не трогает', async () => {
+    const { service, update } = build();
+
+    await service.adminUpdate(admin, 'post-1', { hidden: true });
+
+    expect(update.mock.calls[0][0].data).not.toHaveProperty('sourceVerified');
+  });
+});

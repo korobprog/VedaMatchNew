@@ -108,6 +108,7 @@ export default async function MotivationPage({
           tab={tab}
           donation={donation}
           order={order}
+          isAdmin={isAdmin}
         />
         <ReelsChrome isAdmin={isAdmin} order={order} count={stats?.published} />
       </div>

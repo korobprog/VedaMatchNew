@@ -29,12 +29,20 @@ import {
  */
 export function MotivationPublishedList({
   posts,
+  openSlug,
 }: {
   posts: MotivationAdminCandidateDto[] | null;
+  /**
+   * Слаг карточки, ради которой сюда пришли из ленты. Её правка открыта
+   * сразу: искать глазами то, на что только что смотрел, — лишний шаг.
+   */
+  openSlug?: string;
 }) {
   const { pending, errors, run } = useAdminCommand();
   const [query, setQuery] = useState("");
-  const [editing, setEditing] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(
+    () => posts?.find((post) => post.slug === openSlug)?.id ?? null,
+  );
 
   const found = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase("ru-RU");
@@ -205,8 +213,11 @@ export function MotivationPublishedList({
  *
  * Только русский: остальные языки заводит генерация, и подсовывать здесь
  * пустые поля под них значило бы предлагать перевести вручную то, что
- * переводится не здесь. Что не правится — цитата: у неё своя проверка
- * источника, и менять её задним числом мимо этой проверки нельзя.
+ * переводится не здесь.
+ *
+ * Подпись правится, но не бесплатно: сервер снимает отметку о проверенном
+ * источнике — она относилась к тому, что сверяли, а не к тому, что
+ * переписали руками. Об этом сказано прямо, до нажатия.
  */
 function PublishedTextForm({
   post,
@@ -222,9 +233,17 @@ function PublishedTextForm({
   const [title, setTitle] = useState(post.title);
   const [text, setText] = useState(post.text);
   const [storyText, setStoryText] = useState(post.storyText);
+  const [speaker, setSpeaker] = useState(post.attributionSpeaker ?? "");
+  const [work, setWork] = useState(post.attributionWork ?? "");
+  const [locator, setLocator] = useState(post.attributionLocator ?? "");
 
-  const changed =
+  const textChanged =
     title !== post.title || text !== post.text || storyText !== post.storyText;
+  const attributionChanged =
+    speaker !== (post.attributionSpeaker ?? "") ||
+    work !== (post.attributionWork ?? "") ||
+    locator !== (post.attributionLocator ?? "");
+  const changed = textChanged || attributionChanged;
 
   return (
     <div className="mt-3 space-y-3 border-t border-glass-brd pt-3">
@@ -257,6 +276,43 @@ function PublishedTextForm({
         />
       </label>
 
+      <div className="grid gap-3 sm:grid-cols-3">
+        <label className="block">
+          <span className={labelClass}>Автор</span>
+          <input
+            value={speaker}
+            onChange={(event) => setSpeaker(event.target.value)}
+            className={`${fieldClass} mt-1`}
+          />
+        </label>
+        <label className="block">
+          <span className={labelClass}>Произведение</span>
+          <input
+            value={work}
+            onChange={(event) => setWork(event.target.value)}
+            className={`${fieldClass} mt-1`}
+          />
+        </label>
+        <label className="block">
+          <span className={labelClass}>Место</span>
+          <input
+            value={locator}
+            onChange={(event) => setLocator(event.target.value)}
+            placeholder="2.13"
+            className={`${fieldClass} mt-1`}
+          />
+        </label>
+      </div>
+
+      {attributionChanged && (
+        <p className="text-xs text-text-2">
+          Правка подписи снимет отметку о проверенном источнике: она относилась
+          к тому, что сверяли.
+          {post.origin === "user" &&
+            " Рилс участника уйдёт из общей ленты, пока источник не сверят заново."}
+        </p>
+      )}
+
       <button
         type="button"
         disabled={!changed || pendingAction !== undefined}
@@ -264,7 +320,17 @@ function PublishedTextForm({
           await run(post.id, "edit", {
             path: `/admin/motivation/posts/${post.id}`,
             method: "PATCH",
-            body: { translations: { ru: { title, text, storyText } } },
+            body: {
+              // Отправляем только то, что тронули: подпись тянет за собой
+              // сброс проверки источника, и слать её «на всякий случай»
+              // значило бы снимать отметку при правке одной опечатки.
+              ...(textChanged
+                ? { translations: { ru: { title, text, storyText } } }
+                : {}),
+              ...(attributionChanged
+                ? { attribution: { speaker, work, locator } }
+                : {}),
+            },
           });
           onSaved();
         }}

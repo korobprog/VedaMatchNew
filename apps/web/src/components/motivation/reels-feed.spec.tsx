@@ -446,4 +446,33 @@ describe("ReelsFeed", () => {
       screen.queryByRole("button", { name: "Озвучить цитату" }),
     ).not.toBeInTheDocument();
   });
+
+  it("редакции даёт перейти к правке той карточки, на которую она смотрит", () => {
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+        isAdmin
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Править эту публикацию" }),
+    ).toHaveAttribute("href", "/admin/motivation/published?post=a");
+  });
+
+  it("обычному читателю правки не предлагает", () => {
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: "Править эту публикацию" }),
+    ).not.toBeInTheDocument();
+  });
 });

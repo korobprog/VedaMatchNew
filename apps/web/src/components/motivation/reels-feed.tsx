@@ -49,10 +49,13 @@ export function ReelsFeed({
   tab,
   donation,
   order,
+  isAdmin = false,
 }: {
   initial: MotivationFeedResponse;
   tab: ReelsTab;
   donation: DonationSettingsDto | null;
+  /** Редакции — переход к правке той карточки, на которую она смотрит. */
+  isAdmin?: boolean;
   /**
    * Порядок ленты. Уезжает и в подгрузку: семя перемешивания лежит в курсоре,
    * но без параметра сервер про случайный порядок на второй странице не
@@ -423,6 +426,23 @@ export function ReelsFeed({
             >
               <SpeakIcon />
             </RailButton>
+          )}
+          {/* Правка — прямо отсюда: раньше редакции приходилось уходить в
+              админку и искать глазами то, на что она только что смотрела.
+              Ссылка, а не форма поверх кадра: править текст на слайде в
+              полный экран неудобно, а найти карточку — как раз то, что было
+              дорого. */}
+          {isAdmin && (
+            <Link
+              href={`/admin/motivation/published?post=${encodeURIComponent(activePost.slug)}`}
+              aria-label="Править эту публикацию"
+              className="flex flex-col items-center gap-0.5 text-[10px] font-semibold drop-shadow"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-white/15">
+                <PencilIcon />
+              </span>
+              Править
+            </Link>
           )}
           <Link
             href="/motivation/create"
@@ -935,6 +955,15 @@ function StarIcon({ filled }: { filled: boolean }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
       <path d="M12 3.5l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17.5l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
     </svg>
   );
 }

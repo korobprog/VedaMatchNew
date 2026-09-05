@@ -13,8 +13,16 @@ import { getAdminMotivationPosts } from "@/lib/motivation-api";
  * правят и снимают с показа, второе проверяют, что оно не висит. Свёрнутый
  * список «Уже прошли очередь» в самом низу очереди прятал и то, и другое.
  */
-export default async function AdminMotivationPublishedPage() {
-  const posts = await getAdminMotivationPosts();
+export default async function AdminMotivationPublishedPage({
+  searchParams,
+}: {
+  /** `?post=<slug>` — переход из ленты: открываем правку сразу этой карточки. */
+  searchParams: Promise<{ post?: string }>;
+}) {
+  const [posts, { post }] = await Promise.all([
+    getAdminMotivationPosts(),
+    searchParams,
+  ]);
 
   return (
     <>
@@ -29,6 +37,7 @@ export default async function AdminMotivationPublishedPage() {
       />
       <MotivationPublishedList
         posts={posts ? selectPublishedPosts(posts) : null}
+        openSlug={post}
       />
     </>
   );

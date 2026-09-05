@@ -22,6 +22,9 @@ function post(
     category: "philosophy",
     categoryTitle: "Философия",
     attributionSpeaker: "Прабхупада",
+    attributionWork: "Бхагавад-гита",
+    attributionLocator: "2.13",
+    origin: "editorial",
     imageUrl: "",
     status: "published",
     ...over,
@@ -142,5 +145,59 @@ describe("MotivationPublishedList", () => {
     expect(
       within(document.body).getByText(/опубликованные вдохновения/),
     ).toBeInTheDocument();
+  });
+
+  it("правит подпись и предупреждает, чем это обойдётся", async () => {
+    const user = userEvent.setup();
+    const fetchMock = stubFetch();
+    render(<MotivationPublishedList posts={[post()]} />);
+
+    await user.click(screen.getByRole("button", { name: /Править текст/ }));
+    const speaker = screen.getByLabelText("Автор");
+    await user.clear(speaker);
+    await user.type(speaker, "Бхактивинода");
+
+    expect(
+      screen.getByText(/снимет отметку о проверенном источнике/),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    await waitFor(() =>
+      expect(lastBody(fetchMock)).toEqual({
+        attribution: {
+          speaker: "Бхактивинода",
+          work: "Бхагавад-гита",
+          locator: "2.13",
+        },
+      }),
+    );
+  });
+
+  it("правка одной опечатки в тексте подпись не трогает", async () => {
+    const user = userEvent.setup();
+    const fetchMock = stubFetch();
+    render(<MotivationPublishedList posts={[post()]} />);
+
+    await user.click(screen.getByRole("button", { name: /Править текст/ }));
+    await user.type(screen.getByLabelText("Заголовок"), "!");
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    // Иначе отметка о проверенном источнике слетала бы от лишней запятой.
+    await waitFor(() =>
+      expect(lastBody(fetchMock)).not.toHaveProperty("attribution"),
+    );
+  });
+
+  it("открывает правку той карточки, ради которой пришли из ленты", () => {
+    render(<MotivationPublishedList posts={[post()]} openSlug="gita-2-13" />);
+
+    expect(screen.getByLabelText("Заголовок")).toBeInTheDocument();
+  });
+
+  it("без ссылки из ленты все карточки закрыты", () => {
+    render(<MotivationPublishedList posts={[post()]} />);
+
+    expect(screen.queryByLabelText("Заголовок")).not.toBeInTheDocument();
   });
 });

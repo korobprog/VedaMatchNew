@@ -642,7 +642,14 @@ export class MotivationService {
     input: MotivationAdminUpdate,
   ) {
     this.admin(user);
-    return this.prisma.motivationPost.update({
+    /* Правка подписи снимает отметку о проверке источника.
+
+       Отметка говорит «этот текст найден по этой ссылке и сверен»; после
+       того как подпись переписали руками, она относится уже не к тому, что
+       проверяли. У рилса участника это заодно убирает его из общей ленты —
+       туда он и не должен возвращаться, пока подпись не сверили заново. */
+    const attribution = input.attribution;
+    const post = await this.prisma.motivationPost.update({
       where: { id },
       data: {
         ...(input.hidden !== undefined
@@ -651,8 +658,41 @@ export class MotivationService {
         ...(input.category
           ? { category: await this.categories.resolveSlug(input.category) }
           : {}),
+        ...(attribution
+          ? {
+              attributionSpeaker: attribution.speaker?.trim() || null,
+              attributionWork: attribution.work?.trim() || null,
+              attributionLocator: attribution.locator?.trim() || null,
+              sourceVerified: false,
+            }
+          : {}),
       },
     });
+
+    /* Тексты. Раньше это поле объявлялось в типе, но нигде не применялось:
+       админка отправляла правку, получала 200 и ничего не меняла. */
+    for (const [language, translation] of Object.entries(
+      input.translations ?? {},
+    )) {
+      if (!translation) continue;
+      await this.prisma.motivationPostTranslation.upsert({
+        where: { postId_language: { postId: id, language } },
+        create: {
+          postId: id,
+          language,
+          title: translation.title,
+          text: translation.text,
+          storyText: translation.storyText,
+        },
+        update: {
+          title: translation.title,
+          text: translation.text,
+          storyText: translation.storyText,
+        },
+      });
+    }
+
+    return post;
   }
   /**
    * Удаляет мотивацию вместе с её цитатой.
