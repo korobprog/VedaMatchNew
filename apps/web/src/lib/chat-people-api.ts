@@ -10,6 +10,7 @@ import type {
   ContactsFieldPrivacy,
   ContactsFieldVisibility,
   ContactsFormat,
+  ContactsSearchSort,
   ContactsMapResponse,
   ContactsProfileDto,
   ContactsProfileState,
@@ -102,6 +103,14 @@ export const CONTACTS_ASHRAMS: ContactsAshram[] = [
 /** `any` в фильтре не нужен: «любой формат» — это отсутствие параметра. */
 export const CONTACTS_SEARCH_FORMATS: ContactsFormat[] = ["online", "offline"];
 
+/** Порядки выдачи справочника в том виде, в каком их предлагает интерфейс. */
+export const CONTACTS_SEARCH_SORTS: ContactsSearchSort[] = [
+  "active",
+  "alpha",
+  "new",
+  "city",
+];
+
 function appendText(
   query: URLSearchParams,
   key: string,
@@ -175,6 +184,10 @@ export function buildContactsSearchQuery(
   appendList(query, "tagIds", filters.tagIds);
   appendList(query, "languages", filters.languages);
   appendText(query, "format", filters.format);
+  // Порядок по умолчанию в адрес не пишем: он и так подразумевается, а
+  // лишний параметр делает ссылку на справочник длиннее без пользы.
+  if (filters.sort && filters.sort !== "active")
+    appendText(query, "sort", filters.sort);
   appendFlag(query, "verifiedDevoteeOnly", filters.verifiedDevoteeOnly);
   appendFlag(query, "photoVerifiedOnly", filters.photoVerifiedOnly);
   appendNumber(query, "page", filters.page);
@@ -261,6 +274,11 @@ export function parseContactsSearchFilters(
     verifiedDevoteeOnly: params.get("verifiedDevoteeOnly") === "true",
     photoVerifiedOnly: params.get("photoVerifiedOnly") === "true",
     page: parseNumber(params, "page") ?? 1,
+    // Мусор в адресе — не повод показывать пустоту: незнакомый порядок
+    // читается как «по умолчанию», и до API он не доедет.
+    sort:
+      CONTACTS_SEARCH_SORTS.find((value) => value === params.get("sort")) ??
+      "active",
   };
 }
 

@@ -6,17 +6,20 @@ import type {
   ContactsFormat,
   ContactsSearchFacet,
   ContactsSearchFilters,
+  ContactsSearchSort,
   ContactsTagDto,
   SpiritualStage,
 } from "@vedamatch/shared";
 import {
   CONTACTS_ASHRAMS,
   CONTACTS_SEARCH_FORMATS,
+  CONTACTS_SEARCH_SORTS,
   CONTACTS_STAGES,
 } from "@/lib/chat-people-api";
 import {
   contactsAshramLabels,
   contactsFormatLabels,
+  contactsSortLabels,
   contactsLanguageOptions,
   contactsRadiusOptions,
   contactsStageLabels,
@@ -159,6 +162,28 @@ export function PeopleSearchFiltersPanel({
             className={fieldClass}
           />
         </label>
+        {/* Порядок — рядом с поиском, а не среди фильтров: фильтры сужают
+            выдачу, а это то, как её читать, и ответ на «покажи всех по
+            алфавиту» лежит не там, где «только преданных». */}
+        <label className="block">
+          <span className={labelClass}>Порядок</span>
+          <select
+            value={draft.sort ?? "active"}
+            onChange={(event) =>
+              update("sort", event.target.value as ContactsSearchSort)
+            }
+            className={fieldClass}
+          >
+            {CONTACTS_SEARCH_SORTS.map((sort) => (
+              <option key={sort} value={sort}>
+                {contactsSortLabels[sort]}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-3">
         <label className="block">
           <span className={labelClass}>Формат</span>
           <select
