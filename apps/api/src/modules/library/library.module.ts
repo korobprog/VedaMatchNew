@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { CommunitiesModule } from '../communities/communities.module';
 import { LibraryAdminController } from './library-admin.controller';
 import { LibrarySectionRequestsController } from './library-section-requests.controller';
 import { LibrarySectionRequestsService } from './library-section-requests.service';
@@ -18,7 +19,10 @@ import { LibraryPreferencesService } from './library-preferences.service';
 import { LibraryPreviewsService } from './library-previews.service';
 
 @Module({
-  imports: [AuthModule],
+  // CommunitiesModule — портальная инфраструктура, разрешённая контрактом:
+  // материал можно выложить от имени общины, и право на это спрашивается у
+  // владельца справочника, а не проверяется копией правил внутри сервиса.
+  imports: [AuthModule, CommunitiesModule],
   controllers: [
     LibraryCategoriesController,
     LibraryEntriesController,

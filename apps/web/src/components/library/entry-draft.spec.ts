@@ -18,6 +18,7 @@ function draft(over: Partial<LibraryEntryDraft> = {}): LibraryEntryDraft {
     titleEn: "",
     descriptionRu: "",
     descriptionEn: "",
+    communityId: "",
     categoryIds: ["cat-1"],
     ...over,
   };
@@ -121,7 +122,15 @@ describe("buildCreateEntryBody", () => {
       descriptionRu: null,
       descriptionEn: null,
       categoryIds: ["cat-1"],
+      communityId: null,
     });
+  });
+
+  it("подпись общиной: пустой выбор уезжает как «от себя»", () => {
+    expect(buildCreateEntryBody(draft()).communityId).toBeNull();
+    expect(
+      buildCreateEntryBody(draft({ communityId: "c-1" })).communityId,
+    ).toBe("c-1");
   });
 
   it("отправляет только выбранное из двух", () => {

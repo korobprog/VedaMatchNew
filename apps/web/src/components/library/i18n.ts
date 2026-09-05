@@ -15,6 +15,8 @@ const ui = {
     "filters.category": "Категория",
     "filters.type": "Тип материала",
     "filters.language": "Язык материала",
+    "filters.community": "Организация",
+    "filters.anyCommunity": "Любая",
     "filters.sort": "Сортировка",
     "filters.search": "Поиск",
     "filters.reset": "Сбросить",
@@ -147,6 +149,10 @@ const ui = {
     "category.similarHint":
       "Проверьте список: возможно, нужная категория уже создана",
     "category.forceCreate": "Всё равно создать новую",
+    "add.community": "От чьего имени",
+    "add.communitySelf": "От себя",
+    "add.communityHint":
+      "Автором всё равно останетесь вы — община только подписывает материал",
     "category.empty": "В этом разделе ещё нет категорий",
     "category.entries": "материалов",
     // Подпись у числа рядом с рубрикой. Без неё «4» одинаково читается и как
@@ -225,6 +231,8 @@ const ui = {
     "filters.category": "Category",
     "filters.type": "Material type",
     "filters.language": "Material language",
+    "filters.community": "Organisation",
+    "filters.anyCommunity": "Any",
     "filters.sort": "Sorting",
     "filters.search": "Search",
     "filters.reset": "Reset",
@@ -358,6 +366,10 @@ const ui = {
     "category.similarHint":
       "Check the list: the category you need may already be there",
     "category.forceCreate": "Create a new one anyway",
+    "add.community": "Published as",
+    "add.communitySelf": "Myself",
+    "add.communityHint":
+      "You stay the author — the community only signs the material",
     "category.empty": "This section has no categories yet",
     "category.entries": "materials",
     "count.children": "Subcategories inside",

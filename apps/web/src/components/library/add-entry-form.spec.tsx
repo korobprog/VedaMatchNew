@@ -188,6 +188,12 @@ describe("AddEntryForm", () => {
     expect(
       screen.getByText("Заполните заголовок хотя бы на одном языке"),
     ).toBeDefined();
-    expect(fetchMock).not.toHaveBeenCalled();
+    // Именно POST материала: справочник общин форма читает при монтировании,
+    // и «не звали fetch вовсе» ловило бы уже не отправку, а этот запрос.
+    expect(
+      fetchMock.mock.calls.filter(
+        ([, init]) => (init as RequestInit | undefined)?.method === "POST",
+      ),
+    ).toHaveLength(0);
   });
 });

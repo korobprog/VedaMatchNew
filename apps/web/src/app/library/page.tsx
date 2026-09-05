@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { getProfile } from "@/lib/api";
 import {
   getLibraryCategoryTree,
+  getLibraryCommunities,
   getLibraryFeed,
   getLibraryPreferences,
 } from "@/lib/library-api";
@@ -29,10 +30,11 @@ export default async function LibraryPage({
   if (!user) redirectToLogin("/library");
 
   const params = await searchParams;
-  const [tree, preferences, feed] = await Promise.all([
+  const [tree, preferences, feed, communities] = await Promise.all([
     getLibraryCategoryTree(),
     getLibraryPreferences(),
     getLibraryFeed(params),
+    getLibraryCommunities(),
   ]);
   const locale = preferences?.uiLanguage ?? "ru";
   const roots = tree ?? [];
@@ -72,7 +74,11 @@ export default async function LibraryPage({
           canOrganize={roots.some((root) => root.canMove)}
           root
         />
-        <EntryFilters locale={locale} categories={[]} />
+        <EntryFilters
+          locale={locale}
+          categories={[]}
+          communities={communities ?? []}
+        />
 
         {feed && (
           <EntryList

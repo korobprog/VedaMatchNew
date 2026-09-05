@@ -9,6 +9,7 @@ import type {
   LibraryCategoryPageDto,
   LibraryCategoryTreeNode,
   LibraryCommentsResponse,
+  LibraryCommunityFacet,
   LibraryEntryDto,
   LibraryFeedResponse,
   LibraryPreferencesDto,
@@ -48,6 +49,10 @@ export const getLibraryFeed = (
   params?: Record<string, string | string[] | undefined>,
 ) =>
   libraryGet<LibraryFeedResponse>(`/library/entries${buildLibraryQuery(params)}`);
+
+/** Организации, от имени которых в каталоге есть материалы, — для фильтра. */
+export const getLibraryCommunities = () =>
+  libraryGet<LibraryCommunityFacet[]>("/library/entries/communities");
 
 export const getLibraryEntry = (id: string) =>
   libraryGet<LibraryEntryDto>(`/library/entries/${encodeURIComponent(id)}`);
