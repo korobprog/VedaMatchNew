@@ -127,11 +127,13 @@ export function QuickPanel() {
             отсчёт от него не зависит от того, сколько соседей в шапке видно
             при текущей ширине.
 
-            Материал — `sheet`, а не `glass`: стекло прозрачно намеренно,
-            сквозь него положено видеть страницу, но панель лежит поверх
-            текста, и подписи плиток читались сквозь него как помарки.
+            Фон сплошной, а не стеклянный. `glass` и даже более плотный
+            `sheet` рассчитаны на окна с затемняющей подложкой под ними; у
+            панели её нет, она открывается прямо над текстом страницы — и
+            строки просвечивали сквозь подписи плиток. Панель не стекло:
+            под ней ничего не должно быть видно.
           */
-          className="fixed right-3 top-[calc(3.5rem+env(safe-area-inset-top)+0.25rem)] z-50 w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-sheet-brd bg-sheet p-3 shadow-xl backdrop-blur-xl"
+          className="fixed right-3 top-[calc(3.5rem+env(safe-area-inset-top)+0.25rem)] z-50 w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-glass-brd bg-bg-1 p-3 shadow-xl"
         >
           <div className="mb-2 flex items-center justify-between">
             <h2 className="font-display text-sm font-bold text-text-0">
