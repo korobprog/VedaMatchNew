@@ -118,7 +118,20 @@ export function QuickPanel() {
         <div
           role="dialog"
           aria-label="Горячие кнопки"
-          className="glass absolute right-0 top-11 z-50 w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-glass-brd p-3 shadow-xl"
+          /*
+            Прижата к правому краю окна, а не к кнопке.
+
+            Кнопка стоит в шапке слева от переключателей, и панель, отмеренная
+            от неё вправо-налево, уезжала за левый край экрана — заголовок и
+            первая плитка оказывались срезаны. Окно шире кнопки всегда, и
+            отсчёт от него не зависит от того, сколько соседей в шапке видно
+            при текущей ширине.
+
+            Материал — `sheet`, а не `glass`: стекло прозрачно намеренно,
+            сквозь него положено видеть страницу, но панель лежит поверх
+            текста, и подписи плиток читались сквозь него как помарки.
+          */
+          className="fixed right-3 top-[calc(3.5rem+env(safe-area-inset-top)+0.25rem)] z-50 w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-sheet-brd bg-sheet p-3 shadow-xl backdrop-blur-xl"
         >
           <div className="mb-2 flex items-center justify-between">
             <h2 className="font-display text-sm font-bold text-text-0">
