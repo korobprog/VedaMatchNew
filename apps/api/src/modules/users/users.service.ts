@@ -29,6 +29,7 @@ import {
   type UserProfile,
 } from '@vedamatch/shared';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { normalizeStatusLine } from './status-line';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PersonalDataService } from '../personal-data/personal-data.service';
 import { pickPersonal } from '../personal-data/personal-fields';
@@ -142,6 +143,7 @@ export class UsersService {
       gender: user.gender,
       photoVerification: toPhotoVerificationState(user),
       about: user.about,
+      statusLine: user.statusLine,
       languages: user.languages,
       homeLocation: parseLocation(user.homeLocation),
       socialLinks: parseSocialLinks(user.socialLinks),
@@ -295,6 +297,9 @@ export class UsersService {
       // Пустая строка — «убрать», как и у духовного имени: пустой рассказ и
       // отсутствующий это одно и то же, а различать их пришлось бы везде.
       data.about = about || null;
+    }
+    if ('statusLine' in payload) {
+      data.statusLine = normalizeStatusLine(payload.statusLine);
     }
     if ('languages' in payload) {
       data.languages = normalizeLanguages(payload.languages);

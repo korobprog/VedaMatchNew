@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ABOUT_MAX_LENGTH,
+  STATUS_LINE_MAX_LENGTH,
   LANGUAGES_MAX,
   NAME_MAX_LENGTH,
   type ProfileLocation,
@@ -71,6 +72,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
   // Рассказ о себе и языки — портальные: их показывают и Знакомства, и
   // справочник, поэтому заполняются они один раз, здесь.
   const [about, setAbout] = useState(user.about ?? "");
+  const [statusLine, setStatusLine] = useState(user.statusLine ?? "");
   const [languages, setLanguages] = useState<string[]>(user.languages ?? []);
   const [birthDate, setBirthDate] = useState(user.birthDate ?? "");
   const [gender, setGender] = useState<string>(user.gender ?? "");
@@ -186,6 +188,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
           name,
           spiritualName: spiritualName || null,
           about: about.trim() || null,
+          statusLine: statusLine.trim() || null,
           languages,
           birthDate: birthDate || null,
           gender: gender || null,
@@ -200,6 +203,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
       setName(updated.name);
       setSpiritualName(updated.spiritualName ?? "");
       setAbout(updated.about ?? "");
+      setStatusLine(updated.statusLine ?? "");
       setLanguages(updated.languages ?? []);
       setBirthDate(updated.birthDate ?? "");
       setGender(updated.gender ?? "");
@@ -319,6 +323,25 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
           Один рассказ на весь портал: его показывают и Знакомства, и
           справочник участников. Раньше это приходилось писать дважды.
         </p>
+        {/* Статус — над рассказом: он короче, меняется чаще и первым
+            попадается на глаза тому, кто открыл карточку. */}
+        <label className="mb-4 block">
+          <span className="mb-1 block text-xs text-text-2">
+            Статус — строка рядом с именем
+          </span>
+          <input
+            type="text"
+            value={statusLine}
+            onChange={(event) => setStatusLine(event.target.value)}
+            maxLength={STATUS_LINE_MAX_LENGTH}
+            placeholder="В Маяпуре до марта · Читаю Бхагаватам, пишите"
+            className={fieldClassName}
+          />
+          <span className="mt-1 block text-xs text-text-2">
+            Осталось символов: {STATUS_LINE_MAX_LENGTH - statusLine.length}
+          </span>
+        </label>
+
         <label className="block">
           <span className="mb-1 block text-xs text-text-2">Рассказ о себе</span>
           <textarea

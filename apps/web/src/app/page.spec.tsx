@@ -59,6 +59,7 @@ const user: UserProfile = {
   name: "Радха",
   spiritualName: null,
   about: null,
+    statusLine: null,
   languages: [],
   displayName: "Радха",
   avatarUrl: null,

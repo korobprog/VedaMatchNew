@@ -7,6 +7,7 @@ const card: ContactsCardDto = {
   userId: "u1",
   name: "Радха дд",
   headline: "Повар на праздничных программах",
+  statusLine: null,
   about: "Готовлю прасад на фестивалях",
   offers: "Помогу организовать кухню на программе",
   avatarUrl: null,
@@ -153,5 +154,31 @@ describe("PeopleCardView", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Справочник временно недоступен",
     );
+  });
+
+  it("показывает статус выше заголовка карточки", async () => {
+    stubCard({
+      ...card,
+      statusLine: "В Маяпуре до марта",
+      headline: "Преподаёт санскрит",
+    });
+    render(<PeopleCardView userId="u1" viewerId="viewer" />);
+
+    const status = await screen.findByText("В Маяпуре до марта");
+    const headline = screen.getByText("Преподаёт санскрит");
+    // Заголовок описывает человека вообще, статус — прямо сейчас, и второе
+    // устаревает первым.
+    expect(
+      status.compareDocumentPosition(headline) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("без статуса лишней строки не рисует", async () => {
+    stubCard({ ...card, statusLine: null });
+    render(<PeopleCardView userId="u1" viewerId="viewer" />);
+
+    await screen.findByRole("heading", { level: 2 });
+    expect(screen.queryByText("В Маяпуре до марта")).not.toBeInTheDocument();
   });
 });
