@@ -161,7 +161,7 @@ describe("LibraryScreen", () => {
   it("ищет и по автору: книгу помнят по тому, кто её написал", async () => {
     const user = userEvent.setup();
     render(
-      <VedabaseProvider manager={fakeManager()} library={library}>
+      <VedabaseProvider userId="user-1" manager={fakeManager()} library={library}>
         <LibraryScreen />
       </VedabaseProvider>,
     );
@@ -177,7 +177,7 @@ describe("LibraryScreen", () => {
 
   it("на одном авторе ряд выбора не рисуется: выбор из одного — не выбор", () => {
     render(
-      <VedabaseProvider manager={fakeManager()} library={library}>
+      <VedabaseProvider userId="user-1" manager={fakeManager()} library={library}>
         <LibraryScreen />
       </VedabaseProvider>,
     );
@@ -195,7 +195,7 @@ describe("LibraryScreen", () => {
       ],
     };
     render(
-      <VedabaseProvider manager={fakeManager()} library={mixed}>
+      <VedabaseProvider userId="user-1" manager={fakeManager()} library={mixed}>
         <LibraryScreen />
       </VedabaseProvider>,
     );
