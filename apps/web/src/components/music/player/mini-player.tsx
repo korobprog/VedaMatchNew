@@ -136,6 +136,10 @@ export function MiniPlayer() {
   // паузу — это единственная кнопка, по которой судят, сработало ли нажатие.
   const playState = isLoading ? "loading" : isPlaying ? "playing" : "paused";
 
+  /* Длина очереди — в имени кнопки, а не значком поверх неё: значок в углу
+     кружка 40×40 нечитаем, а скринридеру он не говорит вообще ничего. */
+  const queueLength = player.queue.length;
+
   const total = durationSeconds || current.durationSeconds;
   // `shrink-0` не для красоты: без него флекс ужимал кнопки в правой группе
   // до 17px по ширине при заявленных 32, а цель меньше 24×24 не проходит по
@@ -435,12 +439,12 @@ export function MiniPlayer() {
         </div>
 
         {/* Скорость, сердце, очередь, невидимый сеанс, громкость.
-            На телефоне остаются скорость, сердце и невидимый сеанс: первые
-            две — из макета, третья — потому что «сейчас меня не видно» надо
-            уметь нажать там же, где слушаешь, а не уходить за этим в
-            настройки. Очередь и громкость не влезают: очередь есть на
-            широком экране и в карточке на главной, громкость на телефоне
-            системная. */}
+            На телефоне остаются скорость, сердце, очередь и невидимый сеанс:
+            первые две — из макета, очередь — потому что список того, что
+            играет дальше, спрашивают именно с телефона, а на широкий экран и
+            на главную портала за ним не уйти, третья — потому что «сейчас
+            меня не видно» надо уметь нажать там же, где слушаешь. Не влезает
+            только громкость: на телефоне она системная. */}
         <div className="order-2 flex shrink-0 items-center gap-2 sm:order-none sm:w-auto sm:justify-end sm:gap-2.5 lg:w-56">
           <button
             type="button"
@@ -476,13 +480,19 @@ export function MiniPlayer() {
             </svg>
           </button>
 
-          <div className="relative hidden lg:block">
+          <div className="relative">
             <button
               type="button"
-              aria-label="Очередь"
+              aria-label={
+                queueOpen ? "Закрыть очередь" : `Очередь, записей: ${queueLength}`
+              }
               aria-expanded={queueOpen}
+              aria-haspopup="dialog"
               onClick={() => setQueueOpen((was) => !was)}
-              className={`${ctrl} h-8 w-8 ${queueOpen ? "text-violet" : "text-text-2"}`}
+              // 40 точек на телефоне — как у соседних кнопок ряда: цель
+              // меньше 24×24 не проходит по WCAG 2.5.8, а 32 из макета
+              // рассчитаны на мышь.
+              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8 ${queueOpen ? "text-violet" : "text-text-2"}`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M3 6h11M3 12h8M3 18h8M17 12v8M13 16h8" />
