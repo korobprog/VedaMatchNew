@@ -46,7 +46,7 @@ export function MusicQueuePanel({ onClose }: { onClose: () => void }) {
       // Ширина по месту, а не фиксированные 320 точек: панель висит у правого
       // края полосы, и на экране в 320 точек фиксированная ширина уезжала бы
       // за левый край вместе с названиями записей.
-      className="glass pointer-events-auto absolute bottom-full right-0 mb-2 max-h-[60vh] w-[min(20rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl p-3"
+      className="player-bar pointer-events-auto absolute bottom-full right-0 mb-2 max-h-[60vh] w-[min(20rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl p-3"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="font-display text-sm font-bold text-text-0">Очередь</h2>

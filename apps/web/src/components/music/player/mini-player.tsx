@@ -168,7 +168,7 @@ export function MiniPlayer() {
            мешай, но играй», поэтому здесь нет ни дорожки, ни перемотки. */
         <section
           aria-label="Плеер, свёрнут"
-          className="glass pointer-events-auto mx-auto flex h-12 max-w-5xl items-center gap-2.5 rounded-2xl px-2.5"
+          className="player-bar pointer-events-auto mx-auto flex h-12 max-w-5xl items-center gap-2.5 rounded-2xl px-2.5"
         >
           <Link
             href={`/music/tracks/${current.id}`}
@@ -234,7 +234,7 @@ export function MiniPlayer() {
         // записи сжималось в ноль. Поэтому здесь `flex-wrap` и порядок
         // элементов задан явно, а с `sm` возвращается однострочная раскладка
         // из PortalWide.dc.html.
-        className="glass pointer-events-auto mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-3 py-2 sm:h-16 sm:flex-nowrap sm:gap-5 sm:px-[18px] sm:py-0"
+        className="player-bar pointer-events-auto mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-3 py-2 sm:h-16 sm:flex-nowrap sm:gap-5 sm:px-[18px] sm:py-0"
       >
         {/* Что играет */}
         <div className="order-1 flex min-w-0 flex-1 items-center gap-3 sm:order-none sm:w-40 sm:flex-none lg:w-56">
