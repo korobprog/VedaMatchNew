@@ -51,6 +51,20 @@ export default async function AdminUserDetailPage({
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-2xl font-bold text-text-0">{profile.name}</h1>
             <p className="text-text-1">{profile.email}</p>
+            {/* Написать человеку прямо отсюда. API администрации это позволял
+                с самого начала — беседа заводится сразу активной, без запроса
+                на подтверждение (`isPortalStaff` в chat-conversations.service),
+                — но из админки не было ни одной ссылки, и чтобы ответить
+                новичку, приходилось искать его в справочнике и слать запрос
+                доступа наравне со всеми. */}
+            {currentUser.id !== profile.id && (
+              <Link
+                href={`/chat/with/${profile.id}`}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-glass-brd px-3 py-1.5 text-sm font-medium text-text-1 transition-colors hover:text-text-0"
+              >
+                Написать в чат
+              </Link>
+            )}
             <div className="mt-3 flex flex-wrap gap-2">
               <Badge>{roleLabels[profile.role]}</Badge>
               {profile.spiritualStage && <Badge>{stageLabels[profile.spiritualStage]}</Badge>}
