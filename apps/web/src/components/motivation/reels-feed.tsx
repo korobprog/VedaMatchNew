@@ -12,6 +12,7 @@ import type {
 import { apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
 import { isLongQuote, splitQuoteAndExplanation } from "./quote-text";
+import { buildSpokenQuote, canSpeak, spokenLanguage } from "./speak-quote";
 import { ReportDialog } from "./report-dialog";
 import { SourceLink } from "./source-link";
 import {
@@ -25,6 +26,12 @@ import {
 } from "./reels";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+
+/**
+ * Насколько прячется кадр. Пять секунд из просьбы: меньше — не успеть
+ * дочитать длинную шлоку, больше — начинаешь думать, что картинка пропала.
+ */
+const HIDE_MEDIA_MS = 5_000;
 
 export type ReelsTab = "forYou" | "saved";
 
@@ -68,6 +75,14 @@ export function ReelsFeed({
   const [soundOn, setSoundOn] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Картинка спрятана на несколько секунд. Не «выключена совсем»: просьба
+   * была именно на пять секунд — убрать кадр, чтобы остаться с цитатой, и
+   * получить его обратно, ничего больше не нажимая.
+   */
+  const [mediaHidden, setMediaHidden] = useState(false);
+  /** Что читает голос сейчас. `null` — молчит. */
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const slidesRef = useRef<Slide[]>([]);
   const viewedRef = useRef<Set<string>>(new Set());
@@ -101,8 +116,54 @@ export function ReelsFeed({
   // так setState не каскадирует, а момент тот же — человек долистал до конца.
   function activate(index: number) {
     setActiveIndex(index);
+    // Свайп отменяет и то, и другое: спрятанный кадр относился к прошлому
+    // слайду, а голос, продолжающий читать вчерашнюю цитату поверх новой,
+    // читается как поломка.
+    setMediaHidden(false);
+    stopSpeaking();
     if (shouldLoadMore(index, items.length, Boolean(cursor))) void loadMore();
   }
+
+  /* Показать кадр обратно самим — за этим и шли: «на пять секунд», а не
+     «выключить». Таймер живёт в эффекте, а не в setTimeout по нажатию, чтобы
+     уход со слайда его снимал. */
+  useEffect(() => {
+    if (!mediaHidden) return;
+    const timer = window.setTimeout(
+      () => setMediaHidden(false),
+      HIDE_MEDIA_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [mediaHidden]);
+
+  const stopSpeaking = useCallback(() => {
+    if (canSpeak()) window.speechSynthesis.cancel();
+    setSpeakingId(null);
+  }, []);
+
+  /* Читает браузер, а не сервер: голос устройства бесплатен, работает без
+     сети и говорит тем же голосом, к которому человек привык в остальных
+     приложениях. Синтез на стороне API стоил бы денег на каждое нажатие. */
+  const toggleSpeak = useCallback(() => {
+    const post = items[activeIndex];
+    if (!post || !canSpeak()) return;
+    if (speakingId === post.id) {
+      stopSpeaking();
+      return;
+    }
+    const text = buildSpokenQuote(post);
+    if (!text) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = spokenLanguage(text);
+    utterance.onend = () => setSpeakingId(null);
+    utterance.onerror = () => setSpeakingId(null);
+    window.speechSynthesis.speak(utterance);
+    setSpeakingId(post.id);
+  }, [activeIndex, items, speakingId, stopSpeaking]);
+
+  // Уход со страницы не должен оставлять голос говорить в пустоту.
+  useEffect(() => stopSpeaking, [stopSpeaking]);
 
   // Просмотр: активный слайд, продержавшийся положенное время. Один раз на
   // пост за сессию — повторные пролистывания сервер и так не учитывает.
@@ -162,6 +223,15 @@ export function ReelsFeed({
   }
 
   const activePost = items[activeIndex] ?? null;
+  /* Читаем возможность синтеза эффектом, а не при первом рендере: на сервере
+     `window` нет, и кнопка на разметке сервера разошлась бы с клиентской. */
+  const [speechAvailable, setSpeechAvailable] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- см. выше:
+    // на сервере ответа на этот вопрос нет, и любой другой способ даёт
+    // расхождение гидратации.
+    setSpeechAvailable(canSpeak());
+  }, []);
 
 
   async function toggleLike() {
@@ -284,6 +354,7 @@ export function ReelsFeed({
               position={position}
               active={slide.index === activeIndex}
               soundOn={soundOn}
+              mediaHidden={mediaHidden && slide.index === activeIndex}
               onActive={() => activate(slide.index)}
             />
           );
@@ -320,6 +391,39 @@ export function ReelsFeed({
           >
             <ShareIcon />
           </RailButton>
+          {/* Убрать кадр и остаться с цитатой. Кнопка есть только у фото: в
+              ролике подпись вшита в сам кадр, и спрятать его значит спрятать
+              и текст — то есть ровно то, ради чего кнопку нажимают. */}
+          {mediaKindOf(activePost) === "image" && (
+            <RailButton
+              label={
+                mediaHidden
+                  ? "Показать картинку"
+                  : "Скрыть картинку на пять секунд"
+              }
+              pressed={mediaHidden}
+              caption={mediaHidden ? "Вернуть" : "Скрыть"}
+              onClick={() => setMediaHidden((value) => !value)}
+            >
+              <EyeOffIcon />
+            </RailButton>
+          )}
+          {/* Читает браузер. Кнопки нет там, где синтеза речи нет вовсе:
+              молчащая кнопка хуже её отсутствия. */}
+          {speechAvailable && (
+            <RailButton
+              label={
+                speakingId === activePost.id
+                  ? "Остановить чтение"
+                  : "Озвучить цитату"
+              }
+              pressed={speakingId === activePost.id}
+              caption={speakingId === activePost.id ? "Молчать" : "Озвучить"}
+              onClick={toggleSpeak}
+            >
+              <SpeakIcon />
+            </RailButton>
+          )}
           <Link
             href="/motivation/create"
             aria-label="Создать свой рилс"
@@ -383,12 +487,15 @@ function ReelSlide({
   position,
   active,
   soundOn,
+  mediaHidden = false,
   onActive,
 }: {
   post: MotivationPostDto;
   position: number;
   active: boolean;
   soundOn: boolean;
+  /** Кадр спрятан на несколько секунд — остаётся цитата на ровном фоне. */
+  mediaHidden?: boolean;
   onActive: () => void;
 }) {
   const ref = useRef<HTMLElement>(null);
@@ -528,6 +635,21 @@ function ReelSlide({
           className="absolute inset-0 h-full w-full object-cover"
         />
       )}
+      {/* Занавес на время «скрыть картинку». Поверх кадра, а не вместо него:
+          картинка остаётся загруженной, и через пять секунд она проявляется
+          без второго запроса к хранилищу.
+
+          Чёрный, а не `--vm-bg-0`: текст ленты белый при любой теме — он
+          всегда лежит на фотографии, — и на светлом фоне цитата исчезла бы
+          вместе с картинкой. Тот же довод, что у `bg-black/45` под кнопками
+          поверх кадра. */}
+      {mediaHidden && kind === "image" && (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 z-[6] bg-black/95 transition-opacity"
+        />
+      )}
+
       {/* Подложка под текст. У ролика подпись вшита в кадр и уже стоит на своей
           подложке — наш слой лежал бы поверх неё и глушил белый до серого,
           поэтому для видео затемняем только край под чипами и шапкой. */}
@@ -813,6 +935,25 @@ function StarIcon({ filled }: { filled: boolean }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
       <path d="M12 3.5l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17.5l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" />
+      <path d="M4 4l16 16" />
+    </svg>
+  );
+}
+
+function SpeakIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 5L6 9H3v6h3l5 4z" />
+      <path d="M16 8.5a4.5 4.5 0 0 1 0 7" />
+      <path d="M19 5.5a8.5 8.5 0 0 1 0 13" />
     </svg>
   );
 }
