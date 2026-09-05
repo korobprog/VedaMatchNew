@@ -128,6 +128,17 @@ export function NotificationList() {
         </section>
       )}
 
+      {/* Уведомление живёт неделю и исчезает — а новости разработки
+          остаются. Отсюда единственный путь к ним, кроме набранного руками
+          адреса. */}
+      <p className="text-sm text-text-2">
+        Объявления и новости разработки целиком —{" "}
+        <Link href="/updates/news" className="text-cyan hover:text-magenta">
+          в разделе «Что нового»
+        </Link>
+        .
+      </p>
+
       {read.length > 0 && (
         <section aria-label="Прочитанные">
           <h2 className="mb-3 text-sm font-semibold text-text-2">Прочитанное</h2>
@@ -172,6 +183,15 @@ function NotificationCard({
             {formatWhen(item.createdAt)}
           </span>
         </span>
+        {/* Ярлык «От администрации»: у остальных категорий отправитель ясен
+            из самого текста («вам ответили», «заявка принята»), а
+            объявление портала приходит ниоткуда, и понять, кто его прислал,
+            по значку в углу не выходило. */}
+        {item.category === "announcements" && (
+          <span className="mt-1 inline-flex rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-[11px] font-medium text-gold">
+            От администрации
+          </span>
+        )}
         <span className="mt-1 block text-sm text-text-1">{item.body}</span>
       </span>
     </Link>

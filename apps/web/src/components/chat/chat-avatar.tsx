@@ -66,6 +66,9 @@ export function ChatAvatar({
           src={user.avatarUrl}
           alt=""
           style={box}
+          // Без него Google отдаёт 403 на фотографию профиля: в списке бесед
+          // часть аватаров просто не появлялась.
+          referrerPolicy="no-referrer"
           className="rounded-full object-cover"
         />
       ) : (
