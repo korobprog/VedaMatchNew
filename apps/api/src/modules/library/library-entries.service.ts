@@ -627,21 +627,28 @@ export class LibraryEntriesService {
    * чтение и только подпись.
    */
   async communityFacets(): Promise<LibraryCommunityFacet[]> {
-    const rows = await this.prisma.community.findMany({
-      where: { libraryEntries: { some: { status: 'published' } } },
-      select: {
-        id: true,
-        slug: true,
-        name: true,
-        _count: { select: { libraryEntries: true } },
-      },
+    /* Считаем по записям, а не `_count` у общины: там счётчик взял бы и
+       снятые с публикации, и рядом с фильтром стояло бы число, которого он
+       не находит. */
+    const counts = await this.prisma.libraryEntry.groupBy({
+      by: ['communityId'],
+      where: { status: 'published', communityId: { not: null } },
+      _count: { _all: true },
+    });
+    if (counts.length === 0) return [];
+
+    const communities = await this.prisma.community.findMany({
+      where: { id: { in: counts.map((row) => row.communityId as string) } },
+      select: { id: true, slug: true, name: true },
       orderBy: { name: 'asc' },
     });
-    return rows.map((row) => ({
-      id: row.id,
-      slug: row.slug,
-      name: row.name,
-      entriesCount: row._count.libraryEntries,
+    const byId = new Map(counts.map((row) => [row.communityId, row._count._all]));
+
+    return communities.map((community) => ({
+      id: community.id,
+      slug: community.slug,
+      name: community.name,
+      entriesCount: byId.get(community.id) ?? 0,
     }));
   }
 

@@ -1118,6 +1118,43 @@ describe('LibraryEntriesService — организационная принад�
     ).resolves.toBeDefined();
   });
 
+  it('в фильтр попадают только общины с опубликованным, и число — по нему', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.groupBy = jest
+      .fn()
+      .mockResolvedValue([{ communityId: 'community-1', _count: { _all: 3 } }]);
+    prisma.community = {
+      findMany: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 'community-1', slug: 'moscow', name: 'Москва' },
+        ]),
+    };
+    const { service } = build(true, prisma);
+
+    const facets = await service.communityFacets();
+
+    // Число считается по записям, а не по связи у общины: иначе рядом с
+    // фильтром стояло бы количество, которого он не находит.
+    const groupBy = prisma.libraryEntry.groupBy.mock.calls[0][0] as {
+      where: Record<string, unknown>;
+    };
+    expect(groupBy.where).toMatchObject({ status: 'published' });
+    expect(facets).toEqual([
+      { id: 'community-1', slug: 'moscow', name: 'Москва', entriesCount: 3 },
+    ]);
+  });
+
+  it('пустой каталог не ходит за справочником общин', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.groupBy = jest.fn().mockResolvedValue([]);
+    prisma.community = { findMany: jest.fn() };
+    const { service } = build(true, prisma);
+
+    expect(await service.communityFacets()).toEqual([]);
+    expect(prisma.community.findMany).not.toHaveBeenCalled();
+  });
+
   it('фильтрует ленту по общине', async () => {
     const { service, prisma } = build();
 
