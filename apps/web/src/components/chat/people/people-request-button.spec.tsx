@@ -191,4 +191,47 @@ describe("PeopleRequestButton", () => {
       ),
     );
   });
+
+  it("администрации даёт написать сразу, без запроса доступа", async () => {
+    render(
+      <PeopleRequestButton
+        userId="user-2"
+        viewerId="admin-1"
+        viewerIsStaff
+        contacts={null}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("link", { name: "Написать в чат" }),
+    ).toHaveAttribute("href", "/chat/with/user-2");
+    // Форма запроса при этом не нужна: беседа откроется и без согласия.
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("но контакты человека администрации не раскрывает", async () => {
+    render(
+      <PeopleRequestButton
+        userId="user-2"
+        viewerId="admin-1"
+        viewerIsStaff
+        contacts={null}
+      />,
+    );
+
+    // Право писать и право видеть телефон — разные вещи.
+    expect(
+      await screen.findByText(/Контакты человека при этом остаются закрытыми/),
+    ).toBeInTheDocument();
+  });
+
+  it("обычному участнику ничего лишнего не обещает", async () => {
+    render(
+      <PeopleRequestButton userId="user-2" viewerId="user-1" contacts={null} />,
+    );
+
+    // Дожидаемся загрузки списка запросов, иначе проверяем пустой экран.
+    await screen.findByRole("button", { name: /Запросить/i });
+    expect(screen.queryByText(/Написать без запроса/)).not.toBeInTheDocument();
+  });
 });
