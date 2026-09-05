@@ -27,6 +27,7 @@ export function CategoryNavigator({
   tree,
   activeSlug,
   canOrganize,
+  root = false,
 }: {
   locale: LibraryLocale;
   /** Рубрики текущего уровня — корни либо дети открытой рубрики. */
@@ -34,6 +35,8 @@ export function CategoryNavigator({
   tree: LibraryCategoryTreeNode[];
   activeSlug?: string;
   canOrganize: boolean;
+  /** Показываем верхний уровень портала: полоса рисует его крупно. */
+  root?: boolean;
 }) {
   const [organizing, setOrganizing] = useState(false);
 
@@ -43,6 +46,7 @@ export function CategoryNavigator({
         categories={categories}
         locale={locale}
         activeSlug={activeSlug}
+        root={root}
       />
     );
   }
@@ -68,6 +72,7 @@ export function CategoryNavigator({
           categories={categories}
           locale={locale}
           activeSlug={activeSlug}
+          root={root}
         />
       )}
     </div>

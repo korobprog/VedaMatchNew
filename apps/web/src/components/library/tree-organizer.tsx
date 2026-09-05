@@ -6,12 +6,14 @@ import {
   ChevronRight,
   GripVertical,
   CornerUpRight,
+  Pencil,
   Trash2,
   X,
 } from "lucide-react";
 import type { LibraryCategoryTreeNode, LibraryLocale } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { categoryCountLabel, pickLocalized, t } from "./i18n";
+import { CategoryEditForm } from "./category-edit-form";
 import {
   applyMove,
   categoryCounter,
@@ -20,6 +22,7 @@ import {
   isNoopMove,
   projectDrop,
   removeFromTree,
+  renameInTree,
   subtreeIds,
   withoutSubtree,
   type DropTarget,
@@ -76,9 +79,24 @@ export function LibraryTreeOrganizer({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [drag, setDrag] = useState<DragState | null>(null);
   const [picking, setPicking] = useState<string | null>(null);
+  /* Какую рубрику переименовываем. Карандаш ушёл сюда с плиток верхнего
+     уровня: там он занимал место под названием, а завести корневую рубрику
+     всё равно может только администрация — то есть тот, у кого этот режим и
+     так открыт. */
+  const [renaming, setRenaming] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const rows = useMemo(() => flattenTree(tree, collapsed), [tree, collapsed]);
+
+  /* Свёрнутая ветка выпадает из `rows`, а переименование могло начаться до
+     сворачивания — ищем по дереву, а не по видимым строкам. */
+  const renamingRow = useMemo(
+    () =>
+      renaming
+        ? (flattenTree(tree).find((row) => row.id === renaming) ?? null)
+        : null,
+    [renaming, tree],
+  );
 
   const target: DropTarget | null = useMemo(() => {
     if (!drag?.moved) return null;
@@ -386,6 +404,20 @@ export function LibraryTreeOrganizer({
                 {categoryCounter(row.node).value}
               </span>
 
+              {row.node.canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setRenaming(row.id)}
+                  aria-label={`${t(locale, "category.edit")}: ${pickLocalized(
+                    locale,
+                    { ru: row.node.titleRu, en: row.node.titleEn },
+                  )}`}
+                  className="grid h-11 w-9 shrink-0 place-items-center text-text-2 hover:text-text-0"
+                >
+                  <Pencil aria-hidden className="h-4 w-4" />
+                </button>
+              )}
+
               {row.node.canMove && (
                 <button
                   type="button"
@@ -426,6 +458,29 @@ export function LibraryTreeOrganizer({
             void commit(picking, { parentId, beforeId: null, depth: 0 });
           }}
         />
+      )}
+
+      {/* Форма переименования — панелью под деревом, а не в строке: строки
+          здесь ровно по 48 пикселей, по ним считается жест перетаскивания, и
+          раскрывшаяся посреди списка форма сбила бы прицел у соседних. Там
+          же, где живёт шторка «Переместить в…». */}
+      {renamingRow && (
+        <div className="mt-2 flex justify-center">
+          <CategoryEditForm
+            locale={locale}
+            category={renamingRow.node}
+            open
+            onClose={() => setRenaming(null)}
+            onSaved={(updated) => {
+              setRenaming(null);
+              // Дерево здесь ведёт этот компонент, и `router.refresh()` из
+              // формы до него не доходит: состояние заведено от пропа один
+              // раз. Без этой замены рубрика оставалась бы со старым именем
+              // до выхода из режима.
+              setTree((current) => renameInTree(current, updated));
+            }}
+          />
+        </div>
       )}
 
       {notice && (

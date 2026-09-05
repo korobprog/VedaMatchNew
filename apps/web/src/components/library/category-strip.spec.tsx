@@ -87,4 +87,61 @@ describe("CategoryStrip", () => {
       screen.queryByRole("button", { name: "Редактировать категорию" }),
     ).not.toBeInTheDocument();
   });
+
+  describe("верхний уровень", () => {
+    it("освобождает плитку: ни карандаша, ни значка у числа", () => {
+      const { container } = render(
+        <CategoryStrip
+          locale="ru"
+          root
+          categories={[category({ canEdit: true, childrenCount: 4 })]}
+        />,
+      );
+
+      expect(
+        screen.queryByRole("button", { name: "Редактировать категорию" }),
+      ).not.toBeInTheDocument();
+      // Карандаш, папка и лист — всё это svg внутри плитки.
+      expect(container.querySelector("svg")).toBeNull();
+    });
+
+    it("называет число словами: без значка «4» ничего не значит", () => {
+      render(
+        <CategoryStrip
+          locale="ru"
+          root
+          categories={[category({ childrenCount: 4 })]}
+        />,
+      );
+
+      expect(screen.getByText("4 подраздела")).toBeInTheDocument();
+    });
+
+    it("рисует название прописными — чтобы уровень был виден", () => {
+      render(
+        <CategoryStrip locale="ru" root categories={[category({})]} />,
+      );
+
+      expect(
+        screen.getByRole("link", { name: "Проповедники" }).className,
+      ).toContain("uppercase");
+    });
+
+    it("подраздел остаётся как был: строчными, со значком и карандашом", () => {
+      render(
+        <CategoryStrip
+          locale="ru"
+          categories={[category({ canEdit: true, childrenCount: 4 })]}
+        />,
+      );
+
+      expect(
+        screen.getByRole("link", { name: "Проповедники" }).className,
+      ).not.toContain("uppercase");
+      expect(
+        screen.getByRole("button", { name: "Редактировать категорию" }),
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText("Подразделов внутри: 4")).toBeInTheDocument();
+    });
+  });
 });

@@ -3,7 +3,12 @@ import { FileText, FolderTree } from "lucide-react";
 import type { LibraryCategoryDto, LibraryLocale } from "@vedamatch/shared";
 import { CategoryEditForm } from "./category-edit-form";
 import { categoryCounter } from "./category-tree";
-import { categoryCountLabel, pickLocalized, t } from "./i18n";
+import {
+  categoryCountLabel,
+  categoryPageSummary,
+  pickLocalized,
+  t,
+} from "./i18n";
 
 /**
  * Рубрики одного уровня — сеткой, а не лентой: их немного, и все должны
@@ -12,15 +17,24 @@ import { categoryCountLabel, pickLocalized, t } from "./i18n";
  * Чипы здесь только открывают. Перетаскивание живёт в отдельном режиме
  * «Упорядочить»: чип — ссылка, и совмещать на нём «открыть», «переставить»
  * и «вложить» значит промахиваться мимо двух намерений из трёх.
+ *
+ * Верхний уровень выглядит иначе, чем вложенный: прописными и крупнее, без
+ * значков и без карандаша. Экраны раздела и подраздела отличались только
+ * содержимым плиток, и, пролистав на два уровня вниз, человек не понимал, на
+ * какой глубине он стоит. Разница в начертании отвечает на это до того, как
+ * вопрос задан.
  */
 export function CategoryStrip({
   categories,
   locale,
   activeSlug,
+  root = false,
 }: {
   categories: LibraryCategoryDto[];
   locale: LibraryLocale;
   activeSlug?: string;
+  /** Верхний уровень портала — рубрики на `/library`, а не дети открытой. */
+  root?: boolean;
 }) {
   if (categories.length === 0) return null;
 
@@ -48,41 +62,54 @@ export function CategoryStrip({
             <Link
               href={`/library/${category.slug}`}
               aria-current={active ? "page" : undefined}
-              className={`block truncate font-medium transition-colors ${
-                active ? "text-text-0" : "text-text-1 hover:text-text-0"
-              }`}
+              className={`block truncate transition-colors ${
+                root
+                  ? "font-display text-[15px] font-bold uppercase tracking-[0.02em]"
+                  : "font-medium"
+              } ${active ? "text-text-0" : "text-text-1 hover:text-text-0"}`}
             >
               {pickLocalized(locale, {
                 ru: category.titleRu,
                 en: category.titleEn,
               })}
             </Link>
-            <div className="flex items-center justify-between gap-2">
-              {/* Значок стоит вплотную к числу, а не у названия: он и есть
-                  единица измерения. Папка — подразделы, лист — материалы;
-                  «4» без него одинаково читается и так, и так. Полная
-                  подпись уходит в `aria-label` и во всплывающую. */}
-              <span
-                aria-label={counterLabel}
-                title={counterLabel}
-                className="flex shrink-0 items-center gap-1 font-mono text-xs text-text-2"
-              >
-                {counter.kind === "children" ? (
-                  <FolderTree aria-hidden className="h-3.5 w-3.5" />
-                ) : (
-                  <FileText aria-hidden className="h-3.5 w-3.5" />
-                )}
-                {counter.value}
+            {root ? (
+              /* Число словами, а не значком с цифрой: значок убран по просьбе
+                 освободить плитку, а «4» без него одинаково читается и как
+                 четыре подраздела, и как четыре материала. Формулировка та
+                 же, что в строке под названием на странице рубрики — одно
+                 число не должно называться в двух местах по-разному. */
+              <span className="truncate text-xs text-text-2">
+                {categoryPageSummary(locale, category)}
               </span>
-              {/* Без обёртки в absolute: раньше форма редактирования, открываясь,
-                  наследовала «right-2 top-2» от кнопки-триггера и растягивалась
-                  поверх соседних плиток — её собственный `max-w-full`
-                  (category-edit-form.tsx) не мог сработать без родителя
-                  нормального потока, у которого есть реальная ширина. */}
-              {category.canEdit && (
-                <CategoryEditForm locale={locale} category={category} />
-              )}
-            </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                {/* Значок стоит вплотную к числу, а не у названия: он и есть
+                    единица измерения. Папка — подразделы, лист — материалы;
+                    «4» без него одинаково читается и так, и так. Полная
+                    подпись уходит в `aria-label` и во всплывающую. */}
+                <span
+                  aria-label={counterLabel}
+                  title={counterLabel}
+                  className="flex shrink-0 items-center gap-1 font-mono text-xs text-text-2"
+                >
+                  {counter.kind === "children" ? (
+                    <FolderTree aria-hidden className="h-3.5 w-3.5" />
+                  ) : (
+                    <FileText aria-hidden className="h-3.5 w-3.5" />
+                  )}
+                  {counter.value}
+                </span>
+                {/* Без обёртки в absolute: раньше форма редактирования, открываясь,
+                    наследовала «right-2 top-2» от кнопки-триггера и растягивалась
+                    поверх соседних плиток — её собственный `max-w-full`
+                    (category-edit-form.tsx) не мог сработать без родителя
+                    нормального потока, у которого есть реальная ширина. */}
+                {category.canEdit && (
+                  <CategoryEditForm locale={locale} category={category} />
+                )}
+              </div>
+            )}
           </div>
         );
       })}

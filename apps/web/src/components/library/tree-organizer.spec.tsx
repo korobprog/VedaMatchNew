@@ -401,3 +401,47 @@ describe("LibraryTreeOrganizer — удаление", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("LibraryTreeOrganizer — переименование", () => {
+  it("правит название прямо в режиме упорядочивания", async () => {
+    const user = userEvent.setup();
+    setup();
+
+    await user.click(
+      screen.getByRole("button", { name: "Редактировать категорию: Музыка" }),
+    );
+
+    expect(
+      screen.getByText("Редактировать категорию: Музыка"),
+    ).toBeInTheDocument();
+  });
+
+  it("переименованная строка обновляется, не дожидаясь перезагрузки", async () => {
+    const user = userEvent.setup();
+    const [, music] = tree();
+    setup();
+
+    await user.click(
+      screen.getByRole("button", { name: "Редактировать категорию: Музыка" }),
+    );
+    const field = screen.getByLabelText("Название по-русски");
+    await user.clear(field);
+    await user.type(field, "Киртаны");
+    apiFetch.mockResolvedValueOnce(ok({ ...music, titleRu: "Киртаны" }));
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    // Дерево ведёт сам компонент: без замены в состоянии строка осталась бы
+    // «Музыкой» до выхода из режима.
+    expect(await screen.findByText("Киртаны")).toBeInTheDocument();
+    expect(screen.queryByText("Музыка")).not.toBeInTheDocument();
+  });
+
+  it("без права правки карандаша нет", () => {
+    const readOnly = tree().map((root) => ({ ...root, canEdit: false }));
+    render(<LibraryTreeOrganizer locale="ru" initialTree={readOnly} />);
+
+    expect(
+      screen.queryByRole("button", { name: "Редактировать категорию: Музыка" }),
+    ).not.toBeInTheDocument();
+  });
+});

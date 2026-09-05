@@ -70,6 +70,7 @@ export default async function LibraryPage({
           categories={roots}
           tree={roots}
           canOrganize={roots.some((root) => root.canMove)}
+          root
         />
         <EntryFilters locale={locale} categories={[]} />
 
