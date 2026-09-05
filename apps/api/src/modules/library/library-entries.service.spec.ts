@@ -30,6 +30,7 @@ function entryRecord(overrides: Record<string, unknown> = {}) {
     commentsCount: 0,
     publishedAt: NOW,
     addedBy: { id: 'user-1', name: 'Тест' },
+    community: null,
     categories: [],
     ...overrides,
   };
@@ -45,9 +46,15 @@ function prismaMock(overrides: Record<string, unknown> = {}) {
     count: jest.fn().mockResolvedValue(0),
     create: jest.fn().mockResolvedValue(entryRecord()),
     update: jest.fn().mockResolvedValue(entryRecord()),
+    // Список общин для фильтра считается через groupBy по самим записям.
+    groupBy: jest.fn().mockResolvedValue([]),
   };
   return {
     libraryEntry,
+    // Портальная модель, доступная сервису на чтение: из неё берётся подпись
+    // общины. Заведена здесь, а не дописывается в тестах: дописанное свойство
+    // не проходит проверку типов, и `tsc` со спеками падал бы на нём.
+    community: { findMany: jest.fn().mockResolvedValue([]) },
     libraryCategory: {
       findMany: jest.fn().mockResolvedValue([{ id: 'category-1' }]),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -112,6 +119,14 @@ function categoriesMock() {
   return { subtreeIds: jest.fn().mockResolvedValue(['category-1']) };
 }
 
+/**
+ * От справочника общин сервису нужно одно: можно ли этому человеку писать от
+ * имени общины. По умолчанию — можно; тесты про отказ переопределяют.
+ */
+function communitiesMock(canPostAs = true) {
+  return { canPostAs: jest.fn().mockResolvedValue(canPostAs) };
+}
+
 describe('LibraryEntriesService.create', () => {
   it('rejects an overlong url before database access', async () => {
     const prisma = prismaMock();
@@ -120,6 +135,7 @@ describe('LibraryEntriesService.create', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -138,6 +154,7 @@ describe('LibraryEntriesService.create', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -152,6 +169,7 @@ describe('LibraryEntriesService.create', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -166,6 +184,7 @@ describe('LibraryEntriesService.create', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -184,6 +203,7 @@ describe('LibraryEntriesService.create', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -208,6 +228,7 @@ describe('LibraryEntriesService.create', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -234,6 +255,7 @@ describe('LibraryEntriesService.create', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -261,6 +283,7 @@ describe('LibraryEntriesService.create', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -281,6 +304,7 @@ describe('LibraryEntriesService.create', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -296,6 +320,7 @@ describe('LibraryEntriesService.create', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -323,6 +348,7 @@ describe('LibraryEntriesService.create', () => {
       previews as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -348,6 +374,7 @@ describe('LibraryEntriesService.create', () => {
       previews as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -364,6 +391,7 @@ describe('LibraryEntriesService.create', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -381,6 +409,7 @@ describe('LibraryEntriesService.feed', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -412,6 +441,7 @@ describe('LibraryEntriesService.feed', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -428,6 +458,7 @@ describe('LibraryEntriesService.feed', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -449,6 +480,7 @@ describe('LibraryEntriesService canEdit', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -467,6 +499,7 @@ describe('LibraryEntriesService canEdit', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -485,6 +518,7 @@ describe('LibraryEntriesService canEdit', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -536,6 +570,7 @@ describe('LibraryEntriesService.update', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -564,6 +599,7 @@ describe('LibraryEntriesService.update', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
     // Первый findUnique — сама запись, второй — поиск дубля по новому адресу.
@@ -600,6 +636,7 @@ describe('LibraryEntriesService.update', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -626,6 +663,7 @@ describe('LibraryEntriesService.update', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -644,6 +682,7 @@ describe('LibraryEntriesService.update', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -664,6 +703,7 @@ describe('LibraryEntriesService.update', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -688,6 +728,7 @@ describe('LibraryEntriesService.update', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -706,6 +747,7 @@ describe('LibraryEntriesService.update', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -741,6 +783,7 @@ describe('LibraryEntriesService.update', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -779,6 +822,7 @@ describe('LibraryEntriesService.uploadPreview', () => {
       previews as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -809,6 +853,7 @@ describe('LibraryEntriesService.uploadPreview', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -832,6 +877,7 @@ describe('LibraryEntriesService.uploadPreview', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -876,6 +922,7 @@ describe('LibraryEntriesService.remove', () => {
       previews as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -903,6 +950,7 @@ describe('LibraryEntriesService.remove', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -926,6 +974,7 @@ describe('LibraryEntriesService.remove', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
@@ -944,11 +993,200 @@ describe('LibraryEntriesService.remove', () => {
       previewsMock() as never,
       bookmarksMock() as never,
       categoriesMock() as never,
+      communitiesMock() as never,
       eventsMock() as never,
     );
 
     await expect(
       service.remove('user-1', true, 'entry-1'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('LibraryEntriesService — организационная принадлежность', () => {
+  /** Транзакция правки: сервис читает результат через findUniqueOrThrow. */
+  function updateTx(updated: Record<string, unknown> = entryRecord()) {
+    return {
+      libraryEntry: {
+        update: jest.fn().mockResolvedValue(undefined),
+        findUniqueOrThrow: jest.fn().mockResolvedValue(updated),
+      },
+      libraryEntryCategory: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      libraryCategory: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+  }
+
+  function build(canPostAs = true, prisma = prismaMock()) {
+    const communities = communitiesMock(canPostAs);
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communities as never,
+      eventsMock() as never,
+    );
+    return { service, prisma, communities };
+  }
+
+  it('пишет общину, когда право на это есть', async () => {
+    const { service, prisma, communities } = build();
+
+    await service.create(
+      'user-1',
+      validBody({ communityId: 'community-1' }) as never,
+    );
+
+    expect(communities.canPostAs).toHaveBeenCalledWith('user-1', 'community-1');
+    const create = prisma.libraryEntry.create.mock.calls[0][0] as {
+      data: { communityId: string | null };
+    };
+    expect(create.data.communityId).toBe('community-1');
+  });
+
+  it('отказывает, когда права писать от имени общины нет', async () => {
+    const { service, prisma } = build(false);
+
+    await expect(
+      service.create(
+        'user-1',
+        validBody({ communityId: 'community-1' }) as never,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.libraryEntry.create).not.toHaveBeenCalled();
+  });
+
+  it('без общины справочник не спрашивается вовсе', async () => {
+    const { service, communities } = build();
+
+    await service.create('user-1', validBody() as never);
+
+    expect(communities.canPostAs).not.toHaveBeenCalled();
+  });
+
+  it('перепроверяет право на правке: роль в общине могли снять', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValue(entryRecord());
+    const { service } = build(false, prisma);
+
+    await expect(
+      service.update('user-1', false, 'entry-1', {
+        communityId: 'community-1',
+      } as never),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.libraryEntry.update).not.toHaveBeenCalled();
+  });
+
+  it('не спрашивает право, когда подпись не менялась', async () => {
+    const signed = entryRecord({
+      community: { id: 'community-1', slug: 'moscow', name: 'Москва' },
+    });
+    const prisma = prismaMock({
+      $transaction: jest.fn((callback: (t: unknown) => unknown) =>
+        callback(updateTx(signed)),
+      ),
+    });
+    prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(signed);
+    const { service, communities } = build(false, prisma);
+
+    // Роль в общине сняли, но починить устаревшую подпись можно только
+    // правкой — той самой, которую отказ бы и запретил.
+    await service.update('user-1', false, 'entry-1', {
+      communityId: 'community-1',
+      titleRu: 'Другой заголовок',
+    } as never);
+
+    expect(communities.canPostAs).not.toHaveBeenCalled();
+  });
+
+  it('админ портала правит чужую подписанную карточку', async () => {
+    const prisma = prismaMock({
+      $transaction: jest.fn((callback: (t: unknown) => unknown) =>
+        callback(updateTx()),
+      ),
+    });
+    prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(entryRecord());
+    const { service } = build(false, prisma);
+
+    // Членом чужой общины админ не состоит, а разбирать очередь модерации
+    // должен — отказ здесь запирал бы сохранение чужой карточки.
+    await expect(
+      service.update('admin-1', true, 'entry-1', {
+        communityId: 'community-1',
+      } as never),
+    ).resolves.toBeDefined();
+  });
+
+  it('в фильтр попадают только общины с опубликованным, и число — по нему', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.groupBy.mockResolvedValue([
+      { communityId: 'community-1', _count: { _all: 3 } },
+    ]);
+    prisma.community.findMany.mockResolvedValue([
+      { id: 'community-1', slug: 'moscow', name: 'Москва' },
+    ]);
+    const { service } = build(true, prisma);
+
+    const facets = await service.communityFacets();
+
+    // Число считается по записям, а не по связи у общины: иначе рядом с
+    // фильтром стояло бы количество, которого он не находит.
+    const groupBy = prisma.libraryEntry.groupBy.mock.calls[0][0] as {
+      where: Record<string, unknown>;
+    };
+    expect(groupBy.where).toMatchObject({ status: 'published' });
+    expect(facets).toEqual([
+      { id: 'community-1', slug: 'moscow', name: 'Москва', entriesCount: 3 },
+    ]);
+  });
+
+  it('пустой каталог не ходит за справочником общин', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.groupBy.mockResolvedValue([]);
+    const { service } = build(true, prisma);
+
+    expect(await service.communityFacets()).toEqual([]);
+    expect(prisma.community.findMany).not.toHaveBeenCalled();
+  });
+
+  it('фильтрует ленту по общине', async () => {
+    const { service, prisma } = build();
+
+    await service.feed({ communityId: 'community-1' });
+
+    const args = prisma.libraryEntry.findMany.mock.calls[0][0] as {
+      where: Record<string, unknown>;
+    };
+    expect(args.where).toMatchObject({
+      status: 'published',
+      communityId: 'community-1',
+    });
+  });
+
+  it('отдаёт наружу общину, но автором оставляет человека', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findMany = jest.fn().mockResolvedValue([
+      entryRecord({
+        community: { id: 'community-1', slug: 'moscow', name: 'Москва' },
+      }),
+    ]);
+    const { service } = build(true, prisma);
+
+    const feed = await service.feed({});
+
+    expect(feed.items[0].community).toEqual({
+      id: 'community-1',
+      slug: 'moscow',
+      name: 'Москва',
+    });
+    // Разбирать жалобу всё равно придётся с человеком, а не с общиной.
+    expect(feed.items[0].addedBy?.id).toBe('user-1');
   });
 });

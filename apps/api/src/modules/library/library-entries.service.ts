@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   CreateLibraryEntryRequest,
+  LibraryCommunityFacet,
   LibraryDuplicateEntryConflict,
   LibraryEntryDto,
   LibraryEntryType,
@@ -18,6 +19,7 @@ import type {
 } from '@vedamatch/shared';
 import { PORTAL_ACTIVITY_EVENTS, resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CommunitiesService } from '../communities/communities.service';
 import {
   decodeCursor,
   encodeCursor,
@@ -69,6 +71,8 @@ export interface LibraryFeedFilters {
   cursor?: string;
   /** `'true'` — только избранное текущего пользователя. */
   bookmarked?: string;
+  /** Организационная принадлежность: материалы от имени этой общины. */
+  communityId?: string;
 }
 
 const ENTRY_SELECT = {
@@ -92,6 +96,10 @@ const ENTRY_SELECT = {
   commentsCount: true,
   publishedAt: true,
   addedBy: { select: { id: true, name: true, spiritualName: true } },
+  /* Одна из четырёх портальных моделей, читать которые сервису разрешено, —
+     см. docs/service-module-contract.md. Только чтение и только эти три поля:
+     подпись «от кого» и ссылка на общину. */
+  community: { select: { id: true, slug: true, name: true } },
   categories: {
     select: {
       category: {
@@ -113,8 +121,25 @@ export class LibraryEntriesService {
     private readonly previews: LibraryPreviewsService,
     private readonly bookmarks: LibraryBookmarksService,
     private readonly categories: LibraryCategoriesService,
+    private readonly communities: CommunitiesService,
     private readonly events: EventEmitter2,
   ) {}
+
+  /**
+   * Право подписать материал общиной.
+   *
+   * Спрашивается у справочника, а не проверяется копией правил внутри
+   * сервиса: право живёт в членстве, и вторая копия разошлась бы с ним на
+   * первой же смене роли.
+   */
+  private async assertCommunityRight(
+    userId: string,
+    communityId: string | null,
+  ) {
+    if (!communityId) return;
+    const allowed = await this.communities.canPostAs(userId, communityId);
+    if (!allowed) throw new ForbiddenException('community_not_allowed');
+  }
 
   async create(
     userId: string,
@@ -196,6 +221,9 @@ export class LibraryEntriesService {
       throw new BadRequestException('category_not_found');
     }
 
+    const communityId = body.communityId?.trim() || null;
+    await this.assertCommunityRight(userId, communityId);
+
     const language = normalizeLanguage(body.contentLanguage);
     // Обложку тянуть неоткуда, когда нет адреса.
     const previewUrl = normalized ? await resolvePreviewUrl(normalized.url) : null;
@@ -215,6 +243,7 @@ export class LibraryEntriesService {
           descriptionEn,
           previewUrl,
           addedById: userId,
+          communityId,
           // Без адреса обогащать нечего — иначе запись навсегда осталась бы
           // `pending` и числилась проблемной в админке.
           enrichmentStatus: normalized ? 'pending' : 'not_applicable',
@@ -358,6 +387,29 @@ export class LibraryEntriesService {
         throw new BadRequestException('unsupported_type');
       }
       data.type = body.type;
+    }
+    if (body.communityId !== undefined) {
+      const nextCommunityId = body.communityId?.trim() || null;
+      /* Спрашиваем право только когда подпись меняется, и не спрашиваем у
+         админа портала.
+
+         В Объявлениях право перепроверяется на любой правке. Здесь так
+         нельзя по двум причинам. Первая: админ правит чужие материалы из
+         очереди модерации, а членом их общины не состоит — сохранение чужой
+         карточки упиралось бы в отказ. Вторая: человек, у которого роль в
+         общине сняли, иначе не смог бы даже поправить опечатку, хотя
+         починить устаревшую подпись можно только правкой — как раз той,
+         которую отказ и запрещает.
+
+         Что при этом защищено: новую подпись без права поставить нельзя, и
+         это ровно то, ради чего проверка существует. */
+      const changed = nextCommunityId !== (existing.community?.id ?? null);
+      if (changed && !viewerIsAdmin) {
+        await this.assertCommunityRight(userId, nextCommunityId);
+      }
+      data.community = nextCommunityId
+        ? { connect: { id: nextCommunityId } }
+        : { disconnect: true };
     }
     if (body.contentLanguage !== undefined) {
       data.contentLanguage = normalizeLanguage(body.contentLanguage);
@@ -563,6 +615,43 @@ export class LibraryEntriesService {
     return toEntryDto(updated, false, userId, viewerIsAdmin);
   }
 
+  /**
+   * Общины, от имени которых в каталоге действительно что-то лежит.
+   *
+   * Не весь справочник: список организаций портала длиннее того, что успело
+   * попасть в Образование, и фильтр из сотни пунктов, где полтора рабочих,
+   * бесполезен. Здесь ровно те, по которым фильтр что-то найдёт.
+   *
+   * Прямое чтение `Community` — одна из четырёх портальных моделей, которые
+   * сервису разрешено читать (docs/service-module-contract.md). Только
+   * чтение и только подпись.
+   */
+  async communityFacets(): Promise<LibraryCommunityFacet[]> {
+    /* Считаем по записям, а не `_count` у общины: там счётчик взял бы и
+       снятые с публикации, и рядом с фильтром стояло бы число, которого он
+       не находит. */
+    const counts = await this.prisma.libraryEntry.groupBy({
+      by: ['communityId'],
+      where: { status: 'published', communityId: { not: null } },
+      _count: { _all: true },
+    });
+    if (counts.length === 0) return [];
+
+    const communities = await this.prisma.community.findMany({
+      where: { id: { in: counts.map((row) => row.communityId as string) } },
+      select: { id: true, slug: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    const byId = new Map(counts.map((row) => [row.communityId, row._count._all]));
+
+    return communities.map((community) => ({
+      id: community.id,
+      slug: community.slug,
+      name: community.name,
+      entriesCount: byId.get(community.id) ?? 0,
+    }));
+  }
+
   async feed(
     filters: LibraryFeedFilters,
     viewerId?: string,
@@ -580,6 +669,9 @@ export class LibraryEntriesService {
     }
     if (filters.language) {
       where.contentLanguage = normalizeLanguage(filters.language);
+    }
+    if (filters.communityId) {
+      where.communityId = filters.communityId;
     }
     // Рубрика фильтрует лентой всё своё поддерево: иначе вложение прятало бы
     // материалы — человек убирает рубрику внутрь другой и видит пустую
@@ -746,6 +838,13 @@ function toEntryDto(
     })),
     addedBy: entry.addedBy
       ? { id: entry.addedBy.id, name: resolveDisplayName(entry.addedBy) }
+      : null,
+    community: entry.community
+      ? {
+          id: entry.community.id,
+          slug: entry.community.slug,
+          name: entry.community.name,
+        }
       : null,
     canEdit:
       viewerIsAdmin || (Boolean(viewerId) && entry.addedBy?.id === viewerId),

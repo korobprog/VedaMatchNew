@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import type {
   LibraryCategoryDto,
+  LibraryCommunityFacet,
   LibraryEntryType,
   LibraryFeedSort,
   LibraryLocale,
@@ -28,11 +29,18 @@ const LANGUAGES = ["ru", "en"];
 export function EntryFilters({
   locale,
   categories,
+  communities = [],
   categoryBasePath,
   currentCategorySlug,
 }: {
   locale: LibraryLocale;
   categories: LibraryCategoryDto[];
+  /**
+   * Организации, от имени которых в каталоге что-то есть. Пустой список —
+   * значит ни один материал не выложен от имени общины, и выбирать не из
+   * чего: фильтр не рисуется вовсе.
+   */
+  communities?: LibraryCommunityFacet[];
   /**
    * Заданный на странице одной категории (`/library/[slug]`),
    * слаг категории — это сегмент пути, а не query. Смена значения в селекте
@@ -126,6 +134,24 @@ export function EntryFilters({
           ))}
         </select>
       </label>
+
+      {communities.length > 0 && (
+        <label className="text-sm text-text-1">
+          {t(locale, "filters.community")}
+          <select
+            className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+            value={params.get("communityId") ?? ""}
+            onChange={(event) => apply("communityId", event.target.value)}
+          >
+            <option value="">{t(locale, "filters.anyCommunity")}</option>
+            {communities.map((community) => (
+              <option key={community.id} value={community.id}>
+                {community.name} · {community.entriesCount}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <label className="text-sm text-text-1">
         {t(locale, "filters.sort")}

@@ -11,6 +11,7 @@ import type {
   UpdateLibraryEntryRequest,
 } from "@vedamatch/shared";
 import { CategoryPicker } from "./category-picker";
+import { LibraryCommunitySelect } from "./community-select";
 import { flattenTree, insertIntoTree, renameInTree } from "./category-tree";
 import { entryTypeLabel, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
@@ -196,6 +197,7 @@ function EntryFieldsForm({
   const [titleEn, setTitleEn] = useState(entry.titleEn ?? "");
   const [descriptionRu, setDescriptionRu] = useState(entry.descriptionRu ?? "");
   const [descriptionEn, setDescriptionEn] = useState(entry.descriptionEn ?? "");
+  const [communityId, setCommunityId] = useState(entry.community?.id ?? "");
   const [categories, setCategories] = useState(tree);
   // Рубрики материала берём из него самого: в дереве они лежат вперемешку по
   // веткам, и искать их обходом ради того же результата незачем.
@@ -275,6 +277,10 @@ function EntryFieldsForm({
       descriptionRu: descriptionRu.trim() || null,
       descriptionEn: descriptionEn.trim() || null,
       categoryIds: selected.map((item) => item.id),
+      // Всегда отправляем, даже когда не меняли: сервер перепроверяет право
+      // писать от имени общины на каждой правке, и молча оставленное поле
+      // продолжало бы говорить от её имени после снятия роли.
+      communityId: communityId || null,
     };
 
     setPending(true);
@@ -412,6 +418,13 @@ function EntryFieldsForm({
         onToggle={toggleCategory}
         onRenamed={handleCategoryRenamed}
         onCreated={handleCategoryCreated}
+      />
+
+      <LibraryCommunitySelect
+        locale={locale}
+        value={communityId}
+        onChange={setCommunityId}
+        disabled={pending}
       />
 
       {notice && (

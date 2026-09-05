@@ -11,6 +11,7 @@ import type {
   LibraryLocale,
 } from "@vedamatch/shared";
 import { CategoryPicker } from "./category-picker";
+import { LibraryCommunitySelect } from "./community-select";
 import { insertIntoTree, renameInTree } from "./category-tree";
 import { SectionRequestForm } from "./section-request-form";
 import { entryTypeLabel, pickLocalized, t, type LibraryTextKey } from "./i18n";
@@ -83,6 +84,7 @@ export function AddEntryWizard({
     descriptionRu: "",
     descriptionEn: "",
     categoryIds: [],
+    communityId: "",
   });
 
   function patch(next: Partial<LibraryEntryDraft>) {
@@ -368,6 +370,15 @@ export function AddEntryWizard({
               onCreated={handleCategoryCreated}
               initialParentSlug={initialCategorySlug}
               canCreateRoot={canCreateRoot}
+            />
+
+            {/* Рядом с рубриками, а не на первом шаге: и то и другое — про
+                «куда это относится», и спрашивать об этом дважды в разных
+                местах мастера незачем. */}
+            <LibraryCommunitySelect
+              locale={locale}
+              value={draft.communityId}
+              onChange={(communityId) => patch({ communityId })}
             />
 
             {/* Подходящей рубрики может не оказаться, а тупик посреди мастера

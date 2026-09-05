@@ -79,6 +79,8 @@ export interface LibraryEntryDraft {
   descriptionRu: string;
   descriptionEn: string;
   categoryIds: string[];
+  /** От имени какой общины. Пустая строка — от себя лично. */
+  communityId: string;
 }
 
 export type EntryLocator = "url" | "source";
@@ -142,6 +144,7 @@ export function buildCreateEntryBody(
     descriptionRu: draft.descriptionRu.trim() || null,
     descriptionEn: draft.descriptionEn.trim() || null,
     categoryIds: draft.categoryIds,
+    communityId: draft.communityId || null,
   };
 }
 
