@@ -286,7 +286,7 @@ export function MiniPlayer() {
             встаёт рядом с названием и оба сжимаются в ноль. Пустая полоска во
             всю ширину и нулевой высоты — единственный способ сказать это
             флексу. */}
-        <span aria-hidden="true" className="order-3 -mb-1.5 h-0 w-full sm:hidden" />
+        <span aria-hidden="true" className="order-3 h-0 w-full sm:hidden" />
 
         {/* Управление и дорожка.
             `contents` на телефоне: обёртка перестаёт быть коробкой, и кнопки

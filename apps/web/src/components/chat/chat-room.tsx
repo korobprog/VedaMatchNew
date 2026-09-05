@@ -291,7 +291,12 @@ export function ChatRoom({
 
   return (
     <div
-      className="flex h-[calc(100dvh-9rem)] flex-col"
+      /* Высота считается от окна, а не от потока, поэтому место под полосу
+         плеера приходится вычитать самим: `padding` на `body` такой
+         раскладке ничего не даёт, и поле ввода уходило под полосу — на
+         телефоне целиком. Переменную задаёт `globals.css` рядом с отступом,
+         и она же исчезает вместе с полосой. */
+      className="flex h-[calc(100dvh-9rem-var(--vm-player-space,0px))] flex-col"
       style={{ ...themeStyle, background: "var(--chat-bg, transparent)" }}
     >
       <header className="flex items-center gap-2.5 border-b border-glass-brd pb-3">
