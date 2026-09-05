@@ -34,18 +34,18 @@ export function SearchDialog({
         }),
       );
     } catch (searchError) {
-      setError(searchError instanceof Error ? searchError.message : "Search failed");
+      setError(searchError instanceof Error ? searchError.message : "Не удалось выполнить поиск");
     } finally {
       setSearching(false);
     }
   };
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Search downloaded books" className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+    <div role="dialog" aria-modal="true" aria-label="Поиск по скачанным книгам" className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
       <div className="reader-surface max-h-[80vh] w-full max-w-2xl overflow-auto rounded-2xl border p-5 shadow-xl">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Search downloaded books</h2>
-          <button type="button" onClick={onClose} aria-label="Close search">×</button>
+          <h2 className="text-lg font-semibold">Поиск по скачанным книгам</h2>
+          <button type="button" onClick={onClose} aria-label="Закрыть поиск">×</button>
         </div>
         <form
           className="mt-4 flex gap-2"
@@ -56,18 +56,18 @@ export function SearchDialog({
         >
           <input
             type="search"
-            aria-label="Search query"
+            aria-label="Поисковый запрос"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             className="reader-field min-w-0 flex-1 rounded-xl border px-3 py-2"
           />
           <button type="submit" disabled={searching || !query.trim()} className="rounded-xl bg-amber-600 px-4 py-2 text-white disabled:opacity-50">
-            Search
+            Найти
           </button>
         </form>
         <label className="mt-3 flex items-center gap-2 text-sm">
           <input type="checkbox" checked={onlyThisBook} onChange={(event) => setOnlyThisBook(event.target.checked)} />
-          Search only this book
+          Искать только в этой книге
         </label>
         {error && <p role="alert" className="reader-danger mt-3 text-sm">{error}</p>}
         <div className="mt-4 space-y-2">

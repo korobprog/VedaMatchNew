@@ -71,7 +71,7 @@ export function AnnotationToolbar({
       ? selectionToRange(window.getSelection(), root, bookSlug, chapterSlug)
       : null;
     const selected = range ?? lastSelection;
-    setSelectionError(selected ? null : "Select text inside one reader block first");
+    setSelectionError(selected ? null : "Сначала выделите текст внутри одного блока");
     return selected;
   };
 
@@ -97,7 +97,7 @@ export function AnnotationToolbar({
           }}
           className="reader-mark rounded-lg px-3 py-2 text-sm"
         >
-          Highlight selection
+          Выделить цветом
         </button>
         <button
           type="button"
@@ -122,7 +122,7 @@ export function AnnotationToolbar({
             if (!range) return;
             const text = (window.getSelection()?.toString() || lastText).trim();
             if (!text) {
-              setSelectionError("Select text inside one reader block first");
+              setSelectionError("Сначала выделите текст внутри одного блока");
               return;
             }
             if (text.length > MAX_REEL_TEXT) {
@@ -142,14 +142,14 @@ export function AnnotationToolbar({
       {(pendingRange || editingId) && (
         <div className="mt-3 space-y-2">
           <textarea
-            aria-label="Note text"
+            aria-label="Текст заметки"
             value={noteText}
             maxLength={20_000}
             onChange={(event) => setNoteText(event.target.value)}
             className="reader-field min-h-24 w-full rounded-xl border p-3"
           />
           <button type="button" onClick={saveNote} disabled={!noteText.trim()} className="rounded-lg bg-amber-600 px-3 py-2 text-sm text-white disabled:opacity-50">
-            Save note
+            Сохранить заметку
           </button>
         </div>
       )}
