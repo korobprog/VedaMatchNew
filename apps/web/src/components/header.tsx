@@ -19,6 +19,7 @@ import {
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { LogoutButton } from "@/components/logout-button";
 import { CartBadge } from "@/components/market/cart-badge";
+import { QuickPanel } from "@/components/quick/quick-panel";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
@@ -209,6 +210,10 @@ export function Header({ user }: { user: UserProfile }) {
                 CartBadge решает, показываться ли — рендерится только
                 когда в корзине что-то лежит, независимо от раздела. */}
             <CartBadge />
+            {/* Горячие кнопки — рядом с колокольчиком и корзиной, а не
+                плавающей кнопкой поверх страницы: снизу уже стоит полоса
+                плеера, а на Знакомствах ещё и своя нижняя панель. */}
+            <QuickPanel />
             <NotificationBell />
             <LocaleToggle className="hidden sm:flex" />
             <ThemeToggle className="hidden sm:flex" />
