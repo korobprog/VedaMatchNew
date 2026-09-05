@@ -71,7 +71,7 @@ export function SearchDialog({
         </label>
         {error && <p role="alert" className="reader-danger mt-3 text-sm">{error}</p>}
         <div className="mt-4 space-y-2">
-          {!searching && query.trim() && results.length === 0 && <p className="reader-muted text-sm">No local results</p>}
+          {!searching && query.trim() && results.length === 0 && <p className="reader-muted text-sm">Ничего не нашлось в скачанных книгах</p>}
           {results.map((result) => (
             <button
               key={`${result.bookSlug}:${result.chapterSlug}:${result.unitId}`}

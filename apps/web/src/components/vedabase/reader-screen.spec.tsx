@@ -314,7 +314,7 @@ describe("ReaderScreen", () => {
     selectText("block-unit-1-translationHtml", 0, 4);
     await user.click(screen.getByRole("button", { name: "Выделить цветом" }));
     selectText("block-unit-1-translationHtml", 5, 11);
-    await user.click(screen.getByRole("button", { name: "Add note to selection" }));
+    await user.click(screen.getByRole("button", { name: "Заметка к выделенному" }));
     await user.type(screen.getByLabelText("Текст заметки"), "Initial note");
     await user.click(screen.getByRole("button", { name: "Сохранить заметку" }));
 

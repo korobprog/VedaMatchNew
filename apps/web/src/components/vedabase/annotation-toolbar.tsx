@@ -112,7 +112,7 @@ export function AnnotationToolbar({
           }}
           className="reader-subtle rounded-lg px-3 py-2 text-sm"
         >
-          Add note to selection
+          Заметка к выделенному
         </button>
         <button
           type="button"
