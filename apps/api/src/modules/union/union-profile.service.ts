@@ -39,7 +39,10 @@ import type {
   UnionSpiritualEducation,
   UnionUserSummary,
 } from '@vedamatch/shared';
-import { resolveDisplayName } from '@vedamatch/shared';
+import {
+  STATUS_LINE_MAX_LENGTH,
+  resolveDisplayName,
+} from '@vedamatch/shared';
 import { calculateAge, MAX_PROFILE_AGE, MIN_PROFILE_AGE } from '../users/age';
 import { computeCompleteness } from './union-completeness';
 import { MotivationGenerationService } from '../motivation/motivation-generation.service';
@@ -69,7 +72,12 @@ const MAX_ITEM_LENGTH = 100;
 // Лимиты полей анкеты; веб дублирует их у себя в union-profile-form.tsx.
 export const UNION_MIN_HEIGHT_CM = 120;
 export const UNION_MAX_HEIGHT_CM = 230;
-export const UNION_MAX_STATUS_LENGTH = 120;
+/**
+ * Длина статуса при генерации. Совпадает с портальным пределом: статус живёт
+ * в профиле, и просить у модели больше, чем примет поле, значит обрезать
+ * ответ на сохранении.
+ */
+const UNION_MAX_STATUS_LENGTH = STATUS_LINE_MAX_LENGTH;
 // Мягкий предел для сгенерированного «О себе»: короче MAX_ABOUT_LENGTH,
 // чтобы черновик не разрастался в стену текста.
 const ABOUT_GENERATION_TARGET = 500;
@@ -140,13 +148,26 @@ const FAMILY_GENDER_RESTRICTION_THRESHOLD = 50;
  * портальном профиле, а Знакомства и справочник показывают одно и то же.
  * Поэтому анкета всегда читается вместе с ними.
  */
-type PortalAbout = { about: string | null; languages: string[] };
+type PortalAbout = {
+  about: string | null;
+  languages: string[];
+  statusLine: string | null;
+};
 type ProfileWithIntentions = UnionProfile & {
   intentions: UnionIntention[];
   user: PortalAbout;
 };
 
-const PORTAL_ABOUT_SELECT = { about: true, languages: true } as const;
+/**
+ * Портальные поля, которые Знакомства читают из `User`, а не держат своей
+ * копией: рассказ о себе, языки и статус. Статус переехал сюда последним —
+ * до этого он жил в анкете и был виден только в Знакомствах.
+ */
+const PORTAL_ABOUT_SELECT = {
+  about: true,
+  languages: true,
+  statusLine: true,
+} as const;
 /** Пожелания смотрящего к возрасту партнёра. */
 interface MyAgePreference {
   ageRangeMin: number | null;
@@ -316,7 +337,8 @@ export class UnionProfileService {
       if (profile.housing) lines.push(`Жилищные условия: ${profile.housing}`);
       if (profile.user.about)
         lines.push(`Уже написано о себе: ${profile.user.about}`);
-      if (profile.status) lines.push(`Текущий статус: ${profile.status}`);
+      if (profile.user.statusLine)
+        lines.push(`Текущий статус: ${profile.user.statusLine}`);
     }
     return lines.length > 0
       ? lines.join('\n')
@@ -650,7 +672,8 @@ export class UnionProfileService {
         skills: other.skills,
         interests: other.interests,
         values: other.values,
-        status: other.status,
+        // Статус портальный: анкета его больше не хранит.
+        status: other.user.statusLine,
         heightCm: other.heightCm,
         diet: other.diet,
         regulativePrinciples: other.regulativePrinciples,
@@ -1081,15 +1104,6 @@ export class UnionProfileService {
   ): Partial<Prisma.UnionProfileUncheckedCreateInput> {
     const data: Partial<Prisma.UnionProfileUncheckedCreateInput> = {};
 
-    if (body.status !== undefined) {
-      const status = body.status?.trim() || null;
-      if (status && status.length > UNION_MAX_STATUS_LENGTH) {
-        throw new BadRequestException(
-          `Статус не длиннее ${UNION_MAX_STATUS_LENGTH} символов`,
-        );
-      }
-      data.status = status;
-    }
     if (body.heightCm !== undefined) {
       data.heightCm = this.validateHeight(body.heightCm);
     }
@@ -1258,7 +1272,8 @@ export class UnionProfileService {
       interests: profile.interests,
       values: profile.values,
       familyStatus: profile.familyStatus,
-      status: profile.status,
+      // Статус портальный: анкета его больше не хранит.
+      status: profile.user.statusLine,
       heightCm: profile.heightCm,
       diet: profile.diet,
       regulativePrinciples: profile.regulativePrinciples,

@@ -4,6 +4,7 @@ import type {
   UnionRecommendation,
   UnionSwipeDecision,
 } from '@vedamatch/shared';
+import { STATUS_LINE_MAX_LENGTH } from '@vedamatch/shared';
 import { BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserGalleryService } from '../users/user-gallery.service';
@@ -1105,13 +1106,29 @@ describe('UnionProfileService', () => {
     }
   });
 
+  it('статус в анкету не пишется: он портальный', async () => {
+    profileUpsert.mockResolvedValue(profile('me'));
+    findSavedProfile.mockResolvedValue(profile('me'));
+
+    await service.upsertProfile('me', {
+      ...validProfileBody,
+      status: 'Харе Кришна',
+    } as never);
+
+    const upsertCall = profileUpsert.mock.calls[0] as unknown as [
+      { update: Record<string, unknown> },
+    ];
+    // Поле переехало в `User.statusLine`: анкета его больше не хранит, а
+    // присланное клиентом старой версии молча игнорируется.
+    expect(upsertCall[0].update).not.toHaveProperty('status');
+  });
+
   it('saves «О себе» fields that were sent', async () => {
     profileUpsert.mockResolvedValue(profile('me'));
     findSavedProfile.mockResolvedValue(profile('me'));
 
     await service.upsertProfile('me', {
       ...validProfileBody,
-      status: '  Харе Кришна  ',
       heightCm: 180,
       diet: 'vegetarian',
       regulativePrinciples: ['no_meat', 'no_meat', 'no_gambling'],
@@ -1123,7 +1140,6 @@ describe('UnionProfileService', () => {
       { update: Record<string, unknown> },
     ];
     expect(upsertCall[0].update).toMatchObject({
-      status: 'Харе Кришна',
       heightCm: 180,
       diet: 'vegetarian',
       regulativePrinciples: ['no_meat', 'no_gambling'],
@@ -1180,7 +1196,9 @@ describe('UnionProfileService', () => {
       string,
       number,
     ];
-    expect(maxLength).toBe(120);
+    // Предел один на портал: статус хранится в профиле, и просить у модели
+    // больше, чем примет поле, значит обрезать ответ на сохранении.
+    expect(maxLength).toBe(STATUS_LINE_MAX_LENGTH);
     expect(prompt).toContain('Духовный этап: devotee');
     expect(prompt).toContain('friendship (100%)');
   });

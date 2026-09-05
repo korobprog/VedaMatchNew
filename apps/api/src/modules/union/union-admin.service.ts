@@ -111,7 +111,8 @@ export class UnionAdminService {
       ...base,
       about: row.user.about,
       gender: row.user.gender,
-      status: row.status,
+      // Статус портальный: анкета его больше не хранит.
+      status: row.user.statusLine,
       format: row.format,
       languages: row.user.languages,
       skills: row.skills,
@@ -339,10 +340,12 @@ const profileListSelect = {
       accountStatus: true,
       homeLocation: true,
       lastSeenAt: true,
-      // Рассказ, языки и пол живут в портальном профиле — см. контракт.
-      // Сервис их только читает: править пол можно лишь в карточке аккаунта.
+      // Рассказ, языки, статус и пол живут в портальном профиле — см.
+      // контракт. Сервис их только читает: править пол можно лишь в карточке
+      // аккаунта, а статус — в профиле участника.
       about: true,
       languages: true,
+      statusLine: true,
       gender: true,
     },
   },
@@ -357,7 +360,6 @@ type ProfileListRow = Prisma.UnionProfileGetPayload<{
  *  выводить тип строки. */
 const profileDetailSelect = {
   ...profileListSelect,
-  status: true,
   format: true,
   skills: true,
   interests: true,
