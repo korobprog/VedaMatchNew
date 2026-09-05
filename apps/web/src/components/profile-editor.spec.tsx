@@ -34,6 +34,7 @@ const profile: UserProfile = {
   name: "Максим Коробков",
   spiritualName: null,
   about: null,
+    statusLine: null,
   languages: [],
   displayName: "Максим Коробков",
   avatarUrl: null,
@@ -155,5 +156,41 @@ describe("ProfileEditor — имя", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const [, init] = fetchMock.mock.calls[0];
     expect(JSON.parse(String(init?.body)).spiritualName).toBeNull();
+  });
+
+  it("сохраняет статус вместе с профилем", async () => {
+    const user = userEvent.setup();
+    const fetchMock = stubFetch({ ...profile, statusLine: "В Маяпуре до марта" });
+    render(<ProfileEditor user={profile} />);
+
+    await user.type(
+      screen.getByLabelText(/Статус/),
+      "В Маяпуре до марта",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Сохранить изменения профиля" }),
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      statusLine: "В Маяпуре до марта",
+    });
+  });
+
+  it("пустой статус уезжает как null: пусто значит убрать", async () => {
+    const user = userEvent.setup();
+    const fetchMock = stubFetch(profile);
+    render(<ProfileEditor user={{ ...profile, statusLine: "Старый" }} />);
+
+    await user.clear(screen.getByLabelText(/Статус/));
+    await user.click(
+      screen.getByRole("button", { name: "Сохранить изменения профиля" }),
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0];
+    // Пусто — значит убрать, как у духовного имени и рассказа о себе.
+    expect(JSON.parse(String(init?.body)).statusLine).toBeNull();
   });
 });

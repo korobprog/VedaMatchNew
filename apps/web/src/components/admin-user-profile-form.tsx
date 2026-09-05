@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ABOUT_MAX_LENGTH,
+  STATUS_LINE_MAX_LENGTH,
   LANGUAGES_MAX,
   NAME_MAX_LENGTH,
   type AdminUserProfile,
@@ -48,6 +49,7 @@ export function AdminUserProfileForm({
   const [gender, setGender] = useState<"" | Gender>(profile.gender ?? "");
   const [birthDate, setBirthDate] = useState(profile.birthDate ?? "");
   const [about, setAbout] = useState(profile.about ?? "");
+  const [statusLine, setStatusLine] = useState(profile.statusLine ?? "");
   const [languages, setLanguages] = useState<string[]>(profile.languages ?? []);
   const [homeLocation, setHomeLocation] = useState<ProfileLocation | null>(
     profile.homeLocation ?? null,
@@ -76,6 +78,7 @@ export function AdminUserProfileForm({
           ...(gender ? { gender } : {}),
           birthDate: birthDate || null,
           about,
+          statusLine,
           // Пустые строки из полей ввода — не языки: сервер их не отфильтрует
           // обратно в имя языка, а сохранит пустой пункт в списке.
           languages: languages.map((item) => item.trim()).filter(Boolean),
@@ -158,6 +161,21 @@ export function AdminUserProfileForm({
           rows={4}
           className={`mt-1 ${fieldClassName}`}
         />
+      </label>
+
+      <label className="block text-sm font-medium text-text-1">
+        Статус
+        <input
+          type="text"
+          value={statusLine}
+          onChange={(event) => setStatusLine(event.target.value)}
+          maxLength={STATUS_LINE_MAX_LENGTH}
+          className={`mt-1 ${fieldClassName}`}
+        />
+        <span className="mt-1 block text-xs font-normal text-text-2">
+          Строка рядом с именем. Правка попадёт в журнал и в уведомление
+          человеку — это его слова, а не ваши.
+        </span>
       </label>
 
       <div>

@@ -25,6 +25,7 @@ const card: ContactsCardDto = {
   userId: "u1",
   name: "Радха дд",
   headline: "Повар на праздничных программах",
+  statusLine: null,
   about: null,
   offers: null,
   avatarUrl: null,

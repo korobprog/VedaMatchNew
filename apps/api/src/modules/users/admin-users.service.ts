@@ -217,6 +217,7 @@ export class AdminUsersService {
         avatarUrl: await this.users.resolveAvatarUrl(user),
         avatarKey: user.avatarKey,
         about: user.about,
+        statusLine: user.statusLine,
         languages: user.languages,
         birthDate: toBirthDateInput(user.birthDate),
         age: calculateAge(user.birthDate),

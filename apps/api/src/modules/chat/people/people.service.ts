@@ -103,7 +103,7 @@ interface ProfileRow {
    * Рассказ о себе и языки — портальные: человек заполняет их один раз в
    * профиле, а справочник и Знакомства показывают одно и то же.
    */
-  user: { about: string | null; languages: string[] };
+  user: { about: string | null; statusLine: string | null; languages: string[] };
   ashram: ContactsAshram | null;
   format: ContactsFormat;
   visibility: ContactsVisibility;
@@ -141,7 +141,7 @@ interface ProfileValues {
 const PROFILE_INCLUDE = {
   tags: { include: { tag: true } },
   // Рассказ и языки живут в `User`; без них карточку не собрать.
-  user: { select: { about: true, languages: true } },
+  user: { select: { about: true, statusLine: true, languages: true } },
 } as const;
 
 /**
@@ -703,6 +703,7 @@ export class PeopleService {
       name: resolveDisplayName(owner),
       headline: profile.headline,
       about: profile.user.about,
+      statusLine: profile.user.statusLine,
       offers: profile.offers,
       // Аватар может лежать в приватном бакете — ссылку подписывает users.
       avatarUrl: photoVisible ? await this.users.resolveAvatarUrl(owner) : null,
