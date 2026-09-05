@@ -62,10 +62,17 @@ export function CategoryStrip({
             <Link
               href={`/library/${category.slug}`}
               aria-current={active ? "page" : undefined}
-              className={`block truncate transition-colors ${
+              /* Верхний уровень переносится по строкам, а не обрезается:
+                 прописные шире строчных, и «ФИЛОСОФИЯ И ПИСАНИЯ» в плитке
+                 шириной в пол-экрана оборвалось бы на «ФИЛОСОФИЯ И…» — то
+                 самое, ради чего со плитки убирали значки. Две строки
+                 плитке по карману, многоточие вместо названия — нет.
+                 Подразделы остаются в одну строку: их названия короче, и
+                 плитки в сетке не должны прыгать по высоте. */
+              className={`block transition-colors ${
                 root
-                  ? "font-display text-[15px] font-bold uppercase tracking-[0.02em]"
-                  : "font-medium"
+                  ? "line-clamp-2 font-display text-[15px] font-bold uppercase tracking-[0.02em]"
+                  : "truncate font-medium"
               } ${active ? "text-text-0" : "text-text-1 hover:text-text-0"}`}
             >
               {pickLocalized(locale, {

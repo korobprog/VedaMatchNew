@@ -117,6 +117,22 @@ describe("CategoryStrip", () => {
       expect(screen.getByText("4 подраздела")).toBeInTheDocument();
     });
 
+    it("длинное название переносится, а не обрывается многоточием", () => {
+      render(
+        <CategoryStrip
+          locale="ru"
+          root
+          categories={[category({ titleRu: "Философия и писания" })]}
+        />,
+      );
+
+      // Прописные шире строчных: с `truncate` плитка показывала бы
+      // «ФИЛОСОФИЯ И…» — ровно то, ради чего с неё убирали значки.
+      const link = screen.getByRole("link", { name: "Философия и писания" });
+      expect(link.className).toContain("line-clamp-2");
+      expect(link.className).not.toContain("truncate");
+    });
+
     it("рисует название прописными — чтобы уровень был виден", () => {
       render(
         <CategoryStrip locale="ru" root categories={[category({})]} />,
