@@ -102,10 +102,17 @@ type Draft = Omit<
   familySeeksGender: Gender | null;
 };
 
-function toDraft(profile: UnionProfileDto | null): Draft {
+/**
+ * Статус приходит вторым доводом: он портальный и есть даже у того, кто
+ * анкету Знакомств ещё не заводил.
+ */
+function toDraft(
+  profile: UnionProfileDto | null,
+  statusLine: string | null,
+): Draft {
   return {
     about: profile?.about ?? null,
-    status: profile?.status ?? null,
+    status: statusLine ?? profile?.status ?? null,
     familyStatus: profile?.familyStatus ?? null,
     format: profile?.format ?? "any",
     relocationReady: profile?.relocationReady ?? false,
@@ -200,16 +207,26 @@ export function UnionProfileForm({
   completeness: initialCompleteness,
   viewerGender = null,
   viewerAge = null,
+  viewerStatusLine = null,
 }: {
   profile: UnionProfileDto | null;
   completeness: UnionProfileCompleteness;
+  /**
+   * Статус из портального профиля. Приходит отдельно от анкеты, потому что
+   * поле портальное: у человека, который ещё не заводил анкету Знакомств,
+   * статус уже может быть — и показывать здесь пустую строку значило бы
+   * предложить написать его во второй раз.
+   */
+  viewerStatusLine?: string | null;
   /** Пол из аккаунта: по нему подставляется, кого искать при цели «семья». */
   viewerGender?: Gender | null;
   /** Возраст из аккаунта: цель «Создание семьи» доступна только с 18 лет. */
   viewerAge?: number | null;
 }) {
   const router = useRouter();
-  const [draft, setDraft] = useState<Draft>(() => toDraft(profile));
+  const [draft, setDraft] = useState<Draft>(() =>
+    toDraft(profile, viewerStatusLine),
+  );
   const [weights, setWeights] = useState<IntentionWeights>(() =>
     toWeights(profile),
   );
