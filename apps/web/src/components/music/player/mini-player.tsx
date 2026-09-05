@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { formatTrackDuration } from "@/lib/music-duration";
@@ -12,6 +12,7 @@ import { SEEK_STEP_SECONDS, useMusicPlayer } from "./player-provider";
 import { MusicPlayGlyph, playButtonLabel } from "./play-glyph";
 import { MusicSleepCountdown } from "./sleep-countdown";
 import { MusicQueuePanel } from "./queue-panel";
+import { useHoldSeek } from "./use-hold-seek";
 
 /**
  * Полоса плеера внизу экрана. См. макет `.design/music/MiniPlayer.dc.html`.
@@ -81,6 +82,27 @@ export function MiniPlayer() {
       return next;
     });
   };
+
+  /* Перемотка удержанием — до всех ранних возвратов: порядок хуков не
+     зависит от того, есть ли что играть. Обёртка вокруг `player.skip`
+     нужна потому, что провайдер может быть ещё пуст, а хук объявляется
+     раньше проверки. */
+  const seekBy = useCallback(
+    (seconds: number) => player?.skip(seconds),
+    [player],
+  );
+  const holdPrev = useHoldSeek({
+    direction: -1,
+    seekBy,
+    onTap: () => player?.prev(),
+    disabled: !player?.hasPrev,
+  });
+  const holdNext = useHoldSeek({
+    direction: 1,
+    seekBy,
+    onTap: () => player?.next(),
+    disabled: !player?.hasNext,
+  });
 
   // Полосы нет ни у гостя, ни когда слушать нечего.
   if (!player?.current) return null;
@@ -299,12 +321,23 @@ export function MiniPlayer() {
 
             <button
               type="button"
-              aria-label="Предыдущая запись"
-              disabled={!hasPrev}
-              onClick={player.prev}
+              aria-label={
+                hasPrev
+                  ? "Предыдущая запись, удержание — перемотка назад"
+                  : "Перемотка назад удержанием"
+              }
+              title="Нажать — предыдущая запись, удержать — перемотка назад"
+              // `aria-disabled`, а не `disabled`: перемотка относится к
+              // играющей записи, а не к очереди, и на единственной записи
+              // настоящий `disabled` отнял бы вместе с переходом и её —
+              // отключённая кнопка не получает событий указателя вовсе.
+              aria-disabled={!hasPrev}
+              {...holdPrev.props}
               // Пара к «Следующей»: без неё промах по «дальше» стоил бы
               // возврата в список, а на телефоне это весь экран.
-              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8`}
+              className={`${ctrl} h-10 w-10 touch-none select-none aria-disabled:opacity-40 sm:h-8 sm:w-8 ${
+                holdPrev.seeking ? "text-violet" : ""
+              }`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M19 4L9 12l10 8z" />
@@ -325,10 +358,17 @@ export function MiniPlayer() {
 
             <button
               type="button"
-              aria-label="Следующая запись"
-              disabled={!hasNext}
-              onClick={player.next}
-              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8`}
+              aria-label={
+                hasNext
+                  ? "Следующая запись, удержание — перемотка вперёд"
+                  : "Перемотка вперёд удержанием"
+              }
+              title="Нажать — следующая запись, удержать — перемотка вперёд"
+              aria-disabled={!hasNext}
+              {...holdNext.props}
+              className={`${ctrl} h-10 w-10 touch-none select-none aria-disabled:opacity-40 sm:h-8 sm:w-8 ${
+                holdNext.seeking ? "text-violet" : ""
+              }`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M5 4l10 8-10 8z" />
