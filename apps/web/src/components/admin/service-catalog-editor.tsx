@@ -158,7 +158,12 @@ function ServiceForm({ service }: { service: AdminServiceCardDto }) {
           defaultValue={service.description}
           rows={2}
           className={field}
+          placeholder="без подписи"
         />
+        <span className="mt-1 block text-xs font-normal text-text-2">
+          Подпись под названием сервиса — в карточке портала и на самой
+          странице сервиса. Пустое поле убирает её совсем.
+        </span>
       </label>
 
       <fieldset className="rounded-xl border border-glass-brd p-3">
@@ -263,7 +268,12 @@ function CreateServiceForm() {
       </div>
       <label className="block text-sm font-medium text-text-1">
         Описание
-        <textarea name="description" required rows={2} className={field} />
+        <textarea
+          name="description"
+          rows={2}
+          className={field}
+          placeholder="без подписи"
+        />
       </label>
       <div className="flex gap-2">
         <Button type="submit" loading={pending}>

@@ -62,7 +62,14 @@ export class AdminCatalogService {
     if (existing) throw new BadRequestException('Такой слаг уже занят');
 
     const data = normalizeServiceInput(body);
-    if (!data.name || !data.description || !data.url || !data.category) {
+    // Описание проверяется на «пришло ли поле», а не на непустоту: сервис
+    // можно завести и без подписи, дописав её позже.
+    if (
+      !data.name ||
+      data.description === undefined ||
+      !data.url ||
+      !data.category
+    ) {
       throw new BadRequestException(
         'Имя, описание, адрес и категория обязательны',
       );
