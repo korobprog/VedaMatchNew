@@ -2,6 +2,7 @@ import Link from "next/link";
 
 export type MotivationSection =
   | "feed"
+  | "collections"
   | "favorites"
   | "studio"
   | "settings"
@@ -19,6 +20,9 @@ export function MotivationNav({
 }) {
   const links = [
     ["feed", "/motivation", "Лента"],
+    // Папки готовых карточек: лента отвечает на «покажи что-нибудь», а
+    // подборки — на «покажи про Веды».
+    ["collections", "/motivation/collections", "Подборки"],
     ["favorites", "/motivation/favorites", "Избранное"],
     // «Студия» — место, где живут свои рилсы: там их создают, там же ждут
     // готовый кадр и оживляют его в видео. Раньше раздел назывался «Мои

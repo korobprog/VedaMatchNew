@@ -80,6 +80,17 @@ export class MotivationController {
     return this.service.stats();
   }
 
+  /**
+   * Разделы вдохновения для читателя: дерево категорий с числом
+   * опубликованного. Пустых веток тут нет — папка, за которой ничего нет,
+   * это тупик, а не раздел.
+   */
+  @Get('motivation/categories')
+  @UseGuards(AuthGuard)
+  publicCategories() {
+    return this.categories.publicTree();
+  }
+
   @Get('motivation/posts/:slug') publicPost(
     @Param('slug') slug: string,
     @Query('language') language?: MotivationLanguage,
