@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -20,6 +21,8 @@ function entryRecord(overrides: Record<string, unknown> = {}) {
     descriptionEn: null,
     faviconUrl: null,
     previewUrl: null,
+    previewIsCustom: false,
+    source: null,
     status: 'published',
     usefulCount: 0,
     uniqueClickCount: 0,
@@ -35,6 +38,9 @@ function entryRecord(overrides: Record<string, unknown> = {}) {
 function prismaMock(overrides: Record<string, unknown> = {}) {
   const libraryEntry = {
     findUnique: jest.fn().mockResolvedValue(null),
+    findUniqueOrThrow: jest
+      .fn()
+      .mockResolvedValue({ urlNormalized: 'https://example.com/a' }),
     findMany: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue(0),
     create: jest.fn().mockResolvedValue(entryRecord()),
@@ -489,6 +495,17 @@ describe('LibraryEntriesService canEdit', () => {
 });
 
 describe('LibraryEntriesService.update', () => {
+  /**
+   * Данные единственного `update` внутри транзакции. У jest-мока они `any`,
+   * поэтому форма записывается здесь один раз, а не в каждой проверке.
+   */
+  function updateData(update: jest.Mock): Record<string, unknown> {
+    const calls = update.mock.calls as Array<
+      [{ data: Record<string, unknown> }]
+    >;
+    return calls[0][0].data;
+  }
+
   function txMock(updatedEntry: Record<string, unknown>) {
     return {
       libraryEntry: {
@@ -531,6 +548,110 @@ describe('LibraryEntriesService.update', () => {
       where: { id: 'entry-1' },
       data: { titleRu: 'Новый заголовок', titleEn: null },
     });
+  });
+
+  it('rewrites the url and drops everything read from the old address', async () => {
+    const updated = entryRecord({ url: 'https://example.com/b' });
+    const tx = txMock(updated);
+    const prisma = prismaMock({
+      $transaction: jest.fn((callback: (t: unknown) => unknown) =>
+        callback(tx),
+      ),
+    });
+    prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(null);
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      eventsMock() as never,
+    );
+    // Первый findUnique — сама запись, второй — поиск дубля по новому адресу.
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValueOnce(entryRecord())
+      .mockResolvedValueOnce(null);
+
+    await service.update('user-1', false, 'entry-1', {
+      url: 'https://example.com/b',
+    });
+
+    const data = updateData(tx.libraryEntry.update);
+    expect(data.url).toBe('https://example.com/b');
+    expect(data.domain).toBe('example.com');
+    expect(data.enrichmentStatus).toBe('pending');
+    // Заголовок и фавиконка прежнего источника к новой ссылке отношения
+    // не имеют — иначе карточка врёт.
+    expect(data.ogTitle).toBeNull();
+    expect(data.faviconUrl).toBeNull();
+    expect(data.previewKey).toBeNull();
+  });
+
+  it('leaves enrichment alone when the url did not actually change', async () => {
+    const tx = txMock(entryRecord());
+    const prisma = prismaMock({
+      $transaction: jest.fn((callback: (t: unknown) => unknown) =>
+        callback(tx),
+      ),
+    });
+    prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(entryRecord());
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      eventsMock() as never,
+    );
+
+    // Форма шлёт адрес при каждом сохранении, поэтому «тот же адрес» —
+    // рядовой случай, а не редкость: обложку он сбрасывать не должен.
+    await service.update('user-1', false, 'entry-1', {
+      url: 'https://example.com/a',
+      titleRu: 'Другой заголовок',
+    });
+
+    const data = updateData(tx.libraryEntry.update);
+    expect(data.enrichmentStatus).toBeUndefined();
+    expect(data.previewKey).toBeUndefined();
+  });
+
+  it('refuses a url that another entry already occupies', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValueOnce(entryRecord())
+      .mockResolvedValueOnce(entryRecord({ id: 'entry-2' }));
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      eventsMock() as never,
+    );
+
+    await expect(
+      service.update('user-1', false, 'entry-1', {
+        url: 'https://example.com/b',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('refuses to clear the url of an entry that has no source', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(entryRecord());
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      eventsMock() as never,
+    );
+
+    // CHECK-ограничение в базе требует одно из двух; поймать это раньше
+    // базы — единственный способ ответить человеку словами.
+    await expect(
+      service.update('user-1', false, 'entry-1', { url: '' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('refuses to let another member edit someone else’s entry', async () => {

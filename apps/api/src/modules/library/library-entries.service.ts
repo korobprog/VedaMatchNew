@@ -47,6 +47,7 @@ const ENTRY_TYPES: LibraryEntryType[] = [
   'course',
   'app',
   'telegram_channel',
+  'vk_group',
   'community',
   'other',
 ];
@@ -255,9 +256,16 @@ export class LibraryEntriesService {
   }
 
   /**
-   * Автор ссылки и админ могут поправить заголовок, описание, тип, язык и
-   * набор категорий. Адрес (url) не редактируется — на нём завязана
-   * дедупликация, менять его значило бы фактически создавать другую запись.
+   * Автор ссылки и админ могут поправить адрес, заголовок, описание, тип,
+   * язык и набор категорий.
+   *
+   * Адрес правится с теми же проверками, что и при создании: нормализация,
+   * длина, поддерживаемая схема и уникальность `urlNormalized` — на нём
+   * держится дедупликация. Смена адреса обесценивает всё, что сервер
+   * вычитал по старому: og-поля, фавиконку, канонический адрес и результат
+   * обогащения сбрасываются, а автообложка перезапрашивается. Обложку,
+   * загруженную человеком (`previewIsCustom`), не трогаем — её ставили
+   * руками и авто-обновление её не заменяет.
    */
   async update(
     userId: string,
@@ -277,6 +285,73 @@ export class LibraryEntriesService {
     }
 
     const data: Prisma.LibraryEntryUpdateInput = {};
+
+    // Новый адрес: `undefined` — не трогать, пустая строка — снять.
+    let nextUrl: ReturnType<typeof normalizeUrl> | null = null;
+    let urlChanged = false;
+    if (body.url !== undefined) {
+      const rawUrl = trimOrNull(body.url);
+      const current = await this.prisma.libraryEntry.findUniqueOrThrow({
+        where: { id },
+        select: { urlNormalized: true },
+      });
+
+      if (!rawUrl) {
+        // Снять адрес можно только у материала с источником: пустыми оба
+        // быть не могут — того же требует CHECK-ограничение в базе.
+        if (!existing.source) {
+          throw new BadRequestException('url_or_source_required');
+        }
+        urlChanged = current.urlNormalized !== null;
+      } else {
+        if (rawUrl.length > 2000) throw new BadRequestException('url_too_long');
+        try {
+          nextUrl = normalizeUrl(rawUrl);
+        } catch {
+          throw new BadRequestException('unsupported_url');
+        }
+        urlChanged = nextUrl.normalized !== current.urlNormalized;
+
+        if (urlChanged) {
+          const duplicate = await this.prisma.libraryEntry.findUnique({
+            where: { urlNormalized: nextUrl.normalized },
+            select: ENTRY_SELECT,
+          });
+          if (duplicate) {
+            const payload: LibraryDuplicateEntryConflict = {
+              code: 'entry_already_exists',
+              entry: toEntryDto(duplicate),
+            };
+            throw new ConflictException(payload);
+          }
+        }
+      }
+
+      if (urlChanged) {
+        data.url = nextUrl?.url ?? null;
+        data.urlNormalized = nextUrl?.normalized ?? null;
+        data.domain = nextUrl?.domain ?? null;
+        // Всё, что сервер вычитал по прежнему адресу, к новому отношения не
+        // имеет. Оставить это значило бы показывать чужой заголовок и
+        // фавиконку рядом с новой ссылкой.
+        data.canonicalUrl = null;
+        data.ogTitle = null;
+        data.ogDescription = null;
+        data.ogSiteName = null;
+        data.faviconUrl = null;
+        data.enrichmentError = null;
+        data.enrichedAt = null;
+        data.httpStatus = null;
+        data.lastCheckedAt = null;
+        data.enrichmentStatus = nextUrl ? 'pending' : 'not_applicable';
+        if (!existing.previewIsCustom) {
+          data.previewKey = null;
+          data.previewUrl = nextUrl
+            ? await resolvePreviewUrl(nextUrl.url)
+            : null;
+        }
+      }
+    }
 
     if (body.type !== undefined) {
       if (!ENTRY_TYPES.includes(body.type)) {
@@ -378,6 +453,17 @@ export class LibraryEntriesService {
         select: ENTRY_SELECT,
       });
     });
+
+    // Копию новой обложки кладём в S3 после ответа — ровно как при создании:
+    // человеку незачем ждать скачивание и сжатие картинки.
+    if (
+      urlChanged &&
+      nextUrl &&
+      !existing.previewIsCustom &&
+      updated.previewUrl
+    ) {
+      this.previews.captureInBackground(id, nextUrl.url, updated.previewUrl);
+    }
 
     return toEntryDto(updated, false, userId, viewerIsAdmin);
   }

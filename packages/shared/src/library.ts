@@ -7,6 +7,7 @@ export type LibraryEntryType =
   | 'course'
   | 'app'
   | 'telegram_channel'
+  | 'vk_group'
   | 'community'
   | 'other';
 
@@ -230,6 +231,9 @@ export interface CreateLibraryEntryRequest {
 /** Все поля необязательны — меняются только переданные. Адрес ссылки (url)
  *  не редактируется: он завязан на дедупликацию и normalizedUrl. */
 export interface UpdateLibraryEntryRequest {
+  /** Новый адрес. Пустая строка снимает его — так можно только у материала
+   *  с заполненным источником. */
+  url?: string | null;
   type?: LibraryEntryType;
   contentLanguage?: string;
   titleRu?: string | null;

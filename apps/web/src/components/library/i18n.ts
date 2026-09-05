@@ -166,6 +166,10 @@ const ui = {
     "entry.previewUploadFailed": "Не удалось загрузить обложку, попробуйте позже",
     "entry.updateFailed": "Не удалось сохранить изменения, попробуйте позже",
     "entry.updated": "Изменения сохранены",
+    "entry.urlHint":
+      "Смена адреса сбрасывает то, что портал вычитал по прежней ссылке: заголовок источника, фавиконку и обложку",
+    "entry.urlRequired":
+      "У материала без источника адрес убрать нельзя",
     "entry.delete": "Удалить",
     "entry.deleteConfirm": "Удалить ссылку из библиотеки?",
     "entry.deleteConfirmYes": "Да, удалить",
@@ -367,6 +371,10 @@ const ui = {
     "entry.previewUploadFailed": "Could not upload the cover, please try again later",
     "entry.updateFailed": "Could not save changes, please try again later",
     "entry.updated": "Changes saved",
+    "entry.urlHint":
+      "Changing the address resets what the portal read from the previous link: source title, favicon and cover",
+    "entry.urlRequired":
+      "An entry without a source cannot have its address removed",
     "entry.delete": "Delete",
     "entry.deleteConfirm": "Delete this link from the library?",
     "entry.deleteConfirmYes": "Yes, delete",
@@ -420,6 +428,7 @@ const entryTypes: Record<LibraryLocale, Record<LibraryEntryType, string>> = {
     course: "Курс",
     app: "Приложение",
     telegram_channel: "Telegram-канал",
+    vk_group: "Группа ВКонтакте",
     community: "Община",
     other: "Другое",
   },
@@ -432,6 +441,7 @@ const entryTypes: Record<LibraryLocale, Record<LibraryEntryType, string>> = {
     course: "Course",
     app: "App",
     telegram_channel: "Telegram channel",
+    vk_group: "VK group",
     community: "Community",
     other: "Other",
   },
