@@ -119,16 +119,35 @@ export function MusicQuickWidget({
               </button>
             </div>
 
-            {/* Полоса декоративна: то же самое сказано словами в «осталось …». */}
-            <div
-              aria-hidden="true"
-              className="h-[3px] overflow-hidden rounded-full bg-glass-brd"
-            >
-              <div
-                className="h-full rounded-full bg-violet"
-                style={{ width: `${resume.percent}%` }}
+            {/*
+              Дорожка. Пока запись не поднята в плеер, тянуть нечего —
+              у `resume` есть сохранённая секунда, но звука ещё нет, и
+              ползунок, который ничего не двигает, хуже его отсутствия.
+              До этого момента здесь декоративная полоса: то же самое
+              сказано словами в «осталось …».
+
+              После — настоящий ползунок, как на широком экране. Раньше на
+              телефоне полоса оставалась декоративной всегда, и отмотать
+              пропущенную строку с главной было нечем: приходилось уходить
+              на страницу записи.
+            */}
+            {player?.current ? (
+              <MusicPositionSlider
+                position={player.positionSeconds}
+                total={player.durationSeconds || player.current.durationSeconds}
+                onSeek={player.seek}
               />
-            </div>
+            ) : (
+              <div
+                aria-hidden="true"
+                className="h-[3px] overflow-hidden rounded-full bg-glass-brd"
+              >
+                <div
+                  className="h-full rounded-full bg-violet"
+                  style={{ width: `${resume.percent}%` }}
+                />
+              </div>
+            )}
           </>
         )}
 
