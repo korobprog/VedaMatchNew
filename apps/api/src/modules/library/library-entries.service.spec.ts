@@ -46,9 +46,15 @@ function prismaMock(overrides: Record<string, unknown> = {}) {
     count: jest.fn().mockResolvedValue(0),
     create: jest.fn().mockResolvedValue(entryRecord()),
     update: jest.fn().mockResolvedValue(entryRecord()),
+    // Список общин для фильтра считается через groupBy по самим записям.
+    groupBy: jest.fn().mockResolvedValue([]),
   };
   return {
     libraryEntry,
+    // Портальная модель, доступная сервису на чтение: из неё берётся подпись
+    // общины. Заведена здесь, а не дописывается в тестах: дописанное свойство
+    // не проходит проверку типов, и `tsc` со спеками падал бы на нём.
+    community: { findMany: jest.fn().mockResolvedValue([]) },
     libraryCategory: {
       findMany: jest.fn().mockResolvedValue([{ id: 'category-1' }]),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -1120,16 +1126,12 @@ describe('LibraryEntriesService — организационная принад�
 
   it('в фильтр попадают только общины с опубликованным, и число — по нему', async () => {
     const prisma = prismaMock();
-    prisma.libraryEntry.groupBy = jest
-      .fn()
-      .mockResolvedValue([{ communityId: 'community-1', _count: { _all: 3 } }]);
-    prisma.community = {
-      findMany: jest
-        .fn()
-        .mockResolvedValue([
-          { id: 'community-1', slug: 'moscow', name: 'Москва' },
-        ]),
-    };
+    prisma.libraryEntry.groupBy.mockResolvedValue([
+      { communityId: 'community-1', _count: { _all: 3 } },
+    ]);
+    prisma.community.findMany.mockResolvedValue([
+      { id: 'community-1', slug: 'moscow', name: 'Москва' },
+    ]);
     const { service } = build(true, prisma);
 
     const facets = await service.communityFacets();
@@ -1147,8 +1149,7 @@ describe('LibraryEntriesService — организационная принад�
 
   it('пустой каталог не ходит за справочником общин', async () => {
     const prisma = prismaMock();
-    prisma.libraryEntry.groupBy = jest.fn().mockResolvedValue([]);
-    prisma.community = { findMany: jest.fn() };
+    prisma.libraryEntry.groupBy.mockResolvedValue([]);
     const { service } = build(true, prisma);
 
     expect(await service.communityFacets()).toEqual([]);
