@@ -7,7 +7,16 @@ import { apiFetch } from "@/lib/http-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
-export function MotivationFeed({ initial, favorites = false }: { initial: MotivationFeedResponse; favorites?: boolean }) {
+export function MotivationFeed({
+  initial,
+  favorites = false,
+  order,
+}: {
+  initial: MotivationFeedResponse;
+  favorites?: boolean;
+  /** Порядок ленты; уезжает и в подгрузку — см. ReelsFeed. */
+  order?: "random";
+}) {
   const [items, setItems] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.nextCursor);
   const [pending, setPending] = useState(false);
@@ -20,6 +29,7 @@ export function MotivationFeed({ initial, favorites = false }: { initial: Motiva
     try {
       const query = new URLSearchParams({ cursor });
       if (favorites) query.set("filter", "favorites");
+      if (order) query.set("order", order);
       const response = await apiFetch(`${API_URL}/motivation/feed?${query}`, { credentials: "include" });
       if (!response.ok) throw new Error(await response.text());
       const page = (await response.json()) as MotivationFeedResponse;

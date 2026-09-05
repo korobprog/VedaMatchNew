@@ -11,8 +11,8 @@ import { ImageReviewCard } from "./image-review-card";
 import { LoadFailure } from "./load-failure";
 import { QuoteReviewCard } from "./quote-review-card";
 import {
-  selectArchivedPosts,
   selectImagePosts,
+  selectSetAsidePosts,
   selectTextPosts,
 } from "./queue-selectors";
 import { useAdminCommand } from "./use-admin-command";
@@ -52,7 +52,7 @@ export function QueueBoard({
 
   const textPosts = selectTextPosts(posts);
   const imagePosts = selectImagePosts(posts);
-  const archivedPosts = selectArchivedPosts(posts);
+  const setAsidePosts = selectSetAsidePosts(posts);
   const failedCount = posts.filter((post) => post.reviewStatus === "failed").length;
 
   return (
@@ -134,7 +134,9 @@ export function QueueBoard({
         </div>
       </section>
 
-      <ArchiveList posts={archivedPosts} pending={pending} errors={errors} run={run} />
+      {/* Опубликованное здесь больше не лежит — у него своя вкладка. Тут
+          остаётся только отложенное: отклонённое и снятое с показа. */}
+      <ArchiveList posts={setAsidePosts} pending={pending} errors={errors} run={run} />
     </>
   );
 }

@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { BarChart3, CalendarHeart, Film, FolderTree, ListChecks, PenLine, PlusCircle, Radar, SlidersHorizontal } from "lucide-react";
+import { BarChart3, CalendarHeart, Film, FolderTree, ListChecks, Newspaper, PenLine, PlusCircle, Radar, SlidersHorizontal } from "lucide-react";
 
 export type MotivationAdminTab =
   | "queue"
+  | "published"
   | "reels"
   | "events"
   | "analytics"
@@ -18,7 +19,11 @@ const ITEMS: Array<{
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { key: "queue", href: "/admin/motivation/queue", label: "Очередь", icon: ListChecks },
+  // Два состояния карточки — две вкладки. Раньше опубликованное лежало
+  // свёрнутым списком в самом низу очереди, вперемешку с отклонённым, и на
+  // вопрос «где то, что уже вышло» админка отвечала «поищите».
+  { key: "queue", href: "/admin/motivation/queue", label: "Заготовки", icon: ListChecks },
+  { key: "published", href: "/admin/motivation/published", label: "Опубликованные", icon: Newspaper },
   // Два разных пути: «Своя» — текст пишет админ, «Цитата» — текст пишет ИИ.
   { key: "reels", href: "/admin/motivation/reels", label: "Рилсы", icon: Film },
   { key: "create", href: "/admin/motivation/create", label: "Своя", icon: PenLine },

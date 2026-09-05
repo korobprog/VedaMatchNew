@@ -58,6 +58,9 @@ function fetchOk(body: unknown) {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  // Синтез речи подменяется в одном тесте на весь файл, и без сброса кнопка
+  // «Озвучить» осталась бы видна там, где её быть не должно.
+  vi.unstubAllGlobals();
   vi.stubGlobal("IntersectionObserver", FakeObserver);
 });
 
@@ -348,5 +351,128 @@ describe("ReelsFeed", () => {
     expect(
       screen.getByRole("button", { name: "Читать полностью ›" }),
     ).toBeInTheDocument();
+  });
+
+  it("прячет картинку на пять секунд и возвращает сама", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Скрыть картинку на пять секунд" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Показать картинку" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    // «На пять секунд», а не «выключить»: кадр возвращается сам.
+    vi.advanceTimersByTime(5_000);
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Скрыть картинку на пять секунд" }),
+      ).toHaveAttribute("aria-pressed", "false"),
+    );
+    vi.useRealTimers();
+  });
+
+  it("у ролика прятать нечего: подпись вшита в кадр", () => {
+    render(
+      <ReelsFeed
+        initial={{
+          items: [post("a", { videoUrl: "https://cdn/a.mp4" })],
+          nextCursor: null,
+        }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /Скрыть картинку/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("читает цитату голосом устройства и замолкает по второму нажатию", async () => {
+    const speak = vi.fn();
+    const cancel = vi.fn();
+    vi.stubGlobal("speechSynthesis", { speak, cancel });
+    vi.stubGlobal(
+      "SpeechSynthesisUtterance",
+      class {
+        text: string;
+        lang = "";
+        constructor(text: string) {
+          this.text = text;
+        }
+      },
+    );
+    const user = userEvent.setup();
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Озвучить цитату" }));
+
+    const utterance = speak.mock.calls[0][0] as { text: string; lang: string };
+    expect(utterance.text).toContain("Цитата a");
+    // Пояснение голосом не читается: его читают глазами.
+    expect(utterance.text).not.toContain("Пояснение a");
+    expect(utterance.lang).toBe("ru-RU");
+
+    await user.click(screen.getByRole("button", { name: "Остановить чтение" }));
+    expect(cancel).toHaveBeenCalled();
+  });
+
+  it("без синтеза речи кнопки нет: молчащая кнопка хуже её отсутствия", () => {
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Озвучить цитату" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("редакции даёт перейти к правке той карточки, на которую она смотрит", () => {
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+        isAdmin
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Править эту публикацию" }),
+    ).toHaveAttribute("href", "/admin/motivation/published?post=a");
+  });
+
+  it("обычному читателю правки не предлагает", () => {
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: "Править эту публикацию" }),
+    ).not.toBeInTheDocument();
   });
 });

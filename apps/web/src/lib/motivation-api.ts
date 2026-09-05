@@ -16,6 +16,7 @@ import type {
   MotivationAdminReelsResponse,
   MotivationReelDto,
   MotivationSourceWatchDto,
+  MotivationStatsDto,
 } from "@vedamatch/shared";
 
 import { parseJsonBody } from "@/lib/json-body";
@@ -49,13 +50,27 @@ async function motivationGetPublic<T>(path: string): Promise<T | null> {
 }
 
 /** `post` открывает ленту на конкретном рилсе — он придёт первым в списке. */
+/** Сколько вдохновений в сервисе — цифра над лентой. */
+export const getMotivationStats = () =>
+  motivationGet<MotivationStatsDto>("/motivation/stats");
+
+/** Разделы вдохновения для читателя: дерево категорий без пустых веток. */
+export const getMotivationCategories = () =>
+  motivationGet<MotivationCategoryDto[]>("/motivation/categories");
+
 export const getMotivationFeed = (
   filter: "all" | "favorites" = "all",
   post?: string,
+  /** `"random"` — вперемешку, без ярусов «свежее → повтор». */
+  order?: "random",
+  /** Слаг категории: лента одной папки. */
+  category?: string,
 ) => {
   const query = new URLSearchParams();
   if (filter === "favorites") query.set("filter", "favorites");
   if (post) query.set("post", post);
+  if (order) query.set("order", order);
+  if (category) query.set("category", category);
   const suffix = query.toString();
   return motivationGet<MotivationFeedResponse>(
     `/motivation/feed${suffix ? `?${suffix}` : ""}`,
