@@ -12,6 +12,7 @@ import { DeletePostButton } from "./delete-post-button";
 import { PipelineStages } from "./pipeline-stages";
 import { PromptEditor } from "./prompt-editor";
 import { QuoteDetails } from "./quote-details";
+import { UploadCardImage } from "./upload-card-image";
 import { VoicePreviewButton } from "./voice-preview-button";
 import { ActionBar, RejectControl, StyleSelect } from "./review-actions";
 import type { RunCommand } from "./use-admin-command";
@@ -192,6 +193,12 @@ export function ImageReviewCard({
 
         {canReview && (
           <ActionBar>
+            {/* Открытку редакция рисует сама, а не просит нейросеть: у
+                генерации на этот случай нет ни шрифта, ни макета, и
+                перегенерация раз за разом отдаёт не то. */}
+            <div className="flex flex-wrap gap-2">
+              <UploadCardImage postId={post.id} />
+            </div>
             <StyleSelect post={post} value={style} disabled={disabled} onChange={setStyle} />
             <div className="grid gap-2 sm:items-end">
               <button

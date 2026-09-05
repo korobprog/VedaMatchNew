@@ -352,31 +352,7 @@ export class MotivationReelsService {
         'Рилс уже опубликован: картинку можно поменять только до публикации',
       );
 
-    const image = sharp(file!.buffer, {
-      failOn: 'error',
-      limitInputPixels: true,
-    }).rotate();
-    const meta = await image.metadata();
-    const width = meta.width ?? 0,
-      height = meta.height ?? 0;
-    if (
-      Math.min(width, height) < MIN_REEL_IMAGE_SIDE ||
-      width === 0 ||
-      height === 0
-    )
-      throw new BadRequestException(reelImageMessage('image_too_small'));
-
-    const crop = coverCrop(width, height);
-    const prepared = await image
-      .extract(crop)
-      .resize(REEL_IMAGE_WIDTH, REEL_IMAGE_HEIGHT, { fit: 'cover' })
-      .webp({ quality: 82 })
-      .toBuffer();
-    const url = await this.generation.uploadStory(
-      reelImageKey(postId, Date.now()),
-      prepared,
-      'image/webp',
-    );
+    const { url, crop } = await this.prepareUploadedImage(postId, file!);
 
     await this.prisma.motivationPost.update({
       where: { id: postId },
@@ -406,6 +382,94 @@ export class MotivationReelsService {
       },
     });
     return this.get(userId, postId);
+  }
+
+  /**
+   * Готовая картинка от редакции — открытка, нарисованная не нами.
+   *
+   * Отдельный путь от авторского: там файл принимается только у своего
+   * неопубликованного рилса и всегда уходит на ручную проверку — чужому
+   * файлу верить нельзя, vision-шлюза у нас нет. Здесь файл кладёт сам
+   * администратор, проверять его не у кого и незачем, и стадию карточки
+   * трогать не за что: опубликованная остаётся опубликованной, иначе замена
+   * картинки молча снимала бы её с показа.
+   */
+  async adminUploadImage(
+    user: AccessTokenPayload,
+    postId: string,
+    file: UploadedReelImage | undefined,
+  ): Promise<{ imageUrl: string }> {
+    if (!isAdmin(user)) throw new ForbiddenException('Только администратор');
+    const problem = validateReelImage(file);
+    if (problem) throw new BadRequestException(reelImageMessage(problem));
+    const post = await this.prisma.motivationPost.findUnique({
+      where: { id: postId },
+      select: { id: true },
+    });
+    if (!post) throw new NotFoundException('Публикация не найдена');
+
+    const { url, crop } = await this.prepareUploadedImage(postId, file!);
+    await this.prisma.motivationPost.update({
+      where: { id: postId },
+      data: {
+        imageUrl: url,
+        // Кадр для Stories пока тот же файл: он уже вертикальный.
+        storyImageUrl: url,
+        imageSource: 'uploaded',
+        generationErrorCode: null,
+      },
+    });
+    await this.prisma.motivationModerationAudit.create({
+      data: {
+        postId,
+        actorId: user.sub,
+        action: 'admin_image',
+        reason: null,
+        metadata: {
+          source: 'uploaded',
+          width: crop.width,
+          height: crop.height,
+        },
+      },
+    });
+    return { imageUrl: url };
+  }
+
+  /**
+   * Общая подготовка загруженного кадра: поворот по EXIF, обрезка под 9:16,
+   * запись в хранилище. Одна на авторский и редакционный путь — разойтись в
+   * пропорциях им нельзя, обе картинки показываются одним и тем же слайдом.
+   */
+  private async prepareUploadedImage(
+    postId: string,
+    file: UploadedReelImage,
+  ): Promise<{ url: string; crop: ReturnType<typeof coverCrop> }> {
+    const image = sharp(file.buffer, {
+      failOn: 'error',
+      limitInputPixels: true,
+    }).rotate();
+    const meta = await image.metadata();
+    const width = meta.width ?? 0,
+      height = meta.height ?? 0;
+    if (
+      Math.min(width, height) < MIN_REEL_IMAGE_SIDE ||
+      width === 0 ||
+      height === 0
+    )
+      throw new BadRequestException(reelImageMessage('image_too_small'));
+
+    const crop = coverCrop(width, height);
+    const prepared = await image
+      .extract(crop)
+      .resize(REEL_IMAGE_WIDTH, REEL_IMAGE_HEIGHT, { fit: 'cover' })
+      .webp({ quality: 82 })
+      .toBuffer();
+    const url = await this.generation.uploadStory(
+      reelImageKey(postId, Date.now()),
+      prepared,
+      'image/webp',
+    );
+    return { url, crop };
   }
 
   /**

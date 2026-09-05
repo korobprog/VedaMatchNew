@@ -5,6 +5,7 @@ import Link from "next/link";
 import { EyeOff, Pencil, X } from "lucide-react";
 import type { MotivationAdminCandidateDto } from "@vedamatch/shared";
 import { DeletePostButton } from "./delete-post-button";
+import { UploadCardImage } from "./upload-card-image";
 import { LoadFailure } from "./load-failure";
 import { useAdminCommand } from "./use-admin-command";
 import {
@@ -176,6 +177,11 @@ export function MotivationPublishedList({
                   <EyeOff className="h-4 w-4" />
                   {post.status === "hidden" ? "Вернуть в ленту" : "Скрыть"}
                 </button>
+
+                {/* Открытку редакция рисует сама — генерация нарисует не то.
+                    Замена картинки со стадией карточки ничего не делает:
+                    опубликованная остаётся опубликованной. */}
+                <UploadCardImage postId={post.id} label="Заменить картинку" />
 
                 <DeletePostButton
                   postId={post.id}

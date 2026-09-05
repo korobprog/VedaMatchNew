@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { AccessTokenPayload } from '@vedamatch/shared';
 import { MotivationReelsService } from './motivation-reels.service';
 
@@ -790,5 +794,59 @@ describe('MotivationReelsService.appeal', () => {
     await expect(
       service.appeal('user-1', 'post-1', { message: 'Ещё раз' }),
     ).rejects.toThrow('один раз');
+  });
+});
+
+describe('MotivationReelsService.adminUploadImage', () => {
+
+  function build(post: Record<string, unknown> | null = { id: 'post-1' }) {
+    const update = jest.fn().mockResolvedValue({});
+    const create = jest.fn().mockResolvedValue({});
+    const service = new MotivationReelsService(
+      {
+        motivationPost: {
+          findUnique: jest.fn().mockResolvedValue(post),
+          update,
+        },
+        motivationModerationAudit: { create },
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    return { service, update };
+  }
+
+  it('никого, кроме администратора, не пускает', async () => {
+    const { service } = build();
+
+    await expect(
+      service.adminUploadImage(regularUser, 'post-1', undefined),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('без файла отвечает понятной ошибкой, а не падает в sharp', async () => {
+    const { service } = build();
+
+    await expect(
+      service.adminUploadImage(admin, 'post-1', undefined),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('несуществующей публикации картинку не подкладывает', async () => {
+    const { service } = build(null);
+
+    await expect(
+      service.adminUploadImage(admin, 'post-1', {
+        buffer: Buffer.from('x'),
+        mimetype: 'image/webp',
+        size: 10,
+      } as never),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

@@ -8,8 +8,11 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type {
   AccessTokenPayload,
   MotivationAdminReelFilter,
@@ -38,6 +41,10 @@ import { MotivationStoryRebuildService } from './motivation-story-rebuild.servic
 import { MotivationService } from './motivation.service';
 import { MotivationMusicService } from './motivation-music.service';
 import { MotivationReelsService } from './motivation-reels.service';
+import {
+  MAX_REEL_IMAGE_BYTES,
+  type UploadedReelImage,
+} from './reel-image';
 import { MotivationAdminReelsService } from './motivation-admin-reels.service';
 import { MotivationPostcardsService } from './motivation-postcards.service';
 import { MotivationAnalyticsService } from './motivation-analytics.service';
@@ -85,6 +92,23 @@ export class MotivationAdminController {
   ) {
     return this.service.adminUpdate(user, id, input);
   }
+  /**
+   * Готовая открытка от редакции: файл кладёт сам администратор, а не автор
+   * рилса, поэтому стадия карточки не трогается — опубликованная остаётся
+   * опубликованной. Иначе замена картинки молча снимала бы её с показа.
+   */
+  @Post('posts/:id/image')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_REEL_IMAGE_BYTES } }),
+  )
+  adminUploadImage(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @UploadedFile() file?: UploadedReelImage,
+  ) {
+    return this.reels.adminUploadImage(user, id, file);
+  }
+
   @Delete('posts/:id')
   adminDelete(
     @CurrentUser() user: AccessTokenPayload,
