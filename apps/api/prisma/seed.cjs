@@ -207,9 +207,24 @@ async function main() {
       },
     });
     for (const service of services) {
+      // Название, английское название, описание, иконка и порядок — контент
+      // каталога: их правит администратор (админка → каталог сервисов), и
+      // сид не имеет права возвращать их к значениям из кода. Иначе любой
+      // рестарт контейнера api (SEED_ON_START=1) переименовывал бы сервис
+      // обратно и возвращал стёртую подпись.
+      //
+      // Остальное — поведение, а не контент: статус, адрес, категория и
+      // видимость по этапам едут вместе с релизом и обновляются всегда.
+      const { name, nameEn, description, iconUrl, sortOrder, ...behaviour } =
+        service;
+      void name;
+      void nameEn;
+      void description;
+      void iconUrl;
+      void sortOrder;
       await transaction.service.upsert({
         where: { slug: service.slug },
-        update: service,
+        update: refreshAdminEditable ? service : behaviour,
         create: service,
       });
     }

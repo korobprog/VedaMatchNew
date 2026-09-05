@@ -87,6 +87,30 @@ export const getServices = () => apiGet<ServiceCard[]>("/services");
 /** Каталог для гостя: лендинг и шапка показывают названия до авторизации. */
 export const getPublicServices = () =>
   apiGetPublic<ServiceCard[]>("/services/public");
+
+/**
+ * Карточка одного сервиса из каталога. Заголовок и подпись раздела берутся
+ * из неё, а не из копирайта в коде: администратор правит название и описание
+ * в админке (каталог сервисов), и правка обязана доезжать до самой страницы
+ * сервиса, а не только до плитки в портале.
+ *
+ * Личный каталог спрашивается первым: у гостя он пуст, зато вошедший видит
+ * карточку и тогда, когда сервис снят с публичной витрины (`public: false`)
+ * и открыт ему по этапу или персональным доступом. Публичный — запасной
+ * путь для гостя.
+ *
+ * cache(): страница сервиса зовёт функцию дважды за рендер — в
+ * generateMetadata и в теле, — а запрос к каталогу нужен один.
+ */
+export const getServiceCard = cache(
+  async (slug: string): Promise<ServiceCard | null> => {
+    const mine = await getServices().catch(() => null);
+    const found = mine?.find((service) => service.slug === slug);
+    if (found) return found;
+    const publicList = await getPublicServices().catch(() => null);
+    return publicList?.find((service) => service.slug === slug) ?? null;
+  },
+);
 export const getSelfIdentificationState = () =>
   apiGet<SelfIdentificationState>("/self-identification/me");
 export const getSelfIdentificationHistory = () =>

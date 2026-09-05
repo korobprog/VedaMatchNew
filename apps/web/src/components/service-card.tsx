@@ -119,9 +119,14 @@ export function ServiceCard({
           </button>
         )}
       </div>
-      <p className="mb-4 flex-1 text-sm text-text-1">
-        {service.description}
-      </p>
+      {/* Описание может быть пустым: администратор вправе снять подпись в
+          каталоге. Распорка на её месте остаётся — без неё карточка без
+          подписи съезжает по высоте относительно соседних в сетке. */}
+      {service.description ? (
+        <p className="mb-4 flex-1 text-sm text-text-1">{service.description}</p>
+      ) : (
+        <div className="mb-4 flex-1" />
+      )}
       {extra}
       {/* У недоступного сервиса строка остаётся: «В разработке» сообщает то,
           чего карточка иначе не скажет, — почему нажатие ничего не делает. */}

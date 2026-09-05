@@ -69,11 +69,11 @@ export function normalizeServiceInput(
     data.nameEn = body.nameEn?.trim() || null;
   }
   if (body.description !== undefined) {
-    const description = body.description.trim();
-    if (!description) {
-      throw new BadRequestException('Описание не может быть пустым');
-    }
-    data.description = description;
+    // Пустое описание разрешено осознанно: подпись под названием сервиса
+    // принадлежит администратору целиком, и «убрать её» — такое же законное
+    // решение, как переписать. Карточка и страница сервиса пустую подпись
+    // не рисуют вовсе, а не оставляют пустую строку.
+    data.description = body.description.trim();
   }
   if (body.url !== undefined) {
     const url = body.url.trim();

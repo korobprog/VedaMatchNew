@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getLocale } from "next-intl/server";
+import { serviceCardName } from "@vedamatch/shared";
+import { getServiceCard } from "@/lib/api";
 import {
   getMusicCatalog,
   getMusicTracks,
@@ -21,12 +24,30 @@ import { MusicSearchField } from "@/components/music/music-search-field";
 import { MusicTrackList } from "@/components/music/music-track-list";
 import { plural } from "@/lib/plural";
 
+/** Слаг сервиса в каталоге. Им же берётся карточка с названием и описанием. */
+const SERVICE_SLUG = "music";
+
+/**
+ * Запасное название на случай, когда каталог не ответил. Настоящее приходит
+ * из карточки сервиса (админка → каталог), как и в шапке, на лендинге и в
+ * сетке портала: переименование раздела делается там, а не правкой кода.
+ * Запасного ОПИСАНИЯ здесь нет намеренно — подпись под заголовком целиком
+ * принадлежит администратору, и выдуманная строка вместо неё врёт.
+ */
+const FALLBACK_NAME = "Музыка";
+
 // Суффикс «— VedaMatch» подставляет шаблон в корневом layout; дублировать
 // его здесь значит получить его дважды в заголовке вкладки.
-export const metadata: Metadata = {
-  title: "Музыка",
-  description: "Киртаны, бхаджаны и записи с программ",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const [service, locale] = await Promise.all([
+    getServiceCard(SERVICE_SLUG),
+    getLocale(),
+  ]);
+  return {
+    title: service ? serviceCardName(service, locale) : FALLBACK_NAME,
+    description: service?.description || undefined,
+  };
+}
 
 /**
  * Витрина Музыки. См. docs/music-service-plan.md.
@@ -80,33 +101,46 @@ export default async function MusicPage({
 
   // Витрина нужна всегда — из неё чипы разделов и исполнители для фильтра;
   // выборка догружается только когда стоит фильтр или задан запрос.
-  const [catalog, filtered, mine, favorites, playlists] = await Promise.all([
-    getMusicCatalog(),
-    hasFilter || showAll
-      ? getMusicTracks({
-          ...(category ? { category } : {}),
-          ...(query ? { q: query } : {}),
-          ...(artist ? { artist } : {}),
-          ...(duration ? { duration: duration as never } : {}),
-          ...(live ? { live: live === "true" } : {}),
-          ...(sort ? { sort: sort as never } : {}),
-          ...(cursor ? { cursor } : {}),
-          limit: showAll && !hasFilter ? 60 : 30,
-        })
-      : Promise.resolve(null),
-    // Счётчики рельса — украшение, и падать из-за них каталог не должен.
-    // Гостю приходит `null` и рельс просто без чисел; у вошедшего запрос
-    // может упереться в лимит частоты или в упавший маршрут — тогда тоже
-    // `null`, а не страница с ошибкой вместо всего каталога.
-    getMyMusicUploads().catch(() => null),
-    getMyMusicFavorites().catch(() => null),
-    getMyMusicPlaylists().catch(() => null),
-  ]);
+  const [service, locale, catalog, filtered, mine, favorites, playlists] =
+    await Promise.all([
+      // Название и подпись раздела — из каталога сервисов: их правит
+      // администратор, а не правка кода. cache() в getServiceCard делает
+      // этот запрос общим с generateMetadata.
+      getServiceCard(SERVICE_SLUG),
+      getLocale(),
+      getMusicCatalog(),
+      hasFilter || showAll
+        ? getMusicTracks({
+            ...(category ? { category } : {}),
+            ...(query ? { q: query } : {}),
+            ...(artist ? { artist } : {}),
+            ...(duration ? { duration: duration as never } : {}),
+            ...(live ? { live: live === "true" } : {}),
+            ...(sort ? { sort: sort as never } : {}),
+            ...(cursor ? { cursor } : {}),
+            limit: showAll && !hasFilter ? 60 : 30,
+          })
+        : Promise.resolve(null),
+      // Счётчики рельса — украшение, и падать из-за них каталог не должен.
+      // Гостю приходит `null` и рельс просто без чисел; у вошедшего запрос
+      // может упереться в лимит частоты или в упавший маршрут — тогда тоже
+      // `null`, а не страница с ошибкой вместо всего каталога.
+      getMyMusicUploads().catch(() => null),
+      getMyMusicFavorites().catch(() => null),
+      getMyMusicPlaylists().catch(() => null),
+    ]);
+
+  const serviceName = service
+    ? serviceCardName(service, locale)
+    : FALLBACK_NAME;
+  const serviceDescription = service?.description?.trim() || null;
 
   if (!catalog) {
     return (
       <main className="mx-auto max-w-7xl px-4 py-10 md:px-6">
-        <h1 className="font-display text-2xl font-bold text-text-0">Музыка</h1>
+        <h1 className="font-display text-2xl font-bold text-text-0">
+          {serviceName}
+        </h1>
         <p className="mt-3 text-sm text-text-1">
           Каталог сейчас недоступен. Попробуйте обновить страницу.
         </p>
@@ -185,11 +219,14 @@ export default async function MusicPage({
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-1.5">
           <h1 className="font-display text-2xl font-bold tracking-tight text-text-0 md:text-3xl">
-            Музыка
+            {serviceName}
           </h1>
-          <p className="text-sm text-text-2">
-            Киртаны, бхаджаны и записи с программ
-          </p>
+          {/* Подписи может и не быть: администратор вправе оставить описание
+              пустым, и пустой абзац на её месте — лишний отступ под
+              заголовком. */}
+          {serviceDescription && (
+            <p className="text-sm text-text-2">{serviceDescription}</p>
+          )}
         </div>
         <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
           <MusicSearchField value={query} category={category} />

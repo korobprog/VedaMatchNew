@@ -37,16 +37,19 @@ describe('normalizeServiceInput', () => {
     ).toEqual({ name: 'Знакомства', category: 'community' });
   });
 
-  it('не пропускает пустые имя, описание и категорию', () => {
+  it('не пропускает пустые имя и категорию', () => {
     expect(() => normalizeServiceInput({ name: '   ' })).toThrow(
-      BadRequestException,
-    );
-    expect(() => normalizeServiceInput({ description: '' })).toThrow(
       BadRequestException,
     );
     expect(() => normalizeServiceInput({ category: ' ' })).toThrow(
       BadRequestException,
     );
+  });
+
+  it('разрешает стереть описание: подпись сервиса — решение администратора', () => {
+    expect(normalizeServiceInput({ description: '   ' })).toEqual({
+      description: '',
+    });
   });
 
   it('требует внутренний адрес: карточка портала ведёт в портал', () => {
