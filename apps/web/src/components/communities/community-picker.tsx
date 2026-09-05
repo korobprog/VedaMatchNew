@@ -253,8 +253,19 @@ export function CommunityPicker() {
             </ul>
           )}
 
+          {/* Справочник общин был доступен только по набранному вручную
+              адресу: ссылки на `/communities` не было нигде на портале, и
+              карта с поиском по городу существовала для тех, кто про неё уже
+              знает. Поле выше ищет по названию и городу, но не показывает,
+              что вообще есть рядом. */}
           <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
-            Не нашли свою?{" "}
+            <Link
+              href="/communities"
+              className="font-medium text-zinc-700 underline dark:text-zinc-300"
+            >
+              Все общины на карте
+            </Link>
+            . Не нашли свою?{" "}
             <Link
               href="/communities/new"
               className="font-medium text-zinc-700 underline dark:text-zinc-300"

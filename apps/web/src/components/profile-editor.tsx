@@ -304,11 +304,24 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
         </div>
         <NameHints value={name} label="обычном имени" />
         <NameHints value={spiritualName} label="духовном имени" />
+        {/* Показываем оба имени, как это делает страница профиля: заполнив
+            духовное, человек переставал понимать, куда делось обычное и видит
+            ли его теперь кто-нибудь. Ответ — «портал зовёт вас духовным, а
+            обычное остаётся у вас и у администрации» — теперь виден прямо
+            под полями. */}
         <p className="mt-3 text-sm text-text-2">
           Вас будут видеть как{" "}
           <span className="font-medium text-text-0">
             {spiritualName.trim() || name.trim() || "—"}
           </span>
+          {spiritualName.trim() && name.trim() ? (
+            <>
+              {" "}
+              — обычное имя{" "}
+              <span className="font-medium text-text-0">{name.trim()}</span>{" "}
+              остаётся в вашем профиле и видно администрации
+            </>
+          ) : null}
           . Чтобы убрать духовное имя, очистите поле.
         </p>
       </Card>

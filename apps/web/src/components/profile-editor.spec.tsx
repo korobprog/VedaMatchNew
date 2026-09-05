@@ -108,6 +108,27 @@ describe("ProfileEditor — имя", () => {
     expect(screen.getByText("Мадхава дас")).toBeInTheDocument();
   });
 
+  it("объясняет, куда делось обычное имя, когда заполнены оба", async () => {
+    const user = userEvent.setup();
+    render(<ProfileEditor user={profile} />);
+
+    await user.type(screen.getByLabelText("Духовное имя"), "Мадхава дас");
+
+    // Заполнив духовное, человек переставал понимать, видит ли кто-нибудь
+    // обычное. Ответ теперь стоит прямо под полями.
+    expect(
+      screen.getByText(/остаётся в вашем профиле и видно администрации/),
+    ).toBeInTheDocument();
+  });
+
+  it("без духовного имени про второе не говорит: говорить не о чем", () => {
+    render(<ProfileEditor user={profile} />);
+
+    expect(
+      screen.queryByText(/остаётся в вашем профиле/),
+    ).not.toBeInTheDocument();
+  });
+
   it("сохраняет оба имени в PATCH /profile", async () => {
     const user = userEvent.setup();
     const fetchMock = stubFetch({
