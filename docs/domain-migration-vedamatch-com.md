@@ -503,3 +503,34 @@ zzz-proverka-wildcard.vedamatch.com. 3600 IN A 45.150.9.229
 
 Единственное незакрытое — почта. Трансферу она не мешает, но набор записей
 для Cloudflare без неё не финализируется.
+
+## 13. Трансфер в NiceNIC: как это устроено у них
+
+Снято с https://nicenic.com/domain/transfer.php (06.09.2026). NiceNIC —
+ICANN-аккредитованный регистратор, IANA ID 3765, то есть не реселлер, в
+отличие от Timeweb.
+
+Форма переноса состоит из четырёх полей: Domain Name, Auth Code, Term
+(1–9 лет) и галочка согласия с Domain Transfer Policy. Перенос `.com`
+на их прайс-листе — $14.99 и **включает год продления**.
+
+Что они заявляют прямым текстом и что для нас важно:
+
+- **«Your nameservers stay the same during the transfer.»** Снимает главный
+  риск раздела 8: делегирование на `ns1/ns2.firstvds.ru` сохранится, зона не
+  обнулится. Но отсюда же следует предупреждение — они пишут «make sure it
+  remains active to avoid downtime»: **аккаунт firstvds нельзя закрывать,
+  пока зона не переехала в Cloudflare.** Иначе `.com` погаснет.
+- «Transfers often finish within 24 hours and rarely take more than 7 days».
+- «If the old registrar blocks a lookup, we'll apply your account's default
+  contact info» — контакты в профиле NiceNIC надо заполнить до переноса,
+  иначе они могут уехать в WHOIS домена.
+- Бесплатное пожизненное скрытие WHOIS для gTLD — включить **после**
+  завершения переноса.
+- У них есть свой anycast DNS и бесплатный DNSSEC. То есть Cloudflare не
+  обязателен. Держать зону всё-таки лучше отдельно от регистратора: это ровно
+  та связка, из-за которой в Timeweb управление NS оказалось недоступным.
+
+Требования к домену у них совпадают с тем, что уже проверено: регистрация
+старше 60 дней, замок снят (`Domain Status: ok`), код на руках, доступ к
+почте регистранта есть.
