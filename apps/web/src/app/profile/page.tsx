@@ -125,11 +125,15 @@ export default async function ProfilePage() {
               </dd>
             </div>
           </dl>
+          {/* «Пройти самоидентификацию заново» читалось как «всё придётся
+              заполнять с нуля» и отпугивало от правки: анкета помнит прошлые
+              ответы и открывается с ними. Говорим, что произойдёт на самом
+              деле. */}
           <Link
             href="/self-identification"
             className="mt-6 block rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-4 py-3 text-center text-sm font-medium text-white transition hover:shadow-[0_0_24px_rgba(255,62,158,0.45)]"
           >
-            Пройти самоидентификацию заново
+            Редактировать анкету
           </Link>
           <InstallButton className="mt-3" />
           <LogoutButton variant="danger" className="mt-3 w-full py-3">
