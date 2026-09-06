@@ -4,6 +4,11 @@ import { RecommendationsView } from "@/components/union/recommendations-view";
 import { RecommendationsEmpty } from "@/components/union/recommendations-empty";
 import { countNarrowingFilters } from "@/components/union/recommendation-empty-state";
 import { RecommendationFilters } from "@/components/union/recommendation-filters";
+import { UnionPageSizeSelect } from "@/components/union/page-size-select";
+import {
+  DEFAULT_UNION_PAGE_SIZE,
+  resolveUnionPageSize,
+} from "@/components/union/page-size";
 import { UnionNav } from "@/components/union/union-nav";
 import { UnionTabBar } from "@/components/union/union-tabbar";
 import { UnionTopBar } from "@/components/union/union-top-bar";
@@ -98,11 +103,22 @@ export default async function UnionRecommendationsPage({
               items={recommendations.items}
               total={recommendations.total}
             />
-            <Pagination
-              params={params}
-              page={recommendations.page}
-              totalPages={recommendations.totalPages}
-            />
+            {/* «Показывать по» — рядом с перелистыванием, там и возникает
+                вопрос. Не показываем, когда выбирать нечего: при выдаче
+                меньше самой мелкой страницы любое значение даёт один и тот
+                же экран. */}
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              {(recommendations.total > DEFAULT_UNION_PAGE_SIZE ||
+                resolveUnionPageSize(params.pageSize) !==
+                  DEFAULT_UNION_PAGE_SIZE) && (
+                <UnionPageSizeSelect params={params} />
+              )}
+              <Pagination
+                params={params}
+                page={recommendations.page}
+                totalPages={recommendations.totalPages}
+              />
+            </div>
           </>
         )}
       </main>
@@ -125,7 +141,7 @@ function Pagination({
 }) {
   if (totalPages <= 1) return null;
   return (
-    <div className="mt-6 flex justify-center gap-3">
+    <div className="flex justify-center gap-3">
       {page > 1 && (
         <Link
           href={`/union/recommendations?${withPage(params, page - 1)}`}
