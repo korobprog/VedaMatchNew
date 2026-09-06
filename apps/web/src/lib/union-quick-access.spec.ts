@@ -11,6 +11,7 @@ describe("buildUnionQuickAccessData", () => {
       previewAvatars: [],
       moreCount: 0,
       profileCompletionPercent: null,
+      profileItems: [],
     });
   });
 
@@ -78,5 +79,7 @@ describe("buildUnionQuickAccessData", () => {
 
     expect(below.profileCompletionPercent).toBe(72);
     expect(complete.profileCompletionPercent).toBeNull();
+    // Значки полей идут только вместе с полосой.
+    expect(complete.profileItems).toEqual([]);
   });
 });

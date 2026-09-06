@@ -1,4 +1,6 @@
 import type { UnionQuickAccessData } from "@/lib/union-quick-access";
+import { CompletenessIcon } from "./completeness-icons";
+import { unionProfileFieldLabels } from "./dictionaries";
 
 export function UnionQuickAccessWidget({
   unreadMessages,
@@ -6,6 +8,7 @@ export function UnionQuickAccessWidget({
   previewAvatars,
   moreCount,
   profileCompletionPercent,
+  profileItems,
 }: UnionQuickAccessData) {
   const hasChips = unreadMessages > 0 || incomingLikes > 0;
   const hasAvatars = previewAvatars.length > 0;
@@ -76,6 +79,36 @@ export function UnionQuickAccessWidget({
             }}
           />
         </div>
+      )}
+      {hasProgress && profileItems.length > 0 && (
+        /* Что именно заполнено, а что нет — значками под полосой. Процент
+           сам по себе не говорит, за что взяться; ряд значков говорит:
+           заполненное — ярче, пустое — бледный контур. Название поля и
+           состояние — в подписи для наведения и для скринридера. */
+        <ul
+          aria-label="Поля анкеты"
+          className="flex flex-wrap gap-1.5"
+        >
+          {profileItems.map((item) => {
+            const label = unionProfileFieldLabels[item.key];
+            return (
+              <li
+                key={item.key}
+                title={`${label}: ${item.filled ? "заполнено" : "не заполнено"}`}
+                className={
+                  item.filled
+                    ? "text-cyan"
+                    : "text-text-2 opacity-40"
+                }
+              >
+                <CompletenessIcon field={item.key} className="size-4" />
+                <span className="sr-only">
+                  {label}: {item.filled ? "заполнено" : "не заполнено"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );
