@@ -13,6 +13,7 @@ import { QuoteDiscoveryService } from './quote-discovery.service';
 import { MotivationBooksService } from './motivation-books.service';
 import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationCopyService } from './motivation-copy.service';
+import { MotivationAudioService } from './motivation-audio.service';
 import { MotivationManualPostService } from './motivation-manual-post.service';
 import { MotivationStoryRebuildService } from './motivation-story-rebuild.service';
 import { MotivationModerationService } from './motivation-moderation.service';
@@ -42,6 +43,7 @@ import { MotivationAnalyticsService } from './motivation-analytics.service';
     MotivationBooksService,
     MotivationCategoriesService,
     MotivationCopyService,
+    MotivationAudioService,
     MotivationManualPostService,
     MotivationStoryRebuildService,
     MotivationModerationService,

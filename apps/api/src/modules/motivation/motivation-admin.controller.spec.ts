@@ -20,6 +20,8 @@ describe('MotivationAdminController moderation endpoints', () => {
       savePrompts: jest.fn(),
     };
     const controller = new MotivationAdminController(
+      // Первым идёт сервис фоновой музыки: маршруты модерации его не трогают.
+      {} as never,
       service as never,
       {} as never,
       {} as never,

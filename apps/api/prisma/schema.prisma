@@ -701,6 +701,32 @@ model MotivationCategory {
   @@index([parentId])
 }
 
+/// Фоновая музыка Вдохновения: спокойные записи, под которые читают шлоки.
+///
+/// Свои файлы, а не ссылка на плейлист Музыки: сервисы портала не ходят в
+/// чужие таблицы, а фон и киртаны — разные подборки, и одна очередь на двоих
+/// мешала бы обеим.
+///
+/// С `MotivationTrack` не путать: тот — подложка, которую воркер вшивает
+/// внутрь ролика, и создаётся она генерацией по промпту. Эту редакция
+/// загружает файлом, и играет она поверх ленты, пока человек читает.
+model MotivationAudio {
+  id              String   @id @default(uuid())
+  title           String
+  /// Публичный адрес файла в хранилище — тот же путь, что у кадров.
+  url             String
+  /// Длительность в секундах, если её удалось узнать при загрузке.
+  durationSeconds Int?
+  /// Выключенная запись остаётся в списке админки, но в ленту не идёт:
+  /// удалять ради того, чтобы «пока не играло», значит терять файл.
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
 model MotivationModerationAudit {
   id        String         @id @default(uuid())
   postId    String

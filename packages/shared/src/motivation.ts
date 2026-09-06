@@ -50,6 +50,19 @@ export interface MotivationQuoteDto {
 
 export type MotivationPostOrigin = 'editorial' | 'user';
 
+/**
+ * Фоновая запись Вдохновения — спокойный инструментал, под который читают.
+ * Своя подборка сервиса: с плейлистами Музыки она не связана.
+ */
+export interface MotivationAudioDto {
+  id: string;
+  title: string;
+  url: string;
+  durationSeconds: number | null;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 export interface MotivationPostDto {
   id: string;
   slug: string;

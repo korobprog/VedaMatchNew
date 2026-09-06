@@ -17,7 +17,7 @@ import type {
   MotivationReelDto,
   MotivationSourceWatchDto,
   MotivationStatsDto,
-} from "@vedamatch/shared";
+  MotivationAudioDto,} from "@vedamatch/shared";
 
 import { parseJsonBody } from "@/lib/json-body";
 
@@ -124,6 +124,17 @@ export const getMotivationCurrentEvent = () =>
 
 export const getAdminMotivationCategories = () =>
   motivationGet<MotivationCategoryDto[]>("/admin/motivation/categories");
+
+/** Фон для чтения — то, что включила редакция. Гостю пустой список. */
+export const getMotivationAudio = async () =>
+  (await motivationGet<{ items: MotivationAudioDto[] }>("/motivation/audio"))
+    ?.items ?? [];
+
+/** Фон для чтения — админский список: включённые и выключенные вместе. */
+export const getAdminMotivationAudio = async () =>
+  (await motivationGet<{ items: MotivationAudioDto[] }>(
+    "/admin/motivation/audio",
+  ))?.items ?? [];
 
 export const getMotivationSettings = () =>
   motivationGet<MotivationSettingsDto>("/admin/motivation/settings");
