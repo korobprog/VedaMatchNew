@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { nextUnreadCount } from "./unread-count";
 import Link from "next/link";
 import type {
   ChatConversationSummary,
@@ -28,10 +30,38 @@ const TABS: { id: Tab; label: string }[] = [
  * счётчик, не дожидаясь перезагрузки страницы — иначе «живой чат» живой
  * только внутри открытой переписки.
  */
-export function ChatListView({ initial }: { initial: ChatListState }) {
+export function ChatListView({
+  initial,
+  viewerId,
+}: {
+  initial: ChatListState;
+  /** Своё прочтение гасит счётчик; чужое — про галочки у собеседника. */
+  viewerId: string;
+}) {
+  const router = useRouter();
   const [state, setState] = useState(initial);
+
+  /**
+   * Свежий список при каждом заходе.
+   *
+   * Пока человек читает переписку, список размонтирован и событий не
+   * слышит, а роутер держит страницу в кеше — вернувшись назад, он видел
+   * прежнюю зелёную метку на беседе, которую только что прочитал.
+   * Перезапрос дешевле, чем разбираться, какие счётчики устарели: список
+   * бесед и так живой.
+   */
+  useEffect(() => {
+    router.refresh();
+  }, [router]);
   const [tab, setTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
+
+  /* Обновление сервером приезжает новым `initial`; без этого состояние
+     осталось бы тем, что пришло при первом рендере, и `router.refresh()`
+     ничего бы не менял. */
+  useEffect(() => {
+    setState(initial);
+  }, [initial]);
 
   useEffect(() => {
     return subscribeToChat((event) => {
@@ -50,6 +80,22 @@ export function ChatListView({ initial }: { initial: ChatListState }) {
         }));
         return;
       }
+      // Открыли беседу — счётчик у неё гаснет здесь же. Раньше список
+      // слушал только новые сообщения, и зелёная метка висела до
+      // перезагрузки страницы: человек уже прочитал, а список утверждал
+      // обратное.
+      if (event.type === "read") {
+        if (event.userId !== viewerId) return;
+        setState((current) => ({
+          ...current,
+          conversations: current.conversations.map((conversation) =>
+            conversation.id === event.conversationId
+              ? { ...conversation, unreadCount: 0 }
+              : conversation,
+          ),
+        }));
+        return;
+      }
       if (event.type === "message.created") {
         setState((current) => ({
           ...current,
@@ -60,12 +106,11 @@ export function ChatListView({ initial }: { initial: ChatListState }) {
                     ...conversation,
                     lastMessage: event.message,
                     lastMessageAt: event.message.createdAt,
-                    // Своё сообщение непрочитанным не считается: его же
-                    // и отправили из соседней вкладки.
-                    unreadCount:
-                      event.message.readByOthers === undefined
-                        ? conversation.unreadCount + 1
-                        : conversation.unreadCount,
+                    unreadCount: nextUnreadCount(
+                      conversation.unreadCount,
+                      event.message,
+                      viewerId,
+                    ),
                   }
                 : conversation,
             )
@@ -73,7 +118,7 @@ export function ChatListView({ initial }: { initial: ChatListState }) {
         }));
       }
     });
-  }, []);
+  }, [viewerId]);
 
   /**
    * Поиск идёт двумя слоями: имена бесед фильтруются на месте (это мгновенно
