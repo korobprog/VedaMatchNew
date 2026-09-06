@@ -343,9 +343,20 @@ describe('порядок выдачи справочника', () => {
     expect(sql('new')).toContain('p."createdAt" DESC');
   });
 
+  it('город берётся у владельца карточки — своего у неё нет', () => {
+    // Проверка на `p."city"` закрепляла несуществующий столбец: запрос
+    // падал на `column p.city does not exist`, а тест проходил.
+    expect(sql('city')).toContain(`u."homeLocation"->>'city'`);
+    expect(sql('city')).not.toContain('p."city"');
+  });
+
   it('город без города уходит в конец, а не в начало', () => {
-    expect(sql('city')).toContain('p."city"');
     expect(sql('city')).toContain('NULLS LAST');
+  });
+
+  it('спрятанный город не сортируется наравне с показанным', () => {
+    // Иначе порядок выдачи рассказывает то, что человек закрыл настройками.
+    expect(sql('city')).toContain(`p."fieldPrivacy"->>'city'`);
   });
 
   it('у каждого порядка есть tiebreak по id', () => {

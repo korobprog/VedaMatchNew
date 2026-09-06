@@ -240,6 +240,21 @@ function likePattern(value: string): string {
 
 /** Нормализованный город владельца карточки прямо в SQL. */
 const OWNER_CITY = Prisma.sql`lower(trim(u."homeLocation"->>'city'))`;
+
+/**
+ * Город для сортировки — тот же, что показан в карточке.
+ *
+ * У карточки своего города нет: он берётся из `homeLocation` владельца, тем
+ * же выражением, что и фильтр по городу. Спрятанный настройками приватности
+ * город уходит в конец наравне с незаполненным — сортировать по тому, чего
+ * человек не показывает, значит выдавать это порядком выдачи.
+ */
+const SORTED_CITY = Prisma.sql`
+  CASE
+    WHEN COALESCE(p."fieldPrivacy"->>'city', 'everyone') <> 'hidden'
+    THEN nullif(trim(u."homeLocation"->>'city'), '')
+  END
+`;
 const OWNER_COUNTRY = Prisma.sql`lower(trim(u."homeLocation"->>'country'))`;
 const OWNER_LAT = Prisma.sql`(u."homeLocation"->>'lat')::double precision`;
 const OWNER_LON = Prisma.sql`(u."homeLocation"->>'lon')::double precision`;
@@ -480,7 +495,7 @@ export function searchOrderBy(sort: ContactsSearchSort): Prisma.Sql {
     return Prisma.sql`ORDER BY p."createdAt" DESC, p."id" DESC`;
   if (sort === 'city')
     return Prisma.sql`
-      ORDER BY p."city" COLLATE "ru-RU-x-icu" ASC NULLS LAST,
+      ORDER BY ${SORTED_CITY} COLLATE "ru-RU-x-icu" ASC NULLS LAST,
         COALESCE(u."spiritualName", u."name") COLLATE "ru-RU-x-icu" ASC,
         p."id" DESC
     `;
