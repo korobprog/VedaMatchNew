@@ -62,7 +62,7 @@ export default async function MotivationCollectionPage({
               ))}
             </ul>
           )}
-          <MotivationCollectionGrid posts={feed?.items ?? []} />
+          <MotivationCollectionGrid posts={feed?.items ?? []} category={slug} />
         </div>
       </main>
     </div>

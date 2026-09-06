@@ -4,7 +4,10 @@ import {
   countQueue,
   selectPublishedPosts,
 } from "@/components/motivation/admin/queue-selectors";
-import { getAdminMotivationPosts } from "@/lib/motivation-api";
+import {
+  getAdminMotivationPosts,
+  getMotivationCategories,
+} from "@/lib/motivation-api";
 
 /**
  * Опубликованное — отдельным разделом.
@@ -19,8 +22,11 @@ export default async function AdminMotivationPublishedPage({
   /** `?post=<slug>` — переход из ленты: открываем правку сразу этой карточки. */
   searchParams: Promise<{ post?: string }>;
 }) {
-  const [posts, { post }] = await Promise.all([
+  const [posts, categories, { post }] = await Promise.all([
     getAdminMotivationPosts(),
+    // Справочник — ради выбора категории в правке: перекладывать вышедшую
+    // карточку в другую папку иначе можно было только пересоздав её.
+    getMotivationCategories(),
     searchParams,
   ]);
 
@@ -37,6 +43,7 @@ export default async function AdminMotivationPublishedPage({
       />
       <MotivationPublishedList
         posts={posts ? selectPublishedPosts(posts) : null}
+        categories={categories ?? []}
         openSlug={post}
       />
     </>

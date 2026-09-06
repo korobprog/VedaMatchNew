@@ -76,8 +76,16 @@ export function MotivationCollections({
  */
 export function MotivationCollectionGrid({
   posts,
+  category,
 }: {
   posts: MotivationPostDto[];
+  /**
+   * Слаг папки, из которой открывают карточку. Уезжает в ленту вместе с
+   * постом: открыв «Пословицы», человек ждёт, что дальше листаются
+   * пословицы, а не вся база — иначе папка была бы просто витриной, из
+   * которой выпадают в общую ленту и обратно не находят дорогу.
+   */
+  category?: string;
 }) {
   if (posts.length === 0)
     return (
@@ -91,7 +99,9 @@ export function MotivationCollectionGrid({
       {posts.map((post) => (
         <li key={post.id}>
           <Link
-            href={`/motivation?post=${encodeURIComponent(post.slug)}`}
+            href={`/motivation?post=${encodeURIComponent(post.slug)}${
+              category ? `&category=${encodeURIComponent(category)}` : ""
+            }`}
             className="group block overflow-hidden rounded-xl border border-glass-brd"
           >
             {/* Ссылка на хранилище подписана и может истечь — next/image не

@@ -9,6 +9,7 @@ import { splitQuoteAndExplanation } from "@/components/motivation/quote-text";
 import { getProfile } from "@/lib/api";
 import { getMotivationCurrentEvent, getMyMotivationReels } from "@/lib/motivation-api";
 import { PostcardButton } from "@/components/motivation/postcard-button";
+import { DeleteOwnReelButton } from "@/components/motivation/delete-own-reel";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
@@ -58,11 +59,18 @@ export default async function MyReelsPage() {
             {items.map((reel) => (
               <li key={reel.id} className="space-y-2">
                 <ReelCard reel={reel} />
-                {reel.stage === "published" && (
-                  <div className="pl-1">
+                {/* Открытка — только у вышедшего, удаление — у любого:
+                    отклонённый и зависший на генерации убирают чаще, чем
+                    опубликованный, и запрещать это было бы страннее всего. */}
+                <div className="flex flex-wrap items-center gap-2 pl-1">
+                  {reel.stage === "published" && (
                     <PostcardButton postId={reel.post.id} event={event} />
-                  </div>
-                )}
+                  )}
+                  <DeleteOwnReelButton
+                    postId={reel.post.id}
+                    published={reel.stage === "published"}
+                  />
+                </div>
               </li>
             ))}
           </ul>

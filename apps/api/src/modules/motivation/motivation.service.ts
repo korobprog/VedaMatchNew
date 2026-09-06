@@ -288,7 +288,11 @@ export class MotivationService {
       likes: { where: { userId }, select: { userId: true } },
       // Имя автора наружу собирает resolveDisplayName, поэтому духовное имя
       // тянем рядом с мирским — иначе подпись слайда молча станет мирской.
-      author: { select: { name: true, spiritualName: true } },
+      author: { select: { id: true, name: true, spiritualName: true } },
+      // Глава, из которой выделен стих: по ней слайд открывает комментарий.
+      // Слаги лежат в своей таблице модуля, а не читаются из Библиотеки, —
+      // сервис в чужие таблицы не ходит.
+      quote: { select: { vedabaseBookSlug: true, vedabaseChapterSlug: true } },
     } as const;
     // Один запрос на оба трека: доля вайшнавских публикаций из ленты убрана,
     // и делить выборку больше незачем — что показывать, решают отмеченные
@@ -707,6 +711,31 @@ export class MotivationService {
     this.admin(user);
     const post = await this.prisma.motivationPost.findUnique({
       where: { id },
+      select: { id: true, quoteId: true },
+    });
+    if (!post) throw new NotFoundException('Motivation post not found');
+    await this.prisma.$transaction(async (transaction) => {
+      await transaction.motivationPost.delete({ where: { id } });
+      if (post.quoteId)
+        await transaction.motivationQuote.delete({
+          where: { id: post.quoteId },
+        });
+    });
+  }
+  /**
+   * Автор убирает свой рилс.
+   *
+   * Отдельным методом, а не флагом в `adminDelete`: там проверка роли, здесь
+   * — проверка авторства, и путать эти два условия в одном `if` опасно.
+   * Чужой пост отвечает «не найдено», а не «нельзя»: иначе перебором
+   * идентификаторов можно выяснить, что за ними стоит.
+   *
+   * Цитата уходит вместе с постом ровно там же, где и у администратора: она
+   * заведена этим рилсом и без него никому не принадлежит.
+   */
+  async deleteOwn(userId: string, id: string): Promise<void> {
+    const post = await this.prisma.motivationPost.findFirst({
+      where: { id, authorUserId: userId, origin: 'user' },
       select: { id: true, quoteId: true },
     });
     if (!post) throw new NotFoundException('Motivation post not found');
@@ -1141,11 +1170,19 @@ export class MotivationService {
       isOwn: Boolean(viewerId && post.authorUserId === viewerId),
       author: post.author
         ? {
+            id: post.author.id,
             name: resolveDisplayName(
               post.author as { name: string; spiritualName: string | null },
             ),
           }
         : null,
+      library:
+        post.quote?.vedabaseBookSlug && post.quote?.vedabaseChapterSlug
+          ? {
+              bookSlug: post.quote.vedabaseBookSlug,
+              chapterSlug: post.quote.vedabaseChapterSlug,
+            }
+          : null,
     };
   }
 }

@@ -1244,3 +1244,72 @@ describe('MotivationService.adminUpdate', () => {
     expect(update.mock.calls[0][0].data).not.toHaveProperty('sourceVerified');
   });
 });
+
+describe('MotivationService.deleteOwn', () => {
+  /** Сервис собирается позиционно: методу удаления нужна одна только Prisma. */
+  const build = (prisma: unknown) =>
+    new MotivationService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+  it('убирает свой рилс вместе с его цитатой', async () => {
+    const del = jest.fn().mockResolvedValue({});
+    const quoteDelete = jest.fn().mockResolvedValue({});
+    const prisma = {
+      motivationPost: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'p1', quoteId: 'q1' }),
+        delete: del,
+      },
+      motivationQuote: { delete: quoteDelete },
+      $transaction: (run: (tx: unknown) => unknown) =>
+        run({
+          motivationPost: { delete: del },
+          motivationQuote: { delete: quoteDelete },
+        }),
+    };
+    await build(prisma).deleteOwn('user-1', 'p1');
+
+    expect(prisma.motivationPost.findFirst).toHaveBeenCalledWith({
+      where: { id: 'p1', authorUserId: 'user-1', origin: 'user' },
+      select: { id: true, quoteId: true },
+    });
+    expect(del).toHaveBeenCalledWith({ where: { id: 'p1' } });
+    expect(quoteDelete).toHaveBeenCalledWith({ where: { id: 'q1' } });
+  });
+
+  it('пост без своей цитаты удаляет, а чужую не трогает', async () => {
+    const quoteDelete = jest.fn();
+    const prisma = {
+      motivationPost: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'p1', quoteId: null }),
+      },
+      $transaction: (run: (tx: unknown) => unknown) =>
+        run({
+          motivationPost: { delete: jest.fn().mockResolvedValue({}) },
+          motivationQuote: { delete: quoteDelete },
+        }),
+    };
+    await build(prisma).deleteOwn('user-1', 'p1');
+
+    expect(quoteDelete).not.toHaveBeenCalled();
+  });
+
+  it('чужой пост — «не найдено», а не «нельзя»: иначе перебор идентификаторов выдал бы, что за ними стоит', async () => {
+    const prisma = {
+      motivationPost: { findFirst: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn(),
+    };
+    await expect(build(prisma).deleteOwn('user-1', 'p1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});

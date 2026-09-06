@@ -35,6 +35,7 @@ const post = (over: Partial<MotivationPostDto> = {}): MotivationPostDto => ({
   origin: "editorial",
   author: null,
   isOwn: false,
+  library: null,
   feedTier: "fresh",
   ...over,
 });

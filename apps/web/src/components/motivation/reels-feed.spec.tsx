@@ -41,6 +41,7 @@ const post = (id: string, overrides: Partial<MotivationPostDto> = {}): Motivatio
   origin: "editorial",
   author: null,
   isOwn: false,
+  library: null,
   feedTier: "unseen",
   ...overrides,
 });
@@ -137,14 +138,17 @@ describe("ReelsFeed", () => {
     expect(screen.getByRole("button", { name: /Поддержать развитие/ })).toBeInTheDocument();
   });
 
-  it("signs editorial posts with the service and user reels with their author", () => {
+  it("signs editorial posts with the service and sends the author's name to their profile", () => {
     fetchOk({});
     render(
       <ReelsFeed
         initial={{
           items: [
             post("a"),
-            post("b", { origin: "user", author: { name: "Радха-деви" } }),
+            post("b", {
+              origin: "user",
+              author: { id: "u-radha", name: "Радха-деви" },
+            }),
           ],
           nextCursor: null,
         }}
@@ -153,8 +157,75 @@ describe("ReelsFeed", () => {
       />,
     );
 
-    expect(screen.getByText("VedaMatch · ежедневная")).toBeInTheDocument();
-    expect(screen.getByText("Радха-деви · рилс участника")).toBeInTheDocument();
+    expect(screen.getByText("VedaMatch")).toBeInTheDocument();
+    // Имя участника — ссылка в его профиль: у редакционной публикации
+    // человека-автора нет, и ссылки там быть не должно.
+    expect(screen.getByRole("link", { name: "Радха-деви" })).toHaveAttribute(
+      "href",
+      "/chat/people/users/u-radha",
+    );
+    expect(screen.queryByRole("link", { name: "VedaMatch" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the folder while loading the next page of a category feed", async () => {
+    const fetchMock = fetchOk({ items: [], nextCursor: null });
+    // Наблюдатель, который сразу говорит «слайд на экране»: подгрузку
+    // запускает именно активация, а в jsdom её иначе не случается.
+    class EagerObserver {
+      constructor(private readonly notify: (entries: unknown[]) => void) {}
+      observe(node: Element) {
+        this.notify([{ isIntersecting: true, intersectionRatio: 1, target: node }]);
+      }
+      disconnect() {}
+      unobserve() {}
+    }
+    vi.stubGlobal("IntersectionObserver", EagerObserver);
+
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: "cursor-1" }}
+        tab="forYou"
+        donation={null}
+        category="poslovitsy"
+      />,
+    );
+
+    // Без слага вторая страница приехала бы из всей базы, и папка
+    // «Пословицы» на третьем свайпе молча стала бы общей лентой.
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("category=poslovitsy"),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("offers the purport only for a post that came from a chapter of the Library", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{
+          items: [
+            post("a", {
+              library: { bookSlug: "bhagavad-gita", chapterSlug: "2" },
+            }),
+            post("b"),
+          ],
+          nextCursor: null,
+        }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    const links = screen.getAllByRole("link", { name: /Комментарий/ });
+    // Ровно один: у второго слайда главы нет, и кнопка, ведущая в поиск
+    // «где-то там», обещала бы комментарий и не показала бы его.
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute(
+      "href",
+      "/vedabase/books/bhagavad-gita/2",
+    );
   });
 
   it("offers to report someone else's reel but not your own", () => {
@@ -163,8 +234,8 @@ describe("ReelsFeed", () => {
       <ReelsFeed
         initial={{
           items: [
-            post("a", { origin: "user", author: { name: "Гопал" }, isOwn: false }),
-            post("b", { origin: "user", author: { name: "Я" }, isOwn: true }),
+            post("a", { origin: "user", author: { id: "u-gopal", name: "Гопал" }, isOwn: false }),
+            post("b", { origin: "user", author: { id: "u-me", name: "Я" }, isOwn: true }),
             post("c"),
           ],
           nextCursor: null,
@@ -187,7 +258,7 @@ describe("ReelsFeed", () => {
             post("a", {
               videoUrl: "https://cdn/a.mp4",
               origin: "user",
-              author: { name: "Гопал" },
+              author: { id: "u-gopal", name: "Гопал" },
             }),
           ],
           nextCursor: null,
@@ -198,7 +269,7 @@ describe("ReelsFeed", () => {
     );
 
     // Вторая подпись поверх кадра закрывала бы конец вшитой цитаты.
-    expect(screen.queryByText("Гопал · рилс участника")).not.toBeInTheDocument();
+    expect(screen.queryByText("Гопал")).not.toBeInTheDocument();
   });
 
   it("does not draw the quote over a video: the clip already carries it", () => {

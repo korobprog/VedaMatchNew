@@ -3,7 +3,11 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { EyeOff, Pencil, X } from "lucide-react";
-import type { MotivationAdminCandidateDto } from "@vedamatch/shared";
+import type {
+  MotivationAdminCandidateDto,
+  MotivationCategoryDto,
+} from "@vedamatch/shared";
+import { CategorySelect } from "./category-select";
 import { DeletePostButton } from "./delete-post-button";
 import { UploadCardImage } from "./upload-card-image";
 import { LoadFailure } from "./load-failure";
@@ -30,9 +34,12 @@ import {
  */
 export function MotivationPublishedList({
   posts,
+  categories = [],
   openSlug,
 }: {
   posts: MotivationAdminCandidateDto[] | null;
+  /** Справочник для выбора категории в правке. */
+  categories?: MotivationCategoryDto[];
   /**
    * Слаг карточки, ради которой сюда пришли из ленты. Её правка открыта
    * сразу: искать глазами то, на что только что смотрел, — лишний шаг.
@@ -201,6 +208,7 @@ export function MotivationPublishedList({
               {editing === post.id && (
                 <PublishedTextForm
                   post={post}
+                  categories={categories}
                   pendingAction={pending[post.id]}
                   onSaved={() => setEditing(null)}
                   run={run}
@@ -227,11 +235,13 @@ export function MotivationPublishedList({
  */
 function PublishedTextForm({
   post,
+  categories,
   pendingAction,
   onSaved,
   run,
 }: {
   post: MotivationAdminCandidateDto;
+  categories: MotivationCategoryDto[];
   pendingAction: string | undefined;
   onSaved: () => void;
   run: ReturnType<typeof useAdminCommand>["run"];
@@ -242,6 +252,7 @@ function PublishedTextForm({
   const [speaker, setSpeaker] = useState(post.attributionSpeaker ?? "");
   const [work, setWork] = useState(post.attributionWork ?? "");
   const [locator, setLocator] = useState(post.attributionLocator ?? "");
+  const [category, setCategory] = useState(post.category);
 
   const textChanged =
     title !== post.title || text !== post.text || storyText !== post.storyText;
@@ -249,7 +260,8 @@ function PublishedTextForm({
     speaker !== (post.attributionSpeaker ?? "") ||
     work !== (post.attributionWork ?? "") ||
     locator !== (post.attributionLocator ?? "");
-  const changed = textChanged || attributionChanged;
+  const categoryChanged = category !== post.category;
+  const changed = textChanged || attributionChanged || categoryChanged;
 
   return (
     <div className="mt-3 space-y-3 border-t border-glass-brd pt-3">
@@ -310,6 +322,15 @@ function PublishedTextForm({
         </label>
       </div>
 
+      {/* Категория правится здесь же: заводя карточку, её кладут в папку
+          наугад, а разложить по местам приходят потом — и до этой правки
+          единственным способом было пересоздать карточку. */}
+      <CategorySelect
+        categories={categories}
+        value={category}
+        onChange={setCategory}
+      />
+
       {attributionChanged && (
         <p className="text-xs text-text-2">
           Правка подписи снимет отметку о проверенном источнике: она относилась
@@ -336,6 +357,7 @@ function PublishedTextForm({
               ...(attributionChanged
                 ? { attribution: { speaker, work, locator } }
                 : {}),
+              ...(categoryChanged ? { category } : {}),
             },
           });
           onSaved();

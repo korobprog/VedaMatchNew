@@ -82,6 +82,17 @@ describe("MotivationCollectionGrid", () => {
     );
   });
 
+  it("уносит в ленту саму папку, а не только карточку", () => {
+    render(<MotivationCollectionGrid posts={[post()]} category="poslovitsy" />);
+
+    // Без слага лента листалась бы дальше по всей базе, и человек,
+    // открывший «Пословицы», на третьем свайпе оказывался бы неизвестно где.
+    expect(screen.getByRole("link")).toHaveAttribute(
+      "href",
+      "/motivation?post=gita-2-13&category=poslovitsy",
+    );
+  });
+
   it("не молчит на пустой папке", () => {
     render(<MotivationCollectionGrid posts={[]} />);
 

@@ -293,6 +293,19 @@ export class MotivationController {
   ) {
     return this.reels.appeal(user.sub, id, input);
   }
+  /**
+   * Автор убирает свой рилс. Админское удаление живёт в
+   * `admin/motivation/posts/:id` — здесь роль ни при чём, проверяется
+   * авторство.
+   */
+  @Delete('motivation/posts/:id')
+  @UseGuards(AuthGuard)
+  deleteOwnPost(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.service.deleteOwn(user.sub, id);
+  }
   @Post('motivation/posts/:id/like')
   @UseGuards(AuthGuard)
   addLike(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {

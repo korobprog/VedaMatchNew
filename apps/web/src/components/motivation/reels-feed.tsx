@@ -54,6 +54,7 @@ export function ReelsFeed({
   tab,
   donation,
   order,
+  category,
   isAdmin = false,
   audio = [],
 }: {
@@ -70,6 +71,12 @@ export function ReelsFeed({
    * узнает и вернул бы ярусы вперемешку с уже показанным.
    */
   order?: "random";
+  /**
+   * Лента одной папки. Уезжает и в подгрузку: без неё вторая страница
+   * приехала бы из всей базы, и папка «Пословицы» на третьем свайпе молча
+   * превратилась бы в общую ленту.
+   */
+  category?: string;
 }) {
   const [items, setItems] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.nextCursor);
@@ -127,6 +134,7 @@ export function ReelsFeed({
       const query = new URLSearchParams({ cursor });
       if (tab === "saved") query.set("filter", "favorites");
       if (order) query.set("order", order);
+      if (category) query.set("category", category);
       const response = await apiFetch(`${API_URL}/motivation/feed?${query}`, { credentials: "include" });
       if (!response.ok) throw new Error(await response.text());
       const page = (await response.json()) as MotivationFeedResponse;
@@ -140,7 +148,7 @@ export function ReelsFeed({
     } finally {
       setPending(false);
     }
-  }, [cursor, pending, tab, order]);
+  }, [cursor, pending, tab, order, category]);
 
   // Подгрузка запускается из обработчика активации слайда, а не из эффекта:
   // так setState не каскадирует, а момент тот же — человек долистал до конца.
@@ -767,26 +775,50 @@ function ReelSlide({
         {/* У фото — сразу под цитатой, которую раскрывает. У ролика своей
             цитаты в DOM нет, поэтому кнопка остаётся в общем ряду ниже. */}
         {kind === "image" && explanationToggle}
-        {kind === "image" && source && (
-          <p className="mt-2 text-xs text-white/85">
-            <span aria-hidden="true">📖 </span>
-            {post.attributionSourceUrl ? (
-              <SourceLink href={post.attributionSourceUrl} className="underline decoration-dotted underline-offset-4">
-                {source}
-              </SourceLink>
-            ) : (
-              source
+        {/* Подпись одной строкой: кто принёс и откуда взято.
+            Раньше это были три этажа — источник, ряд кнопок и отдельная
+            плашка автора с отступами сверху и снизу, — и они съедали кадр
+            снизу вместе с цитатой. Стоят рядом потому, что отвечают на один
+            вопрос: чьи это слова.
+
+            У ролика подпись не дублируем: авторство и источник воркер вшивает
+            в сам кадр, а вторая строка поверх закрывала бы конец цитаты. */}
+        {kind === "image" && (
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-white/85">
+            <Byline post={post} />
+            {source && (
+              <>
+                <span aria-hidden="true" className="text-white/40">·</span>
+                <span className="min-w-0">
+                  <span aria-hidden="true">📖 </span>
+                  {post.attributionSourceUrl ? (
+                    <SourceLink href={post.attributionSourceUrl} className="underline decoration-dotted underline-offset-4">
+                      {source}
+                    </SourceLink>
+                  ) : (
+                    source
+                  )}
+                </span>
+              </>
             )}
           </p>
         )}
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/75">
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/75">
           {kind !== "image" && explanationToggle}
           {isLongQuote(quote) && <FullQuoteToggle quote={quote} source={source} />}
+          {/* Комментарий — слова комментатора о стихе, и живут они в
+              Библиотеке. Своей копии не заводим: она разошлась бы с
+              оригиналом на первой же правке книги. */}
+          {post.library && (
+            <Link
+              href={`/vedabase/books/${post.library.bookSlug}/${post.library.chapterSlug}`}
+              className="underline-offset-4 hover:underline"
+            >
+              Комментарий ›
+            </Link>
+          )}
           {post.origin === "user" && !post.isOwn && <ReportDialog postId={post.id} />}
         </div>
-        {/* У ролика подпись не дублируем: авторство и источник воркер вшивает
-            в сам кадр, а вторая строка поверх закрывала бы конец цитаты. */}
-        {kind === "image" && <Byline post={post} />}
       </div>
 
       {showExplanation && explanation && (
@@ -843,18 +875,31 @@ function CenteredSheet({
  */
 function Byline({ post }: { post: MotivationPostDto }) {
   const mine = post.origin === "user";
+  const dot = (
+    <span
+      aria-hidden="true"
+      className={`h-4 w-4 flex-none rounded-full border border-white/80 ${
+        mine ? "bg-gradient-to-br from-[#23F0C7] to-[#0B826F]" : "bg-gradient-to-br from-[#FF3E9E] to-[#FFC85C]"
+      }`}
+    />
+  );
+  // Профиль есть только у участника: у редакционной публикации автора-человека
+  // нет вовсе, и ссылка вела бы в никуда.
+  if (mine && post.author)
+    return (
+      <Link
+        href={`/chat/people/users/${post.author.id}`}
+        className="inline-flex min-w-0 items-center gap-1.5 underline-offset-4 hover:underline"
+      >
+        {dot}
+        <span className="truncate">{post.author.name}</span>
+      </Link>
+    );
   return (
-    <div className="mt-3 mb-2 flex items-center gap-2 text-xs text-white/85">
-      <span
-        aria-hidden="true"
-        className={`h-6 w-6 flex-none rounded-full border-[1.5px] border-white ${
-          mine ? "bg-gradient-to-br from-[#23F0C7] to-[#0B826F]" : "bg-gradient-to-br from-[#FF3E9E] to-[#FFC85C]"
-        }`}
-      />
-      <span className="truncate">
-        {mine ? `${post.author?.name ?? "Участник"} · рилс участника` : "VedaMatch · ежедневная"}
-      </span>
-    </div>
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      {dot}
+      <span className="truncate">{mine ? "Участник" : "VedaMatch"}</span>
+    </span>
   );
 }
 
@@ -868,10 +913,13 @@ function FullQuoteToggle({ quote, source }: { quote: string; source: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
+      {/* Мигает, чтобы её заметили: под обрезанной цитатой она — единственный
+          способ дочитать, а раньше терялась в ряду одинаковых надписей.
+          Класс обезврежен под `prefers-reduced-motion` в globals.css. */}
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="underline-offset-4 hover:underline"
+        className="vm-attention-blink font-semibold underline-offset-4 hover:underline"
       >
         Читать полностью ›
       </button>

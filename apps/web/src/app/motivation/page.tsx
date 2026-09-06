@@ -30,6 +30,7 @@ export default async function MotivationPage({
     tab?: string;
     post?: string;
     order?: string;
+    category?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -39,6 +40,9 @@ export default async function MotivationPage({
      выбирают однажды и надолго, — это «перемешай сейчас», и уходить за ним
      на страницу настроек дороже, чем нажать кнопку над лентой. */
   const order = params.order === "random" ? ("random" as const) : undefined;
+  /* Лента одной папки. Тоже в адресе: из неё выходят кнопкой «назад», и
+     состояние, которого нет в ссылке, при этом теряется молча. */
+  const category = params.category || undefined;
   const [user, feed, donation, stats, audio] = await Promise.all([
     getProfile(),
     // `?post=slug` открывает ленту на конкретном рилсе — так работает переход
@@ -47,6 +51,7 @@ export default async function MotivationPage({
       tab === "saved" ? "favorites" : "all",
       params.post,
       order,
+      category,
     ),
     getDonationSettings(),
     getMotivationStats(),
@@ -114,6 +119,7 @@ export default async function MotivationPage({
           tab={tab}
           donation={donation}
           order={order}
+          category={category}
           isAdmin={isAdmin}
           audio={audio}
         />
