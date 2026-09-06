@@ -59,6 +59,7 @@ import { MotivationAnalyticsService } from './motivation-analytics.service';
     MotivationMusicService,
     MotivationVideoWorkerService,
     MotivationHealthService,
+    MotivationAssistantListener,
   ],
 
   exports: [
