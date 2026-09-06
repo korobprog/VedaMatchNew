@@ -1,7 +1,19 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ChatMessageDto } from "@vedamatch/shared";
+vi.mock("@/lib/chat-client", () => ({
+  uploadChatFile: vi.fn().mockResolvedValue({
+    kind: "image",
+    url: "https://cdn/x.png",
+    key: "chat/x.png",
+    mimeType: "image/png",
+    sizeBytes: 1,
+    width: 10,
+    height: 10,
+  }),
+}));
+
 import { ChatComposer } from "./chat-composer";
 
 const message: ChatMessageDto = {
@@ -81,5 +93,55 @@ describe("ChatComposer", () => {
 
     rerender(<ChatComposer {...props} editing={null} />);
     expect(screen.getByPlaceholderText("Сообщение…")).toHaveValue("черновик");
+  });
+});
+
+describe("ChatComposer — вложения", () => {
+  it("с включённой мгновенной отправкой фото уходит сразу, без кнопки", async () => {
+    window.localStorage.setItem("vedamatch:chat-instant-media", "1");
+    const onSend = vi.fn().mockResolvedValue(undefined);
+    const { container } = render(
+      <ChatComposer
+        conversationId="c1"
+        replyTo={null}
+        editing={null}
+        onCancelReply={() => undefined}
+        onCancelEdit={() => undefined}
+        onSend={onSend}
+        onSaveEdit={vi.fn()}
+        onTyping={() => undefined}
+      />,
+    );
+    const input = container.querySelector('input[accept="image/*"]') as HTMLInputElement;
+    await userEvent.upload(input, new File(["x"], "photo.png", { type: "image/png" }));
+
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    expect(onSend.mock.calls[0][0]).toBe("");
+    expect(onSend.mock.calls[0][1]).toEqual([
+      expect.objectContaining({ kind: "image", url: "https://cdn/x.png" }),
+    ]);
+    expect(screen.queryByText("Фото")).not.toBeInTheDocument();
+    window.localStorage.removeItem("vedamatch:chat-instant-media");
+  });
+
+  it("по умолчанию фото ложится под поле и ждёт кнопки", async () => {
+    const onSend = vi.fn().mockResolvedValue(undefined);
+    const { container } = render(
+      <ChatComposer
+        conversationId="c1"
+        replyTo={null}
+        editing={null}
+        onCancelReply={() => undefined}
+        onCancelEdit={() => undefined}
+        onSend={onSend}
+        onSaveEdit={vi.fn()}
+        onTyping={() => undefined}
+      />,
+    );
+    const input = container.querySelector('input[accept="image/*"]') as HTMLInputElement;
+    await userEvent.upload(input, new File(["x"], "photo.png", { type: "image/png" }));
+
+    expect(await screen.findByText("Фото")).toBeInTheDocument();
+    expect(onSend).not.toHaveBeenCalled();
   });
 });

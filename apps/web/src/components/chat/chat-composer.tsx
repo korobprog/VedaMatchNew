@@ -15,6 +15,7 @@ import {
   attachTileMeta,
   tileToneClass,
 } from "./chat-attach-sheet";
+import { readInstantMedia } from "./chat-send-settings";
 import {
   CHAT_QUICK_SLOT_STORAGE_KEY,
   DEFAULT_CHAT_QUICK_SLOT,
@@ -70,6 +71,7 @@ export function ChatComposer({
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [pinned, setPinned] = useState<ChatQuickSlotId>(DEFAULT_CHAT_QUICK_SLOT);
   const [dropHover, setDropHover] = useState(false);
+  const [instantMedia, setInstantMedia] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
@@ -86,6 +88,7 @@ export function ChatComposer({
     } catch {
       setPinned(DEFAULT_CHAT_QUICK_SLOT);
     }
+    setInstantMedia(readInstantMedia());
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
@@ -137,32 +140,60 @@ export function ChatComposer({
       </p>
     );
 
+  /**
+   * Фото и файлы: по умолчанию ложатся под поле ввода и ждут «Отправить» —
+   * так к ним можно приписать текст или собрать несколько в одно сообщение.
+   * С включённой мгновенной отправкой всё выбранное уходит одним сообщением
+   * сразу после загрузки, а начатый текст остаётся в поле.
+   */
   async function pick(files: FileList | null) {
     if (!files?.length) return;
     setBusy(true);
     setError(null);
+    const uploaded: ChatAttachmentInput[] = [];
     try {
       for (const file of Array.from(files)) {
         const stored = await uploadChatFile(conversationId, file);
-        setAttachments((current) => [
-          ...current,
-          {
-            kind: stored.kind,
-            url: stored.url,
-            key: stored.key,
-            mimeType: stored.mimeType,
-            sizeBytes: stored.sizeBytes,
-            width: stored.width,
-            height: stored.height,
-            title: stored.kind === "file" ? file.name : undefined,
-          },
-        ]);
+        uploaded.push({
+          kind: stored.kind,
+          url: stored.url,
+          key: stored.key,
+          mimeType: stored.mimeType,
+          sizeBytes: stored.sizeBytes,
+          width: stored.width,
+          height: stored.height,
+          title: stored.kind === "file" ? file.name : undefined,
+        });
       }
+      if (instantMedia && !editing) await onSend("", uploaded);
+      else setAttachments((current) => [...current, ...uploaded]);
     } catch (e) {
+      // Загруженное не теряется: если отправка не прошла, оно остаётся
+      // плашкой под полем, и можно нажать «Отправить» ещё раз.
+      if (uploaded.length > 0)
+        setAttachments((current) => [...current, ...uploaded]);
       setError(e instanceof Error ? e.message : "Файл не загрузился");
     } finally {
       setBusy(false);
       setSheetOpen(false);
+    }
+  }
+
+  /**
+   * Голосовое уходит сразу: кнопка остановки обещает «остановить и
+   * отправить», а подписывать голосовое некому. Начатый текст в поле не
+   * трогаем — это отдельное сообщение.
+   */
+  async function sendVoice(attachment: ChatAttachmentInput) {
+    setBusy(true);
+    setError(null);
+    try {
+      await onSend("", [attachment]);
+    } catch (e) {
+      setAttachments((current) => [...current, attachment]);
+      setError(e instanceof Error ? e.message : "Голосовое не отправилось");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -478,9 +509,7 @@ export function ChatComposer({
         ) : (
           <ChatVoiceRecorder
             conversationId={conversationId}
-            onRecorded={(attachment) =>
-              setAttachments((current) => [...current, attachment])
-            }
+            onRecorded={(attachment) => void sendVoice(attachment)}
             onError={setError}
             onRecordingChange={(active, seconds) => {
               setRecording(active);
