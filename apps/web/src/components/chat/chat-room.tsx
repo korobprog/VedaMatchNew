@@ -28,6 +28,7 @@ import { ChatComposer } from "./chat-composer";
 import { ChatRoomMenu } from "./chat-room-menu";
 import { ChatMessage } from "./chat-message";
 import { firstUnreadIndex } from "./unread-divider";
+import { scrollDeltaToCenter } from "./scroll-to-message";
 import {
   buildPendingMessage,
   dropPendingMessage,
@@ -62,6 +63,19 @@ export function ChatRoom({
   const [replyTo, setReplyTo] = useState<ChatMessageDto | null>(null);
   const [editing, setEditing] = useState<ChatMessageDto | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  /**
+   * Куда прыгнуть по нажатию на цитату и что подсветить, когда доехали.
+   *
+   * Два разных состояния, а не одно: искомое сообщение может лежать выше
+   * загруженного куска, и тогда переход ждёт подгрузки истории — иногда
+   * нескольких страниц. Подсветка же живёт полторы секунды после приезда.
+   */
+  const [jumpToId, setJumpToId] = useState<string | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  /* Ref, а не состояние: прокрутка вниз не должна повторяться от того, что
+     переход закончился, — иначе она утаскивает ленту обратно ровно после
+     приезда к цитате. */
+  const jumpingRef = useRef(false);
   /* Черта «непрочитанные» считается один раз, по состоянию на открытие:
      отметка о прочтении ставится тут же при входе, и пересчёт двигал бы
      черту вниз на глазах, пока она не исчезла бы совсем. */
@@ -114,8 +128,78 @@ export function ChatRoom({
   }, [conversation.id]);
 
   useEffect(() => {
+    // Пока едем к цитате, лента не должна утаскивать нас обратно вниз.
+    if (jumpingRef.current) return;
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
+
+  /**
+   * Переход к сообщению, на которое отвечали.
+   *
+   * Цитата в мессенджере — это ссылка на место в переписке, и нажимают её
+   * именно затем, чтобы увидеть, о чём речь. Сообщение может оказаться выше
+   * загруженного куска: тогда подтягиваем историю страницу за страницей,
+   * пока не найдём или пока история не кончится. Из-за этого поиск живёт в
+   * эффекте, а не в обработчике нажатия — после каждой подгрузки он
+   * повторяется сам.
+   */
+  useEffect(() => {
+    if (!jumpToId) return;
+    /* Без `CSS.escape`: значение и так в кавычках, а идентификаторы — uuid.
+       Экранирование ломало поиск как раз у тех, что начинаются с цифры:
+       `CSS.escape("970e…")` даёт `\39 70e…`, и селектор не совпадал ни с
+       чем — переход молча не срабатывал. */
+    const target = document.querySelector<HTMLElement>(
+      `[data-message-id="${jumpToId}"]`,
+    );
+    if (target) {
+      /* Прокручиваем ближайшего прокручиваемого предка вручную:
+         `scrollIntoView`, вызванный отсюда, молча не двигал ленту, хотя тот
+         же вызов из консоли работал. Смещение считает `scrollDeltaToCenter`,
+         оно же покрыто тестом. */
+      const lane = scrollableAncestor(target);
+      if (lane) {
+        const laneBox = lane.getBoundingClientRect();
+        const targetBox = target.getBoundingClientRect();
+        lane.scrollBy({
+          top: scrollDeltaToCenter({
+            laneTop: laneBox.top,
+            laneHeight: lane.clientHeight,
+            targetTop: targetBox.top,
+            targetHeight: targetBox.height,
+          }),
+          // Плавность выключаем тем, кто просил меньше движения.
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+            .matches
+            ? "auto"
+            : "smooth",
+        });
+      }
+      setHighlightedId(jumpToId);
+      setJumpToId(null);
+      jumpingRef.current = false;
+      return;
+    }
+    // Выше ничего нет — значит сообщение удалено или недоступно, и ждать
+    // больше нечего.
+    if (!conversation.hasMore) {
+      setJumpToId(null);
+      jumpingRef.current = false;
+      return;
+    }
+    if (!loadingOlder) void loadOlder();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `loadOlder`
+    // пересоздаётся на каждый рендер; в зависимостях он дал бы бесконечный
+    // цикл, а нужен нам только свежий срез сообщений.
+  }, [jumpToId, messages, conversation.hasMore, loadingOlder]);
+
+  /* Подсветка гаснет сама. Отдельным эффектом: в эффекте перехода её таймер
+     чистился при первом же пересчёте — и подсветка оставалась навсегда. */
+  useEffect(() => {
+    if (!highlightedId) return;
+    const timer = window.setTimeout(() => setHighlightedId(null), 1600);
+    return () => window.clearTimeout(timer);
+  }, [highlightedId]);
 
   // Посты канала считаются просмотренными при открытии ленты. Чужие и
   // только в канале: в переписке счётчик просмотров не имеет смысла.
@@ -497,7 +581,15 @@ export function ChatRoom({
             (!previous || previous.author.id !== message.author.id || newDay);
 
           return (
-            <div key={message.id} className="flex flex-col gap-2.5">
+            <div
+              key={message.id}
+              data-message-id={message.id}
+              className={`flex flex-col gap-2.5 rounded-2xl transition-colors duration-500 motion-reduce:transition-none ${
+                message.id === highlightedId
+                  ? "bg-cyan/10 ring-1 ring-cyan/40"
+                  : ""
+              }`}
+            >
               {message.id === unreadFromId && (
                 <span className="mx-auto rounded-lg border border-magenta/40 bg-magenta/10 px-3 py-1 text-[11px] font-semibold text-magenta">
                   Непрочитанные
@@ -511,6 +603,10 @@ export function ChatRoom({
               <ChatMessage
                 message={message}
                 pending={isPendingMessage(message)}
+                onJumpToReply={(id) => {
+                  jumpingRef.current = true;
+                  setJumpToId(id);
+                }}
                 mine={message.author.id === viewerId}
                 showAuthor={showAuthor}
                 avatar={
@@ -578,4 +674,19 @@ export function ChatRoom({
       </div>
     </div>
   );
+}
+
+/** Ближайший предок, который вообще умеет прокручиваться. */
+function scrollableAncestor(node: HTMLElement): HTMLElement | null {
+  let el: HTMLElement | null = node.parentElement;
+  while (el) {
+    const overflow = getComputedStyle(el).overflowY;
+    if (
+      (overflow === "auto" || overflow === "scroll") &&
+      el.scrollHeight > el.clientHeight
+    )
+      return el;
+    el = el.parentElement;
+  }
+  return null;
 }

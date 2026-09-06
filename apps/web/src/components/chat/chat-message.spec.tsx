@@ -39,6 +39,43 @@ function setup(over: Partial<ChatMessageDto> = {}, props = {}) {
 }
 
 describe("ChatMessage", () => {
+  it("цитата ведёт к сообщению, на которое отвечали", async () => {
+    const onJumpToReply = vi.fn();
+    setup(
+      {
+        replyTo: {
+          id: "m-0",
+          authorName: "Маму Тхакур дас",
+          body: "",
+          attachmentKind: "image",
+        },
+      } as Partial<ChatMessageDto>,
+      { onJumpToReply },
+    );
+
+    // В мессенджерах цитату нажимают именно затем, чтобы увидеть, о чём речь.
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Перейти к сообщению: Маму Тхакур дас",
+      }),
+    );
+
+    expect(onJumpToReply).toHaveBeenCalledWith("m-0");
+  });
+
+  it("цитата без текста называет вложение, а не пустоту", () => {
+    setup({
+      replyTo: {
+        id: "m-0",
+        authorName: "Маму Тхакур дас",
+        body: "",
+        attachmentKind: "image",
+      },
+    } as Partial<ChatMessageDto>);
+
+    expect(screen.getByText("Вложение")).toBeInTheDocument();
+  });
+
   it("текст сообщения — не кнопка: его можно выделить и прочитать", () => {
     setup();
 
