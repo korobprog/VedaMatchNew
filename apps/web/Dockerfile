@@ -5,6 +5,11 @@ WORKDIR /app
 FROM base AS build
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# metadataBase и og:url (apps/web/src/app/layout.tsx). Переменная с префиксом
+# NEXT_PUBLIC_ вшивается на сборке, поэтому задать её в окружении контейнера
+# недостаточно — без этого ARG адрес сайта остаётся зашитым дефолтом.
+ARG NEXT_PUBLIC_SITE_URL
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
