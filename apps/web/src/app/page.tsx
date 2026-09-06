@@ -36,6 +36,9 @@ import {
 } from "@/lib/music-api";
 import { buildMusicQuickAccess } from "@/lib/music-quick-access";
 import { buildMotivationQuickAccess } from "@/lib/motivation-quick-access";
+import { buildLibraryQuickAccess } from "@/lib/library-quick-access";
+import { getLibraryFeed } from "@/lib/library-api";
+import { LibraryQuickAccessWidget } from "@/components/library/library-quick-access-widget";
 import { getMotivationFeed } from "@/lib/motivation-api";
 import { MotivationQuickAccessWidget } from "@/components/motivation/motivation-quick-access-widget";
 import { MusicFriendsBridge } from "@/components/activity/music-friends-bridge";
@@ -91,6 +94,7 @@ export default async function Home({
     musicPlayback,
     musicFavorites,
     motivationFeed,
+    libraryFeed,
   ] = await Promise.all([
     getProfile(),
     getServices(),
@@ -113,6 +117,9 @@ export default async function Home({
     getMyMusicFavorites().catch(() => null),
     // Цитата дня в карточке «Вдохновения». Упала лента — карточка без цитаты.
     getMotivationFeed().catch(() => null),
+    // Свежий материал в карточке «Образования». Лента уже персональная:
+    // линия и язык применяются на сервере.
+    getLibraryFeed({ sort: "new" }).catch(() => null),
   ]);
   if (!user || !services) {
     // Маркер сессии без access-cookie: человек уже входил, refresh скорее всего
@@ -183,6 +190,8 @@ export default async function Home({
   const unionService = services.find((s) => s.url === "/union");
   const motivationService = services.find((s) => s.url === "/motivation");
   const motivationQuickAccess = buildMotivationQuickAccess(motivationFeed);
+  const libraryService = services.find((s) => s.url === "/library");
+  const libraryQuickAccess = buildLibraryQuickAccess(libraryFeed, now);
   // Считаем сообщения, а не беседы: значок читается как «столько меня ждёт»,
   // и три письма из одного диалога — это три письма. Запросы на переписку в
   // том же числе: человеку важно, что его ждут, а не в какой это очереди.
@@ -205,6 +214,13 @@ export default async function Home({
       ? {
           [motivationService.id]: {
             extra: <MotivationQuickAccessWidget {...motivationQuickAccess} />,
+          },
+        }
+      : {}),
+    ...(libraryService && libraryQuickAccess.latest
+      ? {
+          [libraryService.id]: {
+            extra: <LibraryQuickAccessWidget {...libraryQuickAccess} />,
           },
         }
       : {}),
