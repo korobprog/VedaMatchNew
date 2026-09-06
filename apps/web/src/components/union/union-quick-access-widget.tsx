@@ -62,11 +62,18 @@ export function UnionQuickAccessWidget({
           aria-valuenow={profileCompletionPercent}
           aria-valuemin={0}
           aria-valuemax={100}
-          className="h-1.5 w-full overflow-hidden rounded-full bg-glass"
+          className="h-1 w-full overflow-hidden rounded-full bg-glass"
         >
+          {/* Приглушённая и «созревающая»: у пустой анкеты полоса золотая, по
+              мере заполнения зеленеет. Яркая мятная на всю ширину карточки
+              спорила с самой карточкой за внимание. Оба цвета — токены,
+              определённые в обеих темах. */}
           <div
-            className="h-full rounded-full bg-cyan"
-            style={{ width: `${profileCompletionPercent}%` }}
+            className="h-full rounded-full opacity-70"
+            style={{
+              width: `${profileCompletionPercent}%`,
+              background: `color-mix(in oklab, var(--vm-gold), var(--vm-cyan) ${profileCompletionPercent}%)`,
+            }}
           />
         </div>
       )}
