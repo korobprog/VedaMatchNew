@@ -46,17 +46,18 @@ export default async function AstroPage() {
         </Link>
       </div>
 
-      <div className="mt-8">
-        <BirthDataForm initial={state} />
-      </div>
-
-      {/* Рассылка есть только у того, чья карта строится: без данных рождения
-          настраивать нечего. */}
+      {/* Выше формы данных рождения: у того, чья карта готова, форма длинная и
+          нужна редко, а «во сколько придёт» ищут чаще. Без данных рождения
+          рассылки нет — и блока нет. */}
       {state.birthData && pushPrefs && (
         <div className="mt-8">
           <TransitPushSettings initial={pushPrefs} />
         </div>
       )}
+
+      <div className="mt-8">
+        <BirthDataForm initial={state} />
+      </div>
 
       <p className="mt-10 text-sm text-text-2">
         Материалы сервиса предназначены для самопознания и размышления и не
