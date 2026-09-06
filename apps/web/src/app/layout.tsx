@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
 import { ThemeProvider } from "@/components/theme-provider";
+import { TimeZoneSync } from "@/components/time-zone-sync";
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import { SessionGuard } from "@/components/session-guard";
 import { ServiceCatalogProvider } from "@/components/service-catalog-provider";
@@ -142,6 +143,9 @@ export default async function RootLayout({
                   видно, и решить это на клиенте нечем. */}
               {hasSession ? (
                 <MusicPlayerProvider>
+                  {/* Часовой пояс устройства — в профиль, ради утренних
+                      рассылок. Только у вошедшего: гостю профиля нет. */}
+                  <TimeZoneSync />
                   {children}
                   <MiniPlayer />
                 </MusicPlayerProvider>

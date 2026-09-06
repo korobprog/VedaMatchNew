@@ -57,6 +57,7 @@ const user: UserProfile = {
   photoVerification: { status: "none" as const, requestedAt: null, verifiedAt: null },
   lastSelfIdentificationAt: null,
   lineage: null,
+  timeZone: null,
   subscription: {
     status: "trial",
     trialEndsAt: "2026-08-27T00:00:00.000Z",

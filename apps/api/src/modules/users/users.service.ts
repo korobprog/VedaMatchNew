@@ -157,6 +157,7 @@ export class UsersService {
       lastSelfIdentificationAt:
         user.lastSelfIdentificationAt?.toISOString() ?? null,
       lineage: toLineageId(user.lineage),
+      timeZone: user.timeZone,
       subscription: toSubscriptionState(user, new Date(), billingMode),
       accountStatus: user.accountStatus,
       pendingDeletionAt: user.pendingDeletionAt?.toISOString() ?? null,
@@ -313,6 +314,13 @@ export class UsersService {
       // Этап здесь не проверяется: линию можно указать заранее, до анкеты, а
       // показывается она всё равно только преданному — см. isDevotee.
       data.lineage = payload.lineage ?? null;
+    }
+    if ('timeZone' in payload) {
+      const timeZone = payload.timeZone?.trim() || null;
+      if (timeZone && !isValidTimeZone(timeZone)) {
+        throw new BadRequestException('Неизвестный часовой пояс');
+      }
+      data.timeZone = timeZone;
     }
     if ('languages' in payload) {
       data.languages = normalizeLanguages(payload.languages);
@@ -529,4 +537,18 @@ function sanitizeString(value: unknown, maxLength: number): string {
 
 function roundCoordinate(value: number): number {
   return Math.round(value * 10000) / 10000;
+}
+
+/**
+ * Часовой пояс проверяется самим Intl, а не списком: список устаревает, а
+ * `Intl.DateTimeFormat` знает ровно те зоны, по которым потом считается время.
+ */
+export function isValidTimeZone(value: string): boolean {
+  if (value.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
 }

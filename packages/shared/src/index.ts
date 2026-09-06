@@ -181,6 +181,12 @@ export interface UserProfile {
    * не-преданных всегда `null` по смыслу, хотя колонка не запрещает значение.
    */
   lineage: LineageId | null;
+  /**
+   * Часовой пояс человека (IANA, «Asia/Vladivostok»). Определяется браузером
+   * и обновляется при входе; по нему приходят утренние рассылки. null — ещё
+   * не определён: тогда портал считает по Москве.
+   */
+  timeZone: string | null;
   subscription: SubscriptionState;
   accountStatus: UserAccountStatus;
   /** Задано, если пользователь сам запросил удаление аккаунта. */
@@ -300,6 +306,8 @@ export interface ProfileUpdateRequest {
   messengers?: ProfileMessengers;
   /** Духовная линия; `null` — убрать. Значение из справочника `LINEAGES`. */
   lineage?: LineageId | null;
+  /** Часовой пояс IANA; проверяется через Intl. `null` — сбросить. */
+  timeZone?: string | null;
 }
 
 /**

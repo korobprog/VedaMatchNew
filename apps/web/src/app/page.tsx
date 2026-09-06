@@ -37,6 +37,8 @@ import {
 import { buildMusicQuickAccess } from "@/lib/music-quick-access";
 import { buildMotivationQuickAccess } from "@/lib/motivation-quick-access";
 import { buildLibraryQuickAccess } from "@/lib/library-quick-access";
+import { buildAstroQuickAccess } from "@/lib/astro-quick-access";
+import { AstroQuickAccessWidget } from "@/components/astro/astro-quick-access-widget";
 import { getLibraryFeed } from "@/lib/library-api";
 import { LibraryQuickAccessWidget } from "@/components/library/library-quick-access-widget";
 import { getMotivationFeed } from "@/lib/motivation-api";
@@ -192,6 +194,10 @@ export default async function Home({
   const motivationQuickAccess = buildMotivationQuickAccess(motivationFeed);
   const libraryService = services.find((s) => s.url === "/library");
   const libraryQuickAccess = buildLibraryQuickAccess(libraryFeed, now);
+  // Ответ «сегодня» главная уже получает для советника; карточка берёт из
+  // него факты (Луна, даша), советник — фразу. Дублей нет.
+  const astroService = services.find((s) => s.url === "/astro");
+  const astroQuickAccess = buildAstroQuickAccess(astroToday);
   // Считаем сообщения, а не беседы: значок читается как «столько меня ждёт»,
   // и три письма из одного диалога — это три письма. Запросы на переписку в
   // том же числе: человеку важно, что его ждут, а не в какой это очереди.
@@ -221,6 +227,13 @@ export default async function Home({
       ? {
           [libraryService.id]: {
             extra: <LibraryQuickAccessWidget {...libraryQuickAccess} />,
+          },
+        }
+      : {}),
+    ...(astroService && astroQuickAccess.moonLine
+      ? {
+          [astroService.id]: {
+            extra: <AstroQuickAccessWidget {...astroQuickAccess} />,
           },
         }
       : {}),

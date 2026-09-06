@@ -57,6 +57,7 @@ const profile = {
   devoteeVerificationStatus: null,
   lastSelfIdentificationAt: null,
   lineage: null,
+  timeZone: null,
   subscription: {
     status: "trial",
     trialEndsAt: "2026-09-01T00:00:00.000Z",

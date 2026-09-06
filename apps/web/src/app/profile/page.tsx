@@ -125,6 +125,15 @@ export default async function ProfilePage() {
               </div>
             )}
             <div className="flex justify-between gap-4">
+              <dt className="text-text-2">Часовой пояс</dt>
+              <dd className="text-right font-medium text-text-0">
+                {user.timeZone ?? "Определится при следующем входе"}
+                <span className="block text-xs font-normal text-text-2">
+                  По нему приходят утренние рассылки; берётся с устройства
+                </span>
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
               <dt className="text-text-2">Последняя анкета</dt>
               <dd className="font-medium text-text-0">
                 {user.lastSelfIdentificationAt
