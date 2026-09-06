@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { VedabaseAssistantListener } from './vedabase-assistant.listener';
 import { AuthModule } from '../auth/auth.module';
 import { GitabaseSyncController } from '../gitabase/gitabase-sync.controller';
 import { GitabaseSyncService } from '../gitabase/gitabase-sync.service';
@@ -15,6 +16,7 @@ import { VedabaseContentService } from './vedabase-content.service';
     VedabaseContentService,
     GitabaseSyncService,
     GitabaseUserStateService,
+    VedabaseAssistantListener,
   ],
   exports: [VedabaseContentRepository],
 })

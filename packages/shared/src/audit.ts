@@ -47,6 +47,8 @@ export const ADMIN_AUDIT_ACTIONS = [
   'contacts.profile-restored',
   'platform.registration-changed',
   'astro.generation-resumed',
+  'assistant.settings-changed',
+  'assistant.generation-resumed',
   'rewards.entry-revoked',
   'rewards.settings-changed',
 ] as const;

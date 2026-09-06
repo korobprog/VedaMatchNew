@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MusicAssistantListener } from './music-assistant.listener';
 import { AuthModule } from '../auth/auth.module';
 import {
   MusicAdminCatalogController,
@@ -84,6 +85,7 @@ import { MusicWorkerService } from './music-worker.service';
     MusicIngestProcessService,
     MusicWorkerService,
     MusicPurgeListener,
+    MusicAssistantListener,
   ],
 })
 export class MusicModule {}

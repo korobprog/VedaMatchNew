@@ -15,6 +15,7 @@ import {
 import { MemberCountLine } from "@/components/member-count-line";
 import { PortalNews } from "@/components/portal-news";
 import { InviteFriendTeaser } from "@/components/rewards/invite-friend-teaser";
+import { AssistantHomeBar } from "@/components/assistant/assistant-home-bar";
 import {
   getUnionChats,
   getUnionConnectionCounts,
@@ -227,6 +228,9 @@ export default async function Home({
         )}
         {/* Ходовые сервисы отдельной строкой над сеткой: за ними заходят
             чаще всего, и искать их среди равных плиток не нужно. */}
+        {/* Ассистент над ходовыми сервисами: вопрос словами короче, чем
+            поиск по плиткам, и полоса читается раньше сетки. */}
+        <AssistantHomeBar />
         <FeaturedServices unread={chatBadge} />
         {/* Сразу под ходовыми сервисами, как в макете Main.dc.html: карточка
             возвращает к недослушанному, не заходя в Музыку. Её нет вовсе,

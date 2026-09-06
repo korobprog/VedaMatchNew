@@ -16,11 +16,14 @@ export function ChatAttachSheet({
   onPickImage,
   onPickFile,
   onOpenEmoji,
+  onOpenAssistant,
   onClose,
 }: {
   onPickImage: () => void;
   onPickFile: () => void;
   onOpenEmoji: () => void;
+  /** Помощник переписки; пусто — выключен администратором. */
+  onOpenAssistant?: () => void;
   onClose: () => void;
 }) {
   return (
@@ -38,6 +41,14 @@ export function ChatAttachSheet({
         <Tile label="Объявление" tone="gold" icon={<NoticeIcon />} href="/notices" />
         <Tile label="Товар" tone="cyan" icon={<CartIcon />} href="/market" />
         <Tile label="Контакт" tone="violet" icon={<PersonIcon />} href="/chat/people" />
+        {onOpenAssistant && (
+          <Tile
+            label="Ассистент"
+            tone="cyan"
+            onClick={onOpenAssistant}
+            icon={<BotIcon />}
+          />
+        )}
         <Tile label="Закрыть" tone="plain" onClick={onClose} icon={<CloseIcon />} />
       </div>
     </div>
@@ -162,6 +173,18 @@ function PersonIcon() {
     <Svg>
       <circle cx="12" cy="8.5" r="3.5" />
       <path d="M5 20a7 7 0 0114 0" />
+    </Svg>
+  );
+}
+
+function BotIcon() {
+  return (
+    <Svg>
+      <rect x="4" y="8" width="16" height="11" rx="3" />
+      <path d="M12 8V4" />
+      <path d="M9 13h.01" />
+      <path d="M15 13h.01" />
+      <path d="M9.5 16.5h5" />
     </Svg>
   );
 }

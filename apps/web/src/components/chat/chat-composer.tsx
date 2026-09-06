@@ -6,6 +6,7 @@ import type {
   ChatMessageDto,
 } from "@vedamatch/shared";
 import { uploadChatFile } from "@/lib/chat-client";
+import { AssistantComposerHelper } from "@/components/assistant/assistant-composer-helper";
 import { ChatAttachSheet } from "./chat-attach-sheet";
 import { formatDuration } from "./chat-time";
 import { ChatVoiceRecorder } from "./chat-voice-recorder";
@@ -29,8 +30,15 @@ export function ChatComposer({
   onSend,
   onSaveEdit,
   onTyping,
+  assistant,
 }: {
   conversationId: string;
+  /**
+   * Помощник переписки — портальный ассистент в поле ввода. Пусто — выключен
+   * администратором или беседа без собеседника. Контекст даёт чат: ассистент
+   * его переписку не читает.
+   */
+  assistant?: { recipientName: string | null; context: string[] } | null;
   replyTo: ChatMessageDto | null;
   editing: ChatMessageDto | null;
   disabled?: boolean;
@@ -45,6 +53,7 @@ export function ChatComposer({
   const [attachments, setAttachments] = useState<ChatAttachmentInput[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
@@ -228,7 +237,29 @@ export function ChatComposer({
             setEmojiOpen(true);
             setSheetOpen(false);
           }}
+          onOpenAssistant={
+            assistant
+              ? () => {
+                  setAssistantOpen(true);
+                  setSheetOpen(false);
+                }
+              : undefined
+          }
           onClose={() => setSheetOpen(false)}
+        />
+      )}
+
+      {assistantOpen && assistant && (
+        <AssistantComposerHelper
+          recipientName={assistant.recipientName}
+          context={assistant.context}
+          onInsert={(draft) =>
+            setText((current) =>
+              current.trim() ? `${current.trimEnd()}\n${draft}` : draft,
+            )
+          }
+          onSend={(draft) => onSend(draft, [])}
+          onClose={() => setAssistantOpen(false)}
         />
       )}
 

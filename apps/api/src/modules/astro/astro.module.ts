@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AstroAssistantListener } from './astro-assistant.listener';
 import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
 import { AstroAdminController } from './astro-admin.controller';
@@ -47,6 +48,7 @@ import { AstroTransitWorkerService } from './transits/astro-transit-worker.servi
     AstroSettingsService,
     AstroTransitService,
     AstroTransitWorkerService,
+    AstroAssistantListener,
     { provide: EPHEMERIS_PROVIDER, useClass: AstronomiaEphemerisProvider },
   ],
   exports: [EPHEMERIS_PROVIDER],

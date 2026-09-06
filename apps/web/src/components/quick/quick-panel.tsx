@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  Bot,
   Calculator,
   CalendarDays,
   Check,
@@ -36,6 +37,7 @@ const STORAGE_KEY = "vedamatch:quick-panel";
 
 const ICONS: Record<QuickActionId, React.ComponentType<{ className?: string }>> =
   {
+    assistant: Bot,
     aphorism: Quote,
     collections: Sparkles,
     calendar: CalendarDays,

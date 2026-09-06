@@ -23,6 +23,7 @@ export const adminServiceLabels: Record<AdminServiceSlug, string> = {
   astro: 'Astro — ведическая астрология',
   vedabase: 'Vedabase — священные тексты',
   music: 'Music — киртаны и бхаджаны',
+  assistant: 'Ассистент — ИИ-помощник портала',
 };
 
 export const stageLabels: Record<SpiritualStage, string> = {

@@ -22,7 +22,9 @@ export type ChatAttachmentKind =
   | 'story'
   | 'notice'
   | 'listing'
-  | 'contact';
+  | 'contact'
+  /** Ответ ассистента портала, отправленный собеседнику снимком. */
+  | 'assistant';
 
 /** Столько же, сколько было в чате Знакомств: длину переписки меняли бы вместе. */
 export const CHAT_MESSAGE_MAX_LENGTH = 2000;

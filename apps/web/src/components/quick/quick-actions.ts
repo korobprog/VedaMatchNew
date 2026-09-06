@@ -12,6 +12,7 @@
  */
 
 export type QuickActionId =
+  | "assistant"
   | "aphorism"
   | "collections"
   | "calendar"
@@ -31,6 +32,12 @@ export interface QuickActionMeta {
 }
 
 export const QUICK_ACTIONS: readonly QuickActionMeta[] = [
+  {
+    id: "assistant",
+    label: "Ассистент",
+    hint: "Спросить ИИ-помощника: найдёт товар, цитату, материал, поможет с текстом",
+    href: "/assistant",
+  },
   {
     id: "aphorism",
     label: "Афоризм",
@@ -86,11 +93,12 @@ const KNOWN = new Set<string>(QUICK_ACTIONS.map((action) => action.id));
 /**
  * Что стоит в панели у человека, который ничего не настраивал.
  *
- * Пять, а не все восемь: панель на телефоне помещается в два ряда, а
+ * Шесть, а не все девять: панель на телефоне помещается в два ряда, а
  * заполненная до краёв с первого открытия она не читается как настраиваемая
  * — её начинают разбирать, а не собирать.
  */
 export const DEFAULT_QUICK_ACTIONS: readonly QuickActionId[] = [
+  "assistant",
   "aphorism",
   "calendar",
   "invite",

@@ -25,6 +25,7 @@ import {
 import { subscribeToChat } from "@/lib/chat-stream";
 import { ChatAvatar } from "./chat-avatar";
 import { ChatComposer } from "./chat-composer";
+import { contextLinesOf, recipientNameOf } from "./chat-assistant-context";
 import { ChatRoomMenu } from "./chat-room-menu";
 import { ChatMessage } from "./chat-message";
 import { firstUnreadIndex } from "./unread-divider";
@@ -50,10 +51,13 @@ export function ChatRoom({
   initial,
   viewerId,
   initialTheme,
+  assistantEnabled = false,
 }: {
   initial: ChatConversationDetail;
   viewerId: string;
   initialTheme: ChatColorTemplateDto | null;
+  /** Помощник переписки включён администратором ассистента. */
+  assistantEnabled?: boolean;
 }) {
   const [conversation, setConversation] = useState(initial);
   const [messages, setMessages] = useState(initial.messages);
@@ -574,6 +578,14 @@ export function ChatRoom({
           onSend={send}
           onSaveEdit={saveEdit}
           onTyping={onTyping}
+          assistant={
+            assistantEnabled
+              ? {
+                  recipientName: recipientNameOf(conversation, viewerId),
+                  context: contextLinesOf(messages, viewerId),
+                }
+              : null
+          }
         />
       </div>
     </div>

@@ -8,6 +8,7 @@ import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { motion, AnimatePresence } from "framer-motion";
 import {
+  Bot,
   Menu,
   X,
   Home,
@@ -210,6 +211,17 @@ export function Header({ user }: { user: UserProfile }) {
                 CartBadge решает, показываться ли — рендерится только
                 когда в корзине что-то лежит, независимо от раздела. */}
             <CartBadge />
+            {/* Ассистент — рядом с горячими кнопками: за ним заходят так же,
+                из любого места портала, и прятать его в бургер незачем. */}
+            <Link
+              href="/assistant"
+              aria-label={t("assistant")}
+              title={t("assistant")}
+              aria-current={currentAttr("/assistant")}
+              className="flex size-9 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0 aria-[current=page]:bg-glass aria-[current=page]:text-cyan"
+            >
+              <Bot className="size-5" />
+            </Link>
             {/* Горячие кнопки — рядом с колокольчиком и корзиной, а не
                 плавающей кнопкой поверх страницы: снизу уже стоит полоса
                 плеера, а на Знакомствах ещё и своя нижняя панель. */}

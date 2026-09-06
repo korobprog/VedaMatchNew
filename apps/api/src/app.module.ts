@@ -34,6 +34,7 @@ import { TelemetryModule } from './modules/telemetry/telemetry.module';
 import { RewardsModule } from './modules/rewards/rewards.module';
 import { ActivityModule } from './modules/activity/activity.module';
 import { MusicModule } from './modules/music/music.module';
+import { AssistantModule } from './modules/assistant/assistant.module';
 
 @Module({
   imports: [
@@ -76,6 +77,9 @@ import { MusicModule } from './modules/music/music.module';
     RewardsModule,
     ActivityModule,
     MusicModule,
+    // Ассистент портала: портальная инфраструктура, сервисы отвечают ему
+    // событиями `assistant.tool.*` из своих слушателей.
+    AssistantModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: AdminAwareThrottlerGuard }],
 })
