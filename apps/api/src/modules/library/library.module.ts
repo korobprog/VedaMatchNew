@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { LibraryAssistantListener } from './library-assistant.listener';
 import { AuthModule } from '../auth/auth.module';
 import { CommunitiesModule } from '../communities/communities.module';
 import { LibraryAdminController } from './library-admin.controller';
@@ -40,6 +41,7 @@ import { LibraryPreviewsService } from './library-previews.service';
     LibraryCommentsService,
     LibraryAdminService,
     LibrarySectionRequestsService,
+    LibraryAssistantListener,
   ],
 })
 export class LibraryModule {}

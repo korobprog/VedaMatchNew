@@ -8,7 +8,13 @@ import { shareSourceLabel } from "@/components/chat/chat-share-label";
 import { getChatList } from "@/lib/chat-api";
 
 /** Виды карточек, которые умеют присылать другие сервисы портала. */
-const SHARABLE: ChatAttachmentKind[] = ["story", "notice", "listing", "contact"];
+const SHARABLE: ChatAttachmentKind[] = [
+  "story",
+  "notice",
+  "listing",
+  "contact",
+  "assistant",
+];
 
 type Query = Promise<Record<string, string | string[] | undefined>>;
 

@@ -1,12 +1,28 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import type {
   ChatAttachmentInput,
   ChatMessageDto,
 } from "@vedamatch/shared";
 import { uploadChatFile } from "@/lib/chat-client";
-import { ChatAttachSheet } from "./chat-attach-sheet";
+import { AssistantComposerHelper } from "@/components/assistant/assistant-composer-helper";
+import {
+  ATTACH_DRAG_TYPE,
+  AttachTileIcon,
+  ChatAttachSheet,
+  attachTileMeta,
+  tileToneClass,
+} from "./chat-attach-sheet";
+import { DEFAULT_INSTANT_MEDIA, readInstantMedia } from "./chat-send-settings";
+import {
+  CHAT_QUICK_SLOT_STORAGE_KEY,
+  DEFAULT_CHAT_QUICK_SLOT,
+  effectiveQuickSlot,
+  parseQuickSlot,
+  type ChatQuickSlotId,
+} from "./chat-quick-slot";
 import { formatDuration } from "./chat-time";
 import { ChatVoiceRecorder } from "./chat-voice-recorder";
 
@@ -29,8 +45,15 @@ export function ChatComposer({
   onSend,
   onSaveEdit,
   onTyping,
+  assistant,
 }: {
   conversationId: string;
+  /**
+   * Помощник переписки — портальный ассистент в поле ввода. Пусто — выключен
+   * администратором или беседа без собеседника. Контекст даёт чат: ассистент
+   * его переписку не читает.
+   */
+  assistant?: { recipientName: string | null; context: string[] } | null;
   replyTo: ChatMessageDto | null;
   editing: ChatMessageDto | null;
   disabled?: boolean;
@@ -45,12 +68,47 @@ export function ChatComposer({
   const [attachments, setAttachments] = useState<ChatAttachmentInput[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [pinned, setPinned] = useState<ChatQuickSlotId>(DEFAULT_CHAT_QUICK_SLOT);
+  const [dropHover, setDropHover] = useState(false);
+  const [instantMedia, setInstantMedia] = useState(DEFAULT_INSTANT_MEDIA);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [recordedSeconds, setRecordedSeconds] = useState(0);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const imageInput = useRef<HTMLInputElement | null>(null);
+
+  /* Быстрый слот читается эффектом: на сервере `localStorage` нет, и ленивый
+     `useState` дал бы расхождение гидратации — как у панели горячих кнопок. */
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- см. комментарий выше. */
+    try {
+      setPinned(parseQuickSlot(window.localStorage.getItem(CHAT_QUICK_SLOT_STORAGE_KEY)));
+    } catch {
+      setPinned(DEFAULT_CHAT_QUICK_SLOT);
+    }
+    setInstantMedia(readInstantMedia());
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
+
+  function pin(id: ChatQuickSlotId) {
+    setPinned(id);
+    try {
+      window.localStorage.setItem(CHAT_QUICK_SLOT_STORAGE_KEY, id);
+    } catch {
+      // Приватный режим: выбор живёт до конца сессии.
+    }
+  }
+
+  const quickId = effectiveQuickSlot(pinned, { assistantEnabled: Boolean(assistant) });
+  const quickMeta = attachTileMeta(quickId);
+  const quickActions: Partial<Record<ChatQuickSlotId, () => void>> = {
+    photo: () => imageInput.current?.click(),
+    file: () => fileInput.current?.click(),
+    emoji: () => setEmojiOpen((open) => !open),
+    assistant: () => setAssistantOpen((open) => !open),
+  };
 
   /**
    * Правка начинается с прежнего текста сообщения.
@@ -82,32 +140,60 @@ export function ChatComposer({
       </p>
     );
 
+  /**
+   * Фото и файлы: по умолчанию уходят одним сообщением сразу после
+   * загрузки, а начатый текст остаётся в поле. С выключенной мгновенной
+   * отправкой ложатся под поле и ждут «Отправить» — так к ним можно
+   * приписать текст или собрать несколько в одно сообщение.
+   */
   async function pick(files: FileList | null) {
     if (!files?.length) return;
     setBusy(true);
     setError(null);
+    const uploaded: ChatAttachmentInput[] = [];
     try {
       for (const file of Array.from(files)) {
         const stored = await uploadChatFile(conversationId, file);
-        setAttachments((current) => [
-          ...current,
-          {
-            kind: stored.kind,
-            url: stored.url,
-            key: stored.key,
-            mimeType: stored.mimeType,
-            sizeBytes: stored.sizeBytes,
-            width: stored.width,
-            height: stored.height,
-            title: stored.kind === "file" ? file.name : undefined,
-          },
-        ]);
+        uploaded.push({
+          kind: stored.kind,
+          url: stored.url,
+          key: stored.key,
+          mimeType: stored.mimeType,
+          sizeBytes: stored.sizeBytes,
+          width: stored.width,
+          height: stored.height,
+          title: stored.kind === "file" ? file.name : undefined,
+        });
       }
+      if (instantMedia && !editing) await onSend("", uploaded);
+      else setAttachments((current) => [...current, ...uploaded]);
     } catch (e) {
+      // Загруженное не теряется: если отправка не прошла, оно остаётся
+      // плашкой под полем, и можно нажать «Отправить» ещё раз.
+      if (uploaded.length > 0)
+        setAttachments((current) => [...current, ...uploaded]);
       setError(e instanceof Error ? e.message : "Файл не загрузился");
     } finally {
       setBusy(false);
       setSheetOpen(false);
+    }
+  }
+
+  /**
+   * Голосовое уходит сразу: кнопка остановки обещает «остановить и
+   * отправить», а подписывать голосовое некому. Начатый текст в поле не
+   * трогаем — это отдельное сообщение.
+   */
+  async function sendVoice(attachment: ChatAttachmentInput) {
+    setBusy(true);
+    setError(null);
+    try {
+      await onSend("", [attachment]);
+    } catch (e) {
+      setAttachments((current) => [...current, attachment]);
+      setError(e instanceof Error ? e.message : "Голосовое не отправилось");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -228,7 +314,34 @@ export function ChatComposer({
             setEmojiOpen(true);
             setSheetOpen(false);
           }}
+          onOpenAssistant={
+            assistant
+              ? () => {
+                  setAssistantOpen(true);
+                  setSheetOpen(false);
+                }
+              : undefined
+          }
+          pinned={quickId}
+          onPin={(id) => {
+            pin(id);
+            setSheetOpen(false);
+          }}
           onClose={() => setSheetOpen(false)}
+        />
+      )}
+
+      {assistantOpen && assistant && (
+        <AssistantComposerHelper
+          recipientName={assistant.recipientName}
+          context={assistant.context}
+          onInsert={(draft) =>
+            setText((current) =>
+              current.trim() ? `${current.trimEnd()}\n${draft}` : draft,
+            )
+          }
+          onSend={(draft) => onSend(draft, [])}
+          onClose={() => setAssistantOpen(false)}
         />
       )}
 
@@ -286,6 +399,60 @@ export function ChatComposer({
           </svg>
         </button>
 
+        {/* Быстрый слот: одна плитка панели вложений под рукой. Принимает
+            перетащенную плитку; чем занят — решает человек, см. chat-quick-slot.ts. */}
+        {quickMeta.href ? (
+          <Link
+            href={quickMeta.href}
+            aria-label={quickMeta.label}
+            title={`${quickMeta.label} — быстрый слот`}
+            onDragOver={(event) => {
+              if (event.dataTransfer.types.includes(ATTACH_DRAG_TYPE)) {
+                event.preventDefault();
+                setDropHover(true);
+              }
+            }}
+            onDragLeave={() => setDropHover(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDropHover(false);
+              pin(parseQuickSlot(event.dataTransfer.getData(ATTACH_DRAG_TYPE)));
+            }}
+            className={`flex size-11 shrink-0 items-center justify-center rounded-2xl border transition-colors ${tileToneClass(quickMeta.tone)} ${dropHover ? "ring-2 ring-magenta" : ""}`}
+          >
+            <AttachTileIcon id={quickId} />
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => quickActions[quickId]?.()}
+            aria-label={quickMeta.label}
+            aria-expanded={
+              quickId === "assistant"
+                ? assistantOpen
+                : quickId === "emoji"
+                  ? emojiOpen
+                  : undefined
+            }
+            title={`${quickMeta.label} — быстрый слот`}
+            onDragOver={(event) => {
+              if (event.dataTransfer.types.includes(ATTACH_DRAG_TYPE)) {
+                event.preventDefault();
+                setDropHover(true);
+              }
+            }}
+            onDragLeave={() => setDropHover(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDropHover(false);
+              pin(parseQuickSlot(event.dataTransfer.getData(ATTACH_DRAG_TYPE)));
+            }}
+            className={`flex size-11 shrink-0 items-center justify-center rounded-2xl border transition-colors ${tileToneClass(quickMeta.tone)} ${dropHover ? "ring-2 ring-magenta" : ""}`}
+          >
+            <AttachTileIcon id={quickId} />
+          </button>
+        )}
+
         {recording ? (
           // Поле ввода прячется на время записи: печатать и говорить в
           // микрофон разом всё равно нельзя, а таймер честнее показывает,
@@ -342,9 +509,7 @@ export function ChatComposer({
         ) : (
           <ChatVoiceRecorder
             conversationId={conversationId}
-            onRecorded={(attachment) =>
-              setAttachments((current) => [...current, attachment])
-            }
+            onRecorded={(attachment) => void sendVoice(attachment)}
             onError={setError}
             onRecordingChange={(active, seconds) => {
               setRecording(active);

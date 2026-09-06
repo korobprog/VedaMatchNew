@@ -120,6 +120,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         hint: "Расход токенов и пауза генерации",
         scope: "astro",
       },
+      {
+        href: "/admin/assistant",
+        label: "Ассистент",
+        hint: "Лимиты, расход токенов, какими сервисами пользуются через ИИ",
+        scope: "assistant",
+      },
     ],
   },
   {

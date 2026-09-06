@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { ChatAppearanceView } from "@/components/chat/chat-appearance-view";
+import { ChatSendSettingsToggle } from "@/components/chat/chat-send-settings-toggle";
 import { getChatColorTemplates } from "@/lib/chat-api";
 import { requireUser } from "@/lib/require-user";
 
@@ -39,6 +40,7 @@ export default async function ChatAppearancePage() {
           </h1>
         </header>
         <ChatAppearanceView initialTemplates={state?.templates ?? []} />
+        <ChatSendSettingsToggle />
       </main>
     </>
   );

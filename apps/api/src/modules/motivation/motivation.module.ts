@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { VedabaseModule } from '../vedabase/vedabase.module';
 import { MotivationAdminController } from './motivation-admin.controller';
 import { MotivationHealthService } from './motivation-health.service';
+import { MotivationAssistantListener } from './motivation-assistant.listener';
 import { MotivationController } from './motivation.controller';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { MotivationService } from './motivation.service';
@@ -60,7 +61,9 @@ import { MotivationAnalyticsService } from './motivation-analytics.service';
     MotivationMusicService,
     MotivationVideoWorkerService,
     MotivationHealthService,
+    MotivationAssistantListener,
   ],
+
   exports: [
     MotivationService,
     MotivationGenerationService,

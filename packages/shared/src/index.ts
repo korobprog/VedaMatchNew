@@ -27,6 +27,7 @@ export * from './activity';
 export * from './rewards';
 export * from './music';
 export * from './profile-name';
+export * from './assistant';
 
 import type { BillingMode, SubscriptionState } from './support';
 
@@ -48,6 +49,7 @@ export const ADMIN_SERVICE_SLUGS = [
   'astro',
   'vedabase',
   'music',
+  'assistant',
 ] as const;
 
 export type AdminServiceSlug = (typeof ADMIN_SERVICE_SLUGS)[number];

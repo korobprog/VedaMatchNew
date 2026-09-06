@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { NoticesAssistantListener } from './notices-assistant.listener';
 import { AuthModule } from '../auth/auth.module';
 // Общины — портальная инфраструктура наравне с ModerationModule, её
 // импортировать разрешено; сервисные модули — нет.
@@ -37,6 +38,7 @@ import { NoticesWorkerService } from './notices-worker.service';
     NoticesSubscriptionsService,
     NoticesWorkerService,
     NoticesPurgeListener,
+    NoticesAssistantListener,
   ],
 })
 export class NoticesModule {}

@@ -47,6 +47,8 @@ const TEMPLATES: Record<AdminAuditAction, string> = {
   'contacts.profile-restored': 'Карточка справочника возвращена',
   'platform.registration-changed': 'Изменён режим регистрации',
   'astro.generation-resumed': 'Генерация астрологии возобновлена',
+  'assistant.settings-changed': 'Изменены настройки ассистента',
+  'assistant.generation-resumed': 'Ответы ассистента возобновлены',
   'rewards.entry-revoked': 'Отменено начисление баллов',
   'rewards.settings-changed': 'Изменены настройки баллов',
 };

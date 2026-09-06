@@ -7,6 +7,7 @@ import {
   getChatConversation,
   getChatConversationTheme,
 } from "@/lib/chat-api";
+import { getAssistantState } from "@/lib/assistant-api";
 import { requireUser } from "@/lib/require-user";
 
 export default async function ChatConversationPage({
@@ -15,12 +16,16 @@ export default async function ChatConversationPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [user, conversation, theme, templatesState] = await Promise.all([
-    requireUser(),
-    getChatConversation(id),
-    getChatConversationTheme(id),
-    getChatColorTemplates(),
-  ]);
+  const [user, conversation, theme, templatesState, assistant] =
+    await Promise.all([
+      requireUser(),
+      getChatConversation(id),
+      getChatConversationTheme(id),
+      getChatColorTemplates(),
+      // Помощник переписки — необязательная кнопка: молчание ассистента
+      // прячет её, а не роняет беседу.
+      getAssistantState().catch(() => null),
+    ]);
   if (!conversation) notFound();
 
   const initialTheme =
@@ -38,6 +43,7 @@ export default async function ChatConversationPage({
           initial={conversation}
           viewerId={user.id}
           initialTheme={initialTheme}
+          assistantEnabled={assistant?.chatHelperEnabled ?? false}
         />
       </main>
     </>

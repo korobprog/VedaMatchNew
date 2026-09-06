@@ -137,6 +137,12 @@ docker compose --profile prod up -d --build
 | POST | `/chat/people/requests` | Попросить открыть способы связи |
 | GET | `/admin/chat/reports` | Жалобы на переписку и заморозка беседы (admin) |
 | GET | `/chat/people/admin/profiles` | Карточки справочника: снятие и возврат (admin) |
+| GET | `/assistant/state` | Ассистент портала: доступность, квота на сегодня, последние беседы |
+| POST | `/assistant/messages`, `/assistant/threads/:id/messages` | Вопрос ассистенту: модель зовёт инструменты сервисов через шину событий, ответ — текст и карточки |
+| POST | `/assistant/threads/:id/actions` | Подтвердить или отклонить предложенное действие (публикацию во Вдохновение) |
+| POST | `/assistant/compose` | Помощник переписки: составить или поправить сообщение собеседнику |
+| GET/PATCH | `/admin/assistant/settings` | Выключатели, лимиты, дополнение к системной инструкции (admin) |
+| GET | `/admin/assistant/usage` | Расход токенов по дням, кто расходует, метрики использования сервисов (admin) |
 | POST | `/support/tickets` | Создать обращение (работает без авторизации) |
 | GET | `/support/tickets/track/:token` | Гостевой просмотр обращения по секретной ссылке |
 | POST | `/support/tickets/track/:token/messages` | Ответ гостя в своём обращении |

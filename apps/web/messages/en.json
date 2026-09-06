@@ -42,7 +42,8 @@
     "selfIdentification": "Self-identification",
     "notifications": "Notifications",
     "rewards": "Points & invites",
-    "whatsNew": "What's new"
+    "whatsNew": "What's new",
+    "assistant": "Assistant"
   },
   "Landing": {
     "nav": {
@@ -356,7 +357,7 @@
       "deliveryOptions": "Delivery options",
       "messengers": "Contacts",
       "logo": "Logo",
-      "cover": "Cover",
+      "cover": "cover",
       "upload": "Upload",
       "save": "Save",
       "saved": "Saved",
@@ -379,7 +380,6 @@
       "removeImage": "Remove",
       "imagesHint": "Up to 8 photos, JPEG, PNG or WebP, 10 MB each",
       "imagesHintCreate": "Up to 5 photos. Crop each one before adding — the server optimizes size and format automatically",
-      "cover": "cover",
       "cropTitle": "Crop the photo",
       "cropConfirm": "Crop and add",
       "cropSkip": "Skip cropping",
