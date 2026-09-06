@@ -250,6 +250,27 @@ function ReelCard({ reel }: { reel: MotivationAdminReelDto }) {
             {pending === "recheck" ? "Проверяем…" : "Проверить ИИ ещё раз"}
           </button>
         )}
+        {/* Удалить насовсем — на любой стадии: снятие с публикации оставляет
+            рилс автору и в избранном у сохранивших, а спам или чужой текст
+            нужно убирать целиком, вместе с цитатой. Подтверждение обязательно:
+            отменить нельзя. */}
+        <button
+          type="button"
+          disabled={pending !== null}
+          onClick={() => {
+            if (
+              window.confirm(
+                "Удалить афоризм насовсем? Он пропадёт у автора и из избранного, отменить нельзя.",
+              )
+            )
+              void run("delete", () =>
+                apiRequest(`/admin/motivation/posts/${reel.id}`, "DELETE"),
+              );
+          }}
+          className={dangerButton}
+        >
+          {pending === "delete" ? "Удаляем…" : "Удалить"}
+        </button>
         {reel.authorId && (
           <button
             type="button"
