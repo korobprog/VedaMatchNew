@@ -12,6 +12,7 @@ import type {
   LibraryLocale,
 } from "@vedamatch/shared";
 import { CategoryPicker } from "./category-picker";
+import { LibraryCommunitySelect } from "./community-select";
 import { insertIntoTree, renameInTree } from "./category-tree";
 import { entryTypeLabel, t } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
@@ -50,6 +51,8 @@ export function AddEntryForm({
   const [locatorTouched, setLocatorTouched] = useState(false);
   const [type, setType] = useState<LibraryEntryType>("article");
   const [contentLanguage, setContentLanguage] = useState("ru");
+  /** От имени какой общины. Пустая строка — от себя лично. */
+  const [communityId, setCommunityId] = useState("");
   const [titleRu, setTitleRu] = useState("");
   const [titleEn, setTitleEn] = useState("");
   const [descriptionRu, setDescriptionRu] = useState("");
@@ -152,6 +155,7 @@ export function AddEntryForm({
       descriptionRu: descriptionRu.trim() || null,
       descriptionEn: descriptionEn.trim() || null,
       categoryIds: selected.map((item) => item.id),
+      communityId: communityId || null,
     };
 
     setPending(true);
@@ -361,6 +365,13 @@ export function AddEntryForm({
         onCreated={handleCategoryCreated}
         initialParentSlug={initialCategorySlug}
         canCreateRoot={canCreateRoot}
+      />
+
+      <LibraryCommunitySelect
+        locale={locale}
+        value={communityId}
+        onChange={setCommunityId}
+        disabled={pending}
       />
 
       {notice && (

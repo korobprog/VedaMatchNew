@@ -1732,6 +1732,13 @@ model LibraryEntry {
   lastCheckedAt    DateTime?
   addedById        String?
   addedBy          User?                    @relation("LibraryEntryAuthor", fields: [addedById], references: [id], onDelete: SetNull)
+  /// Организационная принадлежность материала: от имени какой общины он
+  /// выложен. null — лично от себя. Как в Объявлениях, автор всегда человек,
+  /// а это поле отвечает только на «от чьего имени показано»; право его
+  /// проставить проверяется через CommunitiesService.canPostAs и на
+  /// создании, и на правке — роль в общине могли снять.
+  communityId      String?
+  community        Community?               @relation("LibraryEntryCommunity", fields: [communityId], references: [id], onDelete: SetNull)
   status           LibraryEntryStatus       @default(published)
   needsReview      Boolean                  @default(false)
   usefulCount      Int                      @default(0)
@@ -1757,6 +1764,7 @@ model LibraryEntry {
   @@index([contentLanguage])
   @@index([domain])
   @@index([addedById])
+  @@index([communityId, status, publishedAt(sort: Desc)])
 }
 
 model LibraryEntryCategory {
@@ -3231,6 +3239,7 @@ model Community {
 
   members             CommunityMember[]
   ownershipTransfers  CommunityOwnershipTransfer[]
+  libraryEntries      LibraryEntry[]               @relation("LibraryEntryCommunity")
   notices             Notice[]                     @relation("NoticeAuthorCommunity")
   noticeSubscriptions NoticeSubscription[]         @relation("NoticeSubscriptions")
   chatConversations   ChatConversation[]

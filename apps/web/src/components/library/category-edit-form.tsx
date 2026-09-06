@@ -18,6 +18,8 @@ export function CategoryEditForm({
   locale,
   category,
   onSaved,
+  open: openProp,
+  onClose,
 }: {
   locale: LibraryLocale;
   category: LibraryCategoryDto;
@@ -27,9 +29,25 @@ export function CategoryEditForm({
    * `router.refresh()` пересоздаст их с нуля (следующее открытие формы).
    */
   onSaved?: (category: LibraryCategoryDto) => void;
+  /**
+   * Открытость снаружи. Задана — форма управляемая и своего карандаша не
+   * рисует: в режиме «Упорядочить» строка ровно 48 пикселей, по ним считается
+   * жест перетаскивания, и раскрывшаяся посреди списка форма сбила бы прицел
+   * у соседних строк. Там кнопка стоит в строке, а форма — панелью под
+   * деревом, рядом с «Переместить в…».
+   */
+  open?: boolean;
+  onClose?: () => void;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const controlled = openProp !== undefined;
+  const open = controlled ? openProp : openState;
+
+  const close = () => {
+    if (controlled) onClose?.();
+    else setOpenState(false);
+  };
   const [titleRu, setTitleRu] = useState(category.titleRu ?? "");
   const [titleEn, setTitleEn] = useState(category.titleEn ?? "");
   const [pending, setPending] = useState(false);
@@ -38,10 +56,12 @@ export function CategoryEditForm({
   if (!category.canEdit) return null;
 
   if (!open) {
+    // Управляемой форме триггер рисует хозяин — иначе карандашей стало бы два.
+    if (controlled) return null;
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setOpenState(true)}
         aria-label={t(locale, "category.edit")}
         className="ml-1 inline-flex text-text-2 hover:text-text-0"
       >
@@ -72,7 +92,7 @@ export function CategoryEditForm({
         return;
       }
       const updated = (await res.json()) as LibraryCategoryDto;
-      setOpen(false);
+      close();
       onSaved?.(updated);
       router.refresh();
     } catch {
@@ -137,7 +157,7 @@ export function CategoryEditForm({
         </button>
         <button
           type="button"
-          onClick={() => setOpen(false)}
+          onClick={close}
           className="rounded-lg border border-glass-brd px-3 py-1.5 text-xs text-text-1 hover:text-text-0"
         >
           {t(locale, "entry.cancel")}

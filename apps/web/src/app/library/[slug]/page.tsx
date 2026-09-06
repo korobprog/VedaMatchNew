@@ -5,6 +5,7 @@ import { getProfile } from "@/lib/api";
 import {
   getLibraryCategoryPage,
   getLibraryCategoryTree,
+  getLibraryCommunities,
   getLibraryFeed,
   getLibraryPreferences,
 } from "@/lib/library-api";
@@ -47,7 +48,7 @@ export default async function LibraryCategoryPage({
   // прятало бы контент — рубрику убрали внутрь, и лента родителя опустела.
   const withDescendants = query.withDescendants !== "false";
 
-  const [page, tree, preferences, feed] = await Promise.all([
+  const [page, tree, preferences, feed, communities] = await Promise.all([
     getLibraryCategoryPage(slug),
     getLibraryCategoryTree(),
     getLibraryPreferences(),
@@ -56,6 +57,7 @@ export default async function LibraryCategoryPage({
       categorySlug: slug,
       withDescendants: withDescendants ? "true" : "false",
     }),
+    getLibraryCommunities(),
   ]);
 
   if (!page) notFound();
@@ -109,7 +111,11 @@ export default async function LibraryCategoryPage({
           <DescendantsToggle locale={locale} enabled={withDescendants} />
         )}
 
-        <EntryFilters locale={locale} categories={children} />
+        <EntryFilters
+          locale={locale}
+          categories={children}
+          communities={communities ?? []}
+        />
 
         {feed && (
           <EntryList

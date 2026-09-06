@@ -131,6 +131,12 @@ export interface LibraryEntryDto {
     Pick<LibraryCategoryDto, 'id' | 'slug' | 'titleRu' | 'titleEn'>
   >;
   addedBy: { id: string; name: string } | null;
+  /**
+   * От имени какой общины выложен материал. `null` — лично от себя.
+   * Автор при этом всегда человек: `addedBy` не подменяется общиной, потому
+   * что при разборе жалобы нужно знать, кто именно добавил ссылку.
+   */
+  community: { id: string; slug: string; name: string } | null;
   /** `true` — текущий пользователь добавил ссылку либо является админом. */
   canEdit: boolean;
   /** `true` — обложка загружена вручную, а не взята автоматически с сайта-источника. */
@@ -226,6 +232,8 @@ export interface CreateLibraryEntryRequest {
   descriptionRu?: string | null;
   descriptionEn?: string | null;
   categoryIds: string[];
+  /** Опубликовать от имени общины. `null` или отсутствие — лично от себя. */
+  communityId?: string | null;
 }
 
 /** Все поля необязательны — меняются только переданные. Адрес ссылки (url)
@@ -241,6 +249,21 @@ export interface UpdateLibraryEntryRequest {
   descriptionRu?: string | null;
   descriptionEn?: string | null;
   categoryIds?: string[];
+  /** Сменить общину или снять её (`null`). Право перепроверяется на правке. */
+  communityId?: string | null;
+}
+
+/**
+ * Организация, от имени которой в каталоге есть материалы.
+ *
+ * Не весь справочник общин портала: фильтр показывает ровно те, по которым
+ * что-то найдётся.
+ */
+export interface LibraryCommunityFacet {
+  id: string;
+  slug: string;
+  name: string;
+  entriesCount: number;
 }
 
 export interface LibraryPreviewUploadResponse {

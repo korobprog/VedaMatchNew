@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bookmark, ExternalLink, MessageSquare, Play } from "lucide-react";
+import { Bookmark, ExternalLink, MessageSquare, Play, Users } from "lucide-react";
 import type { LibraryEntryDto, LibraryLocale } from "@vedamatch/shared";
 import { videoEmbedUrl } from "@vedamatch/shared";
 import { DeleteEntryButton } from "./delete-entry-button";
@@ -67,6 +67,18 @@ export function EntryCard({
           {entryTypeLabel(locale, entry.type)}
         </span>
         <span className="uppercase">{entry.contentLanguage}</span>
+        {/* От чьего имени выложено. Ссылка ведёт не в общину, а в ленту,
+            отфильтрованную по ней: человек, увидевший подпись, спрашивает
+            «что ещё есть от них», а не «что это за ятра». */}
+        {entry.community && (
+          <Link
+            href={`/library?communityId=${encodeURIComponent(entry.community.id)}`}
+            className="inline-flex items-center gap-1 rounded-full border border-glass-brd px-2 py-0.5 hover:text-text-0"
+          >
+            <Users aria-hidden className="h-3 w-3" />
+            {entry.community.name}
+          </Link>
+        )}
         {entry.hasCustomPreview && (
           <span className="rounded-full bg-glass-brd/40 px-2 py-0.5">
             {t(locale, "entry.customPreview")}

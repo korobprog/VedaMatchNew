@@ -48,6 +48,16 @@ export class LibraryEntriesController {
     return this.entries.feed(query, user.sub, isAdmin(user));
   }
 
+  /**
+   * Организации, от имени которых в каталоге есть материалы. Объявлен до
+   * `:id`: Nest сопоставляет маршруты в порядке объявления, и ниже параметра
+   * этот путь читался бы как идентификатор записи.
+   */
+  @Get('communities')
+  communities() {
+    return this.entries.communityFacets();
+  }
+
   @Get(':id')
   byId(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.entries.byId(id, user.sub, isAdmin(user));

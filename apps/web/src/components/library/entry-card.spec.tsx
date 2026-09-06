@@ -36,6 +36,7 @@ const entry: LibraryEntryDto = {
     },
   ],
   addedBy: { id: "user-1", name: "Тест" },
+  community: null,
   canEdit: false,
   hasCustomPreview: false,
 };
@@ -113,5 +114,30 @@ describe("EntryCard", () => {
         .getByRole("link", { name: /редактировать/i })
         .getAttribute("href"),
     ).toBe("/library/entry/entry-1");
+  });
+
+  it("подписывает материал общиной и ведёт в ленту, отфильтрованную по ней", () => {
+    render(
+      <EntryCard
+        entry={{
+          ...entry,
+          community: { id: "c-1", slug: "moscow", name: "Москва" },
+        }}
+        locale="ru"
+      />,
+    );
+
+    // Ссылка ведёт в каталог с фильтром, а не в саму общину: увидевший
+    // подпись спрашивает «что ещё есть от них».
+    expect(screen.getByRole("link", { name: /Москва/ })).toHaveAttribute(
+      "href",
+      "/library?communityId=c-1",
+    );
+  });
+
+  it("без общины подписи нет", () => {
+    render(<EntryCard entry={entry} locale="ru" />);
+
+    expect(screen.queryByRole("link", { name: /Москва/ })).toBeNull();
   });
 });
