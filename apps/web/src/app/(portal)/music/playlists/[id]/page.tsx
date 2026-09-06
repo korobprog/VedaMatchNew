@@ -121,7 +121,7 @@ export default async function MusicPlaylistPage({
           <ul className="mt-4 flex flex-col">
             {tracks.map((track, index) => (
               <li key={track.id}>
-                <MusicTrackRow track={track} position={index + 1} />
+                <MusicTrackRow track={track} position={index + 1} queue={queue} />
               </li>
             ))}
           </ul>

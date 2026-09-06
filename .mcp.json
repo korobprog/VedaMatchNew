@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "dokploy": {
+      "command": "npx",
+      "args": ["-y", "@dokploy/mcp"],
+      "env": {
+        "DOKPLOY_URL": "${DOKPLOY_URL}",
+        "DOKPLOY_API_KEY": "${DOKPLOY_API_KEY}",
+        "DOKPLOY_TOOL_PRESET": "deploy"
+      }
+    }
+  }
+}
