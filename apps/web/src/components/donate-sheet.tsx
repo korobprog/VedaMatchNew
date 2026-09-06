@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { DonationRequisite, DonationSettingsDto } from "@vedamatch/shared";
+import { HeartHandshake } from "lucide-react";
 
 /**
  * Кнопка «Поддержать развитие VedaMatch» и шторка с реквизитами.
@@ -34,7 +35,10 @@ export function DonateButton({
           "inline-flex items-center gap-2 rounded-xl border border-gold/50 bg-gold/10 px-4 py-2 text-sm font-semibold text-gold hover:bg-gold/20"
         }
       >
-        <span aria-hidden="true">💛</span>
+        {/* Ладошка с сердцем вместо жёлтого сердца: помощь порталу — это
+            «протянуть руку», а не «нравится», и эмодзи сердца читалось как
+            вторая кнопка лайка. */}
+        <HeartHandshake aria-hidden className="size-4 shrink-0" />
         {label}
       </button>
       <DonateSheet ref={dialogRef} donation={donation} />

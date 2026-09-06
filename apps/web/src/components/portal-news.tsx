@@ -85,11 +85,11 @@ export function PortalNews({ items }: { items: PublicAnnouncementDto[] }) {
   const opened = visible.find((item) => item.id === openId) ?? null;
 
   return (
-    <section aria-label="Сообщения VedaMatch" className="mb-6 space-y-3">
+    <section aria-label="Сообщения и новости от VedaMatch" className="mb-6 space-y-3">
       {pinned && (
         <article className="glass rounded-2xl border border-gold/40 bg-gold/5 p-4">
           <p className="font-mono text-[11px] uppercase tracking-wide text-gold">
-            Сообщения VedaMatch
+            Сообщения и новости от VedaMatch
           </p>
           <h2 className="mt-1 font-display text-base font-bold text-text-0">
             {pinned.title}
@@ -120,7 +120,7 @@ export function PortalNews({ items }: { items: PublicAnnouncementDto[] }) {
         <div className="glass rounded-2xl border border-glass-brd p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="font-mono text-[11px] uppercase tracking-wide text-text-2">
-              {pinned ? "Ещё сообщения" : "Сообщения VedaMatch"}
+              {pinned ? "Ещё сообщения" : "Сообщения и новости от VedaMatch"}
             </p>
             <Link
               href="/updates/news"

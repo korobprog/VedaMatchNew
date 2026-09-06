@@ -17,6 +17,12 @@ export type ContactsAshram =
   | 'vanaprastha'
   | 'sannyasi';
 
+/**
+ * Порядок выдачи справочника. `active` — недавно заходившие сверху,
+ * `alpha` — по имени, `new` — новые карточки, `city` — по городу.
+ */
+export type ContactsSearchSort = 'active' | 'alpha' | 'new' | 'city';
+
 export type ContactsFormat = 'online' | 'offline' | 'any';
 
 export type ContactsTagKind = 'service' | 'profession' | 'skill' | 'interest';
@@ -193,6 +199,8 @@ export interface ContactsSearchFilters {
   photoVerifiedOnly?: boolean;
   page?: number;
   pageSize?: number;
+  /** Порядок выдачи; пусто — недавно заходившие сверху. */
+  sort?: ContactsSearchSort;
 }
 
 /** Счётчик для чипа фильтра. Считается по той же выдаче, что и результаты. */

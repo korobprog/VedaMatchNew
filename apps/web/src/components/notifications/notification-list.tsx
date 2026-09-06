@@ -99,6 +99,7 @@ export function NotificationList() {
           Здесь появляются новые сообщения, заявки и ответы поддержки.
           Прочитанные остаются на неделю — успеете вернуться.
         </p>
+        <NewsLink />
       </div>
     );
 
@@ -127,6 +128,8 @@ export function NotificationList() {
           </ul>
         </section>
       )}
+
+      <NewsLink />
 
       {read.length > 0 && (
         <section aria-label="Прочитанные">
@@ -172,8 +175,37 @@ function NotificationCard({
             {formatWhen(item.createdAt)}
           </span>
         </span>
+        {/* Ярлык «От администрации»: у остальных категорий отправитель ясен
+            из самого текста («вам ответили», «заявка принята»), а
+            объявление портала приходит ниоткуда, и понять, кто его прислал,
+            по значку в углу не выходило. */}
+        {item.category === "announcements" && (
+          <span className="mt-1 inline-flex rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-[11px] font-medium text-gold">
+            От администрации
+          </span>
+        )}
         <span className="mt-1 block text-sm text-text-1">{item.body}</span>
       </span>
     </Link>
+  );
+}
+
+/**
+ * Путь к новостям разработки.
+ *
+ * Уведомление живёт неделю и исчезает, а новости остаются: отсюда
+ * единственная ссылка на них, кроме набранного руками адреса. Показывается и
+ * над пустым списком — когда уведомлений нет, других дорог с этой страницы
+ * не остаётся вовсе.
+ */
+function NewsLink() {
+  return (
+    <p className="text-sm text-text-2">
+      Объявления и новости разработки целиком —{" "}
+      <Link href="/updates/news" className="text-cyan hover:text-magenta">
+        в разделе «Что нового»
+      </Link>
+      .
+    </p>
   );
 }

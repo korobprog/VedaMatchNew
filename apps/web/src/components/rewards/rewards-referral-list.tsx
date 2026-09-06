@@ -1,5 +1,6 @@
 import type { RewardsReferralDto } from "@vedamatch/shared";
 import { REFERRAL_STATUS_LABELS } from "@/lib/rewards-share";
+import { UserAvatar } from "@/components/ui/user-avatar";
 
 const dateFormat = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
@@ -40,12 +41,7 @@ export function RewardsReferralList({
           >
             {item.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={item.avatarUrl}
-                alt=""
-                className="h-10 w-10 rounded-full"
-                referrerPolicy="no-referrer"
-              />
+              <UserAvatar name={item.name} avatarUrl={item.avatarUrl} size={40} />
             ) : (
               <span
                 aria-hidden

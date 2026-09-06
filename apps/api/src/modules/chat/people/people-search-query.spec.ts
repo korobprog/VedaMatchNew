@@ -6,6 +6,7 @@ import {
   buildSearchWhere,
   normalizeLocationKey,
   normalizeSearchFilters,
+  searchOrderBy,
   toStringList,
 } from './people-search-query';
 import type {
@@ -315,6 +316,69 @@ describe('normalizeSearchFilters: центр карты', () => {
       BadRequestException,
     );
     expect(() => normalizeSearchFilters({ lat: '0', lon: '181' })).toThrow(
+      BadRequestException,
+    );
+  });
+});
+
+describe('порядок выдачи справочника', () => {
+  const sql = (sort: Parameters<typeof searchOrderBy>[0]) =>
+    searchOrderBy(sort).sql.replace(/\s+/g, ' ').trim();
+
+  it('по умолчанию сверху недавно заходившие', () => {
+    expect(sql('active')).toContain('lastSeenAt" DESC');
+  });
+
+  it('алфавит считает по показанному имени, а не по мирскому всегда', () => {
+    // В карточке видно то, что отдаёт resolveDisplayName; сортировка по
+    // скрытому имени выглядела бы случайной.
+    expect(sql('alpha')).toContain('COALESCE(u."spiritualName", u."name")');
+  });
+
+  it('алфавит ставит «Ё» рядом с «Е», а не в конец по коду символа', () => {
+    expect(sql('alpha')).toContain('COLLATE "ru-RU-x-icu"');
+  });
+
+  it('«новые» считает по дате карточки', () => {
+    expect(sql('new')).toContain('p."createdAt" DESC');
+  });
+
+  it('город берётся у владельца карточки — своего у неё нет', () => {
+    // Проверка на `p."city"` закрепляла несуществующий столбец: запрос
+    // падал на `column p.city does not exist`, а тест проходил.
+    expect(sql('city')).toContain(`u."homeLocation"->>'city'`);
+    expect(sql('city')).not.toContain('p."city"');
+  });
+
+  it('город без города уходит в конец, а не в начало', () => {
+    expect(sql('city')).toContain('NULLS LAST');
+  });
+
+  it('спрятанный город не сортируется наравне с показанным', () => {
+    // Иначе порядок выдачи рассказывает то, что человек закрыл настройками.
+    expect(sql('city')).toContain(`p."fieldPrivacy"->>'city'`);
+  });
+
+  it('у каждого порядка есть tiebreak по id', () => {
+    // Без него запись приходит на двух страницах подряд либо ни на одной.
+    for (const sort of ['active', 'alpha', 'new', 'city'] as const)
+      expect(sql(sort)).toContain('p."id" DESC');
+  });
+});
+
+describe('normalizeSearchFilters — порядок', () => {
+  it('без параметра — порядок по умолчанию', () => {
+    expect(normalizeSearchFilters({}).sort).toBe('active');
+  });
+
+  it('принимает известный порядок', () => {
+    expect(normalizeSearchFilters({ sort: 'alpha' }).sort).toBe('alpha');
+  });
+
+  it('незнакомое значение отбивает, а не подменяет молча', () => {
+    // Как и остальные перечисления этого разбора: подменить непонятый
+    // параметр значит соврать выдачей.
+    expect(() => normalizeSearchFilters({ sort: 'по-алфавиту' })).toThrow(
       BadRequestException,
     );
   });

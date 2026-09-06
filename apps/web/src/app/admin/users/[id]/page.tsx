@@ -1,6 +1,7 @@
 ﻿import Link from "next/link";
 import { redirect } from "next/navigation";
 import { redirectToLogin } from "@/lib/require-user";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { AdminUserProfileForm } from "@/components/admin-user-profile-form";
 import { AdminUserStageForm } from "@/components/admin-user-stage-form";
 import { AdminUserRoleForm } from "@/components/admin-user-role-form";
@@ -40,14 +41,7 @@ export default async function AdminUserDetailPage({
 
       <div className="glass rounded-2xl border border-glass-brd p-6 mb-6">
         <div className="flex flex-wrap items-start gap-4">
-          {profile.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={profile.avatarUrl} alt={profile.name} className="h-16 w-16 rounded-full" referrerPolicy="no-referrer" />
-          ) : (
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-glass text-xl font-semibold text-text-0">
-              {profile.name.charAt(0).toUpperCase()}
-            </span>
-          )}
+          <UserAvatar name={profile.name} avatarUrl={profile.avatarUrl} size={64} />
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-2xl font-bold text-text-0">{profile.name}</h1>
             <p className="text-text-1">{profile.email}</p>

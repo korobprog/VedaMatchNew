@@ -40,7 +40,7 @@ import { calculateAge } from './people-age';
 import { PeopleAvatarService } from './people-avatar.service';
 import type { SearchViewer } from './people-search-query';
 import {
-  SEARCH_ORDER_BY,
+  searchOrderBy,
   buildSearchWhere,
   normalizeLocationKey,
   normalizeSearchFilters,
@@ -386,7 +386,7 @@ export class PeopleService {
     const offset = (filters.page - 1) * filters.pageSize;
     const [ids, totals, facets] = await Promise.all([
       this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-        SELECT p."id" ${from} WHERE ${where} ${SEARCH_ORDER_BY}
+        SELECT p."id" ${from} WHERE ${where} ${searchOrderBy(filters.sort)}
         LIMIT ${filters.pageSize} OFFSET ${offset}
       `),
       this.prisma.$queryRaw<Array<{ count: number }>>(Prisma.sql`

@@ -109,4 +109,43 @@ describe("NotificationList", () => {
 
     expect(await screen.findByText(/Не удалось загрузить/)).toBeInTheDocument();
   });
+
+  it("подписывает объявления администрации", async () => {
+    fetchInbox.mockResolvedValue({
+      items: [item({ id: "n2", category: "announcements", title: "Плановые работы" })],
+      unreadCount: 1,
+    });
+    render(<NotificationList />);
+
+    // У остальных категорий отправитель ясен из текста, а объявление портала
+    // приходит ниоткуда.
+    expect(await screen.findByText("От администрации")).toBeInTheDocument();
+  });
+
+  it("не подписывает так всё подряд", async () => {
+    fetchInbox.mockResolvedValue({ items: [item()], unreadCount: 1 });
+    render(<NotificationList />);
+
+    await screen.findByText("Кадр готов");
+    expect(screen.queryByText("От администрации")).not.toBeInTheDocument();
+  });
+
+  it("даёт путь к истории новостей: уведомление живёт неделю, новости остаются", async () => {
+    fetchInbox.mockResolvedValue({ items: [item()], unreadCount: 1 });
+    render(<NotificationList />);
+
+    expect(
+      await screen.findByRole("link", { name: /Что нового/ }),
+    ).toHaveAttribute("href", "/updates/news");
+  });
+
+  it("даёт этот путь и когда уведомлений нет — других с этой страницы нет вовсе", async () => {
+    fetchInbox.mockResolvedValue({ items: [], unreadCount: 0 });
+    render(<NotificationList />);
+
+    await screen.findByText("Уведомлений нет");
+    expect(
+      screen.getByRole("link", { name: /Что нового/ }),
+    ).toHaveAttribute("href", "/updates/news");
+  });
 });

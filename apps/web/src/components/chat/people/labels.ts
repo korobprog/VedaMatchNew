@@ -4,6 +4,7 @@ import type {
   ContactsAshram,
   ContactsFormat,
   ContactsRequestStatus,
+  ContactsSearchSort,
   ContactsTagKind,
   ProfileMessengers,
   ProfileSocialLinks,
@@ -21,6 +22,13 @@ export const contactsFormatLabels: Record<ContactsFormat, string> = {
   online: "Онлайн",
   offline: "Офлайн",
   any: "Любой",
+};
+
+export const contactsSortLabels: Record<ContactsSearchSort, string> = {
+  active: "Недавно заходили",
+  alpha: "По алфавиту",
+  new: "Сначала новые",
+  city: "По городам",
 };
 
 export const contactsStageLabels: Record<SpiritualStage, string> = {

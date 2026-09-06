@@ -10,6 +10,7 @@ import { getListenStats } from "@/lib/music-playback-api";
 import { MusicCover } from "./music-cover";
 import { useMusicPlayer } from "./player/player-provider";
 import { useQueueTracks } from "./player/use-queue-tracks";
+import { UserAvatar } from "@/components/ui/user-avatar";
 
 /**
  * Карточка Музыки на главной портала.
@@ -517,10 +518,11 @@ function FriendsColumn({ friends }: { friends: MusicFriendListening[] }) {
                 // Ссылка подписана и может истечь — next/image не годится для
                 // произвольно меняющегося домена подписи.
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={friend.avatarUrl}
-                  alt=""
-                  className="size-[30px] shrink-0 rounded-[10px] object-cover"
+                <UserAvatar
+                  name={friend.name}
+                  avatarUrl={friend.avatarUrl}
+                  size={30}
+                  rounded="rounded-[10px]"
                 />
               ) : (
                 <span
