@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { readInstantMedia, writeInstantMedia } from "./chat-send-settings";
+import {
+  DEFAULT_INSTANT_MEDIA,
+  readInstantMedia,
+  writeInstantMedia,
+} from "./chat-send-settings";
 
 /**
  * Переключатель «отправлять фото и файлы сразу». Читается эффектом: на
@@ -9,7 +13,7 @@ import { readInstantMedia, writeInstantMedia } from "./chat-send-settings";
  * гидратации — как у панели горячих кнопок.
  */
 export function ChatSendSettingsToggle() {
-  const [instant, setInstant] = useState(false);
+  const [instant, setInstant] = useState(DEFAULT_INSTANT_MEDIA);
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- см. комментарий выше. */
@@ -40,10 +44,10 @@ export function ChatSendSettingsToggle() {
             Отправлять фото и файлы сразу
           </span>
           <span className="block text-xs leading-4 text-text-2">
-            Без этого выбранное сначала ложится под поле ввода — можно
-            приписать текст или добавить ещё снимков, а потом нажать
-            «Отправить». Голосовые уходят сразу в любом случае. Настройка
-            хранится на этом устройстве.
+            Выключите, если хотите приписывать к фото текст или собирать
+            несколько снимков в одно сообщение: тогда выбранное сначала
+            ложится под поле ввода и ждёт «Отправить». Голосовые уходят
+            сразу в любом случае. Настройка хранится на этом устройстве.
           </span>
         </span>
       </label>

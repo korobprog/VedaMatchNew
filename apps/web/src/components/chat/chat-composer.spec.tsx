@@ -97,8 +97,8 @@ describe("ChatComposer", () => {
 });
 
 describe("ChatComposer — вложения", () => {
-  it("с включённой мгновенной отправкой фото уходит сразу, без кнопки", async () => {
-    window.localStorage.setItem("vedamatch:chat-instant-media", "1");
+  it("по умолчанию фото уходит сразу, без кнопки", async () => {
+    window.localStorage.removeItem("vedamatch:chat-instant-media");
     const onSend = vi.fn().mockResolvedValue(undefined);
     const { container } = render(
       <ChatComposer
@@ -121,10 +121,10 @@ describe("ChatComposer — вложения", () => {
       expect.objectContaining({ kind: "image", url: "https://cdn/x.png" }),
     ]);
     expect(screen.queryByText("Фото")).not.toBeInTheDocument();
-    window.localStorage.removeItem("vedamatch:chat-instant-media");
   });
 
-  it("по умолчанию фото ложится под поле и ждёт кнопки", async () => {
+  it("с выключенной мгновенной отправкой фото ложится под поле и ждёт кнопки", async () => {
+    window.localStorage.setItem("vedamatch:chat-instant-media", "0");
     const onSend = vi.fn().mockResolvedValue(undefined);
     const { container } = render(
       <ChatComposer
@@ -143,5 +143,6 @@ describe("ChatComposer — вложения", () => {
 
     expect(await screen.findByText("Фото")).toBeInTheDocument();
     expect(onSend).not.toHaveBeenCalled();
+    window.localStorage.removeItem("vedamatch:chat-instant-media");
   });
 });

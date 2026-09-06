@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { parseInstantMedia, serializeInstantMedia } from "./chat-send-settings";
 
 describe("настройка мгновенной отправки вложений", () => {
-  it("по умолчанию выключена: фото ждут кнопки, чтобы к ним приписать текст", () => {
-    expect(parseInstantMedia(null)).toBe(false);
-    expect(parseInstantMedia("")).toBe(false);
-    expect(parseInstantMedia("мусор")).toBe(false);
+  it("по умолчанию включена: фото уходит сразу, как в мессенджерах", () => {
+    expect(parseInstantMedia(null)).toBe(true);
+    expect(parseInstantMedia("")).toBe(true);
+    expect(parseInstantMedia("мусор")).toBe(true);
   });
 
   it("включённое значение переживает запись и чтение", () => {

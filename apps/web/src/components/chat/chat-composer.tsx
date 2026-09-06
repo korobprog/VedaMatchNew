@@ -15,7 +15,7 @@ import {
   attachTileMeta,
   tileToneClass,
 } from "./chat-attach-sheet";
-import { readInstantMedia } from "./chat-send-settings";
+import { DEFAULT_INSTANT_MEDIA, readInstantMedia } from "./chat-send-settings";
 import {
   CHAT_QUICK_SLOT_STORAGE_KEY,
   DEFAULT_CHAT_QUICK_SLOT,
@@ -71,7 +71,7 @@ export function ChatComposer({
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [pinned, setPinned] = useState<ChatQuickSlotId>(DEFAULT_CHAT_QUICK_SLOT);
   const [dropHover, setDropHover] = useState(false);
-  const [instantMedia, setInstantMedia] = useState(false);
+  const [instantMedia, setInstantMedia] = useState(DEFAULT_INSTANT_MEDIA);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
@@ -141,10 +141,10 @@ export function ChatComposer({
     );
 
   /**
-   * Фото и файлы: по умолчанию ложатся под поле ввода и ждут «Отправить» —
-   * так к ним можно приписать текст или собрать несколько в одно сообщение.
-   * С включённой мгновенной отправкой всё выбранное уходит одним сообщением
-   * сразу после загрузки, а начатый текст остаётся в поле.
+   * Фото и файлы: по умолчанию уходят одним сообщением сразу после
+   * загрузки, а начатый текст остаётся в поле. С выключенной мгновенной
+   * отправкой ложатся под поле и ждут «Отправить» — так к ним можно
+   * приписать текст или собрать несколько в одно сообщение.
    */
   async function pick(files: FileList | null) {
     if (!files?.length) return;
