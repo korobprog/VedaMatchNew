@@ -59,7 +59,7 @@ export function UnionQuickAccessWidget({
         </div>
       )}
       {hasProgress && (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div
             role="progressbar"
             aria-label="Заполненность анкеты Union"
@@ -83,14 +83,20 @@ export function UnionQuickAccessWidget({
           {/* Кнопка «?» — <details>, а не состояние: работает без JavaScript
               и сама закрывается по Escape в браузерах, где это поддержано.
               Текст называет последствие, а не просит «заполнить профиль». */}
-          <details className="relative shrink-0">
+          <details className="contents">
             <summary
               aria-label="Зачем заполнять анкету"
-              className="flex size-5 cursor-pointer list-none items-center justify-center rounded-full border border-glass-brd text-[11px] font-bold text-text-2 hover:text-text-0 [&::-webkit-details-marker]:hidden"
+              className="relative z-10 flex size-5 cursor-pointer list-none items-center justify-center rounded-full border border-glass-brd text-[11px] font-bold text-text-2 hover:text-text-0 [&::-webkit-details-marker]:hidden"
             >
               ?
             </summary>
-            <p className="glass absolute right-0 top-7 z-10 w-64 rounded-xl border border-glass-brd p-3 text-xs leading-relaxed text-text-1">
+            {/* relative z-10 у кнопки и текста: вся карточка сервиса накрыта
+                ссылкой-накладкой (a.after:absolute), и без подъёма нажатие
+                на «?» открывало бы Знакомства вместо подсказки.
+                Отдельной строкой под полосой (basis-full переносит), а не
+                всплывашкой поверх значков: та просвечивала и резалась краем
+                карточки. Подложка непрозрачная. */}
+            <p className="relative z-10 basis-full rounded-xl border border-glass-brd bg-bg-1 p-3 text-xs leading-relaxed text-text-1">
               Чем больше вы расскажете о себе, тем выше анкета в
               рекомендациях и тем чаще вас видят. Ниже — что уже заполнено, а
               что ещё нет.
