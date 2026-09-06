@@ -3,8 +3,15 @@ import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { ChatListView } from "@/components/chat/chat-list-view";
 import { getChatList } from "@/lib/chat-api";
+import { getProfile } from "@/lib/api";
+import { redirectToLogin } from "@/lib/require-user";
 
 export default async function ChatPage() {
+  // Свой идентификатор нужен списку, чтобы отличить своё прочтение от
+  // чужого: первое гасит счётчик, второе ставит галочку у собеседника.
+  const user = await getProfile();
+  if (!user) redirectToLogin("/chat");
+
   const state = (await getChatList()) ?? {
     conversations: [],
     requestsCount: 0,
@@ -110,7 +117,7 @@ export default async function ChatPage() {
             </svg>
           </Link>
         </header>
-        <ChatListView initial={state} />
+        <ChatListView initial={state} viewerId={user.id} />
       </main>
     </>
   );
