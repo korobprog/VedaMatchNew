@@ -232,6 +232,44 @@ describe('MusicUploadsService.completeUpload', () => {
     });
   });
 
+  it('выбранный при загрузке матх сохраняется у записи', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+
+    await service(prisma, storage).completeUpload(
+      'u1',
+      'up1',
+      'gaura.mp3',
+      'sri_chaitanya_saraswat_math',
+    );
+
+    expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        lineage: 'sri_chaitanya_saraswat_math',
+      }),
+    });
+  });
+
+  it('линия вне справочника — «для всех», а не отказ: файл уже в бакете', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+
+    await service(prisma, storage).completeUpload(
+      'u1',
+      'up1',
+      'gaura.mp3',
+      'sri_chaitanya_matha' as never,
+    );
+
+    // Ронять заливку из-за поля, которое поправят в очереди, значит потерять
+    // саму запись — а она уже залита.
+    expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ lineage: null }),
+    });
+  });
+
   it('и у не-преданного тоже «для всех линий», а не ISKCON', async () => {
     const prisma = prismaMock();
     const storage = storageMock();

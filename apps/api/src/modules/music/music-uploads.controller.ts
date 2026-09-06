@@ -11,6 +11,7 @@ import { Throttle } from '@nestjs/throttler';
 import type {
   AccessTokenPayload,
   CreateMusicReportRequest,
+  CompleteMusicUploadRequest,
   CreateMusicUploadRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
@@ -55,9 +56,14 @@ export class MusicUploadsController {
   complete(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
-    @Body() body: { fileName?: string },
+    @Body() body: CompleteMusicUploadRequest,
   ) {
-    return this.uploads.completeUpload(user.sub, id, body?.fileName);
+    return this.uploads.completeUpload(
+      user.sub,
+      id,
+      body?.fileName,
+      body?.lineage,
+    );
   }
 
   /** Снять свою неопубликованную запись и освободить место. */

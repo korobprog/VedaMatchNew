@@ -286,6 +286,19 @@ export interface CreateMusicUploadResponse {
   expiresInSeconds: number;
 }
 
+/**
+ * Завершение заливки: файл уже в бакете, осталось создать карточку.
+ *
+ * `lineage` — матх или линия, которой принадлежит **запись**, а не тот, кто
+ * её принёс. Поле необязательное, и это существенно: не выбрано — значит
+ * `null`, «слышат все». Прежде линию подставлял сервер из профиля
+ * загрузившего, и бхаджан получал чужую принадлежность молча.
+ */
+export interface CompleteMusicUploadRequest {
+  fileName?: string;
+  lineage?: LineageId | null;
+}
+
 export interface CompleteMusicUploadResponse {
   trackId: string;
   status: MusicTrackStatus;

@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import type { MusicUploadRightsBasis } from "@vedamatch/shared";
 import { MUSIC_ACCEPTED_MIME } from "@vedamatch/shared";
 import { uploadMusicTrack } from "@/lib/music-client-api";
+import {
+  LineageSelect,
+  lineageFromSelect,
+} from "@/components/lineage-picker";
 import { getTrack } from "@/lib/music-playback-api";
 import { keepUploadedTrackOffline } from "@/lib/music/offline-manager";
 import { Alert } from "@/components/ui/alert";
@@ -54,6 +58,16 @@ export function MusicUploadForm() {
    */
   const [basis, setBasis] = useState<MusicUploadRightsBasis | "">("");
   /**
+   * Матх или линия записи.
+   *
+   * Пусто по умолчанию — «слышат все», и это не то же самое, что «не знаю».
+   * Линия сужает круг слушателей: преданный другой линии записи с чужой
+   * пометкой в каталоге не увидит. Поэтому выбор осознанный и в руках того,
+   * кто грузит, — а сервер, который прежде подставлял сюда линию из профиля,
+   * молча приписывал бхаджану принадлежность, о которой никто не просил.
+   */
+  const [lineage, setLineage] = useState<string>("");
+  /**
    * Чьё офлайн-хранилище открыто. Берём у плеера — он единственный, кто знает
    * человека в этом поддереве, и ровно так же спрашивает кнопка «скачать».
    */
@@ -97,6 +111,7 @@ export function MusicUploadForm() {
           file,
           basis as MusicUploadRightsBasis,
           setProgress,
+          lineageFromSelect(lineage),
         );
         ok += 1;
         // Копию кладём тем же файлом, что только что уехал в бакет: байты уже
@@ -196,6 +211,19 @@ export function MusicUploadForm() {
             ))}
           </select>
         </label>
+
+        {/* Матх — необязательный выбор, и пустой вариант стоит первым:
+            большинству записей линия не принадлежит вовсе, а поставленная
+            наугад прячет запись от всех остальных линий. */}
+        <LineageSelect
+          value={lineage}
+          onChange={setLineage}
+          emptyLabel="Слышат все"
+          label="Матх или линия записи — если запись принадлежит ей"
+          hint="Преданные видят в каталоге записи своей линии и те, что для всех. Не выбрано — запись слышат все, и для большинства бхаджанов это верно."
+          disabled={busy}
+          className="h-9 w-full rounded-lg border border-glass-brd bg-bg-1 px-2.5 text-sm text-text-0"
+        />
       </div>
 
       {busy && (
