@@ -14,11 +14,7 @@ import type {
   MusicStorageUsageDto,
   MyMusicUploadsDto,
 } from '@vedamatch/shared';
-import {
-  MUSIC_ACCEPTED_MIME,
-  defaultLineageFor,
-  toLineageId,
-} from '@vedamatch/shared';
+import { MUSIC_ACCEPTED_MIME } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MusicStorageService } from './music-storage.service';
 import {
@@ -344,18 +340,18 @@ export class MusicUploadsService {
 
     const title = fallbackTrackTitle(metadata, fileName ?? upload.storageKey);
     const status = initialStatusFor(upload.rightsBasis);
-    // Линия записи — линия загрузившего, если он преданный, иначе ISKCON.
-    // Модератор может поправить перед публикацией. Из `User` читаются ровно
-    // два портальных поля, разрешённых сервису на чтение.
-    const author = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { spiritualStage: true, lineage: true },
-    });
-    const lineage = defaultLineageFor(
-      author
-        ? { spiritualStage: author.spiritualStage, lineage: toLineageId(author.lineage) }
-        : null,
-    );
+    /* Линия записи — «для всех линий», пока редактор не решит иначе.
+
+       Раньше здесь стояла линия загрузившего (`defaultLineageFor`), и это
+       было тихой ошибкой: линия — утверждение о записи, а не о человеке,
+       который нажал «загрузить». Бхаджан Дурге получал линию Гаудия-матха
+       только потому, что его залил преданный этой линии, — и пропадал из
+       каталога у преданных остальных линий, никак этого не объясняя.
+
+       Поставить линию есть где: карточка очереди у модератора и форма правки
+       в справочниках каталога. Не поставленная линия означает «слышат все»,
+       и это честнее, чем угаданная. */
+    const lineage = null;
     const coverKey = embeddedCover
       ? await this.storeEmbeddedCover(userId, embeddedCover)
       : null;

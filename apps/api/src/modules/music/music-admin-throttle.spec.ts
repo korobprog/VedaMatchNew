@@ -26,14 +26,16 @@ import { MusicIngestController } from './music-ingest.controller';
  */
 describe('лимит запросов в админке Музыки', () => {
   const reflector = new Reflector();
-  const metaOf = (target: object) =>
+  const metaOf = (target: Function) =>
     reflector.get<boolean | string | undefined>('admin-unlimited', target);
 
-  it.each([
+  const controllers: [string, Function][] = [
     ['справочники каталога', MusicAdminCatalogController],
     ['очередь, сводка и жалобы', MusicAdminQueueController],
     ['редакционное пополнение', MusicIngestController],
-  ])('%s: администратору Музыки лимит не считается', (_name, controller) => {
+  ];
+
+  it.each(controllers)('%s: администратору Музыки лимит не считается', (_name, controller) => {
     // Именно слаг, а не `true`: с ним послабление достаётся и
     // `service-admin`, которому назначена Музыка, — он и ведёт каталог.
     expect(metaOf(controller)).toBe('music');
