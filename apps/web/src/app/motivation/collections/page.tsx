@@ -27,7 +27,7 @@ export default async function MotivationCollectionsPage() {
         <MotivationTopBar
           active="collections"
           isAdmin={isAdmin}
-          title="Подборки"
+          title="Категории"
           action={{ href: "/motivation", label: "Лента" }}
         />
         <div className="mt-4 px-2">

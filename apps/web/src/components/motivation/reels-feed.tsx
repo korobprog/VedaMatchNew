@@ -363,7 +363,11 @@ export function ReelsFeed({
           частью слайда и «подпрыгивал» при каждом свайпе. Фон стеклянный —
           сплошная чёрная плашка обрезала кадр. */}
       {activePost && onPost && (
-        <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex items-center justify-around gap-1 border-t border-white/15 bg-white/10 px-2 py-2 backdrop-blur-md">
+        /* Кнопки делят строку поровну, а не встают по содержимому: подписи
+           разной длины («Поделиться» против «Скрыть») разводили промежутки
+           так, что ряд читался как случайный набор. Равные доли держат сетку
+           и при седьмой кнопке — она появляется у автора и у админа. */
+        <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex items-stretch border-t border-white/15 bg-white/10 px-1 py-2 backdrop-blur-md">
           <RailButton
             label={activePost.isLiked ? "Убрать лайк" : "Нравится"}
             pressed={activePost.isLiked}
@@ -428,23 +432,23 @@ export function ReelsFeed({
             <Link
               href={`/admin/motivation/published?post=${encodeURIComponent(activePost.slug)}`}
               aria-label="Править эту публикацию"
-              className="flex flex-col items-center gap-0.5 text-[10px] font-semibold drop-shadow"
+              className={railItemClass}
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-white/15">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/15">
                 <PencilIcon />
               </span>
-              Править
+              <span className="w-full truncate text-center">Править</span>
             </Link>
           )}
           <Link
             href="/motivation/create"
             aria-label="Создать свой рилс"
-            className="flex flex-col items-center gap-0.5 text-[10px] font-semibold drop-shadow"
+            className={railItemClass}
           >
-            <span className="btn-mint flex h-9 w-9 items-center justify-center rounded-full text-xl font-bold leading-none">
+            <span className="btn-mint flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl font-bold leading-none">
               +
             </span>
-            Создать
+            <span className="w-full truncate text-center">Создать</span>
           </Link>
         </div>
       )}
@@ -815,6 +819,19 @@ function FullQuoteToggle({ quote, source }: { quote: string; source: string }) {
   );
 }
 
+/**
+ * Доля в нижнем ряду.
+ *
+ * Ряд делят поровну и кнопки, и ссылки: подписи разной длины
+ * («Поделиться» против «Скрыть») разводили промежутки так, что ряд читался
+ * как случайный набор, а «Править» и «Создать» — ссылки, а не кнопки —
+ * слипались в «ПравитьСоздать». `px-1` держит зазор между подписями,
+ * `truncate` не даёт длинной подписи разъехаться на вторую строку: она
+ * подняла бы ряд и съела нижний край кадра.
+ */
+const railItemClass =
+  "flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 text-[9px] font-semibold leading-tight drop-shadow sm:text-[10px]";
+
 function RailButton({
   label,
   caption,
@@ -842,12 +859,18 @@ function RailButton({
       aria-label={label}
       aria-pressed={pressed}
       onClick={onClick}
-      className="flex flex-col items-center gap-0.5 text-[10px] font-semibold"
+      className={railItemClass}
     >
-      <span className={`flex h-9 w-9 items-center justify-center rounded-full border ${activeClass}`}>
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border ${activeClass}`}
+      >
         {children}
       </span>
-      <span aria-hidden="true">{caption}</span>
+      {/* Подпись обрезаем, а не переносим: вторая строка поднимает ряд и
+          съедает нижний край кадра. */}
+      <span aria-hidden="true" className="w-full truncate text-center">
+        {caption}
+      </span>
     </button>
   );
 }
