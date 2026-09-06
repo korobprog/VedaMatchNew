@@ -3,15 +3,18 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type {
-  LibraryCategoryDto,
-  LibraryDuplicateEntryConflict,
-  LibraryEntryType,
-  LibraryCategoryTreeNode,
-  LibraryLocale,
+import {
+  type LibraryCategoryDto,
+  type LibraryDuplicateEntryConflict,
+  type LibraryEntryType,
+  type LibraryCategoryTreeNode,
+  type LibraryLocale,
+  DEFAULT_CONTENT_LINEAGE,
+  type LineageId,
 } from "@vedamatch/shared";
 import { CategoryPicker } from "./category-picker";
 import { LibraryCommunitySelect } from "./community-select";
+import { LineageSelect } from "@/components/lineage-picker";
 import { insertIntoTree, renameInTree } from "./category-tree";
 import { SectionRequestForm } from "./section-request-form";
 import { entryTypeLabel, pickLocalized, t, type LibraryTextKey } from "./i18n";
@@ -55,11 +58,14 @@ export function AddEntryWizard({
   tree,
   initialCategorySlug,
   canCreateRoot = false,
+  defaultLineage = DEFAULT_CONTENT_LINEAGE,
 }: {
   locale: LibraryLocale;
   tree: LibraryCategoryTreeNode[];
   initialCategorySlug?: string;
   canCreateRoot?: boolean;
+  /** Линия автора, если он преданный, иначе ISKCON — см. defaultLineageFor. */
+  defaultLineage?: LineageId;
 }) {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -85,6 +91,7 @@ export function AddEntryWizard({
     descriptionEn: "",
     categoryIds: [],
     communityId: "",
+    lineage: defaultLineage,
   });
 
   function patch(next: Partial<LibraryEntryDraft>) {
@@ -379,6 +386,15 @@ export function AddEntryWizard({
               locale={locale}
               value={draft.communityId}
               onChange={(communityId) => patch({ communityId })}
+            />
+
+            <LineageSelect
+              value={draft.lineage}
+              onChange={(lineage) => patch({ lineage })}
+              allLabel={t(locale, "add.lineageAll")}
+              label={t(locale, "add.lineage")}
+              hint={t(locale, "add.lineageHint")}
+              className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
             />
 
             {/* Подходящей рубрики может не оказаться, а тупик посреди мастера

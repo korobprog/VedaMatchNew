@@ -1,3 +1,4 @@
+import { defaultLineageFor } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
 import { redirectToLogin } from "@/lib/require-user";
 import {
@@ -57,6 +58,7 @@ export default async function LibraryAddProPage({
             tree={roots}
             initialCategorySlug={category}
             canCreateRoot={canCreateRoot}
+            defaultLineage={defaultLineageFor(user)}
           />
         </section>
       </main>

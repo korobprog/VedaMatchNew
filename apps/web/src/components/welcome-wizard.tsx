@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  detectSpiritualStage,
   findNameError,
+  type LineageId,
   type ProfileLocation,
   type SelfIdentificationAnswers,
   type UserProfile,
@@ -16,6 +18,7 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { CityPicker } from "./city-picker";
 import { NameHints } from "./name-hints";
+import { LineageCards } from "./lineage-picker";
 import { UserGalleryEditor } from "./user-gallery-editor";
 import {
   DEFAULT_ANSWERS,
@@ -52,6 +55,14 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
   );
   const [answers, setAnswers] =
     useState<SelfIdentificationAnswers>(DEFAULT_ANSWERS);
+  /**
+   * Духовная линия спрашивается тут же, как только ответы складываются в
+   * «преданного», — не отдельным шагом после отправки. Считается той же
+   * функцией, что и на сервере, поэтому вопрос не появится у йога.
+   */
+  const [lineage, setLineage] = useState<LineageId | "">("");
+  const asksLineage =
+    steps.includes("Этап пути") && detectSpiritualStage(answers) === "devotee";
 
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +88,9 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
         spiritualName: spiritualName.trim() || null,
         gender,
         homeLocation,
+        // Только когда спрашивали и выбрали: пустое поле не должно стирать
+        // линию, а у не-преданного её и не спрашивают.
+        ...(asksLineage && lineage ? { lineage } : {}),
       }),
     });
     if (!res.ok) throw new Error(await res.text());
@@ -224,6 +238,20 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
             пройти заново в любой момент.
           </p>
           <SelfIdentificationQuestions answers={answers} onChange={setAnswers} />
+
+          {asksLineage && (
+            <div className="mt-8 border-t border-glass-brd pt-6">
+              <h3 className="mb-1 font-display text-lg font-semibold text-text-0">
+                К какой линии вы принадлежите?
+              </h3>
+              <p className="mb-4 text-sm text-text-1">
+                По ответам вы преданный. Выберите своё общество, матх или
+                паривар — Образование и Музыка будут показывать материалы
+                вашей традиции. Можно пропустить и указать позже в профиле.
+              </p>
+              <LineageCards value={lineage} onChange={setLineage} />
+            </div>
+          )}
         </Card>
       )}
 

@@ -33,7 +33,11 @@ import type {
   StageHistoryItem,
   UserAccountStatus,
 } from '@vedamatch/shared';
-import { ADMIN_SERVICE_SLUGS, resolveDisplayName } from '@vedamatch/shared';
+import {
+  ADMIN_SERVICE_SLUGS,
+  resolveDisplayName,
+  toLineageId,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toRole } from '../auth/role';
 import {
@@ -232,6 +236,9 @@ export class AdminUsersService {
         devoteeVerificationStatus: user.devoteeVerificationStatus,
         lastSelfIdentificationAt:
           user.lastSelfIdentificationAt?.toISOString() ?? null,
+        lineage: toLineageId(user.lineage),
+        timeZone: user.timeZone,
+        timeZoneLocked: user.timeZoneLocked,
         subscription: toSubscriptionState(user, new Date(), billingMode),
         createdAt: user.createdAt.toISOString(),
         updatedAt: user.updatedAt.toISOString(),

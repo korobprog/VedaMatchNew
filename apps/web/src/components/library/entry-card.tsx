@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { Bookmark, ExternalLink, MessageSquare, Play, Users } from "lucide-react";
-import type { LibraryEntryDto, LibraryLocale } from "@vedamatch/shared";
+import {
+  type LibraryEntryDto,
+  type LibraryLocale,
+  lineageOption,
+} from "@vedamatch/shared";
 import { videoEmbedUrl } from "@vedamatch/shared";
 import { DeleteEntryButton } from "./delete-entry-button";
 import { entryTypeLabel, pickLocalized, t } from "./i18n";
@@ -84,6 +88,12 @@ export function EntryCard({
             {t(locale, "entry.customPreview")}
           </span>
         )}
+        {/* Линия материала: коротко, чипом. Читателю — почему это здесь,
+            редактору — правильно ли подписано. */}
+        <span className="rounded-full border border-glass-brd px-2 py-0.5">
+          {lineageOption(entry.lineage)?.shortLabel ??
+            t(locale, "lineage.badgeAll")}
+        </span>
       </div>
 
       <h3 className="mb-1 font-display text-base font-semibold text-text-0">

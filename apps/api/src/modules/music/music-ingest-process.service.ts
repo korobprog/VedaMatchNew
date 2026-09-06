@@ -520,6 +520,7 @@ export class MusicIngestProcessService {
           artistId: item.batch.artistId,
           albumId: item.batch.albumId,
           isLiveRecording: item.batch.isLiveRecording,
+          lineage: item.batch.lineage,
           // Черновик, а не публикация: партия выходит в каталог целиком и
           // только по кнопке, после того как админ прошёл таблицу глазами.
           status: 'draft',

@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { UnionQuickAccessData } from "@/lib/union-quick-access";
@@ -9,6 +10,7 @@ const empty: UnionQuickAccessData = {
   previewAvatars: [],
   moreCount: 0,
   profileCompletionPercent: null,
+  profileItems: [],
 };
 
 describe("UnionQuickAccessWidget", () => {
@@ -75,5 +77,49 @@ describe("UnionQuickAccessWidget", () => {
     render(<UnionQuickAccessWidget {...empty} />);
 
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  });
+
+  it("под полосой показывает значки полей: заполненные и пустые различимы", () => {
+    render(
+      <UnionQuickAccessWidget
+        {...empty}
+        profileCompletionPercent={40}
+        profileItems={[
+          { key: "photos", filled: true },
+          { key: "about", filled: false },
+        ]}
+      />,
+    );
+
+    const list = screen.getByRole("list", { name: "Поля анкеты" });
+    expect(list.querySelectorAll("li")).toHaveLength(2);
+    expect(screen.getByText("Фото: заполнено")).toBeInTheDocument();
+    expect(screen.getByText("О себе: не заполнено")).toBeInTheDocument();
+    expect(screen.getByTitle("О себе: не заполнено")).toHaveClass("opacity-40");
+  });
+
+  it("без полосы значков нет, даже если поля пришли", () => {
+    render(
+      <UnionQuickAccessWidget
+        {...empty}
+        profileItems={[{ key: "photos", filled: true }]}
+      />,
+    );
+
+    expect(screen.queryByRole("list", { name: "Поля анкеты" })).not.toBeInTheDocument();
+  });
+
+  it("рядом с полосой есть подсказка «зачем»: по нажатию раскрывается текст", async () => {
+    const user = userEvent.setup();
+    render(<UnionQuickAccessWidget {...empty} profileCompletionPercent={40} />);
+
+    const toggle = screen.getByText("?");
+    expect(toggle).toHaveAttribute("aria-label", "Зачем заполнять анкету");
+    expect(toggle.closest("details")).not.toHaveAttribute("open");
+
+    await user.click(toggle);
+
+    expect(toggle.closest("details")).toHaveAttribute("open");
+    expect(screen.getByText(/тем чаще вас видят/)).toBeInTheDocument();
   });
 });

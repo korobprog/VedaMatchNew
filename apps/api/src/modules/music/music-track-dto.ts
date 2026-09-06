@@ -8,6 +8,7 @@ import type {
   MusicTrackDto,
   MusicTrackStatus,
 } from '@vedamatch/shared';
+import { toLineageId } from '@vedamatch/shared';
 
 /**
  * Сборка карточек каталога. Отдельным модулем и на своих типах, а не на
@@ -54,6 +55,7 @@ export interface MusicTrackRow extends MusicCoverSource {
   durationSeconds: number;
   language: string | null;
   isLiveRecording: boolean;
+  lineage: string | null;
   playCount: number;
   publishedAt: Date | null;
   artist: MusicArtistRow | null;
@@ -125,6 +127,7 @@ export function toMusicTrackDto(
     coverUrl: buildCoverUrl(publicBaseUrl, resolveTrackCoverKey(row)),
     language: row.language,
     isLiveRecording: row.isLiveRecording,
+    lineage: toLineageId(row.lineage),
     playCount: row.playCount,
     publishedAt: row.publishedAt?.toISOString() ?? null,
   };

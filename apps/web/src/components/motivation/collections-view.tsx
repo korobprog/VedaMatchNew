@@ -103,8 +103,12 @@ export function MotivationCollectionGrid({
               loading="lazy"
               className="aspect-[3/4] w-full object-cover transition-transform group-hover:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
             />
-            <span className="block px-2 py-1.5 text-xs text-text-1">
-              {post.title || post.storyText}
+            {/* У афоризма участника заголовок — название книги; подписываем
+                началом самой цитаты, как и остальные плитки — смыслом. */}
+            <span className="block truncate px-2 py-1.5 text-xs text-text-1">
+              {post.origin === "user"
+                ? post.storyText || post.text.split("\n")[0]
+                : post.title || post.storyText}
             </span>
           </Link>
         </li>

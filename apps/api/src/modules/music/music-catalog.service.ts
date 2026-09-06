@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
+  LineageId,
+  LineagePreference,
   MusicAlbumPageDto,
   MusicArtistPageDto,
   MusicCatalogDto,
@@ -8,6 +10,11 @@ import type {
   MusicPlaylistCardDto,
   MusicTrackDetailDto,
   MusicTrackListDto,
+} from '@vedamatch/shared';
+import {
+  resolveContentLineage,
+  toLineageId,
+  toLineagePreference,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -40,6 +47,16 @@ const TRACK_CARD_INCLUDE = {
   categories: { include: { category: true } },
 } as const;
 
+/**
+ * Условие по линии: своя плюс записи «для всех» (`null`). Завёрнуто в
+ * `AND`, а не положено в `where` как `OR`: `OR` в поиске уже занят словом
+ * (название или исполнитель), и второй `OR` молча перетёр бы первый. Пустой
+ * объект, когда фильтра нет.
+ */
+export function lineageCondition(lineage: LineageId | null) {
+  return lineage ? { AND: [{ OR: [{ lineage }, { lineage: null }] }] } : {};
+}
+
 @Injectable()
 export class MusicCatalogService {
   private readonly publicBaseUrl: string | undefined;
@@ -58,11 +75,12 @@ export class MusicCatalogService {
    * друг от друга, а последовательные `await` превратили бы открытие
    * страницы в сумму четырёх задержек базы.
    */
-  async showcase(): Promise<MusicCatalogDto> {
+  async showcase(viewerId: string | null = null): Promise<MusicCatalogDto> {
+    const lineage = await this.viewerLineage(viewerId, null);
     const [categories, fresh, artists, systemPlaylists] = await Promise.all([
       this.listCategories(),
       this.prisma.musicTrack.findMany({
-        where: { status: 'published' },
+        where: { status: 'published', ...lineageCondition(lineage) },
         include: TRACK_CARD_INCLUDE,
         orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
         take: SHOWCASE_FRESH,
@@ -153,12 +171,15 @@ export class MusicCatalogService {
    */
   async listTracks(
     query: NormalizedMusicTrackQuery,
+    viewerId: string | null = null,
   ): Promise<MusicTrackListDto> {
     const duration = durationCondition(query.duration);
+    const lineage = await this.viewerLineage(viewerId, query.lineage);
 
     const rows = await this.prisma.musicTrack.findMany({
       where: {
         status: 'published',
+        ...lineageCondition(lineage),
         ...(query.q
           ? {
               OR: [
@@ -194,6 +215,38 @@ export class MusicCatalogService {
       items: items.map((row) => toMusicTrackDto(row, this.publicBaseUrl)),
       nextCursor: hasMore ? (items.at(-1)?.id ?? null) : null,
     };
+  }
+
+  /**
+   * Какую линию слышит человек. Явный параметр запроса сильнее настройки
+   * Музыки, та — сильнее портального профиля; правило одно на все сервисы —
+   * `resolveContentLineage`. Гость и не-преданный получают весь каталог.
+   *
+   * Из `User` читаются ровно этап и линия — портальные поля, разрешённые
+   * сервису на чтение. Пишет их портал.
+   */
+  private async viewerLineage(
+    viewerId: string | null,
+    explicit: LineagePreference,
+  ): Promise<LineageId | null> {
+    if (explicit) return resolveContentLineage(null, explicit);
+    if (!viewerId) return null;
+    const [settings, user] = await Promise.all([
+      this.prisma.musicSettings.findUnique({
+        where: { userId: viewerId },
+        select: { lineage: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: viewerId },
+        select: { spiritualStage: true, lineage: true },
+      }),
+    ]);
+    return resolveContentLineage(
+      user
+        ? { spiritualStage: user.spiritualStage, lineage: toLineageId(user.lineage) }
+        : null,
+      toLineagePreference(settings?.lineage),
+    );
   }
 
   /**

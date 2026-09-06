@@ -107,6 +107,36 @@ describe("ReelsBoard", () => {
     expect(screen.getByText("Это реклама.")).toBeInTheDocument();
   });
 
+  it("удаляет афоризм насовсем после подтверждения — на любой стадии", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 204, text: async () => "" });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const user = userEvent.setup();
+    render(<ReelsBoard data={data([reel({ stage: "published", reviewStatus: "published" })])} filter="all" />);
+
+    await user.click(screen.getByRole("button", { name: "Удалить" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/admin/motivation/posts/post-1"),
+        expect.objectContaining({ method: "DELETE" }),
+      ),
+    );
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  it("без подтверждения ничего не удаляет", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const user = userEvent.setup();
+    render(<ReelsBoard data={data([reel()])} filter="all" />);
+
+    await user.click(screen.getByRole("button", { name: "Удалить" }));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("restores a rejected reel and refreshes the list", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => "{}" });
     vi.stubGlobal("fetch", fetchMock);

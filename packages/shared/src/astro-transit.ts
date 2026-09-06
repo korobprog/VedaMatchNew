@@ -16,3 +16,19 @@ export interface AstroTodayDto {
   /** Готовая фраза; null — ещё не сгенерирована (при недоступном ИИ). */
   text: string | null;
 }
+
+/** Личные настройки рассылки персонального дня. */
+export interface AstroTransitPreferenceDto {
+  /** Час местного времени 0..23. */
+  pushHour: number;
+  /** Пояс, по которому считается час: из портального профиля. null — Москва. */
+  timeZone: string | null;
+  /** Пояс выбран руками, а не определён устройством. */
+  timeZoneLocked: boolean;
+}
+
+export interface UpdateAstroTransitPreferenceRequest {
+  pushHour: number;
+}
+
+export const ASTRO_PUSH_HOUR_DEFAULT = 9;

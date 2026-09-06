@@ -12,19 +12,14 @@ import Redis from 'ioredis';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AstroSettingsService } from '../astro-settings.service';
 import { AstroTransitService } from './astro-transit.service';
+import {
+  isLocalPushWindow,
+  normalizePushHour,
+  scanKey,
+} from './transit-schedule';
 
 const TICK_MS = 5 * 60_000;
 const ACTIVITY_WINDOW_DAYS = 14;
-/** Москва круглый год UTC+3: перевода часов в России нет с 2014-го. */
-const MSK_OFFSET_MS = 3 * 60 * 60_000;
-/** Задуманное время рассылки — 09:00 МСК, когда день только начинается. */
-const PUSH_HOUR_MSK = 9;
-/**
- * Окно, а не одна минута: тик раз в пять минут, деплой или падение Redis не
- * должны отменять сегодняшнюю рассылку. Но и до бесконечности окно тянуть
- * нельзя — иначе рестарт вечером снова выглядит как рассылка не по расписанию.
- */
-const PUSH_WINDOW_HOURS = 2;
 /** Аренда на один проход, а не замок на сутки: см. tick(). */
 const LEASE_MS = 10 * 60_000;
 
@@ -42,6 +37,10 @@ const LEASE_MS = 10 * 60_000;
  * Идемпотентность держится на строке AstroTransitDigest (pushedAt), а не на
  * памяти процесса: рестарт и деплой обнуляют любое поле экземпляра, и раньше
  * каждый подъём сервера рассылал сегодняшний пуш заново.
+ *
+ * Время рассылки — 09:00 по местному времени человека (`User.timeZone`),
+ * см. transit-schedule.ts. Раньше окно было одно на всех, московское, и на
+ * Дальнем Востоке персональный день приходил к вечеру.
  */
 @Injectable()
 export class AstroTransitWorkerService
@@ -51,7 +50,12 @@ export class AstroTransitWorkerService
   private readonly redis: Redis | null;
   private timer?: NodeJS.Timeout;
   private running = false;
-  private lastRunDate?: string;
+  /**
+   * Ключ последнего обхода — час по UTC. Утро у людей наступает в разных
+   * зонах в разные часы, поэтому обход идёт каждый час, а не раз в сутки;
+   * внутри часа ничей местный час не меняется, и чаще сканировать незачем.
+   */
+  private lastScanKey?: string;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -95,15 +99,14 @@ export class AstroTransitWorkerService
 
   async tick(now: Date = new Date()): Promise<void> {
     if (this.running) return;
-    if (!isPushWindow(now)) return;
-    const dateKey = now.toISOString().slice(0, 10);
-    if (this.lastRunDate === dateKey) return;
+    const key = scanKey(now);
+    if (this.lastScanKey === key) return;
 
     this.running = true;
     // Аренда на один проход с освобождением в finally, а не замок до конца
-    // суток: упавший посередине инстанс не должен оставить остальных без
+    // часа: упавший посередине инстанс не должен оставить остальных без
     // рассылки, а от повторной отправки защищает pushedAt получателя.
-    const lockKey = `astro:transit-digest:${dateKey}`;
+    const lockKey = `astro:transit-digest:${key}`;
     const token = randomUUID();
     let leased = false;
     if (this.redis?.status === 'ready') {
@@ -121,14 +124,25 @@ export class AstroTransitWorkerService
       const settings = await this.settings.get();
       if (!settings.enabled) return;
 
-      const userIds = await this.eligibleUserIds(now);
-      this.logger.log(
-        `Ежедневный персональный день: ${userIds.length} получателей`,
+      // Кому сейчас утро. Час считается в поясе человека из портального
+      // профиля; без пояса — по Москве, как было до появления поля.
+      const recipients = (await this.eligibleRecipients(now)).filter(
+        (recipient) =>
+          isLocalPushWindow(now, recipient.timeZone, recipient.pushHour),
       );
-      for (const userId of userIds) {
-        await this.deliverTo(userId, now, settings.transitPushEnabled);
+      if (recipients.length > 0) {
+        this.logger.log(
+          `Персональный день: ${recipients.length} получателей, у кого сейчас утро`,
+        );
       }
-      this.lastRunDate = dateKey;
+      for (const recipient of recipients) {
+        await this.deliverTo(
+          recipient.userId,
+          now,
+          settings.transitPushEnabled,
+        );
+      }
+      this.lastScanKey = key;
     } catch (error) {
       this.logger.error(
         'Рассылка персонального дня упала',
@@ -157,7 +171,9 @@ export class AstroTransitWorkerService
    * Активность за последние 14 дней — тем, кто не открывал сервис, слать не
    * нужно: это экономия расхода на фразы и защита от отписок из-за спама.
    */
-  private async eligibleUserIds(now: Date): Promise<string[]> {
+  private async eligibleRecipients(
+    now: Date,
+  ): Promise<{ userId: string; timeZone: string | null; pushHour: number }[]> {
     const cutoff = new Date(now.getTime() - ACTIVITY_WINDOW_DAYS * 86_400_000);
     const rows = await this.prisma.astroBirthData.findMany({
       where: {
@@ -167,9 +183,23 @@ export class AstroTransitWorkerService
           { user: { astroUsage: { some: { day: { gte: cutoff } } } } },
         ],
       },
-      select: { userId: true },
+      // `User.timeZone` — портальное поле, читать его сервису можно; час —
+      // своя настройка сервиса рядом с человеком.
+      select: {
+        userId: true,
+        user: {
+          select: {
+            timeZone: true,
+            astroTransitPreference: { select: { pushHour: true } },
+          },
+        },
+      },
     });
-    return rows.map((row) => row.userId);
+    return rows.map((row) => ({
+      userId: row.userId,
+      timeZone: row.user?.timeZone ?? null,
+      pushHour: normalizePushHour(row.user?.astroTransitPreference?.pushHour),
+    }));
   }
 
   /**
@@ -182,6 +212,15 @@ export class AstroTransitWorkerService
     pushEnabled: boolean,
   ): Promise<void> {
     try {
+      // Обход теперь ежечасный, и человек в двухчасовом окне попадается в
+      // него дважды: не пересчитывать день и не ходить за фразой тому, кому
+      // сегодня уже отправили.
+      const existing = await this.prisma.astroTransitDigest.findUnique({
+        where: { userId_forDate: { userId, forDate: dayKey(now) } },
+        select: { pushedAt: true },
+      });
+      if (existing?.pushedAt) return;
+
       const digest = await this.transits.today(userId, now);
       if (!digest || !digest.text) return;
       if (!pushEnabled) return;
@@ -210,18 +249,14 @@ export class AstroTransitWorkerService
   }
 }
 
+/**
+ * Ключ строки дайджеста — сутки по UTC, как и в AstroTransitService.today:
+ * у человека на востоке «утро» приходится на конец предыдущих суток UTC, и
+ * это нормально — каждому местному утру соответствуют свои сутки UTC, а
+ * повтор отсекается по той же строке.
+ */
 function dayKey(now: Date): Date {
   return new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   );
-}
-
-/**
- * Окно рассылки по московскому времени. Сервер живёт в UTC, поэтому местный
- * час считаем сдвигом, а не через локаль процесса: она зависит от образа и
- * молча уводит расписание при переезде контейнера.
- */
-function isPushWindow(now: Date): boolean {
-  const hour = new Date(now.getTime() + MSK_OFFSET_MS).getUTCHours();
-  return hour >= PUSH_HOUR_MSK && hour < PUSH_HOUR_MSK + PUSH_WINDOW_HOURS;
 }

@@ -16,6 +16,7 @@ function track(over: Partial<MusicTrackDetailDto> = {}): MusicTrackDetailDto {
     coverUrl: null,
     language: null,
     isLiveRecording: false,
+    lineage: "iskcon",
     playCount: 0,
     publishedAt: null,
     lyrics: { text: null, transliteration: null, translation: null },

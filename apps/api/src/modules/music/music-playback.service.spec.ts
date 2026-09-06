@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { NotFoundException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
@@ -244,6 +245,7 @@ describe('MusicPlaybackService.settings', () => {
     expect(await service(prisma).getSettings('u1')).toEqual({
       nowPlayingVisibility: 'friends',
       autoplay: true,
+      lineage: null,
     });
   });
 
@@ -252,12 +254,46 @@ describe('MusicPlaybackService.settings', () => {
     prisma.musicSettings.findUnique.mockResolvedValue({
       nowPlayingVisibility: 'nobody',
       autoplay: false,
+      lineage: 'ipbys',
     });
 
     expect(await service(prisma).getSettings('u1')).toEqual({
       nowPlayingVisibility: 'nobody',
       autoplay: false,
+      lineage: 'ipbys',
     });
+  });
+
+  it('линию вне справочника читает как «как в профиле», а не отдаёт мусор', async () => {
+    const prisma = prismaMock();
+    prisma.musicSettings.findUnique.mockResolvedValue({
+      nowPlayingVisibility: 'friends',
+      autoplay: true,
+      lineage: 'unknown-math',
+    });
+
+    expect((await service(prisma).getSettings('u1')).lineage).toBeNull();
+  });
+
+  it('линию сохраняет и принимает «all», а неизвестную отвергает', async () => {
+    const prisma = prismaMock();
+    prisma.musicSettings.upsert.mockResolvedValue({
+      nowPlayingVisibility: 'friends',
+      autoplay: true,
+      lineage: 'all',
+    });
+
+    const result = await service(prisma).updateSettings('u1', {
+      lineage: 'all',
+    });
+    expect(result.lineage).toBe('all');
+    expect(prisma.musicSettings.upsert.mock.calls[0][0].update).toEqual({
+      lineage: 'all',
+    });
+
+    await expect(
+      service(prisma).updateSettings('u1', { lineage: 'hare' as never }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('правит только присланное', async () => {

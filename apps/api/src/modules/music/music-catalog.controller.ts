@@ -21,9 +21,14 @@ import { isAdmin } from './is-admin';
 export class MusicCatalogController {
   constructor(private readonly catalog: MusicCatalogService) {}
 
+  /**
+   * Витрина и поиск знают, кто смотрит: преданный видит записи своей
+   * духовной линии, гость и остальные — весь каталог. Страница записи,
+   * исполнителя и альбома не фильтруются — прямая ссылка обязана открываться.
+   */
   @Get('catalog')
-  showcase() {
-    return this.catalog.showcase();
+  showcase(@OptionalUser() user?: AccessTokenPayload) {
+    return this.catalog.showcase(user?.sub ?? null);
   }
 
   @Get('categories')
@@ -35,8 +40,12 @@ export class MusicCatalogController {
   tracks(
     @Query()
     query: Record<string, RawQueryValue>,
+    @OptionalUser() user?: AccessTokenPayload,
   ) {
-    return this.catalog.listTracks(normalizeMusicTrackQuery(query));
+    return this.catalog.listTracks(
+      normalizeMusicTrackQuery(query),
+      user?.sub ?? null,
+    );
   }
 
   @Get('tracks/:id')

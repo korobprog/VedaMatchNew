@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { MusicRail } from "@/components/music/music-rail";
 import { MusicSettingsForm } from "@/components/music/music-settings-form";
 import { MusicOfflineUsage } from "@/components/music/offline-usage";
+import { isDevotee } from "@vedamatch/shared";
+import { getProfile } from "@/lib/api";
 import { getMusicSettingsServer } from "@/lib/music-api";
 
 export const metadata: Metadata = {
@@ -17,7 +19,15 @@ export const metadata: Metadata = {
  * приходится.
  */
 export default async function MusicSettingsPage() {
-  const settings = await getMusicSettingsServer();
+  const [settings, profile] = await Promise.all([
+    getMusicSettingsServer(),
+    // Ради линии: подпись «как в профиле — ISKCON» и сам блок, который
+    // не-преданному без своей настройки не показывается.
+    getProfile().catch(() => null),
+  ]);
+  const showsLineage =
+    Boolean(profile && isDevotee(profile)) ||
+    (settings?.lineage ?? null) !== null;
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10 lg:flex-row">
@@ -34,7 +44,11 @@ export default async function MusicSettingsPage() {
         </header>
 
         {settings ? (
-          <MusicSettingsForm initial={settings} />
+          <MusicSettingsForm
+            initial={settings}
+            profileLineage={profile?.lineage ?? null}
+            showsLineage={showsLineage}
+          />
         ) : (
           <p className="glass rounded-2xl border border-glass-brd p-6 text-sm text-text-1">
             Настройки сейчас недоступны. Попробуйте обновить страницу.

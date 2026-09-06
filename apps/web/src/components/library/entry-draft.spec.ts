@@ -19,6 +19,7 @@ function draft(over: Partial<LibraryEntryDraft> = {}): LibraryEntryDraft {
     descriptionRu: "",
     descriptionEn: "",
     communityId: "",
+    lineage: "iskcon",
     categoryIds: ["cat-1"],
     ...over,
   };
@@ -123,11 +124,17 @@ describe("buildCreateEntryBody", () => {
       descriptionEn: null,
       categoryIds: ["cat-1"],
       communityId: null,
+      lineage: "iskcon",
     });
   });
 
   it("подпись общиной: пустой выбор уезжает как «от себя»", () => {
     expect(buildCreateEntryBody(draft()).communityId).toBeNull();
+    // Пустая линия — «для всех», а не пустая строка в базе.
+    expect(buildCreateEntryBody(draft({ lineage: "" })).lineage).toBeNull();
+    expect(buildCreateEntryBody(draft({ lineage: "ipbys" })).lineage).toBe(
+      "ipbys",
+    );
     expect(
       buildCreateEntryBody(draft({ communityId: "c-1" })).communityId,
     ).toBe("c-1");

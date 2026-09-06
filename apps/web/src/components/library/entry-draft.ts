@@ -1,6 +1,7 @@
 import type {
   CreateLibraryEntryRequest,
   LibraryEntryType,
+  LineageId,
 } from "@vedamatch/shared";
 import type { LibraryTextKey } from "./i18n";
 
@@ -81,6 +82,8 @@ export interface LibraryEntryDraft {
   categoryIds: string[];
   /** От имени какой общины. Пустая строка — от себя лично. */
   communityId: string;
+  /** Духовная линия материала. Пустая строка — для всех линий. */
+  lineage: string;
 }
 
 export type EntryLocator = "url" | "source";
@@ -145,6 +148,7 @@ export function buildCreateEntryBody(
     descriptionEn: draft.descriptionEn.trim() || null,
     categoryIds: draft.categoryIds,
     communityId: draft.communityId || null,
+    lineage: draft.lineage ? (draft.lineage as LineageId) : null,
   };
 }
 

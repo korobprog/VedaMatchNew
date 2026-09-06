@@ -10,6 +10,8 @@ import type {
   AstroCompatibilityRequestDto,
   AstroSection,
   AstroSectionState,
+  AstroTransitPreferenceDto,
+  UpdateAstroTransitPreferenceRequest,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 
@@ -133,3 +135,17 @@ export const compareAstroSubjects = (
     `/astro/subjects/${id}/compare/${otherId}?purpose=${purpose}`,
     { method: "GET" },
   );
+
+/** Во сколько присылать персональный день. */
+export async function saveAstroTransitPreferences(
+  body: UpdateAstroTransitPreferenceRequest,
+): Promise<AstroTransitPreferenceDto> {
+  const res = await apiFetch(`${API_URL}/astro/today/preferences`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return (await res.json()) as AstroTransitPreferenceDto;
+}

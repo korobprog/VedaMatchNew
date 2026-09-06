@@ -9,6 +9,7 @@ import {
 /** Человек, у которого всё заполнено и ничего не висит: советнику молчать. */
 const calm: AdvisorInput = {
   hasHomeLocation: true,
+  needsLineage: false,
   unionProfilePercent: 100,
   unionIncomingLikes: 0,
   astroPercent: 100,
@@ -179,3 +180,19 @@ const TONE_RANK = { todo: 0, gap: 1, discover: 2 } as const;
 function byToneRank(a: keyof typeof TONE_RANK, b: keyof typeof TONE_RANK) {
   return TONE_RANK[a] - TONE_RANK[b];
 }
+
+describe("buildAdvisorCards: духовная линия", () => {
+  it("преданному без линии говорит, что теряют от этого Образование и Музыка", () => {
+    const [card] = buildAdvisorCards({ ...calm, needsLineage: true });
+    expect(card.id).toBe("profile-lineage");
+    expect(card.tone).toBe("gap");
+    expect(card.href).toBe("/profile#lineage");
+  });
+
+  it("город важнее линии: без него ломаются сервисы для всех", () => {
+    expect(idsOf({ hasHomeLocation: false, needsLineage: true })).toEqual([
+      "profile-city",
+      "profile-lineage",
+    ]);
+  });
+});

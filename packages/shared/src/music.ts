@@ -1,3 +1,5 @@
+import type { LineageId, LineagePreference } from './lineage';
+
 // Типы сервиса «Музыка». См. docs/music-service-plan.md.
 //
 // Единица сервиса — запись, которую слушают: киртан, бхаджан, мантра,
@@ -108,6 +110,11 @@ export interface MusicTrackDto {
   language: string | null;
   /** Значок «Запись с программы» на карточке рядом с чипом категории. */
   isLiveRecording: boolean;
+  /**
+   * Духовная линия записи. `null` — для всех линий. Преданный слышит в
+   * каталоге свою линию и записи «для всех», см. `resolveContentLineage`.
+   */
+  lineage: LineageId | null;
   playCount: number;
   publishedAt: string | null;
 }
@@ -178,6 +185,11 @@ export interface MusicTrackListQuery {
   language?: string;
   duration?: MusicDurationBucket;
   live?: boolean;
+  /**
+   * Явный выбор линии на один запрос: идентификатор или `'all'`. Без него
+   * сервер берёт настройку Музыки, а за ней — портальный профиль.
+   */
+  lineage?: LineagePreference;
   sort?: MusicTrackSort;
   cursor?: string;
   limit?: number;
@@ -241,6 +253,8 @@ export interface UpdateMusicTrackRequest {
   categoryIds?: string[];
   language?: string | null;
   isLiveRecording?: boolean;
+  /** Линия записи; `null` — для всех линий. */
+  lineage?: LineageId | null;
   status?: MusicTrackStatus;
   lyrics?: string | null;
   transliteration?: string | null;
@@ -473,6 +487,11 @@ export interface MusicHeartbeatRequest {
 export interface MusicSettingsDto {
   nowPlayingVisibility: MusicNowPlayingVisibility;
   autoplay: boolean;
+  /**
+   * Какую линию слушать. `null` — как в портальном профиле, `'all'` — весь
+   * каталог. См. `LineagePreference`.
+   */
+  lineage: LineagePreference;
 }
 
 export type UpdateMusicSettingsRequest = Partial<MusicSettingsDto>;
@@ -749,6 +768,8 @@ export interface MusicIngestBatchDetailDto extends MusicIngestBatchDto {
   categoryIds: string[];
   language: string | null;
   isLiveRecording: boolean;
+  /** Линия, которую получат записи партии; `null` — для всех линий. */
+  lineage: LineageId | null;
   quotaBytes: number;
   items: MusicIngestItemDto[];
 }
@@ -768,6 +789,7 @@ export interface UpdateMusicIngestBatchRequest {
   categoryIds?: string[];
   language?: string | null;
   isLiveRecording?: boolean;
+  lineage?: LineageId | null;
 }
 
 /** Заявка на N файлов разом: браузер льёт их параллельно. */

@@ -549,7 +549,12 @@ export function IngestItems({
   /** Что проставляем отмеченным: шапка партии. */
   defaults: Pick<
     UpdateMusicIngestBatchRequest,
-    "artistId" | "albumId" | "categoryIds" | "language" | "isLiveRecording"
+    | "artistId"
+    | "albumId"
+    | "categoryIds"
+    | "language"
+    | "isLiveRecording"
+    | "lineage"
   >;
 }) {
   const router = useRouter();
@@ -593,6 +598,7 @@ export function IngestItems({
           categoryIds: defaults.categoryIds ?? [],
           language: defaults.language ?? null,
           isLiveRecording: defaults.isLiveRecording ?? false,
+          lineage: defaults.lineage ?? null,
         });
       }
       setNote(`Поля партии проставлены: ${chosen.length}.`);

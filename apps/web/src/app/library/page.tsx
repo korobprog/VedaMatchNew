@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { redirectToLogin } from "@/lib/require-user";
 import type { Metadata } from "next";
+import {
+  isDevotee,
+  isLineagePreference,
+  resolveContentLineage,
+} from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
+import { LineagePrompt } from "@/components/lineage-prompt";
+import { LineageStatus } from "@/components/lineage-status";
+import { LibraryLineageSwitch } from "@/components/library/lineage-switch";
 import {
   getLibraryCategoryTree,
   getLibraryCommunities,
@@ -38,6 +46,18 @@ export default async function LibraryPage({
   ]);
   const locale = preferences?.uiLanguage ?? "ru";
   const roots = tree ?? [];
+  // Та же арифметика, что на сервере: явный `?lineage=` в адресе сильнее
+  // настройки Образования, та — сильнее профиля. Подпись обязана говорить
+  // ровно то, что применил API.
+  const explicitLineage =
+    typeof params.lineage === "string" && isLineagePreference(params.lineage)
+      ? params.lineage
+      : null;
+  const appliedLineage = explicitLineage
+    ? resolveContentLineage(null, explicitLineage)
+    : resolveContentLineage(user, preferences?.lineage ?? null);
+  const showsLineageSwitch =
+    Boolean(user && isDevotee(user)) || (preferences?.lineage ?? null) !== null;
 
   return (
     <div className="relative min-h-dvh bg-bg-0">
@@ -49,6 +69,11 @@ export default async function LibraryPage({
               {t(locale, "service.title")}
             </h1>
             <p className="text-text-1">{t(locale, "service.subtitle")}</p>
+            <LineageStatus
+              lineage={appliedLineage}
+              settingsHref="#lineage-switch"
+              className="mt-1"
+            />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Link
@@ -64,8 +89,26 @@ export default async function LibraryPage({
               {t(locale, "nav.add")}
             </Link>
             <LocaleSwitch locale={locale} />
+            {showsLineageSwitch && (
+              <span id="lineage-switch" className="scroll-mt-24">
+                <LibraryLineageSwitch
+                  locale={locale}
+                  value={preferences?.lineage ?? null}
+                  profileLineage={user?.lineage ?? null}
+                />
+              </span>
+            )}
           </div>
         </div>
+
+        {user && (
+          <LineagePrompt
+            user={user}
+            serviceName="Образования"
+            settingsHref="#lineage-switch"
+            settingsLabel="в списке линий над рубриками"
+          />
+        )}
 
         <CategoryNavigator
           locale={locale}
@@ -86,6 +129,7 @@ export default async function LibraryPage({
             initialFeed={feed}
             locale={locale}
             query={params}
+            lineageFiltered={appliedLineage !== null}
           />
         )}
       </main>

@@ -53,7 +53,13 @@ export function MotivationPostCard({ post }: { post: MotivationPostDto }) {
           </span>
           <span className="text-zinc-500">{post.category}</span>
         </div>
-        <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{post.title}</h2>
+        {/* У пользовательского афоризма «заголовок» — это название книги и
+            стих («Бхагавад-гита 4.18»): перед цитатой он читается как её
+            часть, а ниже тот же источник стоит подписью. Заголовок остаётся
+            только у редакционных постов, где это настоящая шапка. */}
+        {post.origin !== "user" && post.title && (
+          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{post.title}</h2>
+        )}
         <p className="mt-3 whitespace-pre-line leading-7 text-zinc-700 dark:text-zinc-300">{quote}</p>
         {explanation && (
           <div className="mt-3">

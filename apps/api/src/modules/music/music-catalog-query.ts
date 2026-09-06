@@ -1,4 +1,9 @@
-import type { MusicDurationBucket, MusicTrackSort } from '@vedamatch/shared';
+import type {
+  LineagePreference,
+  MusicDurationBucket,
+  MusicTrackSort,
+} from '@vedamatch/shared';
+import { isLineagePreference } from '@vedamatch/shared';
 
 /**
  * Разбор строки запроса витрины и поиска.
@@ -38,6 +43,11 @@ export interface NormalizedMusicTrackQuery {
   language: string | null;
   duration: MusicDurationBucket | null;
   live: boolean | null;
+  /**
+   * Явный выбор линии на один запрос: идентификатор или `all`; `null` —
+   * не спрашивали, и сервис берёт настройку Музыки, а за ней профиль.
+   */
+  lineage: LineagePreference;
   sort: MusicTrackSort;
   cursor: string | null;
   limit: number;
@@ -94,12 +104,14 @@ export function normalizeMusicTrackQuery(query: {
   language?: RawQueryValue;
   duration?: RawQueryValue;
   live?: RawQueryValue;
+  lineage?: RawQueryValue;
   sort?: RawQueryValue;
   cursor?: RawQueryValue;
   limit?: RawQueryValue;
 }): NormalizedMusicTrackQuery {
   const sort = firstString(query.sort);
   const duration = firstString(query.duration);
+  const lineage = firstString(query.lineage);
 
   return {
     q: normalizeSearch(query.q),
@@ -110,6 +122,8 @@ export function normalizeMusicTrackQuery(query: {
       ? (duration as MusicDurationBucket)
       : null,
     live: optionalBoolean(query.live),
+    // Незнакомая линия — это «не спрашивали», а не пустая выдача.
+    lineage: isLineagePreference(lineage) ? lineage : null,
     sort: SORTS.includes(sort as MusicTrackSort)
       ? (sort as MusicTrackSort)
       : 'fresh',

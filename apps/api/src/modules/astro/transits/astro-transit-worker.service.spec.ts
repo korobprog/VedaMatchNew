@@ -12,7 +12,7 @@ const NO_REDIS_CONFIG = { get: () => undefined } as unknown as ConfigService;
 describe('AstroTransitWorkerService', () => {
   const prisma = {
     astroBirthData: { findMany: jest.fn() },
-    astroTransitDigest: { updateMany: jest.fn() },
+    astroTransitDigest: { updateMany: jest.fn(), findUnique: jest.fn() },
   };
   const transits = { today: jest.fn() };
   const settings = { get: jest.fn() };
@@ -106,7 +106,7 @@ describe('AstroTransitWorkerService', () => {
     expect(events.emit).toHaveBeenCalledTimes(1);
   });
 
-  it('повторный вызов в те же сутки не запускает рассылку снова', async () => {
+  it('повторный вызов в тот же час не сканирует получателей снова', async () => {
     prisma.astroBirthData.findMany.mockResolvedValue([{ userId: 'u1' }]);
     transits.today.mockResolvedValue({ text: 'фраза', moonBhava: 2 });
 
@@ -116,12 +116,12 @@ describe('AstroTransitWorkerService', () => {
     expect(prisma.astroBirthData.findMany).toHaveBeenCalledTimes(1);
   });
 
-  it('следующие сутки запускают рассылку заново', async () => {
+  it('следующий час сканирует заново: у кого-то утро наступило только что', async () => {
     prisma.astroBirthData.findMany.mockResolvedValue([{ userId: 'u1' }]);
     transits.today.mockResolvedValue({ text: 'фраза', moonBhava: 2 });
 
     await worker.tick(NOW);
-    await worker.tick(new Date('2026-08-11T06:00:00.000Z'));
+    await worker.tick(new Date(NOW.getTime() + 60 * 60_000));
 
     expect(prisma.astroBirthData.findMany).toHaveBeenCalledTimes(2);
   });
@@ -129,13 +129,70 @@ describe('AstroTransitWorkerService', () => {
   it.each([
     ['до окна', '2026-08-10T02:59:00.000Z'],
     ['после окна', '2026-08-10T09:00:00.000Z'],
-  ])('вне окна рассылки (%s) не шлём ничего', async (_case, iso) => {
+  ])('вне московского окна (%s) без пояса ничего не шлём', async (_case, iso) => {
     prisma.astroBirthData.findMany.mockResolvedValue([{ userId: 'u1' }]);
     transits.today.mockResolvedValue({ text: 'фраза', moonBhava: 2 });
 
     await worker.tick(new Date(iso));
 
-    expect(prisma.astroBirthData.findMany).not.toHaveBeenCalled();
+    expect(transits.today).not.toHaveBeenCalled();
+    expect(events.emit).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Ради чего переделывался обход: человеку во Владивостоке утро — это
+   * 23:00 UTC накануне, а не 06:00 UTC, когда у него уже вечер.
+   */
+  it('шлёт по местному утру человека, а не по московскому', async () => {
+    prisma.astroBirthData.findMany.mockResolvedValue([
+      { userId: 'vladivostok', user: { timeZone: 'Asia/Vladivostok' } },
+      { userId: 'moscow', user: { timeZone: 'Europe/Moscow' } },
+      { userId: 'legacy', user: { timeZone: null } },
+    ]);
+    transits.today.mockResolvedValue({ text: 'фраза', moonBhava: 2 });
+
+    // 06:00 UTC: утро в Москве и у человека без пояса, вечер во Владивостоке.
+    await worker.tick(NOW);
+    const morningInMoscow = events.emit.mock.calls.map(
+      (call) => (call[1] as { recipientId: string }).recipientId,
+    );
+    expect(morningInMoscow.sort()).toEqual(['legacy', 'moscow']);
+
+    events.emit.mockClear();
+    // 23:00 UTC: утро во Владивостоке, ночь в Москве.
+    await worker.tick(new Date('2026-08-10T23:00:00.000Z'));
+    expect(events.emit).toHaveBeenCalledTimes(1);
+    expect(events.emit.mock.calls[0][1]).toMatchObject({
+      recipientId: 'vladivostok',
+    });
+  });
+
+  it('уважает выбранный человеком час: семь утра приходит в семь, а не в девять', async () => {
+    prisma.astroBirthData.findMany.mockResolvedValue([
+      {
+        userId: 'early',
+        user: { timeZone: 'Europe/Moscow', astroTransitPreference: { pushHour: 7 } },
+      },
+      { userId: 'default', user: { timeZone: 'Europe/Moscow' } },
+    ]);
+    transits.today.mockResolvedValue({ text: 'фраза', moonBhava: 2 });
+
+    // 04:00 UTC = 07:00 по Москве.
+    await worker.tick(new Date('2026-08-10T04:00:00.000Z'));
+
+    expect(events.emit).toHaveBeenCalledTimes(1);
+    expect(events.emit.mock.calls[0][1]).toMatchObject({ recipientId: 'early' });
+  });
+
+  it('второй обход в том же окне не пересчитывает уже отправленный день', async () => {
+    prisma.astroBirthData.findMany.mockResolvedValue([{ userId: 'u1' }]);
+    prisma.astroTransitDigest.findUnique.mockResolvedValue({
+      pushedAt: new Date(NOW.getTime() - 30 * 60_000),
+    });
+
+    await worker.tick(new Date(NOW.getTime() + 60 * 60_000));
+
+    expect(transits.today).not.toHaveBeenCalled();
     expect(events.emit).not.toHaveBeenCalled();
   });
 

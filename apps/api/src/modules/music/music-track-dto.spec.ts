@@ -41,6 +41,7 @@ const track: MusicTrackRow = {
   durationSeconds: 198,
   language: 'sa',
   isLiveRecording: true,
+  lineage: 'iskcon',
   playCount: 12,
   publishedAt: new Date('2026-08-27T10:00:00.000Z'),
   artist,
@@ -123,6 +124,7 @@ describe('toMusicTrackDto', () => {
       coverUrl: 'https://cdn.example.org/bucket/music/tracks/t1.jpg',
       language: 'sa',
       isLiveRecording: true,
+      lineage: 'iskcon',
       playCount: 12,
       publishedAt: '2026-08-27T10:00:00.000Z',
     });

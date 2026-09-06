@@ -1,3 +1,4 @@
+import type { LineageId } from './lineage';
 export * from './vedabase';
 export * from './gitabase';
 export * from './union';
@@ -28,6 +29,8 @@ export * from './rewards';
 export * from './music';
 export * from './profile-name';
 export * from './assistant';
+export * from './lineage';
+export * from './spiritual-stage';
 
 import type { BillingMode, SubscriptionState } from './support';
 
@@ -174,6 +177,20 @@ export interface UserProfile {
   spiritualStage: SpiritualStage | null;
   devoteeVerificationStatus: DevoteeVerificationStatus | null;
   lastSelfIdentificationAt: string | null;
+  /**
+   * Духовная линия преданного (ISKCON, один из Гаудия-матхов, паривар).
+   * Портальное поле: по нему Образование и Музыка показывают своё. У
+   * не-преданных всегда `null` по смыслу, хотя колонка не запрещает значение.
+   */
+  lineage: LineageId | null;
+  /**
+   * Часовой пояс человека (IANA, «Asia/Vladivostok»). Определяется браузером
+   * и обновляется при входе; по нему приходят утренние рассылки. null — ещё
+   * не определён: тогда портал считает по Москве.
+   */
+  timeZone: string | null;
+  /** Пояс выбран руками: автоопределение с устройства его не перезаписывает. */
+  timeZoneLocked: boolean;
   subscription: SubscriptionState;
   accountStatus: UserAccountStatus;
   /** Задано, если пользователь сам запросил удаление аккаунта. */
@@ -291,6 +308,18 @@ export interface ProfileUpdateRequest {
   homeLocation?: ProfileLocation | null;
   socialLinks?: ProfileSocialLinks;
   messengers?: ProfileMessengers;
+  /** Духовная линия; `null` — убрать. Значение из справочника `LINEAGES`. */
+  lineage?: LineageId | null;
+  /**
+   * Ручной выбор часового пояса (IANA): значение фиксирует пояс, и
+   * автоопределение его больше не трогает; `null` — вернуться к автоматике.
+   */
+  timeZone?: string | null;
+  /**
+   * Пояс, который определило устройство. Применяется, только пока пояс не
+   * зафиксирован руками: у кого VPN врёт, тот выбрал сам.
+   */
+  detectedTimeZone?: string;
 }
 
 /**

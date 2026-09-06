@@ -4,14 +4,22 @@
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@vedamatch/web", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@vedamatch/web",
+        "dev"
+      ],
       "port": 3000,
       "autoPort": true
     },
     {
       "name": "api",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@vedamatch/api", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@vedamatch/api",
+        "dev"
+      ],
       "port": 4000
     }
   ]

@@ -9,9 +9,11 @@ import type {
   LibraryEntryType,
   LibraryLocale,
   UpdateLibraryEntryRequest,
+  LineageId,
 } from "@vedamatch/shared";
 import { CategoryPicker } from "./category-picker";
 import { LibraryCommunitySelect } from "./community-select";
+import { LineageSelect } from "@/components/lineage-picker";
 import { flattenTree, insertIntoTree, renameInTree } from "./category-tree";
 import { entryTypeLabel, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
@@ -198,6 +200,8 @@ function EntryFieldsForm({
   const [descriptionRu, setDescriptionRu] = useState(entry.descriptionRu ?? "");
   const [descriptionEn, setDescriptionEn] = useState(entry.descriptionEn ?? "");
   const [communityId, setCommunityId] = useState(entry.community?.id ?? "");
+  /** Пустая строка — для всех линий. */
+  const [lineage, setLineage] = useState<string>(entry.lineage ?? "");
   const [categories, setCategories] = useState(tree);
   // Рубрики материала берём из него самого: в дереве они лежат вперемешку по
   // веткам, и искать их обходом ради того же результата незачем.
@@ -281,6 +285,7 @@ function EntryFieldsForm({
       // писать от имени общины на каждой правке, и молча оставленное поле
       // продолжало бы говорить от её имени после снятия роли.
       communityId: communityId || null,
+      lineage: lineage ? (lineage as LineageId) : null,
     };
 
     setPending(true);
@@ -425,6 +430,16 @@ function EntryFieldsForm({
         value={communityId}
         onChange={setCommunityId}
         disabled={pending}
+      />
+
+      <LineageSelect
+        value={lineage}
+        onChange={setLineage}
+        allLabel={t(locale, "add.lineageAll")}
+        label={t(locale, "add.lineage")}
+        hint={t(locale, "add.lineageHint")}
+        disabled={pending}
+        className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
       />
 
       {notice && (

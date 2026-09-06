@@ -17,6 +17,7 @@ import type {
   UpdateMusicPlaylistRequest,
   UpdateMusicTrackRequest,
 } from '@vedamatch/shared';
+import { isLineageId } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MusicCoversService } from './music-covers.service';
 import { MusicStorageService } from './music-storage.service';
@@ -599,6 +600,13 @@ export class MusicAdminCatalogService {
       });
       if (!album) throw new BadRequestException('Альбом не найден');
     }
+    if (
+      body.lineage !== undefined &&
+      body.lineage !== null &&
+      !isLineageId(body.lineage)
+    ) {
+      throw new BadRequestException('Неизвестная духовная линия');
+    }
 
     // Дата публикации проставляется один раз, при первом переходе в
     // `published`: иначе повторное снятие и возврат записи поднимали бы её
@@ -635,6 +643,7 @@ export class MusicAdminCatalogService {
           ...(body.isLiveRecording === undefined
             ? {}
             : { isLiveRecording: body.isLiveRecording }),
+          ...(body.lineage === undefined ? {} : { lineage: body.lineage }),
           ...(body.status === undefined ? {} : { status: body.status }),
           ...(becomesPublished ? { publishedAt: new Date() } : {}),
           ...(body.lyrics === undefined

@@ -1,5 +1,9 @@
 ﻿import Link from "next/link";
-import type { PricingPlan, SubscriptionState } from "@vedamatch/shared";
+import {
+  lineageLabel,
+  type PricingPlan,
+  type SubscriptionState,
+} from "@vedamatch/shared";
 import { redirectToLogin } from "@/lib/require-user";
 import { getBillingPlan, getProfile } from "@/lib/api";
 import { getRewardsMe } from "@/lib/rewards-api";
@@ -7,6 +11,7 @@ import { PLAN as DEFAULT_PLAN } from "@/lib/plan";
 import { formatDate, subscriptionStatusLabels } from "@/lib/support-labels";
 import { Header } from "@/components/header";
 import { ProfileEditor } from "@/components/profile-editor";
+import { TimeZoneField } from "@/components/time-zone-field";
 import { CommunityPicker } from "@/components/communities/community-picker";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { BackgroundOrbs } from "@/components/landing/Orb";
@@ -99,6 +104,14 @@ export default async function ProfilePage() {
                   : "Не определен"}
               </dd>
             </div>
+            {user.spiritualStage === "devotee" && (
+              <div className="flex justify-between gap-4">
+                <dt className="text-text-2">Духовная линия</dt>
+                <dd className="font-medium text-text-0">
+                  {lineageLabel(user.lineage) ?? "Не указана"}
+                </dd>
+              </div>
+            )}
             {user.devoteeVerificationStatus && (
               <div className="flex justify-between gap-4">
                 <dt className="text-text-2">Статус преданного</dt>
@@ -112,6 +125,21 @@ export default async function ProfilePage() {
                 </dd>
               </div>
             )}
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:gap-4">
+              <dt className="text-text-2">
+                Часовой пояс
+                <span className="block text-xs">
+                  {user.timeZone ?? "ещё не определён"} · по нему приходят
+                  утренние рассылки
+                </span>
+              </dt>
+              <dd className="sm:w-72">
+                <TimeZoneField
+                  timeZone={user.timeZone}
+                  timeZoneLocked={user.timeZoneLocked}
+                />
+              </dd>
+            </div>
             <div className="flex justify-between gap-4">
               <dt className="text-text-2">Последняя анкета</dt>
               <dd className="font-medium text-text-0">

@@ -1,4 +1,6 @@
 import type { UnionQuickAccessData } from "@/lib/union-quick-access";
+import { CompletenessIcon } from "./completeness-icons";
+import { unionProfileFieldLabels } from "./dictionaries";
 
 export function UnionQuickAccessWidget({
   unreadMessages,
@@ -6,6 +8,7 @@ export function UnionQuickAccessWidget({
   previewAvatars,
   moreCount,
   profileCompletionPercent,
+  profileItems,
 }: UnionQuickAccessData) {
   const hasChips = unreadMessages > 0 || incomingLikes > 0;
   const hasAvatars = previewAvatars.length > 0;
@@ -56,19 +59,80 @@ export function UnionQuickAccessWidget({
         </div>
       )}
       {hasProgress && (
-        <div
-          role="progressbar"
-          aria-label="Заполненность анкеты Union"
-          aria-valuenow={profileCompletionPercent}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          className="h-1.5 w-full overflow-hidden rounded-full bg-glass"
-        >
+        <div className="flex flex-wrap items-center gap-2">
           <div
-            className="h-full rounded-full bg-cyan"
-            style={{ width: `${profileCompletionPercent}%` }}
-          />
+            role="progressbar"
+            aria-label="Заполненность анкеты Union"
+            aria-valuenow={profileCompletionPercent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-glass"
+          >
+            {/* Приглушённая и «созревающая»: у пустой анкеты полоса золотая, по
+                мере заполнения зеленеет. Яркая мятная на всю ширину карточки
+                спорила с самой карточкой за внимание. Оба цвета — токены,
+                определённые в обеих темах. */}
+            <div
+              className="h-full rounded-full opacity-70"
+              style={{
+                width: `${profileCompletionPercent}%`,
+                background: `color-mix(in oklab, var(--vm-gold), var(--vm-cyan) ${profileCompletionPercent}%)`,
+              }}
+            />
+          </div>
+          {/* Кнопка «?» — <details>, а не состояние: работает без JavaScript
+              и сама закрывается по Escape в браузерах, где это поддержано.
+              Текст называет последствие, а не просит «заполнить профиль». */}
+          <details className="contents">
+            <summary
+              aria-label="Зачем заполнять анкету"
+              className="relative z-10 flex size-5 cursor-pointer list-none items-center justify-center rounded-full border border-glass-brd text-[11px] font-bold text-text-2 hover:text-text-0 [&::-webkit-details-marker]:hidden"
+            >
+              ?
+            </summary>
+            {/* relative z-10 у кнопки и текста: вся карточка сервиса накрыта
+                ссылкой-накладкой (a.after:absolute), и без подъёма нажатие
+                на «?» открывало бы Знакомства вместо подсказки.
+                Отдельной строкой под полосой (basis-full переносит), а не
+                всплывашкой поверх значков: та просвечивала и резалась краем
+                карточки. Подложка непрозрачная. */}
+            <p className="relative z-10 basis-full rounded-xl border border-glass-brd bg-bg-1 p-3 text-xs leading-relaxed text-text-1">
+              Чем больше вы расскажете о себе, тем выше анкета в
+              рекомендациях и тем чаще вас видят. Ниже — что уже заполнено, а
+              что ещё нет.
+            </p>
+          </details>
         </div>
+      )}
+      {hasProgress && profileItems.length > 0 && (
+        /* Что именно заполнено, а что нет — значками под полосой. Процент
+           сам по себе не говорит, за что взяться; ряд значков говорит:
+           заполненное — ярче, пустое — бледный контур. Название поля и
+           состояние — в подписи для наведения и для скринридера. */
+        <ul
+          aria-label="Поля анкеты"
+          className="flex flex-wrap gap-1.5"
+        >
+          {profileItems.map((item) => {
+            const label = unionProfileFieldLabels[item.key];
+            return (
+              <li
+                key={item.key}
+                title={`${label}: ${item.filled ? "заполнено" : "не заполнено"}`}
+                className={
+                  item.filled
+                    ? "text-cyan"
+                    : "text-text-2 opacity-40"
+                }
+              >
+                <CompletenessIcon field={item.key} className="size-4" />
+                <span className="sr-only">
+                  {label}: {item.filled ? "заполнено" : "не заполнено"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

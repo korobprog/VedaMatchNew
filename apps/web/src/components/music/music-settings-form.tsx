@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import type {
+  LineageId,
+  LineagePreference,
   MusicNowPlayingVisibility,
   MusicSettingsDto,
 } from "@vedamatch/shared";
 import { saveMusicSettings } from "@/lib/music-playback-api";
+import { LineageSelect, inheritLabel } from "@/components/lineage-picker";
 import { MUSIC_SETTINGS_CHANGED_EVENT } from "@/components/music/player/player-provider";
 import { Alert } from "@/components/ui/alert";
 
@@ -21,7 +24,20 @@ import { Alert } from "@/components/ui/alert";
  * подтверждать нечего, а забытая несохранённая приватность — это ровно та
  * ошибка, которой здесь быть нельзя.
  */
-export function MusicSettingsForm({ initial }: { initial: MusicSettingsDto }) {
+export function MusicSettingsForm({
+  initial,
+  profileLineage = null,
+  showsLineage = false,
+}: {
+  initial: MusicSettingsDto;
+  /** Линия из портального профиля — подпись у варианта «как в профиле». */
+  profileLineage?: LineageId | null;
+  /**
+   * Показывать ли блок линии: преданному всегда, остальным — только если
+   * настройка уже стоит (иначе снять её было бы негде).
+   */
+  showsLineage?: boolean;
+}) {
   const [settings, setSettings] = useState(initial);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +132,33 @@ export function MusicSettingsForm({ initial }: { initial: MusicSettingsDto }) {
           </span>
         </label>
       </div>
+
+      {showsLineage && (
+        <fieldset className="glass rounded-2xl border border-glass-brd p-4">
+          <legend className="px-1 text-sm font-semibold text-text-0">
+            Какую линию слушать
+          </legend>
+          <p className="mt-1 text-xs text-text-2">
+            По умолчанию — линия из профиля. Здесь можно выбрать другую только
+            для Музыки или открыть весь каталог; профиль от этого не меняется.
+          </p>
+          <div className="mt-4">
+            <LineageSelect
+              value={settings.lineage ?? ""}
+              onChange={(next) =>
+                void update({
+                  lineage: next
+                    ? (next as Exclude<LineagePreference, null>)
+                    : null,
+                })
+              }
+              emptyLabel={inheritLabel(profileLineage)}
+              allLabel="Все линии — весь каталог"
+              className="h-9 w-full rounded-lg border border-glass-brd bg-bg-1 px-2.5 text-sm text-text-0"
+            />
+          </div>
+        </fieldset>
+      )}
 
       {error && <Alert tone="error">{error}</Alert>}
       {saved && !error && <Alert tone="success">Сохранено.</Alert>}

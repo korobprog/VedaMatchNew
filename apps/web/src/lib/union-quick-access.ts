@@ -1,6 +1,7 @@
 import type {
   UnionChatsState,
   UnionConnectionCounts,
+  UnionProfileFieldKey,
   UnionProfileState,
   UnionRecommendationsResponse,
 } from "@vedamatch/shared";
@@ -13,6 +14,11 @@ export interface UnionQuickAccessData {
   previewAvatars: { url: string | null; initial: string }[];
   moreCount: number;
   profileCompletionPercent: number | null;
+  /**
+   * Поля анкеты и что из них заполнено — под полосой значками. Пусто, когда
+   * полосы нет: у заполненной анкеты показывать нечего.
+   */
+  profileItems: { key: UnionProfileFieldKey; filled: boolean }[];
 }
 
 /**
@@ -42,5 +48,12 @@ export function buildUnionQuickAccessData(
     moreCount: Math.max(0, total - shown.length),
     profileCompletionPercent:
       percent !== null && percent < 100 ? percent : null,
+    profileItems:
+      percent !== null && percent < 100
+        ? (profile?.completeness.items ?? []).map(({ key, filled }) => ({
+            key,
+            filled,
+          }))
+        : [],
   };
 }

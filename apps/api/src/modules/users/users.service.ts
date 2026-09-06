@@ -18,7 +18,9 @@ import {
   ABOUT_MAX_LENGTH,
   LANGUAGES_MAX,
   findNameError,
+  isLineageId,
   resolveDisplayName,
+  toLineageId,
   type AdminAuditEvent,
   type Gender,
   type ProfileLocation,
@@ -154,6 +156,9 @@ export class UsersService {
       devoteeVerificationStatus: user.devoteeVerificationStatus,
       lastSelfIdentificationAt:
         user.lastSelfIdentificationAt?.toISOString() ?? null,
+      lineage: toLineageId(user.lineage),
+      timeZone: user.timeZone,
+      timeZoneLocked: user.timeZoneLocked,
       subscription: toSubscriptionState(user, new Date(), billingMode),
       accountStatus: user.accountStatus,
       pendingDeletionAt: user.pendingDeletionAt?.toISOString() ?? null,
@@ -300,6 +305,36 @@ export class UsersService {
     }
     if ('statusLine' in payload) {
       data.statusLine = normalizeStatusLine(payload.statusLine);
+    }
+    if ('lineage' in payload) {
+      // Справочник общий с вебом; значение вне него — ошибка формы, а не
+      // повод завести в базе новую линию строкой.
+      if (payload.lineage != null && !isLineageId(payload.lineage)) {
+        throw new BadRequestException('Неизвестная духовная линия');
+      }
+      // Этап здесь не проверяется: линию можно указать заранее, до анкеты, а
+      // показывается она всё равно только преданному — см. isDevotee.
+      data.lineage = payload.lineage ?? null;
+    }
+    if ('timeZone' in payload) {
+      // Ручной выбор. Значение фиксирует пояс: у кого VPN или система врут,
+      // тот решил сам, и автоопределение больше не спорит. null — снять
+      // фиксацию, пояс придёт с устройства при следующем входе.
+      const timeZone = payload.timeZone?.trim() || null;
+      if (timeZone && !isValidTimeZone(timeZone)) {
+        throw new BadRequestException('Неизвестный часовой пояс');
+      }
+      data.timeZone = timeZone;
+      data.timeZoneLocked = timeZone !== null;
+    } else if (payload.detectedTimeZone !== undefined) {
+      const detected = payload.detectedTimeZone?.trim();
+      if (detected && isValidTimeZone(detected)) {
+        const current = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { timeZoneLocked: true },
+        });
+        if (!current?.timeZoneLocked) data.timeZone = detected;
+      }
     }
     if ('languages' in payload) {
       data.languages = normalizeLanguages(payload.languages);
@@ -516,4 +551,18 @@ function sanitizeString(value: unknown, maxLength: number): string {
 
 function roundCoordinate(value: number): number {
   return Math.round(value * 10000) / 10000;
+}
+
+/**
+ * Часовой пояс проверяется самим Intl, а не списком: список устаревает, а
+ * `Intl.DateTimeFormat` знает ровно те зоны, по которым потом считается время.
+ */
+export function isValidTimeZone(value: string): boolean {
+  if (value.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
 }
