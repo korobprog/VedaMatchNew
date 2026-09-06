@@ -97,11 +97,11 @@ describe("LibraryScreen", () => {
     renderLibrary();
 
     expect(screen.getAllByRole("article")).toHaveLength(15);
-    await user.type(screen.getByPlaceholderText("Поиск по названию"), "Book 12");
+    await user.type(screen.getByPlaceholderText("Поиск по названию или автору"), "Book 12");
     expect(screen.getAllByRole("article")).toHaveLength(1);
     expect(screen.getByRole("heading", { name: "Book 12" })).toBeInTheDocument();
 
-    await user.clear(screen.getByPlaceholderText("Поиск по названию"));
+    await user.clear(screen.getByPlaceholderText("Поиск по названию или автору"));
     await user.click(screen.getByRole("button", { name: "Скачанные" }));
     expect(screen.getAllByRole("article")).toHaveLength(1);
     expect(screen.getByRole("heading", { name: "Book 1" })).toBeInTheDocument();
@@ -156,5 +156,53 @@ describe("LibraryScreen", () => {
     fireEvent(window, new Event("offline"));
 
     expect(screen.getByText("Офлайн")).toBeInTheDocument();
+  });
+
+  it("ищет и по автору: книгу помнят по тому, кто её написал", async () => {
+    const user = userEvent.setup();
+    render(
+      <VedabaseProvider userId="user-1" manager={fakeManager()} library={library}>
+        <LibraryScreen />
+      </VedabaseProvider>,
+    );
+
+    await user.type(
+      screen.getByPlaceholderText("Поиск по названию или автору"),
+      "Author",
+    );
+
+    // Автор проставлен у каждой второй книги — семь из пятнадцати.
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(7);
+  });
+
+  it("на одном авторе ряд выбора не рисуется: выбор из одного — не выбор", () => {
+    render(
+      <VedabaseProvider userId="user-1" manager={fakeManager()} library={library}>
+        <LibraryScreen />
+      </VedabaseProvider>,
+    );
+
+    expect(screen.queryByLabelText("Авторы")).not.toBeInTheDocument();
+  });
+
+  it("на нескольких авторах даёт выбрать одного", async () => {
+    const user = userEvent.setup();
+    const mixed: VedabaseLibraryManifest = {
+      ...library,
+      books: [
+        { ...book(1), author: "Прабхупада" },
+        { ...book(2), author: "Бхактивинода" },
+      ],
+    };
+    render(
+      <VedabaseProvider userId="user-1" manager={fakeManager()} library={mixed}>
+        <LibraryScreen />
+      </VedabaseProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Бхактивинода" }));
+
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Book 2" })).toBeInTheDocument();
   });
 });

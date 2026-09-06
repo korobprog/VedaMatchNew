@@ -219,9 +219,9 @@ describe("ReaderScreen", () => {
       expect(mutations.some((mutation) => mutation.entity === "progress")).toBe(true);
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "Next chapter" }));
+    await userEvent.click(screen.getByRole("button", { name: "Следующая глава" }));
     expect(onNavigate).toHaveBeenCalledWith("chapter-2");
-    expect(screen.getByRole("button", { name: "Previous chapter" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Предыдущая глава" })).toBeDisabled();
 
     view.rerender(
       <ReaderScreen
@@ -232,7 +232,7 @@ describe("ReaderScreen", () => {
       />,
     );
     await screen.findByRole("heading", { name: "Chapter Two" });
-    await userEvent.click(screen.getByRole("button", { name: "Previous chapter" }));
+    await userEvent.click(screen.getByRole("button", { name: "Предыдущая глава" }));
     expect(onNavigate).toHaveBeenLastCalledWith("chapter-1");
   });
 
@@ -247,7 +247,7 @@ describe("ReaderScreen", () => {
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "This chapter is not available offline",
+      "Этой главы нет на устройстве",
     );
   });
 
@@ -263,15 +263,15 @@ describe("ReaderScreen", () => {
     );
     await screen.findByRole("heading", { name: "Chapter One" });
 
-    await user.selectOptions(screen.getByLabelText("Theme"), "dark");
+    await user.selectOptions(screen.getByLabelText("Тема"), "dark");
     expect(document.querySelector('[data-reader-theme="dark"]')).toHaveClass(
       "reader-shell",
     );
 
-    await user.selectOptions(screen.getByLabelText("Theme"), "sepia");
-    await user.click(screen.getByRole("button", { name: "Increase font size" }));
-    await user.selectOptions(screen.getByLabelText("Line width"), "wide");
-    await user.click(screen.getByRole("button", { name: "Add bookmark" }));
+    await user.selectOptions(screen.getByLabelText("Тема"), "sepia");
+    await user.click(screen.getByRole("button", { name: "Увеличить шрифт" }));
+    await user.selectOptions(screen.getByLabelText("Ширина строки"), "wide");
+    await user.click(screen.getByRole("button", { name: "Добавить закладку" }));
 
     await waitFor(async () => {
       const database = await openVedabaseDb(userId);
@@ -288,7 +288,7 @@ describe("ReaderScreen", () => {
       expect(mutations.some((mutation) => mutation.entity === "bookmark")).toBe(true);
     });
 
-    await user.click(screen.getByRole("button", { name: "Remove bookmark" }));
+    await user.click(screen.getByRole("button", { name: "Убрать закладку" }));
     await waitFor(async () => {
       const database = await openVedabaseDb(userId);
       const bookmark = (await database.getAll("bookmarks"))[0];
@@ -312,17 +312,17 @@ describe("ReaderScreen", () => {
     await screen.findByRole("heading", { name: "Chapter One" });
 
     selectText("block-unit-1-translationHtml", 0, 4);
-    await user.click(screen.getByRole("button", { name: "Highlight selection" }));
+    await user.click(screen.getByRole("button", { name: "Выделить цветом" }));
     selectText("block-unit-1-translationHtml", 5, 11);
-    await user.click(screen.getByRole("button", { name: "Add note to selection" }));
-    await user.type(screen.getByLabelText("Note text"), "Initial note");
-    await user.click(screen.getByRole("button", { name: "Save note" }));
+    await user.click(screen.getByRole("button", { name: "Заметка к выделенному" }));
+    await user.type(screen.getByLabelText("Текст заметки"), "Initial note");
+    await user.click(screen.getByRole("button", { name: "Сохранить заметку" }));
 
     expect(await screen.findByText("Initial note")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Edit Initial note" }));
-    await user.clear(screen.getByLabelText("Note text"));
-    await user.type(screen.getByLabelText("Note text"), "Edited note");
-    await user.click(screen.getByRole("button", { name: "Save note" }));
+    await user.clear(screen.getByLabelText("Текст заметки"));
+    await user.type(screen.getByLabelText("Текст заметки"), "Edited note");
+    await user.click(screen.getByRole("button", { name: "Сохранить заметку" }));
 
     await waitFor(async () => {
       const database = await openVedabaseDb(userId);
@@ -354,9 +354,9 @@ describe("ReaderScreen", () => {
     );
     await screen.findByRole("heading", { name: "Chapter One" });
 
-    await user.click(screen.getByRole("button", { name: "Search downloaded books" }));
-    await user.type(screen.getByLabelText("Search query"), "act attachment");
-    await user.click(screen.getByRole("button", { name: "Search" }));
+    await user.click(screen.getByRole("button", { name: "Поиск по скачанным книгам" }));
+    await user.type(screen.getByLabelText("Поисковый запрос"), "act attachment");
+    await user.click(screen.getByRole("button", { name: "Найти" }));
 
     const result = await screen.findByRole("button", { name: /Detached action/ });
     expect(result).toHaveTextContent("Act without attachment and remain steady.");
