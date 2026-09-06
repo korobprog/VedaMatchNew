@@ -132,6 +132,7 @@ describe("longestSilentResponse", () => {
 describe("toAdvisorInput", () => {
   const empty: AdvisorSources = {
     hasHomeLocation: true,
+    needsLineage: false,
     unionProfile: null,
     unionCounts: null,
     astroState: null,

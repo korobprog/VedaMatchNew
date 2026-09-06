@@ -25,7 +25,34 @@ describe('LibraryPreferencesService', () => {
     await expect(service.get('user-1')).resolves.toEqual({
       uiLanguage: 'ru',
       contentLanguages: [],
+      lineage: null,
     });
+  });
+
+  it('rejects a lineage outside the shared list', async () => {
+    const service = new LibraryPreferencesService(prismaMock() as never);
+
+    await expect(
+      service.update('user-1', { lineage: 'hare' as never }),
+    ).rejects.toMatchObject({ response: { message: 'unsupported_lineage' } });
+  });
+
+  it('stores "all" and a concrete lineage, and reads garbage back as null', async () => {
+    const prisma = prismaMock();
+    const service = new LibraryPreferencesService(prisma as never);
+
+    const all = await service.update('user-1', { lineage: 'all' });
+    expect(all.lineage).toBe('all');
+    expect(prisma.libraryPreference.upsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({ update: { lineage: 'all' } }),
+    );
+
+    prisma.libraryPreference.findUnique.mockResolvedValue({
+      uiLanguage: 'ru',
+      contentLanguages: [],
+      lineage: 'retired-math',
+    });
+    expect((await service.get('user-1')).lineage).toBeNull();
   });
 
   it('rejects an unsupported ui language', async () => {
@@ -44,7 +71,12 @@ describe('LibraryPreferencesService', () => {
 
     expect(prisma.libraryPreference.upsert).toHaveBeenCalledWith({
       where: { userId: 'user-1' },
-      create: { userId: 'user-1', uiLanguage: 'en', contentLanguages: [] },
+      create: {
+        userId: 'user-1',
+        uiLanguage: 'en',
+        contentLanguages: [],
+        lineage: null,
+      },
       update: { uiLanguage: 'en' },
     });
     expect(result.uiLanguage).toBe('en');

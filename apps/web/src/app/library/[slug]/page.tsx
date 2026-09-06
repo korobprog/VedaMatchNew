@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { redirectToLogin } from "@/lib/require-user";
+import { isLineagePreference, resolveContentLineage } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
+import { LineagePrompt } from "@/components/lineage-prompt";
 import {
   getLibraryCategoryPage,
   getLibraryCategoryTree,
@@ -63,6 +65,13 @@ export default async function LibraryCategoryPage({
   if (!page) notFound();
 
   const locale = preferences?.uiLanguage ?? "ru";
+  const explicitLineage =
+    typeof query.lineage === "string" && isLineagePreference(query.lineage)
+      ? query.lineage
+      : null;
+  const appliedLineage = explicitLineage
+    ? resolveContentLineage(null, explicitLineage)
+    : resolveContentLineage(user, preferences?.lineage ?? null);
   const { category, ancestors, children } = page;
   const title = pickLocalized(locale, {
     ru: category.titleRu,
@@ -99,6 +108,15 @@ export default async function LibraryCategoryPage({
           {categoryPageSummary(locale, category)}
         </p>
 
+        {user && (
+          <LineagePrompt
+            user={user}
+            serviceName="Образования"
+            settingsHref="/library#lineage-switch"
+            settingsLabel="в списке линий на главной Образования"
+          />
+        )}
+
         <CategoryNavigator
           locale={locale}
           categories={children}
@@ -123,6 +141,7 @@ export default async function LibraryCategoryPage({
             initialFeed={feed}
             locale={locale}
             query={{ ...query, categorySlug: slug }}
+            lineageFiltered={appliedLineage !== null}
           />
         )}
       </main>

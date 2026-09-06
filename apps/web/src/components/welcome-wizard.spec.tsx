@@ -56,6 +56,7 @@ const profile = {
   spiritualStage: null,
   devoteeVerificationStatus: null,
   lastSelfIdentificationAt: null,
+  lineage: null,
   subscription: {
     status: "trial",
     trialEndsAt: "2026-09-01T00:00:00.000Z",

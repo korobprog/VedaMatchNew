@@ -14,10 +14,21 @@ import type {
   LibraryEntryDto,
   LibraryEntryType,
   LibraryFeedResponse,
+  LineageId,
+  LineageViewer,
   PortalActivityEvent,
   UpdateLibraryEntryRequest,
 } from '@vedamatch/shared';
-import { PORTAL_ACTIVITY_EVENTS, resolveDisplayName } from '@vedamatch/shared';
+import {
+  PORTAL_ACTIVITY_EVENTS,
+  defaultLineageFor,
+  isLineageId,
+  isLineagePreference,
+  resolveContentLineage,
+  resolveDisplayName,
+  toLineageId,
+  toLineagePreference,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CommunitiesService } from '../communities/communities.service';
 import {
@@ -73,6 +84,12 @@ export interface LibraryFeedFilters {
   bookmarked?: string;
   /** Организационная принадлежность: материалы от имени этой общины. */
   communityId?: string;
+  /**
+   * Явный выбор линии на один запрос: идентификатор или `all`. Без него
+   * берётся настройка Образования, а за ней — портальный профиль. Нужен
+   * ссылке «показать материалы всех линий» из пустой ленты.
+   */
+  lineage?: string;
 }
 
 const ENTRY_SELECT = {
@@ -89,6 +106,7 @@ const ENTRY_SELECT = {
   faviconUrl: true,
   previewUrl: true,
   previewIsCustom: true,
+  lineage: true,
   status: true,
   usefulCount: true,
   uniqueClickCount: true,
@@ -124,6 +142,43 @@ export class LibraryEntriesService {
     private readonly communities: CommunitiesService,
     private readonly events: EventEmitter2,
   ) {}
+
+  /**
+   * Этап и линия человека из портального профиля — ровно два поля `User`,
+   * которые сервису разрешено читать ради линии. Пишет их портал.
+   */
+  private async lineageViewer(userId: string): Promise<LineageViewer | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { spiritualStage: true, lineage: true },
+    });
+    return user
+      ? { spiritualStage: user.spiritualStage, lineage: toLineageId(user.lineage) }
+      : null;
+  }
+
+  /**
+   * Какую линию показать в ленте. Явный параметр запроса сильнее настройки
+   * Образования, та — сильнее профиля; правило одно на все сервисы —
+   * `resolveContentLineage`. `null` — не фильтровать.
+   */
+  private async viewerLineage(
+    viewerId: string | undefined,
+    explicit: string | undefined,
+  ): Promise<LineageId | null> {
+    if (explicit !== undefined && isLineagePreference(explicit) && explicit) {
+      return resolveContentLineage(null, explicit);
+    }
+    if (!viewerId) return null;
+    const [preference, viewer] = await Promise.all([
+      this.prisma.libraryPreference.findUnique({
+        where: { userId: viewerId },
+        select: { lineage: true },
+      }),
+      this.lineageViewer(viewerId),
+    ]);
+    return resolveContentLineage(viewer, toLineagePreference(preference?.lineage));
+  }
 
   /**
    * Право подписать материал общиной.
@@ -224,6 +279,16 @@ export class LibraryEntriesService {
     const communityId = body.communityId?.trim() || null;
     await this.assertCommunityRight(userId, communityId);
 
+    // Линия по умолчанию — автора, если он преданный, иначе ISKCON. Формы
+    // предзаполняют то же самое, но старый клиент поля не шлёт вовсе.
+    const lineage =
+      body.lineage === undefined
+        ? defaultLineageFor(await this.lineageViewer(userId))
+        : body.lineage;
+    if (lineage !== null && !isLineageId(lineage)) {
+      throw new BadRequestException('unsupported_lineage');
+    }
+
     const language = normalizeLanguage(body.contentLanguage);
     // Обложку тянуть неоткуда, когда нет адреса.
     const previewUrl = normalized ? await resolvePreviewUrl(normalized.url) : null;
@@ -244,6 +309,7 @@ export class LibraryEntriesService {
           previewUrl,
           addedById: userId,
           communityId,
+          lineage,
           // Без адреса обогащать нечего — иначе запись навсегда осталась бы
           // `pending` и числилась проблемной в админке.
           enrichmentStatus: normalized ? 'pending' : 'not_applicable',
@@ -413,6 +479,12 @@ export class LibraryEntriesService {
     }
     if (body.contentLanguage !== undefined) {
       data.contentLanguage = normalizeLanguage(body.contentLanguage);
+    }
+    if (body.lineage !== undefined) {
+      if (body.lineage !== null && !isLineageId(body.lineage)) {
+        throw new BadRequestException('unsupported_lineage');
+      }
+      data.lineage = body.lineage;
     }
 
     if (body.titleRu !== undefined || body.titleEn !== undefined) {
@@ -673,6 +745,12 @@ export class LibraryEntriesService {
     if (filters.communityId) {
       where.communityId = filters.communityId;
     }
+    // Линия: своя плюс материалы «для всех» (`null`). Через `AND`, а не
+    // `OR` напрямую — `OR` ниже занят курсором, и второй перетёр бы первый.
+    const lineage = await this.viewerLineage(viewerId, filters.lineage);
+    if (lineage) {
+      where.AND = [{ OR: [{ lineage }, { lineage: null }] }];
+    }
     // Рубрика фильтрует лентой всё своё поддерево: иначе вложение прятало бы
     // материалы — человек убирает рубрику внутрь другой и видит пустую
     // ленту родителя. `withDescendants=false` сужает до самой рубрики.
@@ -846,6 +924,7 @@ function toEntryDto(
           name: entry.community.name,
         }
       : null,
+    lineage: toLineageId(entry.lineage),
     canEdit:
       viewerIsAdmin || (Boolean(viewerId) && entry.addedBy?.id === viewerId),
     hasCustomPreview: entry.previewIsCustom,

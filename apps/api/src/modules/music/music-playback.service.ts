@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
@@ -13,6 +17,7 @@ import {
   type UpdateMusicPlaybackStateRequest,
   type UpdateMusicSettingsRequest,
 } from '@vedamatch/shared';
+import { isLineagePreference, toLineagePreference } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { mayShareMusicActivity } from './music-activity-share';
 import { toMusicTrackDto } from './music-track-dto';
@@ -80,6 +85,7 @@ const TRACK_CARD_INCLUDE = {
 const DEFAULT_SETTINGS: MusicSettingsDto = {
   nowPlayingVisibility: 'friends',
   autoplay: true,
+  lineage: null,
 };
 
 @Injectable()
@@ -450,30 +456,38 @@ export class MusicPlaybackService {
   async getSettings(userId: string): Promise<MusicSettingsDto> {
     const row = await this.prisma.musicSettings.findUnique({
       where: { userId },
-      select: { nowPlayingVisibility: true, autoplay: true },
+      select: { nowPlayingVisibility: true, autoplay: true, lineage: true },
     });
 
-    return row ?? DEFAULT_SETTINGS;
+    return row
+      ? { ...row, lineage: toLineagePreference(row.lineage) }
+      : DEFAULT_SETTINGS;
   }
 
   async updateSettings(
     userId: string,
     body: UpdateMusicSettingsRequest,
   ): Promise<MusicSettingsDto> {
+    // Линия: идентификатор из справочника, `all` или `null` («как в
+    // профиле»). Мусор — ошибка формы, а не новая линия строкой в базе.
+    if (body.lineage !== undefined && !isLineagePreference(body.lineage)) {
+      throw new BadRequestException('Неизвестная духовная линия');
+    }
     const patch = {
       ...(body.nowPlayingVisibility === undefined
         ? {}
         : { nowPlayingVisibility: body.nowPlayingVisibility }),
       ...(body.autoplay === undefined ? {} : { autoplay: body.autoplay }),
+      ...(body.lineage === undefined ? {} : { lineage: body.lineage }),
     };
 
     const row = await this.prisma.musicSettings.upsert({
       where: { userId },
       create: { userId, ...DEFAULT_SETTINGS, ...patch },
       update: patch,
-      select: { nowPlayingVisibility: true, autoplay: true },
+      select: { nowPlayingVisibility: true, autoplay: true, lineage: true },
     });
 
-    return row;
+    return { ...row, lineage: toLineagePreference(row.lineage) };
   }
 }

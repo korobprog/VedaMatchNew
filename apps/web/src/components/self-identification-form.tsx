@@ -2,17 +2,21 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type {
-  SelfIdentificationAnswers,
-  SelfIdentificationState,
-  SelfIdentificationSubmitResult,
-  StageHistoryItem,
+import {
+  detectSpiritualStage,
+  lineageLabel,
+  type LineageId,
+  type SelfIdentificationAnswers,
+  type SelfIdentificationState,
+  type SelfIdentificationSubmitResult,
+  type StageHistoryItem,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { fieldClassName } from "@/components/ui/input";
+import { LineageCards } from "./lineage-picker";
 import {
   DEFAULT_ANSWERS,
   SelfIdentificationQuestions,
@@ -41,9 +45,12 @@ const verificationLabels: Record<string, string> = {
 export function SelfIdentificationForm({
   state,
   history,
+  profileLineage = null,
 }: {
   state: SelfIdentificationState | null;
   history: StageHistoryItem[];
+  /** Линия из портального профиля — с неё начинается выбор. */
+  profileLineage?: LineageId | null;
 }) {
   const router = useRouter();
   const [localState, setLocalState] = useState<
@@ -55,8 +62,20 @@ export function SelfIdentificationForm({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedMentorLink, setCopiedMentorLink] = useState(false);
+  const [lineage, setLineage] = useState<LineageId | "">(profileLineage ?? "");
+  const [savedLineage, setSavedLineage] = useState<LineageId | null>(
+    profileLineage,
+  );
 
   const visibleState = localState ?? state;
+  /**
+   * Линию спрашиваем сразу, как только ответы складываются в «преданного»
+   * (та же функция, что на сервере), и у того, кто преданным уже числится:
+   * подтверждённый статус повторная анкета не снимает.
+   */
+  const asksLineage =
+    detectSpiritualStage(answers) === "devotee" ||
+    visibleState?.spiritualStage === "devotee";
   const mentorPath: string | null =
     (visibleState && "mentorLinkPath" in visibleState
       ? (visibleState as SelfIdentificationSubmitResult).mentorLinkPath
@@ -71,6 +90,18 @@ export function SelfIdentificationForm({
     setError(null);
     setCopiedMentorLink(false);
     try {
+      // Линия — поле портального профиля, а не анкеты: уезжает своим
+      // запросом и только когда её спрашивали и она изменилась.
+      if (asksLineage && lineage && lineage !== savedLineage) {
+        const profileRes = await apiFetch(`${API_URL}/profile`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ lineage }),
+        });
+        if (!profileRes.ok) throw new Error(await profileRes.text());
+        setSavedLineage(lineage);
+      }
       const res = await apiFetch(`${API_URL}/self-identification/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -114,6 +145,20 @@ export function SelfIdentificationForm({
 
         <SelfIdentificationQuestions answers={answers} onChange={setAnswers} />
 
+        {asksLineage && (
+          <div className="mt-8 border-t border-glass-brd pt-6">
+            <h3 className="mb-1 font-display text-lg font-semibold text-text-0">
+              К какой линии вы принадлежите?
+            </h3>
+            <p className="mb-4 text-sm text-text-1">
+              Преданный видит в Образовании и Музыке материалы своей
+              традиции. Выберите общество, матх или паривар; для отдельного
+              сервиса другую линию можно выбрать в его настройках.
+            </p>
+            <LineageCards value={lineage} onChange={setLineage} />
+          </div>
+        )}
+
         {error && (
           <Alert tone="error" className="mt-4">
             {error}
@@ -140,6 +185,12 @@ export function SelfIdentificationForm({
           {currentStatus && (
             <p className="mt-2 text-sm text-text-1">
               Статус подтверждения: {verificationLabels[currentStatus]}
+            </p>
+          )}
+          {currentStage === "devotee" && (
+            <p className="mt-2 text-sm text-text-1">
+              Духовная линия:{" "}
+              {lineageLabel(savedLineage) ?? "не указана — выберите выше"}
             </p>
           )}
           {mentorLink && currentStatus !== "confirmed" && (

@@ -1,3 +1,5 @@
+import type { LineageId, LineagePreference } from './lineage';
+
 export type LibraryEntryType =
   | 'website'
   | 'article'
@@ -137,6 +139,11 @@ export interface LibraryEntryDto {
    * что при разборе жалобы нужно знать, кто именно добавил ссылку.
    */
   community: { id: string; slug: string; name: string } | null;
+  /**
+   * Духовная линия материала. `null` — для всех линий. Преданный видит в
+   * ленте свою линию и материалы «для всех», см. `resolveContentLineage`.
+   */
+  lineage: LineageId | null;
   /** `true` — текущий пользователь добавил ссылку либо является админом. */
   canEdit: boolean;
   /** `true` — обложка загружена вручную, а не взята автоматически с сайта-источника. */
@@ -234,6 +241,11 @@ export interface CreateLibraryEntryRequest {
   categoryIds: string[];
   /** Опубликовать от имени общины. `null` или отсутствие — лично от себя. */
   communityId?: string | null;
+  /**
+   * Линия материала. Отсутствие — линия автора, если он преданный, иначе
+   * ISKCON (`defaultLineageFor`); явный `null` — для всех линий.
+   */
+  lineage?: LineageId | null;
 }
 
 /** Все поля необязательны — меняются только переданные. Адрес ссылки (url)
@@ -251,6 +263,8 @@ export interface UpdateLibraryEntryRequest {
   categoryIds?: string[];
   /** Сменить общину или снять её (`null`). Право перепроверяется на правке. */
   communityId?: string | null;
+  /** Сменить линию; `null` — для всех линий. */
+  lineage?: LineageId | null;
 }
 
 /**
@@ -304,11 +318,17 @@ export interface LibraryDuplicateEntryConflict {
 export interface LibraryPreferencesDto {
   uiLanguage: LibraryLocale;
   contentLanguages: string[];
+  /**
+   * Какую линию смотреть в Образовании. `null` — как в портальном профиле,
+   * `'all'` — все линии. См. `LineagePreference`.
+   */
+  lineage: LineagePreference;
 }
 
 export interface UpdateLibraryPreferencesRequest {
   uiLanguage?: LibraryLocale;
   contentLanguages?: string[];
+  lineage?: LineagePreference;
 }
 
 // ===== Админка Library =====

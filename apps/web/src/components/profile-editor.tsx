@@ -23,6 +23,7 @@ import {
 import { UserGalleryEditor } from "./user-gallery-editor";
 import { PhotoVerificationPanel } from "./photo-verification-panel";
 import { CityPicker } from "./city-picker";
+import { LineageSelect } from "./lineage-picker";
 import { NameHints } from "./name-hints";
 import { apiFetch } from "@/lib/http-client";
 import { Alert } from "@/components/ui/alert";
@@ -76,6 +77,10 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
   const [languages, setLanguages] = useState<string[]>(user.languages ?? []);
   const [birthDate, setBirthDate] = useState(user.birthDate ?? "");
   const [gender, setGender] = useState<string>(user.gender ?? "");
+  // Линия — только у преданного: остальным её не показывают и не шлют,
+  // чтобы сохранение профиля не стирало выбранное до смены этапа.
+  const [lineage, setLineage] = useState<string>(user.lineage ?? "");
+  const asksLineage = profile.spiritualStage === "devotee";
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [pending, setPending] = useState(false);
   const [avatarPending, setAvatarPending] = useState(false);
@@ -195,6 +200,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
           homeLocation,
           socialLinks,
           messengers,
+          ...(asksLineage ? { lineage: lineage || null } : {}),
         }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -207,6 +213,7 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
       setLanguages(updated.languages ?? []);
       setBirthDate(updated.birthDate ?? "");
       setGender(updated.gender ?? "");
+      setLineage(updated.lineage ?? "");
       setHomeLocation(updated.homeLocation);
       setSocialLinks(updated.socialLinks ?? {});
       setMessengers(updated.messengers ?? {});
@@ -465,6 +472,19 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
           Обязательное поле: по нему работает подбор в Знакомствах и обращения
           в текстах портала.
         </p>
+
+        {asksLineage && (
+          <div className="mt-6 scroll-mt-24" id="lineage">
+            <LineageSelect
+              value={lineage}
+              onChange={setLineage}
+              emptyLabel="Не указана"
+              label="Духовная линия"
+              hint="Общество, матх или паривар. По ней Образование и Музыка показывают материалы вашей традиции; для отдельного сервиса другую линию можно выбрать в его настройках."
+              className={`${fieldClassName} max-w-md`}
+            />
+          </div>
+        )}
 
         <div className="mt-6 rounded-xl border border-gold/40 bg-gold/10 p-4">
           <p className="text-sm text-text-1">

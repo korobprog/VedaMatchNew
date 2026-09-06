@@ -15,10 +15,18 @@ describe('normalizeMusicTrackQuery', () => {
       language: null,
       duration: null,
       live: null,
+      lineage: null,
       sort: 'fresh',
       cursor: null,
       limit: MUSIC_TRACKS_DEFAULT_LIMIT,
     });
+  });
+
+  it('линию принимает из справочника или «all», прочее считает «не спрашивали»', () => {
+    expect(normalizeMusicTrackQuery({ lineage: 'ipbys' }).lineage).toBe('ipbys');
+    expect(normalizeMusicTrackQuery({ lineage: 'all' }).lineage).toBe('all');
+    expect(normalizeMusicTrackQuery({ lineage: 'hare' }).lineage).toBeNull();
+    expect(normalizeMusicTrackQuery({ lineage: '' }).lineage).toBeNull();
   });
 
   it('берёт первое значение, когда параметр пришёл дважды', () => {

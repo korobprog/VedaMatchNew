@@ -4,6 +4,7 @@ import type {
   LibraryPreferencesDto,
   UpdateLibraryPreferencesRequest,
 } from '@vedamatch/shared';
+import { isLineagePreference, toLineagePreference } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const LOCALES: LibraryLocale[] = ['ru', 'en'];
@@ -20,6 +21,7 @@ export class LibraryPreferencesService {
     return {
       uiLanguage: toLocale(row?.uiLanguage),
       contentLanguages: row?.contentLanguages ?? [],
+      lineage: toLineagePreference(row?.lineage),
     };
   }
 
@@ -39,9 +41,16 @@ export class LibraryPreferencesService {
       }
     }
 
+    // Линия: идентификатор из справочника, `all` или `null` («как в
+    // профиле»). Всё остальное — ошибка формы, а не новая линия.
+    if (body.lineage !== undefined && !isLineagePreference(body.lineage)) {
+      throw new BadRequestException('unsupported_lineage');
+    }
+
     const update: Record<string, unknown> = {};
     if (body.uiLanguage) update.uiLanguage = body.uiLanguage;
     if (body.contentLanguages) update.contentLanguages = body.contentLanguages;
+    if (body.lineage !== undefined) update.lineage = body.lineage;
 
     const row = await this.prisma.libraryPreference.upsert({
       where: { userId },
@@ -49,6 +58,7 @@ export class LibraryPreferencesService {
         userId,
         uiLanguage: body.uiLanguage ?? 'ru',
         contentLanguages: body.contentLanguages ?? [],
+        lineage: body.lineage ?? null,
       },
       update,
     });
@@ -56,6 +66,7 @@ export class LibraryPreferencesService {
     return {
       uiLanguage: toLocale(row.uiLanguage),
       contentLanguages: row.contentLanguages,
+      lineage: toLineagePreference(row.lineage),
     };
   }
 }

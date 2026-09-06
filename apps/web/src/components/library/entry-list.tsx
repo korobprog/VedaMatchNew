@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { LibraryFeedResponse, LibraryLocale } from "@vedamatch/shared";
 import { buildLibraryQuery } from "@/lib/library-query";
 import { EntryCard } from "./entry-card";
@@ -13,10 +14,17 @@ export function EntryList({
   initialFeed,
   locale,
   query,
+  lineageFiltered = false,
 }: {
   initialFeed: LibraryFeedResponse;
   locale: LibraryLocale;
   query: Record<string, string | string[] | undefined>;
+  /**
+   * Лента отфильтрована по духовной линии. Пустота тогда — не «здесь ничего
+   * нет», а «для вашей линии пока ничего нет», и рядом ссылка посмотреть всё
+   * на один раз, без смены настройки.
+   */
+  lineageFiltered?: boolean;
 }) {
   const [feed, setFeed] = useState(initialFeed);
   const [pending, setPending] = useState(false);
@@ -55,7 +63,20 @@ export function EntryList({
   if (feed.items.length === 0) {
     return (
       <p className="glass rounded-2xl border border-glass-brd p-6 text-sm text-text-1">
-        {t(locale, "feed.empty")}
+        {lineageFiltered ? (
+          <>
+            {t(locale, "feed.emptyLineage")}
+            {" · "}
+            <Link
+              href={buildLibraryQuery({ ...query, lineage: "all", cursor: undefined })}
+              className="underline hover:text-text-0"
+            >
+              {t(locale, "feed.showAllLineages")}
+            </Link>
+          </>
+        ) : (
+          t(locale, "feed.empty")
+        )}
       </p>
     );
   }

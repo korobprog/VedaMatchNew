@@ -76,6 +76,7 @@ const user: UserProfile = {
   age: null,
   photoVerification: { status: "none", requestedAt: null, verifiedAt: null },
   lastSelfIdentificationAt: null,
+  lineage: null,
   subscription: {
     status: "trial",
     trialEndsAt: "2026-08-27T00:00:00.000Z",

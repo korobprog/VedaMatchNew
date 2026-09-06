@@ -3,16 +3,19 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type {
-  CreateLibraryEntryRequest,
-  LibraryCategoryDto,
-  LibraryDuplicateEntryConflict,
-  LibraryCategoryTreeNode,
-  LibraryEntryType,
-  LibraryLocale,
+import {
+  type CreateLibraryEntryRequest,
+  type LibraryCategoryDto,
+  type LibraryDuplicateEntryConflict,
+  type LibraryCategoryTreeNode,
+  type LibraryEntryType,
+  type LibraryLocale,
+  DEFAULT_CONTENT_LINEAGE,
+  type LineageId,
 } from "@vedamatch/shared";
 import { CategoryPicker } from "./category-picker";
 import { LibraryCommunitySelect } from "./community-select";
+import { LineageSelect } from "@/components/lineage-picker";
 import { insertIntoTree, renameInTree } from "./category-tree";
 import { entryTypeLabel, t } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
@@ -35,12 +38,15 @@ export function AddEntryForm({
   tree,
   initialCategorySlug,
   canCreateRoot = false,
+  defaultLineage = DEFAULT_CONTENT_LINEAGE,
 }: {
   locale: LibraryLocale;
   tree: LibraryCategoryTreeNode[];
   /** Рубрика, с которой пришли: её и предлагаем родителем для новой. */
   initialCategorySlug?: string;
   canCreateRoot?: boolean;
+  /** Линия автора, если он преданный, иначе ISKCON — см. defaultLineageFor. */
+  defaultLineage?: LineageId;
 }) {
   const router = useRouter();
   const [url, setUrl] = useState("");
@@ -53,6 +59,8 @@ export function AddEntryForm({
   const [contentLanguage, setContentLanguage] = useState("ru");
   /** От имени какой общины. Пустая строка — от себя лично. */
   const [communityId, setCommunityId] = useState("");
+  /** Духовная линия материала. Пустая строка — для всех линий. */
+  const [lineage, setLineage] = useState<string>(defaultLineage);
   const [titleRu, setTitleRu] = useState("");
   const [titleEn, setTitleEn] = useState("");
   const [descriptionRu, setDescriptionRu] = useState("");
@@ -156,6 +164,7 @@ export function AddEntryForm({
       descriptionEn: descriptionEn.trim() || null,
       categoryIds: selected.map((item) => item.id),
       communityId: communityId || null,
+      lineage: lineage ? (lineage as LineageId) : null,
     };
 
     setPending(true);
@@ -372,6 +381,16 @@ export function AddEntryForm({
         value={communityId}
         onChange={setCommunityId}
         disabled={pending}
+      />
+
+      <LineageSelect
+        value={lineage}
+        onChange={setLineage}
+        allLabel={t(locale, "add.lineageAll")}
+        label={t(locale, "add.lineage")}
+        hint={t(locale, "add.lineageHint")}
+        disabled={pending}
+        className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
       />
 
       {notice && (

@@ -18,7 +18,9 @@ import {
   ABOUT_MAX_LENGTH,
   LANGUAGES_MAX,
   findNameError,
+  isLineageId,
   resolveDisplayName,
+  toLineageId,
   type AdminAuditEvent,
   type Gender,
   type ProfileLocation,
@@ -154,6 +156,7 @@ export class UsersService {
       devoteeVerificationStatus: user.devoteeVerificationStatus,
       lastSelfIdentificationAt:
         user.lastSelfIdentificationAt?.toISOString() ?? null,
+      lineage: toLineageId(user.lineage),
       subscription: toSubscriptionState(user, new Date(), billingMode),
       accountStatus: user.accountStatus,
       pendingDeletionAt: user.pendingDeletionAt?.toISOString() ?? null,
@@ -300,6 +303,16 @@ export class UsersService {
     }
     if ('statusLine' in payload) {
       data.statusLine = normalizeStatusLine(payload.statusLine);
+    }
+    if ('lineage' in payload) {
+      // Справочник общий с вебом; значение вне него — ошибка формы, а не
+      // повод завести в базе новую линию строкой.
+      if (payload.lineage != null && !isLineageId(payload.lineage)) {
+        throw new BadRequestException('Неизвестная духовная линия');
+      }
+      // Этап здесь не проверяется: линию можно указать заранее, до анкеты, а
+      // показывается она всё равно только преданному — см. isDevotee.
+      data.lineage = payload.lineage ?? null;
     }
     if ('languages' in payload) {
       data.languages = normalizeLanguages(payload.languages);

@@ -1,3 +1,4 @@
+import type { LineageId } from './lineage';
 export * from './vedabase';
 export * from './gitabase';
 export * from './union';
@@ -27,6 +28,8 @@ export * from './activity';
 export * from './rewards';
 export * from './music';
 export * from './profile-name';
+export * from './lineage';
+export * from './spiritual-stage';
 
 import type { BillingMode, SubscriptionState } from './support';
 
@@ -172,6 +175,12 @@ export interface UserProfile {
   spiritualStage: SpiritualStage | null;
   devoteeVerificationStatus: DevoteeVerificationStatus | null;
   lastSelfIdentificationAt: string | null;
+  /**
+   * Духовная линия преданного (ISKCON, один из Гаудия-матхов, паривар).
+   * Портальное поле: по нему Образование и Музыка показывают своё. У
+   * не-преданных всегда `null` по смыслу, хотя колонка не запрещает значение.
+   */
+  lineage: LineageId | null;
   subscription: SubscriptionState;
   accountStatus: UserAccountStatus;
   /** Задано, если пользователь сам запросил удаление аккаунта. */
@@ -289,6 +298,8 @@ export interface ProfileUpdateRequest {
   homeLocation?: ProfileLocation | null;
   socialLinks?: ProfileSocialLinks;
   messengers?: ProfileMessengers;
+  /** Духовная линия; `null` — убрать. Значение из справочника `LINEAGES`. */
+  lineage?: LineageId | null;
 }
 
 /**

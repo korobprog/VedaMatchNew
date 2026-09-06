@@ -1,15 +1,22 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getLocale } from "next-intl/server";
-import { serviceCardName } from "@vedamatch/shared";
-import { getServiceCard } from "@/lib/api";
+import {
+  isLineagePreference,
+  resolveContentLineage,
+  serviceCardName,
+} from "@vedamatch/shared";
+import { getProfile, getServiceCard } from "@/lib/api";
 import {
   getMusicCatalog,
+  getMusicSettingsServer,
   getMusicTracks,
   getMyMusicFavorites,
   getMyMusicPlaylists,
   getMyMusicUploads,
 } from "@/lib/music-api";
+import { LineagePrompt } from "@/components/lineage-prompt";
+import { LineageStatus } from "@/components/lineage-status";
 import { MusicArtistBubble } from "@/components/music/music-artist-bubble";
 import { MusicCategoryChips } from "@/components/music/music-category-chips";
 import { MusicCover } from "@/components/music/music-cover";
@@ -69,6 +76,7 @@ export default async function MusicPage({
     artist?: string | string[];
     duration?: string | string[];
     live?: string | string[];
+    lineage?: string | string[];
     sort?: string | string[];
     cursor?: string | string[];
   }>;
@@ -83,8 +91,14 @@ export default async function MusicPage({
   const live = first(params.live);
   const sort = first(params.sort);
   const cursor = first(params.cursor);
+  // Явный выбор линии на один просмотр: `all` или идентификатор. Витрина
+  // его не понимает — она фильтруется по профилю, — поэтому с ним сразу
+  // идём в полный список, как с «Все записи».
+  const rawLineage = first(params.lineage);
+  const explicitLineage =
+    rawLineage && isLineagePreference(rawLineage) ? rawLineage : null;
   // «Все записи» — та же страница, но без среза «Новое в каталоге».
-  const showAll = first(params.all) !== null;
+  const showAll = first(params.all) !== null || explicitLineage !== null;
 
   const filterState = {
     category,
@@ -101,8 +115,17 @@ export default async function MusicPage({
 
   // Витрина нужна всегда — из неё чипы разделов и исполнители для фильтра;
   // выборка догружается только когда стоит фильтр или задан запрос.
-  const [service, locale, catalog, filtered, mine, favorites, playlists] =
-    await Promise.all([
+  const [
+    service,
+    locale,
+    catalog,
+    filtered,
+    mine,
+    favorites,
+    playlists,
+    profile,
+    settings,
+  ] = await Promise.all([
       // Название и подпись раздела — из каталога сервисов: их правит
       // администратор, а не правка кода. cache() в getServiceCard делает
       // этот запрос общим с generateMetadata.
@@ -116,6 +139,7 @@ export default async function MusicPage({
             ...(artist ? { artist } : {}),
             ...(duration ? { duration: duration as never } : {}),
             ...(live ? { live: live === "true" } : {}),
+            ...(explicitLineage ? { lineage: explicitLineage } : {}),
             ...(sort ? { sort: sort as never } : {}),
             ...(cursor ? { cursor } : {}),
             limit: showAll && !hasFilter ? 60 : 30,
@@ -128,7 +152,17 @@ export default async function MusicPage({
       getMyMusicUploads().catch(() => null),
       getMyMusicFavorites().catch(() => null),
       getMyMusicPlaylists().catch(() => null),
+      // Профиль и настройки — ради линии: кому предложить выбрать её и какую
+      // подпись поставить над списком. Гостю — null, и подписи нет.
+      getProfile().catch(() => null),
+      getMusicSettingsServer().catch(() => null),
     ]);
+
+  // Та же арифметика, что в API: явный параметр сильнее настройки Музыки,
+  // та — сильнее профиля. Подпись обязана говорить то, что применил сервер.
+  const appliedLineage = explicitLineage
+    ? resolveContentLineage(null, explicitLineage)
+    : resolveContentLineage(profile, settings?.lineage ?? null);
 
   const serviceName = service
     ? serviceCardName(service, locale)
@@ -227,6 +261,11 @@ export default async function MusicPage({
           {serviceDescription && (
             <p className="text-sm text-text-2">{serviceDescription}</p>
           )}
+          <LineageStatus
+            lineage={appliedLineage}
+            settingsHref="/music/settings"
+            allHref="/music?all=1&lineage=all"
+          />
         </div>
         <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
           <MusicSearchField value={query} category={category} />
@@ -255,6 +294,17 @@ export default async function MusicPage({
           </Link>
         </div>
       </header>
+
+      {profile && (
+        <div className="mt-6">
+          <LineagePrompt
+            user={profile}
+            serviceName="Музыки"
+            settingsHref="/music/settings"
+            settingsLabel="в настройках Музыки"
+          />
+        </div>
+      )}
 
       <div className="mt-6 flex flex-col gap-3">
         <MusicCategoryChips
@@ -288,7 +338,20 @@ export default async function MusicPage({
               ? "Ничего не нашлось. Попробуйте другое слово или посмотрите весь каталог."
               : activeCategory
                 ? "В этом разделе пока пусто. Загляните в другие или посмотрите всё."
-                : "Каталог пока пуст. Записи появятся, как только редакция начнёт его наполнять."}
+                : appliedLineage
+                  ? "Для вашей линии записей пока нет. Записи других линий скрыты."
+                  : "Каталог пока пуст. Записи появятся, как только редакция начнёт его наполнять."}
+            {appliedLineage && (
+              <>
+                {" "}
+                <Link
+                  href="/music?all=1&lineage=all"
+                  className="text-cyan underline hover:text-magenta"
+                >
+                  Показать записи всех линий
+                </Link>
+              </>
+            )}
           </p>
         ) : (
           <MusicTrackList tracks={tracks} />

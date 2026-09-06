@@ -153,6 +153,15 @@ const ui = {
     "add.communitySelf": "От себя",
     "add.communityHint":
       "Автором всё равно останетесь вы — община только подписывает материал",
+    "add.lineage": "Духовная линия материала",
+    "add.lineageAll": "Для всех линий",
+    "add.lineageHint":
+      "Преданные видят материалы своей линии и «для всех». По умолчанию — ваша линия либо ISKCON",
+    "lineage.all": "Все линии",
+    "lineage.badgeAll": "Для всех линий",
+    "feed.emptyLineage":
+      "Для вашей линии здесь пока ничего нет. Материалы других линий скрыты",
+    "feed.showAllLineages": "Показать материалы всех линий",
     "category.empty": "В этом разделе ещё нет категорий",
     "category.entries": "материалов",
     // Подпись у числа рядом с рубрикой. Без неё «4» одинаково читается и как
@@ -370,6 +379,15 @@ const ui = {
     "add.communitySelf": "Myself",
     "add.communityHint":
       "You stay the author — the community only signs the material",
+    "add.lineage": "Spiritual lineage of the material",
+    "add.lineageAll": "For all lineages",
+    "add.lineageHint":
+      "Devotees see materials of their own lineage plus those marked for all. Defaults to your lineage or ISKCON",
+    "lineage.all": "All lineages",
+    "lineage.badgeAll": "For all lineages",
+    "feed.emptyLineage":
+      "Nothing here for your lineage yet. Materials of other lineages are hidden",
+    "feed.showAllLineages": "Show materials of all lineages",
     "category.empty": "This section has no categories yet",
     "category.entries": "materials",
     "count.children": "Subcategories inside",

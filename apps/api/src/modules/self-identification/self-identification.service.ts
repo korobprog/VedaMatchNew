@@ -17,6 +17,7 @@ import type {
   SpiritualStage,
   StageHistoryItem,
 } from '@vedamatch/shared';
+import { detectSpiritualStage } from '@vedamatch/shared';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -422,34 +423,13 @@ export class SelfIdentificationService {
     return { ok: true };
   }
 
+  /**
+   * Правила живут в общем пакете: анкета на вебе предлагает выбрать духовную
+   * линию сразу, как только ответы складываются в «преданного», и обязана
+   * считать это так же, как сервер.
+   */
   private detectStage(answers: SelfIdentificationAnswers): SpiritualStage {
-    const devoteeSignals = [
-      answers.hasMentor,
-      answers.hasCommunity,
-      answers.hasSpiritualName,
-      answers.participatesInService,
-      answers.interest === 'devotional_service',
-      answers.currentFocus === 'service_community',
-      answers.regularPractice === 'strict_daily',
-    ].filter(Boolean).length;
-
-    if (devoteeSignals >= 4) return 'devotee';
-    if (
-      answers.regularPractice === 'daily' ||
-      answers.regularPractice === 'strict_daily' ||
-      answers.interest === 'deepening' ||
-      answers.currentFocus === 'deep_practice'
-    ) {
-      return 'yogi';
-    }
-    if (
-      answers.regularPractice === 'sometimes' ||
-      answers.interest === 'learning' ||
-      answers.currentFocus === 'basic_practice'
-    ) {
-      return 'practitioner';
-    }
-    return 'seeker';
+    return detectSpiritualStage(answers);
   }
 
   private resolveVerificationStatus(

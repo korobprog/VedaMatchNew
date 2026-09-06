@@ -34,6 +34,7 @@ const track = (): NonNullable<MusicIngestItemDto["track"]> => ({
   coverUrl: null,
   language: null,
   isLiveRecording: false,
+  lineage: "iskcon",
   playCount: 0,
   publishedAt: null,
 });

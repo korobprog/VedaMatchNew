@@ -1,3 +1,4 @@
+import { needsLineageChoice } from "@vedamatch/shared";
 import { redirect } from "next/navigation";
 import {
   getBillingPlan,
@@ -155,6 +156,7 @@ export default async function Home({
     toAdvisorInput(
       {
         hasHomeLocation: Boolean(user.homeLocation),
+        needsLineage: needsLineageChoice(user),
         unionProfile,
         unionCounts,
         astroState,

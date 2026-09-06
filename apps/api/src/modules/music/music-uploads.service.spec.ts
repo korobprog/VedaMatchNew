@@ -63,6 +63,9 @@ function prismaMock() {
         update: jest.fn().mockResolvedValue({}),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
+      // Портальный профиль читается ради линии записи: этап и линия
+      // загрузившего. По умолчанию человека нет — линия падает в ISKCON.
+      user: { findUnique: jest.fn().mockResolvedValue(null) },
       $transaction: jest.fn().mockImplementation((fn) => fn(tx)),
     },
   };
@@ -206,6 +209,40 @@ describe('MusicUploadsService.completeUpload', () => {
         durationSeconds: 198,
         bitrateKbps: 192,
       }),
+    });
+  });
+
+  it('линия записи — линия преданного, который её принёс', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+    prisma.prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'devotee',
+      lineage: 'sri_chaitanya_saraswat_math',
+    });
+
+    await service(prisma, storage).completeUpload('u1', 'up1', 'gaura.mp3');
+
+    expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        lineage: 'sri_chaitanya_saraswat_math',
+      }),
+    });
+  });
+
+  it('у не-преданного запись подписывается ISKCON по умолчанию', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+    prisma.prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'yogi',
+      lineage: 'ipbys',
+    });
+
+    await service(prisma, storage).completeUpload('u1', 'up1', 'gaura.mp3');
+
+    expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ lineage: 'iskcon' }),
     });
   });
 

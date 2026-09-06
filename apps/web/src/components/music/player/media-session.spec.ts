@@ -12,6 +12,7 @@ const track = (over: Partial<MusicTrackDto> = {}): MusicTrackDto => ({
   coverUrl: "https://cdn.example.org/cover.jpg",
   language: "sa",
   isLiveRecording: true,
+  lineage: "iskcon",
   playCount: 0,
   publishedAt: null,
   ...over,

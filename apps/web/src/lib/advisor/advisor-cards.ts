@@ -66,6 +66,8 @@ const RESPONSE_SILENCE_DAYS = 5;
 export interface AdvisorInput {
   /** Указан ли город в портальном профиле. */
   hasHomeLocation: boolean;
+  /** Преданный без духовной линии в профиле — см. `needsLineageChoice`. */
+  needsLineage: boolean;
 
   /** 0..100, null — анкета Знакомств недоступна. */
   unionProfilePercent: number | null;
@@ -170,6 +172,20 @@ function gapCards(input: AdvisorInput): AdvisorCard[] {
       // высаживает человека на самом верху, далеко от поля города.
       href: "/profile#city",
       weight: 60,
+    });
+  }
+
+  if (input.needsLineage) {
+    cards.push({
+      id: "profile-lineage",
+      tone: "gap",
+      service: null,
+      text: "Линия не указана — Образование и Музыка показывают всё подряд, а не материалы вашей традиции",
+      actionLabel: "Указать линию",
+      href: "/profile#lineage",
+      // Чуть ниже города: город ломает два сервиса для всех, линия — два
+      // сервиса для преданных.
+      weight: 58,
     });
   }
 

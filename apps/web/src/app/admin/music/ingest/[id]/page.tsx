@@ -86,6 +86,7 @@ export default async function MusicAdminIngestBatchPage({
               categoryIds: batch.categoryIds,
               language: batch.language,
               isLiveRecording: batch.isLiveRecording,
+              lineage: batch.lineage,
             }}
           />
         </section>

@@ -29,7 +29,11 @@ export default async function SelfIdentificationPage() {
         <p className="mb-6 text-text-1">
           Ответьте на несколько вопросов, чтобы VedaMatch мог подобрать подходящие сервисы и материалы.
         </p>
-        <SelfIdentificationForm state={state} history={history ?? []} />
+        <SelfIdentificationForm
+          state={state}
+          history={history ?? []}
+          profileLineage={user?.lineage ?? null}
+        />
       </main>
     </div>
   );

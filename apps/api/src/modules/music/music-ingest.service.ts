@@ -23,6 +23,7 @@ import type {
   PublishMusicIngestBatchRequest,
   UpdateMusicIngestBatchRequest,
 } from '@vedamatch/shared';
+import { isLineageId, toLineageId } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { planIngestPlaylist } from './ingest-playlist';
 import {
@@ -216,6 +217,7 @@ export class MusicIngestService {
       categoryIds: batch.categoryIds,
       language: batch.language,
       isLiveRecording: batch.isLiveRecording,
+      lineage: toLineageId(batch.lineage),
       quotaBytes: this.limits.batchQuotaBytes,
       items: batch.items.map((item) => this.toItemDto(item)),
     };
@@ -262,6 +264,12 @@ export class MusicIngestService {
     }
     if (body?.isLiveRecording !== undefined) {
       data.isLiveRecording = Boolean(body.isLiveRecording);
+    }
+    if (body?.lineage !== undefined) {
+      if (body.lineage !== null && !isLineageId(body.lineage)) {
+        throw new BadRequestException('Неизвестная духовная линия');
+      }
+      data.lineage = body.lineage;
     }
 
     await this.prisma.musicIngestBatch.update({ where: { id: batchId }, data });

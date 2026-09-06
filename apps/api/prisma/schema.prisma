@@ -243,6 +243,12 @@ model User {
   spiritualStage               SpiritualStage?
   devoteeVerificationStatus    DevoteeVerificationStatus?
   lastSelfIdentificationAt     DateTime?
+  /// Духовная линия преданного: ISKCON, один из Гаудия-матхов или паривар.
+  /// Справочник — `LINEAGES` в @vedamatch/shared; строкой, а не enum'ом,
+  /// чтобы новая линия не требовала миграции. Портальное поле: Образование и
+  /// Музыка читают его, чтобы показать человеку своё, но не пишут.
+  /// В российский контур не уходит — не идентифицирует человека.
+  lineage                      String?
   // Последняя активность; наружу отдаётся огрублённой (UnionActivityLevel)
   lastSeenAt                   DateTime?
   // Администрация сверила публичные фото с живым человеком
@@ -1747,6 +1753,11 @@ model LibraryEntry {
   /// создании, и на правке — роль в общине могли снять.
   communityId      String?
   community        Community?               @relation("LibraryEntryCommunity", fields: [communityId], references: [id], onDelete: SetNull)
+  /// Духовная линия материала (`LINEAGES`). `null` — для всех линий.
+  /// Умолчание ISKCON выбрано осознанно: каталог наполнялся в его контексте,
+  /// и материал без пометки почти наверняка оттуда. Заполняется сервисом
+  /// всегда явно; умолчание колонки — на старые строки и на сырые вставки.
+  lineage          String?                  @default("iskcon")
   status           LibraryEntryStatus       @default(published)
   needsReview      Boolean                  @default(false)
   usefulCount      Int                      @default(0)
@@ -1773,6 +1784,7 @@ model LibraryEntry {
   @@index([domain])
   @@index([addedById])
   @@index([communityId, status, publishedAt(sort: Desc)])
+  @@index([lineage, status, publishedAt(sort: Desc)])
 }
 
 model LibraryEntryCategory {
@@ -1829,6 +1841,9 @@ model LibraryPreference {
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   uiLanguage       String   @default("ru") @db.VarChar(8)
   contentLanguages String[] @default([])
+  /// Какую линию смотреть здесь: идентификатор из `LINEAGES`, `all` — все,
+  /// `null` — как в портальном профиле (`User.lineage`).
+  lineage          String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -4476,6 +4491,10 @@ model MusicTrack {
   /// для модератора, наружу оно не показывается.
   isLiveRecording Boolean @default(false)
 
+  /// Духовная линия записи (`LINEAGES`). `null` — для всех линий; умолчание
+  /// ISKCON — то же решение, что у `LibraryEntry.lineage`.
+  lineage String? @default("iskcon")
+
   /// Тексты бхаджанов. Поля заложены сразу, показываются с этапа 9: добавлять
   /// три колонки в живую таблицу дороже, чем завести их пустыми.
   lyrics          String?
@@ -4507,6 +4526,7 @@ model MusicTrack {
   @@index([artistId])
   @@index([albumId])
   @@index([uploadedById, status])
+  @@index([lineage, status, publishedAt(sort: Desc)])
 }
 
 /// Связь трека с разделами каталога. Обычно их у записи одна-две.
@@ -4680,6 +4700,9 @@ model MusicSettings {
   nowPlayingVisibility MusicNowPlayingVisibility @default(friends)
   /// Автоматически ставить следующий трек, когда очередь закончилась.
   autoplay             Boolean                   @default(true)
+  /// Какую линию слушать: идентификатор из `LINEAGES`, `all` — весь каталог,
+  /// `null` — как в портальном профиле (`User.lineage`).
+  lineage              String?
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
 }
@@ -4708,6 +4731,8 @@ model MusicIngestBatch {
   categoryIds     String[]
   language        String?
   isLiveRecording Boolean      @default(false)
+  /// Линия, которую получат записи партии; `null` — для всех линий.
+  lineage         String?      @default("iskcon")
 
   items MusicIngestItem[]
 

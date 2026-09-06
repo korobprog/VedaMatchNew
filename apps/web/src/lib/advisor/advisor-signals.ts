@@ -91,6 +91,7 @@ export function longestSilentResponse(
 
 export interface AdvisorSources {
   hasHomeLocation: boolean;
+  needsLineage: boolean;
   unionProfile: UnionProfileState | null;
   unionCounts: UnionConnectionCounts | null;
   astroState: AstroStateDto | null;
@@ -106,6 +107,7 @@ export function toAdvisorInput(
 ): AdvisorInput {
   return {
     hasHomeLocation: sources.hasHomeLocation,
+    needsLineage: sources.needsLineage,
 
     unionProfilePercent: sources.unionProfile?.completeness.percent ?? null,
     unionIncomingLikes: sources.unionCounts?.incomingPending ?? 0,

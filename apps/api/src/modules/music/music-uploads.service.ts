@@ -14,7 +14,11 @@ import type {
   MusicStorageUsageDto,
   MyMusicUploadsDto,
 } from '@vedamatch/shared';
-import { MUSIC_ACCEPTED_MIME } from '@vedamatch/shared';
+import {
+  MUSIC_ACCEPTED_MIME,
+  defaultLineageFor,
+  toLineageId,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MusicStorageService } from './music-storage.service';
 import {
@@ -340,6 +344,18 @@ export class MusicUploadsService {
 
     const title = fallbackTrackTitle(metadata, fileName ?? upload.storageKey);
     const status = initialStatusFor(upload.rightsBasis);
+    // Линия записи — линия загрузившего, если он преданный, иначе ISKCON.
+    // Модератор может поправить перед публикацией. Из `User` читаются ровно
+    // два портальных поля, разрешённых сервису на чтение.
+    const author = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { spiritualStage: true, lineage: true },
+    });
+    const lineage = defaultLineageFor(
+      author
+        ? { spiritualStage: author.spiritualStage, lineage: toLineageId(author.lineage) }
+        : null,
+    );
     const coverKey = embeddedCover
       ? await this.storeEmbeddedCover(userId, embeddedCover)
       : null;
@@ -354,6 +370,7 @@ export class MusicUploadsService {
           durationSeconds: durationSeconds!,
           bitrateKbps: metadata.bitrateKbps,
           language: metadata.language,
+          lineage,
           // Исполнителя из тега в каталог не заводим: справочником владеет
           // редакция, а тег — всего лишь подсказка модератору.
           //

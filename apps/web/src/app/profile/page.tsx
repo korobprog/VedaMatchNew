@@ -1,5 +1,9 @@
 ﻿import Link from "next/link";
-import type { PricingPlan, SubscriptionState } from "@vedamatch/shared";
+import {
+  lineageLabel,
+  type PricingPlan,
+  type SubscriptionState,
+} from "@vedamatch/shared";
 import { redirectToLogin } from "@/lib/require-user";
 import { getBillingPlan, getProfile } from "@/lib/api";
 import { getRewardsMe } from "@/lib/rewards-api";
@@ -99,6 +103,14 @@ export default async function ProfilePage() {
                   : "Не определен"}
               </dd>
             </div>
+            {user.spiritualStage === "devotee" && (
+              <div className="flex justify-between gap-4">
+                <dt className="text-text-2">Духовная линия</dt>
+                <dd className="font-medium text-text-0">
+                  {lineageLabel(user.lineage) ?? "Не указана"}
+                </dd>
+              </div>
+            )}
             {user.devoteeVerificationStatus && (
               <div className="flex justify-between gap-4">
                 <dt className="text-text-2">Статус преданного</dt>

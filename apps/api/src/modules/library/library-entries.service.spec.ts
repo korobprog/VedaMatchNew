@@ -31,6 +31,7 @@ function entryRecord(overrides: Record<string, unknown> = {}) {
     publishedAt: NOW,
     addedBy: { id: 'user-1', name: 'Тест' },
     community: null,
+    lineage: 'iskcon',
     categories: [],
     ...overrides,
   };
@@ -55,6 +56,10 @@ function prismaMock(overrides: Record<string, unknown> = {}) {
     // общины. Заведена здесь, а не дописывается в тестах: дописанное свойство
     // не проходит проверку типов, и `tsc` со спеками падал бы на нём.
     community: { findMany: jest.fn().mockResolvedValue([]) },
+    // Этап и линия человека — ради линии материала и фильтра ленты. По
+    // умолчанию человека нет: линия падает в ISKCON, лента не фильтруется.
+    user: { findUnique: jest.fn().mockResolvedValue(null) },
+    libraryPreference: { findUnique: jest.fn().mockResolvedValue(null) },
     libraryCategory: {
       findMany: jest.fn().mockResolvedValue([{ id: 'category-1' }]),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -1188,5 +1193,182 @@ describe('LibraryEntriesService — организационная принад�
     });
     // Разбирать жалобу всё равно придётся с человеком, а не с общиной.
     expect(feed.items[0].addedBy?.id).toBe('user-1');
+  });
+});
+
+describe('LibraryEntriesService — духовная линия', () => {
+  function build(prisma = prismaMock()) {
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communitiesMock() as never,
+      eventsMock() as never,
+    );
+    return { service, prisma };
+  }
+
+  const whereOf = (prisma: ReturnType<typeof prismaMock>) =>
+    (prisma.libraryEntry.findMany.mock.calls[0][0] as {
+      where: Record<string, unknown>;
+    }).where;
+
+  it('без зрителя лента не фильтруется по линии', async () => {
+    const { service, prisma } = build();
+
+    await service.feed({});
+
+    expect(whereOf(prisma)).not.toHaveProperty('AND');
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('преданному показывает свою линию и материалы «для всех»', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'devotee',
+      lineage: 'ipbys',
+    });
+    const { service } = build(prisma);
+
+    await service.feed({}, 'user-1');
+
+    expect(whereOf(prisma).AND).toEqual([
+      { OR: [{ lineage: 'ipbys' }, { lineage: null }] },
+    ]);
+  });
+
+  it('йогу линию не навязывает, даже если она записана в профиле', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'yogi',
+      lineage: 'ipbys',
+    });
+    const { service } = build(prisma);
+
+    await service.feed({}, 'user-1');
+
+    expect(whereOf(prisma)).not.toHaveProperty('AND');
+  });
+
+  it('настройка Образования сильнее профиля', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'devotee',
+      lineage: 'iskcon',
+    });
+    prisma.libraryPreference.findUnique.mockResolvedValue({
+      lineage: 'sri_chaitanya_saraswat_math',
+    });
+    const { service } = build(prisma);
+
+    await service.feed({}, 'user-1');
+
+    expect(whereOf(prisma).AND).toEqual([
+      {
+        OR: [{ lineage: 'sri_chaitanya_saraswat_math' }, { lineage: null }],
+      },
+    ]);
+  });
+
+  it('явный lineage=all в запросе снимает фильтр и не ходит в профиль', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'devotee',
+      lineage: 'iskcon',
+    });
+    const { service } = build(prisma);
+
+    await service.feed({ lineage: 'all' }, 'user-1');
+
+    expect(whereOf(prisma)).not.toHaveProperty('AND');
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('незнакомую линию в запросе игнорирует, а не отдаёт пустую ленту', async () => {
+    const { service, prisma } = build();
+
+    await service.feed({ lineage: 'DROP TABLE' });
+
+    expect(whereOf(prisma)).not.toHaveProperty('AND');
+  });
+
+  it('фильтр по линии не перетирает условие курсора', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'devotee',
+      lineage: 'ipbys',
+    });
+    const { service } = build(prisma);
+
+    const cursor = Buffer.from(
+      JSON.stringify({ p: NOW.toISOString(), i: 'entry-0' }),
+      'utf8',
+    ).toString('base64url');
+    await service.feed({ cursor }, 'user-1');
+
+    const where = whereOf(prisma);
+    expect(where.OR).toBeDefined();
+    expect(where.AND).toEqual([{ OR: [{ lineage: 'ipbys' }, { lineage: null }] }]);
+  });
+
+  it('новый материал без линии получает линию автора-преданного', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'devotee',
+      lineage: 'nityananda_vamsha',
+    });
+    const { service } = build(prisma);
+
+    await service.create('user-1', validBody() as never);
+
+    const create = prisma.libraryEntry.create.mock.calls[0][0] as {
+      data: { lineage: string | null };
+    };
+    expect(create.data.lineage).toBe('nityananda_vamsha');
+  });
+
+  it('у автора без линии материал подписывается ISKCON', async () => {
+    const { service, prisma } = build();
+
+    await service.create('user-1', validBody() as never);
+
+    const create = prisma.libraryEntry.create.mock.calls[0][0] as {
+      data: { lineage: string | null };
+    };
+    expect(create.data.lineage).toBe('iskcon');
+  });
+
+  it('явный null — «для всех линий» — сохраняется как есть', async () => {
+    const { service, prisma } = build();
+
+    await service.create('user-1', validBody({ lineage: null }) as never);
+
+    const create = prisma.libraryEntry.create.mock.calls[0][0] as {
+      data: { lineage: string | null };
+    };
+    expect(create.data.lineage).toBeNull();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('линию вне справочника отвергает', async () => {
+    const { service, prisma } = build();
+
+    await expect(
+      service.create('user-1', validBody({ lineage: 'hare' }) as never),
+    ).rejects.toMatchObject({ response: { message: 'unsupported_lineage' } });
+    expect(prisma.libraryEntry.create).not.toHaveBeenCalled();
+  });
+
+  it('отдаёт линию материала наружу', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findMany = jest
+      .fn()
+      .mockResolvedValue([entryRecord({ lineage: 'ipbys' })]);
+    const { service } = build(prisma);
+
+    const feed = await service.feed({});
+
+    expect(feed.items[0].lineage).toBe('ipbys');
   });
 });

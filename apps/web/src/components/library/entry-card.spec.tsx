@@ -39,6 +39,7 @@ const entry: LibraryEntryDto = {
   community: null,
   canEdit: false,
   hasCustomPreview: false,
+  lineage: "iskcon",
 };
 
 describe("EntryCard", () => {
