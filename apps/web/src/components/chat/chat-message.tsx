@@ -36,10 +36,13 @@ export function ChatMessage({
   onDelete,
   onReport,
   onPin,
+  onJumpToReply,
   pending = false,
 }: {
   message: ChatMessageDto;
   mine: boolean;
+  /** Переход к сообщению, на которое отвечали: цитата — ссылка на место. */
+  onJumpToReply?: (messageId: string) => void;
   /** В группе и канале имя автора рисуется в первом сообщении подряд. */
   showAuthor: boolean;
   /**
@@ -137,7 +140,16 @@ export function ChatMessage({
               )}
 
               {message.replyTo && (
-                <span className="mb-2 flex gap-2.5 rounded-lg bg-bg-0/35 py-1.5 pr-2.5">
+                /* Цитата — кнопка, а не украшение: в мессенджерах по ней
+                   переходят к тому, о чём речь, и первое, что тут делают, —
+                   нажимают. Кнопка, а не ссылка: переписка уже открыта,
+                   меняется только место в ней. */
+                <button
+                  type="button"
+                  onClick={() => onJumpToReply?.(message.replyTo!.id)}
+                  aria-label={`Перейти к сообщению: ${message.replyTo.authorName}`}
+                  className="mb-2 flex w-full gap-2.5 rounded-lg bg-bg-0/35 py-1.5 pr-2.5 text-left transition-colors hover:bg-bg-0/55"
+                >
                   <span
                     className="w-[3px] shrink-0 rounded-sm"
                     style={{ background: "var(--chat-accent, var(--vm-cyan))" }}
@@ -156,7 +168,7 @@ export function ChatMessage({
                           : "Сообщение удалено")}
                     </span>
                   </span>
-                </span>
+                </button>
               )}
 
               {message.attachments.length > 0 && (
