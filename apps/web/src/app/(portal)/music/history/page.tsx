@@ -57,7 +57,7 @@ export default async function MusicHistoryPage() {
                   className="flex items-center gap-3"
                 >
                   <span className="min-w-0 flex-1">
-                    <MusicTrackRow track={item.track} />
+                    <MusicTrackRow track={item.track} queue={queue} />
                   </span>
                   <time
                     dateTime={item.listenedAt}

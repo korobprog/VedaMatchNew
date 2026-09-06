@@ -34,6 +34,11 @@ services:
       WEB_ORIGIN: ${WEB_ORIGIN}
       API_PUBLIC_URL: ${API_PUBLIC_URL}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN}
+      # Адрес портала в ссылках iCal-экспорта объявлений (notices.controller.ts).
+      # До сих пор не пробрасывался вовсе, и в проде работал зашитый дефолт —
+      # то есть на переезде переменную мало задать в Dokploy, её сначала надо
+      # сюда добавить. Значение по умолчанию повторяет прежнее поведение.
+      WEB_PUBLIC_URL: ${WEB_PUBLIC_URL:-https://vedamatch.ru}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       # Способы входа помимо Google. Со значением по умолчанию: способ может
@@ -116,6 +121,9 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        # Тоже build-arg, а не переменная контейнера: NEXT_PUBLIC_* вшивается
+        # на сборке. Отсюда идут metadataBase и og:url — превью в мессенджерах.
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://vedamatch.ru}
     restart: unless-stopped
     environment:
       NODE_ENV: production

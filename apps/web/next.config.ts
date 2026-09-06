@@ -30,6 +30,28 @@ const nextConfig: NextConfig = {
         destination: "/admin/chat/people/:path*",
         permanent: true,
       },
+      // www → апекс. Канонический адрес портала всегда без www: одна и та же
+      // страница по двум адресам делит поисковый вес и ломает cookie, которые
+      // выставлены на конкретный хост.
+      //
+      // Правило дремлет, пока хост не заведён в Dokploy: Traefik просто не
+      // маршрутизирует такой Host и отдаёт 404, до приложения запрос не
+      // доходит. Поэтому его безопасно выкладывать заранее.
+      //
+      // statusCode вместо permanent: `permanent: true` даёт 308, а для смены
+      // адреса нужен именно 301 — его понимают все, включая старые клиенты.
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.vedamatch.com" }],
+        destination: "https://vedamatch.com/:path*",
+        statusCode: 301,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.vedamatch.ru" }],
+        destination: "https://vedamatch.ru/:path*",
+        statusCode: 301,
+      },
     ];
   },
 };

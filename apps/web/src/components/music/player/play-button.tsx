@@ -2,6 +2,7 @@
 
 import { useMusicPlayer } from "./player-provider";
 import { MusicPlayGlyph, playButtonLabel } from "./play-glyph";
+import { isSameQueue } from "./queue-identity";
 
 /**
  * Кнопка запуска на карточке каталога.
@@ -49,7 +50,10 @@ export function MusicPlayButton({
         // бы на страницу записи.
         event.preventDefault();
         event.stopPropagation();
-        if (isCurrent) player?.toggle();
+        // См. `queue-identity.ts`: та же запись в другом списке обязана
+        // сменить очередь, иначе «дальше» ведёт по прежнему списку.
+        if (isCurrent && isSameQueue(player?.queue ?? [], queue))
+          player?.toggle();
         else player?.play(trackId, queue);
       }}
       className={

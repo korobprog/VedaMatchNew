@@ -11,12 +11,24 @@
 	encode zstd gzip
 }
 
-vedamatch.ru {
+# Портал переезжает на vedamatch.com. Пока .ru отдаёт то же приложение, а не
+# редирект: 301 включается последним шагом, когда .com проверен целиком, —
+# иначе рабочий домен уедет на непроверенный.
+#
+# Сертификат Caddy запрашивает на каждое имя сразу при загрузке конфига. Пока
+# DNS домена .com смотрит на старый сервер, выпуск на него не пройдёт: ACME
+# будет повторять попытки и шуметь в логе. На остальные имена это не влияет,
+# и чинится само, как только записи переедут.
+vedamatch.com, vedamatch.ru {
 	import security_headers
 	reverse_proxy web:3000
 }
 
-api.vedamatch.ru {
+www.vedamatch.com {
+	redir https://vedamatch.com{uri} permanent
+}
+
+api.vedamatch.com, api.vedamatch.ru {
 	import security_headers
 	# Загрузка фото в галерею: до 50 файлов по 20 МБ проверяются в API,
 	# но совсем бесконечное тело не пускаем уже на входе.
