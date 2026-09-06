@@ -99,6 +99,7 @@ export function NotificationList() {
           Здесь появляются новые сообщения, заявки и ответы поддержки.
           Прочитанные остаются на неделю — успеете вернуться.
         </p>
+        <NewsLink />
       </div>
     );
 
@@ -128,16 +129,7 @@ export function NotificationList() {
         </section>
       )}
 
-      {/* Уведомление живёт неделю и исчезает — а новости разработки
-          остаются. Отсюда единственный путь к ним, кроме набранного руками
-          адреса. */}
-      <p className="text-sm text-text-2">
-        Объявления и новости разработки целиком —{" "}
-        <Link href="/updates/news" className="text-cyan hover:text-magenta">
-          в разделе «Что нового»
-        </Link>
-        .
-      </p>
+      <NewsLink />
 
       {read.length > 0 && (
         <section aria-label="Прочитанные">
@@ -195,5 +187,25 @@ function NotificationCard({
         <span className="mt-1 block text-sm text-text-1">{item.body}</span>
       </span>
     </Link>
+  );
+}
+
+/**
+ * Путь к новостям разработки.
+ *
+ * Уведомление живёт неделю и исчезает, а новости остаются: отсюда
+ * единственная ссылка на них, кроме набранного руками адреса. Показывается и
+ * над пустым списком — когда уведомлений нет, других дорог с этой страницы
+ * не остаётся вовсе.
+ */
+function NewsLink() {
+  return (
+    <p className="text-sm text-text-2">
+      Объявления и новости разработки целиком —{" "}
+      <Link href="/updates/news" className="text-cyan hover:text-magenta">
+        в разделе «Что нового»
+      </Link>
+      .
+    </p>
   );
 }

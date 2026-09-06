@@ -138,4 +138,14 @@ describe("NotificationList", () => {
       await screen.findByRole("link", { name: /Что нового/ }),
     ).toHaveAttribute("href", "/updates/news");
   });
+
+  it("даёт этот путь и когда уведомлений нет — других с этой страницы нет вовсе", async () => {
+    fetchInbox.mockResolvedValue({ items: [], unreadCount: 0 });
+    render(<NotificationList />);
+
+    await screen.findByText("Уведомлений нет");
+    expect(
+      screen.getByRole("link", { name: /Что нового/ }),
+    ).toHaveAttribute("href", "/updates/news");
+  });
 });
