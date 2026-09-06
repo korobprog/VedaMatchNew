@@ -52,9 +52,20 @@ export function localHour(now: Date, timeZone: string | null | undefined): numbe
 export function isLocalPushWindow(
   now: Date,
   timeZone: string | null | undefined,
+  pushHour: number = PUSH_HOUR_LOCAL,
 ): boolean {
+  const start = normalizePushHour(pushHour);
   const hour = localHour(now, timeZone);
-  return hour >= PUSH_HOUR_LOCAL && hour < PUSH_HOUR_LOCAL + PUSH_WINDOW_HOURS;
+  // Окно может переваливать через полночь (23:00 → 01:00): считаем по кругу.
+  const offset = (hour - start + 24) % 24;
+  return offset < PUSH_WINDOW_HOURS;
+}
+
+/** Час 0..23; всё странное (NaN, 25, -1) — значение по умолчанию. */
+export function normalizePushHour(value: unknown): number {
+  const hour = Number(value);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return PUSH_HOUR_LOCAL;
+  return hour;
 }
 
 /**

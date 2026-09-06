@@ -12,7 +12,11 @@ import Redis from 'ioredis';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AstroSettingsService } from '../astro-settings.service';
 import { AstroTransitService } from './astro-transit.service';
-import { isLocalPushWindow, scanKey } from './transit-schedule';
+import {
+  isLocalPushWindow,
+  normalizePushHour,
+  scanKey,
+} from './transit-schedule';
 
 const TICK_MS = 5 * 60_000;
 const ACTIVITY_WINDOW_DAYS = 14;
@@ -123,7 +127,8 @@ export class AstroTransitWorkerService
       // Кому сейчас утро. Час считается в поясе человека из портального
       // профиля; без пояса — по Москве, как было до появления поля.
       const recipients = (await this.eligibleRecipients(now)).filter(
-        (recipient) => isLocalPushWindow(now, recipient.timeZone),
+        (recipient) =>
+          isLocalPushWindow(now, recipient.timeZone, recipient.pushHour),
       );
       if (recipients.length > 0) {
         this.logger.log(
@@ -168,7 +173,7 @@ export class AstroTransitWorkerService
    */
   private async eligibleRecipients(
     now: Date,
-  ): Promise<{ userId: string; timeZone: string | null }[]> {
+  ): Promise<{ userId: string; timeZone: string | null; pushHour: number }[]> {
     const cutoff = new Date(now.getTime() - ACTIVITY_WINDOW_DAYS * 86_400_000);
     const rows = await this.prisma.astroBirthData.findMany({
       where: {
@@ -178,12 +183,22 @@ export class AstroTransitWorkerService
           { user: { astroUsage: { some: { day: { gte: cutoff } } } } },
         ],
       },
-      // `User.timeZone` — портальное поле, читать его сервису можно.
-      select: { userId: true, user: { select: { timeZone: true } } },
+      // `User.timeZone` — портальное поле, читать его сервису можно; час —
+      // своя настройка сервиса рядом с человеком.
+      select: {
+        userId: true,
+        user: {
+          select: {
+            timeZone: true,
+            astroTransitPreference: { select: { pushHour: true } },
+          },
+        },
+      },
     });
     return rows.map((row) => ({
       userId: row.userId,
       timeZone: row.user?.timeZone ?? null,
+      pushHour: normalizePushHour(row.user?.astroTransitPreference?.pushHour),
     }));
   }
 

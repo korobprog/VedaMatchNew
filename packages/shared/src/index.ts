@@ -187,6 +187,8 @@ export interface UserProfile {
    * не определён: тогда портал считает по Москве.
    */
   timeZone: string | null;
+  /** Пояс выбран руками: автоопределение с устройства его не перезаписывает. */
+  timeZoneLocked: boolean;
   subscription: SubscriptionState;
   accountStatus: UserAccountStatus;
   /** Задано, если пользователь сам запросил удаление аккаунта. */
@@ -306,8 +308,16 @@ export interface ProfileUpdateRequest {
   messengers?: ProfileMessengers;
   /** Духовная линия; `null` — убрать. Значение из справочника `LINEAGES`. */
   lineage?: LineageId | null;
-  /** Часовой пояс IANA; проверяется через Intl. `null` — сбросить. */
+  /**
+   * Ручной выбор часового пояса (IANA): значение фиксирует пояс, и
+   * автоопределение его больше не трогает; `null` — вернуться к автоматике.
+   */
   timeZone?: string | null;
+  /**
+   * Пояс, который определило устройство. Применяется, только пока пояс не
+   * зафиксирован руками: у кого VPN врёт, тот выбрал сам.
+   */
+  detectedTimeZone?: string;
 }
 
 /**

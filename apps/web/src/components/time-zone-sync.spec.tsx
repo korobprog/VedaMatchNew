@@ -31,7 +31,9 @@ describe("TimeZoneSync", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain("/profile");
     expect(init?.method).toBe("PATCH");
-    expect(JSON.parse(String(init?.body))).toEqual({ timeZone: "Asia/Vladivostok" });
+    expect(JSON.parse(String(init?.body))).toEqual({
+      detectedTimeZone: "Asia/Vladivostok",
+    });
     await waitFor(() =>
       expect(localStorage.getItem("vm_time_zone_synced")).toBe("Asia/Vladivostok"),
     );

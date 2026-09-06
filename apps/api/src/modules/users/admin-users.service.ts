@@ -238,6 +238,7 @@ export class AdminUsersService {
           user.lastSelfIdentificationAt?.toISOString() ?? null,
         lineage: toLineageId(user.lineage),
         timeZone: user.timeZone,
+        timeZoneLocked: user.timeZoneLocked,
         subscription: toSubscriptionState(user, new Date(), billingMode),
         createdAt: user.createdAt.toISOString(),
         updatedAt: user.updatedAt.toISOString(),

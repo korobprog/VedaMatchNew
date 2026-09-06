@@ -167,6 +167,23 @@ describe('AstroTransitWorkerService', () => {
     });
   });
 
+  it('уважает выбранный человеком час: семь утра приходит в семь, а не в девять', async () => {
+    prisma.astroBirthData.findMany.mockResolvedValue([
+      {
+        userId: 'early',
+        user: { timeZone: 'Europe/Moscow', astroTransitPreference: { pushHour: 7 } },
+      },
+      { userId: 'default', user: { timeZone: 'Europe/Moscow' } },
+    ]);
+    transits.today.mockResolvedValue({ text: 'фраза', moonBhava: 2 });
+
+    // 04:00 UTC = 07:00 по Москве.
+    await worker.tick(new Date('2026-08-10T04:00:00.000Z'));
+
+    expect(events.emit).toHaveBeenCalledTimes(1);
+    expect(events.emit.mock.calls[0][1]).toMatchObject({ recipientId: 'early' });
+  });
+
   it('второй обход в том же окне не пересчитывает уже отправленный день', async () => {
     prisma.astroBirthData.findMany.mockResolvedValue([{ userId: 'u1' }]);
     prisma.astroTransitDigest.findUnique.mockResolvedValue({

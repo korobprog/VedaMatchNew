@@ -11,6 +11,7 @@ import { PLAN as DEFAULT_PLAN } from "@/lib/plan";
 import { formatDate, subscriptionStatusLabels } from "@/lib/support-labels";
 import { Header } from "@/components/header";
 import { ProfileEditor } from "@/components/profile-editor";
+import { TimeZoneField } from "@/components/time-zone-field";
 import { CommunityPicker } from "@/components/communities/community-picker";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { BackgroundOrbs } from "@/components/landing/Orb";
@@ -124,13 +125,19 @@ export default async function ProfilePage() {
                 </dd>
               </div>
             )}
-            <div className="flex justify-between gap-4">
-              <dt className="text-text-2">Часовой пояс</dt>
-              <dd className="text-right font-medium text-text-0">
-                {user.timeZone ?? "Определится при следующем входе"}
-                <span className="block text-xs font-normal text-text-2">
-                  По нему приходят утренние рассылки; берётся с устройства
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:gap-4">
+              <dt className="text-text-2">
+                Часовой пояс
+                <span className="block text-xs">
+                  {user.timeZone ?? "ещё не определён"} · по нему приходят
+                  утренние рассылки
                 </span>
+              </dt>
+              <dd className="sm:w-72">
+                <TimeZoneField
+                  timeZone={user.timeZone}
+                  timeZoneLocked={user.timeZoneLocked}
+                />
               </dd>
             </div>
             <div className="flex justify-between gap-4">

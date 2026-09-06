@@ -58,6 +58,7 @@ const user: UserProfile = {
   lastSelfIdentificationAt: null,
   lineage: null,
   timeZone: null,
+  timeZoneLocked: false,
   subscription: {
     status: "trial",
     trialEndsAt: "2026-08-27T00:00:00.000Z",

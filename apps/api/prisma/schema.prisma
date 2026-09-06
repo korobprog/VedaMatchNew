@@ -252,6 +252,9 @@ model User {
   /// Часовой пояс человека (IANA). Браузер определяет и присылает при входе;
   /// по нему сервисы считают «утро» для ежедневных рассылок. null — по Москве.
   timeZone                     String?
+  /// Пояс выбран человеком руками: автоопределение с устройства его не
+  /// трогает. Нужно тем, у кого VPN или системные настройки врут о зоне.
+  timeZoneLocked               Boolean                    @default(false)
   // Последняя активность; наружу отдаётся огрублённой (UnionActivityLevel)
   lastSeenAt                   DateTime?
   // Администрация сверила публичные фото с живым человеком
@@ -341,6 +344,7 @@ model User {
   libraryBookmarks                   LibraryBookmark[]
   libraryComments                    LibraryComment[]
   astroTransitDigests                AstroTransitDigest[]
+  astroTransitPreference             AstroTransitPreference?
   marketShop                         MarketShop?                  @relation("MarketShopOwner")
   marketFavorites                    MarketFavorite[]
   marketPreference                   MarketPreference?
@@ -2232,6 +2236,18 @@ model AstroTransitDigest {
   createdAt DateTime  @default(now())
 
   @@unique([userId, forDate])
+}
+
+/// Личные настройки рассылки персонального дня. Час — местный, в поясе
+/// человека (`User.timeZone`); включена ли рассылка вовсе, решает портальная
+/// NotificationPreference.transits — здесь только «во сколько».
+model AstroTransitPreference {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Час местного времени 0..23, когда присылать. По умолчанию 9 утра.
+  pushHour  Int      @default(9)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 /// Готовая фраза под транзитный паттерн, общая на весь портал. Ключевая

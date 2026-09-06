@@ -19,6 +19,7 @@ import { AstroCompatibilityService } from './compatibility/astro-compatibility.s
 import { AstronomiaEphemerisProvider } from './ephemeris/astronomia-provider';
 import { EPHEMERIS_PROVIDER } from './ephemeris/ephemeris.token';
 import { AstroTransitController } from './transits/astro-transit.controller';
+import { AstroTransitPreferenceService } from './transits/astro-transit-preference.service';
 import { AstroTransitService } from './transits/astro-transit.service';
 import { AstroTransitWorkerService } from './transits/astro-transit-worker.service';
 
@@ -46,6 +47,7 @@ import { AstroTransitWorkerService } from './transits/astro-transit-worker.servi
     AstroReadingService,
     AstroSettingsService,
     AstroTransitService,
+    AstroTransitPreferenceService,
     AstroTransitWorkerService,
     { provide: EPHEMERIS_PROVIDER, useClass: AstronomiaEphemerisProvider },
   ],

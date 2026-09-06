@@ -15,6 +15,10 @@ const STORAGE_KEY = "vm_time_zone_synced";
  * на зону и запоминаем в localStorage, чтобы не дёргать профиль на каждой
  * странице; переезд в другой пояс снимает отметку сам собой.
  *
+ * Отправляется как `detectedTimeZone`, а не `timeZone`: ручной выбор
+ * человека (VPN и системные настройки иногда врут о зоне) сервер фиксирует,
+ * и автоопределение его не перезаписывает.
+ *
  * Монтируется только у вошедшего: гостю профиля нет.
  */
 export function TimeZoneSync() {
@@ -36,7 +40,7 @@ export function TimeZoneSync() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ timeZone }),
+      body: JSON.stringify({ detectedTimeZone: timeZone }),
       signal: controller.signal,
     })
       .then((res) => {

@@ -8,6 +8,7 @@ import type {
   AstroSubjectDto,
   AstroSubjectsDto,
   AstroTodayDto,
+  AstroTransitPreferenceDto,
   VedicChart,
 } from "@vedamatch/shared";
 
@@ -49,6 +50,10 @@ export const getAstroReadings = () =>
   astroGet<AstroReadingsDto>("/astro/readings", { emptyOn404: true });
 
 /** Персональный день. null — нет точного времени и места рождения. */
+/** Во сколько и по какому поясу приходит персональный день. */
+export const getAstroTransitPreferences = () =>
+  astroGet<AstroTransitPreferenceDto>("/astro/today/preferences");
+
 export const getAstroToday = () =>
   astroGet<AstroTodayDto>("/astro/today", { emptyOn404: true });
 

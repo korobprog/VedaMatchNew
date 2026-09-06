@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirectToLogin } from "@/lib/require-user";
-import { getAstroState } from "@/lib/astro-api";
+import { getAstroState, getAstroTransitPreferences } from "@/lib/astro-api";
 import { BirthDataForm } from "@/components/astro/birth-data-form";
+import { TransitPushSettings } from "@/components/astro/transit-push-settings";
 
 export const metadata = {
   title: "Астрология",
@@ -11,7 +12,11 @@ export const metadata = {
 export default async function AstroPage() {
   // Вход проверяет PortalLayout; сюда доходит только вошедший. Остаётся
   // случай, когда сервис не отдал состояние, — тогда всё же на вход.
-  const state = await getAstroState();
+  const [state, pushPrefs] = await Promise.all([
+    getAstroState(),
+    // Настройки рассылки — не повод ронять страницу: не пришли, блока нет.
+    getAstroTransitPreferences().catch(() => null),
+  ]);
   if (!state) redirectToLogin("/astro");
 
   return (
@@ -44,6 +49,14 @@ export default async function AstroPage() {
       <div className="mt-8">
         <BirthDataForm initial={state} />
       </div>
+
+      {/* Рассылка есть только у того, чья карта строится: без данных рождения
+          настраивать нечего. */}
+      {state.birthData && pushPrefs && (
+        <div className="mt-8">
+          <TransitPushSettings initial={pushPrefs} />
+        </div>
+      )}
 
       <p className="mt-10 text-sm text-text-2">
         Материалы сервиса предназначены для самопознания и размышления и не
