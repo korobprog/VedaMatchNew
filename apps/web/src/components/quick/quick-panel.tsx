@@ -182,7 +182,9 @@ function QuickTiles({
   ids: QuickActionId[];
   onClose: () => void;
 }) {
-  const [sheet, setSheet] = useState<"calculator" | "info" | null>(null);
+  const [sheet, setSheet] = useState<
+    "calculator" | "info" | "calendar" | null
+  >(null);
 
   if (ids.length === 0)
     return (
@@ -211,7 +213,9 @@ function QuickTiles({
               ) : (
                 <button
                   type="button"
-                  onClick={() => setSheet(id as "calculator" | "info")}
+                  onClick={() =>
+                    setSheet(id as "calculator" | "info" | "calendar")
+                  }
                   className={tileClass}
                 >
                   <Icon className="size-5" />
@@ -225,6 +229,7 @@ function QuickTiles({
 
       {sheet === "calculator" && <CalculatorPad onClose={() => setSheet(null)} />}
       {sheet === "info" && <InfoSheet onClose={() => setSheet(null)} />}
+      {sheet === "calendar" && <CalendarSheet onClose={() => setSheet(null)} />}
     </>
   );
 }
@@ -289,6 +294,57 @@ function InviteTile() {
           ? "Не вышло"
           : "Пригласить"}
     </button>
+  );
+}
+
+/**
+ * Календарь — два разных календаря, а не один.
+ *
+ * Афиша портала знает о программах и встречах, которые завели участники;
+ * вайшнавский календарь — об экадаши и явлениях, и вести его у себя значило
+ * бы содержать вторую астрономическую службу. Поэтому выбор, а не переход:
+ * «когда экадаши» и «что у нас в субботу» — разные вопросы.
+ */
+function CalendarSheet({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="mt-3 rounded-xl border border-glass-brd bg-bg-1 p-3 text-sm text-text-1">
+      <ul className="space-y-2">
+        <li>
+          <Link
+            href="/notices/events"
+            onClick={onClose}
+            className="text-cyan hover:text-magenta"
+          >
+            Афиша портала
+          </Link>
+          <p className="text-xs text-text-2">
+            Программы, встречи и события, которые завели участники
+          </p>
+        </li>
+        <li>
+          {/* Внешний сайт: `rel` обязателен — без `noopener` открытая
+              вкладка получает доступ к нашей через `window.opener`. */}
+          <a
+            href="https://vcalendar.ru"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-cyan hover:text-magenta"
+          >
+            Вайшнавский календарь ↗
+          </a>
+          <p className="text-xs text-text-2">
+            Экадаши, посты и дни явления — на vcalendar.ru
+          </p>
+        </li>
+      </ul>
+      <button
+        type="button"
+        onClick={onClose}
+        className="mt-3 rounded-lg border border-glass-brd px-3 py-1.5 text-xs text-text-2 hover:text-text-0"
+      >
+        Закрыть
+      </button>
+    </div>
   );
 }
 
