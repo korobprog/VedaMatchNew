@@ -39,6 +39,7 @@ const profile = {
   name: "Гаура Прия",
   spiritualName: null,
   about: null,
+    statusLine: null,
   languages: [],
   displayName: "Гаура Прия",
   avatarUrl: null,

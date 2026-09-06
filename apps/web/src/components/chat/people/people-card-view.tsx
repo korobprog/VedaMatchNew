@@ -182,6 +182,12 @@ function ContactsCard({ card }: { card: ContactsCardDto }) {
           <h2 className="font-display text-xl font-bold text-text-0 sm:text-2xl">
             {card.name}
           </h2>
+          {/* Статус выше заголовка карточки: заголовок описывает человека
+              вообще («преподаёт санскрит»), а статус — прямо сейчас («в
+              Маяпуре до марта»), и второе устаревает первым. */}
+          {card.statusLine && (
+            <p className="mt-1 text-sm text-cyan">{card.statusLine}</p>
+          )}
           {card.headline && (
             <p className="mt-1 text-sm text-text-1">{card.headline}</p>
           )}

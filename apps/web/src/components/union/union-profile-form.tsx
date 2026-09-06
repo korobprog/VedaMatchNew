@@ -21,6 +21,7 @@ import type {
   UnionSpiritualEducation,
   UnionVisibilityLevel,
 } from "@vedamatch/shared";
+import { STATUS_LINE_MAX_LENGTH } from "@vedamatch/shared";
 import { IntentionWeights, intentionSum } from "./intention-constructor";
 import { IntentionSection } from "./intention-section";
 import {
@@ -60,7 +61,8 @@ const MAX_PARTNER_AGE = 100;
 // Совпадает с UNION_* лимитами в union-profile.service.ts на стороне API.
 const MIN_HEIGHT_CM = 120;
 const MAX_HEIGHT_CM = 230;
-const MAX_STATUS_LENGTH = 120;
+/** Предел один на портал: статус хранится в профиле, а не в анкете. */
+const MAX_STATUS_LENGTH = STATUS_LINE_MAX_LENGTH;
 
 const formatLabels: Record<UnionFormat, string> = {
   online: "Только онлайн",
@@ -100,10 +102,17 @@ type Draft = Omit<
   familySeeksGender: Gender | null;
 };
 
-function toDraft(profile: UnionProfileDto | null): Draft {
+/**
+ * Статус приходит вторым доводом: он портальный и есть даже у того, кто
+ * анкету Знакомств ещё не заводил.
+ */
+function toDraft(
+  profile: UnionProfileDto | null,
+  statusLine: string | null,
+): Draft {
   return {
     about: profile?.about ?? null,
-    status: profile?.status ?? null,
+    status: statusLine ?? profile?.status ?? null,
     familyStatus: profile?.familyStatus ?? null,
     format: profile?.format ?? "any",
     relocationReady: profile?.relocationReady ?? false,
@@ -198,16 +207,26 @@ export function UnionProfileForm({
   completeness: initialCompleteness,
   viewerGender = null,
   viewerAge = null,
+  viewerStatusLine = null,
 }: {
   profile: UnionProfileDto | null;
   completeness: UnionProfileCompleteness;
+  /**
+   * Статус из портального профиля. Приходит отдельно от анкеты, потому что
+   * поле портальное: у человека, который ещё не заводил анкету Знакомств,
+   * статус уже может быть — и показывать здесь пустую строку значило бы
+   * предложить написать его во второй раз.
+   */
+  viewerStatusLine?: string | null;
   /** Пол из аккаунта: по нему подставляется, кого искать при цели «семья». */
   viewerGender?: Gender | null;
   /** Возраст из аккаунта: цель «Создание семьи» доступна только с 18 лет. */
   viewerAge?: number | null;
 }) {
   const router = useRouter();
-  const [draft, setDraft] = useState<Draft>(() => toDraft(profile));
+  const [draft, setDraft] = useState<Draft>(() =>
+    toDraft(profile, viewerStatusLine),
+  );
   const [weights, setWeights] = useState<IntentionWeights>(() =>
     toWeights(profile),
   );
@@ -280,6 +299,31 @@ export function UnionProfileForm({
     [],
   );
 
+  /**
+   * Статус уезжает в портальный профиль, а не в анкету: поле общее для всего
+   * портала, и второй его копии в Знакомствах больше нет. Отдельным запросом
+   * и сразу, без общей задержки сохранения анкеты, — иначе его пришлось бы
+   * везти в том же теле, которое уходит в другой сервис.
+   */
+  async function saveStatus(value: string | null) {
+    setDraft((current) => ({ ...current, status: value }));
+    setSaveState("saving");
+    try {
+      const res = await apiFetch(`${API_URL}/profile`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ statusLine: value }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setSaveState("saved");
+      router.refresh();
+    } catch (e) {
+      setSaveState("error");
+      setError(e instanceof Error ? e.message : "Не удалось сохранить статус");
+    }
+  }
+
   /** Меняет поле анкеты и ставит его в очередь на сохранение. */
   function update<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -302,17 +346,22 @@ export function UnionProfileForm({
 
       <section className={sectionClass}>
         <h2 className={sectionTitleClass}>Статус</h2>
+        {/* Статус портальный, как и рассказ о себе: одна строка на весь
+            портал, а не отдельная подпись для Знакомств. Редактор остался
+            здесь — статус спрашивают именно при заполнении анкеты, — но
+            сохраняется он в профиль, и та же строка видна в справочнике
+            людей и в профиле. */}
         <UnionFieldRow
           label="Короткий статус"
           value={draft.status ?? null}
-          hint="Одна фраза, которую увидят первой"
+          hint="Одна фраза, которую увидят первой. Видна на всём портале"
         >
           {(close) => (
             <UnionTextEditor
               value={draft.status ?? ""}
               maxLength={MAX_STATUS_LENGTH}
               placeholder="Расскажите что-нибудь…"
-              onApply={(value) => update("status", value.trim() || null)}
+              onApply={(value) => saveStatus(value.trim() || null)}
               close={close}
             />
           )}
@@ -320,7 +369,7 @@ export function UnionProfileForm({
         <UnionGenerateButton
           field="status"
           label="Сгенерировать статус"
-          onGenerated={(text) => update("status", text)}
+          onGenerated={(text) => saveStatus(text)}
         />
         {/* Рассказ о себе — портальный: он же показывается в справочнике
             участников, и писать его дважды человек больше не должен. */}

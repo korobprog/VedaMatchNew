@@ -255,6 +255,11 @@ export interface ContactsCardDto {
   userId: string;
   name: string;
   headline: string | null;
+  /**
+   * Статус — короткая строка рядом с именем. Портальное поле: правится в
+   * профиле, а не в карточке справочника, и показывается всюду одинаково.
+   */
+  statusLine: string | null;
   about: string | null;
   offers: string | null;
   avatarUrl: string | null;

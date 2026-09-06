@@ -55,6 +55,7 @@ export default async function UnionProfilePage() {
         <UnionProfileForm
           profile={profile}
           viewerGender={user.gender ?? null}
+          viewerStatusLine={user.statusLine ?? null}
           viewerAge={user.age ?? null}
           completeness={
             state?.completeness ?? {

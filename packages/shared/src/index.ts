@@ -128,6 +128,13 @@ export function resolveDisplayName(user: {
 /** Рассказ о себе в портальном профиле: столько же, сколько было в анкетах. */
 export const ABOUT_MAX_LENGTH = 2000;
 
+/**
+ * Статус — строка рядом с именем: «в Маяпуре до марта», «читаю Бхагаватам,
+ * пишите». Коротко намеренно: это не второй рассказ о себе, а подпись, и
+ * длинная строка ломала бы карточку, где стоит в одну строку с именем.
+ */
+export const STATUS_LINE_MAX_LENGTH = 140;
+
 /** Сколько языков можно перечислить: список, а не биография. */
 export const LANGUAGES_MAX = 10;
 
@@ -149,6 +156,11 @@ export interface UserProfile {
   photoVerification: PhotoVerificationState;
   /** Рассказ о себе: один на портал, показывается и в Знакомствах, и в справочнике. */
   about: string | null;
+  /**
+   * Статус — короткая строка рядом с именем. Один на портал, как и рассказ:
+   * человек один, и держать разные подписи по сервисам он не подписывался.
+   */
+  statusLine: string | null;
   /** Языки общения: тоже общие для всего портала. */
   languages: string[];
   homeLocation: ProfileLocation | null;
@@ -271,6 +283,8 @@ export interface ProfileUpdateRequest {
   gender?: Gender | null;
   /** Пустая строка означает «убрать рассказ», как и у духовного имени. */
   about?: string | null;
+  /** Пустая строка означает «убрать статус». */
+  statusLine?: string | null;
   languages?: string[];
   homeLocation?: ProfileLocation | null;
   socialLinks?: ProfileSocialLinks;

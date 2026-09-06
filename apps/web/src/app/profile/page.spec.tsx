@@ -40,6 +40,7 @@ const user: UserProfile = {
   name: "Пользователь",
   spiritualName: null,
   about: null,
+    statusLine: null,
   languages: [],
   displayName: "Пользователь",
   avatarUrl: null,

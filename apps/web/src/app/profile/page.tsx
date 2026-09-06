@@ -75,6 +75,9 @@ export default async function ProfilePage() {
               {user.spiritualName && (
                 <p className="text-sm text-text-1">{user.name}</p>
               )}
+              {user.statusLine && (
+                <p className="text-sm text-cyan">{user.statusLine}</p>
+              )}
               <p className="text-sm text-text-2">{user.email}</p>
             </div>
           </div>
