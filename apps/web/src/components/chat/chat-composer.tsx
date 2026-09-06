@@ -1,13 +1,27 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import type {
   ChatAttachmentInput,
   ChatMessageDto,
 } from "@vedamatch/shared";
 import { uploadChatFile } from "@/lib/chat-client";
 import { AssistantComposerHelper } from "@/components/assistant/assistant-composer-helper";
-import { ChatAttachSheet } from "./chat-attach-sheet";
+import {
+  ATTACH_DRAG_TYPE,
+  AttachTileIcon,
+  ChatAttachSheet,
+  attachTileMeta,
+  tileToneClass,
+} from "./chat-attach-sheet";
+import {
+  CHAT_QUICK_SLOT_STORAGE_KEY,
+  DEFAULT_CHAT_QUICK_SLOT,
+  effectiveQuickSlot,
+  parseQuickSlot,
+  type ChatQuickSlotId,
+} from "./chat-quick-slot";
 import { formatDuration } from "./chat-time";
 import { ChatVoiceRecorder } from "./chat-voice-recorder";
 
@@ -54,12 +68,44 @@ export function ChatComposer({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [pinned, setPinned] = useState<ChatQuickSlotId>(DEFAULT_CHAT_QUICK_SLOT);
+  const [dropHover, setDropHover] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [recordedSeconds, setRecordedSeconds] = useState(0);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const imageInput = useRef<HTMLInputElement | null>(null);
+
+  /* Быстрый слот читается эффектом: на сервере `localStorage` нет, и ленивый
+     `useState` дал бы расхождение гидратации — как у панели горячих кнопок. */
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- см. комментарий выше. */
+    try {
+      setPinned(parseQuickSlot(window.localStorage.getItem(CHAT_QUICK_SLOT_STORAGE_KEY)));
+    } catch {
+      setPinned(DEFAULT_CHAT_QUICK_SLOT);
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
+
+  function pin(id: ChatQuickSlotId) {
+    setPinned(id);
+    try {
+      window.localStorage.setItem(CHAT_QUICK_SLOT_STORAGE_KEY, id);
+    } catch {
+      // Приватный режим: выбор живёт до конца сессии.
+    }
+  }
+
+  const quickId = effectiveQuickSlot(pinned, { assistantEnabled: Boolean(assistant) });
+  const quickMeta = attachTileMeta(quickId);
+  const quickActions: Partial<Record<ChatQuickSlotId, () => void>> = {
+    photo: () => imageInput.current?.click(),
+    file: () => fileInput.current?.click(),
+    emoji: () => setEmojiOpen((open) => !open),
+    assistant: () => setAssistantOpen((open) => !open),
+  };
 
   /**
    * Правка начинается с прежнего текста сообщения.
@@ -245,6 +291,11 @@ export function ChatComposer({
                 }
               : undefined
           }
+          pinned={quickId}
+          onPin={(id) => {
+            pin(id);
+            setSheetOpen(false);
+          }}
           onClose={() => setSheetOpen(false)}
         />
       )}
@@ -316,6 +367,60 @@ export function ChatComposer({
             <path d="M5 12h14" />
           </svg>
         </button>
+
+        {/* Быстрый слот: одна плитка панели вложений под рукой. Принимает
+            перетащенную плитку; чем занят — решает человек, см. chat-quick-slot.ts. */}
+        {quickMeta.href ? (
+          <Link
+            href={quickMeta.href}
+            aria-label={quickMeta.label}
+            title={`${quickMeta.label} — быстрый слот`}
+            onDragOver={(event) => {
+              if (event.dataTransfer.types.includes(ATTACH_DRAG_TYPE)) {
+                event.preventDefault();
+                setDropHover(true);
+              }
+            }}
+            onDragLeave={() => setDropHover(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDropHover(false);
+              pin(parseQuickSlot(event.dataTransfer.getData(ATTACH_DRAG_TYPE)));
+            }}
+            className={`flex size-11 shrink-0 items-center justify-center rounded-2xl border transition-colors ${tileToneClass(quickMeta.tone)} ${dropHover ? "ring-2 ring-magenta" : ""}`}
+          >
+            <AttachTileIcon id={quickId} />
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => quickActions[quickId]?.()}
+            aria-label={quickMeta.label}
+            aria-expanded={
+              quickId === "assistant"
+                ? assistantOpen
+                : quickId === "emoji"
+                  ? emojiOpen
+                  : undefined
+            }
+            title={`${quickMeta.label} — быстрый слот`}
+            onDragOver={(event) => {
+              if (event.dataTransfer.types.includes(ATTACH_DRAG_TYPE)) {
+                event.preventDefault();
+                setDropHover(true);
+              }
+            }}
+            onDragLeave={() => setDropHover(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDropHover(false);
+              pin(parseQuickSlot(event.dataTransfer.getData(ATTACH_DRAG_TYPE)));
+            }}
+            className={`flex size-11 shrink-0 items-center justify-center rounded-2xl border transition-colors ${tileToneClass(quickMeta.tone)} ${dropHover ? "ring-2 ring-magenta" : ""}`}
+          >
+            <AttachTileIcon id={quickId} />
+          </button>
+        )}
 
         {recording ? (
           // Поле ввода прячется на время записи: печатать и говорить в
