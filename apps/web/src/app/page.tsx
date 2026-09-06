@@ -35,6 +35,9 @@ import {
   getMyMusicFavorites,
 } from "@/lib/music-api";
 import { buildMusicQuickAccess } from "@/lib/music-quick-access";
+import { buildMotivationQuickAccess } from "@/lib/motivation-quick-access";
+import { getMotivationFeed } from "@/lib/motivation-api";
+import { MotivationQuickAccessWidget } from "@/components/motivation/motivation-quick-access-widget";
 import { MusicFriendsBridge } from "@/components/activity/music-friends-bridge";
 import { getAstroState, getAstroToday } from "@/lib/astro-api";
 import { getChatUnread } from "@/lib/chat-api";
@@ -87,6 +90,7 @@ export default async function Home({
     activityFeed,
     musicPlayback,
     musicFavorites,
+    motivationFeed,
   ] = await Promise.all([
     getProfile(),
     getServices(),
@@ -107,6 +111,8 @@ export default async function Home({
     getActivityFeedServer().catch(() => null),
     getMusicPlaybackStateServer().catch(() => null),
     getMyMusicFavorites().catch(() => null),
+    // Цитата дня в карточке «Вдохновения». Упала лента — карточка без цитаты.
+    getMotivationFeed().catch(() => null),
   ]);
   if (!user || !services) {
     // Маркер сессии без access-cookie: человек уже входил, refresh скорее всего
@@ -175,6 +181,8 @@ export default async function Home({
     (service) => !FEATURED_ROUTES.includes(service.url),
   );
   const unionService = services.find((s) => s.url === "/union");
+  const motivationService = services.find((s) => s.url === "/motivation");
+  const motivationQuickAccess = buildMotivationQuickAccess(motivationFeed);
   // Считаем сообщения, а не беседы: значок читается как «столько меня ждёт»,
   // и три письма из одного диалога — это три письма. Запросы на переписку в
   // том же числе: человеку важно, что его ждут, а не в какой это очереди.
@@ -190,6 +198,13 @@ export default async function Home({
           [unionService.id]: {
             badgeCount: unionCounts?.incomingPending,
             extra: <UnionQuickAccessWidget {...unionQuickAccess} />,
+          },
+        }
+      : {}),
+    ...(motivationService && motivationQuickAccess.quote
+      ? {
+          [motivationService.id]: {
+            extra: <MotivationQuickAccessWidget {...motivationQuickAccess} />,
           },
         }
       : {}),
