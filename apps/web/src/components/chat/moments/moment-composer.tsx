@@ -5,14 +5,12 @@ import { useRouter } from "next/navigation";
 import {
   CHAT_MOMENT_BACKGROUNDS,
   CHAT_MOMENT_CAPTION_MAX_LENGTH,
+  CHAT_MOMENT_VIDEO_MAX_SECONDS,
   chatMomentBackground,
   type ChatMomentAudience,
   type ChatMomentSettingsState,
 } from "@vedamatch/shared";
-import {
-  publishChatMoment,
-  uploadChatMomentImage,
-} from "@/lib/chat-moments-api";
+import { publishChatMoment, uploadChatMomentFile } from "@/lib/chat-moments-api";
 
 /**
  * Публикация момента: фотография с подписью либо записка на подложке.
@@ -33,10 +31,13 @@ export function MomentComposer({
 
   const [caption, setCaption] = useState("");
   const [background, setBackground] = useState(0);
-  const [photo, setPhoto] = useState<{
+  const [media, setMedia] = useState<{
+    kind: "photo" | "video";
     url: string;
     width: number | null;
     height: number | null;
+    durationSec: number | null;
+    /** Локальный адрес выбранного файла — предпросмотр без похода в бакет. */
     preview: string;
   } | null>(null);
   const [audience, setAudience] = useState<ChatMomentAudience>(
@@ -47,14 +48,21 @@ export function MomentComposer({
 
   const tone = chatMomentBackground(background);
   const canPublish =
-    remainingToday > 0 && !busy && (photo !== null || caption.trim().length > 0);
+    remainingToday > 0 && !busy && (media !== null || caption.trim().length > 0);
 
   async function pick(file: File) {
     setBusy(true);
     setError(null);
     try {
-      const stored = await uploadChatMomentImage(file);
-      setPhoto({ ...stored, preview: URL.createObjectURL(file) });
+      const stored = await uploadChatMomentFile(file);
+      setMedia({
+        kind: stored.kind === "video" ? "video" : "photo",
+        url: stored.url,
+        width: stored.width,
+        height: stored.height,
+        durationSec: stored.durationSec ?? null,
+        preview: URL.createObjectURL(file),
+      });
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Не загрузилось");
     } finally {
@@ -67,12 +75,12 @@ export function MomentComposer({
     setError(null);
     try {
       await publishChatMoment(
-        photo
+        media
           ? {
-              kind: "photo",
-              url: photo.url,
-              width: photo.width ?? undefined,
-              height: photo.height ?? undefined,
+              kind: media.kind,
+              url: media.url,
+              width: media.width ?? undefined,
+              height: media.height ?? undefined,
               caption: caption.trim() || undefined,
               audience,
             }
@@ -90,7 +98,7 @@ export function MomentComposer({
     <div className="flex flex-col gap-4">
       <div
         style={
-          photo
+          media
             ? undefined
             : {
                 background: `linear-gradient(160deg, ${tone.from}, ${tone.to})`,
@@ -99,14 +107,25 @@ export function MomentComposer({
         }
         className="relative flex aspect-[9/16] max-h-[60vh] items-center justify-center overflow-hidden rounded-3xl border border-glass-brd p-6"
       >
-        {photo ? (
+        {media ? (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={photo.preview}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover"
-            />
+            {media.kind === "video" ? (
+              <video
+                src={media.preview}
+                muted
+                loop
+                autoPlay
+                playsInline
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={media.preview}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            )}
             {caption.trim() && (
               <p className="absolute inset-x-0 bottom-0 bg-black/55 p-4 text-center text-sm leading-5 text-white">
                 {caption}
@@ -122,7 +141,7 @@ export function MomentComposer({
 
       <label className="flex flex-col gap-1.5">
         <span className="text-[13px] text-text-1">
-          {photo ? "Подпись" : "Текст момента"}
+          {media ? "Подпись" : "Текст момента"}
         </span>
         <textarea
           value={caption}
@@ -138,7 +157,7 @@ export function MomentComposer({
         </span>
       </label>
 
-      {!photo && (
+      {!media && (
         <fieldset className="flex flex-col gap-2">
           <legend className="pb-1.5 text-[13px] text-text-1">Подложка</legend>
           <div className="flex flex-wrap gap-2">
@@ -167,7 +186,7 @@ export function MomentComposer({
         <input
           ref={fileInput}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
           hidden
           onChange={(event) => {
             const file = event.target.files?.[0];
@@ -180,18 +199,21 @@ export function MomentComposer({
           onClick={() => fileInput.current?.click()}
           className="h-10 rounded-2xl border border-glass-brd bg-glass px-4 text-sm text-text-1 hover:text-text-0"
         >
-          {photo ? "Другая фотография" : "Фотография"}
+          {media ? "Другой файл" : "Фотография или ролик"}
         </button>
-        {photo && (
+        {media && (
           <button
             type="button"
-            onClick={() => setPhoto(null)}
+            onClick={() => setMedia(null)}
             className="h-10 rounded-2xl border border-glass-brd px-4 text-sm text-text-1 hover:text-text-0"
           >
-            Убрать фотографию
+            {media.kind === "video" ? "Убрать ролик" : "Убрать фотографию"}
           </button>
         )}
       </div>
+      <p className="text-xs text-text-2">
+        Ролик — mp4 или webm, до {CHAT_MOMENT_VIDEO_MAX_SECONDS} секунд.
+      </p>
 
       <fieldset className="flex flex-col gap-2">
         <legend className="pb-1.5 text-[13px] text-text-1">Кто увидит</legend>

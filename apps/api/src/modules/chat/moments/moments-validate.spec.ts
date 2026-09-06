@@ -38,23 +38,54 @@ describe('публикация', () => {
   });
 
   it('записка обязана нести текст', () => {
-    expect(() => normalizePublish({ kind: 'text', caption: '  ' }, true)).toThrow(
-      MomentValidationError,
-    );
+    expect(() =>
+      normalizePublish({ kind: 'text', caption: '  ' }, true),
+    ).toThrow(MomentValidationError);
   });
 
   it('у фотографии подложки не бывает, у записки — не бывает размеров', () => {
     const photo = normalizePublish(
-      { kind: 'photo', url: 'https://s3/chat/moments/u1/a.webp', width: 1080, height: 1920, background: 3 },
+      {
+        kind: 'photo',
+        url: 'https://s3/chat/moments/u1/a.webp',
+        width: 1080,
+        height: 1920,
+        background: 3,
+      },
       true,
     );
     expect(photo.background).toBeNull();
     expect(photo.width).toBe(1080);
 
-    const text = normalizePublish({ kind: 'text', caption: 'Ом', background: 3 }, true);
+    const text = normalizePublish(
+      { kind: 'text', caption: 'Ом', background: 3 },
+      true,
+    );
     expect(text.background).toBe(3);
     expect(text.width).toBeNull();
     expect(text.url).toBeNull();
+  });
+
+  it('ролик обязан нести ссылку, и отказ назван его словом', () => {
+    expect(() => normalizePublish({ kind: 'video' }, true)).toThrow(
+      'Ролик не загружен',
+    );
+  });
+
+  it('у ролика подложки не бывает, а размеры сохраняются', () => {
+    const video = normalizePublish(
+      {
+        kind: 'video',
+        url: 'https://s3/chat/moments/u1/a.mp4',
+        width: 1080,
+        height: 1920,
+        background: 3,
+      },
+      true,
+    );
+    expect(video.kind).toBe('video');
+    expect(video.background).toBeNull();
+    expect(video.height).toBe(1920);
   });
 
   it('недоступная аудитория тихо понижается до собеседников, а не роняет публикацию', () => {
@@ -67,15 +98,17 @@ describe('публикация', () => {
 
   it('доступная аудитория сохраняется', () => {
     expect(
-      normalizePublish({ kind: 'text', caption: 'Ом', audience: 'everyone' }, true)
-        .audience,
+      normalizePublish(
+        { kind: 'text', caption: 'Ом', audience: 'everyone' },
+        true,
+      ).audience,
     ).toBe('everyone');
   });
 
   it('умолчание аудитории закрытое', () => {
-    expect(normalizePublish({ kind: 'text', caption: 'Ом' }, true).audience).toBe(
-      'contacts',
-    );
+    expect(
+      normalizePublish({ kind: 'text', caption: 'Ом' }, true).audience,
+    ).toBe('contacts');
   });
 });
 
@@ -102,6 +135,8 @@ describe('суточный лимит', () => {
     expect(() => assertUnderDailyLimit(CHAT_MOMENT_MAX_PER_DAY)).toThrow(
       MomentValidationError,
     );
-    expect(() => assertUnderDailyLimit(CHAT_MOMENT_MAX_PER_DAY - 1)).not.toThrow();
+    expect(() =>
+      assertUnderDailyLimit(CHAT_MOMENT_MAX_PER_DAY - 1),
+    ).not.toThrow();
   });
 });

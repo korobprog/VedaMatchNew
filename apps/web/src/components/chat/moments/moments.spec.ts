@@ -33,6 +33,8 @@ function moment(part: Partial<ChatMomentDto> = {}): ChatMomentDto {
     url: null,
     width: null,
     height: null,
+    previewUrl: null,
+    durationSec: null,
     background: 0,
     audience: "contacts",
     viewsCount: 0,
@@ -101,6 +103,18 @@ describe("длительность слайда", () => {
 
   it("даже очень длинную не держит бесконечно", () => {
     expect(slideMs(moment({ caption: "я".repeat(5000) }))).toBe(15000);
+  });
+
+  it("ролик держится ровно столько, сколько длится", () => {
+    expect(slideMs(moment({ kind: "video", durationSec: 12 }))).toBe(12000);
+  });
+
+  it("ролик без замеренной длины ведёт себя как фотография", () => {
+    expect(slideMs(moment({ kind: "video", durationSec: null }))).toBe(5000);
+  });
+
+  it("длина ролика не обрезается пределом записки", () => {
+    expect(slideMs(moment({ kind: "video", durationSec: 30 }))).toBe(30000);
   });
 });
 

@@ -22,7 +22,10 @@ import {
   ChatSignedUrlsInterceptor,
   RawStorageUrls,
 } from '../chat-signed-urls.interceptor';
-import { MAX_IMAGE_BYTES, validateUpload } from '../chat-upload-rules';
+import {
+  MAX_MOMENT_VIDEO_BYTES,
+  validateMomentUpload,
+} from './moments-upload-rules';
 import type { UploadedChatFile } from '../chat-uploads.service';
 import { MomentsService } from './moments.service';
 
@@ -62,25 +65,32 @@ export class MomentsController {
   }
 
   /**
-   * Фотография момента. Ссылка возвращается неподписанной: браузер вернёт
-   * её обратно в публикацию, а подписанная осела бы в базе вместе со
+   * Фотография или ролик момента. Ссылка возвращается неподписанной: браузер
+   * вернёт её обратно в публикацию, а подписанная осела бы в базе вместе со
    * сроком годности.
+   *
+   * Предел multer — по ролику, самому большому из допустимых; точный предел
+   * своего вида проверяется дальше, в `validateMomentUpload`. Иначе картинка
+   * в двадцать мегабайт отбивалась бы не «слишком большая», а обрывом
+   * соединения.
    */
   @Post('uploads')
   @RawStorageUrls()
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_BYTES } }),
+    FileInterceptor('file', { limits: { fileSize: MAX_MOMENT_VIDEO_BYTES } }),
   )
   async upload(
     @CurrentUser() user: AccessTokenPayload,
     @UploadedFile() file?: UploadedChatFile,
   ) {
-    const denial = validateUpload(file);
+    const denial = validateMomentUpload(file);
     if (denial === 'unsupported_type')
-      throw new UnsupportedMediaTypeException('Такую картинку не принимаем');
+      throw new UnsupportedMediaTypeException(
+        'Такой файл в момент не идёт: нужна фотография или ролик mp4 либо webm',
+      );
     if (denial === 'file_too_large')
-      throw new UnsupportedMediaTypeException('Картинка слишком большая');
+      throw new UnsupportedMediaTypeException('Файл слишком большой');
 
     return this.moments.upload(user.sub, file);
   }

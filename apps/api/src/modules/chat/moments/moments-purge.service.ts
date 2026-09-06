@@ -43,14 +43,17 @@ export class ChatMomentsPurger {
         // иначе модератор открывает пустоту и решает вслепую.
         reports: { none: { status: 'open' } },
       },
-      select: { id: true, key: true },
+      select: { id: true, key: true, previewKey: true },
       orderBy: { expiresAt: 'asc' },
       take: BATCH,
     });
     if (moments.length === 0) return 0;
 
+    // У ролика два объекта: он сам и постер. Постер уезжает снимком в ответы,
+    // сам ролик — нет, но собираем оба одним списком: выживших всё равно
+    // проверяем поимённо.
     const keys = moments
-      .map((moment) => moment.key)
+      .flatMap((moment) => [moment.key, moment.previewKey])
       .filter((key): key is string => Boolean(key));
 
     // Ответ на момент уносит его картинку снимком, переиспользуя тот же

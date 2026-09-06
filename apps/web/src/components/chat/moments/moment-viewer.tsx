@@ -31,6 +31,12 @@ export function MomentViewer({ feed }: { feed: ChatMomentFeed }) {
   const [reply, setReply] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Звук выключен по умолчанию: автозапуск со звуком браузеры запрещают, и
+   * ролик просто не стартовал бы, пока полоска идёт. Включается кнопкой и
+   * держится на всю ленту — переспрашивать на каждом слайде незачем.
+   */
+  const [muted, setMuted] = useState(true);
 
   const moments = feed.moments;
   /**
@@ -191,7 +197,23 @@ export function MomentViewer({ feed }: { feed: ChatMomentFeed }) {
         onPointerCancel={() => setPaused(false)}
         onPointerLeave={() => setPaused(false)}
       >
-        {moment.kind === "photo" && moment.url ? (
+        {moment.kind === "video" && moment.url ? (
+          <video
+            // key по идентификатору: без него React переиспользует тот же
+            // элемент на соседнем слайде, и второй ролик открывается на
+            // позиции, докуда досмотрели первый.
+            key={moment.id}
+            src={moment.url}
+            poster={moment.previewUrl ?? undefined}
+            // Со звуком автозапуск запрещён браузером — ролик просто не
+            // стартовал бы, а полоска шла. Звук включают кнопкой ниже.
+            muted={muted}
+            autoPlay
+            playsInline
+            preload="auto"
+            className="h-full w-full object-contain"
+          />
+        ) : moment.kind === "photo" && moment.url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={moment.url}
@@ -213,13 +235,25 @@ export function MomentViewer({ feed }: { feed: ChatMomentFeed }) {
           </div>
         )}
 
-        {moment.kind === "photo" && moment.caption && (
+        {moment.kind === "video" && (
+          <button
+            type="button"
+            onClick={() => setMuted((current) => !current)}
+            aria-pressed={!muted}
+            className="absolute right-3 top-3 rounded-2xl border border-glass-brd bg-glass px-3 py-1.5 text-xs text-text-0"
+          >
+            {muted ? "Включить звук" : "Выключить звук"}
+          </button>
+        )}
+
+        {(moment.kind === "photo" || moment.kind === "video") &&
+          moment.caption && (
           // Подложка обязательна: контраст поверх произвольной фотографии
           // иначе не обещать.
-          <p className="absolute inset-x-0 bottom-0 bg-black/55 p-4 text-center text-sm leading-5 text-white">
-            {moment.caption}
-          </p>
-        )}
+            <p className="absolute inset-x-0 bottom-0 bg-black/55 p-4 text-center text-sm leading-5 text-white">
+              {moment.caption}
+            </p>
+          )}
 
         <button
           type="button"

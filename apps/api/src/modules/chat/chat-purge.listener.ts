@@ -42,12 +42,14 @@ export class ChatPurgeListener {
       // Моменты уходят каскадом от `User`, а их фотографии в бакете — нет.
       this.prisma.chatMoment.findMany({
         where: { authorId: event.userId },
-        select: { key: true },
+        select: { key: true, previewKey: true },
       }),
     ]);
-    const keys = [...mine, ...moments]
-      .map((row) => row.key)
-      .filter((key): key is string => Boolean(key));
+    const keys = [
+      ...mine.map((row) => row.key),
+      // У ролика момента два объекта: он сам и постер.
+      ...moments.flatMap((row) => [row.key, row.previewKey]),
+    ].filter((key): key is string => Boolean(key));
 
     // Те же ключи в чужих сообщениях — следы пересылки: объект в бакете один,
     // и он всё ещё нужен тому, кому переслали.

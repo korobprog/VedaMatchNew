@@ -1,9 +1,5 @@
 import type { ChatMoment, User } from '@prisma/client';
-import type {
-  ChatMomentAudience,
-  ChatMomentDto,
-  ChatMomentRing,
-} from '@vedamatch/shared';
+import type { ChatMomentDto, ChatMomentRing } from '@vedamatch/shared';
 import { toUserSummary, type ChatUserRow } from '../chat-dto';
 
 /**
@@ -29,8 +25,10 @@ export function toMomentDto(
     url: row.url,
     width: row.width,
     height: row.height,
+    previewUrl: row.previewUrl,
+    durationSec: row.durationSec,
     background: row.background,
-    audience: row.audience as ChatMomentAudience,
+    audience: row.audience,
     // Счётчик — дело автора: кому и сколько раз показался чужой момент,
     // посторонним знать незачем.
     viewsCount: mine ? row.viewsCount : 0,
@@ -55,7 +53,9 @@ export function toRing(
     mine: author.id === viewerId,
     total: moments.length,
     unseen: moments.filter((item) => !seenIds.has(item.id)).length,
-    previewUrl: latest.url,
+    // У ролика миниатюрой идёт постер, а не он сам: качать мегабайты ради
+    // кружка в полосе — это секунда ожидания на каждое открытие списка.
+    previewUrl: latest.previewUrl ?? latest.url,
     previewBackground: latest.background,
     lastPublishedAt: latest.createdAt.toISOString(),
   };
@@ -82,10 +82,11 @@ export function momentSnapshot(
     kind: 'moment',
     title: `Момент · ${authorName}`,
     body: row.caption?.trim() || undefined,
-    previewUrl: row.url ?? undefined,
+    previewUrl: row.previewUrl ?? row.url ?? undefined,
     // Ключ объекта едет вместе со снимком: по нему уборщик моментов узнаёт,
     // что картинка ещё кому-то нужна, и не сносит её из-под чужого ответа.
-    key: row.key ?? undefined,
+    // У ролика это ключ постера — в переписке показывается именно он.
+    key: row.previewKey ?? row.key ?? undefined,
     sourceService: 'chat.moments',
     sourceId: row.id,
   };

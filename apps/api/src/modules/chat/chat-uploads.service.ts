@@ -4,6 +4,7 @@ import {
   CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -210,7 +211,12 @@ export class ChatUploadsService {
   async storeStatusImage(
     authorId: string,
     buffer: Buffer,
-  ): Promise<{ key: string; url: string; width: number; height: number } | null> {
+  ): Promise<{
+    key: string;
+    url: string;
+    width: number;
+    height: number;
+  } | null> {
     if (!this.s3Client || !this.bucket || !this.publicUrl) return null;
     const key = `chat-status/${authorId}/${randomUUID()}.webp`;
     const { data, info } = await sharp(buffer, {
@@ -222,7 +228,12 @@ export class ChatUploadsService {
       .webp({ quality: IMAGE_QUALITY })
       .toBuffer({ resolveWithObject: true });
     await this.put(key, data, 'image/webp');
-    return { key, url: this.urlFor(key), width: info.width, height: info.height };
+    return {
+      key,
+      url: this.urlFor(key),
+      width: info.width,
+      height: info.height,
+    };
   }
 
   /** Ролик статуса как есть и его обложка (VED-129). */
@@ -287,6 +298,48 @@ export class ChatUploadsService {
     };
   }
 
+  /**
+   * Ролик момента и его постер — два объекта в одной папке.
+   *
+   * Сам ролик кладём как есть: перекодировать тридцатимегабайтный файл в
+   * запросе значит держать пользователя в ожидании ради сомнительной
+   * экономии, а размер уже ограничен на входе.
+   */
+  async storeMomentVideo(
+    userId: string,
+    file: UploadedChatFile,
+    poster: Buffer,
+    extension: string,
+    durationSec: number | null,
+  ): Promise<{
+    url: string;
+    key: string;
+    previewUrl: string;
+    previewKey: string;
+  } | null> {
+    if (!this.s3Client || !this.bucket || !this.publicUrl) return null;
+
+    const base = `${momentKeyPrefix(userId)}${randomUUID()}`;
+    const key = `${base}${extension}`;
+    const previewKey = `${base}.webp`;
+
+    // Длительность пишем в метаданные объекта, а не возвращаем клиенту на
+    // хранение: между загрузкой и публикацией число проходит через браузер, и
+    // подменить его там — одна строка в консоли. Метаданные пишет и читает
+    // сервер, и лишнего запроса на разбор ролика они экономят целый.
+    await this.put(key, file.buffer, file.mimetype, {
+      'moment-duration': String(durationSec ?? ''),
+    });
+    await this.put(previewKey, poster, 'image/webp');
+
+    return {
+      key,
+      url: this.urlFor(key),
+      previewKey,
+      previewUrl: this.urlFor(previewKey),
+    };
+  }
+
   private async storeImage(
     conversationId: string,
     file: UploadedChatFile,
@@ -316,13 +369,42 @@ export class ChatUploadsService {
     };
   }
 
-  private async put(key: string, body: Buffer, contentType: string) {
+  /**
+   * Что сервер записал о ролике при загрузке. `null` — объекта нет: значит,
+   * публикуют не то, что грузили.
+   */
+  async momentVideoMeta(
+    key: string,
+  ): Promise<{ durationSec: number | null } | null> {
+    if (!this.s3Client || !this.bucket) return null;
+    try {
+      const head = await this.s3Client.send(
+        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+      const raw = head.Metadata?.['moment-duration'];
+      const seconds = raw ? Number(raw) : Number.NaN;
+      return {
+        durationSec:
+          Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds) : null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private async put(
+    key: string,
+    body: Buffer,
+    contentType: string,
+    metadata?: Record<string, string>,
+  ) {
     await this.s3Client!.send(
       new PutObjectCommand({
         Bucket: this.bucket!,
         Key: key,
         Body: body,
         ContentType: contentType,
+        Metadata: metadata,
         // Переписка не кешируется посредниками: приватная ссылка, отданная
         // прокси-кешу, переживёт удаление сообщения.
         CacheControl: 'private, max-age=0, no-store',
