@@ -24,17 +24,35 @@ export function PeopleRequestButton({
   userId,
   viewerId,
   contacts,
+  viewerIsStaff = false,
 }: {
   userId: string;
   /** Кто смотрит: совпал с `userId` — карточка своя. */
   viewerId: string;
   /** Поле `contacts` карточки: непустое — доступ уже открыт. */
   contacts: ContactsDetailsValue | null;
+  /**
+   * Администрация портала. Переписку с ней сервер и так заводит сразу
+   * активной, без запроса на подтверждение (`isPortalStaff` в
+   * `chat-conversations.service.ts`), — но ссылки на неё в интерфейсе не
+   * было, и чтобы ответить новичку, админ слал запрос доступа наравне со
+   * всеми и ждал согласия.
+   *
+   * Контакты человека при этом не открываются: право писать и право видеть
+   * телефон — разные вещи, и второе по-прежнему даёт только сам человек.
+   */
+  viewerIsStaff?: boolean;
 }) {
   // Развилка вынесена в обёртку без хуков: на своей карточке форма не просто
   // прячется — она не монтируется, и за списком запросов никто не ходит.
   if (userId === viewerId) return <OwnCardLink />;
-  return <RequestForm userId={userId} contacts={contacts} />;
+  return (
+    <RequestForm
+      userId={userId}
+      contacts={contacts}
+      viewerIsStaff={viewerIsStaff}
+    />
+  );
 }
 
 /** Блок под своей карточкой: вместо доступа к человеку — путь к её настройкам. */
@@ -61,9 +79,11 @@ function OwnCardLink() {
 function RequestForm({
   userId,
   contacts,
+  viewerIsStaff,
 }: {
   userId: string;
   contacts: ContactsDetailsValue | null;
+  viewerIsStaff: boolean;
 }) {
   const [outgoing, setOutgoing] = useState<ContactsRequestDto | null>(null);
   const [remainingToday, setRemainingToday] = useState<number | null>(null);
@@ -120,6 +140,31 @@ function RequestForm({
   // Карточка отдаёт контакты только при действующем доступе; принятый запрос
   // несёт их же — берём то, что есть.
   const open = contacts ?? outgoing?.contacts ?? null;
+
+  /* Администрации — сразу ссылка на переписку, до и вместо запроса доступа.
+     Контакты при этом не раскрываются: право писать и право видеть телефон
+     — разные вещи, и второе по-прежнему даёт только сам человек. */
+  if (viewerIsStaff && !open) {
+    return (
+      <section className="glass rounded-2xl border border-glass-brd p-4">
+        <h3 className="font-display text-base font-semibold text-text-0">
+          Написать без запроса
+        </h3>
+        <p className="mt-1 text-xs text-text-2">
+          Администрация портала пишет людям напрямую: беседа откроется сразу, а
+          не запросом на подтверждение. Контакты человека при этом остаются
+          закрытыми — их открывает он сам.
+        </p>
+        <Link
+          href={`/chat/with/${userId}`}
+          className="mt-3 inline-block rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-4 py-2 text-sm font-medium text-white transition hover:shadow-[0_0_20px_rgba(255,62,158,0.4)]"
+        >
+          Написать в чат
+        </Link>
+      </section>
+    );
+  }
+
   if (open) {
     return (
       <div className="flex flex-col gap-3">

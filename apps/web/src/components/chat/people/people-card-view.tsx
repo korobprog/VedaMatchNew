@@ -38,10 +38,13 @@ type Result = { userId: string } & (
 export function PeopleCardView({
   userId,
   viewerId,
+  viewerIsStaff = false,
 }: {
   userId: string;
   /** Кто смотрит: по нему блок под карточкой отличает свою карточку от чужой. */
   viewerId: string;
+  /** Администрация портала: ей писать людям по делу, без запроса доступа. */
+  viewerIsStaff?: boolean;
 }) {
   const [result, setResult] = useState<Result | null>(null);
 
@@ -123,6 +126,7 @@ export function PeopleCardView({
       <PeopleRequestButton
         userId={state.card.userId}
         viewerId={viewerId}
+        viewerIsStaff={viewerIsStaff}
         contacts={state.card.contacts}
       />
     </div>

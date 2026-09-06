@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PeopleCardView } from "@/components/chat/people/people-card-view";
+import { isPortalStaff } from "@vedamatch/shared";
 import { requireUser } from "@/lib/require-user";
 
 export const metadata = {
@@ -30,7 +31,11 @@ export default async function ContactsUserPage({
 
       {/* Карточка грузится в браузере тем же клиентом, что и выдача поиска:
           видимость проверяет бэкенд, а не страница. */}
-      <PeopleCardView userId={id} viewerId={user.id} />
+      <PeopleCardView
+        userId={id}
+        viewerId={user.id}
+        viewerIsStaff={isPortalStaff(user.role)}
+      />
     </main>
   );
 }
