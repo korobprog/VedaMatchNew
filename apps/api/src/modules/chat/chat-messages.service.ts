@@ -78,6 +78,13 @@ export class ChatMessagesService {
      * тогда вложение обязано быть из той же беседы, куда летит сообщение.
      */
     attachmentsConversationId: string = conversationId,
+    /**
+     * Папки в бакете сверх папки беседы. Передаёт только код API — сейчас
+     * это ответ на момент, где снимок собирает сервер из своей же строки.
+     * Из браузера сюда ничего не приходит: иначе перебором идентификаторов
+     * можно было бы вложить в свою переписку чужой приватный момент.
+     */
+    extraAttachmentKeyPrefixes: readonly string[] = [],
   ): Promise<ChatMessageDto> {
     const conversation = await this.conversations.requireConversation(
       conversationId,
@@ -90,6 +97,7 @@ export class ChatMessagesService {
         dto.attachments,
         this.uploads.storagePrefix,
         attachmentsConversationId,
+        extraAttachmentKeyPrefixes,
       ),
     );
     this.validated(() => assertSendable(body, attachments));

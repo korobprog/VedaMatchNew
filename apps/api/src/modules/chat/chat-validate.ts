@@ -5,6 +5,7 @@ import {
   type ChatAttachmentInput,
   type ChatAttachmentKind,
 } from '@vedamatch/shared';
+import { conversationKeyPrefix } from './chat-storage-scope';
 
 /**
  * Проверка того, что приходит из браузера. Отдельным модулем, потому что
@@ -22,6 +23,7 @@ const CARD_KINDS = new Set<ChatAttachmentKind>([
   'notice',
   'listing',
   'contact',
+  'moment',
 ]);
 
 const MAX_TITLE = 200;
@@ -51,10 +53,21 @@ export function isStorageUrl(
   url: string,
   prefix: string | null,
   conversationId: string,
+  /**
+   * Дополнительно разрешённые папки — например, папка моментов их автора,
+   * когда сервер сам собирает снимок момента для ответа на него. Список
+   * приходит только из кода API: принять его из браузера значило бы вернуть
+   * ту самую дыру, ради которой проверка и написана.
+   */
+  extraKeyPrefixes: readonly string[] = [],
 ): boolean {
   if (!prefix || !url.startsWith(prefix)) return false;
   const key = url.slice(prefix.length);
-  return key.startsWith(`chat/${conversationId}/`);
+  const allowed = [
+    conversationKeyPrefix(conversationId),
+    ...extraKeyPrefixes,
+  ];
+  return allowed.some((path) => key.startsWith(path));
 }
 
 /**
@@ -73,9 +86,10 @@ export function assertStorageUrl(
   url: string | null | undefined,
   prefix: string | null,
   conversationId: string,
+  extraKeyPrefixes: readonly string[] = [],
 ): void {
   if (!url) return;
-  if (!isStorageUrl(url, prefix, conversationId))
+  if (!isStorageUrl(url, prefix, conversationId, extraKeyPrefixes))
     throw new ChatValidationError('Вложение не из нашего хранилища');
 }
 
@@ -95,6 +109,8 @@ export function normalizeAttachments(
   storagePrefix: string | null,
   /** Беседа, в которую отправляется сообщение: ключ обязан лежать в её папке. */
   conversationId: string,
+  /** Папки сверх беседы, разрешённые сервером, — см. `isStorageUrl`. */
+  extraKeyPrefixes: readonly string[] = [],
 ): ChatAttachmentInput[] {
   const list = input ?? [];
   if (list.length > CHAT_MAX_ATTACHMENTS)
@@ -110,8 +126,13 @@ export function normalizeAttachments(
 
     // И файл, и картинка карточки чужого сервиса лежат в нашем бакете:
     // карточка уезжает снимком, а снимок с чужого адреса — не снимок.
-    assertStorageUrl(item.url, storagePrefix, conversationId);
-    assertStorageUrl(item.previewUrl, storagePrefix, conversationId);
+    assertStorageUrl(item.url, storagePrefix, conversationId, extraKeyPrefixes);
+    assertStorageUrl(
+      item.previewUrl,
+      storagePrefix,
+      conversationId,
+      extraKeyPrefixes,
+    );
 
     const waveform = (item.waveform ?? [])
       .slice(0, MAX_WAVEFORM_POINTS)

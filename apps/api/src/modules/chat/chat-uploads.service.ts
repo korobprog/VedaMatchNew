@@ -10,6 +10,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import type { ChatUploadResult } from '@vedamatch/shared';
+import { momentKeyPrefix } from './chat-storage-scope';
 import { attachmentKindFor } from './chat-upload-rules';
 
 /**
@@ -32,6 +33,14 @@ const ATTACHMENT_SIGNED_URL_TTL_SECONDS = 6 * 60 * 60;
 
 const IMAGE_WIDTH = 1600;
 const IMAGE_QUALITY = 80;
+
+/**
+ * Момент смотрят во весь экран телефона и ровно один раз, поэтому кадр уже
+ * ленты вложений: лишние пиксели здесь платятся не местом в бакете, а
+ * секундой ожидания на мобильной сети.
+ */
+const MOMENT_WIDTH = 1080;
+const MOMENT_QUALITY = 82;
 
 export interface UploadedChatFile {
   buffer: Buffer;
@@ -139,6 +148,42 @@ export class ChatUploadsService {
       url: this.urlFor(key),
       mimeType: file.mimetype,
       sizeBytes: file.size,
+    };
+  }
+
+  /**
+   * Фотография момента. Своя папка, а не папка беседы: момент не принадлежит
+   * ни одной беседе и переживает их все, а ответы на него живут сразу в
+   * нескольких. Пути собраны в `chat-storage-scope.ts` — на них держится
+   * проверка вложений.
+   */
+  async storeMomentImage(
+    userId: string,
+    file: UploadedChatFile,
+  ): Promise<ChatUploadResult | null> {
+    if (!this.s3Client || !this.bucket || !this.publicUrl) return null;
+    if (attachmentKindFor(file.mimetype) !== 'image') return null;
+
+    const key = `${momentKeyPrefix(userId)}${randomUUID()}.webp`;
+    const { data, info } = await sharp(file.buffer, {
+      failOn: 'error',
+      limitInputPixels: true,
+    })
+      .rotate()
+      .resize({ width: MOMENT_WIDTH, withoutEnlargement: true })
+      .webp({ quality: MOMENT_QUALITY })
+      .toBuffer({ resolveWithObject: true });
+
+    await this.put(key, data, 'image/webp');
+
+    return {
+      kind: 'image',
+      key,
+      url: this.urlFor(key),
+      mimeType: 'image/webp',
+      sizeBytes: info.size,
+      width: info.width,
+      height: info.height,
     };
   }
 

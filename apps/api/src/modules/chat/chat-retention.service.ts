@@ -11,6 +11,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { orphanStorageKeys } from './chat-purge';
 import { retentionCutoff, retentionDays } from './chat-retention';
 import { ChatUploadsService } from './chat-uploads.service';
+import { ChatMomentsPurger } from './moments/moments-purge.service';
 
 /**
  * Чистка удалённых сообщений: тело, вложения, реакции и файлы в S3.
@@ -45,6 +46,7 @@ export class ChatRetentionService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly uploads: ChatUploadsService,
+    private readonly moments: ChatMomentsPurger,
     config: ConfigService,
   ) {
     this.days = retentionDays(
@@ -70,7 +72,10 @@ export class ChatRetentionService implements OnModuleInit, OnModuleDestroy {
         .catch((error) =>
           this.logger.warn(`Redis недоступен: ${String(error)}`),
         );
-    this.logger.log(`Удалённые сообщения чистятся через ${this.days} дн.`);
+    this.logger.log(
+      `Удалённые сообщения чистятся через ${this.days} дн., ` +
+        `сгоревшие моменты — через ${this.moments.graceDays} дн.`,
+    );
     this.timer = setInterval(() => void this.tick(), TICK_MS);
     // unref, иначе таймер держит процесс и тесты не завершаются.
     this.timer.unref();
@@ -95,13 +100,26 @@ export class ChatRetentionService implements OnModuleInit, OnModuleDestroy {
       }
     }
     try {
-      return await this.purge(retentionCutoff(now, this.days));
-    } catch (error) {
-      this.logger.error(
-        'Чистка удалённых сообщений не удалась',
-        error instanceof Error ? error.stack : undefined,
-      );
-      return 0;
+      // Две чистки под одним лизом, но каждая в своей попытке: падение одной
+      // не должно отменять другую — они ни в чём друг от друга не зависят.
+      let done = 0;
+      try {
+        done += await this.purge(retentionCutoff(now, this.days));
+      } catch (error) {
+        this.logger.error(
+          'Чистка удалённых сообщений не удалась',
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+      try {
+        done += await this.moments.purgeExpired(now);
+      } catch (error) {
+        this.logger.error(
+          'Уборка сгоревших моментов не удалась',
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+      return done;
     } finally {
       this.running = false;
     }

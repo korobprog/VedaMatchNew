@@ -157,4 +157,40 @@ describe('conversationTitle', () => {
     expect(result.title).toBe('Киртан-группа');
     expect(result.companion).toBeNull();
   });
+
+  it('«Избранное» подписано именем, а не запасным «Диалог»', () => {
+    const result = conversationTitle(
+      conversation({
+        savedForId: 'me',
+        members: [
+          { userId: 'me', role: 'member', leftAt: null, user: user({ id: 'me' }) },
+        ] as never,
+      }),
+      'me',
+    );
+    expect(result.title).toBe('Избранное');
+    expect(result.companion).toBeNull();
+  });
+
+  it('чужое «Избранное» именем не подписывается', () => {
+    // Строка чужой беседы к смотрящему отношения не имеет; попасть к нему
+    // она может только ошибкой выборки, и притворяться его заметками не должна.
+    const result = conversationTitle(
+      conversation({ savedForId: 'other' }),
+      'me',
+    );
+    expect(result.title).not.toBe('Избранное');
+  });
+});
+
+describe('сообщение в «Избранном»', () => {
+  it('без галочек: читать заметку, кроме автора, некому', () => {
+    const dto = toMessageDto(message(), 'me', null, { saved: true });
+    expect(dto.readByOthers).toBeUndefined();
+  });
+
+  it('в обычной переписке галочка остаётся', () => {
+    const dto = toMessageDto(message(), 'me', null);
+    expect(dto.readByOthers).toBe(false);
+  });
 });

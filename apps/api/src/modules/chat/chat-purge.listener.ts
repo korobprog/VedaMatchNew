@@ -21,6 +21,10 @@ interface UserPurgeRequested {
  * Картинки групп и каналов (`ChatConversation.avatarKey`) сюда не попадают
  * намеренно: беседа переживает уход своего создателя и продолжает показывать
  * эту картинку остальным участникам.
+ *
+ * Фотографии моментов собираются здесь же, а не отдельным слушателем: на
+ * модуль он один, и вычитать пересылки из двух списков разом проще, чем
+ * согласовывать два ответа порталу.
  */
 @Injectable()
 export class ChatPurgeListener {
@@ -30,12 +34,19 @@ export class ChatPurgeListener {
 
   @OnEvent(USER_PURGE_REQUESTED)
   async collectStorageKeys(event: UserPurgeRequested) {
-    const mine = await this.prisma.chatAttachment.findMany({
-      where: { message: { authorId: event.userId } },
-      select: { key: true },
-    });
-    const keys = mine
-      .map((attachment) => attachment.key)
+    const [mine, moments] = await Promise.all([
+      this.prisma.chatAttachment.findMany({
+        where: { message: { authorId: event.userId } },
+        select: { key: true },
+      }),
+      // Моменты уходят каскадом от `User`, а их фотографии в бакете — нет.
+      this.prisma.chatMoment.findMany({
+        where: { authorId: event.userId },
+        select: { key: true },
+      }),
+    ]);
+    const keys = [...mine, ...moments]
+      .map((row) => row.key)
       .filter((key): key is string => Boolean(key));
 
     // Те же ключи в чужих сообщениях — следы пересылки: объект в бакете один,
@@ -58,15 +69,18 @@ export class ChatPurgeListener {
       where: { authorId: event.userId },
     });
 
-    if (messages > 0) {
+    if (messages > 0 || moments.length > 0) {
       this.logger.log(
-        `С пользователем ${event.userId} уходят ${messages} сообщений и ${storageKeys.length} файлов` +
+        `С пользователем ${event.userId} уходят ${messages} сообщений, ${moments.length} моментов и ${storageKeys.length} файлов` +
           (keys.length > storageKeys.length
             ? `; ${keys.length - storageKeys.length} оставлены — их переслали другим`
             : ''),
       );
     }
 
-    return { storageKeys, counts: { chatMessages: messages } };
+    return {
+      storageKeys,
+      counts: { chatMessages: messages, chatMoments: moments.length },
+    };
   }
 }

@@ -22,7 +22,9 @@ export type ChatAttachmentKind =
   | 'story'
   | 'notice'
   | 'listing'
-  | 'contact';
+  | 'contact'
+  /** Снимок момента, на который отвечают: момент живёт сутки, ответ — всегда. */
+  | 'moment';
 
 /** Столько же, сколько было в чате Знакомств: длину переписки меняли бы вместе. */
 export const CHAT_MESSAGE_MAX_LENGTH = 2000;
@@ -147,6 +149,11 @@ export interface ChatConversationSummary {
   unreadCount: number;
   muted: boolean;
   pinned: boolean;
+  /**
+   * «Избранное» — беседа с самим собой. Признаком, а не отдельным `kind`:
+   * три десятка мест читают `kind !== 'direct'` как «группа или канал».
+   */
+  saved: boolean;
   /** Может ли смотрящий писать сюда прямо сейчас. */
   canWrite: boolean;
   lastMessage?: ChatMessageDto | null;
@@ -341,6 +348,7 @@ export interface CreateChatReportRequest {
   comment?: string;
   messageId?: string;
   conversationId?: string;
+  momentId?: string;
 }
 
 export interface ChatUploadResult {
@@ -388,6 +396,17 @@ export type ChatStreamEvent =
       type: 'pinned';
       conversationId: string;
       message: ChatMessageDto | null;
+    }
+  | {
+      /** Опубликован момент: кольцо появляется без перезагрузки списка. */
+      type: 'moment.published';
+      ring: ChatMomentRing;
+    }
+  | {
+      /** Момент убран автором или сгорел: кольцо гаснет. */
+      type: 'moment.removed';
+      momentId: string;
+      authorId: string;
     };
 
 /** Раздел админки: жалоба на сообщение или беседу. */
@@ -516,4 +535,144 @@ export interface ChatConversationThemeState {
 
 export interface SetChatConversationThemeRequest {
   templateId: string | null;
+}
+
+/* ===== Моменты ===== */
+
+/** Что внутри момента. Видео — следующим этапом. */
+export type ChatMomentKind = 'photo' | 'text';
+
+/**
+ * Кому виден момент. `contacts` — те, кому человек открыл активность, и
+ * собеседники живых личных диалогов; `everyone` — весь портал.
+ *
+ * `everyone` — возможность тарифа: в бете она открыта всем, в рабочем режиме
+ * только оплаченному аккаунту. Умолчание закрытое: момент, случайно ставший
+ * публичным, обратно уже не собрать.
+ */
+export type ChatMomentAudience = 'contacts' | 'everyone';
+
+/** Сколько живёт момент. */
+export const CHAT_MOMENT_TTL_HOURS = 24;
+
+/**
+ * Длина подписи. Это подпись, а не второй рассказ о себе: длинная строка
+ * закрывает собой фотографию, ради которой момент и опубликовали.
+ */
+export const CHAT_MOMENT_CAPTION_MAX_LENGTH = 280;
+
+/** Сколько моментов в сутки. Столько же, сколько сообщений в запросе, — не лента. */
+export const CHAT_MOMENT_MAX_PER_DAY = 20;
+
+/**
+ * Подложки текстовых моментов. Фиксированный список, а не свободный цвет:
+ * произвольный hex переживает переключение темы чужим значением и легко даёт
+ * нечитаемый текст. Чернила заданы рядом с фоном, а не подбираются на лету.
+ */
+export const CHAT_MOMENT_BACKGROUNDS = [
+  { from: '#2B1055', to: '#7597DE', ink: '#FFFFFF' },
+  { from: '#0F2027', to: '#2C5364', ink: '#FFFFFF' },
+  { from: '#42275A', to: '#734B6D', ink: '#FFFFFF' },
+  { from: '#F7971E', to: '#FFD200', ink: '#1A1A2E' },
+  { from: '#1D976C', to: '#93F9B9', ink: '#0A2A1E' },
+  { from: '#DA4453', to: '#89216B', ink: '#FFFFFF' },
+] as const;
+
+export type ChatMomentBackground = (typeof CHAT_MOMENT_BACKGROUNDS)[number];
+
+/** Номер подложки в списке; всё, что вне списка, показывается первой. */
+export function chatMomentBackground(index: number | null): ChatMomentBackground {
+  const safe =
+    index !== null && Number.isInteger(index) && index >= 0 && index < CHAT_MOMENT_BACKGROUNDS.length
+      ? index
+      : 0;
+  return CHAT_MOMENT_BACKGROUNDS[safe]!;
+}
+
+export interface ChatMomentDto {
+  id: string;
+  author: ChatUserSummary;
+  mine: boolean;
+  kind: ChatMomentKind;
+  /** Подпись под фотографией либо текст записки. */
+  caption: string;
+  url?: string | null;
+  width?: number | null;
+  height?: number | null;
+  /** Номер подложки текстового момента. */
+  background?: number | null;
+  audience: ChatMomentAudience;
+  /** Счётчик показывается только автору, у чужого момента он 0. */
+  viewsCount: number;
+  viewedByMe: boolean;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/**
+ * Кольцо в полосе над списком бесед. Без самих моментов: полоса на полсотни
+ * авторов везла бы тысячу карточек с подписанными адресами на каждую
+ * загрузку списка, а открывают из них одну.
+ */
+export interface ChatMomentRing {
+  author: ChatUserSummary;
+  mine: boolean;
+  total: number;
+  unseen: number;
+  /** Последний момент — на миниатюру кольца. */
+  previewUrl?: string | null;
+  /** Подложка последнего момента, если он текстовый. */
+  previewBackground?: number | null;
+  lastPublishedAt: string;
+}
+
+export interface ChatMomentsState {
+  rings: ChatMomentRing[];
+  /** Сколько ещё моментов можно опубликовать сегодня. */
+  remainingToday: number;
+}
+
+/** Лента одного человека — то, что открывает просмотрщик. */
+export interface ChatMomentFeed {
+  author: ChatUserSummary;
+  mine: boolean;
+  moments: ChatMomentDto[];
+}
+
+export interface ChatMomentViewerDto {
+  user: ChatUserSummary;
+  viewedAt: string;
+}
+
+export interface ChatMomentViewersState {
+  viewers: ChatMomentViewerDto[];
+  viewsCount: number;
+}
+
+export interface PublishChatMomentRequest {
+  kind: ChatMomentKind;
+  caption?: string;
+  /** Адрес загруженной фотографии — только из своей папки моментов. */
+  url?: string;
+  width?: number;
+  height?: number;
+  background?: number;
+  audience?: ChatMomentAudience;
+}
+
+/**
+ * Настройки моментов. `showToEveryone` — уже разрешённое значение: сервер
+ * свёл галочку человека с тем, что позволяет тариф, и браузеру не нужно
+ * повторять этот расчёт.
+ */
+export interface ChatMomentSettingsState {
+  showToEveryone: boolean;
+  /** Доступна ли возможность по тарифу прямо сейчас. */
+  everyoneAllowed: boolean;
+  /** Почему недоступна — строка для человека; null, когда доступна. */
+  planNote: string | null;
+}
+
+export interface SaveChatMomentSettingsRequest {
+  showToEveryone: boolean;
 }

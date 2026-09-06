@@ -368,6 +368,10 @@ model User {
   chatMessageViews                   ChatMessageView[]            @relation("ChatMessageViews")
   chatColorTemplates                 ChatColorTemplate[]          @relation("ChatColorTemplates")
   chatConversationThemes             ChatConversationTheme[]      @relation("ChatConversationThemes")
+  chatSavedConversation              ChatConversation?            @relation("ChatSavedConversation")
+  chatMoments                        ChatMoment[]                 @relation("ChatMoments")
+  chatMomentViews                    ChatMomentView[]             @relation("ChatMomentViews")
+  chatMomentSettings                 ChatMomentSettings?          @relation("ChatMomentSettings")
   announcementAcks                   AnnouncementAck[]            @relation("AnnouncementAcks")
   rewardsAccount                     RewardsAccount?              @relation("RewardsAccount")
   rewardsReferralsSent               RewardsReferral[]            @relation("RewardsReferralsSent")
@@ -606,45 +610,45 @@ model MotivationPost {
 /// Пустое поле означает «взять из окружения», поэтому настройки можно вводить
 /// постепенно, ничего не ломая.
 model MotivationSettings {
-  id                 String                     @id @default("global")
-  videoModel         String?
-  videoSeconds       Int?
-  videoAudio         Boolean?
-  voiceModel         String?
-  voiceName          String?
-  imageModel         String?
+  id                        String                     @id @default("global")
+  videoModel                String?
+  videoSeconds              Int?
+  videoAudio                Boolean?
+  voiceModel                String?
+  voiceName                 String?
+  imageModel                String?
   /// Стиль по умолчанию. Пусто — подбирать автоматически по смыслу и источнику.
-  visualStyle        MotivationVisualStyle?
+  visualStyle               MotivationVisualStyle?
   /// Дневной потолок расхода в долларах. Меняться должен без перевыкладки.
-  dailyBudgetUsd     Decimal?                   @db.Decimal(10, 2)
-  musicModel         String?
+  dailyBudgetUsd            Decimal?                   @db.Decimal(10, 2)
+  musicModel                String?
   /// Трек по умолчанию. Пусто — ролики выходят без подложки.
-  defaultTrackId     String?
+  defaultTrackId            String?
   /// Пользовательские рилсы: рубильник, дневной лимит на человека (админам
   /// лимит не считается) и ИИ-модерация с порогами уверенности. Между
   /// порогами — эскалация к админу. Правила редакции дописываются к промпту
   /// модератора и меняются без деплоя.
-  userReelsEnabled   Boolean                    @default(true)
-  userDailyLimit     Int                        @default(1)
-  aiModerationMode   MotivationAiModerationMode @default(autonomous)
-  aiApproveThreshold Decimal                    @default(0.75) @db.Decimal(3, 2)
-  aiRejectThreshold  Decimal                    @default(0.85) @db.Decimal(3, 2)
-  aiEditorialRules   String?
+  userReelsEnabled          Boolean                    @default(true)
+  userDailyLimit            Int                        @default(1)
+  aiModerationMode          MotivationAiModerationMode @default(autonomous)
+  aiApproveThreshold        Decimal                    @default(0.75) @db.Decimal(3, 2)
+  aiRejectThreshold         Decimal                    @default(0.85) @db.Decimal(3, 2)
+  aiEditorialRules          String?
   /// Ежедневный автоподбор цитат ИИ воркером. Выключен по умолчанию:
   /// редакция решила подбирать цитаты сама. Кнопка «Подготовить цитаты на
   /// сегодня» в админке — отдельный ручной путь, этим флагом не гасится.
-  autoQuoteDiscoveryEnabled Boolean              @default(false)
+  autoQuoteDiscoveryEnabled Boolean                    @default(false)
   /// Сколько жалоб скрывает рилс участника до решения администратора.
-  reportsToHide      Int                        @default(3)
+  reportsToHide             Int                        @default(3)
   /// Можно ли участникам оживлять свои рилсы в видео. Выключено по умолчанию:
   /// ролик стоит заметно дороже картинки, и включать его — решение редакции.
-  userVideoEnabled   Boolean                    @default(false)
+  userVideoEnabled          Boolean                    @default(false)
   /// Голоса, из которых выбирает автор рилса, и предвыбранный. Пустой список —
   /// небольшой набор по умолчанию: показывать человеку два десятка имён
   /// провайдера бессмысленно.
-  userVoices         String[]
-  userVoiceDefault   String?
-  updatedAt          DateTime                   @updatedAt
+  userVoices                String[]
+  userVoiceDefault          String?
+  updatedAt                 DateTime                   @updatedAt
 }
 
 /// Трек музыкальной подложки.
@@ -1652,7 +1656,7 @@ enum LibraryCategoryStatus {
 /// Узел верхнего уровня (`parentId = null`) — это бывший LibrarySection;
 /// заводить и выносить наверх такие узлы по-прежнему может только админ.
 model LibraryCategory {
-  id               String                @id @default(uuid())
+  id       String            @id @default(uuid())
   parentId String?
   parent   LibraryCategory?  @relation("LibraryCategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
   children LibraryCategory[] @relation("LibraryCategoryTree")
@@ -2123,16 +2127,16 @@ enum AstroCompatibilityPurpose {
 /// получатель не примет запрос явно — точка входа из Union передаёт только id
 /// человека, дальнейшее согласие целиком в astro.
 model AstroCompatibilityRequest {
-  id          String                   @id @default(uuid())
+  id          String                    @id @default(uuid())
   requesterId String
-  requester   User                     @relation("AstroCompatibilityRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  requester   User                      @relation("AstroCompatibilityRequester", fields: [requesterId], references: [id], onDelete: Cascade)
   targetId    String
-  target      User                     @relation("AstroCompatibilityTarget", fields: [targetId], references: [id], onDelete: Cascade)
-  status      AstroCompatibilityStatus @default(pending)
+  target      User                      @relation("AstroCompatibilityTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  status      AstroCompatibilityStatus  @default(pending)
   /// Цель выбирает отправитель. `family` по умолчанию: с неё сервис
   /// начинался, и у всех запросов, созданных до появления целей, она и есть.
   purpose     AstroCompatibilityPurpose @default(family)
-  createdAt   DateTime                 @default(now())
+  createdAt   DateTime                  @default(now())
   respondedAt DateTime?
 
   @@unique([requesterId, targetId])
@@ -3747,6 +3751,11 @@ model GeoCity {
 /// правилам записи: в группе пишут все участники, в канале — только владелец
 /// и администраторы общины.
 enum ChatConversationKind {
+  /// Личный диалог. Обычно на двоих, но «Избранное» — тоже `direct`, только
+  /// с одним участником и заполненным `savedForId`. Отдельного вида ему не
+  /// заводим: три десятка мест в коде читают `kind !== 'direct'` как «группа
+  /// или канал», и новое значение молча получило бы значок группы, страницу
+  /// участников и имя автора перед каждой строкой предпросмотра.
   direct
   group
   channel
@@ -3785,6 +3794,10 @@ enum ChatAttachmentKind {
   notice
   listing
   contact
+  /// Снимок момента, на который отвечают. Хранится тем же снимком, что и
+  /// карточки чужих сервисов: момент живёт сутки, а ответ на него остаётся
+  /// в переписке навсегда, и без снимка от него осталась бы пустая цитата.
+  moment
 }
 
 enum ChatReportStatus {
@@ -3809,6 +3822,14 @@ model ChatConversation {
   /// первым. Уникальность на уровне базы — единственный способ не завести
   /// два диалога на одну пару при гонке двух запросов.
   directKey String? @unique
+
+  /// Хозяин «Избранного». Отдельная колонка, а не `directKey` с одним и тем же
+  /// id дважды: формат ключа обещает двоих, и `directCompanionId` на таком
+  /// ключе вернул бы самого зрителя вместо собеседника. Уникальность держит
+  /// база — «Избранное» заводится лениво, и два одновременных первых
+  /// обращения иначе создали бы две беседы.
+  savedForId String? @unique
+  savedFor   User?   @relation("ChatSavedConversation", fields: [savedForId], references: [id], onDelete: Cascade)
 
   /// Община-владелец канала. `Community` — портальная модель, FK разрешён.
   communityId String?
@@ -3991,6 +4012,11 @@ model ChatReport {
   conversation   ChatConversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   messageId      String?
   message        ChatMessage?      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  /// Жалоба на момент. `SetNull`, а не `Cascade`: момент живёт сутки, а
+  /// решение по жалобе принимают дольше — пусть жалоба переживёт предмет.
+  /// Пока жалоба открыта, уборщик момент не трогает, см. `moments-retention`.
+  momentId       String?
+  moment         ChatMoment?       @relation(fields: [momentId], references: [id], onDelete: SetNull)
 
   reason  String
   comment String?
@@ -4826,4 +4852,105 @@ model TeamApplication {
   updatedAt       DateTime              @updatedAt
 
   @@index([status, createdAt])
+}
+
+// ===== Моменты сервиса «Общение» =====
+//
+// Исчезающие через сутки фото и записки: кольцо вокруг аватара в списке бесед,
+// полноэкранный просмотр, ответ обычным личным сообщением. Живут внутри
+// «Общения», а не отдельным сервисом: аудиторию момента составляют собеседники,
+// отвечают на него перепиской, и кольцо рисуется в её же списке.
+//
+// Срок жизни держит условие `expiresAt > now` в самом запросе, а не воркер:
+// остановленный уборщик оставит мусор в таблице, но никогда не покажет
+// просроченное. Тот же приём, что у протухания объявлений.
+//
+// Файлы в S3 каскадом не удаляются: ключи отдаёт `chat-purge.listener.ts` на
+// `portal.user.purge-requested` вместе с ключами вложений переписки.
+
+enum ChatMomentKind {
+  photo
+  text
+}
+
+/// Кому виден момент. `everyone` — платная возможность: в режиме `beta` она
+/// открыта всем, в `business` — только оплаченному аккаунту.
+enum ChatMomentAudience {
+  contacts
+  everyone
+}
+
+model ChatMoment {
+  id       String @id @default(uuid())
+  authorId String
+  author   User   @relation("ChatMoments", fields: [authorId], references: [id], onDelete: Cascade)
+
+  kind     ChatMomentKind
+  audience ChatMomentAudience @default(contacts)
+
+  /// Фотография в приватном бакете — как вложения переписки, без публичного
+  /// ACL и с подписью адреса на выдаче.
+  url    String?
+  key    String?
+  width  Int?
+  height Int?
+
+  /// Подпись под фотографией либо текст записки.
+  caption    String?
+  /// Подложка текстового момента — номер в палитре, а не hex: цвет обязан
+  /// пережить переключение темы, а записанный шестнадцатеричный не переживёт.
+  background Int?
+
+  /// Когда момент перестаёт показываться. Хранится, а не считается на лету от
+  /// `createdAt`: срок жизни ещё будет меняться, и старые моменты не должны
+  /// задним числом сгорать раньше или позже, чем обещали автору.
+  expiresAt DateTime
+
+  /// Счётчик просмотров денормализован: его показывают на своём кольце в общем
+  /// списке, а считать строки просмотров на каждую отрисовку списка — лишний
+  /// запрос к самой горячей таблице раздела.
+  viewsCount Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  views   ChatMomentView[]
+  reports ChatReport[]
+
+  /// Лента одного человека и суточный лимит публикаций.
+  @@index([authorId, expiresAt])
+  /// Публичные моменты выбираются без списка авторов.
+  @@index([audience, expiresAt])
+  /// Уборщик отбирает сгоревшие.
+  @@index([expiresAt])
+}
+
+/// Кто посмотрел момент. Строка на человека, а не голый счётчик: автору
+/// показывают именно список, и один зритель не должен накручивать число
+/// каждым открытием.
+model ChatMomentView {
+  id       String     @id @default(uuid())
+  momentId String
+  moment   ChatMoment @relation(fields: [momentId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User       @relation("ChatMomentViews", fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([momentId, userId])
+  @@index([momentId])
+}
+
+/// Настройки моментов одного человека.
+model ChatMomentSettings {
+  userId String @id
+  user   User   @relation("ChatMomentSettings", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Показывать ли моменты всему порталу. `null` — «как в тарифе»: в бете это
+  /// выключено, у оплаченного аккаунта включено. Именно `null`, а не `false`:
+  /// иначе включение возможности в тарифе пришлось бы разносить по всем
+  /// строкам разом, и человек, однажды выключивший её руками, получил бы её
+  /// обратно вместе со всеми.
+  showToEveryone Boolean?
+
+  updatedAt DateTime @updatedAt
 }

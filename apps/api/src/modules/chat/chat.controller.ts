@@ -68,6 +68,15 @@ export class ChatController {
     return this.conversations.requests(user.sub);
   }
 
+  /**
+   * «Избранное». Идемпотентно: заводит беседу при первом обращении и дальше
+   * возвращает ту же — страница `/chat/saved` на этом и держится.
+   */
+  @Post('saved')
+  saved(@CurrentUser() user: AccessTokenPayload) {
+    return this.conversations.saved(user.sub);
+  }
+
   /** Люди, из которых собирается группа: собеседники личных диалогов. */
   @Get('people')
   people(@CurrentUser() user: AccessTokenPayload) {

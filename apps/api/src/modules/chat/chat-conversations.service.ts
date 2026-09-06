@@ -8,6 +8,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   ChatChannelCommunitiesState,
   ChatConversationDetail,
+  ChatConversationSummary,
   ChatDiscoverState,
   ChatListState,
   ChatMapCity,
@@ -69,6 +70,10 @@ export class ChatConversationsService {
 
   /** Список бесед: активные диалоги, группы и каналы. Запросы — отдельно. */
   async list(userId: string): Promise<ChatListState> {
+    // Заводим до выборки, а не по первому открытию: строки, которой нет в
+    // списке, человек не найдёт — искать её негде.
+    await this.ensureSaved(userId);
+
     const rows = await this.prisma.chatConversation.findMany({
       where: {
         state: { in: ['active', 'archived'] },
@@ -276,8 +281,10 @@ export class ChatConversationsService {
 
   private async createDirect(userId: string, targetId?: string) {
     if (!targetId) throw new BadRequestException('Не указан собеседник');
-    if (targetId === userId)
-      throw new BadRequestException('Нельзя написать самому себе');
+    // Раньше здесь был отказ. Теперь у беседы с собой есть имя и место:
+    // ссылка «написать» на собственную карточку в справочнике ведёт в
+    // «Избранное», а не в ошибку, которую человеку нечем объяснить.
+    if (targetId === userId) return this.saved(userId);
 
     const target = await this.prisma.user.findUnique({
       where: { id: targetId },
@@ -336,6 +343,56 @@ export class ChatConversationsService {
     });
 
     return this.summary(created, userId);
+  }
+
+  /**
+   * «Избранное» — беседа человека с самим собой: заметки, ссылки, пересылки.
+   *
+   * Отдельного вида беседы у неё нет намеренно: три десятка мест в коде
+   * читают `kind !== 'direct'` как «группа или канал», и новое значение
+   * молча получило бы значок группы, страницу участников и имя автора перед
+   * каждой строкой предпросмотра. Отличает её заполненный `savedForId`.
+   */
+  async saved(userId: string): Promise<ChatConversationSummary> {
+    return this.summary(await this.ensureSaved(userId), userId);
+  }
+
+  /**
+   * Строка «Избранного», заведённая при необходимости.
+   *
+   * Уникальность держит база: два одновременных обращения к списку бесед
+   * иначе завели бы две беседы, и половина заметок уехала бы в невидимую
+   * вторую — та же гонка, от которой защищает `directKey`.
+   */
+  private async ensureSaved(userId: string): Promise<ChatConversationRow> {
+    const existing = await this.prisma.chatConversation.findUnique({
+      where: { savedForId: userId },
+      include: chatConversationInclude,
+    });
+    if (existing) return existing;
+
+    try {
+      return await this.prisma.chatConversation.create({
+        data: {
+          kind: 'direct',
+          savedForId: userId,
+          createdById: userId,
+          state: 'active',
+          // Сразу закреплено: это самая часто открываемая строка списка, а
+          // открепить её человек может как любую другую.
+          members: { create: [{ userId, pinnedAt: new Date() }] },
+        },
+        include: chatConversationInclude,
+      });
+    } catch {
+      // Проиграли гонку — беседу завёл соседний запрос.
+      const created = await this.prisma.chatConversation.findUnique({
+        where: { savedForId: userId },
+        include: chatConversationInclude,
+      });
+      if (!created) throw new NotFoundException('Избранное недоступно');
+      return created;
+    }
   }
 
   private async createGroup(
@@ -972,10 +1029,13 @@ export class ChatConversationsService {
           })
         : undefined);
 
+    const saved = row.savedForId === userId;
     return toConversationSummary(row, userId, {
       unreadCount,
       lastMessage: last
-        ? toMessageDto(last, userId, this.othersLastReadAt(row, userId))
+        ? toMessageDto(last, userId, this.othersLastReadAt(row, userId), {
+            saved,
+          })
         : null,
       messageCount,
     });
