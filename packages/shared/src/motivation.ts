@@ -242,6 +242,11 @@ export interface MotivationReelCreateResult {
 export interface MotivationFeedResponse { items: MotivationPostDto[]; nextCursor: string | null }
 export interface MotivationLikeResponse { likeCount: number; isLiked: boolean }
 export type MotivationPostStatus = 'draft' | 'generating' | 'published' | 'failed' | 'hidden';
+/** Сколько вдохновений в сервисе — цифра над лентой. */
+export interface MotivationStatsDto {
+  published: number;
+}
+
 export interface MotivationAdminPostDto extends MotivationPostDto {
   status: MotivationPostStatus;
   generationStage: string | null;
@@ -689,7 +694,23 @@ export interface MotivationPreferenceUpdate {
   language?: MotivationLanguage;
   profileTypes?: MotivationProfileType[];
 }
-export interface MotivationAdminUpdate { hidden?: boolean; category?: string; translations?: Partial<Record<MotivationLanguage, { title: string; text: string; storyText: string }>> }
+export interface MotivationAdminUpdate {
+  hidden?: boolean;
+  category?: string;
+  translations?: Partial<
+    Record<MotivationLanguage, { title: string; text: string; storyText: string }>
+  >;
+  /**
+   * Подпись: кто сказал, где и в каком месте. Правка снимает отметку о
+   * проверке источника — она относилась к тому, что сверяли, а не к тому,
+   * что переписали руками.
+   */
+  attribution?: {
+    speaker?: string | null;
+    work?: string | null;
+    locator?: string | null;
+  };
+}
 export interface MotivationApproveTextInput { visualStyle?: MotivationVisualStyle }
 export interface MotivationRejectInput { reason: string }
 export interface MotivationRegenerateImageInput { visualStyle?: MotivationVisualStyle }

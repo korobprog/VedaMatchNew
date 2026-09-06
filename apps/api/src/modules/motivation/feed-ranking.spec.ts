@@ -1,4 +1,9 @@
-import { rankFeed, seedOf, spreadCategories } from './feed-ranking';
+import {
+  rankFeed,
+  seedOf,
+  shuffleFeed,
+  spreadCategories,
+} from './feed-ranking';
 
 const day = (n: number) => new Date(Date.UTC(2026, 7, n));
 
@@ -126,5 +131,49 @@ describe('spreadCategories', () => {
     const input = [c('1', 'x'), c('2', 'y'), c('3', 'x'), c('4', 'y')];
 
     expect(spreadCategories(input, 2)).toEqual(input);
+  });
+});
+
+describe('shuffleFeed', () => {
+  const posts = Array.from({ length: 12 }, (_, index) => ({
+    id: `post-${index}`,
+  }));
+
+  it('одно семя — один порядок: вторая страница не уезжает относительно первой', () => {
+    const first = shuffleFeed(posts, 'abc123').map((item) => item.post.id);
+    const again = shuffleFeed(posts, 'abc123').map((item) => item.post.id);
+
+    expect(again).toEqual(first);
+  });
+
+  it('другое семя — другой порядок', () => {
+    const first = shuffleFeed(posts, 'abc123').map((item) => item.post.id);
+    const other = shuffleFeed(posts, 'def456').map((item) => item.post.id);
+
+    expect(other).not.toEqual(first);
+  });
+
+  it('не теряет и не двоит посты', () => {
+    const ids = shuffleFeed(posts, 'abc123').map((item) => item.post.id);
+
+    expect(ids).toHaveLength(posts.length);
+    expect(new Set(ids).size).toBe(posts.length);
+  });
+
+  it('перемешивает, а не оставляет как было', () => {
+    const ids = shuffleFeed(posts, 'abc123').map((item) => item.post.id);
+
+    expect(ids).not.toEqual(posts.map((post) => post.id));
+  });
+
+  it('не проставляет ярус: в случайном порядке «свежее» ничего не значит', () => {
+    expect(shuffleFeed(posts, 'abc123')[0]).not.toHaveProperty('tier');
+  });
+
+  it('не трогает исходный список', () => {
+    const source = [...posts];
+    shuffleFeed(source, 'abc123');
+
+    expect(source.map((post) => post.id)).toEqual(posts.map((post) => post.id));
   });
 });

@@ -359,3 +359,76 @@ describe('MotivationCategoriesService', () => {
     ]);
   });
 });
+
+describe('MotivationCategoriesService.publicTree', () => {
+  function build(
+    categories: Array<Record<string, unknown>>,
+    counts: Array<{ category: string; _count: { _all: number } }>,
+  ) {
+    const groupBy = jest.fn().mockResolvedValue(counts);
+    const service = new MotivationCategoriesService({
+      motivationCategory: { findMany: jest.fn().mockResolvedValue(categories) },
+      motivationPost: { groupBy },
+    } as never);
+    return { service, groupBy };
+  }
+
+  const root = {
+    id: 'r',
+    slug: 'vedy',
+    title: 'Веды',
+    sortOrder: 0,
+    isDefault: false,
+    parentId: null,
+  };
+  const child = {
+    id: 'c',
+    slug: 'gita',
+    title: 'Гита',
+    sortOrder: 0,
+    isDefault: false,
+    parentId: 'r',
+  };
+  const empty = {
+    id: 'e',
+    slug: 'pustaya',
+    title: 'Пустая',
+    sortOrder: 1,
+    isDefault: false,
+    parentId: null,
+  };
+
+  it('считает только опубликованное: заготовки читателю не обещают', async () => {
+    const { service, groupBy } = build([root], [{ category: 'vedy', _count: { _all: 3 } }]);
+
+    await service.publicTree();
+
+    expect(groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { status: 'published' } }),
+    );
+  });
+
+  it('не показывает пустую папку: за ней тупик, а не раздел', async () => {
+    const { service } = build(
+      [root, empty],
+      [{ category: 'vedy', _count: { _all: 3 } }],
+    );
+
+    expect((await service.publicTree()).map((item) => item.slug)).toEqual([
+      'vedy',
+    ]);
+  });
+
+  it('оставляет родителя, пока что-то есть в его подкатегории', async () => {
+    const { service } = build(
+      [root, child],
+      [{ category: 'gita', _count: { _all: 2 } }],
+    );
+
+    // Без родителя подкатегория повисла бы в воздухе.
+    expect((await service.publicTree()).map((item) => item.slug)).toEqual([
+      'vedy',
+      'gita',
+    ]);
+  });
+});

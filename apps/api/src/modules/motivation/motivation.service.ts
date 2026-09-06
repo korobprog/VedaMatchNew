@@ -13,6 +13,7 @@ import {
   MotivationVideoStatus,
   SpiritualStage,
 } from '@prisma/client';
+import { randomBytes } from 'node:crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   MOTIVATION_VOICES,
@@ -39,6 +40,7 @@ import type {
   MotivationReportResult,
   MotivationSourceWatchDto,
   MotivationSourceWatchInput,
+  MotivationStatsDto,
   MotivationVisualStyle,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -48,7 +50,7 @@ import {
   encodeMotivationCursor,
   feedPage,
 } from './motivation-feed';
-import { rankFeed } from './feed-ranking';
+import { rankFeed, shuffleFeed } from './feed-ranking';
 import { attributionLine } from './postcard-events';
 import { adminAiVerdictOf, adminAppealOf } from './moderation-audit';
 import { MotivationSettingsService } from './motivation-settings.service';
@@ -169,6 +171,23 @@ export class MotivationService {
     return unique;
   }
 
+  /**
+   * Сколько вдохновений в сервисе. Одно число, без разбивки: оно отвечает на
+   * «а много ли там вообще», и «348 · из них 120 вайшнавских» на этот вопрос
+   * отвечает хуже, чем «348».
+   *
+   * Считается по всей ленте, а не по тому, что видит спрашивающий: настройки
+   * направлений у каждого свои, и число, меняющееся от галочки в настройках,
+   * читалось бы как пропажа публикаций.
+   */
+  async stats(): Promise<MotivationStatsDto> {
+    return {
+      published: await this.prisma.motivationPost.count({
+        where: { status: MotivationPostStatus.published },
+      }),
+    };
+  }
+
   async feed(
     userId: string,
     query: {
@@ -177,6 +196,8 @@ export class MotivationService {
       category?: string;
       favorites?: boolean;
       archive?: boolean;
+      /** `true` — показывать вперемешку, без ярусов «свежее → повтор». */
+      shuffle?: boolean;
       /**
        * Slug поста, с которого открывать ленту: переход «Открыть рилс» должен
        * показать созданное в самой ленте, а не на отдельной странице.
@@ -292,19 +313,28 @@ export class MotivationService {
       categoryTitle: categoryTitles.get(post.category) ?? post.category,
     });
     const session = { userId, since, seenBefore };
+    /* Семя случайного порядка живёт в курсоре: первая страница его заводит,
+       следующие берут готовое. Не от пользователя — иначе «случайный»
+       порядок был бы у него всегда один и тот же, и перезапуск ленты ничего
+       бы не менял. */
+    const shuffleSeed = query.shuffle
+      ? (cursor.shuffleSeed ?? randomBytes(8).toString('hex'))
+      : undefined;
     type Loaded = (typeof posts)[number];
     const order = (
       posts: Loaded[],
     ): { post: Loaded; tier?: MotivationFeedTier }[] =>
-      ranked
-        ? rankFeed(
-            posts.map((post) => ({
-              ...post,
-              viewedAt: post.views[0]?.viewedAt ?? null,
-            })),
-            session,
-          )
-        : posts.map((post) => ({ post }));
+      shuffleSeed
+        ? shuffleFeed(posts, shuffleSeed)
+        : ranked
+          ? rankFeed(
+              posts.map((post) => ({
+                ...post,
+                viewedAt: post.views[0]?.viewedAt ?? null,
+              })),
+              session,
+            )
+          : posts.map((post) => ({ post }));
     const page = feedPage(order(posts), cursor, limit);
     // Закреплённый пост берём тем же запросом, что и ленту: у публичного DTO
     // нет ни автора, ни отметок зрителя, и слайд выходил бы обеднённым.
@@ -332,6 +362,7 @@ export class MotivationService {
               ...page.cursor,
               since: since.getTime(),
               seenBefore: seenBefore?.getTime() ?? null,
+              ...(shuffleSeed ? { shuffleSeed } : {}),
             })
           : null,
     };
@@ -611,7 +642,14 @@ export class MotivationService {
     input: MotivationAdminUpdate,
   ) {
     this.admin(user);
-    return this.prisma.motivationPost.update({
+    /* Правка подписи снимает отметку о проверке источника.
+
+       Отметка говорит «этот текст найден по этой ссылке и сверен»; после
+       того как подпись переписали руками, она относится уже не к тому, что
+       проверяли. У рилса участника это заодно убирает его из общей ленты —
+       туда он и не должен возвращаться, пока подпись не сверили заново. */
+    const attribution = input.attribution;
+    const post = await this.prisma.motivationPost.update({
       where: { id },
       data: {
         ...(input.hidden !== undefined
@@ -620,8 +658,41 @@ export class MotivationService {
         ...(input.category
           ? { category: await this.categories.resolveSlug(input.category) }
           : {}),
+        ...(attribution
+          ? {
+              attributionSpeaker: attribution.speaker?.trim() || null,
+              attributionWork: attribution.work?.trim() || null,
+              attributionLocator: attribution.locator?.trim() || null,
+              sourceVerified: false,
+            }
+          : {}),
       },
     });
+
+    /* Тексты. Раньше это поле объявлялось в типе, но нигде не применялось:
+       админка отправляла правку, получала 200 и ничего не меняла. */
+    for (const [language, translation] of Object.entries(
+      input.translations ?? {},
+    )) {
+      if (!translation) continue;
+      await this.prisma.motivationPostTranslation.upsert({
+        where: { postId_language: { postId: id, language } },
+        create: {
+          postId: id,
+          language,
+          title: translation.title,
+          text: translation.text,
+          storyText: translation.storyText,
+        },
+        update: {
+          title: translation.title,
+          text: translation.text,
+          storyText: translation.storyText,
+        },
+      });
+    }
+
+    return post;
   }
   /**
    * Удаляет мотивацию вместе с её цитатой.

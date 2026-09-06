@@ -70,6 +70,27 @@ export class MotivationController {
     private readonly analytics: MotivationAnalyticsService,
   ) {}
 
+  /**
+   * Сколько всего опубликовано. Объявлен до `posts/:slug`: Nest сопоставляет
+   * маршруты в порядке объявления, и ниже параметра «stats» читалось бы как
+   * слаг публикации.
+   */
+  @Get('motivation/stats')
+  stats() {
+    return this.service.stats();
+  }
+
+  /**
+   * Разделы вдохновения для читателя: дерево категорий с числом
+   * опубликованного. Пустых веток тут нет — папка, за которой ничего нет,
+   * это тупик, а не раздел.
+   */
+  @Get('motivation/categories')
+  @UseGuards(AuthGuard)
+  publicCategories() {
+    return this.categories.publicTree();
+  }
+
   @Get('motivation/posts/:slug') publicPost(
     @Param('slug') slug: string,
     @Query('language') language?: MotivationLanguage,
@@ -86,12 +107,16 @@ export class MotivationController {
     @Query('limit') limit?: string,
     @Query('category') category?: string,
     @Query('post') post?: string,
+    @Query('order') order?: string,
   ) {
     return this.service.feed(user.sub, {
       cursor,
       favorites: filter === 'favorites',
       category,
       post,
+      // Значение, а не булев флаг: порядков со временем станет больше одного,
+      // и `?shuffle=1` пришлось бы держать рядом с остальными.
+      shuffle: order === 'random',
       limit: limit ? Number(limit) : undefined,
     });
   }

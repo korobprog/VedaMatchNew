@@ -39,6 +39,38 @@ export class MotivationCategoriesService {
    */
   async list(user: AccessTokenPayload): Promise<MotivationCategoryDto[]> {
     this.admin(user);
+    return this.tree();
+  }
+
+  /**
+   * То же дерево, но для читателя: без проверки прав и без пустых веток.
+   *
+   * Считается только опубликованное — в админском списке в счётчик идут и
+   * заготовки, и это там правильно: редакция смотрит, сколько всего лежит.
+   * Читателю такое число обещало бы карточки, которых он не увидит.
+   *
+   * Пустые категории не показываются вовсе: папка, за которой ничего нет, —
+   * это тупик, а не раздел. Родитель остаётся, пока хоть в одной его
+   * подкатегории что-то есть: без него подкатегории повисли бы в воздухе.
+   */
+  async publicTree(): Promise<MotivationCategoryDto[]> {
+    const all = await this.tree({ status: 'published' });
+    const withPosts = new Set(
+      all.filter((item) => item.postCount > 0).map((item) => item.id),
+    );
+    const parentsWithPosts = new Set(
+      all
+        .filter((item) => item.parentId && withPosts.has(item.id))
+        .map((item) => item.parentId as string),
+    );
+    return all.filter(
+      (item) => withPosts.has(item.id) || parentsWithPosts.has(item.id),
+    );
+  }
+
+  private async tree(
+    postWhere?: { status: 'published' },
+  ): Promise<MotivationCategoryDto[]> {
     const [categories, counts] = await Promise.all([
       this.prisma.motivationCategory.findMany({
         orderBy: [{ sortOrder: 'asc' }, { title: 'asc' }],
@@ -46,6 +78,7 @@ export class MotivationCategoriesService {
       this.prisma.motivationPost.groupBy({
         by: ['category'],
         _count: { _all: true },
+        ...(postWhere ? { where: postWhere } : {}),
       }),
     ]);
     const countBySlug = new Map(

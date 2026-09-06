@@ -15,6 +15,7 @@ export function MotivationTopBar({
   isAdmin,
   title = "Вдохновение",
   action,
+  count,
 }: {
   active: MotivationSection;
   isAdmin: boolean;
@@ -22,6 +23,12 @@ export function MotivationTopBar({
   title?: string;
   /** Ссылка справа — например, переключатель вида на ленте. */
   action?: { href: string; label: string };
+  /**
+   * Сколько всего вдохновений в сервисе. Рядом с названием, а не отдельной
+   * плашкой: это ответ на «а много ли тут вообще», и спрашивают его ровно
+   * тогда, когда читают заголовок.
+   */
+  count?: number;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -40,6 +47,18 @@ export function MotivationTopBar({
             ▾
           </span>
         </button>
+        {/* Рядом с названием, но не внутри кнопки: иначе имя кнопки читалось
+            бы как «Вдохновение 348», и скринридер сообщал бы число каждый раз,
+            когда до неё доходит фокус. */}
+        {count !== undefined && count > 0 && (
+          <span
+            title={`Всего вдохновений: ${count}`}
+            className="mr-auto font-mono text-xs font-medium text-text-2"
+          >
+            {count}
+            <span className="sr-only"> вдохновений в сервисе</span>
+          </span>
+        )}
         {action && (
           <Link
             href={action.href}
