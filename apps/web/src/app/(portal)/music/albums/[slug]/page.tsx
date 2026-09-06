@@ -39,6 +39,9 @@ export default async function MusicAlbumPage({
   if (!page) notFound();
 
   const { album, tracks } = page;
+  // Очередь — весь альбом: программу слушают подряд, и без неё «дальше»
+  // в полосе плеера ведёт в пустоту.
+  const queue = tracks.map((track) => track.id);
   const totalSeconds = tracks.reduce(
     (sum, track) => sum + track.durationSeconds,
     0,
@@ -99,7 +102,7 @@ export default async function MusicAlbumPage({
           <ul className="mt-3 flex flex-col">
             {tracks.map((track, index) => (
               <li key={track.id}>
-                <MusicTrackRow track={track} position={index + 1} />
+                <MusicTrackRow track={track} position={index + 1} queue={queue} />
               </li>
             ))}
           </ul>

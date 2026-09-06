@@ -14,6 +14,9 @@ coverage/
 # и `.claude/settings.json` — рабочие конфиги репозитория и отслеживаются.
 .agents/
 .claude/skills/
+# Личные настройки сессии: туда же попадают токены доступа к внешним сервисам
+# (Dokploy MCP читает DOKPLOY_API_KEY из окружения). В репозиторий не едет.
+.claude/settings.local.json
 skills-lock.json
 .DS_Store
 apps/api/scripts/test-motivation-ai-output.png

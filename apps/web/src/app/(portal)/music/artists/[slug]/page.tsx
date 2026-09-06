@@ -35,6 +35,8 @@ export default async function MusicArtistPage({
   if (!page) notFound();
 
   const { artist, albums, tracks } = page;
+  // Очередь — записи исполнителя: см. комментарий на странице альбома.
+  const queue = tracks.map((track) => track.id);
   const kind = KIND_LABELS[artist.kind] ?? "";
 
   return (
@@ -128,7 +130,7 @@ export default async function MusicArtistPage({
           <ul className="mt-3 flex flex-col">
             {tracks.map((track) => (
               <li key={track.id}>
-                <MusicTrackRow track={track} />
+                <MusicTrackRow track={track} queue={queue} />
               </li>
             ))}
           </ul>
