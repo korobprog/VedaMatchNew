@@ -12,6 +12,7 @@ import {
   type ChatMomentFeed,
   type ChatMomentRing,
   type ChatMomentSettingsState,
+  type ChatMomentUploadResult,
   type ChatMomentViewersState,
   type ChatMomentsState,
   type PublishChatMomentRequest,
@@ -29,6 +30,12 @@ import { chatUserSelect } from '../chat-selects';
 import { momentKeyPrefix } from '../chat-storage-scope';
 import { ChatValidationError, isStorageUrl, normalizeMessageBody } from '../chat-validate';
 import { denyMomentView, momentFanout } from './moments-access';
+import {
+  momentUploadKindFor,
+  momentVideoExtension,
+} from './moments-upload-rules';
+import { denyDuration } from './moments-video';
+import { MomentsVideoService } from './moments-video.service';
 import {
   momentSnapshot,
   toMomentDto,
@@ -70,6 +77,7 @@ export class MomentsService {
     private readonly uploads: ChatUploadsService,
     private readonly conversations: ChatConversationsService,
     private readonly messages: ChatMessagesService,
+    private readonly video: MomentsVideoService,
   ) {}
 
   /** Полоса колец над списком бесед. */
@@ -167,22 +175,67 @@ export class MomentsService {
     };
   }
 
-  /** Загрузка фотографии момента: адрес возвращается браузеру и приезжает обратно. */
+  /**
+   * Загрузка фотографии или ролика: адрес возвращается браузеру и приезжает
+   * обратно в публикацию.
+   *
+   * У ролика сервер сам снимает постер и меряет длительность. Верить числу
+   * из браузера нельзя: по нему считается полоска прогресса и проверяется
+   * предел, а подменить его в запросе — одна строка в консоли.
+   */
   async upload(
     userId: string,
     file: UploadedChatFile | undefined,
-  ): Promise<{ url: string; width: number | null; height: number | null }> {
+  ): Promise<ChatMomentUploadResult> {
     if (!file) throw new BadRequestException('Файл не пришёл');
     if (!this.uploads.configured)
       throw new ServiceUnavailableException('Загрузка файлов не настроена');
+
+    const kind = momentUploadKindFor(file.mimetype);
+    if (!kind) throw new BadRequestException('Такие файлы не принимаем');
+    if (kind === 'video') return this.uploadVideo(userId, file);
 
     const stored = await this.uploads.storeMomentImage(userId, file);
     if (!stored) throw new BadRequestException('Такие файлы не принимаем');
 
     return {
+      kind: 'photo',
       url: stored.url,
       width: stored.width ?? null,
       height: stored.height ?? null,
+    };
+  }
+
+  private async uploadVideo(
+    userId: string,
+    file: UploadedChatFile,
+  ): Promise<ChatMomentUploadResult> {
+    const extension = momentVideoExtension(file.mimetype);
+    const inspected = await this.video.inspect(file.buffer, extension);
+    if (!inspected)
+      throw new BadRequestException(
+        'Не удалось прочитать ролик — попробуйте другой файл',
+      );
+
+    const denial = denyDuration(inspected.probe.durationSec);
+    if (denial) throw new BadRequestException(denial);
+
+    const stored = await this.uploads.storeMomentVideo(
+      userId,
+      file,
+      inspected.poster,
+      extension,
+      inspected.probe.durationSec,
+    );
+    if (!stored) throw new BadRequestException('Ролик не сохранён');
+
+    return {
+      kind: 'video',
+      url: stored.url,
+      previewUrl: stored.previewUrl,
+      durationSec: inspected.probe.durationSec,
+      width: inspected.probe.width,
+      height: inspected.probe.height,
     };
   }
 
@@ -204,7 +257,19 @@ export class MomentsService {
         momentKeyPrefix(userId),
       ])
     )
-      throw new BadRequestException('Фотография не из нашего хранилища');
+      throw new BadRequestException(
+        input.kind === 'video'
+          ? 'Ролик не из нашего хранилища'
+          : 'Фотография не из нашего хранилища',
+      );
+
+    // Постер и длительность ролика сервер знает сам — из своего же объекта в
+    // бакете, а не из запроса: у постера предсказуемое имя, и подсунуть чужой
+    // адрес вместо него нельзя.
+    const video =
+      input.kind === 'video'
+        ? await this.videoFacts(input.url!)
+        : null;
 
     const created = await this.prisma.chatMoment.create({
       data: {
@@ -214,6 +279,10 @@ export class MomentsService {
         caption: input.caption || null,
         url: input.url,
         key: input.url ? this.keyOf(input.url) : null,
+        previewUrl: video?.previewUrl ?? null,
+        previewKey: video?.previewKey ?? null,
+        durationSec: video?.durationSec ?? null,
+        mimeType: video?.mimeType ?? null,
         width: input.width,
         height: input.height,
         background: input.background,
@@ -551,6 +620,39 @@ export class MomentsService {
       type: 'moment.published',
       ring: toRing(moment.author, OTHER_VIEWER, [moment], nobodySeenYet),
     });
+  }
+
+  /**
+   * Постер и длительность ролика по его адресу.
+   *
+   * Постер лежит рядом с роликом под тем же именем и расширением `.webp` —
+   * так его положила загрузка. Длительность перемеряем: между загрузкой и
+   * публикацией браузер мог прислать что угодно.
+   */
+  private async videoFacts(url: string): Promise<{
+    previewUrl: string;
+    previewKey: string;
+    durationSec: number | null;
+    mimeType: string;
+  }> {
+    const key = this.keyOf(url);
+    if (!key) throw new BadRequestException('Ролик не из нашего хранилища');
+
+    const previewKey = key.replace(/\.[A-Za-z0-9]+$/, '.webp');
+    if (previewKey === key)
+      throw new BadRequestException('У ролика нет постера');
+
+    // Объект должен существовать и быть нашим: несуществующий ключ означает,
+    // что публикуют не то, что грузили, — например, чужой адрес наугад.
+    const meta = await this.uploads.momentVideoMeta(key);
+    if (!meta) throw new BadRequestException('Ролик не найден в хранилище');
+
+    return {
+      previewUrl: url.slice(0, url.length - key.length) + previewKey,
+      previewKey,
+      durationSec: meta.durationSec,
+      mimeType: key.endsWith('.webm') ? 'video/webm' : 'video/mp4',
+    };
   }
 
   /** Ключ объекта в бакете по его адресу. */

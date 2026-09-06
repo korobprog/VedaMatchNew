@@ -25,6 +25,7 @@ import { PeopleService } from './people/people.service';
 import { MomentsController } from './moments/moments.controller';
 import { MomentsService } from './moments/moments.service';
 import { ChatMomentsPurger } from './moments/moments-purge.service';
+import { MomentsVideoService } from './moments/moments-video.service';
 
 /**
  * Сервис «Общение»: беседы, справочник людей (папка `people/` — бывший
@@ -65,6 +66,7 @@ import { ChatMomentsPurger } from './moments/moments-purge.service';
     PeopleAdminService,
     PeopleAvatarService,
     MomentsService,
+    MomentsVideoService,
     ChatMomentsPurger,
   ],
 })

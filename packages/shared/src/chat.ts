@@ -539,8 +539,14 @@ export interface SetChatConversationThemeRequest {
 
 /* ===== Моменты ===== */
 
-/** Что внутри момента. Видео — следующим этапом. */
-export type ChatMomentKind = 'photo' | 'text';
+export type ChatMomentKind = 'photo' | 'text' | 'video';
+
+/**
+ * Сколько длится ролик момента. Тридцать секунд: момент — это «посмотрите,
+ * что сейчас», а не фильм, и на длинном ролике полоска прогресса перестаёт
+ * что-либо обещать.
+ */
+export const CHAT_MOMENT_VIDEO_MAX_SECONDS = 30;
 
 /**
  * Кому виден момент. `contacts` — те, кому человек открыл активность, и
@@ -599,6 +605,10 @@ export interface ChatMomentDto {
   url?: string | null;
   width?: number | null;
   height?: number | null;
+  /** Постер ролика: он же миниатюра кольца и первый кадр до старта. */
+  previewUrl?: string | null;
+  /** Длина ролика в секундах — её замерил сервер, а не браузер. */
+  durationSec?: number | null;
   /** Номер подложки текстового момента. */
   background?: number | null;
   audience: ChatMomentAudience;
@@ -652,12 +662,26 @@ export interface ChatMomentViewersState {
 export interface PublishChatMomentRequest {
   kind: ChatMomentKind;
   caption?: string;
-  /** Адрес загруженной фотографии — только из своей папки моментов. */
+  /** Адрес загруженной фотографии или ролика — только из своей папки моментов. */
   url?: string;
   width?: number;
   height?: number;
   background?: number;
   audience?: ChatMomentAudience;
+}
+
+/**
+ * Ответ загрузки. У ролика приезжает постер и замеренная длительность —
+ * публиковать его без них нельзя: без постера кольцо и первый кадр
+ * показывают чёрный прямоугольник.
+ */
+export interface ChatMomentUploadResult {
+  kind: ChatMomentKind;
+  url: string;
+  width: number | null;
+  height: number | null;
+  previewUrl?: string | null;
+  durationSec?: number | null;
 }
 
 /**

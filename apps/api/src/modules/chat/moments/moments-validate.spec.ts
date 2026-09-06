@@ -57,6 +57,28 @@ describe('публикация', () => {
     expect(text.url).toBeNull();
   });
 
+  it('ролик обязан нести ссылку, и отказ назван его словом', () => {
+    expect(() => normalizePublish({ kind: 'video' }, true)).toThrow(
+      'Ролик не загружен',
+    );
+  });
+
+  it('у ролика подложки не бывает, а размеры сохраняются', () => {
+    const video = normalizePublish(
+      {
+        kind: 'video',
+        url: 'https://s3/chat/moments/u1/a.mp4',
+        width: 1080,
+        height: 1920,
+        background: 3,
+      },
+      true,
+    );
+    expect(video.kind).toBe('video');
+    expect(video.background).toBeNull();
+    expect(video.height).toBe(1920);
+  });
+
   it('недоступная аудитория тихо понижается до собеседников, а не роняет публикацию', () => {
     const moment = normalizePublish(
       { kind: 'text', caption: 'Ом', audience: 'everyone' },

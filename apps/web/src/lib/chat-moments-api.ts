@@ -6,6 +6,7 @@ import type {
   ChatMomentDto,
   ChatMomentFeed,
   ChatMomentSettingsState,
+  ChatMomentUploadResult,
   ChatMomentViewersState,
   ChatMomentsState,
   PublishChatMomentRequest,
@@ -67,12 +68,19 @@ export function publishChatMoment(
   });
 }
 
-export function uploadChatMomentImage(
+/**
+ * Фотография или ролик. Вид определяет сервер по типу файла и он же снимает
+ * постер ролика и меряет его длину — браузеру эти числа не доверяют.
+ */
+export function uploadChatMomentFile(
   file: File,
-): Promise<{ url: string; width: number | null; height: number | null }> {
+): Promise<ChatMomentUploadResult> {
   const form = new FormData();
   form.append("file", file);
-  return send("/chat/moments/uploads", { method: "POST", body: form });
+  return send<ChatMomentUploadResult>("/chat/moments/uploads", {
+    method: "POST",
+    body: form,
+  });
 }
 
 export function markChatMomentViewed(momentId: string): Promise<{ ok: true }> {

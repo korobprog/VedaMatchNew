@@ -17,7 +17,7 @@ import {
 export class MomentValidationError extends Error {}
 
 export interface NormalizedMoment {
-  kind: 'photo' | 'text';
+  kind: 'photo' | 'text' | 'video';
   caption: string;
   url: string | null;
   width: number | null;
@@ -58,10 +58,13 @@ export function normalizePublish(
   const audience: ChatMomentAudience =
     dto.audience === 'everyone' && allowEveryone ? 'everyone' : 'contacts';
 
-  if (dto.kind === 'photo') {
-    if (!dto.url) throw new MomentValidationError('Фотография не загружена');
+  if (dto.kind === 'photo' || dto.kind === 'video') {
+    if (!dto.url)
+      throw new MomentValidationError(
+        dto.kind === 'video' ? 'Ролик не загружен' : 'Фотография не загружена',
+      );
     return {
-      kind: 'photo',
+      kind: dto.kind,
       caption,
       url: dto.url,
       width: positive(dto.width),
