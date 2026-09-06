@@ -27,6 +27,13 @@ import { ChatAvatar } from "./chat-avatar";
 import { ChatComposer } from "./chat-composer";
 import { ChatRoomMenu } from "./chat-room-menu";
 import { ChatMessage } from "./chat-message";
+import { firstUnreadIndex } from "./unread-divider";
+import {
+  buildPendingMessage,
+  dropPendingMessage,
+  isPendingMessage,
+  settlePendingMessage,
+} from "./pending-message";
 import { formatChatDivider } from "./chat-time";
 import { isOnline, presenceLabel } from "./chat-presence";
 import { withPlural } from "./chat-plural";
@@ -55,6 +62,16 @@ export function ChatRoom({
   const [replyTo, setReplyTo] = useState<ChatMessageDto | null>(null);
   const [editing, setEditing] = useState<ChatMessageDto | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  /* Черта «непрочитанные» считается один раз, по состоянию на открытие:
+     отметка о прочтении ставится тут же при входе, и пересчёт двигал бы
+     черту вниз на глазах, пока она не исчезла бы совсем. */
+  const [unreadFromId] = useState<string | null>(() => {
+    const lastReadAt = initial.members.find(
+      (member) => member.user.id === viewerId,
+    )?.lastReadAt;
+    const at = firstUnreadIndex(initial.messages, viewerId, lastReadAt);
+    return at === null ? null : initial.messages[at]!.id;
+  });
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const typingSentAt = useRef(0);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -227,16 +244,54 @@ export function ChatRoom({
     }
   }
 
+  /**
+   * Отправка с показом до ответа сервера.
+   *
+   * Раньше сообщение дорисовывалось только после ответа: на медленной сети
+   * поле очищалось, и полминуты не происходило ничего — оставалось гадать,
+   * ушло или нет, и половина людей отправляла второй раз. Теперь пузырь
+   * появляется сразу, с пометкой «отправляется», и заменяется настоящим.
+   *
+   * Отказ убирает черновик и возвращает написанное в поле: сообщение,
+   * молча висящее «отправляется» навсегда, хуже честной ошибки.
+   */
   async function send(body: string, attachments: ChatAttachmentInput[]) {
-    const message = await sendChatMessage(conversation.id, {
-      body,
-      attachments,
-      replyToId: replyTo?.id,
-    });
-    setMessages((current) =>
-      current.some((m) => m.id === message.id) ? current : [...current, message],
-    );
+    const me = conversation.members.find(
+      (member) => member.user.id === viewerId,
+    )?.user;
+    const draft = me
+      ? buildPendingMessage({
+          seed: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          conversationId: conversation.id,
+          author: me,
+          body,
+          attachments,
+          replyTo,
+          now: new Date(),
+        })
+      : null;
+    const quoted = replyTo;
+    if (draft) setMessages((current) => [...current, draft]);
     setReplyTo(null);
+
+    try {
+      const message = await sendChatMessage(conversation.id, {
+        body,
+        attachments,
+        replyToId: quoted?.id,
+      });
+      setMessages((current) =>
+        draft
+          ? settlePendingMessage(current, draft.id, message)
+          : current.some((m) => m.id === message.id)
+            ? current
+            : [...current, message],
+      );
+    } catch (error) {
+      if (draft) setMessages((current) => dropPendingMessage(current, draft.id));
+      setReplyTo(quoted);
+      throw error;
+    }
   }
 
   async function saveEdit(body: string) {
@@ -443,6 +498,11 @@ export function ChatRoom({
 
           return (
             <div key={message.id} className="flex flex-col gap-2.5">
+              {message.id === unreadFromId && (
+                <span className="mx-auto rounded-lg border border-magenta/40 bg-magenta/10 px-3 py-1 text-[11px] font-semibold text-magenta">
+                  Непрочитанные
+                </span>
+              )}
               {newDay && (
                 <span className="mx-auto rounded-lg border border-glass-brd bg-white/5 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-text-2">
                   {formatChatDivider(message.createdAt)}
@@ -450,6 +510,7 @@ export function ChatRoom({
               )}
               <ChatMessage
                 message={message}
+                pending={isPendingMessage(message)}
                 mine={message.author.id === viewerId}
                 showAuthor={showAuthor}
                 avatar={
