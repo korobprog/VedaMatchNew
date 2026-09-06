@@ -277,6 +277,9 @@ export class ChatConversationsService {
       select: { id: true },
     });
 
+    // В «Избранном» галочек не бывает: читать заметку, кроме автора, некому.
+    const saved = row.savedForId === userId;
+
     // Пометка фото собеседника — не перечисляемое свойство и спредом не
     // копируется; переносим её явно (VED-492).
     return attachAvatarKey(
@@ -284,11 +287,13 @@ export class ChatConversationsService {
         ...summary,
         description: row.description,
         pinnedMessage: row.pinnedMessage
-          ? toMessageDto(row.pinnedMessage, userId)
+          ? toMessageDto(row.pinnedMessage, userId, null, { saved })
           : null,
         members: row.members.map(toMemberDto),
         messages: page.map((message) =>
-          toMessageDto(message as ChatMessageRow, userId, othersLastReadAt),
+          toMessageDto(message as ChatMessageRow, userId, othersLastReadAt, {
+            saved,
+          }),
         ),
         hasMore,
         myRole: mine?.role ?? 'member',
