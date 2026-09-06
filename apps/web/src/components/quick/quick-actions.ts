@@ -46,8 +46,10 @@ export const QUICK_ACTIONS: readonly QuickActionMeta[] = [
   {
     id: "calendar",
     label: "Календарь",
-    hint: "Праздники и события ближайших дней",
-    href: "/notices/events",
+    hint: "Афиша портала и вайшнавский календарь",
+    // Своей страницы нет: календарей два, и выбор между ними — это
+    // маленькая шторка, а не переход.
+    href: null,
   },
   {
     id: "calculator",

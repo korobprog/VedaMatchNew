@@ -58,7 +58,30 @@ describe("QuickPanel", () => {
       "href",
       "/motivation?order=random",
     );
-    expect(within(panel).getByRole("link", { name: /Календарь/ })).toBeInTheDocument();
+    // Календарь — кнопка, а не ссылка: календарей два, и плитка открывает
+    // выбор между афишей портала и вайшнавским календарём.
+    expect(
+      within(panel).getByRole("button", { name: /Календарь/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("календарь предлагает афишу портала и вайшнавский календарь", async () => {
+    await openPanel();
+    const panel = screen.getByRole("dialog", { name: "Горячие кнопки" });
+    await userEvent.click(
+      within(panel).getByRole("button", { name: /Календарь/ }),
+    );
+
+    expect(
+      within(panel).getByRole("link", { name: "Афиша портала" }),
+    ).toHaveAttribute("href", "/notices/events");
+    const external = within(panel).getByRole("link", {
+      name: /Вайшнавский календарь/,
+    });
+    expect(external).toHaveAttribute("href", "https://vcalendar.ru");
+    // Без `noopener` открытая вкладка получает доступ к нашей через
+    // `window.opener` — на внешних ссылках это обязательно.
+    expect(external).toHaveAttribute("rel", "noopener noreferrer");
   });
 
   it("помнит настроенный набор между заходами", async () => {
