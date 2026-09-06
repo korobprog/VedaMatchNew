@@ -39,7 +39,7 @@ export const QUICK_ACTIONS: readonly QuickActionMeta[] = [
   },
   {
     id: "collections",
-    label: "Подборки",
+    label: "Категории",
     hint: "Цитаты по разделам: Веды, вайшнавизм, философия",
     href: "/motivation/collections",
   },
