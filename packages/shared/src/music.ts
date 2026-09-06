@@ -408,6 +408,18 @@ export interface MusicAdminTrackDto {
   sizeBytes: number;
   createdAt: string;
   publishedAt: string | null;
+  /**
+   * Идентификаторы связей и линия — чтобы форму правки можно было
+   * предзаполнить тем, что стоит сейчас. Без них админка показывала имена, но
+   * при открытии правки не знала, какой пункт выбран, и любое сохранение
+   * молча перевешивало запись на первый в списке.
+   */
+  artistId: string | null;
+  albumId: string | null;
+  categoryIds: string[];
+  isLiveRecording: boolean;
+  /** `null` — запись для всех линий. */
+  lineage: LineageId | null;
 }
 
 export interface MusicAdminTracksDto {

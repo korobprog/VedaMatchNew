@@ -15,6 +15,7 @@ import type {
   MusicModerationDecisionRequest,
   MusicModerationItemDto,
 } from '@vedamatch/shared';
+import { toLineageId } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   toMusicAlbumDto,
@@ -261,7 +262,13 @@ export class MusicAdminQueueService {
 
     const [rows, total] = await Promise.all([
       this.prisma.musicTrack.findMany({
-        include: { artist: true, album: true },
+        // Категории — ради формы правки: без них она не знала бы, какой
+        // раздел стоит у записи сейчас.
+        include: {
+          artist: true,
+          album: true,
+          categories: { select: { categoryId: true } },
+        },
         orderBy: { createdAt: 'desc' },
         take: TRACKS_PAGE,
       }),
@@ -279,6 +286,11 @@ export class MusicAdminQueueService {
         sizeBytes: row.sizeBytes,
         createdAt: row.createdAt.toISOString(),
         publishedAt: row.publishedAt?.toISOString() ?? null,
+        artistId: row.artistId,
+        albumId: row.albumId,
+        categoryIds: row.categories.map((link) => link.categoryId),
+        isLiveRecording: row.isLiveRecording,
+        lineage: toLineageId(row.lineage),
       })),
       total,
     };

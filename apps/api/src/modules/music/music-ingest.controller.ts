@@ -18,6 +18,7 @@ import type {
   UpdateMusicIngestBatchRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { AdminUnlimited } from '../auth/admin-unlimited.guard';
 import { MusicIngestService } from './music-ingest.service';
 
 /**
@@ -25,6 +26,10 @@ import { MusicIngestService } from './music-ingest.service';
  * админ-ручек Музыки: единственная точка касания портала у модуля — строка в
  * `app.module.ts`.
  */
+/* Своего лимита у пополнения нет, действует общий (100 запросов в минуту), а
+   заливка партии из полусотни файлов — это полсотни запросов подряд от одного
+   человека. Администратору Музыки он тоже ни к чему. */
+@AdminUnlimited('music')
 @Controller('music/admin/ingest')
 @UseGuards(AuthGuard)
 export class MusicIngestController {

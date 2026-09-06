@@ -14,7 +14,11 @@ import { decideMusicTrack, updateMusicTrack } from "@/lib/music-admin-client-api
 import { formatBytes, formatTrackDuration } from "@/lib/music-duration";
 import { MusicCoverField } from "@/components/music/cover-field";
 import { Alert } from "@/components/ui/alert";
-import { LineageSelect } from "@/components/lineage-picker";
+import {
+  LineageSelect,
+  lineageFromSelect,
+  lineageToSelect,
+} from "@/components/lineage-picker";
 
 const RIGHTS_LABELS: Record<MusicUploadRightsBasis, string> = {
   own_recording: "Своя запись",
@@ -47,8 +51,8 @@ export function MusicModerationCard({
   const [categoryId, setCategoryId] = useState(track.categories[0]?.id ?? "");
   const [title, setTitle] = useState(track.title);
   const [isLive, setIsLive] = useState(track.isLiveRecording);
-  /** Пустая строка — для всех линий. */
-  const [lineage, setLineage] = useState<string>(track.lineage ?? "");
+  /** `"all"` — для всех линий; в запрос уходит `null` (см. lineageFromSelect). */
+  const [lineage, setLineage] = useState<string>(lineageToSelect(track.lineage));
   const [coverKey, setCoverKey] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [pending, setPending] = useState(false);
@@ -66,7 +70,7 @@ export function MusicModerationCard({
           artistId: artistId || null,
           categoryIds: categoryId ? [categoryId] : [],
           isLiveRecording: isLive,
-          lineage: lineage ? (lineage as LineageId) : null,
+          lineage: lineageFromSelect(lineage),
           // Только когда обложку выбрали: `null` здесь означал бы «снять», а
           // модератор её просто не трогал.
           ...(coverKey ? { coverKey } : {}),
