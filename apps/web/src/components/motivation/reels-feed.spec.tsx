@@ -353,9 +353,8 @@ describe("ReelsFeed", () => {
     ).toBeInTheDocument();
   });
 
-  it("прячет картинку на пять секунд и возвращает сама", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it("убирает текст и оставляет изображение", async () => {
+    const user = userEvent.setup();
     render(
       <ReelsFeed
         initial={{ items: [post("a")], nextCursor: null }}
@@ -364,21 +363,33 @@ describe("ReelsFeed", () => {
       />,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Скрыть картинку на пять секунд" }),
-    );
-    expect(
-      screen.getByRole("button", { name: "Показать картинку" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Цитата a")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Скрыть текст" }));
 
-    // «На пять секунд», а не «выключить»: кадр возвращается сам.
-    vi.advanceTimersByTime(5_000);
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Скрыть картинку на пять секунд" }),
-      ).toHaveAttribute("aria-pressed", "false"),
+    expect(
+      screen.getByRole("button", { name: "Показать текст" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    // Цитата убрана, но остаётся в разметке: возвращают её тем же нажатием.
+    expect(screen.getByText("Цитата a")).not.toBeVisible();
+  });
+
+  it("убранный текст держится, пока его не вернут", async () => {
+    const user = userEvent.setup();
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+      />,
     );
-    vi.useRealTimers();
+
+    await user.click(screen.getByRole("button", { name: "Скрыть текст" }));
+    // Прежняя кнопка возвращала кадр через пять секунд; эту включают, чтобы
+    // листать картинки без надписей, и сама она не выключается.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(
+      screen.getByRole("button", { name: "Показать текст" }),
+    ).toBeInTheDocument();
   });
 
   it("у ролика прятать нечего: подпись вшита в кадр", () => {
@@ -394,7 +405,7 @@ describe("ReelsFeed", () => {
     );
 
     expect(
-      screen.queryByRole("button", { name: /Скрыть картинку/ }),
+      screen.queryByRole("button", { name: /Скрыть текст/ }),
     ).not.toBeInTheDocument();
   });
 

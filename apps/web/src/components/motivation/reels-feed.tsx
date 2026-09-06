@@ -31,7 +31,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
  * Насколько прячется кадр. Пять секунд из просьбы: меньше — не успеть
  * дочитать длинную шлоку, больше — начинаешь думать, что картинка пропала.
  */
-const HIDE_MEDIA_MS = 5_000;
 
 export type ReelsTab = "forYou" | "saved";
 
@@ -83,7 +82,16 @@ export function ReelsFeed({
    * была именно на пять секунд — убрать кадр, чтобы остаться с цитатой, и
    * получить его обратно, ничего больше не нажимая.
    */
-  const [mediaHidden, setMediaHidden] = useState(false);
+  /**
+   * Убранный текст.
+   *
+   * Кнопка пряталa кадр, оставляя цитату, и возвращала его через пять
+   * секунд. Просили обратное: убрать текст и смотреть на изображение — и
+   * чтобы это держалось на всех афоризмах, которые листают дальше, а не
+   * сбрасывалось на каждом. Поэтому состояние живёт у ленты, а не у слайда,
+   * и таймера у него нет: вернуть текст — то же нажатие.
+   */
+  const [textHidden, setTextHidden] = useState(false);
   /** Что читает голос сейчас. `null` — молчит. */
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -119,25 +127,12 @@ export function ReelsFeed({
   // так setState не каскадирует, а момент тот же — человек долистал до конца.
   function activate(index: number) {
     setActiveIndex(index);
-    // Свайп отменяет и то, и другое: спрятанный кадр относился к прошлому
-    // слайду, а голос, продолжающий читать вчерашнюю цитату поверх новой,
-    // читается как поломка.
-    setMediaHidden(false);
+    // Голос обрываем: он читал прошлую цитату, и продолжение поверх новой
+    // читается как поломка. А вот убранный текст свайп не возвращает — его
+    // включают именно для того, чтобы листать картинки без надписей.
     stopSpeaking();
     if (shouldLoadMore(index, items.length, Boolean(cursor))) void loadMore();
   }
-
-  /* Показать кадр обратно самим — за этим и шли: «на пять секунд», а не
-     «выключить». Таймер живёт в эффекте, а не в setTimeout по нажатию, чтобы
-     уход со слайда его снимал. */
-  useEffect(() => {
-    if (!mediaHidden) return;
-    const timer = window.setTimeout(
-      () => setMediaHidden(false),
-      HIDE_MEDIA_MS,
-    );
-    return () => window.clearTimeout(timer);
-  }, [mediaHidden]);
 
   const stopSpeaking = useCallback(() => {
     if (canSpeak()) window.speechSynthesis.cancel();
@@ -357,7 +352,7 @@ export function ReelsFeed({
               position={position}
               active={slide.index === activeIndex}
               soundOn={soundOn}
-              mediaHidden={mediaHidden && slide.index === activeIndex}
+              textHidden={textHidden}
               onActive={() => activate(slide.index)}
             />
           );
@@ -394,19 +389,16 @@ export function ReelsFeed({
           >
             <ShareIcon />
           </RailButton>
-          {/* Убрать кадр и остаться с цитатой. Кнопка есть только у фото: в
-              ролике подпись вшита в сам кадр, и спрятать его значит спрятать
-              и текст — то есть ровно то, ради чего кнопку нажимают. */}
+          {/* Убрать текст и остаться с изображением. Кнопка есть только у
+              фото: в ролике подпись вшита в сам кадр, убрать её оттуда
+              нечем. Режим держится, пока его не выключат, — в том числе на
+              следующих афоризмах: за этим его и включают. */}
           {mediaKindOf(activePost) === "image" && (
             <RailButton
-              label={
-                mediaHidden
-                  ? "Показать картинку"
-                  : "Скрыть картинку на пять секунд"
-              }
-              pressed={mediaHidden}
-              caption={mediaHidden ? "Вернуть" : "Скрыть"}
-              onClick={() => setMediaHidden((value) => !value)}
+              label={textHidden ? "Показать текст" : "Скрыть текст"}
+              pressed={textHidden}
+              caption={textHidden ? "Вернуть" : "Скрыть"}
+              onClick={() => setTextHidden((value) => !value)}
             >
               <EyeOffIcon />
             </RailButton>
@@ -507,15 +499,15 @@ function ReelSlide({
   position,
   active,
   soundOn,
-  mediaHidden = false,
+  textHidden = false,
   onActive,
 }: {
   post: MotivationPostDto;
   position: number;
   active: boolean;
   soundOn: boolean;
-  /** Кадр спрятан на несколько секунд — остаётся цитата на ровном фоне. */
-  mediaHidden?: boolean;
+  /** Текст убран — остаётся одно изображение. */
+  textHidden?: boolean;
   onActive: () => void;
 }) {
   const ref = useRef<HTMLElement>(null);
@@ -655,30 +647,19 @@ function ReelSlide({
           className="absolute inset-0 h-full w-full object-cover"
         />
       )}
-      {/* Занавес на время «скрыть картинку». Поверх кадра, а не вместо него:
-          картинка остаётся загруженной, и через пять секунд она проявляется
-          без второго запроса к хранилищу.
-
-          Чёрный, а не `--vm-bg-0`: текст ленты белый при любой теме — он
-          всегда лежит на фотографии, — и на светлом фоне цитата исчезла бы
-          вместе с картинкой. Тот же довод, что у `bg-black/45` под кнопками
-          поверх кадра. */}
-      {mediaHidden && kind === "image" && (
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 z-[6] bg-black/95 transition-opacity"
-        />
-      )}
-
       {/* Подложка под текст. У ролика подпись вшита в кадр и уже стоит на своей
           подложке — наш слой лежал бы поверх неё и глушил белый до серого,
           поэтому для видео затемняем только край под чипами и шапкой. */}
+      {/* При убранном тексте затемнять низ кадра не за чем: подложка нужна
+          ради читаемости цитаты, а цитаты сейчас нет. */}
       <div
         aria-hidden="true"
         className={
           kind === "video"
             ? "absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,.45)_0%,rgba(0,0,0,0)_18%)]"
-            : "absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,.45)_0%,rgba(0,0,0,0)_22%,rgba(0,0,0,0)_38%,rgba(10,6,20,.55)_62%,rgba(10,6,20,.86)_82%,rgba(10,6,20,.95)_100%)]"
+            : textHidden
+              ? "absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,.45)_0%,rgba(0,0,0,0)_18%)]"
+              : "absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,.45)_0%,rgba(0,0,0,0)_22%,rgba(0,0,0,0)_38%,rgba(10,6,20,.55)_62%,rgba(10,6,20,.86)_82%,rgba(10,6,20,.95)_100%)]"
         }
       />
 
@@ -700,8 +681,14 @@ function ReelSlide({
       )}
 
 
-      {/* Служебная строка стоит над рядом кнопок и, у ролика, под его кадром. */}
-      <div className="absolute bottom-[4.5rem] left-4 right-4 z-10">
+      {/* Служебная строка стоит над рядом кнопок и, у ролика, под его кадром.
+          Убранный текст прячет её целиком — цитату, источник, подпись и
+          кнопки, которые эту же цитату раскрывают: смотреть на изображение
+          мешает всё перечисленное, а не одна строка. */}
+      <div
+        hidden={textHidden}
+        className="absolute bottom-[4.5rem] left-4 right-4 z-10"
+      >
         {/* В ролик подпись вшита воркером, и вторая копия поверх кадра
             наезжала бы на первую. Для фото текст рисуем мы. */}
         {kind === "image" && (
