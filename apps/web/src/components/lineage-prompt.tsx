@@ -73,12 +73,11 @@ export function LineagePrompt({
   if (saved) {
     return (
       <Alert tone="success" className="mb-6">
-        Линия сохранена в профиле. Материалы {serviceName} теперь подбираются
-        под неё; другую линию для этого сервиса можно выбрать{" "}
+        Линия сохранена. Другую для {serviceName} можно выбрать{" "}
         <Link href={settingsHref} className="underline">
           {settingsLabel}
         </Link>
-        , а линию в целом — в профиле.
+        , в целом — в профиле.
       </Alert>
     );
   }

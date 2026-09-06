@@ -40,12 +40,15 @@ export function LibraryLineageSwitch({
   }
 
   return (
+    // Компактно: короткие названия и ограниченная ширина — на телефоне
+    // переключатель стоит в одной строке с языком, а не занимает свою.
     <LineageSelect
+      compact
       value={value ?? ""}
       onChange={(next) => void change(next)}
-      emptyLabel={inheritLabel(profileLineage)}
+      emptyLabel={inheritLabel(profileLineage, true)}
       allLabel={t(locale, "lineage.all")}
-      className="max-w-full rounded-xl border border-glass-brd bg-bg-0 px-2 py-2 text-sm text-text-0"
+      className="max-w-[11rem] truncate rounded-xl border border-glass-brd bg-bg-0 px-2 py-2 text-sm text-text-0 sm:max-w-xs"
     />
   );
 }

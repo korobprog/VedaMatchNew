@@ -2,7 +2,7 @@
 
 import {
   LINEAGE_ALL,
-  lineageLabel,
+  lineageOption,
   lineagesByGroup,
   type LineageId,
 } from "@vedamatch/shared";
@@ -90,6 +90,7 @@ export function LineageSelect({
   disabled = false,
   id,
   className,
+  compact = false,
 }: {
   /** `""`, `"all"` или идентификатор линии. */
   value: string;
@@ -107,6 +108,12 @@ export function LineageSelect({
   disabled?: boolean;
   id?: string;
   className?: string;
+  /**
+   * Короткие названия без расшифровок — для переключателей в шапке
+   * страницы, где полное «Шри Чайтанья Сарасват Матх» на телефоне занимает
+   * всю строку.
+   */
+  compact?: boolean;
 }) {
   const select = (
     <select
@@ -125,8 +132,8 @@ export function LineageSelect({
         <optgroup key={group.group} label={group.label}>
           {group.items.map((item) => (
             <option key={item.id} value={item.id}>
-              {item.label}
-              {item.hint ? ` — ${item.hint}` : ""}
+              {compact ? item.shortLabel : item.label}
+              {!compact && item.hint ? ` — ${item.hint}` : ""}
             </option>
           ))}
         </optgroup>
@@ -148,7 +155,15 @@ export function LineageSelect({
  * Подпись варианта «как в профиле» с текущим значением: «Как в профиле —
  * ISKCON». Без значения — честно говорит, что линия в профиле не указана.
  */
-export function inheritLabel(profileLineage: LineageId | null): string {
-  const label = lineageLabel(profileLineage);
-  return label ? `Как в профиле — ${label}` : "Как в профиле (линия не указана)";
+export function inheritLabel(
+  profileLineage: LineageId | null,
+  compact = false,
+): string {
+  const option = lineageOption(profileLineage);
+  // В компактном виде значение не повторяется: какая линия применена,
+  // говорит строка над списком, а в селект на телефоне оно не помещается.
+  if (compact) return "Как в профиле";
+  return option
+    ? `Как в профиле — ${option.label}`
+    : "Как в профиле (линия не указана)";
 }
