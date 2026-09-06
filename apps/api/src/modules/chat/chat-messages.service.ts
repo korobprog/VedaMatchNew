@@ -175,7 +175,10 @@ export class ChatMessagesService {
       data: { lastReadAt: created.createdAt },
     });
 
-    const dtoOut = toMessageDto(created, userId);
+    // В «Избранном» галочек не бывает: читать заметку, кроме автора, некому.
+    const dtoOut = toMessageDto(created, userId, null, {
+      saved: conversation.savedForId === userId,
+    });
     this.events.publish(this.conversations.recipients(conversation), {
       type: 'message.created',
       conversationId,

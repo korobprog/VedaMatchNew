@@ -253,16 +253,19 @@ export class ChatConversationsService {
     });
 
     const summary = await this.summary(row, userId, messageCount);
+    const saved = row.savedForId === userId;
 
     return {
       ...summary,
       description: row.description,
       pinnedMessage: row.pinnedMessage
-        ? toMessageDto(row.pinnedMessage, userId)
+        ? toMessageDto(row.pinnedMessage, userId, null, { saved })
         : null,
       members: row.members.map(toMemberDto),
       messages: page.map((message) =>
-        toMessageDto(message as ChatMessageRow, userId, othersLastReadAt),
+        toMessageDto(message as ChatMessageRow, userId, othersLastReadAt, {
+          saved,
+        }),
       ),
       hasMore,
       myRole: mine?.role ?? 'member',

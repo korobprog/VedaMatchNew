@@ -49,12 +49,12 @@ export function MomentViewer({ feed }: { feed: ChatMomentFeed }) {
     setProgress(0);
     setReply("");
     setSent(false);
-    setIndex((current) => {
-      if (current + 1 < moments.length) return current + 1;
-      close();
-      return current;
-    });
-  }, [close, moments.length]);
+    // Переход и закрытие решаются здесь, а не внутри обновления состояния:
+    // `router.push` из тела обновления — побочное действие в фазе отрисовки,
+    // и React справедливо ругается на него в консоли.
+    if (index + 1 < moments.length) setIndex(index + 1);
+    else close();
+  }, [close, index, moments.length]);
 
   const previous = useCallback(() => {
     setProgress(0);
