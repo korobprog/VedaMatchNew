@@ -45,6 +45,8 @@ import {
   MAX_REEL_IMAGE_BYTES,
   type UploadedReelImage,
 } from './reel-image';
+import { MotivationAudioService } from './motivation-audio.service';
+import { MAX_AUDIO_BYTES, type UploadedAudio } from './audio-upload';
 import { MotivationAdminReelsService } from './motivation-admin-reels.service';
 import { MotivationPostcardsService } from './motivation-postcards.service';
 import { MotivationAnalyticsService } from './motivation-analytics.service';
@@ -62,6 +64,7 @@ import {
 @UseGuards(AuthGuard, MotivationAdminGuard)
 export class MotivationAdminController {
   constructor(
+    private readonly audio: MotivationAudioService,
     private readonly service: MotivationService,
     private readonly categories: MotivationCategoriesService,
     private readonly manualPosts: MotivationManualPostService,
@@ -107,6 +110,45 @@ export class MotivationAdminController {
     @UploadedFile() file?: UploadedReelImage,
   ) {
     return this.reels.adminUploadImage(user, id, file);
+  }
+
+  /**
+   * Фоновая музыка ленты. Загружает редакция: «закачаем спокойные
+   * инструментальные композиции» — это про файлы, а не про генерацию, для
+   * которой рядом живёт вкладка подложек роликов.
+   */
+  @Get('audio')
+  audioList(@CurrentUser() user: AccessTokenPayload) {
+    return this.audio.adminList(user);
+  }
+
+  @Post('audio')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_AUDIO_BYTES } }),
+  )
+  audioUpload(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: { title?: string },
+    @UploadedFile() file?: UploadedAudio,
+  ) {
+    return this.audio.adminUpload(user, file, body?.title);
+  }
+
+  @Patch('audio/:id')
+  audioUpdate(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: { title?: string; isActive?: boolean; sortOrder?: number },
+  ) {
+    return this.audio.adminUpdate(user, id, body ?? {});
+  }
+
+  @Delete('audio/:id')
+  audioRemove(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.audio.adminRemove(user, id);
   }
 
   @Delete('posts/:id')

@@ -9,7 +9,11 @@ import { MotivationTopBar } from "@/components/motivation/motivation-top-bar";
 import { ReelsChrome } from "@/components/motivation/reels-chrome";
 import { ReelsFeed, type ReelsTab } from "@/components/motivation/reels-feed";
 import { getDonationSettings, getProfile } from "@/lib/api";
-import { getMotivationFeed, getMotivationStats } from "@/lib/motivation-api";
+import {
+  getMotivationAudio,
+  getMotivationFeed,
+  getMotivationStats,
+} from "@/lib/motivation-api";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
@@ -35,7 +39,7 @@ export default async function MotivationPage({
      выбирают однажды и надолго, — это «перемешай сейчас», и уходить за ним
      на страницу настроек дороже, чем нажать кнопку над лентой. */
   const order = params.order === "random" ? ("random" as const) : undefined;
-  const [user, feed, donation, stats] = await Promise.all([
+  const [user, feed, donation, stats, audio] = await Promise.all([
     getProfile(),
     // `?post=slug` открывает ленту на конкретном рилсе — так работает переход
     // из мастера и из «Моих рилсов».
@@ -46,6 +50,8 @@ export default async function MotivationPage({
     ),
     getDonationSettings(),
     getMotivationStats(),
+    // Фон для чтения. Пустой список — кнопки музыки в ленте не будет.
+    getMotivationAudio(),
   ]);
   if (!user) redirectToLogin("/motivation");
   // Новичок идёт в мастер: там тот же вопрос об этапе, но после имени
@@ -109,6 +115,7 @@ export default async function MotivationPage({
           donation={donation}
           order={order}
           isAdmin={isAdmin}
+          audio={audio}
         />
         <ReelsChrome isAdmin={isAdmin} order={order} count={stats?.published} />
       </div>

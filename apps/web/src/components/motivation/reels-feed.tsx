@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type {
   DonationSettingsDto,
+  MotivationAudioDto,
   MotivationFeedResponse,
   MotivationLikeResponse,
   MotivationPostDto,
@@ -12,6 +13,11 @@ import type {
 import { apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
 import { isLongQuote, splitQuoteAndExplanation } from "./quote-text";
+import {
+  BACKGROUND_VOLUME,
+  hasBackgroundAudio,
+  nextAudioIndex,
+} from "./background-audio";
 import { buildSpokenQuote, canSpeak, spokenLanguage } from "./speak-quote";
 import { ReportDialog } from "./report-dialog";
 import { SourceLink } from "./source-link";
@@ -50,10 +56,13 @@ export function ReelsFeed({
   donation,
   order,
   isAdmin = false,
+  audio = [],
 }: {
   initial: MotivationFeedResponse;
   tab: ReelsTab;
   donation: DonationSettingsDto | null;
+  /** Фон для чтения. Пустой список — кнопки музыки нет вовсе. */
+  audio?: MotivationAudioDto[];
   /** Редакции — переход к правке той карточки, на которую она смотрит. */
   isAdmin?: boolean;
   /**
@@ -76,6 +85,16 @@ export function ReelsFeed({
    * просто не даст автозапуск.
    */
   const [soundOn, setSoundOn] = useState(false);
+  /**
+   * Фоновая музыка ленты.
+   *
+   * Живёт у ленты, а не у слайда: свайп её не обрывает — под то и включают,
+   * чтобы читать подряд. Список приходит с сервера один раз; играем по
+   * кругу, следующая запись берётся, когда кончилась предыдущая.
+   */
+  const [musicOn, setMusicOn] = useState(false);
+  const [trackAt, setTrackAt] = useState(0);
+  const musicRef = useRef<HTMLAudioElement | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /**
@@ -327,6 +346,53 @@ export function ReelsFeed({
         >
           {soundOn ? "🔊 Звук включён" : "🔇 Включить звук"}
         </button>
+      )}
+
+      {/* Музыка для чтения — рядом со звуком ролика и по той же причине
+          наверху: она про всю ленту, а не про карточку, и в нижнем ряду
+          действий над постом ей не место. Ряд там и так плотный. */}
+      {hasBackgroundAudio(audio) && (
+        <button
+          type="button"
+          onClick={() => setMusicOn((value) => !value)}
+          aria-pressed={musicOn}
+          aria-label={musicOn ? "Выключить музыку" : "Включить музыку"}
+          className={`absolute left-3 top-16 z-30 rounded-full border px-3 py-1.5 text-xs font-medium backdrop-blur ${
+            musicOn
+              ? "border-mint-edge bg-mint text-on-mint"
+              : "border-white/25 bg-black/40 text-white"
+          }`}
+        >
+          {musicOn ? "♪ Музыка играет" : "♪ Музыка"}
+        </button>
+      )}
+
+      {/* Сам проигрыватель — один на ленту и без органов управления: фон
+          включают кнопкой выше, а перемотка фону не нужна. Следующая запись
+          берётся по окончании предыдущей, список идёт по кругу. */}
+      {musicOn && audio[trackAt] && (
+        <audio
+          key={audio[trackAt].id}
+          src={audio[trackAt].url}
+          /* Одна запись зацикливается сама: следующей за ней всё равно она
+             же, а `key` при этом не меняется — React не пересоздаёт элемент,
+             и фон замолкал после первого круга. */
+          loop={audio.length === 1}
+          onEnded={() => setTrackAt((at) => nextAudioIndex(audio.length, at))}
+          /* Файла нет или он битый — кнопка не должна остаться нажатой,
+             обещая музыку, которой не будет. */
+          onError={() => setMusicOn(false)}
+          ref={(node) => {
+            musicRef.current = node;
+            if (!node) return;
+            // Тише обычного: под цитату ставят музыку, а не наоборот.
+            node.volume = BACKGROUND_VOLUME;
+            /* Запускаем сами, а не атрибутом `autoPlay`: браузер разрешает
+               звук только после жеста, и отказ надо поймать — иначе кнопка
+               горит «играет» при тишине. */
+            void node.play().catch(() => setMusicOn(false));
+          }}
+        />
       )}
       <div
         ref={containerRef}

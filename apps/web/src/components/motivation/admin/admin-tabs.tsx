@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, CalendarHeart, Film, FolderTree, ListChecks, Newspaper, PenLine, PlusCircle, Radar, SlidersHorizontal } from "lucide-react";
+import { BarChart3, CalendarHeart, Film, FolderTree, ListChecks, Music4, Newspaper, PenLine, PlusCircle, Radar, SlidersHorizontal } from "lucide-react";
 
 export type MotivationAdminTab =
   | "queue"
@@ -11,6 +11,7 @@ export type MotivationAdminTab =
   | "add"
   | "search"
   | "categories"
+  | "audio"
   | "settings";
 
 const ITEMS: Array<{
@@ -31,6 +32,9 @@ const ITEMS: Array<{
   { key: "search", href: "/admin/motivation/search", label: "Поиск", icon: Radar },
   { key: "categories", href: "/admin/motivation/categories", label: "Категории", icon: FolderTree },
   { key: "events", href: "/admin/motivation/events", label: "Праздники", icon: CalendarHeart },
+  // Фон для чтения. С подложками роликов не путать: те генерируются по
+  // промпту во вкладке «Рилсы», эти редакция загружает файлами.
+  { key: "audio", href: "/admin/motivation/audio", label: "Музыка", icon: Music4 },
   { key: "analytics", href: "/admin/motivation/analytics", label: "Аналитика", icon: BarChart3 },
   { key: "settings", href: "/admin/motivation/settings", label: "Настройки", icon: SlidersHorizontal },
 ];

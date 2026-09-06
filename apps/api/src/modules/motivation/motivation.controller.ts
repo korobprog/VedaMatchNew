@@ -44,6 +44,7 @@ import { MotivationManualPostService } from './motivation-manual-post.service';
 import { MotivationStoryRebuildService } from './motivation-story-rebuild.service';
 import { MotivationService } from './motivation.service';
 import { MotivationMusicService } from './motivation-music.service';
+import { MotivationAudioService } from './motivation-audio.service';
 import {
   MotivationSettingsService,
   type MotivationSettingsUpdate,
@@ -64,6 +65,7 @@ export class MotivationController {
     private readonly books: MotivationBooksService,
     private readonly settings: MotivationSettingsService,
     private readonly music: MotivationMusicService,
+    private readonly audio_: MotivationAudioService,
     private readonly reels: MotivationReelsService,
     private readonly adminReels: MotivationAdminReelsService,
     private readonly postcards: MotivationPostcardsService,
@@ -210,6 +212,16 @@ export class MotivationController {
   reelVoices() {
     return this.reels.voiceOptions();
   }
+  /**
+   * Фон для чтения: спокойные записи, загруженные редакцией. Отдельно от
+   * подложек роликов (`reels/music`) — там генерация по промпту, здесь
+   * файлы, которые играют поверх ленты.
+   */
+  @Get('motivation/audio')
+  audio() {
+    return this.audio_.list();
+  }
+
   /** Справочники объявлены до `:id`: иначе «music» уедет в параметр. */
   @Get('motivation/reels/music')
   @UseGuards(AuthGuard)
