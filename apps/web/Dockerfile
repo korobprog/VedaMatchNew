@@ -8,6 +8,11 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 # Имя бота для кнопки «Войти через Telegram» на /login (telegram-login-button.tsx).
 ARG NEXT_PUBLIC_TELEGRAM_BOT
 ENV NEXT_PUBLIC_TELEGRAM_BOT=$NEXT_PUBLIC_TELEGRAM_BOT
+# metadataBase и og:url (apps/web/src/app/layout.tsx). Переменная с префиксом
+# NEXT_PUBLIC_ вшивается на сборке, поэтому задать её в окружении контейнера
+# недостаточно — без этого ARG адрес сайта остаётся зашитым дефолтом.
+ARG NEXT_PUBLIC_SITE_URL
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
 # Заплатки зависимостей (`patchedDependencies` в pnpm-workspace.yaml). pnpm
 # проверяет наличие каждого файла заплатки при любой установке, даже если сам
