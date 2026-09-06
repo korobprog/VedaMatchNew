@@ -5,6 +5,7 @@ import Link from "next/link";
 import type {
   ChatConversationSummary,
   ChatListState,
+  ChatMomentsState,
   ChatSearchHit,
 } from "@vedamatch/shared";
 import { searchChat } from "@/lib/chat-client";
@@ -13,6 +14,7 @@ import { ChatAvatar } from "./chat-avatar";
 import { formatChatStamp } from "./chat-time";
 import { isOnline } from "./chat-presence";
 import { plural } from "./chat-plural";
+import { MomentsRail } from "./moments/moments-rail";
 
 type Tab = "all" | "direct" | "group" | "channel";
 
@@ -28,7 +30,14 @@ const TABS: { id: Tab; label: string }[] = [
  * счётчик, не дожидаясь перезагрузки страницы — иначе «живой чат» живой
  * только внутри открытой переписки.
  */
-export function ChatListView({ initial }: { initial: ChatListState }) {
+export function ChatListView({
+  initial,
+  moments,
+}: {
+  initial: ChatListState;
+  /** Полоса моментов. `null` — раздел не ответил; список это переживает. */
+  moments?: ChatMomentsState | null;
+}) {
   const [state, setState] = useState(initial);
   const [tab, setTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
@@ -128,6 +137,8 @@ export function ChatListView({ initial }: { initial: ChatListState }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {moments && <MomentsRail initial={moments} />}
+
       <label className="flex h-11 items-center gap-2.5 rounded-2xl border border-glass-brd bg-glass px-3.5">
         <SearchIcon />
         <input
@@ -277,13 +288,22 @@ function ConversationRow({
         highlighted ? "border border-glass-brd bg-glass" : ""
       }`}
     >
-      <ChatAvatar
-        kind={conversation.kind}
-        user={conversation.companion}
-        title={conversation.title}
-        imageUrl={conversation.avatarUrl}
-        online={isOnline(conversation.companion?.lastSeenAt)}
-      />
+      {conversation.saved ? (
+        <span
+          aria-hidden
+          className="flex size-[50px] shrink-0 items-center justify-center rounded-2xl border border-gold/34 bg-gold/12 text-gold"
+        >
+          <BookmarkIcon />
+        </span>
+      ) : (
+        <ChatAvatar
+          kind={conversation.kind}
+          user={conversation.companion}
+          title={conversation.title}
+          imageUrl={conversation.avatarUrl}
+          online={isOnline(conversation.companion?.lastSeenAt)}
+        />
+      )}
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex items-center justify-between gap-2">
           <span
@@ -329,7 +349,10 @@ function SectionLabel({ children }: { children: string }) {
 /** Строка предпросмотра: у вложения показываем его вид, а не пустоту. */
 function previewOf(conversation: ChatConversationSummary): string {
   const message = conversation.lastMessage;
-  if (!message) return "Пока ни одного сообщения";
+  if (!message)
+    return conversation.saved
+      ? "Заметки, ссылки и всё, что переслали себе"
+      : "Пока ни одного сообщения";
   if (message.deletedAt) return "Сообщение удалено";
   const prefix =
     conversation.kind === "direct" ? "" : `${message.author.name}: `;
@@ -345,7 +368,9 @@ function previewOf(conversation: ChatConversationSummary): string {
           ? "Файл"
           : kind === "story"
             ? "Сторис"
-            : "Вложение";
+            : kind === "moment"
+              ? "Ответ на момент"
+              : "Вложение";
   return `${prefix}${label}`;
 }
 
@@ -419,6 +444,24 @@ function ChevronIcon() {
       aria-hidden
     >
       <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+function BookmarkIcon() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M6.5 4h11a1 1 0 011 1v15l-6.5-4-6.5 4V5a1 1 0 011-1z" />
     </svg>
   );
 }

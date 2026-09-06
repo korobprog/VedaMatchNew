@@ -11,6 +11,10 @@ import type { ReactNode } from "react";
  * Объявления или Рынок, а оттуда кнопка «Отправить в чат» приводит обратно
  * со снимком карточки. Так чат не читает чужие таблицы, а сервисы не знают
  * про его устройство.
+ *
+ * Плитка Вдохновения раньше называлась «Сторис». Имя переехало к моментам —
+ * тем, что живут сутки: два «сторис» рядом в одной панели не различал никто,
+ * включая поддержку.
  */
 export function ChatAttachSheet({
   onPickImage,
@@ -34,7 +38,18 @@ export function ChatAttachSheet({
           onClick={onOpenEmoji}
           icon={<SmileIcon />}
         />
-        <Tile label="Сторис" tone="gold" icon={<StarIcon />} href="/motivation" />
+        <Tile
+          label="Момент"
+          tone="gold"
+          icon={<MomentIcon />}
+          href="/chat/moments/new"
+        />
+        <Tile
+          label="Вдохновение"
+          tone="gold"
+          icon={<StarIcon />}
+          href="/motivation"
+        />
         <Tile label="Объявление" tone="gold" icon={<NoticeIcon />} href="/notices" />
         <Tile label="Товар" tone="cyan" icon={<CartIcon />} href="/market" />
         <Tile label="Контакт" tone="violet" icon={<PersonIcon />} href="/chat/people" />
@@ -134,6 +149,15 @@ function StarIcon() {
   return (
     <Svg>
       <path d="M12 3.5l2.4 5 5.6.8-4 3.9 1 5.5-5-2.6-5 2.6 1-5.5-4-3.9 5.6-.8z" />
+    </Svg>
+  );
+}
+
+function MomentIcon() {
+  return (
+    <Svg>
+      <circle cx="12" cy="12" r="8.6" strokeDasharray="4 3" />
+      <circle cx="12" cy="12" r="3.4" />
     </Svg>
   );
 }

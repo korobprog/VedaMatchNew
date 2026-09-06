@@ -2,13 +2,11 @@ import Link from "next/link";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { ChatListView } from "@/components/chat/chat-list-view";
-import { getChatList } from "@/lib/chat-api";
+import { getChatList, getChatMoments } from "@/lib/chat-api";
 
 export default async function ChatPage() {
-  const state = (await getChatList()) ?? {
-    conversations: [],
-    requestsCount: 0,
-  };
+  const [list, moments] = await Promise.all([getChatList(), getChatMoments()]);
+  const state = list ?? { conversations: [], requestsCount: 0 };
 
   return (
     <>
@@ -110,7 +108,7 @@ export default async function ChatPage() {
             </svg>
           </Link>
         </header>
-        <ChatListView initial={state} />
+        <ChatListView initial={state} moments={moments} />
       </main>
     </>
   );

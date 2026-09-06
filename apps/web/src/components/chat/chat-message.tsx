@@ -408,7 +408,7 @@ function Attachment({ attachment }: { attachment: ChatAttachmentDto }) {
   // Карточка чужого сервиса: снимок, а не ссылка на живой объект — оригинал
   // может быть уже изменён или удалён.
   const tint =
-    attachment.kind === "story"
+    attachment.kind === "story" || attachment.kind === "moment"
       ? "border-gold/26 bg-gold/8"
       : "border-glass-brd bg-white/5";
   return (
@@ -439,6 +439,9 @@ function Attachment({ attachment }: { attachment: ChatAttachmentDto }) {
 
 function sourceLabel(attachment: ChatAttachmentDto): string {
   if (attachment.kind === "story") return "Сторис · Вдохновение";
+  // Момент живёт сутки, а ответ на него остаётся: подпись объясняет, откуда
+  // взялась карточка, которой в разделе моментов уже нет.
+  if (attachment.kind === "moment") return "Ответ на момент";
   if (attachment.kind === "notice") return "Объявление";
   if (attachment.kind === "listing") return "Товар · Рынок";
   return "Контакт";
