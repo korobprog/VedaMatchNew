@@ -59,25 +59,43 @@ export function UnionQuickAccessWidget({
         </div>
       )}
       {hasProgress && (
-        <div
-          role="progressbar"
-          aria-label="Заполненность анкеты Union"
-          aria-valuenow={profileCompletionPercent}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          className="h-1 w-full overflow-hidden rounded-full bg-glass"
-        >
-          {/* Приглушённая и «созревающая»: у пустой анкеты полоса золотая, по
-              мере заполнения зеленеет. Яркая мятная на всю ширину карточки
-              спорила с самой карточкой за внимание. Оба цвета — токены,
-              определённые в обеих темах. */}
+        <div className="flex items-center gap-2">
           <div
-            className="h-full rounded-full opacity-70"
-            style={{
-              width: `${profileCompletionPercent}%`,
-              background: `color-mix(in oklab, var(--vm-gold), var(--vm-cyan) ${profileCompletionPercent}%)`,
-            }}
-          />
+            role="progressbar"
+            aria-label="Заполненность анкеты Union"
+            aria-valuenow={profileCompletionPercent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-glass"
+          >
+            {/* Приглушённая и «созревающая»: у пустой анкеты полоса золотая, по
+                мере заполнения зеленеет. Яркая мятная на всю ширину карточки
+                спорила с самой карточкой за внимание. Оба цвета — токены,
+                определённые в обеих темах. */}
+            <div
+              className="h-full rounded-full opacity-70"
+              style={{
+                width: `${profileCompletionPercent}%`,
+                background: `color-mix(in oklab, var(--vm-gold), var(--vm-cyan) ${profileCompletionPercent}%)`,
+              }}
+            />
+          </div>
+          {/* Кнопка «?» — <details>, а не состояние: работает без JavaScript
+              и сама закрывается по Escape в браузерах, где это поддержано.
+              Текст называет последствие, а не просит «заполнить профиль». */}
+          <details className="relative shrink-0">
+            <summary
+              aria-label="Зачем заполнять анкету"
+              className="flex size-5 cursor-pointer list-none items-center justify-center rounded-full border border-glass-brd text-[11px] font-bold text-text-2 hover:text-text-0 [&::-webkit-details-marker]:hidden"
+            >
+              ?
+            </summary>
+            <p className="glass absolute right-0 top-7 z-10 w-64 rounded-xl border border-glass-brd p-3 text-xs leading-relaxed text-text-1">
+              Чем больше вы расскажете о себе, тем выше анкета в
+              рекомендациях и тем чаще вас видят. Ниже — что уже заполнено, а
+              что ещё нет.
+            </p>
+          </details>
         </div>
       )}
       {hasProgress && profileItems.length > 0 && (

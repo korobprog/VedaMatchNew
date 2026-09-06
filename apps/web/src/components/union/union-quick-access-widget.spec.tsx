@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { UnionQuickAccessData } from "@/lib/union-quick-access";
@@ -106,5 +107,19 @@ describe("UnionQuickAccessWidget", () => {
     );
 
     expect(screen.queryByRole("list", { name: "Поля анкеты" })).not.toBeInTheDocument();
+  });
+
+  it("рядом с полосой есть подсказка «зачем»: по нажатию раскрывается текст", async () => {
+    const user = userEvent.setup();
+    render(<UnionQuickAccessWidget {...empty} profileCompletionPercent={40} />);
+
+    const toggle = screen.getByText("?");
+    expect(toggle).toHaveAttribute("aria-label", "Зачем заполнять анкету");
+    expect(toggle.closest("details")).not.toHaveAttribute("open");
+
+    await user.click(toggle);
+
+    expect(toggle.closest("details")).toHaveAttribute("open");
+    expect(screen.getByText(/тем чаще вас видят/)).toBeInTheDocument();
   });
 });
