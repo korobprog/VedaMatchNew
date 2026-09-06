@@ -213,12 +213,14 @@ export function Header({ user }: { user: UserProfile }) {
             <LocaleToggle className="hidden sm:flex" />
             <ThemeToggle className="hidden sm:flex" />
 
+            {/* Подпись по роли: у управляющего одним-двумя сервисами кнопка
+                «Админ» обещает больше, чем он получит. */}
             {isPortalAdmin(user) && (
               <Link
                 href="/admin"
                 className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-text-1 hover:text-magenta border border-glass-brd hover:border-magenta/30 transition-colors"
               >
-                {t("admin")}
+                {t(user.role === "admin" ? "admin" : "manager")}
               </Link>
             )}
             
@@ -316,7 +318,9 @@ export function Header({ user }: { user: UserProfile }) {
                       onClick={closeDrawer}
                       className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
                     >
-                      <span className="text-sm font-medium">{t("adminPanel")}</span>
+                      <span className="text-sm font-medium">
+                        {t(user.role === "admin" ? "adminPanel" : "managerPanel")}
+                      </span>
                     </Link>
                   </motion.div>
                 )}
