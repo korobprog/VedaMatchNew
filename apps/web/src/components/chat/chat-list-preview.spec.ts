@@ -108,6 +108,26 @@ describe("вторая строка беседы в списке", () => {
     ).toBe("Сообщение удалено");
   });
 
+  it("в «Избранном» пустая беседа объясняет своё назначение", () => {
+    expect(
+      chatListPreview(conversation({ saved: true, lastMessage: null })).text,
+    ).toBe("Заметки, ссылки и всё, что переслали себе");
+  });
+
+  it("снимок момента называется по-своему", () => {
+    expect(
+      chatListPreview(
+        conversation({
+          kind: "direct",
+          lastMessage: message({
+            body: "",
+            attachments: [{ id: "a-1", kind: "moment", url: "/a" }],
+          }),
+        }),
+      ).text,
+    ).toBe("Ответ на момент");
+  });
+
   it("вложение называется видом, а не пустотой", () => {
     expect(
       chatListPreview(

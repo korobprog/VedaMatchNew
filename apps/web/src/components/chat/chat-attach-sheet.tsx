@@ -14,10 +14,15 @@ import { LONG_PRESS_MS, type ChatQuickSlotId } from "./chat-quick-slot";
  * со снимком карточки. Так чат не читает чужие таблицы, а сервисы не знают
  * про его устройство.
  *
+ *
  * Любую плитку можно закрепить в быстрый слот у поля ввода: булавкой в
  * углу, долгим нажатием (телефон) или перетаскиванием мышью на слот.
  * Булавка — основной путь: она видна, доступна с клавиатуры и не спорит с
  * прокруткой; жесты — ускорители для тех, кто их ждёт.
+ *
+ * Плитка Вдохновения раньше называлась «Сторис». Имя переехало к моментам —
+ * тем, что живут сутки: два «сторис» рядом в одной панели не различал никто,
+ * включая поддержку.
  */
 
 export type AttachTileTone = "cyan" | "gold" | "violet" | "plain";
@@ -34,7 +39,8 @@ export const ATTACH_TILES: readonly AttachTileMeta[] = [
   { id: "photo", label: "Фото", tone: "cyan" },
   { id: "file", label: "Файл", tone: "violet" },
   { id: "emoji", label: "Смайлы", tone: "cyan" },
-  { id: "story", label: "Сторис", tone: "gold", href: "/motivation" },
+  { id: "moment", label: "Момент", tone: "gold", href: "/chat/moments/new" },
+  { id: "story", label: "Вдохновение", tone: "gold", href: "/motivation" },
   { id: "notice", label: "Объявление", tone: "gold", href: "/notices" },
   { id: "product", label: "Товар", tone: "cyan", href: "/market" },
   { id: "contact", label: "Контакт", tone: "violet", href: "/chat/people" },
@@ -56,6 +62,8 @@ export function AttachTileIcon({ id }: { id: ChatQuickSlotId }) {
       return <FileIcon />;
     case "emoji":
       return <SmileIcon />;
+    case "moment":
+      return <MomentIcon />;
     case "story":
       return <StarIcon />;
     case "notice":
@@ -286,6 +294,15 @@ function StarIcon() {
   return (
     <Svg>
       <path d="M12 3.5l2.4 5 5.6.8-4 3.9 1 5.5-5-2.6-5 2.6 1-5.5-4-3.9 5.6-.8z" />
+    </Svg>
+  );
+}
+
+function MomentIcon() {
+  return (
+    <Svg>
+      <circle cx="12" cy="12" r="8.6" strokeDasharray="4 3" />
+      <circle cx="12" cy="12" r="3.4" />
     </Svg>
   );
 }
