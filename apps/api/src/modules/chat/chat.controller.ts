@@ -84,6 +84,15 @@ export class ChatController {
     return { conversation: await this.conversations.directWith(user.sub, userId) };
   }
 
+  /**
+   * «Избранное». Идемпотентно: заводит беседу при первом обращении и дальше
+   * возвращает ту же — страница `/chat/saved` на этом и держится.
+   */
+  @Post('saved')
+  saved(@CurrentUser() user: AccessTokenPayload) {
+    return this.conversations.saved(user.sub);
+  }
+
   /** Люди, из которых собирается группа: собеседники личных диалогов. */
   @Get('people')
   people(@CurrentUser() user: AccessTokenPayload) {

@@ -11,6 +11,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { orphanStorageKeys } from './chat-purge';
 import { retentionCutoff, retentionDays } from './chat-retention';
 import { ChatUploadsService } from './chat-uploads.service';
+import { ChatMomentsPurger } from './moments/moments-purge.service';
 import { ChatStatusesService } from './statuses/chat-statuses.service';
 
 /**
@@ -46,6 +47,7 @@ export class ChatRetentionService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly uploads: ChatUploadsService,
+    private readonly moments: ChatMomentsPurger,
     config: ConfigService,
     private readonly statuses: ChatStatusesService,
   ) {
@@ -72,7 +74,10 @@ export class ChatRetentionService implements OnModuleInit, OnModuleDestroy {
         .catch((error) =>
           this.logger.warn(`Redis недоступен: ${String(error)}`),
         );
-    this.logger.log(`Удалённые сообщения чистятся через ${this.days} дн.`);
+    this.logger.log(
+      `Удалённые сообщения чистятся через ${this.days} дн., ` +
+        `сгоревшие моменты — через ${this.moments.graceDays} дн.`,
+    );
     this.timer = setInterval(() => void this.tick(), TICK_MS);
     // unref, иначе таймер держит процесс и тесты не завершаются.
     this.timer.unref();
@@ -97,17 +102,37 @@ export class ChatRetentionService implements OnModuleInit, OnModuleDestroy {
       }
     }
     try {
-      // Истёкшие статусы (VED-129) — на том же тике и под тем же лизом.
-      const statuses = await this.statuses.purgeExpired(now);
-      if (statuses > 0)
-        this.logger.log(`Убрано истёкших статусов: ${statuses}`);
-      return await this.purge(retentionCutoff(now, this.days));
-    } catch (error) {
-      this.logger.error(
-        'Чистка удалённых сообщений не удалась',
-        error instanceof Error ? error.stack : undefined,
-      );
-      return 0;
+      // Чистки под одним лизом, но каждая в своей попытке: падение одной
+      // не должно отменять остальные — они ни в чём друг от друга не зависят.
+      let done = 0;
+      try {
+        // Истёкшие статусы (VED-129) — на том же тике и под тем же лизом.
+        const statuses = await this.statuses.purgeExpired(now);
+        if (statuses > 0)
+          this.logger.log(`Убрано истёкших статусов: ${statuses}`);
+      } catch (error) {
+        this.logger.error(
+          'Чистка истёкших статусов не удалась',
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+      try {
+        done += await this.purge(retentionCutoff(now, this.days));
+      } catch (error) {
+        this.logger.error(
+          'Чистка удалённых сообщений не удалась',
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+      try {
+        done += await this.moments.purgeExpired(now);
+      } catch (error) {
+        this.logger.error(
+          'Уборка сгоревших моментов не удалась',
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+      return done;
     } finally {
       this.running = false;
     }

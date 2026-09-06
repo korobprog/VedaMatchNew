@@ -16,6 +16,7 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
+import { MomentsService } from './moments/moments.service';
 import { toUserSummary } from './chat-dto';
 import { directKey } from './direct-key';
 import { chatUserSelect } from './chat-selects';
@@ -44,12 +45,14 @@ export class ChatReportsService {
     // Портальная инфраструктура — её контракт сервисного модуля разрешает
     // наравне с AuthModule.
     private readonly moderation: ModerationService,
+    // Правило видимости момента живёт в его папке, а не переписано сюда.
+    private readonly moments: MomentsService,
   ) {}
 
   async create(userId: string, dto: CreateChatReportRequest) {
     const reason = dto?.reason?.trim();
     if (!reason) throw new BadRequestException('Не указана причина');
-    if (!dto.messageId && !dto.conversationId)
+    if (!dto.messageId && !dto.conversationId && !dto.momentId)
       throw new BadRequestException('Не указано, на что жалоба');
 
     // Жалобу принимаем только на то, что человек действительно видит:
@@ -64,6 +67,9 @@ export class ChatReportsService {
       if (!message) throw new BadRequestException('Сообщение не найдено');
       await this.assertVisible(userId, message.conversationId);
     }
+    // Момент проверяет свой сервис: правило видимости у него своё, и второй
+    // его копии здесь быть не должно.
+    if (dto.momentId) await this.moments.assertVisible(userId, dto.momentId);
 
     const created = await this.prisma.chatReport.create({
       data: {
@@ -72,6 +78,7 @@ export class ChatReportsService {
         comment: dto.comment?.trim() || null,
         messageId: dto.messageId ?? null,
         conversationId: dto.conversationId ?? null,
+        momentId: dto.momentId ?? null,
       },
     });
 
@@ -371,7 +378,11 @@ export class ChatReportsService {
       openReports,
     ] = await Promise.all([
       this.prisma.chatConversation.count(),
-      this.prisma.chatConversation.count({ where: { kind: 'direct' } }),
+      // «Избранное» — тоже `direct`, но диалогом не является: посчитанное
+      // вместе с ним число личных переписок завышено на число аккаунтов.
+      this.prisma.chatConversation.count({
+        where: { kind: 'direct', savedForId: null },
+      }),
       this.prisma.chatConversation.count({ where: { kind: 'group' } }),
       this.prisma.chatConversation.count({ where: { kind: 'channel' } }),
       this.prisma.chatMessage.count(),
