@@ -73,6 +73,31 @@ export function columnBeside(
   return board.columns[index + direction]?.id ?? null;
 }
 
+/**
+ * Соседи колонки на новом месте, когда её двигают на шаг: `-1` — раньше,
+ * `+1` — позже. `null`, когда двигать некуда, — колонка уже с краю.
+ *
+ * Считается по списку БЕЗ самой колонки: ровно так её видит сервер, который
+ * ставит колонку между названными соседями. Считать по списку с ней внутри
+ * значит промахнуться на единицу и вернуть колонку туда, откуда взяли.
+ */
+export function columnNeighbours(
+  columns: Array<{ id: string }>,
+  columnId: string,
+  direction: -1 | 1,
+): { afterColumnId: string | null; beforeColumnId: string | null } | null {
+  const index = columns.findIndex((column) => column.id === columnId);
+  if (index === -1) return null;
+  const target = index + direction;
+  if (target < 0 || target >= columns.length) return null;
+
+  const rest = columns.filter((column) => column.id !== columnId);
+  return {
+    afterColumnId: rest[target - 1]?.id ?? null,
+    beforeColumnId: rest[target]?.id ?? null,
+  };
+}
+
 /** Колонка переполнена: подсветка, а не запрет — запрет злит, подсветка работает. */
 export function isOverWip(column: {
   wipLimit: number;
