@@ -40,6 +40,7 @@ import { BackgroundOrbs } from "./Orb";
 import { HexScales } from "./HexScales";
 import { NoiseOverlay } from "./NoiseOverlay";
 import { Iris } from "./Iris";
+import { PortalPreview } from "./PortalPreview";
 import { CommunitiesMap } from "./CommunitiesMap";
 import { CommunityMapStats } from "./CommunityMapStats";
 import { Pricing } from "./Pricing";
@@ -205,7 +206,11 @@ export function VaishnavaLandingPage({
 
       {/* Hero */}
       <section className="relative min-h-dvh flex items-center pt-20 pb-32 md:pt-24 md:pb-40 overflow-hidden">
-        <div className="mx-auto max-w-5xl px-4 md:px-6 w-full text-center">
+        <div className="mx-auto max-w-7xl px-4 md:px-6 w-full">
+          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+          {/* Текст слева, справа — ролик кабинета с курсором, тот же, что на
+              главной: преданному так же важно увидеть портал изнутри до входа. */}
+          <div className="min-w-0 text-center lg:text-left">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -234,7 +239,7 @@ export function VaishnavaLandingPage({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.35 }}
-            className="text-text-1 text-lg md:text-xl mb-10 max-w-2xl mx-auto leading-relaxed"
+            className="text-text-1 text-lg md:text-xl mb-10 max-w-xl mx-auto lg:mx-0 leading-relaxed"
           >
             {t("hero.description")}
           </motion.p>
@@ -243,7 +248,7 @@ export function VaishnavaLandingPage({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.45 }}
-            className="flex flex-col sm:flex-row gap-4 justify-center"
+            className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start"
           >
             <Link
               href={startHref}
@@ -285,7 +290,7 @@ export function VaishnavaLandingPage({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
-              className="flex gap-4 sm:gap-8 mt-14 justify-center"
+              className="flex gap-4 sm:gap-8 mt-12 justify-center lg:justify-start"
             >
               {totalMembers != null && (
                 <div className="shrink-0">
@@ -325,6 +330,17 @@ export function VaishnavaLandingPage({
               )}
             </motion.div>
           )}
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+            className="relative flex min-w-0 justify-center lg:justify-end"
+          >
+            <PortalPreview />
+          </motion.div>
+          </div>
         </div>
 
         <motion.div
