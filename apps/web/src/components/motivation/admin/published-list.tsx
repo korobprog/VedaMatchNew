@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { EyeOff, Pencil, X } from "lucide-react";
+import { ArrowLeft, EyeOff, Pencil, X } from "lucide-react";
 import type {
   MotivationAdminCandidateDto,
   MotivationCategoryDto,
@@ -95,6 +95,20 @@ export function MotivationPublishedList({
 
   return (
     <>
+      {/* Дорога обратно. Из ленты сюда приходят с одним вопросом — поправить
+          то, на что смотрели, — и уходить должны туда же, а не искать ленту
+          заново через меню. Ссылки нет, когда во вкладку зашли сами: тогда
+          «назад» вело бы в ленту, из которой не приходили. */}
+      {openSlug && (
+        <Link
+          href={`/motivation?post=${encodeURIComponent(openSlug)}`}
+          className="mb-4 inline-flex items-center gap-1 text-sm text-text-1 hover:text-text-0"
+        >
+          <ArrowLeft aria-hidden className="size-4" />
+          Назад к афоризму в ленте
+        </Link>
+      )}
+
       <label className="block max-w-md">
         <span className={labelClass}>Найти по названию, цитате или автору</span>
         <input
@@ -175,12 +189,23 @@ export function MotivationPublishedList({
               <div className="mt-3 flex flex-wrap gap-2">
                 {/* Открывает ленту прямо на этой карточке — тем же адресом,
                     что и переход из «Студии»: у админа один способ увидеть
-                    публикацию глазами читателя. */}
+                    публикацию глазами читателя.
+
+                    У карточки, ради которой пришли из ленты, та же ссылка
+                    подписана возвращением: адрес совпадает с дорогой назад, и
+                    называть её «открыть» значило прятать выход на виду. */}
                 <Link
                   href={`/motivation?post=${encodeURIComponent(post.slug)}`}
                   className={secondaryButton}
                 >
-                  Открыть в ленте
+                  {post.id === openId ? (
+                    <>
+                      <ArrowLeft aria-hidden className="size-4" />
+                      Вернуться в ленту
+                    </>
+                  ) : (
+                    "Открыть в ленте"
+                  )}
                 </Link>
 
                 <button
@@ -288,18 +313,25 @@ function PublishedTextForm({
 }) {
   const [title, setTitle] = useState(post.title);
   const [text, setText] = useState(post.text);
-  const [storyText, setStoryText] = useState(post.storyText);
   const [speaker, setSpeaker] = useState(post.attributionSpeaker ?? "");
   const [work, setWork] = useState(post.attributionWork ?? "");
-  const [locator, setLocator] = useState(post.attributionLocator ?? "");
   const [category, setCategory] = useState(post.category);
 
-  const textChanged =
-    title !== post.title || text !== post.text || storyText !== post.storyText;
+  /* Подпись на картинке и место в произведении из формы убраны, но из
+     запроса — нет, и это не забытый код.
+
+     Сервер пишет подпись и атрибуцию целиком: `storyText` в схеме
+     обязателен, а `attribution` перезаписывает все три поля разом
+     (`locator?.trim() || null`). Перестань форма их слать — правка одного
+     автора молча обнуляла бы место, а вставка перевода падала бы на
+     обязательном поле. Поэтому оба уезжают обратно такими, какими пришли. */
+  const storyText = post.storyText;
+  const locator = post.attributionLocator ?? "";
+
+  const textChanged = title !== post.title || text !== post.text;
   const attributionChanged =
     speaker !== (post.attributionSpeaker ?? "") ||
-    work !== (post.attributionWork ?? "") ||
-    locator !== (post.attributionLocator ?? "");
+    work !== (post.attributionWork ?? "");
   const categoryChanged = category !== post.category;
   const changed = textChanged || attributionChanged || categoryChanged;
 
@@ -324,17 +356,7 @@ function PublishedTextForm({
         />
       </label>
 
-      <label className="block">
-        <span className={labelClass}>Подпись на картинке</span>
-        <textarea
-          value={storyText}
-          rows={2}
-          onChange={(event) => setStoryText(event.target.value)}
-          className={`${fieldClass} mt-1`}
-        />
-      </label>
-
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
           <span className={labelClass}>Автор</span>
           <input
@@ -348,15 +370,6 @@ function PublishedTextForm({
           <input
             value={work}
             onChange={(event) => setWork(event.target.value)}
-            className={`${fieldClass} mt-1`}
-          />
-        </label>
-        <label className="block">
-          <span className={labelClass}>Место</span>
-          <input
-            value={locator}
-            onChange={(event) => setLocator(event.target.value)}
-            placeholder="2.13"
             className={`${fieldClass} mt-1`}
           />
         </label>
