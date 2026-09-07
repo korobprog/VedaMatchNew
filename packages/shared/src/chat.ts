@@ -24,7 +24,9 @@ export type ChatAttachmentKind =
   | 'listing'
   | 'contact'
   /** Ответ ассистента портала, отправленный собеседнику снимком. */
-  | 'assistant';
+  | 'assistant'
+  /** Приглашение в рабочую среду сервиса «Работа». */
+  | 'work';
 
 /** Столько же, сколько было в чате Знакомств: длину переписки меняли бы вместе. */
 export const CHAT_MESSAGE_MAX_LENGTH = 2000;

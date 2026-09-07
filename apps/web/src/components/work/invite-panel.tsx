@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Copy, Link2, Loader2, UserPlus, X } from "lucide-react";
+import Link from "next/link";
+import { Copy, Link2, Loader2, Search, Send, UserPlus, X } from "lucide-react";
 import type {
   WorkContactDto,
   WorkInviteDto,
@@ -14,6 +15,7 @@ import {
   listWorkInvites,
   revokeWorkInvite,
 } from "@/lib/work-api";
+import { buildWorkInviteShareHref } from "./work-share";
 
 const ROLE_TITLE: Record<WorkMemberRole, string> = {
   owner: "владелец",
@@ -44,6 +46,7 @@ export function WorkInvitePanel({
   const [copied, setCopied] = useState(false);
   const [contacts, setContacts] = useState<WorkContactDto[] | null>(null);
   const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const canInvite = space.role === "owner" || space.role === "admin";
 
@@ -60,17 +63,22 @@ export function WorkInvitePanel({
   useEffect(() => {
     if (!open || !canInvite) return;
     let alive = true;
-    listWorkContacts(space.id)
-      .then((loaded) => {
-        if (alive) setContacts(loaded);
-      })
-      .catch(() => {
-        if (alive) setContacts([]);
-      });
+    // Полсекунды тишины перед запросом: иначе на каждую букву уходит поход в
+    // базу, а список знакомых и так короткий.
+    const timer = setTimeout(() => {
+      listWorkContacts(space.id, search.trim() || undefined)
+        .then((loaded) => {
+          if (alive) setContacts(loaded);
+        })
+        .catch(() => {
+          if (alive) setContacts([]);
+        });
+    }, 400);
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
-  }, [open, canInvite, space.id]);
+  }, [open, canInvite, space.id, search]);
 
   useEffect(() => {
     if (!open || !canInvite) return;
@@ -238,12 +246,37 @@ export function WorkInvitePanel({
                     {copied ? "Скопировано" : "Копировать"}
                   </button>
                 </div>
+                {/* Отправка идёт через общий экран портала: там настоящий
+                    список бесед человека, а «Работа» про устройство чата
+                    ничего не знает — только адрес и поля карточки. */}
+                <Link
+                  href={buildWorkInviteShareHref({
+                    spaceId: space.id,
+                    spaceName: space.name,
+                    roleTitle: ROLE_TITLE[fresh.role],
+                    url: fresh.url,
+                  })}
+                  className="mt-2 flex w-fit items-center gap-1.5 rounded-lg bg-magenta px-3 py-1.5 text-xs font-semibold text-white"
+                >
+                  <Send aria-hidden className="size-3.5" />
+                  Отправить другу в чат
+                </Link>
               </div>
             )}
 
             <h3 className="mt-5 text-sm font-semibold text-text-0">
               Позвать из своих
             </h3>
+            <label className="mt-2 flex items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2">
+              <Search aria-hidden className="size-4 shrink-0 text-text-2" />
+              <span className="sr-only">Поиск по знакомым</span>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Найти по имени"
+                className="min-w-0 flex-1 bg-transparent text-sm text-text-0 outline-none"
+              />
+            </label>
             {contacts === null ? (
               <p className="mt-2 flex items-center gap-2 text-sm text-text-2">
                 <Loader2 aria-hidden className="size-4 animate-spin" />
@@ -251,8 +284,9 @@ export function WorkInvitePanel({
               </p>
             ) : contacts.length === 0 ? (
               <p className="mt-2 text-sm text-text-2">
-                Здесь появятся те, с кем вы уже знакомы на портале. Пока некого
-                позвать — отправьте ссылку.
+                {search.trim()
+                  ? "Среди знакомых никого с таким именем."
+                  : "Здесь появятся те, с кем вы уже знакомы на портале. Пока некого позвать — создайте ссылку и отправьте её другу в чат кнопкой выше."}
               </p>
             ) : (
               <ul className="mt-2 space-y-1">

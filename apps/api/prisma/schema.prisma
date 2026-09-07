@@ -3862,6 +3862,9 @@ enum ChatAttachmentKind {
   listing
   contact
   assistant
+  /// Приглашение в рабочую среду сервиса «Работа». Как и остальные снимки
+  /// чужих сервисов, живёт здесь: вложение хранит чат, а не издатель.
+  work
 }
 
 enum ChatReportStatus {
