@@ -91,9 +91,7 @@ export function NotificationSettings() {
     setProblem(null);
     try {
       if ((await enablePush()) === "failed") {
-        setProblem(
-          "Не удалось включить уведомления. Попробуйте ещё раз позже.",
-        );
+        setProblem("Не удалось включить уведомления. Попробуйте ещё раз позже.");
       }
     } finally {
       setBusy(false);
@@ -176,9 +174,7 @@ export function NotificationSettings() {
               type="checkbox"
               aria-label="Все уведомления"
               checked={preferences.enabled}
-              onChange={(event) =>
-                void update({ enabled: event.target.checked })
-              }
+              onChange={(event) => void update({ enabled: event.target.checked })}
               className="h-6 w-6 shrink-0"
             />
           </label>
