@@ -123,13 +123,10 @@ export function LandingPage({
                 href="#services"
                 className="mt-6 inline-flex items-center gap-2 text-sm text-text-2 hover:text-text-0 transition-colors"
               >
-                {/* Цифра обычным цветом текста, а не мятой: мята на светлой
-                    теме давала 4.53:1 — впритык к норме, и любой фон под
-                    полупрозрачной подложкой уводил её ниже. Кружок остаётся
-                    мятным, читается по-прежнему как счётчик. */}
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan/15 text-text-0 text-xs font-bold">
-                  8
-                </span>
+                {/* Без числа: каталог растёт (Медиатека появилась после
+                    «восьми»), и любая цифра в разметке отстаёт от него.
+                    Кружок — декоративный маркер, а не счётчик. */}
+                <span className="h-2 w-2 rounded-full bg-cyan/70" aria-hidden />
                 {t("hero.ecosystem")}
               </a>
 
@@ -214,7 +211,7 @@ export function LandingPage({
         </motion.div>
       </section>
 
-      {/* Services Section — весь каталог из 8 сервисов платформы */}
+      {/* Services Section — каталог сервисов платформы */}
       <Services />
 
       {/* How It Works Section */}

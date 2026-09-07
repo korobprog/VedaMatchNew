@@ -62,14 +62,14 @@
       "description": "No more juggling a dozen separate apps. VedaMatch brings together dating, community, practice, and marketplace for people who live in goodness.",
       "ctaStart": "Start",
       "ctaMore": "Learn more",
-      "ecosystem": "platform services: practice, knowledge, community and marketplace",
+      "ecosystem": "Every platform service: practice, knowledge, community and marketplace",
       "statUsers": "Members",
       "statCities": "Cities",
       "statCommunities": "Communities",
       "scroll": "Scroll down"
     },
     "services": {
-      "title": "One account — eight services",
+      "title": "One account — every service",
       "subtitle": "VedaMatch is more than dating. It's an ecosystem for a life in goodness: practice, knowledge, community and conscious connections in one place.",
       "featured": "Flagship",
       "learnMore": "Learn more →",
@@ -141,7 +141,7 @@
     },
     "cta": {
       "title": "Ready to begin?",
-      "description": "Join thousands of people who have already found like-minded companions through VedaMatch — connections in goodness.",
+      "description": "Join the people who have already found like-minded companions through VedaMatch — connections in goodness.",
       "button": "Create an account"
     },
     "footer": {
@@ -164,7 +164,7 @@
       "statCities": "Cities",
       "statTalks": "Open conversations",
       "readyTitle": "Ready to try “{name}”?",
-      "readyDescription": "First month free, with access to all 8 platform services in one account.",
+      "readyDescription": "First month free, with access to every platform service in one account.",
       "createAccount": "Create an account",
       "mapAriaLabel": "Map of portal communities"
     }
@@ -696,7 +696,7 @@
     },
     "services": {
       "title": "Services for devotees",
-      "subtitle": "Eight services in one account. Each is described as it works for a Vaishnava today, not as a promise.",
+      "subtitle": "Every service in one account. Each is described as it works for a Vaishnava today, not as a promise.",
       "learnMore": "More about the service",
       "planned": "Planned",
       "items": {
