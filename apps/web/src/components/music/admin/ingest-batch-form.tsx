@@ -20,7 +20,11 @@ import {
 import { formatBytes } from "@/lib/music-duration";
 import { plural } from "@/lib/plural";
 import { Alert } from "@/components/ui/alert";
-import { LineageSelect } from "@/components/lineage-picker";
+import {
+  LineageSelect,
+  lineageFromSelect,
+  lineageToSelect,
+} from "@/components/lineage-picker";
 
 const BASES: { value: MusicUploadRightsBasis; label: string }[] = [
   { value: "own_recording", label: "Своя запись" },
@@ -277,15 +281,11 @@ export function IngestBatchForm({
 
       <div className="max-w-md">
         <LineageSelect
-          value={batch.lineage ?? ""}
-          onChange={(next) =>
-            void patch({
-              lineage: next ? (next as NonNullable<typeof batch.lineage>) : null,
-            })
-          }
+          value={lineageToSelect(batch.lineage)}
+          onChange={(next) => void patch({ lineage: lineageFromSelect(next) })}
           allLabel="Для всех линий"
           label="Духовная линия записей"
-          hint="Преданные слышат в каталоге записи своей линии и «для всех». По умолчанию ISKCON — чтобы не было путаницы; «для всех» ставьте осознанно."
+          hint="Преданные слышат в каталоге записи своей линии и «для всех». По умолчанию «для всех» — линию ставьте, когда записи партии действительно принадлежат ей: иначе они пропадут из каталога у остальных линий."
           disabled={published}
           className={field}
         />

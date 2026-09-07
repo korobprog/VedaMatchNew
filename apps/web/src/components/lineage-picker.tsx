@@ -27,6 +27,29 @@ import { fieldClassName } from "@/components/ui/input";
 
 const NONE = "";
 
+/**
+ * Значение `<select>` → то, что понимает API: линия материала или `null`
+ * («для всех линий»).
+ *
+ * Нужно потому, что вариант «для всех» в списке имеет значение `"all"`, а не
+ * пустую строку, и наивное `value ? value : null` отправляло на сервер
+ * строку `"all"` как идентификатор линии. Сервер отвечал 400 «Неизвестная
+ * духовная линия» — то есть модератор, осознанно выбравший «для всех линий»,
+ * не мог ни опубликовать запись из очереди, ни сохранить партию пополнения.
+ */
+export function lineageFromSelect(value: string): LineageId | null {
+  return value === NONE || value === LINEAGE_ALL ? null : (value as LineageId);
+}
+
+/**
+ * Обратное преобразование: `null` показываем как «для всех линий», а не как
+ * пустой выбор. Пустой выбор в этих формах означал бы «ещё не решили», а
+ * решение уже принято — просто оно «для всех».
+ */
+export function lineageToSelect(lineage: LineageId | null | undefined): string {
+  return lineage ?? LINEAGE_ALL;
+}
+
 export function LineageCards({
   value,
   onChange,

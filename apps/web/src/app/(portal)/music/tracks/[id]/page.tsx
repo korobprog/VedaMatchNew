@@ -1,4 +1,3 @@
-import { lineageLabel } from "@vedamatch/shared";
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -114,11 +113,6 @@ export default async function MusicTrackPage({
                 Запись с программы
               </li>
             )}
-            {/* Линия записи: слушателю — почему она в его каталоге, редакции —
-                правильно ли подписана. */}
-            <li className="flex h-8 items-center rounded-full border border-glass-brd px-3 text-xs font-semibold text-text-1">
-              {lineageLabel(track.lineage) ?? "Для всех линий"}
-            </li>
           </ul>
 
           <div className="mt-1 flex flex-col gap-2">

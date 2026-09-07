@@ -212,7 +212,7 @@ describe('MusicUploadsService.completeUpload', () => {
     });
   });
 
-  it('линия записи — линия преданного, который её принёс', async () => {
+  it('линия загрузившего на запись не переносится: она «для всех линий»', async () => {
     const prisma = prismaMock();
     const storage = storageMock();
     prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
@@ -223,6 +223,27 @@ describe('MusicUploadsService.completeUpload', () => {
 
     await service(prisma, storage).completeUpload('u1', 'up1', 'gaura.mp3');
 
+    /* Раньше здесь стояла линия преданного, и это было тихой ошибкой: линия
+       — утверждение о записи, а не о том, кто нажал «загрузить». Бхаджан
+       Дурге получал линию Гаудия-матха и пропадал из каталога у преданных
+       остальных линий, ничего им не объясняя. Ставит линию модератор. */
+    expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ lineage: null }),
+    });
+  });
+
+  it('выбранный при загрузке матх сохраняется у записи', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+
+    await service(prisma, storage).completeUpload(
+      'u1',
+      'up1',
+      'gaura.mp3',
+      'sri_chaitanya_saraswat_math',
+    );
+
     expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         lineage: 'sri_chaitanya_saraswat_math',
@@ -230,7 +251,26 @@ describe('MusicUploadsService.completeUpload', () => {
     });
   });
 
-  it('у не-преданного запись подписывается ISKCON по умолчанию', async () => {
+  it('линия вне справочника — «для всех», а не отказ: файл уже в бакете', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+
+    await service(prisma, storage).completeUpload(
+      'u1',
+      'up1',
+      'gaura.mp3',
+      'sri_chaitanya_matha' as never,
+    );
+
+    // Ронять заливку из-за поля, которое поправят в очереди, значит потерять
+    // саму запись — а она уже залита.
+    expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ lineage: null }),
+    });
+  });
+
+  it('и у не-преданного тоже «для всех линий», а не ISKCON', async () => {
     const prisma = prismaMock();
     const storage = storageMock();
     prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
@@ -242,7 +282,7 @@ describe('MusicUploadsService.completeUpload', () => {
     await service(prisma, storage).completeUpload('u1', 'up1', 'gaura.mp3');
 
     expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ lineage: 'iskcon' }),
+      data: expect.objectContaining({ lineage: null }),
     });
   });
 

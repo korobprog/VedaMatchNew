@@ -24,6 +24,7 @@ import type {
   UpdateMusicTrackRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { AdminUnlimited } from '../auth/admin-unlimited.guard';
 import { MusicAdminCatalogService } from './music-admin-catalog.service';
 import { MusicAdminQueueService } from './music-admin-queue.service';
 import { MusicReportsService } from './music-reports.service';
@@ -35,6 +36,21 @@ import { isAdmin } from './is-admin';
  */
 @Controller('music/admin/catalog')
 @UseGuards(AuthGuard)
+/* Лимит остаётся для всех, кроме администратора Музыки — иначе он бил ровно
+   по той работе, ради которой раздел и заведён.
+
+   Считалось это так: страница справочников на каждую отрисовку тянет четыре
+   списка (исполнители, альбомы, разделы, записи), а каждое действие —
+   завести исполнителя, переименовать, удалить запись — заканчивается
+   `router.refresh()`, то есть теми же четырьмя запросами. Одно действие
+   стоит пяти обращений, и 120 в час кончались примерно на двадцать четвёртом.
+   Дальше сервер отвечал 429 на всё подряд, а админка показывала пустые
+   справочники и «не удалось выполнить запрос» — то самое «управление музыкой
+   полностью нерабочее».
+
+   Механизм для этого в портале уже был (`AdminUnlimited`, им пользуются Чат и
+   Образование) — к Музыке его просто не подключили. */
+@AdminUnlimited('music')
 @Throttle({ default: { ttl: 3_600_000, limit: 120 } })
 export class MusicAdminCatalogController {
   constructor(
@@ -214,6 +230,9 @@ export class MusicAdminCatalogController {
  */
 @Controller('music/admin')
 @UseGuards(AuthGuard)
+/* Та же причина, что и у справочников: разбор очереди и жалоб — это работа
+   пачками, и общий лимит «двери для спама» на ней не к месту. */
+@AdminUnlimited('music')
 @Throttle({ default: { ttl: 3_600_000, limit: 300 } })
 export class MusicAdminQueueController {
   constructor(

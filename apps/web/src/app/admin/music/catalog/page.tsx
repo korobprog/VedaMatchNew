@@ -3,6 +3,7 @@ import { MusicReferenceForms } from "@/components/music/admin/reference-forms";
 import { MusicReferenceList } from "@/components/music/admin/reference-list";
 import { MusicTrackList } from "@/components/music/admin/track-list";
 import { MusicUploadForm } from "@/components/music/upload-form";
+import { Alert } from "@/components/ui/alert";
 import { plural } from "@/lib/plural";
 import {
   getMusicAdminAlbums,
@@ -27,6 +28,14 @@ export default async function AdminMusicCatalogPage() {
     getMusicAdminTracks(),
   ]);
 
+  /* Ни один список не приехал — это не пустой каталог.
+     `adminGet` отдаёт `null` и на 401/403/404, и молча: раньше страница в
+     этом случае рисовала «Пока никого» во всех трёх справочниках, и
+     отсутствие прав или упавший API выглядели точно так же, как чистая база.
+     Именно так читалось «управление музыкой полностью нерабочее». */
+  const nothingLoaded =
+    !artists && !albums && !categories && !tracks && !summary;
+
   const artistItems = artists?.items ?? [];
   const albumItems = albums?.items ?? [];
   const categoryItems = categories?.items ?? [];
@@ -37,6 +46,16 @@ export default async function AdminMusicCatalogPage() {
   return (
     <>
       <MusicAdminTabs active="catalog" pendingCount={summary?.pending ?? 0} />
+
+      {nothingLoaded && (
+        <div className="mb-5">
+          <Alert tone="error">
+            Справочники не загрузились. Либо у этой учётной записи нет прав на
+            раздел «Музыка», либо API ответил ошибкой — пустые списки ниже не
+            значат, что каталог пуст.
+          </Alert>
+        </div>
+      )}
 
       <div className="mb-5">
         <MusicUploadForm />
@@ -95,6 +114,9 @@ export default async function AdminMusicCatalogPage() {
         <MusicTrackList
           tracks={tracks?.items ?? []}
           total={tracks?.total ?? 0}
+          artists={artistItems}
+          albums={albumItems}
+          categories={categoryItems}
         />
       </div>
     </>

@@ -10,6 +10,7 @@
 // буфере не пройдёт.
 import type {
   CompleteMusicUploadResponse,
+  LineageId,
   CreateMusicCoverUploadResponse,
   CreateMusicReportRequest,
   CreateMusicUploadResponse,
@@ -48,6 +49,11 @@ export async function uploadMusicTrack(
   file: File,
   rightsBasis: MusicUploadRightsBasis,
   onProgress?: (fraction: number) => void,
+  /**
+   * Матх или линия записи. `null` (и по умолчанию) — слышат все: сервер
+   * линию не угадывает, см. `CompleteMusicUploadRequest`.
+   */
+  lineage: LineageId | null = null,
 ): Promise<CompleteMusicUploadResponse> {
   const created = await send<CreateMusicUploadResponse>("/music/uploads", {
     method: "POST",
@@ -63,7 +69,10 @@ export async function uploadMusicTrack(
 
   return send<CompleteMusicUploadResponse>(
     `/music/uploads/${created.uploadId}/complete`,
-    { method: "POST", body: JSON.stringify({ fileName: file.name }) },
+    {
+      method: "POST",
+      body: JSON.stringify({ fileName: file.name, lineage }),
+    },
   );
 }
 

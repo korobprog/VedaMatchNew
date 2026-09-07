@@ -9,16 +9,13 @@ import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import type {
   CompleteMusicUploadResponse,
+  LineageId,
   CreateMusicUploadRequest,
   CreateMusicUploadResponse,
   MusicStorageUsageDto,
   MyMusicUploadsDto,
 } from '@vedamatch/shared';
-import {
-  MUSIC_ACCEPTED_MIME,
-  defaultLineageFor,
-  toLineageId,
-} from '@vedamatch/shared';
+import { isLineageId, MUSIC_ACCEPTED_MIME } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MusicStorageService } from './music-storage.service';
 import {
@@ -265,10 +262,21 @@ export class MusicUploadsService {
    * автор. Обратный порядок для аудио не работает: правообладатель приходит
    * быстрее модератора.
    */
+  /**
+   * Линия из запроса. Мусор — не «поставим ISKCON» и не 500, а «слышат все»:
+   * заливка уже удалась, файл в бакете, и ронять её из-за поля, которое
+   * можно поправить в очереди, значит потерять запись целиком.
+   */
+  private uploadLineage(value: LineageId | null | undefined): LineageId | null {
+    return isLineageId(value) ? value : null;
+  }
+
   async completeUpload(
     userId: string,
     uploadId: string,
     fileName: string | undefined,
+    /** Матх или линия записи; не выбрана — слышат все. */
+    requestedLineage?: LineageId | null,
   ): Promise<CompleteMusicUploadResponse> {
     const upload = await this.prisma.musicUpload.findUnique({
       where: { id: uploadId },
@@ -344,18 +352,19 @@ export class MusicUploadsService {
 
     const title = fallbackTrackTitle(metadata, fileName ?? upload.storageKey);
     const status = initialStatusFor(upload.rightsBasis);
-    // Линия записи — линия загрузившего, если он преданный, иначе ISKCON.
-    // Модератор может поправить перед публикацией. Из `User` читаются ровно
-    // два портальных поля, разрешённых сервису на чтение.
-    const author = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { spiritualStage: true, lineage: true },
-    });
-    const lineage = defaultLineageFor(
-      author
-        ? { spiritualStage: author.spiritualStage, lineage: toLineageId(author.lineage) }
-        : null,
-    );
+    /* Линия записи — та, что выбрал загрузивший; не выбрал — слышат все.
+
+       Сервер её больше не угадывает. Раньше он подставлял линию
+       загрузившего (`defaultLineageFor`), и это было тихой ошибкой: линия —
+       утверждение о записи, а не о человеке, который нажал «загрузить».
+       Бхаджан Дурге получал линию Гаудия-матха только потому, что его залил
+       преданный этой линии, — и пропадал из каталога у остальных линий,
+       никак этого не объясняя.
+
+       Пустое значение означает «слышат все» и остаётся таким: это честнее
+       угаданного. Поправить может модератор в очереди и редакция в форме
+       правки каталога. */
+    const lineage = this.uploadLineage(requestedLineage);
     const coverKey = embeddedCover
       ? await this.storeEmbeddedCover(userId, embeddedCover)
       : null;
