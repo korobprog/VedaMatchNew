@@ -107,8 +107,12 @@ export function workAttachmentName(
  * показать её как пришла.
  */
 function decodeMultipartName(raw: string): string {
-  const singleByte = /^[\u0000-\u00FF]*$/.test(raw);
-  const hasHighByte = /[\u0080-\u00FF]/.test(raw);
+  // По кодам, а не регуляркой: диапазон с \u0000 внутри регулярного выражения
+  // запрещён правилом no-control-regex, и не зря — управляющий символ там
+  // невидим при чтении.
+  const codes = [...raw].map((char) => char.charCodeAt(0));
+  const singleByte = codes.every((code) => code <= 0xff);
+  const hasHighByte = codes.some((code) => code >= 0x80 && code <= 0xff);
   if (!singleByte || !hasHighByte) return raw;
   const decoded = Buffer.from(raw, 'latin1').toString('utf8');
   return decoded.includes('\uFFFD') ? raw : decoded;

@@ -35,7 +35,9 @@ describe('validateWorkUpload', () => {
     expect(validateWorkUpload({ mimetype: 'image/jpeg', size })).toBe(
       'file_too_large',
     );
-    expect(validateWorkUpload({ mimetype: 'application/pdf', size })).toBeNull();
+    expect(
+      validateWorkUpload({ mimetype: 'application/pdf', size }),
+    ).toBeNull();
   });
 
   it('ровно по границе — ещё принимаем', () => {
