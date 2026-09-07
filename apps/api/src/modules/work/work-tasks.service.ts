@@ -2,6 +2,8 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
+  UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Prisma } from '@prisma/client';
@@ -18,6 +20,7 @@ import {
   type UpdateWorkTaskRequest,
   type WorkAgendaDto,
   type WorkAgendaItemDto,
+  type WorkAttachmentDto,
   type WorkTaskDto,
 } from '@vedamatch/shared';
 import { resolveDisplayName } from '@vedamatch/shared';
@@ -38,6 +41,15 @@ import {
 import { WORK_POSITION_STEP, resolveMovePosition } from './work-position';
 import { assertWorkAccess } from './work-roles';
 import { WorkSpacesService } from './work-spaces.service';
+import {
+  validateWorkUpload,
+  workAttachmentName,
+  workUploadKindFor,
+} from './work-upload-rules';
+import {
+  WorkUploadsService,
+  type UploadedWorkFile,
+} from './work-uploads.service';
 import {
   normalizeWorkPriority,
   optionalText,
@@ -69,6 +81,7 @@ export class WorkTasksService {
     private readonly prisma: PrismaService,
     private readonly spaces: WorkSpacesService,
     private readonly events: EventEmitter2,
+    private readonly uploads: WorkUploadsService,
   ) {}
 
   /**
@@ -168,9 +181,7 @@ export class WorkTasksService {
         createdAt: comment.createdAt.toISOString(),
         editedAt: comment.editedAt?.toISOString() ?? null,
       })),
-      // Вложения приезжают подписанными ссылками на этапе 2; пока их нет,
-      // список пуст, а не отсутствует — экран карточки не должен об этом знать.
-      attachments: [],
+      attachments: await this.signAttachments(task.attachments),
       activity: task.activity.map((entry) => ({
         id: entry.id,
         kind: entry.kind,
@@ -539,6 +550,133 @@ export class WorkTasksService {
     }
 
     return this.get(taskId, userId);
+  }
+
+  /**
+   * Подписанные адреса вложений. Ссылка живёт шесть часов и собирается на
+   * каждый показ карточки: в базе лежит ключ объекта, а не адрес, — записанный
+   * адрес протух бы к следующему открытию.
+   *
+   * Ключ, который не удалось подписать (S3 не настроен в разработке), отдаётся
+   * пустой ссылкой, а не выбрасывается из списка: вложение существует, и
+   * карточка должна говорить об этом, а не притворяться, что файла нет.
+   */
+  private async signAttachments(
+    attachments: readonly {
+      id: string;
+      name: string;
+      mime: string;
+      sizeBytes: number;
+      width: number | null;
+      height: number | null;
+      storageKey: string;
+      createdAt: Date;
+    }[],
+  ): Promise<WorkAttachmentDto[]> {
+    return Promise.all(
+      attachments.map(async (file) => ({
+        id: file.id,
+        name: file.name,
+        mime: file.mime,
+        sizeBytes: file.sizeBytes,
+        width: file.width,
+        height: file.height,
+        url: await this.uploads.signedUrl(file.storageKey),
+        createdAt: file.createdAt.toISOString(),
+      })),
+    );
+  }
+
+  /**
+   * Приложить файл к задаче.
+   *
+   * Право то же, что у комментария (`editTask`): наблюдателя позвали смотреть,
+   * а вложение — такое же изменение задачи, как строка обсуждения.
+   *
+   * Порядок «сначала в бакет, потом строка в базе» намеренный. Обратный
+   * оставлял бы в карточке вложение, за которым ничего нет, а так худшее —
+   * файл в бакете, на который никто не ссылается: его уберёт та же чистка,
+   * что и остальной мусор.
+   */
+  async addAttachment(
+    taskId: string,
+    userId: string,
+    file: UploadedWorkFile | undefined,
+  ): Promise<WorkTaskDto> {
+    const context = await this.taskContext(taskId);
+    assertWorkAccess(
+      await this.spaces.roleOf(context.spaceId, userId),
+      'editTask',
+    );
+
+    const denial = validateWorkUpload(file);
+    if (denial === 'unsupported_type')
+      throw new UnsupportedMediaTypeException(
+        'Такие файлы к задаче не прикладываются',
+      );
+    if (denial === 'file_too_large')
+      throw new BadRequestException('Файл слишком большой');
+
+    if (!this.uploads.configured) {
+      this.uploads.warnUnavailable(taskId);
+      throw new ServiceUnavailableException(
+        'Хранилище файлов недоступно — вложение не сохранено',
+      );
+    }
+
+    const stored = await this.uploads.store(taskId, file!);
+    if (!stored)
+      throw new ServiceUnavailableException(
+        'Хранилище файлов недоступно — вложение не сохранено',
+      );
+
+    await this.prisma.workAttachment.create({
+      data: {
+        taskId,
+        uploaderId: userId,
+        storageKey: stored.storageKey,
+        name: workAttachmentName(
+          file!.originalname,
+          workUploadKindFor(file!.mimetype) ?? 'file',
+        ),
+        mime: stored.mime,
+        sizeBytes: stored.sizeBytes,
+        width: stored.width,
+        height: stored.height,
+      },
+    });
+
+    return this.get(taskId, userId);
+  }
+
+  /**
+   * Убрать вложение.
+   *
+   * Файл уходит из бакета следом за строкой: вложение задачи — не документ,
+   * который кто-то мог сохранить себе ссылкой, а частная картинка среды, и
+   * оставлять её лежать после удаления значило бы держать живой подписанную
+   * ссылку, которую уже успели переслать.
+   */
+  async removeAttachment(
+    attachmentId: string,
+    userId: string,
+  ): Promise<WorkTaskDto> {
+    const attachment = await this.prisma.workAttachment.findUnique({
+      where: { id: attachmentId },
+      select: { id: true, taskId: true, storageKey: true },
+    });
+    if (!attachment) throw new NotFoundException('Вложение не найдено');
+
+    const context = await this.taskContext(attachment.taskId);
+    assertWorkAccess(
+      await this.spaces.roleOf(context.spaceId, userId),
+      'editTask',
+    );
+
+    await this.prisma.workAttachment.delete({ where: { id: attachment.id } });
+    await this.uploads.removeMany([attachment.storageKey]);
+
+    return this.get(attachment.taskId, userId);
   }
 
   async addChecklistItem(

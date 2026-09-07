@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Trash2, X } from "lucide-react";
+import { FileText, Loader2, Paperclip, Trash2, X } from "lucide-react";
 import type {
   WorkBoardDto,
   WorkTaskDto,
@@ -10,6 +10,8 @@ import type {
 import {
   addWorkChecklistItem,
   archiveWorkTask,
+  attachWorkFile,
+  removeWorkAttachment,
   commentWorkTask,
   getWorkTask,
   moveWorkTask,
@@ -340,6 +342,112 @@ export function WorkTaskDialog({
                   Добавить
                 </button>
               </form>
+            )}
+
+            <h3 className="mt-5 text-sm font-semibold text-text-0">
+              Вложения{" "}
+              {task.attachments.length > 0 && (
+                <span className="font-normal text-text-2">
+                  {task.attachments.length}
+                </span>
+              )}
+            </h3>
+
+            {/* Картинки сеткой, документы строкой: скриншот узнают по самому
+                скриншоту, а смету — по имени файла, и показывать её серым
+                квадратом-заглушкой значило бы занимать место ничем. */}
+            {task.attachments.length > 0 && (
+              <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {task.attachments
+                  .filter((file) => file.mime.startsWith("image/"))
+                  .map((file) => (
+                    <li key={file.id} className="group relative">
+                      <a
+                        href={file.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block overflow-hidden rounded-xl border border-glass-brd"
+                      >
+                        {/* Ссылка подписана и живёт шесть часов — next/image
+                            не годится для адреса, который меняется. */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={file.url}
+                          alt={file.name}
+                          loading="lazy"
+                          className="aspect-square w-full object-cover"
+                        />
+                      </a>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void run(() => removeWorkAttachment(file.id))
+                          }
+                          aria-label={`Убрать вложение «${file.name}»`}
+                          className="absolute right-1 top-1 rounded-lg bg-bg-0/80 p-1 text-text-1 hover:text-text-0 disabled:opacity-50"
+                        >
+                          <Trash2 aria-hidden className="size-4" />
+                        </button>
+                      )}
+                    </li>
+                  ))}
+              </ul>
+            )}
+
+            <ul className="mt-2 space-y-1">
+              {task.attachments
+                .filter((file) => !file.mime.startsWith("image/"))
+                .map((file) => (
+                  <li key={file.id} className="flex items-center gap-2">
+                    <FileText aria-hidden className="size-4 shrink-0 text-text-2" />
+                    <a
+                      href={file.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="min-w-0 flex-1 truncate text-sm text-text-1 hover:text-text-0"
+                    >
+                      {file.name}
+                    </a>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(() => removeWorkAttachment(file.id))
+                        }
+                        aria-label={`Убрать вложение «${file.name}»`}
+                        className="rounded-lg p-1 text-text-2 hover:text-text-0 disabled:opacity-50"
+                      >
+                        <Trash2 aria-hidden className="size-4" />
+                      </button>
+                    )}
+                  </li>
+                ))}
+            </ul>
+
+            {canEdit && (
+              // Подпись поверх спрятанного input: системная кнопка «Выберите
+              // файл» не переживает тему портала и говорит «файл не выбран»
+              // там, где выбирать нечего.
+              <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-glass px-3 py-2 text-sm text-text-0">
+                <Paperclip aria-hidden className="size-4" />
+                Прикрепить картинку или файл
+                <input
+                  type="file"
+                  className="sr-only"
+                  disabled={busy}
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    // Поле очищается сразу: иначе тот же файл, выбранный
+                    // второй раз, не поднимет change и молча не приложится.
+                    event.target.value = "";
+                    if (file) void run(() => attachWorkFile(task.id, file));
+                  }}
+                />
+              </label>
             )}
 
             <h3 className="mt-5 text-sm font-semibold text-text-0">

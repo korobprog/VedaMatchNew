@@ -182,4 +182,21 @@ export const updateWorkChecklistItem = (
 export const removeWorkChecklistItem = (itemId: string) =>
   send<WorkTaskDto>(`/work/checklist/${itemId}`, "DELETE");
 
+/**
+ * Вложение уезжает формой, а не JSON: `Content-Type` браузер ставит сам
+ * вместе с границей multipart, и задать его руками — верный способ получить
+ * на сервере пустой файл.
+ */
+export const attachWorkFile = (taskId: string, file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return request<WorkTaskDto>(`/work/tasks/${taskId}/attachments`, {
+    method: "POST",
+    body: form,
+  });
+};
+
+export const removeWorkAttachment = (attachmentId: string) =>
+  send<WorkTaskDto>(`/work/attachments/${attachmentId}`, "DELETE");
+
 export const getWorkAgenda = () => request<WorkAgendaDto>("/work/agenda");

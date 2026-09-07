@@ -6,6 +6,7 @@ import { WorkInvitesService } from './work-invites.service';
 import { WorkPurgeListener } from './work-purge.listener';
 import { WorkSpacesService } from './work-spaces.service';
 import { WorkTasksService } from './work-tasks.service';
+import { WorkUploadsService } from './work-uploads.service';
 import {
   WorkBoardsController,
   WorkController,
@@ -34,6 +35,7 @@ import {
     WorkTasksService,
     WorkInvitesService,
     WorkContactsService,
+    WorkUploadsService,
     WorkPurgeListener,
   ],
 })
