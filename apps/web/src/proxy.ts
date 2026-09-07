@@ -143,9 +143,13 @@ export function vaishnavaSubdomainResponse(
 }
 
 /**
- * Адрес, каким его видит браузер. `req.url` за обратным прокси может
- * содержать внутренний хост и схему, поэтому хост берётся из заголовка
- * `Host`, а схема — из `X-Forwarded-Proto`, когда он есть.
+ * Адрес, каким его видит браузер. `req.url` за обратным прокси содержит
+ * внутренний хост и порт (`web:3000`), поэтому адрес собирается заново:
+ * хост — из заголовка `Host`, схема — из `X-Forwarded-Proto`, когда он есть.
+ *
+ * Именно собирается, а не правится через `url.host = …`: сеттер `host` без
+ * порта в значении оставляет прежний порт, и в проде редирект уходил на
+ * `https://vedamatch.ru:3000/login`.
  */
 function publicUrl(
   req: NextRequest,
@@ -153,11 +157,12 @@ function publicUrl(
   pathWithSearch: string,
   targetHost: string = host,
 ): URL {
-  const url = new URL(pathWithSearch, req.url);
-  url.host = targetHost;
-  const proto = req.headers.get("x-forwarded-proto");
-  if (proto === "https" || proto === "http") url.protocol = `${proto}:`;
-  return url;
+  const forwarded = req.headers.get("x-forwarded-proto");
+  const proto =
+    forwarded === "https" || forwarded === "http"
+      ? forwarded
+      : req.nextUrl.protocol.replace(/:$/, "");
+  return new URL(`${proto}://${targetHost}${pathWithSearch}`);
 }
 
 /**
