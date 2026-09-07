@@ -180,6 +180,11 @@ export interface WorkBoardDto {
   members: WorkMemberDto[];
   /** Права смотрящего на этой доске — интерфейс не гадает, а спрашивает. */
   role: WorkMemberRole;
+  /**
+   * Кто смотрит. Нужен, чтобы новая карточка по умолчанию доставалась себе:
+   * список участников одинаков для всех, и вычислить в нём себя неоткуда.
+   */
+  viewerId: string;
 }
 
 export interface WorkSpaceSummaryDto {

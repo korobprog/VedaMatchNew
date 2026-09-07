@@ -34,6 +34,7 @@ function board(): WorkBoardDto {
     spaceId: "s1",
     name: "Доска",
     role: "member",
+    viewerId: "u1",
     labels: [],
     members: [],
     columns: [

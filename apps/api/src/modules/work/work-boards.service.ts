@@ -110,6 +110,7 @@ export class WorkBoardsService {
       spaceId: board.spaceId,
       name: board.name,
       role,
+      viewerId: userId,
       labels: board.space.labels.map(toWorkLabel),
       members: board.space.members.map(toWorkMember),
       columns: board.columns.map((column) => ({

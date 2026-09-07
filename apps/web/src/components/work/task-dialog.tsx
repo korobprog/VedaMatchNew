@@ -17,6 +17,7 @@ import {
   updateWorkChecklistItem,
   updateWorkTask,
 } from "@/lib/work-api";
+import { dueFromInput, dueToInput } from "./task-due";
 
 const PRIORITY_TITLE: Record<WorkTaskPriority, string> = {
   low: "Не горит",
@@ -24,14 +25,6 @@ const PRIORITY_TITLE: Record<WorkTaskPriority, string> = {
   high: "Важная",
   urgent: "Срочно",
 };
-
-/** `datetime-local` понимает только местное время без зоны. */
-function toLocalInput(iso: string | null): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return shifted.toISOString().slice(0, 16);
-}
 
 /**
  * Карточка целиком: описание, срок, исполнитель, чек-лист и обсуждение.
@@ -51,6 +44,7 @@ export function WorkTaskDialog({
 }) {
   const [task, setTask] = useState<WorkTaskDto | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [comment, setComment] = useState("");
   const [checklistDraft, setChecklistDraft] = useState("");
 
@@ -87,13 +81,30 @@ export function WorkTaskDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  async function patch(body: Parameters<typeof updateWorkTask>[1]) {
+  /**
+   * Любое действие карточки идёт через одну обёртку.
+   *
+   * Раньше ошибку показывала только правка полей, а отправка комментария,
+   * чек-лист, перенос и архив падали молча: отказ сервера (истёкшая сессия,
+   * лимит запросов, потерянные права) выглядел как «кнопка не нажимается».
+   * Заодно `busy` не даёт отправить второй раз, пока летит первый.
+   */
+  async function run(action: () => Promise<WorkTaskDto | void>) {
+    setBusy(true);
+    setError(null);
     try {
-      setTask(await updateWorkTask(taskId, body));
+      const next = await action();
+      if (next) setTask(next);
       await onChanged();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не сохранилось");
+    } finally {
+      setBusy(false);
     }
+  }
+
+  function patch(body: Parameters<typeof updateWorkTask>[1]) {
+    void run(() => updateWorkTask(taskId, body));
   }
 
   return (
@@ -153,15 +164,11 @@ export function WorkTaskDialog({
                 <select
                   value={task.columnId}
                   disabled={!canEdit}
-                  onChange={async (event) => {
+                  onChange={(event) => {
                     // Смена колонки из карточки — тот же перенос, что и
                     // перетаскиванием: клавиатуре нужен свой путь.
-                    setTask(
-                      await moveWorkTask(task.id, {
-                        columnId: event.target.value,
-                      }),
-                    );
-                    await onChanged();
+                    const columnId = event.target.value;
+                    void run(() => moveWorkTask(task.id, { columnId }));
                   }}
                   className="mt-1 block w-full rounded-xl border border-glass-brd bg-bg-1 px-2 py-2 text-sm text-text-0"
                 >
@@ -211,22 +218,33 @@ export function WorkTaskDialog({
               </label>
             </div>
 
-            <label className="mt-3 block text-sm text-text-1">
-              Срок
-              <input
-                type="datetime-local"
-                defaultValue={toLocalInput(task.dueAt)}
-                disabled={!canEdit}
-                onChange={(event) =>
-                  patch({
-                    dueAt: event.target.value
-                      ? new Date(event.target.value).toISOString()
-                      : null,
-                  })
-                }
-                className="mt-1 block rounded-xl border border-glass-brd bg-bg-1 px-2 py-2 text-sm text-text-0"
-              />
-            </label>
+            {/* Кто исполняет — выше, в поле; кто поставил — здесь, рядом со
+                сроком. Постановщика не выбирают: это тот, кто завёл карточку,
+                и подменять его задним числом значит переписывать, с кого
+                спрашивать. */}
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="text-sm text-text-1">
+                Задачу поставил
+                <p className="mt-1 truncate rounded-xl border border-glass-brd bg-bg-1 px-2 py-2 text-sm text-text-0">
+                  {task.createdBy?.name ?? "Неизвестно"}
+                </p>
+              </div>
+
+              <label className="text-sm text-text-1">
+                Срок
+                <input
+                  type="datetime-local"
+                  defaultValue={dueToInput(task.dueAt)}
+                  disabled={!canEdit}
+                  onChange={(event) => {
+                    const dueAt = dueFromInput(event.target.value);
+                    // undefined — поле ещё недописано: такое не сохраняем.
+                    if (dueAt !== undefined) patch({ dueAt });
+                  }}
+                  className="mt-1 block w-full rounded-xl border border-glass-brd bg-bg-1 px-2 py-2 text-sm text-text-0"
+                />
+              </label>
+            </div>
 
             <label className="mt-3 block text-sm text-text-1">
               Описание
@@ -261,13 +279,11 @@ export function WorkTaskDialog({
                     checked={item.done}
                     disabled={!canEdit}
                     id={`check-${item.id}`}
-                    onChange={async (event) => {
-                      setTask(
-                        await updateWorkChecklistItem(item.id, {
-                          done: event.target.checked,
-                        }),
+                    onChange={(event) => {
+                      const done = event.target.checked;
+                      void run(() =>
+                        updateWorkChecklistItem(item.id, { done }),
                       );
-                      await onChanged();
                     }}
                   />
                   <label
@@ -282,11 +298,11 @@ export function WorkTaskDialog({
                     <button
                       type="button"
                       aria-label={`Убрать пункт «${item.text}»`}
-                      onClick={async () => {
-                        setTask(await removeWorkChecklistItem(item.id));
-                        await onChanged();
-                      }}
-                      className="text-text-2 hover:text-magenta"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(() => removeWorkChecklistItem(item.id))
+                      }
+                      className="text-text-2 hover:text-magenta disabled:opacity-50"
                     >
                       <Trash2 aria-hidden className="size-4" />
                     </button>
@@ -297,16 +313,15 @@ export function WorkTaskDialog({
             {canEdit && (
               <form
                 className="mt-2 flex gap-2"
-                onSubmit={async (event) => {
+                onSubmit={(event) => {
                   event.preventDefault();
-                  if (!checklistDraft.trim()) return;
-                  setTask(
-                    await addWorkChecklistItem(task.id, {
-                      text: checklistDraft.trim(),
-                    }),
-                  );
-                  setChecklistDraft("");
-                  await onChanged();
+                  const text = checklistDraft.trim();
+                  if (!text) return;
+                  void run(async () => {
+                    const next = await addWorkChecklistItem(task.id, { text });
+                    setChecklistDraft("");
+                    return next;
+                  });
                 }}
               >
                 <input
@@ -319,7 +334,8 @@ export function WorkTaskDialog({
                 />
                 <button
                   type="submit"
-                  className="rounded-xl bg-glass px-3 py-2 text-sm text-text-0"
+                  disabled={busy || !checklistDraft.trim()}
+                  className="rounded-xl bg-glass px-3 py-2 text-sm text-text-0 disabled:opacity-50"
                 >
                   Добавить
                 </button>
@@ -350,14 +366,15 @@ export function WorkTaskDialog({
             {canEdit && (
               <form
                 className="mt-3 flex gap-2"
-                onSubmit={async (event) => {
+                onSubmit={(event) => {
                   event.preventDefault();
-                  if (!comment.trim()) return;
-                  setTask(
-                    await commentWorkTask(task.id, { body: comment.trim() }),
-                  );
-                  setComment("");
-                  await onChanged();
+                  const body = comment.trim();
+                  if (!body) return;
+                  void run(async () => {
+                    const next = await commentWorkTask(task.id, { body });
+                    setComment("");
+                    return next;
+                  });
                 }}
               >
                 <input
@@ -370,7 +387,8 @@ export function WorkTaskDialog({
                 />
                 <button
                   type="submit"
-                  className="rounded-xl bg-magenta px-3 py-2 text-sm font-semibold text-white"
+                  disabled={busy || !comment.trim()}
+                  className="rounded-xl bg-magenta px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                 >
                   Отправить
                 </button>
@@ -380,12 +398,14 @@ export function WorkTaskDialog({
             {canEdit && (
               <button
                 type="button"
-                onClick={async () => {
-                  await archiveWorkTask(task.id);
-                  await onChanged();
-                  onClose();
-                }}
-                className="mt-6 text-sm text-magenta"
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    await archiveWorkTask(task.id);
+                    onClose();
+                  })
+                }
+                className="mt-6 text-sm text-magenta disabled:opacity-50"
               >
                 Убрать карточку в архив
               </button>
