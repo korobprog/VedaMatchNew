@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildWorkInviteShareHref, shareTitle } from "./work-share";
+import {
+  buildWorkInviteShareHref,
+  inviteToken,
+  shareTitle,
+} from "./work-share";
 
 const invite = {
   spaceId: "space-1",
@@ -22,16 +26,16 @@ describe("buildWorkInviteShareHref", () => {
   it("представляется своим видом карточки", () => {
     expect(params.get("kind")).toBe("work");
     expect(params.get("sourceService")).toBe("work");
-    expect(params.get("sourceId")).toBe("space-1");
   });
 
-  it("ссылка едет в тексте, а не в заголовке", () => {
-    expect(params.get("body")).toContain(invite.url);
-    expect(params.get("title")).not.toContain(invite.url);
+  it("токен едет отдельным полем — по нему карточка соберёт кнопку", () => {
+    expect(params.get("sourceId")).toBe("TOKEN");
   });
 
-  it("в поле url ссылку не кладёт: чат принимает туда только своё хранилище", () => {
+  it("полного адреса в карточке нет нигде", () => {
     expect(params.get("url")).toBeNull();
+    expect(params.get("body")).not.toContain(invite.url);
+    expect(params.get("title")).not.toContain(invite.url);
   });
 
   it("называет роль: без неё человек не знает, куда его зовут", () => {
@@ -47,6 +51,20 @@ describe("buildWorkInviteShareHref", () => {
     expect(new URLSearchParams(href.split("?")[1]).get("title")).toContain(
       "Ремонт & кухня?",
     );
+  });
+});
+
+describe("inviteToken", () => {
+  it("вынимает токен из полного адреса", () => {
+    expect(inviteToken("https://vedamatch.ru/work/join/ABC")).toBe("ABC");
+  });
+
+  it("порт и http тоже", () => {
+    expect(inviteToken("http://localhost:3000/work/join/ABC")).toBe("ABC");
+  });
+
+  it("неожиданный формат отдаём как есть, а не пустоту", () => {
+    expect(inviteToken("ABC")).toBe("ABC");
   });
 });
 

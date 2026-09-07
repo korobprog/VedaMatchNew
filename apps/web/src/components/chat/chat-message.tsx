@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { chatCardLink } from "@/components/chat/chat-card-link";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import type {
   ChatAttachmentDto,
@@ -211,7 +212,13 @@ export function ChatMessage({
                 : "opacity-60 group-hover:opacity-100 group-focus-within:opacity-100"
             }`}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden
+            >
               <circle cx="5" cy="12" r="1.8" />
               <circle cx="12" cy="12" r="1.8" />
               <circle cx="19" cy="12" r="1.8" />
@@ -227,49 +234,49 @@ export function ChatMessage({
           mine ? "justify-end" : avatar ? "pl-10" : ""
         }`}
       >
-          {pinned && (
-            <span className="flex items-center gap-1 text-[10px] text-gold">
-              <PinIcon />
-              закреплено
-            </span>
-          )}
-          {message.editedAt && !deleted && (
-            <span className="text-[10px] text-text-2">изменено</span>
-          )}
-          {/* У ещё не доехавшего время не показываем: оно проставится
-              сервером, и показанное сейчас разошлось бы с ним на секунды. */}
-          {pending ? (
-            <span className="text-[10px] text-text-2">отправляется…</span>
-          ) : (
-            <span className="font-mono text-[10px] text-text-2">
-              {new Date(message.createdAt).toLocaleTimeString("ru-RU", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
-          )}
-          {mine && !deleted && !pending && (
-            <ReadMark read={Boolean(message.readByOthers)} />
-          )}
-          {typeof message.viewsCount === "number" && message.viewsCount > 0 && (
-            <span className="flex items-center gap-1 text-text-2">
-              <EyeIcon />
-              <span className="font-mono text-[10px]">{message.viewsCount}</span>
-            </span>
-          )}
-        </div>
-
-        {threadHref && !deleted && (
-          <Link
-            href={threadHref}
-            style={{ color: "var(--chat-accent, var(--vm-cyan))" }}
-            className="px-1.5 text-[13px] font-semibold hover:underline"
-          >
-            {message.commentsCount
-              ? `Комментарии · ${message.commentsCount}`
-              : "Обсудить"}
-          </Link>
+        {pinned && (
+          <span className="flex items-center gap-1 text-[10px] text-gold">
+            <PinIcon />
+            закреплено
+          </span>
         )}
+        {message.editedAt && !deleted && (
+          <span className="text-[10px] text-text-2">изменено</span>
+        )}
+        {/* У ещё не доехавшего время не показываем: оно проставится
+              сервером, и показанное сейчас разошлось бы с ним на секунды. */}
+        {pending ? (
+          <span className="text-[10px] text-text-2">отправляется…</span>
+        ) : (
+          <span className="font-mono text-[10px] text-text-2">
+            {new Date(message.createdAt).toLocaleTimeString("ru-RU", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+        )}
+        {mine && !deleted && !pending && (
+          <ReadMark read={Boolean(message.readByOthers)} />
+        )}
+        {typeof message.viewsCount === "number" && message.viewsCount > 0 && (
+          <span className="flex items-center gap-1 text-text-2">
+            <EyeIcon />
+            <span className="font-mono text-[10px]">{message.viewsCount}</span>
+          </span>
+        )}
+      </div>
+
+      {threadHref && !deleted && (
+        <Link
+          href={threadHref}
+          style={{ color: "var(--chat-accent, var(--vm-cyan))" }}
+          className="px-1.5 text-[13px] font-semibold hover:underline"
+        >
+          {message.commentsCount
+            ? `Комментарии · ${message.commentsCount}`
+            : "Обсудить"}
+        </Link>
+      )}
 
       {message.reactions.length > 0 && (
         <div
@@ -277,91 +284,91 @@ export function ChatMessage({
             mine ? "justify-end" : avatar ? "pl-10" : ""
           }`}
         >
-            {message.reactions.map((reaction) => (
-              <ReactionChip
-                key={reaction.emoji}
-                reaction={reaction}
-                onClick={() => onReact(message, reaction.emoji)}
-              />
-            ))}
-          </div>
-        )}
+          {message.reactions.map((reaction) => (
+            <ReactionChip
+              key={reaction.emoji}
+              reaction={reaction}
+              onClick={() => onReact(message, reaction.emoji)}
+            />
+          ))}
+        </div>
+      )}
 
       {!deleted && (
         <div
           className={`flex w-full items-center gap-1 px-1 transition-opacity ${
             mine ? "justify-end" : avatar ? "pl-9" : ""
           } ${open ? "opacity-100" : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"}`}
-          >
-            <SmallButton onClick={() => onReply(message)} label="Ответить" />
-            <CopyButton body={message.body} />
+        >
+          <SmallButton onClick={() => onReply(message)} label="Ответить" />
+          <CopyButton body={message.body} />
+          <SmallButton
+            onClick={() => setPickerOpen((current) => !current)}
+            label="Реакция"
+          />
+          {canPin && (
             <SmallButton
-              onClick={() => setPickerOpen((current) => !current)}
-              label="Реакция"
+              onClick={() => onPin(message, !pinned)}
+              label={pinned ? "Открепить" : "Закрепить"}
             />
-            {canPin && (
-              <SmallButton
-                onClick={() => onPin(message, !pinned)}
-                label={pinned ? "Открепить" : "Закрепить"}
-              />
-            )}
-            {forwardHref && (
-              <Link
-                href={forwardHref}
-                className="rounded-lg px-2 py-1 text-[11px] text-text-2 transition-colors hover:text-text-0"
-              >
-                Переслать
-              </Link>
-            )}
-            {mine ? (
-              <>
-                <SmallButton onClick={() => onEdit(message)} label="Изменить" />
-                <SmallButton onClick={() => onDelete(message)} label="Удалить" />
-              </>
-            ) : (
-              <SmallButton
-                onClick={() => setMenuOpen((current) => !current)}
-                label="Ещё"
-              />
-            )}
-          </div>
-        )}
+          )}
+          {forwardHref && (
+            <Link
+              href={forwardHref}
+              className="rounded-lg px-2 py-1 text-[11px] text-text-2 transition-colors hover:text-text-0"
+            >
+              Переслать
+            </Link>
+          )}
+          {mine ? (
+            <>
+              <SmallButton onClick={() => onEdit(message)} label="Изменить" />
+              <SmallButton onClick={() => onDelete(message)} label="Удалить" />
+            </>
+          ) : (
+            <SmallButton
+              onClick={() => setMenuOpen((current) => !current)}
+              label="Ещё"
+            />
+          )}
+        </div>
+      )}
 
-        {pickerOpen && (
-          <div
-            className={`flex flex-wrap gap-1 rounded-2xl border border-glass-brd bg-glass p-1.5 ${
-              mine ? "self-end" : "self-start"
-            }`}
-          >
-            {CHAT_REACTION_EMOJIS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => {
-                  onReact(message, emoji);
-                  setPickerOpen(false);
-                }}
-                className="flex size-11 items-center justify-center rounded-xl text-lg transition-colors hover:bg-white/10"
-                aria-label={`Реакция ${emoji}`}
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-        )}
+      {pickerOpen && (
+        <div
+          className={`flex flex-wrap gap-1 rounded-2xl border border-glass-brd bg-glass p-1.5 ${
+            mine ? "self-end" : "self-start"
+          }`}
+        >
+          {CHAT_REACTION_EMOJIS.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => {
+                onReact(message, emoji);
+                setPickerOpen(false);
+              }}
+              className="flex size-11 items-center justify-center rounded-xl text-lg transition-colors hover:bg-white/10"
+              aria-label={`Реакция ${emoji}`}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
 
-        {menuOpen && (
-          <button
-            type="button"
-            onClick={() => {
-              onReport(message);
-              setMenuOpen(false);
-            }}
-            className="self-start rounded-xl border border-magenta/26 px-3 py-1.5 text-xs font-semibold text-magenta"
-          >
-            Пожаловаться
-          </button>
-        )}
+      {menuOpen && (
+        <button
+          type="button"
+          onClick={() => {
+            onReport(message);
+            setMenuOpen(false);
+          }}
+          className="self-start rounded-xl border border-magenta/26 px-3 py-1.5 text-xs font-semibold text-magenta"
+        >
+          Пожаловаться
+        </button>
+      )}
     </div>
   );
 }
@@ -418,7 +425,10 @@ function Attachment({ attachment }: { attachment: ChatAttachmentDto }) {
     );
 
   // Карточка чужого сервиса: снимок, а не ссылка на живой объект — оригинал
-  // может быть уже изменён или удалён.
+  // может быть уже изменён или удалён. Исключение — приглашения и прочее, что
+  // без перехода бесполезно: им маршрут собирает chat-card-link по своим
+  // правилам, а не по адресу из сообщения.
+  const cardLink = chatCardLink(attachment);
   const tint =
     attachment.kind === "story"
       ? "border-gold/26 bg-gold/8"
@@ -444,6 +454,16 @@ function Attachment({ attachment }: { attachment: ChatAttachmentDto }) {
       )}
       {attachment.subtitle && (
         <span className="text-[11px] text-text-2">{attachment.subtitle}</span>
+      )}
+      {/* Адрес собран из пары «сервис + id» кодом, а не взят из сообщения:
+          увести наружу отправитель не может — см. chat-card-link.ts. */}
+      {cardLink && (
+        <Link
+          href={cardLink.href}
+          className="w-fit rounded-lg bg-white/10 px-2.5 py-1 text-xs font-semibold text-text-0"
+        >
+          {cardLink.label}
+        </Link>
       )}
     </span>
   );

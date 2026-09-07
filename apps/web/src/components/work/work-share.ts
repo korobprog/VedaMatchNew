@@ -29,15 +29,27 @@ export function buildWorkInviteShareHref(invite: WorkInviteShare): string {
     kind: "work",
     title: shareTitle(invite.spaceName),
     subtitle: `Роль: ${invite.roleTitle}`,
-    // Ссылка едет текстом. Кнопкой её сделать нельзя: поле `url` вложения
-    // чат принимает только на объекты своего хранилища, и это осознанная
-    // защита — он рисует его как `<a href>`, а чужой адрес выдал бы IP
-    // получателя. Кликабельное приглашение — отдельная работа в «Общении».
-    body: `Ссылка для входа: ${invite.url}`,
+    body: "Приглашение одноразовое и действует неделю.",
     sourceService: "work",
-    sourceId: invite.spaceId,
+    // Токен, а не id среды: по этой паре карточка сама соберёт внутренний
+    // адрес `/work/join/<токен>` и покажет кнопку. Полный адрес в сообщение не
+    // кладём — чат принимает в `url` только объекты своего хранилища, и это
+    // правильно: он рисует его как `<a href>`, и чужой домен узнавал бы IP
+    // получателя. См. chat-card-link.ts.
+    sourceId: inviteToken(invite.url),
   });
   return `/chat/share?${params.toString()}`;
+}
+
+/**
+ * Токен из полной ссылки приглашения. Полный адрес собран на сервере по
+ * `WEB_URL` и может отличаться от домена, с которого смотрит человек; токен
+ * одинаков, а маршрут карточка подставит свой.
+ */
+export function inviteToken(url: string): string {
+  const marker = "/work/join/";
+  const at = url.indexOf(marker);
+  return at === -1 ? url : url.slice(at + marker.length);
 }
 
 /** Длинное название среды режем: заголовок карточки стоит в одну строку. */
