@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -35,6 +36,7 @@ import {
   OptionalUser,
 } from '../auth/auth.guard';
 import { WorkBoardsService } from './work-boards.service';
+import { WorkContactsService } from './work-contacts.service';
 import { WorkInvitesService } from './work-invites.service';
 import { WorkSpacesService } from './work-spaces.service';
 import { WorkTasksService } from './work-tasks.service';
@@ -90,6 +92,7 @@ export class WorkController {
     private readonly spaces: WorkSpacesService,
     private readonly invites: WorkInvitesService,
     private readonly tasks: WorkTasksService,
+    private readonly contacts: WorkContactsService,
   ) {}
 
   @Get('spaces')
@@ -177,6 +180,16 @@ export class WorkController {
     @CurrentUser() user: AccessTokenPayload,
   ) {
     return this.invites.list(id, user.sub);
+  }
+
+  /** Кого можно позвать: знакомые из портального графа, а не весь портал. */
+  @Get('spaces/:id/contacts')
+  listContacts(
+    @Param('id') id: string,
+    @Query('query') query: string | undefined,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.contacts.listFor(id, user.sub, query);
   }
 
   @Post('spaces/:id/invites')

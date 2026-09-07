@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { WorkBoardsService } from './work-boards.service';
+import { WorkContactsService } from './work-contacts.service';
 import { WorkInvitesService } from './work-invites.service';
 import { WorkPurgeListener } from './work-purge.listener';
 import { WorkSpacesService } from './work-spaces.service';
@@ -32,6 +33,7 @@ import {
     WorkBoardsService,
     WorkTasksService,
     WorkInvitesService,
+    WorkContactsService,
     WorkPurgeListener,
   ],
 })

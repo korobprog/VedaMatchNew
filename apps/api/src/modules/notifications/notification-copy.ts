@@ -42,6 +42,10 @@ export const notificationEventNames = {
   musicTrackRejected: 'music.track.rejected',
   musicTrackHiddenByReports: 'music.track.hidden-by-reports',
   musicTrackReviewExpired: 'music.track.review-expired',
+  workTaskAssigned: 'work.task.assigned',
+  workTaskCommented: 'work.task.commented',
+  workTaskReturned: 'work.task.returned',
+  workInviteReceived: 'work.invite.received',
 } as const satisfies Record<string, NotificationEventName>;
 
 /**
@@ -316,9 +320,7 @@ export function buildNotification(
             ? 'Можно добавлять в него материалы'
             : 'Администрация отклонила заявку',
         // При отказе вести некуда — открываем справочник целиком.
-        url: event.sectionSlug
-          ? `/library/${event.sectionSlug}`
-          : '/library',
+        url: event.sectionSlug ? `/library/${event.sectionSlug}` : '/library',
         tag: `library-section-request:${event.requestId}`,
         // Своей категории у Образования нет, а заводить её значит добавлять
         // тумблер в настройки: решение по заявке ближе всего к поддержке.
@@ -331,6 +333,44 @@ export function buildNotification(
         url: `/admin/team-applications/${event.applicationId}`,
         tag: `team-application:${event.applicationId}`,
         category: 'support',
+      };
+    case 'work.task.assigned':
+      return {
+        title: 'Вам поручили задачу',
+        body: `${event.actorName}: ${event.taskKey} «${toExcerpt(event.taskTitle)}» в среде «${event.spaceName}»`,
+        url: `/work/planner/${event.spaceId}`,
+        // Тег по задаче, а не по среде: два поручения подряд — это две
+        // новости, и второе не должно затирать первое.
+        tag: `work-task:${event.taskKey}`,
+        category: 'work',
+      };
+    case 'work.task.commented':
+      return {
+        title: `${event.taskKey}: новый комментарий`,
+        body: `${event.actorName}: ${toExcerpt(event.excerpt)}`,
+        url: `/work/planner/${event.spaceId}`,
+        tag: `work-comment:${event.taskKey}`,
+        category: 'work',
+      };
+    case 'work.task.returned':
+      return {
+        title: 'Задачу вернули в работу',
+        // Без рода: у `User.gender` его может не быть, а «перенёс» на женском
+        // имени читается как чужая ошибка — правило всего файла.
+        body: `${event.actorName}: ${event.taskKey} «${toExcerpt(event.taskTitle)}» снова в колонке «${event.columnName}»`,
+        url: `/work/planner/${event.spaceId}`,
+        tag: `work-returned:${event.taskKey}`,
+        category: 'work',
+      };
+    case 'work.invite.received':
+      return {
+        title: 'Приглашение в рабочую среду',
+        body: event.inviterName
+          ? `${event.inviterName} зовёт вас в «${event.spaceName}» — ${event.roleTitle}`
+          : `Вас зовут в «${event.spaceName}» — ${event.roleTitle}`,
+        url: event.url,
+        tag: `work-invite:${event.spaceName}`,
+        category: 'work',
       };
     case 'music.track.published':
       return {

@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Prisma } from '@prisma/client';
 import {
   WORK_CHECKLIST_TEXT_MAX,
@@ -19,7 +20,15 @@ import {
   type WorkAgendaItemDto,
   type WorkTaskDto,
 } from '@vedamatch/shared';
+import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  WORK_EVENTS,
+  workTaskRecipients,
+  type WorkTaskAssignedEvent,
+  type WorkTaskCommentedEvent,
+  type WorkTaskReturnedEvent,
+} from './work-events';
 import {
   toWorkAgendaItem,
   toWorkPerson,
@@ -59,7 +68,38 @@ export class WorkTasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly spaces: WorkSpacesService,
+    private readonly events: EventEmitter2,
   ) {}
+
+  /**
+   * Всё, что нужно уведомлению, одним запросом: подписчик не имеет права
+   * дочитывать это из наших таблиц, поэтому едет в самом событии.
+   */
+  private async notifyContext(taskId: string, actorId: string) {
+    const [task, actor] = await Promise.all([
+      this.prisma.workTask.findUnique({
+        where: { id: taskId },
+        select: {
+          number: true,
+          title: true,
+          spaceId: true,
+          assigneeId: true,
+          createdById: true,
+          space: { select: { name: true, prefix: true } },
+        },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: actorId },
+        select: { name: true, spiritualName: true },
+      }),
+    ]);
+    if (!task) return null;
+    return {
+      task,
+      taskKey: workTaskKey(task.space.prefix, task.number),
+      actorName: actor ? resolveDisplayName(actor) : 'Участник',
+    };
+  }
 
   private async taskContext(taskId: string) {
     const task = await this.prisma.workTask.findUnique({
@@ -304,6 +344,23 @@ export class WorkTasksService {
       }
     });
 
+    // Поручение — единственная правка карточки, о которой человеку нужно
+    // узнать сразу: остальные поля он увидит, когда откроет её сам.
+    if (request.assigneeId && request.assigneeId !== userId) {
+      const notify = await this.notifyContext(taskId, userId);
+      if (notify) {
+        this.events.emit(WORK_EVENTS.taskAssigned, {
+          name: WORK_EVENTS.taskAssigned,
+          recipientId: request.assigneeId,
+          spaceId: notify.task.spaceId,
+          taskKey: notify.taskKey,
+          taskTitle: notify.task.title,
+          spaceName: notify.task.space.name,
+          actorName: notify.actorName,
+        } satisfies WorkTaskAssignedEvent);
+      }
+    }
+
     return this.get(taskId, userId);
   }
 
@@ -324,7 +381,7 @@ export class WorkTasksService {
 
     const column = await this.prisma.workColumn.findFirst({
       where: { id: request.columnId, boardId: context.boardId },
-      select: { id: true, isDone: true },
+      select: { id: true, name: true, isDone: true },
     });
     if (!column) throw new NotFoundException('Колонка не найдена');
 
@@ -370,6 +427,25 @@ export class WorkTasksService {
           payload: { from: wasDone.columnId, to: column.id },
         },
       });
+    }
+
+    // Возврат сделанного обратно в работу — новость для того, кто это делал.
+    // Обычные переезды карточки по доске не уведомляют: их за день десятки.
+    if (wasDone?.completedAt && !column.isDone) {
+      const notify = await this.notifyContext(taskId, userId);
+      if (notify) {
+        for (const recipientId of workTaskRecipients(notify.task, userId)) {
+          this.events.emit(WORK_EVENTS.taskReturned, {
+            name: WORK_EVENTS.taskReturned,
+            recipientId,
+            spaceId: notify.task.spaceId,
+            taskKey: notify.taskKey,
+            taskTitle: notify.task.title,
+            actorName: notify.actorName,
+            columnName: column.name,
+          } satisfies WorkTaskReturnedEvent);
+        }
+      }
     }
 
     return this.get(taskId, userId);
@@ -446,6 +522,22 @@ export class WorkTasksService {
         },
       }),
     ]);
+
+    const notify = await this.notifyContext(taskId, userId);
+    if (notify) {
+      for (const recipientId of workTaskRecipients(notify.task, userId)) {
+        this.events.emit(WORK_EVENTS.taskCommented, {
+          name: WORK_EVENTS.taskCommented,
+          recipientId,
+          spaceId: notify.task.spaceId,
+          taskKey: notify.taskKey,
+          taskTitle: notify.task.title,
+          actorName: notify.actorName,
+          excerpt: body,
+        } satisfies WorkTaskCommentedEvent);
+      }
+    }
+
     return this.get(taskId, userId);
   }
 

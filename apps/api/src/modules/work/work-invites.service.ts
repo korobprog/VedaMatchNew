@@ -20,15 +20,10 @@ import {
   workInviteStateMessage,
   workInviteUrl,
 } from './work-invite';
+import { WORK_EVENTS, type WorkInviteReceivedEvent } from './work-events';
 import { assertWorkAccess, workRoleTitle } from './work-roles';
 import { WorkSpacesService } from './work-spaces.service';
 import { normalizeWorkColor } from './work-validate';
-
-/**
- * Имя события дублируется здесь, а не импортируется: модули не знают друг о
- * друге, и подписчик («Уведомления») сам собирает формулировку из фактов.
- */
-const WORK_INVITE_RECEIVED = 'work.invite.received';
 
 @Injectable()
 export class WorkInvitesService {
@@ -85,14 +80,17 @@ export class WorkInvitesService {
         where: { id: userId },
         select: { name: true, spiritualName: true },
       });
-      // Событие самодостаточно: подписчик не дочитывает наши таблицы.
-      this.events.emit(WORK_INVITE_RECEIVED, {
-        userId: invite.inviteeId,
+      // Событие самодостаточно: подписчик не дочитывает наши таблицы. Ссылка
+      // едет путём, а не полным адресом: колокольчик ведёт по своему домену, а
+      // выносить одноразовый токен в чужую абсолютную ссылку незачем.
+      this.events.emit(WORK_EVENTS.inviteReceived, {
+        name: WORK_EVENTS.inviteReceived,
+        recipientId: invite.inviteeId,
         spaceName: invite.space.name,
         inviterName: inviter ? resolveDisplayName(inviter) : null,
-        role: invite.role,
-        url: workInviteUrl(this.webUrl(), token),
-      });
+        roleTitle: workRoleTitle(invite.role),
+        url: `/work/join/${token}`,
+      } satisfies WorkInviteReceivedEvent);
     }
 
     return {

@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Copy, Link2, Loader2, X } from "lucide-react";
+import { Copy, Link2, Loader2, UserPlus, X } from "lucide-react";
 import type {
+  WorkContactDto,
   WorkInviteDto,
   WorkMemberRole,
   WorkSpaceDto,
 } from "@vedamatch/shared";
 import {
   createWorkInvite,
+  listWorkContacts,
   listWorkInvites,
   revokeWorkInvite,
 } from "@/lib/work-api";
@@ -40,6 +42,8 @@ export function WorkInvitePanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [contacts, setContacts] = useState<WorkContactDto[] | null>(null);
+  const [invitingId, setInvitingId] = useState<string | null>(null);
 
   const canInvite = space.role === "owner" || space.role === "admin";
 
@@ -50,6 +54,23 @@ export function WorkInvitePanel({
       setError(cause instanceof Error ? cause.message : "Не удалось загрузить");
     }
   }, [space.id]);
+
+  // Знакомых грузим вместе со ссылками: панель одна, и второй спиннер под
+  // первым выглядит как поломка.
+  useEffect(() => {
+    if (!open || !canInvite) return;
+    let alive = true;
+    listWorkContacts(space.id)
+      .then((loaded) => {
+        if (alive) setContacts(loaded);
+      })
+      .catch(() => {
+        if (alive) setContacts([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, canInvite, space.id]);
 
   useEffect(() => {
     if (!open || !canInvite) return;
@@ -85,6 +106,27 @@ export function WorkInvitePanel({
       setError(cause instanceof Error ? cause.message : "Не получилось");
     } finally {
       setBusy(false);
+    }
+  }
+
+  /**
+   * Именное приглашение: человеку приходит уведомление в колокольчик, ссылку
+   * пересылать не нужно. Ровно этого и ждут от «позвать партнёра».
+   */
+  async function inviteContact(contact: WorkContactDto) {
+    setInvitingId(contact.userId);
+    setError(null);
+    try {
+      await createWorkInvite(space.id, { role, inviteeId: contact.userId });
+      setContacts(await listWorkContacts(space.id));
+      await reload();
+      await onChanged();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Не получилось позвать",
+      );
+    } finally {
+      setInvitingId(null);
     }
   }
 
@@ -197,6 +239,47 @@ export function WorkInvitePanel({
                   </button>
                 </div>
               </div>
+            )}
+
+            <h3 className="mt-5 text-sm font-semibold text-text-0">
+              Позвать из своих
+            </h3>
+            {contacts === null ? (
+              <p className="mt-2 flex items-center gap-2 text-sm text-text-2">
+                <Loader2 aria-hidden className="size-4 animate-spin" />
+                Загружаем…
+              </p>
+            ) : contacts.length === 0 ? (
+              <p className="mt-2 text-sm text-text-2">
+                Здесь появятся те, с кем вы уже знакомы на портале. Пока некого
+                позвать — отправьте ссылку.
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-1">
+                {contacts.map((contact) => (
+                  <li
+                    key={contact.userId}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <span className="truncate text-text-0">{contact.name}</span>
+                    {contact.alreadyInvited ? (
+                      <span className="ml-auto text-xs text-text-2">
+                        уже позван
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={invitingId === contact.userId}
+                        onClick={() => inviteContact(contact)}
+                        className="ml-auto flex items-center gap-1 rounded-lg bg-glass px-2 py-1 text-xs text-text-0 disabled:opacity-50"
+                      >
+                        <UserPlus aria-hidden className="size-3.5" />
+                        {invitingId === contact.userId ? "Зовём…" : "Позвать"}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
             )}
 
             <h3 className="mt-5 text-sm font-semibold text-text-0">

@@ -17,6 +17,7 @@ import type {
   UpdateWorkTaskRequest,
   WorkAgendaDto,
   WorkBoardDto,
+  WorkContactDto,
   WorkInviteDto,
   WorkInvitePreviewDto,
   WorkLabelDto,
@@ -95,6 +96,11 @@ export const leaveWorkSpace = (spaceId: string, userId: string) =>
   send<void>(`/work/spaces/${spaceId}/members/${userId}`, "DELETE");
 
 // ===== Приглашения =====
+
+export const listWorkContacts = (spaceId: string, query?: string) =>
+  request<WorkContactDto[]>(
+    `/work/spaces/${spaceId}/contacts${query ? `?query=${encodeURIComponent(query)}` : ""}`,
+  );
 
 export const listWorkInvites = (spaceId: string) =>
   request<WorkInviteDto[]>(`/work/spaces/${spaceId}/invites`);

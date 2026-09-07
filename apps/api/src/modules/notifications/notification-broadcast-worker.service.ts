@@ -155,7 +155,9 @@ export class NotificationBroadcastWorkerService
       take: BROADCAST_BATCH_SIZE,
       select: {
         id: true,
-        notificationPreference: { select: { enabled: true, announcements: true } },
+        notificationPreference: {
+          select: { enabled: true, announcements: true },
+        },
       },
     });
 

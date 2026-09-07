@@ -19,6 +19,7 @@ const defaults: NotificationPreferencesDto = {
   notices: true,
   motivation: true,
   music: true,
+  work: true,
   announcements: true,
 };
 
@@ -116,6 +117,7 @@ export class NotificationsService {
       notices: row.notices,
       motivation: row.motivation,
       music: row.music,
+      work: row.work,
       announcements: row.announcements,
     };
   }
@@ -135,6 +137,7 @@ export class NotificationsService {
       notices: patch.notices ?? current.notices,
       motivation: patch.motivation ?? current.motivation,
       music: patch.music ?? current.music,
+      work: patch.work ?? current.work,
       announcements: patch.announcements ?? current.announcements,
     };
     await this.prisma.notificationPreference.upsert({
@@ -181,7 +184,10 @@ export class NotificationsService {
       where: { userId },
       // Непрочитанное первым, внутри групп — свежее сверху: человек приходит
       // за новым, а прочитанное держим под рукой на случай «а что там было».
-      orderBy: [{ readAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'desc' }],
+      orderBy: [
+        { readAt: { sort: 'asc', nulls: 'first' } },
+        { createdAt: 'desc' },
+      ],
       select: {
         id: true,
         title: true,

@@ -12,7 +12,9 @@ import {
   ListChecks,
   Loader2,
   MessageSquare,
+  Pencil,
   Plus,
+  Trash2,
 } from "lucide-react";
 import type {
   WorkBoardDto,
@@ -20,10 +22,13 @@ import type {
   WorkTaskCardDto,
 } from "@vedamatch/shared";
 import {
+  createWorkColumn,
   createWorkTask,
+  deleteWorkColumn,
   getWorkBoard,
   getWorkSpace,
   moveWorkTask,
+  updateWorkColumn,
 } from "@/lib/work-api";
 import {
   columnAt,
@@ -71,6 +76,8 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   const [composerColumn, setComposerColumn] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [columnDraft, setColumnDraft] = useState<string | null>(null);
+  const [renamingColumn, setRenamingColumn] = useState<string | null>(null);
 
   const columnRefs = useRef(new Map<string, HTMLElement>());
   const cardRefs = useRef(new Map<string, HTMLElement>());
@@ -108,6 +115,8 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     board?.role === "owner" ||
     board?.role === "admin" ||
     board?.role === "member";
+  /** Колонки заводит и правит администрация среды, задачи — любой участник. */
+  const canManage = board?.role === "owner" || board?.role === "admin";
 
   /**
    * Перенос: доска перестраивается сразу, запрос уходит следом, ошибка
@@ -202,6 +211,39 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     }
   }
 
+  /**
+   * Своя колонка — это, например, «На доработку»: партнёр посмотрел и вернул.
+   * Трёх колонок по умолчанию хватает, чтобы начать, но не хватает, чтобы
+   * описать любой процесс, — поэтому добавить можно, а обязательно не нужно.
+   */
+  async function addColumn() {
+    if (!board || !columnDraft?.trim()) return;
+    try {
+      setBoard(await createWorkColumn(board.id, { name: columnDraft.trim() }));
+      setColumnDraft(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Не получилось");
+    }
+  }
+
+  async function renameColumn(columnId: string, name: string) {
+    if (!board || !name.trim()) return;
+    try {
+      setBoard(await updateWorkColumn(columnId, { name: name.trim() }));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Не переименовалось");
+    }
+  }
+
+  async function removeColumn(columnId: string) {
+    try {
+      setBoard(await deleteWorkColumn(columnId));
+    } catch (cause) {
+      // Колонка с карточками не удаляется — сервер объясняет почему.
+      setError(cause instanceof Error ? cause.message : "Не удалилось");
+    }
+  }
+
   function moveBeside(task: WorkTaskCardDto, direction: -1 | 1) {
     if (!board) return;
     const columnId = columnBeside(board, task.columnId, direction);
@@ -267,9 +309,32 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               className="flex w-[280px] shrink-0 snap-start flex-col rounded-2xl glass p-3 sm:w-[300px]"
             >
               <header className="mb-2 flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-text-0">
-                  {column.name}
-                </h2>
+                {/* Заголовок остаётся заголовком: поле ввода вместо него
+                    лишает скринридер структуры доски. Переименование
+                    включается кнопкой и живёт ровно пока правят. */}
+                {renamingColumn === column.id ? (
+                  <input
+                    autoFocus
+                    defaultValue={column.name}
+                    aria-label={`Название колонки «${column.name}»`}
+                    maxLength={40}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") setRenamingColumn(null);
+                      if (event.key === "Enter") event.currentTarget.blur();
+                    }}
+                    onBlur={(event) => {
+                      setRenamingColumn(null);
+                      if (event.target.value.trim() !== column.name) {
+                        void renameColumn(column.id, event.target.value);
+                      }
+                    }}
+                    className="w-28 rounded border border-glass-brd bg-bg-1 px-1 py-0.5 text-sm font-semibold text-text-0"
+                  />
+                ) : (
+                  <h2 className="text-sm font-semibold text-text-0">
+                    {column.name}
+                  </h2>
+                )}
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs ${
                     over ? "bg-gold/20 text-gold" : "text-text-2"
@@ -284,7 +349,29 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   {column.wipLimit > 0 ? ` / ${column.wipLimit}` : ""}
                 </span>
                 {column.isDone && (
-                  <Check aria-hidden className="ml-auto size-4 text-cyan" />
+                  <Check aria-hidden className="size-4 text-cyan" />
+                )}
+                {canManage && renamingColumn !== column.id && (
+                  <button
+                    type="button"
+                    aria-label={`Переименовать колонку «${column.name}»`}
+                    onClick={() => setRenamingColumn(column.id)}
+                    className="ml-auto rounded p-1 text-text-2 hover:text-text-0"
+                  >
+                    <Pencil aria-hidden className="size-3.5" />
+                  </button>
+                )}
+                {/* Удалить предлагаем только пустую: колонка с карточками
+                    всё равно не удалится, и кнопка обещала бы невозможное. */}
+                {canManage && column.tasks.length === 0 && (
+                  <button
+                    type="button"
+                    aria-label={`Удалить колонку «${column.name}»`}
+                    onClick={() => removeColumn(column.id)}
+                    className="rounded p-1 text-text-2 hover:text-magenta"
+                  >
+                    <Trash2 aria-hidden className="size-3.5" />
+                  </button>
                 )}
               </header>
 
@@ -373,6 +460,54 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             </section>
           );
         })}
+
+        {canManage &&
+          (columnDraft === null ? (
+            <button
+              type="button"
+              onClick={() => setColumnDraft("")}
+              className="flex w-[200px] shrink-0 snap-start items-center justify-center gap-1 rounded-2xl border border-dashed border-glass-brd px-3 py-4 text-sm text-text-1 hover:text-text-0"
+            >
+              <Plus aria-hidden className="size-4" />
+              Колонка
+            </button>
+          ) : (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void addColumn();
+              }}
+              className="flex w-[240px] shrink-0 snap-start flex-col gap-2 rounded-2xl glass p-3"
+            >
+              <input
+                autoFocus
+                value={columnDraft}
+                onChange={(event) => setColumnDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setColumnDraft(null);
+                }}
+                maxLength={40}
+                placeholder="На доработку"
+                aria-label="Название новой колонки"
+                className="rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="rounded-lg bg-magenta px-3 py-1.5 text-xs font-semibold text-white"
+                >
+                  Добавить
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setColumnDraft(null)}
+                  className="rounded-lg px-3 py-1.5 text-xs text-text-1"
+                >
+                  Отмена
+                </button>
+              </div>
+            </form>
+          ))}
       </div>
 
       {openTaskId && (

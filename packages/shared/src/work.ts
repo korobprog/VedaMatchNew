@@ -4,19 +4,19 @@
 // нет и быть не должно — как только за задачу платят, это Рынок.
 
 /** Роль в рабочей среде. Владелец ровно один. */
-export type WorkMemberRole = "owner" | "admin" | "member" | "viewer";
+export type WorkMemberRole = 'owner' | 'admin' | 'member' | 'viewer';
 
-export type WorkTaskPriority = "low" | "normal" | "high" | "urgent";
+export type WorkTaskPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 export type WorkActivityKind =
-  | "task_created"
-  | "task_moved"
-  | "task_assigned"
-  | "task_due_set"
-  | "task_completed"
-  | "task_archived"
-  | "comment_added"
-  | "member_joined";
+  | 'task_created'
+  | 'task_moved'
+  | 'task_assigned'
+  | 'task_due_set'
+  | 'task_completed'
+  | 'task_archived'
+  | 'comment_added'
+  | 'member_joined';
 
 /**
  * Имена акцентных токенов из globals.css. Цвет хранится именем, а не
@@ -24,11 +24,11 @@ export type WorkActivityKind =
  * чужой — правило дизайн-системы портала.
  */
 export const WORK_COLORS = [
-  "magenta",
-  "cyan",
-  "gold",
-  "violet",
-  "blue",
+  'magenta',
+  'cyan',
+  'gold',
+  'violet',
+  'blue',
 ] as const;
 export type WorkColor = (typeof WORK_COLORS)[number];
 
@@ -55,9 +55,9 @@ export const WORK_MAX_ATTACHMENTS_PER_TASK = 20;
  * отпугивает сильнее, чем отсутствие функции. Последняя закрывает задачу.
  */
 export const WORK_DEFAULT_COLUMNS = [
-  { name: "Надо", isDone: false },
-  { name: "В работе", isDone: false },
-  { name: "Готово", isDone: true },
+  { name: 'Надо', isDone: false },
+  { name: 'В работе', isDone: false },
+  { name: 'Готово', isDone: true },
 ] as const;
 
 /** Участник среды глазами остальных участников. */
@@ -242,8 +242,20 @@ export interface UpdateWorkSpaceRequest {
   color?: WorkColor;
 }
 
+/**
+ * Человек, которого можно позвать в среду: из портального графа доступа, а не
+ * из справочника всего портала. «Работа» — не место, где ищут незнакомых.
+ */
+export interface WorkContactDto {
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+  /** Приглашение ему уже выписано и ещё действует. */
+  alreadyInvited: boolean;
+}
+
 export interface CreateWorkInviteRequest {
-  role?: Exclude<WorkMemberRole, "owner">;
+  role?: Exclude<WorkMemberRole, 'owner'>;
   /** Дней жизни ссылки; по умолчанию 7. */
   expiresInDays?: number;
   /** 0 — без ограничения. */
@@ -253,7 +265,7 @@ export interface CreateWorkInviteRequest {
 }
 
 export interface UpdateWorkMemberRequest {
-  role: Exclude<WorkMemberRole, "owner">;
+  role: Exclude<WorkMemberRole, 'owner'>;
 }
 
 export interface CreateWorkBoardRequest {
@@ -351,14 +363,14 @@ export interface WorkAgendaItemDto {
 
 /** Живые события доски (SSE). Один поток на человека, как в «Общении». */
 export type WorkStreamEvent =
-  | { type: "task.created"; boardId: string; task: WorkTaskCardDto }
-  | { type: "task.updated"; boardId: string; task: WorkTaskCardDto }
+  | { type: 'task.created'; boardId: string; task: WorkTaskCardDto }
+  | { type: 'task.updated'; boardId: string; task: WorkTaskCardDto }
   | {
-      type: "task.moved";
+      type: 'task.moved';
       boardId: string;
       taskId: string;
       columnId: string;
       position: number;
     }
-  | { type: "task.removed"; boardId: string; taskId: string }
-  | { type: "board.changed"; boardId: string };
+  | { type: 'task.removed'; boardId: string; taskId: string }
+  | { type: 'board.changed'; boardId: string };
