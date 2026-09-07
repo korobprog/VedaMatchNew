@@ -1,9 +1,10 @@
 import type {
   CreateLibraryEntryRequest,
   LibraryEntryType,
+  LibraryLocale,
   LineageId,
 } from "@vedamatch/shared";
-import type { LibraryTextKey } from "./i18n";
+import { t, type LibraryTextKey } from "./i18n";
 
 /**
  * Черновик карточки и проверки над ним.
@@ -38,11 +39,20 @@ export const ENTRY_TYPES: LibraryEntryType[] = [
   "other",
 ];
 
-/** Коды `400` от API — по ним показываем причину, а не «ссылка плохая». */
+/**
+ * Коды `400` от API — по ним показываем причину, а не «ссылка плохая».
+ * Список обязан покрывать все `BadRequestException` из
+ * `library-entries.service.ts`: код без строки здесь превращается в
+ * бессодержательное «попробуйте позже», по которому нельзя понять, что
+ * именно поправить в карточке.
+ */
 export const ERROR_KEYS: Record<string, LibraryTextKey> = {
   unsupported_url: "add.unsupportedUrl",
   url_too_long: "add.urlTooLong",
+  url_or_source_required: "add.urlOrSourceRequired",
+  source_too_long: "add.sourceTooLong",
   unsupported_type: "add.unsupportedType",
+  unsupported_lineage: "add.unsupportedLineage",
   title_required: "add.titleRequired",
   title_too_long: "add.titleTooLong",
   description_too_long: "add.descriptionTooLong",
@@ -51,16 +61,60 @@ export const ERROR_KEYS: Record<string, LibraryTextKey> = {
   category_not_found: "add.categoryNotFound",
 };
 
-export async function badRequestKey(
-  response: Response,
-): Promise<LibraryTextKey> {
+/** Код ошибки из тела Nest (`message` строкой или массивом). */
+async function errorCode(response: Response): Promise<string | null> {
   const payload = (await response.json().catch(() => null)) as {
     message?: unknown;
   } | null;
   const code = Array.isArray(payload?.message)
     ? payload?.message[0]
     : payload?.message;
-  return (typeof code === "string" && ERROR_KEYS[code]) || "add.failed";
+  return typeof code === "string" && code ? code : null;
+}
+
+/**
+ * Почему не удалось добавить материал.
+ *
+ * `detail` — то, что дописывается в скобках, когда причина неизвестна: код
+ * ошибки бэкенда или код ответа. Без него экран одинаков для истёкшей
+ * сессии, отказа в правах и упавшего сервера: «Не удалось добавить ссылку,
+ * попробуйте позже» не говорит ни человеку, что делать, ни поддержке, что
+ * чинить.
+ *
+ * `409` сюда не попадает: у дубля своя ветка со ссылкой на найденную
+ * запись, и ей нужно тело ответа целиком.
+ */
+export interface EntrySubmitFailure {
+  key: LibraryTextKey;
+  detail?: string;
+}
+
+export async function entrySubmitFailure(
+  response: Response,
+): Promise<EntrySubmitFailure> {
+  if (response.status === 400) {
+    const code = await errorCode(response);
+    const key = code ? ERROR_KEYS[code] : undefined;
+    return key ? { key } : { key: "add.failed", detail: code ?? "400" };
+  }
+  // 401 доходит сюда, только когда refresh уже не помог (см. http-client):
+  // сессии действительно нет, и «попробуйте позже» тут вводит в заблуждение.
+  if (response.status === 401) return { key: "add.sessionExpired" };
+  if (response.status === 403) return { key: "add.forbidden" };
+  if (response.status === 429) return { key: "add.rateLimited" };
+  if (response.status >= 500) {
+    return { key: "add.serverError", detail: String(response.status) };
+  }
+  return { key: "add.failed", detail: String(response.status) };
+}
+
+/** Текст ошибки для экрана: причина, а в скобках — код, если он неизвестен. */
+export function failureText(
+  locale: LibraryLocale,
+  failure: EntrySubmitFailure,
+): string {
+  const text = t(locale, failure.key);
+  return failure.detail ? `${text} (${failure.detail})` : text;
 }
 
 export interface LibraryEntryDraft {

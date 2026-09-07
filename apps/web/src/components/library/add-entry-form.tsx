@@ -20,9 +20,10 @@ import { insertIntoTree, renameInTree } from "./category-tree";
 import { entryTypeLabel, t } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
 import {
-  badRequestKey,
   defaultLocator,
   ENTRY_TYPES,
+  entrySubmitFailure,
+  failureText,
   MAX_CATEGORIES,
   MAX_DESCRIPTION_LENGTH,
   MAX_SOURCE_LENGTH,
@@ -182,23 +183,16 @@ export function AddEntryForm({
         setError(t(locale, "add.duplicate"));
         return;
       }
-      if (res.status === 429) {
-        setError(t(locale, "add.rateLimited"));
-        return;
-      }
-      if (res.status === 400) {
-        setError(t(locale, await badRequestKey(res)));
-        return;
-      }
       if (!res.ok) {
-        setError(t(locale, "add.failed"));
+        setError(failureText(locale, await entrySubmitFailure(res)));
         return;
       }
 
       const created = (await res.json()) as { id: string };
       router.push(`/library/entry/${created.id}`);
     } catch {
-      setError(t(locale, "add.failed"));
+      // Сюда доходит только сорванный запрос: ответ с кодом разобран выше.
+      setError(t(locale, "add.networkError"));
     } finally {
       setPending(false);
     }

@@ -37,6 +37,9 @@ function entryRecord(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** Что вернул последний вызов jest-мока. */
+type CallResult = { value?: Promise<unknown> } | undefined;
+
 function prismaMock(overrides: Record<string, unknown> = {}) {
   const libraryEntry = {
     findUnique: jest.fn().mockResolvedValue(null),
@@ -69,7 +72,16 @@ function prismaMock(overrides: Record<string, unknown> = {}) {
     },
     $transaction: jest.fn((callback: (tx: unknown) => unknown) =>
       callback({
-        libraryEntry,
+        libraryEntry: {
+          ...libraryEntry,
+          // Создание перечитывает запись в той же транзакции, чтобы вернуть
+          // её вместе с категориями. Отдаём то же, что отдал `create`:
+          // тесты подменяют именно его.
+          findUniqueOrThrow: jest.fn(() => {
+            const last = libraryEntry.create.mock.results.at(-1) as CallResult;
+            return last?.value ?? Promise.resolve(entryRecord());
+          }),
+        },
         libraryEntryCategory: {
           createMany: jest.fn().mockResolvedValue({ count: 1 }),
         },
@@ -151,6 +163,46 @@ describe('LibraryEntriesService.create', () => {
       ),
     ).rejects.toMatchObject({ response: { message: 'url_too_long' } });
     expect(prisma.libraryEntry.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('возвращает созданную запись вместе с выбранными категориями', async () => {
+    // Связи заводятся после `create`, и запись из него приходила с пустым
+    // `categories`: карточка в ответе выглядела так, будто категории
+    // потерялись.
+    const prisma = prismaMock();
+    prisma.libraryEntry.create = jest.fn().mockResolvedValue(
+      entryRecord({
+        categories: [
+          {
+            category: {
+              id: 'category-1',
+              slug: 'lekcii',
+              titleRu: 'Лекции и видео',
+              titleEn: 'Lectures and video',
+            },
+          },
+        ],
+      }),
+    );
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communitiesMock() as never,
+      eventsMock() as never,
+    );
+
+    const created = await service.create('user-1', validBody());
+
+    expect(created.categories).toEqual([
+      {
+        id: 'category-1',
+        slug: 'lekcii',
+        titleRu: 'Лекции и видео',
+        titleEn: 'Lectures and video',
+      },
+    ]);
   });
 
   it('rejects an unsupported url', async () => {

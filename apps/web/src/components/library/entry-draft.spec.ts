@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildCreateEntryBody,
   defaultLocator,
+  entrySubmitFailure,
+  failureText,
   isWizardStepReady,
   validateEntryDraft,
   type LibraryEntryDraft,
@@ -194,5 +196,83 @@ describe("isWizardStepReady", () => {
     expect(isWizardStepReady(4, draft({ url: "битая" }))).toBe(false);
     expect(isWizardStepReady(4, sourceDraft())).toBe(true);
     expect(isWizardStepReady(4, sourceDraft({ source: "" }))).toBe(false);
+  });
+});
+
+describe("entrySubmitFailure", () => {
+  function response(status: number, body?: unknown): Response {
+    return new Response(body === undefined ? null : JSON.stringify(body), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  it("переводит известный код 400 в свою строку", async () => {
+    const failure = await entrySubmitFailure(
+      response(400, { message: "category_not_found" }),
+    );
+    expect(failure).toEqual({ key: "add.categoryNotFound" });
+  });
+
+  it("знает и те коды, что появились в сервисе позже словаря", async () => {
+    expect(
+      await entrySubmitFailure(response(400, { message: "unsupported_lineage" })),
+    ).toEqual({ key: "add.unsupportedLineage" });
+    expect(
+      await entrySubmitFailure(
+        response(400, { message: "url_or_source_required" }),
+      ),
+    ).toEqual({ key: "add.urlOrSourceRequired" });
+  });
+
+  it("незнакомый код 400 показывает сам код", async () => {
+    const failure = await entrySubmitFailure(
+      response(400, { message: "brand_new_rule" }),
+    );
+    expect(failure).toEqual({ key: "add.failed", detail: "brand_new_rule" });
+  });
+
+  it("различает истёкшую сессию, отказ в правах и лимит", async () => {
+    expect(await entrySubmitFailure(response(401))).toEqual({
+      key: "add.sessionExpired",
+    });
+    expect(await entrySubmitFailure(response(403))).toEqual({
+      key: "add.forbidden",
+    });
+    expect(await entrySubmitFailure(response(429))).toEqual({
+      key: "add.rateLimited",
+    });
+  });
+
+  it("ошибку сервера называет ошибкой сервера и показывает код", async () => {
+    expect(await entrySubmitFailure(response(500))).toEqual({
+      key: "add.serverError",
+      detail: "500",
+    });
+    expect(await entrySubmitFailure(response(502))).toEqual({
+      key: "add.serverError",
+      detail: "502",
+    });
+  });
+
+  it("прочие коды доносит числом", async () => {
+    expect(await entrySubmitFailure(response(404))).toEqual({
+      key: "add.failed",
+      detail: "404",
+    });
+  });
+});
+
+describe("failureText", () => {
+  it("дописывает код в скобках, когда причина неизвестна", () => {
+    expect(failureText("ru", { key: "add.failed", detail: "500" })).toBe(
+      "Не удалось добавить ссылку, попробуйте позже (500)",
+    );
+  });
+
+  it("известную причину оставляет без скобок", () => {
+    expect(failureText("ru", { key: "add.categoryNotFound" })).toBe(
+      "Одна из категорий больше недоступна",
+    );
   });
 });

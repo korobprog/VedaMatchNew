@@ -327,7 +327,13 @@ export class LibraryEntriesService {
         where: { id: { in: categoryIds } },
         data: { entriesCount: { increment: 1 } },
       });
-      return entry;
+      // Перечитываем: у записи из `create` связи ещё пусты, и карточка в
+      // ответе уезжала без категорий — тех самых, что человек только что
+      // выбрал в мастере.
+      return tx.libraryEntry.findUniqueOrThrow({
+        where: { id: entry.id },
+        select: ENTRY_SELECT,
+      });
     });
 
     // Копию обложки кладём в S3 уже после ответа: пользователю незачем ждать

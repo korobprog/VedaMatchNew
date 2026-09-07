@@ -60,6 +60,14 @@ const ui = {
     "add.categoryCancel": "Отмена",
     "add.categoryCreated": "Категория создана и выбрана",
     "add.failed": "Не удалось добавить ссылку, попробуйте позже",
+    "add.serverError":
+      "Сервер не смог сохранить ссылку — попробуйте ещё раз",
+    "add.sessionExpired": "Сессия истекла — войдите заново и повторите",
+    "add.forbidden": "Недостаточно прав, чтобы добавить этот материал",
+    "add.networkError":
+      "Нет связи с сервером — проверьте интернет и повторите",
+    "add.urlOrSourceRequired": "Укажите ссылку или источник материала",
+    "add.unsupportedLineage": "Выберите другую духовную линию",
     "add.modeTitle": "Как заполним карточку?",
     "add.modeSimple": "Простой",
     "add.modeSimpleHint":
@@ -285,6 +293,13 @@ const ui = {
     "add.categoryCancel": "Cancel",
     "add.categoryCreated": "The category is created and selected",
     "add.failed": "Could not add the link, please try again later",
+    "add.serverError": "The server could not save the link — please try again",
+    "add.sessionExpired": "Your session has expired — sign in again and retry",
+    "add.forbidden": "You do not have the rights to add this material",
+    "add.networkError":
+      "No connection to the server — check the internet and retry",
+    "add.urlOrSourceRequired": "Provide a link or a source for the material",
+    "add.unsupportedLineage": "Choose another spiritual lineage",
     "add.modeTitle": "How would you like to fill this in?",
     "add.modeSimple": "Simple",
     "add.modeSimpleHint":
