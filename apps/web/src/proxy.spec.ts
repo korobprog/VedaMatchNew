@@ -34,6 +34,7 @@ describe("proxy", () => {
       "/updates/history",
       "/services/union",
       "/services/astro",
+      "/vaishnava",
     ]) {
       const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));
 
@@ -70,6 +71,69 @@ describe("proxy", () => {
 
       expect(response.headers.get("location"), path).toBeNull();
     }
+  });
+
+  describe("vaishnava subdomain", () => {
+    const request = (path: string, headers: Record<string, string> = {}) =>
+      new NextRequest(`https://vaishnava.vedamatch.ru${path}`, {
+        headers: { host: "vaishnava.vedamatch.ru", ...headers },
+      });
+
+    it("serves the landing at the root without changing the address", () => {
+      const response = proxy(request("/?ref=ABC1234"));
+
+      expect(response.headers.get("location")).toBeNull();
+      expect(response.headers.get("x-middleware-rewrite")).toBe(
+        "https://vaishnava.vedamatch.ru/vaishnava?ref=ABC1234",
+      );
+      // Реферальный код запоминается и на поддомене: ссылку с ним шлют
+      // именно преданным.
+      expect(response.cookies.get("vm_ref")?.value).toBe("ABC1234");
+    });
+
+    it("collapses the duplicate /vaishnava path into the root", () => {
+      const response = proxy(request("/vaishnava"));
+
+      expect(response.headers.get("location")).toBe(
+        "https://vaishnava.vedamatch.ru/",
+      );
+    });
+
+    it("sends every other path to the main domain with the same path", () => {
+      for (const path of ["/login", "/services/union?x=1", "/union", "/support"]) {
+        const response = proxy(request(path));
+
+        expect(response.headers.get("location"), path).toBe(
+          `https://vedamatch.ru${path}`,
+        );
+      }
+    });
+
+    it("keeps the host port and honours the forwarded scheme", () => {
+      const response = proxy(
+        new NextRequest("http://vaishnava.localhost:3000/login", {
+          headers: {
+            host: "vaishnava.localhost:3000",
+            "x-forwarded-proto": "https",
+          },
+        }),
+      );
+
+      expect(response.headers.get("location")).toBe(
+        "https://localhost:3000/login",
+      );
+    });
+
+    it("leaves the main domain alone", () => {
+      const response = proxy(
+        new NextRequest("https://vedamatch.ru/vaishnava", {
+          headers: { host: "vedamatch.ru" },
+        }),
+      );
+
+      expect(response.headers.get("location")).toBeNull();
+      expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    });
   });
 
   it("still guards the library itself", () => {

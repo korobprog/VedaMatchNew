@@ -662,5 +662,123 @@
       "confirm": "Uphold and hide",
       "moderatorNote": "Moderator note"
     }
+  },
+  "Vaishnava": {
+    "hero": {
+      "badge": "For Vaishnavas of every lineage",
+      "titleLine1": "The portal where Vaishnavas",
+      "titleLine2": "find their own",
+      "description": "A life partner and friends in goodness, your community and temple on the map, sacred texts offline, lectures of your lineage, Jyotish and an ad-free market. One account, and the portal is tuned to your lineage.",
+      "ctaStart": "Enter the portal",
+      "ctaMore": "What is inside",
+      "statUsers": "Members",
+      "statCities": "Cities",
+      "statCommunities": "Communities",
+      "scroll": "Scroll down"
+    },
+    "audience": {
+      "title": "Who it is for",
+      "subtitle": "VedaMatch is built around a devotee's life, not around a feed. Every service answers a concrete question a Vaishnava has.",
+      "items": {
+        "devotee": {
+          "title": "For a devotee",
+          "description": "Choose your lineage once, and Education, Music and Inspiration show the materials of your acharyas and teachers, with no foreign overlap."
+        },
+        "community": {
+          "title": "For a yatra and temple",
+          "description": "A community with verified status: channels and groups, a pin on the map, notices posted on behalf of the yatra, invitations to programs and festivals."
+        },
+        "family": {
+          "title": "For a family in goodness",
+          "description": "Dating with a seven-criteria compatibility score, awareness of the spiritual stage, and Guna Milan by classical Jyotish, up to 36 points."
+        }
+      }
+    },
+    "services": {
+      "title": "Services for devotees",
+      "subtitle": "Eight services in one account. Each is described as it works for a Vaishnava today, not as a promise.",
+      "learnMore": "More about the service",
+      "planned": "Planned",
+      "items": {
+        "union": "A life partner, a friend or a partner in service. A seven-criteria score takes your spiritual stage and goal into account: family, friendship, service, joint projects.",
+        "chat": "Channels and groups of your community, temple and nama-hatta. Verified communities, a map of yatras by city, messaging without leaving for third-party apps.",
+        "vedabase": "Bhagavad-gita and canonical texts with commentaries, verse search and offline reading: a downloaded book opens without a connection.",
+        "library": "Lectures, books and courses tagged by lineage. A devotee sees their own by default, with no manual filters. Anyone can suggest a find.",
+        "motivation": "Daily quotes and materials, source-checked before publication. How much Vaishnava specificity the feed has is up to a slider.",
+        "astro": "Jyotish by the traditional method: birth chart, Moon nakshatra, current dasha, Guna Milan. Formulas do the math; AI only explains it in words.",
+        "notices": "The community board where nothing is for sale: give something away, find hands for a move, share a ride to a festival, invite people to the Sunday program.",
+        "market": "Goods and services in goodness from devotees: a storefront, shops, orders and a chat with the seller, among your own, with no ads.",
+        "music": "Kirtans, bhajans and recordings from programs, tagged with the performer's lineage.",
+        "work": "Vacancies, services and tools for service and business."
+      }
+    },
+    "lineage": {
+      "title": "Your lineage is your context",
+      "subtitle": "Different lineages have different teachers, standards and bodies of material. That is why every Education item and every Music recording is tagged with a lineage, and a devotee sees their own by default.",
+      "note": "Only devotees choose a lineage. Seekers and practitioners see the whole catalogue; this division does not apply to them.",
+      "groupsTitle": "Lineages in the portal directory",
+      "footnote": "The directory is open to extension: if your lineage is missing, write to support."
+    },
+    "map": {
+      "title": "Communities on the map",
+      "description": "Real points, the same ones portal members see. A pin is a community, the number next to it is how many open talks it has."
+    },
+    "howItWorks": {
+      "title": "How to start",
+      "subtitle": "Three steps and the portal is tuned to you",
+      "steps": {
+        "login": {
+          "title": "Sign in with Google",
+          "description": "No passwords and no ten-screen forms. One account opens every service of the platform."
+        },
+        "stage": {
+          "title": "Stage of the path and lineage",
+          "description": "A short questionnaire finds where you are on the path: seeker, practitioner or devotee. A devotee additionally picks a lineage."
+        },
+        "portal": {
+          "title": "The portal tuned to you",
+          "description": "The feed, lectures and recommendations follow your stage and lineage. The advisor on the home page suggests the next step."
+        }
+      }
+    },
+    "principles": {
+      "title": "What the portal stands on",
+      "subtitle": "Rules that do not change from service to service",
+      "items": {
+        "noAds": {
+          "title": "No ads",
+          "description": "No banners and no paid promotion. Renewing a notice does not lift it in the feed; that is not a way to be first."
+        },
+        "moderation": {
+          "title": "Moderation before publication",
+          "description": "Quotes, materials and members' finds are checked by an administrator. Sources are verified, not taken from anywhere."
+        },
+        "privacy": {
+          "title": "Contacts only by consent",
+          "description": "Ways to reach you are never shown in a feed. They open when the other side has agreed to talk."
+        },
+        "verified": {
+          "title": "Verified communities",
+          "description": "Temples, yatras and nama-hattas get a verification mark. A notice on behalf of a yatra is posted only by its owner and admins."
+        },
+        "offline": {
+          "title": "Texts without internet",
+          "description": "Downloaded Library books open offline: on the road, in the temple, at a festival."
+        },
+        "onePlan": {
+          "title": "One plan for everything",
+          "description": "No separate fee per service and no quota on what you read. The first month is free."
+        }
+      }
+    },
+    "cta": {
+      "title": "Join the Vaishnavas of the portal",
+      "description": "Sign in with Google, a short questionnaire, and you are among your own. The first month is free.",
+      "button": "Start"
+    },
+    "meta": {
+      "title": "VedaMatch for Vaishnavas",
+      "description": "A portal for devotees of every lineage: dating in goodness, communities and temples on the map, Bhagavad-gita offline, lectures of your lineage, Jyotish and an ad-free market. One account, every service."
+    }
   }
 }
