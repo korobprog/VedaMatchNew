@@ -1,0 +1,38 @@
+import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
+import { WorkBoardsService } from './work-boards.service';
+import { WorkInvitesService } from './work-invites.service';
+import { WorkPurgeListener } from './work-purge.listener';
+import { WorkSpacesService } from './work-spaces.service';
+import { WorkTasksService } from './work-tasks.service';
+import {
+  WorkBoardsController,
+  WorkController,
+  WorkInvitesController,
+  WorkTasksController,
+} from './work.controller';
+
+/**
+ * Сервис «Работа». См. docs/work-service-plan.md.
+ *
+ * Порядок контроллеров значим: у `WorkController` есть `@Get('spaces/:id')`, и
+ * он перехватил бы буквальные пути соседей. Nest сопоставляет маршруты в
+ * порядке регистрации — менять порядок нельзя, не проверив маршруты руками.
+ */
+@Module({
+  imports: [AuthModule],
+  controllers: [
+    WorkInvitesController,
+    WorkController,
+    WorkBoardsController,
+    WorkTasksController,
+  ],
+  providers: [
+    WorkSpacesService,
+    WorkBoardsService,
+    WorkTasksService,
+    WorkInvitesService,
+    WorkPurgeListener,
+  ],
+})
+export class WorkModule {}

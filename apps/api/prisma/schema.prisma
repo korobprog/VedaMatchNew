@@ -407,6 +407,15 @@ model User {
   assistantThreads                   AssistantThread[]            @relation("AssistantThreads")
   assistantUsage                     AssistantUsage[]             @relation("AssistantUsage")
   assistantToolCalls                 AssistantToolCall[]          @relation("AssistantToolCalls")
+  workSpacesOwned                    WorkSpace[]                  @relation("WorkSpacesOwned")
+  workMemberships                    WorkSpaceMember[]            @relation("WorkMemberships")
+  workInvitesCreated                 WorkInvite[]                 @relation("WorkInvitesCreated")
+  workInvitesReceived                WorkInvite[]                 @relation("WorkInvitesReceived")
+  workTasksAssigned                  WorkTask[]                   @relation("WorkTasksAssigned")
+  workTasksCreated                   WorkTask[]                   @relation("WorkTasksCreated")
+  workComments                       WorkComment[]                @relation("WorkComments")
+  workAttachments                    WorkAttachment[]             @relation("WorkAttachments")
+  workActivity                       WorkActivity[]               @relation("WorkActivityActor")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -5012,4 +5021,274 @@ model AssistantToolCall {
 
   @@index([createdAt])
   @@index([tool, createdAt])
+}
+
+// ===== Work service =====
+// Сервис «Работа», раздел «Планировщик». См. docs/work-service-plan.md.
+// FK — только на User, все Cascade либо SetNull: удаление аккаунта не должно
+// упираться в чужую доску.
+
+/// Роль участника рабочей среды. Владелец ровно один: без него остаётся доска,
+/// которую некому удалить. `viewer` смотрит, но не трогает — это «покажи, что у
+/// вас там» для заказчика.
+enum WorkMemberRole {
+  owner
+  admin
+  member
+  viewer
+}
+
+enum WorkTaskPriority {
+  low
+  normal
+  high
+  urgent
+}
+
+/// Что записывается в историю задачи. Список закрытый: свободная строка в
+/// журнале означает, что подпись собирают в десяти местах по-разному.
+enum WorkActivityKind {
+  task_created
+  task_moved
+  task_assigned
+  task_due_set
+  task_completed
+  task_archived
+  comment_added
+  member_joined
+}
+
+/// Рабочая среда — проект, вокруг которого собираются люди и доски.
+model WorkSpace {
+  id          String    @id @default(uuid())
+  ownerId     String
+  owner       User      @relation("WorkSpacesOwned", fields: [ownerId], references: [id], onDelete: Cascade)
+  name        String
+  /// Префикс номеров задач: VM-14. Заглавная латиница, 2–5 знаков. Нужен,
+  /// чтобы про задачу можно было написать словами в чате, а не ссылкой на uuid.
+  prefix      String
+  description String    @default("")
+  /// Имя токена акцента из globals.css (magenta | cyan | gold | violet).
+  /// Хранится именем, а не #RRGGBB: цвет обязан жить в обеих темах.
+  color       String    @default("magenta")
+  /// Сколько номеров уже выдано. Растёт только вперёд: удалённая задача свой
+  /// номер не возвращает, иначе ссылка VM-14 из переписки уводит к чужому делу.
+  taskSeq     Int       @default(0)
+  /// Личная среда «Мои дела», заводится при первом входе. Отдельной модели под
+  /// личный список нет: две модели разъедутся на первом желании позвать в него
+  /// одного человека.
+  isPersonal  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  archivedAt  DateTime?
+
+  members  WorkSpaceMember[]
+  invites  WorkInvite[]
+  boards   WorkBoard[]
+  labels   WorkLabel[]
+  tasks    WorkTask[]
+  activity WorkActivity[]
+
+  @@index([ownerId, archivedAt])
+}
+
+model WorkSpaceMember {
+  id       String         @id @default(uuid())
+  spaceId  String
+  space    WorkSpace      @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User           @relation("WorkMemberships", fields: [userId], references: [id], onDelete: Cascade)
+  role     WorkMemberRole @default(member)
+  joinedAt DateTime       @default(now())
+
+  @@unique([spaceId, userId])
+  @@index([userId])
+}
+
+/// Приглашение в среду. Ссылкой — для пересылки в мессенджер; именное
+/// (inviteeId) — для человека, который уже есть на портале.
+model WorkInvite {
+  id          String         @id @default(uuid())
+  spaceId     String
+  space       WorkSpace      @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  /// SHA-256 от токена, а не сам токен: дамп таблицы не должен открывать
+  /// доступ к чужим доскам. Показать ссылку целиком можно ровно один раз —
+  /// в ответе на создание.
+  tokenHash   String         @unique
+  role        WorkMemberRole @default(member)
+  createdById String?
+  createdBy   User?          @relation("WorkInvitesCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  /// Заполнено у именного приглашения: ссылка сработает только у этого
+  /// человека, и он получит уведомление.
+  inviteeId   String?
+  invitee     User?          @relation("WorkInvitesReceived", fields: [inviteeId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  /// 0 — без ограничения. Ссылка на команду живёт с лимитом, именная — с 1.
+  maxUses     Int            @default(0)
+  useCount    Int            @default(0)
+  revokedAt   DateTime?
+  createdAt   DateTime       @default(now())
+
+  @@index([spaceId, revokedAt])
+  @@index([inviteeId])
+}
+
+model WorkBoard {
+  id         String    @id @default(uuid())
+  spaceId    String
+  space      WorkSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  name       String
+  position   Float     @default(0)
+  createdAt  DateTime  @default(now())
+  archivedAt DateTime?
+
+  columns WorkColumn[]
+  tasks   WorkTask[]
+
+  @@index([spaceId, position])
+}
+
+model WorkColumn {
+  id       String    @id @default(uuid())
+  boardId  String
+  board    WorkBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  name     String
+  position Float     @default(0)
+  /// Сколько карточек колонка терпит одновременно; 0 — без предела. Превышение
+  /// подсвечивается, но перенос не запрещается: запрет злит, подсветка работает.
+  wipLimit Int       @default(0)
+  /// Попадание сюда закрывает задачу: проставляется completedAt.
+  isDone   Boolean   @default(false)
+
+  tasks WorkTask[]
+
+  @@index([boardId, position])
+}
+
+model WorkTask {
+  id          String           @id @default(uuid())
+  /// Продублирован намеренно: счётчик номеров и выборка «все мои задачи по
+  /// всем доскам среды» иначе требуют join через доску на каждый запрос.
+  spaceId     String
+  space       WorkSpace        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  boardId     String
+  board       WorkBoard        @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  columnId    String
+  column      WorkColumn       @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  number      Int
+  title       String
+  description String           @default("")
+  /// Дробный индекс порядка внутри колонки: перенос меняет одну строку, а не
+  /// всю колонку. См. work-position.ts.
+  position    Float            @default(0)
+  priority    WorkTaskPriority @default(normal)
+  dueAt       DateTime?
+  assigneeId  String?
+  assignee    User?            @relation("WorkTasksAssigned", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdById String?
+  createdBy   User?            @relation("WorkTasksCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  completedAt DateTime?
+  archivedAt  DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  labels      WorkTaskLabel[]
+  checklist   WorkChecklistItem[]
+  comments    WorkComment[]
+  attachments WorkAttachment[]
+  activity    WorkActivity[]
+
+  @@unique([spaceId, number])
+  @@index([columnId, position])
+  @@index([boardId, archivedAt])
+  @@index([assigneeId, dueAt])
+}
+
+model WorkLabel {
+  id      String    @id @default(uuid())
+  spaceId String
+  space   WorkSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  name    String
+  /// Имя токена акцента, как у обложки среды.
+  color   String    @default("cyan")
+
+  tasks WorkTaskLabel[]
+
+  @@unique([spaceId, name])
+}
+
+model WorkTaskLabel {
+  taskId  String
+  task    WorkTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  labelId String
+  label   WorkLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@index([labelId])
+}
+
+model WorkChecklistItem {
+  id       String   @id @default(uuid())
+  taskId   String
+  task     WorkTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  text     String
+  done     Boolean  @default(false)
+  position Float    @default(0)
+
+  @@index([taskId, position])
+}
+
+model WorkComment {
+  id        String    @id @default(uuid())
+  taskId    String
+  task      WorkTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  /// Автор обнуляется вместе с аккаунтом, текст остаётся: обсуждение задачи
+  /// без одной реплики перестаёт читаться.
+  authorId  String?
+  author    User?     @relation("WorkComments", fields: [authorId], references: [id], onDelete: SetNull)
+  body      String
+  createdAt DateTime  @default(now())
+  editedAt  DateTime?
+
+  @@index([taskId, createdAt])
+}
+
+/// Вложение задачи. Файлы приватны: объект лежит в S3 без публичного ACL и
+/// раздаётся подписанной ссылкой — скриншот из рабочей переписки не должен
+/// висеть в CDN по угадываемому адресу.
+model WorkAttachment {
+  id         String   @id @default(uuid())
+  taskId     String
+  task       WorkTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploaderId String?
+  uploader   User?    @relation("WorkAttachments", fields: [uploaderId], references: [id], onDelete: SetNull)
+  storageKey String
+  name       String
+  mime       String
+  sizeBytes  Int
+  width      Int?
+  height     Int?
+  createdAt  DateTime @default(now())
+
+  @@index([taskId, createdAt])
+}
+
+/// История: «кто перенёс в Готово и когда». Первый вопрос второй недели, и
+/// задним числом он не восстанавливается — поэтому пишется с первого дня.
+model WorkActivity {
+  id        String           @id @default(uuid())
+  spaceId   String
+  space     WorkSpace        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  taskId    String?
+  task      WorkTask?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actorId   String?
+  actor     User?            @relation("WorkActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  kind      WorkActivityKind
+  /// Подробности события: старая и новая колонка, имя назначенного, срок.
+  /// Формулировку собирает читатель, здесь — факты.
+  payload   Json             @default("{}")
+  createdAt DateTime         @default(now())
+
+  @@index([taskId, createdAt])
+  @@index([spaceId, createdAt])
 }

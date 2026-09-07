@@ -31,6 +31,7 @@ export * from './profile-name';
 export * from './assistant';
 export * from './lineage';
 export * from './spiritual-stage';
+export * from './work';
 
 import type { BillingMode, SubscriptionState } from './support';
 

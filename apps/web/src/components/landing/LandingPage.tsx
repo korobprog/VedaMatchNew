@@ -214,7 +214,7 @@ export function LandingPage({
         </motion.div>
       </section>
 
-      {/* Services Section — весь каталог из 8 сервисов платформы */}
+      {/* Services Section — весь каталог из 9 сервисов платформы */}
       <Services />
 
       {/* How It Works Section */}

@@ -173,6 +173,26 @@ const services = [
     devoteeVerifiedVisible: true,
   },
   {
+    slug: 'work',
+    name: 'Работа',
+    nameEn: 'Work',
+    description:
+      'Совместные дела: планировщик задач на канбан-доске, рабочие среды и приглашение своих',
+    url: '/work',
+    // active: витрина раздела, Планировщик со средами, досками, задачами и
+    // приглашением по ссылке готовы и покрыты тестами. Вложения, живой поток
+    // и «Мой день» — следующие этапы, статуса не меняют. Соседние разделы
+    // (Вакансии, Услуги) показывают «Скоро» внутри самой витрины.
+    status: 'active',
+    category: 'community',
+    public: true,
+    seekerVisible: true,
+    practitionerVisible: true,
+    yogiVisible: true,
+    devoteeSelfIdentifiedVisible: true,
+    devoteeVerifiedVisible: true,
+  },
+  {
     slug: 'notices',
     name: 'Объявления',
     description:
