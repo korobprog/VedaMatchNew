@@ -46,6 +46,7 @@ import {
 } from "./board-state";
 import { WorkInvitePanel } from "./invite-panel";
 import { WorkTaskDialog } from "./task-dialog";
+import { dueFromInput, endOfDayInput } from "./task-due";
 
 /** Сколько точек палец должен пройти, чтобы это считалось переносом, а не касанием. */
 const DRAG_THRESHOLD = 6;
@@ -77,6 +78,9 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [composerColumn, setComposerColumn] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  // Исполнитель и срок новой задачи. Заполнены заранее — см. openComposer.
+  const [draftAssignee, setDraftAssignee] = useState("");
+  const [draftDue, setDraftDue] = useState("");
   const [drag, setDrag] = useState<DragState | null>(null);
   const [columnDraft, setColumnDraft] = useState<string | null>(null);
   const [renamingColumn, setRenamingColumn] = useState<string | null>(null);
@@ -208,10 +212,33 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     if (target) void commitMove(drag.taskId, target.columnId, target.index);
   }
 
+  /**
+   * Задачу заводят одним движением, поэтому исполнитель и срок в форме уже
+   * стоят: себе и до конца сегодняшнего дня. Оба — самый частый случай, оба
+   * меняются на месте, и оба нужны, чтобы карточка сразу попала в «Мой день»,
+   * а не осела на доске без срока и без хозяина.
+   */
+  function openComposer(columnId: string) {
+    setComposerColumn(columnId);
+    setDraft("");
+    setDraftAssignee(
+      board?.members.some((member) => member.userId === board.viewerId)
+        ? board.viewerId
+        : "",
+    );
+    setDraftDue(endOfDayInput(new Date()));
+  }
+
   async function addTask(columnId: string) {
     if (!board || !draft.trim()) return;
+    const dueAt = dueFromInput(draftDue);
     try {
-      await createWorkTask(board.id, { columnId, title: draft.trim() });
+      await createWorkTask(board.id, {
+        columnId,
+        title: draft.trim(),
+        assigneeId: draftAssignee || null,
+        dueAt: dueAt ?? null,
+      });
       setDraft("");
       setBoard(await getWorkBoard(board.id));
     } catch (cause) {
@@ -444,7 +471,37 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                       aria-label={`Новая задача в колонке «${column.name}»`}
                       className="w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
                     />
-                    <div className="mt-1 flex gap-2">
+                    <div className="mt-2 grid gap-2">
+                      <label className="text-xs text-text-1">
+                        Исполнитель
+                        <select
+                          value={draftAssignee}
+                          onChange={(event) =>
+                            setDraftAssignee(event.target.value)
+                          }
+                          className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0"
+                        >
+                          <option value="">Никто</option>
+                          {board.members.map((member) => (
+                            <option key={member.userId} value={member.userId}>
+                              {member.userId === board.viewerId
+                                ? `${member.name} (вы)`
+                                : member.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="text-xs text-text-1">
+                        Срок
+                        <input
+                          type="datetime-local"
+                          value={draftDue}
+                          onChange={(event) => setDraftDue(event.target.value)}
+                          className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0"
+                        />
+                      </label>
+                    </div>
+                    <div className="mt-2 flex gap-2">
                       <button
                         type="submit"
                         className="rounded-lg bg-magenta px-3 py-1.5 text-xs font-semibold text-white"
@@ -463,10 +520,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => {
-                      setComposerColumn(column.id);
-                      setDraft("");
-                    }}
+                    onClick={() => openComposer(column.id)}
                     className="mt-2 flex items-center gap-1 rounded-xl px-2 py-2 text-sm text-text-1 hover:text-text-0"
                   >
                     <Plus aria-hidden className="size-4" />
