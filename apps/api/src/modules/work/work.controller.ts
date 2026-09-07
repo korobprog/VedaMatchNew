@@ -8,8 +8,11 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import type {
   AccessTokenPayload,
@@ -40,6 +43,8 @@ import { WorkContactsService } from './work-contacts.service';
 import { WorkInvitesService } from './work-invites.service';
 import { WorkSpacesService } from './work-spaces.service';
 import { WorkTasksService } from './work-tasks.service';
+import { MAX_WORK_FILE_BYTES } from './work-upload-rules';
+import type { UploadedWorkFile } from './work-uploads.service';
 
 /**
  * Приглашения. Отдельный контроллер и первый в модуле: у `WorkController`
@@ -371,5 +376,34 @@ export class WorkTasksController {
     @CurrentUser() user: AccessTokenPayload,
   ) {
     return this.tasks.removeChecklistItem(id, user.sub);
+  }
+
+  /**
+   * Вложение: файл уезжает в S3, в карточку возвращается подписанная ссылка.
+   *
+   * Лимит интерцептора — по самому большому допустимому типу; свой предел для
+   * картинки проверяет `validateWorkUpload` уже по MIME. Отдельный лимит на
+   * частоту: доску заполняют скриншотами пачкой, и общий лимит запросов
+   * банил бы за нормальную работу.
+   */
+  @Post('tasks/:id/attachments')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_WORK_FILE_BYTES } }),
+  )
+  addAttachment(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @UploadedFile() file?: UploadedWorkFile,
+  ) {
+    return this.tasks.addAttachment(id, user.sub, file);
+  }
+
+  @Delete('attachments/:id')
+  removeAttachment(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.tasks.removeAttachment(id, user.sub);
   }
 }
