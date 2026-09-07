@@ -5,7 +5,8 @@ import { NextRequest, NextResponse } from "next/server";
 // "/services" — публичные страницы с
 // описанием каждого сервиса и кнопкой регистрации: их и должны читать гости,
 // иначе клик «Узнать больше» на лендинге мгновенно перекидывает на логин без
-// единого слова о том, что вообще регистрируешь.
+// единого слова о том, что вообще регистрируешь. "/vaishnava" — лендинг для
+// преданных под отдельный поддомен: его читают до входа по определению.
 const publicPrefixes = [
   "/login",
   "/mentor-verification",
@@ -15,6 +16,7 @@ const publicPrefixes = [
   "/legal",
   "/updates",
   "/services",
+  "/vaishnava",
 ];
 // Воркер, манифест и офлайн-оболочки обязаны отдаваться и гостю: без них
 // приложение не устанавливается и не кэшируется при первом визите.
@@ -63,7 +65,17 @@ const DEVICE_COOKIE_MAX_AGE = 365 * 24 * 60 * 60;
  */
 const REF_CODE = /^[A-Za-z0-9]{7}$/;
 
+/**
+ * Поддомен лендинга для вайшнавов: `vaishnava.vedamatch.ru` (в разработке —
+ * `vaishnava.localhost:3000`). Префикс, а не полный хост: домен портала
+ * задаётся снаружи, а proxy серверные переменные не читает.
+ */
+const VAISHNAVA_HOST_PREFIX = "vaishnava.";
+
 export function proxy(req: NextRequest) {
+  const subdomain = vaishnavaSubdomainResponse(req);
+  if (subdomain) return subdomain;
+
   const hasAccess = req.cookies.has("access_token");
   const hasSessionMarker = req.cookies.has(SESSION_MARKER);
   const isPublic =
@@ -93,6 +105,59 @@ export function proxy(req: NextRequest) {
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   rememberReferral(req, response);
   return response;
+}
+
+/**
+ * Поддомен вайшнавов показывает лендинг корнем, а всё остальное отдаёт
+ * основному домену.
+ *
+ * Корень переписывается на `/vaishnava` без смены адреса: в строке браузера
+ * и в ссылках остаётся `vaishnava.vedamatch.ru/`. Сам `/vaishnava` на
+ * поддомене — дубль корня, его сводим к `/`, чтобы у страницы был один адрес.
+ *
+ * Любой другой путь — вход, страницы сервисов, поддержка — уходит редиректом
+ * на основной домен с тем же путём. Cookie сессии и OAuth-колбэки живут там,
+ * и вести человека по порталу с поддомена значило бы держать два входа.
+ * Порт хоста сохраняется: в разработке это `localhost:3000`.
+ */
+export function vaishnavaSubdomainResponse(
+  req: NextRequest,
+): NextResponse | null {
+  const host = req.headers.get("host") ?? req.nextUrl.host;
+  if (!host.startsWith(VAISHNAVA_HOST_PREFIX)) return null;
+
+  const { pathname, search } = req.nextUrl;
+  if (pathname === "/") {
+    const response = NextResponse.rewrite(
+      new URL(`/vaishnava${search}`, req.url),
+    );
+    rememberReferral(req, response);
+    return response;
+  }
+  if (pathname === "/vaishnava") {
+    return NextResponse.redirect(publicUrl(req, host, `/${search}`));
+  }
+  return NextResponse.redirect(
+    publicUrl(req, host, `${pathname}${search}`, host.slice(VAISHNAVA_HOST_PREFIX.length)),
+  );
+}
+
+/**
+ * Адрес, каким его видит браузер. `req.url` за обратным прокси может
+ * содержать внутренний хост и схему, поэтому хост берётся из заголовка
+ * `Host`, а схема — из `X-Forwarded-Proto`, когда он есть.
+ */
+function publicUrl(
+  req: NextRequest,
+  host: string,
+  pathWithSearch: string,
+  targetHost: string = host,
+): URL {
+  const url = new URL(pathWithSearch, req.url);
+  url.host = targetHost;
+  const proto = req.headers.get("x-forwarded-proto");
+  if (proto === "https" || proto === "http") url.protocol = `${proto}:`;
+  return url;
 }
 
 /**

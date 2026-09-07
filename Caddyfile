@@ -16,6 +16,13 @@ vedamatch.ru {
 	reverse_proxy web:3000
 }
 
+# Лендинг для вайшнавов: тот же web, корень поддомена proxy.ts переписывает
+# на /vaishnava, остальные пути отправляет на vedamatch.ru.
+vaishnava.vedamatch.ru {
+	import security_headers
+	reverse_proxy web:3000
+}
+
 api.vedamatch.ru {
 	import security_headers
 	# Загрузка фото в галерею: до 50 файлов по 20 МБ проверяются в API,
