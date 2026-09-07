@@ -40,6 +40,7 @@ import {
 } from "./board-drop";
 import {
   columnBeside,
+  columnNeighbours,
   isOverWip,
   moveTaskLocally,
   neighboursOf,
@@ -270,6 +271,23 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     }
   }
 
+  /**
+   * Порядок колонок — это порядок работы, и заводят его редко тем, каким он
+   * останется: «Тестирование» появляется после «Готово», а стоять должно до.
+   * Кнопками, а не перетаскиванием: колонок единицы, переставляют их раз в
+   * жизни, а перетаскивание пришлось бы отбирать у карточек и у прокрутки.
+   */
+  async function moveColumn(columnId: string, direction: -1 | 1) {
+    if (!board) return;
+    const neighbours = columnNeighbours(board.columns, columnId, direction);
+    if (!neighbours) return;
+    try {
+      setBoard(await updateWorkColumn(columnId, neighbours));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Не переставилось");
+    }
+  }
+
   async function removeColumn(columnId: string) {
     try {
       setBoard(await deleteWorkColumn(columnId));
@@ -339,7 +357,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           между двумя осями. Столбиком видно всё, а порядок колонок сверху
           вниз читается так же, как слева направо. */}
       <div className="-mx-4 flex flex-col gap-3 px-4 pb-4 sm:snap-x sm:flex-row sm:overflow-x-auto">
-        {board.columns.map((column) => {
+        {board.columns.map((column, index) => {
           const over = isOverWip(column);
           return (
             <section
@@ -394,12 +412,46 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                 {column.isDone && (
                   <Check aria-hidden className="size-4 text-cyan" />
                 )}
+                {/* «Раньше» и «позже», а не «левее» и «правее»: на телефоне
+                    колонки стоят столбиком, и «левее» показывало бы вверх.
+                    Стрелка разворачивается вслед за раскладкой — так же, как
+                    у кнопок переноса карточки. */}
+                {canManage && (
+                  <span className="ml-auto flex">
+                    <button
+                      type="button"
+                      disabled={index === 0}
+                      aria-label={`Переставить колонку «${column.name}» раньше`}
+                      onClick={() => void moveColumn(column.id, -1)}
+                      className="rounded p-1 text-text-2 hover:text-text-0 disabled:opacity-30"
+                    >
+                      <ChevronUp aria-hidden className="size-3.5 sm:hidden" />
+                      <ChevronLeft
+                        aria-hidden
+                        className="hidden size-3.5 sm:block"
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={index === board.columns.length - 1}
+                      aria-label={`Переставить колонку «${column.name}» позже`}
+                      onClick={() => void moveColumn(column.id, 1)}
+                      className="rounded p-1 text-text-2 hover:text-text-0 disabled:opacity-30"
+                    >
+                      <ChevronDown aria-hidden className="size-3.5 sm:hidden" />
+                      <ChevronRight
+                        aria-hidden
+                        className="hidden size-3.5 sm:block"
+                      />
+                    </button>
+                  </span>
+                )}
                 {canManage && renamingColumn !== column.id && (
                   <button
                     type="button"
                     aria-label={`Переименовать колонку «${column.name}»`}
                     onClick={() => setRenamingColumn(column.id)}
-                    className="ml-auto rounded p-1 text-text-2 hover:text-text-0"
+                    className="rounded p-1 text-text-2 hover:text-text-0"
                   >
                     <Pencil aria-hidden className="size-3.5" />
                   </button>

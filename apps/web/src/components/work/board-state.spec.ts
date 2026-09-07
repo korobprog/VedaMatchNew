@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { WorkBoardDto, WorkTaskCardDto } from "@vedamatch/shared";
 import {
   columnBeside,
+  columnNeighbours,
   isOverWip,
   moveTaskLocally,
   neighboursOf,
@@ -150,5 +151,46 @@ describe("isOverWip", () => {
   it("ровно по лимиту — ещё не перебор", () => {
     expect(isOverWip({ wipLimit: 2, tasks: [1, 2] })).toBe(false);
     expect(isOverWip({ wipLimit: 2, tasks: [1, 2, 3] })).toBe(true);
+  });
+});
+
+describe("columnNeighbours", () => {
+  const columns = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }];
+
+  it("шаг раньше ставит колонку между её соседями слева", () => {
+    expect(columnNeighbours(columns, "c", -1)).toEqual({
+      afterColumnId: "a",
+      beforeColumnId: "b",
+    });
+  });
+
+  it("шаг позже ставит колонку за следующую", () => {
+    expect(columnNeighbours(columns, "b", 1)).toEqual({
+      afterColumnId: "c",
+      beforeColumnId: "d",
+    });
+  });
+
+  it("первая колонка становится второй, а не остаётся на месте", () => {
+    expect(columnNeighbours(columns, "a", 1)).toEqual({
+      afterColumnId: "b",
+      beforeColumnId: "c",
+    });
+  });
+
+  it("последняя колонка встаёт предпоследней", () => {
+    expect(columnNeighbours(columns, "d", -1)).toEqual({
+      afterColumnId: "b",
+      beforeColumnId: "c",
+    });
+  });
+
+  it("с краю двигать некуда", () => {
+    expect(columnNeighbours(columns, "a", -1)).toBeNull();
+    expect(columnNeighbours(columns, "d", 1)).toBeNull();
+  });
+
+  it("чужая колонка — не повод гадать", () => {
+    expect(columnNeighbours(columns, "z", -1)).toBeNull();
   });
 });
