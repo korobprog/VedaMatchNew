@@ -81,6 +81,7 @@ import { AssistantModule } from './modules/assistant/assistant.module';
     // Ассистент портала: портальная инфраструктура, сервисы отвечают ему
     // событиями `assistant.tool.*` из своих слушателей.
     AssistantModule,
+    WorkModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: AdminAwareThrottlerGuard }],
 })
