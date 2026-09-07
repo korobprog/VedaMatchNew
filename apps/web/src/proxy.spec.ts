@@ -124,6 +124,23 @@ describe("proxy", () => {
       );
     });
 
+    it("drops the internal port when the public host has none", () => {
+      // За Traefik Next видит запрос как http://web:3000/login, а браузер —
+      // https://vaishnava.vedamatch.ru/login. Порт 3000 наружу уходить не должен.
+      const response = proxy(
+        new NextRequest("http://web:3000/login", {
+          headers: {
+            host: "vaishnava.vedamatch.ru",
+            "x-forwarded-proto": "https",
+          },
+        }),
+      );
+
+      expect(response.headers.get("location")).toBe(
+        "https://vedamatch.ru/login",
+      );
+    });
+
     it("leaves the main domain alone", () => {
       const response = proxy(
         new NextRequest("https://vedamatch.ru/vaishnava", {
