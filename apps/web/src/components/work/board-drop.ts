@@ -8,7 +8,7 @@
  * Готовой библиотеки здесь нет намеренно: перетаскивание одного вида карточек
  * в одном виде колонок — это полторы сотни строк, а @dnd-kit тянет в бандл
  * заметно больше и всё равно требует своей разметки. Своё решение к тому же
- * обязано иметь клавиатурный путь (кнопки «в колонку слева/справа»), а не
+ * обязано иметь клавиатурный путь (кнопки «в предыдущую/следующую колонку»), а не
  * зависеть от чужой поддержки доступности.
  */
 
@@ -16,6 +16,8 @@ export interface ColumnRect {
   id: string;
   left: number;
   right: number;
+  top: number;
+  bottom: number;
 }
 
 export interface CardRect {
@@ -25,21 +27,41 @@ export interface CardRect {
 }
 
 /**
- * Колонка под пальцем. Если палец ушёл за край доски, берётся ближайшая: на
- * телефоне промахнуться мимо крайней колонки легче, чем попасть, и «карточка
- * никуда не переехала» человек читает как поломку.
+ * Колонка под пальцем — по всему прямоугольнику, а не по одной оси.
+ *
+ * Оси здесь две намеренно, хотя доска раскладывается по-разному. В ряд
+ * колонки стоят на одной высоте, и попадание решает X; в столбик на телефоне
+ * они одной ширины, и решает Y. Прямоугольник целиком отвечает на оба случая
+ * одинаково, и раскладку знать не нужно — иначе выбор по X молча приклеивал
+ * бы каждое перетаскивание к первой колонке, стоило доске встать столбиком.
+ *
+ * Если палец ушёл за край доски, берётся ближайшая: промахнуться мимо
+ * крайней колонки легче, чем попасть, и «карточка никуда не переехала»
+ * человек читает как поломку. Расстояние тоже по обеим осям — до края
+ * прямоугольника, а не до его середины: у высокой колонки середина далеко от
+ * того места, куда целятся.
  */
-export function columnAt(columns: ColumnRect[], x: number): string | null {
+export function columnAt(
+  columns: ColumnRect[],
+  x: number,
+  y: number,
+): string | null {
   if (columns.length === 0) return null;
   const inside = columns.find(
-    (column) => x >= column.left && x <= column.right,
+    (column) =>
+      x >= column.left &&
+      x <= column.right &&
+      y >= column.top &&
+      y <= column.bottom,
   );
   if (inside) return inside.id;
 
   let nearest = columns[0];
   let bestDistance = Number.POSITIVE_INFINITY;
   for (const column of columns) {
-    const distance = x < column.left ? column.left - x : x - column.right;
+    const dx = Math.max(column.left - x, 0, x - column.right);
+    const dy = Math.max(column.top - y, 0, y - column.bottom);
+    const distance = Math.hypot(dx, dy);
     if (distance < bestDistance) {
       bestDistance = distance;
       nearest = column;

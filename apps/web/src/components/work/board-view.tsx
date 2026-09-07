@@ -6,8 +6,10 @@ import {
   ArrowLeft,
   CalendarClock,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   GripVertical,
   ListChecks,
   Loader2,
@@ -148,7 +150,13 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
       const element = columnRefs.current.get(column.id);
       if (!element) continue;
       const rect = element.getBoundingClientRect();
-      columns.push({ id: column.id, left: rect.left, right: rect.right });
+      columns.push({
+        id: column.id,
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+      });
       cardsByColumn[column.id] = column.tasks.flatMap((task) => {
         const card = cardRefs.current.get(task.id);
         if (!card) return [];
@@ -183,7 +191,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
       Math.abs(event.clientY - drag.startY) > DRAG_THRESHOLD;
     if (!drag.started && !movedEnough) return;
 
-    const columnId = columnAt(drag.columns, event.clientX);
+    const columnId = columnAt(drag.columns, event.clientX, event.clientY);
     if (!columnId) return;
     const index = dropIndexAt(
       drag.cardsByColumn[columnId] ?? [],
@@ -293,9 +301,17 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         </p>
       )}
 
-      {/* Колонки скроллятся вбок: на телефоне три колонки в ширину экрана не
-          помещаются, а сжимать их до нечитаемости хуже, чем прокручивать. */}
-      <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-4">
+      {/* На телефоне колонки идут столбиком, на экранах пошире — рядом с
+          прокруткой вбок.
+
+          Вбок их скроллило и на телефоне: три колонки в ширину экрана не
+          помещаются, а сжимать их до нечитаемости хуже, чем прокручивать. Но
+          боковая прокрутка внутри страницы, которая и сама прокручивается
+          вниз, отдаёт колонку шириной в половину экрана и прячет остальные за
+          краем: доску не видно целиком, и каждое движение приходится выбирать
+          между двумя осями. Столбиком видно всё, а порядок колонок сверху
+          вниз читается так же, как слева направо. */}
+      <div className="-mx-4 flex flex-col gap-3 px-4 pb-4 sm:snap-x sm:flex-row sm:overflow-x-auto">
         {board.columns.map((column) => {
           const over = isOverWip(column);
           return (
@@ -306,7 +322,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                 else columnRefs.current.delete(column.id);
               }}
               aria-label={column.name}
-              className="flex w-[280px] shrink-0 snap-start flex-col rounded-2xl glass p-3 sm:w-[300px]"
+              className="flex w-full flex-col rounded-2xl glass p-3 sm:w-[300px] sm:shrink-0 sm:snap-start"
             >
               <header className="mb-2 flex items-center gap-2">
                 {/* Заголовок остаётся заголовком: поле ввода вместо него
@@ -466,7 +482,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             <button
               type="button"
               onClick={() => setColumnDraft("")}
-              className="flex w-[200px] shrink-0 snap-start items-center justify-center gap-1 rounded-2xl border border-dashed border-glass-brd px-3 py-4 text-sm text-text-1 hover:text-text-0"
+              className="flex w-full items-center justify-center gap-1 rounded-2xl border border-dashed border-glass-brd px-3 py-4 text-sm text-text-1 hover:text-text-0 sm:w-[200px] sm:shrink-0 sm:snap-start"
             >
               <Plus aria-hidden className="size-4" />
               Колонка
@@ -477,7 +493,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                 event.preventDefault();
                 void addColumn();
               }}
-              className="flex w-[240px] shrink-0 snap-start flex-col gap-2 rounded-2xl glass p-3"
+              className="flex w-full flex-col gap-2 rounded-2xl glass p-3 sm:w-[240px] sm:shrink-0 sm:snap-start"
             >
               <input
                 autoFocus
@@ -626,22 +642,28 @@ function TaskCard({
         // Клавиатурный путь к переносу. Перетаскивание мышью и пальцем работает,
         // но им нельзя пользоваться с клавиатуры, а доска без переноса
         // бесполезна — поэтому кнопки видны всегда, а не только на наведении.
+        //
+        // «Предыдущая» и «следующая», а не «слева» и «справа»: на телефоне
+        // колонки стоят столбиком, и «слева» там показывало бы вверх. Стрелка
+        // разворачивается вслед за раскладкой по той же причине.
         <div className="mt-1 flex gap-1 pl-5">
           <button
             type="button"
             onClick={() => onMoveBeside(-1)}
-            aria-label={`Перенести «${task.title}» в колонку слева`}
+            aria-label={`Перенести «${task.title}» в предыдущую колонку`}
             className="rounded p-1 text-text-2 hover:text-text-0"
           >
-            <ChevronLeft aria-hidden className="size-4" />
+            <ChevronUp aria-hidden className="size-4 sm:hidden" />
+            <ChevronLeft aria-hidden className="hidden size-4 sm:block" />
           </button>
           <button
             type="button"
             onClick={() => onMoveBeside(1)}
-            aria-label={`Перенести «${task.title}» в колонку справа`}
+            aria-label={`Перенести «${task.title}» в следующую колонку`}
             className="rounded p-1 text-text-2 hover:text-text-0"
           >
-            <ChevronRight aria-hidden className="size-4" />
+            <ChevronDown aria-hidden className="size-4 sm:hidden" />
+            <ChevronRight aria-hidden className="hidden size-4 sm:block" />
           </button>
         </div>
       )}
