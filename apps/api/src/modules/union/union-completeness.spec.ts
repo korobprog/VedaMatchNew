@@ -42,6 +42,32 @@ function profile(overrides: Partial<UnionProfileDto> = {}): UnionProfileDto {
   };
 }
 
+/**
+ * Анкета, в которой заполнено всё, что считается в прогрессе. Животных и
+ * желаемого возраста здесь нет намеренно: они необязательные, и 100% должны
+ * достигаться без них.
+ */
+function full(): UnionProfileDto {
+  return profile({
+    about: 'текст',
+    status: 'Харе Кришна',
+    intentions: [{ type: 'family', weight: 100 }],
+    languages: ['русский'],
+    interests: ['киртан'],
+    values: ['семья'],
+    skills: ['кулинария'],
+    familyStatus: 'свободен / свободна',
+    childrenStatus: 'none_want',
+    diet: 'vegetarian',
+    regulativePrinciples: ['no_meat'],
+    heightCm: 180,
+    education: 'higher',
+    spiritualEducation: 'bhakti_shastri',
+    housing: 'own_place',
+    income: 'basic_and_rest',
+  });
+}
+
 describe('computeCompleteness', () => {
   it('веса полей в сумме дают 100', () => {
     expect(UNION_COMPLETENESS_TOTAL).toBe(100);
@@ -67,8 +93,8 @@ describe('computeCompleteness', () => {
       }),
       { publicPhotoCount: 2 },
     );
-    // photos 12 + about 12 + intentions 10
-    expect(result.percent).toBe(34);
+    // photos 14 + about 14 + intentions 11
+    expect(result.percent).toBe(39);
     expect(result.missing).not.toContain('about');
   });
 
@@ -81,11 +107,13 @@ describe('computeCompleteness', () => {
     expect(result.missing).toContain('status');
   });
 
-  it('возрастной диапазон засчитывается по одной границе', () => {
-    const result = computeCompleteness(profile({ ageRangeMin: 30 }), {
-      publicPhotoCount: 0,
-    });
-    expect(result.missing).not.toContain('ageRange');
+  it('необязательные поля не держат прогресс', () => {
+    // Животные и желаемый возраст в анкете есть, а в прогрессе их нет: не
+    // заполнив их, человек всё равно доходит до 100%.
+    const result = computeCompleteness(full(), { publicPhotoCount: 1 });
+    expect(result.percent).toBe(100);
+    expect(result.items.map((item) => item.key)).not.toContain('pets');
+    expect(result.items.map((item) => item.key)).not.toContain('ageRange');
   });
 
   it('подсказывает самое весомое из незаполненных полей', () => {
@@ -100,30 +128,7 @@ describe('computeCompleteness', () => {
   });
 
   it('полностью заполненный профиль даёт 100%', () => {
-    const result = computeCompleteness(
-      profile({
-        about: 'текст',
-        status: 'Харе Кришна',
-        intentions: [{ type: 'family', weight: 100 }],
-        languages: ['русский'],
-        interests: ['киртан'],
-        values: ['семья'],
-        skills: ['кулинария'],
-        familyStatus: 'свободен / свободна',
-        childrenStatus: 'none_want',
-        diet: 'vegetarian',
-        regulativePrinciples: ['no_meat'],
-        ageRangeMin: 30,
-        ageRangeMax: 45,
-        heightCm: 180,
-        education: 'higher',
-        spiritualEducation: 'bhakti_shastri',
-        housing: 'own_place',
-        income: 'basic_and_rest',
-        pets: ['кошка'],
-      }),
-      { publicPhotoCount: 1 },
-    );
+    const result = computeCompleteness(full(), { publicPhotoCount: 1 });
     expect(result.percent).toBe(100);
     expect(result.missing).toEqual([]);
     expect(result.next).toBeNull();

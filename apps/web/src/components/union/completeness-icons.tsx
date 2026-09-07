@@ -35,8 +35,6 @@ const PATHS: Record<UnionProfileFieldKey, string> = {
   diet: "M5 19C5 10 10 5 19 5c0 9-5 14-14 14z M5 19l9-9",
   // четыре зарубки
   regulativePrinciples: "M6 5v14 M10 5v14 M14 5v14 M18 5v14 M4 12h16",
-  // двусторонняя стрелка
-  ageRange: "M4 12h16 M8 8l-4 4 4 4 M16 8l4 4-4 4",
   // мерная линейка
   heightCm: "M12 4v16 M8 4h8 M8 20h8 M12 8h3 M12 12h3 M12 16h3",
   // раскрытая книга
@@ -47,8 +45,6 @@ const PATHS: Record<UnionProfileFieldKey, string> = {
   housing: "M4 12l8-7 8 7 M6 10v9h12v-9 M10 19v-5h4v5",
   // монета
   income: "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z M12 7v10 M14.5 9.5c-.5-1-1.5-1.5-2.5-1.5-1.5 0-2.5 1-2.5 2s1 1.7 2.5 2 2.5 1 2.5 2-1 2-2.5 2-2.3-.6-2.7-1.5",
-  // лапка
-  pets: "M12 19c-3 0-5-1.5-5-3.5 0-2 2.5-3.5 5-3.5s5 1.5 5 3.5c0 2-2 3.5-5 3.5z M7 9a1.5 1.5 0 1 1 0-.01 M10.5 6.5a1.5 1.5 0 1 1 0-.01 M13.5 6.5a1.5 1.5 0 1 1 0-.01 M17 9a1.5 1.5 0 1 1 0-.01",
 };
 
 export function CompletenessIcon({

@@ -1179,8 +1179,8 @@ describe('UnionProfileService', () => {
 
     const state = await service.getState('me');
 
-    // Заполнены только фото (12) и намерения (10) из фикстуры.
-    expect(state.completeness.percent).toBe(22);
+    // Заполнены только фото (14) и намерения (11) из фикстуры.
+    expect(state.completeness.percent).toBe(25);
     expect(state.completeness.next).toBe('about');
   });
 

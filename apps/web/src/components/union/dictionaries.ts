@@ -215,13 +215,11 @@ export const unionProfileFieldLabels: Record<UnionProfileFieldKey, string> = {
   childrenStatus: "Дети",
   diet: "Питание",
   regulativePrinciples: "Регулирующие принципы",
-  ageRange: "Желаемый возраст партнёра",
   heightCm: "Рост",
   education: "Образование",
   spiritualEducation: "Духовное образование",
   housing: "Жилищные условия",
   income: "Материальная обеспеченность",
-  pets: "Домашние животные",
 };
 
 export const unionFamilyStatusOptions = [

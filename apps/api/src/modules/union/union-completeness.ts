@@ -8,11 +8,16 @@ import type {
 /**
  * Веса полей анкеты. Сумма ровно 100, порядок задаёт приоритет подсказок:
  * чем выше поле в списке, тем раньше мы предложим его заполнить.
+ *
+ * Необязательных полей анкеты здесь нет — см. `UnionProfileFieldKey`. Пять
+ * очков, которые раньше держали «животные» и «желаемый возраст», ушли туда,
+ * что действительно двигает анкету в рекомендациях: фото, рассказ о себе и
+ * цель знакомства.
  */
 const FIELD_WEIGHTS: Array<[UnionProfileFieldKey, number]> = [
-  ['photos', 12],
-  ['about', 12],
-  ['intentions', 10],
+  ['photos', 14],
+  ['about', 14],
+  ['intentions', 11],
   ['interests', 8],
   ['values', 7],
   ['status', 5],
@@ -21,13 +26,11 @@ const FIELD_WEIGHTS: Array<[UnionProfileFieldKey, number]> = [
   ['childrenStatus', 5],
   ['diet', 5],
   ['regulativePrinciples', 5],
-  ['ageRange', 4],
   ['skills', 4],
   ['heightCm', 3],
   ['education', 3],
   ['spiritualEducation', 3],
   ['housing', 2],
-  ['pets', 1],
   ['income', 1],
 ];
 
@@ -68,11 +71,6 @@ function isFilled(
       return profile.skills.length > 0;
     case 'regulativePrinciples':
       return profile.regulativePrinciples.length > 0;
-    case 'pets':
-      return profile.pets.length > 0;
-    // Диапазон считается заполненным, когда указана хотя бы одна граница.
-    case 'ageRange':
-      return profile.ageRangeMin != null || profile.ageRangeMax != null;
     case 'heightCm':
       return profile.heightCm != null;
     case 'childrenStatus':

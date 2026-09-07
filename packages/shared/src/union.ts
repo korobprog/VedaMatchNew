@@ -138,7 +138,15 @@ export interface UnionProfileDto extends UnionProfileDetails {
   updatedAt: string;
 }
 
-/** Ключи полей, из которых складывается прогресс заполнения анкеты. */
+/**
+ * Ключи полей, из которых складывается прогресс заполнения анкеты.
+ *
+ * Не всё, что есть в анкете, сюда попадает. «Домашние животные» и «желаемый
+ * возраст партнёра» заполняют по желанию: питомцев у половины людей нет, а
+ * возрастную рамку многие сознательно не ставят — и требовать их значило бы
+ * держать полосу заполненности вечно недокрашенной у того, кто рассказал о
+ * себе всё остальное. В анкете поля остались, в прогрессе их нет.
+ */
 export type UnionProfileFieldKey =
   | 'photos'
   | 'about'
@@ -152,13 +160,11 @@ export type UnionProfileFieldKey =
   | 'childrenStatus'
   | 'diet'
   | 'regulativePrinciples'
-  | 'ageRange'
   | 'heightCm'
   | 'education'
   | 'spiritualEducation'
   | 'housing'
-  | 'income'
-  | 'pets';
+  | 'income';
 
 export interface UnionProfileCompletenessItem {
   key: UnionProfileFieldKey;
