@@ -118,6 +118,39 @@ describe("AddEntryForm", () => {
     });
   });
 
+  it("отличает ошибку сервера от «попробуйте позже» и показывает код", async () => {
+    // Скриншот тестировщика от 2026-09-07: на шаге «Проверка» единственная
+    // строка «Не удалось добавить ссылку, попробуйте позже» одинакова для
+    // упавшего сервера, истёкшей сессии и отказа в правах — по ней нельзя
+    // ни понять, что делать, ни завести задачу.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ message: "Internal server error" }),
+      }),
+    );
+
+    render(<AddEntryForm locale="ru" tree={tree} />);
+
+    await userEvent.type(
+      screen.getByLabelText("Адрес ссылки"),
+      "https://www.youtube.com/watch?v=GPWziJv2XlY",
+    );
+    await userEvent.type(screen.getByLabelText("Заголовок по-русски"), "Видео");
+    await userEvent.click(screen.getByLabelText("Гита"));
+    await userEvent.click(screen.getByRole("button", { name: "Добавить" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "Сервер не смог сохранить ссылку — попробуйте ещё раз (500)",
+        ),
+      ).toBeDefined();
+    });
+  });
+
   it("creates a category inline without losing the entered link", async () => {
     vi.stubGlobal(
       "fetch",
