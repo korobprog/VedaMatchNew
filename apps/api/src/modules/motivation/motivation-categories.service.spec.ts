@@ -404,22 +404,42 @@ describe('MotivationCategoriesService.publicTree', () => {
     await service.publicTree();
 
     expect(groupBy).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { status: 'published' } }),
+      expect.objectContaining({
+        where: expect.objectContaining({ status: 'published' }),
+      }),
     );
   });
 
-  it('не показывает пустую папку: за ней тупик, а не раздел', async () => {
+  it('не считает рилсы участников без проверенного источника', async () => {
+    const { service, groupBy } = build([root], [{ category: 'vedy', _count: { _all: 3 } }]);
+
+    await service.publicTree();
+
+    // В папку такие не попадают ни к кому — значит, и в счётчике их быть не
+    // должно, иначе число снова обещает больше, чем откроется.
+    expect(groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          NOT: { origin: 'user', sourceVerified: false },
+        }),
+      }),
+    );
+  });
+
+  it('показывает пустую папку: раздел из админки читатель должен найти', async () => {
     const { service } = build(
       [root, empty],
       [{ category: 'vedy', _count: { _all: 3 } }],
     );
 
-    expect((await service.publicTree()).map((item) => item.slug)).toEqual([
-      'vedy',
-    ]);
+    const tree = await service.publicTree();
+
+    expect(tree.map((item) => item.slug)).toEqual(['vedy', 'pustaya']);
+    // Ноль рядом с названием — за него список и не пускает дальше.
+    expect(tree.find((item) => item.slug === 'pustaya')?.postCount).toBe(0);
   });
 
-  it('оставляет родителя, пока что-то есть в его подкатегории', async () => {
+  it('отдаёт подкатегорию следом за её родителем', async () => {
     const { service } = build(
       [root, child],
       [{ category: 'gita', _count: { _all: 2 } }],

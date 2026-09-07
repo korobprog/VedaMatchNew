@@ -10,6 +10,7 @@ import type {
   MotivationCategoryInput,
   MotivationCategoryUpdate,
 } from '@vedamatch/shared';
+import { MotivationPostOrigin, MotivationPostStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isAdmin } from './is-admin';
 import {
@@ -19,6 +20,26 @@ import {
 
 /** Слаг, который проставлялся постам до появления справочника. */
 export const FALLBACK_CATEGORY_SLUG = 'verified_quote';
+
+/**
+ * Что читатель действительно увидит в папке — по этому и считается счётчик.
+ *
+ * Опубликованное: в админском счётчике сидят и заготовки, и это там верно —
+ * редакция смотрит, сколько всего лежит. Читателю такое число обещало бы
+ * карточки, которых он не увидит.
+ *
+ * Минус рилсы участников без проверенного источника: они живут во вкладке
+ * «Мои» и по прямой ссылке, а в общую выдачу — в том числе в папку — не идут
+ * ни к кому. Правило то же, что в ленте, и держать его надо синхронно: иначе
+ * счётчик снова начнёт обещать больше, чем откроется.
+ *
+ * Единственное оставшееся расхождение — заблокированный автор: оно у каждого
+ * читателя своё, а счётчик один на всех.
+ */
+const READER_VISIBLE_POSTS = {
+  status: MotivationPostStatus.published,
+  NOT: { origin: MotivationPostOrigin.user, sourceVerified: false },
+};
 
 type CategoryRow = {
   id: string;
@@ -43,33 +64,22 @@ export class MotivationCategoriesService {
   }
 
   /**
-   * То же дерево, но для читателя: без проверки прав и без пустых веток.
+   * То же дерево, но для читателя: без проверки прав и со счётчиком по тому,
+   * что откроется в папке (`READER_VISIBLE_POSTS`).
    *
-   * Считается только опубликованное — в админском списке в счётчик идут и
-   * заготовки, и это там правильно: редакция смотрит, сколько всего лежит.
-   * Читателю такое число обещало бы карточки, которых он не увидит.
-   *
-   * Пустые категории не показываются вовсе: папка, за которой ничего нет, —
-   * это тупик, а не раздел. Родитель остаётся, пока хоть в одной его
-   * подкатегории что-то есть: без него подкатегории повисли бы в воздухе.
+   * Пустые ветки остаются в списке. Раньше они вырезались — «папка, за
+   * которой ничего нет, это тупик», — и справочник во «Вдохновении» выглядел
+   * вдвое беднее админского: заведённые редакцией разделы просто не
+   * существовали, и понять, куда делись, было неоткуда. Оглавление сервиса
+   * честнее показывает свой состав целиком, а от захода в пустую папку
+   * читателя удерживает сам список: нулевой раздел там не ссылка.
    */
   async publicTree(): Promise<MotivationCategoryDto[]> {
-    const all = await this.tree({ status: 'published' });
-    const withPosts = new Set(
-      all.filter((item) => item.postCount > 0).map((item) => item.id),
-    );
-    const parentsWithPosts = new Set(
-      all
-        .filter((item) => item.parentId && withPosts.has(item.id))
-        .map((item) => item.parentId as string),
-    );
-    return all.filter(
-      (item) => withPosts.has(item.id) || parentsWithPosts.has(item.id),
-    );
+    return this.tree(READER_VISIBLE_POSTS);
   }
 
   private async tree(
-    postWhere?: { status: 'published' },
+    postWhere?: typeof READER_VISIBLE_POSTS,
   ): Promise<MotivationCategoryDto[]> {
     const [categories, counts] = await Promise.all([
       this.prisma.motivationCategory.findMany({
