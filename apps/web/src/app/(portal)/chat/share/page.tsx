@@ -14,6 +14,7 @@ const SHARABLE: ChatAttachmentKind[] = [
   "listing",
   "contact",
   "assistant",
+  "work",
 ];
 
 type Query = Promise<Record<string, string | string[] | undefined>>;

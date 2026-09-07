@@ -634,6 +634,74 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
         </svg>
       );
 
+    case "work":
+      // Kanban board: three columns, cards stacked at different heights and one
+      // card already carried over to the right — the shape of the service in a
+      // glance. Teal is the hue left unused by the neighbours, and the column
+      // silhouette does not collide with the notice board or the market awning
+      // even at nav size.
+      return (
+        <svg
+          viewBox="0 0 32 32"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className={className}
+        >
+          {/* Board */}
+          <rect
+            x="3.5"
+            y="5.5"
+            width="25"
+            height="21"
+            rx="2.5"
+            fill={`url(#${gid("board")})`}
+            stroke={`url(#${gid("frame")})`}
+            strokeWidth="1.8"
+          />
+          {/* Column separators — dashed, because a column is a state, not a wall */}
+          <path
+            d="M11.7 8.5V23.5M20.3 8.5V23.5"
+            stroke="#0F766E"
+            strokeWidth="1"
+            strokeOpacity="0.35"
+            strokeLinecap="round"
+            strokeDasharray="2 2.5"
+          />
+          {/* Cards: «надо» — three, «в работе» — two, «готово» — one with a tick */}
+          <rect x="6" y="9" width="4.2" height="3.2" rx="0.9" fill={`url(#${gid("card")})`} />
+          <rect x="6" y="13.4" width="4.2" height="3.2" rx="0.9" fill={`url(#${gid("card")})`} />
+          <rect x="6" y="17.8" width="4.2" height="3.2" rx="0.9" fill={`url(#${gid("card")})`} />
+          <rect x="13.9" y="9" width="4.2" height="3.2" rx="0.9" fill={`url(#${gid("card")})`} />
+          <rect x="13.9" y="13.4" width="4.2" height="3.2" rx="0.9" fill={`url(#${gid("card")})`} />
+          <rect x="21.8" y="9" width="4.2" height="3.2" rx="0.9" fill={`url(#${gid("done")})`} />
+          <path
+            d="M22.6 10.6L23.6 11.6L25.2 9.9"
+            stroke="#065F46"
+            strokeWidth="1.1"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <defs>
+            <linearGradient id={gid("board")} x1="3.5" y1="5.5" x2="28.5" y2="26.5" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#ECFEFF" />
+              <stop offset="1" stopColor="#CCFBF1" />
+            </linearGradient>
+            <linearGradient id={gid("frame")} x1="3.5" y1="5.5" x2="28.5" y2="26.5" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#0D9488" />
+              <stop offset="1" stopColor="#0F766E" />
+            </linearGradient>
+            <linearGradient id={gid("card")} x1="6" y1="9" x2="10.2" y2="12.2" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#5EEAD4" />
+              <stop offset="1" stopColor="#2DD4BF" />
+            </linearGradient>
+            <linearGradient id={gid("done")} x1="21.8" y1="9" x2="26" y2="12.2" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#A7F3D0" />
+              <stop offset="1" stopColor="#6EE7B7" />
+            </linearGradient>
+          </defs>
+        </svg>
+      );
+
     case "devotee-space":
     default:
       // Sacred Temple / Lotus flower with Crown / Lock emblem - Restricted Space

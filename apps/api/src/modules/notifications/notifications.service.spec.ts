@@ -170,6 +170,7 @@ describe('NotificationsService.getPreferences', () => {
       notices: true,
       motivation: true,
       music: true,
+      work: true,
       announcements: true,
     });
   });
@@ -210,6 +211,7 @@ describe('NotificationsService.updatePreferences', () => {
       notices: true,
       motivation: true,
       music: true,
+      work: true,
       announcements: true,
     });
   });
@@ -269,8 +271,9 @@ describe('NotificationsService: колокольчик', () => {
 
     const after = await service.listInbox('user-1');
     expect(after.unreadCount).toBe(1);
-    expect(after.items.find((item) => item.id === before.items[0].id)?.readAt)
-      .not.toBeNull();
+    expect(
+      after.items.find((item) => item.id === before.items[0].id)?.readAt,
+    ).not.toBeNull();
   });
 
   it('удаляет прочитанное, пролежавшее дольше недели: архив не копится', async () => {

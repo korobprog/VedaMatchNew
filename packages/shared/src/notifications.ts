@@ -276,6 +276,58 @@ export type NotificationEvent =
       kind: 'copyright' | 'content' | 'quality';
     }
   | {
+      /**
+       * Задачу поручили человеку. Ключ и название едут в событии: подписчик
+       * не имеет права дочитывать их из таблиц «Работы».
+       */
+      name: 'work.task.assigned';
+      recipientId: string;
+      spaceId: string;
+      taskKey: string;
+      taskTitle: string;
+      spaceName: string;
+      /** Кто поручил. */
+      actorName: string;
+    }
+  | {
+      /** Новый комментарий к задаче, которую человек ведёт или завёл. */
+      name: 'work.task.commented';
+      recipientId: string;
+      spaceId: string;
+      taskKey: string;
+      taskTitle: string;
+      actorName: string;
+      excerpt: string;
+    }
+  | {
+      /**
+       * Задачу вернули из «Готово» обратно в работу — то самое «убрать на
+       * доработку». Отдельное событие, а не общий «перенос»: обычные переезды
+       * карточки по доске уведомлять незачем, а возврат сделанного — это
+       * новость для того, кто её делал.
+       */
+      name: 'work.task.returned';
+      recipientId: string;
+      spaceId: string;
+      taskKey: string;
+      taskTitle: string;
+      actorName: string;
+      /** Куда вернули: название колонки, например «На доработку». */
+      columnName: string;
+    }
+  | {
+      /** Именное приглашение в рабочую среду. */
+      name: 'work.invite.received';
+      recipientId: string;
+      spaceName: string;
+      /** Кто зовёт; null — приглашение пережило удаление автора. */
+      inviterName: string | null;
+      /** Роль словом: «участник», «наблюдатель», «администратор». */
+      roleTitle: string;
+      /** Путь экрана приглашения — полную ссылку в уведомление не кладём. */
+      url: string;
+    }
+  | {
       /** Неделя прошла, решения не было — запись вернулась автору. */
       name: 'music.track.review-expired';
       recipientId: string;
@@ -302,7 +354,8 @@ export type NotificationCategory =
   | 'transits'
   | 'market'
   | 'motivation'
-  | 'music';
+  | 'music'
+  | 'work';
 
 /** Уведомление в колокольчике. Живёт до прочтения, потом удаляется — это
  *  список непрочитанного, а не архив. */
@@ -364,6 +417,10 @@ export interface NotificationPreferencesDto
   /** Судьба своих записей в «Музыке»: разбор редакции, скрытие по жалобам,
    *  возврат без разбора. Каталог сам по себе не пишет — только про своё. */
   music: boolean;
+  /** Сервис «Работа»: поручили задачу, ответили в карточке, вернули сделанное
+   *  на доработку, позвали в рабочую среду. Отдельный тумблер: человек, у
+   *  которого дела ведутся здесь, не должен терять их вместе с новостями. */
+  work: boolean;
   /** Новости от администрации портала. Под этой же категорией идут рассылки
    *  из админки: выключение гасит пуш, а важная рассылка всё равно появится
    *  в колокольчике — см. `important` у рассылки. */

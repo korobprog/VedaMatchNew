@@ -29,6 +29,7 @@ const categories = [
   { key: "motivation", label: "Мои рилсы: студия «Вдохновения»" },
   // Тоже только про своё: о чужих новинках каталога тумблер не сообщает.
   { key: "music", label: "Мои записи в «Музыке»" },
+  { key: "work", label: "Задачи и приглашения в «Работе»" },
   { key: "announcements", label: "Новости VedaMatch" },
 ] as const;
 

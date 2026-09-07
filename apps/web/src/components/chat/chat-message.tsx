@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { chatCardLink } from "@/components/chat/chat-card-link";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import type {
   ChatAttachmentDto,
@@ -418,7 +419,10 @@ function Attachment({ attachment }: { attachment: ChatAttachmentDto }) {
     );
 
   // Карточка чужого сервиса: снимок, а не ссылка на живой объект — оригинал
-  // может быть уже изменён или удалён.
+  // может быть уже изменён или удалён. Исключение — то, что без перехода
+  // бесполезно (приглашение в рабочую среду): маршрут таким собирает
+  // chat-card-link по паре «сервис + id», а не по адресу из сообщения.
+  const cardLink = chatCardLink(attachment);
   const tint =
     attachment.kind === "story"
       ? "border-gold/26 bg-gold/8"
@@ -445,6 +449,14 @@ function Attachment({ attachment }: { attachment: ChatAttachmentDto }) {
       {attachment.subtitle && (
         <span className="text-[11px] text-text-2">{attachment.subtitle}</span>
       )}
+      {cardLink && (
+        <Link
+          href={cardLink.href}
+          className="w-fit rounded-lg bg-white/10 px-2.5 py-1 text-xs font-semibold text-text-0"
+        >
+          {cardLink.label}
+        </Link>
+      )}
     </span>
   );
 }
@@ -454,6 +466,7 @@ function sourceLabel(attachment: ChatAttachmentDto): string {
   if (attachment.kind === "notice") return "Объявление";
   if (attachment.kind === "listing") return "Товар · Рынок";
   if (attachment.kind === "assistant") return "Ответ ассистента";
+  if (attachment.kind === "work") return "Приглашение · Работа";
   return "Контакт";
 }
 
