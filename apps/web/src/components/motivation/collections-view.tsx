@@ -11,6 +11,11 @@ import type { MotivationCategoryDto, MotivationPostDto } from "@vedamatch/shared
  * Сетка картинок, а не список: карточка вдохновения — это картинка с
  * подписью, и узнают её именно по картинке. Подпись остаётся ради
  * скринридера и тех, у кого картинка не загрузилась.
+ *
+ * Пустые разделы показываются наравне с наполненными — это оглавление
+ * сервиса, и заведённый редакцией раздел человек должен здесь найти. Но
+ * ссылкой пустой раздел не становится: за ней тупик со словами «пока пусто»,
+ * а нулём рядом с названием то же самое сказано, не заставляя туда идти.
  */
 export function MotivationCollections({
   categories,
@@ -35,9 +40,16 @@ export function MotivationCollections({
         return (
           <section key={root.id}>
             <h2 className="mb-2 font-display text-lg font-bold text-text-0">
-              <Link href={`/motivation/collections/${root.slug}`} className="hover:text-cyan">
-                {root.title}
-              </Link>{" "}
+              {root.postCount > 0 ? (
+                <Link
+                  href={`/motivation/collections/${root.slug}`}
+                  className="hover:text-cyan"
+                >
+                  {root.title}
+                </Link>
+              ) : (
+                <span className="text-text-2">{root.title}</span>
+              )}{" "}
               <span className="font-mono text-xs font-medium text-text-2">
                 {root.postCount}
               </span>
@@ -46,15 +58,24 @@ export function MotivationCollections({
               <ul className="flex flex-wrap gap-2">
                 {children.map((child) => (
                   <li key={child.id}>
-                    <Link
-                      href={`/motivation/collections/${child.slug}`}
-                      className="glass inline-flex items-center gap-1.5 rounded-full border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0"
-                    >
-                      {child.title}
-                      <span className="font-mono text-xs text-text-2">
-                        {child.postCount}
+                    {child.postCount > 0 ? (
+                      <Link
+                        href={`/motivation/collections/${child.slug}`}
+                        className="glass inline-flex items-center gap-1.5 rounded-full border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0"
+                      >
+                        {child.title}
+                        <span className="font-mono text-xs text-text-2">
+                          {child.postCount}
+                        </span>
+                      </Link>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-glass-brd px-3 py-1.5 text-sm text-text-2">
+                        {child.title}
+                        <span className="font-mono text-xs">
+                          {child.postCount}
+                        </span>
                       </span>
-                    </Link>
+                    )}
                   </li>
                 ))}
               </ul>

@@ -59,6 +59,40 @@ describe("MotivationCollections", () => {
     expect(screen.getByText(/Всё опубликованное — в ленте/)).toBeInTheDocument();
   });
 
+  it("показывает пустой подраздел, но не ссылкой", () => {
+    render(
+      <MotivationCollections
+        categories={[
+          category(),
+          category({
+            id: "c",
+            slug: "psihologiya",
+            title: "Психология",
+            parentId: "r",
+            postCount: 0,
+          }),
+        ]}
+      />,
+    );
+
+    // Заведённый в админке раздел читатель должен здесь найти — иначе
+    // справочник во «Вдохновении» выглядит вдвое беднее админского. Но
+    // ссылка вела бы в тупик со словами «пока пусто».
+    expect(screen.getByText("Психология")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /Психология/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("пустой раздел верхнего уровня тоже не кликается", () => {
+    render(<MotivationCollections categories={[category({ postCount: 0 })]} />);
+
+    expect(
+      screen.getByRole("heading", { name: /Веды/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Веды/ })).not.toBeInTheDocument();
+  });
+
   it("подраздел без своего раздела не всплывает наверх", () => {
     render(
       <MotivationCollections

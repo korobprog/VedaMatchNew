@@ -195,9 +195,33 @@ describe("MotivationPublishedList", () => {
     expect(screen.getByLabelText("Заголовок")).toBeInTheDocument();
   });
 
+  it("подводит к карточке из ленты, а не оставляет её за экраном", () => {
+    const scrollIntoView = vi.fn();
+    const spy = vi
+      .spyOn(Element.prototype, "scrollIntoView")
+      .mockImplementation(scrollIntoView);
+
+    render(<MotivationPublishedList posts={[post()]} openSlug="gita-2-13" />);
+
+    // Список опубликованного показывает своё начало, а нужная карточка лежит
+    // на второй-третьей тысяче пикселей вниз: без прокрутки человек нажимал
+    // «Править» на одном афоризме и упирался в чужой.
+    expect(scrollIntoView).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("говорит, когда карточки из ленты среди опубликованного нет", () => {
+    render(<MotivationPublishedList posts={[post()]} openSlug="snyato" />);
+
+    // Молча показывать начало списка нельзя: человек решит, что «Править»
+    // открыло не тот афоризм.
+    expect(screen.getByRole("status")).toHaveTextContent(/не нашлась/);
+  });
+
   it("без ссылки из ленты все карточки закрыты", () => {
     render(<MotivationPublishedList posts={[post()]} />);
 
     expect(screen.queryByLabelText("Заголовок")).not.toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });

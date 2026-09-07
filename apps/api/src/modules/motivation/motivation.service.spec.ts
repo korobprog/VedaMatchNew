@@ -291,6 +291,19 @@ describe('MotivationService feed profiles', () => {
     for (const [input] of motivationPost.findMany.mock.calls)
       expect(input.where.OR[0]).toEqual({ profileType: { in: ['user'] } });
   });
+
+  it('в папке подбора под путь нет: раздел отдаётся целиком', async () => {
+    const { service, motivationPost } = buildFeed(['devotee']);
+
+    await service.feed('user-1', { category: 'vedy' });
+
+    // Иначе над разделом стоит «9», а внутри лежат две карточки: счётчик
+    // считает всё опубликованное, а выдача отдавала выборку под профиль.
+    for (const [input] of motivationPost.findMany.mock.calls) {
+      expect(input.where.OR).toBeUndefined();
+      expect(input.where.category).toBe('vedy');
+    }
+  });
 });
 
 describe('MotivationService feed tiers', () => {

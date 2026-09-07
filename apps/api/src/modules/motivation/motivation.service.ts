@@ -248,17 +248,30 @@ export class MotivationService {
     const profileTypes = preference.profileTypes?.length
       ? (preference.profileTypes as MotivationProfileType[])
       : [stageProfiles[user.spiritualStage]];
+    // Подбор под путь — свойство ленты, а не папки. В папку приходят с готовой
+    // просьбой «покажи Веды», и отвечать на неё той частью Вед, которая
+    // подошла самоидентификации, значит показать пустой раздел там, где над
+    // ним написано «9»: счётчик считает всё опубликованное, а выдача отдавала
+    // выборку под профиль. Оглавление обещает содержимое папки — папка его и
+    // отдаёт целиком.
+    const personalized = !query.category;
     const where = {
-      OR: [
-        { profileType: { in: profileTypes } },
-        {
-          quote: { profiles: { some: { profileType: { in: profileTypes } } } },
-        },
-        // Свой рилс автор видит всегда: он его создал, ему написали «рилс
-        // опубликован», и настройки ленты не должны прятать от него его же
-        // публикацию.
-        { authorUserId: userId },
-      ],
+      ...(personalized
+        ? {
+            OR: [
+              { profileType: { in: profileTypes } },
+              {
+                quote: {
+                  profiles: { some: { profileType: { in: profileTypes } } },
+                },
+              },
+              // Свой рилс автор видит всегда: он его создал, ему написали
+              // «рилс опубликован», и настройки ленты не должны прятать от
+              // него его же публикацию.
+              { authorUserId: userId },
+            ],
+          }
+        : {}),
       status: MotivationPostStatus.published,
       // Рилсы заблокированных авторов не показываем: портальный `UserBlock` —
       // одна из четырёх моделей, читать которые сервисному модулю разрешено.

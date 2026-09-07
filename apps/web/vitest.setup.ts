@@ -27,6 +27,15 @@ if (!("EventSource" in globalThis)) {
     SilentEventSource;
 }
 
+// jsdom не реализует scrollIntoView; компоненты, подводящие человека к нужному
+// месту списка, зовут его в эффекте — без заглушки они падают на монтировании.
+if (
+  typeof Element !== "undefined" &&
+  !(Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+) {
+  Element.prototype.scrollIntoView = () => {};
+}
+
 // jsdom не реализует matchMedia; компоненты с адаптивной логикой полагаются на него.
 if (typeof window !== "undefined" && !window.matchMedia) {
   window.matchMedia = ((query: string) => ({

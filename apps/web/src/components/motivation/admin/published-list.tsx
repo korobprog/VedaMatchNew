@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { EyeOff, Pencil, X } from "lucide-react";
 import type {
@@ -48,9 +48,30 @@ export function MotivationPublishedList({
 }) {
   const { pending, errors, run } = useAdminCommand();
   const [query, setQuery] = useState("");
-  const [editing, setEditing] = useState<string | null>(
+  const openId = useMemo(
     () => posts?.find((post) => post.slug === openSlug)?.id ?? null,
+    [posts, openSlug],
   );
+  const [editing, setEditing] = useState<string | null>(openId);
+
+  /**
+   * Пришли из ленты — подводим к той самой карточке.
+   *
+   * Правка открывалась и раньше, но список опубликованного при загрузке
+   * показывает своё начало, а нужная карточка лежала на второй-третьей
+   * тысяче пикселей вниз. Человек нажимал «Править» на одном афоризме и
+   * упирался в чужой: открытая форма была за экраном, и о ней нельзя было
+   * догадаться.
+   *
+   * `block: "center"` без плавности: прокрутка здесь не эффект, а способ
+   * оказаться на месте, и `prefers-reduced-motion` она не нарушает.
+   * Миниатюры фиксированного размера, поэтому дозагрузка картинок выше
+   * список не сдвинет.
+   */
+  const openCard = useRef<HTMLLIElement | null>(null);
+  useEffect(() => {
+    if (openId) openCard.current?.scrollIntoView({ block: "center" });
+  }, [openId]);
 
   const found = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase("ru-RU");
@@ -91,6 +112,17 @@ export function MotivationPublishedList({
           : `Опубликовано: ${posts.length}`}
       </p>
 
+      {/* Пришли из ленты, а карточки здесь нет — значит, её успели снять с
+          показа. Молча показывать начало списка нельзя: человек решит, что
+          «Править» открыло не тот афоризм. */}
+      {openSlug && !openId && (
+        <p role="status" className={`${cardClass} mt-4 text-sm text-text-1`}>
+          Карточка, с которой вы пришли из ленты, среди опубликованного не
+          нашлась — её сняли с показа или удалили. Скрытое лежит во вкладке
+          «Заготовки».
+        </p>
+      )}
+
       {found.length === 0 ? (
         <p className={`${cardClass} mt-4 text-center text-text-2`}>
           Ничего не нашлось. Попробуйте другое слово.
@@ -98,7 +130,15 @@ export function MotivationPublishedList({
       ) : (
         <ul className="mt-4 space-y-3">
           {found.map((post) => (
-            <li key={post.id} className={cardClass}>
+            <li
+              key={post.id}
+              ref={post.id === openId ? openCard : undefined}
+              // Та самая карточка обведена: после прокрутки видно, что
+              // открылась именно она, а не соседняя.
+              className={`${cardClass} ${
+                post.id === openId ? "ring-2 ring-magenta" : ""
+              }`}
+            >
               <div className="flex flex-wrap items-start gap-3">
                 {post.imageUrl ? (
                   // Ссылка на хранилище подписана и может истечь — next/image

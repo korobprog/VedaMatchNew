@@ -49,15 +49,28 @@ export default async function MotivationCollectionPage({
             <ul className="flex flex-wrap gap-2">
               {children.map((child) => (
                 <li key={child.id}>
-                  <Link
-                    href={`/motivation/collections/${child.slug}`}
-                    className="glass inline-flex items-center gap-1.5 rounded-full border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0"
-                  >
-                    {child.title}
-                    <span className="font-mono text-xs text-text-2">
-                      {child.postCount}
+                  {/* Пустая подкатегория видна, но не кликается: за ней тупик
+                      со словами «пока пусто», а ноль рядом с названием говорит
+                      то же самое, не заставляя туда идти. Так же и в списке
+                      всех подборок. */}
+                  {child.postCount > 0 ? (
+                    <Link
+                      href={`/motivation/collections/${child.slug}`}
+                      className="glass inline-flex items-center gap-1.5 rounded-full border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0"
+                    >
+                      {child.title}
+                      <span className="font-mono text-xs text-text-2">
+                        {child.postCount}
+                      </span>
+                    </Link>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-glass-brd px-3 py-1.5 text-sm text-text-2">
+                      {child.title}
+                      <span className="font-mono text-xs">
+                        {child.postCount}
+                      </span>
                     </span>
-                  </Link>
+                  )}
                 </li>
               ))}
             </ul>
