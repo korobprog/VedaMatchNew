@@ -316,6 +316,26 @@ export type NotificationEvent =
       columnName: string;
     }
   | {
+      /**
+       * Карточка переехала в другую колонку доски.
+       *
+       * Событие рождается не в момент переноса, а после окна дозревания: у
+       * человека есть несколько минут передумать, и вернувшаяся на место
+       * карточка не поднимает никого зря. Поэтому здесь уже итог — колонка,
+       * где задача осталась, а не та, куда её на секунду положили.
+       */
+      name: 'work.task.status-changed';
+      recipientId: string;
+      spaceId: string;
+      taskKey: string;
+      taskTitle: string;
+      /** Кто двигал последним: за окно карточку могли трогать несколько раз. */
+      actorName: string;
+      /** Откуда уехала — колонка на момент первого движения в окне. */
+      fromColumnName: string;
+      toColumnName: string;
+    }
+  | {
       /** Именное приглашение в рабочую среду. */
       name: 'work.invite.received';
       recipientId: string;

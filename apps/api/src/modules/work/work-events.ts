@@ -16,6 +16,7 @@ export const WORK_EVENTS = {
   taskAssigned: 'work.task.assigned',
   taskCommented: 'work.task.commented',
   taskReturned: 'work.task.returned',
+  taskStatusChanged: 'work.task.status-changed',
   inviteReceived: 'work.invite.received',
 } as const satisfies Record<string, NotificationEvent['name']>;
 
@@ -27,6 +28,7 @@ type WorkEvent<TName extends NotificationEvent['name']> = Extract<
 export type WorkTaskAssignedEvent = WorkEvent<'work.task.assigned'>;
 export type WorkTaskCommentedEvent = WorkEvent<'work.task.commented'>;
 export type WorkTaskReturnedEvent = WorkEvent<'work.task.returned'>;
+export type WorkTaskStatusChangedEvent = WorkEvent<'work.task.status-changed'>;
 export type WorkInviteReceivedEvent = WorkEvent<'work.invite.received'>;
 
 /**

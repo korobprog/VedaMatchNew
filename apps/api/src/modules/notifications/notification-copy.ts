@@ -45,6 +45,7 @@ export const notificationEventNames = {
   workTaskAssigned: 'work.task.assigned',
   workTaskCommented: 'work.task.commented',
   workTaskReturned: 'work.task.returned',
+  workTaskStatusChanged: 'work.task.status-changed',
   workInviteReceived: 'work.invite.received',
 } as const satisfies Record<string, NotificationEventName>;
 
@@ -360,6 +361,17 @@ export function buildNotification(
         body: `${event.actorName}: ${event.taskKey} «${toExcerpt(event.taskTitle)}» снова в колонке «${event.columnName}»`,
         url: `/work/planner/${event.spaceId}`,
         tag: `work-returned:${event.taskKey}`,
+        category: 'work',
+      };
+    case 'work.task.status-changed':
+      return {
+        title: `${event.taskKey}: «${event.toColumnName}»`,
+        body: `${event.actorName}: «${toExcerpt(event.taskTitle)}» — из «${event.fromColumnName}»`,
+        url: `/work/planner/${event.spaceId}`,
+        // Свой тег, общий для всех переездов задачи: вторая смена колонки
+        // затирает первую в шторке — это одна и та же новость, обновившаяся.
+        // Поручение (`work-task:`) она при этом не трогает: там новость иная.
+        tag: `work-status:${event.taskKey}`,
         category: 'work',
       };
     case 'work.invite.received':

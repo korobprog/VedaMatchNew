@@ -263,6 +263,11 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.workTaskStatusChanged)
+  onWorkTaskStatusChanged(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   @OnEvent(notificationEventNames.workInviteReceived)
   onWorkInviteReceived(event: NotificationEvent): void {
     void this.deliver(event);

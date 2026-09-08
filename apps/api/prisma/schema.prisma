@@ -416,6 +416,8 @@ model User {
   workComments                       WorkComment[]                @relation("WorkComments")
   workAttachments                    WorkAttachment[]             @relation("WorkAttachments")
   workActivity                       WorkActivity[]               @relation("WorkActivityActor")
+  workTaskNoticesReceived            WorkTaskNotice[]             @relation("WorkTaskNoticeRecipient")
+  workTaskNoticesCaused              WorkTaskNotice[]             @relation("WorkTaskNoticeActor")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -5204,6 +5206,7 @@ model WorkTask {
   comments    WorkComment[]
   attachments WorkAttachment[]
   activity    WorkActivity[]
+  notices     WorkTaskNotice[]
 
   @@unique([spaceId, number])
   @@index([columnId, position])
@@ -5298,4 +5301,33 @@ model WorkActivity {
 
   @@index([taskId, createdAt])
   @@index([spaceId, createdAt])
+}
+
+/// Очередь дозревания уведомлений о переездах карточки.
+///
+/// Строка живёт минуты: появляется при переносе задачи и умирает, когда воркер
+/// решил, слать пуш или нет. Пары «задача + получатель» хватает — серия
+/// переносов за окно схлопывается в одну строку, и человек получит одно
+/// уведомление с итоговой колонкой вместо пяти с промежуточными.
+model WorkTaskNotice {
+  id           String    @id @default(uuid())
+  taskId       String
+  task         WorkTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  recipientId  String
+  recipient    User      @relation("WorkTaskNoticeRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  /// Кто двигал последним: за окно карточку могут трогать несколько человек.
+  actorId      String?
+  actor        User?     @relation("WorkTaskNoticeActor", fields: [actorId], references: [id], onDelete: SetNull)
+  /// Колонка на момент ПЕРВОГО движения в окне. «Куда» не храним: на отправке
+  /// читается из задачи, иначе промежуточный перенос стал бы новостью.
+  fromColumnId String
+  /// Когда отправлять. Повторный перенос срок не двигает — см. work-notice.ts.
+  notifyAt     DateTime
+  /// Взято воркером в работу; брошенное возвращается в очередь по таймауту.
+  claimedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([taskId, recipientId])
+  @@index([notifyAt, claimedAt])
 }
