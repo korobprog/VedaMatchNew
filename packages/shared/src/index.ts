@@ -21,6 +21,7 @@ export * from './changelog';
 export * from './market';
 export * from './community';
 export * from './notices';
+export * from './vacancies';
 export * from './audit';
 export * from './chat';
 export * from './pwa';
@@ -50,6 +51,7 @@ export const ADMIN_SERVICE_SLUGS = [
   'motivation',
   'library',
   'notices',
+  'vacancies',
   'astro',
   'vedabase',
   'music',

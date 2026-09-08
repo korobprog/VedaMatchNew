@@ -35,6 +35,7 @@ import { RewardsModule } from './modules/rewards/rewards.module';
 import { ActivityModule } from './modules/activity/activity.module';
 import { MusicModule } from './modules/music/music.module';
 import { WorkModule } from './modules/work/work.module';
+import { VacanciesModule } from './modules/vacancies/vacancies.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
 
 @Module({
@@ -82,6 +83,7 @@ import { AssistantModule } from './modules/assistant/assistant.module';
     // событиями `assistant.tool.*` из своих слушателей.
     AssistantModule,
     WorkModule,
+    VacanciesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: AdminAwareThrottlerGuard }],
 })
