@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import type { NotificationEvent } from '@vedamatch/shared';
+import type { NotificationEvent, UserRegisteredEvent } from '@vedamatch/shared';
+import { USER_REGISTERED_EVENT, resolveDisplayName } from '@vedamatch/shared';
+import { PrismaService } from '../../prisma/prisma.service';
 import { buildNotification, notificationEventNames } from './notification-copy';
 import { NotificationsService } from './notifications.service';
 import { PushSenderService } from './push-sender.service';
@@ -12,7 +14,41 @@ export class NotificationsListener {
   constructor(
     private readonly notifications: NotificationsService,
     private readonly sender: PushSenderService,
+    private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * Приветствие новому участнику. Слушаем событие регистрации, а не ждём от
+   * `auth` готового уведомления: модуль входа о приветствиях не знает и знать
+   * не должен, он сообщает факт.
+   *
+   * Имя событие не несёт — берём его из `User`, одной из четырёх портальных
+   * моделей, читать которые разрешено. Наружу идёт `resolveDisplayName`:
+   * духовное имя, если оно есть, иначе мирское.
+   */
+  @OnEvent(USER_REGISTERED_EVENT)
+  onUserRegistered(event: UserRegisteredEvent): void {
+    void this.welcome(event.userId);
+  }
+
+  private async welcome(userId: string): Promise<void> {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, spiritualName: true },
+      });
+      if (!user) return;
+      await this.deliver({
+        name: 'portal.welcome',
+        recipientId: userId,
+        recipientName: resolveDisplayName(user),
+      });
+    } catch (cause) {
+      // Приветствие не повод ронять регистрацию: человек уже зарегистрирован,
+      // и молчащий колокольчик хуже, чем упавший запрос на входе.
+      this.logger.warn(`Приветствие не отправилось: ${String(cause)}`);
+    }
+  }
 
   @OnEvent(notificationEventNames.chatMessageSent)
   onChatMessage(event: NotificationEvent): void {
