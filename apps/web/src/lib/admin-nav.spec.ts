@@ -100,3 +100,23 @@ describe("currentAdminNavLabel", () => {
     expect(currentAdminNavLabel(groups, "/admin")).toBe("Обзор");
   });
 });
+
+describe("раздел «Вакансии»", () => {
+  const items = ADMIN_NAV.flatMap((group) => group.items);
+  const vacancies = items.find((item) => item.href === "/admin/vacancies");
+
+  it("есть в навигации и открывается админу сервиса vacancies", () => {
+    expect(vacancies).toBeDefined();
+    expect(vacancies?.scope).toBe("vacancies");
+    const user = {
+      role: "service-admin" as const,
+      adminServices: ["vacancies"],
+    };
+    expect(canOpenAdminSection(user, "vacancies")).toBe(true);
+    expect(
+      visibleAdminNav(user)
+        .flatMap((group) => group.items)
+        .map((item) => item.href),
+    ).toEqual(["/admin/vacancies"]);
+  });
+});

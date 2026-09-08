@@ -151,4 +151,10 @@ docker compose --profile prod up -d --build
 | GET | `/admin/support/tickets` | Очередь обращений (только admin) |
 | PATCH | `/admin/support/tickets/:id` | Статус, категория, исполнитель, пометка (admin) |
 | POST | `/admin/support/tickets/:id/messages` | Ответ поддержки или внутренняя заметка (admin) |
+| GET | `/vacancies` | Лента «Вакансий»: работа, служение, разовые задачи; фильтры вид, город или удалённо, только от общин |
+| POST | `/vacancies` | Разместить предложение; служение — только от имени общины |
+| POST | `/vacancies/:id/responses` | Откликнуться своим профилем; событие открывает диалог в Чате |
+| GET | `/vacancies/:id/responses` | Воронка откликов автора (новые, в диалоге, приняты, отклонены) |
+| GET | `/vacancies/responses/mine` | Мои отклики и остаток суточного лимита |
+| GET | `/admin/vacancies` | Предложения с фильтрами, действия скрыть/вернуть/снять, жалобы и статистика (admin) |
 | GET | `/.well-known/jwks.json` | Публичные ключи для валидации JWT другими сервисами |

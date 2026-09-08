@@ -7,6 +7,7 @@
 // работодатель видит только тех, кто откликнулся.
 import type { CommunityBadgeDto } from './community';
 import type { ProfileLocation } from './index';
+import type { NotificationEvent } from './notifications';
 
 /**
  * Вид предложения. Меняет обязательные поля и срок жизни, поэтому набор
@@ -222,6 +223,8 @@ export interface VacancyResponseDto {
   /** Заголовок и вид предложения — чтобы список откликов был читаем. */
   offerTitle: string;
   offerKind: VacancyKind;
+  /** Автор предложения — чтобы соискатель мог открыть с ним диалог. */
+  offerAuthorId: string;
   status: VacancyResponseStatus;
   message: string | null;
   createdAt: string;
@@ -277,50 +280,78 @@ export interface AdminVacancyReportsResponse {
 }
 
 export interface AdminVacancyReportDecisionRequest {
-  /** `hide` скрывает предложение, `dismiss` отклоняет жалобу. */
-  decision: 'hide' | 'dismiss' | 'remove';
+  /**
+   * `hide` скрывает предложение, `remove` снимает насовсем, `restore`
+   * возвращает в ленту и закрывает все открытые жалобы, `dismiss`
+   * отклоняет одну жалобу как необоснованную.
+   */
+  decision: 'hide' | 'dismiss' | 'remove' | 'restore';
   moderatorNote?: string | null;
+}
+
+// ===== Админка: предложения и статистика =====
+
+/** Предложение в админке: мирское имя автора, как везде в /admin. */
+export interface AdminVacancyOfferDto {
+  id: string;
+  kind: VacancyKind;
+  title: string;
+  status: VacancyStatus;
+  city: string | null;
+  isRemote: boolean;
+  authorName: string;
+  communityName: string | null;
+  publishedAt: string;
+  expiresAt: string;
+  responsesCount: number;
+  openReportsCount: number;
+  moderatorNote: string | null;
+}
+
+export interface AdminVacancyOffersFilters {
+  kind?: VacancyKind;
+  status?: VacancyStatus;
+  q?: string;
+}
+
+export interface AdminVacancyOffersResponse {
+  items: AdminVacancyOfferDto[];
+  total: number;
+}
+
+/** Действие модератора над предложением, минуя жалобы. */
+export interface AdminVacancyOfferActionRequest {
+  action: 'hide' | 'restore' | 'remove';
+  moderatorNote?: string | null;
+}
+
+export interface AdminVacancyStatsDto {
+  /** Живые предложения по видам. */
+  liveByKind: Record<VacancyKind, number>;
+  /** Все предложения по статусам. */
+  byStatus: Record<VacancyStatus, number>;
+  /** Живых откликов (не отозванных) всего. */
+  responsesTotal: number;
+  /** Откликов за последние 7 дней. */
+  responsesLastWeek: number;
+  openReports: number;
 }
 
 // ===== События шины =====
 
 /**
- * События «Вакансий». Payload самодостаточен: подписчик (Чат, Уведомления,
- * агенда Работы) не имеет права дочитывать недостающее из наших таблиц.
- * Формулировки собирает подписчик, издатель сообщает факт.
+ * События «Вакансий» — часть общего контракта уведомлений (см.
+ * notifications.ts): у каждого есть `recipientId`, и колокольчик доставляет
+ * их сам. Чат и агенда Работы подписаны на те же имена.
  */
-export type VacancyEvent =
-  | {
-      name: 'vacancies.response.created';
-      offerId: string;
-      offerTitle: string;
-      offerKind: VacancyKind;
-      responseId: string;
-      /** Автор предложения — получатель. */
-      authorId: string;
-      responderId: string;
-      responderName: string;
-      message: string | null;
-    }
-  | {
-      name: 'vacancies.response.status-changed';
-      offerId: string;
-      offerTitle: string;
-      offerKind: VacancyKind;
-      responseId: string;
-      authorId: string;
-      /** Соискатель — получатель. */
-      responderId: string;
-      status: Extract<VacancyResponseStatus, 'in_dialog' | 'accepted' | 'declined'>;
-    }
-  | {
-      name: 'vacancies.offer.closed';
-      offerId: string;
-      offerTitle: string;
-      offerKind: VacancyKind;
-      authorId: string;
-      /** Соискатели с живыми откликами — получатели. */
-      responderIds: string[];
-    };
+export type VacancyEvent = Extract<
+  NotificationEvent,
+  {
+    name:
+      | 'vacancies.response.created'
+      | 'vacancies.response.status-changed'
+      | 'vacancies.offer.closed';
+  }
+>;
 
 export type VacancyEventName = VacancyEvent['name'];

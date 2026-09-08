@@ -14,6 +14,8 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type {
   AccessTokenPayload,
+  AdminVacancyOfferActionRequest,
+  AdminVacancyOffersFilters,
   AdminVacancyReportDecisionRequest,
   CreateVacancyOfferRequest,
   CreateVacancyReportRequest,
@@ -25,6 +27,7 @@ import type {
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { isAdmin } from './is-admin';
 import { parseFeedFilters } from './vacancy-feed-query';
+import { VacanciesAdminService } from './vacancies-admin.service';
 import { VacanciesReportsService } from './vacancies-reports.service';
 import { VacanciesResponsesService } from './vacancies-responses.service';
 import { VacanciesService } from './vacancies.service';
@@ -174,14 +177,17 @@ export class VacanciesController {
   }
 }
 
-/** Разбор жалоб администрацией портала. */
-@Controller('admin/vacancies/reports')
+/** Админка: жалобы, список предложений, действия и статистика. */
+@Controller('admin/vacancies')
 @UseGuards(AuthGuard)
 export class AdminVacanciesController {
-  constructor(private readonly reports: VacanciesReportsService) {}
+  constructor(
+    private readonly reports: VacanciesReportsService,
+    private readonly admin: VacanciesAdminService,
+  ) {}
 
-  @Get()
-  list(
+  @Get('reports')
+  listReports(
     @CurrentUser() user: AccessTokenPayload,
     @Query('status') status?: string,
   ) {
@@ -189,7 +195,7 @@ export class AdminVacanciesController {
     return this.reports.adminList(status);
   }
 
-  @Post(':id/decide')
+  @Post('reports/:id/decide')
   @HttpCode(200)
   decide(
     @CurrentUser() user: AccessTokenPayload,
@@ -198,6 +204,38 @@ export class AdminVacanciesController {
   ) {
     this.assertAdmin(user);
     return this.reports.decide(user.sub, id, body);
+  }
+
+  @Get('stats')
+  stats(@CurrentUser() user: AccessTokenPayload) {
+    this.assertAdmin(user);
+    return this.admin.stats();
+  }
+
+  @Get()
+  listOffers(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query() query: Record<string, string | undefined>,
+  ) {
+    this.assertAdmin(user);
+    // Значения проверяет сервис: незнакомый вид или статус просто не
+    // сужают список.
+    return this.admin.list({
+      kind: query.kind as AdminVacancyOffersFilters['kind'],
+      status: query.status as AdminVacancyOffersFilters['status'],
+      q: query.q,
+    });
+  }
+
+  @Post(':id/action')
+  @HttpCode(200)
+  act(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: AdminVacancyOfferActionRequest,
+  ) {
+    this.assertAdmin(user);
+    return this.admin.act(user.sub, id, body);
   }
 
   private assertAdmin(user: AccessTokenPayload) {

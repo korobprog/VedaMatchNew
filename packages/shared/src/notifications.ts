@@ -348,6 +348,47 @@ export type NotificationEvent =
       url: string;
     }
   | {
+      /**
+       * Отклик на предложение в «Вакансиях». Payload самодостаточен: в нём
+       * заголовок и вид предложения, имя соискателя и его сообщение —
+       * подписчик (Чат, Уведомления, агенда Работы) не имеет права
+       * дочитывать их из таблиц «Вакансий».
+       */
+      name: 'vacancies.response.created';
+      /** Автор предложения. */
+      recipientId: string;
+      offerId: string;
+      offerTitle: string;
+      offerKind: 'work' | 'seva' | 'task';
+      responseId: string;
+      responderId: string;
+      responderName: string;
+      message: string | null;
+    }
+  | {
+      /** Автор открыл диалог, принял или отклонил отклик. */
+      name: 'vacancies.response.status-changed';
+      /** Соискатель. */
+      recipientId: string;
+      offerId: string;
+      offerTitle: string;
+      offerKind: 'work' | 'seva' | 'task';
+      responseId: string;
+      authorId: string;
+      status: 'in_dialog' | 'accepted' | 'declined';
+    }
+  | {
+      /** Предложение закрыто: место занято, ждать ответа больше незачем. */
+      name: 'vacancies.offer.closed';
+      /** Соискатель с живым откликом. Одно событие на получателя. */
+      recipientId: string;
+      offerId: string;
+      offerTitle: string;
+      offerKind: 'work' | 'seva' | 'task';
+      responseId: string;
+      authorId: string;
+    }
+  | {
       /** Неделя прошла, решения не было — запись вернулась автору. */
       name: 'music.track.review-expired';
       recipientId: string;

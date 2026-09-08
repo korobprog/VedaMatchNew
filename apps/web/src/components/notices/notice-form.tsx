@@ -221,6 +221,11 @@ export function NoticeForm() {
         <Link href="/market/sell" className="text-text-0 underline">
           Рынок
         </Link>
+        . Ищете работников, руки на служение или исполнителя разовой задачи —
+        для этого есть{" "}
+        <Link href="/vacancies/new" className="text-text-0 underline">
+          Вакансии
+        </Link>
         .
       </p>
 

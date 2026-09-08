@@ -37,6 +37,12 @@ export function chatCardLink(
         href: `/work/join/${encodeURIComponent(id)}`,
         label: "Принять приглашение",
       };
+    case "vacancies":
+      // `sourceId` — id предложения: карточка отклика ведёт к нему.
+      return {
+        href: `/vacancies/${encodeURIComponent(id)}`,
+        label: "Открыть предложение",
+      };
     default:
       return null;
   }

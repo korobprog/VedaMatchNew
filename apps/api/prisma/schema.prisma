@@ -422,6 +422,7 @@ model User {
   workActivity                       WorkActivity[]               @relation("WorkActivityActor")
   workTaskNoticesReceived            WorkTaskNotice[]             @relation("WorkTaskNoticeRecipient")
   workTaskNoticesCaused              WorkTaskNotice[]             @relation("WorkTaskNoticeActor")
+  workVacancyResponses               WorkVacancyResponse[]        @relation("WorkVacancyResponses")
   apiKeys                            UserApiKey[]                 @relation("UserApiKeys")
 
   @@index([accountStatus])
@@ -3873,6 +3874,8 @@ enum ChatAttachmentKind {
   /// Приглашение в рабочую среду сервиса «Работа». Как и остальные снимки
   /// чужих сервисов, живёт здесь: вложение хранит чат, а не издатель.
   work
+  /// Карточка предложения из «Вакансий»: первое сообщение отклика.
+  vacancy
 }
 
 enum ChatReportStatus {
@@ -5336,6 +5339,29 @@ model WorkTaskNotice {
 
   @@unique([taskId, recipientId])
   @@index([notifyAt, claimedAt])
+}
+
+/// Мой отклик в «Вакансиях» — для агенды «Мой день».
+///
+/// Работа не читает таблицы «Вакансий»: запись собирается из событий
+/// `vacancies.*` и хранит ровно то, что нужно строке агенды. Ключ —
+/// `responseId` чужого сервиса, без FK: контракт запрещает связь с моделями
+/// другого сервиса, а удалённый отклик просто перестанет обновляться.
+model WorkVacancyResponse {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation("WorkVacancyResponses", fields: [userId], references: [id], onDelete: Cascade)
+  responseId String   @unique
+  offerId    String
+  offerTitle String
+  /// Вид предложения строкой: энум чужого сервиса сюда не тянем.
+  offerKind  String
+  /// new, in_dialog, accepted, declined, closed. Строкой по той же причине.
+  status     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId, status, updatedAt(sort: Desc)])
 }
 
 /// Персональный ключ доступа: вход для программ, которым негде показать

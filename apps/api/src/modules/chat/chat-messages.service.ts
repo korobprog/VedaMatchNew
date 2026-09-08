@@ -78,6 +78,12 @@ export class ChatMessagesService {
      * тогда вложение обязано быть из той же беседы, куда летит сообщение.
      */
     attachmentsConversationId: string = conversationId,
+    /**
+     * `silent` — без пуша о сообщении. Нужен подписчикам чужих событий,
+     * когда колокольчик уже получил уведомление о самом действии (отклик в
+     * «Вакансиях»): второе о том же — шум.
+     */
+    options: { silent?: boolean } = {},
   ): Promise<ChatMessageDto> {
     const conversation = await this.conversations.requireConversation(
       conversationId,
@@ -173,7 +179,13 @@ export class ChatMessagesService {
       conversationId,
       message: dtoOut,
     });
-    void this.notify(conversation, userId, body || 'Вложение', conversationId);
+    if (!options.silent)
+      void this.notify(
+        conversation,
+        userId,
+        body || 'Вложение',
+        conversationId,
+      );
     this.announceActivity(userId);
 
     return dtoOut;
@@ -508,7 +520,8 @@ export class ChatMessagesService {
     for (const member of conversation.members) {
       if (member.userId === senderId || member.leftAt) continue;
       if (member.mutedUntil && member.mutedUntil > now) continue;
-      if (await this.presence.isViewing(member.userId, conversationId)) continue;
+      if (await this.presence.isViewing(member.userId, conversationId))
+        continue;
 
       const event: NotificationEvent =
         conversation.state === 'request'

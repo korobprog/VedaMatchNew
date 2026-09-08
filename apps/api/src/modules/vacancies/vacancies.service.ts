@@ -317,6 +317,10 @@ export class VacanciesService {
 
   // ===== Внутреннее =====
 
+  /**
+   * Место занято: соискателям с живыми откликами ждать ответа больше незачем.
+   * По событию на получателя — так требует контракт уведомлений.
+   */
   private async announceClosed(offer: {
     id: string;
     title: string;
@@ -325,17 +329,20 @@ export class VacanciesService {
   }) {
     const responses = await this.prisma.vacancyResponse.findMany({
       where: { offerId: offer.id, status: { in: ['new', 'in_dialog'] } },
-      select: { userId: true },
+      select: { id: true, userId: true },
     });
-    const event: VacancyOfferClosedEvent = {
-      name: VACANCY_EVENTS.offerClosed,
-      offerId: offer.id,
-      offerTitle: offer.title,
-      offerKind: offer.kind,
-      authorId: offer.authorId,
-      responderIds: responses.map((row) => row.userId),
-    };
-    this.events.emit(event.name, event);
+    for (const response of responses) {
+      const event: VacancyOfferClosedEvent = {
+        name: VACANCY_EVENTS.offerClosed,
+        recipientId: response.userId,
+        offerId: offer.id,
+        offerTitle: offer.title,
+        offerKind: offer.kind,
+        responseId: response.id,
+        authorId: offer.authorId,
+      };
+      this.events.emit(event.name, event);
+    }
   }
 
   private async viewerResponses(

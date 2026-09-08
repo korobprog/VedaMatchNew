@@ -109,6 +109,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         scope: "notices",
       },
       {
+        href: "/admin/vacancies",
+        label: "Вакансии",
+        hint: "Жалобы, предложения, статистика откликов",
+        scope: "vacancies",
+      },
+      {
         href: "/admin/music",
         label: "Музыка",
         hint: "Очередь разбора записей, исполнители, разделы, загрузка",
