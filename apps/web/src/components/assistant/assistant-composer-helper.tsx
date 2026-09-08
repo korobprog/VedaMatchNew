@@ -65,12 +65,21 @@ export function AssistantComposerHelper({
    * поле прокручивается.
    */
   const requestRef = useRef<HTMLTextAreaElement>(null);
+  const draftRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const field = requestRef.current;
     if (!field) return;
     field.style.height = "auto";
     field.style.height = `${field.scrollHeight}px`;
   }, [request]);
+  /* Готовый текст растёт по тем же правилам: ответ в три абзаца — обычное
+     дело, а читают его целиком, прежде чем отправить от своего имени. */
+  useEffect(() => {
+    const field = draftRef.current;
+    if (!field) return;
+    field.style.height = "auto";
+    field.style.height = `${field.scrollHeight}px`;
+  }, [draft]);
 
   return (
     <div
@@ -140,6 +149,7 @@ export function AssistantComposerHelper({
               Верхняя граница в 40% высоты экрана оставляет на виду и саму
               переписку, и кнопки под полем. Ручное растягивание сохранено. */}
           <textarea
+            ref={draftRef}
             value={draft}
             rows={7}
             onChange={(event) => setDraft(event.target.value)}
