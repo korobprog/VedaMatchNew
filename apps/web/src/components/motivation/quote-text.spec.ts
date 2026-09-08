@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isLongQuote, isTextClamped } from "./quote-text";
+import {
+  isLongQuote,
+  isTextClamped,
+  joinQuoteAndExplanation,
+  splitQuoteAndExplanation,
+} from "./quote-text";
 
 describe("isLongQuote", () => {
   it("короткую цитату не считает длинной", () => {
@@ -32,5 +37,36 @@ describe("isTextClamped", () => {
 
   it("скрытый блок обрезанным не считает: обе величины нулевые", () => {
     expect(isTextClamped({ scrollHeight: 0, clientHeight: 0 })).toBe(false);
+  });
+});
+
+describe("joinQuoteAndExplanation", () => {
+  it("склеивает через пустую строку", () => {
+    expect(joinQuoteAndExplanation("Цитата", "Пояснение")).toBe(
+      "Цитата\n\nПояснение",
+    );
+  });
+
+  it("без пояснения разделителя не оставляет", () => {
+    expect(joinQuoteAndExplanation("Цитата", "")).toBe("Цитата");
+    expect(joinQuoteAndExplanation("Цитата", "   ")).toBe("Цитата");
+  });
+
+  it("склейка и разбор возвращают исходные части", () => {
+    const parts = { quote: "Цитата", explanation: "Пояснение в две строки" };
+    expect(
+      splitQuoteAndExplanation(
+        joinQuoteAndExplanation(parts.quote, parts.explanation),
+      ),
+    ).toEqual(parts);
+  });
+
+  it("пояснение из двух абзацев переживает круг", () => {
+    const explanation = "Первый абзац.\n\nВторой абзац.";
+    const text = joinQuoteAndExplanation("Цитата", explanation);
+    expect(splitQuoteAndExplanation(text)).toEqual({
+      quote: "Цитата",
+      explanation,
+    });
   });
 });

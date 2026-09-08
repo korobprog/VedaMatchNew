@@ -222,9 +222,11 @@ describe("ReelsFeed", () => {
     // Ровно один: у второго слайда главы нет, и кнопка, ведущая в поиск
     // «где-то там», обещала бы комментарий и не показала бы его.
     expect(links).toHaveLength(1);
+    /* Адрес карточки уезжает с собой: из главы возвращаются к тому афоризму,
+       с которого в неё пришли, а не в оглавление библиотеки. */
     expect(links[0]).toHaveAttribute(
       "href",
-      "/vedabase/books/bhagavad-gita/2",
+      "/vedabase/books/bhagavad-gita/2?fromPost=a",
     );
   });
 
@@ -249,7 +251,7 @@ describe("ReelsFeed", () => {
     expect(screen.getAllByRole("button", { name: "Пожаловаться" })).toHaveLength(1);
   });
 
-  it("keeps the author line off video slides: the clip already carries it", () => {
+  it("ведёт в профиль того, кто принёс ролик: в кадр вшит источник, а не он", () => {
     fetchOk({});
     render(
       <ReelsFeed
@@ -268,8 +270,16 @@ describe("ReelsFeed", () => {
       />,
     );
 
-    // Вторая подпись поверх кадра закрывала бы конец вшитой цитаты.
-    expect(screen.queryByText("Гопал")).not.toBeInTheDocument();
+    /* Раньше подписи у ролика не было вовсе: считалось, что её несёт сам кадр.
+       Кадр несёт другое — воркер вшивает туда attributionLine, то есть автора
+       цитаты и книгу, а не того, кто принёс ролик. Имя дублировать нечему, и
+       без ссылки в профиль участника из ленты было не попасть. Ссылка стоит в
+       общем ряду, отдельной строкой поверх кадра она закрыла бы конец
+       вшитой цитаты. */
+    expect(screen.getByRole("link", { name: "Гопал" })).toHaveAttribute(
+      "href",
+      "/chat/people/users/u-gopal",
+    );
   });
 
   it("does not draw the quote over a video: the clip already carries it", () => {

@@ -744,9 +744,17 @@ function ReelSlide({
             loop
             playsInline
             preload={active ? "auto" : "metadata"}
-            // Кадр показывается целиком: подпись вшита у самого края, и любая
-            // обрезка съедает её первыми.
-            className="absolute inset-0 h-full w-full object-contain"
+            /* Кадр показывается целиком: подпись вшита у самого края, и
+               любая обрезка съедает её первыми.
+
+               Коробка кадра кончается там же, где начинается служебная
+               строка. Раньше она шла до самого низа слайда, и на телефоне
+               9:19,5 нижние точки кадра оказывались ровно под строкой: наш
+               «Комментарий ›» ложился на вшитый логотип VedaMatch. Размытая
+               подложка по-прежнему во весь слайд, чёрной полосы под роликом
+               не появляется, а сам кадр не мельчает — по высоте он и так с
+               запасом, его ширина упирается в экран раньше. */
+            className="absolute inset-x-0 bottom-[4.5rem] top-0 w-full object-contain"
           />
         </div>
       ) : (
@@ -837,6 +845,11 @@ function ReelSlide({
           </p>
         )}
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/75">
+          {/* У ролика подпись вшита в кадр воркером, но имя в кадре — картинка,
+              нажать на неё нельзя. Ссылка встаёт в этот же ряд, а не отдельной
+              строкой поверх кадра: строка закрыла бы конец цитаты, а ряд уже
+              есть и переносится сам. */}
+          {kind !== "image" && <Byline post={post} />}
           {kind !== "image" && explanationToggle}
           {/* Замер добавляет случаи к прикидке, а не заменяет её: цитата длиннее
               ста семидесяти знаков обрезана в четырёх строках при любой
@@ -847,7 +860,10 @@ function ReelSlide({
               оригиналом на первой же правке книги. */}
           {post.library && (
             <Link
-              href={`/vedabase/books/${post.library.bookSlug}/${post.library.chapterSlug}`}
+              /* Адрес карточки едет с собой: глава открывается отдельной
+                 страницей, и без него оттуда некуда вернуться — «К
+                 библиотеке» уводит не туда, откуда пришли. */
+              href={`/vedabase/books/${post.library.bookSlug}/${post.library.chapterSlug}?fromPost=${encodeURIComponent(post.slug)}`}
               className="underline-offset-4 hover:underline"
             >
               Комментарий ›
@@ -883,13 +899,20 @@ function CenteredSheet({
   children: ReactNode;
 }) {
   return (
+    /* `fixed`, а не `absolute`: кнопку «Читать полностью» держит ряд ссылок
+       внутри текстового блока, а он сам спозиционирован и высотой всего в
+       сотню точек. Окно считало проценты от него — выходило 86 точек высоты
+       на экране в 812 и центр на четверть экрана ниже настоящего. От окна
+       просмотра проценты честные, и центр совпадает с серединой экрана.
+       Ни у одного предка нет transform или filter, иначе `fixed` вёл бы себя
+       как `absolute` и всё вернулось бы. */
     <div
-      className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={onClose}
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="flex max-h-[70%] w-full max-w-sm flex-col overflow-hidden rounded-3xl border border-white/15 bg-[#1B0F2E]/95 text-sm text-white/90 backdrop-blur"
+        className="flex max-h-[80svh] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-white/15 bg-[#1B0F2E]/95 text-sm text-white/90 backdrop-blur"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-3">
           <span className="font-display text-sm">{title}</span>
@@ -899,7 +922,9 @@ function CenteredSheet({
         </div>
         {/* min-h-0 — иначе флекс-item не сжимается до overflow и прокрутка
             не срабатывает, вся карточка просто растёт за рамки max-h. */}
-        <div className="min-h-0 overflow-y-auto p-5 leading-6">{children}</div>
+        {/* Цитату в этом окне читают, а не просматривают: размер как у
+            основного текста портала, а не как у подписей под кадром. */}
+        <div className="min-h-0 overflow-y-auto p-5 text-base leading-7">{children}</div>
       </div>
     </div>
   );
