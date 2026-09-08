@@ -84,9 +84,13 @@ export function AssistantComposerHelper({
         </p>
       )}
       <div className="flex items-end gap-2">
+        {/* Три строки, а не одна: в одну не помещалась даже подсказка
+            («Что написать Сите? Например: „вежливо перенеси встречу"») — она
+            обрезалась на середине, и было не видно, чего от поля ждут.
+            Просьба к ассистенту — это фраза, а не слово. */}
         <textarea
           value={request}
-          rows={1}
+          rows={3}
           onChange={(event) => setRequest(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
@@ -100,7 +104,7 @@ export function AssistantComposerHelper({
               : "Что написать? Например: «поблагодари за помощь»"
           }
           aria-label="Просьба ассистенту"
-          className="max-h-32 min-h-10 flex-1 resize-none rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0 placeholder:text-text-2"
+          className="max-h-40 min-h-20 flex-1 resize-none rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0 placeholder:text-text-2"
         />
         <button
           type="button"
@@ -113,12 +117,16 @@ export function AssistantComposerHelper({
       </div>
       {draft !== null && (
         <div className="flex flex-col gap-2">
+          {/* Готовый текст читают целиком, прежде чем отправить от своего
+              имени: в три строки ответ в пару абзацев смотрелся через щёлку.
+              Верхняя граница в 40% высоты экрана оставляет на виду и саму
+              переписку, и кнопки под полем. Ручное растягивание сохранено. */}
           <textarea
             value={draft}
-            rows={3}
+            rows={7}
             onChange={(event) => setDraft(event.target.value)}
             aria-label="Текст от ассистента"
-            className="min-h-16 w-full resize-y rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
+            className="max-h-[40svh] min-h-40 w-full resize-y rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
           />
           <div className="flex flex-wrap gap-2">
             <button
