@@ -8,6 +8,14 @@
         "DOKPLOY_API_KEY": "${DOKPLOY_API_KEY}",
         "DOKPLOY_TOOL_PRESET": "deploy"
       }
+    },
+    "vedamatch": {
+      "command": "node",
+      "args": ["C:/Users/makst/Documents/VedaMatchNew/apps/mcp/dist/index.js"],
+      "env": {
+        "VEDAMATCH_API_KEY": "${VEDAMATCH_API_KEY}",
+        "VEDAMATCH_API_URL": "https://api.vedamatch.ru"
+      }
     }
   }
 }

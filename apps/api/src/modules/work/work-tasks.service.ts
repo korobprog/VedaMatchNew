@@ -38,7 +38,11 @@ import {
   toWorkTaskCard,
   workAgendaBucket,
 } from './work-dto';
-import { WORK_POSITION_STEP, resolveMovePosition } from './work-position';
+import {
+  WORK_POSITION_STEP,
+  positionBetween,
+  resolveMovePosition,
+} from './work-position';
 import { assertWorkAccess } from './work-roles';
 import { WorkSpacesService } from './work-spaces.service';
 import {
@@ -235,9 +239,12 @@ export class WorkTasksService {
     const dueAt = parseWorkDueAt(request.dueAt);
     await this.assertAssigneeIsMember(board.spaceId, request.assigneeId);
 
-    const last = await this.prisma.workTask.findFirst({
+    // Новая задача встаёт первой в колонке, а не последней: её завели
+    // только что, и внизу длинной колонки её пришлось бы искать прокруткой —
+    // а на телефоне, где колонки идут столбиком, ещё и мимо всей доски.
+    const first = await this.prisma.workTask.findFirst({
       where: { columnId: column.id, archivedAt: null },
-      orderBy: { position: 'desc' },
+      orderBy: { position: 'asc' },
       select: { position: true },
     });
 
@@ -258,7 +265,7 @@ export class WorkTasksService {
           number: space.taskSeq,
           title,
           description,
-          position: (last?.position ?? 0) + WORK_POSITION_STEP,
+          position: positionBetween(null, first?.position ?? null),
           priority: normalizeWorkPriority(request.priority),
           dueAt,
           assigneeId: request.assigneeId ?? null,
