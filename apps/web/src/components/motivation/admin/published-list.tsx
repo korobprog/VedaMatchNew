@@ -7,6 +7,10 @@ import type {
   MotivationAdminCandidateDto,
   MotivationCategoryDto,
 } from "@vedamatch/shared";
+import {
+  joinQuoteAndExplanation,
+  splitQuoteAndExplanation,
+} from "../quote-text";
 import { CategorySelect } from "./category-select";
 import { DeletePostButton } from "./delete-post-button";
 import { UploadCardImage } from "./upload-card-image";
@@ -312,7 +316,15 @@ function PublishedTextForm({
   run: ReturnType<typeof useAdminCommand>["run"];
 }) {
   const [title, setTitle] = useState(post.title);
-  const [text, setText] = useState(post.text);
+  /* Сервер хранит цитату и пояснение одной строкой, склеенными пустой
+     строкой, но править их одним полем нельзя: поле называлось «Пояснение», а
+     показывало ещё и афоризм — тот же текст, что стоит в карточке выше.
+     Редактор разбирает строку на части, правит их порознь и склеивает обратно
+     тем же разделителем. */
+  const initial = splitQuoteAndExplanation(post.text);
+  const [quote, setQuote] = useState(initial.quote);
+  const [explanation, setExplanation] = useState(initial.explanation);
+  const text = joinQuoteAndExplanation(quote, explanation);
   const [speaker, setSpeaker] = useState(post.attributionSpeaker ?? "");
   const [work, setWork] = useState(post.attributionWork ?? "");
   const [category, setCategory] = useState(post.category);
@@ -328,7 +340,11 @@ function PublishedTextForm({
   const storyText = post.storyText;
   const locator = post.attributionLocator ?? "";
 
-  const textChanged = title !== post.title || text !== post.text;
+  /* Сравниваем со склейкой разобранного, а не с исходной строкой: разбор
+     подрезает пробелы по краям, и у поста с лишним переносом «Сохранить»
+     загоралась бы сразу при открытии, ничего не тронув. */
+  const savedText = joinQuoteAndExplanation(initial.quote, initial.explanation);
+  const textChanged = title !== post.title || text !== savedText;
   const attributionChanged =
     speaker !== (post.attributionSpeaker ?? "") ||
     work !== (post.attributionWork ?? "");
@@ -347,13 +363,27 @@ function PublishedTextForm({
       </label>
 
       <label className="block">
-        <span className={labelClass}>Пояснение</span>
+        <span className={labelClass}>Цитата</span>
         <textarea
-          value={text}
-          rows={4}
-          onChange={(event) => setText(event.target.value)}
+          value={quote}
+          rows={3}
+          onChange={(event) => setQuote(event.target.value)}
           className={`${fieldClass} mt-1`}
         />
+      </label>
+
+      <label className="block">
+        <span className={labelClass}>Пояснение</span>
+        <textarea
+          value={explanation}
+          rows={4}
+          placeholder="Почему эта цитата важна и как её применить"
+          onChange={(event) => setExplanation(event.target.value)}
+          className={`${fieldClass} mt-1`}
+        />
+        <span className="mt-1 block text-xs font-normal text-text-2">
+          Если пусто — в карточке останется одна цитата, без блока «Пояснение».
+        </span>
       </label>
 
       <div className="grid gap-3 sm:grid-cols-2">
