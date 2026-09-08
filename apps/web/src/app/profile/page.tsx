@@ -21,6 +21,7 @@ import { DeleteAccountSection } from "@/components/delete-account-section";
 import { RewardsProfileCard } from "@/components/rewards/rewards-profile-card";
 import { InstallButton } from "@/components/pwa/install-button";
 import { NotificationSettings } from "@/components/pwa/notification-settings";
+import { ApiKeysSettings } from "@/components/api-keys/api-keys-settings";
 
 const stageLabels: Record<string, string> = {
   seeker: "Ищущий",
@@ -177,6 +178,9 @@ export default async function ProfilePage() {
         </div>
         <div className="mb-6">
           <CommunityPicker />
+        </div>
+        <div className="mb-6">
+          <ApiKeysSettings />
         </div>
         <ProfileEditor user={user} />
       </main>

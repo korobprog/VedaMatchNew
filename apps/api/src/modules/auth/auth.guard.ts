@@ -2,6 +2,7 @@ import {
   CanActivate,
   createParamDecorator,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -9,6 +10,8 @@ import type { Request } from 'express';
 import type { AccessTokenPayload, Role } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { assertAccountActive } from '../users/account-status';
+import { looksLikeApiKey } from './api-key';
+import { ApiKeysService } from './api-keys.service';
 import { JwtSignService } from './jwt.service';
 import { toRole } from './role';
 
@@ -26,6 +29,7 @@ export class AuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtSignService,
     private readonly prisma: PrismaService,
+    private readonly apiKeys: ApiKeysService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -35,10 +39,42 @@ export class AuthGuard implements CanActivate {
       ? header.slice(7)
       : (req.cookies as Record<string, string> | undefined)?.access_token;
     if (!token) throw new UnauthorizedException('Требуется авторизация');
-    try {
-      req.user = await this.jwt.verifyAccessToken(token);
-    } catch {
-      throw new UnauthorizedException('Токен недействителен или истёк');
+
+    // Персональный ключ узнаётся по префиксу: у программ нет браузера, чтобы
+    // пройти OIDC, и нет места, где пережить перезапуск refresh-cookie. Права
+    // ключа уже проверены к этому моменту — resolve() сверяет их с методом и
+    // сервисом, поэтому «work:read» не создаст задачу и не заглянет в Общение.
+    if (looksLikeApiKey(token)) {
+      const resolved = await this.apiKeys.resolve(token, req.method, req.path);
+      if (!resolved.ok) {
+        // Живому ключу без права отвечаем 403, а не 401: 401 отправляет
+        // человека выпускать новый ключ вместо того, чтобы дописать право.
+        if (resolved.reason === 'forbidden') {
+          throw new ForbiddenException(
+            `Ключу не хватает права на ${req.method} ${req.path}. Есть: ${resolved.scopes.join(', ') || 'ничего'}. Выпустите ключ с нужным правом в настройках портала.`,
+          );
+        }
+        throw new UnauthorizedException(
+          'Ключ недействителен: отозван, просрочен или не существует',
+        );
+      }
+      const owner = await this.prisma.user.findUnique({
+        where: { id: resolved.userId },
+        select: { email: true },
+      });
+      if (!owner) throw new UnauthorizedException('Ключ недействителен');
+      req.user = {
+        sub: resolved.userId,
+        email: owner.email,
+        role: 'user',
+        apiScopes: resolved.scopes,
+      };
+    } else {
+      try {
+        req.user = await this.jwt.verifyAccessToken(token);
+      } catch {
+        throw new UnauthorizedException('Токен недействителен или истёк');
+      }
     }
     // Пользователь и так читается из базы на каждый запрос — роль берём
     // оттуда, а не из токена: разжалованный админ иначе сохранял бы права

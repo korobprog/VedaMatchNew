@@ -1,0 +1,26 @@
+{
+  "name": "@vedamatch/mcp",
+  "version": "0.0.1",
+  "private": true,
+  "description": "MCP-сервер портала: доски и задачи «Работы» под персональным ключом",
+  "type": "module",
+  "bin": {
+    "vedamatch-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "lint": "eslint \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.5"
+  }
+}

@@ -360,6 +360,11 @@ export interface AccessTokenPayload {
    * попадает: AuthGuard подставляет актуальный список из базы на каждый запрос.
    */
   adminServices?: string[];
+  /**
+   * Права персонального ключа, если вход был по нему, а не по JWT. У живого
+   * человека в браузере поля нет — по нему и отличается программа.
+   */
+  apiScopes?: string[];
 }
 
 export interface SelfIdentificationAnswers {

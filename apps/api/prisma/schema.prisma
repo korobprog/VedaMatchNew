@@ -418,6 +418,7 @@ model User {
   workActivity                       WorkActivity[]               @relation("WorkActivityActor")
   workTaskNoticesReceived            WorkTaskNotice[]             @relation("WorkTaskNoticeRecipient")
   workTaskNoticesCaused              WorkTaskNotice[]             @relation("WorkTaskNoticeActor")
+  apiKeys                            UserApiKey[]                 @relation("UserApiKeys")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -5330,4 +5331,30 @@ model WorkTaskNotice {
 
   @@unique([taskId, recipientId])
   @@index([notifyAt, claimedAt])
+}
+
+/// Персональный ключ доступа: вход для программ, которым негде показать
+/// браузер, — MCP-клиента, скрипта, интеграции.
+///
+/// Хранится хеш, как у RefreshToken: украденная база не даёт войти. Права
+/// («work:read», «work:write») режут доступ по сервису и по методу — см.
+/// api-key.ts.
+model UserApiKey {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation("UserApiKeys", fields: [userId], references: [id], onDelete: Cascade)
+  /// Человеческое имя: «Claude на ноутбуке». Чтобы отзывать осознанно.
+  name       String
+  tokenHash  String    @unique
+  /// Хвост ключа для списка: целиком он показывается один раз, при выпуске.
+  hint       String
+  scopes     String[]
+  /// Когда ключом пользовались в последний раз: по нему видно забытые.
+  lastUsedAt DateTime?
+  /// Пусто — бессрочный.
+  expiresAt  DateTime?
+  revoked    Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, revoked])
 }
