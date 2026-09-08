@@ -10,7 +10,11 @@ import {
   getProfile,
 } from "@/lib/api";
 
-export default async function AdminChangelogPage() {
+export default async function AdminChangelogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ new?: string }>;
+}) {
   const user = await getProfile();
   if (!user) redirectToLogin("/admin/changelog");
   if (user.role !== "admin") redirect("/");
@@ -23,6 +27,8 @@ export default async function AdminChangelogPage() {
   if (!releases || !announcements || !roadmap) {
     throw new Error("Не удалось загрузить данные страницы «Версия и новости»");
   }
+
+  const startCreating = (await searchParams).new === "1";
 
   return (
     <>
@@ -41,7 +47,10 @@ export default async function AdminChangelogPage() {
         <h2 className="mb-3 font-display text-lg font-semibold text-text-0">
           Новости
         </h2>
-        <AdminChangelogAnnouncements announcements={announcements} />
+        <AdminChangelogAnnouncements
+          announcements={announcements}
+          startCreating={startCreating}
+        />
       </section>
 
       <section>
