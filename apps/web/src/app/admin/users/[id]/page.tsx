@@ -9,6 +9,7 @@ import { AdminUserServicesForm } from "@/components/admin-user-services-form";
 import { AdminUserBlockForm } from "@/components/admin-user-block-form";
 import { AdminUserDeleteForm } from "@/components/admin-user-delete-form";
 import { AdminUserPurgeForm } from "@/components/admin-user-purge-form";
+import { AdminUserApiKeys } from "@/components/admin-user-api-keys";
 import { AdminPhotoVerification } from "@/components/admin-photo-verification";
 import { AdminSubscriptionForm } from "@/components/admin-subscription-form";
 import { getAdminUser, getProfile } from "@/lib/api";
@@ -229,6 +230,7 @@ export default async function AdminUserDetailPage({
             initialStage={profile.spiritualStage}
             initialStatus={profile.devoteeVerificationStatus}
           />
+          <AdminUserApiKeys userId={profile.id} />
           <AdminUserBlockForm
             userId={profile.id}
             isSelf={currentUser.id === profile.id}

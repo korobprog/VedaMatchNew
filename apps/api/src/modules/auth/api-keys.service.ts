@@ -99,6 +99,44 @@ export class ApiKeysService {
   }
 
   /**
+   * Ключи любого человека — для администрации.
+   *
+   * Нужны не из любопытства: человек уходит из проекта, а его ключ продолжает
+   * ходить в доски, пока сам владелец не вспомнит про него. Отозвать должен
+   * уметь кто-то ещё.
+   *
+   * Отозванные тоже показываются: «ключ был и его погасили» — ответ на вопрос
+   * «почему интеграция перестала работать», а отсутствие строки ответом не
+   * является.
+   */
+  async listForAdmin(actorRole: string, userId: string) {
+    assertAdmin(actorRole);
+    return this.prisma.userApiKey.findMany({
+      where: { userId },
+      orderBy: [{ revoked: 'asc' }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        name: true,
+        hint: true,
+        scopes: true,
+        lastUsedAt: true,
+        expiresAt: true,
+        revoked: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  /** Отзыв чужого ключа администрацией. Выпускать чужие ключи нельзя вовсе. */
+  async revokeAsAdmin(actorRole: string, keyId: string): Promise<void> {
+    assertAdmin(actorRole);
+    await this.prisma.userApiKey.update({
+      where: { id: keyId },
+      data: { revoked: true },
+    });
+  }
+
+  /**
    * Кому принадлежит предъявленный ключ и вправе ли он так поступать.
    *
    * Негодный ключ и нехватка права — разные ответы, и это не педантизм.
@@ -144,5 +182,15 @@ export class ApiKeysService {
     void this.prisma.userApiKey
       .update({ where: { id: keyId }, data: { lastUsedAt: now } })
       .catch(() => this.lastUsedWrites.delete(keyId));
+  }
+}
+
+/**
+ * Ключи — вход в аккаунт, а не настройка сервиса, поэтому доступ к чужим
+ * закрыт для админов сервисов: их полномочия ограничены своим разделом.
+ */
+function assertAdmin(role: string): void {
+  if (role !== 'admin') {
+    throw new ForbiddenException('Доступ только для администратора');
   }
 }

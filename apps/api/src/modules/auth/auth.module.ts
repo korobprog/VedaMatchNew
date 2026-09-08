@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AdminApiKeysController } from './admin-api-keys.controller';
 import { ApiKeysController } from './api-keys.controller';
 import { ApiKeysService } from './api-keys.service';
 import { AuthProvidersService } from './auth-providers.service';
@@ -10,7 +11,12 @@ import { JwtSignService } from './jwt.service';
 import { RefreshTokenCleanupService } from './refresh-token-cleanup.service';
 
 @Module({
-  controllers: [ApiKeysController, AuthController, WellKnownController],
+  controllers: [
+    AdminApiKeysController,
+    ApiKeysController,
+    AuthController,
+    WellKnownController,
+  ],
   providers: [
     AuthService,
     ApiKeysService,

@@ -25,6 +25,21 @@ const SCOPES = [
 ] as const;
 
 /**
+ * Срок жизни ключа.
+ *
+ * По умолчанию бессрочный: ключ к своей же машине, у которого однажды кончится
+ * срок, перестанет работать без объяснения — человек будет искать поломку в
+ * настройках клиента. Срок нужен другому случаю: временный доступ подрядчику
+ * или проверка, после которой ключ должен исчезнуть сам.
+ */
+const LIFETIMES = [
+  { value: 0, label: "Бессрочно" },
+  { value: 30, label: "30 дней" },
+  { value: 90, label: "90 дней" },
+  { value: 365, label: "Год" },
+] as const;
+
+/**
  * Персональные ключи доступа.
  *
  * Ключ нужен программам, которым негде показать браузер: MCP-клиенту, скрипту,
@@ -40,6 +55,7 @@ export function ApiKeysSettings() {
   const [issued, setIssued] = useState<IssuedApiKeyDto | null>(null);
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState<string[]>(["work:read"]);
+  const [days, setDays] = useState(0);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -54,7 +70,11 @@ export function ApiKeysSettings() {
     setBusy(true);
     setProblem(null);
     try {
-      const key = await createApiKey({ name: name.trim(), scopes });
+      const key = await createApiKey({
+        name: name.trim(),
+        scopes,
+        ...(days > 0 ? { expiresInDays: days } : {}),
+      });
       setIssued(key);
       setName("");
       setKeys(await fetchApiKeys());
@@ -100,7 +120,7 @@ export function ApiKeysSettings() {
             Ключ «{issued.name}» выпущен
           </p>
           <p className="mt-1 text-sm text-[var(--vm-text-2)]">
-            Скопируйте его сейчас: portal хранит только отпечаток, и показать
+            Скопируйте его сейчас: портал хранит только отпечаток, и показать
             ключ второй раз будет невозможно.
           </p>
           <code className="mt-3 block overflow-x-auto rounded-lg bg-[var(--vm-bg-0)] p-3 font-[family-name:var(--font-mono)] text-xs text-[var(--vm-text-0)]">
@@ -163,6 +183,21 @@ export function ApiKeysSettings() {
           ))}
         </fieldset>
 
+        <label className="block text-sm text-[var(--vm-text-1)]">
+          Срок действия
+          <select
+            value={days}
+            onChange={(event) => setDays(Number(event.target.value))}
+            className="mt-1 w-full rounded-xl border border-[var(--vm-glass-border)] bg-[var(--vm-bg-2)] px-3 py-2 text-sm text-[var(--vm-text-0)]"
+          >
+            {LIFETIMES.map((lifetime) => (
+              <option key={lifetime.value} value={lifetime.value}>
+                {lifetime.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
         {problem && (
           <p role="alert" className="text-sm text-[var(--vm-magenta)]">
             {problem}
@@ -195,6 +230,8 @@ export function ApiKeysSettings() {
                   {key.lastUsedAt
                     ? `использован ${new Date(key.lastUsedAt).toLocaleDateString("ru-RU")}`
                     : "ещё не использован"}
+                  {key.expiresAt &&
+                    ` · до ${new Date(key.expiresAt).toLocaleDateString("ru-RU")}`}
                 </span>
               </span>
               <button
