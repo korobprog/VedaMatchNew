@@ -10,6 +10,7 @@ import {
   Globe,
   Loader2,
   MapPin,
+  Send,
 } from "lucide-react";
 import type { VacancyOfferDto } from "@vedamatch/shared";
 import {
@@ -38,6 +39,7 @@ import {
   formatPay,
 } from "./vacancy-labels";
 import { VacancyReportDialog } from "./vacancy-report-dialog";
+import { buildVacancyShareHref } from "./vacancy-share";
 
 export function VacancyDetailView({ id }: { id: string }) {
   const router = useRouter();
@@ -359,11 +361,20 @@ export function VacancyDetailView({ id }: { id: string }) {
           </div>
         )}
 
-        {!offer.isMine && (
-          <div className="mt-4 border-t border-glass-brd pt-4">
-            <VacancyReportDialog offerId={offer.id} />
-          </div>
-        )}
+        <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-glass-brd pt-4">
+          {/* Живое предложение можно переслать другу: «тебе не подойдёт?».
+              Экран отправки общий у портала, свой список бесед не нужен. */}
+          {live && !expired && (
+            <Link
+              href={buildVacancyShareHref(offer)}
+              className="flex items-center gap-1 text-xs text-text-1 underline hover:text-text-0"
+            >
+              <Send className="size-3.5" aria-hidden />
+              Отправить в чат
+            </Link>
+          )}
+          {!offer.isMine && <VacancyReportDialog offerId={offer.id} />}
+        </div>
       </article>
 
       {error && (
