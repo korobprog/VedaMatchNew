@@ -1,6 +1,7 @@
 import {
   resolveDisplayName,
   type WorkAgendaItemDto,
+  type WorkAgendaResponseDto,
   type WorkColor,
   type WorkLabelDto,
   type WorkMemberDto,
@@ -142,5 +143,33 @@ export function toWorkAgendaItem(
     boardId: task.boardId,
     dueAt: task.dueAt?.toISOString() ?? null,
     priority: task.priority,
+  };
+}
+
+/**
+ * Строка агенды про отклик в «Вакансиях». Вид и статус хранятся строками —
+ * это чужие энумы; наружу отдаётся только известное, остальное отбрасывается.
+ */
+export function toWorkAgendaResponse(row: {
+  responseId: string;
+  offerId: string;
+  offerTitle: string;
+  offerKind: string;
+  status: string;
+  updatedAt: Date;
+}): WorkAgendaResponseDto {
+  const kind = (['work', 'seva', 'task'] as const).find(
+    (value) => value === row.offerKind,
+  );
+  const status = (['new', 'in_dialog', 'accepted'] as const).find(
+    (value) => value === row.status,
+  );
+  return {
+    responseId: row.responseId,
+    offerId: row.offerId,
+    offerTitle: row.offerTitle,
+    offerKind: kind ?? 'task',
+    status: status ?? 'new',
+    updatedAt: row.updatedAt.toISOString(),
   };
 }

@@ -47,7 +47,17 @@ export const notificationEventNames = {
   workTaskReturned: 'work.task.returned',
   workTaskStatusChanged: 'work.task.status-changed',
   workInviteReceived: 'work.invite.received',
+  vacancyResponseCreated: 'vacancies.response.created',
+  vacancyResponseStatusChanged: 'vacancies.response.status-changed',
+  vacancyOfferClosed: 'vacancies.offer.closed',
 } as const satisfies Record<string, NotificationEventName>;
+
+/** Подпись вида предложения в «Вакансиях» — событие несёт код. */
+const VACANCY_KIND_LABELS: Record<'work' | 'seva' | 'task', string> = {
+  work: 'работа',
+  seva: 'служение',
+  task: 'задача',
+};
 
 /**
  * Названия портальных полей профиля для уведомления о правке администрацией.
@@ -459,6 +469,46 @@ export function buildNotification(
         url: `/notices/${event.noticeId}`,
         tag: `notice-responses:${event.noticeId}`,
         category: 'notices',
+      };
+    case 'vacancies.response.created':
+      return {
+        title: 'Отклик на предложение',
+        // Без рода: User.gender необязателен.
+        body: `${event.responderName} — «${toExcerpt(event.offerTitle)}»${
+          event.message ? `: ${toExcerpt(event.message)}` : ''
+        }`,
+        url: `/vacancies/${event.offerId}/responses`,
+        // Тег по предложению: три отклика подряд схлопываются в одну плашку,
+        // а не выстраиваются тремя.
+        tag: `vacancy-responses:${event.offerId}`,
+        // «Вакансии» живут под тумблером «Работа»: это витрина одного
+        // раздела, и второй переключатель на то же самое только путал бы.
+        category: 'work',
+      };
+    case 'vacancies.response.status-changed':
+      return {
+        title:
+          event.status === 'accepted'
+            ? 'Ваш отклик принят'
+            : event.status === 'declined'
+              ? 'По отклику отказ'
+              : 'Работодатель открыл диалог',
+        // Отказ без причины намеренно: причину пишут в диалоге, если хотят.
+        body: `${VACANCY_KIND_LABELS[event.offerKind]} «${toExcerpt(event.offerTitle)}»`,
+        url:
+          event.status === 'in_dialog'
+            ? `/vacancies/${event.offerId}`
+            : '/vacancies/responses',
+        tag: `vacancy-response:${event.responseId}`,
+        category: 'work',
+      };
+    case 'vacancies.offer.closed':
+      return {
+        title: 'Предложение закрыто',
+        body: `${VACANCY_KIND_LABELS[event.offerKind]} «${toExcerpt(event.offerTitle)}» — человек найден`,
+        url: '/vacancies/responses',
+        tag: `vacancy-response:${event.responseId}`,
+        category: 'work',
       };
     case 'notices.response.accepted':
       return {

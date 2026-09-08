@@ -98,7 +98,7 @@ export class VacanciesResponsesService {
       offerTitle: row.offer.title,
       offerKind: row.offer.kind,
       responseId: row.id,
-      authorId: offer.authorId,
+      recipientId: offer.authorId,
       responderId: userId,
       responderName: resolveDisplayName(row.user),
       message,
@@ -179,8 +179,8 @@ export class VacanciesResponsesService {
       offerTitle: updated.offer.title,
       offerKind: updated.offer.kind,
       responseId: updated.id,
+      recipientId: updated.userId,
       authorId: userId,
-      responderId: updated.userId,
       status: body.status,
     };
     this.events.emit(event.name, event);

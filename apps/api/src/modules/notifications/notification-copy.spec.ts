@@ -207,6 +207,88 @@ describe('buildNotification', () => {
   });
 });
 
+describe('вакансии', () => {
+  it('отклик ведёт автора в воронку и схлопывается по предложению', () => {
+    const first = buildNotification({
+      name: 'vacancies.response.created',
+      recipientId: 'author',
+      offerId: 'o1',
+      offerTitle: 'Повар в кафе',
+      offerKind: 'work',
+      responseId: 'r1',
+      responderId: 'u2',
+      responderName: 'Ишвара дас',
+      message: 'Готов выйти с понедельника',
+    });
+    expect(first).toEqual({
+      title: 'Отклик на предложение',
+      body: 'Ишвара дас — «Повар в кафе»: Готов выйти с понедельника',
+      url: '/vacancies/o1/responses',
+      tag: 'vacancy-responses:o1',
+      category: 'work',
+    });
+    const second = buildNotification({
+      name: 'vacancies.response.created',
+      recipientId: 'author',
+      offerId: 'o1',
+      offerTitle: 'Повар в кафе',
+      offerKind: 'work',
+      responseId: 'r2',
+      responderId: 'u3',
+      responderName: 'Гопал',
+      message: null,
+    });
+    expect(second.tag).toBe(first.tag);
+    expect(second.body).toBe('Гопал — «Повар в кафе»');
+  });
+
+  it('отказ — без причины, диалог ведёт к предложению', () => {
+    const declined = buildNotification({
+      name: 'vacancies.response.status-changed',
+      recipientId: 'u2',
+      offerId: 'o1',
+      offerTitle: 'Помощь на кухне',
+      offerKind: 'seva',
+      responseId: 'r1',
+      authorId: 'author',
+      status: 'declined',
+    });
+    expect(declined.title).toBe('По отклику отказ');
+    expect(declined.body).toBe('служение «Помощь на кухне»');
+    expect(declined.url).toBe('/vacancies/responses');
+
+    const dialog = buildNotification({
+      name: 'vacancies.response.status-changed',
+      recipientId: 'u2',
+      offerId: 'o1',
+      offerTitle: 'Помощь на кухне',
+      offerKind: 'seva',
+      responseId: 'r1',
+      authorId: 'author',
+      status: 'in_dialog',
+    });
+    expect(dialog.url).toBe('/vacancies/o1');
+  });
+
+  it('закрытие предложения говорит, что человек найден', () => {
+    expect(
+      buildNotification({
+        name: 'vacancies.offer.closed',
+        recipientId: 'u2',
+        offerId: 'o1',
+        offerTitle: 'Перевезти книги',
+        offerKind: 'task',
+        responseId: 'r1',
+        authorId: 'author',
+      }),
+    ).toMatchObject({
+      title: 'Предложение закрыто',
+      body: 'задача «Перевезти книги» — человек найден',
+      category: 'work',
+    });
+  });
+});
+
 describe('toExcerpt', () => {
   it('оставляет короткое сообщение как есть и схлопывает пробелы', () => {
     expect(toExcerpt('  Харе   Кришна  ')).toBe('Харе Кришна');

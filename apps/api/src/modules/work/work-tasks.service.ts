@@ -34,6 +34,7 @@ import {
 import { WorkNoticesService } from './work-notices.service';
 import {
   toWorkAgendaItem,
+  toWorkAgendaResponse,
   toWorkPerson,
   toWorkTaskCard,
   workAgendaBucket,
@@ -767,11 +768,19 @@ export class WorkTasksService {
       },
     });
 
+    // Живые отклики в «Вакансиях» — из своей таблицы, собранной событиями.
+    const responses = await this.prisma.workVacancyResponse.findMany({
+      where: { userId, status: { in: ['new', 'in_dialog', 'accepted'] } },
+      orderBy: { updatedAt: 'desc' },
+      take: 20,
+    });
+
     const buckets: WorkAgendaDto = {
       overdue: [],
       today: [],
       soon: [],
       undated: [],
+      responses: responses.map(toWorkAgendaResponse),
     };
     for (const task of tasks) {
       const item: WorkAgendaItemDto = toWorkAgendaItem(task, task.space);

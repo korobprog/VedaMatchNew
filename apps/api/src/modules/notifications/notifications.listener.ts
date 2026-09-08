@@ -272,4 +272,19 @@ export class NotificationsListener {
   onWorkInviteReceived(event: NotificationEvent): void {
     void this.deliver(event);
   }
+
+  @OnEvent(notificationEventNames.vacancyResponseCreated)
+  onVacancyResponseCreated(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.vacancyResponseStatusChanged)
+  onVacancyResponseStatusChanged(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.vacancyOfferClosed)
+  onVacancyOfferClosed(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
 }
