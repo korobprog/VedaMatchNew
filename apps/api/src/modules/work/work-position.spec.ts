@@ -30,6 +30,19 @@ describe('positionBetween', () => {
   });
 });
 
+describe('позиция новой задачи', () => {
+  it('новая задача встаёт над первой, а не под последней', () => {
+    const column = [0, WORK_POSITION_STEP, WORK_POSITION_STEP * 2];
+    const created = positionBetween(null, column[0]);
+    expect(created).toBeLessThan(column[0]);
+    expect([...column, created].sort((a, b) => a - b)[0]).toBe(created);
+  });
+
+  it('в пустой колонке место находится и без соседей', () => {
+    expect(positionBetween(null, null)).toBe(0);
+  });
+});
+
 describe('needsRebalance', () => {
   it('обычный зазор перенумерации не требует', () => {
     expect(needsRebalance(0, 1024)).toBe(false);

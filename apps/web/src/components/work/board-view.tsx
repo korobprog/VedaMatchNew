@@ -470,37 +470,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                 )}
               </header>
 
-              <ul className="flex min-h-[40px] flex-col gap-2">
-                {column.tasks.map((task, index) => (
-                  <li key={task.id}>
-                    {drag?.target?.columnId === column.id &&
-                      drag.target.index === index && <DropLine />}
-                    <TaskCard
-                      task={task}
-                      dragging={
-                        drag?.started === true && drag.taskId === task.id
-                      }
-                      canEdit={Boolean(canEdit)}
-                      onOpen={() => setOpenTaskId(task.id)}
-                      onHandleDown={(event) => onHandleDown(event, task.id)}
-                      onHandleMove={onHandleMove}
-                      onHandleUp={onHandleUp}
-                      onMoveBeside={(direction) => moveBeside(task, direction)}
-                      cardRef={(element) => {
-                        if (element) cardRefs.current.set(task.id, element);
-                        else cardRefs.current.delete(task.id);
-                      }}
-                    />
-                  </li>
-                ))}
-                {drag?.target?.columnId === column.id &&
-                  drag.target.index >= column.tasks.length && <DropLine />}
-              </ul>
-
               {canEdit &&
                 (composerColumn === column.id ? (
                   <form
-                    className="mt-2"
+                    className="mb-2"
                     onSubmit={(event) => {
                       event.preventDefault();
                       void addTask(column.id);
@@ -573,12 +546,39 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   <button
                     type="button"
                     onClick={() => openComposer(column.id)}
-                    className="mt-2 flex items-center gap-1 rounded-xl px-2 py-2 text-sm text-text-1 hover:text-text-0"
+                    className="mb-2 flex items-center gap-1 rounded-xl px-2 py-2 text-sm text-text-1 hover:text-text-0"
                   >
                     <Plus aria-hidden className="size-4" />
                     Задача
                   </button>
                 ))}
+
+              <ul className="flex min-h-[40px] flex-col gap-2">
+                {column.tasks.map((task, index) => (
+                  <li key={task.id}>
+                    {drag?.target?.columnId === column.id &&
+                      drag.target.index === index && <DropLine />}
+                    <TaskCard
+                      task={task}
+                      dragging={
+                        drag?.started === true && drag.taskId === task.id
+                      }
+                      canEdit={Boolean(canEdit)}
+                      onOpen={() => setOpenTaskId(task.id)}
+                      onHandleDown={(event) => onHandleDown(event, task.id)}
+                      onHandleMove={onHandleMove}
+                      onHandleUp={onHandleUp}
+                      onMoveBeside={(direction) => moveBeside(task, direction)}
+                      cardRef={(element) => {
+                        if (element) cardRefs.current.set(task.id, element);
+                        else cardRefs.current.delete(task.id);
+                      }}
+                    />
+                  </li>
+                ))}
+                {drag?.target?.columnId === column.id &&
+                  drag.target.index >= column.tasks.length && <DropLine />}
+              </ul>
             </section>
           );
         })}
