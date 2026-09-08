@@ -222,9 +222,11 @@ describe("ReelsFeed", () => {
     // Ровно один: у второго слайда главы нет, и кнопка, ведущая в поиск
     // «где-то там», обещала бы комментарий и не показала бы его.
     expect(links).toHaveLength(1);
+    /* Адрес карточки уезжает с собой: из главы возвращаются к тому афоризму,
+       с которого в неё пришли, а не в оглавление библиотеки. */
     expect(links[0]).toHaveAttribute(
       "href",
-      "/vedabase/books/bhagavad-gita/2",
+      "/vedabase/books/bhagavad-gita/2?fromPost=a",
     );
   });
 

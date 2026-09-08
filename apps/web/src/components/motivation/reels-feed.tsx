@@ -744,9 +744,17 @@ function ReelSlide({
             loop
             playsInline
             preload={active ? "auto" : "metadata"}
-            // Кадр показывается целиком: подпись вшита у самого края, и любая
-            // обрезка съедает её первыми.
-            className="absolute inset-0 h-full w-full object-contain"
+            /* Кадр показывается целиком: подпись вшита у самого края, и
+               любая обрезка съедает её первыми.
+
+               Коробка кадра кончается там же, где начинается служебная
+               строка. Раньше она шла до самого низа слайда, и на телефоне
+               9:19,5 нижние точки кадра оказывались ровно под строкой: наш
+               «Комментарий ›» ложился на вшитый логотип VedaMatch. Размытая
+               подложка по-прежнему во весь слайд, чёрной полосы под роликом
+               не появляется, а сам кадр не мельчает — по высоте он и так с
+               запасом, его ширина упирается в экран раньше. */
+            className="absolute inset-x-0 bottom-[4.5rem] top-0 w-full object-contain"
           />
         </div>
       ) : (
@@ -852,7 +860,10 @@ function ReelSlide({
               оригиналом на первой же правке книги. */}
           {post.library && (
             <Link
-              href={`/vedabase/books/${post.library.bookSlug}/${post.library.chapterSlug}`}
+              /* Адрес карточки едет с собой: глава открывается отдельной
+                 страницей, и без него оттуда некуда вернуться — «К
+                 библиотеке» уводит не туда, откуда пришли. */
+              href={`/vedabase/books/${post.library.bookSlug}/${post.library.chapterSlug}?fromPost=${encodeURIComponent(post.slug)}`}
               className="underline-offset-4 hover:underline"
             >
               Комментарий ›
