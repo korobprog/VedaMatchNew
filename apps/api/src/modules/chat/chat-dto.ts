@@ -10,6 +10,7 @@ import type {
 import {
   resolveDisplayName,
   type ChatAttachmentDto,
+  type ChatConversationContext,
   type ChatConversationSummary,
   type ChatMemberDto,
   type ChatMessageDto,
@@ -227,5 +228,30 @@ export function toConversationSummary(
     ),
     lastMessage: extra.lastMessage ?? null,
     lastMessageAt: row.lastMessageAt?.toISOString() ?? null,
+    context: toConversationContext(row),
+  };
+}
+
+/**
+ * Контекст от другого сервиса. Наружу уходит только известный источник:
+ * строка из базы могла остаться от версии, о которой этот код не знает.
+ */
+export function toConversationContext(
+  row: Pick<
+    ChatConversation,
+    | 'contextService'
+    | 'contextId'
+    | 'contextTitle'
+    | 'contextStatus'
+    | 'contextMeta'
+  >,
+): ChatConversationContext | null {
+  if (row.contextService !== 'vacancies' || !row.contextId) return null;
+  return {
+    service: 'vacancies',
+    id: row.contextId,
+    title: row.contextTitle ?? 'Предложение',
+    status: row.contextStatus ?? 'new',
+    meta: (row.contextMeta as ChatConversationContext['meta']) ?? null,
   };
 }

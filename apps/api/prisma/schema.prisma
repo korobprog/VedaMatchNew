@@ -3929,6 +3929,16 @@ model ChatConversation {
   pinnedMessageId String?      @unique
   pinnedMessage   ChatMessage? @relation("ChatPinnedMessage", fields: [pinnedMessageId], references: [id], onDelete: SetNull)
 
+  /// О чём беседа, если её открыл другой сервис: отклик в «Вакансиях».
+  /// Снимок из события — заголовок и статус хранятся здесь, а не читаются
+  /// из чужих таблиц; `contextId` — id в чужом сервисе, без FK. Один
+  /// контекст на беседу: новый отклик той же пары перепишет прежний.
+  contextService String?
+  contextId      String?
+  contextTitle   String?
+  contextStatus  String?
+  contextMeta    Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -3936,6 +3946,7 @@ model ChatConversation {
   messages ChatMessage[]
   reports  ChatReport[]
 
+  @@index([contextService, contextId])
   @@index([kind, lastMessageAt])
   @@index([communityId])
 }

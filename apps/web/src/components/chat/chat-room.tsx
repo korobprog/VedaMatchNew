@@ -26,6 +26,7 @@ import { subscribeToChat } from "@/lib/chat-stream";
 import { ChatAvatar } from "./chat-avatar";
 import { ChatComposer } from "./chat-composer";
 import { contextLinesOf, recipientNameOf } from "./chat-assistant-context";
+import { ChatContextBar } from "./chat-context-bar";
 import { ChatRoomMenu } from "./chat-room-menu";
 import { ChatMessage } from "./chat-message";
 import { firstUnreadIndex } from "./unread-divider";
@@ -192,7 +193,7 @@ export function ChatRoom({
       return;
     }
     if (!loadingOlder) void loadOlder();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `loadOlder`
+     
     // пересоздаётся на каждый рендер; в зависимостях он дал бы бесконечный
     // цикл, а нужен нам только свежий срез сообщений.
   }, [jumpToId, messages, conversation.hasMore, loadingOlder]);
@@ -519,6 +520,20 @@ export function ChatRoom({
           onThemeChange={setTheme}
         />
       </header>
+
+      {conversation.context && (
+        <ChatContextBar
+          context={conversation.context}
+          viewerId={viewerId}
+          onStatusChange={(status) =>
+            setConversation((current) =>
+              current.context
+                ? { ...current, context: { ...current.context, status } }
+                : current,
+            )
+          }
+        />
+      )}
 
       {conversation.pinnedMessage && (
         // Закреплённое всегда на виду под шапкой — как на макете: это то,
