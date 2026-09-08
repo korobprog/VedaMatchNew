@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bot } from "lucide-react";
 import { composeWithAssistant } from "@/lib/assistant-client";
 
@@ -58,6 +58,20 @@ export function AssistantComposerHelper({
     }
   }
 
+  /**
+   * Поле просьбы растёт под текст. Фиксированной высоты не хватало: длинная
+   * просьба уходила за нижний край, и написанного было не видно — а править
+   * формулировку, не видя её, нельзя. Потолок держит CSS (`max-h`), за ним
+   * поле прокручивается.
+   */
+  const requestRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const field = requestRef.current;
+    if (!field) return;
+    field.style.height = "auto";
+    field.style.height = `${field.scrollHeight}px`;
+  }, [request]);
+
   return (
     <div
       role="group"
@@ -83,12 +97,16 @@ export function AssistantComposerHelper({
           {error}
         </p>
       )}
-      <div className="flex items-end gap-2">
+      {/* Кнопка под полем, а не сбоку: рядом с ней на телефоне полю
+          доставалось меньше двух третей ширины, и просьба в одну фразу
+          разъезжалась на три строки. */}
+      <div className="flex flex-col items-stretch gap-2">
         {/* Три строки, а не одна: в одну не помещалась даже подсказка
             («Что написать Сите? Например: „вежливо перенеси встречу"») — она
             обрезалась на середине, и было не видно, чего от поля ждут.
             Просьба к ассистенту — это фраза, а не слово. */}
         <textarea
+          ref={requestRef}
           value={request}
           rows={3}
           onChange={(event) => setRequest(event.target.value)}
@@ -104,13 +122,13 @@ export function AssistantComposerHelper({
               : "Что написать? Например: «поблагодари за помощь»"
           }
           aria-label="Просьба ассистенту"
-          className="max-h-40 min-h-20 flex-1 resize-none rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0 placeholder:text-text-2"
+          className="max-h-[30svh] min-h-20 w-full resize-none rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0 placeholder:text-text-2"
         />
         <button
           type="button"
           onClick={() => void compose()}
           disabled={busy || !request.trim()}
-          className="btn-mint rounded-xl px-3 py-2 text-sm font-medium disabled:opacity-50"
+          className="btn-mint self-end rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-50"
         >
           {busy && !draft ? "Пишу…" : "Составить"}
         </button>
