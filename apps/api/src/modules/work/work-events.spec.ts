@@ -6,6 +6,7 @@ describe('WORK_EVENTS', () => {
       'work.task.assigned',
       'work.task.commented',
       'work.task.returned',
+      'work.task.status-changed',
       'work.invite.received',
     ]);
   });

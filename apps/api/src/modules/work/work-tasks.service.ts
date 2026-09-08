@@ -30,8 +30,8 @@ import {
   workTaskRecipients,
   type WorkTaskAssignedEvent,
   type WorkTaskCommentedEvent,
-  type WorkTaskReturnedEvent,
 } from './work-events';
+import { WorkNoticesService } from './work-notices.service';
 import {
   toWorkAgendaItem,
   toWorkPerson,
@@ -82,6 +82,7 @@ export class WorkTasksService {
     private readonly spaces: WorkSpacesService,
     private readonly events: EventEmitter2,
     private readonly uploads: WorkUploadsService,
+    private readonly notices: WorkNoticesService,
   ) {}
 
   /**
@@ -440,22 +441,18 @@ export class WorkTasksService {
       });
     }
 
-    // Возврат сделанного обратно в работу — новость для того, кто это делал.
-    // Обычные переезды карточки по доске не уведомляют: их за день десятки.
-    if (wasDone?.completedAt && !column.isDone) {
-      const notify = await this.notifyContext(taskId, userId);
-      if (notify) {
-        for (const recipientId of workTaskRecipients(notify.task, userId)) {
-          this.events.emit(WORK_EVENTS.taskReturned, {
-            name: WORK_EVENTS.taskReturned,
-            recipientId,
-            spaceId: notify.task.spaceId,
-            taskKey: notify.taskKey,
-            taskTitle: notify.task.title,
-            actorName: notify.actorName,
-            columnName: column.name,
-          } satisfies WorkTaskReturnedEvent);
-        }
+    // Уведомление не уходит по клику: перенос — единственное действие, которое
+    // человек отменяет через минуту («поставил в тест, а там не дописано»), и
+    // пуш, ушедший сразу, к этому моменту уже врёт. Кладём в очередь, а через
+    // окно воркер посмотрит, где карточка осталась на самом деле, и решит,
+    // есть ли вообще новость. См. work-notice.ts.
+    if (wasDone && wasDone.columnId !== column.id) {
+      const task = await this.prisma.workTask.findUnique({
+        where: { id: taskId },
+        select: { id: true, assigneeId: true, createdById: true },
+      });
+      if (task) {
+        await this.notices.enqueueMove(task, userId, wasDone.columnId);
       }
     }
 

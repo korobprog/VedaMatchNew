@@ -3,6 +3,8 @@ import { AuthModule } from '../auth/auth.module';
 import { WorkBoardsService } from './work-boards.service';
 import { WorkContactsService } from './work-contacts.service';
 import { WorkInvitesService } from './work-invites.service';
+import { WorkNoticeWorkerService } from './work-notice-worker.service';
+import { WorkNoticesService } from './work-notices.service';
 import { WorkPurgeListener } from './work-purge.listener';
 import { WorkSpacesService } from './work-spaces.service';
 import { WorkTasksService } from './work-tasks.service';
@@ -36,6 +38,8 @@ import {
     WorkInvitesService,
     WorkContactsService,
     WorkUploadsService,
+    WorkNoticesService,
+    WorkNoticeWorkerService,
     WorkPurgeListener,
   ],
 })
