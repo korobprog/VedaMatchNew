@@ -289,6 +289,33 @@ describe('вакансии', () => {
   });
 });
 
+describe('приветствие новому участнику', () => {
+  it('обращается по имени и ведёт на приветственный экран', () => {
+    expect(
+      buildNotification({
+        name: 'portal.welcome',
+        recipientId: 'u-1',
+        recipientName: 'Маму Тхакур дас',
+      }),
+    ).toMatchObject({
+      title: 'Добро пожаловать, Маму Тхакур дас!',
+      url: '/welcome',
+      category: 'announcements',
+    });
+  });
+
+  it('печатает имя как дали, своего не подбирает', () => {
+    const content = buildNotification({
+      name: 'portal.welcome',
+      recipientId: 'u-2',
+      recipientName: 'Сита',
+    });
+
+    expect(content.title).toContain('Сита');
+    expect(content.body).not.toContain('Сита');
+  });
+});
+
 describe('toExcerpt', () => {
   it('оставляет короткое сообщение как есть и схлопывает пробелы', () => {
     expect(toExcerpt('  Харе   Кришна  ')).toBe('Харе Кришна');

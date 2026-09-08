@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
+import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsListener } from './notifications.listener';
 import { notificationEventNames } from './notification-copy';
 import { NotificationsService } from './notifications.service';
@@ -19,6 +20,7 @@ function createListener(options: {
     chat: boolean;
     connections: boolean;
     support: boolean;
+    announcements: boolean;
   }>;
   sendResult?: 'gone' | 'rate-limited' | 'transient' | null;
   /** Пустой массив — устройство не подписано на пуш. */
@@ -70,8 +72,19 @@ function createListener(options: {
     }),
   } as unknown as PushSenderService;
 
+  /* Приветствие читает имя из `User` — в наборе оно одно на всех: тесты
+     доставки про имя ничего не знают, им важен путь уведомления. */
+  const prisma = {
+    user: {
+      findUnique: jest.fn(() =>
+        Promise.resolve({ name: 'Иван', spiritualName: null }),
+      ),
+    },
+  } as unknown as PrismaService;
+
   return {
-    listener: new NotificationsListener(notifications, sender),
+    listener: new NotificationsListener(notifications, sender, prisma),
+    prisma,
     notifications,
     sender,
     deleted,
@@ -199,6 +212,32 @@ describe('NotificationsListener.deliver', () => {
  * team.application.received: событие завели в notification-copy.ts, но
  * забыли обработчик здесь — заодно нашлись ещё четыре таких же дыры).
  */
+describe('приветствие новому участнику', () => {
+  it('на регистрацию шлёт приветствие с именем из User', async () => {
+    const { listener, inbox } = createListener({
+      preferences: { announcements: true },
+    });
+
+    await listener['welcome']('u-1');
+
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0]).toMatchObject({
+      userId: 'u-1',
+      title: 'Добро пожаловать, Иван!',
+      url: '/welcome',
+    });
+  });
+
+  it('молчит, если человека уже нет: приветствие не повод падать', async () => {
+    const { listener, prisma, inbox } = createListener({});
+    (prisma.user.findUnique as jest.Mock).mockResolvedValueOnce(null);
+
+    await listener['welcome']('u-404');
+
+    expect(inbox).toHaveLength(0);
+  });
+});
+
 describe('NotificationsListener wiring', () => {
   it('has a live @OnEvent handler for every registered event name', async () => {
     const moduleRef = await Test.createTestingModule({
@@ -207,6 +246,7 @@ describe('NotificationsListener wiring', () => {
         NotificationsListener,
         { provide: NotificationsService, useValue: {} },
         { provide: PushSenderService, useValue: {} },
+        { provide: PrismaService, useValue: {} },
       ],
     }).compile();
 
