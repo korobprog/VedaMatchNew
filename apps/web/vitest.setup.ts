@@ -36,6 +36,20 @@ if (
   Element.prototype.scrollIntoView = () => {};
 }
 
+// jsdom не реализует ResizeObserver, а компоненты, которые меряют себя сами
+// (бегущая строка в плеере, обрезанная цитата в ленте), подписываются на него
+// прямо в эффекте. Заглушка молчит: в jsdom разметки нет, наблюдать нечего, а
+// первый замер компоненты делают сами, не дожидаясь отчёта.
+if (!("ResizeObserver" in globalThis)) {
+  class SilentResizeObserver {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver =
+    SilentResizeObserver;
+}
+
 // jsdom не реализует matchMedia; компоненты с адаптивной логикой полагаются на него.
 if (typeof window !== "undefined" && !window.matchMedia) {
   window.matchMedia = ((query: string) => ({

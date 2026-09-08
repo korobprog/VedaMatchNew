@@ -12,7 +12,7 @@ import type {
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
-import { isLongQuote, splitQuoteAndExplanation } from "./quote-text";
+import { isLongQuote, isTextClamped, splitQuoteAndExplanation } from "./quote-text";
 import {
   BACKGROUND_VOLUME,
   hasBackgroundAudio,
@@ -590,8 +590,10 @@ function ReelSlide({
 }) {
   const ref = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const quoteRef = useRef<HTMLParagraphElement>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [quoteClamped, setQuoteClamped] = useState(false);
   const { quote, explanation } = splitQuoteAndExplanation(post.text);
   const kind = mediaKindOf(post);
   const source = attributionLine(post);
@@ -609,6 +611,37 @@ function ReelSlide({
       {showExplanation ? "Скрыть пояснение" : "Пояснение — нажмите, чтобы раскрыть ›"}
     </button>
   );
+
+  /**
+   * Обрезана ли цитата фото — вопрос к разметке, а не к длине текста.
+   * `line-clamp-4` режет по строкам, и сколько их выйдет, решают ширина кадра,
+   * перенос внутри шлоки и подставившийся шрифт. Замер отвечает на все три
+   * сразу; счёт символов, стоявший здесь один, промахивался на шлоках примерно
+   * от ста сорока знаков до ста семидесяти: текст обрезан, а кнопки нет.
+   *
+   * У ролика цитаты в DOM нет вовсе — мерить нечего, там остаётся прикидка.
+   */
+  useEffect(() => {
+    if (kind !== "image") return;
+    const element = quoteRef.current;
+    if (!element) return;
+    let alive = true;
+    const measure = () => {
+      if (alive) setQuoteClamped(isTextClamped(element));
+    };
+    measure();
+    // Ширина меняется на повороте телефона, а `hidden` у родителя обнуляет
+    // коробку и возвращает обратно — наблюдатель ловит и то, и другое.
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    // Подмену шрифта наблюдатель не заметит: под `line-clamp-4` высота коробки
+    // фиксирована, меняется только перенос строк внутри неё.
+    void document.fonts?.ready.then(measure).catch(() => {});
+    return () => {
+      alive = false;
+      observer.disconnect();
+    };
+  }, [kind, quote]);
 
   // Колбэк в ref: родитель пересоздаёт его каждый рендер, а наблюдатель
   // должен жить один на слайд, иначе при каждом лайке он переподписывается.
@@ -770,7 +803,7 @@ function ReelSlide({
         {/* В ролик подпись вшита воркером, и вторая копия поверх кадра
             наезжала бы на первую. Для фото текст рисуем мы. */}
         {kind === "image" && (
-          <p className="line-clamp-4 font-display text-[17px] font-medium leading-snug drop-shadow-md">{quote}</p>
+          <p ref={quoteRef} className="line-clamp-4 font-display text-[17px] font-medium leading-snug drop-shadow-md">{quote}</p>
         )}
         {/* У фото — сразу под цитатой, которую раскрывает. У ролика своей
             цитаты в DOM нет, поэтому кнопка остаётся в общем ряду ниже. */}
@@ -805,7 +838,10 @@ function ReelSlide({
         )}
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/75">
           {kind !== "image" && explanationToggle}
-          {isLongQuote(quote) && <FullQuoteToggle quote={quote} source={source} />}
+          {/* Замер добавляет случаи к прикидке, а не заменяет её: цитата длиннее
+              ста семидесяти знаков обрезана в четырёх строках при любой
+              раскладке, и кнопка нужна ей даже там, где замерить не вышло. */}
+          {(isLongQuote(quote) || quoteClamped) && <FullQuoteToggle quote={quote} source={source} />}
           {/* Комментарий — слова комментатора о стихе, и живут они в
               Библиотеке. Своей копии не заводим: она разошлась бы с
               оригиналом на первой же правке книги. */}
