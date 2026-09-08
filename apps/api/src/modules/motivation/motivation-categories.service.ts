@@ -10,9 +10,9 @@ import type {
   MotivationCategoryInput,
   MotivationCategoryUpdate,
 } from '@vedamatch/shared';
-import { MotivationPostOrigin, MotivationPostStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isAdmin } from './is-admin';
+import { READER_VISIBLE_POSTS } from './reader-visible';
 import {
   buildMotivationCategorySlug,
   withCategorySlugSuffix,
@@ -36,11 +36,6 @@ export const FALLBACK_CATEGORY_SLUG = 'verified_quote';
  * Единственное оставшееся расхождение — заблокированный автор: оно у каждого
  * читателя своё, а счётчик один на всех.
  */
-const READER_VISIBLE_POSTS = {
-  status: MotivationPostStatus.published,
-  NOT: { origin: MotivationPostOrigin.user, sourceVerified: false },
-};
-
 type CategoryRow = {
   id: string;
   slug: string;

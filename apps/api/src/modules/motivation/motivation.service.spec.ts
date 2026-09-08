@@ -1176,8 +1176,16 @@ describe('MotivationService.stats', () => {
 
     expect(await service.stats()).toEqual({ published: 348 });
     // Настройки направлений у каждого свои, и число, меняющееся от галочки
-    // в настройках, читалось бы как пропажа публикаций.
-    expect(count).toHaveBeenCalledWith({ where: { status: 'published' } });
+    // в настройках, читалось бы как пропажа публикаций, — поэтому подбора под
+    // путь здесь нет. А вот рилс участника без проверенного источника читателю
+    // недоступен ни одним путём: считать его значило обещать больше, чем есть,
+    // и расходиться с числами у папок, которые его уже не считали.
+    expect(count).toHaveBeenCalledWith({
+      where: {
+        status: 'published',
+        NOT: { origin: 'user', sourceVerified: false },
+      },
+    });
   });
 });
 
@@ -1208,7 +1216,9 @@ describe('MotivationService.adminUpdate', () => {
     const { service, upsert } = build();
 
     await service.adminUpdate(admin, 'post-1', {
-      translations: { ru: { title: 'Заголовок', text: 'Текст', storyText: 'Подпись' } },
+      translations: {
+        ru: { title: 'Заголовок', text: 'Текст', storyText: 'Подпись' },
+      },
     });
 
     expect(upsert).toHaveBeenCalledWith(
@@ -1320,9 +1330,9 @@ describe('MotivationService.deleteOwn', () => {
       motivationPost: { findFirst: jest.fn().mockResolvedValue(null) },
       $transaction: jest.fn(),
     };
-    await expect(build(prisma).deleteOwn('user-1', 'p1')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      build(prisma).deleteOwn('user-1', 'p1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
