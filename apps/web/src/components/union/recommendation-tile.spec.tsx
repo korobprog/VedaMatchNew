@@ -69,6 +69,7 @@ describe("RecommendationTile", () => {
             {
               id: "p1",
               url: "https://example.test/photo.webp",
+              thumbUrl: null,
               width: 800,
               height: 800,
             },

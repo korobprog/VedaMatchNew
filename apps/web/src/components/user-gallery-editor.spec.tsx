@@ -14,6 +14,7 @@ function photo(overrides: Partial<UserPhotoDto> = {}): UserPhotoDto {
   return {
     id: "photo-1",
     url: "https://signed.test/photo-1",
+    thumbUrl: null,
     sizeBytes: 1024,
     width: 1200,
     height: 800,

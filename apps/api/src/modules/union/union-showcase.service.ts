@@ -59,6 +59,7 @@ export class UnionShowcaseService {
               select: {
                 id: true,
                 storageKey: true,
+                thumbKey: true,
                 width: true,
                 height: true,
               },
@@ -78,7 +79,9 @@ export class UnionShowcaseService {
     );
     const cards = drafts.map((draft, index) => ({
       ...draft.card,
-      photoUrl: signed[index].url,
+      // Витрина — сетка карточек, полноразмерный снимок ей не нужен: на
+      // телефоне десяток распакованных кадров по 7 МБ роняет вкладку.
+      photoUrl: signed[index].thumbUrl ?? signed[index].url,
     }));
     return { cards };
   }

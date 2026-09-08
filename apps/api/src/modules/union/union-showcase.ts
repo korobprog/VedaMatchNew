@@ -20,6 +20,7 @@ const INTERESTS_LIMIT = 3;
 export interface ShowcasePhoto {
   id: string;
   storageKey: string;
+  thumbKey: string | null;
   width: number;
   height: number;
 }

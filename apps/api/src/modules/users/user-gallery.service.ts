@@ -26,7 +26,12 @@ import type {
 } from '@vedamatch/shared';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import { isDirectUrl, toStorageImage } from './gallery-image';
+import {
+  isDirectUrl,
+  thumbStorageKey,
+  toStorageImage,
+  toThumbImage,
+} from './gallery-image';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PersonalDataService } from '../personal-data/personal-data.service';
 import { RESET_PHOTO_VERIFICATION } from './photo-verification';
@@ -49,6 +54,8 @@ interface ProcessedGalleryFile {
   data: Buffer;
   width: number;
   height: number;
+  /** Уменьшенная копия. null — сделать её не вышло, снимок это не отменяет. */
+  thumb: Buffer | null;
 }
 
 class GalleryQuotaError extends Error {}
@@ -136,6 +143,15 @@ export class UserGalleryService {
         continue;
       }
 
+      /*
+        Уменьшенная копия — рядом и не в ущерб снимку. Не легла в хранилище —
+        снимок всё равно принят: читающая сторона умеет падать обратно на
+        оригинал, и терять из-за миниатюры саму фотографию было бы нелепо.
+      */
+      const thumbKey = processed.thumb
+        ? await this.putThumb(thumbStorageKey(storageKey), processed.thumb)
+        : null;
+
       try {
         // Ключ файла — персональные данные, и для россиянина он обязан
         // сначала оказаться в московской базе.
@@ -148,37 +164,41 @@ export class UserGalleryService {
         // обращения через полконтинента хуже.
         const photo = await this.personal.writeFor(
           userId,
-          () => this.prisma.$transaction(async (tx) => {
-          await this.lockOwner(tx, userId);
-          const totals = await tx.userPhoto.aggregate({
-            where: { userId },
-            _sum: { sizeBytes: true },
-            _max: { sortOrder: true },
-          });
-          const usedBytes = totals._sum.sizeBytes ?? 0;
-          if (usedBytes + processed.data.length > this.quotaBytes) {
-            throw new GalleryQuotaError();
-          }
+          () =>
+            this.prisma.$transaction(async (tx) => {
+              await this.lockOwner(tx, userId);
+              const totals = await tx.userPhoto.aggregate({
+                where: { userId },
+                _sum: { sizeBytes: true },
+                _max: { sortOrder: true },
+              });
+              const usedBytes = totals._sum.sizeBytes ?? 0;
+              if (usedBytes + processed.data.length > this.quotaBytes) {
+                throw new GalleryQuotaError();
+              }
 
-          return tx.userPhoto.create({
-            data: {
-              userId,
-              storageKey,
-              sizeBytes: processed.data.length,
-              width: processed.width,
-              height: processed.height,
-              // Публично сразу. Раньше публиковалось только первое фото, а
-              // остальные ждали отдельного тумблера у каждого снимка — и не
-              // дожидались: человек загружал галерею, был уверен, что он в
-              // Знакомствах с ней, а его видели по аватарке. Скрыть любое
-              // фото по-прежнему можно в один клик, и об этом сказано прямо
-              // в форме загрузки.
-              isPublic: true,
-              sortOrder: (totals._max.sortOrder ?? -1) + 1,
-            },
-          });
-          }),
-          { addPhotoKeys: [storageKey] },
+              return tx.userPhoto.create({
+                data: {
+                  userId,
+                  storageKey,
+                  thumbKey,
+                  sizeBytes: processed.data.length,
+                  width: processed.width,
+                  height: processed.height,
+                  // Публично сразу. Раньше публиковалось только первое фото, а
+                  // остальные ждали отдельного тумблера у каждого снимка — и не
+                  // дожидались: человек загружал галерею, был уверен, что он в
+                  // Знакомствах с ней, а его видели по аватарке. Скрыть любое
+                  // фото по-прежнему можно в один клик, и об этом сказано прямо
+                  // в форме загрузки.
+                  isPublic: true,
+                  sortOrder: (totals._max.sortOrder ?? -1) + 1,
+                },
+              });
+            }),
+          {
+            addPhotoKeys: thumbKey ? [storageKey, thumbKey] : [storageKey],
+          },
         );
 
         await this.resetPhotoVerification(userId);
@@ -188,6 +208,7 @@ export class UserGalleryService {
         });
       } catch (error) {
         await this.deleteObject(storageKey, 'компенсации загрузки');
+        if (thumbKey) await this.deleteObject(thumbKey, 'компенсации загрузки');
         failed.push(
           error instanceof GalleryQuotaError
             ? failure(
@@ -316,19 +337,31 @@ export class UserGalleryService {
     // создаёт: удалить ключ из Москвы раньше или позже — одинаково законно.
     // Зато читать фото до взятия блокировки владельца нельзя, а иначе набор
     // ключей заранее не собрать.
-    await this.personal.sync(userId, { removePhotoKeys: [deleted.storageKey] });
+    await this.personal.sync(userId, {
+      removePhotoKeys: deleted.thumbKey
+        ? [deleted.storageKey, deleted.thumbKey]
+        : [deleted.storageKey],
+    });
 
     await this.resetPhotoVerification(userId);
     await this.deleteObject(deleted.storageKey, 'удаления фотографии');
+    if (deleted.thumbKey) {
+      await this.deleteObject(deleted.thumbKey, 'удаления фотографии');
+    }
   }
 
   async signPublicPhotos(
-    photos: Array<Pick<UserPhoto, 'id' | 'storageKey' | 'width' | 'height'>>,
+    photos: Array<
+      Pick<UserPhoto, 'id' | 'storageKey' | 'width' | 'height'> & {
+        thumbKey?: string | null;
+      }
+    >,
   ): Promise<UnionPhoto[]> {
     return Promise.all(
       photos.map(async (photo) => ({
         id: photo.id,
         url: await this.signStorageKey(photo.storageKey),
+        thumbUrl: await this.signThumbKey(photo.thumbKey),
         width: photo.width,
         height: photo.height,
       })),
@@ -396,6 +429,12 @@ export class UserGalleryService {
         data: output.data,
         width: output.width,
         height: output.height,
+        // Копия делается из оригинала, а не из уже сжатого webp: второе
+        // сжатие поверх первого добавляет артефактов и ничего не экономит.
+        thumb: await toThumbImage(file.buffer).then(
+          (thumb) => thumb.data,
+          () => null,
+        ),
       };
     } catch {
       return {
@@ -435,6 +474,7 @@ export class UserGalleryService {
     return {
       id: photo.id,
       url: await this.signStorageKey(photo.storageKey),
+      thumbUrl: await this.signThumbKey(photo.thumbKey),
       sizeBytes: photo.sizeBytes,
       width: photo.width,
       height: photo.height,
@@ -443,6 +483,37 @@ export class UserGalleryService {
       createdAt: photo.createdAt.toISOString(),
       updatedAt: photo.updatedAt.toISOString(),
     };
+  }
+
+  /**
+   * Ссылка на уменьшенную копию — или null, когда копии нет: у снимков,
+   * залитых до её появления, и у тех, чья копия не легла в хранилище.
+   */
+  private async signThumbKey(
+    thumbKey: string | null | undefined,
+  ): Promise<string | null> {
+    if (!thumbKey) return null;
+    return this.signStorageKey(thumbKey);
+  }
+
+  /** Кладёт копию в хранилище; не легла — значит её просто нет. */
+  private async putThumb(key: string, body: Buffer): Promise<string | null> {
+    if (!this.s3Client || !this.bucket) return null;
+    try {
+      await this.s3Client.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          Body: body,
+          ContentType: 'image/webp',
+          CacheControl: 'private, max-age=31536000, immutable',
+        }),
+      );
+      return key;
+    } catch {
+      this.logger.warn(`Не удалось сохранить уменьшенную копию ${key}`);
+      return null;
+    }
   }
 
   private async signStorageKey(storageKey: string): Promise<string> {

@@ -83,6 +83,7 @@ describe("RecommendationCard photo fallback", () => {
             {
               id: "gallery-photo",
               url: "https://example.com/gallery.webp",
+              thumbUrl: null,
               width: 1200,
               height: 800,
             },

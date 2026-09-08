@@ -234,12 +234,18 @@ export class PersonalDataService {
   ): Promise<string[]> {
     const photos = await this.prisma.userPhoto.findMany({
       where: { userId },
-      select: { storageKey: true },
+      // Уменьшенная копия — такой же объект хранилища, как оригинал, и в
+      // московском списке ключей она обязана быть рядом с ним.
+      select: { storageKey: true, thumbKey: true },
       orderBy: { sortOrder: 'asc' },
     });
     const removed = new Set(patch.removePhotoKeys ?? []);
     const keys = photos
-      .map((photo) => photo.storageKey)
+      .flatMap((photo) =>
+        photo.thumbKey
+          ? [photo.storageKey, photo.thumbKey]
+          : [photo.storageKey],
+      )
       .filter((key) => !removed.has(key));
     for (const key of patch.addPhotoKeys ?? []) {
       if (!keys.includes(key)) keys.push(key);

@@ -484,9 +484,14 @@ export function UserGalleryEditor(): React.ReactNode {
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={photo.url}
+                    // Квадратик в сетке: копия, а не оригинал. Своя галерея
+                    // бывает и на полсотни снимков, и распаковка каждого в
+                    // полный размер роняет вкладку на телефоне.
+                    src={photo.thumbUrl ?? photo.url}
                     alt="Фото галереи профиля"
                     className="aspect-square w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
                     referrerPolicy="no-referrer"
                   />
                   <div className="space-y-3 p-3">

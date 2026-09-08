@@ -46,6 +46,17 @@ export function RecommendationPhotoCarousel({
   paused?: boolean;
 }): React.ReactNode {
   const isCover = variant === "cover";
+  /*
+    Какой файл показываем. На всю карточку — оригинал: снимок здесь главное
+    на экране. В превью рядом с текстом (112px) — уменьшенная копия: браузер
+    распаковывает картинку целиком независимо от того, во сколько пикселей её
+    показали, и оригинал стоил бы 7,7 МБ памяти вместо 1,2.
+
+    Копии может не быть — у снимков, залитых до её появления; тогда остаётся
+    оригинал, и вести себя всё должно ровно так же.
+  */
+  const источник = (photo: UnionPhoto) =>
+    isCover ? photo.url : (photo.thumbUrl ?? photo.url);
   const photoIdentity = photos.map(({ id, url }) => `${id}:${url}`).join("|");
   const identity = `${userName}|${photoIdentity}`;
   const [navigation, setNavigation] = useState({ identity, index: 0 });
@@ -108,14 +119,17 @@ export function RecommendationPhotoCarousel({
     На полной карточке этого не нужно: там соседние снимки смонтированы
     по-настоящему (см. `окно` ниже), и браузер грузит их сам.
   */
-  const currentLoaded = loadedUrls.has(photos[safeIndex]?.url ?? "");
+  const currentPhoto = photos[safeIndex];
+  const currentLoaded = loadedUrls.has(
+    currentPhoto ? источник(currentPhoto) : "",
+  );
   useEffect(() => {
     if (isCover || total < 2 || !currentLoaded) return;
     const next = photos[nextPhotoIndex(safeIndex, total)];
     if (!next) return;
     const preload = new window.Image();
     preload.referrerPolicy = "no-referrer";
-    preload.src = next.url;
+    preload.src = next.thumbUrl ?? next.url;
   }, [isCover, photos, safeIndex, total, currentLoaded]);
 
   // Хук нельзя звать после раннего выхода, поэтому пустая галерея
@@ -142,7 +156,7 @@ export function RecommendationPhotoCarousel({
 
   if (photos.length === 0) return null;
   const photo = photos[safeIndex];
-  const isLoaded = loadedUrls.has(photo.url);
+  const isLoaded = loadedUrls.has(источник(photo));
   const hasControls = photos.length > 1;
 
   /*
@@ -188,22 +202,23 @@ export function RecommendationPhotoCarousel({
       {окно.map((photoIndex) => {
         const item = photos[photoIndex];
         const current = photoIndex === safeIndex;
+        const src = источник(item);
         return (
           /* Signed gallery URLs can use varying storage hosts, so Next Image
              cannot safely enumerate their remote origins. */
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
-            // Ключ по адресу: при листании React переносит уже смонтированные
-            // соседние картинки, а не пересоздаёт их.
-            key={item.url}
+            // Ключ по снимку, а не по адресу: при листании React переносит
+            // уже смонтированные соседние картинки, а не пересоздаёт их.
+            key={item.id}
             ref={(element) => {
               // Снимок из кэша бывает готов уже к монтированию, и onLoad по
               // нему не наступает — без этой проверки он остался бы скрытым.
               if (element?.complete && element.naturalWidth > 0) {
-                markLoaded(item.url);
+                markLoaded(src);
               }
             }}
-            src={item.url}
+            src={src}
             alt={current ? `${userName}, фото ${safeIndex + 1} из ${total}` : ""}
             // Соседей скринридер не читает: снимок на экране один.
             aria-hidden={current ? undefined : "true"}
@@ -216,7 +231,7 @@ export function RecommendationPhotoCarousel({
             // нужны заранее — иначе смысл окна теряется.
             loading={isCover ? "eager" : "lazy"}
             decoding="async"
-            onLoad={() => markLoaded(item.url)}
+            onLoad={() => markLoaded(src)}
             // Переключение мгновенное, без перехода: плавное проявление и было
             // тем миганием — полкадра человек смотрел сквозь полупрозрачный
             // снимок на фон карточки.

@@ -17,7 +17,13 @@ export function RecommendationTile({
   onOpen: () => void;
 }) {
   const { user, compatibility } = item;
-  const cover = user.photos[0]?.url ?? user.avatarUrl;
+  /*
+    Плитка 180px шириной, и полноразмерный снимок ей не нужен: браузер
+    распаковывает его целиком независимо от того, во сколько пикселей его
+    показали, — 1600×1200 стоит 7,7 МБ памяти на каждую плитку. Экран таких
+    плиток укладывал вкладку на телефоне. Копия — 640px, 1,2 МБ.
+  */
+  const cover = user.photos[0]?.thumbUrl ?? user.photos[0]?.url ?? user.avatarUrl;
   const title = user.age != null ? `${user.name}, ${user.age}` : user.name;
   /*
     Плитка мелкая, и фразе здесь места нет — только галочка в углу. Но
