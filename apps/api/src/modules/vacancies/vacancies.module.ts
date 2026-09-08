@@ -9,6 +9,7 @@ import {
   VacanciesController,
   VacanciesResponsesController,
 } from './vacancies.controller';
+import { VacanciesAdminService } from './vacancies-admin.service';
 import { VacanciesReportsService } from './vacancies-reports.service';
 import { VacanciesResponsesService } from './vacancies-responses.service';
 import { VacanciesService } from './vacancies.service';
@@ -32,6 +33,7 @@ import { VacanciesService } from './vacancies.service';
     VacanciesService,
     VacanciesResponsesService,
     VacanciesReportsService,
+    VacanciesAdminService,
   ],
 })
 export class VacanciesModule {}

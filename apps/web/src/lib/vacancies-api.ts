@@ -2,7 +2,12 @@
 // Запросы идут из браузера: авторизация — той же cookie, что и у остальных
 // сервисов, поэтому здесь только знание эндпоинтов, без работы с токенами.
 import type {
+  AdminVacancyOfferActionRequest,
+  AdminVacancyOfferDto,
+  AdminVacancyOffersFilters,
+  AdminVacancyOffersResponse,
   AdminVacancyReportDecisionRequest,
+  AdminVacancyStatsDto,
   AdminVacancyReportsResponse,
   CreateVacancyOfferRequest,
   CreateVacancyReportRequest,
@@ -162,6 +167,30 @@ export const decideAdminVacancyReport = (
   body: AdminVacancyReportDecisionRequest,
 ) =>
   request<{ ok: true }>(`/admin/vacancies/reports/${id}/decide`, {
+    method: "POST",
+    ...json(body),
+  });
+
+export const getAdminVacancyOffers = (filters: AdminVacancyOffersFilters) => {
+  const params = new URLSearchParams();
+  if (filters.kind) params.set("kind", filters.kind);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.q?.trim()) params.set("q", filters.q.trim());
+  const qs = params.toString();
+  return request<AdminVacancyOffersResponse>(
+    `/admin/vacancies${qs ? `?${qs}` : ""}`,
+    { method: "GET" },
+  );
+};
+
+export const getAdminVacancyStats = () =>
+  request<AdminVacancyStatsDto>("/admin/vacancies/stats", { method: "GET" });
+
+export const actOnAdminVacancyOffer = (
+  id: string,
+  body: AdminVacancyOfferActionRequest,
+) =>
+  request<AdminVacancyOfferDto>(`/admin/vacancies/${id}/action`, {
     method: "POST",
     ...json(body),
   });

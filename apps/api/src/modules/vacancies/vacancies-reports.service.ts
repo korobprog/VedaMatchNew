@@ -137,6 +137,8 @@ export class VacanciesReportsService {
           data: { status: 'dismissed', reviewedById: adminId, reviewedAt: now },
         });
       } else {
+        // hide, remove, restore — решение по предложению, а не по жалобе:
+        // все открытые жалобы на него закрываются разом.
         await tx.vacancyReport.updateMany({
           where: { offerId: report.offerId, status: 'open' },
           data: { status: 'reviewed', reviewedById: adminId, reviewedAt: now },
@@ -155,15 +157,21 @@ export class VacanciesReportsService {
           ? 'removed_by_admin'
           : body.decision === 'hide'
             ? 'hidden_by_reports'
-            : offer.status === 'hidden_by_reports' && openReportsCount === 0
+            : body.decision === 'restore'
               ? 'published'
-              : offer.status;
+              : offer.status === 'hidden_by_reports' && openReportsCount === 0
+                ? 'published'
+                : offer.status;
       await tx.vacancyOffer.update({
         where: { id: report.offerId },
         data: {
           openReportsCount,
           status,
-          ...(body.decision !== 'dismiss' ? { moderatorNote: note } : {}),
+          ...(body.decision === 'restore'
+            ? { moderatorNote: null }
+            : body.decision !== 'dismiss'
+              ? { moderatorNote: note }
+              : {}),
         },
       });
     });

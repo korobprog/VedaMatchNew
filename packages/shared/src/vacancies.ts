@@ -280,9 +280,61 @@ export interface AdminVacancyReportsResponse {
 }
 
 export interface AdminVacancyReportDecisionRequest {
-  /** `hide` скрывает предложение, `dismiss` отклоняет жалобу. */
-  decision: 'hide' | 'dismiss' | 'remove';
+  /**
+   * `hide` скрывает предложение, `remove` снимает насовсем, `restore`
+   * возвращает в ленту и закрывает все открытые жалобы, `dismiss`
+   * отклоняет одну жалобу как необоснованную.
+   */
+  decision: 'hide' | 'dismiss' | 'remove' | 'restore';
   moderatorNote?: string | null;
+}
+
+// ===== Админка: предложения и статистика =====
+
+/** Предложение в админке: мирское имя автора, как везде в /admin. */
+export interface AdminVacancyOfferDto {
+  id: string;
+  kind: VacancyKind;
+  title: string;
+  status: VacancyStatus;
+  city: string | null;
+  isRemote: boolean;
+  authorName: string;
+  communityName: string | null;
+  publishedAt: string;
+  expiresAt: string;
+  responsesCount: number;
+  openReportsCount: number;
+  moderatorNote: string | null;
+}
+
+export interface AdminVacancyOffersFilters {
+  kind?: VacancyKind;
+  status?: VacancyStatus;
+  q?: string;
+}
+
+export interface AdminVacancyOffersResponse {
+  items: AdminVacancyOfferDto[];
+  total: number;
+}
+
+/** Действие модератора над предложением, минуя жалобы. */
+export interface AdminVacancyOfferActionRequest {
+  action: 'hide' | 'restore' | 'remove';
+  moderatorNote?: string | null;
+}
+
+export interface AdminVacancyStatsDto {
+  /** Живые предложения по видам. */
+  liveByKind: Record<VacancyKind, number>;
+  /** Все предложения по статусам. */
+  byStatus: Record<VacancyStatus, number>;
+  /** Живых откликов (не отозванных) всего. */
+  responsesTotal: number;
+  /** Откликов за последние 7 дней. */
+  responsesLastWeek: number;
+  openReports: number;
 }
 
 // ===== События шины =====
