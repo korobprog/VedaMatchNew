@@ -20,6 +20,7 @@ export const adminServiceLabels: Record<AdminServiceSlug, string> = {
   motivation: 'Motivation — цитаты и ролики',
   library: 'Library — библиотека',
   notices: 'Notices — доска объявлений',
+  vacancies: 'Vacancies — работа и служение',
   astro: 'Astro — ведическая астрология',
   vedabase: 'Vedabase — священные тексты',
   music: 'Music — киртаны и бхаджаны',
