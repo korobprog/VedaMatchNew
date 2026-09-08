@@ -157,6 +157,30 @@ export interface ChatConversationSummary {
   canWrite: boolean;
   lastMessage?: ChatMessageDto | null;
   lastMessageAt?: string | null;
+  /** О чём беседа, если её открыл другой сервис. null — обычная переписка. */
+  context?: ChatConversationContext | null;
+}
+
+/**
+ * Контекст беседы от другого сервиса. Пока единственный источник —
+ * «Вакансии»: диалог по отклику помнит предложение и статус отклика, и
+ * решение принимается прямо в переписке. Поля — снимок из события: Чат не
+ * читает чужие таблицы.
+ */
+export interface ChatConversationContext {
+  service: 'vacancies';
+  /** Id в сервисе-источнике: для «Вакансий» — отклик. */
+  id: string;
+  title: string;
+  /** Статус словом сервиса-источника; подписи собирает клиент. */
+  status: string;
+  meta: {
+    offerId?: string;
+    offerKind?: 'work' | 'seva' | 'task';
+    /** Автор предложения — тот, кто принимает решение. */
+    authorId?: string;
+    responderId?: string;
+  } | null;
 }
 
 export interface ChatConversationDetail extends ChatConversationSummary {
