@@ -45,6 +45,7 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isAdmin } from './is-admin';
+import { READER_VISIBLE_POSTS } from './reader-visible';
 import {
   decodeMotivationCursor,
   encodeMotivationCursor,
@@ -183,7 +184,7 @@ export class MotivationService {
   async stats(): Promise<MotivationStatsDto> {
     return {
       published: await this.prisma.motivationPost.count({
-        where: { status: MotivationPostStatus.published },
+        where: READER_VISIBLE_POSTS,
       }),
     };
   }
