@@ -23,10 +23,21 @@ const statusLabels: Record<AnnouncementStatus, string> = {
 
 export function AdminChangelogAnnouncements({
   announcements,
+  startCreating = false,
 }: {
   announcements: AdminAnnouncementDto[];
+  /**
+   * Открыть форму сразу. Приходит со страницы, из `?new=1`: по этой ссылке
+   * попадают из панели портала, где кнопка называется «Добавить новость» и
+   * обещает именно форму, а не страницу, на которой её ещё надо найти.
+   *
+   * Флаг спускается пропом, а не читается здесь `useSearchParams`: на первом
+   * рендере тот пуст, а `useState` второй раз начальное значение не берёт —
+   * форма молча оставалась закрытой.
+   */
+  startCreating?: boolean;
 }) {
-  const [isCreating, setIsCreating] = useState(false);
+  const [isCreating, setIsCreating] = useState(startCreating);
 
   return (
     <div className="space-y-4">

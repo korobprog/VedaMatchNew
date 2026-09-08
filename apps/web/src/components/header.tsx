@@ -285,11 +285,56 @@ export function Header({ user }: { user: UserProfile }) {
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
               className="fixed top-0 right-0 bottom-0 z-50 w-72 overflow-y-auto border-l border-glass-brd bg-bg-1 outline-none md:hidden"
             >
-              {/* Отступ сверху ровно на шапку (h-14) плюс вырез телефона, а
-                  не круглые 80 точек: лишняя четверть сотни читалась как
-                  пустая полоса над первым пунктом, и панель начиналась
-                  заметно ниже, чем всё остальное на экране. */}
-              <div className="flex h-full flex-col p-6 pt-[calc(3.5rem+env(safe-area-inset-top)+0.75rem)]">
+              {/* Место под шапку больше не резервируем. Панель и шапка стоят
+                  на одном слое (z-50), панель в разметке ниже — и накрывает
+                  её целиком: сверху оставалась пустая полоса в высоту шапки,
+                  а вместе с шапкой уезжал под панель и её крестик, которым
+                  панель полагалось закрывать. Крестик теперь свой, стоит в
+                  той самой полосе, и место больше ничем не занято. */}
+              <div className="flex h-full flex-col p-6 pt-[calc(1.5rem+env(safe-area-inset-top))]">
+                <div className="mb-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={closeDrawer}
+                    aria-label={t("closeMenu")}
+                    className="rounded-lg p-2 text-text-1 transition-colors hover:bg-glass hover:text-text-0"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+                {/* Админские ссылки — самыми первыми, а не под списком
+                    сервисов: администратор ходит сюда чаще, чем в любой из
+                    них, и мотать до низа ради «Добавить новость» — ровно то,
+                    от чего эту кнопку сюда и вынесли. Обычный участник блока
+                    не видит, и порядок для него не меняется. */}
+                {isPortalAdmin(user) && (
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0 }}
+                    className="mb-4 pb-4 border-b border-glass-brd"
+                  >
+                    {/* Один вход: разделы админки живут в её собственном
+                        сайдбаре, дублировать их список в бургере незачем. */}
+                    <Link
+                      href="/admin"
+                      onClick={closeDrawer}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
+                    >
+                      <span className="text-sm font-medium">{t("adminPanel")}</span>
+                    </Link>
+                    {/* Новость пишут чаще, чем заходят в остальную админку, а
+                        лежала она третьим разделом внутри «Версии и новостей».
+                        Ссылка ведёт сразу к открытой форме — см. `?new=1`. */}
+                    <Link
+                      href="/admin/changelog?new=1"
+                      onClick={closeDrawer}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
+                    >
+                      <span className="text-sm font-medium">{t("addNews")}</span>
+                    </Link>
+                  </motion.div>
+                )}
                 <nav aria-label={t("services")} className="flex flex-col gap-1">
                   {navItems.map((item, index) => (
                     <motion.div
@@ -311,24 +356,6 @@ export function Header({ user }: { user: UserProfile }) {
                   ))}
                 </nav>
                 
-                {isPortalAdmin(user) && (
-                  <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: navItems.length * 0.05 }}
-                    className="mt-4 pt-4 border-t border-glass-brd"
-                  >
-                    {/* Один вход: разделы админки живут в её собственном
-                        сайдбаре, дублировать их список в бургере незачем. */}
-                    <Link
-                      href="/admin"
-                      onClick={closeDrawer}
-                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-magenta hover:bg-magenta/10 transition-colors"
-                    >
-                      <span className="text-sm font-medium">{t("adminPanel")}</span>
-                    </Link>
-                  </motion.div>
-                )}
 
                 <div className="mt-auto pt-4 border-t border-glass-brd space-y-1">
                   <div className="px-1 pb-3">
