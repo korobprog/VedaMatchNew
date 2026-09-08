@@ -352,6 +352,23 @@ export interface WorkAgendaDto {
   soon: WorkAgendaItemDto[];
   /** Назначенные на меня, но без срока. */
   undated: WorkAgendaItemDto[];
+  /**
+   * Мои живые отклики в «Вакансиях». Работа хранит их у себя минимальной
+   * записью из событий `vacancies.*`, а не читает чужие таблицы.
+   */
+  responses: WorkAgendaResponseDto[];
+}
+
+export type WorkAgendaResponseStatus = 'new' | 'in_dialog' | 'accepted';
+
+export interface WorkAgendaResponseDto {
+  responseId: string;
+  offerId: string;
+  offerTitle: string;
+  offerKind: 'work' | 'seva' | 'task';
+  status: WorkAgendaResponseStatus;
+  /** Когда статус менялся в последний раз. */
+  updatedAt: string;
 }
 
 export interface WorkAgendaItemDto {

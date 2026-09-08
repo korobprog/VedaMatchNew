@@ -179,6 +179,7 @@ export function toResponseDto(row: ResponseRow): VacancyResponseDto {
     offerId: row.offerId,
     offerTitle: row.offer.title,
     offerKind: row.offer.kind,
+    offerAuthorId: row.offer.authorId,
     status: row.status,
     message: row.message,
     createdAt: row.createdAt.toISOString(),

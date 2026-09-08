@@ -22,6 +22,7 @@ const CARD_KINDS = new Set<ChatAttachmentKind>([
   'notice',
   'listing',
   'contact',
+  'vacancy',
 ]);
 
 const MAX_TITLE = 200;

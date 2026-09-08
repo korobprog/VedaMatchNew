@@ -1,5 +1,6 @@
 import {
   toWorkAgendaItem,
+  toWorkAgendaResponse,
   toWorkMember,
   toWorkTaskCard,
   workAgendaBucket,
@@ -145,5 +146,38 @@ describe('toWorkAgendaItem', () => {
     expect(item.spaceName).toBe('Veda Match');
     expect(item.spaceColor).toBe('cyan');
     expect(item.dueAt).toBe('2026-09-08T09:00:00.000Z');
+  });
+});
+
+describe('toWorkAgendaResponse', () => {
+  const row = {
+    responseId: 'r1',
+    offerId: 'o1',
+    offerTitle: 'Повар',
+    offerKind: 'work',
+    status: 'in_dialog',
+    updatedAt: new Date('2026-09-08T10:00:00Z'),
+  };
+
+  it('переносит известные вид и статус как есть', () => {
+    expect(toWorkAgendaResponse(row)).toEqual({
+      responseId: 'r1',
+      offerId: 'o1',
+      offerTitle: 'Повар',
+      offerKind: 'work',
+      status: 'in_dialog',
+      updatedAt: '2026-09-08T10:00:00.000Z',
+    });
+  });
+
+  it('незнакомые вид и статус чужого сервиса не ломают агенду', () => {
+    // «Вакансии» могут завести новый вид раньше, чем Работа о нём узнает.
+    const dto = toWorkAgendaResponse({
+      ...row,
+      offerKind: 'internship',
+      status: 'shortlisted',
+    });
+    expect(dto.offerKind).toBe('task');
+    expect(dto.status).toBe('new');
   });
 });

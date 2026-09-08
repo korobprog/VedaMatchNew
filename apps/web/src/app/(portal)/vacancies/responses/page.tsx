@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { MyVacancyResponsesView } from "@/components/vacancies/my-responses-view";
 import { VacanciesNav } from "@/components/vacancies/vacancies-nav";
 
 export const metadata = {
@@ -13,15 +13,7 @@ export default function MyVacancyResponsesPage() {
         Мои отклики
       </h1>
       <VacanciesNav />
-      <div className="glass rounded-2xl border border-glass-brd p-6 text-sm text-text-1">
-        <p>
-          Список откликов со статусами появится здесь совсем скоро. Пока
-          статус своего отклика видно на карточке предложения.
-        </p>
-        <Link href="/vacancies" className="mt-2 inline-block text-text-0 underline">
-          К ленте
-        </Link>
-      </div>
+      <MyVacancyResponsesView />
     </main>
   );
 }

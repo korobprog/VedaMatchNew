@@ -9,6 +9,7 @@ import { WorkPurgeListener } from './work-purge.listener';
 import { WorkSpacesService } from './work-spaces.service';
 import { WorkTasksService } from './work-tasks.service';
 import { WorkUploadsService } from './work-uploads.service';
+import { WorkVacanciesListener } from './work-vacancies.listener';
 import {
   WorkBoardsController,
   WorkController,
@@ -41,6 +42,7 @@ import {
     WorkNoticesService,
     WorkNoticeWorkerService,
     WorkPurgeListener,
+    WorkVacanciesListener,
   ],
 })
 export class WorkModule {}
