@@ -106,8 +106,16 @@ export function MotivationCollections({
 export function MotivationCollectionGrid({
   posts,
   category,
+  variant = "image",
 }: {
   posts: MotivationPostDto[];
+  /**
+   * Что показывать в плитке. `image` — иллюстрация, `story` — готовый
+   * оформленный афоризм: та же картинка с вшитым текстом, подписью и знаком
+   * сервиса, которую отдают в сторис. Второй режим отвечает на «покажи, что
+   * можно переслать», первый — на «покажи, про что это».
+   */
+  variant?: "image" | "story";
   /**
    * Слаг папки, из которой открывают карточку. Уезжает в ленту вместе с
    * постом: открыв «Пословицы», человек ждёт, что дальше листаются
@@ -135,12 +143,23 @@ export function MotivationCollectionGrid({
           >
             {/* Ссылка на хранилище подписана и может истечь — next/image не
                 годится для произвольно меняющегося домена подписи. */}
+            {/* У оформленного афоризма пропорции сторис, а не витрины: обрежь
+                его под 3/4 — и первыми уйдут вшитые сверху и снизу подпись со
+                знаком сервиса. Если оформленной картинки у поста нет (её
+                делает воркер, и он мог не дойти), показываем иллюстрацию:
+                дырка в сетке хуже, чем плитка не того вида. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={post.imageUrl}
+              src={
+                variant === "story" && post.storyImageUrl
+                  ? post.storyImageUrl
+                  : post.imageUrl
+              }
               alt=""
               loading="lazy"
-              className="aspect-[3/4] w-full object-cover transition-transform group-hover:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+              className={`w-full object-cover transition-transform group-hover:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${
+                variant === "story" ? "aspect-[9/16]" : "aspect-[3/4]"
+              }`}
             />
             {/* У афоризма участника заголовок — название книги; подписываем
                 началом самой цитаты, как и остальные плитки — смыслом. */}

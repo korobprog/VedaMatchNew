@@ -14,10 +14,16 @@ import {
 /** Карточки одной папки — сеткой картинок. */
 export default async function MotivationCollectionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const { slug } = await params;
+  /* Режим просмотра живёт в адресе, как и сама папка: из плитки уходят в
+     ленту и возвращаются кнопкой «назад», а состояние, которого нет в
+     ссылке, при этом теряется молча. */
+  const story = (await searchParams).view === "story";
   const [user, categories, feed] = await Promise.all([
     getProfile(),
     getMotivationCategories(),
@@ -75,7 +81,31 @@ export default async function MotivationCollectionPage({
               ))}
             </ul>
           )}
-          <MotivationCollectionGrid posts={feed?.items ?? []} category={slug} />
+          {/* Два вида одной папки: иллюстрации отвечают на «про что это», а
+              готовые афоризмы — на «что отсюда можно переслать». Переключатель
+              ссылками, а не кнопкой: вид уезжает в адрес, им делятся и на него
+              возвращаются «назад». */}
+          <div className="flex gap-2" role="group" aria-label="Вид папки">
+            <Link
+              href={`/motivation/collections/${slug}`}
+              aria-current={story ? undefined : "true"}
+              className="glass rounded-full border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0 aria-[current=true]:border-cyan aria-[current=true]:text-text-0"
+            >
+              Иллюстрации
+            </Link>
+            <Link
+              href={`/motivation/collections/${slug}?view=story`}
+              aria-current={story ? "true" : undefined}
+              className="glass rounded-full border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0 aria-[current=true]:border-cyan aria-[current=true]:text-text-0"
+            >
+              Готовые афоризмы
+            </Link>
+          </div>
+          <MotivationCollectionGrid
+            posts={feed?.items ?? []}
+            category={slug}
+            variant={story ? "story" : "image"}
+          />
         </div>
       </main>
     </div>
