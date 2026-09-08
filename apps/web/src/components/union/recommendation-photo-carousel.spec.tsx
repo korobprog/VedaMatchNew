@@ -6,9 +6,27 @@ import type { UnionPhoto } from "@vedamatch/shared";
 import { RecommendationPhotoCarousel } from "./recommendation-photo-carousel";
 
 const photos: UnionPhoto[] = [
-  { id: "photo-1", url: "https://example.com/one.webp", width: 1200, height: 800 },
-  { id: "photo-2", url: "https://example.com/two.webp", width: 800, height: 1200 },
-  { id: "photo-3", url: "https://example.com/three.webp", width: 1000, height: 1000 },
+  {
+    id: "photo-1",
+    url: "https://example.com/one.webp",
+    thumbUrl: "https://example.com/one-t640.webp",
+    width: 1200,
+    height: 800,
+  },
+  {
+    id: "photo-2",
+    url: "https://example.com/two.webp",
+    thumbUrl: "https://example.com/two-t640.webp",
+    width: 800,
+    height: 1200,
+  },
+  {
+    id: "photo-3",
+    url: "https://example.com/three.webp",
+    thumbUrl: "https://example.com/three-t640.webp",
+    width: 1000,
+    height: 1000,
+  },
 ];
 
 describe("RecommendationPhotoCarousel", () => {
@@ -18,13 +36,13 @@ describe("RecommendationPhotoCarousel", () => {
 
     expect(screen.getByRole("img", { name: "Радха, фото 1 из 3" })).toHaveAttribute(
       "src",
-      photos[0].url,
+      photos[0].thumbUrl,
     );
 
     await user.click(screen.getByRole("button", { name: "Следующее фото" }));
     expect(screen.getByRole("img", { name: "Радха, фото 2 из 3" })).toHaveAttribute(
       "src",
-      photos[1].url,
+      photos[1].thumbUrl,
     );
 
     await user.click(screen.getByRole("button", { name: "Предыдущее фото" }));
@@ -127,7 +145,7 @@ describe("RecommendationPhotoCarousel", () => {
 
     expect(screen.getByRole("img", { name: "Радха, фото 3 из 3" })).toHaveAttribute(
       "src",
-      photos[2].url,
+      photos[2].thumbUrl,
     );
   });
 
@@ -155,7 +173,13 @@ describe("RecommendationPhotoCarousel", () => {
     await user.click(screen.getByRole("button", { name: "Следующее фото" }));
 
     const nextPhotos = [
-      { id: "new-photo", url: "https://example.com/new.webp", width: 900, height: 1200 },
+      {
+        id: "new-photo",
+        url: "https://example.com/new.webp",
+        thumbUrl: null,
+        width: 900,
+        height: 1200,
+      },
       photos[0],
     ];
     rerender(<RecommendationPhotoCarousel photos={nextPhotos} userName="Кришна" />);
@@ -163,6 +187,50 @@ describe("RecommendationPhotoCarousel", () => {
     expect(
       screen.getByRole("img", { name: "Кришна, фото 1 из 2" }),
     ).toHaveAttribute("src", nextPhotos[0].url);
+  });
+});
+
+describe("RecommendationPhotoCarousel: какой файл берём", () => {
+  /*
+    Ради этого копия и заводилась. Полноразмерный снимок браузер распаковывает
+    целиком, во сколько бы пикселей его ни показали: превью 112px стоило тех
+    же 7,7 МБ памяти, что и фото во весь экран, и страница знакомств на
+    телефоне падала.
+  */
+  it("в превью рядом с текстом берёт уменьшенную копию", () => {
+    render(<RecommendationPhotoCarousel photos={photos} userName="Радха" />);
+
+    expect(screen.getByRole("img", { name: "Радха, фото 1 из 3" })).toHaveAttribute(
+      "src",
+      photos[0].thumbUrl,
+    );
+  });
+
+  it("на всю карточку берёт оригинал: снимок здесь главное на экране", () => {
+    window.localStorage.setItem("union:photo-hint-seen", "1");
+    render(
+      <RecommendationPhotoCarousel
+        photos={photos}
+        userName="Радха"
+        variant="cover"
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "Радха, фото 1 из 3" })).toHaveAttribute(
+      "src",
+      photos[0].url,
+    );
+    window.localStorage.clear();
+  });
+
+  it("без копии показывает оригинал — так у снимков, залитых до неё", () => {
+    const без = photos.map((photo) => ({ ...photo, thumbUrl: null }));
+    render(<RecommendationPhotoCarousel photos={без} userName="Радха" />);
+
+    expect(screen.getByRole("img", { name: "Радха, фото 1 из 3" })).toHaveAttribute(
+      "src",
+      photos[0].url,
+    );
   });
 });
 

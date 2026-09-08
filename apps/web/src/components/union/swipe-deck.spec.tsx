@@ -116,8 +116,20 @@ describe("SwipeDeck card", () => {
           recommendation({
             user: {
               photos: [
-                { id: "photo-1", url: "one.webp", width: 800, height: 1200 },
-                { id: "photo-2", url: "two.webp", width: 800, height: 1200 },
+                {
+                  id: "photo-1",
+                  url: "one.webp",
+                  thumbUrl: "one-t640.webp",
+                  width: 800,
+                  height: 1200,
+                },
+                {
+                  id: "photo-2",
+                  url: "two.webp",
+                  thumbUrl: "two-t640.webp",
+                  width: 800,
+                  height: 1200,
+                },
               ],
             },
           }),

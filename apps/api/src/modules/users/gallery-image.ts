@@ -15,8 +15,26 @@ import sharp from 'sharp';
  */
 export const MAX_IMAGE_DIMENSION = 1600;
 
+/**
+ * Предел длинной стороны уменьшенной копии.
+ *
+ * Копия закрывает всё, где снимок мелкий: плитку списка (180px на телефоне),
+ * миниатюру в раскрытой анкете (48px), превью рядом с текстом. Полноразмерный
+ * снимок в этих местах браузер всё равно распаковывает целиком — 1600×1200 в
+ * памяти это 7,7 МБ независимо от того, во сколько пикселей его показали.
+ * Десяток таких распаковок — и вкладка на телефоне падает; ровно это и
+ * означает «на странице повторно возникла проблема» в мобильном браузере.
+ *
+ * 640 хватает плитке на экране с тройной плотностью (180×3 = 540), а в
+ * памяти стоит 1,2 МБ — вшестеро дешевле оригинала.
+ */
+export const THUMB_IMAGE_DIMENSION = 640;
+
 /** Суффикс ключа для ужатой копии. */
 const SHRUNK_SUFFIX = `-w${MAX_IMAGE_DIMENSION}`;
+
+/** Суффикс ключа для уменьшенной копии. */
+const THUMB_SUFFIX = `-t${THUMB_IMAGE_DIMENSION}`;
 
 export interface StorageImage {
   data: Buffer;
@@ -58,6 +76,33 @@ export async function toStorageImage(input: Buffer): Promise<StorageImage> {
   };
 }
 
+/**
+ * Уменьшенная копия снимка — то же преобразование, что и для хранилища, но с
+ * другим пределом и с качеством пожёстче: на 640 пикселях разница между 80 и
+ * 100 не видна, а вес отличается вдвое.
+ */
+export async function toThumbImage(input: Buffer): Promise<StorageImage> {
+  const output = await sharp(input, { failOn: 'error', limitInputPixels: true })
+    .rotate()
+    .resize({
+      width: THUMB_IMAGE_DIMENSION,
+      height: THUMB_IMAGE_DIMENSION,
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+    .webp({ quality: 72 })
+    .toBuffer({ resolveWithObject: true });
+
+  if (!output.info.width || !output.info.height) {
+    throw new Error('Missing output dimensions');
+  }
+  return {
+    data: output.data,
+    width: output.info.width,
+    height: output.info.height,
+  };
+}
+
 /** Снимок больше предела хотя бы одной стороной — значит его стоит ужать. */
 export function needsShrink(width: number, height: number): boolean {
   return width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION;
@@ -82,6 +127,21 @@ export function shrunkStorageKey(storageKey: string): string {
 /** Уже ужатая копия — по такому ключу проходить второй раз незачем. */
 export function isShrunkStorageKey(storageKey: string): boolean {
   return storageKey.includes(SHRUNK_SUFFIX);
+}
+
+/**
+ * Ключ уменьшенной копии рядом с оригиналом.
+ *
+ * Выводится из ключа оригинала теми же правилами, что и ключ ужатой копии:
+ * суффикс перед расширением, а если расширения нет — в конец. Детерминированно,
+ * поэтому повторный проход не плодит объектов, а удаление снимка знает, что
+ * убрать вторым.
+ */
+export function thumbStorageKey(storageKey: string): string {
+  if (storageKey.includes(THUMB_SUFFIX)) return storageKey;
+  const dot = storageKey.lastIndexOf('.');
+  if (dot <= storageKey.lastIndexOf('/')) return `${storageKey}${THUMB_SUFFIX}`;
+  return `${storageKey.slice(0, dot)}${THUMB_SUFFIX}${storageKey.slice(dot)}`;
 }
 
 /**

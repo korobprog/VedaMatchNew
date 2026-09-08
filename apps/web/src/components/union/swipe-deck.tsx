@@ -1001,9 +1001,14 @@ function SwipeCard({
                         Next Image не может перечислить их источники. */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={photo.url}
+                      // Миниатюра 48px — уменьшенная копия. Раньше здесь
+                      // висел полноразмерный снимок, и все они грузились
+                      // разом: анкета на десяток фото стоила 77 МБ памяти —
+                      // столько мобильный браузер не отдаёт, вкладка падала.
+                      src={photo.thumbUrl ?? photo.url}
                       alt=""
                       className="h-full w-full object-cover"
+                      loading="lazy"
                       referrerPolicy="no-referrer"
                       decoding="async"
                       draggable={false}

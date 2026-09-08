@@ -458,6 +458,9 @@ model UserPhoto {
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   storageKey String   @unique
+  /// Ключ уменьшенной копии. null — копии ещё нет: снимок залит до её
+  /// появления и ждёт прохода `gallery:shrink`.
+  thumbKey   String?  @unique
   sizeBytes  Int
   width      Int
   height     Int

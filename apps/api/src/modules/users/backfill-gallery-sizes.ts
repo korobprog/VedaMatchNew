@@ -1,5 +1,9 @@
 /*
- * Ужимает фотографии галереи, залитые до появления предела на размер.
+ * Приводит фотографии галереи к нужным размерам: ужимает оригинал до предела и
+ * делает рядом уменьшенную копию для плиток и миниатюр.
+ *
+ * Оба дела в одном проходе намеренно: и то и другое начинается со скачивания
+ * снимка из хранилища, и делать это дважды значит платить за канал дважды.
  *
  * Локально: pnpm --filter @vedamatch/api gallery:shrink [--dry-run] [--limit=N]
  * В контейнере: node dist/modules/users/backfill-gallery-sizes.js [--dry-run]
@@ -31,7 +35,10 @@ import {
   MAX_IMAGE_DIMENSION,
   needsShrink,
   shrunkStorageKey,
+  THUMB_IMAGE_DIMENSION,
+  thumbStorageKey,
   toStorageImage,
+  toThumbImage,
 } from './gallery-image';
 
 const BATCH_SIZE = 200;
@@ -77,6 +84,7 @@ export async function backfillGallerySizes(argv: string[] = []) {
   let cursor: string | undefined;
   let scanned = 0;
   let shrunk = 0;
+  let thumbed = 0;
   let bytesBefore = 0;
   let bytesAfter = 0;
 
@@ -89,6 +97,7 @@ export async function backfillGallerySizes(argv: string[] = []) {
         select: {
           id: true,
           storageKey: true,
+          thumbKey: true,
           width: true,
           height: true,
           sizeBytes: true,
@@ -103,17 +112,34 @@ export async function backfillGallerySizes(argv: string[] = []) {
 
         // Демо-аккаунты держат в ключе готовый адрес — в S3 такого объекта нет.
         if (isDirectUrl(photo.storageKey)) continue;
-        if (isShrunkStorageKey(photo.storageKey)) continue;
-        if (!needsShrink(photo.width, photo.height)) continue;
 
-        const targetKey = shrunkStorageKey(photo.storageKey);
+        const shrinkNeeded =
+          !isShrunkStorageKey(photo.storageKey) &&
+          needsShrink(photo.width, photo.height);
+        const thumbNeeded = photo.thumbKey === null;
+        if (!shrinkNeeded && !thumbNeeded) continue;
+
+        // Ключ оригинала после прохода: копия должна лечь рядом с тем
+        // снимком, который останется в базе, а не с тем, что был до ужатия.
+        const storageKeyAfter = shrinkNeeded
+          ? shrunkStorageKey(photo.storageKey)
+          : photo.storageKey;
+        const thumbKey = thumbNeeded
+          ? thumbStorageKey(storageKeyAfter)
+          : photo.thumbKey;
+
         console.log(
           `${dryRun ? '[dry-run] ' : ''}${photo.storageKey} ` +
-            `(${photo.width}×${photo.height}, ${Math.round(photo.sizeBytes / 1024)} КБ) → ${targetKey}`,
+            `(${photo.width}×${photo.height}, ${Math.round(photo.sizeBytes / 1024)} КБ)` +
+            `${shrinkNeeded ? ` → ${storageKeyAfter}` : ''}` +
+            `${thumbNeeded ? ` + ${thumbKey}` : ''}`,
         );
         if (dryRun) {
-          shrunk += 1;
-          bytesBefore += photo.sizeBytes;
+          if (shrinkNeeded) {
+            shrunk += 1;
+            bytesBefore += photo.sizeBytes;
+          }
+          if (thumbNeeded) thumbed += 1;
           continue;
         }
 
@@ -122,31 +148,55 @@ export async function backfillGallerySizes(argv: string[] = []) {
           new GetObjectCommand({ Bucket: bucket, Key: photo.storageKey }),
         );
         const source = Buffer.from(await object.Body!.transformToByteArray());
-        const image = await toStorageImage(source);
 
-        await client.send(
-          new PutObjectCommand({
-            Bucket: bucket,
-            Key: targetKey,
-            Body: image.data,
-            ContentType: 'image/webp',
-          }),
-        );
+        // Копия делается из того же исходника, что и ужатый оригинал: сжимать
+        // уже сжатое — добавлять артефактов на ровном месте.
+        const image = shrinkNeeded ? await toStorageImage(source) : null;
+        const thumb = thumbNeeded ? await toThumbImage(source) : null;
+
+        if (image) {
+          await client.send(
+            new PutObjectCommand({
+              Bucket: bucket,
+              Key: storageKeyAfter,
+              Body: image.data,
+              ContentType: 'image/webp',
+            }),
+          );
+        }
+        if (thumb) {
+          await client.send(
+            new PutObjectCommand({
+              Bucket: bucket,
+              Key: thumbKey!,
+              Body: thumb.data,
+              ContentType: 'image/webp',
+            }),
+          );
+        }
         // Указатель переводим только после успешной заливки: упасть между
         // ними значит оставить в базе ключ, которого в хранилище нет.
         await prisma.userPhoto.update({
           where: { id: photo.id },
           data: {
-            storageKey: targetKey,
-            width: image.width,
-            height: image.height,
-            sizeBytes: image.data.length,
+            ...(image
+              ? {
+                  storageKey: storageKeyAfter,
+                  width: image.width,
+                  height: image.height,
+                  sizeBytes: image.data.length,
+                }
+              : {}),
+            ...(thumb ? { thumbKey } : {}),
           },
         });
 
-        shrunk += 1;
-        bytesBefore += photo.sizeBytes;
-        bytesAfter += image.data.length;
+        if (image) {
+          shrunk += 1;
+          bytesBefore += photo.sizeBytes;
+          bytesAfter += image.data.length;
+        }
+        if (thumb) thumbed += 1;
       }
 
       if (scanned >= limit) break;
@@ -155,7 +205,8 @@ export async function backfillGallerySizes(argv: string[] = []) {
     const mb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1);
     console.log(
       `Просмотрено фотографий: ${scanned}, ужато: ${shrunk} ` +
-        `(предел ${MAX_IMAGE_DIMENSION}px)`,
+        `(предел ${MAX_IMAGE_DIMENSION}px), сделано копий: ${thumbed} ` +
+        `(предел ${THUMB_IMAGE_DIMENSION}px)`,
     );
     if (shrunk > 0 && !dryRun) {
       console.log(`Было ${mb(bytesBefore)} МБ, стало ${mb(bytesAfter)} МБ`);

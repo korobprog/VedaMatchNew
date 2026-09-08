@@ -138,7 +138,8 @@ function LikeCard({
   onRespond: (requestId: string, action: "accept" | "decline") => void;
 }) {
   const { user } = like;
-  const photo = user.photos[0]?.url ?? user.avatarUrl;
+  // Карточка в сетке, а не снимок во весь экран: хватает уменьшенной копии.
+  const photo = user.photos[0]?.thumbUrl ?? user.photos[0]?.url ?? user.avatarUrl;
   const subtitle =
     [
       user.age != null ? `${user.age} ${yearsSuffix(user.age)}` : null,

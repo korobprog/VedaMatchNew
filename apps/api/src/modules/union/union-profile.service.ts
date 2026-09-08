@@ -403,6 +403,7 @@ export class UnionProfileService {
               select: {
                 id: true,
                 storageKey: true,
+                thumbKey: true,
                 width: true,
                 height: true,
               },
@@ -579,6 +580,7 @@ export class UnionProfileService {
               select: {
                 id: true,
                 storageKey: true,
+                thumbKey: true,
                 width: true,
                 height: true,
               },

@@ -24,6 +24,7 @@ function candidate(
         {
           id: 'photo-1',
           storageKey: 'union/photo-1.jpg',
+          thumbKey: 'union/photo-1-t640.jpg',
           width: 1080,
           height: 1350,
         },
@@ -135,7 +136,9 @@ describe('toShowcaseDraft', () => {
     });
 
     it('оставляет короткий текст как есть', () => {
-      const draft = toShowcaseDraft(candidate({}, { about: 'Практикую йогу.' }));
+      const draft = toShowcaseDraft(
+        candidate({}, { about: 'Практикую йогу.' }),
+      );
 
       expect(draft?.card.about).toBe('Практикую йогу.');
     });

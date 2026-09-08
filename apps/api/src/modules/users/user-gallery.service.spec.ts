@@ -111,6 +111,44 @@ describe('UserGalleryService', () => {
     },
   );
 
+  it('кладёт рядом уменьшенную копию и помнит её ключ', async () => {
+    // Копия — то, чем живут плитки и миниатюры. Без неё браузер на телефоне
+    // распаковывает в этих местах полноразмерный снимок и падает по памяти.
+    const result = await service.uploadMany(USER_ID, [
+      await validImageFile('image/jpeg'),
+    ]);
+
+    expect(uploadedKeys(send)).toEqual([
+      expect.stringMatching(/^users\/user-id\/gallery\/[\w-]+\.webp$/),
+      expect.stringMatching(/^users\/user-id\/gallery\/[\w-]+-t640\.webp$/),
+    ]);
+    expect(prisma.userPhoto.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ thumbKey: uploadedKeys(send)[1] }),
+    });
+    expect(result.uploaded[0].photo.thumbUrl).toBe(
+      `https://signed.test/${uploadedKeys(send)[1]}`,
+    );
+  });
+
+  it('принимает снимок, даже если копия не легла в хранилище', async () => {
+    // Терять фотографию из-за миниатюры нелепо: показать её можно и
+    // оригиналом, а вот второй раз человек её грузить не станет.
+    send.mockImplementation(((command: unknown) =>
+      command instanceof PutObjectCommand &&
+      String(command.input.Key).includes('-t640')
+        ? Promise.reject(new Error('storage down'))
+        : Promise.resolve({})) as never);
+
+    const result = await service.uploadMany(USER_ID, [
+      await validImageFile('image/jpeg'),
+    ]);
+
+    expect(result.failed).toEqual([]);
+    expect(prisma.userPhoto.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ thumbKey: null }),
+    });
+  });
+
   it('applies EXIF orientation before recording dimensions', async () => {
     const buffer = await sharp({
       create: {
@@ -287,7 +325,7 @@ describe('UserGalleryService', () => {
     ]);
 
     expect(result.failed[0].code).toBe('quota_exceeded');
-    expect(send.mock.calls[1][0]).toBeInstanceOf(DeleteObjectCommand);
+    expect(deletedKeys(send)).toContain(uploadedKeys(send)[0]);
     expect(prisma.userPhoto.create).not.toHaveBeenCalled();
   });
 
@@ -299,7 +337,9 @@ describe('UserGalleryService', () => {
     ]);
 
     expect(result.failed[0].code).toBe('storage_error');
-    expect(send.mock.calls[1][0]).toBeInstanceOf(DeleteObjectCommand);
+    // Обе копии — и снимок, и уменьшенная: оставить в бакете половину
+    // отвергнутой загрузки значит копить мусор, за который никто не отвечает.
+    expect(deletedKeys(send).sort()).toEqual(uploadedKeys(send).sort());
   });
 
   it('keeps processing later files and preserves result order', async () => {
@@ -354,20 +394,36 @@ describe('UserGalleryService', () => {
       {
         id: 'a',
         storageKey: 'a.webp',
+        thumbKey: 'a-t640.webp',
         width: 10,
         height: 20,
       },
       {
         id: 'b',
+        // Копии нет: снимок залит до её появления. Наружу уходит null, и
+        // читающая сторона показывает оригинал.
         storageKey: 'b.webp',
+        thumbKey: null,
         width: 30,
         height: 40,
       },
     ]);
 
     expect(result).toEqual([
-      { id: 'a', url: 'https://signed.test/a.webp', width: 10, height: 20 },
-      { id: 'b', url: 'https://signed.test/b.webp', width: 30, height: 40 },
+      {
+        id: 'a',
+        url: 'https://signed.test/a.webp',
+        thumbUrl: 'https://signed.test/a-t640.webp',
+        width: 10,
+        height: 20,
+      },
+      {
+        id: 'b',
+        url: 'https://signed.test/b.webp',
+        thumbUrl: null,
+        width: 30,
+        height: 40,
+      },
     ]);
   });
 
@@ -403,13 +459,20 @@ describe('UserGalleryService', () => {
       {
         id: 'demo',
         storageKey: '/mock/union/radha-1.svg',
+        thumbKey: null,
         width: 600,
         height: 750,
       },
     ]);
 
     expect(result).toEqual([
-      { id: 'demo', url: '/mock/union/radha-1.svg', width: 600, height: 750 },
+      {
+        id: 'demo',
+        url: '/mock/union/radha-1.svg',
+        thumbUrl: null,
+        width: 600,
+        height: 750,
+      },
     ]);
     expect(signedUrl).not.toHaveBeenCalled();
   });
@@ -559,6 +622,19 @@ describe('UserGalleryService', () => {
     expect(prisma.userPhoto.update).not.toHaveBeenCalled();
   });
 
+  it('снимает с хранилища и уменьшенную копию', async () => {
+    // Копия — отдельный объект бакета: не унеся её вместе со снимком, мы
+    // оставили бы в хранилище фотографию, которую человек удалил.
+    prisma.userPhoto.findFirst.mockResolvedValueOnce(photo());
+
+    await service.remove(USER_ID, 'photo-id');
+
+    expect(deletedKeys(send)).toEqual([
+      'users/user-id/gallery/photo.webp',
+      'users/user-id/gallery/photo-t640.webp',
+    ]);
+  });
+
   it('does not delete a photo owned by another user', async () => {
     prisma.userPhoto.findFirst.mockResolvedValueOnce(null);
 
@@ -568,6 +644,28 @@ describe('UserGalleryService', () => {
     expect(prisma.userPhoto.delete).not.toHaveBeenCalled();
   });
 });
+
+/** Ключи, легшие в хранилище за прогон. */
+function uploadedKeys(send: jest.SpiedFunction<S3Client['send']>): string[] {
+  return send.mock.calls
+    .map(([command]) => command)
+    .filter(
+      (command): command is PutObjectCommand =>
+        command instanceof PutObjectCommand,
+    )
+    .map((command) => String(command.input.Key));
+}
+
+/** Ключи, снятые с хранилища за прогон. */
+function deletedKeys(send: jest.SpiedFunction<S3Client['send']>): string[] {
+  return send.mock.calls
+    .map(([command]) => command)
+    .filter(
+      (command): command is DeleteObjectCommand =>
+        command instanceof DeleteObjectCommand,
+    )
+    .map((command) => String(command.input.Key));
+}
 
 function createService(
   prisma: ReturnType<typeof prismaMock>,
@@ -670,6 +768,7 @@ interface PhotoRecord {
   id: string;
   userId: string;
   storageKey: string;
+  thumbKey: string | null;
   sizeBytes: number;
   width: number;
   height: number;
@@ -684,6 +783,7 @@ function photo(overrides: Partial<PhotoRecord> = {}): PhotoRecord {
     id: 'photo-id',
     userId: USER_ID,
     storageKey: 'users/user-id/gallery/photo.webp',
+    thumbKey: 'users/user-id/gallery/photo-t640.webp',
     sizeBytes: 80,
     width: 3,
     height: 2,

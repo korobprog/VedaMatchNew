@@ -218,6 +218,8 @@ export interface PhotoVerificationState {
 export interface UserPhotoDto {
   id: string;
   url: string;
+  /** Уменьшенная копия; `null`, пока её не сделали. См. `UnionPhoto`. */
+  thumbUrl: string | null;
   sizeBytes: number;
   width: number;
   height: number;

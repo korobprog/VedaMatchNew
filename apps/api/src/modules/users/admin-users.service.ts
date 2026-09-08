@@ -682,12 +682,18 @@ export class AdminUsersService {
   ) {
     const photos = await this.prisma.userPhoto.findMany({
       where: { userId },
-      select: { storageKey: true },
+      select: { storageKey: true, thumbKey: true },
     });
     return {
       storageKeys: [
         ...(avatarKey ? [avatarKey] : []),
-        ...photos.map((photo) => photo.storageKey),
+        // Уменьшенная копия лежит отдельным объектом: не унеся её, чистка
+        // оставила бы в бакете снимок удалённого человека.
+        ...photos.flatMap((photo) =>
+          photo.thumbKey
+            ? [photo.storageKey, photo.thumbKey]
+            : [photo.storageKey],
+        ),
       ],
       counts: { photos: photos.length },
     };

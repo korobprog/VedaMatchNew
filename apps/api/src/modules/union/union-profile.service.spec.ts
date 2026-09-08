@@ -41,6 +41,7 @@ function photo(
     id,
     userId: 'other',
     storageKey: `${id}.webp`,
+    thumbKey: `${id}-t640.webp`,
     sizeBytes: 1024,
     width: id === 'photo-2' ? 800 : 1200,
     height: id === 'photo-2' ? 1200 : 800,
@@ -268,14 +269,18 @@ describe('UnionProfileService', () => {
         photos: Array<{
           id: string;
           storageKey: string;
+          thumbKey?: string | null;
           width: number;
           height: number;
         }>,
       ): Promise<UnionPhoto[]> =>
         Promise.resolve(
-          photos.map(({ id, width, height }) => ({
+          photos.map(({ id, thumbKey, width, height }) => ({
             id,
             url: `signed-${id.replace('photo-', '')}`,
+            thumbUrl: thumbKey
+              ? `signed-thumb-${id.replace('photo-', '')}`
+              : null,
             width,
             height,
           })),
@@ -489,7 +494,10 @@ describe('UnionProfileService', () => {
 
     it('снимает мой отбор по полу под целью «Создание семьи»', async () => {
       const me = withDetails(
-        withGender(withIntentions(profile('me'), [{ type: 'family', weight: 100 }]), 'male'),
+        withGender(
+          withIntentions(profile('me'), [{ type: 'family', weight: 100 }]),
+          'male',
+        ),
         { familySeeksGender: 'female' },
       );
       prisma.unionProfile.findUnique.mockResolvedValue(me);
@@ -1113,7 +1121,7 @@ describe('UnionProfileService', () => {
     await service.upsertProfile('me', {
       ...validProfileBody,
       status: 'Харе Кришна',
-    } as never);
+    });
 
     const upsertCall = profileUpsert.mock.calls[0] as unknown as [
       { update: Record<string, unknown> },
@@ -1378,7 +1386,13 @@ describe('UnionProfileService', () => {
     const result = await service.getRecommendationForUser('me', 'other');
 
     expect(result.user.photos).toEqual([
-      { id: 'photo-1', url: 'signed-1', width: 1200, height: 800 },
+      {
+        id: 'photo-1',
+        url: 'signed-1',
+        thumbUrl: 'signed-thumb-1',
+        width: 1200,
+        height: 800,
+      },
     ]);
     expect(result.user.avatarUrl).toBeNull();
     expect(gallery.signPublicPhotos).toHaveBeenCalledWith([photo('photo-1')]);
@@ -1415,6 +1429,7 @@ describe('UnionProfileService', () => {
                 select: {
                   id: true,
                   storageKey: true,
+                  thumbKey: true,
                   width: true,
                   height: true,
                 },
@@ -1425,8 +1440,20 @@ describe('UnionProfileService', () => {
       }),
     );
     expect(result.items[0]?.user.photos).toEqual([
-      { id: 'photo-1', url: 'signed-1', width: 1200, height: 800 },
-      { id: 'photo-2', url: 'signed-2', width: 800, height: 1200 },
+      {
+        id: 'photo-1',
+        url: 'signed-1',
+        thumbUrl: 'signed-thumb-1',
+        width: 1200,
+        height: 800,
+      },
+      {
+        id: 'photo-2',
+        url: 'signed-2',
+        thumbUrl: 'signed-thumb-2',
+        width: 800,
+        height: 1200,
+      },
     ]);
     expect(result.items[0]?.user.avatarUrl).toBeNull();
     expect(gallery.signPublicPhotos).toHaveBeenCalledWith(photos);
