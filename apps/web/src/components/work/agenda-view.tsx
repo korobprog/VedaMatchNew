@@ -9,6 +9,7 @@ import type {
   WorkAgendaResponseDto,
 } from "@vedamatch/shared";
 import { getWorkAgenda } from "@/lib/work-api";
+import { priorityMark } from "./task-priority";
 
 /**
  * «Мой день» — задачи со сроком по всем средам сразу. Ради этого экрана и
@@ -116,13 +117,25 @@ export function WorkAgendaView() {
 }
 
 function AgendaRow({ item }: { item: WorkAgendaItemDto }) {
+  // Метка та же, что на доске: важность не должна выглядеть по-разному в
+  // двух местах, где на неё смотрят.
+  const mark = priorityMark(item.priority);
+
   return (
     <li>
       <Link
         href={`/work/planner/${item.spaceId}`}
-        className="flex flex-wrap items-center gap-2 rounded-xl glass px-3 py-2"
+        className={`flex flex-wrap items-center gap-2 rounded-xl glass px-3 py-2 ${
+          mark?.edge ?? ""
+        }`}
       >
         <span className="font-mono text-xs text-text-2">{item.key}</span>
+        {mark && (
+          <span className="flex items-center gap-1 rounded-full bg-glass px-1.5 py-0.5 text-[10px] text-text-1">
+            <span aria-hidden className={`size-1.5 rounded-full ${mark.dot}`} />
+            {mark.label}
+          </span>
+        )}
         <span className="min-w-0 flex-1 truncate text-sm text-text-0">
           {item.title}
         </span>
