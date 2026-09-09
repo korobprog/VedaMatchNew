@@ -22,6 +22,7 @@ import type {
   WorkBoardDto,
   WorkSpaceDto,
   WorkTaskCardDto,
+  WorkTaskPriority,
 } from "@vedamatch/shared";
 import {
   createWorkColumn,
@@ -48,7 +49,7 @@ import {
 import { WorkInvitePanel } from "./invite-panel";
 import { WorkTaskDialog } from "./task-dialog";
 import { dueFromInput, endOfDayInput } from "./task-due";
-import { priorityMark } from "./task-priority";
+import { PRIORITY_TITLE, priorityMark } from "./task-priority";
 
 /** Сколько точек палец должен пройти, чтобы это считалось переносом, а не касанием. */
 const DRAG_THRESHOLD = 6;
@@ -83,6 +84,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   // Исполнитель и срок новой задачи. Заполнены заранее — см. openComposer.
   const [draftAssignee, setDraftAssignee] = useState("");
   const [draftDue, setDraftDue] = useState("");
+  const [draftPriority, setDraftPriority] = useState<WorkTaskPriority>("normal");
   const [drag, setDrag] = useState<DragState | null>(null);
   const [columnDraft, setColumnDraft] = useState<string | null>(null);
   const [renamingColumn, setRenamingColumn] = useState<string | null>(null);
@@ -229,6 +231,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         : "",
     );
     setDraftDue(endOfDayInput(new Date()));
+    // Важность — единственное поле формы, которое начинает с нуля: «срочно»
+    // у прошлой задачи ничего не говорит о следующей, а тихо унаследованное
+    // «срочно» обесценивает метку на всей доске.
+    setDraftPriority("normal");
   }
 
   async function addTask(columnId: string) {
@@ -240,8 +246,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         title: draft.trim(),
         assigneeId: draftAssignee || null,
         dueAt: dueAt ?? null,
+        priority: draftPriority,
       });
       setDraft("");
+      setDraftPriority("normal");
       setBoard(await getWorkBoard(board.id));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не получилось");
@@ -525,6 +533,29 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                           onChange={(event) => setDraftDue(event.target.value)}
                           className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0"
                         />
+                      </label>
+                      {/* Важность здесь же, а не в открытой карточке:
+                          «срочно» известно в ту же секунду, что и название,
+                          а за вторым заходом его обычно не ставят вовсе. */}
+                      <label className="text-xs text-text-1">
+                        Важность
+                        <select
+                          value={draftPriority}
+                          onChange={(event) =>
+                            setDraftPriority(
+                              event.target.value as WorkTaskPriority,
+                            )
+                          }
+                          className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0"
+                        >
+                          {Object.entries(PRIORITY_TITLE).map(
+                            ([value, title]) => (
+                              <option key={value} value={value}>
+                                {title}
+                              </option>
+                            ),
+                          )}
+                        </select>
                       </label>
                     </div>
                     <div className="mt-2 flex gap-2">
