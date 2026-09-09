@@ -128,6 +128,13 @@ export class MotivationManualPostService {
           attributionLocator: locator || null,
           attributionSourceUrl: sourceUrl,
           storyCaption: input.storyCaption !== false,
+          /* Пояснение здесь пишет тот, кто публикует, и подписывать его надо
+             им. Если поле оставили пустым — подписывать нечего. */
+          explanationAuthorId: LANGUAGES.some(
+            (language) => byLanguage[language].explanation,
+          )
+            ? actorId
+            : null,
           generationStage: 'text',
           promptVersion: 'manual-v1',
           imageUrl: null,

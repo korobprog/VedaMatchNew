@@ -47,6 +47,7 @@ function reelDto(overrides: Partial<MotivationReelDto>): MotivationReelDto {
       isLiked: false,
       origin: "user",
       author: null,
+      explanationAuthor: null,
       isOwn: true,
       library: null,
     },

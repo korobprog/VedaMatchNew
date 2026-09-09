@@ -908,6 +908,15 @@ function ReelSlide({
       {showExplanation && explanation && (
         <CenteredSheet title="Пояснение" onClose={() => setShowExplanation(false)}>
           <p className="whitespace-pre-line">{explanation}</p>
+          {/* Кто написал трактовку. Подпись важнее, чем кажется: цитата — это
+              слова автора, а пояснение — чьё-то прочтение, и читатель вправе
+              знать, чьё именно. Пусто — пояснение собрала модель, человека за
+              ним нет, и подписывать нечем. */}
+          {post.explanationAuthor && (
+            <p className="mt-3 text-xs text-white/70">
+              Пояснение написал(а) {post.explanationAuthor.name}
+            </p>
+          )}
         </CenteredSheet>
       )}
     </article>
