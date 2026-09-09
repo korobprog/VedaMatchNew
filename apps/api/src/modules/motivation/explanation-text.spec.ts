@@ -1,4 +1,8 @@
-import { explanationChanged, explanationOf } from './explanation-text';
+import {
+  explanationChanged,
+  explanationOf,
+  withoutExplanation,
+} from './explanation-text';
 
 describe('explanationOf', () => {
   it('берёт часть после пустой строки', () => {
@@ -35,5 +39,15 @@ describe('explanationChanged', () => {
     expect(
       explanationChanged('Цитата\n\nПояснение', 'Цитата\n\n  Пояснение  '),
     ).toBe(false);
+  });
+});
+
+describe('withoutExplanation', () => {
+  it('оставляет одну цитату', () => {
+    expect(withoutExplanation('Цитата\n\nПояснение')).toBe('Цитата');
+  });
+
+  it('голую цитату не трогает', () => {
+    expect(withoutExplanation('Только цитата')).toBe('Только цитата');
   });
 });

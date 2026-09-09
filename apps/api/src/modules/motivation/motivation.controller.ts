@@ -135,6 +135,21 @@ export class MotivationController {
   ) {
     return this.service.savePreference(user.sub, input);
   }
+  /**
+   * Жалоба на пояснение — и снятие своей жалобы тем же нажатием.
+   *
+   * Один маршрут на оба действия намеренно: у кнопки два состояния, и
+   * отдельный DELETE заставлял бы клиент помнить, в каком он сейчас, ради
+   * действия, которое всё равно решается на сервере.
+   */
+  @Post('motivation/posts/:id/explanation-report')
+  @UseGuards(AuthGuard)
+  reportExplanation(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.service.reportExplanation(id, user.sub);
+  }
   @Post('motivation/posts/:id/favorite')
   @UseGuards(AuthGuard)
   addFavorite(

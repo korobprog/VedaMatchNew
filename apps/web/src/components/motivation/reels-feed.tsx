@@ -624,6 +624,12 @@ function ReelSlide({
   const videoRef = useRef<HTMLVideoElement>(null);
   const quoteRef = useRef<HTMLParagraphElement>(null);
   const [showExplanation, setShowExplanation] = useState(false);
+  /* Своя жалоба на пояснение и признак, что трактовку уже спрятали. Держим
+     на слайде: жалоба относится к этому афоризму, а не к ленте. */
+  const [reported, setReported] = useState(post.explanationReported);
+  const [explanationHidden, setExplanationHidden] = useState(
+    post.explanationHidden,
+  );
   const [paused, setPaused] = useState(false);
   const [quoteClamped, setQuoteClamped] = useState(false);
   const { quote, explanation } = splitQuoteAndExplanation(post.text);
@@ -643,6 +649,32 @@ function ReelSlide({
       {showExplanation ? "Скрыть пояснение" : "Пояснение — нажмите, чтобы раскрыть ›"}
     </button>
   );
+
+  /**
+   * Пожаловаться на пояснение — или снять свою жалобу тем же нажатием.
+   * Порог решает сервер: на третьей жалобе от разных читателей трактовка
+   * прячется, и тогда закрываем лист — показывать в нём больше нечего.
+   */
+  async function reportExplanation() {
+    try {
+      const response = await apiFetch(
+        `${API_URL}/motivation/posts/${post.id}/explanation-report`,
+        { method: "POST" },
+      );
+      if (!response.ok) return;
+      const result = (await response.json()) as {
+        reported: boolean;
+        hidden: boolean;
+      };
+      setReported(result.reported);
+      if (result.hidden) {
+        setExplanationHidden(true);
+        setShowExplanation(false);
+      }
+    } catch {
+      // Сеть отвалилась — жалоба не засчиталась, и кнопка осталась прежней.
+    }
+  }
 
   /**
    * Обрезана ли цитата фото — вопрос к разметке, а не к длине текста.
@@ -905,7 +937,7 @@ function ReelSlide({
         </div>
       </div>
 
-      {showExplanation && explanation && (
+      {showExplanation && explanation && !explanationHidden && (
         <CenteredSheet title="Пояснение" onClose={() => setShowExplanation(false)}>
           <p className="whitespace-pre-line">{explanation}</p>
           {/* Кто написал трактовку. Подпись важнее, чем кажется: цитата — это
@@ -917,6 +949,20 @@ function ReelSlide({
               Пояснение написал(а) {post.explanationAuthor.name}
             </p>
           )}
+          {/* Жалоба на трактовку. Цитата — слова автора, и на них не жалуются;
+              пояснение — чьё-то прочтение, и оно может оказаться выдумкой.
+              Порог держит сервер: прячет на третьей жалобе от разных
+              читателей, а не по одному нажатию. */}
+          <button
+            type="button"
+            onClick={() => void reportExplanation()}
+            aria-pressed={reported}
+            className="mt-3 text-xs text-white/60 underline-offset-4 hover:text-white/90 hover:underline"
+          >
+            {reported
+              ? "Вы пожаловались — нажмите, чтобы отозвать"
+              : "Пожаловаться на пояснение"}
+          </button>
         </CenteredSheet>
       )}
     </article>

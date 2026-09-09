@@ -21,3 +21,12 @@ export function explanationOf(text: string): string {
 export function explanationChanged(before: string, after: string): boolean {
   return explanationOf(before) !== explanationOf(after);
 }
+
+/**
+ * Одна цитата, без пояснения. Нужна, когда трактовку спрятали по жалобам:
+ * читателю уходит только то, что сказал автор цитаты.
+ */
+export function withoutExplanation(text: string): string {
+  const separator = text.indexOf('\n\n');
+  return separator === -1 ? text : text.slice(0, separator).trimEnd();
+}

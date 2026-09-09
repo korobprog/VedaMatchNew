@@ -41,6 +41,8 @@ const post = (id: string, overrides: Partial<MotivationPostDto> = {}): Motivatio
   origin: "editorial",
   author: null,
   explanationAuthor: null,
+  explanationHidden: false,
+  explanationReported: false,
   isOwn: false,
   library: null,
   feedTier: "unseen",
