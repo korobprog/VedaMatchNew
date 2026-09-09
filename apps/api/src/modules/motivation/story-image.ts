@@ -149,8 +149,10 @@ export type StoryOverlayInput = {
  * своего места, и заметно это стало бы только на готовом кадре.
  *
  * Блок собирается снизу вверх от нижнего поля: отметка об ИИ, атрибуция,
- * цитата и знак над ней. Знак стоит именно над текстом — снизу он спорил с
- * подписью, а сверху читается как шапка кадра.
+ * знак и цитата над ним. Знак стоит под текстом — так решено по VED-7: надпись
+ * с кругом читается как подпись автора кадра, а не как шапка. С самым низом
+ * кадра он не спорит: между знаком и краем остаются атрибуция и отметка об
+ * ИИ — служебная строка ленты ложится именно туда (см. VED-29).
  */
 export function storyLayout(input: {
   quoteLines: number;
@@ -168,20 +170,25 @@ export function storyLayout(input: {
   const disclosureBaseline = STORY_HEIGHT - BOTTOM_PADDING + 90;
   const metaBottom = disclosureBaseline - 48;
   const metaTop = metaBottom - Math.max(0, input.metaLines - 1) * META_LINE_HEIGHT;
-  const quoteBottom =
+  /* Знак стоит на той же линии, на которой раньше заканчивалась цитата:
+     над подписью и отметкой об ИИ, но под самим текстом. От длины цитаты
+     он больше не зависит — вверх едет сам текст. */
+  const logoBaseline =
     input.metaLines > 0 ? metaTop - 58 : disclosureBaseline - 58;
+  const logoTop = logoBaseline - height;
+  // Цитата заканчивается над знаком, с тем же воздухом, что был над ним.
+  const quoteBottom = logoTop - 28;
   const firstLineY =
     quoteBottom - Math.max(0, input.quoteLines - 1) * QUOTE_LINE_HEIGHT;
-  // Знак поднимается над первой строкой на её кегль плюс воздух.
-  const logoTop = firstLineY - QUOTE_SIZE - 28 - height;
 
   return {
     logo: { left: SIDE_PADDING, top: logoTop, width, height },
     firstLineY,
     metaTop,
     disclosureBaseline,
-    // Подложка начинается над знаком, иначе светлый фон съедает и его, и текст.
-    scrimTop: Math.max(0, logoTop - 60),
+    // Подложка начинается над первой строкой цитаты: теперь верхний край
+    // блока — текст, а не знак, и светлый фон съедал бы именно его.
+    scrimTop: Math.max(0, firstLineY - QUOTE_SIZE - 60),
   };
 }
 
