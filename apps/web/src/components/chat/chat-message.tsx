@@ -186,7 +186,9 @@ export function ChatMessage({
                 </span>
               )}
 
-              {message.body && (
+              {/* У записи о звонке текст повторяет карточку — его не показываем. */}
+              {message.body &&
+                !message.attachments.some((a) => a.kind === "call") && (
                 <span className="block whitespace-pre-wrap break-words text-[15px] leading-[21px]">
                   {message.body}
                 </span>

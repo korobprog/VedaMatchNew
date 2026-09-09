@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  callReasonLabel,
   callDurationLabel,
   callStatusLabel,
   formatSeconds,
@@ -64,5 +65,16 @@ describe("percentLabel", () => {
   it("ставит прочерк, когда доля неизвестна", () => {
     expect(percentLabel(null)).toBe("—");
     expect(percentLabel(undefined)).toBe("—");
+  });
+});
+
+describe("callReasonLabel", () => {
+  it("переводит известные причины и не трогает неизвестные", () => {
+    expect(callReasonLabel("hangup")).toBe("Положили трубку");
+    expect(callReasonLabel("timeout")).toBe("Не ответили");
+    expect(callReasonLabel("network")).toBe("Обрыв сети");
+    expect(callReasonLabel("busy")).toBe("Занято");
+    expect(callReasonLabel("weird")).toBe("weird");
+    expect(callReasonLabel(null)).toBe("—");
   });
 });

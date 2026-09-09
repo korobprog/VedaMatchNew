@@ -53,3 +53,16 @@ export function percentLabel(share: number | null | undefined): string {
   if (share === null || share === undefined || !Number.isFinite(share)) return "—";
   return `${Math.round(share * 100)} %`;
 }
+
+const REASON_LABELS: Record<string, string> = {
+  hangup: "Положили трубку",
+  timeout: "Не ответили",
+  network: "Обрыв сети",
+  busy: "Занято",
+};
+
+/** Причина завершения словами; неизвестную показываем как есть. */
+export function callReasonLabel(reason: string | null | undefined): string {
+  if (!reason) return "—";
+  return REASON_LABELS[reason] ?? reason;
+}

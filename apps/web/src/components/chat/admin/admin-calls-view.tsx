@@ -11,6 +11,7 @@ import { Alert } from "@/components/ui/alert";
 import { API_URL, apiFetch } from "@/lib/http-client";
 import {
   callDurationLabel,
+  callReasonLabel,
   callStatusLabel,
   formatSeconds,
   percentLabel,
@@ -176,7 +177,7 @@ function CallRow({ call }: { call: ChatCallDto }) {
       <td className="px-3 py-2 font-mono text-text-0">
         {callDurationLabel(call.answeredAt, call.endedAt)}
       </td>
-      <td className="px-3 py-2 text-text-1">{call.endReason ?? "—"}</td>
+      <td className="px-3 py-2 text-text-1">{callReasonLabel(call.endReason)}</td>
     </tr>
   );
 }
