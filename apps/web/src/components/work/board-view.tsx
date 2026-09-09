@@ -649,11 +649,20 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                         className="w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
                       />
                       {/* Говорим заранее, что произойдёт: молча разрезанный
-                          текст выглядел бы как потеря половины написанного. */}
+                          текст выглядел бы как потеря половины написанного.
+
+                          Сам будущий заголовок переносится по буквам: в него
+                          попадает то, что написал человек, а сплошная строка
+                          без пробелов вылезала за край колонки. Переносим
+                          только его — обычные слова подсказки от `break-all`
+                          рвались бы на середине. */}
                       {draftSplit.description && (
                         <p className="mt-1 text-xs text-text-2">
-                          Длинно для названия. В нём останется «{draftSplit.title}
-                          », остальное уедет в описание.
+                          Длинно для названия. В нём останется{" "}
+                          <span className="break-all text-text-1">
+                            «{draftSplit.title}»
+                          </span>{" "}
+                          — остальное уедет в описание.
                         </p>
                       )}
                       <div className="mt-2 grid gap-2">

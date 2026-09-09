@@ -314,7 +314,14 @@ export class WorkBoardsService {
 
     const column = await this.prisma.workColumn.findUnique({
       where: { id: columnId },
-      select: { boardId: true, _count: { select: { tasks: true } } },
+      select: {
+        boardId: true,
+        // Архивные не в счёт: на доске их не видно, перенести их нельзя, и
+        // колонка из-за них оставалась неудаляемой навсегда — с отказом
+        // «в колонке есть карточки», которому человек справедливо не верил,
+        // потому что колонка перед ним пустая.
+        _count: { select: { tasks: { where: { archivedAt: null } } } },
+      },
     });
     if (!column) throw new NotFoundException('Колонка не найдена');
     if (column._count.tasks > 0) {
