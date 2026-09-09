@@ -114,32 +114,41 @@ describe('buildStoryOverlaySvg', () => {
     expect(box.left + box.width).toBeLessThan(STORY_WIDTH);
   });
 
-  it('ставит знак над текстом, а не под ним', () => {
+  it('ставит знак под текстом, но над подписью', () => {
+    // Решение VED-7: надпись с кругом читается как подпись автора кадра.
+    // Ниже знака остаются атрибуция и отметка об ИИ — туда же ложится
+    // служебная строка ленты, и сам знак она не накрывает (VED-29).
     const input = {
       text: 'Цитата',
       attribution: 'Шри Кришна · Бхагавад-гита',
     };
     const svg = buildStoryOverlaySvg(input);
     const box = brandLogoBox({ quoteLines: 1, metaLines: 1 });
-    const blockBaselines = [
-      ...svg.matchAll(
-        /<text[^>]*y="(\d+(?:\.\d+)?)"[^>]*class="(quote|meta|disclosure)"/g,
-      ),
-    ].map((match) => Number(match[1]));
+    const baselines = (kind: string) =>
+      [
+        ...svg.matchAll(/<text[^>]*y="(\d+(?:\.\d+)?)"[^>]*class="([a-z]+)"/g),
+      ]
+        .filter((match) => match[2] === kind)
+        .map((match) => Number(match[1]));
 
-    expect(blockBaselines.length).toBeGreaterThan(0);
-    // Знак — шапка блока: весь текст начинается ниже его нижнего края.
-    for (const y of blockBaselines)
+    const quotes = baselines('quote');
+    expect(quotes.length).toBeGreaterThan(0);
+    // Цитата заканчивается над знаком…
+    for (const y of quotes) expect(y).toBeLessThanOrEqual(box.top);
+    // …а подпись и отметка о нейросети начинаются ниже его.
+    for (const y of [...baselines('meta'), ...baselines('disclosure')])
       expect(y).toBeGreaterThan(box.top + box.height);
   });
 
-  it('поднимает знак вместе с длинной цитатой', () => {
-    // Знак привязан к первой строке, а не к низу кадра: иначе многострочная
-    // цитата подъехала бы под него и легла поверх.
-    const short = brandLogoBox({ quoteLines: 1, metaLines: 0 });
-    const long = brandLogoBox({ quoteLines: 6, metaLines: 2 });
+  it('длинная цитата уезжает вверх, а знак стоит на месте', () => {
+    // Знак привязан к нижнему блоку: от длины цитаты он не зависит,
+    // вверх едет текст. От числа строк подписи — зависит: она под ним.
+    const short = brandLogoBox({ quoteLines: 1, metaLines: 1 });
+    const long = brandLogoBox({ quoteLines: 6, metaLines: 1 });
+    const withTwoMetaLines = brandLogoBox({ quoteLines: 1, metaLines: 2 });
 
-    expect(long.top).toBeLessThan(short.top);
+    expect(long.top).toBe(short.top);
+    expect(withTwoMetaLines.top).toBeLessThan(short.top);
     expect(long.top).toBeGreaterThan(0);
   });
 
