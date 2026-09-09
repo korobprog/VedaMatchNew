@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { ChatAdminController } from './chat-admin.controller';
+import { ChatCallsController } from './calls/chat-calls.controller';
 import { ChatColorTemplatesService } from './chat-color-templates.service';
 import { ChatConversationThemeService } from './chat-conversation-theme.service';
 import { ChatConversationsService } from './chat-conversations.service';
@@ -42,6 +43,7 @@ import { PeopleService } from './people/people.service';
     ChatPublicMapController,
     ChatStreamController,
     ChatAdminController,
+    ChatCallsController,
     PeopleController,
     PeopleAdminController,
   ],

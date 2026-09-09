@@ -420,6 +420,21 @@ export type ChatStreamEvent =
       message: ChatMessageDto | null;
     };
 
+/** ICE-сервер в формате `RTCIceServer` — то, что уходит в `RTCPeerConnection`. */
+export interface ChatIceServerDto {
+  urls: string[];
+  username?: string;
+  credential?: string;
+}
+
+/** `GET /chat/calls/ice-servers`: STUN и TURN с короткоживущей учёткой. */
+export interface ChatIceServersState {
+  iceServers: ChatIceServerDto[];
+  /** Сколько секунд живёт учётка TURN; 0 — TURN не настроен. */
+  ttlSeconds: number;
+  turnConfigured: boolean;
+}
+
 /** Раздел админки: жалоба на сообщение или беседу. */
 export interface AdminChatReportDto {
   id: string;

@@ -1,0 +1,36 @@
+# TURN-сервер для звонков в «Общении» (docs/chat-calls-plan.md).
+#
+# network_mode: host — не прихоть: релей раздаёт диапазон UDP-портов, и
+# пробрасывать его через docker-proxy означает по процессу на порт и
+# потерю исходного адреса. На хосте coturn слушает 3478 (udp/tcp),
+# 443 (tls) и релейный диапазон 49160–49400/udp.
+#
+# 443/tcp на хосте занят Traefik'ом Dokploy. Поэтому TLS-порт задаётся
+# переменной TURN_TLS_PORT: на сервере с одним публичным адресом ставим
+# 5349, а «turns:...:443» из ice-servers заработает только со вторым
+# адресом или после выделения coturn'у отдельного IP. Это открытый вопрос
+# этапа 0, см. README.md рядом.
+services:
+  coturn:
+    image: coturn/coturn:4.6-alpine
+    container_name: vedamatch-coturn
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+      # Сертификат домена TURN: выпускается отдельно (certbot standalone
+      # на 80/tcp во время выпуска либо копия из Traefik'а), см. README.
+      - ${TURN_CERT_DIR:-./certs}:/certs:ro
+    command:
+      - -c
+      - /etc/coturn/turnserver.conf
+      - --static-auth-secret=${TURN_SECRET:?TURN_SECRET не задан}
+      - --realm=${TURN_REALM:?TURN_REALM не задан}
+      - --external-ip=${TURN_EXTERNAL_IP:?TURN_EXTERNAL_IP не задан}
+      - --tls-listening-port=${TURN_TLS_PORT:-5349}
+    logging:
+      driver: json-file
+      options:
+        max-size: '20m'
+        max-file: '5'
