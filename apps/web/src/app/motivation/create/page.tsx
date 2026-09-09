@@ -49,7 +49,12 @@ export default async function MotivationCreatePage({
           Цитата → стиль → проверка → картинка. В бете — один рилс в день бесплатно, генерацию оплачивает проект.
         </p>
         <div className="mt-4 px-2">
-          <ReelWizard prefill={{ ...prefill, reelId: params.reel }} donation={donation} defaultTrack={defaultTrack} />
+          <ReelWizard
+            prefill={{ ...prefill, reelId: params.reel }}
+            donation={donation}
+            defaultTrack={defaultTrack}
+            isAdmin={isAdmin}
+          />
         </div>
       </main>
     </div>
