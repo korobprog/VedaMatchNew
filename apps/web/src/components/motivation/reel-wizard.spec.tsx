@@ -70,7 +70,7 @@ function routeFetch(routes: Record<string, (init?: RequestInit) => unknown>) {
 beforeEach(() => vi.restoreAllMocks());
 
 describe("ReelWizard", () => {
-  it("walks quote → style → status and posts the reel", async () => {
+  it("walks text → source → image → review and posts the reel", async () => {
     const fetchMock = routeFetch({
       "/motivation/reels/quota": () => quota,
       "/motivation/reels/reel-1": () => reelDto({ stage: "generating" }),
@@ -80,17 +80,27 @@ describe("ReelWizard", () => {
     render(<ReelWizard prefill={{}} donation={null} />);
 
     await screen.findByText("Сегодня: 0 из 1");
-    const next = screen.getByRole("button", { name: "Дальше: формат и стиль" });
+    const next = screen.getByRole("button", { name: "Дальше: источник и автор" });
     expect(next).toBeDisabled();
     await user.type(screen.getByLabelText(/Текст цитаты/), "Делай что должно, и будь что будет.");
-    await user.type(screen.getByLabelText(/Автор/), "Марк Аврелий");
     await user.click(next);
 
+    // Шаг 2 — только источник и автор.
+    await user.type(screen.getByLabelText(/Автор/), "Марк Аврелий");
+    await user.click(screen.getByRole("button", { name: "Дальше: картинка" }));
+
+    // Шаг 3 — только картинка: трек, способ и стиль.
     await user.click(screen.getByRole("button", { name: /Вайшнавская мудрость/ }));
     await user.selectOptions(screen.getByLabelText(/Визуальный стиль/), "indian_miniature");
-    await user.click(screen.getByRole("button", { name: "Отправить на проверку" }));
+    await user.click(screen.getByRole("button", { name: "Дальше: проверка" }));
 
-    await waitFor(() => expect(screen.getByText("Шаг 3 из 3 · Сборка")).toBeInTheDocument());
+    // Шаг 4 — обзор и одна кнопка.
+    expect(screen.getByText("Марк Аврелий")).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Отправить на проверку администраторам" }),
+    );
+
+    await waitFor(() => expect(screen.getByText("Шаг 4 из 4 · Проверка")).toBeInTheDocument());
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
     expect(post?.[0]).toContain("/motivation/reels");
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({
@@ -117,8 +127,12 @@ describe("ReelWizard", () => {
 
     await screen.findByText("Сегодня: 0 из 1");
     expect(screen.getByLabelText(/Текст цитаты/)).toHaveValue("Ты имеешь право лишь на действие.");
-    await user.click(screen.getByRole("button", { name: "Дальше: формат и стиль" }));
-    await user.click(screen.getByRole("button", { name: "Отправить на проверку" }));
+    await user.click(screen.getByRole("button", { name: "Дальше: источник и автор" }));
+    await user.click(screen.getByRole("button", { name: "Дальше: картинка" }));
+    await user.click(screen.getByRole("button", { name: "Дальше: проверка" }));
+    await user.click(
+      screen.getByRole("button", { name: "Отправить на проверку администраторам" }),
+    );
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true));
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
@@ -159,8 +173,12 @@ describe("ReelWizard", () => {
     expect(screen.getByLabelText(/Текст цитаты/)).toHaveValue(hit.text);
     expect(screen.getByText("Бхагавад-гита как она есть")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Дальше: формат и стиль" }));
-    await user.click(screen.getByRole("button", { name: "Отправить на проверку" }));
+    await user.click(screen.getByRole("button", { name: "Дальше: источник и автор" }));
+    await user.click(screen.getByRole("button", { name: "Дальше: картинка" }));
+    await user.click(screen.getByRole("button", { name: "Дальше: проверка" }));
+    await user.click(
+      screen.getByRole("button", { name: "Отправить на проверку администраторам" }),
+    );
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true));
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
@@ -220,7 +238,7 @@ describe("ReelWizard", () => {
     await user.click(screen.getByRole("button", { name: /Взять из наших книг/ }));
     await user.type(screen.getByLabelText(/Текст цитаты/), "Просто набранный вручную текст.");
 
-    expect(screen.getByRole("button", { name: "Дальше: формат и стиль" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Дальше: источник и автор" })).toBeDisabled();
   });
 
   it("shows the rejection reason and lets the author appeal once", async () => {
@@ -254,15 +272,19 @@ describe("ReelWizard", () => {
 
     await screen.findByText("Сегодня: 0 из 1");
     await user.type(screen.getByLabelText(/Текст цитаты/), "Делай что должно, и будь что будет.");
-    await user.click(screen.getByRole("button", { name: "Дальше: формат и стиль" }));
+    await user.click(screen.getByRole("button", { name: "Дальше: источник и автор" }));
+    await user.click(screen.getByRole("button", { name: "Дальше: картинка" }));
     await user.click(screen.getByRole("button", { name: /Загрузить своё/ }));
 
     // Пока файла нет, отправка закрыта: иначе рилс уйдёт без картинки.
-    expect(screen.getByRole("button", { name: "Отправить на проверку" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Дальше: проверка" })).toBeDisabled();
     const picture = new File(["binary"], "photo.jpg", { type: "image/jpeg" });
     await user.upload(screen.getByLabelText(/Файл/), picture);
     expect(screen.getByLabelText(/Визуальный стиль/)).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "Отправить на проверку" }));
+    await user.click(screen.getByRole("button", { name: "Дальше: проверка" }));
+    await user.click(
+      screen.getByRole("button", { name: "Отправить на проверку администраторам" }),
+    );
 
     await waitFor(() =>
       expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/image"))).toBe(true),
