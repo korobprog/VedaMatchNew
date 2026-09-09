@@ -32,6 +32,7 @@ import {
   moveWorkTask,
   updateWorkColumn,
 } from "@/lib/work-api";
+import { plural } from "@/lib/plural";
 import {
   columnAt,
   dropIndexAt,
@@ -45,6 +46,12 @@ import {
   moveTaskLocally,
   neighboursOf,
 } from "./board-state";
+import {
+  expandCollapsedColumn,
+  readCollapsedColumns,
+  toggleCollapsedColumn,
+  writeCollapsedColumns,
+} from "./column-collapse";
 import { WorkInvitePanel } from "./invite-panel";
 import { WorkTaskDialog } from "./task-dialog";
 import { dueFromInput, endOfDayInput } from "./task-due";
@@ -85,6 +92,9 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   const [drag, setDrag] = useState<DragState | null>(null);
   const [columnDraft, setColumnDraft] = useState<string | null>(null);
   const [renamingColumn, setRenamingColumn] = useState<string | null>(null);
+  // Свёрнутые колонки. Складываются только на телефоне: шире sm колонки стоят
+  // в ряд, там прятать нечего.
+  const [collapsed, setCollapsed] = useState<string[]>([]);
 
   const columnRefs = useRef(new Map<string, HTMLElement>());
   const cardRefs = useRef(new Map<string, HTMLElement>());
@@ -98,6 +108,11 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         if (!alive) return;
         setSpace(loaded.space);
         setBoard(loaded.board);
+        // Свёрнутое переживает перезагрузку: иначе на каждом заходе пришлось
+        // бы складывать «Разное» заново.
+        setCollapsed(
+          loaded.board ? readCollapsedColumns(loaded.board.id) : [],
+        );
         setError(null);
       })
       .catch((cause: unknown) => {
@@ -132,6 +147,13 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   const commitMove = useCallback(
     async (taskId: string, columnId: string, index: number) => {
       if (!board) return;
+      // Карточку унесли в свёрнутую колонку — разворачиваем её. Иначе перенос
+      // выглядит как пропажа: карточка ушла, а куда — не видно.
+      const unfolded = expandCollapsedColumn(collapsed, columnId);
+      if (unfolded !== collapsed) {
+        setCollapsed(unfolded);
+        writeCollapsedColumns(board.id, unfolded);
+      }
       const before = board;
       const next = moveTaskLocally(board, taskId, columnId, index);
       setBoard(next);
@@ -145,7 +167,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         setError(cause instanceof Error ? cause.message : "Перенос не удался");
       }
     },
-    [board],
+    [board, collapsed],
   );
 
   function measure(): Pick<DragState, "columns" | "cardsByColumn"> {
@@ -297,6 +319,19 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     }
   }
 
+  /**
+   * Свернуть колонку. Нужно на телефоне, где колонки стоят столбиком: «Разное»
+   * с полусотней карточек отодвигает всё, что после него, за три экрана
+   * прокрутки. Заголовок со счётчиком остаётся — свёрнутая колонка честно
+   * говорит, сколько в ней задач.
+   */
+  function toggleColumn(columnId: string) {
+    if (!board) return;
+    const next = toggleCollapsedColumn(collapsed, columnId);
+    setCollapsed(next);
+    writeCollapsedColumns(board.id, next);
+  }
+
   function moveBeside(task: WorkTaskCardDto, direction: -1 | 1) {
     if (!board) return;
     const columnId = columnBeside(board, task.columnId, direction);
@@ -359,6 +394,8 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
       <div className="-mx-4 flex flex-col gap-3 px-4 pb-4 sm:snap-x sm:flex-row sm:overflow-x-auto">
         {board.columns.map((column, index) => {
           const over = isOverWip(column);
+          const folded = collapsed.includes(column.id);
+          const bodyId = `work-column-body-${column.id}`;
           return (
             <section
               key={column.id}
@@ -367,9 +404,38 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                 else columnRefs.current.delete(column.id);
               }}
               aria-label={column.name}
-              className="flex w-full flex-col rounded-2xl glass p-3 sm:w-[300px] sm:shrink-0 sm:snap-start"
+              className={`flex w-full flex-col rounded-2xl glass p-3 sm:w-[300px] sm:shrink-0 sm:snap-start ${
+                folded && drag?.target?.columnId === column.id
+                  ? "ring-2 ring-magenta"
+                  : ""
+              }`}
             >
               <header className="mb-2 flex items-center gap-2">
+                {/* Свернуть можно только на телефоне: шире sm колонки стоят в
+                    ряд, и прятать их содержимое незачем. Счётчик рядом остаётся
+                    виден всегда — он и есть содержание свёрнутой колонки,
+                    поэтому же число повторено словами в подписи кнопки. */}
+                <button
+                  type="button"
+                  aria-expanded={!folded}
+                  aria-controls={bodyId}
+                  aria-label={`${
+                    folded ? "Развернуть" : "Свернуть"
+                  } колонку «${column.name}», ${column.tasks.length} ${plural(
+                    column.tasks.length,
+                    "задача",
+                    "задачи",
+                    "задач",
+                  )}`}
+                  onClick={() => toggleColumn(column.id)}
+                  className="-ml-1 rounded px-2 py-2.5 text-text-2 hover:text-text-0 sm:hidden"
+                >
+                  {folded ? (
+                    <ChevronRight aria-hidden className="size-5" />
+                  ) : (
+                    <ChevronDown aria-hidden className="size-5" />
+                  )}
+                </button>
                 {/* Заголовок остаётся заголовком: поле ввода вместо него
                     лишает скринридер структуры доски. Переименование
                     включается кнопкой и живёт ровно пока правят. */}
@@ -470,115 +536,122 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                 )}
               </header>
 
-              {canEdit &&
-                (composerColumn === column.id ? (
-                  <form
-                    className="mb-2"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void addTask(column.id);
-                    }}
-                  >
-                    <textarea
-                      autoFocus
-                      value={draft}
-                      onChange={(event) => setDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && !event.shiftKey) {
-                          event.preventDefault();
-                          void addTask(column.id);
-                        }
-                        if (event.key === "Escape") setComposerColumn(null);
+              {/* Тело колонки: форма и карточки. Прячется только на узком
+                  экране — на широком колонка всегда развёрнута. */}
+              <div
+                id={bodyId}
+                className={folded ? "hidden sm:block" : undefined}
+              >
+                {canEdit &&
+                  (composerColumn === column.id ? (
+                    <form
+                      className="mb-2"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void addTask(column.id);
                       }}
-                      rows={2}
-                      maxLength={200}
-                      placeholder="Что нужно сделать"
-                      aria-label={`Новая задача в колонке «${column.name}»`}
-                      className="w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
-                    />
-                    <div className="mt-2 grid gap-2">
-                      <label className="text-xs text-text-1">
-                        Исполнитель
-                        <select
-                          value={draftAssignee}
-                          onChange={(event) =>
-                            setDraftAssignee(event.target.value)
+                    >
+                      <textarea
+                        autoFocus
+                        value={draft}
+                        onChange={(event) => setDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && !event.shiftKey) {
+                            event.preventDefault();
+                            void addTask(column.id);
                           }
-                          className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0"
+                          if (event.key === "Escape") setComposerColumn(null);
+                        }}
+                        rows={2}
+                        maxLength={200}
+                        placeholder="Что нужно сделать"
+                        aria-label={`Новая задача в колонке «${column.name}»`}
+                        className="w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
+                      />
+                      <div className="mt-2 grid gap-2">
+                        <label className="text-xs text-text-1">
+                          Исполнитель
+                          <select
+                            value={draftAssignee}
+                            onChange={(event) =>
+                              setDraftAssignee(event.target.value)
+                            }
+                            className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0"
+                          >
+                            <option value="">Никто</option>
+                            {board.members.map((member) => (
+                              <option key={member.userId} value={member.userId}>
+                                {member.userId === board.viewerId
+                                  ? `${member.name} (вы)`
+                                  : member.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-xs text-text-1">
+                          Срок
+                          <input
+                            type="datetime-local"
+                            value={draftDue}
+                            onChange={(event) => setDraftDue(event.target.value)}
+                            className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0"
+                          />
+                        </label>
+                      </div>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          type="submit"
+                          className="rounded-lg bg-magenta px-3 py-1.5 text-xs font-semibold text-white"
                         >
-                          <option value="">Никто</option>
-                          {board.members.map((member) => (
-                            <option key={member.userId} value={member.userId}>
-                              {member.userId === board.viewerId
-                                ? `${member.name} (вы)`
-                                : member.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="text-xs text-text-1">
-                        Срок
-                        <input
-                          type="datetime-local"
-                          value={draftDue}
-                          onChange={(event) => setDraftDue(event.target.value)}
-                          className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0"
-                        />
-                      </label>
-                    </div>
-                    <div className="mt-2 flex gap-2">
-                      <button
-                        type="submit"
-                        className="rounded-lg bg-magenta px-3 py-1.5 text-xs font-semibold text-white"
-                      >
-                        Добавить
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setComposerColumn(null)}
-                        className="rounded-lg px-3 py-1.5 text-xs text-text-1"
-                      >
-                        Отмена
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => openComposer(column.id)}
-                    className="mb-2 flex items-center gap-1 rounded-xl px-2 py-2 text-sm text-text-1 hover:text-text-0"
-                  >
-                    <Plus aria-hidden className="size-4" />
-                    Задача
-                  </button>
-                ))}
+                          Добавить
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setComposerColumn(null)}
+                          className="rounded-lg px-3 py-1.5 text-xs text-text-1"
+                        >
+                          Отмена
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => openComposer(column.id)}
+                      className="mb-2 flex items-center gap-1 rounded-xl px-2 py-2 text-sm text-text-1 hover:text-text-0"
+                    >
+                      <Plus aria-hidden className="size-4" />
+                      Задача
+                    </button>
+                  ))}
 
-              <ul className="flex min-h-[40px] flex-col gap-2">
-                {column.tasks.map((task, index) => (
-                  <li key={task.id}>
-                    {drag?.target?.columnId === column.id &&
-                      drag.target.index === index && <DropLine />}
-                    <TaskCard
-                      task={task}
-                      dragging={
-                        drag?.started === true && drag.taskId === task.id
-                      }
-                      canEdit={Boolean(canEdit)}
-                      onOpen={() => setOpenTaskId(task.id)}
-                      onHandleDown={(event) => onHandleDown(event, task.id)}
-                      onHandleMove={onHandleMove}
-                      onHandleUp={onHandleUp}
-                      onMoveBeside={(direction) => moveBeside(task, direction)}
-                      cardRef={(element) => {
-                        if (element) cardRefs.current.set(task.id, element);
-                        else cardRefs.current.delete(task.id);
-                      }}
-                    />
-                  </li>
-                ))}
-                {drag?.target?.columnId === column.id &&
-                  drag.target.index >= column.tasks.length && <DropLine />}
-              </ul>
+                <ul className="flex min-h-[40px] flex-col gap-2">
+                  {column.tasks.map((task, index) => (
+                    <li key={task.id}>
+                      {drag?.target?.columnId === column.id &&
+                        drag.target.index === index && <DropLine />}
+                      <TaskCard
+                        task={task}
+                        dragging={
+                          drag?.started === true && drag.taskId === task.id
+                        }
+                        canEdit={Boolean(canEdit)}
+                        onOpen={() => setOpenTaskId(task.id)}
+                        onHandleDown={(event) => onHandleDown(event, task.id)}
+                        onHandleMove={onHandleMove}
+                        onHandleUp={onHandleUp}
+                        onMoveBeside={(direction) => moveBeside(task, direction)}
+                        cardRef={(element) => {
+                          if (element) cardRefs.current.set(task.id, element);
+                          else cardRefs.current.delete(task.id);
+                        }}
+                      />
+                    </li>
+                  ))}
+                  {drag?.target?.columnId === column.id &&
+                    drag.target.index >= column.tasks.length && <DropLine />}
+                </ul>
+              </div>
             </section>
           );
         })}
