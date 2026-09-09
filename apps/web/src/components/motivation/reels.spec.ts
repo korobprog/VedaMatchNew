@@ -5,7 +5,6 @@ import {
   formatCount,
   mediaKindOf,
   seenDividerIndex,
-  shareUrlFor,
   shouldLoadMore,
   viewDelayMs,
 } from "./reels";
@@ -70,12 +69,6 @@ describe("shouldLoadMore", () => {
     expect(shouldLoadMore(7, 10, true)).toBe(true);
     expect(shouldLoadMore(9, 10, false)).toBe(false);
     expect(shouldLoadMore(0, 0, true)).toBe(false);
-  });
-});
-
-describe("shareUrlFor", () => {
-  it("builds the public post link", () => {
-    expect(shareUrlFor("bg-2-47", "https://vedamatch.app")).toBe("https://vedamatch.app/m/bg-2-47");
   });
 });
 

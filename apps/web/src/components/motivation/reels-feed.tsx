@@ -1,7 +1,14 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import Link from "next/link";
 import type {
   DonationSettingsDto,
@@ -26,7 +33,6 @@ import {
   formatCount,
   mediaKindOf,
   seenDividerIndex,
-  shareUrlFor,
   shouldLoadMore,
   viewDelayMs,
 } from "./reels";
@@ -37,6 +43,17 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
  * Насколько прячется кадр. Пять секунд из просьбы: меньше — не успеть
  * дочитать длинную шлоку, больше — начинаешь думать, что картинка пропала.
  */
+
+/**
+ * Умеет ли браузер читать вслух — вопрос к устройству, а не состояние ленты.
+ *
+ * Ответ не меняется, пока страница открыта, поэтому подписке не на что
+ * реагировать: она возвращает пустую отписку. На сервере синтеза нет по
+ * определению — там нет и `window`, — а на клиенте React сам сделает один
+ * переход после гидратации.
+ */
+const subscribeToNothing = () => () => {};
+const speechUnavailableOnServer = () => false;
 
 export type ReelsTab = "forYou" | "saved";
 
@@ -165,15 +182,18 @@ export function ReelsFeed({
     if (shouldLoadMore(index, items.length, Boolean(cursor))) void loadMore();
   }
 
-  const stopSpeaking = useCallback(() => {
+  /* Без useCallback: компилятор React отказывался сохранять эту мемоизацию —
+     и был прав, польза от неё была нулевая. Ни один эффект больше не зависит
+     от тождества этих функций, а обработчику кнопки оно безразлично. */
+  function stopSpeaking() {
     if (canSpeak()) window.speechSynthesis.cancel();
     setSpeakingId(null);
-  }, []);
+  }
 
   /* Читает браузер, а не сервер: голос устройства бесплатен, работает без
      сети и говорит тем же голосом, к которому человек привык в остальных
      приложениях. Синтез на стороне API стоил бы денег на каждое нажатие. */
-  const toggleSpeak = useCallback(() => {
+  function toggleSpeak() {
     const post = items[activeIndex];
     if (!post || !canSpeak()) return;
     if (speakingId === post.id) {
@@ -189,10 +209,18 @@ export function ReelsFeed({
     utterance.onerror = () => setSpeakingId(null);
     window.speechSynthesis.speak(utterance);
     setSpeakingId(post.id);
-  }, [activeIndex, items, speakingId, stopSpeaking]);
+  }
 
-  // Уход со страницы не должен оставлять голос говорить в пустоту.
-  useEffect(() => stopSpeaking, [stopSpeaking]);
+  /* Уход со страницы не должен оставлять голос говорить в пустоту. Чистилка
+     отменяет речь сама, а не зовёт stopSpeaking: от неё нужна ровно отмена, а
+     состояние размонтированного компонента менять незачем. Заодно эффект
+     перестал зависеть от тождества функции — иначе он снимался бы и ставился
+     заново на каждом рендере, обрывая чтение на полуслове. */
+  useEffect(() => {
+    return () => {
+      if (canSpeak()) window.speechSynthesis.cancel();
+    };
+  }, []);
 
   // Просмотр: активный слайд, продержавшийся положенное время. Один раз на
   // пост за сессию — повторные пролистывания сервер и так не учитывает.
@@ -252,15 +280,17 @@ export function ReelsFeed({
   }
 
   const activePost = items[activeIndex] ?? null;
-  /* Читаем возможность синтеза эффектом, а не при первом рендере: на сервере
-     `window` нет, и кнопка на разметке сервера разошлась бы с клиентской. */
-  const [speechAvailable, setSpeechAvailable] = useState(false);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- см. выше:
-    // на сервере ответа на этот вопрос нет, и любой другой способ даёт
-    // расхождение гидратации.
-    setSpeechAvailable(canSpeak());
-  }, []);
+  /* Возможность синтеза читаем внешним источником, а не состоянием с
+     эффектом. Ответ на сервере и на клиенте разный, и раньше он приезжал
+     эффектом: тот писал состояние сразу при монтировании — лишняя
+     перерисовка на каждом открытии ленты. Здесь разницу между сервером и
+     клиентом держит сам React, а разметка по-прежнему совпадает: на сервере
+     кнопки нет, после гидратации она появляется. */
+  const speechAvailable = useSyncExternalStore(
+    subscribeToNothing,
+    canSpeak,
+    speechUnavailableOnServer,
+  );
 
 
   async function toggleLike() {

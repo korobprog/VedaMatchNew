@@ -35,10 +35,6 @@ export function shouldLoadMore(activeIndex: number, total: number, hasMore: bool
   return hasMore && total > 0 && activeIndex >= total - 3;
 }
 
-export function shareUrlFor(slug: string, origin: string): string {
-  return new URL(`/m/${slug}`, origin).toString();
-}
-
 /** Строка источника под цитатой: «Бхагавад-гита · 2.47». */
 export function attributionLine(
   post: Pick<MotivationPostDto, "attributionSpeaker" | "attributionWork" | "attributionLocator">,
