@@ -5,7 +5,9 @@
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
-		Permissions-Policy "camera=(), microphone=(), payment=()"
+		# Камера и микрофон нужны своим страницам (звонки в «Общении»);
+		# сторонним фреймам по-прежнему закрыто.
+		Permissions-Policy "camera=(self), microphone=(self), payment=()"
 		-Server
 	}
 	encode zstd gzip
