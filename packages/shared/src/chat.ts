@@ -28,7 +28,9 @@ export type ChatAttachmentKind =
   /** Приглашение в рабочую среду сервиса «Работа». */
   | 'work'
   /** Карточка предложения из «Вакансий»: первое сообщение отклика. */
-  | 'vacancy';
+  | 'vacancy'
+  /** Запись о звонке в ленте диалога; создаёт только сервер. */
+  | 'call';
 
 /** Столько же, сколько было в чате Знакомств: длину переписки меняли бы вместе. */
 export const CHAT_MESSAGE_MAX_LENGTH = 2000;
@@ -418,7 +420,8 @@ export type ChatStreamEvent =
       type: 'pinned';
       conversationId: string;
       message: ChatMessageDto | null;
-    };
+    }
+  | ChatCallStreamEvent;
 
 /** ICE-сервер в формате `RTCIceServer` — то, что уходит в `RTCPeerConnection`. */
 export interface ChatIceServerDto {
@@ -561,4 +564,109 @@ export interface ChatConversationThemeState {
 
 export interface SetChatConversationThemeRequest {
   templateId: string | null;
+}
+
+// ===== Звонки (docs/chat-calls-plan.md) =====
+
+export type ChatCallKind = 'audio' | 'video';
+
+/**
+ * Состояние звонка. Переходы: ringing → accepted → ended | failed;
+ * ringing → declined (вызываемый) | cancelled (звонивший) | missed (таймер).
+ */
+export type ChatCallStatus =
+  | 'ringing'
+  | 'accepted'
+  | 'declined'
+  | 'missed'
+  | 'cancelled'
+  | 'ended'
+  | 'failed';
+
+/** Почему звонок закончился — то, что клиент сообщает при завершении. */
+export type ChatCallEndReason = 'hangup' | 'timeout' | 'network' | 'busy';
+
+export interface ChatCallDto {
+  id: string;
+  conversationId: string;
+  kind: ChatCallKind;
+  status: ChatCallStatus;
+  caller: ChatUserSummary;
+  callee: ChatUserSummary;
+  createdAt: string;
+  answeredAt?: string | null;
+  endedAt?: string | null;
+  endReason?: ChatCallEndReason | null;
+}
+
+export interface StartChatCallRequest {
+  conversationId: string;
+  kind: ChatCallKind;
+}
+
+export interface EndChatCallRequest {
+  reason?: ChatCallEndReason;
+  /** Клиент знает по статистике соединения, шёл ли звук через TURN. */
+  relayed?: boolean;
+}
+
+/**
+ * Сигналинг WebRTC. Сервер содержимое не разбирает — переносит второй
+ * стороне как есть. `sdp` — offer или answer, `candidate` — ICE.
+ */
+export type ChatCallSignal =
+  | { kind: 'sdp'; sdp: { type: 'offer' | 'answer'; sdp: string } }
+  | {
+      kind: 'candidate';
+      candidate: {
+        candidate: string;
+        sdpMid?: string | null;
+        sdpMLineIndex?: number | null;
+      } | null;
+    };
+
+export interface ChatCallSignalRequest {
+  signal: ChatCallSignal;
+}
+
+/** `GET /chat/calls/active`: звонок, в котором человек прямо сейчас. */
+export interface ChatActiveCallState {
+  call: ChatCallDto | null;
+}
+
+/** События звонков в общем потоке `GET /chat/stream`. */
+export type ChatCallStreamEvent =
+  | { type: 'call.ringing'; call: ChatCallDto }
+  | { type: 'call.accepted'; call: ChatCallDto }
+  | {
+      /** Любой финал: declined, missed, cancelled, ended, failed — в `call.status`. */
+      type: 'call.ended';
+      call: ChatCallDto;
+    }
+  | {
+      type: 'call.signal';
+      callId: string;
+      fromUserId: string;
+      signal: ChatCallSignal;
+    };
+
+/** Раздел админки: звонки. */
+export interface AdminChatCallStats {
+  sinceDays: number;
+  total: number;
+  byStatus: Partial<Record<ChatCallStatus, number>>;
+  /** Доля звонков, пошедших через TURN, среди тех, где это известно. */
+  relayedShare: number | null;
+  talkSeconds: number;
+}
+
+export interface AdminChatCallsState {
+  callsEnabled: boolean;
+  turnConfigured: boolean;
+  stats: AdminChatCallStats;
+  calls: ChatCallDto[];
+}
+
+export interface UpdateChatCallSettingsRequest {
+  callsEnabled: boolean;
 }

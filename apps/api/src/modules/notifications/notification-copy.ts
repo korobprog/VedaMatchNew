@@ -16,6 +16,8 @@ export const notificationEventNames = {
   chatMessageSent: 'union.chat.message-sent',
   portalChatMessageSent: 'chat.message-sent',
   portalChatRequestReceived: 'chat.request-received',
+  portalChatCallIncoming: 'chat.call-incoming',
+  portalChatCallMissed: 'chat.call-missed',
   connectionRequested: 'union.connection.requested',
   connectionAccepted: 'union.connection.accepted',
   astroCompatibilityRequested: 'astro.compatibility.requested',
@@ -137,6 +139,30 @@ export function buildNotification(
         body: `${event.senderName}: ${toExcerpt(event.body)}`,
         url: '/chat/requests',
         tag: `chat-request:${event.conversationId}`,
+        category: 'chat',
+      };
+    case 'chat.call-incoming':
+      return {
+        title: event.callerName,
+        body:
+          event.callKind === 'video'
+            ? 'Входящий видеозвонок'
+            : 'Входящий аудиозвонок',
+        // Открывает диалог с параметром звонка: страница подхватит его и
+        // покажет экран входящего, даже если поток событий ещё не поднялся.
+        url: `/chat/${event.conversationId}?call=${event.callId}`,
+        tag: `call:${event.callId}`,
+        category: 'chat',
+      };
+    case 'chat.call-missed':
+      return {
+        title: event.callerName,
+        body:
+          event.callKind === 'video'
+            ? 'Пропущенный видеозвонок'
+            : 'Пропущенный аудиозвонок',
+        url: `/chat/${event.conversationId}`,
+        tag: `call-missed:${event.conversationId}`,
         category: 'chat',
       };
     case 'portal.welcome':

@@ -103,6 +103,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         scope: "chat",
       },
       {
+        href: "/admin/chat/calls",
+        label: "Общение — звонки",
+        hint: "Включение звонков, сводка и журнал за период",
+        scope: "chat",
+      },
+      {
         href: "/admin/notices",
         label: "Объявления",
         hint: "Жалобы на доску объявлений",

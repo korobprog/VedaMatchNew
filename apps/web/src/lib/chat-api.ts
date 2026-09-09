@@ -1,6 +1,7 @@
 // API-клиент сервиса «Общение». См. docs/service-module-contract.md
 import { cookies } from "next/headers";
 import type {
+  AdminChatCallsState,
   AdminChatConversationsState,
   AdminChatReportsState,
   AdminChatStats,
@@ -109,6 +110,11 @@ export function getAdminChatConversations(
 
 export function getAdminChatStats(): Promise<AdminChatStats | null> {
   return chatGet<AdminChatStats>("/admin/chat/stats");
+}
+
+/** Раздел админки «Звонки»: тумблер, сводка за период и последние звонки. */
+export function getAdminChatCalls(): Promise<AdminChatCallsState | null> {
+  return chatGet<AdminChatCallsState>("/admin/chat/calls");
 }
 
 /** Шаблоны цвета — для серверного рендера страницы /chat/appearance. */

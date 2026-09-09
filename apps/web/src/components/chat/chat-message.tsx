@@ -186,7 +186,9 @@ export function ChatMessage({
                 </span>
               )}
 
-              {message.body && (
+              {/* У записи о звонке текст повторяет карточку — его не показываем. */}
+              {message.body &&
+                !message.attachments.some((a) => a.kind === "call") && (
                 <span className="block whitespace-pre-wrap break-words text-[15px] leading-[21px]">
                   {message.body}
                 </span>
@@ -418,6 +420,23 @@ function Attachment({ attachment }: { attachment: ChatAttachmentDto }) {
       </a>
     );
 
+  if (attachment.kind === "call")
+    return (
+      <span className="flex items-center gap-3 rounded-xl border border-glass-brd bg-white/5 p-2.5">
+        <span className="flex size-10 items-center justify-center rounded-lg bg-white/6 text-text-1">
+          <CallIcon video={attachment.title === "Видеозвонок"} />
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-sm font-semibold text-text-0">
+            {attachment.title ?? "Звонок"}
+          </span>
+          <span className="font-mono text-[11px] text-text-2">
+            {attachment.subtitle ?? ""}
+          </span>
+        </span>
+      </span>
+    );
+
   // Карточка чужого сервиса: снимок, а не ссылка на живой объект — оригинал
   // может быть уже изменён или удалён. Исключение — то, что без перехода
   // бесполезно (приглашение в рабочую среду): маршрут таким собирает
@@ -458,6 +477,19 @@ function Attachment({ attachment }: { attachment: ChatAttachmentDto }) {
         </Link>
       )}
     </span>
+  );
+}
+
+function CallIcon({ video }: { video: boolean }) {
+  return video ? (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="7" width="13" height="10" rx="2" />
+      <path d="M16 11l5-3v8l-5-3" />
+    </svg>
+  ) : (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" />
+    </svg>
   );
 }
 

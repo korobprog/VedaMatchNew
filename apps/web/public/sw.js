@@ -108,18 +108,35 @@ async function showNotificationUnlessOpen(payload) {
     focused.postMessage({ type: "push-received", payload });
     return;
   }
+  // Входящий звонок: кнопки прямо в уведомлении и настойчивость — оно не
+  // должно свернуться само, пока звонят. Тег «call:» ставит API.
+  const isCall = typeof payload.tag === "string" && payload.tag.startsWith("call:");
   await self.registration.showNotification(payload.title, {
     body: payload.body,
     tag: payload.tag,
     icon: "/icons/icon-192.png",
     badge: "/icons/icon-192.png",
     data: { url: payload.url },
+    ...(isCall
+      ? {
+          requireInteraction: true,
+          vibrate: [300, 200, 300, 200, 300],
+          actions: [
+            { action: "answer", title: "Ответить" },
+            { action: "decline", title: "Отклонить" },
+          ],
+        }
+      : {}),
   });
 }
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url ?? "/";
+  let url = event.notification.data?.url ?? "/";
+  // «Отклонить» из уведомления: страница откроется с меткой и сама
+  // отклонит звонок — сервис-воркер не знает адреса API и не ходит в него.
+  if (event.action === "decline") url += (url.includes("?") ? "&" : "?") + "callAction=decline";
+  if (event.action === "answer") url += (url.includes("?") ? "&" : "?") + "callAction=answer";
   event.waitUntil(openTarget(url));
 });
 

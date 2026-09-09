@@ -218,3 +218,17 @@ export function canDeleteMessage(
   if (conversation.kind === 'direct') return false;
   return member.role === 'owner' || member.role === 'admin';
 }
+
+/** Тексты отказов в записи — общие для сообщений и звонков. */
+export const WRITE_DENIAL_TEXT: Record<WriteDenial, string> = {
+  not_member: 'Беседа недоступна',
+  left: 'Вы вышли из этой беседы',
+  // Та же формулировка, что при заведении диалога с заблокированным: по
+  // отказу не должно быть видно, кто кого заблокировал и было ли это вообще.
+  blocked: 'Переписка недоступна',
+  declined: 'Человек отклонил переписку',
+  archived: 'Беседа в архиве',
+  request_awaiting_answer: 'Запрос даёт одно сообщение — дождитесь ответа',
+  request_not_yours: 'Сначала примите запрос',
+  channel_readers_do_not_write: 'В канал пишет администрация общины',
+};

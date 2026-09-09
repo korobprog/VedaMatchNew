@@ -66,6 +66,16 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.portalChatCallIncoming)
+  onPortalChatCallIncoming(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.portalChatCallMissed)
+  onPortalChatCallMissed(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   @OnEvent(notificationEventNames.connectionRequested)
   onConnectionRequested(event: NotificationEvent): void {
     void this.deliver(event);
