@@ -1,6 +1,7 @@
-﻿import { NestFactory } from '@nestjs/core';
+import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 function corsOrigins() {
@@ -23,6 +24,16 @@ async function bootstrap() {
   // ThrottlerModule (100 запросов/мин), и любой всплеск трафика от одного
   // пользователя роняет лимит для всех остальных.
   app.set('trust proxy', 1);
+  // Базовые защитные заголовки (HSTS, nosniff, X-Frame-Options, скрытый
+  // X-Powered-By). CORP переведён в cross-origin: картинки и файлы, которые
+  // отдаёт API, встраиваются на vedamatch.ru с другого origin, а дефолтный
+  // same-origin браузер бы заблокировал.
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      contentSecurityPolicy: false,
+    }),
+  );
   app.use(cookieParser());
   app.enableCors({
     origin: corsOrigins(),
