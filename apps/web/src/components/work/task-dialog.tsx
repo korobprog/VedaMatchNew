@@ -20,13 +20,7 @@ import {
   updateWorkTask,
 } from "@/lib/work-api";
 import { dueFromInput, dueToInput } from "./task-due";
-
-const PRIORITY_TITLE: Record<WorkTaskPriority, string> = {
-  low: "Не горит",
-  normal: "Обычная",
-  high: "Важная",
-  urgent: "Срочно",
-};
+import { PRIORITY_TITLE } from "./task-priority";
 
 /**
  * Карточка целиком: описание, срок, исполнитель, чек-лист и обсуждение.

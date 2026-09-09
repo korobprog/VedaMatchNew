@@ -41,3 +41,18 @@ const MARKS: Record<WorkTaskPriority, PriorityMark | null> = {
 export function priorityMark(priority: WorkTaskPriority): PriorityMark | null {
   return MARKS[priority] ?? null;
 }
+
+/**
+ * Слова для выбора важности: и в карточке, и в форме новой задачи. Один
+ * список на оба места — «Важная» в одном окне и «Высокая» в соседнем читаются
+ * как две разные настройки.
+ *
+ * Порядок — от спокойного к горящему: список открывают, чтобы поднять
+ * важность, а не чтобы опустить.
+ */
+export const PRIORITY_TITLE: Record<WorkTaskPriority, string> = {
+  low: "Не горит",
+  normal: "Обычная",
+  high: "Важная",
+  urgent: "Срочно",
+};
