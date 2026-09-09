@@ -49,6 +49,11 @@ export type ReelsTab = "forYou" | "saved";
  * Порядок слайдов приходит с сервера («свежее → непросмотренное → повтор»);
  * перед первым повтором лента ставит разделитель, а в конце — финальный слайд.
  */
+/** Цитата без пояснения — то, чем делятся и что уезжает подписью. */
+function quoteOf(post: MotivationPostDto): string {
+  return splitQuoteAndExplanation(post.text).quote;
+}
+
 export function ReelsFeed({
   initial,
   tab,
@@ -84,7 +89,6 @@ export function ReelsFeed({
   // Что сейчас на экране: пост или служебный слайд. Ряд кнопок общий на всю
   // ленту, и на разделителе ему действовать не над чем.
   const [onPost, setOnPost] = useState(false);
-  const [shared, setShared] = useState(false);
   /**
    * Звук один на всю ленту, а не на слайд: включив его один раз, человек
    * ожидает слышать и следующие ролики. Стартуем без звука — с ним браузер
@@ -292,21 +296,6 @@ export function ReelsFeed({
     }
   }
 
-  async function share() {
-    if (!activePost) return;
-    const url = shareUrlFor(activePost.slug, window.location.origin);
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: activePost.title, text: activePost.text, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      setShared(true);
-      setTimeout(() => setShared(false), 1800);
-    } catch {
-      // Человек закрыл системное окно — не ошибка.
-    }
-  }
 
   const slides = buildSlides(items, dividerAt, Boolean(cursor));
 
@@ -460,13 +449,30 @@ export function ReelsFeed({
           >
             <StarIcon filled={activePost.isFavorite} />
           </RailButton>
-          <RailButton
-            label="Поделиться"
-            caption={shared ? "Скопировано" : "Поделиться"}
-            onClick={share}
+          {/* Ведёт на свой экран, а не в системную шторку. Шторка отдаёт
+              наружу только ссылку, а истории и статусы ссылку не принимают
+              вовсе — им нужен файл; на компьютере шторки и вовсе нет. Экран
+              разводит эти дороги и говорит, какая куда ведёт. */}
+          <RailLink
+            label="Поделиться афоризмом"
+            caption="Поделиться"
+            href={{
+              pathname: "/share",
+              query: {
+                kind: "story",
+                title: quoteOf(activePost).slice(0, 200),
+                text: quoteOf(activePost),
+                subtitle: attributionLine(activePost),
+                link: `/m/${encodeURIComponent(activePost.slug)}`,
+                file: `/m/${encodeURIComponent(activePost.slug)}/story`,
+                previewUrl: activePost.storyImageUrl || activePost.imageUrl,
+                sourceService: "motivation",
+                sourceId: activePost.slug,
+              },
+            }}
           >
             <ShareIcon />
-          </RailButton>
+          </RailLink>
           {/* Отправка внутрь портала — обычная ссылка в «Общение»: сервис
               «Вдохновение» не знает про устройство чата, а чат не читает его
               таблиц. Всё, что нужно сообщению, уезжает в адресе и хранится в
@@ -483,10 +489,7 @@ export function ReelsFeed({
               pathname: "/chat/share",
               query: {
                 kind: "story",
-                title: splitQuoteAndExplanation(activePost.text).quote.slice(
-                  0,
-                  200,
-                ),
+                title: quoteOf(activePost).slice(0, 200),
                 subtitle: attributionLine(activePost),
                 previewUrl: activePost.storyImageUrl || activePost.imageUrl,
                 sourceService: "motivation",
