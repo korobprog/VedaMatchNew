@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileText, Loader2, Paperclip, Trash2, X } from "lucide-react";
 import type {
   WorkBoardDto,
@@ -21,6 +21,13 @@ import {
 } from "@/lib/work-api";
 import { dueFromInput, dueToInput } from "./task-due";
 import { PRIORITY_TITLE } from "./task-priority";
+import { titleToSave } from "./task-title";
+
+/** Высота поля под текст: длинное название видно целиком, а не первой строкой. */
+function growToText(element: HTMLTextAreaElement): void {
+  element.style.height = "auto";
+  element.style.height = `${element.scrollHeight}px`;
+}
 
 /**
  * Карточка целиком: описание, срок, исполнитель, чек-лист и обсуждение.
@@ -43,6 +50,7 @@ export function WorkTaskDialog({
   const [busy, setBusy] = useState(false);
   const [comment, setComment] = useState("");
   const [checklistDraft, setChecklistDraft] = useState("");
+  const titleRef = useRef<HTMLTextAreaElement | null>(null);
 
   const canEdit =
     board.role === "owner" || board.role === "admin" || board.role === "member";
@@ -66,6 +74,12 @@ export function WorkTaskDialog({
       alive = false;
     };
   }, [taskId]);
+
+  // Высоту заголовка считаем после загрузки: до неё в поле пусто и оно
+  // осталось бы в одну строку.
+  useEffect(() => {
+    if (titleRef.current) growToText(titleRef.current);
+  }, [task?.title]);
 
   // Escape закрывает окно: без этого на компьютере из карточки выходят мышью,
   // а с клавиатуры — никак.
@@ -125,18 +139,36 @@ export function WorkTaskDialog({
               <span className="mt-1 font-mono text-xs text-text-2">
                 {task.key}
               </span>
-              <input
+              {/* Название целиком, а не первой строкой. В однострочном поле
+                  длинное название обрывалось на середине слова, и карточка
+                  открывалась так, будто текста в ней нет. Поле растёт под текст
+                  и обведено — иначе заголовок не читается как правимый. */}
+              <textarea
+                ref={titleRef}
                 defaultValue={task.title}
                 readOnly={!canEdit}
+                rows={1}
                 maxLength={200}
                 aria-label="Название задачи"
-                onBlur={(event) => {
-                  const value = event.target.value.trim();
-                  if (canEdit && value && value !== task.title) {
-                    void patch({ title: value });
+                onInput={(event) => growToText(event.currentTarget)}
+                onKeyDown={(event) => {
+                  // Enter в заголовке — это «готово», а не новая строка.
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
                   }
                 }}
-                className="min-w-0 flex-1 rounded-lg bg-transparent px-1 py-0.5 font-display text-lg font-bold text-text-0"
+                onBlur={(event) => {
+                  const value = titleToSave(event.target.value, task.title);
+                  if (canEdit && value) patch({ title: value });
+                  // Пустое или неизменённое возвращаем к сохранённому: поле
+                  // не должно врать о том, что лежит на доске.
+                  else event.target.value = task.title;
+                  growToText(event.target);
+                }}
+                className={`min-w-0 flex-1 resize-none overflow-hidden rounded-lg px-2 py-1 font-display text-lg font-bold text-text-0 ${
+                  canEdit ? "border border-glass-brd bg-bg-1" : "bg-transparent"
+                }`}
               />
               <button
                 type="button"
