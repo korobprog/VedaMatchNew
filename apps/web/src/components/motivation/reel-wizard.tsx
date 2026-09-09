@@ -49,12 +49,22 @@ export interface ReelWizardPrefill {
   reelId?: string;
 }
 
-type Step = "quote" | "style" | "status";
+type Step = "text" | "image" | "review";
 
 /**
- * Мастер «Свой рилс»: цитата → формат и стиль → статус. Дальше конвейер
- * работает сам, а экран статуса опрашивает сервер и показывает стадии;
- * отказ — с причиной и одним обращением к администратору.
+ * Мастер «Свой рилс» в три экрана (VED-38): текст и источник → картинка →
+ * проверка и отправка. В карточке названы четыре вещи, и все четыре здесь
+ * есть — но «источник / автор» стоит блоком на первом экране, а не отдельным
+ * шагом: для фрагмента из книг он не спрашивает ничего (источник известен из
+ * выбранного фрагмента), а для своих слов — одно необязательное поле. Экран
+ * ради одного необязательного поля стоил бы двух лишних нажатий на каждом
+ * афоризме, а на пути из читалки — вдвое больше, чем весь остальной мастер.
+ *
+ * Отправка стала отдельным шагом с обзором: раньше кнопка «Отправить на
+ * проверку» стояла под выбором стиля и нажималась до того, как человек
+ * видел, что именно уходит администраторам. Дальше конвейер работает сам, а
+ * экран статуса опрашивает сервер и показывает стадии; отказ — с причиной и одним
+ * обращением к администратору.
  */
 export function ReelWizard({
   prefill,
@@ -66,7 +76,7 @@ export function ReelWizard({
   defaultTrack?: MotivationAudienceTrack;
 }) {
   const fromBook = Boolean(prefill.book && prefill.chapter && prefill.text);
-  const [step, setStep] = useState<Step>(prefill.reelId ? "status" : "quote");
+  const [step, setStep] = useState<Step>(prefill.reelId ? "review" : "text");
   const [sourceKind, setSourceKind] = useState<"own" | "vedabase">(fromBook ? "vedabase" : "own");
   // Фрагмент из книг: пришёл из читалки или выбран поиском прямо здесь.
   const [book, setBook] = useState<MotivationReelSourceHit | null>(
@@ -116,7 +126,7 @@ export function ReelWizard({
   // запрос уходит только после ответа на предыдущий.
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (step !== "status" || !reelId) return;
+    if (step !== "review" || !reelId) return;
     let cancelled = false;
     const tick = async () => {
       try {
@@ -188,7 +198,7 @@ export function ReelWizard({
         if (!upload.ok) throw new Error(await readError(upload));
       }
       setReelId(result.id);
-      setStep("status");
+      setStep("review");
       setQuota((current) =>
         current && !current.unlimited
           ? { ...current, used: current.used + 1, remaining: Math.max(0, current.remaining - 1) }
@@ -206,7 +216,7 @@ export function ReelWizard({
     setReel(null);
     setReelId(null);
     setError(null);
-    setStep("quote");
+    setStep("text");
   }
 
   const exhausted = quotaExhausted(quota);
@@ -215,9 +225,9 @@ export function ReelWizard({
     <div className="space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div className="font-mono text-xs uppercase tracking-wide text-text-2">
-          {step === "quote" && "Шаг 1 из 3 · Цитата"}
-          {step === "style" && "Шаг 2 из 3 · Формат и стиль"}
-          {step === "status" && "Шаг 3 из 3 · Сборка"}
+          {step === "text" && "Шаг 1 из 3 · Текст и источник"}
+          {step === "image" && "Шаг 2 из 3 · Картинка"}
+          {step === "review" && "Шаг 3 из 3 · Проверка"}
         </div>
         {quota && <div className="text-xs text-text-2">{quotaLine(quota)}</div>}
       </header>
@@ -229,7 +239,7 @@ export function ReelWizard({
         </p>
       )}
 
-      {step !== "status" && exhausted && (
+      {step !== "review" && exhausted && (
         <div className="glass rounded-2xl p-4 text-sm text-text-1">
           <p className="font-semibold text-text-0">
             {quota && !quota.enabled ? "Создание своих рилсов сейчас выключено" : "Сегодня рилс уже создан"}
@@ -248,12 +258,12 @@ export function ReelWizard({
         </div>
       )}
 
-      {step === "quote" && !exhausted && (
+      {step === "text" && !exhausted && (
         <form
           className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!textError && trimmed) setStep("style");
+            if (!textError && trimmed) setStep("image");
           }}
         >
           <div className="grid grid-cols-2 gap-2">
@@ -299,18 +309,6 @@ export function ReelWizard({
               {textError ?? `${trimmed.length} / ${MAX_TEXT}`}
             </span>
           </label>
-          {sourceKind === "own" && (
-            <label className="block text-sm text-text-1">
-              Автор (необязательно)
-              <input
-                value={author}
-                onChange={(e) => setAuthor(e.target.value)}
-                maxLength={80}
-                placeholder="Кому принадлежат слова"
-                className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
-              />
-            </label>
-          )}
           <label className="block text-sm text-text-1">
             Ваша мысль под цитатой (необязательно)
             <textarea
@@ -322,6 +320,37 @@ export function ReelWizard({
               className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
             />
           </label>
+          {/* Источник и автор — отдельным блоком, но на этом же экране. Для
+              фрагмента из книг спрашивать нечего: источник известен из самого
+              фрагмента, и здесь он только назван, чтобы человек видел, чем
+              подпишется. Для своих слов это одно необязательное поле. */}
+          <fieldset className="space-y-2 rounded-2xl border border-glass-brd p-3">
+            <legend className="px-1 text-sm font-medium text-text-1">
+              Источник / автор
+            </legend>
+            {sourceKind === "vedabase" ? (
+              <p className="text-sm text-text-1">
+                {book
+                  ? `${book.bookTitle}${book.locator ? ` · ${book.locator}` : ""}`
+                  : "Выберите фрагмент выше — книга и глава подставятся сами."}
+              </p>
+            ) : (
+              <label className="block text-sm text-text-1">
+                Автор (необязательно)
+                <input
+                  value={author}
+                  onChange={(e) => setAuthor(e.target.value)}
+                  maxLength={80}
+                  placeholder="Кому принадлежат слова"
+                  className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
+                />
+                <span className="mt-1 block text-xs text-text-2">
+                  Пусто — подпишем вашим именем. Чужие слова честнее подписать
+                  тем, кому они принадлежат.
+                </span>
+              </label>
+            )}
+          </fieldset>
           <p className="text-xs text-text-2">
             {sourceKind === "own"
               ? "Своя цитата не попадёт в общую ленту «Для вас» — только в «Мои» и по ссылке: у неё нет проверенного источника."
@@ -332,13 +361,19 @@ export function ReelWizard({
             disabled={!trimmed || Boolean(textError) || (sourceKind === "vedabase" && !book)}
             className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
           >
-            Дальше: формат и стиль
+            Дальше: картинка
           </button>
         </form>
       )}
 
-      {step === "style" && !exhausted && (
-        <form className="space-y-4" onSubmit={submit}>
+      {step === "image" && !exhausted && (
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setStep("review");
+          }}
+        >
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium text-text-1">Трек ленты</legend>
             <div className="grid grid-cols-2 gap-2">
@@ -401,21 +436,86 @@ export function ReelWizard({
             {imageMode === "upload" && " Свой кадр всегда смотрит администратор перед публикацией."}
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => setStep("quote")} className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1">
+            <button type="button" onClick={() => setStep("text")} className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1">
               ← Назад
             </button>
             <button
               type="submit"
-              disabled={pending || (imageMode === "upload" && !file)}
+              disabled={imageMode === "upload" && !file}
               className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
             >
-              {pending ? "Отправляем…" : "Отправить на проверку"}
+              Дальше: проверка
             </button>
           </div>
         </form>
       )}
 
-      {step === "status" && (
+      {/* Шаг 4. Пока рилс не создан — обзор и одна кнопка: человек видит, что
+          именно уходит администраторам. После отправки на том же шаге живёт
+          статус сборки: возвращать его на отдельный экран значило бы уводить
+          от карточки, за которой человек и пришёл. */}
+      {step === "review" && !reelId && !exhausted && (
+        <form className="space-y-4" onSubmit={submit}>
+          <div className="glass space-y-3 rounded-2xl p-4 text-sm text-text-1">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-text-2">Текст</p>
+              <p className="mt-1 whitespace-pre-line text-text-0">{trimmed}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-text-2">
+                Источник
+              </p>
+              <p className="mt-1 text-text-0">
+                {sourceKind === "vedabase" && book
+                  ? `${book.bookTitle}${book.locator ? ` · ${book.locator}` : ""}`
+                  : author.trim() || "Ваши слова, подпишем вашим именем"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-text-2">
+                Картинка
+              </p>
+              <p className="mt-1 text-text-0">
+                {imageMode === "upload"
+                  ? `Ваш файл${file ? `: ${file.name}` : ""}`
+                  : "Сгенерируем по смыслу цитаты"}
+              </p>
+            </div>
+            {explanation.trim() && (
+              <div>
+                <p className="text-xs uppercase tracking-wide text-text-2">
+                  Ваша мысль под цитатой
+                </p>
+                <p className="mt-1 whitespace-pre-line text-text-0">
+                  {explanation.trim()}
+                </p>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-text-2">
+            Администратор посмотрит текст, источник и кадр. Пока идёт проверка,
+            рилс виден вам в «Моих» — и никому больше.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setStep("image")}
+              className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1"
+            >
+              ← Назад
+            </button>
+            <button
+              type="submit"
+              disabled={pending || !trimmed || Boolean(textError)}
+              className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              {pending ? "Отправляем…" : "Отправить на проверку администраторам"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {step === "review" && reelId && (
         <ReelStatus reel={reel} donation={donation} onRestart={restart} onUpdate={setReel} />
       )}
     </div>
@@ -689,7 +789,7 @@ function HitList({
 }
 
 function StepBar({ step }: { step: Step }) {
-  const index = step === "quote" ? 0 : step === "style" ? 1 : 2;
+  const index = step === "text" ? 0 : step === "image" ? 1 : 2;
   return (
     <div className="grid grid-cols-3 gap-1" aria-hidden="true">
       {[0, 1, 2].map((i) => (
