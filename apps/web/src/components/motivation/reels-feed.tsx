@@ -467,6 +467,35 @@ export function ReelsFeed({
           >
             <ShareIcon />
           </RailButton>
+          {/* Отправка внутрь портала — обычная ссылка в «Общение»: сервис
+              «Вдохновение» не знает про устройство чата, а чат не читает его
+              таблиц. Всё, что нужно сообщению, уезжает в адресе и хранится в
+              переписке снимком, поэтому правка или удаление афоризма не
+              оставляет в чужой переписке дыру.
+
+              Той же дверью уже ходят Объявления, Рынок, Работа и Ассистент —
+              и карточка афоризма на отдельной странице. В ленте её не было,
+              хотя делятся чаще всего именно отсюда. */}
+          <RailLink
+            label="Отправить своим в портале"
+            caption="Своим"
+            href={{
+              pathname: "/chat/share",
+              query: {
+                kind: "story",
+                title: splitQuoteAndExplanation(activePost.text).quote.slice(
+                  0,
+                  200,
+                ),
+                subtitle: attributionLine(activePost),
+                previewUrl: activePost.storyImageUrl || activePost.imageUrl,
+                sourceService: "motivation",
+                sourceId: activePost.slug,
+              },
+            }}
+          >
+            <PeopleIcon />
+          </RailLink>
           {/* Убрать текст и остаться с изображением. Кнопка есть только у
               фото: в ролике подпись вшита в сам кадр, убрать её оттуда
               нечем. Режим держится, пока его не выключат, — в том числе на
@@ -1007,6 +1036,34 @@ function FullQuoteToggle({ quote, source }: { quote: string; source: string }) {
 const railItemClass =
   "flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 text-[9px] font-semibold leading-tight drop-shadow sm:text-[10px]";
 
+/**
+ * Пункт ряда, который уводит на другой экран. Ссылка, а не кнопка с
+ * router.push: её открывают в новой вкладке, копируют адрес и видят, куда она
+ * ведёт, — кнопка всего этого не умеет, а выглядит так же.
+ */
+function RailLink({
+  label,
+  caption,
+  href,
+  children,
+}: {
+  label: string;
+  caption: string;
+  href: React.ComponentProps<typeof Link>["href"];
+  children: React.ReactNode;
+}) {
+  return (
+    <Link href={href} aria-label={label} className={railItemClass}>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/15">
+        {children}
+      </span>
+      <span aria-hidden="true" className="w-full truncate text-center">
+        {caption}
+      </span>
+    </Link>
+  );
+}
+
 function RailButton({
   label,
   caption,
@@ -1168,6 +1225,16 @@ function SpeakIcon() {
       <path d="M11 5L6 9H3v6h3l5 4z" />
       <path d="M16 8.5a4.5 4.5 0 0 1 0 7" />
       <path d="M19 5.5a8.5 8.5 0 0 1 0 13" />
+    </svg>
+  );
+}
+
+function PeopleIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1" />
+      <circle cx="9" cy="7" r="3" />
+      <path d="M22 19v-1a4 4 0 0 0-3-3.87M16 4.13a4 4 0 0 1 0 7.75" />
     </svg>
   );
 }
