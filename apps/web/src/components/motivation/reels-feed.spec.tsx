@@ -115,6 +115,27 @@ describe("ReelsFeed", () => {
     expect(query.get("file")).toBe("/m/a/story");
   });
 
+  it("нижний ряд слушается раскладки с устройства", () => {
+    fetchOk({});
+    // Своя раскладка: сначала «Поделиться», потом «Нравится»,
+    // а «Сохранить» убрано вовсе.
+    window.localStorage.setItem(
+      "vedamatch:motivation-rail",
+      JSON.stringify(["share", "like"]),
+    );
+    render(<ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="forYou" donation={null} />);
+
+    expect(
+      screen.queryByRole("button", { name: "Сохранить в избранное" }),
+    ).not.toBeInTheDocument();
+    const share = screen.getByRole("link", { name: "Поделиться афоризмом" });
+    const like = screen.getByRole("button", { name: "Нравится" });
+    expect(
+      share.compareDocumentPosition(like) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    window.localStorage.clear();
+  });
+
   it("likes optimistically and settles on the server count", async () => {
     const fetchMock = fetchOk({ likeCount: 10, isLiked: true });
     const user = userEvent.setup();
