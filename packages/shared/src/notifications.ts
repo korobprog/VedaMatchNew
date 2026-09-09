@@ -264,6 +264,23 @@ export type NotificationEvent =
       conversationId: string;
     }
   | {
+      /** Входящий звонок в «Общении»: пуш с кнопками «Ответить / Отклонить». */
+      name: 'chat.call-incoming';
+      recipientId: string;
+      callerName: string;
+      callId: string;
+      conversationId: string;
+      callKind: 'audio' | 'video';
+    }
+  | {
+      /** Звонок не приняли за время дозвона. */
+      name: 'chat.call-missed';
+      recipientId: string;
+      callerName: string;
+      conversationId: string;
+      callKind: 'audio' | 'video';
+    }
+  | {
       /** Запись прошла проверку и появилась в общем каталоге. */
       name: 'music.track.published';
       recipientId: string;

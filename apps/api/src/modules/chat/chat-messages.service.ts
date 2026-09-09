@@ -19,7 +19,7 @@ import {
   canDeleteMessage,
   canEditMessage,
   denyWrite,
-  type WriteDenial,
+  WRITE_DENIAL_TEXT,
 } from './chat-access';
 import { ChatConversationsService } from './chat-conversations.service';
 import {
@@ -39,20 +39,6 @@ import {
   normalizeAttachments,
   normalizeMessageBody,
 } from './chat-validate';
-
-/** Объяснения отказа в записи — человеку, а не в логи. */
-const WRITE_DENIAL_TEXT: Record<WriteDenial, string> = {
-  not_member: 'Беседа недоступна',
-  left: 'Вы вышли из этой беседы',
-  // Та же формулировка, что при заведении диалога с заблокированным: по
-  // отказу не должно быть видно, кто кого заблокировал и было ли это вообще.
-  blocked: 'Переписка недоступна',
-  declined: 'Человек отклонил переписку',
-  archived: 'Беседа в архиве',
-  request_awaiting_answer: 'Запрос даёт одно сообщение — дождитесь ответа',
-  request_not_yours: 'Сначала примите запрос',
-  channel_readers_do_not_write: 'В канал пишет администрация общины',
-};
 
 @Injectable()
 export class ChatMessagesService {

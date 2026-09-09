@@ -379,6 +379,8 @@ model User {
   telemetryInstallEnvironment        TelemetryInstallEnvironment? @relation("TelemetryInstallEnvironment")
   chatConversationsCreated           ChatConversation[]           @relation("ChatConversationsCreated")
   chatMemberships                    ChatMember[]                 @relation("ChatMemberships")
+  chatCallsPlaced                    ChatCall[]                   @relation("ChatCallsPlaced")
+  chatCallsReceived                  ChatCall[]                   @relation("ChatCallsReceived")
   chatMessagesSent                   ChatMessage[]                @relation("ChatMessagesSent")
   chatReactionsMade                  ChatMessageReaction[]        @relation("ChatReactionsMade")
   chatReportsMade                    ChatReport[]                 @relation("ChatReportsMade")
@@ -3886,6 +3888,9 @@ enum ChatAttachmentKind {
   work
   /// Карточка предложения из «Вакансий»: первое сообщение отклика.
   vacancy
+  /// Запись о звонке в ленте диалога: вид, исход и длительность. Создаёт
+  /// только сервер (ChatCallsService), через API такое вложение не прислать.
+  call
 }
 
 enum ChatReportStatus {
@@ -3946,12 +3951,12 @@ model ChatConversation {
   contextStatus  String?
   contextMeta    Json?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  members  ChatMember[]
-  messages ChatMessage[]
-  reports  ChatReport[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  calls     ChatCall[]
+  members   ChatMember[]
+  messages  ChatMessage[]
+  reports   ChatReport[]
 
   @@index([contextService, contextId])
   @@index([kind, lastMessageAt])
@@ -5635,4 +5640,64 @@ model VacancyReport {
   @@unique([reporterId, offerId])
   @@index([status, createdAt])
   @@index([offerId, status])
+}
+
+// ===== Chat service: звонки =====
+
+enum ChatCallKind {
+  audio
+  video
+}
+
+/// Жизненный цикл звонка. Переходы — в `calls/call-state.ts`:
+/// ringing → accepted → ended | failed; ringing → declined | missed | cancelled.
+enum ChatCallStatus {
+  ringing
+  accepted
+  declined
+  missed
+  cancelled
+  ended
+  failed
+}
+
+/// Звонок один на один внутри личного диалога. Сигналинг (offer/answer/ICE)
+/// сюда не пишется — живёт в событиях секунды; здесь факт звонка для ленты,
+/// админки и метрики «сколько пошло через релей».
+model ChatCall {
+  id             String           @id @default(uuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  callerId       String
+  caller         User             @relation("ChatCallsPlaced", fields: [callerId], references: [id], onDelete: Cascade)
+  calleeId       String
+  callee         User             @relation("ChatCallsReceived", fields: [calleeId], references: [id], onDelete: Cascade)
+
+  kind   ChatCallKind
+  status ChatCallStatus @default(ringing)
+
+  createdAt  DateTime  @default(now())
+  answeredAt DateTime?
+  endedAt    DateTime?
+
+  /// Кто завершил и почему: hangup | timeout | network | busy.
+  endedById String?
+  endReason String?
+
+  /// Пошёл ли звук через TURN. Единственная метрика, ради которой стоит
+  /// хранить строку, а не только сообщение в ленте.
+  relayed Boolean?
+
+  @@index([conversationId, createdAt])
+  @@index([callerId, createdAt])
+  @@index([calleeId, createdAt])
+  @@index([status, createdAt])
+}
+
+/// Настройки сервиса «Общение», меняются из админки. Одна строка `global`.
+model ChatSettings {
+  id           String   @id @default("global")
+  /// Выключатель звонков на случай инцидента с TURN или злоупотреблений.
+  callsEnabled Boolean  @default(true)
+  updatedAt    DateTime @updatedAt
 }

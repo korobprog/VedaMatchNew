@@ -28,6 +28,7 @@ import { ChatComposer } from "./chat-composer";
 import { contextLinesOf, recipientNameOf } from "./chat-assistant-context";
 import { ChatContextBar } from "./chat-context-bar";
 import { ChatRoomMenu } from "./chat-room-menu";
+import { CallButtons } from "./calls/call-buttons";
 import { ChatMessage } from "./chat-message";
 import { firstUnreadIndex } from "./unread-divider";
 import { scrollDeltaToCenter } from "./scroll-to-message";
@@ -512,6 +513,12 @@ export function ChatRoom({
             )}
           </p>
         </div>
+        {conversation.kind === "direct" && conversation.companion && (
+          <CallButtons
+            conversationId={conversation.id}
+            disabled={!conversation.canWrite}
+          />
+        )}
         <ChatRoomMenu
           conversation={conversation}
           onChange={(patch) =>

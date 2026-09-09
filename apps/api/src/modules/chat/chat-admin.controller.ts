@@ -12,10 +12,12 @@ import {
 import type {
   AccessTokenPayload,
   AdminChatReportDecisionRequest,
+  UpdateChatCallSettingsRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { ChatSignedUrlsInterceptor } from './chat-signed-urls.interceptor';
 import { ChatReportsService } from './chat-reports.service';
+import { ChatCallsService } from './calls/chat-calls.service';
 import { isAdmin } from './is-admin';
 
 /**
@@ -26,7 +28,10 @@ import { isAdmin } from './is-admin';
 @UseGuards(AuthGuard)
 @UseInterceptors(ChatSignedUrlsInterceptor)
 export class ChatAdminController {
-  constructor(private readonly reports: ChatReportsService) {}
+  constructor(
+    private readonly reports: ChatReportsService,
+    private readonly calls: ChatCallsService,
+  ) {}
 
   @Get('reports')
   list(
@@ -75,6 +80,22 @@ export class ChatAdminController {
   ) {
     if (!isAdmin(user)) throw new ForbiddenException('Недостаточно прав');
     return this.reports.adminDirectTranscript(user.sub, a ?? '', b ?? '');
+  }
+
+  /** Звонки: выключатель, сводка за неделю и последние звонки. */
+  @Get('calls')
+  callsOverview(@CurrentUser() user: AccessTokenPayload) {
+    this.assertAdmin(user);
+    return this.calls.adminOverview();
+  }
+
+  @Post('calls/settings')
+  callsSettings(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: UpdateChatCallSettingsRequest,
+  ) {
+    this.assertAdmin(user);
+    return this.calls.updateSettings(body);
   }
 
   @Get('stats')

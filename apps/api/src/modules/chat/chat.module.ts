@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { ChatAdminController } from './chat-admin.controller';
 import { ChatCallsController } from './calls/chat-calls.controller';
+import { ChatCallsService } from './calls/chat-calls.service';
 import { ChatColorTemplatesService } from './chat-color-templates.service';
 import { ChatConversationThemeService } from './chat-conversation-theme.service';
 import { ChatConversationsService } from './chat-conversations.service';
@@ -49,6 +50,7 @@ import { PeopleService } from './people/people.service';
   ],
   providers: [
     ChatConversationsService,
+    ChatCallsService,
     ChatMessagesService,
     ChatReportsService,
     ChatEventsService,
