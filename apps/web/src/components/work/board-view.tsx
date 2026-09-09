@@ -311,7 +311,25 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     }
   }
 
-  async function removeColumn(columnId: string) {
+  /**
+   * «Готово» — не название, а свойство: задача, попавшая в такую колонку,
+   * закрывается и уходит из «Моего дня», а вынутая — открывается обратно.
+   * Свойство было только у колонок из заготовки; свою «Выполнено» отметить
+   * было нечем, и сложенное в неё навсегда оставалось открытым.
+   */
+  async function toggleDone(columnId: string, isDone: boolean) {
+    try {
+      setBoard(await updateWorkColumn(columnId, { isDone }));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Не переключилось");
+    }
+  }
+
+  async function removeColumn(columnId: string, name: string) {
+    // Спрашиваем: колонку не вернуть, а кнопка стоит в одном ряду с
+    // переименованием — так однажды и пропала «Готово» вместе со своей
+    // галочкой.
+    if (!window.confirm(`Удалить колонку «${name}»?`)) return;
     try {
       setBoard(await deleteWorkColumn(columnId));
     } catch (cause) {
@@ -476,8 +494,31 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   {column.tasks.length}
                   {column.wipLimit > 0 ? ` / ${column.wipLimit}` : ""}
                 </span>
-                {column.isDone && (
-                  <Check aria-hidden className="size-4 text-cyan" />
+                {/* Галочка — не украшение: она и делает колонку завершающей.
+                    Администрации это переключатель, остальным — отметка. */}
+                {canManage ? (
+                  <button
+                    type="button"
+                    aria-pressed={column.isDone}
+                    aria-label={`Колонка «${column.name}» закрывает задачи`}
+                    title={
+                      column.isDone
+                        ? "Задачи здесь считаются выполненными"
+                        : "Отметить колонку завершающей"
+                    }
+                    onClick={() => void toggleDone(column.id, !column.isDone)}
+                    className={`rounded p-1 ${
+                      column.isDone
+                        ? "text-cyan"
+                        : "text-text-2 opacity-40 hover:opacity-100"
+                    }`}
+                  >
+                    <Check aria-hidden className="size-4" />
+                  </button>
+                ) : (
+                  column.isDone && (
+                    <Check aria-hidden className="size-4 text-cyan" />
+                  )
                 )}
                 {/* «Раньше» и «позже», а не «левее» и «правее»: на телефоне
                     колонки стоят столбиком, и «левее» показывало бы вверх.
@@ -529,7 +570,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   <button
                     type="button"
                     aria-label={`Удалить колонку «${column.name}»`}
-                    onClick={() => removeColumn(column.id)}
+                    onClick={() => void removeColumn(column.id, column.name)}
                     className="rounded p-1 text-text-2 hover:text-magenta"
                   >
                     <Trash2 aria-hidden className="size-3.5" />

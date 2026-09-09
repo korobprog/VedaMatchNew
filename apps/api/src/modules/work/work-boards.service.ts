@@ -18,6 +18,7 @@ import {
   type WorkLabelDto,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { columnDoneChange } from './work-column-done';
 import { toWorkLabel, toWorkMember, toWorkTaskCard } from './work-dto';
 import { WORK_POSITION_STEP, resolveMovePosition } from './work-position';
 import { assertWorkAccess } from './work-roles';
@@ -232,7 +233,7 @@ export class WorkBoardsService {
 
     const column = await this.prisma.workColumn.findUnique({
       where: { id: columnId },
-      select: { boardId: true },
+      select: { boardId: true, isDone: true },
     });
     if (!column) throw new NotFoundException('Колонка не найдена');
 
@@ -272,6 +273,21 @@ export class WorkBoardsService {
     }
 
     await this.prisma.workColumn.update({ where: { id: columnId }, data });
+
+    // Карточки догоняют колонку: свою «Выполнено» отмечают завершающей уже
+    // после того, как в неё сложили сделанное. См. work-column-done.ts.
+    const done = columnDoneChange(column.isDone, request.isDone, new Date());
+    if (done) {
+      await this.prisma.workTask.updateMany({
+        where: {
+          columnId,
+          archivedAt: null,
+          ...(done.completedAt ? { completedAt: null } : {}),
+        },
+        data: { completedAt: done.completedAt },
+      });
+    }
+
     return this.board(column.boardId, userId);
   }
 
