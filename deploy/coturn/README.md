@@ -90,7 +90,14 @@ cd /opt/vedamatch/coturn && sudo docker compose up -d && sudo docker compose ps 
 ```
 
 В логе должны быть строки про прослушивание 3478 и TLS 5349 и ни одной
-про сертификат.
+про сертификат. Если TLS-порт не слушается, а в логе «cannot find
+certificate file» — дело в правах: coturn в контейнере работает от
+`nobody` (uid 65534), файлы должны принадлежать ему (`extract-cert.py`
+делает это сам).
+
+Состояние на 2026-09-09: coturn на проде поднят по этим шагам, TLS на 5349
+снаружи отвечает сертификатом `turn.vedamatch.ru`, TCP 3478 открыт.
+UDP снаружи не проверялся — это работа зонда.
 
 **5. Переменные API в Dokploy** (амстердамская панель, compose
 `vedamatch-portal`, сервис api), после чего Redeploy:
