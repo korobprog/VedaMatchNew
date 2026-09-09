@@ -44,6 +44,7 @@ import {
   columnBeside,
   columnNeighbours,
   isOverWip,
+  looksDone,
   moveTaskLocally,
   neighboursOf,
 } from "./board-state";
@@ -595,6 +596,25 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   </button>
                 )}
               </header>
+
+              {/* Колонка называется «Выполнено», а задачи в ней остаются
+                  открытыми: закрывает их признак колонки, а не название. Без
+                  него счётчик среды не уменьшается, сколько туда ни клади, —
+                  и человек месяцами не понимает почему. Спрашиваем прямо,
+                  вместе с кнопкой, которая это чинит одним нажатием. */}
+              {canManage && !column.isDone && looksDone(column.name) && (
+                <p className="mb-2 rounded-xl border border-gold/40 bg-gold/10 p-2 text-xs text-text-1">
+                  Задачи в этой колонке остаются открытыми и считаются в
+                  счётчике среды.{" "}
+                  <button
+                    type="button"
+                    onClick={() => void toggleDone(column.id, true)}
+                    className="font-semibold text-text-0 underline"
+                  >
+                    Отмечать выполненными
+                  </button>
+                </p>
+              )}
 
               {/* Тело колонки: форма и карточки. Прячется только на узком
                   экране — на широком колонка всегда развёрнута. */}

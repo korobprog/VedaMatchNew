@@ -4,6 +4,7 @@ import {
   columnBeside,
   columnNeighbours,
   isOverWip,
+  looksDone,
   moveTaskLocally,
   neighboursOf,
 } from "./board-state";
@@ -192,5 +193,42 @@ describe("columnNeighbours", () => {
 
   it("чужая колонка — не повод гадать", () => {
     expect(columnNeighbours(columns, "z", -1)).toBeNull();
+  });
+});
+
+describe("looksDone", () => {
+  it("узнаёт колонку конца работы в разных написаниях", () => {
+    for (const name of [
+      "Готово",
+      "готово",
+      "Выполнено ✅",
+      "ВЫПОЛНЕНО",
+      "Завершённые",
+      "Сделано",
+      "Закрыто",
+      "Done",
+      "Completed",
+    ]) {
+      expect(looksDone(name)).toBe(true);
+    }
+  });
+
+  it("рабочие колонки не трогает", () => {
+    for (const name of [
+      "Надо",
+      "В работе",
+      "Тестерование",
+      "На доработку",
+      "РАЗНОЕ.",
+      "Идеи",
+    ]) {
+      expect(looksDone(name)).toBe(false);
+    }
+  });
+
+  it("«не готово» — тоже про готовность: спросить дешевле, чем промолчать", () => {
+    // Подсказка не принимает решение за человека, поэтому лишний вопрос
+    // здесь безопаснее пропущенного.
+    expect(looksDone("Не готово")).toBe(true);
   });
 });
