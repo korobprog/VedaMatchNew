@@ -46,9 +46,11 @@ def main() -> int:
             pass
         with open(path, "wb") as fh:
             fh.write(data)
-        # coturn в контейнере читает файлы не root'ом — ключ должен быть
-        # читаем, но не миру.
+        # coturn в контейнере работает от nobody (uid 65534) и файлы root:640
+        # не открывает — TLS-слушатель молча не поднимается. Отдаём файлы ему,
+        # миру не показываем.
         os.chmod(path, 0o640)
+        os.chown(path, 65534, 65534)
         changed = True
 
     return 0 if changed else 3
