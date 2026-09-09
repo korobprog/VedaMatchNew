@@ -27,6 +27,7 @@ services:
       - /etc/coturn/turnserver.conf
       - --static-auth-secret=${TURN_SECRET:?TURN_SECRET не задан}
       - --realm=${TURN_REALM:?TURN_REALM не задан}
+      # Формат «внешний/внутренний»: хост за 1:1 NAT (README).
       - --external-ip=${TURN_EXTERNAL_IP:?TURN_EXTERNAL_IP не задан}
       - --tls-listening-port=${TURN_TLS_PORT:-5349}
     logging:
