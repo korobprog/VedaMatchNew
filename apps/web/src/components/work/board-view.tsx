@@ -55,6 +55,7 @@ import {
 import { WorkInvitePanel } from "./invite-panel";
 import { WorkTaskDialog } from "./task-dialog";
 import { dueFromInput, endOfDayInput } from "./task-due";
+import { priorityMark } from "./task-priority";
 
 /** Сколько точек палец должен пройти, чтобы это считалось переносом, а не касанием. */
 const DRAG_THRESHOLD = 6;
@@ -747,13 +748,14 @@ function TaskCard({
     task.dueAt !== null &&
     !task.completedAt &&
     new Date(task.dueAt) < new Date();
+  const mark = priorityMark(task.priority);
 
   return (
     <div
       ref={cardRef}
       className={`rounded-xl border border-glass-brd bg-bg-1 p-2 transition-opacity ${
-        dragging ? "opacity-40" : ""
-      }`}
+        mark?.edge ?? ""
+      } ${dragging ? "opacity-40" : ""}`}
     >
       <div className="flex items-start gap-1">
         {canEdit && (
@@ -779,6 +781,14 @@ function TaskCard({
 
       <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-5 text-xs text-text-2">
         <span className="font-mono">{task.key}</span>
+        {/* Точка и слово вместе: цветного края мало — на солнце и при
+            дальтонизме золото от пурпура не отличить. */}
+        {mark && (
+          <span className="flex items-center gap-1 rounded-full bg-glass px-1.5 py-0.5 text-[10px] text-text-1">
+            <span aria-hidden className={`size-1.5 rounded-full ${mark.dot}`} />
+            {mark.label}
+          </span>
+        )}
         {task.labels.map((label) => (
           <span
             key={label.id}
