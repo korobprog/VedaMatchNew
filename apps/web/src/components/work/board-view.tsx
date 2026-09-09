@@ -22,6 +22,7 @@ import type {
   WorkBoardDto,
   WorkSpaceDto,
   WorkTaskCardDto,
+  WorkTaskPriority,
 } from "@vedamatch/shared";
 import {
   createWorkColumn,
@@ -55,7 +56,8 @@ import {
 import { WorkInvitePanel } from "./invite-panel";
 import { WorkTaskDialog } from "./task-dialog";
 import { dueFromInput, endOfDayInput } from "./task-due";
-import { priorityMark } from "./task-priority";
+import { splitTaskDraft } from "./task-title";
+import { PRIORITY_TITLE, priorityMark } from "./task-priority";
 
 /** Сколько точек палец должен пройти, чтобы это считалось переносом, а не касанием. */
 const DRAG_THRESHOLD = 6;
@@ -90,6 +92,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   // Исполнитель и срок новой задачи. Заполнены заранее — см. openComposer.
   const [draftAssignee, setDraftAssignee] = useState("");
   const [draftDue, setDraftDue] = useState("");
+  const [draftPriority, setDraftPriority] = useState<WorkTaskPriority>("normal");
   const [drag, setDrag] = useState<DragState | null>(null);
   const [columnDraft, setColumnDraft] = useState<string | null>(null);
   const [renamingColumn, setRenamingColumn] = useState<string | null>(null);
@@ -251,19 +254,30 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         : "",
     );
     setDraftDue(endOfDayInput(new Date()));
+    // Важность — единственное поле формы, которое начинает с нуля: «срочно»
+    // у прошлой задачи ничего не говорит о следующей, а тихо унаследованное
+    // «срочно» обесценивает метку на всей доске.
+    setDraftPriority("normal");
   }
 
   async function addTask(columnId: string) {
     if (!board || !draft.trim()) return;
     const dueAt = dueFromInput(draftDue);
+    /* Поле подписано как название, но пишут в него задачу целиком. Длинный
+       текст делится сам: начало остаётся названием, остальное уезжает в
+       описание — см. splitTaskDraft. Ничего не теряется. */
+    const { title, description } = splitTaskDraft(draft);
     try {
       await createWorkTask(board.id, {
         columnId,
-        title: draft.trim(),
+        title,
+        description: description || undefined,
         assigneeId: draftAssignee || null,
         dueAt: dueAt ?? null,
+        priority: draftPriority,
       });
       setDraft("");
+      setDraftPriority("normal");
       setBoard(await getWorkBoard(board.id));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не получилось");
@@ -372,6 +386,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
       </p>
     );
   }
+
+  /** Что станет названием, а что описанием, — считаем на каждом нажатии
+      клавиши: подсказка под полем должна показывать правду, а не обещание. */
+  const draftSplit = splitTaskDraft(draft);
 
   return (
     <div>
@@ -605,11 +623,19 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                           if (event.key === "Escape") setComposerColumn(null);
                         }}
                         rows={2}
-                        maxLength={200}
+                        maxLength={2000}
                         placeholder="Что нужно сделать"
                         aria-label={`Новая задача в колонке «${column.name}»`}
                         className="w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
                       />
+                      {/* Говорим заранее, что произойдёт: молча разрезанный
+                          текст выглядел бы как потеря половины написанного. */}
+                      {draftSplit.description && (
+                        <p className="mt-1 text-xs text-text-2">
+                          Длинно для названия. В нём останется «{draftSplit.title}
+                          », остальное уедет в описание.
+                        </p>
+                      )}
                       <div className="mt-2 grid gap-2">
                         <label className="text-xs text-text-1">
                           Исполнитель
@@ -638,6 +664,29 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                             onChange={(event) => setDraftDue(event.target.value)}
                             className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0"
                           />
+                        </label>
+                        {/* Важность здесь же, а не в открытой карточке:
+                            «срочно» известно в ту же секунду, что и название,
+                            а за вторым заходом его обычно не ставят вовсе. */}
+                        <label className="text-xs text-text-1">
+                          Важность
+                          <select
+                            value={draftPriority}
+                            onChange={(event) =>
+                              setDraftPriority(
+                                event.target.value as WorkTaskPriority,
+                              )
+                            }
+                            className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0"
+                          >
+                            {Object.entries(PRIORITY_TITLE).map(
+                              ([value, title]) => (
+                                <option key={value} value={value}>
+                                  {title}
+                                </option>
+                              ),
+                            )}
+                          </select>
                         </label>
                       </div>
                       <div className="mt-2 flex gap-2">
