@@ -44,6 +44,7 @@ import type {
   MotivationVisualStyle,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { explanationChanged, explanationOf } from './explanation-text';
 import { isAdmin } from './is-admin';
 import { READER_VISIBLE_POSTS } from './reader-visible';
 import {
@@ -303,6 +304,11 @@ export class MotivationService {
       // Имя автора наружу собирает resolveDisplayName, поэтому духовное имя
       // тянем рядом с мирским — иначе подпись слайда молча станет мирской.
       author: { select: { id: true, name: true, spiritualName: true } },
+      // Подпись под пояснением собирает тот же resolveDisplayName, поэтому
+      // духовное имя тянем рядом с мирским.
+      explanationAuthor: {
+        select: { id: true, name: true, spiritualName: true },
+      },
       // Глава, из которой выделен стих: по ней слайд открывает комментарий.
       // Слаги лежат в своей таблице модуля, а не читаются из Библиотеки, —
       // сервис в чужие таблицы не ходит.
@@ -693,6 +699,23 @@ export class MotivationService {
       input.translations ?? {},
     )) {
       if (!translation) continue;
+      /* Переписал пояснение — стал его автором, и спрашивать за трактовку
+         теперь с него. Правку самой цитаты автором не считаем: опечатка в
+         чужих словах не делает их твоими. */
+      const before = await this.prisma.motivationPostTranslation.findUnique({
+        where: { postId_language: { postId: id, language } },
+        select: { text: true },
+      });
+      if (explanationChanged(before?.text ?? '', translation.text)) {
+        await this.prisma.motivationPost.update({
+          where: { id },
+          data: {
+            explanationAuthorId: explanationOf(translation.text)
+              ? user.sub
+              : null,
+          },
+        });
+      }
       await this.prisma.motivationPostTranslation.upsert({
         where: { postId_language: { postId: id, language } },
         create: {
@@ -1187,6 +1210,17 @@ export class MotivationService {
             id: post.author.id,
             name: resolveDisplayName(
               post.author as { name: string; spiritualName: string | null },
+            ),
+          }
+        : null,
+      explanationAuthor: post.explanationAuthor
+        ? {
+            id: post.explanationAuthor.id,
+            name: resolveDisplayName(
+              post.explanationAuthor as {
+                name: string;
+                spiritualName: string | null;
+              },
             ),
           }
         : null,

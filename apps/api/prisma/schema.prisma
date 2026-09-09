@@ -328,6 +328,7 @@ model User {
   motivationViews                    MotivationView[]
   motivationLikes                    MotivationLike[]
   motivationAuthoredPosts            MotivationPost[]             @relation("MotivationAuthoredPosts")
+  motivationExplanations             MotivationPost[]             @relation("MotivationExplanations")
   motivationAuthorPolicy             MotivationAuthorPolicy?
   motivationReports                  MotivationReport[]
   motivationModerationAudits         MotivationModerationAudit[]
@@ -614,6 +615,12 @@ model MotivationPost {
   /// не исчезает из чужих лент вместе со ссылками на него.
   authorUserId         String?
   author               User?                     @relation("MotivationAuthoredPosts", fields: [authorUserId], references: [id], onDelete: SetNull)
+  /// Кто написал пояснение. Отдельно от автора поста: пост приносит один
+  /// человек, а трактовку под цитатой может написать другой — и спрашивать
+  /// за неё надо с него. Пусто — пояснение собрала модель, человека за ним
+  /// нет; такое и подписывать нечем.
+  explanationAuthorId  String?
+  explanationAuthor    User?                     @relation("MotivationExplanations", fields: [explanationAuthorId], references: [id], onDelete: SetNull)
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
 

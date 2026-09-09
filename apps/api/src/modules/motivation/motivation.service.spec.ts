@@ -1193,10 +1193,13 @@ describe('MotivationService.adminUpdate', () => {
   function build() {
     const update = jest.fn().mockResolvedValue({ id: 'post-1' });
     const upsert = jest.fn().mockResolvedValue({});
+    /* Прежний текст нужен, чтобы понять, тронули ли пояснение: переписал
+       трактовку — стал её автором. Здесь до правки пояснения не было. */
+    const findUnique = jest.fn().mockResolvedValue({ text: 'Было' });
     const service = new MotivationService(
       {
         motivationPost: { update },
-        motivationPostTranslation: { upsert },
+        motivationPostTranslation: { upsert, findUnique },
       } as never,
       {} as never,
       {} as never,
@@ -1207,10 +1210,49 @@ describe('MotivationService.adminUpdate', () => {
       {} as never,
       {} as never,
     );
-    return { service, update, upsert };
+    return { service, update, upsert, findUnique };
   }
 
   const admin = { sub: 'admin-1', role: 'admin' } as never;
+
+  it('переписал пояснение — стал его автором', async () => {
+    const { service, update, findUnique } = build();
+    findUnique.mockResolvedValue({ text: 'Цитата\n\nСтарое пояснение' });
+
+    await service.adminUpdate(admin, 'post-1', {
+      translations: {
+        ru: {
+          title: 'Заголовок',
+          text: 'Цитата\n\nНовое пояснение',
+          storyText: 'Подпись',
+        },
+      },
+    });
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'post-1' },
+      data: { explanationAuthorId: 'admin-1' },
+    });
+  });
+
+  it('правка самой цитаты автором пояснения не делает', async () => {
+    const { service, update, findUnique } = build();
+    findUnique.mockResolvedValue({ text: 'Цитата\n\nПояснение' });
+    update.mockClear();
+
+    await service.adminUpdate(admin, 'post-1', {
+      translations: {
+        ru: {
+          title: 'Заголовок',
+          text: 'Цитата с опечаткой\n\nПояснение',
+          storyText: 'Подпись',
+        },
+      },
+    });
+
+    // Один вызов — сама карточка; второго, с авторством, быть не должно.
+    expect(update).toHaveBeenCalledTimes(1);
+  });
 
   it('пишет тексты, а не молча возвращает 200', async () => {
     const { service, upsert } = build();

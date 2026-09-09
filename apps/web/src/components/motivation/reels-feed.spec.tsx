@@ -40,6 +40,7 @@ const post = (id: string, overrides: Partial<MotivationPostDto> = {}): Motivatio
   isLiked: false,
   origin: "editorial",
   author: null,
+  explanationAuthor: null,
   isOwn: false,
   library: null,
   feedTier: "unseen",

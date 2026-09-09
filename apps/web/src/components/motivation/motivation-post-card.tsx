@@ -67,6 +67,12 @@ export function MotivationPostCard({ post }: { post: MotivationPostDto }) {
               <p className="whitespace-pre-line leading-7 text-zinc-700 dark:text-zinc-300">
                 {explanation}
               </p>
+              {/* Кто написал трактовку — см. тот же блок в ленте. */}
+              {post.explanationAuthor && (
+                <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  Пояснение написал(а) {post.explanationAuthor.name}
+                </p>
+              )}
             </CollapsibleBlock>
           </div>
         )}
