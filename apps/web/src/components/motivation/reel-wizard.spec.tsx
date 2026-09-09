@@ -48,6 +48,8 @@ function reelDto(overrides: Partial<MotivationReelDto>): MotivationReelDto {
       origin: "user",
       author: null,
       explanationAuthor: null,
+      explanationHidden: false,
+      explanationReported: false,
       isOwn: true,
       library: null,
     },
