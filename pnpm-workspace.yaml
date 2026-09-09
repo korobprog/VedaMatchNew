@@ -15,3 +15,16 @@ allowBuilds:
   argon2: true
   '@parcel/watcher': false
   '@swc/core': false
+
+# Закрытие advisory в транзитивных зависимостях (pnpm audit --prod, сентябрь 2026).
+# Диапазоны минимальны и не выходят за мажор, который ждёт потребитель.
+overrides:
+  'multer': '>=2.3.0'
+  'undici@7': '>=7.29.1'
+  'postcss': '>=8.5.23'
+  'nanoid@3': '>=3.3.18'
+  'browserslist': '>=4.28.7'
+  'qs': '>=6.16.0'
+  'fast-uri@3': '>=3.1.7'
+  'sanitize-html': '>=2.17.7'
+  'baseline-browser-mapping': '>=2.11.0'
