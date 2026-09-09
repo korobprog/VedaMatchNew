@@ -2,6 +2,7 @@ import { Header } from "@/components/header";
 import { redirectToLogin } from "@/lib/require-user";
 import { MotivationTopBar } from "@/components/motivation/motivation-top-bar";
 import { MotivationSettingsForm } from "@/components/motivation/motivation-settings-form";
+import { MotivationRailSettings } from "@/components/motivation/rail-settings";
 import { getProfile } from "@/lib/api";
 import { getMotivationPreferences } from "@/lib/motivation-api";
 import { BackgroundOrbs } from "@/components/landing/Orb";
@@ -28,6 +29,7 @@ export default async function MotivationSettingsPage() {
           <MotivationSettingsForm
             initial={preferences ?? { vaishnavaPercent: 50, language: "ru", profileTypes: [] }}
           />
+          <MotivationRailSettings />
         </div>
       </main>
     </div>

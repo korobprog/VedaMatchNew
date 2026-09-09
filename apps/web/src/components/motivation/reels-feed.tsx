@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -26,6 +27,12 @@ import {
   nextAudioIndex,
 } from "./background-audio";
 import { buildSpokenQuote, canSpeak, spokenLanguage } from "./speak-quote";
+import {
+  DEFAULT_RAIL,
+  RAIL_STORAGE_KEY,
+  parseRailConfig,
+  type RailActionId,
+} from "./rail-actions";
 import { ReportDialog } from "./report-dialog";
 import { SourceLink } from "./source-link";
 import {
@@ -54,6 +61,39 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
  */
 const subscribeToNothing = () => () => {};
 const speechUnavailableOnServer = () => false;
+
+/**
+ * Раскладка нижнего ряда: её выбирают в настройках ленты, и живёт она на
+ * устройстве. Читается так же, как возможность синтеза, — внешним
+ * источником, а не состоянием с эффектом.
+ *
+ * Разобранный список кэшируем по сырой строке: `useSyncExternalStore`
+ * сравнивает снимки по ссылке, и новый массив на каждый вызов означал бы
+ * бесконечную перерисовку. Подписка слушает `storage` — вкладку с настройками
+ * держат открытой рядом, и лента подхватывает изменение сама.
+ */
+const railOnServer = () => DEFAULT_RAIL;
+let railRaw: string | null = null;
+let railCached: readonly RailActionId[] = DEFAULT_RAIL;
+
+function readRailLayout(): readonly RailActionId[] {
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(RAIL_STORAGE_KEY);
+  } catch {
+    // Приватный режим: раскладка заводская.
+  }
+  if (raw !== railRaw) {
+    railRaw = raw;
+    railCached = parseRailConfig(raw);
+  }
+  return railCached;
+}
+
+function subscribeToRail(onChange: () => void): () => void {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
 
 export type ReelsTab = "forYou" | "saved";
 
@@ -292,6 +332,15 @@ export function ReelsFeed({
     speechUnavailableOnServer,
   );
 
+  /* Раскладка нижнего ряда читается тем же способом, что и возможность
+     синтеза: внешним источником. На сервере её нет, и состояние с эффектом
+     дало бы лишнюю перерисовку на каждом открытии ленты. */
+  const rail = useSyncExternalStore(
+    subscribeToRail,
+    readRailLayout,
+    railOnServer,
+  );
+
 
   async function toggleLike() {
     if (!activePost) return;
@@ -344,6 +393,137 @@ export function ReelsFeed({
       </div>
     );
   }
+
+  /**
+   * Кнопки нижнего ряда по именам: порядок и набор выбирает человек
+   * в настройках ленты, поэтому ряд собирается из списка, а не пишется
+   * подряд. `null` — кнопка включена, но здесь ей нечего делать: у ролика
+   * нечего скрывать, без синтеза речи нечем читать, а править может админ.
+   */
+  const railNodes: Partial<Record<RailActionId, ReactNode>> = activePost
+    ? {
+        like: (
+          <RailButton
+        label={activePost.isLiked ? "Убрать лайк" : "Нравится"}
+        pressed={activePost.isLiked}
+        caption={formatCount(activePost.likeCount)}
+        onClick={toggleLike}
+        accent="magenta"
+      >
+        <HeartIcon filled={activePost.isLiked} />
+      </RailButton>
+        ),
+        save: (
+          <RailButton
+        label={activePost.isFavorite ? "Убрать из избранного" : "Сохранить в избранное"}
+        pressed={activePost.isFavorite}
+        caption={activePost.isFavorite ? "Сохранено" : "Сохранить"}
+        onClick={toggleFavorite}
+        accent="gold"
+      >
+        <StarIcon filled={activePost.isFavorite} />
+      </RailButton>
+        ),
+        share: (
+          <RailLink
+        label="Поделиться афоризмом"
+        caption="Поделиться"
+        href={{
+          pathname: "/share",
+          query: {
+            kind: "story",
+            title: quoteOf(activePost).slice(0, 200),
+            text: quoteOf(activePost),
+            subtitle: attributionLine(activePost),
+            link: `/m/${encodeURIComponent(activePost.slug)}`,
+            file: `/m/${encodeURIComponent(activePost.slug)}/story`,
+            previewUrl: activePost.storyImageUrl || activePost.imageUrl,
+            sourceService: "motivation",
+            sourceId: activePost.slug,
+          },
+        }}
+      >
+        <ShareIcon />
+      </RailLink>
+        ),
+        hide:
+          mediaKindOf(activePost) === "image" ? (
+            <RailButton
+          label={textHidden ? "Показать текст" : "Скрыть текст"}
+          pressed={textHidden}
+          caption={textHidden ? "Вернуть" : "Скрыть"}
+          onClick={() => setTextHidden((value) => !value)}
+        >
+          <EyeOffIcon />
+        </RailButton>
+          ) : null,
+        speak: speechAvailable ? (
+          <RailButton
+          label={
+            speakingId === activePost.id
+              ? "Остановить чтение"
+              : "Озвучить цитату"
+          }
+          pressed={speakingId === activePost.id}
+          caption={speakingId === activePost.id ? "Молчать" : "Озвучить"}
+          onClick={toggleSpeak}
+        >
+          <SpeakIcon />
+        </RailButton>
+        ) : null,
+        edit: isAdmin ? (
+          <Link
+          href={`/admin/motivation/published?post=${encodeURIComponent(activePost.slug)}`}
+          aria-label="Править эту публикацию"
+          className={railItemClass}
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/15">
+            <PencilIcon />
+          </span>
+          <span className="w-full truncate text-center">Править</span>
+        </Link>
+        ) : null,
+        create: (
+          <Link
+        href="/motivation/create"
+        aria-label="Создать свой рилс"
+        className={railItemClass}
+      >
+        <span className="btn-mint flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl font-bold leading-none">
+          +
+        </span>
+        <span className="w-full truncate text-center">Создать</span>
+      </Link>
+        ),
+        categories: (
+          <RailLink
+            label="Категории ленты"
+            caption="Категории"
+            href="/motivation/collections"
+          >
+            <FolderIcon />
+          </RailLink>
+        ),
+        random: (
+          <RailLink
+            label="Перемешать ленту"
+            caption="Случайный"
+            href="/motivation?order=random"
+          >
+            <ShuffleIcon />
+          </RailLink>
+        ),
+        settings: (
+          <RailLink
+            label="Настройки ленты"
+            caption="Настройки"
+            href="/motivation/settings"
+          >
+            <SlidersIcon />
+          </RailLink>
+        ),
+      }
+    : {};
 
   return (
     <div className="relative h-full overflow-hidden bg-[#0A0614] text-white sm:rounded-[28px] sm:shadow-2xl">
@@ -438,7 +618,7 @@ export function ReelsFeed({
             );
           if (slide.kind === "end")
             return <EndSlide key="end" donation={donation} tab={tab} error={error} onRetry={loadMore} />;
-          return (
+  return (
             <ReelSlide
               key={slide.post.id}
               post={slide.post}
@@ -461,110 +641,9 @@ export function ReelsFeed({
            так, что ряд читался как случайный набор. Равные доли держат сетку
            и при седьмой кнопке — она появляется у автора и у админа. */
         <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex items-stretch border-t border-white/15 bg-white/10 px-1 py-2 backdrop-blur-md">
-          <RailButton
-            label={activePost.isLiked ? "Убрать лайк" : "Нравится"}
-            pressed={activePost.isLiked}
-            caption={formatCount(activePost.likeCount)}
-            onClick={toggleLike}
-            accent="magenta"
-          >
-            <HeartIcon filled={activePost.isLiked} />
-          </RailButton>
-          <RailButton
-            label={activePost.isFavorite ? "Убрать из избранного" : "Сохранить в избранное"}
-            pressed={activePost.isFavorite}
-            caption={activePost.isFavorite ? "Сохранено" : "Сохранить"}
-            onClick={toggleFavorite}
-            accent="gold"
-          >
-            <StarIcon filled={activePost.isFavorite} />
-          </RailButton>
-          {/* Ведёт на свой экран, а не в системную шторку. Шторка отдаёт
-              наружу только ссылку, а истории и статусы ссылку не принимают
-              вовсе — им нужен файл; на компьютере шторки и вовсе нет. Экран
-              разводит эти дороги и говорит, какая куда ведёт.
-
-              Сюда же ушла бывшая соседняя кнопка «Своим»: две кнопки про
-              одно и то же стояли рядом и заставляли выбирать до того, как человек
-              решил, кому отправляет. На экране «Поделиться» «Своим в портале» —
-              первая кнопка в блоке «В переписку» и ведёт туда же, куда вела она. */}
-          <RailLink
-            label="Поделиться афоризмом"
-            caption="Поделиться"
-            href={{
-              pathname: "/share",
-              query: {
-                kind: "story",
-                title: quoteOf(activePost).slice(0, 200),
-                text: quoteOf(activePost),
-                subtitle: attributionLine(activePost),
-                link: `/m/${encodeURIComponent(activePost.slug)}`,
-                file: `/m/${encodeURIComponent(activePost.slug)}/story`,
-                previewUrl: activePost.storyImageUrl || activePost.imageUrl,
-                sourceService: "motivation",
-                sourceId: activePost.slug,
-              },
-            }}
-          >
-            <ShareIcon />
-          </RailLink>
-          {/* Убрать текст и остаться с изображением. Кнопка есть только у
-              фото: в ролике подпись вшита в сам кадр, убрать её оттуда
-              нечем. Режим держится, пока его не выключат, — в том числе на
-              следующих афоризмах: за этим его и включают. */}
-          {mediaKindOf(activePost) === "image" && (
-            <RailButton
-              label={textHidden ? "Показать текст" : "Скрыть текст"}
-              pressed={textHidden}
-              caption={textHidden ? "Вернуть" : "Скрыть"}
-              onClick={() => setTextHidden((value) => !value)}
-            >
-              <EyeOffIcon />
-            </RailButton>
-          )}
-          {/* Читает браузер. Кнопки нет там, где синтеза речи нет вовсе:
-              молчащая кнопка хуже её отсутствия. */}
-          {speechAvailable && (
-            <RailButton
-              label={
-                speakingId === activePost.id
-                  ? "Остановить чтение"
-                  : "Озвучить цитату"
-              }
-              pressed={speakingId === activePost.id}
-              caption={speakingId === activePost.id ? "Молчать" : "Озвучить"}
-              onClick={toggleSpeak}
-            >
-              <SpeakIcon />
-            </RailButton>
-          )}
-          {/* Правка — прямо отсюда: раньше редакции приходилось уходить в
-              админку и искать глазами то, на что она только что смотрела.
-              Ссылка, а не форма поверх кадра: править текст на слайде в
-              полный экран неудобно, а найти карточку — как раз то, что было
-              дорого. */}
-          {isAdmin && (
-            <Link
-              href={`/admin/motivation/published?post=${encodeURIComponent(activePost.slug)}`}
-              aria-label="Править эту публикацию"
-              className={railItemClass}
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/15">
-                <PencilIcon />
-              </span>
-              <span className="w-full truncate text-center">Править</span>
-            </Link>
-          )}
-          <Link
-            href="/motivation/create"
-            aria-label="Создать свой рилс"
-            className={railItemClass}
-          >
-            <span className="btn-mint flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl font-bold leading-none">
-              +
-            </span>
-            <span className="w-full truncate text-center">Создать</span>
-          </Link>
+          {rail.map((id) => (
+            <Fragment key={id}>{railNodes[id] ?? null}</Fragment>
+          ))}
         </div>
       )}
     </div>
@@ -1246,6 +1325,37 @@ function SpeakIcon() {
       <path d="M11 5L6 9H3v6h3l5 4z" />
       <path d="M16 8.5a4.5 4.5 0 0 1 0 7" />
       <path d="M19 5.5a8.5 8.5 0 0 1 0 13" />
+    </svg>
+  );
+}
+
+function FolderIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </svg>
+  );
+}
+
+function ShuffleIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 3h5v5" />
+      <path d="M4 20 21 3" />
+      <path d="M21 16v5h-5" />
+      <path d="m15 15 6 6" />
+      <path d="M4 4l5 5" />
+    </svg>
+  );
+}
+
+function SlidersIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" />
+      <circle cx="16" cy="6" r="2" />
+      <circle cx="10" cy="12" r="2" />
+      <circle cx="18" cy="18" r="2" />
     </svg>
   );
 }
