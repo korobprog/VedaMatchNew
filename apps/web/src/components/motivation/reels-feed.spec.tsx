@@ -92,6 +92,29 @@ describe("ReelsFeed", () => {
     expect(within(feed).getByRole("region", { name: "Конец ленты" })).toBeInTheDocument();
   });
 
+  it("отправка своим живёт внутри «Поделиться», а не соседней кнопкой", () => {
+    fetchOk({});
+    render(<ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="forYou" donation={null} />);
+
+    expect(
+      screen.queryByRole("link", { name: "Отправить своим в портале" }),
+    ).not.toBeInTheDocument();
+
+    const share = screen.getByRole("link", { name: "Поделиться афоризмом" });
+    const href = share.getAttribute("href") ?? "";
+    expect(href.startsWith("/share?")).toBe(true);
+    // Экран «Поделиться» собирает из этих полей кнопку «Своим в портале»:
+    // без них объединённая кнопка потеряла бы дорогу внутрь портала.
+    const query = new URLSearchParams(href.slice(href.indexOf("?") + 1));
+    expect(query.get("sourceService")).toBe("motivation");
+    expect(query.get("sourceId")).toBe("a");
+    expect(query.get("kind")).toBe("story");
+    expect(query.get("title")).toContain("Цитата a");
+    expect(query.get("subtitle")).toBe("Кришна · Бхагавад-гита · 2.47");
+    expect(query.get("link")).toBe("/m/a");
+    expect(query.get("file")).toBe("/m/a/story");
+  });
+
   it("likes optimistically and settles on the server count", async () => {
     const fetchMock = fetchOk({ likeCount: 10, isLiked: true });
     const user = userEvent.setup();
