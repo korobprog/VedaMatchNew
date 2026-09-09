@@ -2,11 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { detectDisplayMode } from "@/lib/pwa/browser";
 import {
   MESSENGER_LABELS,
   isOwnFile,
+  messengerAppLink,
   messengerLink,
+  opensInApp,
   shareText,
+  shouldFallBackToSite,
   type MessengerId,
 } from "./share-targets";
 
@@ -79,6 +83,36 @@ export function ShareView({
       if (cause instanceof Error && cause.name === "AbortError") return;
       setFileError("Не получилось передать картинку. Сохраните её кнопкой рядом.");
     }
+  }
+
+  /**
+   * Мессенджер открываем приложением, а не сайтом.
+   *
+   * В установленном портале ссылка на t.me открывала белое окно: показать
+   * новую вкладку окну без вкладок негде, а сайт Telegram умеет только
+   * попросить открыть приложение. Во вкладке браузера ничего не меняем: там
+   * ссылка работает и её можно скопировать длинным нажатием.
+   */
+  function openMessenger(
+    event: React.MouseEvent<HTMLAnchorElement>,
+    target: MessengerId,
+  ) {
+    // Текст без ссылки: в схеме приложения адрес идёт отдельным полем — так
+    // же, как в адресе сайта выше, иначе ссылка уедет в сообщение дважды.
+    const app = messengerAppLink(target, link, shareText({ text, source }));
+    const mode = detectDisplayMode(
+      (query) => window.matchMedia(query),
+      (window.navigator as { standalone?: boolean }).standalone,
+    );
+    if (!app || !opensInApp(mode, app)) return;
+    event.preventDefault();
+    const site = event.currentTarget.href;
+    window.location.assign(app);
+    // Приложения нет — окно осталось на экране, и человек должен увидеть
+    // хоть что-то, а не ошибку неизвестной схемы.
+    window.setTimeout(() => {
+      if (shouldFallBackToSite(document.hidden)) window.location.assign(site);
+    }, 1200);
   }
 
   return (
@@ -154,6 +188,7 @@ export function ShareView({
               href={messengerLink(target, link, shareText({ text, source }))}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(event) => openMessenger(event, target)}
               className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1 hover:text-text-0"
             >
               {MESSENGER_LABELS[target]}

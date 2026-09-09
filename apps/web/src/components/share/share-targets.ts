@@ -67,3 +67,48 @@ export function isOwnFile(path: string | null | undefined): path is string {
   // `//example.com` — тоже чужой адрес, хотя и начинается со слэша.
   return path.startsWith("/") && !path.startsWith("//");
 }
+
+/**
+ * Адрес приложения, а не сайта.
+ *
+ * В установленном портале кнопка мессенджера открывала сайт t.me, и он
+ * оставался белым: показать «новую вкладку» окну без вкладок негде, а сам
+ * сайт Telegram умеет только попросить открыть приложение. Собственная схема
+ * отдаёт ссылку системе, и та поднимает мессенджер со списком чатов.
+ *
+ * `null` — у адресата такой схемы нет (ВКонтакте), остаётся сайт.
+ */
+export function messengerAppLink(
+  target: MessengerId,
+  link: string,
+  text: string,
+): string | null {
+  if (target === "telegram") {
+    return `tg://msg_url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
+  }
+  if (target === "whatsapp") {
+    return `whatsapp://send?text=${encodeURIComponent(`${text} ${link}`)}`;
+  }
+  return null;
+}
+
+/**
+ * Стоит ли звать приложение. Только в установленном портале: во вкладке
+ * браузера сайт мессенджера сам передаёт ссылку приложению, а незнакомая
+ * схема в обычной вкладке даёт ошибку вместо ссылки, которую можно скопировать.
+ */
+export function opensInApp(
+  displayMode: string,
+  appLink: string | null,
+): boolean {
+  return Boolean(appLink) && displayMode !== "browser";
+}
+
+/**
+ * Приложение не перехватило ссылку — уходим на сайт. Судим по видимости:
+ * когда мессенджер открылся, окно портала ушло в фон, и вторая попытка выбросила
+ * бы человека обратно на полпути.
+ */
+export function shouldFallBackToSite(documentHidden: boolean): boolean {
+  return !documentHidden;
+}
