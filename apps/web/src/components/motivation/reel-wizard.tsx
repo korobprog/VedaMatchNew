@@ -49,13 +49,16 @@ export interface ReelWizardPrefill {
   reelId?: string;
 }
 
-type Step = "text" | "source" | "image" | "review";
+type Step = "text" | "image" | "review";
 
 /**
- * Мастер «Свой рилс» в четыре шага (VED-38): текст → источник и автор →
- * картинка → отправка на проверку. Каждый шаг спрашивает об одном: раньше
- * первый экран сразу требовал и откуда цитата, и сам текст, и автора, и мысль под
- * ним — четыре решения в одном экране, после которого часть людей уходила.
+ * Мастер «Свой рилс» в три экрана (VED-38): текст и источник → картинка →
+ * проверка и отправка. В карточке названы четыре вещи, и все четыре здесь
+ * есть — но «источник / автор» стоит блоком на первом экране, а не отдельным
+ * шагом: для фрагмента из книг он не спрашивает ничего (источник известен из
+ * выбранного фрагмента), а для своих слов — одно необязательное поле. Экран
+ * ради одного необязательного поля стоил бы двух лишних нажатий на каждом
+ * афоризме, а на пути из читалки — вдвое больше, чем весь остальной мастер.
  *
  * Отправка стала отдельным шагом с обзором: раньше кнопка «Отправить на
  * проверку» стояла под выбором стиля и нажималась до того, как человек
@@ -222,10 +225,9 @@ export function ReelWizard({
     <div className="space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div className="font-mono text-xs uppercase tracking-wide text-text-2">
-          {step === "text" && "Шаг 1 из 4 · Текст"}
-          {step === "source" && "Шаг 2 из 4 · Источник и автор"}
-          {step === "image" && "Шаг 3 из 4 · Картинка"}
-          {step === "review" && "Шаг 4 из 4 · Проверка"}
+          {step === "text" && "Шаг 1 из 3 · Текст и источник"}
+          {step === "image" && "Шаг 2 из 3 · Картинка"}
+          {step === "review" && "Шаг 3 из 3 · Проверка"}
         </div>
         {quota && <div className="text-xs text-text-2">{quotaLine(quota)}</div>}
       </header>
@@ -261,7 +263,7 @@ export function ReelWizard({
           className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!textError && trimmed) setStep("source");
+            if (!textError && trimmed) setStep("image");
           }}
         >
           <div className="grid grid-cols-2 gap-2">
@@ -318,6 +320,37 @@ export function ReelWizard({
               className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
             />
           </label>
+          {/* Источник и автор — отдельным блоком, но на этом же экране. Для
+              фрагмента из книг спрашивать нечего: источник известен из самого
+              фрагмента, и здесь он только назван, чтобы человек видел, чем
+              подпишется. Для своих слов это одно необязательное поле. */}
+          <fieldset className="space-y-2 rounded-2xl border border-glass-brd p-3">
+            <legend className="px-1 text-sm font-medium text-text-1">
+              Источник / автор
+            </legend>
+            {sourceKind === "vedabase" ? (
+              <p className="text-sm text-text-1">
+                {book
+                  ? `${book.bookTitle}${book.locator ? ` · ${book.locator}` : ""}`
+                  : "Выберите фрагмент выше — книга и глава подставятся сами."}
+              </p>
+            ) : (
+              <label className="block text-sm text-text-1">
+                Автор (необязательно)
+                <input
+                  value={author}
+                  onChange={(e) => setAuthor(e.target.value)}
+                  maxLength={80}
+                  placeholder="Кому принадлежат слова"
+                  className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
+                />
+                <span className="mt-1 block text-xs text-text-2">
+                  Пусто — подпишем вашим именем. Чужие слова честнее подписать
+                  тем, кому они принадлежат.
+                </span>
+              </label>
+            )}
+          </fieldset>
           <p className="text-xs text-text-2">
             {sourceKind === "own"
               ? "Своя цитата не попадёт в общую ленту «Для вас» — только в «Мои» и по ссылке: у неё нет проверенного источника."
@@ -328,65 +361,8 @@ export function ReelWizard({
             disabled={!trimmed || Boolean(textError) || (sourceKind === "vedabase" && !book)}
             className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
           >
-            Дальше: источник и автор
+            Дальше: картинка
           </button>
-        </form>
-      )}
-
-      {step === "source" && !exhausted && (
-        <form
-          className="space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setStep("image");
-          }}
-        >
-          {sourceKind === "vedabase" && book ? (
-            /* Источник уже известен — его не переписывают, а показывают: имя
-               книги и главы берётся из выбранного фрагмента, и правка руками
-               превратила бы сверку с книгой в формальность. */
-            <div className="glass rounded-2xl p-4 text-sm text-text-1">
-              <p className="font-semibold text-text-0">Источник — наши книги</p>
-              <p className="mt-1">
-                {book.bookTitle}
-                {book.locator ? ` · ${book.locator}` : ""}
-              </p>
-              <button
-                type="button"
-                onClick={() => setStep("text")}
-                className="mt-3 rounded-xl border border-glass-brd px-3 py-1.5 text-sm font-medium text-text-1"
-              >
-                Выбрать другой фрагмент
-              </button>
-            </div>
-          ) : (
-            <label className="block text-sm text-text-1">
-              Автор (необязательно)
-              <input
-                value={author}
-                onChange={(e) => setAuthor(e.target.value)}
-                maxLength={80}
-                placeholder="Кому принадлежат слова"
-                className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
-              />
-              <span className="mt-1 block text-xs text-text-2">
-                Пусто — подпишем вашим именем. Чужие слова честнее подписать
-                тем, кому они принадлежат.
-              </span>
-            </label>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setStep("text")}
-              className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1"
-            >
-              ← Назад
-            </button>
-            <button type="submit" className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold">
-              Дальше: картинка
-            </button>
-          </div>
         </form>
       )}
 
@@ -460,7 +436,7 @@ export function ReelWizard({
             {imageMode === "upload" && " Свой кадр всегда смотрит администратор перед публикацией."}
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => setStep("source")} className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1">
+            <button type="button" onClick={() => setStep("text")} className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1">
               ← Назад
             </button>
             <button
@@ -813,11 +789,10 @@ function HitList({
 }
 
 function StepBar({ step }: { step: Step }) {
-  const index =
-    step === "text" ? 0 : step === "source" ? 1 : step === "image" ? 2 : 3;
+  const index = step === "text" ? 0 : step === "image" ? 1 : 2;
   return (
-    <div className="grid grid-cols-4 gap-1" aria-hidden="true">
-      {[0, 1, 2, 3].map((i) => (
+    <div className="grid grid-cols-3 gap-1" aria-hidden="true">
+      {[0, 1, 2].map((i) => (
         <i key={i} className={`h-1 rounded ${i < index ? "bg-cyan" : i === index ? "bg-magenta" : "bg-bg-2"}`} />
       ))}
     </div>
