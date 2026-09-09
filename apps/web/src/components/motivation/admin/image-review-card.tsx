@@ -59,10 +59,10 @@ export function ImageReviewCard({
             controls
             loop
             playsInline
-            className="aspect-[9/16] w-full bg-bg-1 object-cover"
+            className="mx-auto max-h-[18rem] w-auto bg-bg-1 object-contain"
           />
         ) : (
-          <div className="flex aspect-[9/16] items-center justify-center bg-bg-1 px-6 text-center text-sm text-text-2">
+          <div className="flex h-40 items-center justify-center bg-bg-1 px-6 text-center text-sm text-text-2">
             {videoBusy
               ? "Ролик создаётся, это занимает около минуты…"
               : post.videoErrorCode
@@ -71,14 +71,21 @@ export function ImageReviewCard({
           </div>
         )
       ) : shown ? (
+        /* Предпросмотр ростом в ладонь, а не во весь экран. Кадр 9:16 во всю
+           ширину занимал шестьсот точек — больше половины карточки, — и
+           проверяющий видел по одному афоризму за раз. Восемнадцати рем хватает,
+           чтобы судить о композиции и о том, читается ли вшитый текст; кому
+           нужен оригинал, открывает картинку по ссылке ниже.
+           `object-contain`, а не `cover`: обрезка съедала бы вшитую подпись,
+           ради которой кадр и смотрят. */
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={shown}
           alt={post.title || post.slug}
-          className="aspect-[9/16] w-full object-cover"
+          className="mx-auto max-h-[18rem] w-auto object-contain"
         />
       ) : (
-        <div className="flex aspect-[9/16] items-center justify-center bg-bg-1 text-sm text-text-2">
+        <div className="flex h-40 items-center justify-center bg-bg-1 text-sm text-text-2">
           {post.reviewStatus === "image_queued"
             ? "Изображение создаётся…"
             : "Изображение недоступно"}
