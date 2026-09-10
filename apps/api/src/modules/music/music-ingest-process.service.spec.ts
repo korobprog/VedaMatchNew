@@ -69,6 +69,9 @@ function build() {
     storage as never,
     metadata as never,
     fetcher as never,
+    // Разбор исполнителя по тегу: в этих сценариях он не нужен — у партии
+    // либо есть свой исполнитель, либо запись остаётся ничьей, как раньше.
+    { resolveFromTag: async () => null } as never,
     { get: () => undefined } as never,
   );
 

@@ -9,6 +9,7 @@ import {
   nextStateAfterFailure,
 } from './ingest-process-rules';
 import { batchStatusFor, isItemStale } from './ingest-state';
+import { MusicArtistTagsService } from './music-artist-tags.service';
 import { ingestArchiveBreakNotice } from './ingest-fetch-limits';
 import {
   IngestFetchError,
@@ -66,6 +67,7 @@ export class MusicIngestProcessService {
     private readonly storage: MusicStorageService,
     private readonly metadata: MusicMetadataReader,
     private readonly fetcher: MusicIngestFetchService,
+    private readonly artistTags: MusicArtistTagsService,
     config: ConfigService,
   ) {
     // Пределы те же, что у людей, и читаются из окружения так же: потолок
@@ -503,6 +505,16 @@ export class MusicIngestProcessService {
       ? await this.storeEmbeddedCover(item.batchId, embeddedCover)
       : null;
 
+    /**
+     * Исполнитель партии сильнее тега — его админ выставил осознанно. Но
+     * когда у партии его нет, тег остаётся единственным, что отличает запись
+     * от «Исполнитель не указан»: раньше имя из файла просто выбрасывалось, и
+     * весь каталог оказывался ничей.
+     */
+    const artistId =
+      item.batch.artistId ??
+      (await this.artistTags.resolveFromTag(metadata.artist));
+
     await this.prisma.$transaction(async (tx) => {
       const track = await tx.musicTrack.create({
         data: {
@@ -517,7 +529,7 @@ export class MusicIngestProcessService {
           // Значения партии сильнее тега: их админ выставил осознанно, а тег
           // пришёл из чужого архива.
           language: item.batch.language ?? metadata.language,
-          artistId: item.batch.artistId,
+          artistId,
           albumId: item.batch.albumId,
           isLiveRecording: item.batch.isLiveRecording,
           lineage: item.batch.lineage,

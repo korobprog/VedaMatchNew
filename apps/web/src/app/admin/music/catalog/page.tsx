@@ -1,4 +1,5 @@
 import { MusicAdminTabs } from "@/components/music/admin/admin-tabs";
+import { MusicArtistsFromTags } from "@/components/music/admin/artists-from-tags";
 import { MusicReferenceForms } from "@/components/music/admin/reference-forms";
 import { MusicReferenceList } from "@/components/music/admin/reference-list";
 import { MusicTrackList } from "@/components/music/admin/track-list";
@@ -60,6 +61,8 @@ export default async function AdminMusicCatalogPage() {
       <div className="mb-5">
         <MusicUploadForm />
       </div>
+
+      <MusicArtistsFromTags />
 
       <h2 className="mb-3 font-display text-lg font-bold text-text-0">
         Добавить в справочники

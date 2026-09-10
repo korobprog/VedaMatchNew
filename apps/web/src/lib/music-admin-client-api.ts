@@ -13,6 +13,7 @@ import type {
   CreateMusicCategoryRequest,
   CreateMusicPlaylistRequest,
   CreateMusicIngestBatchRequest,
+  MusicArtistsFromTagsResult,
   MusicIngestBatchDetailDto,
   MusicIngestBatchDto,
   MusicModerationDecisionRequest,
@@ -50,6 +51,16 @@ export const decideMusicTrack = (
     method: "POST",
     body: JSON.stringify(body),
   });
+
+/**
+ * Разобрать коллекцию: завести исполнителей по тегам уже залитых записей.
+ * `dryRun` — показать список, ничего не меняя.
+ */
+export const scanMusicArtistsFromTags = (dryRun: boolean) =>
+  send<MusicArtistsFromTagsResult>(
+    `/music/admin/catalog/artists/from-tags${dryRun ? "?dryRun=1" : ""}`,
+    { method: "POST" },
+  );
 
 export const updateMusicTrack = (id: string, body: UpdateMusicTrackRequest) =>
   send<unknown>(`/music/admin/catalog/tracks/${id}`, {
