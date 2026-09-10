@@ -57,6 +57,7 @@ import {
 import { WorkInvitePanel } from "./invite-panel";
 import { WorkTaskDialog } from "./task-dialog";
 import { dueFromInput, endOfDayInput } from "./task-due";
+import { findTaskByKey, parseFocusKey } from "./task-focus";
 import { splitTaskDraft } from "./task-title";
 import { PRIORITY_TITLE, priorityMark } from "./task-priority";
 
@@ -115,9 +116,25 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         setBoard(loaded.board);
         // Свёрнутое переживает перезагрузку: иначе на каждом заходе пришлось
         // бы складывать «Разное» заново.
-        setCollapsed(
-          loaded.board ? readCollapsedColumns(loaded.board.id) : [],
+        const wasCollapsed = loaded.board
+          ? readCollapsedColumns(loaded.board.id)
+          : [];
+        /* Пришли по уведомлению «VED-42: новый комментарий» — открываем саму
+           задачу, а не доску с полусотней чужих карточек. Ключ разбираем
+           здесь, в ответе на загрузку: найти задачу можно только по уже
+           приехавшей доске. */
+        const focused = findTaskByKey(
+          loaded.board,
+          parseFocusKey(window.location.search),
         );
+        setCollapsed(
+          // Колонку нужной задачи разворачиваем: иначе, закрыв карточку,
+          // человек упрётся в сложенную колонку и решит, что задачи нет.
+          focused
+            ? wasCollapsed.filter((id) => id !== focused.columnId)
+            : wasCollapsed,
+        );
+        if (focused) setOpenTaskId(focused.taskId);
         setError(null);
       })
       .catch((cause: unknown) => {

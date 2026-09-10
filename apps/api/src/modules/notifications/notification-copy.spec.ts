@@ -1,5 +1,66 @@
 import { buildNotification, toExcerpt } from './notification-copy';
 
+describe('buildNotification · уведомления «Работ» ведут в саму задачу', () => {
+  // Раньше все четыре вели на доску, и человек искал названную задачу
+  // глазами среди полусотни чужих карточек.
+  it('поручение открывает поручённую задачу', () => {
+    expect(
+      buildNotification({
+        name: 'work.task.assigned',
+        recipientId: 'u1',
+        spaceId: 'space-1',
+        taskKey: 'VED-42',
+        taskTitle: 'Починить ссылки',
+        spaceName: 'VedaMatch',
+        actorName: 'Санкаршан',
+      }),
+    ).toMatchObject({ url: '/work/planner/space-1?task=VED-42' });
+  });
+
+  it('комментарий открывает задачу, к которой его написали', () => {
+    expect(
+      buildNotification({
+        name: 'work.task.commented',
+        recipientId: 'u1',
+        spaceId: 'space-1',
+        taskKey: 'VED-42',
+        taskTitle: 'Починить ссылки',
+        actorName: 'Санкаршан',
+        excerpt: 'Посмотрите ещё раз',
+      }),
+    ).toMatchObject({ url: '/work/planner/space-1?task=VED-42' });
+  });
+
+  it('возврат в работу открывает возвращённую задачу', () => {
+    expect(
+      buildNotification({
+        name: 'work.task.returned',
+        recipientId: 'u1',
+        spaceId: 'space-1',
+        taskKey: 'VED-42',
+        taskTitle: 'Починить ссылки',
+        columnName: 'На доработку',
+        actorName: 'Санкаршан',
+      }),
+    ).toMatchObject({ url: '/work/planner/space-1?task=VED-42' });
+  });
+
+  it('переезд по колонкам открывает переехавшую задачу', () => {
+    expect(
+      buildNotification({
+        name: 'work.task.status-changed',
+        recipientId: 'u1',
+        spaceId: 'space-1',
+        taskKey: 'VED-42',
+        taskTitle: 'Починить ссылки',
+        fromColumnName: 'В работе',
+        toColumnName: 'Тестирование',
+        actorName: 'Санкаршан',
+      }),
+    ).toMatchObject({ url: '/work/planner/space-1?task=VED-42' });
+  });
+});
+
 describe('buildNotification', () => {
   it('показывает имя отправителя и начало сообщения', () => {
     expect(

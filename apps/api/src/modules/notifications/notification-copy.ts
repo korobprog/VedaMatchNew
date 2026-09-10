@@ -96,6 +96,20 @@ export function toExcerpt(body: string): string {
   return `${text.slice(0, excerptLength - 1)}…`;
 }
 
+/**
+ * Адрес задачи на доске.
+ *
+ * Уведомления «Работ» вели на саму доску, и человек, нажав «VED-42: новый
+ * комментарий», искал эту задачу глазами среди полусотни чужих карточек.
+ * Новость называет задачу — её и открываем.
+ *
+ * Ключ, а не внутренний идентификатор: он уже есть в событии, написан на
+ * карточке, и такой ссылкой можно поделиться словами.
+ */
+export function workTaskUrl(spaceId: string, taskKey: string): string {
+  return `/work/planner/${spaceId}?task=${encodeURIComponent(taskKey)}`;
+}
+
 export interface NotificationContent {
   title: string;
   body: string;
@@ -398,7 +412,7 @@ export function buildNotification(
       return {
         title: 'Вам поручили задачу',
         body: `${event.actorName}: ${event.taskKey} «${toExcerpt(event.taskTitle)}» в среде «${event.spaceName}»`,
-        url: `/work/planner/${event.spaceId}`,
+        url: workTaskUrl(event.spaceId, event.taskKey),
         // Тег по задаче, а не по среде: два поручения подряд — это две
         // новости, и второе не должно затирать первое.
         tag: `work-task:${event.taskKey}`,
@@ -408,7 +422,7 @@ export function buildNotification(
       return {
         title: `${event.taskKey}: новый комментарий`,
         body: `${event.actorName}: ${toExcerpt(event.excerpt)}`,
-        url: `/work/planner/${event.spaceId}`,
+        url: workTaskUrl(event.spaceId, event.taskKey),
         tag: `work-comment:${event.taskKey}`,
         category: 'work',
       };
@@ -418,7 +432,7 @@ export function buildNotification(
         // Без рода: у `User.gender` его может не быть, а «перенёс» на женском
         // имени читается как чужая ошибка — правило всего файла.
         body: `${event.actorName}: ${event.taskKey} «${toExcerpt(event.taskTitle)}» снова в колонке «${event.columnName}»`,
-        url: `/work/planner/${event.spaceId}`,
+        url: workTaskUrl(event.spaceId, event.taskKey),
         tag: `work-returned:${event.taskKey}`,
         category: 'work',
       };
@@ -426,7 +440,7 @@ export function buildNotification(
       return {
         title: `${event.taskKey}: «${event.toColumnName}»`,
         body: `${event.actorName}: «${toExcerpt(event.taskTitle)}» — из «${event.fromColumnName}»`,
-        url: `/work/planner/${event.spaceId}`,
+        url: workTaskUrl(event.spaceId, event.taskKey),
         // Свой тег, общий для всех переездов задачи: вторая смена колонки
         // затирает первую в шторке — это одна и та же новость, обновившаяся.
         // Поручение (`work-task:`) она при этом не трогает: там новость иная.
