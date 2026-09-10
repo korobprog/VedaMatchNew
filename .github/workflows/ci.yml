@@ -90,3 +90,63 @@ jobs:
           build-args: NEXT_PUBLIC_API_URL=https://api.example.invalid
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Деплой просит сам CI, а не вебхук Dokploy.
+  #
+  # 9 сентября вебхук молча перестал приходить: сборки не падали, их просто
+  # не было, и полтора дня работы лежали в main при старом коде на проде.
+  # Отсюда правило — о деплое должен свидетельствовать тот же прогон, что и о
+  # тестах: не пришёл — прогон красный, а не пустой.
+  #
+  # Заодно деплой теперь идёт ПОСЛЕ тестов и сборки образов, чего вебхук не
+  # умел: он срабатывал на пуш и катил что угодно.
+  deploy:
+    name: deploy prod
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [check, docker]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Ask Dokploy to deploy
+        env:
+          HOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            {
+              echo "### Деплой пропущен"
+              echo
+              echo "Секрет \`DOKPLOY_DEPLOY_WEBHOOK\` не задан."
+              echo "Пока его нет, после вливания надо жать «Deploy» в панели руками."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          code=$(curl -sS -o /tmp/deploy.out -w '%{http_code}' -X POST --max-time 60 "$HOOK")
+          echo "Ответ панели: $code"
+          head -c 500 /tmp/deploy.out || true
+          # Отказ обязан быть виден: ровно этого не хватало вебхуку.
+          case "$code" in
+            2*) ;;
+            *) echo "::error::Dokploy не принял запрос на деплой ($code)"; exit 1 ;;
+          esac
+
+      - name: Wait for prod to answer
+        env:
+          HOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
+          HEALTH: ${{ vars.PROD_HEALTH_URL || 'https://api.vedamatch.ru/health' }}
+        run: |
+          if [ -z "$HOOK" ]; then exit 0; fi
+          # Панель отвечает «принято» сразу, поэтому ждём сам прод: пока он
+          # пересобирается, здоровье пропадает и возвращается.
+          for i in $(seq 1 40); do
+            body=$(curl -s --max-time 15 "$HEALTH" || true)
+            case "$body" in
+              *'"status":"ok"'*)
+                echo "Прод отвечает: $body"
+                echo "Прод поднялся: \`$body\`" >> "$GITHUB_STEP_SUMMARY"
+                exit 0 ;;
+            esac
+            echo "  ещё не готов, жду ($i)"
+            sleep 15
+          done
+          echo "::error::Прод не ответил здоровьем за 10 минут после деплоя"
+          exit 1
