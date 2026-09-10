@@ -1,4 +1,9 @@
-import { buildNotification, toExcerpt } from './notification-copy';
+import {
+  buildNotification,
+  nightsWord,
+  toExcerpt,
+  travelDecisionTitle,
+} from './notification-copy';
 
 describe('buildNotification · уведомления «Работ» ведут в саму задачу', () => {
   // Раньше все четыре вели на доску, и человек искал названную задачу
@@ -387,5 +392,31 @@ describe('toExcerpt', () => {
 
     expect(excerpt).toHaveLength(120);
     expect(excerpt.endsWith('…')).toBe(true);
+  });
+});
+
+describe('nightsWord', () => {
+  it('склоняет ночи по-русски', () => {
+    expect(nightsWord(1)).toBe('1 ночь');
+    expect(nightsWord(2)).toBe('2 ночи');
+    expect(nightsWord(5)).toBe('5 ночей');
+    expect(nightsWord(21)).toBe('21 ночь');
+    expect(nightsWord(22)).toBe('22 ночи');
+  });
+
+  it('не спотыкается на 11–14, где последняя цифра врёт', () => {
+    expect(nightsWord(11)).toBe('11 ночей');
+    expect(nightsWord(12)).toBe('12 ночей');
+    expect(nightsWord(14)).toBe('14 ночей');
+  });
+});
+
+describe('travelDecisionTitle', () => {
+  it('называет решение без рода: у пола может не быть значения', () => {
+    for (const status of ['accepted', 'declined', 'checked_in', 'completed'] as const) {
+      const title = travelDecisionTitle(status);
+      expect(title).not.toMatch(/(ла|лся)\b/);
+      expect(title.length).toBeGreaterThan(0);
+    }
   });
 });

@@ -333,4 +333,14 @@ export class NotificationsListener {
   onVacancyOfferClosed(event: NotificationEvent): void {
     void this.deliver(event);
   }
+
+  @OnEvent(notificationEventNames.travelBookingCreated)
+  onTravelBookingCreated(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.travelBookingStatusChanged)
+  onTravelBookingStatusChanged(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
 }

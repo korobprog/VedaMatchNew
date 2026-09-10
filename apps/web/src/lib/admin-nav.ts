@@ -150,6 +150,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         hint: "Справочник ингредиентов, очередь продуктов, жалобы на состав",
         scope: "wellness",
       },
+      {
+        href: "/admin/travel",
+        label: "Путешествия",
+        hint: "Точки на карте и модерация объектов размещения",
+        scope: "travel",
+      },
     ],
   },
   {

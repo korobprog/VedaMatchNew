@@ -434,6 +434,9 @@ model User {
   wellnessReportsMade                WellnessProductReport[]      @relation("WellnessReportsMade")
   wellnessReportsDecided             WellnessProductReport[]      @relation("WellnessReportsDecided")
   wellnessBasketItems                WellnessBasketItem[]         @relation("WellnessBasketItems")
+  travelStaysManaged                 TravelStayManager[]          @relation("TravelStaysManaged")
+  travelBookings                     TravelBooking[]              @relation("TravelBookingsPlaced")
+  workTravelBookings                 WorkTravelBooking[]          @relation("WorkTravelBookings")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -2016,6 +2019,10 @@ model NotificationPreference {
   /// на доработку, позвали в рабочую среду. Своя колонка по той же причине,
   /// что у музыки и рилсов: это ответы по собственным делам, а не новости.
   work          Boolean  @default(true)
+  /// Сервис «Путешествия»: заявки на ночлег у управляющего объектом и решение
+  /// по своей заявке у гостя. Своя колонка, а не `market`: человек, который
+  /// выключил торговлю, ночлег на пути терять не должен.
+  travel        Boolean  @default(true)
   updatedAt     DateTime @updatedAt
 }
 
@@ -5397,6 +5404,35 @@ model WorkVacancyResponse {
   @@index([userId, status, updatedAt(sort: Desc)])
 }
 
+/// Заявка на ночлег из «Путешествий», как её видит управляющий в «Моём дне».
+///
+/// Своя минимальная строка, собранная из событий шины, — ровно как
+/// WorkVacancyResponse. Таблицы «Путешествий» отсюда не читаются: контракт
+/// запрещает, и FK на чужую модель тоже. Поэтому и статус строкой, и имя
+/// объекта копией: чужой энум сюда не тянем.
+model WorkTravelBooking {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation("WorkTravelBookings", fields: [userId], references: [id], onDelete: Cascade)
+  bookingId     String
+  bookingNumber Int
+  stayId        String
+  stayName      String
+  guestName     String
+  /// Даты заезда и выезда без времени: ночлег считается днями.
+  checkIn       DateTime @db.Date
+  checkOut      DateTime @db.Date
+  /// new_request, accepted, declined, cancelled, checked_in, completed.
+  status        String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  /// Одна строка на пару «управляющий + заявка»: событие приходит на каждого
+  /// управляющего своё, а повтор доставки не должен множить карточки.
+  @@unique([userId, bookingId])
+  @@index([userId, status, checkIn])
+}
+
 /// Персональный ключ доступа: вход для программ, которым негде показать
 /// браузер, — MCP-клиента, скрипта, интеграции.
 ///
@@ -5972,4 +6008,202 @@ model WellnessRecipeIngredient {
   position Int
 
   @@index([recipeId])
+}
+
+// ===== Travel service =====
+// Сервис «Путешествия», раздел «Ночлег»: отели, хостелы, гостевые дома,
+// ашрамы и комнаты у преданных — за плату или за служение.
+//
+// FK — только на User, все Cascade либо SetNull: удаление аккаунта не должно
+// упираться в чужую заявку. Связи с моделями других сервисов запрещены
+// контрактом, поэтому «Работа» получает заявку событием, а не FK, и держит
+// своё зеркало WorkTravelBooking.
+//
+// Файлы в S3 каскадом не удаляются: ключи фотографий отдаёт
+// `travel-purge.listener.ts` по событию `portal.user.purge-requested`.
+
+enum TravelStayKind {
+  hotel
+  hostel
+  guesthouse
+  ashram
+  homestay
+}
+
+/// Чем платят за ночлег. `seva` — служением; `both` — место принимает и так,
+/// и так. Отдельное поле, а не «цена = 0»: бесплатный ночлег и ночлег за
+/// служение — разный разговор с хозяином и разные ожидания у гостя.
+enum TravelStayPayment {
+  paid
+  seva
+  both
+}
+
+enum TravelStayStatus {
+  draft
+  published
+  hidden_by_author
+  removed_by_admin
+}
+
+/// Те же валюты, что на Рынке. Суммы — в минорных единицах, целым числом.
+enum TravelCurrency {
+  rub
+  usd
+  eur
+  inr
+}
+
+/// Путь заявки: `new_request` → `accepted` | `declined`; принятая доходит до
+/// `checked_in` и `completed`. `cancelled` ставит гость, и только до заезда.
+enum TravelBookingStatus {
+  new_request
+  accepted
+  declined
+  cancelled
+  checked_in
+  completed
+}
+
+/// Владелец объекта ровно один: без него остаётся место, которое некому снять
+/// с публикации. Остальные — управляющие: принимают заявки, но не удаляют.
+enum TravelStayManagerRole {
+  owner
+  manager
+}
+
+/// Точка на карте, вокруг которой собираются места ночлега: город, храм,
+/// место программы. Заводится администрацией, а не автором объекта: две
+/// «Маяпуры» с разными координатами развалили бы карту.
+model TravelPlace {
+  id        String       @id @default(uuid())
+  slug      String       @unique
+  name      String
+  country   String
+  region    String?
+  lat       Float
+  lng       Float
+  /// Короткое «зачем сюда едут» — подпись под маркером.
+  summary   String       @default("")
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  stays     TravelStay[]
+
+  @@index([country, name])
+}
+
+/// Объект размещения.
+model TravelStay {
+  id      String       @id @default(uuid())
+  /// SetNull, а не Cascade: удаление точки на карте не должно уносить с собой
+  /// хостел — он остаётся с адресом, но без метки.
+  placeId String?
+  place   TravelPlace? @relation(fields: [placeId], references: [id], onDelete: SetNull)
+
+  kind        TravelStayKind
+  name        String
+  description String            @default("")
+  address     String            @default("")
+  lat         Float?
+  lng         Float?
+  payment     TravelStayPayment @default(paid)
+  /// Цена за ночь в минорных единицах. null — цены нет: ночлег за служение
+  /// или «договоримся».
+  priceMinor  Int?
+  currency    TravelCurrency    @default(rub)
+  /// Что просят взамен, когда ночлег за служение.
+  sevaNote    String?
+  photoUrls   String[]          @default([])
+  contactPhone String?
+
+  /// Код публичной страницы: `/travel/s/<code>`. Его печатают под QR и иногда
+  /// диктуют голосом, поэтому шесть знаков без похожих букв.
+  publicCode String           @unique
+  status     TravelStayStatus @default(draft)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  managers TravelStayManager[]
+  rooms    TravelRoom[]
+  bookings TravelBooking[]
+
+  @@index([status, kind])
+  @@index([placeId, status])
+}
+
+model TravelStayManager {
+  id        String                @id @default(uuid())
+  stayId    String
+  stay      TravelStay            @relation(fields: [stayId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User                  @relation("TravelStaysManaged", fields: [userId], references: [id], onDelete: Cascade)
+  role      TravelStayManagerRole @default(manager)
+  createdAt DateTime              @default(now())
+
+  @@unique([stayId, userId])
+  @@index([userId])
+}
+
+/// Комната или койко-место. Корпус отдельным полем: у хостеля при храме их
+/// бывает несколько, и «номер 3» без корпуса ничего не значит.
+model TravelRoom {
+  id         String     @id @default(uuid())
+  stayId     String
+  stay       TravelStay @relation(fields: [stayId], references: [id], onDelete: Cascade)
+  building   String     @default("")
+  number     String
+  capacity   Int        @default(1)
+  /// Цена за ночь именно этой комнаты; null — берётся цена объекта.
+  priceMinor Int?
+
+  bookings TravelBooking[]
+
+  @@unique([stayId, building, number])
+  @@index([stayId])
+}
+
+/// Заявка на ночлег.
+model TravelBooking {
+  id     String      @id @default(uuid())
+  /// Человекочитаемый номер — как у MarketOrder: «заявка №42» в переписке
+  /// понятнее, чем uuid.
+  number Int         @unique @default(autoincrement())
+  stayId String
+  stay   TravelStay  @relation(fields: [stayId], references: [id], onDelete: Cascade)
+  /// SetNull: уборка комнат у хозяина не стирает историю гостя.
+  roomId String?
+  room   TravelRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  /// Гость портала; null — заявка с публичной страницы, ещё не привязанная к
+  /// аккаунту. Имя и телефон поэтому хранятся строками, а не берутся из User:
+  /// у гостя с QR-страницы аккаунта может не быть вовсе.
+  guestUserId String?
+  guestUser   User?   @relation("TravelBookingsPlaced", fields: [guestUserId], references: [id], onDelete: SetNull)
+  guestName   String
+  guestPhone  String
+
+  /// Даты без времени: ночлег считается днями.
+  checkIn  DateTime @db.Date
+  checkOut DateTime @db.Date
+  guests   Int      @default(1)
+  comment  String?
+
+  status        TravelBookingStatus @default(new_request)
+  declineReason String?
+  /// Снимок суммы: цены объекта после оформления меняются. null — ночлег за
+  /// служение либо цена не назначена.
+  totalMinor    Int?
+  currency      TravelCurrency      @default(rub)
+
+  /// Одноразовый токен привязки гостевой заявки к аккаунту. Заполнен только у
+  /// заявок с публичной страницы и гасится при привязке.
+  claimToken String? @unique
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  decidedAt DateTime?
+
+  @@index([stayId, status, createdAt(sort: Desc)])
+  @@index([guestUserId, createdAt(sort: Desc)])
 }

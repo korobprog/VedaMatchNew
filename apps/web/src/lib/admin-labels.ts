@@ -26,6 +26,7 @@ export const adminServiceLabels: Record<AdminServiceSlug, string> = {
   music: 'Music — киртаны и бхаджаны',
   assistant: 'Ассистент — ИИ-помощник портала',
   wellness: 'Здоровье — состав продуктов',
+  travel: 'Travel — путешествия и ночлег',
 };
 
 export const stageLabels: Record<SpiritualStage, string> = {
