@@ -9,6 +9,7 @@ import type {
   SupportTicketListResponse,
   AdminVerificationRequest,
   AdminUserDetail,
+  AdminUserContactsResponse,
   AdminUserListResponse,
   AdminUserReportsResponse,
   AdminAnnouncementDto,
@@ -119,6 +120,24 @@ export const getAdminVerificationRequests = (status?: DevoteeVerificationStatus)
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
   return apiGet<AdminVerificationRequest[]>(`/admin/verification-requests${query}`);
 };
+/**
+ * Справочник рабочих контактов участников. Отдельным запросом от списка
+ * людей: телефоны нужны для связи, а не для модерации, и в общем списке им
+ * делать нечего.
+ */
+export const getAdminUserContacts = (
+  query: Record<string, string | undefined>,
+) => {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value) params.set(key, value);
+  }
+  const qs = params.toString();
+  return apiGet<AdminUserContactsResponse>(
+    `/admin/users/contacts${qs ? `?${qs}` : ""}`,
+  );
+};
+
 export const getAdminUsers = (query: Record<string, string | undefined>) => {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {

@@ -22,6 +22,7 @@ import type {
   AdminAuditEvent,
   AdminRoleUpdateRequest,
   AdminServiceScopeUpdateRequest,
+  AdminUserContactsResponse,
   AdminUserDetail,
   AdminUserListResponse,
   DevoteeVerificationStatus,
@@ -178,6 +179,75 @@ export class AdminUsersService {
       pageSize,
       total,
       totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  }
+
+  /**
+   * Справочник рабочих контактов: телефон и мессенджеры участников, чтобы
+   * администрация могла быстро написать человеку.
+   *
+   * Отдельным запросом, а не полем общего списка людей: список открывают
+   * ради модерации по десятку раз в день, и телефоны в нём светились бы без
+   * нужды. Здесь же контакты — весь смысл ответа.
+   *
+   * Удалённые сюда не попадают: писать туда некому. Заблокированные —
+   * попадают: разбирательство обычно и начинается с того, что человеку надо
+   * что-то сказать.
+   */
+  async listContacts(
+    adminRole: Role,
+    query: { q?: string; page?: string; pageSize?: string },
+  ): Promise<AdminUserContactsResponse> {
+    this.ensureAdmin(adminRole);
+
+    const page = clampInt(query.page, 1, 10_000, 1);
+    const pageSize = clampInt(query.pageSize, 1, 100, 20);
+    const q = query.q?.trim();
+    const where: Prisma.UserWhereInput = {
+      accountStatus: { not: 'deleted' },
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q, mode: 'insensitive' as const } },
+              { spiritualName: { contains: q, mode: 'insensitive' as const } },
+              { email: { contains: q, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+
+    const [total, users] = await Promise.all([
+      this.prisma.user.count({ where }),
+      this.prisma.user.findMany({
+        where,
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    const items = await Promise.all(
+      users.map(async (user) => ({
+        id: user.id,
+        displayName: resolveDisplayName(user),
+        name: user.name,
+        email: user.email,
+        avatarUrl: await this.users.resolveAvatarUrl(user),
+        role: toRole(user.role),
+        accountStatus: user.accountStatus,
+        messengers: parseMessengers(user.messengers),
+      })),
+    );
+
+    return {
+      items,
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      reachable: items.filter((item) =>
+        Object.values(item.messengers).some((value) => Boolean(value?.trim())),
+      ).length,
     };
   }
 

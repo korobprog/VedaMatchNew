@@ -488,6 +488,34 @@ export interface AdminUserListResponse {
   totalPages: number;
 }
 
+/**
+ * Строка справочника рабочих контактов. Отдельно от `AdminUserListItem`:
+ * список людей открывают ради модерации, а этот — ради быстрой связи, и
+ * телефоны в общий список попадать не должны.
+ */
+export interface AdminUserContactRow {
+  id: string;
+  /** Имя, под которым человек виден на портале. */
+  displayName: string;
+  /** Мирское имя: в администрации нужно понимать, кто именно. */
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+  role: Role;
+  accountStatus: UserAccountStatus;
+  messengers: ProfileMessengers;
+}
+
+export interface AdminUserContactsResponse {
+  items: AdminUserContactRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  /** Сколько людей на этой странице оставили хоть один способ связи. */
+  reachable: number;
+}
+
 export interface AdminUserProfile extends UserProfile {
   updatedAt: string;
   statusReason: string | null;
