@@ -427,6 +427,13 @@ model User {
   workTaskNoticesCaused              WorkTaskNotice[]             @relation("WorkTaskNoticeActor")
   workVacancyResponses               WorkVacancyResponse[]        @relation("WorkVacancyResponses")
   apiKeys                            UserApiKey[]                 @relation("UserApiKeys")
+  wellnessProductsAdded              WellnessProduct[]            @relation("WellnessProductsAdded")
+  wellnessProductsReviewed           WellnessProduct[]            @relation("WellnessProductsReviewed")
+  wellnessDietProfile                WellnessDietProfile?         @relation("WellnessDietProfile")
+  wellnessScans                      WellnessScan[]               @relation("WellnessScans")
+  wellnessReportsMade                WellnessProductReport[]      @relation("WellnessReportsMade")
+  wellnessReportsDecided             WellnessProductReport[]      @relation("WellnessReportsDecided")
+  wellnessBasketItems                WellnessBasketItem[]         @relation("WellnessBasketItems")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -5700,4 +5707,269 @@ model ChatSettings {
   /// Выключатель звонков на случай инцидента с TURN или злоупотреблений.
   callsEnabled Boolean  @default(true)
   updatedAt    DateTime @updatedAt
+}
+
+// ===== Wellness service: «Здоровье» =====
+
+/// Класс ингредиента — то, из-за чего продукт может не подойти. Энум закрытый
+/// и намеренно короткий: справочник растёт записями `WellnessIngredient`, а не
+/// значениями энума, иначе каждая новая добавка требовала бы миграции.
+enum WellnessIngredientClass {
+  meat
+  fish
+  egg
+  dairy
+  honey
+  gelatin
+  rennet
+  onion
+  garlic
+  mushroom
+  alcohol
+  caffeine
+  additive
+  other
+}
+
+/// Насколько запись мешает. `hidden` — про формулировки, за которыми
+/// ингредиент прячется («натуральный ароматизатор», «специи»): состав его не
+/// называет, но и чистым продукт назвать нельзя.
+enum WellnessIngredientSeverity {
+  contains
+  mayContain
+  hidden
+}
+
+/// Ответ человеку у полки. `unknown` — полноправный исход, а не отсутствие
+/// ответа: состав разобран не до конца, и молчать об этом нельзя.
+enum WellnessVerdict {
+  clean
+  warning
+  forbidden
+  unknown
+}
+
+enum WellnessProductStatus {
+  draft
+  published
+  rejected
+}
+
+/// Кто принёс состав: человек руками, распознавание этикетки нашим ИИ или
+/// администратор. Источник виден в карточке — доверие к строке разное.
+enum WellnessProductSource {
+  user
+  ai
+  admin
+}
+
+enum WellnessReportStatus {
+  open
+  accepted
+  rejected
+}
+
+/// Как человек получил ответ. `photo` — путь без штрихкода: код стёрт, не
+/// читается или его нет вовсе, и человек снимает сам состав.
+enum WellnessScanKind {
+  barcode
+  photo
+  manual
+}
+
+/// Справочник ингредиентов — то, ради чего сервис полезен с первого дня даже
+/// на пустой базе продуктов. Ищется по `aliases`, а не по названию: на
+/// этикетках пишут «сычужный фермент», «rennet» и «E1105».
+model WellnessIngredient {
+  /// Канонический ключ латиницей: `onion`, `gelatin`, `e120`.
+  key      String                     @unique
+  id       String                     @id @default(uuid())
+  nameRu   String
+  nameEn   String
+  aliases  String[]
+  class    WellnessIngredientClass
+  severity WellnessIngredientSeverity @default(contains)
+  eNumber  String?
+
+  /// Короткое «почему это здесь» — показывается в причине вердикта.
+  noteRu String?
+  noteEn String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products WellnessProductIngredient[]
+
+  @@index([class])
+}
+
+/// Продукт, узнанный по штрихкоду. База копится из того, что приносят люди:
+/// внешние каталоги не импортируются.
+model WellnessProduct {
+  id      String  @id @default(uuid())
+  barcode String  @unique
+  name    String
+  brand   String?
+
+  /// Строка состава как её напечатали на упаковке. Разбор — производная,
+  /// исходник хранится целиком: справочник меняется, и состав придётся
+  /// перечитывать заново.
+  ingredientsRaw String
+
+  imageUrl      String?
+  labelImageUrl String?
+
+  source WellnessProductSource @default(user)
+  status WellnessProductStatus @default(draft)
+
+  addedById String?
+  addedBy   User?   @relation("WellnessProductsAdded", fields: [addedById], references: [id], onDelete: SetNull)
+
+  reviewedById String?
+  reviewedBy   User?     @relation("WellnessProductsReviewed", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+  rejectReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ingredients WellnessProductIngredient[]
+  scans       WellnessScan[]
+  reports     WellnessProductReport[]
+  basketItems WellnessBasketItem[]
+
+  @@index([status, createdAt])
+}
+
+/// Разобранный состав: какая запись справочника нашлась и каким куском текста.
+/// `matchedText` хранится, чтобы человек видел, на что сработал вердикт.
+model WellnessProductIngredient {
+  id           String                     @id @default(uuid())
+  productId    String
+  product      WellnessProduct            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ingredientId String
+  ingredient   WellnessIngredient         @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  matchedText  String
+  position     Int
+  severity     WellnessIngredientSeverity
+
+  @@unique([productId, ingredientId])
+  @@index([productId])
+}
+
+/// Что человек исключает. Пустые списки — сервис показывает состав, но не
+/// судит: без ограничений вердикт всегда `clean`.
+model WellnessDietProfile {
+  userId String @id
+  user   User   @relation("WellnessDietProfile", fields: [userId], references: [id], onDelete: Cascade)
+
+  excluded WellnessIngredientClass[]
+
+  /// Ключи справочника поверх классов — «мне нельзя именно кармин».
+  excludedKeys String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// История сканов. Вердикт записан на момент скана: справочник и состав потом
+/// правятся, а человек помнит, что ему ответили в магазине.
+model WellnessScan {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation("WellnessScans", fields: [userId], references: [id], onDelete: Cascade)
+
+  kind WellnessScanKind @default(barcode)
+
+  /// Пусто у скана по фото: кода не было или он не прочитался.
+  barcode   String?
+  productId String?
+  product   WellnessProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  /// Что удалось прочитать со снимка. У скана по штрихкоду пусто — состав
+  /// лежит в продукте; у скана по фото это единственный след разбора.
+  ingredientsRaw String?
+  imageUrl       String?
+
+  verdict   WellnessVerdict
+  createdAt DateTime        @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// «Состав неверный» — очередь модерации. Без неё чужая ошибка в базе живёт
+/// вечно и отвечает всем.
+model WellnessProductReport {
+  id        String          @id @default(uuid())
+  productId String
+  product   WellnessProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  authorId String?
+  author   User?   @relation("WellnessReportsMade", fields: [authorId], references: [id], onDelete: SetNull)
+
+  comment String
+  status  WellnessReportStatus @default(open)
+
+  decidedById String?
+  decidedBy   User?     @relation("WellnessReportsDecided", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt   DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
+}
+
+/// Задел раздела «Корзина»: продукты, отобранные для покупки. Пока только
+/// хранится — подбор рецептов поверх неё делает следующая веха.
+model WellnessBasketItem {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation("WellnessBasketItems", fields: [userId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   WellnessProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([userId, createdAt])
+}
+
+/// Задел раздела «Рецепты»: «Ведическая кулинария», рецепты Ямуны и прочее.
+model WellnessRecipe {
+  id     String @id @default(uuid())
+  slug   String @unique
+  titleRu String
+  titleEn String?
+
+  /// Откуда рецепт: название книги или автор. Показывается рядом с рецептом.
+  sourceRu String?
+
+  descriptionRu String?
+  steps         String?
+
+  kcalPer100g Int?
+  status      WellnessProductStatus @default(draft)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ingredients WellnessRecipeIngredient[]
+
+  @@index([status])
+}
+
+/// Ингредиенты рецепта — свободный текст, а не ссылки на справочник добавок:
+/// справочник отвечает на «что не так с этим продуктом», а не «сколько взять
+/// муки».
+model WellnessRecipeIngredient {
+  id       String         @id @default(uuid())
+  recipeId String
+  recipe   WellnessRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  nameRu   String
+  amountRu String?
+  position Int
+
+  @@index([recipeId])
 }

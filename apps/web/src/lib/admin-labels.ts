@@ -25,6 +25,7 @@ export const adminServiceLabels: Record<AdminServiceSlug, string> = {
   vedabase: 'Vedabase — священные тексты',
   music: 'Music — киртаны и бхаджаны',
   assistant: 'Ассистент — ИИ-помощник портала',
+  wellness: 'Здоровье — состав продуктов',
 };
 
 export const stageLabels: Record<SpiritualStage, string> = {

@@ -40,6 +40,7 @@ const { marketCategories } = require('./market-categories-data.js');
 const { noticeRubrics } = require('./notice-rubrics-data.js');
 const { musicCategories } = require('./music-categories-data.js');
 const { geoCities } = require('./geo-cities-data.js');
+const { wellnessIngredients } = require('./wellness-ingredients-data.js');
 
 const services = [
   {
@@ -209,6 +210,25 @@ const services = [
     devoteeSelfIdentifiedVisible: true,
     devoteeVerifiedVisible: true,
   },
+  {
+    slug: 'wellness',
+    name: 'Здоровье',
+    description:
+      'Сканер состава: за секунду видно, есть ли в продукте мясо, желатин, лук или чеснок',
+    // В коде и маршрутах сервис зовётся `wellness`: имя `health` занято
+    // техническим liveness-эндпоинтом для Docker HEALTHCHECK.
+    url: '/wellness',
+    // coming_soon: справочник и сканер готовы, база продуктов пуста, а
+    // корзина с рецептами ещё заделы.
+    status: 'coming_soon',
+    category: 'lifestyle',
+    public: true,
+    seekerVisible: true,
+    practitionerVisible: true,
+    yogiVisible: true,
+    devoteeSelfIdentifiedVisible: true,
+    devoteeVerifiedVisible: true,
+  },
 ];
 
 async function main() {
@@ -328,6 +348,26 @@ async function main() {
       });
     }
 
+    // Справочник ингредиентов «Здоровья» перезаписывается целиком: на нём
+    // держится вердикт сканера, и правка алиаса в файле обязана доехать до
+    // базы, а не остаться рядом со старым значением.
+    for (const ingredient of wellnessIngredients) {
+      const fields = {
+        nameRu: ingredient.nameRu,
+        nameEn: ingredient.nameEn,
+        aliases: ingredient.aliases,
+        class: ingredient.class,
+        severity: ingredient.severity,
+        eNumber: ingredient.eNumber ?? null,
+        noteRu: ingredient.noteRu ?? null,
+      };
+      await transaction.wellnessIngredient.upsert({
+        where: { key: ingredient.key },
+        update: fields,
+        create: { key: ingredient.key, ...fields },
+      });
+    }
+
     // Справочник городов перезаписывается целиком: файл — источник истины,
     // и правка алиаса в нём обязана доехать до базы, а не остаться рядом
     // со старым значением.
@@ -372,7 +412,7 @@ async function main() {
     }
   });
   console.log(
-    `Seeded ${services.length} services, ${libraryRoots.length} library roots, ${contactsTags.length} contacts tags, ${marketSections.length} market sections, ${marketCategories.length} market categories ${noticeRubrics.length} notice rubrics, ${musicCategories.length} music categories and ${geoCities.length} cities`,
+    `Seeded ${services.length} services, ${libraryRoots.length} library roots, ${contactsTags.length} contacts tags, ${marketSections.length} market sections, ${marketCategories.length} market categories ${noticeRubrics.length} notice rubrics, ${musicCategories.length} music categories, ${wellnessIngredients.length} wellness ingredients and ${geoCities.length} cities`,
   );
 }
 
