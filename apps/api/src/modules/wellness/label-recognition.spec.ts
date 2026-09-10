@@ -49,6 +49,13 @@ describe('buildLabelRequest', () => {
     const text = body.messages[0].content[0];
     expect(JSON.stringify(text)).toContain('Состав');
   });
+
+  it('задание требует не терять предупреждение о следах', () => {
+    // Без этой строки модель считает «может содержать следы рыбы» отдельным
+    // предложением и выбрасывает — проверено на живых моделях.
+    const text = JSON.stringify(body.messages[0].content[0]);
+    expect(text).toContain('следы');
+  });
 });
 
 describe('parseLabelResponse', () => {
