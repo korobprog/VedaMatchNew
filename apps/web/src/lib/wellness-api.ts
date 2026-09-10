@@ -7,6 +7,8 @@ import type {
   WellnessHistoryItem,
   WellnessIngredientDto,
   WellnessProductCard,
+  WellnessRecipeDetail,
+  WellnessRecipeMatchDto,
   WellnessScanRequest,
   WellnessScanResult,
   WellnessUpdateDietProfileRequest,
@@ -114,4 +116,23 @@ export const recognizeWellnessLabel = (imageDataUrl: string) =>
   request<{ ingredientsRaw: string }>("/wellness/recognize", {
     method: "POST",
     ...json({ imageDataUrl }),
+  });
+
+export const getWellnessRecipes = (signal?: AbortSignal) =>
+  request<WellnessRecipeDetail[]>("/wellness/recipes", {
+    method: "GET",
+    signal,
+  });
+
+export const getWellnessRecipe = (slug: string, signal?: AbortSignal) =>
+  request<WellnessRecipeDetail>(
+    `/wellness/recipes/${encodeURIComponent(slug)}`,
+    { method: "GET", signal },
+  );
+
+/** Что приготовить из набранного. Пустая корзина — пустой список. */
+export const getWellnessRecipesForBasket = (signal?: AbortSignal) =>
+  request<WellnessRecipeMatchDto[]>("/wellness/recipes/for-basket", {
+    method: "GET",
+    signal,
   });

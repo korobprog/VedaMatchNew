@@ -11,6 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type {
   AccessTokenPayload,
   WellnessProductStatus,
@@ -19,6 +20,8 @@ import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { isAdmin } from './is-admin';
 import { parseIngredientInput, WellnessInputError } from './wellness-dto';
 import { WellnessAdminService } from './wellness-admin.service';
+import { WellnessRecipeImportService } from './wellness-recipe-import.service';
+import { WellnessRecipesService } from './wellness-recipes.service';
 import { WellnessService } from './wellness.service';
 
 const STATUSES: WellnessProductStatus[] = ['draft', 'published', 'rejected'];
@@ -33,7 +36,60 @@ export class WellnessAdminController {
   constructor(
     private readonly admin: WellnessAdminService,
     private readonly wellness: WellnessService,
+    private readonly recipes: WellnessRecipesService,
+    private readonly recipeImport: WellnessRecipeImportService,
   ) {}
+
+  /**
+   * Импорт книги рецептов с gitabase. Руками и только админом: это выкачивание
+   * чужого издания, и оно должно быть осознанным решением оператора. Рецепты
+   * ложатся черновиками — публикует их человек, а не импорт.
+   */
+  @Post('recipes/import')
+  @Throttle({ default: { ttl: 600_000, limit: 4 } })
+  importRecipes(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: { book?: string; chapter?: number },
+  ) {
+    this.assertAdmin(user);
+    const book = String(body.book ?? '').toUpperCase();
+    if (!/^CB\d{1,2}$/.test(book)) {
+      throw new BadRequestException('Книга задаётся кодом вида CB1');
+    }
+    const chapter = Number(body.chapter);
+    return Number.isInteger(chapter) && chapter > 0
+      ? this.recipeImport.importChapter(book, chapter)
+      : this.recipeImport.importBook(book);
+  }
+
+  @Get('recipes')
+  recipeList(@CurrentUser() user: AccessTokenPayload) {
+    this.assertAdmin(user);
+    return this.recipes.all();
+  }
+
+  @Post('recipes/:id/status')
+  recipeStatus(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: { status?: string },
+  ) {
+    this.assertAdmin(user);
+    if (!STATUSES.includes(body.status as WellnessProductStatus)) {
+      throw new BadRequestException('Неизвестный статус');
+    }
+    return this.recipes.setStatus(id, body.status as WellnessProductStatus);
+  }
+
+  @Delete('recipes/:id')
+  @HttpCode(204)
+  async recipeRemove(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    this.assertAdmin(user);
+    await this.recipes.remove(id);
+  }
 
   @Get('products')
   products(

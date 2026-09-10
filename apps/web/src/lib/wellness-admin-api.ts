@@ -30,6 +30,16 @@ export interface AdminWellnessProduct {
   }[];
 }
 
+export interface AdminWellnessRecipe {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  source: string | null;
+  status: WellnessProductStatus;
+  ingredients: { nameRu: string; amountRu: string | null }[];
+}
+
 export interface AdminWellnessReport {
   id: string;
   comment: string;
@@ -117,3 +127,35 @@ export const saveWellnessIngredient = (body: {
 
 export const deleteWellnessIngredient = (id: string) =>
   request<void>(`/wellness/admin/ingredients/${id}`, { method: "DELETE" });
+
+export const getAdminWellnessRecipes = (signal?: AbortSignal) =>
+  request<AdminWellnessRecipe[]>("/wellness/admin/recipes", {
+    method: "GET",
+    signal,
+  });
+
+export const setWellnessRecipeStatus = (
+  id: string,
+  status: WellnessProductStatus,
+) =>
+  request<{ id: string; status: string }>(
+    `/wellness/admin/recipes/${id}/status`,
+    { method: "POST", ...json({ status }) },
+  );
+
+export const deleteWellnessRecipe = (id: string) =>
+  request<void>(`/wellness/admin/recipes/${id}`, { method: "DELETE" });
+
+export interface WellnessImportOutcome {
+  book: string;
+  chapters: number;
+  imported: number;
+  skipped: number;
+}
+
+/** Импорт книги рецептов с gitabase. Долгий: сервер ходит по чужим страницам. */
+export const importWellnessRecipes = (book: string, chapter?: number) =>
+  request<WellnessImportOutcome>("/wellness/admin/recipes/import", {
+    method: "POST",
+    ...json(chapter ? { book, chapter } : { book }),
+  });

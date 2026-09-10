@@ -8,6 +8,10 @@ import {
 } from "@vedamatch/shared";
 import {
   approveWellnessProduct,
+  deleteWellnessRecipe,
+  getAdminWellnessRecipes,
+  importWellnessRecipes,
+  setWellnessRecipeStatus,
   decideWellnessReport,
   deleteWellnessIngredient,
   getAdminWellnessIngredients,
@@ -16,11 +20,12 @@ import {
   rejectWellnessProduct,
   saveWellnessIngredient,
   type AdminWellnessProduct,
+  type AdminWellnessRecipe,
   type AdminWellnessReport,
 } from "@/lib/wellness-admin-api";
 import { ingredientClassLabel } from "@/components/wellness/verdict-labels";
 
-type Tab = "queue" | "reports" | "catalog";
+type Tab = "queue" | "reports" | "catalog" | "recipes";
 
 /**
  * Админка сервиса. Справочник здесь главный: пока в нём нет алиаса, сканер
@@ -41,11 +46,15 @@ export function AdminWellnessView() {
         <TabButton active={tab === "catalog"} onClick={() => setTab("catalog")}>
           Справочник
         </TabButton>
+        <TabButton active={tab === "recipes"} onClick={() => setTab("recipes")}>
+          Рецепты
+        </TabButton>
       </div>
 
       {tab === "queue" && <QueueTab />}
       {tab === "reports" && <ReportsTab />}
       {tab === "catalog" && <CatalogTab />}
+      {tab === "recipes" && <RecipesTab />}
     </div>
   );
 }
@@ -396,5 +405,173 @@ function Alert({ text }: { text: string }) {
     <p role="alert" className="text-sm text-magenta">
       {text}
     </p>
+  );
+}
+
+/**
+ * Рецепты. Добавляются сидом, а из админки ими управляют: публикуют, снимают
+ * с публикации и удаляют. Пока рецепт в черновике, в сервисе его не видно.
+ */
+function RecipesTab() {
+  const [items, setItems] = useState<AdminWellnessRecipe[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    getAdminWellnessRecipes()
+      .then(setItems)
+      .catch((cause: Error) => setError(cause.message));
+  }, []);
+
+  useEffect(load, [load]);
+
+  if (error) return <Alert text={error} />;
+  if (!items) return <Loading />;
+
+  return (
+    <div className="space-y-4">
+      <ImportBox onDone={load} onError={setError} />
+      {!items.length ? (
+        <p className="text-sm text-text-1">Рецептов пока нет.</p>
+      ) : (
+        <RecipeList items={items} onChanged={load} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Импорт книги с gitabase. Отдельной коробкой и с предупреждением: это
+ * выкачивание чужого издания, и запускать его должен человек, понимающий, на
+ * каком основании книга у нас появляется.
+ */
+function ImportBox({
+  onDone,
+  onError,
+}: {
+  onDone: () => void;
+  onError: (text: string) => void;
+}) {
+  const [book, setBook] = useState("CB1");
+  const [chapter, setChapter] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+
+  return (
+    <div className="rounded-2xl border border-glass-brd bg-glass p-4">
+      <p className="font-display text-base font-bold text-text-0">
+        Импорт книги с gitabase
+      </p>
+      <p className="mt-1 text-sm text-text-1">
+        Рецепты лягут черновиками с указанием книги и ссылкой на оригинал.
+        Публикует их человек: разбор чужой вёрстки не бывает безошибочным.
+        Запускайте, только если знаете, на каком основании книга у нас
+        появляется.
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <label className="text-sm text-text-1">
+          Книга
+          <input
+            value={book}
+            onChange={(event) => setBook(event.target.value)}
+            className="ml-2 w-24 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 font-mono text-sm text-text-0"
+          />
+        </label>
+        <label className="text-sm text-text-1">
+          Глава (пусто — вся книга)
+          <input
+            value={chapter}
+            inputMode="numeric"
+            onChange={(event) => setChapter(event.target.value)}
+            className="ml-2 w-24 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 font-mono text-sm text-text-0"
+          />
+        </label>
+        <button
+          type="button"
+          disabled={busy || !book.trim()}
+          onClick={() => {
+            setBusy(true);
+            setDone(null);
+            void importWellnessRecipes(
+              book.trim(),
+              chapter.trim() ? Number(chapter) : undefined,
+            )
+              .then((outcome) => {
+                setDone(
+                  `Глав: ${outcome.chapters}, принесено: ${outcome.imported}, пропущено: ${outcome.skipped}`,
+                );
+                onDone();
+              })
+              .catch((cause: Error) => onError(cause.message))
+              .finally(() => setBusy(false));
+          }}
+          className="rounded-xl bg-magenta px-4 py-2 text-sm font-medium text-bg-0 disabled:opacity-50"
+        >
+          {busy ? "Импортируем…" : "Импортировать"}
+        </button>
+      </div>
+
+      {done && (
+        <p role="status" className="mt-2 text-sm text-cyan">
+          {done}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function RecipeList({
+  items,
+  onChanged,
+}: {
+  items: AdminWellnessRecipe[];
+  onChanged: () => void;
+}) {
+  const load = onChanged;
+  return (
+    <ul className="space-y-2">
+      {items.map((recipe) => (
+        <li
+          key={recipe.id}
+          className="rounded-2xl border border-glass-brd bg-glass p-4"
+        >
+          <p className="text-sm font-medium text-text-0">{recipe.title}</p>
+          <p className="font-mono text-xs text-text-2">{recipe.slug}</p>
+          {recipe.description && (
+            <p className="mt-1 text-sm text-text-1">{recipe.description}</p>
+          )}
+          <p className="mt-1 text-xs text-text-2">
+            {recipe.ingredients.length} ингредиентов
+            {recipe.source ? ` · источник: ${recipe.source}` : ""}
+          </p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const next =
+                  recipe.status === "published" ? "draft" : "published";
+                void setWellnessRecipeStatus(recipe.id, next).then(load);
+              }}
+              className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-0"
+            >
+              {recipe.status === "published" ? "Снять с публикации" : "Опубликовать"}
+            </button>
+            <span className="text-xs text-text-2">{recipe.status}</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`Удалить рецепт «${recipe.title}»?`)) {
+                  void deleteWellnessRecipe(recipe.id).then(load);
+                }
+              }}
+              className="ml-auto text-xs text-text-1 underline"
+            >
+              Удалить
+            </button>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

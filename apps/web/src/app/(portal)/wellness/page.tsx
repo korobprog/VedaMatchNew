@@ -8,7 +8,7 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-/** Разделы сервиса. Корзина и рецепты — заделы, и это сказано прямо. */
+/** Разделы сервиса. Все живые: заделов больше не осталось. */
 const SECTIONS = [
   {
     href: "/wellness/scan",
@@ -35,10 +35,10 @@ const SECTIONS = [
     ready: true,
   },
   {
-    href: "/wellness",
+    href: "/wellness/recipes",
     title: "Рецепты",
-    text: "Что вкусного приготовить из набранного — «Ведическая кулинария», рецепты Ямуны, калорийность. Готовим.",
-    ready: false,
+    text: "Вайшнавская кухня и подбор блюд из того, что уже в корзине.",
+    ready: true,
   },
 ];
 
