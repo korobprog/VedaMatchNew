@@ -15,6 +15,7 @@ import {
   scanWellness,
   WellnessApiError,
 } from "@/lib/wellness-api";
+import { AddToBasket } from "./add-to-basket";
 import { fileToScanImage } from "./scan-image";
 import { VerdictCard } from "./verdict-card";
 import { hasSomethingToJudge } from "./verdict-labels";
@@ -389,12 +390,15 @@ function ScanOutcome({
           <p className="mt-2 text-sm text-text-1">
             {result.product.ingredientsRaw}
           </p>
-          <Link
-            href={`/wellness/products/${result.product.barcode}`}
-            className="mt-3 inline-block text-sm text-cyan underline"
-          >
-            Карточка продукта
-          </Link>
+          <div className="mt-3 flex flex-wrap items-center gap-4">
+            <AddToBasket productId={result.product.id} />
+            <Link
+              href={`/wellness/products/${result.product.barcode}`}
+              className="text-sm text-cyan underline"
+            >
+              Карточка продукта
+            </Link>
+          </div>
         </div>
       ) : (
         result.kind === "barcode" && (

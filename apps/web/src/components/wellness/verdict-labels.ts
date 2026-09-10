@@ -115,3 +115,27 @@ export function hasSomethingToJudge(result: {
     result.result.unrecognized.length > 0
   );
 }
+
+/**
+ * Шапка корзины: одна фраза, по которой человек решает, идти на кассу или
+ * вернуть что-то на полку. Порядок важности — запрет, сомнение, непонятое:
+ * корзина без единого запрета, но с тремя «неизвестно», это не «всё хорошо».
+ */
+export function basketHeadline(summary: {
+  total: number;
+  warning: number;
+  forbidden: number;
+  unknown: number;
+}): string {
+  if (summary.total === 0) return "Корзина пуста";
+  if (summary.forbidden > 0) {
+    return `Не подходит: ${summary.forbidden} из ${summary.total}`;
+  }
+  if (summary.warning > 0) {
+    return `Под вопросом: ${summary.warning} из ${summary.total}`;
+  }
+  if (summary.unknown > 0) {
+    return `Разобрано не до конца: ${summary.unknown} из ${summary.total}`;
+  }
+  return `Всё подходит: ${summary.total}`;
+}

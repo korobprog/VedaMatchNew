@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  basketHeadline,
   hasSomethingToJudge,
   ingredientClassLabel,
   reasonSummary,
@@ -87,5 +88,32 @@ describe("hasSomethingToJudge", () => {
         result: { reasons: [], unrecognized: ["камедь"] },
       }),
     ).toBe(true);
+  });
+});
+
+describe("basketHeadline", () => {
+  const of = (o: Partial<Parameters<typeof basketHeadline>[0]>) =>
+    basketHeadline({ total: 0, warning: 0, forbidden: 0, unknown: 0, ...o });
+
+  it("пустую корзину называет пустой", () => {
+    expect(of({})).toBe("Корзина пуста");
+  });
+
+  it("запрет важнее всего остального", () => {
+    expect(of({ total: 4, warning: 1, forbidden: 1, unknown: 1 })).toBe(
+      "Не подходит: 1 из 4",
+    );
+  });
+
+  it("без запретов говорит о сомнительном", () => {
+    expect(of({ total: 2, warning: 1 })).toBe("Под вопросом: 1 из 2");
+  });
+
+  it("не выдаёт неразобранное за благополучие", () => {
+    expect(of({ total: 3, unknown: 2 })).toBe("Разобрано не до конца: 2 из 3");
+  });
+
+  it("и только на чистой корзине радуется", () => {
+    expect(of({ total: 2 })).toBe("Всё подходит: 2");
   });
 });

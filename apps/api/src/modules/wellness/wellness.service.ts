@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { WELLNESS_HISTORY_LIMIT } from '@vedamatch/shared';
 import type {
+  WellnessBasketDto,
   WellnessBasketItemDto,
   WellnessDietProfileDto,
   WellnessHistoryItem,
@@ -10,6 +11,7 @@ import type {
   WellnessVerdictResult,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { summarizeBasket } from './basket-summary';
 import { resolveVerdict, type WellnessDietRestrictions } from './diet-verdict';
 import {
   matchIngredients,
@@ -308,17 +310,33 @@ export class WellnessService {
     });
   }
 
-  async basket(userId: string): Promise<WellnessBasketItemDto[]> {
+  /**
+   * Корзина с вердиктом по каждой позиции. Вердикт считается на лету, а не
+   * берётся из истории: человек мог поменять ограничения после того, как
+   * положил продукт, и старый ответ был бы враньём.
+   */
+  async basket(userId: string): Promise<WellnessBasketDto> {
     const rows = await this.prisma.wellnessBasketItem.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       select: { id: true, createdAt: true, product: { select: CARD_SELECT } },
     });
-    return rows.map((row) => ({
-      id: row.id,
-      product: toCard(row.product),
-      createdAt: row.createdAt.toISOString(),
-    }));
+
+    const restrictions = await this.restrictions(userId);
+    const items: WellnessBasketItemDto[] = [];
+    for (const row of rows) {
+      items.push({
+        id: row.id,
+        product: toCard(row.product),
+        result: await this.evaluate(row.product.ingredientsRaw, restrictions),
+        createdAt: row.createdAt.toISOString(),
+      });
+    }
+
+    return {
+      items,
+      summary: summarizeBasket(items.map((item) => item.result.verdict)),
+    };
   }
 
   async addToBasket(userId: string, productId: string): Promise<void> {

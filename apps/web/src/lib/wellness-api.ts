@@ -2,7 +2,7 @@
 // В коде и маршрутах сервис зовётся `wellness`: имя `health` занято
 // техническим liveness-эндпоинтом API.
 import type {
-  WellnessBasketItemDto,
+  WellnessBasketDto,
   WellnessDietProfileDto,
   WellnessHistoryItem,
   WellnessIngredientDto,
@@ -98,7 +98,7 @@ export const getWellnessHistory = (signal?: AbortSignal) =>
   request<WellnessHistoryItem[]>("/wellness/history", { method: "GET", signal });
 
 export const getWellnessBasket = (signal?: AbortSignal) =>
-  request<WellnessBasketItemDto[]>("/wellness/basket", { method: "GET", signal });
+  request<WellnessBasketDto>("/wellness/basket", { method: "GET", signal });
 
 export const addToWellnessBasket = (productId: string) =>
   request<void>(`/wellness/basket/${productId}`, { method: "POST" });
