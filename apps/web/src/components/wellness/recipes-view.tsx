@@ -10,7 +10,7 @@ import {
   getWellnessRecipes,
   getWellnessRecipesForBasket,
 } from "@/lib/wellness-api";
-import { isAbort } from "./is-abort";
+import { isAbort } from "@/lib/is-abort";
 
 /**
  * Рецепты и подбор под корзину.

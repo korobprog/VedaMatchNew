@@ -13,6 +13,8 @@
 // Серверные хелперы (lib/api.ts и *-server-api.ts) сюда не ходят: у них
 // cookie из next/headers, а не браузера.
 
+import { isAbort } from "./is-abort";
+
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -133,10 +135,15 @@ async function send(
   try {
     return await fetch(input, init);
   } catch (error) {
+    // Отмена — не сбой сети. Заворачивать её в `NetworkError` значит показать
+    // человеку «нет связи» там, где он просто ушёл со страницы; а повторять
+    // запрос с уже отменённым сигналом бессмысленно — он падает тут же.
+    if (isAbort(error)) throw error;
     if (!retriable) throw new NetworkError(error);
     try {
       return await fetch(input, init);
     } catch (retryError) {
+      if (isAbort(retryError)) throw retryError;
       throw new NetworkError(retryError);
     }
   }

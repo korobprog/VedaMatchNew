@@ -702,6 +702,130 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
         </svg>
       );
 
+    case "wellness":
+      // Лупа с листом внутри: сервис читает состав с упаковки и отвечает, годна
+      // ли она тому, кто не ест лишнего. Круг с ручкой — силуэт, которого нет
+      // ни у одного соседа, поэтому карточка узнаётся и в навигации размером с
+      // ноготь. Лайм — единственный свободный оттенок: эмеральд занят
+      // «Вдохновением», бирюза «Работой» и «Общением».
+      return (
+        <svg
+          viewBox="0 0 32 32"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className={className}
+        >
+          {/* Ручка — под линзой, чтобы стык не рисовать отдельно */}
+          <path
+            d="M20.4 20.4L26.5 26.5"
+            stroke={`url(#${gid("handle")})`}
+            strokeWidth="3.2"
+            strokeLinecap="round"
+          />
+          {/* Линза */}
+          <circle
+            cx="14"
+            cy="14"
+            r="8.6"
+            fill={`url(#${gid("lens")})`}
+            stroke={`url(#${gid("rim")})`}
+            strokeWidth="1.8"
+          />
+          {/* Лист: растительное, а не «полезное вообще» */}
+          <path
+            d="M10.2 17.6C9.6 12.9 12.9 9.6 18 9.4C18.2 14.4 15 17.9 10.2 17.6Z"
+            fill={`url(#${gid("leaf")})`}
+          />
+          {/* Прожилка — без неё лист читается пятном */}
+          <path
+            d="M10.6 17.2C12.9 15.1 15.4 12.6 17.6 10.2"
+            stroke="#3F6212"
+            strokeWidth="1"
+            strokeOpacity="0.55"
+            strokeLinecap="round"
+          />
+          {/* Блик: линза, а не просто кружок */}
+          <path
+            d="M8.6 11.2C9.4 9.6 10.8 8.4 12.5 7.9"
+            stroke="#FFFFFF"
+            strokeWidth="1.4"
+            strokeOpacity="0.7"
+            strokeLinecap="round"
+          />
+          <defs>
+            <linearGradient id={gid("lens")} x1="5.4" y1="5.4" x2="22.6" y2="22.6" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#F7FEE7" />
+              <stop offset="1" stopColor="#ECFCCB" />
+            </linearGradient>
+            <linearGradient id={gid("rim")} x1="5.4" y1="5.4" x2="22.6" y2="22.6" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#84CC16" />
+              <stop offset="1" stopColor="#4D7C0F" />
+            </linearGradient>
+            <linearGradient id={gid("leaf")} x1="10.2" y1="9.4" x2="18" y2="17.6" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#A3E635" />
+              <stop offset="1" stopColor="#65A30D" />
+            </linearGradient>
+            <linearGradient id={gid("handle")} x1="20.4" y1="20.4" x2="26.5" y2="26.5" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#65A30D" />
+              <stop offset="1" stopColor="#3F6212" />
+            </linearGradient>
+          </defs>
+        </svg>
+      );
+
+    case "travel":
+      // Метка на карте, а внутри — крыша с окном: сервис отвечает не «куда
+      // съездить», а «где переночевать». Капля метки не повторяет ни один
+      // соседний силуэт, а домик внутри читается даже в навигации. Небесный
+      // синий свободен: у «Библиотеки» он густой индиговый, у «Общения» —
+      // бирюза.
+      return (
+        <svg
+          viewBox="0 0 32 32"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className={className}
+        >
+          {/* Тень под меткой — иначе она висит в пустоте */}
+          <ellipse cx="16" cy="27.6" rx="5.6" ry="1.7" fill="#0EA5E9" fillOpacity="0.18" />
+          {/* Метка */}
+          <path
+            d="M16 2.8C10.6 2.8 6.2 7.1 6.2 12.5C6.2 19.6 16 27.4 16 27.4C16 27.4 25.8 19.6 25.8 12.5C25.8 7.1 21.4 2.8 16 2.8Z"
+            fill={`url(#${gid("pin")})`}
+            stroke={`url(#${gid("edge")})`}
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+          {/* Крыша */}
+          <path
+            d="M10.6 13.1L16 8.6L21.4 13.1"
+            stroke="#FFFFFF"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          {/* Стены с окном: ночлег, а не просто точка на карте */}
+          <path
+            d="M12.1 13.4V17.9H19.9V13.4"
+            stroke="#FFFFFF"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <rect x="14.9" y="14.9" width="2.2" height="3" rx="0.5" fill="#FFFFFF" fillOpacity="0.9" />
+          <defs>
+            <linearGradient id={gid("pin")} x1="6.2" y1="2.8" x2="25.8" y2="27.4" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#38BDF8" />
+              <stop offset="1" stopColor="#0284C7" />
+            </linearGradient>
+            <linearGradient id={gid("edge")} x1="6.2" y1="2.8" x2="25.8" y2="27.4" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#0EA5E9" />
+              <stop offset="1" stopColor="#075985" />
+            </linearGradient>
+          </defs>
+        </svg>
+      );
+
     case "devotee-space":
     default:
       // Sacred Temple / Lotus flower with Crown / Lock emblem - Restricted Space

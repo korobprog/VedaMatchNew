@@ -10,7 +10,7 @@ import {
   updateWellnessDiet,
   WellnessApiError,
 } from "@/lib/wellness-api";
-import { isAbort } from "./is-abort";
+import { isAbort } from "@/lib/is-abort";
 import { ingredientClassLabel } from "./verdict-labels";
 
 /**

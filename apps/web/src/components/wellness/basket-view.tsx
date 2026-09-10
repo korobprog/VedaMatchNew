@@ -7,7 +7,7 @@ import {
   getWellnessBasket,
   removeFromWellnessBasket,
 } from "@/lib/wellness-api";
-import { isAbort } from "./is-abort";
+import { isAbort } from "@/lib/is-abort";
 import { basketHeadline, verdictLook } from "./verdict-labels";
 
 /**

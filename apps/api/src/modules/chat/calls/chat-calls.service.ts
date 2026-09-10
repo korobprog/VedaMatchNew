@@ -339,6 +339,22 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
     return isFinal(fresh.status) ? null : toCallDto(fresh);
   }
 
+  /**
+   * История звонков человека: и свои, и входящие, свежие сверху.
+   *
+   * Звонок начинается внутри диалога, поэтому без этого списка вспомнить, кто
+   * звонил вчера, было негде — оставалось листать переписку.
+   */
+  async historyForUser(userId: string, limit = 50): Promise<ChatCallDto[]> {
+    const rows = await this.prisma.chatCall.findMany({
+      where: { OR: [{ callerId: userId }, { calleeId: userId }] },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Math.max(limit, 1), 200),
+      include: callInclude,
+    });
+    return rows.map(toCallDto);
+  }
+
   /** Раздел админки: последние звонки. */
   async listForAdmin(limit = 100): Promise<ChatCallDto[]> {
     const rows = await this.prisma.chatCall.findMany({

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { WellnessHistoryItem } from "@vedamatch/shared";
 import { getWellnessHistory } from "@/lib/wellness-api";
-import { isAbort } from "./is-abort";
+import { isAbort } from "@/lib/is-abort";
 import { verdictLook } from "./verdict-labels";
 
 const KIND_LABEL: Record<WellnessHistoryItem["kind"], string> = {

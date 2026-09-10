@@ -63,6 +63,12 @@ export class ChatCallsController {
     };
   }
 
+  /** История звонков человека. Буквальный путь — до `:id`, иначе он его съест. */
+  @Get('history')
+  history(@CurrentUser() user: AccessTokenPayload) {
+    return this.calls.historyForUser(user.sub);
+  }
+
   @Get('active')
   async active(
     @CurrentUser() user: AccessTokenPayload,
