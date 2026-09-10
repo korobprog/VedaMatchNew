@@ -205,6 +205,13 @@ export class MotivationService {
        * показать созданное в самой ленте, а не на отдельной странице.
        */
       post?: string;
+      /**
+       * Откуда взялась картинка: `uploaded` — фотография, которую принёс
+       * человек, `generated` — работа нейросети. Нужен папке: под «готовым
+       * афоризмом» имелись в виду именно наложенные на фотографии, а в общей
+       * куче они неразличимы.
+       */
+      imageSource?: 'uploaded' | 'generated';
     },
   ) {
     const user = await this.prisma.user.findUnique({
@@ -294,6 +301,7 @@ export class MotivationService {
       // сессии: оно придёт «свежим» при следующем открытии ленты.
       ...(ranked ? { publishedAt: { lte: since } } : {}),
       ...(query.category ? { category: query.category } : {}),
+      ...(query.imageSource ? { imageSource: query.imageSource } : {}),
       ...(query.favorites ? { favorites: { some: { userId } } } : {}),
     };
     const include = {
