@@ -10,6 +10,7 @@ import {
   approveWellnessProduct,
   deleteWellnessRecipe,
   getAdminWellnessRecipes,
+  importWellnessRecipes,
   setWellnessRecipeStatus,
   decideWellnessReport,
   deleteWellnessIngredient,
@@ -425,9 +426,108 @@ function RecipesTab() {
 
   if (error) return <Alert text={error} />;
   if (!items) return <Loading />;
-  if (!items.length)
-    return <p className="text-sm text-text-1">Рецептов пока нет.</p>;
 
+  return (
+    <div className="space-y-4">
+      <ImportBox onDone={load} onError={setError} />
+      {!items.length ? (
+        <p className="text-sm text-text-1">Рецептов пока нет.</p>
+      ) : (
+        <RecipeList items={items} onChanged={load} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Импорт книги с gitabase. Отдельной коробкой и с предупреждением: это
+ * выкачивание чужого издания, и запускать его должен человек, понимающий, на
+ * каком основании книга у нас появляется.
+ */
+function ImportBox({
+  onDone,
+  onError,
+}: {
+  onDone: () => void;
+  onError: (text: string) => void;
+}) {
+  const [book, setBook] = useState("CB1");
+  const [chapter, setChapter] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+
+  return (
+    <div className="rounded-2xl border border-glass-brd bg-glass p-4">
+      <p className="font-display text-base font-bold text-text-0">
+        Импорт книги с gitabase
+      </p>
+      <p className="mt-1 text-sm text-text-1">
+        Рецепты лягут черновиками с указанием книги и ссылкой на оригинал.
+        Публикует их человек: разбор чужой вёрстки не бывает безошибочным.
+        Запускайте, только если знаете, на каком основании книга у нас
+        появляется.
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <label className="text-sm text-text-1">
+          Книга
+          <input
+            value={book}
+            onChange={(event) => setBook(event.target.value)}
+            className="ml-2 w-24 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 font-mono text-sm text-text-0"
+          />
+        </label>
+        <label className="text-sm text-text-1">
+          Глава (пусто — вся книга)
+          <input
+            value={chapter}
+            inputMode="numeric"
+            onChange={(event) => setChapter(event.target.value)}
+            className="ml-2 w-24 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 font-mono text-sm text-text-0"
+          />
+        </label>
+        <button
+          type="button"
+          disabled={busy || !book.trim()}
+          onClick={() => {
+            setBusy(true);
+            setDone(null);
+            void importWellnessRecipes(
+              book.trim(),
+              chapter.trim() ? Number(chapter) : undefined,
+            )
+              .then((outcome) => {
+                setDone(
+                  `Глав: ${outcome.chapters}, принесено: ${outcome.imported}, пропущено: ${outcome.skipped}`,
+                );
+                onDone();
+              })
+              .catch((cause: Error) => onError(cause.message))
+              .finally(() => setBusy(false));
+          }}
+          className="rounded-xl bg-magenta px-4 py-2 text-sm font-medium text-bg-0 disabled:opacity-50"
+        >
+          {busy ? "Импортируем…" : "Импортировать"}
+        </button>
+      </div>
+
+      {done && (
+        <p role="status" className="mt-2 text-sm text-cyan">
+          {done}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function RecipeList({
+  items,
+  onChanged,
+}: {
+  items: AdminWellnessRecipe[];
+  onChanged: () => void;
+}) {
+  const load = onChanged;
   return (
     <ul className="space-y-2">
       {items.map((recipe) => (

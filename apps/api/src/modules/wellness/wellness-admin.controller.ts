@@ -11,6 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type {
   AccessTokenPayload,
   WellnessProductStatus,
@@ -19,6 +20,7 @@ import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { isAdmin } from './is-admin';
 import { parseIngredientInput, WellnessInputError } from './wellness-dto';
 import { WellnessAdminService } from './wellness-admin.service';
+import { WellnessRecipeImportService } from './wellness-recipe-import.service';
 import { WellnessRecipesService } from './wellness-recipes.service';
 import { WellnessService } from './wellness.service';
 
@@ -35,7 +37,30 @@ export class WellnessAdminController {
     private readonly admin: WellnessAdminService,
     private readonly wellness: WellnessService,
     private readonly recipes: WellnessRecipesService,
+    private readonly recipeImport: WellnessRecipeImportService,
   ) {}
+
+  /**
+   * Импорт книги рецептов с gitabase. Руками и только админом: это выкачивание
+   * чужого издания, и оно должно быть осознанным решением оператора. Рецепты
+   * ложатся черновиками — публикует их человек, а не импорт.
+   */
+  @Post('recipes/import')
+  @Throttle({ default: { ttl: 600_000, limit: 4 } })
+  importRecipes(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: { book?: string; chapter?: number },
+  ) {
+    this.assertAdmin(user);
+    const book = String(body.book ?? '').toUpperCase();
+    if (!/^CB\d{1,2}$/.test(book)) {
+      throw new BadRequestException('Книга задаётся кодом вида CB1');
+    }
+    const chapter = Number(body.chapter);
+    return Number.isInteger(chapter) && chapter > 0
+      ? this.recipeImport.importChapter(book, chapter)
+      : this.recipeImport.importBook(book);
+  }
 
   @Get('recipes')
   recipeList(@CurrentUser() user: AccessTokenPayload) {

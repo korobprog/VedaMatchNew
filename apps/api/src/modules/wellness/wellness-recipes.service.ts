@@ -13,6 +13,7 @@ const RECIPE_SELECT = {
   titleRu: true,
   descriptionRu: true,
   sourceRu: true,
+  sourceUrl: true,
   kcalPer100g: true,
   status: true,
   steps: true,
@@ -28,6 +29,7 @@ type RecipeRow = {
   titleRu: string;
   descriptionRu: string | null;
   sourceRu: string | null;
+  sourceUrl: string | null;
   kcalPer100g: number | null;
   status: WellnessRecipeCard['status'];
   steps: string | null;
@@ -41,6 +43,7 @@ function toDetail(row: RecipeRow): WellnessRecipeDetail {
     title: row.titleRu,
     description: row.descriptionRu,
     source: row.sourceRu,
+    sourceUrl: row.sourceUrl,
     kcalPer100g: row.kcalPer100g,
     status: row.status,
     steps: row.steps,

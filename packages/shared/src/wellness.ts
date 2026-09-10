@@ -187,6 +187,8 @@ export interface WellnessRecipeCard {
   description: string | null;
   /** Откуда рецепт: книга или автор. Пусто, пока источник не подтверждён. */
   source: string | null;
+  /** Ссылка на оригинал у импортированного рецепта. */
+  sourceUrl: string | null;
   kcalPer100g: number | null;
   status: WellnessProductStatus;
   ingredients: WellnessRecipeIngredientDto[];

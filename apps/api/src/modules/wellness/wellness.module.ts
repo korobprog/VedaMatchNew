@@ -4,6 +4,7 @@ import { WellnessAdminController } from './wellness-admin.controller';
 import { WellnessAdminService } from './wellness-admin.service';
 import { WellnessAssistantListener } from './wellness-assistant.listener';
 import { WellnessController } from './wellness.controller';
+import { WellnessRecipeImportService } from './wellness-recipe-import.service';
 import { WellnessRecipesService } from './wellness-recipes.service';
 import { WellnessRecognizeService } from './wellness-recognize.service';
 import { WellnessService } from './wellness.service';
@@ -24,6 +25,7 @@ import { WellnessService } from './wellness.service';
     WellnessAdminService,
     WellnessRecognizeService,
     WellnessRecipesService,
+    WellnessRecipeImportService,
     WellnessAssistantListener,
   ],
 })
