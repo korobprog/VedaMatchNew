@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   collapsedColumnsKey,
+  everyColumnCollapsed,
   expandCollapsedColumn,
   parseCollapsedColumns,
   serializeCollapsedColumns,
+  toggleAllColumns,
   toggleCollapsedColumn,
 } from "./column-collapse";
 
@@ -68,5 +70,53 @@ describe("expandCollapsedColumn", () => {
   it("развёрнутую оставляет как есть", () => {
     const ids = ["c1"];
     expect(expandCollapsedColumn(ids, "c2")).toBe(ids);
+  });
+});
+
+describe("everyColumnCollapsed", () => {
+  it("узнаёт, что свёрнуто всё", () => {
+    expect(everyColumnCollapsed(["c1", "c2"], ["c1", "c2"])).toBe(true);
+  });
+
+  it("одна развёрнутая — уже не всё", () => {
+    expect(everyColumnCollapsed(["c1"], ["c1", "c2"])).toBe(false);
+  });
+
+  it("память о колонке, которой на доске нет, ничего не решает", () => {
+    // Колонку удалили, а в хранилище она осталась: доска от этого не
+    // становится свёрнутой.
+    expect(everyColumnCollapsed(["c1", "ушедшая"], ["c1", "c2"])).toBe(false);
+  });
+
+  it("пустая доска не считается свёрнутой: сворачивать нечего", () => {
+    expect(everyColumnCollapsed([], [])).toBe(false);
+  });
+});
+
+describe("toggleAllColumns", () => {
+  it("сворачивает всё разом", () => {
+    expect(toggleAllColumns([], ["c1", "c2", "c3"])).toEqual([
+      "c1",
+      "c2",
+      "c3",
+    ]);
+  });
+
+  it("дожимает остаток, когда часть уже свёрнута", () => {
+    expect(toggleAllColumns(["c2"], ["c1", "c2"])).toEqual(["c1", "c2"]);
+  });
+
+  it("из свёрнутого состояния разворачивает всё", () => {
+    expect(toggleAllColumns(["c1", "c2"], ["c1", "c2"])).toEqual([]);
+  });
+
+  it("заодно забывает колонки, которых на доске уже нет", () => {
+    expect(toggleAllColumns(["ушедшая"], ["c1"])).toEqual(["c1"]);
+  });
+
+  it("не меняет исходный список", () => {
+    const before = ["c1"];
+    toggleAllColumns(before, ["c1", "c2"]);
+    expect(before).toEqual(["c1"]);
   });
 });
