@@ -21,6 +21,13 @@ import { apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
 import { splitQuoteAndExplanation } from "./quote-text";
 import {
+  formatImageSize,
+  pastedImageName,
+  pastedImageRejection,
+  pickClipboardType,
+  pickPastedImage,
+} from "./clipboard-image";
+import {
   MAX_TEXT,
   MIN_TEXT,
   POLL_INTERVAL_MS,
@@ -100,6 +107,8 @@ export function ReelWizard({
   const [style, setStyle] = useState<MotivationVisualStyle | "">("");
   const [imageMode, setImageMode] = useState<"generate" | "upload">("generate");
   const [file, setFile] = useState<File | null>(null);
+  /** Почему кадр не взят: чужой формат, слишком большой, пустой буфер. */
+  const [imageError, setImageError] = useState<string | null>(null);
   const [quota, setQuota] = useState<MotivationReelQuotaDto | null>(null);
   const [reel, setReel] = useState<MotivationReelDto | null>(null);
   const [reelId, setReelId] = useState<string | null>(prefill.reelId ?? null);
@@ -118,6 +127,70 @@ export function ReelWizard({
       cancelled = true;
     };
   }, []);
+
+  /**
+   * Кадр принимаем только тот, который примет сервер: отказ уже после
+   * отправки человек читает как «портал сломался», а набранное к тому
+   * времени жалко.
+   */
+  const acceptImage = useCallback((next: File | null) => {
+    const rejection = pastedImageRejection(next);
+    setImageError(rejection);
+    if (!rejection) setFile(next);
+  }, []);
+
+  /**
+   * Ctrl+V где угодно на шаге. Слушаем окно, а не поле: вставлять человек
+   * будет туда, куда смотрит, а не туда, где стоит курсор. На телефоне этого
+   * события нет вовсе — там работает кнопка ниже.
+   */
+  useEffect(() => {
+    if (step !== "image" || imageMode !== "upload") return;
+    const onPaste = (event: ClipboardEvent) => {
+      const picked = pickPastedImage(event.clipboardData?.files);
+      if (!picked) return;
+      // Своё поведение только когда в буфере правда картинка: иначе пусть
+      // вставляется текст, как обычно.
+      event.preventDefault();
+      acceptImage(picked);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [step, imageMode, acceptImage]);
+
+  /**
+   * Взять картинку из буфера по нажатию — единственный путь на телефоне, где
+   * Ctrl+V нет. iOS спросит подтверждение «Вставить», Android — разрешение.
+   * Если браузер читать буфер не даёт, отправляем к выбору файла: на телефоне
+   * он открывает камеру и галерею.
+   */
+  const pasteImage = useCallback(async () => {
+    setImageError(null);
+    if (!navigator.clipboard?.read) {
+      setImageError(
+        "Этот браузер не даёт читать буфер. Нажмите Ctrl+V или выберите файл — на телефоне это откроет галерею.",
+      );
+      return;
+    }
+    try {
+      for (const item of await navigator.clipboard.read()) {
+        const type = pickClipboardType(item.types);
+        if (!type) continue;
+        const blob = await item.getType(type);
+        acceptImage(
+          new File([blob], pastedImageName(type, new Date()), { type }),
+        );
+        return;
+      }
+      acceptImage(null);
+    } catch {
+      // Отказ в доступе выглядит так же, как пустой буфер, — различить их
+      // браузер не даёт, поэтому говорим про оба пути сразу.
+      setImageError(
+        "Не удалось прочитать буфер. Разрешите доступ или выберите файл.",
+      );
+    }
+  }, [acceptImage]);
 
   const loadReel = useCallback(async (id: string) => {
     const response = await apiFetch(`${API_URL}/motivation/reels/${id}`, { credentials: "include" });
@@ -408,10 +481,37 @@ export function ReelWizard({
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  onChange={(e) => acceptImage(e.target.files?.[0] ?? null)}
                   className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
                 />
               </label>
+              {/* Картинку чаще копируют, чем сохраняют файлом: из переписки,
+                  из галереи, из чужого поста. «Найдите её в файлах» на
+                  телефоне означает выйти из мастера и вернуться, потеряв
+                  набранное. */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={pasteImage}
+                  className="rounded-xl border border-glass-brd px-3 py-2 text-sm font-medium text-text-1 hover:text-text-0"
+                >
+                  📋 Вставить из буфера
+                </button>
+                <span className="text-xs text-text-2">
+                  Скопировали картинку — нажмите сюда. На компьютере работает
+                  и Ctrl+V.
+                </span>
+              </div>
+              {file && (
+                <p className="text-xs text-text-1">
+                  Кадр взят: {file.name} · {formatImageSize(file.size)}
+                </p>
+              )}
+              {imageError && (
+                <p role="status" className="text-xs text-magenta">
+                  {imageError}
+                </p>
+              )}
               <p className="text-xs text-text-2">
                 Кадр обрежется под вертикальный формат 9:16, снизу ляжет цитата. Подтвердите, что права
                 на снимок ваши: чужие фото и скриншоты модерация отклоняет.
