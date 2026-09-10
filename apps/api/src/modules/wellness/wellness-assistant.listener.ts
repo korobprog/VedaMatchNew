@@ -28,7 +28,11 @@ export class WellnessAssistantListener {
       typeof request.args.barcode === 'string' ? request.args.barcode : '';
     const query =
       typeof request.args.query === 'string' ? request.args.query.trim() : '';
-    const barcode = barcodeArg ? normalizeBarcode(barcodeArg) : null;
+    // Человек говорит ассистенту «проверь 4600059800108», и модель кладёт
+    // цифры в `query`, а не в `barcode`. Считаем цифровой запрос кодом сам —
+    // иначе поиск по названию заведомо ничего не найдёт.
+    const digitsInQuery = /^[\d\s-]{8,20}$/.test(query) ? query : '';
+    const barcode = normalizeBarcode(barcodeArg || digitsInQuery || '');
 
     if (!barcode && !query) return { ok: true, items: [] };
 

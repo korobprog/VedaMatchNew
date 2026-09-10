@@ -127,3 +127,21 @@ describe('parseToolArgs', () => {
     });
   });
 });
+
+describe('wellness_lookup', () => {
+  it('есть в реестре и принадлежит сервису «Здоровье»', () => {
+    const tool = ASSISTANT_TOOLS.find((t) => t.name === 'wellness_lookup');
+    expect(tool?.service).toBe('wellness');
+    // Поиск, а не действие: подтверждения от человека не требует.
+    expect(tool?.requiresConfirmation).toBe(false);
+  });
+
+  it('оставляет из штрихкода только цифры', () => {
+    const tool = ASSISTANT_TOOLS.find((t) => t.name === 'wellness_lookup')!;
+    const args = parseToolArgs(tool, {
+      query: 'печенье',
+      barcode: '5 901234-123457',
+    });
+    expect(args.barcode).toBe('5901234123457');
+  });
+});
