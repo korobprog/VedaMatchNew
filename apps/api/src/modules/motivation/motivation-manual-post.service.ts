@@ -121,6 +121,10 @@ export class MotivationManualPostService {
           category,
           status: 'draft',
           reviewStatus: 'text_review',
+          /* Автор — тот администратор, который этот текст только что написал.
+             Раньше ручной пост был безымянным, и конвейер не отличал его от
+             находки робота: кадр уходил на одобрение тому же человеку. */
+          authorUserId: actorId,
           sourceVerified: true,
           attributionKind: 'exact_quote',
           attributionSpeaker: author,

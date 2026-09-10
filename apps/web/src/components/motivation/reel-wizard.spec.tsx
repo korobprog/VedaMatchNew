@@ -70,6 +70,32 @@ function routeFetch(routes: Record<string, (init?: RequestInit) => unknown>) {
 beforeEach(() => vi.restoreAllMocks());
 
 describe("ReelWizard", () => {
+  it("администратору обещают публикацию, а не очередь", async () => {
+    // Кнопка не должна обещать проверку, которой не будет: афоризм админа
+    // публикуется сразу (VED-69).
+    routeFetch({ "/motivation/reels/quota": () => quota });
+    const user = userEvent.setup();
+    render(<ReelWizard prefill={{}} donation={null} isAdmin />);
+
+    await screen.findByText("Сегодня: 0 из 1");
+    await user.type(
+      screen.getByLabelText(/Текст цитаты/),
+      "Делай что должно, и будь что будет.",
+    );
+    await user.click(screen.getByRole("button", { name: "Дальше: картинка" }));
+    await user.click(screen.getByRole("button", { name: "Дальше: проверка" }));
+
+    expect(
+      screen.getByRole("button", { name: "Опубликовать" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: "Отправить на проверку администраторам",
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/публикуется без очереди/)).toBeInTheDocument();
+  });
+
   it("walks text → image → review and posts the reel", async () => {
     const fetchMock = routeFetch({
       "/motivation/reels/quota": () => quota,

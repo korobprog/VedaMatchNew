@@ -53,7 +53,13 @@ function build(options: {
         ),
       ),
     },
-    user: { findMany: jest.fn(() => Promise.resolve([{ id: 'admin-1' }])) },
+    user: {
+      findMany: jest.fn(() => Promise.resolve([{ id: 'admin-1' }])),
+      // Воркер спрашивает права автора: здесь пост участника, прав нет.
+      findUnique: jest.fn(() =>
+        Promise.resolve({ role: 'user', serviceAdminScopes: [] }),
+      ),
+    },
   };
   const fal = {
     enabled: true,

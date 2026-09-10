@@ -32,6 +32,7 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isAdmin } from './is-admin';
+import { isMotivationAdminRow } from './author-admin';
 import {
   buildModerationPrompt,
   parseAiVerdict,
@@ -321,7 +322,10 @@ export class MotivationReelsService {
       audienceTrack,
       language,
       visualStyle,
-      trusted: Boolean(policy?.trusted),
+      /* Администратор ручается за себя сам: отправлять его текст на платную
+         проверку значит спрашивать разрешения у самого себя — и рисковать
+         отказом ИИ на посте того, кто этот ИИ и настраивает. */
+      trusted: Boolean(policy?.trusted) || isAdmin(actor),
     });
     return { id: post.id, ...reviewed };
   }
@@ -354,6 +358,11 @@ export class MotivationReelsService {
 
     const { url, crop } = await this.prepareUploadedImage(postId, file!);
 
+    /* Загруженный кадр обычно смотрит человек: vision-шлюза у нас нет. Но
+       когда загрузил администратор, смотреть его будет он же — а значит
+       публикуем сразу. Тот же признак, что и у конвейера (author-admin.ts). */
+    const authorIsAdmin = await this.authorIsAdmin(userId);
+    const now = new Date();
     await this.prisma.motivationPost.update({
       where: { id: postId },
       data: {
@@ -361,11 +370,22 @@ export class MotivationReelsService {
         // Кадр для Stories пока тот же файл: он уже вертикальный.
         storyImageUrl: url,
         imageSource: 'uploaded',
-        reviewStatus: 'image_review',
-        status: 'draft',
-        generationStage: 'image_review',
-        generationErrorCode: null,
-        imageApprovedAt: null,
+        ...(authorIsAdmin
+          ? {
+              reviewStatus: 'published' as const,
+              status: 'published',
+              generationStage: 'published',
+              generationErrorCode: null,
+              imageApprovedAt: now,
+              publishedAt: now,
+            }
+          : {
+              reviewStatus: 'image_review' as const,
+              status: 'draft',
+              generationStage: 'image_review',
+              generationErrorCode: null,
+              imageApprovedAt: null,
+            }),
       },
     });
     await this.prisma.motivationModerationAudit.create({
@@ -759,6 +779,21 @@ export class MotivationReelsService {
    * исполняет уверенные вердикты, сомнительные эскалирует. Любой сбой модели
    * — эскалация: рилс не теряется и не публикуется «по умолчанию».
    */
+  /**
+   * Права автора из базы: сюда приходит только его идентификатор, а решение
+   * «публиковать без проверки» зависит именно от прав. См. author-admin.ts.
+   */
+  private async authorIsAdmin(userId: string): Promise<boolean> {
+    const row = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        role: true,
+        serviceAdminScopes: { select: { service: { select: { slug: true } } } },
+      },
+    });
+    return isMotivationAdminRow(row);
+  }
+
   private async review(
     postId: string,
     input: {

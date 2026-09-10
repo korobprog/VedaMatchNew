@@ -15,6 +15,7 @@ import { FalAudioService } from './fal-audio.service';
 import { FalVideoService } from './fal-video.service';
 import { buildImageDataUri, encodedSizeBytes } from './image-data-uri';
 import { isAutonomousApproval } from './autonomous-approval';
+import { isMotivationAdminRow } from './author-admin';
 import { MotivationSettingsService } from './motivation-settings.service';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { resolveVideoPrompt } from './motivation-prompt';
@@ -315,22 +316,42 @@ export class MotivationVideoWorkerService
   private async shouldAutoAccept(post: {
     id: string;
     origin: string;
+    authorUserId?: string | null;
   }): Promise<boolean> {
     if (!this.settings) return false;
     const settings = await this.settings.read();
-    const approval = await this.prisma.motivationModerationAudit.findFirst({
-      where: {
-        postId: post.id,
-        action: { in: ['ai_approve', 'approve_text'] },
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { action: true },
-    });
+    const [approval, authorIsAdmin] = await Promise.all([
+      this.prisma.motivationModerationAudit.findFirst({
+        where: {
+          postId: post.id,
+          action: { in: ['ai_approve', 'approve_text'] },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { action: true },
+      }),
+      this.authorIsAdmin(post.authorUserId),
+    ]);
     return isAutonomousApproval({
       origin: post.origin,
       moderationMode: settings.aiModerationMode,
       lastApprovalAction: approval?.action,
+      authorIsAdmin,
     });
+  }
+
+  /** Права автора — тем же признаком, что и у кадра. См. author-admin.ts. */
+  private async authorIsAdmin(
+    authorUserId: string | null | undefined,
+  ): Promise<boolean> {
+    if (!authorUserId) return false;
+    const row = await this.prisma.user.findUnique({
+      where: { id: authorUserId },
+      select: {
+        role: true,
+        serviceAdminScopes: { select: { service: { select: { slug: true } } } },
+      },
+    });
+    return isMotivationAdminRow(row);
   }
 
   /** Автору — что ролик готов и виден. */

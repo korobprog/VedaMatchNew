@@ -70,10 +70,13 @@ export function ReelWizard({
   prefill,
   donation,
   defaultTrack = "universal",
+  isAdmin = false,
 }: {
   prefill: ReelWizardPrefill;
   donation: DonationSettingsDto | null;
   defaultTrack?: MotivationAudienceTrack;
+  /** Администратор ручается за себя сам: его афоризм публикуется без очереди. */
+  isAdmin?: boolean;
 }) {
   const fromBook = Boolean(prefill.book && prefill.chapter && prefill.text);
   const [step, setStep] = useState<Step>(prefill.reelId ? "review" : "text");
@@ -492,9 +495,12 @@ export function ReelWizard({
               </div>
             )}
           </div>
+          {/* Администратору очередь не нужна: одобрять свой афоризм он будет
+              сам, а кнопка не должна обещать проверку, которой не будет. */}
           <p className="text-xs text-text-2">
-            Администратор посмотрит текст, источник и кадр. Пока идёт проверка,
-            рилс виден вам в «Моих» — и никому больше.
+            {isAdmin
+              ? "Ваш афоризм публикуется без очереди: одобрять его было бы некому, кроме вас. Скрыть или поправить можно в админке."
+              : "Администратор посмотрит текст, источник и кадр. Пока идёт проверка, рилс виден вам в «Моих» — и никому больше."}
           </p>
           <div className="flex flex-wrap gap-2">
             <button
@@ -509,7 +515,11 @@ export function ReelWizard({
               disabled={pending || !trimmed || Boolean(textError)}
               className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
             >
-              {pending ? "Отправляем…" : "Отправить на проверку администраторам"}
+              {pending
+                ? "Отправляем…"
+                : isAdmin
+                  ? "Опубликовать"
+                  : "Отправить на проверку администраторам"}
             </button>
           </div>
         </form>

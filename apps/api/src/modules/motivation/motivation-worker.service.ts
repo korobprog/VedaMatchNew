@@ -20,6 +20,7 @@ import { MotivationSettingsService } from './motivation-settings.service';
 import { MotivationModerationService } from './motivation-moderation.service';
 import { estimateImageCostUsd, IMAGE_SIZE } from './image-cost';
 import { isAutonomousApproval } from './autonomous-approval';
+import { isMotivationAdminRow } from './author-admin';
 import { classifyAiFailure, isRetryableFailure } from './ai-failure';
 
 /**
@@ -440,22 +441,45 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
   private async shouldAutoPublish(post: {
     id: string;
     origin?: string;
+    authorUserId?: string | null;
   }): Promise<boolean> {
     if (!this.settings) return false;
     const settings = await this.settings.read();
-    const approval = await this.prisma.motivationModerationAudit.findFirst({
-      where: {
-        postId: post.id,
-        action: { in: ['ai_approve', 'approve_text'] },
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { action: true },
-    });
+    const [approval, authorIsAdmin] = await Promise.all([
+      this.prisma.motivationModerationAudit.findFirst({
+        where: {
+          postId: post.id,
+          action: { in: ['ai_approve', 'approve_text'] },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { action: true },
+      }),
+      this.authorIsAdmin(post.authorUserId),
+    ]);
     return isAutonomousApproval({
       origin: post.origin,
       moderationMode: settings.aiModerationMode,
       lastApprovalAction: approval?.action,
+      authorIsAdmin,
     });
+  }
+
+  /**
+   * Права автора берём из базы: у воркера нет токена, а решение «пускать без
+   * человека» зависит именно от того, кто написал пост. См. author-admin.ts.
+   */
+  private async authorIsAdmin(
+    authorUserId: string | null | undefined,
+  ): Promise<boolean> {
+    if (!authorUserId) return false;
+    const row = await this.prisma.user.findUnique({
+      where: { id: authorUserId },
+      select: {
+        role: true,
+        serviceAdminScopes: { select: { service: { select: { slug: true } } } },
+      },
+    });
+    return isMotivationAdminRow(row);
   }
 
   private async composeStory(
