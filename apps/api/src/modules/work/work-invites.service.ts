@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -15,7 +16,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   createWorkInviteToken,
   hashWorkInviteToken,
-  portalWebUrl,
   workInviteExpiry,
   workInviteState,
   workInviteStateMessage,
@@ -23,11 +23,14 @@ import {
 } from './work-invite';
 import { WORK_EVENTS, type WorkInviteReceivedEvent } from './work-events';
 import { assertWorkAccess, workRoleTitle } from './work-roles';
+import { publicOrigin } from './public-origin';
 import { WorkSpacesService } from './work-spaces.service';
 import { normalizeWorkColor } from './work-validate';
 
 @Injectable()
 export class WorkInvitesService {
+  private readonly logger = new Logger(WorkInvitesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly spaces: WorkSpacesService,
@@ -35,8 +38,31 @@ export class WorkInvitesService {
     private readonly events: EventEmitter2,
   ) {}
 
+  /**
+   * Откуда берётся адрес в ссылке приглашения.
+   *
+   * Читалась `WEB_URL` — переменная, которой нет ни в compose, ни в панели:
+   * её не читает больше никто в портале. На проде ссылка поэтому всегда
+   * получалась `http://localhost:3000/work/join/<токен>`, и позвать по ней
+   * было невозможно.
+   *
+   * Правильное имя одно — `WEB_ORIGIN`, его читают вход, награды и CORS.
+   * Прежнее оставлено запасным: если кто-то успел его задать, ссылка от
+   * правки не сломается.
+   */
   private webUrl(): string {
-    return portalWebUrl(this.config.get<string>('WEB_ORIGIN'));
+    const configured =
+      publicOrigin(this.config.get<string>('WEB_ORIGIN')) ??
+      publicOrigin(this.config.get<string>('WEB_URL'));
+    if (configured) return configured;
+    /* Молчаливый localhost и был причиной: ссылка выглядела рабочей и
+       никуда не вела. В разработке это норма, в проде — поломка, и она
+       обязана попасть в журнал. */
+    if (this.config.get<string>('NODE_ENV') === 'production')
+      this.logger.error(
+        'WEB_ORIGIN не задан: ссылка приглашения соберётся на localhost',
+      );
+    return 'http://localhost:3000';
   }
 
   /**
