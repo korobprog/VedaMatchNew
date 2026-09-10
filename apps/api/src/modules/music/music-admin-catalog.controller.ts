@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -26,6 +27,7 @@ import type {
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { AdminUnlimited } from '../auth/admin-unlimited.guard';
 import { MusicAdminCatalogService } from './music-admin-catalog.service';
+import { MusicArtistTagsService } from './music-artist-tags.service';
 import { MusicAdminQueueService } from './music-admin-queue.service';
 import { MusicReportsService } from './music-reports.service';
 import { isAdmin } from './is-admin';
@@ -56,6 +58,7 @@ export class MusicAdminCatalogController {
   constructor(
     private readonly catalog: MusicAdminCatalogService,
     private readonly queue: MusicAdminQueueService,
+    private readonly artistTags: MusicArtistTagsService,
   ) {}
 
   @Get('playlists')
@@ -125,6 +128,24 @@ export class MusicAdminCatalogController {
   @Get('tracks')
   listTracks(@CurrentUser() user: AccessTokenPayload) {
     return this.queue.listTracks(isAdmin(user));
+  }
+
+  /**
+   * Разбор коллекции: исполнители по тегам уже залитых записей. Стоит перед
+   * `artists/:id`-маршрутами не по необходимости — они отличаются методом, —
+   * а чтобы читалось рядом с созданием исполнителя, которым и заканчивается.
+   *
+   * `dryRun` — показать, что получится, ничего не меняя: редакция сначала
+   * смотрит список имён, а потом нажимает второй раз.
+   */
+  @Post('artists/from-tags')
+  artistsFromTags(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('dryRun') dryRun?: string,
+  ) {
+    return this.artistTags.scan(isAdmin(user), {
+      dryRun: dryRun === '1' || dryRun === 'true',
+    });
   }
 
   @Post('artists')

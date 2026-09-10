@@ -314,6 +314,27 @@ export default async function MusicPage({
         <MusicFilters state={filterState} artists={catalog.artists} />
       </div>
 
+      {/* Исполнители — до списка записей. Хвостом после подборок их не
+          находили: человек видел «Исполнитель не указан» у каждой строки и
+          уходил, не долистав. */}
+      {catalog.artists.length > 0 && (
+        <section className="mt-8" aria-labelledby="music-artists">
+          <h2
+            id="music-artists"
+            className="font-display text-base font-bold text-text-0"
+          >
+            Исполнители
+          </h2>
+          <ul className="scroll-slim mt-4 flex gap-5 overflow-x-auto pb-2">
+            {catalog.artists.map((artist) => (
+              <li key={artist.id}>
+                <MusicArtistBubble artist={artist} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="mt-8" aria-labelledby="music-tracks">
         <div className="flex items-baseline justify-between gap-4">
           <h2
@@ -372,24 +393,6 @@ export default async function MusicPage({
           </Link>
         )}
       </section>
-
-      {catalog.artists.length > 0 && (
-        <section className="mt-10" aria-labelledby="music-artists">
-          <h2
-            id="music-artists"
-            className="font-display text-base font-bold text-text-0"
-          >
-            Исполнители
-          </h2>
-          <ul className="scroll-slim mt-4 flex gap-5 overflow-x-auto pb-2">
-            {catalog.artists.map((artist) => (
-              <li key={artist.id}>
-                <MusicArtistBubble artist={artist} />
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
 
       {catalog.systemPlaylists.length > 0 && (
         <section className="mt-10" aria-labelledby="music-playlists">

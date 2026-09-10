@@ -391,6 +391,32 @@ export interface MusicModerationDecisionRequest {
   note?: string;
 }
 
+/**
+ * Разбор коллекции: исполнители по тегам уже залитых записей. Итог одного
+ * прогона — и предпросмотра, и настоящего.
+ */
+export interface MusicArtistFromTagsGroup {
+  name: string;
+  trackCount: number;
+  /** Такой исполнитель в справочнике уже был — записи просто привязаны. */
+  existed: boolean;
+}
+
+export interface MusicArtistsFromTagsResult {
+  /** Сколько записей без исполнителя посмотрели за прогон. */
+  scanned: number;
+  /** У скольких из них в теге нашлось внятное имя. */
+  withTag: number;
+  artistsCreated: number;
+  artistsMatched: number;
+  tracksLinked: number;
+  /** Сколько записей без исполнителя осталось. */
+  remaining: number;
+  groups: MusicArtistFromTagsGroup[];
+  /** Прогон был предпросмотром: ничего не заведено и не привязано. */
+  dryRun: boolean;
+}
+
 export interface MusicAdminArtistsDto {
   items: MusicArtistDto[];
 }

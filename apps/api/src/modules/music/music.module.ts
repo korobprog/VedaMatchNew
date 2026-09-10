@@ -6,6 +6,7 @@ import {
   MusicAdminQueueController,
 } from './music-admin-catalog.controller';
 import { MusicAdminCatalogService } from './music-admin-catalog.service';
+import { MusicArtistTagsService } from './music-artist-tags.service';
 import { MusicAdminQueueService } from './music-admin-queue.service';
 import { MusicCatalogController } from './music-catalog.controller';
 import { MusicCatalogService } from './music-catalog.service';
@@ -71,6 +72,7 @@ import { MusicWorkerService } from './music-worker.service';
   providers: [
     MusicCatalogService,
     MusicAdminCatalogService,
+    MusicArtistTagsService,
     MusicAdminQueueService,
     MusicStorageService,
     MusicCoversService,
