@@ -32,3 +32,9 @@ backups/
 
 # Сгенерированный клиент московской базы (prisma/ru/schema.prisma).
 apps/api/node_modules/@vedamatch/ru-client/
+
+# Next 16 сам генерирует эти файлы при `next dev` и `next build`
+# (`agentRules` в next.config.ts). Они пересоздаются у каждого, кто просто
+# запустил дев-сервер, и иначе вечно висят в `git status`.
+apps/web/AGENTS.md
+apps/web/CLAUDE.md

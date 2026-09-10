@@ -108,7 +108,18 @@ describe('справочник из сида на настоящих этике�
       VEGETARIAN,
     );
     expect(result.verdict).toBe('unknown');
-    expect(result.unrecognized).toContain('ароматизатор натуральный');
+    expect(result.hidden.map((r) => r.matchedText)).toContain(
+      'ароматизатор натуральный',
+    );
+  });
+
+  it('«может содержать следы рыбы» ловится в родительном падеже', () => {
+    const result = check(
+      'Состав: мука, сахар. Может содержать следы рыбы',
+      VEGETARIAN,
+    );
+    expect(result.verdict).toBe('warning');
+    expect(result.reasons.map((r) => r.ingredient.key)).toContain('fish');
   });
 
   it('E471 предупреждает вегетарианца: сырьё бывает животным', () => {

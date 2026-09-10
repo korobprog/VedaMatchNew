@@ -10,6 +10,7 @@ import {
   reportWellnessProduct,
   WellnessApiError,
 } from "@/lib/wellness-api";
+import { isAbort } from "./is-abort";
 import { VerdictCard } from "./verdict-card";
 
 /**
@@ -31,6 +32,7 @@ export function ProductView({ barcode }: { barcode: string }) {
     getWellnessProduct(barcode, controller.signal)
       .then(setData)
       .catch((cause) => {
+        if (isAbort(cause)) return;
         if (cause instanceof WellnessApiError && cause.status === 404) {
           setMissing(true);
           return;

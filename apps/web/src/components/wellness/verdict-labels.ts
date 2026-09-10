@@ -77,18 +77,41 @@ export function ingredientClassLabel(value: WellnessIngredientClass): string {
 /**
  * Строка «почему так». Собирается здесь, а не в разметке: её же показывает
  * история сканов, и расходиться две формулировки не должны.
+ *
+ * `unclearCount` считает и незнакомые слова, и формулировки, которые ничего не
+ * говорят. Звать вторые «неразобранными» нельзя — они как раз разобраны, это
+ * они молчат.
  */
 export function reasonSummary(
   reasons: { ingredient: { name: string } }[],
-  unrecognizedCount: number,
+  unclearCount: number,
 ): string {
   const named = reasons.map((reason) => reason.ingredient.name);
-  if (named.length && unrecognizedCount) {
-    return `${named.join(", ")}; ещё ${unrecognizedCount} позиций состава не разобрано`;
+  if (named.length && unclearCount) {
+    return `${named.join(", ")}; ещё ${unclearCount} позиций состава без ясного ответа`;
   }
   if (named.length) return named.join(", ");
-  if (unrecognizedCount) {
-    return `${unrecognizedCount} позиций состава не разобрано`;
+  if (unclearCount) {
+    return `${unclearCount} позиций состава без ясного ответа`;
   }
   return "Состав разобран полностью";
+}
+
+/**
+ * Было ли что судить. Скан по штрихкоду, не нашедший продукт, состава не
+ * видел вовсе — показывать для него вердикт значит утверждать «неизвестно» и
+ * тут же подписывать «состав разобран полностью».
+ */
+export function hasSomethingToJudge(result: {
+  product: unknown | null;
+  ingredientsRaw?: string | null;
+  result: { reasons: unknown[]; hidden?: unknown[]; unrecognized: unknown[] };
+}): boolean {
+  if (result.product) return true;
+  if (result.ingredientsRaw) return true;
+  return (
+    result.result.reasons.length > 0 ||
+    (result.result.hidden?.length ?? 0) > 0 ||
+    result.result.unrecognized.length > 0
+  );
 }

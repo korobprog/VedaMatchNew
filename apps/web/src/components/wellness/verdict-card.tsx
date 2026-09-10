@@ -58,23 +58,48 @@ export function VerdictCard({ result }: { result: WellnessVerdictResult }) {
         </ul>
       )}
 
-      {result.unrecognized.length > 0 && (
+      {result.hidden.length > 0 && (
         <details className="mt-4">
           <summary className="cursor-pointer text-sm text-text-1">
-            Не разобрано: {result.unrecognized.length}
+            Состав не договаривает: {result.hidden.length}
+          </summary>
+          <ul className="mt-2 space-y-1">
+            {result.hidden.map((reason) => (
+              <li key={reason.matchedText} className="text-xs text-text-1">
+                <span className="font-mono text-text-2">
+                  {reason.matchedText}
+                </span>
+                {reason.ingredient.note && ` — ${reason.ingredient.note}`}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-text-1">
+            Такие формулировки производитель не расшифровывает: под ними может
+            быть и лук, и животное сырьё.
+          </p>
+        </details>
+      )}
+
+      {result.unrecognized.length > 0 && (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-sm text-text-1">
+            Незнакомые слова: {result.unrecognized.length}
           </summary>
           <p className="mt-2 text-xs text-text-2">
             {result.unrecognized.join(", ")}
           </p>
           <p className="mt-2 text-xs text-text-1">
-            Этих слов нет в нашем справочнике. Если что-то из них важно —
-            напишите нам, и мы добавим.
+            Их нет в нашем справочнике. Если что-то из них важно — напишите
+            нам, и мы добавим.
           </p>
         </details>
       )}
 
       <p className="mt-4 border-t border-glass-brd pt-3 text-xs text-text-2">
-        {reasonSummary(result.reasons, result.unrecognized.length)}
+        {reasonSummary(
+          result.reasons,
+          result.unrecognized.length + result.hidden.length,
+        )}
       </p>
     </section>
   );

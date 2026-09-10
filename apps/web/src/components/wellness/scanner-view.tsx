@@ -10,12 +10,14 @@ import {
 import Link from "next/link";
 import type { WellnessScanResult } from "@vedamatch/shared";
 import {
+  createWellnessProduct,
   recognizeWellnessLabel,
   scanWellness,
   WellnessApiError,
 } from "@/lib/wellness-api";
 import { fileToScanImage } from "./scan-image";
 import { VerdictCard } from "./verdict-card";
+import { hasSomethingToJudge } from "./verdict-labels";
 
 /**
  * Сканер у полки. Три пути, и ни один не обязателен:
@@ -64,13 +66,16 @@ export function ScannerView() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Поддержку проверяем на клиенте: на сервере `window` нет, а решение,
-  // предлагать ли камеру, зависит только от браузера. Через
-  // `useSyncExternalStore`, а не через эффект: серверный снимок `false` даёт
-  // ту же разметку, что и первый клиентский рендер, и гидрация не расходится.
-  const hasDetector = useSyncExternalStore(
+  // Есть ли вообще камера. Через `useSyncExternalStore`, а не через эффект:
+  // серверный снимок `false` даёт ту же разметку, что и первый клиентский
+  // рендер, и гидрация не расходится.
+  //
+  // Проверяем камеру, а не `BarcodeDetector`: нативного детектора нет в Safari
+  // на iOS, и раньше половина телефонов вкладки «Камера» не видела вовсе.
+  // Теперь там подхватывается ZXing.
+  const hasCamera = useSyncExternalStore(
     subscribeToNothing,
-    () => "BarcodeDetector" in window,
+    () => Boolean(navigator.mediaDevices?.getUserMedia),
     () => false,
   );
 
@@ -118,34 +123,59 @@ export function ScannerView() {
     }
   }, []);
 
-  // Поиск кода в кадре — раз в 400 мс, а не каждый кадр: чаще не нужно, а
-  // батарею в магазине человек тратит не на нас.
+  // Поиск кода в кадре. Нативный детектор — раз в 400 мс: чаще не нужно, а
+  // батарею в магазине человек тратит не на нас. Где его нет, тот же кадр
+  // читает ZXing — он грузится только здесь, чтобы не тащить wasm на все
+  // страницы портала.
   useEffect(() => {
     if (mode !== "camera" || !cameraReady) return;
-    const reader = barcodeReader();
-    if (!reader) return;
     let stopped = false;
+    let timer = 0;
+    let controls: { stop: () => void } | null = null;
 
-    const timer = window.setInterval(() => {
-      const video = videoRef.current;
-      if (stopped || !video || video.readyState < 2) return;
-      void reader
-        .detect(video)
-        .then(([found]) => {
-          if (stopped || !found?.rawValue) return;
-          stopped = true;
-          window.clearInterval(timer);
-          stopCamera();
-          void send({ kind: "barcode", barcode: found.rawValue });
+    const found = (value: string) => {
+      if (stopped || !value) return;
+      stopped = true;
+      window.clearInterval(timer);
+      controls?.stop();
+      stopCamera();
+      void send({ kind: "barcode", barcode: value });
+    };
+
+    const native = barcodeReader();
+    if (native) {
+      timer = window.setInterval(() => {
+        const video = videoRef.current;
+        if (stopped || !video || video.readyState < 2) return;
+        void native
+          .detect(video)
+          .then(([hit]) => found(hit?.rawValue ?? ""))
+          .catch(() => {
+            // Кадр не прочитался — это норма, ждём следующий.
+          });
+      }, 400);
+    } else {
+      void import("@zxing/browser")
+        .then(async ({ BrowserMultiFormatReader }) => {
+          const video = videoRef.current;
+          if (stopped || !video) return;
+          const reader = new BrowserMultiFormatReader();
+          controls = await reader.decodeFromVideoElement(video, (result) => {
+            if (result) found(result.getText());
+          });
+          if (stopped) controls.stop();
         })
         .catch(() => {
-          // Кадр не прочитался — это норма, ждём следующий.
+          setError(
+            "Не удалось запустить распознавание кода. Снимите состав или введите цифры.",
+          );
         });
-    }, 400);
+    }
 
     return () => {
       stopped = true;
       window.clearInterval(timer);
+      controls?.stop();
     };
   }, [mode, cameraReady, send, stopCamera]);
 
@@ -179,7 +209,7 @@ export function ScannerView() {
   return (
     <div className="space-y-6">
       <div role="tablist" aria-label="Способ проверки" className="flex gap-2">
-        {hasDetector && (
+        {hasCamera && (
           <ModeButton
             active={mode === "camera"}
             onClick={() => {
@@ -297,7 +327,15 @@ export function ScannerView() {
         </p>
       )}
 
-      {result && <ScanOutcome result={result} />}
+      {result && (
+        <ScanOutcome
+          result={result}
+          onPhotoRequested={() => {
+            stopCamera();
+            setMode("photo");
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -328,9 +366,16 @@ function ModeButton({
 
 /**
  * Продукта может не оказаться — на старте база пуста, и это главный путь, а не
- * ошибка. Поэтому «не нашли» приглашает снять состав, а не извиняется.
+ * ошибка. Поэтому «не нашли» не извиняется, а ведёт к снимку состава и дальше
+ * к пополнению базы: иначе она никогда не наполнится.
  */
-function ScanOutcome({ result }: { result: WellnessScanResult }) {
+function ScanOutcome({
+  result,
+  onPhotoRequested,
+}: {
+  result: WellnessScanResult;
+  onPhotoRequested: () => void;
+}) {
   return (
     <div className="space-y-4">
       {result.product ? (
@@ -361,11 +406,122 @@ function ScanOutcome({ result }: { result: WellnessScanResult }) {
               Снимите состав с упаковки — мы прочитаем его и заодно пополним
               базу для остальных.
             </p>
+            <button
+              type="button"
+              onClick={onPhotoRequested}
+              className="mt-3 rounded-xl bg-magenta px-4 py-2 text-sm font-medium text-bg-0"
+            >
+              Снять состав
+            </button>
           </div>
         )
       )}
 
-      <VerdictCard result={result.result} />
+      {hasSomethingToJudge(result) && <VerdictCard result={result.result} />}
+
+      {!result.product && result.ingredientsRaw && (
+        <SaveProduct
+          barcode={result.barcode}
+          ingredientsRaw={result.ingredientsRaw}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Пополнение базы. Штрихкод берётся из предыдущего скана: без него состав
+ * останется в истории одного человека и никому больше не поможет.
+ */
+function SaveProduct({
+  barcode,
+  ingredientsRaw,
+}: {
+  barcode: string | null;
+  ingredientsRaw: string;
+}) {
+  const [name, setName] = useState("");
+  const [code, setCode] = useState(barcode ?? "");
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (saved) {
+    return (
+      <p
+        role="status"
+        className="rounded-2xl border border-glass-brd px-4 py-3 text-sm text-cyan"
+      >
+        Спасибо. Продукт ушёл на проверку — после неё его увидят все.
+      </p>
+    );
+  }
+
+  return (
+    <form
+      className="rounded-2xl border border-glass-brd p-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        setError(null);
+        void createWellnessProduct({ barcode: code, name, ingredientsRaw })
+          .then(() => setSaved(true))
+          .catch((cause) =>
+            setError(
+              cause instanceof WellnessApiError
+                ? cause.message
+                : "Не удалось сохранить",
+            ),
+          );
+      }}
+    >
+      <p className="font-display text-base font-bold text-text-0">
+        Добавить продукт в базу
+      </p>
+      <p className="mt-1 text-sm text-text-1">
+        Состав уже прочитан. Назовите продукт — и остальные найдут его по
+        штрихкоду.
+      </p>
+
+      <label
+        htmlFor="save-product-name"
+        className="mt-3 block text-sm font-medium text-text-0"
+      >
+        Название с упаковки
+      </label>
+      <input
+        id="save-product-name"
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
+      />
+
+      <label
+        htmlFor="save-product-barcode"
+        className="mt-3 block text-sm font-medium text-text-0"
+      >
+        Цифры под штрихкодом
+      </label>
+      <input
+        id="save-product-barcode"
+        inputMode="numeric"
+        value={code}
+        onChange={(event) => setCode(event.target.value)}
+        className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 font-mono text-sm text-text-0"
+      />
+
+      <div className="mt-3 flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={name.trim().length < 2 || code.trim().length < 8}
+          className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-0 disabled:opacity-50"
+        >
+          Отправить на проверку
+        </button>
+        {error && (
+          <span role="alert" className="text-sm text-magenta">
+            {error}
+          </span>
+        )}
+      </div>
+    </form>
   );
 }

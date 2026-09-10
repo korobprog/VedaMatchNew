@@ -194,7 +194,7 @@ export class WellnessService {
     const source = input.ingredientsRaw ?? product?.ingredientsRaw ?? '';
     const result: WellnessVerdictResult = source
       ? await this.evaluate(source, restrictions)
-      : { verdict: 'unknown', reasons: [], unrecognized: [] };
+      : { verdict: 'unknown', reasons: [], hidden: [], unrecognized: [] };
 
     await this.prisma.wellnessScan.create({
       data: {
@@ -208,7 +208,13 @@ export class WellnessService {
       },
     });
 
-    return { kind: input.kind, barcode: input.barcode, product, result };
+    return {
+      kind: input.kind,
+      barcode: input.barcode,
+      product,
+      ingredientsRaw: source || null,
+      result,
+    };
   }
 
   async history(userId: string): Promise<WellnessHistoryItem[]> {

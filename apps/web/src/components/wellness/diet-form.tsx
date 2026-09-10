@@ -10,6 +10,7 @@ import {
   updateWellnessDiet,
   WellnessApiError,
 } from "@/lib/wellness-api";
+import { isAbort } from "./is-abort";
 import { ingredientClassLabel } from "./verdict-labels";
 
 /**
@@ -57,9 +58,15 @@ export function DietForm() {
   useEffect(() => {
     const controller = new AbortController();
     getWellnessDiet(controller.signal)
-      .then((profile) => setExcluded(profile.excluded))
-      .catch(() => setError("Не удалось загрузить настройки"))
-      .finally(() => setLoading(false));
+      .then((profile) => {
+        setExcluded(profile.excluded);
+        setLoading(false);
+      })
+      .catch((cause) => {
+        if (isAbort(cause)) return;
+        setError("Не удалось загрузить настройки");
+        setLoading(false);
+      });
     return () => controller.abort();
   }, []);
 

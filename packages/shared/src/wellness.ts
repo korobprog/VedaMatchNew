@@ -84,7 +84,14 @@ export interface WellnessVerdictReason {
 export interface WellnessVerdictResult {
   verdict: WellnessVerdict;
   reasons: WellnessVerdictReason[];
-  /** Куски состава, которых нет в справочнике. Они и делают вердикт `unknown`. */
+  /**
+   * Формулировки, за которыми ингредиент прячется: «натуральный ароматизатор»,
+   * «специи». Они есть в справочнике — и именно поэтому мы знаем, что состав
+   * ими ничего не сказал. Отдельно от `unrecognized`: путать «не нашли слово»
+   * и «слово ничего не значит» значит врать человеку в обе стороны.
+   */
+  hidden: WellnessVerdictReason[];
+  /** Куски состава, которых нет в справочнике. */
   unrecognized: string[];
 }
 
@@ -105,6 +112,12 @@ export interface WellnessScanResult {
   kind: WellnessScanKind;
   barcode: string | null;
   product: WellnessProductCard | null;
+  /**
+   * Состав, по которому вынесен вердикт: прочитанный со снимка или взятый у
+   * продукта. Пусто у скана штрихкода, не нашедшего продукт, — судить было не
+   * о чем, и интерфейс на это опирается.
+   */
+  ingredientsRaw: string | null;
   result: WellnessVerdictResult;
 }
 

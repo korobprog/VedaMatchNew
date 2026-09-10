@@ -12,13 +12,13 @@
 const wellnessIngredients = [
   // ===== Мясо и производное =====
   { key: 'meat', nameRu: 'Мясо', nameEn: 'Meat', class: 'meat', severity: 'contains',
-    aliases: ['мясо', 'мясной', 'мясное сырье', 'meat'] },
+    aliases: ['мясо', 'мясной', 'мясное сырье', 'meat', 'мяса', 'мясные'] },
   { key: 'beef', nameRu: 'Говядина', nameEn: 'Beef', class: 'meat', severity: 'contains',
-    aliases: ['говядина', 'говяжий', 'говяжья', 'beef'] },
+    aliases: ['говядина', 'говяжий', 'говяжья', 'beef', 'говядины'] },
   { key: 'pork', nameRu: 'Свинина', nameEn: 'Pork', class: 'meat', severity: 'contains',
-    aliases: ['свинина', 'свиной', 'свиная', 'pork'] },
+    aliases: ['свинина', 'свиной', 'свиная', 'pork', 'свинины'] },
   { key: 'chicken', nameRu: 'Курица', nameEn: 'Chicken', class: 'meat', severity: 'contains',
-    aliases: ['курица', 'куриное мясо', 'куриный', 'куриная', 'мясо птицы', 'chicken'] },
+    aliases: ['курица', 'куриное мясо', 'куриный', 'куриная', 'мясо птицы', 'chicken', 'курицы', 'куриного'] },
   { key: 'turkey', nameRu: 'Индейка', nameEn: 'Turkey', class: 'meat', severity: 'contains',
     aliases: ['индейка', 'индюшиный', 'turkey'] },
   { key: 'lamb', nameRu: 'Баранина', nameEn: 'Lamb', class: 'meat', severity: 'contains',
@@ -40,7 +40,7 @@ const wellnessIngredients = [
 
   // ===== Рыба и морское =====
   { key: 'fish', nameRu: 'Рыба', nameEn: 'Fish', class: 'fish', severity: 'contains',
-    aliases: ['рыба', 'рыбный', 'рыбная', 'fish'] },
+    aliases: ['рыба', 'рыбный', 'рыбная', 'fish', 'рыбы', 'рыбу', 'рыбные'] },
   { key: 'fish-oil', nameRu: 'Рыбий жир', nameEn: 'Fish oil', class: 'fish', severity: 'contains',
     aliases: ['рыбий жир', 'fish oil'] },
   { key: 'anchovy', nameRu: 'Анчоус', nameEn: 'Anchovy', class: 'fish', severity: 'contains',
@@ -50,7 +50,7 @@ const wellnessIngredients = [
   { key: 'salmon', nameRu: 'Лосось', nameEn: 'Salmon', class: 'fish', severity: 'contains',
     aliases: ['лосось', 'семга', 'форель', 'salmon'] },
   { key: 'shrimp', nameRu: 'Креветка', nameEn: 'Shrimp', class: 'fish', severity: 'contains',
-    aliases: ['креветка', 'креветки', 'shrimp', 'prawn'] },
+    aliases: ['креветка', 'креветки', 'shrimp', 'prawn', 'креветок'] },
   { key: 'crab', nameRu: 'Краб', nameEn: 'Crab', class: 'fish', severity: 'contains',
     aliases: ['краб', 'крабовый', 'crab'] },
   { key: 'squid', nameRu: 'Кальмар', nameEn: 'Squid', class: 'fish', severity: 'contains',
@@ -70,7 +70,7 @@ const wellnessIngredients = [
 
   // ===== Яйцо =====
   { key: 'egg', nameRu: 'Яйцо', nameEn: 'Egg', class: 'egg', severity: 'contains',
-    aliases: ['яйцо', 'яйца', 'яичный', 'яичная', 'куриное яйцо', 'egg'] },
+    aliases: ['яйцо', 'яйца', 'яичный', 'яичная', 'куриное яйцо', 'egg', 'яиц', 'яйца', 'яичного'] },
   { key: 'egg-powder', nameRu: 'Яичный порошок', nameEn: 'Egg powder', class: 'egg', severity: 'contains',
     aliases: ['яичный порошок', 'меланж', 'egg powder'] },
   { key: 'egg-white', nameRu: 'Яичный белок', nameEn: 'Egg white', class: 'egg', severity: 'contains',
@@ -84,25 +84,25 @@ const wellnessIngredients = [
 
   // ===== Молочное =====
   { key: 'milk', nameRu: 'Молоко', nameEn: 'Milk', class: 'dairy', severity: 'contains',
-    aliases: ['молоко', 'молочный', 'сухое молоко', 'milk'] },
+    aliases: ['молоко', 'молочный', 'сухое молоко', 'milk', 'молока', 'молочные'] },
   { key: 'cream', nameRu: 'Сливки', nameEn: 'Cream', class: 'dairy', severity: 'contains',
-    aliases: ['сливки', 'сливочный', 'cream'] },
+    aliases: ['сливки', 'сливочный', 'cream', 'сливок'] },
   { key: 'butter', nameRu: 'Сливочное масло', nameEn: 'Butter', class: 'dairy', severity: 'contains',
-    aliases: ['сливочное масло', 'масло сливочное', 'butter'] },
+    aliases: ['сливочное масло', 'масло сливочное', 'butter', 'сливочного масла'] },
   { key: 'whey', nameRu: 'Молочная сыворотка', nameEn: 'Whey', class: 'dairy', severity: 'contains',
-    aliases: ['сыворотка', 'молочная сыворотка', 'whey'] },
+    aliases: ['сыворотка', 'молочная сыворотка', 'whey', 'сыворотки'] },
   { key: 'casein', nameRu: 'Казеин', nameEn: 'Casein', class: 'dairy', severity: 'contains',
     aliases: ['казеин', 'казеинат', 'casein'] },
   { key: 'lactose', nameRu: 'Лактоза', nameEn: 'Lactose', class: 'dairy', severity: 'contains',
     aliases: ['лактоза', 'lactose'] },
   { key: 'cheese', nameRu: 'Сыр', nameEn: 'Cheese', class: 'dairy', severity: 'contains',
-    aliases: ['сыр', 'сырный', 'творог', 'cheese'] },
+    aliases: ['сыр', 'сырный', 'творог', 'cheese', 'сыра', 'творога'] },
   { key: 'ghee', nameRu: 'Топлёное масло', nameEn: 'Ghee', class: 'dairy', severity: 'contains',
     aliases: ['топленое масло', 'гхи', 'ghee'] },
 
   // ===== Мёд =====
   { key: 'honey', nameRu: 'Мёд', nameEn: 'Honey', class: 'honey', severity: 'contains',
-    aliases: ['мед', 'медовый', 'honey'] },
+    aliases: ['мед', 'медовый', 'honey', 'меда'] },
   { key: 'propolis', nameRu: 'Прополис', nameEn: 'Propolis', class: 'honey', severity: 'contains',
     aliases: ['прополис', 'маточное молочко', 'propolis'] },
   { key: 'beeswax', nameRu: 'Пчелиный воск (E901)', nameEn: 'Beeswax (E901)', class: 'honey', severity: 'contains',
@@ -110,14 +110,14 @@ const wellnessIngredients = [
 
   // ===== Желатин и сычуг =====
   { key: 'gelatin', nameRu: 'Желатин', nameEn: 'Gelatin', class: 'gelatin', severity: 'contains',
-    aliases: ['желатин', 'желатин пищевой', 'gelatin', 'gelatine'] },
+    aliases: ['желатин', 'желатин пищевой', 'gelatin', 'gelatine', 'желатина'] },
   { key: 'e441', nameRu: 'Желатин (E441)', nameEn: 'Gelatin (E441)', class: 'gelatin', severity: 'contains',
     eNumber: 'E441', aliases: ['e441'] },
   { key: 'rennet', nameRu: 'Сычужный фермент', nameEn: 'Rennet', class: 'rennet', severity: 'contains',
     aliases: ['сычужный фермент', 'сычуг', 'реннин', 'химозин', 'rennet'],
     noteRu: 'Животный сычуг — из желудка телят. Микробиальный указывают отдельно.' },
   { key: 'pepsin', nameRu: 'Пепсин', nameEn: 'Pepsin', class: 'rennet', severity: 'contains',
-    aliases: ['пепсин', 'pepsin'] },
+    aliases: ['пепсин', 'pepsin', 'сычужного фермента'] },
   { key: 'enzymes', nameRu: 'Ферменты', nameEn: 'Enzymes', class: 'rennet', severity: 'hidden',
     aliases: ['ферменты', 'ферментный препарат', 'enzymes'],
     noteRu: 'Происхождение не указано: бывает и микробиальным, и животным.' },
@@ -126,7 +126,7 @@ const wellnessIngredients = [
   // Асафетида в справочник не входит намеренно: она и есть замена лука с
   // чесноком, а не запрет.
   { key: 'onion', nameRu: 'Лук', nameEn: 'Onion', class: 'onion', severity: 'contains',
-    aliases: ['лук', 'лук репчатый', 'репчатый лук', 'луковый', 'луковый порошок', 'сушеный лук', 'лук сушеный', 'onion'] },
+    aliases: ['лук', 'лук репчатый', 'репчатый лук', 'луковый', 'луковый порошок', 'сушеный лук', 'лук сушеный', 'onion', 'лука', 'луком'] },
   { key: 'green-onion', nameRu: 'Зелёный лук', nameEn: 'Green onion', class: 'onion', severity: 'contains',
     aliases: ['зеленый лук', 'лук зеленый', 'перо лука', 'green onion', 'scallion'] },
   { key: 'shallot', nameRu: 'Шалот', nameEn: 'Shallot', class: 'onion', severity: 'contains',
@@ -136,13 +136,13 @@ const wellnessIngredients = [
   { key: 'chive', nameRu: 'Шнитт-лук', nameEn: 'Chives', class: 'onion', severity: 'contains',
     aliases: ['шнитт-лук', 'chives'] },
   { key: 'garlic', nameRu: 'Чеснок', nameEn: 'Garlic', class: 'garlic', severity: 'contains',
-    aliases: ['чеснок', 'чесночный', 'чесночный порошок', 'сушеный чеснок', 'чеснок сушеный', 'экстракт чеснока', 'garlic'] },
+    aliases: ['чеснок', 'чесночный', 'чесночный порошок', 'сушеный чеснок', 'чеснок сушеный', 'экстракт чеснока', 'garlic', 'чеснока', 'чесноком'] },
   { key: 'garlic-salt', nameRu: 'Чесночная соль', nameEn: 'Garlic salt', class: 'garlic', severity: 'contains',
     aliases: ['чесночная соль', 'garlic salt'] },
 
   // ===== Грибы =====
   { key: 'mushroom', nameRu: 'Грибы', nameEn: 'Mushrooms', class: 'mushroom', severity: 'contains',
-    aliases: ['грибы', 'грибной', 'грибной порошок', 'mushroom'] },
+    aliases: ['грибы', 'грибной', 'грибной порошок', 'mushroom', 'грибов', 'грибные'] },
   { key: 'champignon', nameRu: 'Шампиньоны', nameEn: 'Champignon', class: 'mushroom', severity: 'contains',
     aliases: ['шампиньоны', 'шампиньон', 'champignon'] },
   { key: 'oyster-mushroom', nameRu: 'Вёшенки', nameEn: 'Oyster mushroom', class: 'mushroom', severity: 'contains',
@@ -153,7 +153,7 @@ const wellnessIngredients = [
 
   // ===== Алкоголь =====
   { key: 'alcohol', nameRu: 'Спирт', nameEn: 'Alcohol', class: 'alcohol', severity: 'contains',
-    aliases: ['спирт', 'этиловый спирт', 'этанол', 'спирт этиловый', 'alcohol', 'ethanol'] },
+    aliases: ['спирт', 'этиловый спирт', 'этанол', 'спирт этиловый', 'alcohol', 'ethanol', 'спирта'] },
   { key: 'wine', nameRu: 'Вино', nameEn: 'Wine', class: 'alcohol', severity: 'contains',
     aliases: ['вино', 'винный', 'вермут', 'wine'] },
   { key: 'beer', nameRu: 'Пиво', nameEn: 'Beer', class: 'alcohol', severity: 'contains',
@@ -166,7 +166,7 @@ const wellnessIngredients = [
 
   // ===== Кофеин =====
   { key: 'caffeine', nameRu: 'Кофеин', nameEn: 'Caffeine', class: 'caffeine', severity: 'contains',
-    aliases: ['кофеин', 'caffeine'] },
+    aliases: ['кофеин', 'caffeine', 'кофеина'] },
   { key: 'coffee', nameRu: 'Кофе', nameEn: 'Coffee', class: 'caffeine', severity: 'contains',
     aliases: ['кофе', 'кофейный', 'растворимый кофе', 'coffee'] },
   { key: 'tea', nameRu: 'Чай', nameEn: 'Tea', class: 'caffeine', severity: 'contains',

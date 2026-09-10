@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { WellnessHistoryItem } from "@vedamatch/shared";
 import { getWellnessHistory } from "@/lib/wellness-api";
+import { isAbort } from "./is-abort";
 import { verdictLook } from "./verdict-labels";
 
 const KIND_LABEL: Record<WellnessHistoryItem["kind"], string> = {
@@ -20,7 +21,10 @@ export function HistoryList() {
     const controller = new AbortController();
     getWellnessHistory(controller.signal)
       .then(setItems)
-      .catch(() => setError("Не удалось загрузить историю"));
+      .catch((cause) => {
+        if (isAbort(cause)) return;
+        setError("Не удалось загрузить историю");
+      });
     return () => controller.abort();
   }, []);
 

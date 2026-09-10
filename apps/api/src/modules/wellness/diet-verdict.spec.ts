@@ -80,7 +80,11 @@ describe('resolveVerdict', () => {
       vegetarian,
     );
     expect(result.verdict).toBe('unknown');
-    expect(result.unrecognized).toEqual(['ароматизатор натуральный']);
+    expect(result.hidden.map((r) => r.matchedText)).toEqual([
+      'ароматизатор натуральный',
+    ]);
+    // Она есть в справочнике, поэтому незнакомым словом её звать нельзя.
+    expect(result.unrecognized).toEqual([]);
   });
 
   it('запрет по отдельному ключу поверх классов', () => {

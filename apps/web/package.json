@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@vedamatch/shared": "workspace:*",
+    "@zxing/browser": "^0.2.1",
     "framer-motion": "^12.42.2",
     "idb": "^8.0.3",
     "leaflet": "^1.9.4",

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  hasSomethingToJudge,
   ingredientClassLabel,
   reasonSummary,
   verdictLook,
@@ -43,11 +44,48 @@ describe("reasonSummary", () => {
     );
   });
 
-  it("не умалчивает о неразобранных позициях", () => {
-    expect(reasonSummary([reason("Желатин")], 3)).toContain("3 позиций");
+  it("не умалчивает о позициях без ясного ответа", () => {
+    expect(reasonSummary([reason("Желатин")], 3)).toContain(
+      "3 позиций состава без ясного ответа",
+    );
   });
 
   it("на полностью разобранном чистом составе говорит об этом прямо", () => {
     expect(reasonSummary([], 0)).toBe("Состав разобран полностью");
+  });
+});
+
+describe("hasSomethingToJudge", () => {
+  const empty = { reasons: [], unrecognized: [] };
+
+  it("штрихкод без продукта судить не о чем", () => {
+    expect(
+      hasSomethingToJudge({ product: null, ingredientsRaw: null, result: empty }),
+    ).toBe(false);
+  });
+
+  it("найденный продукт судить есть о чем", () => {
+    expect(
+      hasSomethingToJudge({ product: { id: "1" }, result: empty }),
+    ).toBe(true);
+  });
+
+  it("прочитанный со снимка состав тоже", () => {
+    expect(
+      hasSomethingToJudge({
+        product: null,
+        ingredientsRaw: "сахар, соль",
+        result: empty,
+      }),
+    ).toBe(true);
+  });
+
+  it("и разбор, давший хоть что-то", () => {
+    expect(
+      hasSomethingToJudge({
+        product: null,
+        result: { reasons: [], unrecognized: ["камедь"] },
+      }),
+    ).toBe(true);
   });
 });

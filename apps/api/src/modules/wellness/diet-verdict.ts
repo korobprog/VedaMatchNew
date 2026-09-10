@@ -45,14 +45,15 @@ export function resolveVerdict(
 ): WellnessVerdictResult {
   const excluded = new Set<string>(restrictions.excluded);
   const excludedKeys = new Set(restrictions.excludedKeys);
-  const unclear = [...unrecognized];
 
   const relevant: WellnessIngredientMatch[] = [];
+  const hidden: WellnessIngredientMatch[] = [];
   for (const match of matches) {
     // Скрытая формулировка класса `other` ничего не утверждает о составе.
-    // Она не запрещает продукт, но и не даёт назвать его чистым.
+    // Она не запрещает продукт, но и не даёт назвать его чистым — и это не то
+    // же самое, что незнакомое слово: путать их значит врать в обе стороны.
     if (match.severity === 'hidden' && match.entry.class === 'other') {
-      unclear.push(match.matchedText);
+      hidden.push(match);
       continue;
     }
     if (excluded.has(match.entry.class) || excludedKeys.has(match.entry.key)) {
@@ -60,21 +61,33 @@ export function resolveVerdict(
     }
   }
 
+  const hiddenReasons = hidden.map(toReason);
+
   // Ограничений нет — судить не о чем: показываем состав и молчим.
   if (excluded.size === 0 && excludedKeys.size === 0) {
-    return { verdict: 'clean', reasons: [], unrecognized: unclear };
+    return {
+      verdict: 'clean',
+      reasons: [],
+      hidden: hiddenReasons,
+      unrecognized,
+    };
   }
 
-  const reasons = relevant.map(toReason);
+  const unclear = unrecognized.length > 0 || hidden.length > 0;
   const verdict: WellnessVerdict = relevant.some(
     (match) => match.severity === 'contains',
   )
     ? 'forbidden'
     : relevant.length > 0
       ? 'warning'
-      : unclear.length > 0
+      : unclear
         ? 'unknown'
         : 'clean';
 
-  return { verdict, reasons, unrecognized: unclear };
+  return {
+    verdict,
+    reasons: relevant.map(toReason),
+    hidden: hiddenReasons,
+    unrecognized,
+  };
 }
