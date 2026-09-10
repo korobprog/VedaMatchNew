@@ -38,6 +38,20 @@ export class AdminUsersController {
     return this.adminUsers.listUsers(user.role, query);
   }
 
+  /**
+   * Справочник рабочих контактов. Объявлен ДО `:id`: иначе Nest сопоставит
+   * «contacts» с идентификатором и отдаст 404 вместо списка.
+   */
+  @Get('contacts')
+  contacts(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.adminUsers.listContacts(user.role, { q, page, pageSize });
+  }
+
   @Get(':id')
   detail(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.adminUsers.getUser(user.role, id);

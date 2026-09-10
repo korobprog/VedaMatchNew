@@ -32,6 +32,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         scope: "portal",
       },
       {
+        href: "/admin/users/contacts",
+        label: "Связь с участниками",
+        hint: "Телефон и мессенджеры, чтобы быстро написать",
+        scope: "portal",
+      },
+      {
         href: "/admin/verification-requests",
         label: "Заявки на проверку",
         hint: "Подтверждение преданных наставниками",
