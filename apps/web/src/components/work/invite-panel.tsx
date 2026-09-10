@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Copy, Link2, Loader2, Search, Send, UserPlus, X } from "lucide-react";
 import type {
   WorkContactDto,
+  WorkContactsDto,
   WorkInviteDto,
   WorkMemberRole,
   WorkSpaceDto,
@@ -15,6 +16,7 @@ import {
   listWorkInvites,
   revokeWorkInvite,
 } from "@/lib/work-api";
+import { emptyHint } from "./invite-hints";
 import { buildWorkInviteShareHref } from "./work-share";
 
 const ROLE_TITLE: Record<WorkMemberRole, string> = {
@@ -44,7 +46,7 @@ export function WorkInvitePanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [contacts, setContacts] = useState<WorkContactDto[] | null>(null);
+  const [contacts, setContacts] = useState<WorkContactsDto | null>(null);
   const [invitingId, setInvitingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
@@ -71,7 +73,15 @@ export function WorkInvitePanel({
           if (alive) setContacts(loaded);
         })
         .catch(() => {
-          if (alive) setContacts([]);
+          // Пустой список, но область поиска прежняя: администратору нельзя
+          // из-за сетевой икоты подсунуть текст про «своих знакомых».
+          if (alive) {
+            setContacts((prev) => ({
+              scope: prev?.scope ?? "known",
+              items: [],
+              minQuery: prev?.minQuery ?? null,
+            }));
+          }
         });
     }, 400);
     return () => {
@@ -126,7 +136,9 @@ export function WorkInvitePanel({
     setError(null);
     try {
       await createWorkInvite(space.id, { role, inviteeId: contact.userId });
-      setContacts(await listWorkContacts(space.id));
+      // Список перечитываем с тем же запросом: у поиска по порталу без него
+      // выдачи нет вовсе, и строка, из которой только что позвали, пропала бы.
+      setContacts(await listWorkContacts(space.id, search.trim() || undefined));
       await reload();
       await onChanged();
     } catch (cause) {
@@ -265,11 +277,17 @@ export function WorkInvitePanel({
             )}
 
             <h3 className="mt-5 text-sm font-semibold text-text-0">
-              Позвать из своих
+              {contacts?.scope === "portal"
+                ? "Позвать человека с портала"
+                : "Позвать из своих"}
             </h3>
             <label className="mt-2 flex items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2">
               <Search aria-hidden className="size-4 shrink-0 text-text-2" />
-              <span className="sr-only">Поиск по знакомым</span>
+              <span className="sr-only">
+                {contacts?.scope === "portal"
+                  ? "Поиск по порталу"
+                  : "Поиск по знакомым"}
+              </span>
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -282,15 +300,13 @@ export function WorkInvitePanel({
                 <Loader2 aria-hidden className="size-4 animate-spin" />
                 Загружаем…
               </p>
-            ) : contacts.length === 0 ? (
+            ) : contacts.items.length === 0 ? (
               <p className="mt-2 text-sm text-text-2">
-                {search.trim()
-                  ? "Среди знакомых никого с таким именем."
-                  : "Здесь появятся те, с кем вы уже знакомы на портале. Пока некого позвать — создайте ссылку и отправьте её другу в чат кнопкой выше."}
+                {emptyHint(contacts, search)}
               </p>
             ) : (
               <ul className="mt-2 space-y-1">
-                {contacts.map((contact) => (
+                {contacts.items.map((contact) => (
                   <li
                     key={contact.userId}
                     className="flex items-center gap-2 text-sm"
