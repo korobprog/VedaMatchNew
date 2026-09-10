@@ -34,6 +34,7 @@ export * from './lineage';
 export * from './spiritual-stage';
 export * from './work';
 export * from './wellness';
+export * from './travel';
 
 import type { BillingMode, SubscriptionState } from './support';
 
@@ -58,6 +59,7 @@ export const ADMIN_SERVICE_SLUGS = [
   'music',
   'assistant',
   'wellness',
+  'travel',
 ] as const;
 
 export type AdminServiceSlug = (typeof ADMIN_SERVICE_SLUGS)[number];

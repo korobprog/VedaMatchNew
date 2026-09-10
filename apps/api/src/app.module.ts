@@ -35,6 +35,7 @@ import { RewardsModule } from './modules/rewards/rewards.module';
 import { ActivityModule } from './modules/activity/activity.module';
 import { MusicModule } from './modules/music/music.module';
 import { WorkModule } from './modules/work/work.module';
+import { TravelModule } from './modules/travel/travel.module';
 import { WellnessModule } from './modules/wellness/wellness.module';
 import { VacanciesModule } from './modules/vacancies/vacancies.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
@@ -85,6 +86,7 @@ import { AssistantModule } from './modules/assistant/assistant.module';
     AssistantModule,
     WorkModule,
     WellnessModule,
+    TravelModule,
     VacanciesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: AdminAwareThrottlerGuard }],

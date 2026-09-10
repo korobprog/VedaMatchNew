@@ -229,6 +229,23 @@ const services = [
     devoteeSelfIdentifiedVisible: true,
     devoteeVerifiedVisible: true,
   },
+  {
+    slug: 'travel',
+    name: 'Путешествия',
+    description:
+      'Куда поехать и где переночевать: отели, хостелы, ашрамы и комнаты у преданных — за плату или за служение',
+    url: '/travel',
+    // coming_soon: карта, объекты и заявки на ночлег готовы, но мест на карте
+    // почти нет, а учёт хостела и публичная страница с QR — следующие этапы.
+    status: 'coming_soon',
+    category: 'lifestyle',
+    public: true,
+    seekerVisible: true,
+    practitionerVisible: true,
+    yogiVisible: true,
+    devoteeSelfIdentifiedVisible: true,
+    devoteeVerifiedVisible: true,
+  },
 ];
 
 async function main() {

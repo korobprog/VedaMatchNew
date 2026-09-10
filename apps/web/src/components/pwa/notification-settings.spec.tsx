@@ -29,6 +29,7 @@ const всеВключены = {
   motivation: true,
   music: true,
   work: true,
+  travel: true,
   announcements: true,
 };
 

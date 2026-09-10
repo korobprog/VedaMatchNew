@@ -426,6 +426,44 @@ export type NotificationEvent =
       recipientId: string;
       trackId: string;
       title: string;
+    }
+  | {
+      /**
+       * Заявка на ночлег. Получатель — управляющий объектом; на каждого
+       * управляющего своё событие.
+       *
+       * Payload самодостаточен: название объекта, имя гостя и даты едут
+       * здесь, потому что подписчик (Уведомления, агенда «Работы») не имеет
+       * права дочитывать их из таблиц «Путешествий». Заявку могли завести с
+       * публичной страницы, где гость ещё не человек портала, — поэтому имя
+       * строкой, а не идентификатором.
+       */
+      name: 'travel.booking.created';
+      recipientId: string;
+      bookingId: string;
+      bookingNumber: number;
+      stayId: string;
+      stayName: string;
+      guestName: string;
+      /** ISO-даты без времени: ночлег считается днями. */
+      checkIn: string;
+      checkOut: string;
+      nights: number;
+    }
+  | {
+      /**
+       * Решение по заявке. Получатель — гость, если он человек портала;
+       * заявке с публичной страницы уведомлять некого, и событие не шлётся.
+       */
+      name: 'travel.booking.status-changed';
+      recipientId: string;
+      bookingId: string;
+      bookingNumber: number;
+      stayId: string;
+      stayName: string;
+      status: 'accepted' | 'declined' | 'checked_in' | 'completed';
+      /** Причина отказа, когда она есть. */
+      reason: string | null;
     };
 
 /**
@@ -448,7 +486,8 @@ export type NotificationCategory =
   | 'market'
   | 'motivation'
   | 'music'
-  | 'work';
+  | 'work'
+  | 'travel';
 
 /** Уведомление в колокольчике. Живёт до прочтения, потом удаляется — это
  *  список непрочитанного, а не архив. */
@@ -514,6 +553,10 @@ export interface NotificationPreferencesDto
    *  на доработку, позвали в рабочую среду. Отдельный тумблер: человек, у
    *  которого дела ведутся здесь, не должен терять их вместе с новостями. */
   work: boolean;
+  /** Сервис «Путешествия»: заявки на ночлег у управляющего объектом и
+   *  решение по своей заявке у гостя. Отдельно от `market`: человек, который
+   *  выключил торговлю, ночлег на пути не терял. */
+  travel: boolean;
   /** Новости от администрации портала. Под этой же категорией идут рассылки
    *  из админки: выключение гасит пуш, а важная рассылка всё равно появится
    *  в колокольчике — см. `important` у рассылки. */

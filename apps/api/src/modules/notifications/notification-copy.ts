@@ -56,6 +56,8 @@ export const notificationEventNames = {
   vacancyResponseCreated: 'vacancies.response.created',
   vacancyResponseStatusChanged: 'vacancies.response.status-changed',
   vacancyOfferClosed: 'vacancies.offer.closed',
+  travelBookingCreated: 'travel.booking.created',
+  travelBookingStatusChanged: 'travel.booking.status-changed',
 } as const satisfies Record<string, NotificationEventName>;
 
 /** Подпись вида предложения в «Вакансиях» — событие несёт код. */
@@ -108,6 +110,38 @@ export function toExcerpt(body: string): string {
  */
 export function workTaskUrl(spaceId: string, taskKey: string): string {
   return `/work/planner/${spaceId}?task=${encodeURIComponent(taskKey)}`;
+}
+
+/**
+ * «3 ночи» — с правильным окончанием: подпись читает человек, а «3 ночь» в
+ * пуше выглядит как ошибка сервиса, а не как экономия на склонении.
+ */
+export function nightsWord(nights: number): string {
+  const tail = nights % 100;
+  const last = nights % 10;
+  if (tail >= 11 && tail <= 14) return `${nights} ночей`;
+  if (last === 1) return `${nights} ночь`;
+  if (last >= 2 && last <= 4) return `${nights} ночи`;
+  return `${nights} ночей`;
+}
+
+/**
+ * Заголовок решения по заявке. Без рода: у `User.gender` его может не быть —
+ * правило всего файла.
+ */
+export function travelDecisionTitle(
+  status: 'accepted' | 'declined' | 'checked_in' | 'completed',
+): string {
+  switch (status) {
+    case 'accepted':
+      return 'Заявку на ночлег приняли';
+    case 'declined':
+      return 'Заявку на ночлег отклонили';
+    case 'checked_in':
+      return 'Вас отметили как заселённого';
+    case 'completed':
+      return 'Проживание завершено';
+  }
 }
 
 export interface NotificationContent {
@@ -456,6 +490,26 @@ export function buildNotification(
         url: event.url,
         tag: `work-invite:${event.spaceName}`,
         category: 'work',
+      };
+    case 'travel.booking.created':
+      return {
+        title: 'Заявка на ночлег',
+        body: `${event.guestName}: ${event.checkIn} — ${event.checkOut}, ${nightsWord(event.nights)}, «${toExcerpt(event.stayName)}»`,
+        url: `/travel/manage/${event.stayId}/bookings`,
+        // Тег по заявке, а не по объекту: две заявки подряд — это две
+        // новости, и вторая не должна затирать первую.
+        tag: `travel-booking:${event.bookingId}`,
+        category: 'travel',
+      };
+    case 'travel.booking.status-changed':
+      return {
+        title: travelDecisionTitle(event.status),
+        body: event.reason
+          ? `«${toExcerpt(event.stayName)}»: ${toExcerpt(event.reason)}`
+          : `Заявка №${event.bookingNumber} — «${toExcerpt(event.stayName)}»`,
+        url: '/travel/bookings',
+        tag: `travel-decision:${event.bookingId}`,
+        category: 'travel',
       };
     case 'music.track.published':
       return {

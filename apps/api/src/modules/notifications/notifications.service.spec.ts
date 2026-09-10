@@ -170,6 +170,7 @@ describe('NotificationsService.getPreferences', () => {
       notices: true,
       motivation: true,
       music: true,
+      travel: true,
       work: true,
       announcements: true,
     });
@@ -211,6 +212,7 @@ describe('NotificationsService.updatePreferences', () => {
       notices: true,
       motivation: true,
       music: true,
+      travel: true,
       work: true,
       announcements: true,
     });
