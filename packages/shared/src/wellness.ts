@@ -173,3 +173,36 @@ export interface WellnessBasketItemDto {
   product: WellnessProductCard;
   createdAt: string;
 }
+
+/** Ингредиент рецепта. Свободный текст: рецепты приходят от людей и из книг. */
+export interface WellnessRecipeIngredientDto {
+  nameRu: string;
+  amountRu: string | null;
+}
+
+export interface WellnessRecipeCard {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  /** Откуда рецепт: книга или автор. Пусто, пока источник не подтверждён. */
+  source: string | null;
+  kcalPer100g: number | null;
+  status: WellnessProductStatus;
+  ingredients: WellnessRecipeIngredientDto[];
+}
+
+export interface WellnessRecipeDetail extends WellnessRecipeCard {
+  steps: string | null;
+}
+
+/**
+ * Насколько рецепт складывается из того, что уже в корзине. `missing` —
+ * главное поле: по нему человек решает, что докупить.
+ */
+export interface WellnessRecipeMatchDto {
+  recipe: WellnessRecipeCard;
+  have: string[];
+  missing: string[];
+  ratio: number;
+}

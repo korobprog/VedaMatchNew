@@ -41,6 +41,7 @@ const { noticeRubrics } = require('./notice-rubrics-data.js');
 const { musicCategories } = require('./music-categories-data.js');
 const { geoCities } = require('./geo-cities-data.js');
 const { wellnessIngredients } = require('./wellness-ingredients-data.js');
+const { wellnessRecipes } = require('./wellness-recipes-data.js');
 
 const services = [
   {
@@ -368,6 +369,28 @@ async function main() {
       });
     }
 
+    // Рецепты «Здоровья». Текст в файле — свой, не перепечатка книг, поэтому
+    // он и есть источник истины: правка в файле обязана доехать до базы.
+    for (const recipe of wellnessRecipes) {
+      const { ingredients, ...fields } = recipe;
+      const saved = await transaction.wellnessRecipe.upsert({
+        where: { slug: recipe.slug },
+        update: { ...fields, status: 'published' },
+        create: { ...fields, status: 'published' },
+      });
+      await transaction.wellnessRecipeIngredient.deleteMany({
+        where: { recipeId: saved.id },
+      });
+      await transaction.wellnessRecipeIngredient.createMany({
+        data: ingredients.map((item, index) => ({
+          recipeId: saved.id,
+          nameRu: item.nameRu,
+          amountRu: item.amountRu ?? null,
+          position: index,
+        })),
+      });
+    }
+
     // Справочник городов перезаписывается целиком: файл — источник истины,
     // и правка алиаса в нём обязана доехать до базы, а не остаться рядом
     // со старым значением.
@@ -412,7 +435,7 @@ async function main() {
     }
   });
   console.log(
-    `Seeded ${services.length} services, ${libraryRoots.length} library roots, ${contactsTags.length} contacts tags, ${marketSections.length} market sections, ${marketCategories.length} market categories ${noticeRubrics.length} notice rubrics, ${musicCategories.length} music categories, ${wellnessIngredients.length} wellness ingredients and ${geoCities.length} cities`,
+    `Seeded ${services.length} services, ${libraryRoots.length} library roots, ${contactsTags.length} contacts tags, ${marketSections.length} market sections, ${marketCategories.length} market categories ${noticeRubrics.length} notice rubrics, ${musicCategories.length} music categories, ${wellnessIngredients.length} wellness ingredients, ${wellnessRecipes.length} wellness recipes and ${geoCities.length} cities`,
   );
 }
 

@@ -24,6 +24,7 @@ import {
 } from './wellness-dto';
 import { LabelImageError, parseImageDataUrl } from './label-recognition';
 import { WellnessRecognizeService } from './wellness-recognize.service';
+import { WellnessRecipesService } from './wellness-recipes.service';
 import { WellnessService } from './wellness.service';
 
 /**
@@ -36,7 +37,28 @@ export class WellnessController {
   constructor(
     private readonly wellness: WellnessService,
     private readonly recognize: WellnessRecognizeService,
+    private readonly recipes: WellnessRecipesService,
   ) {}
+
+  /**
+   * Рецепты. Буквальный `recipes/for-basket` объявлен раньше `recipes/:slug`:
+   * иначе параметрический маршрут перехватит его и станет искать рецепт со
+   * слагом «for-basket».
+   */
+  @Get('recipes/for-basket')
+  forBasket(@CurrentUser() user: AccessTokenPayload) {
+    return this.recipes.forBasket(user.sub);
+  }
+
+  @Get('recipes')
+  recipeList() {
+    return this.recipes.published();
+  }
+
+  @Get('recipes/:slug')
+  recipe(@Param('slug') slug: string) {
+    return this.recipes.bySlug(slug);
+  }
 
   /**
    * Снимок состава, когда штрихкод не читается — стёрт, смят или его нет.
