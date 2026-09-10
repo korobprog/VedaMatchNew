@@ -65,12 +65,18 @@ export const getMotivationFeed = (
   order?: "random",
   /** Слаг категории: лента одной папки. */
   category?: string,
+  /**
+   * Откуда картинка: `uploaded` — фотография человека, `generated` —
+   * нейросеть. Папка показывает эти виды порознь.
+   */
+  imageSource?: "uploaded" | "generated",
 ) => {
   const query = new URLSearchParams();
   if (filter === "favorites") query.set("filter", "favorites");
   if (post) query.set("post", post);
   if (order) query.set("order", order);
   if (category) query.set("category", category);
+  if (imageSource) query.set("imageSource", imageSource);
   const suffix = query.toString();
   return motivationGet<MotivationFeedResponse>(
     `/motivation/feed${suffix ? `?${suffix}` : ""}`,

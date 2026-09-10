@@ -10,6 +10,14 @@ import {
   getMotivationCategories,
   getMotivationFeed,
 } from "@/lib/motivation-api";
+import {
+  COLLECTION_VIEWS,
+  collectionEmptyText,
+  collectionImageSource,
+  collectionViewHref,
+  isStoryView,
+  parseCollectionView,
+} from "@/components/motivation/folder-view";
 
 /** Карточки одной папки — сеткой картинок. */
 export default async function MotivationCollectionPage({
@@ -20,14 +28,21 @@ export default async function MotivationCollectionPage({
   searchParams: Promise<{ view?: string }>;
 }) {
   const { slug } = await params;
-  /* Режим просмотра живёт в адресе, как и сама папка: из плитки уходят в
-     ленту и возвращаются кнопкой «назад», а состояние, которого нет в
-     ссылке, при этом теряется молча. */
-  const story = (await searchParams).view === "story";
+  /* Вид папки живёт в адресе, как и сама папка: из плитки уходят в ленту и
+     возвращаются кнопкой «назад», а состояние, которого нет в ссылке, при
+     этом теряется молча. Разбор — в folder-view.ts, там же и старый
+     ?view=story. */
+  const view = parseCollectionView((await searchParams).view);
   const [user, categories, feed] = await Promise.all([
     getProfile(),
     getMotivationCategories(),
-    getMotivationFeed("all", undefined, undefined, slug),
+    getMotivationFeed(
+      "all",
+      undefined,
+      undefined,
+      slug,
+      collectionImageSource(view),
+    ),
   ]);
   if (!user) redirectToLogin(`/motivation/collections/${slug}`);
   if (needsWelcome(user)) redirect("/welcome");
@@ -81,30 +96,33 @@ export default async function MotivationCollectionPage({
               ))}
             </ul>
           )}
-          {/* Два вида одной папки: иллюстрации отвечают на «про что это», а
-              готовые афоризмы — на «что отсюда можно переслать». Переключатель
-              ссылками, а не кнопкой: вид уезжает в адрес, им делятся и на него
-              возвращаются «назад». */}
-          <div className="flex gap-2" role="group" aria-label="Вид папки">
-            <Link
-              href={`/motivation/collections/${slug}`}
-              aria-current={story ? undefined : "true"}
-              className="glass rounded-full border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0 aria-[current=true]:border-cyan aria-[current=true]:text-text-0"
-            >
-              Иллюстрации
-            </Link>
-            <Link
-              href={`/motivation/collections/${slug}?view=story`}
-              aria-current={story ? "true" : undefined}
-              className="glass rounded-full border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0 aria-[current=true]:border-cyan aria-[current=true]:text-text-0"
-            >
-              Готовые афоризмы
-            </Link>
+          {/* Три вида одной папки: иллюстрации отвечают на «про что это»,
+              а оформленные афоризмы — на «что отсюда можно переслать», и
+              разведены по происхождению картинки. Просили именно те, что
+              наложены на фотографии людьми: в общей куче с работой нейросети
+              их не различить. Переключатель ссылками, а не кнопкой: вид
+              уезжает в адрес, им делятся и на него возвращаются «назад». */}
+          <div
+            className="flex flex-wrap gap-2"
+            role="group"
+            aria-label="Вид папки"
+          >
+            {COLLECTION_VIEWS.map((option) => (
+              <Link
+                key={option.id}
+                href={collectionViewHref(slug, option.id)}
+                aria-current={option.id === view ? "true" : undefined}
+                className="glass rounded-full border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0 aria-[current=true]:border-cyan aria-[current=true]:text-text-0"
+              >
+                {option.label}
+              </Link>
+            ))}
           </div>
           <MotivationCollectionGrid
             posts={feed?.items ?? []}
             category={slug}
-            variant={story ? "story" : "image"}
+            variant={isStoryView(view) ? "story" : "image"}
+            empty={collectionEmptyText(view)}
           />
         </div>
       </main>

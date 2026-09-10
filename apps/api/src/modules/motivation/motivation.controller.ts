@@ -110,6 +110,7 @@ export class MotivationController {
     @Query('category') category?: string,
     @Query('post') post?: string,
     @Query('order') order?: string,
+    @Query('imageSource') imageSource?: string,
   ) {
     return this.service.feed(user.sub, {
       cursor,
@@ -119,6 +120,12 @@ export class MotivationController {
       // Значение, а не булев флаг: порядков со временем станет больше одного,
       // и `?shuffle=1` пришлось бы держать рядом с остальными.
       shuffle: order === 'random',
+      // Чужое значение молча пропускаем: неизвестный фильтр не должен
+      // превращать папку в пустую страницу.
+      imageSource:
+        imageSource === 'uploaded' || imageSource === 'generated'
+          ? imageSource
+          : undefined,
       limit: limit ? Number(limit) : undefined,
     });
   }

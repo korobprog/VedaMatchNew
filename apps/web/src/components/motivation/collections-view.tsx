@@ -107,6 +107,7 @@ export function MotivationCollectionGrid({
   posts,
   category,
   variant = "image",
+  empty,
 }: {
   posts: MotivationPostDto[];
   /**
@@ -123,11 +124,17 @@ export function MotivationCollectionGrid({
    * которой выпадают в общую ленту и обратно не находят дорогу.
    */
   category?: string;
+  /**
+   * Что написать, когда показывать нечего. Общее «пока пусто» врёт, когда
+   * пуст только вид: в папке может лежать полсотни афоризмов, просто ни
+   * одного на фотографии.
+   */
+  empty?: string;
 }) {
   if (posts.length === 0)
     return (
       <p className="glass rounded-2xl border border-glass-brd p-4 text-sm text-text-2">
-        В этом разделе пока пусто.
+        {empty ?? "В этом разделе пока пусто."}
       </p>
     );
 
