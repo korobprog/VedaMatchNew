@@ -3,6 +3,7 @@ import {
   WORK_INVITE_MAX_DAYS,
   createWorkInviteToken,
   hashWorkInviteToken,
+  portalWebUrl,
   workInviteExpiry,
   workInviteState,
   workInviteStateMessage,
@@ -108,5 +109,24 @@ describe('workInviteStateMessage', () => {
 
   it('у действующей ссылки объяснять нечего', () => {
     expect(workInviteStateMessage('active')).toBe('');
+  });
+});
+
+describe('portalWebUrl', () => {
+  it('берёт адрес портала из WEB_ORIGIN', () => {
+    expect(portalWebUrl('https://vedamatch.ru')).toBe('https://vedamatch.ru');
+  });
+
+  it('из списка адресов CORS берёт первый', () => {
+    expect(portalWebUrl('https://vedamatch.ru, https://vedamatch.com')).toBe(
+      'https://vedamatch.ru',
+    );
+  });
+
+  // Прод год выдавал ссылки на localhost, потому что сервис спрашивал
+  // переменную, которой нет: пустое значение не должно выглядеть рабочим.
+  it('без значения остаётся локальным адресом', () => {
+    expect(portalWebUrl(undefined)).toBe('http://localhost:3000');
+    expect(portalWebUrl('   ')).toBe('http://localhost:3000');
   });
 });

@@ -15,6 +15,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   createWorkInviteToken,
   hashWorkInviteToken,
+  portalWebUrl,
   workInviteExpiry,
   workInviteState,
   workInviteStateMessage,
@@ -35,7 +36,7 @@ export class WorkInvitesService {
   ) {}
 
   private webUrl(): string {
-    return this.config.get<string>('WEB_URL') ?? 'http://localhost:3000';
+    return portalWebUrl(this.config.get<string>('WEB_ORIGIN'));
   }
 
   /**

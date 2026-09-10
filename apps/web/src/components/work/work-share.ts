@@ -43,7 +43,7 @@ export function buildWorkInviteShareHref(invite: WorkInviteShare): string {
 
 /**
  * Токен из полной ссылки приглашения. Полный адрес собран на сервере по
- * `WEB_URL` и может отличаться от домена, с которого смотрит человек; токен
+ * `WEB_ORIGIN` и может отличаться от домена, с которого смотрит человек; токен
  * одинаков, а маршрут карточка подставит свой.
  */
 export function inviteToken(url: string): string {

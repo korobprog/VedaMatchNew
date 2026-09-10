@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { resolveDisplayName, type WorkContactDto } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PortalAccessService } from '../access/access.service';
+import { matchesContactQuery } from './work-contacts-search';
 import { assertWorkAccess } from './work-roles';
 import { WorkSpacesService } from './work-spaces.service';
 
@@ -76,36 +77,24 @@ export class WorkContactsService {
         .filter((id): id is string => Boolean(id)),
     );
 
-    const search = query?.trim();
+    // Запрос сравниваем в памяти, а не в `where`: базе не объяснить, что ё и
+    // е — одна буква, а без этого «артем» не находит «Артёма». Кандидаты уже
+    // ограничены графом знакомств, так что читать их целиком не дорого.
+    const search = query?.trim() ?? '';
     const people = await this.prisma.user.findMany({
-      where: {
-        id: { in: [...known] },
-        accountStatus: 'active',
-        ...(search
-          ? {
-              OR: [
-                { name: { contains: search, mode: 'insensitive' as const } },
-                {
-                  spiritualName: {
-                    contains: search,
-                    mode: 'insensitive' as const,
-                  },
-                },
-              ],
-            }
-          : {}),
-      },
+      where: { id: { in: [...known] }, accountStatus: 'active' },
       select: { id: true, name: true, spiritualName: true, avatarUrl: true },
-      take: WorkContactsService.LIMIT,
     });
 
     return people
+      .filter((person) => matchesContactQuery(person, search))
       .map((person) => ({
         userId: person.id,
         name: resolveDisplayName(person),
         avatarUrl: person.avatarUrl,
         alreadyInvited: invitedIds.has(person.id),
       }))
-      .sort((left, right) => left.name.localeCompare(right.name, 'ru'));
+      .sort((left, right) => left.name.localeCompare(right.name, 'ru'))
+      .slice(0, WorkContactsService.LIMIT);
   }
 }
