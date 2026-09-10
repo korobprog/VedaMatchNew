@@ -8,6 +8,7 @@ import {
   clampLines,
   composeStoryImage,
   escapeXml,
+  fitQuote,
   STORY_HEIGHT,
   STORY_WIDTH,
   wrapText,
@@ -325,7 +326,7 @@ describe('buildStoryOverlaySvg · лимит строк цитаты', () => {
     return (svg.match(/class="quote"/g) ?? []).length;
   }
 
-  it('без maxQuoteLines укладывается в дефолтный лимит (12)', () => {
+  it('без maxQuoteLines кадр берёт столько строк, сколько нужно тексту', () => {
     const svg = buildStoryOverlaySvg({ text: longText });
     expect(quoteLineCount(svg)).toBeGreaterThan(4);
   });
@@ -345,5 +346,74 @@ describe('buildStoryOverlaySvg · лимит строк цитаты', () => {
     // уже покрыт другими тестами файла через brandLogoBox().
     expect(short.length).toBeGreaterThan(0);
     expect(long.length).toBeGreaterThan(0);
+  });
+});
+
+describe('fitQuote · длинный афоризм мельчает, а не обрезается', () => {
+  /** Та же ширина, что считает сам модуль: 1080 минус поля, с запасом. */
+  const maxWidth = (STORY_WIDTH - 88 * 2) * 0.96;
+  const cut = (lines: string[]) => lines.some((line) => line.endsWith('…'));
+
+  it('короткий афоризм остаётся крупным', () => {
+    const fitted = fitQuote('Ты имеешь право лишь на действие.', maxWidth);
+
+    expect(fitted.size).toBe(54);
+    expect(fitted.lineHeight).toBe(74);
+    expect(cut(fitted.lines)).toBe(false);
+  });
+
+  it('крупным кеглем помещается больше строк, чем прежние двенадцать', () => {
+    // Ровно та причина, по которой задачу и завели: текст резался на
+    // двенадцатой строке, хотя места было больше.
+    const text = 'Слово '.repeat(120);
+    const fitted = fitQuote(text, maxWidth);
+    const atBigSize = fitQuote(text, maxWidth, 14);
+
+    expect(atBigSize.lines).toHaveLength(14);
+    expect(fitted.lines.length).toBeGreaterThan(12);
+  });
+
+  it('не влезло крупным — берётся ступень мельче, а текст остаётся целым', () => {
+    const text = 'Преданность освобождает ум от иллюзии. '.repeat(12);
+    const fitted = fitQuote(text, maxWidth);
+
+    expect(fitted.size).toBeLessThan(54);
+    // Шаг строки соответствует выбранному кеглю, а не крупному.
+    expect(fitted.lineHeight).toBeLessThan(74);
+    expect(cut(fitted.lines)).toBe(false);
+  });
+
+  it('шестьсот знаков — предел поля — влезают целиком', () => {
+    // Поле мастера разрешает 600, и до правки такой текст доходил до кадра
+    // обрубком: «…» появлялось примерно на трёхстах пятидесяти.
+    const long = 'Преданность освобождает ум от иллюзии и открывает путь. '
+      .repeat(12)
+      .slice(0, 600);
+    const fitted = fitQuote(long, maxWidth);
+
+    expect(cut(fitted.lines)).toBe(false);
+    expect(fitted.lines.join(' ').replace(/\s+/g, '')).toBe(
+      long.replace(/\s+/g, ''),
+    );
+  });
+
+  it('худший случай — шестьсот широких букв — тоже не режется', () => {
+    // «ш», «щ», «ф», «ю» вдвое шире обычной буквы: именно на них кончались
+    // прежние ступени.
+    const wide = 'шщфю жюшщ '.repeat(60).slice(0, 600);
+    const fitted = fitQuote(wide, maxWidth);
+
+    expect(cut(fitted.lines)).toBe(false);
+    expect(fitted.size).toBeLessThan(42);
+  });
+
+  it('у ролика предел строк остаётся жёстким и крупным', () => {
+    // В кадре ролика текст обязан быть коротким: читать целиком зовёт
+    // «Развернуть» в самой ленте.
+    const fitted = fitQuote('Слово '.repeat(80), maxWidth, 4);
+
+    expect(fitted.lines).toHaveLength(4);
+    expect(fitted.size).toBe(54);
+    expect(cut(fitted.lines)).toBe(true);
   });
 });

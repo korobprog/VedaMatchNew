@@ -8,8 +8,6 @@ export const STORY_HEIGHT = 1920;
 
 const SIDE_PADDING = 88;
 const BOTTOM_PADDING = 180;
-const QUOTE_SIZE = 54;
-const QUOTE_LINE_HEIGHT = 74;
 const META_SIZE = 30;
 /** Высота знака в кадре. Ширина считается из пропорций исходника. */
 const BRAND_LOGO_HEIGHT = 76;
@@ -32,8 +30,94 @@ const MAX_GREETING_LINES = 2;
  */
 export const AI_DISCLOSURE = 'Создано нейросетью в VedaMatch';
 const META_LINE_HEIGHT = 40;
-const MAX_QUOTE_LINES = 12;
 const MAX_META_LINES = 2;
+
+/**
+ * Ступени кегля цитаты. Длинный афоризм раньше просто срезался многоточием на
+ * двенадцатой строке, хотя поле разрешает 600 знаков — а это около двадцати
+ * строк крупным кеглем. Человек писал мысль целиком и получал её обрубок.
+ *
+ * Теперь длинный текст не режется, а мельчает: сначала пробуем крупно и лишь
+ * когда не влезает — берём следующую ступень. Короткие афоризмы, которых
+ * большинство, остаются такими же крупными, как были.
+ */
+const QUOTE_STEPS = [
+  { size: 54, lineHeight: 74 },
+  { size: 48, lineHeight: 66 },
+  { size: 42, lineHeight: 58 },
+  { size: 36, lineHeight: 50 },
+  /* Последняя ступень нужна ради худшего случая: шестьсот знаков из широких
+     букв («ш», «щ», «ф», «ю») занимают вдвое больше места, чем обычная речь,
+     и на 36-й всё ещё не помещались. Дальше мельчить некуда — да и незачем:
+     здесь влезает любой текст, который принимает поле. */
+  { size: 32, lineHeight: 44 },
+] as const;
+
+/**
+ * Высота, отведённая цитате над знаком. Верхняя граница выбрана так, чтобы
+ * блок не наезжал на поздравление открытки: его подложка заканчивается около
+ * 416-й точки, а цитата начинается ниже даже на самой длинной ступени.
+ */
+const QUOTE_BLOCK_HEIGHT = 1040;
+
+const QUOTE_SIZE = QUOTE_STEPS[0].size;
+const QUOTE_LINE_HEIGHT = QUOTE_STEPS[0].lineHeight;
+
+/** Сколько строк помещается на этой ступени. */
+function linesForStep(lineHeight: number): number {
+  return Math.floor(QUOTE_BLOCK_HEIGHT / lineHeight);
+}
+
+/** Предел строк крупным кеглем — им меряют «влезает ли как раньше». */
+const MAX_QUOTE_LINES = linesForStep(QUOTE_LINE_HEIGHT);
+
+export interface FittedQuote {
+  lines: string[];
+  size: number;
+  lineHeight: number;
+}
+
+/**
+ * Подбирает кегль под длину афоризма.
+ *
+ * `hardLimit` — жёсткий предел строк, его задаёт кадр ролика
+ * (`REEL_MAX_QUOTE_LINES`): там текст обязан остаться крупным и коротким, а
+ * читать целиком зовёт кнопка «Развернуть» в самой ленте. С ним поведение
+ * прежнее: переносим крупным кеглем и режем.
+ *
+ * Без него текст мельчает, пока не поместится, и режется только если не влез
+ * даже на последней ступени — то есть практически никогда: на ней помещается
+ * около девятисот знаков при разрешённых шестистах.
+ */
+export function fitQuote(
+  text: string,
+  maxWidth: number,
+  hardLimit?: number,
+): FittedQuote {
+  const [base] = QUOTE_STEPS;
+  if (hardLimit !== undefined)
+    return {
+      lines: clampLines(wrapText(text, base.size, maxWidth), hardLimit),
+      size: base.size,
+      lineHeight: base.lineHeight,
+    };
+
+  for (const step of QUOTE_STEPS) {
+    const lines = wrapText(text, step.size, maxWidth);
+    if (lines.length <= linesForStep(step.lineHeight))
+      return { lines, size: step.size, lineHeight: step.lineHeight };
+  }
+
+  const last = QUOTE_STEPS[QUOTE_STEPS.length - 1];
+  return {
+    lines: clampLines(
+      wrapText(text, last.size, maxWidth),
+      linesForStep(last.lineHeight),
+    ),
+    size: last.size,
+    lineHeight: last.lineHeight,
+  };
+}
 /** Запас на неточность оценки ширины: лучше перенести раньше, чем срезать край. */
 const WIDTH_SAFETY = 0.96;
 
@@ -157,6 +241,13 @@ export type StoryOverlayInput = {
 export function storyLayout(input: {
   quoteLines: number;
   metaLines: number;
+  /**
+   * Шаг и кегль выбранной ступени. Без них блок считался бы по крупному
+   * кеглю, и у смельчавшего текста подложка начиналась бы не там, где он
+   * на самом деле начинается.
+   */
+  quoteLineHeight?: number;
+  quoteSize?: number;
 }): {
   logo: { left: number; top: number; width: number; height: number };
   firstLineY: number;
@@ -178,8 +269,10 @@ export function storyLayout(input: {
   const logoTop = logoBaseline - height;
   // Цитата заканчивается над знаком, с тем же воздухом, что был над ним.
   const quoteBottom = logoTop - 28;
+  const lineHeight = input.quoteLineHeight ?? QUOTE_LINE_HEIGHT;
+  const quoteSize = input.quoteSize ?? QUOTE_SIZE;
   const firstLineY =
-    quoteBottom - Math.max(0, input.quoteLines - 1) * QUOTE_LINE_HEIGHT;
+    quoteBottom - Math.max(0, input.quoteLines - 1) * lineHeight;
 
   return {
     logo: { left: SIDE_PADDING, top: logoTop, width, height },
@@ -188,7 +281,7 @@ export function storyLayout(input: {
     disclosureBaseline,
     // Подложка начинается над первой строкой цитаты: теперь верхний край
     // блока — текст, а не знак, и светлый фон съедал бы именно его.
-    scrimTop: Math.max(0, firstLineY - QUOTE_SIZE - 60),
+    scrimTop: Math.max(0, firstLineY - quoteSize - 60),
   };
 }
 
@@ -196,16 +289,16 @@ export function storyLayout(input: {
 export function brandLogoBox(input?: {
   quoteLines: number;
   metaLines: number;
+  quoteLineHeight?: number;
+  quoteSize?: number;
 }): { left: number; top: number; width: number; height: number } {
   return storyLayout(input ?? { quoteLines: 1, metaLines: 0 }).logo;
 }
 
 export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
   const maxWidth = (STORY_WIDTH - SIDE_PADDING * 2) * WIDTH_SAFETY;
-  const lines = clampLines(
-    wrapText(input.text, QUOTE_SIZE, maxWidth),
-    input.maxQuoteLines ?? MAX_QUOTE_LINES,
-  );
+  const quote = fitQuote(input.text, maxWidth, input.maxQuoteLines);
+  const lines = quote.lines;
   // Атрибуция переносится так же, как цитата: одной строкой длинная связка
   // «автор · произведение · глава» уезжала за правый край.
   const metaLines = input.attribution?.trim()
@@ -218,6 +311,8 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
   const layout = storyLayout({
     quoteLines: lines.length,
     metaLines: metaLines.length,
+    quoteLineHeight: quote.lineHeight,
+    quoteSize: quote.size,
   });
   const { firstLineY, metaTop, scrimTop } = layout;
 
@@ -239,7 +334,7 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
   const quoteLines = lines
     .map(
       (line, index) =>
-        `<text x="${SIDE_PADDING}" y="${firstLineY + index * QUOTE_LINE_HEIGHT}" class="quote">${escapeXml(line)}</text>`,
+        `<text x="${SIDE_PADDING}" y="${firstLineY + index * quote.lineHeight}" class="quote">${escapeXml(line)}</text>`,
     )
     .join('');
 
@@ -264,7 +359,7 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
     </linearGradient>
   </defs>
   <style>
-    .quote { font-family: ${FONT_STACK}; font-size: ${QUOTE_SIZE}px; font-weight: 400; fill: #FFFFFF; }
+    .quote { font-family: ${FONT_STACK}; font-size: ${quote.size}px; font-weight: 400; fill: #FFFFFF; }
     .meta  { font-family: ${FONT_STACK}; font-size: ${META_SIZE}px; fill: #D9CCF5; }
     .disclosure { font-family: ${FONT_STACK}; font-size: ${DISCLOSURE_SIZE}px; fill: #B9A9DC; }
     .greeting { font-family: ${FONT_STACK}; font-size: ${GREETING_SIZE}px; font-weight: 700; fill: #FFE2A6; }
@@ -288,11 +383,14 @@ export async function renderStoryOverlay(
   input: StoryOverlayInput,
 ): Promise<Buffer> {
   const maxWidth = (STORY_WIDTH - SIDE_PADDING * 2) * WIDTH_SAFETY;
+  // Ступень подбираем тем же вызовом, что и SVG: разъедься эти два расчёта —
+  // знак сел бы мимо своего места, и заметно это стало бы только на готовом
+  // кадре.
+  const quote = fitQuote(input.text, maxWidth, input.maxQuoteLines);
   const box = brandLogoBox({
-    quoteLines: clampLines(
-      wrapText(input.text, QUOTE_SIZE, maxWidth),
-      input.maxQuoteLines ?? MAX_QUOTE_LINES,
-    ).length,
+    quoteLines: quote.lines.length,
+    quoteLineHeight: quote.lineHeight,
+    quoteSize: quote.size,
     metaLines: input.attribution?.trim()
       ? clampLines(wrapText(input.attribution, META_SIZE, maxWidth), MAX_META_LINES)
           .length
