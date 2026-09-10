@@ -33,6 +33,22 @@ export function workInviteUrl(webUrl: string, token: string): string {
   return `${webUrl.replace(/\/+$/, '')}/work/join/${token}`;
 }
 
+/**
+ * Адрес портала для ссылки-приглашения — из `WEB_ORIGIN`.
+ *
+ * Это единственная переменная про адрес веба, которая на портале заведена: по
+ * ней собирается CORS и ссылки в письмах. Пока сервис спрашивал собственное
+ * `WEB_URL`, которого нет ни в одном окружении, прод молча выдавал людям
+ * приглашения на `http://localhost:3000`.
+ *
+ * В CORS адресов бывает несколько через запятую, а ссылка нужна одна — берём
+ * первый. Пустое значение оставляем локальным: в dev так и есть.
+ */
+export function portalWebUrl(configured: string | undefined): string {
+  const first = (configured ?? '').split(',')[0]?.trim();
+  return first || 'http://localhost:3000';
+}
+
 export function workInviteExpiry(now: Date, days?: number): Date {
   const clamped = Math.min(
     Math.max(Math.trunc(days ?? WORK_INVITE_DEFAULT_DAYS), 1),

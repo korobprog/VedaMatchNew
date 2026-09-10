@@ -174,7 +174,8 @@ describe("ConnectionsPanel", () => {
     await user.click(screen.getByRole("button", { name: "Принять" }));
 
     expect(incomingTab).toHaveAttribute("aria-selected", "true");
-    expect(await screen.findByText("Сеть недоступна")).toBeInTheDocument();
+    // apiFetch переводит обрыв сети в понятную человеку строку
+    expect(await screen.findByText(/Проверьте интернет/)).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
   });
 

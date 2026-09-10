@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   API_URL,
+  NetworkError,
   SESSION_EXPIRED_EVENT,
   apiFetch,
   apiRequest,
@@ -73,6 +74,34 @@ describe("apiFetch", () => {
     window.removeEventListener(SESSION_EXPIRED_EVENT, listener);
   });
 
+  it("оборванная сеть — понятная ошибка вместо TypeError", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new TypeError("Failed to fetch"));
+
+    const failed = await apiFetch(`${API_URL}/profile`, {
+      method: "PATCH",
+      body: "{}",
+    }).catch((e: unknown) => e);
+
+    expect(failed).toBeInstanceOf(NetworkError);
+    expect((failed as NetworkError).status).toBe(0);
+    expect((failed as NetworkError).message).toContain("портал");
+    // мутацию не повторяем: ответа нет, но запрос мог дойти
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("чтение переспрашивает один раз после обрыва", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(response(200, { ok: true }));
+
+    const res = await apiFetch(`${API_URL}/notices`);
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("сами /auth/* эндпоинты не рефрешатся", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
@@ -106,6 +135,8 @@ describe("apiRequest", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       new Response(null, { status: 204 }),
     );
-    await expect(apiRequest("/x", { method: "DELETE" })).resolves.toBeUndefined();
+    await expect(
+      apiRequest("/x", { method: "DELETE" }),
+    ).resolves.toBeUndefined();
   });
 });

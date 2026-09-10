@@ -187,7 +187,10 @@ export class WorkController {
     return this.invites.list(id, user.sub);
   }
 
-  /** Кого можно позвать: знакомые из портального графа, а не весь портал. */
+  /**
+   * Кого можно позвать: знакомые из портального графа, а администрации —
+   * весь портал. Где именно искали, сказано в ответе полем `scope`.
+   */
   @Get('spaces/:id/contacts')
   listContacts(
     @Param('id') id: string,

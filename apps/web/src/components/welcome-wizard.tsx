@@ -10,7 +10,7 @@ import {
   type SelfIdentificationAnswers,
   type UserProfile,
 } from "@vedamatch/shared";
-import { apiFetch } from "@/lib/http-client";
+import { apiFetch, readErrorMessage } from "@/lib/http-client";
 import { welcomeSteps, type WelcomeStep } from "@/lib/welcome";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -93,7 +93,7 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
         ...(asksLineage && lineage ? { lineage } : {}),
       }),
     });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) throw new Error(await readErrorMessage(res));
   }
 
   /**
@@ -116,7 +116,7 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
           credentials: "include",
           body: JSON.stringify(answers),
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) throw new Error(await readErrorMessage(res));
       }
       router.push("/");
       router.refresh();
