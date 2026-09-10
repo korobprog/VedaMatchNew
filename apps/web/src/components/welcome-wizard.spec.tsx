@@ -33,13 +33,24 @@ const render = (ui: ReactElement) =>
 const chooseGender = (user: ReturnType<typeof userEvent.setup>) =>
   user.click(screen.getByRole("radio", { name: "Мужской" }));
 
+/** Пройти мастер до конца, оставив ответы анкеты по умолчанию. */
+async function finishWizard(user: ReturnType<typeof userEvent.setup>) {
+  await chooseGender(user);
+  await user.click(screen.getByRole("button", { name: "Дальше" }));
+  await user.click(screen.getByRole("button", { name: "Дальше" }));
+  await user.click(screen.getByRole("button", { name: "Дальше" }));
+  await user.click(
+    screen.getByRole("button", { name: "Готово, к сервисам портала" }),
+  );
+}
+
 const profile = {
   id: "u1",
   email: "user@example.com",
   name: "Гаура Прия",
   spiritualName: null,
   about: null,
-    statusLine: null,
+  statusLine: null,
   languages: [],
   displayName: "Гаура Прия",
   avatarUrl: null,
@@ -177,19 +188,36 @@ describe("WelcomeWizard", () => {
   // несохранённой анкетой значит потерять всё, что человек только что ввёл.
   it("при ошибке остаётся на шаге и называет её", async () => {
     const user = userEvent.setup();
-    fetchMock.mockResolvedValue(new Response("Сервис недоступен", { status: 503 }));
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ message: "Сервис недоступен" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
     render(<WelcomeWizard user={profile} />);
 
-    await chooseGender(user);
-    await user.click(screen.getByRole("button", { name: "Дальше" }));
-    await user.click(screen.getByRole("button", { name: "Дальше" }));
-    await user.click(screen.getByRole("button", { name: "Дальше" }));
-    await user.click(
-      screen.getByRole("button", { name: "Готово, к сервисам портала" }),
-    );
+    await finishWizard(user);
 
     expect(await screen.findByText("Сервис недоступен")).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  // «Failed to fetch» — то, что реально увидел человек с мобильного:
+  // строка из движка браузера, по-английски и без единой подсказки.
+  it("оборванная сеть объясняется по-русски, ответы остаются на месте", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    render(<WelcomeWizard user={profile} />);
+
+    await finishWizard(user);
+
+    expect(await screen.findByText(/Проверьте интернет/)).toBeInTheDocument();
+    expect(screen.queryByText(/Failed to fetch/)).not.toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+    // кнопка снова живая: повторить можно, не проходя мастер заново
+    expect(
+      screen.getByRole("button", { name: "Готово, к сервисам портала" }),
+    ).toBeEnabled();
   });
 
   it("шаг города можно пропустить", async () => {
@@ -304,7 +332,10 @@ describe("WelcomeWizard", () => {
    * анкету, которую он проходил.
    */
   describe("аккаунт, у которого не хватает только пола", () => {
-    const settled = { ...profile, spiritualStage: "practitioner" } as UserProfile;
+    const settled = {
+      ...profile,
+      spiritualStage: "practitioner",
+    } as UserProfile;
 
     it("показывает один шаг", () => {
       render(<WelcomeWizard user={settled} />);
@@ -323,9 +354,9 @@ describe("WelcomeWizard", () => {
 
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
       expect(String(fetchMock.mock.calls[0][0])).toContain("/profile");
-      expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject(
-        { gender: "male" },
-      );
+      expect(
+        JSON.parse(String(fetchMock.mock.calls[0][1]?.body)),
+      ).toMatchObject({ gender: "male" });
     });
   });
 });
