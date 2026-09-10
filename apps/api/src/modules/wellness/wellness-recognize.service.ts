@@ -33,11 +33,15 @@ export class WellnessRecognizeService {
       env.MOTIVATION_AI_API_KEY ||
       '';
     if (!baseUrl || !apiKey) return null;
+    // Литерал — крайний случай и он неизбежно устаревает: у релея модели
+    // приходят и уходят, а `gpt-5.4-mini` на нём уже молчит. Настоящее
+    // значение всегда приходит из окружения, и именно его надо править.
+    // Модель обязана уметь читать картинки, а не только текст.
     const model =
       env.WELLNESS_VISION_MODEL ||
       env.ASSISTANT_TEXT_MODEL ||
       env.MOTIVATION_TEXT_MODEL ||
-      'gpt-5.4-mini';
+      'gpt-5.4';
     return { baseUrl, apiKey, model };
   }
 

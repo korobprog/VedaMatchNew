@@ -44,7 +44,13 @@ import type {
   MotivationVisualStyle,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import { explanationChanged, explanationOf } from './explanation-text';
+import {
+  canAddExplanation,
+  explanationChanged,
+  explanationOf,
+  normalizeExplanation,
+  withExplanation,
+} from './explanation-text';
 import { isAdmin } from './is-admin';
 import { READER_VISIBLE_POSTS } from './reader-visible';
 import {
@@ -461,6 +467,79 @@ export class MotivationService {
    * администратора — молчать до его прихода нельзя, а удалять по жалобам
    * нельзя тем более.
    */
+  /**
+   * Пояснение участника к афоризму.
+   *
+   * Раньше трактовку мог написать только администратор, правя текст поста, —
+   * при том что подпись «пояснение написал такой-то» и жалоба на неё уже были.
+   * Кнопки, ради которой всё это заводилось, не было.
+   *
+   * Публикуется сразу: разбирать каждую трактовку через очередь — значит не
+   * получить их вовсе. Снимается жалобами (см. VED-49) и правкой админа.
+   */
+  async explain(
+    userId: string,
+    postId: string,
+    input: { text?: string },
+  ): Promise<{
+    explanation: string;
+    explanationAuthor: { id: string; name: string };
+  }> {
+    const explanation = normalizeExplanation(input?.text);
+    if (!explanation)
+      throw new BadRequestException('Напишите пояснение');
+
+    const post = await this.prisma.motivationPost.findFirst({
+      where: { id: postId, status: 'published' },
+      select: { id: true },
+    });
+    if (!post) throw new NotFoundException();
+
+    /* Текст живёт в переводе, а не у поста: поясняют ту версию, которую
+       читают. Автор пояснения при этом один на пост — так же, как при правке
+       администратором. */
+    const preference = await this.preference(userId);
+    const language = languages.has(preference.language as MotivationLanguage)
+      ? preference.language
+      : 'ru';
+    const translation =
+      await this.prisma.motivationPostTranslation.findUnique({
+        where: { postId_language: { postId, language } },
+        select: { text: true },
+      });
+    if (!translation) throw new NotFoundException();
+    if (!canAddExplanation(translation.text))
+      throw new BadRequestException(
+        'У этого афоризма пояснение уже есть — с ним можно не согласиться жалобой',
+      );
+
+    const author = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, spiritualName: true },
+    });
+    if (!author) throw new NotFoundException();
+
+    /* Условие по тексту — не перестраховка: пока человек писал трактовку, её
+       мог добавить другой, и затирать чужую молча нельзя. */
+    const updated = await this.prisma.motivationPostTranslation.updateMany({
+      where: { postId, language, text: translation.text },
+      data: { text: withExplanation(translation.text, explanation) },
+    });
+    if (updated.count === 0)
+      throw new BadRequestException(
+        'Пояснение только что добавил кто-то другой — обновите ленту',
+      );
+    await this.prisma.motivationPost.update({
+      where: { id: postId },
+      data: { explanationAuthorId: userId },
+    });
+
+    return {
+      explanation,
+      explanationAuthor: { id: author.id, name: resolveDisplayName(author) },
+    };
+  }
+
   async report(
     userId: string,
     postId: string,

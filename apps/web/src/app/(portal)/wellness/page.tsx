@@ -8,7 +8,7 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-/** Разделы сервиса. Корзина и рецепты — заделы, и это сказано прямо. */
+/** Разделы сервиса. Все живые: заделов больше не осталось. */
 const SECTIONS = [
   {
     href: "/wellness/scan",
@@ -29,16 +29,16 @@ const SECTIONS = [
     ready: true,
   },
   {
+    href: "/wellness/basket",
+    title: "Корзина",
+    text: "Отобранное к покупке и что из этого вам подходит.",
+    ready: true,
+  },
+  {
     href: "/wellness/recipes",
     title: "Рецепты",
     text: "Вайшнавская кухня и подбор блюд из того, что уже в корзине.",
     ready: true,
-  },
-  {
-    href: "/wellness",
-    title: "Корзина",
-    text: "Собрать список покупок из проверенного. Готовим.",
-    ready: false,
   },
 ];
 

@@ -10,6 +10,7 @@ import {
   reportWellnessProduct,
   WellnessApiError,
 } from "@/lib/wellness-api";
+import { AddToBasket } from "./add-to-basket";
 import { isAbort } from "./is-abort";
 import { VerdictCard } from "./verdict-card";
 
@@ -88,6 +89,9 @@ export function ProductView({ barcode }: { barcode: string }) {
         <p className="mt-3 text-sm text-text-1">
           {data.product.ingredientsRaw}
         </p>
+        <div className="mt-3">
+          <AddToBasket productId={data.product.id} />
+        </div>
       </div>
 
       <VerdictCard result={data.result} />

@@ -323,6 +323,15 @@ export class MotivationController {
   removeLike(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.service.like(user.sub, id, false);
   }
+  @Post('motivation/posts/:id/explanation')
+  @UseGuards(AuthGuard)
+  explain(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() input: { text?: string },
+  ) {
+    return this.service.explain(user.sub, id, input);
+  }
   @Post('motivation/posts/:id/report')
   @UseGuards(AuthGuard)
   report(

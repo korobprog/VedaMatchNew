@@ -18,7 +18,8 @@ export type AssistantToolName =
   | 'library_search'
   | 'music_search'
   | 'vedabase_search'
-  | 'astro_status';
+  | 'astro_status'
+  | 'wellness_lookup';
 
 export interface AssistantToolDefinition {
   name: AssistantToolName;
@@ -174,6 +175,19 @@ export const ASSISTANT_TOOLS: readonly AssistantToolDefinition[] = [
     parameters: { type: 'object', properties: {} },
     requiresConfirmation: false,
   },
+  {
+    name: 'wellness_lookup',
+    service: 'wellness',
+    description:
+      'Найти продукт в базе сервиса Здоровье по штрихкоду или названию и показать его состав с упаковки. Вердикт «подходит или нет» не выносит: он зависит от ограничений конкретного человека и считается в самом сервисе.',
+    parameters: searchParameters({
+      barcode: {
+        type: 'string',
+        description: 'Цифры под штрихкодом, если человек их назвал',
+      },
+    }),
+    requiresConfirmation: false,
+  },
 ];
 
 const byName = new Map(ASSISTANT_TOOLS.map((tool) => [tool.name, tool]));
@@ -283,6 +297,12 @@ export function parseToolArgs(
   if (tool.name === 'market_search') {
     const kind = cleanEnum(input.kind, ['product', 'service'] as const);
     if (kind) args.kind = kind;
+  }
+  if (tool.name === 'wellness_lookup') {
+    // Штрихкод — цифры, и только они: всё остальное сервис всё равно отвергнет
+    // при проверке контрольной цифры.
+    const barcode = cleanString(input.barcode, 20);
+    if (barcode) args.barcode = barcode.replace(/\D/g, '');
   }
   if (tool.name === 'notices_search') {
     const kind = cleanEnum(input.kind, [

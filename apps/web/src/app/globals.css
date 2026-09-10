@@ -1349,3 +1349,27 @@ body:has([data-music-player][data-collapsed="true"]) {
 .leaflet-marker-icon:focus-visible .notices-map-cluster {
   background: var(--vm-magenta, #ff3e9e);
 }
+
+/* Метка точки на карте «Путешествий»: название места и число объектов в нём.
+   Свой класс, а не общий с «Объявлениями»: у сервисов разные акценты, и общая
+   метка развалилась бы на первом же расхождении. Цвета — токенами, чтобы
+   метка жила в обеих темах. */
+.travel-map-place {
+  display: inline-block;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  border-radius: 9999px;
+  border: 1px solid var(--vm-cyan, #35d6e3);
+  background: rgba(18, 18, 26, 0.92);
+  padding: 0.15rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  /* Белый по тёмной плашке — она тёмная в обеих темах, как у «Объявлений». */
+  color: #fff;
+}
+
+.leaflet-marker-icon:hover .travel-map-place,
+.leaflet-marker-icon:focus-visible .travel-map-place {
+  background: var(--vm-cyan, #35d6e3);
+  color: #06131a;
+}

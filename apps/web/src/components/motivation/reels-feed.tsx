@@ -33,6 +33,10 @@ import {
   parseRailConfig,
   type RailActionId,
 } from "./rail-actions";
+import {
+  ExplanationDialog,
+  type AddedExplanation,
+} from "./explanation-dialog";
 import { ReportDialog } from "./report-dialog";
 import { SourceLink } from "./source-link";
 import {
@@ -714,7 +718,13 @@ function ReelSlide({
   const [showExplanation, setShowExplanation] = useState(false);
   const [paused, setPaused] = useState(false);
   const [quoteClamped, setQuoteClamped] = useState(false);
-  const { quote, explanation } = splitQuoteAndExplanation(post.text);
+  /* Только что написанное пояснение. Держим у слайда, а не тянем через весь
+     список: сервер уже принял его, и показать надо ровно здесь. При
+     следующей загрузке ленты оно придёт в самом посте. */
+  const [added, setAdded] = useState<AddedExplanation | null>(null);
+  const { quote, explanation: stored } = splitQuoteAndExplanation(post.text);
+  const explanation = added?.text ?? stored;
+  const explanationAuthor = added?.author ?? post.explanationAuthor;
   const kind = mediaKindOf(post);
   const source = attributionLine(post);
   const explanationToggle = explanation && (
@@ -730,6 +740,21 @@ function ReelSlide({
     >
       {showExplanation ? "Скрыть пояснение" : "Пояснение — нажмите, чтобы раскрыть ›"}
     </button>
+  );
+
+  /* Пояснения нет — предлагаем написать. Пояснение у афоризма одно, поэтому
+     кнопка исчезает, как только оно появилось: спорить с чужой трактовкой
+     нужно жалобой, а не поверх неё. */
+  const explanationInvite = !explanation && (
+    <ExplanationDialog
+      postId={post.id}
+      onAdded={setAdded}
+      className={
+        kind === "image"
+          ? "mt-1 block text-xs text-white/85 underline-offset-4 hover:underline"
+          : "underline-offset-4 hover:underline"
+      }
+    />
   );
 
   /**
@@ -935,7 +960,7 @@ function ReelSlide({
         )}
         {/* У фото — сразу под цитатой, которую раскрывает. У ролика своей
             цитаты в DOM нет, поэтому кнопка остаётся в общем ряду ниже. */}
-        {kind === "image" && explanationToggle}
+        {kind === "image" && (explanationToggle || explanationInvite)}
         {/* Подпись одной строкой: кто принёс и откуда взято.
             Раньше это были три этажа — источник, ряд кнопок и отдельная
             плашка автора с отступами сверху и снизу, — и они съедали кадр
@@ -970,7 +995,7 @@ function ReelSlide({
               строкой поверх кадра: строка закрыла бы конец цитаты, а ряд уже
               есть и переносится сам. */}
           {kind !== "image" && <Byline post={post} />}
-          {kind !== "image" && explanationToggle}
+          {kind !== "image" && (explanationToggle || explanationInvite)}
           {/* Замер добавляет случаи к прикидке, а не заменяет её: цитата длиннее
               ста семидесяти знаков обрезана в четырёх строках при любой
               раскладке, и кнопка нужна ей даже там, где замерить не вышло. */}
@@ -1000,9 +1025,9 @@ function ReelSlide({
               слова автора, а пояснение — чьё-то прочтение, и читатель вправе
               знать, чьё именно. Пусто — пояснение собрала модель, человека за
               ним нет, и подписывать нечем. */}
-          {post.explanationAuthor && (
+          {explanationAuthor && (
             <p className="mt-3 text-xs text-white/70">
-              Пояснение написал(а) {post.explanationAuthor.name}
+              Пояснение написал(а) {explanationAuthor.name}
             </p>
           )}
         </CenteredSheet>
