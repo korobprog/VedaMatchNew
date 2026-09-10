@@ -49,8 +49,10 @@ import {
   neighboursOf,
 } from "./board-state";
 import {
+  everyColumnCollapsed,
   expandCollapsedColumn,
   readCollapsedColumns,
+  toggleAllColumns,
   toggleCollapsedColumn,
   writeCollapsedColumns,
 } from "./column-collapse";
@@ -161,6 +163,11 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     board?.role === "member";
   /** Колонки заводит и правит администрация среды, задачи — любой участник. */
   const canManage = board?.role === "owner" || board?.role === "admin";
+  /** Свёрнута ли доска целиком — от этого зависит смысл кнопки в шапке. */
+  const allFolded = everyColumnCollapsed(
+    collapsed,
+    board?.columns.map((column) => column.id) ?? [],
+  );
 
   /**
    * Перенос: доска перестраивается сразу, запрос уходит следом, ошибка
@@ -383,6 +390,20 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     writeCollapsedColumns(board.id, next);
   }
 
+  /**
+   * Свернуть или развернуть всю доску разом. Складывать двенадцать колонок по
+   * одной — то же самое листание, ради которого их и складывают.
+   */
+  function toggleAll() {
+    if (!board) return;
+    const next = toggleAllColumns(
+      collapsed,
+      board.columns.map((column) => column.id),
+    );
+    setCollapsed(next);
+    writeCollapsedColumns(board.id, next);
+  }
+
   function moveBeside(task: WorkTaskCardDto, direction: -1 | 1) {
     if (!board) return;
     const columnId = columnBeside(board, task.columnId, direction);
@@ -425,7 +446,26 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         <span className="rounded-full bg-glass px-2 py-0.5 font-mono text-xs uppercase text-text-2">
           {space.prefix}
         </span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {/* Только на телефоне, как и стрелки у колонок: шире sm колонки
+              стоят в ряд, прятать их незачем. Одна кнопка, меняющая смысл, а
+              не пара рядом: вторая всегда была бы бесполезной, а место
+              занимала бы то же. */}
+          {board.columns.length > 1 && (
+            <button
+              type="button"
+              onClick={toggleAll}
+              aria-expanded={!allFolded}
+              className="flex items-center gap-1.5 rounded-xl border border-glass-brd px-2.5 py-2 text-xs font-semibold text-text-1 hover:text-text-0 sm:hidden"
+            >
+              {allFolded ? (
+                <ChevronDown aria-hidden className="size-3.5" />
+              ) : (
+                <ChevronUp aria-hidden className="size-3.5" />
+              )}
+              {allFolded ? "Развернуть все" : "Свернуть все"}
+            </button>
+          )}
           <WorkInvitePanel space={space} onChanged={reload} />
         </div>
       </div>

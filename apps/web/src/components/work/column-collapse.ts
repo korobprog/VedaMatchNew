@@ -76,3 +76,32 @@ export function writeCollapsedColumns(boardId: string, ids: string[]): void {
     // Приватный режим: свёрнутое живёт до конца сессии.
   }
 }
+
+/**
+ * Все ли колонки доски свёрнуты. Пустая доска не считается свёрнутой:
+ * сворачивать там нечего, и кнопка не должна предлагать развернуть пустоту.
+ */
+export function everyColumnCollapsed(
+  ids: readonly string[],
+  columnIds: readonly string[],
+): boolean {
+  return columnIds.length > 0 && columnIds.every((id) => ids.includes(id));
+}
+
+/**
+ * Одна кнопка на всю доску: свернуть всё или, если уже свёрнуто, развернуть.
+ *
+ * Складывать колонки по одной — то же самое листание, ради которого их и
+ * складывают: на доске их у нас двенадцать. Кнопка меняет смысл по состоянию,
+ * а не стоит парой рядом: две кнопки, одна из которых всегда бесполезна,
+ * занимают ту же строку, что и сами колонки.
+ *
+ * Свернуть — значит записать ровно нынешние колонки: заодно из памяти
+ * выпадают те, которых на доске уже нет.
+ */
+export function toggleAllColumns(
+  ids: readonly string[],
+  columnIds: readonly string[],
+): string[] {
+  return everyColumnCollapsed(ids, columnIds) ? [] : [...columnIds];
+}
