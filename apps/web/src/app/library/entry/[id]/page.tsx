@@ -14,6 +14,7 @@ import { BookmarkButton } from "@/components/library/bookmark-button";
 import { DeleteEntryButton } from "@/components/library/delete-entry-button";
 import { EditEntryForm } from "@/components/library/edit-entry-form";
 import { EntryComments } from "@/components/library/entry-comments";
+import { OutsideLink } from "@/components/library/outside-link";
 import { VideoEmbed } from "@/components/library/video-embed";
 import { entryTypeLabel, pickLocalized, t } from "@/components/library/i18n";
 
@@ -94,10 +95,8 @@ export default async function LibraryEntryPage({
           // нечего, но показать её надо — у материала из книги она вообще
           // единственное изображение, и загружали её вручную.
           (entry.url ? (
-            <a
+            <OutsideLink
               href={entry.url}
-              target="_blank"
-              rel="noopener noreferrer"
               className="mb-4 block overflow-hidden rounded-2xl border border-glass-brd"
             >
               {/* eslint-disable-next-line @next/next/no-img-element -- обложка лежит в нашем S3 */}
@@ -106,7 +105,7 @@ export default async function LibraryEntryPage({
                 alt={t(locale, "entry.preview")}
                 className="aspect-video w-full object-cover"
               />
-            </a>
+            </OutsideLink>
           ) : (
             <span className="mb-4 block overflow-hidden rounded-2xl border border-glass-brd">
               {/* eslint-disable-next-line @next/next/no-img-element -- обложка лежит в нашем S3 */}
@@ -132,16 +131,14 @@ export default async function LibraryEntryPage({
           {/* У материала без адреса открывать нечего — вместо кнопки
               показываем, где его искать. */}
           {entry.url ? (
-            <a
+            <OutsideLink
               href={entry.url}
-              target="_blank"
-              rel="noopener noreferrer"
               className="rounded-xl bg-glass-brd/40 px-4 py-2 text-sm text-text-0 hover:bg-glass-brd/60"
             >
               {provider
                 ? `${t(locale, "entry.watchOn")} ${videoProviderName(provider)}`
                 : t(locale, "entry.open")}
-            </a>
+            </OutsideLink>
           ) : (
             entry.source && (
               <p className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1">

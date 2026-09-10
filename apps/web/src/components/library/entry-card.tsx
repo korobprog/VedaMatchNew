@@ -7,6 +7,7 @@ import {
 } from "@vedamatch/shared";
 import { videoEmbedUrl } from "@vedamatch/shared";
 import { DeleteEntryButton } from "./delete-entry-button";
+import { OutsideLink } from "./outside-link";
 import { entryTypeLabel, pickLocalized, t } from "./i18n";
 
 export function EntryCard({
@@ -47,14 +48,12 @@ export function EntryCard({
             </span>
           </Link>
         ) : entry.url ? (
-          <a
+          <OutsideLink
             href={entry.url}
-            target="_blank"
-            rel="noopener noreferrer"
             className="mb-3 block overflow-hidden rounded-xl border border-glass-brd"
           >
             <PreviewImage locale={locale} src={entry.previewUrl} />
-          </a>
+          </OutsideLink>
         ) : (
           // Без адреса открывать нечего, но обложку показываем: у материала
           // из книги она единственное изображение и загружена вручную.
@@ -100,15 +99,13 @@ export function EntryCard({
         {/* Без адреса открывать нечего — заголовок остаётся текстом, а куда
             смотреть, говорит строка источника выше. */}
         {entry.url ? (
-          <a
+          <OutsideLink
             href={entry.url}
-            target="_blank"
-            rel="noopener noreferrer"
             className="inline-flex items-center gap-1 hover:underline"
           >
             {title}
             <ExternalLink aria-hidden className="h-3.5 w-3.5" />
-          </a>
+          </OutsideLink>
         ) : (
           title
         )}
