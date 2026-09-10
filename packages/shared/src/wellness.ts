@@ -167,9 +167,28 @@ export interface WellnessIngredientDto extends WellnessIngredientRef {
   severity: WellnessIngredientSeverity;
 }
 
-/** Заготовка раздела «Корзина»: отобранное для покупки. */
+/**
+ * Позиция корзины. Вердикт считается на лету под текущие ограничения: человек
+ * мог поменять их после того, как положил продукт, и показывать старый ответ
+ * значило бы врать.
+ */
 export interface WellnessBasketItemDto {
   id: string;
   product: WellnessProductCard;
+  result: WellnessVerdictResult;
   createdAt: string;
+}
+
+/** Сколько чего в корзине. Ради этой строки раздел и нужен. */
+export interface WellnessBasketSummary {
+  total: number;
+  clean: number;
+  warning: number;
+  forbidden: number;
+  unknown: number;
+}
+
+export interface WellnessBasketDto {
+  items: WellnessBasketItemDto[];
+  summary: WellnessBasketSummary;
 }

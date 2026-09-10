@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-/** Разделы сервиса. Корзина и рецепты пока заделы и в навигации не висят. */
+/** Разделы сервиса. Рецепты пока задел и в навигации не висят. */
 const LINKS = [
   { href: "/wellness", label: "Обзор" },
   { href: "/wellness/scan", label: "Проверить" },
+  { href: "/wellness/basket", label: "Корзина" },
   { href: "/wellness/diet", label: "Мои ограничения" },
   { href: "/wellness/history", label: "История" },
 ];
