@@ -11,7 +11,7 @@ import {
   WellnessApiError,
 } from "@/lib/wellness-api";
 import { AddToBasket } from "./add-to-basket";
-import { isAbort } from "./is-abort";
+import { isAbort } from "@/lib/is-abort";
 import { VerdictCard } from "./verdict-card";
 
 /**

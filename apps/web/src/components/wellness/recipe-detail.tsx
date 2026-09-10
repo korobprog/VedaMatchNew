@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { WellnessRecipeDetail } from "@vedamatch/shared";
 import { getWellnessRecipe, WellnessApiError } from "@/lib/wellness-api";
-import { isAbort } from "./is-abort";
+import { isAbort } from "@/lib/is-abort";
 
 export function RecipeDetailView({ slug }: { slug: string }) {
   const [recipe, setRecipe] = useState<WellnessRecipeDetail | null>(null);

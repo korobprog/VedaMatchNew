@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Briefcase, MessagesSquare, Music } from "lucide-react";
+import { MessagesSquare, Music } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /**
@@ -19,11 +19,37 @@ import type { LucideIcon } from "lucide-react";
 interface FeaturedService {
   name: string;
   hint: string;
-  Icon: LucideIcon;
+  /** Значок: готовый из lucide или свой, нарисованный здесь. */
+  Icon: LucideIcon | ((props: { className?: string }) => React.ReactElement);
   /** Цвет знака: акценты чередуются, чтобы кнопки различались не только словом. */
   accent: string;
   /** Готовый сервис — ссылка; будущий — плашка со словом «Скоро». */
   href?: string;
+}
+
+/**
+ * Трубка с волной вызова. Рисованная, а не готовая: соседние значки ряда —
+ * штриховые, и гладиентная иконка из каталога сервисов рядом с ними выглядит
+ * чужой. Волна отличает её от простой трубки «положить звонок».
+ */
+function HandsetIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      {/* Трубка */}
+      <path d="M6.2 3.5h3l1.5 3.7-1.9 1.2a11.5 11.5 0 0 0 5.3 5.3l1.2-1.9 3.7 1.5v3a1.8 1.8 0 0 1-2 1.8A15.6 15.6 0 0 1 4.4 5.5a1.8 1.8 0 0 1 1.8-2Z" />
+      {/* Волна вызова */}
+      <path d="M15.5 4.6a5.4 5.4 0 0 1 3.9 3.9" strokeOpacity="0.55" />
+    </svg>
+  );
 }
 
 const FEATURED: FeaturedService[] = [
@@ -46,13 +72,13 @@ const FEATURED: FeaturedService[] = [
     href: "/music",
   },
   {
-    name: "Работа",
-    hint: "Задачи и доски",
-    Icon: Briefcase,
+    name: "Звонки",
+    hint: "Кто звонил и кому",
+    Icon: HandsetIcon,
     accent: "text-gold",
-    // Витрина раздела: за ней Планировщик и «Мой день», а Вакансии с Мастерами
-    // показывают «Скоро» уже внутри неё.
-    href: "/work",
+    // Звонок начинается внутри диалога, а этот экран отвечает на другой
+    // вопрос — кто звонил вчера. Раньше ответа не было нигде.
+    href: "/chat/calls",
   },
 ];
 

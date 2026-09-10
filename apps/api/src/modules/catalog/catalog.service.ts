@@ -1,6 +1,7 @@
 ﻿import { Injectable } from '@nestjs/common';
 import type { Role, ServiceCard } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { buildCatalogFilter } from './catalog-filter';
 
 @Injectable()
 export class CatalogService {
@@ -19,16 +20,7 @@ export class CatalogService {
       : [];
 
     const services = await this.prisma.service.findMany({
-      where: isAdmin
-        ? {}
-        : {
-            status: { not: 'disabled' },
-            OR: [
-              { public: true },
-              { access: { some: { userId } } },
-              ...stageFilters,
-            ],
-          },
+      where: buildCatalogFilter({ isAdmin, userId, stageFilters }),
       // Заданный администратором порядок важнее статуса: «скоро» может
       // стоять выше активного, если так решили в каталоге.
       orderBy: [{ sortOrder: 'asc' }, { status: 'asc' }, { name: 'asc' }],
