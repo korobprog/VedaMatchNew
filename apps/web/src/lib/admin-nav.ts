@@ -144,6 +144,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         hint: "Лимиты, расход токенов, какими сервисами пользуются через ИИ",
         scope: "assistant",
       },
+      {
+        href: "/admin/wellness",
+        label: "Здоровье",
+        hint: "Справочник ингредиентов, очередь продуктов, жалобы на состав",
+        scope: "wellness",
+      },
     ],
   },
   {
