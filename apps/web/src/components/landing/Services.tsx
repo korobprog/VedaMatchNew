@@ -5,7 +5,6 @@ import { motion } from "framer-motion";
 import { useLocale, useTranslations } from "next-intl";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { useServiceNames } from "@/components/service-catalog-provider";
-import { Briefcase, Music } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
   PLANNED_SERVICES,
@@ -28,11 +27,12 @@ const itemVariants = {
   },
 };
 
-/** Знак будущего сервиса: своей иконки в каталоге у него ещё нет. */
-const PLANNED_ICONS: Record<string, LucideIcon> = {
-  music: Music,
-  work: Briefcase,
-};
+/**
+ * Знак будущего сервиса: своей иконки в каталоге у него ещё нет. Карта пуста,
+ * пока список будущих сервисов пуст: держать здесь «Музыку» и «Работу», давно
+ * живые, значит однажды нарисовать активному сервису заглушку.
+ */
+const PLANNED_ICONS: Record<string, LucideIcon> = {};
 
 export function Services() {
   const t = useTranslations("Landing.services");

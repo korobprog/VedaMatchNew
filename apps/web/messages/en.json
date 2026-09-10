@@ -70,7 +70,7 @@
       "scroll": "Scroll down"
     },
     "services": {
-      "title": "One account — eight services",
+      "title": "One account — every service",
       "subtitle": "VedaMatch is more than dating. It's an ecosystem for a life in goodness: practice, knowledge, community and conscious connections in one place.",
       "featured": "Flagship",
       "learnMore": "Learn more →",
@@ -165,7 +165,7 @@
       "statCities": "Cities",
       "statTalks": "Open conversations",
       "readyTitle": "Ready to try “{name}”?",
-      "readyDescription": "First month free, with access to all 8 platform services in one account.",
+      "readyDescription": "First month free, with access to every platform service in one account.",
       "createAccount": "Create an account",
       "mapAriaLabel": "Map of portal communities"
     }

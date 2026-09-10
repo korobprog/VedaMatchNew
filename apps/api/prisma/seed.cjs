@@ -165,7 +165,7 @@ const services = [
     // coming_soon: этап 0 — каркас модуля и схема. Сервис включается
     // ('active') после этапа 6, когда каталог наполнен и работает плеер;
     // до тех пор карточка в портале показывает «Скоро» и никуда не ведёт.
-    status: 'coming_soon',
+    status: 'active',
     category: 'lifestyle',
     public: true,
     seekerVisible: true,
@@ -219,9 +219,10 @@ const services = [
     // В коде и маршрутах сервис зовётся `wellness`: имя `health` занято
     // техническим liveness-эндпоинтом для Docker HEALTHCHECK.
     url: '/wellness',
-    // coming_soon: справочник и сканер готовы, база продуктов пуста, а
-    // корзина с рецептами ещё заделы.
-    status: 'coming_soon',
+    // active: сканер, справочник, корзина и рецепты работают и покрыты
+    // тестами. База продуктов копится из того, что приносят люди, — пустой
+    // она мешает не больше, чем пустая доска объявлений.
+    status: 'active',
     category: 'lifestyle',
     public: true,
     seekerVisible: true,

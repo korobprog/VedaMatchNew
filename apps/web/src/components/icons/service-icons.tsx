@@ -702,6 +702,77 @@ export function ServiceIcon({ slug, category, className = "h-7 w-7" }: ServiceIc
         </svg>
       );
 
+    case "wellness":
+      // Лупа с листом внутри: сервис читает состав с упаковки и отвечает, годна
+      // ли она тому, кто не ест лишнего. Круг с ручкой — силуэт, которого нет
+      // ни у одного соседа, поэтому карточка узнаётся и в навигации размером с
+      // ноготь. Лайм — единственный свободный оттенок: эмеральд занят
+      // «Вдохновением», бирюза «Работой» и «Общением».
+      return (
+        <svg
+          viewBox="0 0 32 32"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className={className}
+        >
+          {/* Ручка — под линзой, чтобы стык не рисовать отдельно */}
+          <path
+            d="M20.4 20.4L26.5 26.5"
+            stroke={`url(#${gid("handle")})`}
+            strokeWidth="3.2"
+            strokeLinecap="round"
+          />
+          {/* Линза */}
+          <circle
+            cx="14"
+            cy="14"
+            r="8.6"
+            fill={`url(#${gid("lens")})`}
+            stroke={`url(#${gid("rim")})`}
+            strokeWidth="1.8"
+          />
+          {/* Лист: растительное, а не «полезное вообще» */}
+          <path
+            d="M10.2 17.6C9.6 12.9 12.9 9.6 18 9.4C18.2 14.4 15 17.9 10.2 17.6Z"
+            fill={`url(#${gid("leaf")})`}
+          />
+          {/* Прожилка — без неё лист читается пятном */}
+          <path
+            d="M10.6 17.2C12.9 15.1 15.4 12.6 17.6 10.2"
+            stroke="#3F6212"
+            strokeWidth="1"
+            strokeOpacity="0.55"
+            strokeLinecap="round"
+          />
+          {/* Блик: линза, а не просто кружок */}
+          <path
+            d="M8.6 11.2C9.4 9.6 10.8 8.4 12.5 7.9"
+            stroke="#FFFFFF"
+            strokeWidth="1.4"
+            strokeOpacity="0.7"
+            strokeLinecap="round"
+          />
+          <defs>
+            <linearGradient id={gid("lens")} x1="5.4" y1="5.4" x2="22.6" y2="22.6" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#F7FEE7" />
+              <stop offset="1" stopColor="#ECFCCB" />
+            </linearGradient>
+            <linearGradient id={gid("rim")} x1="5.4" y1="5.4" x2="22.6" y2="22.6" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#84CC16" />
+              <stop offset="1" stopColor="#4D7C0F" />
+            </linearGradient>
+            <linearGradient id={gid("leaf")} x1="10.2" y1="9.4" x2="18" y2="17.6" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#A3E635" />
+              <stop offset="1" stopColor="#65A30D" />
+            </linearGradient>
+            <linearGradient id={gid("handle")} x1="20.4" y1="20.4" x2="26.5" y2="26.5" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#65A30D" />
+              <stop offset="1" stopColor="#3F6212" />
+            </linearGradient>
+          </defs>
+        </svg>
+      );
+
     case "devotee-space":
     default:
       // Sacred Temple / Lotus flower with Crown / Lock emblem - Restricted Space
