@@ -329,6 +329,7 @@ model User {
   motivationLikes                    MotivationLike[]
   motivationAuthoredPosts            MotivationPost[]             @relation("MotivationAuthoredPosts")
   motivationExplanations             MotivationPost[]             @relation("MotivationExplanations")
+  motivationExplanationReports       MotivationExplanationReport[] @relation("MotivationExplanationReports")
   motivationAuthorPolicy             MotivationAuthorPolicy?
   motivationReports                  MotivationReport[]
   motivationModerationAudits         MotivationModerationAudit[]
@@ -639,6 +640,10 @@ model MotivationPost {
   /// нет; такое и подписывать нечем.
   explanationAuthorId  String?
   explanationAuthor    User?                     @relation("MotivationExplanations", fields: [explanationAuthorId], references: [id], onDelete: SetNull)
+  /// Когда пояснение спрятали по жалобам. Не удаляем: скрытие обратимо,
+  /// админ возвращает трактовку из панели, а стёртый текст вернуть неоткуда.
+  explanationHiddenAt  DateTime?
+  explanationReports   MotivationExplanationReport[]
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
 
@@ -658,6 +663,10 @@ model MotivationPost {
   @@index([quoteId])
   /// Лимит «рилсов в день» и вкладка «Мои» выбирают по автору и дате.
   @@index([authorUserId, createdAt])
+  /// Индекс завела миграция 20260909100000, а в схеме его не было: следующий
+  /// `migrate dev` предложил бы снести его как лишний. По нему находят чужие
+  /// трактовки одного человека, когда разбирают жалобы.
+  @@index([explanationAuthorId])
 }
 
 /// Единственная строка настроек сервиса (id всегда "global").
@@ -801,6 +810,23 @@ model MotivationModerationAudit {
 
   @@index([postId, createdAt])
   @@index([actorId, createdAt])
+}
+
+/// Жалоба на пояснение под цитатой.
+///
+/// Одна на человека: пара уникальна, и повторное нажатие снимает свою жалобу,
+/// а не добавляет вторую. Иначе один человек в одиночку прятал бы чужую
+/// трактовку, и порог в три жалобы ничего бы не значил.
+model MotivationExplanationReport {
+  id        String         @id @default(uuid())
+  postId    String
+  post      MotivationPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User           @relation("MotivationExplanationReports", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  @@unique([postId, userId])
+  @@index([postId])
 }
 
 model MotivationPostTranslation {

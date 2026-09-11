@@ -49,8 +49,10 @@ import {
   explanationChanged,
   explanationOf,
   normalizeExplanation,
+  quoteOf,
   withExplanation,
 } from './explanation-text';
+import { crossesExplanationThreshold } from './explanation-report-threshold';
 import { isAdmin } from './is-admin';
 import { READER_VISIBLE_POSTS } from './reader-visible';
 import {
@@ -327,6 +329,9 @@ export class MotivationService {
       explanationAuthor: {
         select: { id: true, name: true, spiritualName: true },
       },
+      // Своя жалоба на пояснение: кнопка должна показывать, что человек уже
+      // нажал, иначе он жмёт её снова и снова, а вторая жалоба не считается.
+      explanationReports: { where: { userId }, select: { userId: true } },
       // Глава, из которой выделен стих: по ней слайд открывает комментарий.
       // Слаги лежат в своей таблице модуля, а не читаются из Библиотеки, —
       // сервис в чужие таблицы не ходит.
@@ -751,6 +756,54 @@ export class MotivationService {
       videoPrompt: post.videoPrompt,
     }));
   }
+  /**
+   * Пожаловаться на пояснение — или снять свою жалобу.
+   *
+   * Жалоба одна на человека: повторное нажатие её снимает, а не добавляет
+   * вторую. Иначе один читатель в одиночку прятал бы чужую трактовку, и
+   * порог в три жалобы ничего бы не значил.
+   *
+   * На третьей жалобе пояснение прячется. Не стирается: скрытие обратимо,
+   * админ возвращает трактовку, а стёртый текст вернуть неоткуда — и
+   * разбирающему жалобу нечего было бы читать.
+   */
+  async reportExplanation(
+    postId: string,
+    userId: string,
+  ): Promise<{ reported: boolean; hidden: boolean }> {
+    const post = await this.prisma.motivationPost.findUnique({
+      where: { id: postId },
+      select: { id: true, explanationHiddenAt: true },
+    });
+    if (!post) throw new NotFoundException('Афоризм не найден');
+
+    const mine = await this.prisma.motivationExplanationReport.findUnique({
+      where: { postId_userId: { postId, userId } },
+      select: { id: true },
+    });
+    if (mine) {
+      await this.prisma.motivationExplanationReport.delete({
+        where: { id: mine.id },
+      });
+      return { reported: false, hidden: Boolean(post.explanationHiddenAt) };
+    }
+
+    await this.prisma.motivationExplanationReport.create({
+      data: { postId, userId },
+    });
+    const reports = await this.prisma.motivationExplanationReport.count({
+      where: { postId },
+    });
+    if (crossesExplanationThreshold(reports)) {
+      await this.prisma.motivationPost.update({
+        where: { id: postId },
+        data: { explanationHiddenAt: new Date() },
+      });
+      return { reported: true, hidden: true };
+    }
+    return { reported: true, hidden: Boolean(post.explanationHiddenAt) };
+  }
+
   async adminUpdate(
     user: AccessTokenPayload,
     id: string,
@@ -1284,7 +1337,7 @@ export class MotivationService {
         (post as { captionInImage?: boolean }).captionInImage,
       ),
       title: t?.title ?? '',
-      text: t?.text ?? '',
+      text: post.explanationHiddenAt ? quoteOf(t?.text ?? '') : (t?.text ?? ''),
       storyText: t?.storyText ?? '',
       attributionKind: post.attributionKind,
       attributionSpeaker: post.attributionSpeaker,
@@ -1307,6 +1360,11 @@ export class MotivationService {
             ),
           }
         : null,
+      /* Пояснение спрятано по жалобам — наружу уходит одна цитата. Стирать
+         текст в базе не стали: скрытие обратимо, и разбирающему жалобу надо
+         видеть, что именно спрятали. */
+      explanationHidden: Boolean(post.explanationHiddenAt),
+      explanationReported: (post.explanationReports?.length ?? 0) > 0,
       explanationAuthor: post.explanationAuthor
         ? {
             id: post.explanationAuthor.id,
