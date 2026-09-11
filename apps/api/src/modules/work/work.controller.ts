@@ -256,6 +256,16 @@ export class WorkBoardsController {
    * `boards/:id` не пересекается. Запрос на каждую набранную букву, поэтому
    * лимит свой, а не общий.
    */
+  /** Архив доски (VED-61): `view=done` — выполненные, `view=removed` — убранные. */
+  @Get('boards/:id/archive')
+  archive(
+    @Param('id') id: string,
+    @Query('view') view: unknown,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.boards.archive(id, user.sub, view);
+  }
+
   @Get('boards/:id/search')
   @Throttle({ default: { ttl: 60_000, limit: 120 } })
   searchTasks(
@@ -359,6 +369,12 @@ export class WorkTasksController {
     @CurrentUser() user: AccessTokenPayload,
   ) {
     await this.tasks.archive(id, user.sub);
+  }
+
+  /** Вернуть карточку из архива доски на её колонку (VED-61). */
+  @Post('tasks/:id/restore')
+  restore(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.tasks.restore(id, user.sub);
   }
 
   @Post('tasks/:id/comments')
