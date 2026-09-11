@@ -564,6 +564,15 @@ export function AddEntryWizard({
               </div>
             )}
 
+            {/* Файл книги — не здесь: сотня мегабайт льётся минутами, и
+                держать ради неё мастер незаконченным незачем. Страница
+                материала открывается сразу после «Добавить», там и заливка. */}
+            {draft.locator !== "url" && (
+              <p className="text-xs text-text-2">
+                {t(locale, "add.fileLater")}
+              </p>
+            )}
+
             <div>
               <label className="text-sm text-text-1">
                 {locale === "ru"

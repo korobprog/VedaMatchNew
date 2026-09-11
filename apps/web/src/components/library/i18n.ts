@@ -144,6 +144,30 @@ const ui = {
     "add.stepText": "Текст и название",
     "add.stepTextHint":
       "Катху читают прямо на портале — вставьте её текст целиком",
+    "add.fileLater":
+      "Файл книги — pdf, epub, djvu и другие — прикрепите на странице материала: она откроется сразу после добавления",
+    "files.title": "Файлы книги",
+    "files.upload": "Прикрепить файл",
+    "files.uploading": "Загружаю…",
+    "files.hint":
+      "pdf, epub, fb2, djvu, mobi, doc, docx, odt, rtf, txt — до 100 МБ, не больше пяти файлов. Прикрепляйте только то, что вправе распространять: по жалобе материал снимают вместе с файлами",
+    "files.remove": "Убрать файл",
+    "files.removeConfirm":
+      "Убрать файл из материала? Вернуть его можно только новой загрузкой.",
+    "files.removeFailed": "Не удалось убрать файл — попробуйте ещё раз",
+    "files.unsupportedFormat":
+      "Такой формат не принимаем — нужен файл книги: pdf, epub, fb2, djvu, mobi, doc, docx, odt, rtf или txt",
+    "files.empty": "Файл пустой",
+    "files.tooLarge": "Файл больше 100 МБ",
+    "files.tooMany":
+      "У материала уже пять файлов — уберите лишний, чтобы добавить новый",
+    "files.unavailable":
+      "Хранилище файлов сейчас недоступно — попробуйте позже",
+    "files.forbidden":
+      "Прикреплять файлы может автор материала или администратор",
+    "files.failed": "Файл не загрузился — попробуйте ещё раз",
+    "files.network":
+      "Связь прервалась — проверьте интернет и попробуйте ещё раз",
     "entry.preview": "Обложка материала",
     "entry.play": "Смотреть здесь",
     "entry.watchOn": "Смотреть на",
@@ -387,6 +411,30 @@ const ui = {
     "add.stepText": "The text and its title",
     "add.stepTextHint":
       "A katha is read right here on the portal — paste its whole text",
+    "add.fileLater":
+      "Attach the book file — pdf, epub, djvu and others — on the material page: it opens right after you add it",
+    "files.title": "Book files",
+    "files.upload": "Attach a file",
+    "files.uploading": "Uploading…",
+    "files.hint":
+      "pdf, epub, fb2, djvu, mobi, doc, docx, odt, rtf, txt — up to 100 MB, no more than five files. Attach only what you have the right to share: a reported material is taken down together with its files",
+    "files.remove": "Remove the file",
+    "files.removeConfirm":
+      "Remove the file from the material? It can only come back with a new upload.",
+    "files.removeFailed": "Could not remove the file — please try again",
+    "files.unsupportedFormat":
+      "This format is not accepted — a book file is needed: pdf, epub, fb2, djvu, mobi, doc, docx, odt, rtf or txt",
+    "files.empty": "The file is empty",
+    "files.tooLarge": "The file is larger than 100 MB",
+    "files.tooMany":
+      "The material already has five files — remove one to add another",
+    "files.unavailable":
+      "File storage is unavailable right now — please try later",
+    "files.forbidden":
+      "Files can be attached by the author of the material or an administrator",
+    "files.failed": "The file did not upload — please try again",
+    "files.network":
+      "The connection dropped — check the internet and try again",
     "entry.preview": "Material cover",
     "entry.play": "Play here",
     "entry.watchOn": "Watch on",

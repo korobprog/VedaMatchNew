@@ -18,6 +18,7 @@ import { OutsideLink } from "@/components/library/outside-link";
 import { VideoEmbed } from "@/components/library/video-embed";
 import { entryTypeLabel, pickLocalized, t } from "@/components/library/i18n";
 import { kathaParagraphs } from "@/components/library/katha-text";
+import { EntryFiles } from "@/components/library/entry-files";
 
 export default async function LibraryEntryPage({
   params,
@@ -144,6 +145,15 @@ export default async function LibraryEntryPage({
             ))}
           </div>
         )}
+
+        {/* Файлы книги — сразу за текстом: ради них на страницу и приходят,
+            а ряд кнопок ниже — про материал целиком. */}
+        <EntryFiles
+          locale={locale}
+          entryId={entry.id}
+          files={entry.files ?? []}
+          canEdit={entry.canEdit}
+        />
 
         <div className="mb-6 flex flex-wrap items-center gap-3">
           {/* У материала без адреса открывать нечего — вместо кнопки
