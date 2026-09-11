@@ -1,3 +1,4 @@
+import { canAdminService } from "@vedamatch/shared";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { redirectToLogin } from "@/lib/require-user";
@@ -50,6 +51,9 @@ export default async function MotivationCollectionPage({
   const category = (categories ?? []).find((item) => item.slug === slug);
   if (!category) notFound();
   const isAdmin = user.role === "admin" || user.role === "service-admin";
+  // Кнопка загрузки — только тем, кому откроется сама загрузка: у админа
+  // другого сервиса ссылка вела бы на отказ.
+  const canAddPictures = canAdminService(user, "motivation");
   const children = (categories ?? []).filter(
     (item) => item.parentId === category.id,
   );
@@ -118,6 +122,16 @@ export default async function MotivationCollectionPage({
               </Link>
             ))}
           </div>
+          {/* Готовые открытки кладут прямо отсюда (VED-87): редакция смотрит
+              в папку, видит, чего не хватает, и тут же добавляет. */}
+          {canAddPictures && (
+            <Link
+              href={`/admin/motivation/pictures?category=${encodeURIComponent(slug)}`}
+              className="inline-flex rounded-full border border-dashed border-cyan/50 px-3 py-1.5 text-sm text-text-1 hover:text-text-0"
+            >
+              + Добавить картинки в «{category.title}»
+            </Link>
+          )}
           <MotivationCollectionGrid
             posts={feed?.items ?? []}
             category={slug}

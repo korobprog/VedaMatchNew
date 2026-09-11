@@ -24,6 +24,7 @@ const post = (id: string, overrides: Partial<MotivationPostDto> = {}): Motivatio
   storyImageUrl: "",
   videoUrl: "",
   videoHasSound: false,
+  captionInImage: false,
   title: `Пост ${id}`,
   text: `Цитата ${id}\n\nПояснение ${id}`,
   storyText: "",
@@ -90,6 +91,35 @@ describe("ReelsFeed", () => {
     expect(divider.compareDocumentPosition(articles[1]) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
     expect(divider.compareDocumentPosition(articles[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(feed).getByRole("region", { name: "Конец ленты" })).toBeInTheDocument();
+  });
+
+  // VED-87: цитата уже напечатана на открытке — второй экземпляр поверх
+  // закрыл бы первый. Набранный текст уходит в alt для скринридера.
+  it("не рисует цитату поверх готовой открытки и отдаёт её текст в alt", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{
+          items: [
+            post("a", {
+              captionInImage: true,
+              text: "Кто видит меня везде",
+              title: "Кто видит меня везде",
+            }),
+          ],
+          nextCursor: null,
+        }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    const slide = within(screen.getByRole("feed", { name: "Лента вдохновения" })).getAllByRole("article")[0];
+    expect(within(slide).queryByText("Кто видит меня везде")).not.toBeInTheDocument();
+    const picture = within(slide).getByRole("img", { name: "Кто видит меня везде" });
+    expect(picture).toHaveClass("object-contain");
+    // Подпись источника остаётся: кто автор, на картинке может не значиться.
+    expect(within(slide).getByText("Кришна · Бхагавад-гита · 2.47")).toBeInTheDocument();
   });
 
   it("отправка своим живёт внутри «Поделиться», а не соседней кнопкой", () => {

@@ -726,6 +726,10 @@ function ReelSlide({
   const explanation = added?.text ?? stored;
   const explanationAuthor = added?.author ?? post.explanationAuthor;
   const kind = mediaKindOf(post);
+  /* Готовая открытка редакции (VED-87): цитата уже напечатана на картинке.
+     Второй экземпляр поверх закрыл бы первый, а обрезка кадра под экран
+     срезала бы края надписи. */
+  const printed = kind === "image" && post.captionInImage;
   const source = attributionLine(post);
   const explanationToggle = explanation && (
     <button
@@ -767,7 +771,7 @@ function ReelSlide({
    * У ролика цитаты в DOM нет вовсе — мерить нечего, там остаётся прикидка.
    */
   useEffect(() => {
-    if (kind !== "image") return;
+    if (kind !== "image" || printed) return;
     const element = quoteRef.current;
     if (!element) return;
     let alive = true;
@@ -786,7 +790,7 @@ function ReelSlide({
       alive = false;
       observer.disconnect();
     };
-  }, [kind, quote]);
+  }, [kind, printed, quote]);
 
   // Колбэк в ref: родитель пересоздаёт его каждый рендер, а наблюдатель
   // должен жить один на слайд, иначе при каждом лайке он переподписывается.
@@ -902,6 +906,27 @@ function ReelSlide({
             className="absolute inset-x-0 bottom-[4.5rem] top-0 w-full object-contain"
           />
         </div>
+      ) : printed ? (
+        // Кадр целиком, как у ролика: поля — размытая копия, а сам кадр
+        // кончается над служебной строкой, чтобы та не легла на надпись.
+        <div className="absolute inset-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={post.imageUrl}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl"
+          />
+          {/* Текст на картинке для скринридера — то, что набрала редакция.
+              Не набрала — хотя бы заголовок. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={post.imageUrl}
+            alt={quote || post.title}
+            loading={position < 2 ? "eager" : "lazy"}
+            className="absolute inset-x-0 bottom-[4.5rem] top-0 h-[calc(100%-4.5rem)] w-full object-contain"
+          />
+        </div>
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -919,7 +944,7 @@ function ReelSlide({
       <div
         aria-hidden="true"
         className={
-          kind === "video"
+          kind === "video" || printed
             ? "absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,.45)_0%,rgba(0,0,0,0)_18%)]"
             : textHidden
               ? "absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,.45)_0%,rgba(0,0,0,0)_18%)]"
@@ -955,7 +980,7 @@ function ReelSlide({
       >
         {/* В ролик подпись вшита воркером, и вторая копия поверх кадра
             наезжала бы на первую. Для фото текст рисуем мы. */}
-        {kind === "image" && (
+        {kind === "image" && !printed && (
           <p ref={quoteRef} className="line-clamp-4 font-display text-[17px] font-medium leading-snug drop-shadow-md">{quote}</p>
         )}
         {/* У фото — сразу под цитатой, которую раскрывает. У ролика своей
@@ -999,7 +1024,7 @@ function ReelSlide({
           {/* Замер добавляет случаи к прикидке, а не заменяет её: цитата длиннее
               ста семидесяти знаков обрезана в четырёх строках при любой
               раскладке, и кнопка нужна ей даже там, где замерить не вышло. */}
-          {(isLongQuote(quote) || quoteClamped) && <FullQuoteToggle quote={quote} source={source} />}
+          {!printed && (isLongQuote(quote) || quoteClamped) && <FullQuoteToggle quote={quote} source={source} />}
           {/* Комментарий — слова комментатора о стихе, и живут они в
               Библиотеке. Своей копии не заводим: она разошлась бы с
               оригиналом на первой же правке книги. */}

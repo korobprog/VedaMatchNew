@@ -31,6 +31,7 @@ function reelDto(overrides: Partial<MotivationReelDto>): MotivationReelDto {
       storyImageUrl: "",
       videoUrl: "",
       videoHasSound: false,
+      captionInImage: false,
       title: "Свой рилс",
       text: "Делай что должно, и будь что будет.",
       storyText: "",

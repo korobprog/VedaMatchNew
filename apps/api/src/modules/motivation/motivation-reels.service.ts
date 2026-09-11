@@ -1051,6 +1051,9 @@ export class MotivationReelsService {
         storyImageUrl: post.storyImageUrl ?? '',
         videoUrl: post.videoStatus === 'ready' ? (post.videoUrl ?? '') : '',
         videoHasSound: Boolean(post.videoVoice || post.videoTrackId),
+        // Готовые открытки кладёт только редакция (VED-87): у рилса участника
+        // текст всегда рисуем мы.
+        captionInImage: false,
         title: translation?.title ?? '',
         text: translation?.text ?? '',
         storyText: translation?.storyText ?? '',

@@ -37,6 +37,7 @@ import { MotivationHealthService } from './motivation-health.service';
 import { MotivationBooksService } from './motivation-books.service';
 import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationManualPostService } from './motivation-manual-post.service';
+import { MotivationPicturesService } from './motivation-pictures.service';
 import { MotivationStoryRebuildService } from './motivation-story-rebuild.service';
 import { MotivationService } from './motivation.service';
 import { MotivationMusicService } from './motivation-music.service';
@@ -77,6 +78,7 @@ export class MotivationAdminController {
     private readonly adminReels: MotivationAdminReelsService,
     private readonly postcards: MotivationPostcardsService,
     private readonly analytics: MotivationAnalyticsService,
+    private readonly pictures: MotivationPicturesService,
   ) {}
   /** Состояние генерации: очередь и живой воркер. */
   @Get('health')
@@ -110,6 +112,22 @@ export class MotivationAdminController {
     @UploadedFile() file?: UploadedReelImage,
   ) {
     return this.reels.adminUploadImage(user, id, file);
+  }
+
+  /**
+   * Готовая картинка с афоризмом — сразу опубликованным постом в категорию
+   * (VED-87). Поля формы: `category`, необязательные `text` и `author`.
+   */
+  @Post('pictures')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_REEL_IMAGE_BYTES } }),
+  )
+  createPicture(
+    @CurrentUser() user: AccessTokenPayload,
+    @UploadedFile() file: UploadedReelImage | undefined,
+    @Body() body: unknown,
+  ) {
+    return this.pictures.create(user, file, body);
   }
 
   /**
