@@ -284,6 +284,10 @@ export class MotivationService {
               // «рилс опубликован», и настройки ленты не должны прятать от
               // него его же публикацию.
               { authorUserId: userId },
+              // Готовую картинку редакция несёт в раздел, а не под профиль:
+              // профиль у поста один, и без этого её увидела бы только
+              // четверть читателей (VED-87).
+              { captionInImage: true },
             ],
           }
         : {}),
@@ -1276,6 +1280,9 @@ export class MotivationService {
       // Звук в ролике есть, только если его туда положили: озвучка цитаты или
       // выбранный трек. Сама видеомодель звук не пишет — мы просим немой кадр.
       videoHasSound: Boolean(post.videoVoice || post.videoTrackId),
+      captionInImage: Boolean(
+        (post as { captionInImage?: boolean }).captionInImage,
+      ),
       title: t?.title ?? '',
       text: t?.text ?? '',
       storyText: t?.storyText ?? '',

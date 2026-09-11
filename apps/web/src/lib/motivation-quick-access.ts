@@ -54,11 +54,16 @@ export function buildMotivationQuickAccess(
   feed: MotivationFeedResponse | null,
 ): MotivationQuickAccessData {
   const items = feed?.items ?? [];
-  const first = items[0];
+  // Готовая открытка без набранного текста (VED-87): цитата у неё только на
+  // картинке, а в карточке картинки нет — вместо цитаты стоял бы заголовок
+  // «Картинка из раздела…». Берём следующий пост.
+  const first = items.find(
+    (post) => !(post.captionInImage && !post.text.trim()),
+  );
   if (!first) return { quote: null, freshMore: 0 };
 
   const freshMore = items.filter(
-    (post, index) => index > 0 && post.feedTier === "fresh",
+    (post) => post !== first && post.feedTier === "fresh",
   ).length;
 
   return {

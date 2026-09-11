@@ -16,6 +16,7 @@ import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationCopyService } from './motivation-copy.service';
 import { MotivationAudioService } from './motivation-audio.service';
 import { MotivationManualPostService } from './motivation-manual-post.service';
+import { MotivationPicturesService } from './motivation-pictures.service';
 import { MotivationStoryRebuildService } from './motivation-story-rebuild.service';
 import { MotivationModerationService } from './motivation-moderation.service';
 import { MotivationAuthorSearchService } from './motivation-author-search.service';
@@ -46,6 +47,7 @@ import { MotivationAnalyticsService } from './motivation-analytics.service';
     MotivationCopyService,
     MotivationAudioService,
     MotivationManualPostService,
+    MotivationPicturesService,
     MotivationStoryRebuildService,
     MotivationModerationService,
     MotivationReelsService,

@@ -164,9 +164,11 @@ export function MotivationCollectionGrid({
               }
               alt=""
               loading="lazy"
-              className={`w-full object-cover transition-transform group-hover:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${
-                variant === "story" ? "aspect-[9/16]" : "aspect-[3/4]"
-              }`}
+              /* Готовую открытку (VED-87) не обрезаем: надпись на ней идёт
+                 до краёв, и плитка показывала бы полфразы. Поля заливает фон. */
+              className={`w-full transition-transform group-hover:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${
+                post.captionInImage ? "bg-bg-2 object-contain" : "object-cover"
+              } ${variant === "story" ? "aspect-[9/16]" : "aspect-[3/4]"}`}
             />
             {/* У афоризма участника заголовок — название книги; подписываем
                 началом самой цитаты, как и остальные плитки — смыслом. */}

@@ -609,6 +609,10 @@ model MotivationPost {
   /// Накладывать ли цитату и подпись на кадр для Stories. Хранится, а не
   /// решается на лету: сторис собирает воркер уже после создания поста.
   storyCaption         Boolean                   @default(true)
+  /// Цитата уже напечатана на самой картинке — готовая открытка редакции
+  /// (VED-87). Лента не рисует текст поверх и показывает кадр целиком, без
+  /// обрезки под 9:16: обрезка съела бы края надписи.
+  captionInImage       Boolean                   @default(false)
   sourceVerified       Boolean                   @default(false)
   generationStage      String?
   generationErrorCode  String?

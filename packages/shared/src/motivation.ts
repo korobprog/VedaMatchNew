@@ -85,6 +85,12 @@ export interface MotivationPostDto {
    * переключатель звука над ним только сбивал бы с толку.
    */
   videoHasSound: boolean;
+  /**
+   * Цитата уже напечатана на картинке — готовая открытка редакции (VED-87).
+   * Лента не рисует текст поверх и показывает кадр целиком, без обрезки.
+   * `text` у такого поста может быть пустым: набирать надпись необязательно.
+   */
+  captionInImage: boolean;
   title: string;
   text: string;
   storyText: string;
@@ -829,6 +835,14 @@ export interface MotivationManualPostInput extends MotivationManualQuoteInput {
   /** Накладывать ли цитату и подпись на кадр для Stories. По умолчанию да. */
   storyCaption?: boolean;
 }
+/** Готовая картинка с афоризмом, опубликованная в категорию (VED-87). */
+export interface MotivationPictureResult {
+  postId: string;
+  slug: string;
+  category: string;
+  imageUrl: string;
+}
+
 export interface MotivationManualPostResult {
   quoteId: string;
   postId: string;

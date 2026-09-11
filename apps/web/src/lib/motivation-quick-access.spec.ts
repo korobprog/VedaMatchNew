@@ -18,6 +18,7 @@ const post = (over: Partial<MotivationPostDto> = {}): MotivationPostDto => ({
   storyImageUrl: "",
   videoUrl: "",
   videoHasSound: false,
+  captionInImage: false,
   title: "О действии",
   text: "Тот, кто видит бездействие в действии и действие в бездействии, разумен среди людей.",
   storyText: "",
@@ -97,6 +98,33 @@ describe("buildMotivationQuickAccess", () => {
     const data = buildMotivationQuickAccess(feed([post({ feedTier: "seen" })]));
     expect(data.quote?.slug).toBe("gita-4-18");
     expect(data.freshMore).toBe(0);
+  });
+
+  // VED-87: у открытки без набранного текста цитата только на картинке —
+  // в карточке вместо неё стоял бы заголовок «Картинка из раздела…».
+  it("пропускает готовую открытку без текста и берёт следующий пост", () => {
+    const data = buildMotivationQuickAccess(
+      feed([
+        post({
+          slug: "picture-1",
+          captionInImage: true,
+          text: "",
+          title: "Картинка из раздела «Шастры»",
+          feedTier: "fresh",
+        }),
+        post({ slug: "gita-2-47" }),
+      ]),
+    );
+    expect(data.quote?.slug).toBe("gita-2-47");
+    // Открытка — свежая и в карточку не попала: о ней и говорит «ещё N».
+    expect(data.freshMore).toBe(1);
+  });
+
+  it("берёт открытку, если её текст набран", () => {
+    const data = buildMotivationQuickAccess(
+      feed([post({ slug: "picture-1", captionInImage: true, text: "Кто видит меня везде" })]),
+    );
+    expect(data.quote?.text).toBe("Кто видит меня везде");
   });
 });
 
