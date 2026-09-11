@@ -1,4 +1,10 @@
 .git
+# Из .git в контекст идут только указатели на коммит — по ним образ API узнаёт,
+# из чего собран (apps/api/scripts/build-commit.sh). Объекты и история остаются
+# снаружи.
+!.git/HEAD
+!.git/refs/heads
+!.git/packed-refs
 .env
 **/.env
 **/.env.*

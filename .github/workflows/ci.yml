@@ -142,20 +142,43 @@ jobs:
         env:
           HOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
           HEALTH: ${{ vars.PROD_HEALTH_URL || 'https://api.vedamatch.ru/health' }}
+          EXPECTED: ${{ github.sha }}
         run: |
           if [ -z "$HOOK" ]; then exit 0; fi
-          # Панель отвечает «принято» сразу, поэтому ждём сам прод: пока он
-          # пересобирается, здоровье пропадает и возвращается.
-          for i in $(seq 1 40); do
-            body=$(curl -s --max-time 15 "$HEALTH" || true)
-            case "$body" in
-              *'"status":"ok"'*)
-                echo "Прод отвечает: $body"
-                echo "Прод поднялся: \`$body\`" >> "$GITHUB_STEP_SUMMARY"
-                exit 0 ;;
-            esac
-            echo "  ещё не готов, жду ($i)"
+          # Ждём не здоровья, а своего коммита. «ok» отвечает и старый
+          # контейнер: 11 сентября (прогон 34569492771, PR #235) этот шаг
+          # прошёл через 3 с после ответа панели, пока новая сборка ещё шла, —
+          # упади она, прогон остался бы зелёным. Коммит образа отдаёт
+          # /health (apps/api/src/modules/health/build-commit.ts), а узнаёт
+          # его сборка из клона панели (apps/api/scripts/build-commit.sh).
+          #
+          # Срок — по часам, а не числом попыток: запрос к зависшему проду
+          # сам длится до 10 с, и «40 попыток по 15 с» растягивались бы.
+          short=${EXPECTED:0:7}
+          deadline=$(( $(date +%s) + 600 ))
+          body=""
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            body=$(curl -s --max-time 10 "$HEALTH" || true)
+            # Пока контейнер перезапускается, вместо JSON приходит страница
+            # прокси или пустота — это «ещё не готов», а не ошибка.
+            commit=$(printf '%s' "$body" | jq -r '.commit // empty' 2>/dev/null || true)
+            status=$(printf '%s' "$body" | jq -r '.status // empty' 2>/dev/null || true)
+            if [ "$commit" = "$EXPECTED" ] && [ "$status" = "ok" ]; then
+              echo "На проде $short, здоровье ok: $body"
+              echo "На проде коммит \`$short\`, здоровье \`ok\`." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "  на проде коммит ${commit:-не указан}, status=${status:-нет ответа}; жду $short"
             sleep 15
           done
-          echo "::error::Прод не ответил здоровьем за 10 минут после деплоя"
+          # Коммит мог не совпасть и потому, что панель собрала более свежий
+          # main: она клонирует ветку, а не коммит из события. Тогда этот
+          # прогон должен был отменить следующий пуш (concurrency выше).
+          echo "::error::За 10 минут на проде не появился коммит $short. Последний ответ /health: ${body:-пусто}. Смотрите деплой в панели Dokploy: сборка могла упасть, застрять в очереди или собрать другой коммит."
+          {
+            echo "### Деплой не подтверждён"
+            echo
+            echo "Ждали коммит \`$EXPECTED\` на $HEALTH 10 минут."
+            echo "Последний ответ: \`${body:-пусто}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
           exit 1
