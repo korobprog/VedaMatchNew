@@ -45,8 +45,11 @@ export type WellnessVerdict = 'clean' | 'warning' | 'forbidden' | 'unknown';
 
 export type WellnessProductStatus = 'draft' | 'published' | 'rejected';
 
-/** Кто принёс состав. Доверие к строке разное, и источник виден в карточке. */
-export type WellnessProductSource = 'user' | 'ai' | 'admin';
+/**
+ * Кто принёс состав. Доверие к строке разное, и источник виден в карточке.
+ * `openfoodfacts` — открытая база; её лицензия (ODbL) требует подписи.
+ */
+export type WellnessProductSource = 'user' | 'ai' | 'admin' | 'openfoodfacts';
 
 /** `photo` — путь без штрихкода: код стёрт, не читается или его нет вовсе. */
 export type WellnessScanKind = 'barcode' | 'photo' | 'manual';

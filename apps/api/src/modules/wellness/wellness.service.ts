@@ -19,6 +19,7 @@ import {
 } from './ingredient-match';
 import { parseComposition } from './ingredient-parse';
 import type { ParsedProductInput, ParsedScanInput } from './wellness-dto';
+import { WellnessOpenFoodFactsService } from './wellness-openfoodfacts.service';
 
 /** Справочник меняется редко, а читается на каждый скан. */
 const CATALOG_TTL_MS = 60_000;
@@ -66,7 +67,10 @@ export class WellnessService {
   private catalog: { entries: WellnessIngredientEntry[]; at: number } | null =
     null;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly openFoodFacts: WellnessOpenFoodFactsService,
+  ) {}
 
   /** Справочник целиком: он мал (сотни записей) и нужен на каждый разбор. */
   async ingredients(): Promise<WellnessIngredientEntry[]> {
@@ -180,6 +184,51 @@ export class WellnessService {
   }
 
   /**
+   * Продукт по штрихкоду: сначала своя база, потом Open Food Facts.
+   *
+   * Найденное там сохраняется к нам и публикуется сразу: строку уже проверяло
+   * их сообщество, источник подписан в карточке, а «состав неверный» ведёт в
+   * ту же очередь модерации. Второй человек у той же полки получит ответ из
+   * нашей базы и не потратит общий минутный лимит.
+   *
+   * Черновик от человека и снятая модератором строка чужим каталогом не
+   * перебиваются: решение о них за нашей модерацией.
+   */
+  async findProduct(barcode: string): Promise<WellnessProductCard | null> {
+    const own = await this.productByBarcode(barcode);
+    if (own) return own;
+
+    const known = await this.prisma.wellnessProduct.findUnique({
+      where: { barcode },
+      select: { id: true },
+    });
+    if (known) return null;
+
+    const found = await this.openFoodFacts.lookup(barcode);
+    if (!found) return null;
+
+    try {
+      const row = await this.prisma.wellnessProduct.create({
+        data: {
+          barcode,
+          ...found,
+          source: 'openfoodfacts',
+          status: 'published',
+        },
+        select: CARD_SELECT,
+      });
+      await this.storeComposition(row.id, row.ingredientsRaw);
+      return toCard(row);
+    } catch (error) {
+      // Двое сканируют одно и то же: второй упирается в уникальный штрихкод.
+      if ((error as { code?: unknown }).code === 'P2002') {
+        return this.productByBarcode(barcode);
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Ответ у полки. Продукта может не быть — тогда это не ошибка, а приглашение
    * снять состав: на старте база пустая, и «не найдено» здесь главный путь.
    */
@@ -191,7 +240,7 @@ export class WellnessService {
     const product =
       input.kind === 'photo' || !input.barcode
         ? null
-        : await this.productByBarcode(input.barcode);
+        : await this.findProduct(input.barcode);
 
     const source = input.ingredientsRaw ?? product?.ingredientsRaw ?? '';
     const result: WellnessVerdictResult = source
