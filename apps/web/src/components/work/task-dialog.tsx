@@ -13,6 +13,7 @@ import {
   attachWorkFile,
   removeWorkAttachment,
   commentWorkTask,
+  deleteWorkTaskForever,
   getWorkTask,
   moveWorkTask,
   removeWorkChecklistItem,
@@ -64,6 +65,9 @@ export function WorkTaskDialog({
 
   const canEdit =
     board.role === "owner" || board.role === "admin" || board.role === "member";
+  /* Стереть карточку насовсем может тот, кто отвечает за среду (VED-6):
+     участнику остаётся архив, откуда карточку ещё можно вернуть. */
+  const canManage = board.role === "owner" || board.role === "admin";
 
   // Ответ применяется только пока карточка открыта: закрыли её и открыли
   // соседнюю — прилетевший ответ первой не должен подменить вторую.
@@ -632,36 +636,63 @@ export function WorkTaskDialog({
             {/* Карточка из архива доски (VED-61): вместо «убрать» — «вернуть».
                 Иначе открытая из архива карточка предлагала бы убрать её
                 второй раз, а обратной дороги не было вовсе. */}
-            {canEdit &&
-              (task.archivedAt ? (
-                <div className="mt-6 flex flex-wrap items-center gap-3">
-                  <p className="text-sm text-text-2">
-                    Карточка убрана с доски и лежит в архиве.
-                  </p>
+            {(canEdit || canManage) && (
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                {canEdit &&
+                  (task.archivedAt ? (
+                    <>
+                      <p className="text-sm text-text-2">
+                        Карточка убрана с доски и лежит в архиве.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void run(() => restoreWorkTask(task.id))}
+                        className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm font-semibold text-text-0 disabled:opacity-50"
+                      >
+                        Вернуть на доску
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(async () => {
+                          await archiveWorkTask(task.id);
+                          onClose();
+                        })
+                      }
+                      className="text-sm text-magenta disabled:opacity-50"
+                    >
+                      Убрать карточку в архив
+                    </button>
+                  ))}
+
+                {/* Удаление без возврата (VED-6) стоит в стороне от архива и
+                    спрашивает подтверждение: промах пальцем по соседней
+                    кнопке иначе стоил бы всего обсуждения. */}
+                {canManage && (
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => void run(() => restoreWorkTask(task.id))}
-                    className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm font-semibold text-text-0 disabled:opacity-50"
+                    onClick={() => {
+                      const sure = window.confirm(
+                        `Стереть «${task.title}» насовсем? Вместе с карточкой исчезнут обсуждение, чек-лист и файлы. Вернуть её будет нельзя — в архиве её тоже не будет.`,
+                      );
+                      if (!sure) return;
+                      void run(async () => {
+                        await deleteWorkTaskForever(task.id);
+                        onClose();
+                      });
+                    }}
+                    className="ml-auto text-sm text-text-2 hover:text-magenta disabled:opacity-50"
                   >
-                    Вернуть на доску
+                    Удалить насовсем
                   </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    void run(async () => {
-                      await archiveWorkTask(task.id);
-                      onClose();
-                    })
-                  }
-                  className="mt-6 text-sm text-magenta disabled:opacity-50"
-                >
-                  Убрать карточку в архив
-                </button>
-              ))}
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

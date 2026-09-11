@@ -181,6 +181,10 @@ export const getWorkBoardArchive = (boardId: string, view: WorkArchiveView) =>
 export const restoreWorkTask = (taskId: string) =>
   send<WorkTaskDto>(`/work/tasks/${taskId}/restore`, "POST");
 
+/** Стереть карточку насовсем (VED-6): архив её уже не вернёт. */
+export const deleteWorkTaskForever = (taskId: string) =>
+  send<void>(`/work/tasks/${taskId}/forever`, "DELETE");
+
 export const commentWorkTask = (
   taskId: string,
   body: CreateWorkCommentRequest,
