@@ -81,6 +81,8 @@ export function toNoticeDto(
   row: NoticeRow,
   viewerId: string | null,
   now: Date,
+  /** Смотрящий — администратор Объявлений: ему можно удалить любое. */
+  viewerIsAdmin = false,
 ): NoticeDto {
   // Координаты отдаются только у общественного места. У объявления человека
   // город есть, а точки нет: доска не должна показывать, где он живёт.
@@ -138,6 +140,7 @@ export function toNoticeDto(
     thanksCount: row.thanksCount,
 
     isMine: row.authorId === viewerId,
+    canDelete: row.authorId === viewerId || viewerIsAdmin,
   };
 }
 

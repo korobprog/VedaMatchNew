@@ -117,3 +117,74 @@ describe('NoticesService.setStatus — блокировка модерации',
     expect(prisma.notice.update).not.toHaveBeenCalled();
   });
 });
+
+// VED-42: удалить можно своё, администратору Объявлений — любое. Чужое
+// удаление уходит в журнал админки: объявление исчезает насовсем.
+describe('NoticesService.remove', () => {
+  function removeSetup() {
+    const prisma = {
+      notice: {
+        findUnique: jest.fn().mockResolvedValue({
+          ...base,
+          titleRu: 'Отдам книги',
+          titleEn: null,
+        }),
+        delete: jest.fn().mockResolvedValue({}),
+      },
+      noticeImage: {
+        findMany: jest.fn().mockResolvedValue([{ storageKey: 'k1' }]),
+      },
+    };
+    const images = { removeMany: jest.fn().mockResolvedValue(undefined) };
+    const bus = { emit: jest.fn() };
+    const service = new NoticesService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      images as never,
+      {} as never,
+      bus as never,
+    );
+    jest
+      .spyOn(
+        service as unknown as { recountRubric: () => Promise<void> },
+        'recountRubric',
+      )
+      .mockResolvedValue(undefined);
+    return { prisma, images, bus, service };
+  }
+
+  it('автор удаляет своё без записи в журнал', async () => {
+    const { prisma, images, bus, service } = removeSetup();
+
+    await service.remove('author', false, 'n1');
+
+    expect(prisma.notice.delete).toHaveBeenCalledWith({ where: { id: 'n1' } });
+    expect(images.removeMany).toHaveBeenCalledWith(['k1']);
+    expect(bus.emit).not.toHaveBeenCalled();
+  });
+
+  it('участник чужое удалить не может', async () => {
+    const { prisma, service } = removeSetup();
+
+    await expect(service.remove('stranger', false, 'n1')).rejects.toThrow(
+      'Объявление не найдено',
+    );
+    expect(prisma.notice.delete).not.toHaveBeenCalled();
+  });
+
+  it('администратор удаляет чужое, и это видно в журнале', async () => {
+    const { prisma, bus, service } = removeSetup();
+
+    await service.remove('admin', true, 'n1');
+
+    expect(prisma.notice.delete).toHaveBeenCalled();
+    expect(bus.emit).toHaveBeenCalledWith('admin.action', {
+      actorId: 'admin',
+      action: 'notices.notice-deleted',
+      targetType: 'notice',
+      targetId: 'n1',
+      details: { authorId: 'author', title: 'Отдам книги' },
+    });
+  });
+});

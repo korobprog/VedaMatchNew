@@ -10,6 +10,7 @@ import {
   MAX_IMAGES_PER_NOTICE,
   PORTAL_ACTIVITY_EVENTS,
   NOTICES_PER_DAY,
+  type AdminAuditEvent,
   type CreateNoticeRequest,
   type NoticeDto,
   type NoticeCalendarResponse,
@@ -185,7 +186,9 @@ export class NoticesService {
     const page = hasMore ? rows.slice(0, filters.limit) : rows;
     const last = page.at(-1);
     return {
-      items: page.map((row) => toNoticeDto(row, viewer.userId, now)),
+      items: page.map((row) =>
+        toNoticeDto(row, viewer.userId, now, viewer.isAdmin),
+      ),
       nextCursor: hasMore && last ? encodeCursor(last) : null,
     };
   }
@@ -216,7 +219,7 @@ export class NoticesService {
         data: { viewsCount: { increment: 1 } },
       });
     }
-    return toNoticeDto(row, viewer.userId, now);
+    return toNoticeDto(row, viewer.userId, now, viewer.isAdmin);
   }
 
   /**
@@ -671,6 +674,11 @@ export class NoticesService {
     return toNoticeDto(updated, userId, now);
   }
 
+  /**
+   * Автор удаляет своё, администратор Объявлений — любое (VED-42). Чужое
+   * удаление пишется в журнал админки: объявление исчезает насовсем, и
+   * вопрос «кто его снял» иначе остался бы без ответа.
+   */
   async remove(userId: string, isAdmin: boolean, id: string): Promise<void> {
     const notice = await this.requireOwn(id, userId, isAdmin);
     const images = await this.prisma.noticeImage.findMany({
@@ -680,6 +688,20 @@ export class NoticesService {
     await this.prisma.notice.delete({ where: { id } });
     await this.images.removeMany(images.map((image) => image.storageKey));
     await this.recountRubric(notice.rubricId);
+
+    if (notice.authorId !== userId) {
+      const event: AdminAuditEvent = {
+        actorId: userId,
+        action: 'notices.notice-deleted',
+        targetType: 'notice',
+        targetId: id,
+        details: {
+          authorId: notice.authorId,
+          title: notice.titleRu ?? notice.titleEn ?? '',
+        },
+      };
+      this.bus.emit('admin.action', event);
+    }
   }
 
   // ===== Картинки =====
