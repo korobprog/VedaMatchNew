@@ -511,16 +511,20 @@ export class MusicIngestProcessService {
      * от «Исполнитель не указан»: раньше имя из файла просто выбрасывалось, и
      * весь каталог оказывался ничей.
      */
-    const artistId =
-      item.batch.artistId ??
-      (await this.artistTags.resolveFromTag(metadata.artist));
+    const fileTitle = fallbackTrackTitle(metadata, item.sourceRef);
+    // Нет тега — имя берётся из названия вида «Jahnavi dasi - Maha Mantra»,
+    // но только если такой исполнитель уже заведён: новые имена из названий
+    // предлагает разбор в админке, где их видит редакция.
+    const { artistId, title } = item.batch.artistId
+      ? { artistId: item.batch.artistId, title: fileTitle }
+      : await this.artistTags.resolveForIngest(metadata.artist, fileTitle);
 
     await this.prisma.$transaction(async (tx) => {
       const track = await tx.musicTrack.create({
         data: {
           // Тег, иначе имя файла: пустая карточка в таблице хуже неточного
           // названия — админ правит его руками, но искать безымянное нечем.
-          title: fallbackTrackTitle(metadata, item.sourceRef),
+          title,
           storageKey,
           mime,
           sizeBytes: object.sizeBytes,

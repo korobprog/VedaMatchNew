@@ -18,6 +18,7 @@ import type {
   CreateMusicPlaylistRequest,
   UpdateMusicAlbumRequest,
   UpdateMusicArtistRequest,
+  MusicArtistsFromTagsRequest,
   MusicModerationDecisionRequest,
   MusicReportDecisionRequest,
   UpdateMusicCategoryRequest,
@@ -136,15 +137,19 @@ export class MusicAdminCatalogController {
    * а чтобы читалось рядом с созданием исполнителя, которым и заканчивается.
    *
    * `dryRun` — показать, что получится, ничего не меняя: редакция сначала
-   * смотрит список имён, а потом нажимает второй раз.
+   * смотрит список имён, а потом нажимает второй раз. В теле — `after`
+   * (продолжить со следующих записей) и `skip` (имена, снятые редакцией).
    */
   @Post('artists/from-tags')
   artistsFromTags(
     @CurrentUser() user: AccessTokenPayload,
     @Query('dryRun') dryRun?: string,
+    @Body() body?: MusicArtistsFromTagsRequest,
   ) {
     return this.artistTags.scan(isAdmin(user), {
       dryRun: dryRun === '1' || dryRun === 'true',
+      after: body?.after,
+      skip: body?.skip,
     });
   }
 

@@ -397,9 +397,30 @@ export interface MusicModerationDecisionRequest {
  */
 export interface MusicArtistFromTagsGroup {
   name: string;
+  /** Ключ группы: по нему редакция снимает имя с применения. */
+  key: string;
   trackCount: number;
   /** Такой исполнитель в справочнике уже был — записи просто привязаны. */
   existed: boolean;
+  /**
+   * Сколько имён взято из названия записи («Jahnavi dasi - Maha Mantra»), а не
+   * из тега. Таким веры меньше: редакция смотрит на них внимательнее.
+   */
+  fromTitle: number;
+  /** Всего названий поменяется: имя исполнителя уходит из начала. */
+  renameCount: number;
+  /** Несколько примеров «было → стало» — чтобы решить, не глядя в каталог. */
+  renames: Array<{ before: string; after: string }>;
+  /** Имя сняли с применения: записи остались без исполнителя. */
+  skipped: boolean;
+}
+
+/** Тело запроса разбора. Всё необязательно. */
+export interface MusicArtistsFromTagsRequest {
+  /** С какого места продолжать — `nextCursor` прошлого ответа. */
+  after?: string;
+  /** Ключи групп, которые не заводить и не привязывать. */
+  skip?: string[];
 }
 
 export interface MusicArtistsFromTagsResult {
@@ -412,6 +433,16 @@ export interface MusicArtistsFromTagsResult {
   tracksLinked: number;
   /** Сколько записей без исполнителя осталось. */
   remaining: number;
+  /** Сколько имён из них взято из названия, а не из тега. */
+  fromTitle: number;
+  /** Сколько названий поменялось (или поменяется при предпросмотре). */
+  titlesRenamed: number;
+  /**
+   * Откуда продолжать, чтобы разобрать следующие записи; `null` — дошли до
+   * конца. Без курсора прогон снова брал бы те же первые записи, у которых
+   * имени нет, и дальше них не продвигался.
+   */
+  nextCursor: string | null;
   groups: MusicArtistFromTagsGroup[];
   /** Прогон был предпросмотром: ничего не заведено и не привязано. */
   dryRun: boolean;
