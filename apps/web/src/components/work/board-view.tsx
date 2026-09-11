@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Pencil,
   Plus,
+  Search,
   Trash2,
 } from "lucide-react";
 import type {
@@ -31,6 +32,7 @@ import {
   getWorkBoard,
   getWorkSpace,
   moveWorkTask,
+  searchWorkBoardTasks,
   updateWorkColumn,
 } from "@/lib/work-api";
 import { plural } from "@/lib/plural";
@@ -57,6 +59,13 @@ import {
   writeCollapsedColumns,
 } from "./column-collapse";
 import { WorkInvitePanel } from "./invite-panel";
+import {
+  TASK_SEARCH_DEBOUNCE_MS,
+  countTasks,
+  isTaskQuery,
+  searchColumns,
+  searchSummary,
+} from "./task-search";
 import { WorkTaskDialog } from "./task-dialog";
 import { dueFromInput, endOfDayInput } from "./task-due";
 import { findTaskByKey, parseFocusKey } from "./task-focus";
@@ -103,6 +112,36 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   // Свёрнутые колонки. Складываются только на телефоне: шире sm колонки стоят
   // в ряд, там прятать нечего.
   const [collapsed, setCollapsed] = useState<string[]>([]);
+  /* Поиск по задачам (VED-76). `matches` — что нашёл сервер по последнему
+     запросу; `null` — поиска нет, доска целиком. */
+  const [query, setQuery] = useState("");
+  const [matches, setMatches] = useState<Set<string> | null>(null);
+  const [searching, setSearching] = useState(false);
+  const boardId = board?.id;
+  useEffect(() => {
+    if (!boardId || !isTaskQuery(query)) return;
+    const text = query.trim();
+    let alive = true;
+    // Ответ на устаревший запрос не должен перебить свежий: `alive`
+    // гасится, как только человек набрал следующую букву.
+    const timer = setTimeout(() => {
+      setSearching(true);
+      searchWorkBoardTasks(boardId, text)
+        .then((result) => {
+          if (alive) setMatches(new Set(result.taskIds));
+        })
+        .catch(() => {
+          if (alive) setError("Поиск не ответил — попробуйте ещё раз");
+        })
+        .finally(() => {
+          if (alive) setSearching(false);
+        });
+    }, TASK_SEARCH_DEBOUNCE_MS);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [boardId, query]);
 
   const columnRefs = useRef(new Map<string, HTMLElement>());
   const cardRefs = useRef(new Map<string, HTMLElement>());
@@ -430,6 +469,18 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
       клавиши: подсказка под полем должна показывать правду, а не обещание. */
   const draftSplit = splitTaskDraft(draft);
 
+  const searchActive = matches !== null && isTaskQuery(query);
+  const shownColumns = searchActive
+    ? searchColumns(board.columns, matches)
+    : board.columns;
+  const found = countTasks({ columns: shownColumns });
+
+  function changeQuery(value: string) {
+    setQuery(value);
+    // Стёртый запрос возвращает доску сразу, не дожидаясь паузы.
+    if (!isTaskQuery(value)) setMatches(null);
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -470,6 +521,45 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         </div>
       </div>
 
+      {/* Поиск по задачам (VED-76): слова ищутся в названии, описании,
+          метках, чек-листе, обсуждении и имени исполнителя, номер — как его
+          пишут, «VED-76» или просто «76». */}
+      <div className="mb-4">
+        <label className="relative block sm:max-w-sm">
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-2"
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => changeQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") changeQuery("");
+            }}
+            maxLength={120}
+            aria-label="Поиск по задачам"
+            placeholder="Поиск по задачам: слово или номер"
+            className="w-full rounded-xl border border-glass-brd bg-bg-1 py-2 pl-9 pr-3 text-sm text-text-0"
+          />
+        </label>
+        {searchActive && (
+          <p role="status" className="mt-2 flex items-center gap-2 text-xs text-text-1">
+            {searchSummary(found, countTasks(board))}
+            {searching && (
+              <Loader2 aria-hidden className="size-3.5 animate-spin" />
+            )}
+            <button
+              type="button"
+              onClick={() => changeQuery("")}
+              className="font-semibold text-text-0 underline underline-offset-2"
+            >
+              Показать все
+            </button>
+          </p>
+        )}
+      </div>
+
       {error && (
         <p role="alert" className="mb-3 text-sm text-magenta">
           {error}
@@ -487,9 +577,16 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           между двумя осями. Столбиком видно всё, а порядок колонок сверху
           вниз читается так же, как слева направо. */}
       <div className="-mx-4 flex flex-col gap-3 px-4 pb-4 sm:snap-x sm:flex-row sm:overflow-x-auto">
-        {board.columns.map((column, index) => {
-          const over = isOverWip(column);
-          const folded = collapsed.includes(column.id);
+        {shownColumns.map((column) => {
+          // Номер, лимит и «пустая ли колонка» — по доске целиком: поиск
+          // прячет карточки, но не убирает их из колонки.
+          const full =
+            board.columns.find((item) => item.id === column.id) ?? column;
+          const index = board.columns.indexOf(full);
+          const over = isOverWip(full);
+          // Свёрнутая колонка прятала бы найденное: на время поиска все
+          // колонки с совпадениями раскрыты.
+          const folded = !searchActive && collapsed.includes(column.id);
           const bodyId = `work-column-body-${column.id}`;
           return (
             <section
@@ -516,8 +613,8 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   aria-controls={bodyId}
                   aria-label={`${
                     folded ? "Развернуть" : "Свернуть"
-                  } колонку «${column.name}», ${column.tasks.length} ${plural(
-                    column.tasks.length,
+                  } колонку «${column.name}», ${full.tasks.length} ${plural(
+                    full.tasks.length,
                     "задача",
                     "задачи",
                     "задач",
@@ -567,8 +664,11 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                       : undefined
                   }
                 >
-                  {column.tasks.length}
-                  {column.wipLimit > 0 ? ` / ${column.wipLimit}` : ""}
+                  {searchActive
+                    ? `${column.tasks.length} из ${full.tasks.length}`
+                    : `${column.tasks.length}${
+                        column.wipLimit > 0 ? ` / ${column.wipLimit}` : ""
+                      }`}
                 </span>
                 {/* Галочка — не украшение: она и делает колонку завершающей.
                     Администрации это переключатель, остальным — отметка. */}
@@ -642,7 +742,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                 )}
                 {/* Удалить предлагаем только пустую: колонка с карточками
                     всё равно не удалится, и кнопка обещала бы невозможное. */}
-                {canManage && column.tasks.length === 0 && (
+                {canManage && full.tasks.length === 0 && (
                   <button
                     type="button"
                     aria-label={`Удалить колонку «${column.name}»`}
@@ -813,6 +913,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                           drag?.started === true && drag.taskId === task.id
                         }
                         canEdit={Boolean(canEdit)}
+                        // Место вставки считается по видимым карточкам, а во
+                        // время поиска видны не все — перетаскивание легло бы
+                        // не туда. Кнопки переноса работают по всей доске.
+                        draggable={!searchActive}
                         onOpen={() => setOpenTaskId(task.id)}
                         onHandleDown={(event) => onHandleDown(event, task.id)}
                         onHandleMove={onHandleMove}
@@ -834,6 +938,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         })}
 
         {canManage &&
+          !searchActive &&
           (columnDraft === null ? (
             <button
               type="button"
@@ -903,6 +1008,7 @@ function TaskCard({
   task,
   dragging,
   canEdit,
+  draggable,
   onOpen,
   onHandleDown,
   onHandleMove,
@@ -913,6 +1019,7 @@ function TaskCard({
   task: WorkTaskCardDto;
   dragging: boolean;
   canEdit: boolean;
+  draggable: boolean;
   onOpen: () => void;
   onHandleDown: (event: React.PointerEvent) => void;
   onHandleMove: (event: React.PointerEvent) => void;
@@ -934,7 +1041,7 @@ function TaskCard({
       } ${dragging ? "opacity-40" : ""}`}
     >
       <div className="flex items-start gap-1">
-        {canEdit && (
+        {canEdit && draggable && (
           // Ручка, а не вся карточка: перетаскивание за всю карточку отнимает
           // у телефона вертикальную прокрутку доски.
           // aria-hidden без role и без фокуса: для клавиатуры и скринридера

@@ -251,6 +251,21 @@ export class WorkBoardsController {
     return this.boards.board(id, user.sub);
   }
 
+  /**
+   * Поиск по задачам доски (VED-76). Буквальный путь после `:id` — с
+   * `boards/:id` не пересекается. Запрос на каждую набранную букву, поэтому
+   * лимит свой, а не общий.
+   */
+  @Get('boards/:id/search')
+  @Throttle({ default: { ttl: 60_000, limit: 120 } })
+  searchTasks(
+    @Param('id') id: string,
+    @Query('q') query: unknown,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.boards.searchTasks(id, user.sub, query);
+  }
+
   @Patch('boards/:id')
   updateBoard(
     @Param('id') id: string,
