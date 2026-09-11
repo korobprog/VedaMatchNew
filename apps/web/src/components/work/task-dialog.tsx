@@ -246,7 +246,7 @@ export function WorkTaskDialog({
 
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="text-sm text-text-1">
-                Колонка
+                Раздел
                 <select
                   value={task.columnId}
                   disabled={!canEdit}

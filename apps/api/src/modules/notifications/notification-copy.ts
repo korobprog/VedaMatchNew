@@ -465,7 +465,7 @@ export function buildNotification(
         title: 'Задачу вернули в работу',
         // Без рода: у `User.gender` его может не быть, а «перенёс» на женском
         // имени читается как чужая ошибка — правило всего файла.
-        body: `${event.actorName}: ${event.taskKey} «${toExcerpt(event.taskTitle)}» снова в колонке «${event.columnName}»`,
+        body: `${event.actorName}: ${event.taskKey} «${toExcerpt(event.taskTitle)}» снова в разделе «${event.columnName}»`,
         url: workTaskUrl(event.spaceId, event.taskKey),
         tag: `work-returned:${event.taskKey}`,
         category: 'work',

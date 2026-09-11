@@ -79,7 +79,7 @@ export class WorkBoardsService {
       where: { id: columnId },
       select: { board: { select: { spaceId: true } } },
     });
-    if (!column) throw new NotFoundException('Колонка не найдена');
+    if (!column) throw new NotFoundException('Раздел не найден');
     return column.board.spaceId;
   }
 
@@ -280,7 +280,7 @@ export class WorkBoardsService {
     const count = await this.prisma.workColumn.count({ where: { boardId } });
     if (count >= WORK_MAX_COLUMNS_PER_BOARD) {
       throw new BadRequestException(
-        `Колонок на доске не больше ${WORK_MAX_COLUMNS_PER_BOARD}`,
+        `Разделов на доске не больше ${WORK_MAX_COLUMNS_PER_BOARD}`,
       );
     }
     const last = await this.prisma.workColumn.findFirst({
@@ -293,7 +293,7 @@ export class WorkBoardsService {
         boardId,
         name: requireText(
           request.name,
-          'Название колонки',
+          'Название раздела',
           WORK_COLUMN_NAME_MAX,
         ),
         wipLimit: normalizeWipLimit(request.wipLimit),
@@ -316,13 +316,13 @@ export class WorkBoardsService {
       where: { id: columnId },
       select: { boardId: true, isDone: true },
     });
-    if (!column) throw new NotFoundException('Колонка не найдена');
+    if (!column) throw new NotFoundException('Раздел не найден');
 
     const data: Prisma.WorkColumnUpdateInput = {};
     if (request.name !== undefined) {
       data.name = requireText(
         request.name,
-        'Название колонки',
+        'Название раздела',
         WORK_COLUMN_NAME_MAX,
       );
     }
@@ -404,17 +404,17 @@ export class WorkBoardsService {
         _count: { select: { tasks: { where: { archivedAt: null } } } },
       },
     });
-    if (!column) throw new NotFoundException('Колонка не найдена');
+    if (!column) throw new NotFoundException('Раздел не найден');
     if (column._count.tasks > 0) {
       throw new BadRequestException(
-        'В колонке есть карточки — сначала перенесите их',
+        'В разделе есть карточки — сначала перенесите их',
       );
     }
     const left = await this.prisma.workColumn.count({
       where: { boardId: column.boardId },
     });
     if (left <= 1) {
-      throw new BadRequestException('Последнюю колонку удалить нельзя');
+      throw new BadRequestException('Последний раздел удалить нельзя');
     }
     await this.prisma.workColumn.delete({ where: { id: columnId } });
     return this.board(column.boardId, userId);

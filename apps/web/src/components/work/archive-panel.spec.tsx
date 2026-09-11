@@ -142,7 +142,7 @@ describe("WorkArchivePanel", () => {
     vi.mocked(getWorkBoardArchive).mockResolvedValue(archive("done", []));
     renderPanel();
     expect(
-      await screen.findByText(/переносят в колонку с галочкой/),
+      await screen.findByText(/переносят в раздел с галочкой/),
     ).toBeInTheDocument();
   });
 });

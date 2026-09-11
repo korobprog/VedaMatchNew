@@ -411,7 +411,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     // Спрашиваем: колонку не вернуть, а кнопка стоит в одном ряду с
     // переименованием — так однажды и пропала «Готово» вместе со своей
     // галочкой.
-    if (!window.confirm(`Удалить колонку «${name}»?`)) return;
+    if (!window.confirm(`Удалить раздел «${name}»?`)) return;
     try {
       setBoard(await deleteWorkColumn(columnId));
     } catch (cause) {
@@ -625,7 +625,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   aria-controls={bodyId}
                   aria-label={`${
                     folded ? "Развернуть" : "Свернуть"
-                  } колонку «${column.name}», ${full.tasks.length} ${plural(
+                  } раздел «${column.name}», ${full.tasks.length} ${plural(
                     full.tasks.length,
                     "задача",
                     "задачи",
@@ -647,7 +647,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   <input
                     autoFocus
                     defaultValue={column.name}
-                    aria-label={`Название колонки «${column.name}»`}
+                    aria-label={`Название раздела «${column.name}»`}
                     maxLength={40}
                     onKeyDown={(event) => {
                       if (event.key === "Escape") setRenamingColumn(null);
@@ -672,7 +672,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   }`}
                   title={
                     column.wipLimit > 0
-                      ? `Лимит колонки: ${column.wipLimit}`
+                      ? `Лимит раздела: ${column.wipLimit}`
                       : undefined
                   }
                 >
@@ -688,11 +688,11 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   <button
                     type="button"
                     aria-pressed={column.isDone}
-                    aria-label={`Колонка «${column.name}» закрывает задачи`}
+                    aria-label={`Раздел «${column.name}» закрывает задачи`}
                     title={
                       column.isDone
                         ? "Задачи здесь считаются выполненными"
-                        : "Отметить колонку завершающей"
+                        : "Отметить раздел завершающим"
                     }
                     onClick={() => void toggleDone(column.id, !column.isDone)}
                     className={`rounded p-1 ${
@@ -717,7 +717,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                     <button
                       type="button"
                       disabled={index === 0}
-                      aria-label={`Переставить колонку «${column.name}» раньше`}
+                      aria-label={`Переставить раздел «${column.name}» раньше`}
                       onClick={() => void moveColumn(column.id, -1)}
                       className="rounded p-1 text-text-2 hover:text-text-0 disabled:opacity-30"
                     >
@@ -730,7 +730,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                     <button
                       type="button"
                       disabled={index === board.columns.length - 1}
-                      aria-label={`Переставить колонку «${column.name}» позже`}
+                      aria-label={`Переставить раздел «${column.name}» позже`}
                       onClick={() => void moveColumn(column.id, 1)}
                       className="rounded p-1 text-text-2 hover:text-text-0 disabled:opacity-30"
                     >
@@ -745,7 +745,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                 {canManage && renamingColumn !== column.id && (
                   <button
                     type="button"
-                    aria-label={`Переименовать колонку «${column.name}»`}
+                    aria-label={`Переименовать раздел «${column.name}»`}
                     onClick={() => setRenamingColumn(column.id)}
                     className="rounded p-1 text-text-2 hover:text-text-0"
                   >
@@ -757,7 +757,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                 {canManage && full.tasks.length === 0 && (
                   <button
                     type="button"
-                    aria-label={`Удалить колонку «${column.name}»`}
+                    aria-label={`Удалить раздел «${column.name}»`}
                     onClick={() => void removeColumn(column.id, column.name)}
                     className="rounded p-1 text-text-2 hover:text-magenta"
                   >
@@ -773,7 +773,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   вместе с кнопкой, которая это чинит одним нажатием. */}
               {canManage && !column.isDone && looksDone(column.name) && (
                 <p className="mb-2 rounded-xl border border-gold/40 bg-gold/10 p-2 text-xs text-text-1">
-                  Задачи в этой колонке остаются открытыми и считаются в
+                  Задачи в этом разделе остаются открытыми и считаются в
                   счётчике среды.{" "}
                   <button
                     type="button"
@@ -814,7 +814,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                         rows={2}
                         maxLength={2000}
                         placeholder="Что нужно сделать"
-                        aria-label={`Новая задача в колонке «${column.name}»`}
+                        aria-label={`Новая задача в разделе «${column.name}»`}
                         className="w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
                       />
                       {/* Говорим заранее, что произойдёт: молча разрезанный
@@ -958,7 +958,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               className="flex w-full items-center justify-center gap-1 rounded-2xl border border-dashed border-glass-brd px-3 py-4 text-sm text-text-1 hover:text-text-0 sm:w-[200px] sm:shrink-0 sm:snap-start"
             >
               <Plus aria-hidden className="size-4" />
-              Колонка
+              Раздел
             </button>
           ) : (
             <form
@@ -977,7 +977,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                 }}
                 maxLength={40}
                 placeholder="На доработку"
-                aria-label="Название новой колонки"
+                aria-label="Название нового раздела"
                 className="rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
               />
               <div className="flex gap-2">
@@ -1145,7 +1145,7 @@ function TaskCard({
           <button
             type="button"
             onClick={() => onMoveBeside(-1)}
-            aria-label={`Перенести «${task.title}» в предыдущую колонку`}
+            aria-label={`Перенести «${task.title}» в предыдущий раздел`}
             className="rounded p-1 text-text-2 hover:text-text-0"
           >
             <ChevronUp aria-hidden className="size-4 sm:hidden" />
@@ -1154,7 +1154,7 @@ function TaskCard({
           <button
             type="button"
             onClick={() => onMoveBeside(1)}
-            aria-label={`Перенести «${task.title}» в следующую колонку`}
+            aria-label={`Перенести «${task.title}» в следующий раздел`}
             className="rounded p-1 text-text-2 hover:text-text-0"
           >
             <ChevronDown aria-hidden className="size-4 sm:hidden" />
