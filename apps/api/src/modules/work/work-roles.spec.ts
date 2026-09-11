@@ -18,6 +18,13 @@ describe('canWork', () => {
     expect(canWork('member', 'manageMembers')).toBe(false);
   });
 
+  // Участник ошибается в своей карточке, а стирает обсуждение целиком тот,
+  // кто отвечает за среду: участнику остаётся архив, откуда карточку вернут.
+  it('стереть задачу насовсем участник не может', () => {
+    expect(canWork('member', 'deleteTask')).toBe(false);
+    expect(canWork('admin', 'deleteTask')).toBe(true);
+  });
+
   it('администратор заводит доски и приглашает', () => {
     expect(canWork('admin', 'manageBoard')).toBe(true);
     expect(canWork('admin', 'manageMembers')).toBe(true);

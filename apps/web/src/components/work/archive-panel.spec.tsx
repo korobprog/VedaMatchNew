@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkArchiveDto, WorkArchiveItemDto } from "@vedamatch/shared";
@@ -136,6 +136,26 @@ describe("WorkArchivePanel", () => {
     const props = renderPanel({ covered: true });
     await user.keyboard("{Escape}");
     expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  // Из карточки поверх архива её возвращают на доску и стирают насовсем
+  // (VED-6): к закрытию окна список под ним уже устарел.
+  it("rereads the list when the window on top closes", async () => {
+    vi.mocked(getWorkBoardArchive).mockResolvedValue(archive("done", []));
+    const props = {
+      boardId: "b1",
+      canEdit: true,
+      covered: true,
+      onOpenTask: vi.fn(),
+      onRestored: vi.fn(),
+      onClose: vi.fn(),
+    };
+    const { rerender } = render(<WorkArchivePanel {...props} />);
+    expect(getWorkBoardArchive).not.toHaveBeenCalled();
+
+    rerender(<WorkArchivePanel {...props} covered={false} />);
+
+    await waitFor(() => expect(getWorkBoardArchive).toHaveBeenCalledTimes(1));
   });
 
   it("explains an empty «done» tab", async () => {

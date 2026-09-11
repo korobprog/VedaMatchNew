@@ -8,7 +8,11 @@ import {
   pendingTaskEdits,
   taskEditsProblem,
 } from "./task-edits";
-import { getWorkTask, updateWorkTask } from "@/lib/work-api";
+import {
+  deleteWorkTaskForever,
+  getWorkTask,
+  updateWorkTask,
+} from "@/lib/work-api";
 
 vi.mock("@/lib/work-api", () => ({
   addWorkChecklistItem: vi.fn(),
@@ -16,6 +20,7 @@ vi.mock("@/lib/work-api", () => ({
   attachWorkFile: vi.fn(),
   removeWorkAttachment: vi.fn(),
   commentWorkTask: vi.fn(),
+  deleteWorkTaskForever: vi.fn(),
   getWorkTask: vi.fn(),
   moveWorkTask: vi.fn(),
   removeWorkChecklistItem: vi.fn(),
@@ -73,6 +78,8 @@ beforeEach(() => {
   vi.mocked(updateWorkTask).mockImplementation((_id, body) =>
     Promise.resolve({ ...task, ...body } as WorkTaskDto),
   );
+  vi.mocked(deleteWorkTaskForever).mockReset();
+  vi.mocked(deleteWorkTaskForever).mockResolvedValue(undefined);
 });
 
 describe("task edits", () => {
@@ -190,5 +197,54 @@ describe("WorkTaskDialog — кнопка «Сохранить» (VED-56)", () =
     });
     expect(props.onClose).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
+  });
+});
+
+describe("WorkTaskDialog — «Удалить насовсем» (VED-6)", () => {
+  it("стирает карточку после подтверждения и закрывает окно", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const user = userEvent.setup();
+    const props = open();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Удалить насовсем" }),
+    );
+
+    expect(deleteWorkTaskForever).toHaveBeenCalledWith("t1");
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+    confirm.mockRestore();
+  });
+
+  // Промах пальцем по соседней кнопке не должен стоить всего обсуждения.
+  it("ничего не стирает, если передумали", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const user = userEvent.setup();
+    const props = open();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Удалить насовсем" }),
+    );
+
+    expect(deleteWorkTaskForever).not.toHaveBeenCalled();
+    expect(props.onClose).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it("участнику удаления не предлагает — только архив", async () => {
+    render(
+      <WorkTaskDialog
+        taskId="t1"
+        board={{ ...board, role: "member" } as WorkBoardDto}
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Убрать карточку в архив" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Удалить насовсем" }),
+    ).toBeNull();
   });
 });

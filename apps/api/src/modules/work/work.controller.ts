@@ -377,6 +377,20 @@ export class WorkTasksController {
     return this.tasks.restore(id, user.sub);
   }
 
+  /**
+   * Стереть карточку насовсем, вместе с обсуждением и файлами (VED-6).
+   * Отдельный адрес, а не `DELETE tasks/:id`: тот убирает карточку в архив, и
+   * промахнуться между «убрать» и «стереть» нельзя даже опечаткой.
+   */
+  @Delete('tasks/:id/forever')
+  @HttpCode(204)
+  async purge(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    await this.tasks.purge(id, user.sub);
+  }
+
   @Post('tasks/:id/comments')
   comment(
     @Param('id') id: string,

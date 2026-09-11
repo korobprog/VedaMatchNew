@@ -52,9 +52,12 @@ export function WorkArchivePanel({
     [boardId],
   );
 
+  // Пока поверх открыта карточка, список не перечитываем: из карточки её
+  // возвращают на доску и стирают насовсем, и к закрытию окна архив под ним
+  // успевает устареть — поэтому читаем заново, как только он снова открыт.
   useEffect(() => {
-    void load(view);
-  }, [load, view]);
+    if (!covered) void load(view);
+  }, [covered, load, view]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

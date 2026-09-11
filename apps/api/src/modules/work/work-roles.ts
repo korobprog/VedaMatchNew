@@ -14,6 +14,8 @@ export type WorkAction =
   | 'view'
   /** Создавать, править, двигать и архивировать задачи; комментировать. */
   | 'editTask'
+  /** Стереть задачу насовсем — вместе с обсуждением, файлами и историей. */
+  | 'deleteTask'
   /** Заводить и переименовывать доски, колонки и метки. */
   | 'manageBoard'
   /** Приглашать, менять роли, исключать. */
@@ -34,6 +36,7 @@ const RANK: Record<WorkMemberRole, number> = {
 const REQUIRED: Record<WorkAction, WorkMemberRole> = {
   view: 'viewer',
   editTask: 'member',
+  deleteTask: 'admin',
   manageBoard: 'admin',
   manageMembers: 'admin',
   editSpace: 'admin',

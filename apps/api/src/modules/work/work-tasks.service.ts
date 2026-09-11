@@ -542,6 +542,42 @@ export class WorkTasksService {
     return this.get(taskId, userId);
   }
 
+  /**
+   * Стереть карточку насовсем (VED-6).
+   *
+   * Архив отвечает на вопрос «куда делась карточка», но не на просьбу убрать
+   * её из среды совсем: заведённая по ошибке или дважды карточка иначе лежит
+   * в архиве вечно. Право — администратора и владельца: участнику остаётся
+   * архив, откуда карточку ещё можно вернуть.
+   *
+   * Всё, что висит на задаче, уходит вместе с ней каскадом: чек-лист,
+   * комментарии, метки, история и очередь уведомлений. Файлы из бакета
+   * удаляем сами — база о них не знает. Порядок «сначала строка, потом
+   * файлы» тот же, что у вложения: обратный оставил бы карточку со ссылками
+   * на стёртые файлы, а так худшее — забытый в бакете файл, на который никто
+   * не ссылается.
+   *
+   * Номер в оборот не возвращается: счётчик среды растёт только вперёд, и
+   * ссылка VED-6 из переписки не уведёт потом к чужому делу.
+   */
+  async purge(taskId: string, userId: string): Promise<void> {
+    const context = await this.taskContext(taskId);
+    assertWorkAccess(
+      await this.spaces.roleOf(context.spaceId, userId),
+      'deleteTask',
+    );
+
+    const attachments = await this.prisma.workAttachment.findMany({
+      where: { taskId },
+      select: { storageKey: true },
+    });
+
+    // deleteMany, а не delete: повторная просьба стереть уже стёртую карточку
+    // — это та же самая просьба, а не ошибка.
+    await this.prisma.workTask.deleteMany({ where: { id: taskId } });
+    await this.uploads.removeMany(attachments.map((file) => file.storageKey));
+  }
+
   async addComment(
     taskId: string,
     userId: string,
