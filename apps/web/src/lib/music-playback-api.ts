@@ -51,6 +51,16 @@ export const savePlaybackPosition = (
     body: JSON.stringify({ trackId, positionSeconds }),
   });
 
+/**
+ * Очередь плеера — на сервер, когда она поменялась (VED-88). Без позиции:
+ * звук мог ещё не дойти до сохранённой секунды, и ноль её бы затёр.
+ */
+export const savePlaybackQueue = (trackId: string, queue: string[]) =>
+  quiet<MusicPlaybackStateDto>("/music/playback/state", {
+    method: "PUT",
+    body: JSON.stringify({ trackId, queue }),
+  });
+
 export const stopPlayback = () =>
   quiet<{ ok: true }>("/music/playback/stop", { method: "POST" });
 

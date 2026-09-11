@@ -23,6 +23,7 @@ import {
   getPlaybackState,
   getTrack,
   savePlaybackPosition,
+  savePlaybackQueue,
   sendHeartbeat,
   setTrackFavorite,
   stopPlayback,
@@ -308,6 +309,11 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
    * раз: иначе возобновление дёргало бы человека назад при каждой перемотке.
    */
   const resumeToRef = useRef<number | null>(null);
+  /**
+   * Какая очередь уже лежит на сервере — чтобы не слать сотню идентификаторов
+   * на каждое переключение записи, а только когда очередь поменялась.
+   */
+  const sentQueueRef = useRef("");
   /** Сколько прослушано с прошлого тика. Перемотка сюда не засчитывается. */
   const listenedRef = useRef(0);
   const lastTickPositionRef = useRef(0);
@@ -456,6 +462,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       // Очередь целиком, а не одна запись: иначе на другом устройстве
       // «предыдущая» и «следующая» были мертвы (VED-70).
       const restored = resumeQueue(state.trackId, state.queue);
+      // Эта очередь пришла с сервера — отправлять её обратно незачем.
+      sentQueueRef.current = restored.queue.join(",");
       setQueue(restored.queue);
       setIndex(restored.index);
       resumeToRef.current = state.positionSeconds;
@@ -466,6 +474,25 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ---------- Очередь на сервере ----------
+
+  /**
+   * Очередь уезжает на сервер, как только поменялась (VED-88). Локального
+   * зеркала мало: полосу плеера закрывают — оно стирается, — а на другом
+   * устройстве его нет вовсе. Тогда «продолжить» на главной поднимал одну
+   * запись, и «назад» и «вперёд» были мертвы.
+   */
+  useEffect(() => {
+    if (!currentId || queue.length === 0) return;
+    const key = queue.join(",");
+    if (key === sentQueueRef.current) return;
+    sentQueueRef.current = key;
+    void savePlaybackQueue(currentId, queue).then((saved) => {
+      // Не дошло — пусть уйдёт при следующем случае, а не пропадёт.
+      if (!saved && sentQueueRef.current === key) sentQueueRef.current = "";
+    });
+  }, [currentId, queue]);
 
   // ---------- Настройки прослушивания ----------
 

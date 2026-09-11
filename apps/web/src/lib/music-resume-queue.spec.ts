@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resumeQueue } from "./music-resume-queue";
+import { resumeNeighbour, resumeQueue } from "./music-resume-queue";
 
 describe("resumeQueue", () => {
   it("восстанавливает очередь целиком и встаёт на текущую запись", () => {
@@ -25,5 +25,23 @@ describe("resumeQueue", () => {
       queue: ["a", "b"],
       index: 1,
     });
+  });
+});
+
+describe("resumeNeighbour", () => {
+  // VED-88: кнопки на главной, пока плеер запись ещё не поднял.
+  it("находит соседей текущей записи в сохранённой очереди", () => {
+    expect(resumeNeighbour("b", ["a", "b", "c"], 1)).toBe("c");
+    expect(resumeNeighbour("b", ["a", "b", "c"], -1)).toBe("a");
+  });
+
+  it("на краю очереди соседа нет", () => {
+    expect(resumeNeighbour("a", ["a", "b"], -1)).toBeNull();
+    expect(resumeNeighbour("b", ["a", "b"], 1)).toBeNull();
+  });
+
+  it("чужая или пустая очередь — соседей нет", () => {
+    expect(resumeNeighbour("x", ["a", "b"], 1)).toBeNull();
+    expect(resumeNeighbour("a", [], 1)).toBeNull();
   });
 });

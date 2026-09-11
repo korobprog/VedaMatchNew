@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { MusicQuickAccessData } from "@/lib/music-quick-access";
+import type {
+  MusicQuickAccessData,
+  MusicQuickAccessResume,
+} from "@/lib/music-quick-access";
+import { resumeNeighbour } from "@/lib/music-resume-queue";
 import { formatTotalDuration, formatTrackDuration } from "@/lib/music-duration";
 import { MusicMarqueeText } from "@/components/music/marquee-text";
 import { MusicPositionSlider } from "@/components/music/player/position-slider";
@@ -42,6 +46,8 @@ export function MusicQuickWidget({
   const player = useMusicPlayer();
   const { resume, favoritesCount } = data;
   const current = player?.current ?? null;
+  const prevStep = queueStep(player, resume, -1);
+  const nextStep = queueStep(player, resume, 1);
 
   // Что показывает карточка на телефоне: играющую запись, когда она есть,
   // иначе недослушанную. Раньше всегда недослушанную — и «следующая»
@@ -113,8 +119,8 @@ export function MusicQuickWidget({
                 <button
                   type="button"
                   aria-label="Предыдущая запись"
-                  disabled={!player?.hasPrev}
-                  onClick={() => player?.prev()}
+                  disabled={!prevStep.enabled}
+                  onClick={prevStep.go}
                   className="flex size-10 items-center justify-center rounded-full text-text-1 hover:text-text-0 disabled:opacity-40"
                 >
                   <svg
@@ -175,8 +181,8 @@ export function MusicQuickWidget({
                 <button
                   type="button"
                   aria-label="Следующая запись"
-                  disabled={!player?.hasNext}
-                  onClick={() => player?.next()}
+                  disabled={!nextStep.enabled}
+                  onClick={nextStep.go}
                   className="flex size-10 items-center justify-center rounded-full text-text-1 hover:text-text-0 disabled:opacity-40"
                 >
                   <svg
@@ -285,10 +291,40 @@ function QuickChips({ favoritesCount }: { favoritesCount: number }) {
  * — из сохранённой позиции: карточка обязана предлагать продолжить и после
  * перезагрузки страницы, пока звук ещё не запущен.
  */
+/**
+ * «Назад» и «вперёд» карточки (VED-88). Пока плеер ведёт запись — его
+ * очередь. Пока не поднял (полосу плеера закрыли, звук ещё не запускали) —
+ * соседи из сохранённой очереди: нажатие запускает соседнюю запись с начала,
+ * а не молчит бледной кнопкой.
+ */
+function queueStep(
+  player: ReturnType<typeof useMusicPlayer>,
+  resume: MusicQuickAccessResume | null,
+  direction: -1 | 1,
+): { enabled: boolean; go: () => void } {
+  if (player?.current) {
+    return {
+      enabled: direction < 0 ? player.hasPrev : player.hasNext,
+      go: () => (direction < 0 ? player.prev() : player.next()),
+    };
+  }
+  const target = resume
+    ? resumeNeighbour(resume.trackId, resume.queue, direction)
+    : null;
+  return {
+    enabled: Boolean(player && target),
+    go: () => {
+      if (target && resume) player?.play(target, resume.queue, 0);
+    },
+  };
+}
+
 function NowPlayingColumn({ data }: { data: MusicQuickAccessData }) {
   const player = useMusicPlayer();
   const { resume } = data;
   const current = player?.current ?? null;
+  const prevStep = queueStep(player, resume, -1);
+  const nextStep = queueStep(player, resume, 1);
 
   const title = current?.title ?? resume?.title ?? null;
   const artistName = current?.artist?.name ?? resume?.artistName ?? null;
@@ -371,8 +407,8 @@ function NowPlayingColumn({ data }: { data: MusicQuickAccessData }) {
           <button
             type="button"
             aria-label="Предыдущая запись"
-            disabled={!player?.hasPrev}
-            onClick={() => player?.prev()}
+            disabled={!prevStep.enabled}
+            onClick={prevStep.go}
             className="flex size-8 items-center justify-center rounded-full text-text-1 hover:text-text-0 disabled:opacity-40"
           >
             <svg
@@ -430,8 +466,8 @@ function NowPlayingColumn({ data }: { data: MusicQuickAccessData }) {
           <button
             type="button"
             aria-label="Следующая запись"
-            disabled={!player?.hasNext}
-            onClick={() => player?.next()}
+            disabled={!nextStep.enabled}
+            onClick={nextStep.go}
             className="flex size-8 items-center justify-center rounded-full text-text-1 hover:text-text-0 disabled:opacity-40"
           >
             <svg

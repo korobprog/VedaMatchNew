@@ -404,6 +404,7 @@ model User {
   musicPlaylists                     MusicPlaylist[]              @relation("MusicPlaylistsOwned")
   musicFavorites                     MusicFavorite[]              @relation("MusicFavorites")
   musicPlayStates                    MusicPlayState[]             @relation("MusicPlayStates")
+  musicPlaybackQueue                 MusicPlaybackQueue?          @relation("MusicPlaybackQueue")
   musicNowPlaying                    MusicNowPlaying?             @relation("MusicNowPlaying")
   musicListens                       MusicListen[]                @relation("MusicListens")
   musicUploads                       MusicUpload[]                @relation("MusicUploads")
@@ -4763,6 +4764,17 @@ model MusicPlayState {
 
   @@id([userId, trackId])
   @@index([userId, updatedAt(sort: Desc)])
+}
+
+/// Очередь плеера человека (VED-88). Одна строка на человека: очередь у
+/// плеера одна. Без неё состояние с сервера приходило с одной записью, и
+/// «назад» и «вперёд» были мертвы после закрытой полосы плеера и на другом
+/// устройстве. Порядок — как у плеера до перемешивания: перемешивает он сам.
+model MusicPlaybackQueue {
+  userId    String   @id
+  user      User     @relation("MusicPlaybackQueue", fields: [userId], references: [id], onDelete: Cascade)
+  trackIds  String[] @default([])
+  updatedAt DateTime @updatedAt
 }
 
 /// Одна строка на человека, а не журнал: вопрос «что он слушает сейчас»

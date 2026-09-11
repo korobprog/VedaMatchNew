@@ -22,6 +22,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { mayShareMusicActivity } from './music-activity-share';
 import { toMusicTrackDto } from './music-track-dto';
 import { isNowPlayingStale } from './now-playing-visibility';
+import { keepExistingInOrder, normalizePlaybackQueue } from './playback-queue';
 
 /**
  * Состояние плеера, тик воспроизведения и настройки прослушивания.
@@ -400,11 +401,14 @@ export class MusicPlaybackService {
    * чтобы отдать их другому устройству.
    */
   async getState(userId: string): Promise<MusicPlaybackStateDto> {
-    const last = await this.prisma.musicPlayState.findFirst({
-      where: { userId },
-      orderBy: { updatedAt: 'desc' },
-      select: { trackId: true, positionSeconds: true, updatedAt: true },
-    });
+    const [last, queue] = await Promise.all([
+      this.prisma.musicPlayState.findFirst({
+        where: { userId },
+        orderBy: { updatedAt: 'desc' },
+        select: { trackId: true, positionSeconds: true, updatedAt: true },
+      }),
+      this.storedQueue(userId),
+    ]);
 
     if (!last) {
       return {
@@ -420,33 +424,75 @@ export class MusicPlaybackService {
     return {
       trackId: last.trackId,
       positionSeconds: last.positionSeconds,
-      // Очередь пока не хранится на сервере: до этапа 4 она короткая и
-      // целиком помещается в localStorage. Поле в ответе есть, чтобы плеер
-      // не переписывать, когда хранение появится.
-      queue: [],
+      // Очередь с сервера нужна, когда локального зеркала нет: полосу плеера
+      // закрыли или слушают на другом устройстве. Без неё «назад» и «вперёд»
+      // на главной были мертвы (VED-88).
+      queue,
       repeat: 'off',
       shuffle: false,
       updatedAt: last.updatedAt.toISOString(),
     };
   }
 
-  /** Плеер сохраняет позицию при паузе и при уходе со страницы. */
+  /**
+   * Плеер сохраняет позицию при паузе и при уходе со страницы, а очередь —
+   * когда она поменялась (VED-88). Одно без другого не стирает: позиция
+   * приходит часто и без очереди, очередь — без позиции.
+   */
   async putState(userId: string, body: UpdateMusicPlaybackStateRequest) {
     if (!body.trackId) return this.getState(userId);
 
     const track = await this.playableTrack(userId, body.trackId);
-    const position = Math.min(
-      Math.max(0, Math.floor(body.positionSeconds || 0)),
-      track.durationSeconds,
-    );
+    const where = { userId_trackId: { userId, trackId: track.id } };
 
-    await this.prisma.musicPlayState.upsert({
-      where: { userId_trackId: { userId, trackId: track.id } },
-      create: { userId, trackId: track.id, positionSeconds: position },
-      update: { positionSeconds: position },
-    });
+    if (body.positionSeconds !== undefined) {
+      const position = Math.min(
+        Math.max(0, Math.floor(body.positionSeconds || 0)),
+        track.durationSeconds,
+      );
+      await this.prisma.musicPlayState.upsert({
+        where,
+        create: { userId, trackId: track.id, positionSeconds: position },
+        update: { positionSeconds: position },
+      });
+    } else {
+      // Только очередь: позицию не трогаем — звук мог ещё не перемотаться к
+      // сохранённой секунде, — но запись становится последней тронутой, и
+      // «продолжить» ведёт к тому, что слушают сейчас.
+      await this.prisma.musicPlayState.upsert({
+        where,
+        create: { userId, trackId: track.id, positionSeconds: 0 },
+        update: { updatedAt: new Date() },
+      });
+    }
+
+    const queue = normalizePlaybackQueue(body.queue);
+    if (queue !== undefined) {
+      await this.prisma.musicPlaybackQueue.upsert({
+        where: { userId },
+        create: { userId, trackIds: queue },
+        update: { trackIds: queue },
+      });
+    }
 
     return this.getState(userId);
+  }
+
+  /** Хранимая очередь без снятых с каталога записей, в её же порядке. */
+  private async storedQueue(userId: string): Promise<string[]> {
+    const row = await this.prisma.musicPlaybackQueue.findUnique({
+      where: { userId },
+      select: { trackIds: true },
+    });
+    if (!row || row.trackIds.length === 0) return [];
+    const existing = await this.prisma.musicTrack.findMany({
+      where: { id: { in: row.trackIds } },
+      select: { id: true },
+    });
+    return keepExistingInOrder(
+      row.trackIds,
+      new Set(existing.map((track) => track.id)),
+    );
   }
 
   /**
