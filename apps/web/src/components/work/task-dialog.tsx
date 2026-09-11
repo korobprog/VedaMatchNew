@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FileText, Loader2, Paperclip, Trash2, X } from "lucide-react";
 import type {
   WorkBoardDto,
@@ -22,7 +22,11 @@ import {
 } from "@/lib/work-api";
 import { dueFromInput, dueToInput } from "./task-due";
 import { PRIORITY_TITLE } from "./task-priority";
-import { titleToSave } from "./task-title";
+import {
+  hasTaskEdits,
+  pendingTaskEdits,
+  taskEditsProblem,
+} from "./task-edits";
 
 /** Высота поля под текст: длинное название видно целиком, а не первой строкой. */
 function growToText(element: HTMLTextAreaElement): void {
@@ -51,6 +55,11 @@ export function WorkTaskDialog({
   const [busy, setBusy] = useState(false);
   const [comment, setComment] = useState("");
   const [checklistDraft, setChecklistDraft] = useState("");
+  /* Черновик названия и описания (VED-56): сохраняет кнопка «Сохранить» или
+     закрытие окна, а не потеря фокуса. */
+  const [draft, setDraft] = useState({ title: "", description: "" });
+  /** Только что сохранили — показать «Сохранено», пока снова не начали править. */
+  const [justSaved, setJustSaved] = useState(false);
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
 
   const canEdit =
@@ -62,7 +71,9 @@ export function WorkTaskDialog({
     let alive = true;
     getWorkTask(taskId)
       .then((loaded) => {
-        if (alive) setTask(loaded);
+        if (!alive) return;
+        setTask(loaded);
+        setDraft({ title: loaded.title, description: loaded.description });
       })
       .catch((cause: unknown) => {
         if (alive) {
@@ -80,17 +91,44 @@ export function WorkTaskDialog({
   // осталось бы в одну строку.
   useEffect(() => {
     if (titleRef.current) growToText(titleRef.current);
-  }, [task?.title]);
+  }, [draft.title]);
+
+  const saved = task
+    ? { title: task.title, description: task.description }
+    : draft;
+  const dirty = Boolean(task) && hasTaskEdits(saved, draft);
+  const problem = taskEditsProblem(draft);
+
+  /**
+   * Закрыть окно, не потеряв правок: несохранённое уходит на сервер. Раньше
+   * Escape прямо из поля закрывал окно раньше, чем поле теряло фокус, и
+   * правка пропадала.
+   */
+  const requestClose = useCallback(() => {
+    const body =
+      task && canEdit
+        ? pendingTaskEdits(
+            { title: task.title, description: task.description },
+            draft,
+          )
+        : null;
+    if (body) {
+      void updateWorkTask(task!.id, body)
+        .then(() => onChanged())
+        .catch(() => undefined);
+    }
+    onClose();
+  }, [task, canEdit, draft, onChanged, onClose]);
 
   // Escape закрывает окно: без этого на компьютере из карточки выходят мышью,
   // а с клавиатуры — никак.
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") requestClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [requestClose]);
 
   /**
    * Любое действие карточки идёт через одну обёртку.
@@ -118,6 +156,31 @@ export function WorkTaskDialog({
     void run(() => updateWorkTask(taskId, body));
   }
 
+  function edit(next: Partial<typeof draft>) {
+    setDraft((current) => ({ ...current, ...next }));
+    setJustSaved(false);
+  }
+
+  /** «Сохранить»: название и описание одним запросом. */
+  function save() {
+    if (!task || problem) return;
+    const body = pendingTaskEdits(saved, draft);
+    if (!body) return;
+    void run(async () => {
+      const updated = await updateWorkTask(taskId, body);
+      setDraft({ title: updated.title, description: updated.description });
+      setJustSaved(true);
+      return updated;
+    });
+  }
+
+  /** Отменить правки: вернуть в поля то, что лежит на доске. */
+  function discard() {
+    if (!task) return;
+    setDraft({ title: task.title, description: task.description });
+    setJustSaved(false);
+  }
+
   return (
     <div
       role="dialog"
@@ -125,7 +188,7 @@ export function WorkTaskDialog({
       aria-label={task ? task.title : "Задача"}
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4"
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) requestClose();
       }}
     >
       <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-sheet p-4 sm:rounded-2xl">
@@ -146,26 +209,20 @@ export function WorkTaskDialog({
                   и обведено — иначе заголовок не читается как правимый. */}
               <textarea
                 ref={titleRef}
-                defaultValue={task.title}
+                value={draft.title}
                 readOnly={!canEdit}
                 rows={1}
                 maxLength={200}
                 aria-label="Название задачи"
+                onChange={(event) => edit({ title: event.target.value })}
                 onInput={(event) => growToText(event.currentTarget)}
                 onKeyDown={(event) => {
-                  // Enter в заголовке — это «готово», а не новая строка.
+                  // Enter в заголовке — это «готово»: сохранить, а не новая
+                  // строка.
                   if (event.key === "Enter") {
                     event.preventDefault();
-                    event.currentTarget.blur();
+                    save();
                   }
-                }}
-                onBlur={(event) => {
-                  const value = titleToSave(event.target.value, task.title);
-                  if (canEdit && value) patch({ title: value });
-                  // Пустое или неизменённое возвращаем к сохранённому: поле
-                  // не должно врать о том, что лежит на доске.
-                  else event.target.value = task.title;
-                  growToText(event.target);
                 }}
                 className={`min-w-0 flex-1 resize-none overflow-hidden rounded-lg px-2 py-1 font-display text-lg font-bold text-text-0 ${
                   canEdit ? "border border-glass-brd bg-bg-1" : "bg-transparent"
@@ -173,7 +230,7 @@ export function WorkTaskDialog({
               />
               <button
                 type="button"
-                onClick={onClose}
+                onClick={requestClose}
                 aria-label="Закрыть"
                 className="rounded-lg p-1 text-text-1"
               >
@@ -278,19 +335,61 @@ export function WorkTaskDialog({
             <label className="mt-3 block text-sm text-text-1">
               Описание
               <textarea
-                defaultValue={task.description}
+                value={draft.description}
                 readOnly={!canEdit}
                 rows={4}
                 maxLength={10000}
                 placeholder="Что именно нужно сделать и что считать готовым"
-                onBlur={(event) => {
-                  if (canEdit && event.target.value !== task.description) {
-                    void patch({ description: event.target.value });
+                onChange={(event) => edit({ description: event.target.value })}
+                onKeyDown={(event) => {
+                  // Ctrl+Enter (⌘+Enter) — сохранить, не отрывая рук от
+                  // клавиатуры: простой Enter в описании — новая строка.
+                  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                    event.preventDefault();
+                    save();
                   }
                 }}
                 className="mt-1 block w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
               />
             </label>
+
+            {/* Кнопка «Сохранить» (VED-56). Видна, пока есть несохранённые
+                правки, и прилипает к низу окна: название правят наверху, а
+                кнопка всё равно перед глазами. */}
+            {canEdit && (dirty || justSaved) && (
+              <div className="sticky bottom-0 z-10 -mx-4 mt-3 flex flex-wrap items-center gap-2 border-t border-glass-brd bg-sheet px-4 py-3">
+                {dirty ? (
+                  <>
+                    <p
+                      role={problem ? "alert" : undefined}
+                      className={`mr-auto text-sm ${problem ? "text-magenta" : "text-text-2"}`}
+                    >
+                      {problem ?? "Есть несохранённые правки"}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={discard}
+                      disabled={busy}
+                      className="rounded-xl px-3 py-2 text-sm text-text-1 hover:text-text-0 disabled:opacity-50"
+                    >
+                      Отменить правки
+                    </button>
+                    <button
+                      type="button"
+                      onClick={save}
+                      disabled={busy || Boolean(problem)}
+                      className="rounded-xl bg-magenta px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      {busy ? "Сохраняем…" : "Сохранить"}
+                    </button>
+                  </>
+                ) : (
+                  <p role="status" className="text-sm text-text-1">
+                    Сохранено
+                  </p>
+                )}
+              </div>
+            )}
 
             <h3 className="mt-5 text-sm font-semibold text-text-0">
               Чек-лист{" "}
