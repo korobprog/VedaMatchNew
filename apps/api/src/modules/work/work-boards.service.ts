@@ -16,6 +16,7 @@ import {
   type UpdateWorkColumnRequest,
   type WorkBoardDto,
   type WorkLabelDto,
+  type WorkTaskSearchResponse,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { columnDoneChange } from './work-column-done';
@@ -23,6 +24,11 @@ import { toWorkLabel, toWorkMember, toWorkTaskCard } from './work-dto';
 import { WORK_POSITION_STEP, resolveMovePosition } from './work-position';
 import { assertWorkAccess } from './work-roles';
 import { WorkSpacesService } from './work-spaces.service';
+import {
+  TASK_SEARCH_LIMIT,
+  taskSearchWhere,
+  taskSearchWords,
+} from './work-task-search';
 import {
   normalizeWipLimit,
   normalizeWorkColor,
@@ -74,6 +80,35 @@ export class WorkBoardsService {
    * Доска целиком — один запрос на открытие экрана. Колонки без карточек и
    * карточки без колонок по отдельности не нужны никому.
    */
+  /**
+   * Задачи доски, в которых нашлись все слова запроса (VED-76). Права — как
+   * на просмотр доски: искать можно ровно то, что и так видно.
+   */
+  async searchTasks(
+    boardId: string,
+    userId: string,
+    query: unknown,
+  ): Promise<WorkTaskSearchResponse> {
+    const spaceId = await this.spaceOfBoard(boardId);
+    const role = await this.spaces.roleOf(spaceId, userId);
+    assertWorkAccess(role, 'view');
+
+    const words = taskSearchWords(query);
+    const text = typeof query === 'string' ? query.trim() : '';
+    if (words.length === 0) return { query: text, taskIds: [] };
+
+    const space = await this.prisma.workSpace.findUnique({
+      where: { id: spaceId },
+      select: { prefix: true },
+    });
+    const tasks = await this.prisma.workTask.findMany({
+      where: taskSearchWhere(boardId, words, space?.prefix ?? ''),
+      select: { id: true },
+      take: TASK_SEARCH_LIMIT,
+    });
+    return { query: text, taskIds: tasks.map((task) => task.id) };
+  }
+
   async board(boardId: string, userId: string): Promise<WorkBoardDto> {
     const spaceId = await this.spaceOfBoard(boardId);
     const role = await this.spaces.roleOf(spaceId, userId);

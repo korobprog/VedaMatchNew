@@ -170,6 +170,16 @@ export interface WorkBoardSummaryDto {
 }
 
 /** Доска целиком: колонки с карточками. Один запрос на открытие экрана. */
+/**
+ * Поиск задач доски по ключевым словам (VED-76): какие карточки совпали.
+ * Доска уже загружена целиком, поэтому отдаём только идентификаторы — она
+ * сама спрячет остальные.
+ */
+export interface WorkTaskSearchResponse {
+  query: string;
+  taskIds: string[];
+}
+
 export interface WorkBoardDto {
   id: string;
   spaceId: string;

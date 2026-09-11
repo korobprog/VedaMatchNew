@@ -24,6 +24,7 @@ import type {
   WorkSpaceDto,
   WorkSpaceSummaryDto,
   WorkTaskDto,
+  WorkTaskSearchResponse,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 
@@ -123,6 +124,12 @@ export const acceptWorkInvite = (token: string) =>
 
 export const getWorkBoard = (boardId: string) =>
   request<WorkBoardDto>(`/work/boards/${boardId}`);
+
+/** Какие задачи доски подходят под запрос (VED-76). */
+export const searchWorkBoardTasks = (boardId: string, query: string) =>
+  request<WorkTaskSearchResponse>(
+    `/work/boards/${boardId}/search?q=${encodeURIComponent(query)}`,
+  );
 
 export const createWorkBoard = (
   spaceId: string,
