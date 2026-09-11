@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServiceCard as ServiceCardType, UserProfile } from "@vedamatch/shared";
 import Home from "./page";
+import { HOME_FEATURED_COOKIE, serializeHomeFeatured } from "@/lib/home-featured";
 import { getCommunityStats, getProfile, getServices } from "@/lib/api";
 import { needsSessionRestore } from "@/lib/session-marker";
 import {
@@ -10,6 +11,21 @@ import {
   getUnionProfileState,
   getUnionRecommendations,
 } from "@/lib/union-api";
+
+// Cookie запроса: главная читает из него выбор трёх кнопок (VED-86).
+const cookieJar = vi.hoisted(() => new Map<string, string>());
+vi.mock("next/headers", () => ({
+  cookies: async () => ({
+    get: (name: string) =>
+      cookieJar.has(name) ? { name, value: cookieJar.get(name) } : undefined,
+  }),
+}));
+
+// Редактор кнопок зовёт роутер, а смонтированного роутера в тесте нет.
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 
 vi.mock("@/lib/api", () => ({
   getProfile: vi.fn(),
@@ -118,6 +134,7 @@ describe("Home", () => {
     vi.mocked(getUnionRecommendations).mockResolvedValue(null);
     vi.mocked(getCommunityStats).mockResolvedValue(null);
     vi.mocked(needsSessionRestore).mockResolvedValue(false);
+    cookieJar.clear();
   });
 
   it("shows the session splash instead of the landing when the marker cookie is set", async () => {
@@ -199,5 +216,33 @@ describe("Home", () => {
     render(await Home({ searchParams: Promise.resolve({}) }));
 
     expect(screen.queryByText("Вместе нас:")).not.toBeInTheDocument();
+  });
+
+  // VED-86: наверху — выбранные человеком сервисы, и из сетки ниже они уходят.
+  it("puts the services the person picked on the big buttons", async () => {
+    const catalog: ServiceCardType[] = [
+      ...services,
+      { ...services[0], id: "music", slug: "music", name: "Музыка", url: "/music" },
+      { ...services[0], id: "library", slug: "library", name: "Образование", url: "/library" },
+      { ...services[0], id: "notices", slug: "notices", name: "Объявления", url: "/notices" },
+    ];
+    vi.mocked(getProfile).mockResolvedValue(user);
+    vi.mocked(getServices).mockResolvedValue(catalog);
+    cookieJar.set(
+      HOME_FEATURED_COOKIE,
+      serializeHomeFeatured(user.id, ["library", "notices", "music"]),
+    );
+
+    render(await Home({ searchParams: Promise.resolve({}) }));
+
+    const buttons = screen.getByRole("region", { name: "Ходовые сервисы" });
+    expect(
+      within(buttons)
+        .getAllByRole("link")
+        .map((link) => link.getAttribute("href")),
+    ).toEqual(["/library", "/notices", "/music"]);
+    // Каждый выбранный — один раз на странице: кнопкой, а не ещё и плиткой.
+    expect(screen.getAllByRole("link", { name: /Образование/ })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: /Объявления/ })).toHaveLength(1);
   });
 });

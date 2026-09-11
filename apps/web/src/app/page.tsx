@@ -1,4 +1,5 @@
 import { needsLineageChoice } from "@vedamatch/shared";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   getBillingPlan,
@@ -9,10 +10,13 @@ import {
 } from "@/lib/api";
 import { Header } from "@/components/header";
 import { ServiceGrid } from "@/components/service-grid";
+import { FeaturedServices } from "@/components/featured-services";
 import {
-  FEATURED_ROUTES,
-  FeaturedServices,
-} from "@/components/featured-services";
+  HOME_FEATURED_COOKIE,
+  homeFeaturedOptions,
+  parseHomeFeatured,
+  resolveHomeFeatured,
+} from "@/lib/home-featured";
 import { MemberCountLine } from "@/components/member-count-line";
 import { PortalNews } from "@/components/portal-news";
 import { PortalSearchField } from "@/components/portal-search-field";
@@ -186,10 +190,14 @@ export default async function Home({
     advisorLimitFor(user.createdAt, now),
   );
 
-  // «Общение» уже стоит крупной кнопкой выше — в сетке ему делать нечего.
-  const gridServices = services.filter(
-    (service) => !FEATURED_ROUTES.includes(service.url),
+  // Три крупные кнопки над сеткой — свои у каждого (VED-86). Сервис,
+  // вынесенный наверх, из сетки уходит: второй раз в списке он просто шум.
+  const featuredOptions = homeFeaturedOptions(services);
+  const featured = resolveHomeFeatured(
+    parseHomeFeatured((await cookies()).get(HOME_FEATURED_COOKIE)?.value, user.id),
+    featuredOptions,
   );
+  const featuredRoutes = new Set(featured.map((item) => item.href));
   const unionService = services.find((s) => s.url === "/union");
   const motivationService = services.find((s) => s.url === "/motivation");
   const motivationQuickAccess = buildMotivationQuickAccess(motivationFeed);
@@ -239,6 +247,14 @@ export default async function Home({
         }
       : {}),
   };
+  // Сервис с живой карточкой в сетке (Знакомства, Вдохновение…) остаётся в
+  // ней и после выноса наверх: кнопка только ведёт в сервис, а карточка несёт
+  // то, чего у кнопки нет, — цитату дня, новые анкеты. Иначе вынос наверх
+  // отнимал бы виджет.
+  const gridServices = services.filter(
+    (service) =>
+      !featuredRoutes.has(service.url) || service.id in serviceExtras,
+  );
 
   return (
     <div className="relative min-h-dvh bg-bg-0">
@@ -278,7 +294,12 @@ export default async function Home({
         )}
         {/* Ходовые сервисы отдельной строкой над сеткой: за ними заходят
             чаще всего, и искать их среди равных плиток не нужно. */}
-        <FeaturedServices unread={chatBadge} />
+        <FeaturedServices
+          items={featured}
+          options={featuredOptions}
+          userId={user.id}
+          unread={chatBadge}
+        />
         {/* Сразу под ходовыми сервисами, как в макете Main.dc.html: карточка
             возвращает к недослушанному, не заходя в Музыку. Её нет вовсе,
             когда возвращаться не к чему и избранное пусто. */}

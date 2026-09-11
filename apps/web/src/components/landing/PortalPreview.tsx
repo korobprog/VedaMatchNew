@@ -70,8 +70,8 @@ const AVATAR_PHOTO = "/landing/profiles/ekaterina.jpg";
 
 /**
  * Сервисы сетки. «Общение» отсеяно так же, как в кабинете: оно уже стоит
- * крупной кнопкой выше, и второй раз в списке было бы шумом (см. фильтр по
- * FEATURED_ROUTES на главной).
+ * крупной кнопкой выше, и второй раз в списке было бы шумом (см.
+ * `resolveHomeFeatured` на главной).
  */
 const GRID = SERVICE_CONTENT.filter((service) => service.slug !== "chat");
 
