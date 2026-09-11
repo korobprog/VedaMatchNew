@@ -27,6 +27,9 @@ import { NoticeImagesUpload } from "./notice-images-upload";
 import { NoticeReportDialog } from "./notice-report-dialog";
 import { NoticeResponsesPanel } from "./notice-responses-panel";
 
+const DELETE_CONFIRM =
+  "Удалить объявление насовсем? Вместе с ним пропадут отклики и фотографии.";
+
 export function NoticeDetailView({ id }: { id: string }) {
   const router = useRouter();
   const locale = useLocale();
@@ -257,6 +260,35 @@ export function NoticeDetailView({ id }: { id: string }) {
         </p>
       )}
 
+      {/* Администратор Объявлений удаляет любое (VED-42). Отдельным блоком,
+          а не кнопками автора: править чужой текст и фото ему незачем,
+          а удаление должно читаться как решение администратора. */}
+      {!notice.isMine && notice.canDelete && (
+        <div className="glass rounded-2xl border border-glass-brd p-6">
+          <h2 className="mb-1 font-display text-lg font-semibold text-text-0">
+            Администрирование
+          </h2>
+          <p className="mb-4 text-sm text-text-2">
+            Вы администратор Объявлений и можете удалить это объявление.
+            Удаление попадёт в журнал админки.
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              if (!window.confirm(DELETE_CONFIRM)) return;
+              void act(async () => {
+                await deleteNotice(notice.id);
+                router.push("/notices");
+              });
+            }}
+            className="rounded-xl border border-red-400/30 px-4 py-2 text-sm text-red-400 disabled:opacity-50"
+          >
+            Удалить объявление
+          </button>
+        </div>
+      )}
+
       {notice.isMine && (
         <div className="glass rounded-2xl border border-glass-brd p-6">
           <h2 className="mb-1 font-display text-lg font-semibold text-text-0">
@@ -331,12 +363,16 @@ export function NoticeDetailView({ id }: { id: string }) {
             <button
               type="button"
               disabled={busy}
-              onClick={() =>
-                act(async () => {
+              onClick={() => {
+                // Удаление насовсем — вместе с откликами и фотографиями.
+                // Раньше кнопка срабатывала с первого касания, а «Скрыть»
+                // стоит в том же ряду.
+                if (!window.confirm(DELETE_CONFIRM)) return;
+                void act(async () => {
                   await deleteNotice(notice.id);
                   router.push("/notices/my");
-                })
-              }
+                });
+              }}
               className="ml-auto rounded-xl border border-red-400/30 px-4 py-2 text-sm text-red-400 disabled:opacity-50"
             >
               Удалить

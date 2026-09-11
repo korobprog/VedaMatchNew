@@ -172,6 +172,15 @@ describe('toNoticeDto: смотрящий', () => {
     expect(toNoticeDto(soon, 'u2', now).canRenew).toBe(false);
   });
 
+  // VED-42: удалить своё может автор, любое — администратор Объявлений.
+  it('canDelete у автора и у администратора, но не у прохожего', () => {
+    expect(toNoticeDto(row, 'u1', now).canDelete).toBe(true);
+    expect(toNoticeDto(row, 'u2', now).canDelete).toBe(false);
+    expect(toNoticeDto(row, 'u2', now, true).canDelete).toBe(true);
+    // Администратор не становится автором: кнопки автора ему не рисуются.
+    expect(toNoticeDto(row, 'u2', now, true).isMine).toBe(false);
+  });
+
   it('картинки идут по sortOrder, а не по порядку из БД', () => {
     expect(toNoticeDto(row, null, now).images.map((i) => i.id)).toEqual([
       'i1',

@@ -29,6 +29,7 @@ const TEMPLATES: Record<AdminAuditAction, string> = {
   'market.report-resolved': 'Разобрана жалоба Рынка',
   'market.listing-hidden': 'Объявление Рынка скрыто',
   'notices.report-resolved': 'Разобрана жалоба на объявление',
+  'notices.notice-deleted': 'Удалено чужое объявление',
   'union.profile-hidden': 'Анкета знакомств снята с выдачи',
   'union.profile-restored': 'Анкета знакомств возвращена в выдачу',
   'union.showcase-blocked': 'Анкета снята с публичной витрины Знакомств',
