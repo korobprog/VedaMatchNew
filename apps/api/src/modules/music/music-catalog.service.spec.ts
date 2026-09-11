@@ -71,10 +71,25 @@ describe('MusicCatalogService — линия слушателя', () => {
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
-  it('преданный с линией в профиле слышит своё', async () => {
+  it('линию из профиля Музыка не наследует — преданный слышит весь каталог', async () => {
+    // VED-82: наследованный фильтр прятал записи, а строка «Показываем
+    // линию…» возвращалась над каталогом при каждом заходе.
     const prisma = prismaMock();
     prisma.user.findUnique.mockResolvedValue({
       spiritualStage: 'devotee',
+      lineage: 'sri_gopinath_gaudiya_math',
+    });
+    const { service: catalog } = service(prisma);
+
+    await catalog.listTracks(query, 'u1');
+
+    expect(whereOf(prisma)).not.toHaveProperty('AND');
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('линия, выбранная в настройках Музыки, фильтрует каталог', async () => {
+    const prisma = prismaMock();
+    prisma.musicSettings.findUnique.mockResolvedValue({
       lineage: 'sri_gopinath_gaudiya_math',
     });
     const { service: catalog } = service(prisma);
@@ -86,20 +101,7 @@ describe('MusicCatalogService — линия слушателя', () => {
     ]);
   });
 
-  it('практикующий слышит всё, что бы ни лежало в поле линии', async () => {
-    const prisma = prismaMock();
-    prisma.user.findUnique.mockResolvedValue({
-      spiritualStage: 'practitioner',
-      lineage: 'iskcon',
-    });
-    const { service: catalog } = service(prisma);
-
-    await catalog.listTracks(query, 'u1');
-
-    expect(whereOf(prisma)).not.toHaveProperty('AND');
-  });
-
-  it('настройка Музыки сильнее профиля, «all» снимает фильтр', async () => {
+  it('«all» в настройках Музыки — тоже весь каталог', async () => {
     const prisma = prismaMock();
     prisma.user.findUnique.mockResolvedValue({
       spiritualStage: 'devotee',
@@ -128,10 +130,7 @@ describe('MusicCatalogService — линия слушателя', () => {
 
   it('поиск по слову и линия уживаются: слово в своём OR, линия — в своём', async () => {
     const prisma = prismaMock();
-    prisma.user.findUnique.mockResolvedValue({
-      spiritualStage: 'devotee',
-      lineage: 'ipbys',
-    });
+    prisma.musicSettings.findUnique.mockResolvedValue({ lineage: 'ipbys' });
     const { service: catalog } = service(prisma);
 
     await catalog.listTracks({ ...query, q: 'гаура' }, 'u1');
@@ -147,12 +146,9 @@ describe('MusicCatalogService — линия слушателя', () => {
     ]);
   });
 
-  it('витрина фильтрует «новое» по линии преданного', async () => {
+  it('витрина фильтрует «новое» по линии из настроек Музыки', async () => {
     const prisma = prismaMock();
-    prisma.user.findUnique.mockResolvedValue({
-      spiritualStage: 'devotee',
-      lineage: 'ipbys',
-    });
+    prisma.musicSettings.findUnique.mockResolvedValue({ lineage: 'ipbys' });
     const { service: catalog } = service(prisma);
 
     await catalog.showcase('u1');

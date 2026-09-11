@@ -11,11 +11,7 @@ import type {
   MusicTrackDetailDto,
   MusicTrackListDto,
 } from '@vedamatch/shared';
-import {
-  resolveContentLineage,
-  toLineageId,
-  toLineagePreference,
-} from '@vedamatch/shared';
+import { resolveContentLineage, toLineagePreference } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   durationCondition,
@@ -219,11 +215,14 @@ export class MusicCatalogService {
 
   /**
    * Какую линию слышит человек. Явный параметр запроса сильнее настройки
-   * Музыки, та — сильнее портального профиля; правило одно на все сервисы —
-   * `resolveContentLineage`. Гость и не-преданный получают весь каталог.
+   * Музыки; нет ни того, ни другого — весь каталог.
    *
-   * Из `User` читаются ровно этап и линия — портальные поля, разрешённые
-   * сервису на чтение. Пишет их портал.
+   * Линию из портального профиля Музыка не наследует (VED-82). Киртаны и
+   * бхаджаны общие для всех линий: наследованный фильтр только прятал
+   * записи, а строка «Показываем линию…» над каталогом возвращалась при
+   * каждом заходе, сколько её ни снимай. Кто хочет слушать одну линию,
+   * выбирает её в настройках Музыки — и это его собственный выбор, о
+   * котором строка над каталогом ему и напоминает.
    */
   private async viewerLineage(
     viewerId: string | null,
@@ -231,22 +230,11 @@ export class MusicCatalogService {
   ): Promise<LineageId | null> {
     if (explicit) return resolveContentLineage(null, explicit);
     if (!viewerId) return null;
-    const [settings, user] = await Promise.all([
-      this.prisma.musicSettings.findUnique({
-        where: { userId: viewerId },
-        select: { lineage: true },
-      }),
-      this.prisma.user.findUnique({
-        where: { id: viewerId },
-        select: { spiritualStage: true, lineage: true },
-      }),
-    ]);
-    return resolveContentLineage(
-      user
-        ? { spiritualStage: user.spiritualStage, lineage: toLineageId(user.lineage) }
-        : null,
-      toLineagePreference(settings?.lineage),
-    );
+    const settings = await this.prisma.musicSettings.findUnique({
+      where: { userId: viewerId },
+      select: { lineage: true },
+    });
+    return resolveContentLineage(null, toLineagePreference(settings?.lineage));
   }
 
   /**
