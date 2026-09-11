@@ -77,4 +77,11 @@ else
   echo "docker-entrypoint: seed пропущен (SEED_ON_START=0)"
 fi
 
+# Коммит сборки для GET /health (см. стадию commit в Dockerfile). Переменная из
+# окружения важнее файла — так его можно перекрыть при ручном запуске образа.
+if [ -z "${GIT_SHA:-}" ] && [ -r /app/BUILD_COMMIT ]; then
+  GIT_SHA=$(cat /app/BUILD_COMMIT)
+  export GIT_SHA
+fi
+
 exec node dist/main.js "$@"

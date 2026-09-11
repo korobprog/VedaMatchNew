@@ -23,6 +23,19 @@ COPY apps/api apps/api
 RUN pnpm --filter @vedamatch/api prisma:generate && pnpm --filter @vedamatch/api prisma:generate:ru && pnpm turbo run build --filter=@vedamatch/api
 RUN pnpm --filter @vedamatch/api deploy --prod /out
 
+# Коммит сборки для GET /health — по нему CI понимает, что на проде уже новый
+# образ, а не старый контейнер, который тоже отвечает «ok».
+#
+# Отдельной стадией: из .git сюда приходят только HEAD, refs/heads и
+# packed-refs (см. .dockerignore), и они меняются на каждом коммите — в стадии
+# build это сбрасывало бы кэш установки зависимостей. `.gi[t]` — шаблон, а не
+# имя: без .git в контексте (сборка из worktree) COPY не падает, коммит
+# просто окажется unknown. GIT_SHA перекрывает .git, если его передали явно.
+FROM base AS commit
+ARG GIT_SHA=
+COPY apps/api/scripts/build-commit.sh .gi[t] /tmp/commit/
+RUN sh /tmp/commit/build-commit.sh /tmp/commit "$GIT_SHA" > /build-commit \n  && echo "API build commit: $(cat /build-commit)"
+
 FROM base AS runtime
 ENV NODE_ENV=production
 # Шрифты для подписи на сторис: sharp рисует текст через SVG, а в node:*-alpine
@@ -53,6 +66,9 @@ COPY --from=build --chown=node:node /app/packages/shared/dist /app/packages/shar
 COPY --from=build --chown=node:node /app/apps/api/dist /app/dist
 COPY --chown=node:node apps/api/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod 0755 /app/docker-entrypoint.sh
+# Последним слоем: он меняется на каждом коммите, и всё, что выше, берётся из
+# кэша. Читает его docker-entrypoint.sh.
+COPY --from=commit --chown=node:node /build-commit /app/BUILD_COMMIT
 USER node
 EXPOSE 4000
 # /health отвечает 503, если Postgres недоступен (HealthModule) — wget тогда
