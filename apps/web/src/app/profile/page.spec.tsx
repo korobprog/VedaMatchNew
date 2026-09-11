@@ -34,6 +34,13 @@ vi.mock("@/components/logout-button", () => ({
   LogoutButton: () => <button>Выйти из аккаунта</button>,
 }));
 
+// Ключи доступа грузятся живым запросом, а странице профиля в этом тесте они
+// не нужны. Запрос возвращался уже после конца теста, и его отказ валил весь
+// прогон CI — отсюда пропущенные деплои при зелёных тестах.
+vi.mock("@/components/api-keys/api-keys-settings", () => ({
+  ApiKeysSettings: () => null,
+}));
+
 const user: UserProfile = {
   id: "user-1",
   email: "user@example.com",

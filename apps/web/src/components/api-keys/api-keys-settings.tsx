@@ -61,9 +61,22 @@ export function ApiKeysSettings() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
+    // Запрос может вернуться, когда компонент уже снят: человек ушёл со
+    // страницы, или тест закончился и jsdom снесён. Писать в состояние
+    // размонтированного компонента нельзя — в тестах это давало отказ
+    // «window is not defined», он валил весь прогон CI, и деплой на прод
+    // пропускался при всех зелёных тестах.
+    let active = true;
     void fetchApiKeys()
-      .then(setKeys)
-      .catch(() => setKeys([]));
+      .then((list) => {
+        if (active) setKeys(list);
+      })
+      .catch(() => {
+        if (active) setKeys([]);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function issue() {
