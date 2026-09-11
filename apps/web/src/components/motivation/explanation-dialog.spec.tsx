@@ -29,7 +29,7 @@ describe("ExplanationDialog", () => {
     const user = userEvent.setup();
     render(<ExplanationDialog postId="p1" onAdded={onAdded} />);
 
-    await user.click(screen.getByRole("button", { name: "Сделать пояснение" }));
+    await user.click(screen.getByRole("button", { name: "Добавить пояснение" }));
     await user.type(
       screen.getByLabelText("Текст пояснения"),
       "О долге без расчёта на плоды.",
@@ -56,7 +56,7 @@ describe("ExplanationDialog", () => {
     const user = userEvent.setup();
     render(<ExplanationDialog postId="p1" onAdded={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: "Сделать пояснение" }));
+    await user.click(screen.getByRole("button", { name: "Добавить пояснение" }));
     // Одни пробелы — то же самое, что пусто.
     await user.type(screen.getByLabelText("Текст пояснения"), "   ");
 
@@ -79,7 +79,7 @@ describe("ExplanationDialog", () => {
     const user = userEvent.setup();
     render(<ExplanationDialog postId="p1" onAdded={onAdded} />);
 
-    await user.click(screen.getByRole("button", { name: "Сделать пояснение" }));
+    await user.click(screen.getByRole("button", { name: "Добавить пояснение" }));
     await user.type(screen.getByLabelText("Текст пояснения"), "Моя мысль");
     await user.click(screen.getByRole("button", { name: "Опубликовать" }));
 

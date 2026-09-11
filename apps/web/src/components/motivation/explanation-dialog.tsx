@@ -14,7 +14,7 @@ export interface AddedExplanation {
 }
 
 /**
- * «Сделать пояснение» к афоризму.
+ * «Добавить пояснение» к афоризму.
  *
  * Подпись «пояснение написал такой-то» и жалоба на трактовку были давно, а
  * написать её мог только администратор, правя текст поста. Кнопки, ради
@@ -77,7 +77,7 @@ export function ExplanationDialog({
         onClick={() => dialogRef.current?.showModal()}
         className={className ?? "underline-offset-4 hover:underline"}
       >
-        Сделать пояснение
+        Добавить пояснение
       </button>
       <dialog
         ref={dialogRef}

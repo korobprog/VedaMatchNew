@@ -4,6 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import type { MotivationPostDto } from "@vedamatch/shared";
 import { CollapsibleBlock } from "./collapsible-block";
+import {
+  ExplanationDialog,
+  type AddedExplanation,
+} from "./explanation-dialog";
 import { splitQuoteAndExplanation } from "./quote-text";
 import { apiFetch } from "@/lib/http-client";
 
@@ -14,7 +18,14 @@ const trackLabels = { universal: "Мудрость мира", vaishnava: "Вай
 export function MotivationPostCard({ post }: { post: MotivationPostDto }) {
   const [favorite, setFavorite] = useState(post.isFavorite);
   const [pending, setPending] = useState(false);
-  const { quote, explanation } = splitQuoteAndExplanation(post.text);
+  /* Своё пояснение, только что написанное: показываем его сразу, не дожидаясь
+     перезагрузки ленты. До этого кнопка «Добавить пояснение» была только в
+     ленте роликов, и в обычной карточке трактовку писать было нечем. */
+  const [added, setAdded] = useState<AddedExplanation | null>(null);
+  const split = splitQuoteAndExplanation(post.text);
+  const quote = split.quote;
+  const explanation = added?.text ?? split.explanation;
+  const explanationAuthor = added?.author ?? post.explanationAuthor;
 
   async function toggleFavorite() {
     setPending(true);
@@ -61,19 +72,30 @@ export function MotivationPostCard({ post }: { post: MotivationPostDto }) {
           <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{post.title}</h2>
         )}
         <p className="mt-3 whitespace-pre-line leading-7 text-zinc-700 dark:text-zinc-300">{quote}</p>
-        {explanation && (
+        {explanation ? (
           <div className="mt-3">
             <CollapsibleBlock title="Пояснение">
               <p className="whitespace-pre-line leading-7 text-zinc-700 dark:text-zinc-300">
                 {explanation}
               </p>
               {/* Кто написал трактовку — см. тот же блок в ленте. */}
-              {post.explanationAuthor && (
+              {explanationAuthor && (
                 <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                  Пояснение написал(а) {post.explanationAuthor.name}
+                  Пояснение написал(а) {explanationAuthor.name}
                 </p>
               )}
             </CollapsibleBlock>
+          </div>
+        ) : (
+          /* Пояснения нет — предлагаем написать. Пояснение у афоризма одно,
+             поэтому кнопка исчезает, как только оно появилось: спорить с
+             чужой трактовкой нужно жалобой, а не поверх неё. */
+          <div className="mt-3">
+            <ExplanationDialog
+              postId={post.id}
+              onAdded={setAdded}
+              className="text-sm font-medium text-zinc-600 underline underline-offset-4 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+            />
           </div>
         )}
         {post.attributionSpeaker && (
