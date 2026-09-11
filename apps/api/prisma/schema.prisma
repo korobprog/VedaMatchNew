@@ -339,6 +339,7 @@ model User {
   supportTicketMessages              SupportTicketMessage[]       @relation("SupportTicketMessagesAuthored")
   libraryCategories                  LibraryCategory[]            @relation("LibraryCategoryAuthor")
   libraryEntries                     LibraryEntry[]               @relation("LibraryEntryAuthor")
+  libraryEntryFiles                  LibraryEntryFile[]           @relation("LibraryEntryFileAuthor")
   librarySectionRequests             LibrarySectionRequest[]      @relation("LibrarySectionRequests")
   librarySectionRequestsDecided      LibrarySectionRequest[]      @relation("LibrarySectionRequestsDecided")
   libraryPreference                  LibraryPreference?
@@ -1860,6 +1861,7 @@ model LibraryEntry {
   categories LibraryEntryCategory[]
   bookmarks  LibraryBookmark[]
   comments   LibraryComment[]
+  files      LibraryEntryFile[]
 
   @@index([status, publishedAt(sort: Desc)])
   @@index([status, rankScore(sort: Desc)])
@@ -1869,6 +1871,28 @@ model LibraryEntry {
   @@index([addedById])
   @@index([communityId, status, publishedAt(sort: Desc)])
   @@index([lineage, status, publishedAt(sort: Desc)])
+}
+
+/// Файл книги у материала: pdf, epub, djvu, doc и прочие. Сам файл — в S3
+/// под ключом `library/books/<entryId>/<uuid>.<format>`, здесь только то, что
+/// нужно списку. Строка заводится после сверки объекта в бакете, поэтому
+/// незавершённых заливок здесь не бывает.
+model LibraryEntryFile {
+  id         String       @id @default(uuid())
+  entryId    String
+  entry      LibraryEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  storageKey String       @unique
+  /// Имя, под которым файл скачается, — очищенное, с расширением по формату.
+  name       String
+  /// Один из `LIBRARY_BOOK_FORMATS`. Строка, а не enum: новый формат не
+  /// должен требовать миграции.
+  format     String       @db.VarChar(8)
+  sizeBytes  Int
+  addedById  String?
+  addedBy    User?        @relation("LibraryEntryFileAuthor", fields: [addedById], references: [id], onDelete: SetNull)
+  createdAt  DateTime     @default(now())
+
+  @@index([entryId, createdAt])
 }
 
 model LibraryEntryCategory {

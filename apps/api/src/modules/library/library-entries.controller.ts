@@ -16,6 +16,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import type {
   AccessTokenPayload,
+  CompleteLibraryBookUploadRequest,
+  CreateLibraryBookUploadRequest,
   CreateLibraryCommentRequest,
   CreateLibraryEntryRequest,
   UpdateLibraryEntryRequest,
@@ -29,6 +31,7 @@ import {
   type LibraryFeedFilters,
   type UploadedPreviewFile,
 } from './library-entries.service';
+import { LibraryFilesService } from './library-files.service';
 import { isAdmin } from './is-admin';
 
 @Controller('library/entries')
@@ -38,6 +41,7 @@ export class LibraryEntriesController {
     private readonly entries: LibraryEntriesService,
     private readonly bookmarks: LibraryBookmarksService,
     private readonly comments: LibraryCommentsService,
+    private readonly files: LibraryFilesService,
   ) {}
 
   @Get()
@@ -58,9 +62,15 @@ export class LibraryEntriesController {
     return this.entries.communityFacets();
   }
 
+  /**
+   * Страница материала — вместе с файлами книги. Файлы спрашиваются только
+   * после того, как запись нашлась и опубликована: у скрытой жалобами
+   * записи `byId` отвечает 404, и ссылок на её файлы никто не получит.
+   */
   @Get(':id')
-  byId(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
-    return this.entries.byId(id, user.sub, isAdmin(user));
+  async byId(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    const entry = await this.entries.byId(id, user.sub, isAdmin(user));
+    return { ...entry, files: await this.files.forEntry(entry.id) };
   }
 
   /**
@@ -87,10 +97,20 @@ export class LibraryEntriesController {
     return this.entries.update(user.sub, isAdmin(user), id, body);
   }
 
+  /**
+   * Ключи файлов забираем до удаления записи: строки файлов уходят вместе с
+   * ней каскадом, и найти потом их объекты в бакете было бы не по чему.
+   * Объекты убираем после — не удалась запись, файлы остаются на месте.
+   */
   @Delete(':id')
   @HttpCode(204)
-  remove(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
-    return this.entries.remove(user.sub, isAdmin(user), id);
+  async remove(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    const keys = await this.files.keysOf(id);
+    await this.entries.remove(user.sub, isAdmin(user), id);
+    await this.files.removeObjects(keys);
   }
 
   @Post(':id/preview')
@@ -105,6 +125,43 @@ export class LibraryEntriesController {
     @UploadedFile() file?: UploadedPreviewFile,
   ) {
     return this.entries.uploadPreview(user.sub, isAdmin(user), id, file);
+  }
+
+  /**
+   * Заявка на заливку файла книги: в ответ — подписанный PUT в бакет. Сам
+   * файл через API не идёт, см. LibraryFilesService.
+   */
+  @Post(':id/files/upload')
+  @Throttle({ default: { ttl: 3_600_000, limit: 30 } })
+  @AdminUnlimited('library')
+  createFileUpload(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: CreateLibraryBookUploadRequest,
+  ) {
+    return this.files.createUpload(user.sub, isAdmin(user), id, body);
+  }
+
+  /** Заливка закончена — прикрепить файл к материалу. */
+  @Post(':id/files')
+  @Throttle({ default: { ttl: 3_600_000, limit: 30 } })
+  @AdminUnlimited('library')
+  completeFileUpload(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: CompleteLibraryBookUploadRequest,
+  ) {
+    return this.files.complete(user.sub, isAdmin(user), id, body);
+  }
+
+  @Delete(':id/files/:fileId')
+  @HttpCode(204)
+  removeFile(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Param('fileId') fileId: string,
+  ) {
+    return this.files.remove(user.sub, isAdmin(user), id, fileId);
   }
 
   @Post(':id/bookmark')

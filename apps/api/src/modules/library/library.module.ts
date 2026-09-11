@@ -18,6 +18,8 @@ import { LibraryEntriesService } from './library-entries.service';
 import { LibraryPreferencesController } from './library-preferences.controller';
 import { LibraryPreferencesService } from './library-preferences.service';
 import { LibraryPreviewsService } from './library-previews.service';
+import { LibraryBookStorageService } from './library-book-storage.service';
+import { LibraryFilesService } from './library-files.service';
 
 @Module({
   // CommunitiesModule — портальная инфраструктура, разрешённая контрактом:
@@ -37,6 +39,8 @@ import { LibraryPreviewsService } from './library-previews.service';
     LibraryEntriesService,
     LibraryPreferencesService,
     LibraryPreviewsService,
+    LibraryBookStorageService,
+    LibraryFilesService,
     LibraryBookmarksService,
     LibraryCommentsService,
     LibraryAdminService,

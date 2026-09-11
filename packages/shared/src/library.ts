@@ -156,6 +156,78 @@ export interface LibraryEntryDto {
   canEdit: boolean;
   /** `true` — обложка загружена вручную, а не взята автоматически с сайта-источника. */
   hasCustomPreview: boolean;
+  /**
+   * Файлы книги: pdf, epub, djvu и прочие. Приходят только со страницы
+   * материала; в ленте поля нет.
+   */
+  files?: LibraryEntryFileDto[];
+}
+
+/**
+ * Форматы файлов книг, которые можно прикрепить к материалу. Порядок — для
+ * подсказки: сначала то, чем читают книги, потом документы.
+ */
+export const LIBRARY_BOOK_FORMATS = [
+  'pdf',
+  'epub',
+  'fb2',
+  'djvu',
+  'mobi',
+  'doc',
+  'docx',
+  'odt',
+  'rtf',
+  'txt',
+] as const;
+
+export type LibraryBookFormat = (typeof LIBRARY_BOOK_FORMATS)[number];
+
+/** Скан книги в djvu или pdf — десятки мегабайт; сотня с запасом. */
+export const LIBRARY_BOOK_MAX_BYTES = 100 * 1024 * 1024;
+
+/** Одна книга в нескольких форматах — да; библиотека в одной карточке — нет. */
+export const LIBRARY_BOOK_FILES_PER_ENTRY = 5;
+
+/** Формат по имени файла; `null` — такой не принимаем. `.djv` — то же, что `.djvu`. */
+export function libraryBookFormatOf(fileName: string): LibraryBookFormat | null {
+  const ext = /\.([a-z0-9]{2,5})$/.exec(fileName.trim().toLowerCase())?.[1];
+  if (!ext) return null;
+  const format = ext === 'djv' ? 'djvu' : ext;
+  return (LIBRARY_BOOK_FORMATS as readonly string[]).includes(format)
+    ? (format as LibraryBookFormat)
+    : null;
+}
+
+export interface LibraryEntryFileDto {
+  id: string;
+  /** Имя, под которым файл скачается: «Бхагавад-гита как она есть.pdf». */
+  name: string;
+  format: LibraryBookFormat;
+  sizeBytes: number;
+  /** Подписанная ссылка на шесть часов: файлы лежат в закрытом бакете. */
+  url: string;
+  createdAt: string;
+}
+
+/** Заявка на заливку: сервер отвечает подписанной ссылкой на PUT в бакет. */
+export interface CreateLibraryBookUploadRequest {
+  fileName: string;
+  sizeBytes: number;
+}
+
+export interface LibraryBookUploadResponse {
+  /** Ключ объекта — его возвращают на завершении. */
+  key: string;
+  url: string;
+  /** Ровно те заголовки, что вошли в подпись: разойдутся — S3 ответит 403. */
+  headers: Record<string, string>;
+  expiresInSeconds: number;
+}
+
+/** Заливка закончена: сервер сверяет объект и прикрепляет файл к материалу. */
+export interface CompleteLibraryBookUploadRequest {
+  key: string;
+  fileName: string;
 }
 
 export interface LibraryFeedResponse {
