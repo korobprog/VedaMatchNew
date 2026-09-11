@@ -16,6 +16,7 @@ import {
   nextIndex as queueNext,
   prevIndex as queuePrev,
 } from "@/lib/music-queue";
+import { resumeQueue } from "@/lib/music-resume-queue";
 import {
   fetchTrackStreamUrl,
   getMusicSettings,
@@ -452,8 +453,11 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       // Локальное зеркало важнее: оно свежее и уже показано человеку.
       if (queue.length > 0) return;
 
-      setQueue([state.trackId]);
-      setIndex(0);
+      // Очередь целиком, а не одна запись: иначе на другом устройстве
+      // «предыдущая» и «следующая» были мертвы (VED-70).
+      const restored = resumeQueue(state.trackId, state.queue);
+      setQueue(restored.queue);
+      setIndex(restored.index);
       resumeToRef.current = state.positionSeconds;
       await loadTrack(state.trackId);
     })();

@@ -3,6 +3,7 @@ import type {
   MusicTrackDetailDto,
 } from "@vedamatch/shared";
 import { formatTrackDuration } from "./music-duration";
+import { resumeQueue } from "./music-resume-queue";
 
 /**
  * Данные карточки быстрых действий Музыки на главной портала.
@@ -30,6 +31,11 @@ export interface MusicQuickAccessResume {
    * дослушана до конца: «осталось 0:00» — это не подсказка, а мусор.
    */
   remainingLabel: string | null;
+  /**
+   * Очередь, в которой стояла запись, — чтобы с главной работали
+   * «предыдущая» и «следующая». Без текущей записи в очереди — одна она.
+   */
+  queue: string[];
 }
 
 export interface MusicQuickAccessData {
@@ -84,6 +90,7 @@ function buildResume(
     // 0:00» уже бессмысленно, а запись формально ещё не кончилась.
     remainingLabel:
       remaining >= 1 ? `осталось ${formatTrackDuration(remaining)}` : null,
+    queue: resumeQueue(track.id, state.queue).queue,
   };
 }
 

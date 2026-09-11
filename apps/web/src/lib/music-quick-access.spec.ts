@@ -76,6 +76,17 @@ describe("buildMusicQuickAccess", () => {
     expect(data?.resume?.percent).toBeCloseTo(37.93, 1);
   });
 
+  // VED-70: с одной записью в очереди «предыдущая» и «следующая» на главной
+  // были мертвы, хотя сервер помнит очередь целиком.
+  it("keeps the saved queue so previous and next work from the home card", () => {
+    const data = buildMusicQuickAccess({
+      state: state({ queue: ["t0", "t1", "t2"] }),
+      track: track(),
+      favoritesCount: 0,
+    });
+    expect(data?.resume?.queue).toEqual(["t0", "t1", "t2"]);
+  });
+
   // Кнопка пуска отдаёт эту секунду плееру: позиция с чужого устройства не
   // должна уехать за длительность и начать воспроизведение в пустоте.
   it("clamps the resume position to the length of the record", () => {

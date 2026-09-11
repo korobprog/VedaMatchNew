@@ -41,83 +41,159 @@ export function MusicQuickWidget({
 }) {
   const player = useMusicPlayer();
   const { resume, favoritesCount } = data;
+  const current = player?.current ?? null;
+
+  // Что показывает карточка на телефоне: играющую запись, когда она есть,
+  // иначе недослушанную. Раньше всегда недослушанную — и «следующая»
+  // переключала звук, а название с обложкой оставались от прежней (VED-70).
+  const shown = current
+    ? {
+        trackId: current.id,
+        title: current.title,
+        coverUrl: current.coverUrl,
+        subtitle: current.artist?.name ?? "Исполнитель не указан",
+      }
+    : resume
+      ? {
+          trackId: resume.trackId,
+          title: resume.title,
+          coverUrl: resume.coverUrl,
+          subtitle:
+            [resume.artistName, resume.remainingLabel]
+              .filter(Boolean)
+              .join(" · ") || "Исполнитель не указан",
+        }
+      : null;
 
   return (
     <section
       aria-label="Музыка"
       className="glass mb-4 rounded-2xl p-3 lg:rounded-[20px] lg:p-[18px]"
     >
-      {/* Телефон и планшет: продолжить + кнопки. */}
+      {/* Телефон и планшет: что играет, кнопки плеера и чипы. */}
       <div className="flex flex-col gap-3 lg:hidden">
-        {resume && (
+        {shown && (
           <>
             <div className="flex items-center gap-2.5">
               <Link
-                href={`/music/tracks/${resume.trackId}`}
-                aria-label={`Открыть запись: ${resume.title}`}
+                href={`/music/tracks/${shown.trackId}`}
+                aria-label={`Открыть запись: ${shown.title}`}
                 className="size-13 shrink-0 overflow-hidden rounded-xl"
               >
                 <MusicCover
-                  url={resume.coverUrl}
-                  seed={resume.trackId}
+                  url={shown.coverUrl}
+                  seed={shown.trackId}
                   alt=""
                   rounded="rounded-xl"
                 />
               </Link>
 
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-violet">
-                  Продолжить
-                </span>
+                {/* Подпись — только о том, что играет. Раньше здесь стояло
+                    фиолетовое «Продолжить»: прописными и цветом оно читалось
+                    как кнопка, а на нажатие не отвечало (VED-70). Что запись
+                    недослушана, и так говорит «осталось …» строкой ниже. */}
+                {player?.isPlaying && (
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-violet">
+                    Играет сейчас
+                  </span>
+                )}
                 <span className="truncate text-sm font-semibold text-text-0">
-                  {resume.title}
+                  {shown.title}
                 </span>
                 <span className="truncate text-xs text-text-2">
-                  {[resume.artistName, resume.remainingLabel]
-                    .filter(Boolean)
-                    .join(" · ") || "Исполнитель не указан"}
+                  {shown.subtitle}
                 </span>
               </div>
 
-              {/* Пауза, а не только пуск. На главной портала полосы плеера
-                  нет — она спрятана, чтобы две панели одного плеера не
-                  спорили, — и эта кнопка остаётся единственной на экране
-                  телефона. Если бы она всегда звала `play()`, играющую
-                  запись здесь было бы нечем остановить, а нажатие
-                  перезапускало бы её с сохранённой секунды. */}
-              <button
-                type="button"
-                aria-label={
-                  player?.isPlaying ? "Пауза" : `Продолжить запись: ${resume.title}`
-                }
-                disabled={!player}
-                onClick={() => {
-                  if (player?.current) player.toggle();
-                  else
-                    player?.play(
-                      resume.trackId,
-                      undefined,
-                      resume.positionSeconds,
-                    );
-                }}
-                className="flex size-11 shrink-0 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint disabled:opacity-40"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  className="size-4"
-                  fill="currentColor"
-                  aria-hidden="true"
+              {/* Назад, пуск, вперёд — как на широком экране (VED-70).
+                  Соседи есть, когда очередь восстановлена целиком; для
+                  одной записи кнопки честно гаснут, а не молчат. */}
+              <div className="flex shrink-0 items-center gap-0.5">
+                <button
+                  type="button"
+                  aria-label="Предыдущая запись"
+                  disabled={!player?.hasPrev}
+                  onClick={() => player?.prev()}
+                  className="flex size-10 items-center justify-center rounded-full text-text-1 hover:text-text-0 disabled:opacity-40"
                 >
-                  {player?.isPlaying ? (
-                    <>
-                      <rect x="6" y="4" width="4" height="16" rx="1" />
-                      <rect x="14" y="4" width="4" height="16" rx="1" />
-                    </>
-                  ) : (
-                    <path d="M7 4l13 8-13 8z" />
-                  )}
-                </svg>
-              </button>
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="size-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M19 4L9 12l10 8z" />
+                    <path d="M5 5v14" />
+                  </svg>
+                </button>
+
+                {/* Пауза, а не только пуск. На главной портала полосы плеера
+                    нет — она спрятана, чтобы две панели одного плеера не
+                    спорили, — и эта кнопка остаётся единственной на экране
+                    телефона. Если бы она всегда звала `play()`, играющую
+                    запись здесь было бы нечем остановить, а нажатие
+                    перезапускало бы её с сохранённой секунды. */}
+                <button
+                  type="button"
+                  aria-label={
+                    player?.isPlaying ? "Пауза" : `Слушать: ${shown.title}`
+                  }
+                  disabled={!player}
+                  onClick={() => {
+                    if (player?.current) player.toggle();
+                    else if (resume)
+                      player?.play(
+                        resume.trackId,
+                        resume.queue,
+                        resume.positionSeconds,
+                      );
+                  }}
+                  className="flex size-11 shrink-0 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint disabled:opacity-40"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="size-4"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    {player?.isPlaying ? (
+                      <>
+                        <rect x="6" y="4" width="4" height="16" rx="1" />
+                        <rect x="14" y="4" width="4" height="16" rx="1" />
+                      </>
+                    ) : (
+                      <path d="M7 4l13 8-13 8z" />
+                    )}
+                  </svg>
+                </button>
+
+                <button
+                  type="button"
+                  aria-label="Следующая запись"
+                  disabled={!player?.hasNext}
+                  onClick={() => player?.next()}
+                  className="flex size-10 items-center justify-center rounded-full text-text-1 hover:text-text-0 disabled:opacity-40"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="size-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 4l10 8-10 8z" />
+                    <path d="M19 5v14" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             {/*
@@ -145,7 +221,7 @@ export function MusicQuickWidget({
               >
                 <div
                   className="h-full rounded-full bg-violet"
-                  style={{ width: `${resume.percent}%` }}
+                  style={{ width: `${resume?.percent ?? 0}%` }}
                 />
               </div>
             )}
@@ -252,9 +328,13 @@ function NowPlayingColumn({ data }: { data: MusicQuickAccessData }) {
             Kabe…» не отвечает на вопрос, что именно играет. Строка едет
             только если не помещается, и стоит под `prefers-reduced-motion`. */}
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-violet">
-            {player?.isPlaying ? "Играет сейчас" : "Продолжить"}
-          </span>
+          {/* Только о том, что играет: фиолетовое «Продолжить» читалось как
+              кнопка, которая не нажимается (VED-70). */}
+          {player?.isPlaying && (
+            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-violet">
+              Играет сейчас
+            </span>
+          )}
           <MusicMarqueeText
             text={title}
             className="font-display text-lg font-bold text-text-0"
@@ -317,7 +397,11 @@ function NowPlayingColumn({ data }: { data: MusicQuickAccessData }) {
             onClick={() => {
               if (player?.current) player.toggle();
               else if (resume)
-                player?.play(resume.trackId, undefined, resume.positionSeconds);
+                player?.play(
+                  resume.trackId,
+                  resume.queue,
+                  resume.positionSeconds,
+                );
             }}
             className="flex size-11 shrink-0 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint disabled:opacity-40"
           >
