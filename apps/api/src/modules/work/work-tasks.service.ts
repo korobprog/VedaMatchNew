@@ -512,6 +512,36 @@ export class WorkTasksService {
     ]);
   }
 
+  /**
+   * Вернуть карточку из архива (VED-61). Встаёт в свою колонку на прежнее
+   * место. Колонка точно на месте: убранные карточки удаляются вместе с ней
+   * (каскад), так что раз карточка есть — есть и колонка. Уже стоящую на
+   * доске не трогаем — повтор безвреден.
+   */
+  async restore(taskId: string, userId: string): Promise<WorkTaskDto> {
+    const context = await this.taskContext(taskId);
+    assertWorkAccess(
+      await this.spaces.roleOf(context.spaceId, userId),
+      'editTask',
+    );
+    const restored = await this.prisma.workTask.updateMany({
+      where: { id: taskId, archivedAt: { not: null } },
+      data: { archivedAt: null },
+    });
+    if (restored.count > 0) {
+      await this.prisma.workActivity.create({
+        data: {
+          spaceId: context.spaceId,
+          taskId,
+          actorId: userId,
+          kind: 'task_restored',
+          payload: {},
+        },
+      });
+    }
+    return this.get(taskId, userId);
+  }
+
   async addComment(
     taskId: string,
     userId: string,

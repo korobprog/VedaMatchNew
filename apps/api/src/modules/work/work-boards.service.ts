@@ -16,6 +16,7 @@ import {
   type UpdateWorkColumnRequest,
   type WorkBoardDto,
   type WorkLabelDto,
+  type WorkArchiveDto,
   type WorkTaskSearchResponse,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -24,6 +25,12 @@ import { toWorkLabel, toWorkMember, toWorkTaskCard } from './work-dto';
 import { WORK_POSITION_STEP, resolveMovePosition } from './work-position';
 import { assertWorkAccess } from './work-roles';
 import { WorkSpacesService } from './work-spaces.service';
+import {
+  WORK_ARCHIVE_LIMIT,
+  archiveOrderBy,
+  archiveWhere,
+  parseArchiveView,
+} from './work-archive';
 import {
   TASK_SEARCH_LIMIT,
   taskSearchWhere,
@@ -84,6 +91,45 @@ export class WorkBoardsService {
    * Задачи доски, в которых нашлись все слова запроса (VED-76). Права — как
    * на просмотр доски: искать можно ровно то, что и так видно.
    */
+  /**
+   * Архив доски (VED-61): выполненные или убранные карточки, свежие первыми.
+   * Права — как на просмотр доски: в архиве то же, что было на ней.
+   */
+  async archive(
+    boardId: string,
+    userId: string,
+    rawView: unknown,
+  ): Promise<WorkArchiveDto> {
+    const spaceId = await this.spaceOfBoard(boardId);
+    assertWorkAccess(await this.spaces.roleOf(spaceId, userId), 'view');
+
+    const view = parseArchiveView(rawView);
+    const [space, tasks] = await Promise.all([
+      this.prisma.workSpace.findUnique({
+        where: { id: spaceId },
+        select: { prefix: true },
+      }),
+      this.prisma.workTask.findMany({
+        where: archiveWhere(boardId, view),
+        orderBy: archiveOrderBy(view),
+        // На одну больше предела: так видно, что показаны не все.
+        take: WORK_ARCHIVE_LIMIT + 1,
+        include: { ...taskCardInclude, column: { select: { name: true } } },
+      }),
+    ]);
+    const prefix = space?.prefix ?? '';
+
+    return {
+      view,
+      hasMore: tasks.length > WORK_ARCHIVE_LIMIT,
+      items: tasks.slice(0, WORK_ARCHIVE_LIMIT).map((task) => ({
+        ...toWorkTaskCard(task, prefix),
+        columnName: task.column.name,
+        archivedAt: task.archivedAt?.toISOString() ?? null,
+      })),
+    };
+  }
+
   async searchTasks(
     boardId: string,
     userId: string,

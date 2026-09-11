@@ -16,6 +16,7 @@ import {
   getWorkTask,
   moveWorkTask,
   removeWorkChecklistItem,
+  restoreWorkTask,
   updateWorkChecklistItem,
   updateWorkTask,
 } from "@/lib/work-api";
@@ -529,21 +530,39 @@ export function WorkTaskDialog({
               </form>
             )}
 
-            {canEdit && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    await archiveWorkTask(task.id);
-                    onClose();
-                  })
-                }
-                className="mt-6 text-sm text-magenta disabled:opacity-50"
-              >
-                Убрать карточку в архив
-              </button>
-            )}
+            {/* Карточка из архива доски (VED-61): вместо «убрать» — «вернуть».
+                Иначе открытая из архива карточка предлагала бы убрать её
+                второй раз, а обратной дороги не было вовсе. */}
+            {canEdit &&
+              (task.archivedAt ? (
+                <div className="mt-6 flex flex-wrap items-center gap-3">
+                  <p className="text-sm text-text-2">
+                    Карточка убрана с доски и лежит в архиве.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void run(() => restoreWorkTask(task.id))}
+                    className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm font-semibold text-text-0 disabled:opacity-50"
+                  >
+                    Вернуть на доску
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(async () => {
+                      await archiveWorkTask(task.id);
+                      onClose();
+                    })
+                  }
+                  className="mt-6 text-sm text-magenta disabled:opacity-50"
+                >
+                  Убрать карточку в архив
+                </button>
+              ))}
           </>
         )}
       </div>

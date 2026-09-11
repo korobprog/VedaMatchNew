@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  Archive,
   ArrowLeft,
   CalendarClock,
   Check,
@@ -58,6 +59,7 @@ import {
   toggleCollapsedColumn,
   writeCollapsedColumns,
 } from "./column-collapse";
+import { WorkArchivePanel } from "./archive-panel";
 import { WorkInvitePanel } from "./invite-panel";
 import {
   TASK_SEARCH_DEBOUNCE_MS,
@@ -100,6 +102,8 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   const [board, setBoard] = useState<WorkBoardDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  /** Архив доски (VED-61): выполненные и убранные карточки. */
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [composerColumn, setComposerColumn] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   // Исполнитель и срок новой задачи. Заполнены заранее — см. openComposer.
@@ -517,6 +521,14 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               {allFolded ? "Развернуть все" : "Свернуть все"}
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setArchiveOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-glass-brd px-2.5 py-2 text-xs font-semibold text-text-1 hover:text-text-0"
+          >
+            <Archive aria-hidden className="size-3.5" />
+            Архив
+          </button>
           <WorkInvitePanel space={space} onChanged={reload} />
         </div>
       </div>
@@ -986,6 +998,17 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             </form>
           ))}
       </div>
+
+      {archiveOpen && (
+        <WorkArchivePanel
+          boardId={board.id}
+          canEdit={Boolean(canEdit)}
+          covered={openTaskId !== null}
+          onOpenTask={setOpenTaskId}
+          onRestored={() => void reload()}
+          onClose={() => setArchiveOpen(false)}
+        />
+      )}
 
       {openTaskId && (
         <WorkTaskDialog

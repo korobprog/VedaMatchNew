@@ -5161,6 +5161,8 @@ enum WorkActivityKind {
   task_due_set
   task_completed
   task_archived
+  /// Карточку вернули из архива доски (VED-61).
+  task_restored
   comment_added
   member_joined
 }

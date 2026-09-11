@@ -15,6 +15,7 @@ export type WorkActivityKind =
   | 'task_due_set'
   | 'task_completed'
   | 'task_archived'
+  | 'task_restored'
   | 'comment_added'
   | 'member_joined';
 
@@ -175,6 +176,27 @@ export interface WorkBoardSummaryDto {
  * Доска уже загружена целиком, поэтому отдаём только идентификаторы — она
  * сама спрячет остальные.
  */
+/**
+ * Архив доски (VED-61): выполненные задачи и убранные с доски карточки.
+ * «Выполненные» — всё, что закрыто, даже если карточка ещё стоит в колонке с
+ * галочкой; «Убранные» — то, что убрали кнопкой «в архив».
+ */
+export type WorkArchiveView = 'done' | 'removed';
+
+export interface WorkArchiveItemDto extends WorkTaskCardDto {
+  /** В какой колонке карточка стоит или стояла. */
+  columnName: string;
+  /** Когда убрали с доски; `null` — карточка всё ещё на доске. */
+  archivedAt: string | null;
+}
+
+export interface WorkArchiveDto {
+  view: WorkArchiveView;
+  items: WorkArchiveItemDto[];
+  /** Показаны не все: архив режется по свежести. */
+  hasMore: boolean;
+}
+
 export interface WorkTaskSearchResponse {
   query: string;
   taskIds: string[];

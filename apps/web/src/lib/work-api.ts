@@ -16,6 +16,8 @@ import type {
   UpdateWorkSpaceRequest,
   UpdateWorkTaskRequest,
   WorkAgendaDto,
+  WorkArchiveDto,
+  WorkArchiveView,
   WorkBoardDto,
   WorkContactsDto,
   WorkInviteDto,
@@ -170,6 +172,14 @@ export const moveWorkTask = (taskId: string, body: MoveWorkTaskRequest) =>
 
 export const archiveWorkTask = (taskId: string) =>
   send<void>(`/work/tasks/${taskId}`, "DELETE");
+
+/** Архив доски (VED-61): выполненные или убранные карточки. */
+export const getWorkBoardArchive = (boardId: string, view: WorkArchiveView) =>
+  request<WorkArchiveDto>(`/work/boards/${boardId}/archive?view=${view}`);
+
+/** Вернуть карточку из архива на её колонку. */
+export const restoreWorkTask = (taskId: string) =>
+  send<WorkTaskDto>(`/work/tasks/${taskId}/restore`, "POST");
 
 export const commentWorkTask = (
   taskId: string,
