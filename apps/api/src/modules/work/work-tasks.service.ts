@@ -32,6 +32,7 @@ import {
   type WorkTaskCommentedEvent,
 } from './work-events';
 import { WorkNoticesService } from './work-notices.service';
+import { newTaskColumnQuery } from './work-task-column';
 import {
   toWorkAgendaItem,
   toWorkAgendaResponse,
@@ -221,10 +222,9 @@ export class WorkTasksService {
       'editTask',
     );
 
-    const column = await this.prisma.workColumn.findFirst({
-      where: { id: request.columnId, boardId },
-      select: { id: true, isDone: true },
-    });
+    const column = await this.prisma.workColumn.findFirst(
+      newTaskColumnQuery(boardId, request.columnId),
+    );
     if (!column) throw new NotFoundException('Колонка не найдена');
 
     const title = requireText(

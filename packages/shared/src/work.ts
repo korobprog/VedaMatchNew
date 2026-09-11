@@ -318,7 +318,8 @@ export interface UpdateWorkColumnRequest {
 }
 
 export interface CreateWorkTaskRequest {
-  columnId: string;
+  /** Колонка; без неё задача встаёт в первую колонку доски. */
+  columnId?: string;
   title: string;
   description?: string;
   priority?: WorkTaskPriority;
