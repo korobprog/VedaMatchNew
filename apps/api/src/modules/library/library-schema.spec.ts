@@ -14,6 +14,7 @@ describe('Library Prisma schema', () => {
         'video',
         'audio',
         'book',
+        'katha',
         'course',
         'app',
         'telegram_channel',

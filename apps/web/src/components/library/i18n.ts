@@ -103,7 +103,7 @@ const ui = {
     "add.hintDescription": "Пара предложений: о чём материал и кому пригодится",
     "add.stepWhat": "Что добавляем",
     "add.stepWhatHint":
-      "Тип задаёт, что спросим дальше: видео нужен адрес, книге — источник",
+      "Тип задаёт, что спросим дальше: видео нужен адрес, книге — источник, катхе — текст",
     "add.stepWhere": "Где найти и как называется",
     "add.stepWhereHint":
       "Материал в сети — дайте ссылку; из книги — укажите источник",
@@ -134,6 +134,16 @@ const ui = {
       "Откуда материал: «Бхагавад-гита 9.22, комментарий Прабхупады»",
     "add.sourceRequired": "Укажите источник или переключитесь на ссылку",
     "add.sourceTooLong": "Источник длиннее 300 символов",
+    "add.body": "Текст",
+    "add.hintBody":
+      "Вставьте текст целиком — лекцию, беседу, главу. Абзацы разделяйте пустой строкой",
+    "add.hintKathaSource":
+      "Где и когда прозвучало: «Лекция по Бхагаватам 1.2.6, Лондон, 1972» — необязательно",
+    "add.bodyRequired": "Вставьте текст катхи",
+    "add.bodyTooLong": "Текст длиннее 200 000 символов",
+    "add.stepText": "Текст и название",
+    "add.stepTextHint":
+      "Катху читают прямо на портале — вставьте её текст целиком",
     "entry.preview": "Обложка материала",
     "entry.play": "Смотреть здесь",
     "entry.watchOn": "Смотреть на",
@@ -336,7 +346,7 @@ const ui = {
       "A couple of sentences: what it is about and who it helps",
     "add.stepWhat": "What are you adding",
     "add.stepWhatHint":
-      "The type decides what comes next: a video needs an address, a book needs a source",
+      "The type decides what comes next: a video needs an address, a book needs a source, a katha needs its text",
     "add.stepWhere": "Where to find it and what it is called",
     "add.stepWhereHint":
       "Material on the web — give a link; from a book — name the source",
@@ -367,6 +377,16 @@ const ui = {
       "Where the material comes from: “Bhagavad-gita 9.22, Prabhupada’s purport”",
     "add.sourceRequired": "Name the source or switch to a link",
     "add.sourceTooLong": "The source is longer than 300 characters",
+    "add.body": "Text",
+    "add.hintBody":
+      "Paste the whole text — a lecture, a talk, a chapter. Separate paragraphs with an empty line",
+    "add.hintKathaSource":
+      "Where and when it was given: “Lecture on Bhagavatam 1.2.6, London, 1972” — optional",
+    "add.bodyRequired": "Paste the text of the katha",
+    "add.bodyTooLong": "The text is longer than 200,000 characters",
+    "add.stepText": "The text and its title",
+    "add.stepTextHint":
+      "A katha is read right here on the portal — paste its whole text",
     "entry.preview": "Material cover",
     "entry.play": "Play here",
     "entry.watchOn": "Watch on",
@@ -478,6 +498,7 @@ const entryTypes: Record<LibraryLocale, Record<LibraryEntryType, string>> = {
     video: "Видео",
     audio: "Аудио",
     book: "Книга",
+    katha: "Катха",
     course: "Курс",
     app: "Приложение",
     telegram_channel: "Telegram-канал",
@@ -491,6 +512,7 @@ const entryTypes: Record<LibraryLocale, Record<LibraryEntryType, string>> = {
     video: "Video",
     audio: "Audio",
     book: "Book",
+    katha: "Katha",
     course: "Course",
     app: "App",
     telegram_channel: "Telegram channel",

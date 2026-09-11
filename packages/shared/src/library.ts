@@ -6,6 +6,8 @@ export type LibraryEntryType =
   | 'video'
   | 'audio'
   | 'book'
+  /** Текст целиком на портале: лекция, беседа, глава. */
+  | 'katha'
   | 'course'
   | 'app'
   | 'telegram_channel'
@@ -113,6 +115,12 @@ export interface LibraryEntryDto {
   domain: string | null;
   /** Откуда материал, когда ссылки нет: «Бхагавад-гита 9.22». */
   source: string | null;
+  /**
+   * Текст катхи целиком. Приходит только со страницы материала
+   * (`GET /library/entries/:id`) и в ответе на правку; в ленте поля нет:
+   * там хватает описания, а текст бывает в сотни килобайт.
+   */
+  body?: string | null;
   type: LibraryEntryType;
   contentLanguage: string;
   titleRu: string | null;
@@ -225,13 +233,16 @@ export interface CreateLibraryCategoryConflict {
 }
 
 /**
- * Заполнено должно быть хотя бы одно из `url` / `source`: у цитаты из книги
- * адреса нет, у видео — наоборот, обязателен. Проверяют и сервис, и
- * CHECK-ограничение в базе.
+ * Заполнено должно быть хотя бы одно из `url` / `source` / `body`: у цитаты
+ * из книги адреса нет, у видео — наоборот, обязателен, а катхе (`katha`)
+ * обязателен собственный текст. Проверяют и сервис, и CHECK-ограничение в
+ * базе.
  */
 export interface CreateLibraryEntryRequest {
   url?: string | null;
   source?: string | null;
+  /** Текст целиком — у катхи. До 200 000 знаков. */
+  body?: string | null;
   type: LibraryEntryType;
   contentLanguage: string;
   titleRu?: string | null;
@@ -254,6 +265,9 @@ export interface UpdateLibraryEntryRequest {
   /** Новый адрес. Пустая строка снимает его — так можно только у материала
    *  с заполненным источником. */
   url?: string | null;
+  /** Текст катхи. `null` снимает его — если материалу остаётся на что
+   *  указывать и это не катха: катхе текст обязателен. */
+  body?: string | null;
   type?: LibraryEntryType;
   contentLanguage?: string;
   titleRu?: string | null;

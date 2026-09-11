@@ -172,4 +172,32 @@ describe("AddEntryWizard", () => {
     expect(screen.getByText("Бхагавад-гита 9.22")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Добавить" })).toBeEnabled();
   });
+
+  it("у катхи вместо ссылки просит сам текст и доходит до отправки", async () => {
+    const user = userEvent.setup();
+    setup();
+    await pickType(user, "katha");
+
+    // Переключателя «ссылка / источник» у катхи нет: указывать ей есть на
+    // что одно — на собственный текст.
+    expect(
+      screen.getByRole("heading", { name: "Текст и название" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Адрес ссылки")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Только источник")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Далее" })).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Текст"), "Первый абзац лекции.");
+    await user.type(
+      screen.getByLabelText("Заголовок по-русски"),
+      "Лекция о святом имени",
+    );
+    await user.click(screen.getByRole("button", { name: "Далее" }));
+
+    await user.click(screen.getByLabelText("Шрила Прабхупада"));
+    await user.click(screen.getByRole("button", { name: "Далее" }));
+
+    expect(screen.getByText("Первый абзац лекции.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Добавить" })).toBeEnabled();
+  });
 });

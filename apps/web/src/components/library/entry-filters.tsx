@@ -16,6 +16,7 @@ const TYPES: LibraryEntryType[] = [
   "video",
   "audio",
   "book",
+  "katha",
   "course",
   "app",
   "telegram_channel",

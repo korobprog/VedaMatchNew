@@ -28,6 +28,7 @@ const TYPE_LABEL: Record<string, string> = {
   video: 'видео',
   audio: 'аудио',
   book: 'книга',
+  katha: 'катха',
   course: 'курс',
   app: 'приложение',
   telegram_channel: 'телеграм-канал',

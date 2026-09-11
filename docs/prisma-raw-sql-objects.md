@@ -9,8 +9,8 @@
 
 | Объект | Где создан | Что генерирует Prisma |
 |---|---|---|
-| `LibraryEntry."searchVector"` — generated-колонка `tsvector` | `library_core` | `ALTER COLUMN "searchVector" DROP DEFAULT` |
-| `LibraryEntry_searchVector_idx` — GIN по `searchVector` | `library_core` | `DROP INDEX` |
+| `LibraryEntry."searchVector"` — generated-колонка `tsvector` | `library_core`, пересоздана в `library_katha` (веса и текст катхи) | `ALTER COLUMN "searchVector" DROP DEFAULT` |
+| `LibraryEntry_searchVector_idx` — GIN по `searchVector` | `library_core`, пересоздан в `library_katha` | `DROP INDEX` |
 | `LibraryCategory_normalizedRu_trgm_idx` — GIN `gin_trgm_ops` | `library_core` | `DROP INDEX` |
 | `LibraryCategory_normalizedEn_trgm_idx` — GIN `gin_trgm_ops` | `library_core` | `DROP INDEX` |
 | `VedabaseSearchUnit_text_fts_idx` — GIN по `to_tsvector('russian', "text")` | `20260711_vedabase_postgres_content` | `DROP INDEX` |

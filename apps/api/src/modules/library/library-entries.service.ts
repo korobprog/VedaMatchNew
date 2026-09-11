@@ -37,6 +37,11 @@ import {
   feedOrderBy,
   resolveSort,
 } from './library-feed-query';
+import {
+  entryLocatorError,
+  MAX_BODY_LENGTH,
+  normalizeEntryBody,
+} from './entry-body';
 import { LibraryBookmarksService } from './library-bookmarks.service';
 import { LibraryCategoriesService } from './library-categories.service';
 import { LibraryPreviewsService } from './library-previews.service';
@@ -57,6 +62,7 @@ const ENTRY_TYPES: LibraryEntryType[] = [
   'video',
   'audio',
   'book',
+  'katha',
   'course',
   'app',
   'telegram_channel',
@@ -132,6 +138,16 @@ const ENTRY_SELECT = {
   },
 } satisfies Prisma.LibraryEntrySelect;
 
+/**
+ * Страница материала и ответ на правку — вместе с текстом. Лента берёт
+ * ENTRY_SELECT без него: двадцать лекций по сотне килобайт ради карточек,
+ * где текст не показывается, гонять незачем.
+ */
+const ENTRY_DETAIL_SELECT = {
+  ...ENTRY_SELECT,
+  body: true,
+} satisfies Prisma.LibraryEntrySelect;
+
 @Injectable()
 export class LibraryEntriesService {
   constructor(
@@ -200,16 +216,30 @@ export class LibraryEntriesService {
     userId: string,
     body: CreateLibraryEntryRequest,
   ): Promise<LibraryEntryDto> {
+    // Тип проверяется первым: от него зависит, на что материал обязан
+    // указывать.
+    if (!ENTRY_TYPES.includes(body.type)) {
+      throw new BadRequestException('unsupported_type');
+    }
+
     // Адрес есть не у каждого материала: цитата из книги описывается
-    // источником. Пустыми оба быть не могут — того же требует
-    // CHECK-ограничение LibraryEntry_url_or_source в базе.
+    // источником, катха — собственным текстом. Хотя бы одно из трёх быть
+    // обязано, а у катхи — именно текст; см. entryLocatorError.
     const rawUrl = trimOrNull(body.url);
     const source = trimOrNull(body.source);
-    if (!rawUrl && !source) {
-      throw new BadRequestException('url_or_source_required');
-    }
+    const text = normalizeEntryBody(body.body);
+    const locatorError = entryLocatorError({
+      type: body.type,
+      url: rawUrl,
+      source,
+      body: text,
+    });
+    if (locatorError) throw new BadRequestException(locatorError);
     if (source && source.length > MAX_SOURCE_LENGTH) {
       throw new BadRequestException('source_too_long');
+    }
+    if (text && text.length > MAX_BODY_LENGTH) {
+      throw new BadRequestException('body_too_long');
     }
 
     let normalized: ReturnType<typeof normalizeUrl> | null = null;
@@ -220,10 +250,6 @@ export class LibraryEntriesService {
       } catch {
         throw new BadRequestException('unsupported_url');
       }
-    }
-
-    if (!ENTRY_TYPES.includes(body.type)) {
-      throw new BadRequestException('unsupported_type');
     }
 
     const titleRu = trimOrNull(body.titleRu);
@@ -300,6 +326,7 @@ export class LibraryEntriesService {
           urlNormalized: normalized?.normalized ?? null,
           domain: normalized?.domain ?? null,
           source,
+          body: text,
           type: body.type,
           contentLanguage: language,
           titleRu,
@@ -374,9 +401,11 @@ export class LibraryEntriesService {
     id: string,
     body: UpdateLibraryEntryRequest,
   ): Promise<LibraryEntryDto> {
+    // С текстом: итог правки проверяется целиком, а текст — одно из того, на
+    // что материал может указывать (см. entryLocatorError ниже).
     const existing = await this.prisma.libraryEntry.findUnique({
       where: { id },
-      select: ENTRY_SELECT,
+      select: ENTRY_DETAIL_SELECT,
     });
     if (!existing || existing.status !== 'published') {
       throw new NotFoundException('entry_not_found');
@@ -398,11 +427,8 @@ export class LibraryEntriesService {
       });
 
       if (!rawUrl) {
-        // Снять адрес можно только у материала с источником: пустыми оба
-        // быть не могут — того же требует CHECK-ограничение в базе.
-        if (!existing.source) {
-          throw new BadRequestException('url_or_source_required');
-        }
+        // Снять адрес можно, только если материалу останется на что
+        // указывать, — это проверяет entryLocatorError по итогу правки.
         urlChanged = current.urlNormalized !== null;
       } else {
         if (rawUrl.length > 2000) throw new BadRequestException('url_too_long');
@@ -526,6 +552,27 @@ export class LibraryEntriesService {
       data.descriptionEn = descriptionEn;
     }
 
+    // Текст: `undefined` — не трогать, пустой — снять.
+    let nextBody = existing.body;
+    if (body.body !== undefined) {
+      nextBody = normalizeEntryBody(body.body);
+      if (nextBody && nextBody.length > MAX_BODY_LENGTH) {
+        throw new BadRequestException('body_too_long');
+      }
+      data.body = nextBody;
+    }
+
+    // Итог правки обязан на что-то указывать. Проверяем сложившуюся запись,
+    // а не поля по одному: адрес снимают, текст добавляют и тип меняют
+    // одним сохранением.
+    const locatorError = entryLocatorError({
+      type: body.type ?? existing.type,
+      url: urlChanged ? (nextUrl?.url ?? null) : existing.url,
+      source: existing.source,
+      body: nextBody,
+    });
+    if (locatorError) throw new BadRequestException(locatorError);
+
     let categoryIds: string[] | null = null;
     if (body.categoryIds !== undefined) {
       categoryIds = [...new Set(body.categoryIds)];
@@ -580,7 +627,7 @@ export class LibraryEntriesService {
 
       return tx.libraryEntry.findUniqueOrThrow({
         where: { id },
-        select: ENTRY_SELECT,
+        select: ENTRY_DETAIL_SELECT,
       });
     });
 
@@ -595,7 +642,7 @@ export class LibraryEntriesService {
       this.previews.captureInBackground(id, nextUrl.url, updated.previewUrl);
     }
 
-    return toEntryDto(updated, false, userId, viewerIsAdmin);
+    return toEntryDetailDto(updated, false, userId, viewerIsAdmin);
   }
 
   /**
@@ -829,9 +876,10 @@ export class LibraryEntriesService {
     viewerId?: string,
     viewerIsAdmin = false,
   ): Promise<LibraryEntryDto> {
+    // Страница материала — единственное место, где текст катхи читают.
     const entry = await this.prisma.libraryEntry.findUnique({
       where: { id },
-      select: ENTRY_SELECT,
+      select: ENTRY_DETAIL_SELECT,
     });
     if (!entry || entry.status !== 'published') {
       throw new NotFoundException('entry_not_found');
@@ -839,7 +887,12 @@ export class LibraryEntriesService {
     const marked = viewerId
       ? await this.bookmarks.markedAmong(viewerId, [entry.id])
       : new Set<string>();
-    return toEntryDto(entry, marked.has(entry.id), viewerId, viewerIsAdmin);
+    return toEntryDetailDto(
+      entry,
+      marked.has(entry.id),
+      viewerId,
+      viewerIsAdmin,
+    );
   }
 
   /** `null` — поиска нет; массив — найденные id в порядке релевантности. */
@@ -887,6 +940,22 @@ function normalizeLanguage(value: string | undefined): string {
 }
 
 type EntryRow = Prisma.LibraryEntryGetPayload<{ select: typeof ENTRY_SELECT }>;
+type EntryDetailRow = Prisma.LibraryEntryGetPayload<{
+  select: typeof ENTRY_DETAIL_SELECT;
+}>;
+
+/** Карточка для страницы материала — та же, что в ленте, плюс текст. */
+function toEntryDetailDto(
+  entry: EntryDetailRow,
+  bookmarked = false,
+  viewerId?: string,
+  viewerIsAdmin = false,
+): LibraryEntryDto {
+  return {
+    ...toEntryDto(entry, bookmarked, viewerId, viewerIsAdmin),
+    body: entry.body,
+  };
+}
 
 function toEntryDto(
   entry: EntryRow,

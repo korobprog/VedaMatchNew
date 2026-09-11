@@ -26,6 +26,8 @@ import {
   entrySubmitFailure,
   failureText,
   isWizardStepReady,
+  locatorForType,
+  MAX_BODY_LENGTH,
   MAX_DESCRIPTION_LENGTH,
   MAX_SOURCE_LENGTH,
   MAX_TITLE_LENGTH,
@@ -83,6 +85,7 @@ export function AddEntryWizard({
   const [draft, setDraft] = useState<LibraryEntryDraft>({
     url: "",
     source: "",
+    body: "",
     locator: defaultLocator("article"),
     type: "article",
     contentLanguage: locale,
@@ -102,10 +105,15 @@ export function AddEntryWizard({
   /**
    * Пока человек не трогал переключатель сам, его положение задаёт тип.
    * После ручного выбора тип его больше не двигает: иначе «книга, но по
-   * ссылке» сбрасывалось бы каждый раз при возврате на первый шаг.
+   * ссылке» сбрасывалось бы каждый раз при возврате на первый шаг. Катха —
+   * исключение в обе стороны, см. locatorForType.
    */
   function changeType(type: LibraryEntryType) {
-    patch(locatorTouched ? { type } : { type, locator: defaultLocator(type) });
+    setDraft((current) => ({
+      ...current,
+      type,
+      locator: locatorForType(type, current.locator, locatorTouched),
+    }));
   }
 
   function changeLocator(locator: EntryLocator) {
@@ -198,7 +206,12 @@ export function AddEntryWizard({
     }
   }
 
-  const current = STEPS[step - 1];
+  // У катхи второй шаг — не «где найти», а сам текст: заголовок шага
+  // говорит о том, что на нём просят.
+  const current =
+    step === 2 && draft.locator === "body"
+      ? ({ title: "add.stepText", hint: "add.stepTextHint" } as const)
+      : STEPS[step - 1];
   const ready = isWizardStepReady(step, draft);
 
   return (
@@ -264,33 +277,86 @@ export function AddEntryWizard({
 
         {step === 2 && (
           <>
-            <fieldset className="text-sm text-text-1">
-              {/* Легенда скрыта: на экране она повторяла бы заголовок шага,
-                  а скринридеру нужна, чтобы сгруппировать переключатели. */}
-              <legend className="sr-only">
-                {t(locale, "add.locatorLegend")}
-              </legend>
-              <div className="flex flex-wrap gap-4">
-                {(["url", "source"] as const).map((value) => (
-                  <label key={value} className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="wizard-locator"
-                      checked={draft.locator === value}
-                      onChange={() => changeLocator(value)}
+            {/* Катхе переключатель ни к чему: указывать ей есть на что одно —
+                на собственный текст. Без maxLength у текста: на вставке он
+                молча обрезал бы длинную лекцию, а так превышение видно в
+                подсказке, и «Далее» не пускает дальше. */}
+            {draft.locator === "body" && (
+              <>
+                <div>
+                  <label className="text-sm text-text-1">
+                    {t(locale, "add.body")}
+                    <textarea
+                      value={draft.body}
+                      onChange={(event) => patch({ body: event.target.value })}
+                      rows={12}
+                      lang={draft.contentLanguage}
+                      aria-describedby="wizard-body-hint"
+                      className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
                     />
-                    {t(
-                      locale,
-                      value === "url" ? "add.locatorUrl" : "add.locatorSource",
-                    )}
                   </label>
-                ))}
-              </div>
-            </fieldset>
+                  <span
+                    id="wizard-body-hint"
+                    className="mt-1 block text-xs text-text-2"
+                  >
+                    {draft.body.trim().length > MAX_BODY_LENGTH
+                      ? t(locale, "add.bodyTooLong")
+                      : t(locale, "add.hintBody")}{" "}
+                    · {draft.body.length}/{MAX_BODY_LENGTH}
+                  </span>
+                </div>
+                <div>
+                  <label className="text-sm text-text-1">
+                    {t(locale, "add.source")}
+                    <input
+                      value={draft.source}
+                      onChange={(event) => patch({ source: event.target.value })}
+                      maxLength={MAX_SOURCE_LENGTH}
+                      aria-describedby="wizard-katha-source-hint"
+                      className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+                    />
+                  </label>
+                  <span
+                    id="wizard-katha-source-hint"
+                    className="mt-1 block text-xs text-text-2"
+                  >
+                    {t(locale, "add.hintKathaSource")}
+                  </span>
+                </div>
+              </>
+            )}
+
+            {draft.locator !== "body" && (
+              <fieldset className="text-sm text-text-1">
+                {/* Легенда скрыта: на экране она повторяла бы заголовок шага,
+                    а скринридеру нужна, чтобы сгруппировать переключатели. */}
+                <legend className="sr-only">
+                  {t(locale, "add.locatorLegend")}
+                </legend>
+                <div className="flex flex-wrap gap-4">
+                  {(["url", "source"] as const).map((value) => (
+                    <label key={value} className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="wizard-locator"
+                        checked={draft.locator === value}
+                        onChange={() => changeLocator(value)}
+                      />
+                      {t(
+                        locale,
+                        value === "url"
+                          ? "add.locatorUrl"
+                          : "add.locatorSource",
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
 
             {/* Подсказка — сиблинг label, а не её содержимое: внутри она вошла
                 бы в доступное имя поля, и скринридер назвал бы поле фразой. */}
-            {draft.locator === "url" ? (
+            {draft.locator === "body" ? null : draft.locator === "url" ? (
               <div>
                 <label className="text-sm text-text-1">
                   {t(locale, "add.url")}
@@ -429,9 +495,19 @@ export function AddEntryWizard({
               <Row
                 label={t(
                   locale,
-                  draft.locator === "url" ? "add.url" : "add.source",
+                  draft.locator === "url"
+                    ? "add.url"
+                    : draft.locator === "source"
+                      ? "add.source"
+                      : "add.body",
                 )}
-                value={draft.locator === "url" ? draft.url : draft.source}
+                value={
+                  draft.locator === "url"
+                    ? draft.url
+                    : draft.locator === "source"
+                      ? draft.source
+                      : draft.body
+                }
               />
               <Row
                 label={t(locale, "add.type")}
@@ -458,9 +534,10 @@ export function AddEntryWizard({
               />
             </dl>
 
-            {/* Обложку предлагаем только материалу без ссылки: у остальных
-                картинку тянет обогащение со страницы источника. */}
-            {draft.locator === "source" && (
+            {/* Обложку предлагаем только материалу без ссылки — книге и
+                катхе: у остальных картинку тянет обогащение со страницы
+                источника. */}
+            {draft.locator !== "url" && (
               <div>
                 <label className="text-sm text-text-1">
                   {t(locale, "add.cover")}{" "}

@@ -17,6 +17,7 @@ import { EntryComments } from "@/components/library/entry-comments";
 import { OutsideLink } from "@/components/library/outside-link";
 import { VideoEmbed } from "@/components/library/video-embed";
 import { entryTypeLabel, pickLocalized, t } from "@/components/library/i18n";
+import { kathaParagraphs } from "@/components/library/katha-text";
 
 export default async function LibraryEntryPage({
   params,
@@ -126,6 +127,23 @@ export default async function LibraryEntryPage({
             en: entry.descriptionEn,
           })}
         </p>
+
+        {/* Текст катхи — ради него страница и открыта. `lang` включает
+            переносы по правилам языка текста, а не интерфейса: русская
+            лекция в английском интерфейсе иначе переносилась бы
+            по-английски. */}
+        {entry.body && (
+          <div
+            lang={entry.contentLanguage}
+            className="mb-6 grid gap-4 break-words hyphens-auto text-[15px] leading-7 text-text-0"
+          >
+            {kathaParagraphs(entry.body).map((paragraph, index) => (
+              <p key={index} className="whitespace-pre-line">
+                {paragraph}
+              </p>
+            ))}
+          </div>
+        )}
 
         <div className="mb-6 flex flex-wrap items-center gap-3">
           {/* У материала без адреса открывать нечего — вместо кнопки
