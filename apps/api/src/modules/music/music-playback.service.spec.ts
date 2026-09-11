@@ -23,6 +23,11 @@ function prismaMock() {
         uploadedById: null,
       }),
       update: jest.fn().mockResolvedValue({}),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    musicPlaybackQueue: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue({}),
     },
     musicPlayState: {
       findFirst: jest.fn().mockResolvedValue(null),
@@ -334,6 +339,72 @@ describe('MusicPlaybackService.getState', () => {
       positionSeconds: 128,
       updatedAt: updatedAt.toISOString(),
     });
+  });
+});
+
+// VED-88: без очереди на сервере «назад» и «вперёд» на главной были мертвы
+// после закрытой полосы плеера и на другом устройстве.
+describe('MusicPlaybackService — очередь', () => {
+  const A = '11111111-1111-4111-8111-111111111111';
+  const B = '22222222-2222-4222-8222-222222222222';
+  const C = '33333333-3333-4333-8333-333333333333';
+
+  it('сохраняет присланную очередь', async () => {
+    const prisma = prismaMock();
+
+    await service(prisma).putState('u1', {
+      trackId: 't1',
+      queue: [A, B, 'мусор', C],
+    });
+
+    expect(prisma.musicPlaybackQueue.upsert).toHaveBeenCalledWith({
+      where: { userId: 'u1' },
+      create: { userId: 'u1', trackIds: [A, B, C] },
+      update: { trackIds: [A, B, C] },
+    });
+  });
+
+  // Позиция приходит часто и без очереди — хранимую очередь она не стирает.
+  it('сохранение позиции очередь не трогает', async () => {
+    const prisma = prismaMock();
+
+    await service(prisma).putState('u1', {
+      trackId: 't1',
+      positionSeconds: 42,
+    });
+
+    expect(prisma.musicPlaybackQueue.upsert).not.toHaveBeenCalled();
+    expect(prisma.musicPlayState.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: { positionSeconds: 42 } }),
+    );
+  });
+
+  // Звук мог ещё не перемотаться к сохранённой секунде: ноль её бы затёр.
+  it('одна очередь без позиции не сбрасывает сохранённую секунду', async () => {
+    const prisma = prismaMock();
+
+    await service(prisma).putState('u1', { trackId: 't1', queue: [A] });
+
+    const [[call]] = prisma.musicPlayState.upsert.mock
+      .calls as unknown as Array<[{ update: Record<string, unknown> }]>;
+    expect(call.update).not.toHaveProperty('positionSeconds');
+    expect(call.update.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it('отдаёт очередь в её порядке, без снятых с каталога записей', async () => {
+    const prisma = prismaMock();
+    prisma.musicPlayState.findFirst.mockResolvedValue({
+      trackId: B,
+      positionSeconds: 10,
+      updatedAt: new Date('2026-09-11T08:00:00.000Z'),
+    });
+    prisma.musicPlaybackQueue.findUnique.mockResolvedValue({
+      trackIds: [A, B, C],
+    });
+    // Базе порядок не важен: отдаёт как придётся.
+    prisma.musicTrack.findMany.mockResolvedValue([{ id: C }, { id: A }]);
+
+    expect((await service(prisma).getState('u1')).queue).toEqual([A, C]);
   });
 });
 
