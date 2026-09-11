@@ -46,6 +46,7 @@ export const SERVICE_LABELS: Record<string, string> = {
   chat: "Общение",
   union: "Знакомства",
   work: "Работа",
+  wellness: "Здоровье",
   portal: "Портал",
 };
 

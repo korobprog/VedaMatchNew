@@ -31,7 +31,17 @@ export class AssistantToolsService {
     args: Record<string, unknown>,
     actor: AccessTokenPayload,
     locale = 'ru',
+    options: {
+      /**
+       * Писать ли вызов в журнал метрик ассистента. Поиск по порталу его
+       * не пишет: там метрики ассистента, а не поиска.
+       */
+      record?: boolean;
+      /** Сколько ждать сервис; по умолчанию — чатовые двенадцать секунд. */
+      timeoutMs?: number;
+    } = {},
   ): Promise<AssistantToolReply | null> {
+    const { record = true, timeoutMs = TOOL_TIMEOUT_MS } = options;
     const request: AssistantToolRequest = {
       tool: tool.name,
       args,
@@ -50,7 +60,7 @@ export class AssistantToolsService {
       const replies = await Promise.race([
         this.events.emitAsync(toolEventName(tool.name), request),
         new Promise<unknown[]>((resolve) =>
-          setTimeout(() => resolve([]), TOOL_TIMEOUT_MS).unref(),
+          setTimeout(() => resolve([]), timeoutMs).unref(),
         ),
       ]);
       reply = pickReply(replies);
@@ -66,6 +76,7 @@ export class AssistantToolsService {
       );
 
     // Журнал — для метрик, и его сбой не должен ронять ответ.
+    if (!record) return reply;
     await this.prisma.assistantToolCall
       .create({
         data: {

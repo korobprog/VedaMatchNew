@@ -6,6 +6,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -18,23 +19,44 @@ import type {
   AssistantThreadDto,
   ConfirmAssistantActionRequest,
   ConfirmAssistantActionResponse,
+  PortalSearchResponse,
   SendAssistantMessageRequest,
   SendAssistantMessageResponse,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { AssistantService } from './assistant.service';
+import { PortalSearchService } from './portal-search.service';
 
 /** Каждый вопрос — платный запрос к модели: лимит на ввод жёстче общего. */
 const ASK_THROTTLE = { default: { ttl: 60_000, limit: 20 } };
 
+/**
+ * Поиск по порталу модель не зовёт — только слушатели сервисов, — поэтому
+ * лимит мягче, чем у вопросов, но один запрос всё же будит семь сервисов.
+ */
+const SEARCH_THROTTLE = { default: { ttl: 60_000, limit: 40 } };
+
 @Controller('assistant')
 @UseGuards(AuthGuard)
 export class AssistantController {
-  constructor(private readonly assistant: AssistantService) {}
+  constructor(
+    private readonly assistant: AssistantService,
+    private readonly portalSearch: PortalSearchService,
+  ) {}
 
   @Get('state')
   state(@CurrentUser() user: AccessTokenPayload): Promise<AssistantStateDto> {
     return this.assistant.state(user.sub);
+  }
+
+  /** Поиск по порталу для поля на главной (VED-75), см. portal-search.ts. */
+  @Get('search')
+  @Throttle(SEARCH_THROTTLE)
+  search(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('q') q?: string,
+  ): Promise<PortalSearchResponse> {
+    return this.portalSearch.search(user, q);
   }
 
   @Post('threads')
