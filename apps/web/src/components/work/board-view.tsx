@@ -73,6 +73,11 @@ import { dueFromInput, endOfDayInput } from "./task-due";
 import { findTaskByKey, parseFocusKey } from "./task-focus";
 import { splitTaskDraft } from "./task-title";
 import { PRIORITY_TITLE, priorityMark } from "./task-priority";
+import {
+  groupTasksByPriority,
+  readPriorityGrouping,
+  writePriorityGrouping,
+} from "./task-grouping";
 
 /** Сколько точек палец должен пройти, чтобы это считалось переносом, а не касанием. */
 const DRAG_THRESHOLD = 6;
@@ -116,6 +121,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   // Свёрнутые колонки. Складываются только на телефоне: шире sm колонки стоят
   // в ряд, там прятать нечего.
   const [collapsed, setCollapsed] = useState<string[]>([]);
+  /* Группировка карточек по важности внутри раздела (VED-51). Это вид, а не
+     порядок: позиции не трогаются, и выключенная группировка возвращает
+     раздел таким, каким его выстроили руками. */
+  const [grouped, setGrouped] = useState(false);
   /* Поиск по задачам (VED-76). `matches` — что нашёл сервер по последнему
      запросу; `null` — поиска нет, доска целиком. */
   const [query, setQuery] = useState("");
@@ -178,6 +187,9 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           focused
             ? wasCollapsed.filter((id) => id !== focused.columnId)
             : wasCollapsed,
+        );
+        setGrouped(
+          loaded.board ? readPriorityGrouping(loaded.board.id) : false,
         );
         if (focused) setOpenTaskId(focused.taskId);
         setError(null);
@@ -447,6 +459,14 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     writeCollapsedColumns(board.id, next);
   }
 
+  /** Собрать карточки по важности (VED-51). Вид запоминается на устройстве. */
+  function toggleGrouping() {
+    if (!board) return;
+    const next = !grouped;
+    setGrouped(next);
+    writePriorityGrouping(board.id, next);
+  }
+
   function moveBeside(task: WorkTaskCardDto, direction: -1 | 1) {
     if (!board) return;
     const columnId = columnBeside(board, task.columnId, direction);
@@ -521,6 +541,26 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               {allFolded ? "Развернуть все" : "Свернуть все"}
             </button>
           )}
+          {/* Группировка по важности (VED-51). Один выключатель, а не пара
+              кнопок: вторая всегда была бы бесполезной. Нажатое состояние
+              видно не только рамкой — его называет `aria-pressed`. */}
+          <button
+            type="button"
+            aria-pressed={grouped}
+            onClick={toggleGrouping}
+            title={
+              grouped
+                ? "Карточки собраны по важности; перетаскивание пока выключено"
+                : "Собрать карточки раздела по важности: горящее сверху"
+            }
+            className={`rounded-xl border px-2.5 py-2 text-xs font-semibold ${
+              grouped
+                ? "border-cyan text-text-0"
+                : "border-glass-brd text-text-1 hover:text-text-0"
+            }`}
+          >
+            По важности
+          </button>
           <button
             type="button"
             onClick={() => setArchiveOpen(true)}
@@ -572,6 +612,16 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         )}
       </div>
 
+      {/* Сказать про выключенное перетаскивание словами: иначе карточка,
+          которая перестала браться пальцем, читается как поломка. */}
+      {grouped && (
+        <p className="mb-3 text-xs text-text-2">
+          Карточки собраны по важности. Перетаскивание пока выключено — порядок
+          внутри раздела задаёт важность; перенести карточку в соседний раздел
+          можно стрелками на ней.
+        </p>
+      )}
+
       {error && (
         <p role="alert" className="mb-3 text-sm text-magenta">
           {error}
@@ -600,6 +650,28 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           // колонки с совпадениями раскрыты.
           const folded = !searchActive && collapsed.includes(column.id);
           const bodyId = `work-column-body-${column.id}`;
+          /* Карточка одна и та же в обоих видах — обычном и сгруппированном:
+             две копии разъехались бы на первой же правке. */
+          const renderCard = (task: WorkTaskCardDto) => (
+            <TaskCard
+              task={task}
+              dragging={drag?.started === true && drag.taskId === task.id}
+              canEdit={Boolean(canEdit)}
+              // Место вставки считается по порядку видимых карточек: во время
+              // поиска видны не все, а в группах порядок другой — и там, и там
+              // карточка легла бы не туда. Кнопки переноса работают всегда.
+              draggable={!searchActive && !grouped}
+              onOpen={() => setOpenTaskId(task.id)}
+              onHandleDown={(event) => onHandleDown(event, task.id)}
+              onHandleMove={onHandleMove}
+              onHandleUp={onHandleUp}
+              onMoveBeside={(direction) => moveBeside(task, direction)}
+              cardRef={(element) => {
+                if (element) cardRefs.current.set(task.id, element);
+                else cardRefs.current.delete(task.id);
+              }}
+            />
+          );
           return (
             <section
               key={column.id}
@@ -914,36 +986,51 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                     </button>
                   ))}
 
-                <ul className="flex min-h-[40px] flex-col gap-2">
-                  {column.tasks.map((task, index) => (
-                    <li key={task.id}>
-                      {drag?.target?.columnId === column.id &&
-                        drag.target.index === index && <DropLine />}
-                      <TaskCard
-                        task={task}
-                        dragging={
-                          drag?.started === true && drag.taskId === task.id
-                        }
-                        canEdit={Boolean(canEdit)}
-                        // Место вставки считается по видимым карточкам, а во
-                        // время поиска видны не все — перетаскивание легло бы
-                        // не туда. Кнопки переноса работают по всей доске.
-                        draggable={!searchActive}
-                        onOpen={() => setOpenTaskId(task.id)}
-                        onHandleDown={(event) => onHandleDown(event, task.id)}
-                        onHandleMove={onHandleMove}
-                        onHandleUp={onHandleUp}
-                        onMoveBeside={(direction) => moveBeside(task, direction)}
-                        cardRef={(element) => {
-                          if (element) cardRefs.current.set(task.id, element);
-                          else cardRefs.current.delete(task.id);
-                        }}
-                      />
-                    </li>
-                  ))}
-                  {drag?.target?.columnId === column.id &&
-                    drag.target.index >= column.tasks.length && <DropLine />}
-                </ul>
+                {/* Сгруппированный раздел — тот же список, разложенный по
+                    важности: горящее сверху, пустые группы не занимают строку.
+                    Подпись группы — заголовок третьего уровня под названием
+                    раздела: скринридер должен слышать вложенность, а не
+                    ровный ряд карточек. */}
+                {grouped ? (
+                  <div className="flex min-h-[40px] flex-col gap-3">
+                    {groupTasksByPriority(column.tasks).map((group) => {
+                      const mark = priorityMark(group.priority);
+                      return (
+                        <div key={group.priority}>
+                          <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-text-2">
+                            {mark && (
+                              <span
+                                aria-hidden
+                                className={`size-1.5 rounded-full ${mark.dot}`}
+                              />
+                            )}
+                            {group.title}
+                            <span className="font-normal">
+                              {group.tasks.length}
+                            </span>
+                          </h3>
+                          <ul className="flex flex-col gap-2">
+                            {group.tasks.map((task) => (
+                              <li key={task.id}>{renderCard(task)}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <ul className="flex min-h-[40px] flex-col gap-2">
+                    {column.tasks.map((task, index) => (
+                      <li key={task.id}>
+                        {drag?.target?.columnId === column.id &&
+                          drag.target.index === index && <DropLine />}
+                        {renderCard(task)}
+                      </li>
+                    ))}
+                    {drag?.target?.columnId === column.id &&
+                      drag.target.index >= column.tasks.length && <DropLine />}
+                  </ul>
+                )}
               </div>
             </section>
           );
