@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import type {
-  LineageId,
   LineagePreference,
   MusicNowPlayingVisibility,
   MusicSettingsDto,
 } from "@vedamatch/shared";
 import { saveMusicSettings } from "@/lib/music-playback-api";
-import { LineageSelect, inheritLabel } from "@/components/lineage-picker";
+import { LineageSelect } from "@/components/lineage-picker";
 import { MUSIC_SETTINGS_CHANGED_EVENT } from "@/components/music/player/player-provider";
 import { Alert } from "@/components/ui/alert";
 
@@ -26,12 +25,9 @@ import { Alert } from "@/components/ui/alert";
  */
 export function MusicSettingsForm({
   initial,
-  profileLineage = null,
   showsLineage = false,
 }: {
   initial: MusicSettingsDto;
-  /** Линия из портального профиля — подпись у варианта «как в профиле». */
-  profileLineage?: LineageId | null;
   /**
    * Показывать ли блок линии: преданному всегда, остальным — только если
    * настройка уже стоит (иначе снять её было бы негде).
@@ -139,12 +135,15 @@ export function MusicSettingsForm({
             Какую линию слушать
           </legend>
           <p className="mt-1 text-xs text-text-2">
-            По умолчанию — линия из профиля. Здесь можно выбрать другую только
-            для Музыки или открыть весь каталог; профиль от этого не меняется.
+            По умолчанию слышен весь каталог — все линии. Выберите линию, если
+            хотите слушать только её: над каталогом тогда появится
+            напоминание, что он отфильтрован. Профиль от этого не меняется.
           </p>
           <div className="mt-4">
+            {/* «all», сохранённое раньше, значит то же, что пустой вариант, —
+                показываем его им же, а не отдельным пунктом-двойником. */}
             <LineageSelect
-              value={settings.lineage ?? ""}
+              value={settings.lineage === "all" ? "" : (settings.lineage ?? "")}
               onChange={(next) =>
                 void update({
                   lineage: next
@@ -152,8 +151,7 @@ export function MusicSettingsForm({
                     : null,
                 })
               }
-              emptyLabel={inheritLabel(profileLineage)}
-              allLabel="Все линии — весь каталог"
+              emptyLabel="Все линии — весь каталог"
               className="h-9 w-full rounded-lg border border-glass-brd bg-bg-1 px-2.5 text-sm text-text-0"
             />
           </div>

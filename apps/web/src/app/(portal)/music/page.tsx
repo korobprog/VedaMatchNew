@@ -6,7 +6,7 @@ import {
   resolveContentLineage,
   serviceCardName,
 } from "@vedamatch/shared";
-import { getProfile, getServiceCard } from "@/lib/api";
+import { getServiceCard } from "@/lib/api";
 import {
   getMusicCatalog,
   getMusicSettingsServer,
@@ -15,7 +15,6 @@ import {
   getMyMusicPlaylists,
   getMyMusicUploads,
 } from "@/lib/music-api";
-import { LineagePrompt } from "@/components/lineage-prompt";
 import { LineageStatus } from "@/components/lineage-status";
 import { MusicArtistBubble } from "@/components/music/music-artist-bubble";
 import { MusicCategoryChips } from "@/components/music/music-category-chips";
@@ -123,7 +122,6 @@ export default async function MusicPage({
     mine,
     favorites,
     playlists,
-    profile,
     settings,
   ] = await Promise.all([
       // Название и подпись раздела — из каталога сервисов: их правит
@@ -152,17 +150,17 @@ export default async function MusicPage({
       getMyMusicUploads().catch(() => null),
       getMyMusicFavorites().catch(() => null),
       getMyMusicPlaylists().catch(() => null),
-      // Профиль и настройки — ради линии: кому предложить выбрать её и какую
-      // подпись поставить над списком. Гостю — null, и подписи нет.
-      getProfile().catch(() => null),
+      // Настройки — ради линии: подпись над списком ставится, только когда
+      // человек сам выбрал линию в настройках Музыки. Гостю — null.
       getMusicSettingsServer().catch(() => null),
     ]);
 
-  // Та же арифметика, что в API: явный параметр сильнее настройки Музыки,
-  // та — сильнее профиля. Подпись обязана говорить то, что применил сервер.
+  // Та же арифметика, что в API: явный параметр сильнее настройки Музыки, а
+  // линию из профиля Музыка не наследует (VED-82) — без настройки слышно всё
+  // и подписи нет. Подпись обязана говорить то, что применил сервер.
   const appliedLineage = explicitLineage
     ? resolveContentLineage(null, explicitLineage)
-    : resolveContentLineage(profile, settings?.lineage ?? null);
+    : resolveContentLineage(null, settings?.lineage ?? null);
 
   const serviceName = service
     ? serviceCardName(service, locale)
@@ -294,17 +292,6 @@ export default async function MusicPage({
           </Link>
         </div>
       </header>
-
-      {profile && (
-        <div className="mt-6">
-          <LineagePrompt
-            user={profile}
-            serviceName="Музыки"
-            settingsHref="/music/settings"
-            settingsLabel="в настройках Музыки"
-          />
-        </div>
-      )}
 
       <div className="mt-6 flex flex-col gap-3">
         <MusicCategoryChips

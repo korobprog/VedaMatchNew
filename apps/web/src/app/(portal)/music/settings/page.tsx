@@ -21,8 +21,7 @@ export const metadata: Metadata = {
 export default async function MusicSettingsPage() {
   const [settings, profile] = await Promise.all([
     getMusicSettingsServer(),
-    // Ради линии: подпись «как в профиле — ISKCON» и сам блок, который
-    // не-преданному без своей настройки не показывается.
+    // Ради блока линии: не-преданному без своей настройки он не показывается.
     getProfile().catch(() => null),
   ]);
   const showsLineage =
@@ -46,7 +45,6 @@ export default async function MusicSettingsPage() {
         {settings ? (
           <MusicSettingsForm
             initial={settings}
-            profileLineage={profile?.lineage ?? null}
             showsLineage={showsLineage}
           />
         ) : (
