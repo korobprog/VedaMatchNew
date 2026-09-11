@@ -463,7 +463,7 @@ describe('MotivationService feed tiers', () => {
     await service.feed('user-1', {});
     for (const [input] of motivationPost.findMany.mock.calls)
       expect(input.where.AND).toContainEqual({
-        NOT: { origin: 'user', sourceVerified: false },
+        NOT: { origin: 'user', sourceVerified: false, authorIsAdmin: false },
       });
 
     motivationPost.findMany.mockClear();
@@ -1186,7 +1186,7 @@ describe('MotivationService.stats', () => {
     expect(count).toHaveBeenCalledWith({
       where: {
         status: 'published',
-        NOT: { origin: 'user', sourceVerified: false },
+        NOT: { origin: 'user', sourceVerified: false, authorIsAdmin: false },
       },
     });
   });

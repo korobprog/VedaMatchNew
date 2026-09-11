@@ -181,6 +181,7 @@ describe('MotivationReelsService.create', () => {
           generationStage: 'ai_review',
           attributionKind: 'ai_reflection',
           sourceVerified: false,
+          authorIsAdmin: false,
           profileType: 'devotee',
         }),
       }),
@@ -253,6 +254,44 @@ describe('MotivationReelsService.create', () => {
       expect.objectContaining({ failure: 'unknown', retryable: false }),
     );
     expect(broken.moderation.aiApproveText).not.toHaveBeenCalled();
+  });
+
+  // VED-9: администратор добавлял афоризм своим текстом и не находил его в
+  // ленте — источник не сверен с библиотекой, а такие публикации участников
+  // намеренно видны только автору. К тому, кто отвечает за ленту, это
+  // правило не относится.
+  it('метит афоризм администратора как админский — он идёт в общую ленту', async () => {
+    const { service, tx } = build();
+
+    await service.create('admin-1', admin, ownInput);
+
+    expect(tx.motivationPost.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          origin: 'user',
+          sourceVerified: false,
+          authorIsAdmin: true,
+        }),
+      }),
+    );
+  });
+
+  it('то же для администратора самого сервиса, но не чужого', async () => {
+    const mine = build();
+    await mine.service.create('sa-1', motivationServiceAdmin, ownInput);
+    expect(mine.tx.motivationPost.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ authorIsAdmin: true }),
+      }),
+    );
+
+    const stranger = build();
+    await stranger.service.create('sa-2', otherServiceAdmin, ownInput);
+    expect(stranger.tx.motivationPost.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ authorIsAdmin: false }),
+      }),
+    );
   });
 
   it('only suggests in assist mode and skips the model when off', async () => {
