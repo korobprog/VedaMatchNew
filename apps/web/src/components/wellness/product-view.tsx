@@ -12,6 +12,7 @@ import {
 } from "@/lib/wellness-api";
 import { AddToBasket } from "./add-to-basket";
 import { isAbort } from "@/lib/is-abort";
+import { OffAttribution } from "./off-attribution";
 import { VerdictCard } from "./verdict-card";
 
 /**
@@ -55,8 +56,8 @@ export function ProductView({ barcode }: { barcode: string }) {
     return (
       <div className="rounded-2xl border border-glass-brd bg-glass p-4">
         <p className="text-sm text-text-0">
-          Продукта с кодом <span className="font-mono">{barcode}</span> в базе
-          пока нет.
+          Продукта с кодом <span className="font-mono">{barcode}</span> пока нет
+          ни в нашей базе, ни в открытой базе Open Food Facts.
         </p>
         <p className="mt-1 text-sm text-text-1">
           Снимите состав с упаковки — мы прочитаем его и добавим продукт для
@@ -89,6 +90,9 @@ export function ProductView({ barcode }: { barcode: string }) {
         <p className="mt-3 text-sm text-text-1">
           {data.product.ingredientsRaw}
         </p>
+        {data.product.source === "openfoodfacts" && (
+          <OffAttribution barcode={data.product.barcode} />
+        )}
         <div className="mt-3">
           <AddToBasket productId={data.product.id} />
         </div>

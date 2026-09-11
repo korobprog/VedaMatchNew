@@ -16,6 +16,7 @@ import {
   WellnessApiError,
 } from "@/lib/wellness-api";
 import { AddToBasket } from "./add-to-basket";
+import { OffAttribution } from "./off-attribution";
 import { fileToScanImage } from "./scan-image";
 import { VerdictCard } from "./verdict-card";
 import { hasSomethingToJudge } from "./verdict-labels";
@@ -390,6 +391,9 @@ function ScanOutcome({
           <p className="mt-2 text-sm text-text-1">
             {result.product.ingredientsRaw}
           </p>
+          {result.product.source === "openfoodfacts" && (
+            <OffAttribution barcode={result.product.barcode} />
+          )}
           <div className="mt-3 flex flex-wrap items-center gap-4">
             <AddToBasket productId={result.product.id} />
             <Link
@@ -404,7 +408,8 @@ function ScanOutcome({
         result.kind === "barcode" && (
           <div className="rounded-2xl border border-glass-brd bg-glass p-4">
             <p className="text-sm text-text-0">
-              Этого продукта пока нет в нашей базе.
+              Этого продукта пока нет ни в нашей базе, ни в открытой базе Open
+              Food Facts.
             </p>
             <p className="mt-1 text-sm text-text-1">
               Снимите состав с упаковки — мы прочитаем его и заодно пополним

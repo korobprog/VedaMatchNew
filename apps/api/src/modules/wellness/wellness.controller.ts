@@ -122,7 +122,7 @@ export class WellnessController {
   ) {
     const barcode = normalizeBarcode(code);
     if (!barcode) throw new BadRequestException('Штрихкод не распознан');
-    const product = await this.wellness.productByBarcode(barcode);
+    const product = await this.wellness.findProduct(barcode);
     if (!product) throw new NotFoundException('Продукта пока нет в базе');
     const restrictions = await this.wellness.restrictions(user.sub);
     const result = await this.wellness.evaluate(
