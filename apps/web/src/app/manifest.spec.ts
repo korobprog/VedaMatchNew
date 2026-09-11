@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -38,10 +38,37 @@ describe("manifest", () => {
     }
   });
 
-  it("keeps a shortcut into the library and into Union", () => {
+  it("первыми в быстром меню стоят три сервиса — Android показывает только их", () => {
     const urls = (manifest().shortcuts ?? []).map((shortcut) => shortcut.url);
 
-    expect(urls).toEqual(["/vedabase", "/union"]);
+    expect(urls.slice(0, 3)).toEqual(["/motivation", "/music", "/library"]);
+    // Прежние пункты не потерялись — на компьютере видно всё меню.
+    expect(urls).toEqual(expect.arrayContaining(["/vedabase", "/union"]));
+  });
+
+  it("у каждого пункта меню есть значки заявленного размера — без них Android пункт не показывает", () => {
+    for (const shortcut of manifest().shortcuts ?? []) {
+      const icons = shortcut.icons ?? [];
+      expect(icons.map((icon) => icon.sizes)).toEqual(["96x96", "192x192"]);
+      for (const icon of icons) {
+        const [declared] = icon.sizes!.split("x");
+        expect(pngSize(path.join(publicDir, icon.src))).toEqual({
+          width: Number(declared),
+          height: Number(declared),
+        });
+      }
+    }
+  });
+
+  it("каждый пункт меню ведёт на существующую страницу", () => {
+    for (const { url } of manifest().shortcuts ?? []) {
+      const segment = url.replace(/^\//, "");
+      const pages = [
+        path.join(appDir, segment, "page.tsx"),
+        path.join(appDir, "(portal)", segment, "page.tsx"),
+      ];
+      expect(pages.some((page) => existsSync(page)), url).toBe(true);
+    }
   });
 
   it("provides an apple touch icon, which iOS needs outside the manifest", () => {
