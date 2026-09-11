@@ -370,6 +370,75 @@ describe('LibraryEntriesService.create', () => {
     ).rejects.toThrow('url_or_source_required');
   });
 
+  it('stores a katha with its own text and neither url nor source', async () => {
+    const prisma = prismaMock();
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communitiesMock() as never,
+      eventsMock() as never,
+    );
+
+    await service.create(
+      'user-1',
+      validBody({
+        type: 'katha',
+        url: null,
+        body: 'Первый абзац.\r\n\r\n\r\nВторой.',
+      }),
+    );
+
+    const createCalls = prisma.libraryEntry.create.mock.calls as Array<
+      [{ data: Record<string, unknown> }]
+    >;
+    const { data } = createCalls[0][0];
+    expect(data.type).toBe('katha');
+    // Текст хранится приведённым: переводы строк одного вида, без лишних
+    // пустых строк — см. normalizeEntryBody.
+    expect(data.body).toBe('Первый абзац.\n\nВторой.');
+    expect(data.url).toBeNull();
+    expect(data.source).toBeNull();
+    expect(data.enrichmentStatus).toBe('not_applicable');
+  });
+
+  it('refuses a katha without text even when it has a link', async () => {
+    const prisma = prismaMock();
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communitiesMock() as never,
+      eventsMock() as never,
+    );
+
+    await expect(
+      service.create('user-1', validBody({ type: 'katha', body: '  \n ' })),
+    ).rejects.toThrow('body_required');
+    expect(prisma.libraryEntry.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a text longer than the limit', async () => {
+    const prisma = prismaMock();
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communitiesMock() as never,
+      eventsMock() as never,
+    );
+
+    await expect(
+      service.create(
+        'user-1',
+        validBody({ type: 'katha', url: null, body: 'я'.repeat(200_001) }),
+      ),
+    ).rejects.toThrow('body_too_long');
+  });
+
   it('stores a youtube cover taken from the link itself', async () => {
     const prisma = prismaMock();
     const service = new LibraryEntriesService(
@@ -585,6 +654,33 @@ describe('LibraryEntriesService canEdit', () => {
   });
 });
 
+describe('LibraryEntriesService.byId', () => {
+  it('returns the text of a katha on its page', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValue(
+        entryRecord({ type: 'katha', url: null, body: 'Текст лекции' }),
+      );
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communitiesMock() as never,
+      eventsMock() as never,
+    );
+
+    const result = await service.byId('entry-1', 'user-1');
+
+    expect(result.body).toBe('Текст лекции');
+    const calls = prisma.libraryEntry.findUnique.mock.calls as Array<
+      [{ select: Record<string, unknown> }]
+    >;
+    expect(calls[0][0].select.body).toBe(true);
+  });
+});
+
 describe('LibraryEntriesService.update', () => {
   /**
    * Данные единственного `update` внутри транзакции. У jest-мока они `any`,
@@ -748,6 +844,82 @@ describe('LibraryEntriesService.update', () => {
     await expect(
       service.update('user-1', false, 'entry-1', { url: '' }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('lets the url go when the entry keeps its own text', async () => {
+    const tx = txMock(entryRecord({ type: 'katha', url: null, body: 'Текст' }));
+    const prisma = prismaMock({
+      $transaction: jest.fn((callback: (t: unknown) => unknown) =>
+        callback(tx),
+      ),
+    });
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValue(entryRecord({ type: 'katha', body: 'Текст' }));
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communitiesMock() as never,
+      eventsMock() as never,
+    );
+
+    // Катхе адрес не нужен: указывать ей есть на что — на собственный текст.
+    await service.update('user-1', false, 'entry-1', { url: '' });
+
+    expect(updateData(tx.libraryEntry.update).url).toBeNull();
+  });
+
+  it('refuses to strip the text of a katha', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValue(
+        entryRecord({ type: 'katha', url: null, body: 'Текст' }),
+      );
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communitiesMock() as never,
+      eventsMock() as never,
+    );
+
+    await expect(
+      service.update('user-1', false, 'entry-1', { body: '   ' }),
+    ).rejects.toThrow('body_required');
+  });
+
+  it('makes an entry a katha only together with its text', async () => {
+    const tx = txMock(entryRecord({ type: 'katha', body: 'Текст' }));
+    const prisma = prismaMock({
+      $transaction: jest.fn((callback: (t: unknown) => unknown) =>
+        callback(tx),
+      ),
+    });
+    prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(entryRecord());
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communitiesMock() as never,
+      eventsMock() as never,
+    );
+
+    await expect(
+      service.update('user-1', false, 'entry-1', { type: 'katha' }),
+    ).rejects.toThrow('body_required');
+
+    await service.update('user-1', false, 'entry-1', {
+      type: 'katha',
+      body: 'Текст',
+    });
+    const data = updateData(tx.libraryEntry.update);
+    expect(data.type).toBe('katha');
+    expect(data.body).toBe('Текст');
   });
 
   it('refuses to let another member edit someone else’s entry', async () => {

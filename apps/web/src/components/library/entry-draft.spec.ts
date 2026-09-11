@@ -5,6 +5,7 @@ import {
   entrySubmitFailure,
   failureText,
   isWizardStepReady,
+  locatorForType,
   validateEntryDraft,
   type LibraryEntryDraft,
 } from "./entry-draft";
@@ -13,6 +14,7 @@ function draft(over: Partial<LibraryEntryDraft> = {}): LibraryEntryDraft {
   return {
     url: "https://example.com/kirtan",
     source: "",
+    body: "",
     locator: "url",
     type: "video",
     contentLanguage: "ru",
@@ -118,6 +120,7 @@ describe("buildCreateEntryBody", () => {
     ).toEqual({
       url: "https://example.com/kirtan",
       source: null,
+      body: null,
       type: "video",
       contentLanguage: "ru",
       titleRu: "Киртан",
@@ -162,6 +165,98 @@ describe("defaultLocator", () => {
   it("остальным типам нужен адрес", () => {
     for (const type of ["video", "website", "article", "audio"] as const)
       expect(defaultLocator(type)).toBe("url");
+  });
+
+  it("катхе нужен её текст", () => {
+    expect(defaultLocator("katha")).toBe("body");
+  });
+});
+
+describe("locatorForType", () => {
+  it("катха всегда получает текст, даже после ручного выбора", () => {
+    expect(locatorForType("katha", "source", true)).toBe("body");
+  });
+
+  it("уходя с катхи, переключатель встаёт по новому типу", () => {
+    // «Текста» у остальных типов в формах нет — оставить его значило бы
+    // спрятать и адрес, и источник.
+    expect(locatorForType("video", "body", true)).toBe("url");
+    expect(locatorForType("book", "body", true)).toBe("source");
+  });
+
+  it("ручной выбор тип не перебивает, нетронутый переключатель идёт за типом", () => {
+    expect(locatorForType("video", "source", true)).toBe("source");
+    expect(locatorForType("book", "url", false)).toBe("source");
+  });
+});
+
+describe("катха", () => {
+  function kathaDraft(
+    over: Partial<LibraryEntryDraft> = {},
+  ): LibraryEntryDraft {
+    return draft({
+      type: "katha",
+      locator: "body",
+      url: "",
+      body: "Текст лекции",
+      ...over,
+    });
+  }
+
+  it("принимается с одним текстом, без адреса и источника", () => {
+    expect(validateEntryDraft(kathaDraft())).toBeNull();
+  });
+
+  it("требует текст", () => {
+    expect(validateEntryDraft(kathaDraft({ body: "  \n " }))).toBe(
+      "add.bodyRequired",
+    );
+  });
+
+  it("не пускает текст длиннее предела", () => {
+    expect(
+      validateEntryDraft(kathaDraft({ body: "я".repeat(200_001) })),
+    ).toBe("add.bodyTooLong");
+  });
+
+  it("источник необязателен, но и безразмерным не бывает", () => {
+    expect(
+      validateEntryDraft(kathaDraft({ source: "Лекция, Лондон, 1972" })),
+    ).toBeNull();
+    expect(validateEntryDraft(kathaDraft({ source: "я".repeat(301) }))).toBe(
+      "add.sourceTooLong",
+    );
+  });
+
+  it("отправляет текст и подпись, но не адрес", () => {
+    const body = buildCreateEntryBody(
+      kathaDraft({
+        url: "https://example.com/остаток",
+        body: "  Текст  ",
+        source: " Лондон, 1972 ",
+      }),
+    );
+    expect(body.url).toBeNull();
+    expect(body.body).toBe("Текст");
+    expect(body.source).toBe("Лондон, 1972");
+    // Пустая подпись уезжает как «подписи нет», а не пустой строкой.
+    expect(buildCreateEntryBody(kathaDraft()).source).toBeNull();
+  });
+
+  it("второй шаг мастера ждёт текст и название, а не адрес", () => {
+    expect(isWizardStepReady(2, kathaDraft({ categoryIds: [] }))).toBe(true);
+    expect(isWizardStepReady(2, kathaDraft({ body: "" }))).toBe(false);
+    expect(isWizardStepReady(2, kathaDraft({ titleRu: "" }))).toBe(false);
+  });
+
+  it("отказ сервера по тексту переводится в свою строку", async () => {
+    const response = new Response(
+      JSON.stringify({ message: "body_required" }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+    expect(await entrySubmitFailure(response)).toEqual({
+      key: "add.bodyRequired",
+    });
   });
 });
 

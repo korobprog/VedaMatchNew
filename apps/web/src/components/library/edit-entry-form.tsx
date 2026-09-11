@@ -17,6 +17,7 @@ import { LineageSelect } from "@/components/lineage-picker";
 import { flattenTree, insertIntoTree, renameInTree } from "./category-tree";
 import { entryTypeLabel, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
+import { MAX_BODY_LENGTH } from "./entry-draft";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const MAX_URL_LENGTH = 2000;
@@ -29,6 +30,7 @@ const TYPES: LibraryEntryType[] = [
   "video",
   "audio",
   "book",
+  "katha",
   "course",
   "app",
   "telegram_channel",
@@ -41,6 +43,8 @@ const ERROR_KEYS: Record<string, LibraryTextKey> = {
   unsupported_url: "add.unsupportedUrl",
   url_too_long: "add.urlTooLong",
   url_or_source_required: "entry.urlRequired",
+  body_required: "add.bodyRequired",
+  body_too_long: "add.bodyTooLong",
   unsupported_type: "add.unsupportedType",
   title_required: "add.titleRequired",
   title_too_long: "add.titleTooLong",
@@ -199,6 +203,10 @@ function EntryFieldsForm({
   const [titleEn, setTitleEn] = useState(entry.titleEn ?? "");
   const [descriptionRu, setDescriptionRu] = useState(entry.descriptionRu ?? "");
   const [descriptionEn, setDescriptionEn] = useState(entry.descriptionEn ?? "");
+  const [text, setText] = useState(entry.body ?? "");
+  // Текст правится у катхи — и у материала, который её перестал быть: иначе
+  // сменой типа текст оказывался бы вне досягаемости формы.
+  const showBody = type === "katha" || Boolean(entry.body);
   const [communityId, setCommunityId] = useState(entry.community?.id ?? "");
   /** Пустая строка — для всех линий. */
   const [lineage, setLineage] = useState<string>(entry.lineage ?? "");
@@ -269,11 +277,22 @@ function EntryFieldsForm({
       setError(t(locale, "add.tooManyCategories"));
       return;
     }
+    if (type === "katha" && !text.trim()) {
+      setError(t(locale, "add.bodyRequired"));
+      return;
+    }
+    if (showBody && text.trim().length > MAX_BODY_LENGTH) {
+      setError(t(locale, "add.bodyTooLong"));
+      return;
+    }
 
     const body: UpdateLibraryEntryRequest = {
       // Адрес отправляем всегда: сервер сам сверит его с нынешним и не
       // тронет ни обогащение, ни обложку, когда ссылка не изменилась.
       url: url.trim() || null,
+      // Текст — только когда его поле на экране: иначе сохранение обычной
+      // ссылки слало бы `body: null` по полю, которого человек не видел.
+      ...(showBody ? { body: text.trim() || null } : {}),
       type,
       contentLanguage,
       titleRu: titleRu.trim() || null,
@@ -415,6 +434,30 @@ function EntryFieldsForm({
           />
         </label>
       </div>
+
+      {showBody && (
+        <div>
+          <label className="text-sm text-text-1">
+            {t(locale, "add.body")}
+            {/* Без maxLength: на вставке он молча обрезал бы длинную лекцию.
+                Превышение показывает подсказка, а отправку держит проверка. */}
+            <textarea
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              rows={12}
+              lang={contentLanguage}
+              aria-describedby="edit-body-hint"
+              className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+            />
+          </label>
+          <span id="edit-body-hint" className="mt-1 block text-xs text-text-2">
+            {text.trim().length > MAX_BODY_LENGTH
+              ? t(locale, "add.bodyTooLong")
+              : t(locale, "add.hintBody")}{" "}
+            · {text.length}/{MAX_BODY_LENGTH}
+          </span>
+        </div>
+      )}
 
       <CategoryPicker
         locale={locale}

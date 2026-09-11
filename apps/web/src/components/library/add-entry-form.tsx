@@ -20,16 +20,20 @@ import { insertIntoTree, renameInTree } from "./category-tree";
 import { entryTypeLabel, t } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
 import {
+  buildCreateEntryBody,
   defaultLocator,
   ENTRY_TYPES,
   entrySubmitFailure,
   failureText,
-  MAX_CATEGORIES,
+  locatorForType,
+  MAX_BODY_LENGTH,
   MAX_DESCRIPTION_LENGTH,
   MAX_SOURCE_LENGTH,
   MAX_TITLE_LENGTH,
   MAX_URL_LENGTH,
+  validateEntryDraft,
   type EntryLocator,
+  type LibraryEntryDraft,
 } from "./entry-draft";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -52,6 +56,8 @@ export function AddEntryForm({
   const router = useRouter();
   const [url, setUrl] = useState("");
   const [source, setSource] = useState("");
+  /** Текст катхи целиком. */
+  const [text, setText] = useState("");
   const [locator, setLocator] = useState<EntryLocator>(
     defaultLocator("article"),
   );
@@ -104,69 +110,30 @@ export function AddEntryForm({
     setNotice(null);
     setDuplicateId(null);
 
-    // Проверяем то из двух, что выбрано: второе поле могло остаться
-    // заполненным с прошлого положения переключателя и всё равно не уедет.
-    const trimmedUrl = url.trim();
-    const trimmedSource = source.trim();
-    if (locator === "url") {
-      if (trimmedUrl.length > MAX_URL_LENGTH) {
-        setError(t(locale, "add.urlTooLong"));
-        return;
-      }
-      if (!/^https?:\/\/\S+$/i.test(trimmedUrl)) {
-        setError(t(locale, "add.unsupportedUrl"));
-        return;
-      }
-    } else {
-      if (!trimmedSource) {
-        setError(t(locale, "add.sourceRequired"));
-        return;
-      }
-      if (trimmedSource.length > MAX_SOURCE_LENGTH) {
-        setError(t(locale, "add.sourceTooLong"));
-        return;
-      }
-    }
-    if (!titleRu.trim() && !titleEn.trim()) {
-      setError(t(locale, "add.titleRequired"));
-      return;
-    }
-    if (
-      titleRu.trim().length > MAX_TITLE_LENGTH ||
-      titleEn.trim().length > MAX_TITLE_LENGTH
-    ) {
-      setError(t(locale, "add.titleTooLong"));
-      return;
-    }
-    if (
-      descriptionRu.trim().length > MAX_DESCRIPTION_LENGTH ||
-      descriptionEn.trim().length > MAX_DESCRIPTION_LENGTH
-    ) {
-      setError(t(locale, "add.descriptionTooLong"));
-      return;
-    }
-    if (selected.length === 0) {
-      setError(t(locale, "add.categoryRequired"));
-      return;
-    }
-    if (selected.length > MAX_CATEGORIES) {
-      setError(t(locale, "add.tooManyCategories"));
-      return;
-    }
-
-    const body: CreateLibraryEntryRequest = {
-      url: locator === "url" ? trimmedUrl : null,
-      source: locator === "source" ? trimmedSource : null,
+    // Правила те же, что у мастера, — через общий черновик, а не своей
+    // копией проверок: копия здесь уже была и расходилась бы с мастером на
+    // первом же новом поле (так и случилось бы с текстом катхи).
+    const draft: LibraryEntryDraft = {
+      url,
+      source,
+      body: text,
+      locator,
       type,
       contentLanguage,
-      titleRu: titleRu.trim() || null,
-      titleEn: titleEn.trim() || null,
-      descriptionRu: descriptionRu.trim() || null,
-      descriptionEn: descriptionEn.trim() || null,
+      titleRu,
+      titleEn,
+      descriptionRu,
+      descriptionEn,
       categoryIds: selected.map((item) => item.id),
-      communityId: communityId || null,
-      lineage: lineage ? (lineage as LineageId) : null,
+      communityId,
+      lineage,
     };
+    const invalid = validateEntryDraft(draft);
+    if (invalid) {
+      setError(t(locale, invalid));
+      return;
+    }
+    const body: CreateLibraryEntryRequest = buildCreateEntryBody(draft);
 
     setPending(true);
     try {
@@ -204,30 +171,78 @@ export function AddEntryForm({
           в доступное имя поля («Адрес ссылки Полный адрес вместе с https://»),
           и скринридер называет поле целой фразой. Описание вешаем через
           aria-describedby — оно читается отдельно от имени. */}
-      <fieldset className="text-sm text-text-1">
-        <legend className="mb-2">{t(locale, "add.locatorLegend")}</legend>
-        <div className="flex flex-wrap gap-4">
-          {(["url", "source"] as const).map((value) => (
-            <label key={value} className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="add-locator"
-                checked={locator === value}
-                onChange={() => {
-                  setLocatorTouched(true);
-                  setLocator(value);
-                }}
+      {/* Катхе переключатель ни к чему: указывать ей есть на что одно — на
+          собственный текст. Без maxLength у текста: на вставке он молча
+          обрезал бы длинную лекцию, а так превышение видно в подсказке. */}
+      {locator === "body" && (
+        <>
+          <div>
+            <label className="text-sm text-text-1">
+              {t(locale, "add.body")}
+              <textarea
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+                rows={12}
+                lang={contentLanguage}
+                aria-describedby="add-body-hint"
+                required
+                className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
               />
-              {t(
-                locale,
-                value === "url" ? "add.locatorUrl" : "add.locatorSource",
-              )}
             </label>
-          ))}
-        </div>
-      </fieldset>
+            <span id="add-body-hint" className="mt-1 block text-xs text-text-2">
+              {text.trim().length > MAX_BODY_LENGTH
+                ? t(locale, "add.bodyTooLong")
+                : t(locale, "add.hintBody")}{" "}
+              · {text.length}/{MAX_BODY_LENGTH}
+            </span>
+          </div>
+          <div>
+            <label className="text-sm text-text-1">
+              {t(locale, "add.source")}
+              <input
+                value={source}
+                onChange={(event) => setSource(event.target.value)}
+                className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+                maxLength={MAX_SOURCE_LENGTH}
+                aria-describedby="add-katha-source-hint"
+              />
+            </label>
+            <span
+              id="add-katha-source-hint"
+              className="mt-1 block text-xs text-text-2"
+            >
+              {t(locale, "add.hintKathaSource")}
+            </span>
+          </div>
+        </>
+      )}
 
-      {locator === "url" ? (
+      {locator !== "body" && (
+        <fieldset className="text-sm text-text-1">
+          <legend className="mb-2">{t(locale, "add.locatorLegend")}</legend>
+          <div className="flex flex-wrap gap-4">
+            {(["url", "source"] as const).map((value) => (
+              <label key={value} className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="add-locator"
+                  checked={locator === value}
+                  onChange={() => {
+                    setLocatorTouched(true);
+                    setLocator(value);
+                  }}
+                />
+                {t(
+                  locale,
+                  value === "url" ? "add.locatorUrl" : "add.locatorSource",
+                )}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
+
+      {locator === "body" ? null : locator === "url" ? (
         <div>
           <label className="text-sm text-text-1">
             {t(locale, "add.url")}
@@ -273,8 +288,11 @@ export function AddEntryForm({
               const next = event.target.value as LibraryEntryType;
               setType(next);
               // Пока человек не трогал переключатель сам, его двигает тип;
-              // после ручного выбора не перебиваем — он знает лучше.
-              if (!locatorTouched) setLocator(defaultLocator(next));
+              // после ручного выбора не перебиваем — он знает лучше. Катха —
+              // исключение в обе стороны, см. locatorForType.
+              setLocator((current) =>
+                locatorForType(next, current, locatorTouched),
+              );
             }}
             className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
           >

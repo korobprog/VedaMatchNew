@@ -63,9 +63,15 @@ export function EntryCard({
         ))}
 
       <div className="mb-2 flex items-center gap-2 text-xs text-text-2">
-        {/* У материала без адреса домена нет — на его месте источник. */}
-        <span>{entry.domain ?? entry.source}</span>
-        <span aria-hidden>·</span>
+        {/* У материала без адреса домена нет — на его месте источник. У
+            катхи может не быть ни того, ни другого, и тогда висящая точка в
+            начале строки ни к чему. */}
+        {(entry.domain ?? entry.source) && (
+          <>
+            <span>{entry.domain ?? entry.source}</span>
+            <span aria-hidden>·</span>
+          </>
+        )}
         <span className="rounded-full border border-glass-brd px-2 py-0.5">
           {entryTypeLabel(locale, entry.type)}
         </span>
@@ -96,8 +102,9 @@ export function EntryCard({
       </div>
 
       <h3 className="mb-1 font-display text-base font-semibold text-text-0">
-        {/* Без адреса открывать нечего — заголовок остаётся текстом, а куда
-            смотреть, говорит строка источника выше. */}
+        {/* Без адреса открывать снаружи нечего — заголовок остаётся текстом,
+            а куда смотреть, говорит строка источника выше. Катха — другое
+            дело: её текст лежит у нас, и заголовок ведёт на её страницу. */}
         {entry.url ? (
           <OutsideLink
             href={entry.url}
@@ -106,6 +113,10 @@ export function EntryCard({
             {title}
             <ExternalLink aria-hidden className="h-3.5 w-3.5" />
           </OutsideLink>
+        ) : entry.type === "katha" ? (
+          <Link href={`/library/entry/${entry.id}`} className="hover:underline">
+            {title}
+          </Link>
         ) : (
           title
         )}

@@ -19,6 +19,9 @@ function corsOrigins() {
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Текст катхи в Образовании — до 200 000 знаков, в UTF-8 это за 400 КБ.
+  // Стандартные 100 КБ парсера отбивали бы длинную лекцию ответом 413.
+  app.useBodyParser('json', { limit: '1mb' });
   // За Traefik (единственный хоп на dokploy-network) req.ip иначе всегда
   // резолвится в адрес прокси — все клиенты делят один и тот же бакет
   // ThrottlerModule (100 запросов/мин), и любой всплеск трафика от одного

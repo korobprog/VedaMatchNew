@@ -141,4 +141,27 @@ describe("EntryCard", () => {
 
     expect(screen.queryByRole("link", { name: /Москва/ })).toBeNull();
   });
+
+  it("катха ведёт заголовком на свою страницу, а строка не начинается с точки", () => {
+    render(
+      <EntryCard
+        entry={{
+          ...entry,
+          type: "katha",
+          url: null,
+          domain: null,
+          source: null,
+        }}
+        locale="ru"
+      />,
+    );
+
+    // Текст катхи лежит у нас — открывать её есть где.
+    expect(
+      screen.getByRole("link", { name: "Лекция по Гите" }),
+    ).toHaveAttribute("href", "/library/entry/entry-1");
+    // Ни домена, ни источника: строка начинается сразу с типа.
+    const meta = screen.getByText("Катха").parentElement;
+    expect(meta?.firstElementChild).toHaveTextContent("Катха");
+  });
 });
