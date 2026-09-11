@@ -120,7 +120,16 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          code=$(curl -sS -o /tmp/deploy.out -w '%{http_code}' -X POST --max-time 60 "$HOOK")
+          # Панель берёт ветку из тела запроса в формате GitHub (`ref`), и
+          # только при заголовке X-GitHub-Event. Голый POST она отбивала
+          # ответом 301 «Branch Not Match» — так 11 сентября прошёл первый же
+          # прогон с секретом. Пересылаем ей само событие push этого прогона:
+          # в нём и ветка, и изменённые файлы для watch paths, и коммит.
+          code=$(curl -sS -o /tmp/deploy.out -w '%{http_code}' -X POST --max-time 60 \
+            -H 'Content-Type: application/json' \
+            -H 'X-GitHub-Event: push' \
+            --data-binary @"$GITHUB_EVENT_PATH" \
+            "$HOOK")
           echo "Ответ панели: $code"
           head -c 500 /tmp/deploy.out || true
           # Отказ обязан быть виден: ровно этого не хватало вебхуку.
