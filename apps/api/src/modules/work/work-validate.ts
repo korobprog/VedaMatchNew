@@ -166,7 +166,7 @@ export function normalizeWipLimit(value: unknown): number {
   if (value === undefined || value === null) return 0;
   const limit = Number(value);
   if (!Number.isInteger(limit) || limit < 0 || limit > 999) {
-    throw new BadRequestException('Лимит колонки: целое число от 0 до 999');
+    throw new BadRequestException('Лимит раздела: целое число от 0 до 999');
   }
   return limit;
 }

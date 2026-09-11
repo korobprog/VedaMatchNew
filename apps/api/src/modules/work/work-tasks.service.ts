@@ -225,7 +225,7 @@ export class WorkTasksService {
     const column = await this.prisma.workColumn.findFirst(
       newTaskColumnQuery(boardId, request.columnId),
     );
-    if (!column) throw new NotFoundException('Колонка не найдена');
+    if (!column) throw new NotFoundException('Раздел не найден');
 
     const title = requireText(
       request.title,
@@ -403,7 +403,7 @@ export class WorkTasksService {
       where: { id: request.columnId, boardId: context.boardId },
       select: { id: true, name: true, isDone: true },
     });
-    if (!column) throw new NotFoundException('Колонка не найдена');
+    if (!column) throw new NotFoundException('Раздел не найден');
 
     const ordered = await this.prisma.workTask.findMany({
       where: { columnId: column.id, archivedAt: null, id: { not: taskId } },
