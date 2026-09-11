@@ -5,6 +5,7 @@ import type {
   AssistantSettingsDto,
   AssistantStateDto,
   AssistantThreadDetail,
+  PortalSearchResponse,
 } from "@vedamatch/shared";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
@@ -42,3 +43,13 @@ export const getAdminAssistantSettings = () =>
 
 export const getAdminAssistantUsage = (days = 30) =>
   assistantGet<AssistantAdminUsageDto>(`/admin/assistant/usage?days=${days}`);
+
+/**
+ * Поиск по порталу (VED-75): находки всех сервисов, которые умеют искать.
+ * Собирает их портальный модуль ассистента — страница в сервисы сама не
+ * ходит. `null` — сессии нет.
+ */
+export const getPortalSearch = (q: string) =>
+  assistantGet<PortalSearchResponse>(
+    `/assistant/search?q=${encodeURIComponent(q)}`,
+  );

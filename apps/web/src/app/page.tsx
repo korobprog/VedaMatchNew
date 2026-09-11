@@ -15,6 +15,7 @@ import {
 } from "@/components/featured-services";
 import { MemberCountLine } from "@/components/member-count-line";
 import { PortalNews } from "@/components/portal-news";
+import { PortalSearchField } from "@/components/portal-search-field";
 import { InviteFriendTeaser } from "@/components/rewards/invite-friend-teaser";
 import {
   getUnionChats,
@@ -245,6 +246,10 @@ export default async function Home({
       <NoiseOverlay />
       <Header user={user} />
       <main className="mx-auto max-w-6xl px-4 py-8 pb-24">
+        {/* Поиск по порталу — первым на странице (VED-75): человек, который
+            пришёл за конкретной лекцией или объявлением, не должен сначала
+            угадывать, в каком она сервисе. */}
+        <PortalSearchField className="mb-6" />
         {/* Новости администрации выше советника: советник говорит о делах
             человека, новость — о портале, и она не должна теряться под ними. */}
         <PortalNews items={news ?? []} />

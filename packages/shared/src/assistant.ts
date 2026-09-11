@@ -262,3 +262,20 @@ export interface AssistantToolReply {
   /** Куда идти после действия. */
   href?: string | null;
 }
+
+/** Одна группа выдачи поиска по порталу — находки одного сервиса. */
+export interface PortalSearchGroup {
+  /** Слаг сервиса — по нему подпись группы. */
+  service: string;
+  items: AssistantLinkCard[];
+}
+
+/** Ответ `GET /assistant/search?q=` — поиск по порталу (VED-75). */
+export interface PortalSearchResponse {
+  /** Запрос после очистки; `null` — слишком короткий, искать нечего. */
+  query: string | null;
+  /** Только сервисы, где что-то нашлось, в постоянном порядке. */
+  groups: PortalSearchGroup[];
+  /** Сервисы, которые не успели ответить: выдача может быть неполной. */
+  unavailable: string[];
+}

@@ -8,6 +8,7 @@ import { AssistantQuotaService } from './assistant-quota.service';
 import { AssistantSettingsService } from './assistant-settings.service';
 import { AssistantToolsService } from './assistant-tools.service';
 import { AssistantService } from './assistant.service';
+import { PortalSearchService } from './portal-search.service';
 
 /**
  * Ассистент портала — портальная инфраструктура, как уведомления или
@@ -25,6 +26,7 @@ import { AssistantService } from './assistant.service';
     AssistantQuotaService,
     AssistantToolsService,
     AssistantService,
+    PortalSearchService,
     AssistantAdminService,
   ],
 })
