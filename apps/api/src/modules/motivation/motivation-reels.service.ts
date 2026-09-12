@@ -292,6 +292,9 @@ export class MotivationReelsService {
           promptVersion: 'user-reel-v1',
           origin: 'user',
           authorUserId: userId,
+          // Снимок прав на момент создания (VED-9): афоризм администратора
+          // идёт в общую ленту, даже когда источник не сверен с библиотекой.
+          authorIsAdmin: isAdmin(actor),
           visualStyle,
           storyCaption: true,
           ...attribution,

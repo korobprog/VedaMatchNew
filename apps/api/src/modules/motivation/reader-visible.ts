@@ -7,6 +7,11 @@ import { MotivationPostOrigin, MotivationPostStatus } from '@prisma/client';
  * рилс живёт во вкладке «Мои» и по прямой ссылке, а в общую ленту и в папки
  * не идёт. Читателю он недоступен ни одним путём.
  *
+ * Афоризм администратора сервиса из-под этого правила выведен (VED-9): он и
+ * есть тот, кто отвечает за ленту, и прятать его публикацию не от кого.
+ * Раньше администратор добавлял афоризм своим текстом, видел его только во
+ * вкладке «Мои» и решал, что добавление не работает вовсе.
+ *
  * Правило вынесено сюда, потому что по нему считают в двух местах — счётчик
  * «N вдохновений в сервисе» над лентой и числа у папок в оглавлении. Пока
  * счётчик считал просто всё опубликованное, он обещал больше, чем есть: над
@@ -20,5 +25,9 @@ import { MotivationPostOrigin, MotivationPostStatus } from '@prisma/client';
  */
 export const READER_VISIBLE_POSTS = {
   status: MotivationPostStatus.published,
-  NOT: { origin: MotivationPostOrigin.user, sourceVerified: false },
+  NOT: {
+    origin: MotivationPostOrigin.user,
+    sourceVerified: false,
+    authorIsAdmin: false,
+  },
 };

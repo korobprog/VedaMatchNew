@@ -305,9 +305,19 @@ export class MotivationService {
         // Рилс участника без проверенного источника в общую ленту не идёт:
         // он живёт во вкладке «Мои» и по прямой ссылке. Избранное —
         // исключение: туда пост мог попасть, пока правило было другим.
+        // Афоризм администратора сервиса это правило не прячет (VED-9): он и
+        // есть тот, кто отвечает за ленту.
         ...(query.favorites
           ? []
-          : [{ NOT: { origin: 'user' as const, sourceVerified: false } }]),
+          : [
+              {
+                NOT: {
+                  origin: 'user' as const,
+                  sourceVerified: false,
+                  authorIsAdmin: false,
+                },
+              },
+            ]),
       ],
       // Опубликованное уже во время листания не втискивается в середину
       // сессии: оно придёт «свежим» при следующем открытии ленты.
@@ -495,8 +505,7 @@ export class MotivationService {
     explanationAuthor: { id: string; name: string };
   }> {
     const explanation = normalizeExplanation(input?.text);
-    if (!explanation)
-      throw new BadRequestException('Напишите пояснение');
+    if (!explanation) throw new BadRequestException('Напишите пояснение');
 
     const post = await this.prisma.motivationPost.findFirst({
       where: { id: postId, status: 'published' },
@@ -511,11 +520,10 @@ export class MotivationService {
     const language = languages.has(preference.language as MotivationLanguage)
       ? preference.language
       : 'ru';
-    const translation =
-      await this.prisma.motivationPostTranslation.findUnique({
-        where: { postId_language: { postId, language } },
-        select: { text: true },
-      });
+    const translation = await this.prisma.motivationPostTranslation.findUnique({
+      where: { postId_language: { postId, language } },
+      select: { text: true },
+    });
     if (!translation) throw new NotFoundException();
     if (!canAddExplanation(translation.text))
       throw new BadRequestException(

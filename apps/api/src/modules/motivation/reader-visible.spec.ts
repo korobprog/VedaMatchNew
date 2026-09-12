@@ -5,10 +5,13 @@ describe('READER_VISIBLE_POSTS', () => {
     expect(READER_VISIBLE_POSTS.status).toBe('published');
   });
 
-  it('отсекает рилс участника без проверенного источника', () => {
+  // Три условия внутри NOT читаются как «не (участник И источник не сверен И
+  // автор не администратор)»: афоризм администратора остаётся видимым (VED-9).
+  it('отсекает рилс участника без проверенного источника, кроме админского', () => {
     expect(READER_VISIBLE_POSTS.NOT).toEqual({
       origin: 'user',
       sourceVerified: false,
+      authorIsAdmin: false,
     });
   });
 

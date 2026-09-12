@@ -420,7 +420,7 @@ describe('MotivationCategoriesService.publicTree', () => {
     expect(groupBy).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          NOT: { origin: 'user', sourceVerified: false },
+          NOT: { origin: 'user', sourceVerified: false, authorIsAdmin: false },
         }),
       }),
     );
