@@ -9,8 +9,9 @@ import { currentSubscription } from "@/lib/pwa/push-subscription";
 import { removeSubscription } from "@/lib/notifications-api";
 import { Alert } from "@/components/ui/alert";
 import { Button, type ButtonVariant } from "@/components/ui/button";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 export function LogoutButton({
   children = "Выйти",

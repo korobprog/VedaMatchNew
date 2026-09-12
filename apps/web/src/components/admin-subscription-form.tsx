@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import type { SubscriptionState } from "@vedamatch/shared";
 import { formatDate, subscriptionStatusLabels } from "@/lib/support-labels";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /**
  * Ручная активация подписки: оплату пользователь подтверждает через тикет,

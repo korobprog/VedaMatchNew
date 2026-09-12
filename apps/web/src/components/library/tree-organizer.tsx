@@ -28,8 +28,9 @@ import {
   type DropTarget,
   type FlatRow,
 } from "./category-tree";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /** Высота строки и шаг отступа в пикселях — по ним считается жест. */
 const ROW_HEIGHT = 48;

@@ -8,9 +8,9 @@ import type {
   NotificationBroadcastDto,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const BROWSER_API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const BROWSER_API_URL = apiBase();
 
 async function command<T>(path: string, init: RequestInit): Promise<T> {
   const response = await apiFetch(`${BROWSER_API_URL}${path}`, {

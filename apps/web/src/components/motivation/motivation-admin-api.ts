@@ -1,6 +1,7 @@
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 export async function apiRequest(path: string, method: string, body?: unknown) {
   // apiFetch сам делает refresh на 401 и повторяет запрос: админ сидит на

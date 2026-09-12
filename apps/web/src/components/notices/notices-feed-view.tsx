@@ -19,8 +19,9 @@ import { NoticeCard } from "./notice-card";
 import { NOTICE_KIND_CHIPS, NOTICE_KIND_ORDER } from "./notice-labels";
 import { apiFetch } from "@/lib/http-client";
 import { localizedName } from "@/lib/localized-name";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /** Лента доски: вид, рубрика, город и поиск. */
 export function NoticesFeedView({ mine = false }: { mine?: boolean }) {

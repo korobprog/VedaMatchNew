@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/http-client";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 interface AdminApiKey {
   id: string;

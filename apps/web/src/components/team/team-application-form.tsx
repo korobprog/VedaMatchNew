@@ -7,8 +7,9 @@ import type {
 } from "@vedamatch/shared";
 import { teamRoleLabels, teamRoles } from "@/lib/team-labels";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /** Форма заявки: кандидат всегда гость, контакт (email или Telegram) обязателен. */
 export function TeamApplicationForm() {

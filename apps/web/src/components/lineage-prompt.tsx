@@ -12,8 +12,9 @@ import { apiFetch } from "@/lib/http-client";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { LineageCards } from "./lineage-picker";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /**
  * Предложение выбрать духовную линию — преданному, у которого она ещё не

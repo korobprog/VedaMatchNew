@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { getSafeReturnTo, loginHref } from "@/lib/return-to";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 const MARKER = "vm_session";
 const FAILED_KEY = "vm_session_restore_failed";
 

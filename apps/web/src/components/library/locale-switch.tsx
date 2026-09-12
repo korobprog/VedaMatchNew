@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation";
 import type { LibraryLocale } from "@vedamatch/shared";
 import { t } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 export function LocaleSwitch({ locale }: { locale: LibraryLocale }) {
   const router = useRouter();

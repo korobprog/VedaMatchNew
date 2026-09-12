@@ -16,8 +16,9 @@ import type {
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { buttonClassName } from "@/components/ui/button";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const ACCEPT_ATTRIBUTE = "image/jpeg,image/png,image/webp";

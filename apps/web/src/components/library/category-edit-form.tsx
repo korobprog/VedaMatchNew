@@ -6,8 +6,9 @@ import type { LibraryCategoryDto, LibraryLocale } from "@vedamatch/shared";
 import { Pencil } from "lucide-react";
 import { pickLocalized, t } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /**
  * Правится только название/описание — раздел (sectionId) в этой форме не

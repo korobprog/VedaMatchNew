@@ -11,8 +11,9 @@ import { VerifiedBadge } from "./verified-badge";
 import { yearsSuffix } from "./labels";
 import { sortIncomingLikes } from "./sort-likes";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /** Входящие лайки: те, кто уже проявил интерес и ждёт ответа. */
 export function UnionLikesPanel({

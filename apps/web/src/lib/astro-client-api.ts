@@ -1,5 +1,5 @@
-// Клиентская часть Astro API: запросы из браузера идут с NEXT_PUBLIC_API_URL и
-// cookie, а не через серверные хелперы lib/astro-api.ts.
+// Клиентская часть Astro API: запросы из браузера идут в API своего контура
+// (lib/api-base) с cookie, а не через серверные хелперы lib/astro-api.ts.
 import type {
   AstroCompatibilityPurpose,
   AstroSubjectDto,
@@ -14,8 +14,9 @@ import type {
   UpdateAstroTransitPreferenceRequest,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 export class AstroReadingError extends Error {
   constructor(

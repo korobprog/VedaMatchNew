@@ -7,8 +7,9 @@ import type {
   MotivationProfileType,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 const profiles: ReadonlyArray<{
   value: MotivationProfileType;

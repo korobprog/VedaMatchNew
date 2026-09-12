@@ -16,8 +16,9 @@ import {
   JOIN_POLICY_LABELS,
 } from "./community-labels";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 const JOIN_POLICIES: CommunityJoinPolicy[] = [
   "request_approval",

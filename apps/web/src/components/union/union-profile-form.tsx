@@ -52,8 +52,9 @@ import {
 } from "./union-field-row";
 import { UnionHelpToggle } from "./union-help-toggle";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 const SAVE_DEBOUNCE_MS = 600;
 // Совпадает с MIN/MAX_PROFILE_AGE на бэкенде
 const MIN_PARTNER_AGE = 18;

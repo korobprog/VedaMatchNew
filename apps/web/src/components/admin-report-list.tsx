@@ -10,8 +10,9 @@ import type {
 } from "@vedamatch/shared";
 import { ChatReportTranscript } from "@/components/chat/admin/report-transcript";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 const reasonLabels: Record<UserReportReason, string> = {
   spam: "Спам или реклама",

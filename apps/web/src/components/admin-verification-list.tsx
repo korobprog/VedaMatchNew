@@ -4,8 +4,9 @@ import { useState } from "react";
 import type { AdminVerificationRequest, DevoteeVerificationStatus } from "@vedamatch/shared";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 const statusLabels: Record<DevoteeVerificationStatus, string> = {
   self_identified: "Преданный, не подтвержден",

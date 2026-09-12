@@ -16,8 +16,9 @@ import {
   ticketStatuses,
 } from "@/lib/support-labels";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /** Разбор обращения: ответ пользователю, внутренняя заметка и смена статуса. */
 export function AdminTicketDetail({ ticket }: { ticket: AdminSupportTicketDto }) {

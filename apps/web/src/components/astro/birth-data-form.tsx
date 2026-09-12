@@ -22,8 +22,9 @@ import {
 import { BirthTimeHelp } from "./birth-time-help";
 import { formatUtcOffset } from "./utc-offset";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /**
  * Общий вид поля. Токены темы, а не чёрное с белым: захардкоженные цвета

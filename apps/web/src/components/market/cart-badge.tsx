@@ -12,8 +12,9 @@ import {
 } from "@/lib/market-cart-badge";
 import { deriveCartQuantities, setCartQuantities } from "@/lib/market-cart-items";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /** Опрос вместо сокета: одно число раз в минуту дешевле постоянного соединения. */
 const pollIntervalMs = 60_000;

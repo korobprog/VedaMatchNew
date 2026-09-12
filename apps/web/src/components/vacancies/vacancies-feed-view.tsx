@@ -12,8 +12,9 @@ import { VacanciesApiError, getVacanciesFeed } from "@/lib/vacancies-api";
 import { apiFetch } from "@/lib/http-client";
 import { VacancyCard } from "./vacancy-card";
 import { VACANCY_KIND_CHIPS, VACANCY_KIND_ORDER } from "./vacancy-labels";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 const FILTERS_KEY = "vacancies:feed-filters";
 
 interface StoredFilters {

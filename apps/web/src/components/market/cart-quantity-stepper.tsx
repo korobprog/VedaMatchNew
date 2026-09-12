@@ -7,8 +7,9 @@ import { bumpCartCount } from "@/lib/market-cart-badge";
 import { bumpCartItemQuantity, useCartItemQuantity } from "@/lib/market-cart-items";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /** Показывается вместо кнопки «в корзину», когда товар там уже лежит —
  *  +/- меняют количество без захода в корзину. Рендерится только если в

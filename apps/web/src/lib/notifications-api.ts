@@ -1,5 +1,6 @@
 // Клиентский API уведомлений: подписка создаётся в браузере, поэтому запросы
-// идут с NEXT_PUBLIC_API_URL и cookie, а не через серверные хелперы lib/api.ts.
+// идут в API своего контура (lib/api-base) с cookie, а не через серверные
+// хелперы lib/api.ts.
 import type {
   NotificationInboxResponse,
   NotificationPreferencesDto,
@@ -9,8 +10,9 @@ import type {
   VapidKeyResponse,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await apiFetch(`${API_URL}${path}`, {

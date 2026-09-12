@@ -30,8 +30,9 @@ import { Alert } from "@/components/ui/alert";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input, fieldClassName } from "@/components/ui/input";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 
 const socialFields: Array<[keyof ProfileSocialLinks, string, string]> = [

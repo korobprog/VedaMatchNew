@@ -6,8 +6,9 @@ import type { MarketCategoryDto, MarketSectionDto } from "@vedamatch/shared";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 export interface CatalogSection {
   section: MarketSectionDto;

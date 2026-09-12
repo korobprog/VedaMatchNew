@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import type { MotivationAudioDto } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { apiRequest } from "../motivation-admin-api";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /**
  * Фоновая музыка Вдохновения — записи, под которые читают шлоки.

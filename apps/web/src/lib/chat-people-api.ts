@@ -24,8 +24,9 @@ import type {
   SpiritualStage,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /** Лимиты повторяют ограничения contacts-profile.service.ts на стороне API. */
 export const CONTACTS_MAX_HEADLINE_LENGTH = 120;

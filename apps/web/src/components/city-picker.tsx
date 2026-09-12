@@ -6,8 +6,9 @@ import type { GeoSearchResult, ProfileLocation } from "@vedamatch/shared";
 import { apiFetch, readErrorMessage } from "@/lib/http-client";
 import { Button } from "@/components/ui/button";
 import { fieldClassName } from "@/components/ui/input";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /**
  * Святые места вайшнавов одной кнопкой: их называет заметная часть портала, а

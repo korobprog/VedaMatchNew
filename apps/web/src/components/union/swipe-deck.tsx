@@ -28,8 +28,9 @@ import { intentionLabels } from "./labels";
 import { EVERYTHING_URL } from "./recommendation-empty-state";
 import { PhotoVerifiedBadge, VerifiedBadge } from "./verified-badge";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /** Насколько далеко надо утащить карточку, чтобы решение засчиталось. */
 const SWIPE_DISTANCE = 110;

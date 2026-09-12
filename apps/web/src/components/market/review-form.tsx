@@ -7,8 +7,9 @@ import type { MarketReviewDto } from "@vedamatch/shared";
 import { StarRating, StarRatingInput } from "./star-rating";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /**
  * Отзыв по заявке. Показывается только покупателю и только после завершения:
