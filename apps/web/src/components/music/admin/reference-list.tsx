@@ -11,6 +11,8 @@ import {
   updateMusicCategory,
 } from "@/lib/music-admin-client-api";
 import { Alert } from "@/components/ui/alert";
+import { MusicCover } from "@/components/music/music-cover";
+import { MusicCoverField } from "@/components/music/cover-field";
 
 export type MusicReferenceKind = "artist" | "album" | "category";
 
@@ -19,6 +21,8 @@ export interface MusicReferenceRow {
   primary: string;
   secondary: string;
   badge: string | null;
+  /** Обложка, если она уже есть. У разделов каталога обложек не бывает. */
+  coverUrl?: string | null;
 }
 
 /**
@@ -36,6 +40,11 @@ export interface MusicReferenceRow {
  * Удаление в два нажатия и без `confirm()`: системное окно не переживает
  * тему портала и не объясняет, что именно исчезнет. Ответ сервера — почему
  * не вышло («сначала перевесьте записи») — показывается прямо в строке.
+ *
+ * Обложка правится здесь же (VED-19). Раньше её можно было задать только при
+ * создании карточки: у заведённого исполнителя картинку было не поменять
+ * ничем, а альбом без обложки так и оставался серым. Сервер это умел с самого
+ * начала — не хватало кнопки.
  */
 export function MusicReferenceList({
   title,
@@ -68,8 +77,14 @@ export function MusicReferenceList({
 
 function Row({ row, kind }: { row: MusicReferenceRow; kind: MusicReferenceKind }) {
   const router = useRouter();
-  const [mode, setMode] = useState<"view" | "rename" | "confirm">("view");
+  const [mode, setMode] = useState<"view" | "rename" | "confirm" | "cover">(
+    "view",
+  );
   const [name, setName] = useState(row.primary);
+  /* Ключ новой обложки и признак «её трогали». Без второго нажатие
+     «Сохранить» сразу после открытия сняло бы обложку, которая уже стоит. */
+  const [coverKey, setCoverKey] = useState<string | null>(null);
+  const [coverTouched, setCoverTouched] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -101,6 +116,15 @@ function Row({ row, kind }: { row: MusicReferenceRow; kind: MusicReferenceKind }
           : updateMusicCategory(row.id, { title: next }),
     );
   };
+
+  /** Обложка есть только у исполнителя и альбома: раздел каталога — просто имя. */
+  const coverScope = kind === "artist" ? "artist" : "album";
+  const saveCover = () =>
+    void run(() =>
+      kind === "artist"
+        ? updateMusicArtist(row.id, { coverKey })
+        : updateMusicAlbum(row.id, { coverKey }),
+    );
 
   const remove = () =>
     void run(() =>
@@ -153,6 +177,42 @@ function Row({ row, kind }: { row: MusicReferenceRow; kind: MusicReferenceKind }
             Отмена
           </button>
         </div>
+      ) : mode === "cover" ? (
+        <div className="flex flex-col gap-2">
+          <MusicCoverField
+            scope={coverScope}
+            value={coverKey}
+            onChange={(next) => {
+              setCoverKey(next);
+              setCoverTouched(true);
+            }}
+            label={`Обложка: ${row.primary}`}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={saveCover}
+              /* Пока обложку не трогали, сохранять нечего: иначе нажатие
+                 сразу после открытия сняло бы ту, что уже стоит. */
+              disabled={pending || !coverTouched}
+              className="btn-mint h-9 shrink-0 rounded-lg px-3 text-sm font-semibold disabled:opacity-50"
+            >
+              Сохранить
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCoverKey(null);
+                setCoverTouched(false);
+                setMode("view");
+                setError(null);
+              }}
+              className="h-9 shrink-0 rounded-lg px-2 text-sm text-text-2 hover:text-text-0"
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
       ) : mode === "confirm" ? (
         <div className="flex items-center gap-2">
           <span className="min-w-0 flex-1 truncate text-sm text-text-1">
@@ -179,6 +239,14 @@ function Row({ row, kind }: { row: MusicReferenceRow; kind: MusicReferenceKind }
         </div>
       ) : (
         <div className="flex items-baseline gap-2">
+          {kind !== "category" && (
+            <span
+              aria-hidden
+              className="size-9 shrink-0 self-center overflow-hidden rounded-lg border border-glass-brd"
+            >
+              <MusicCover url={row.coverUrl ?? null} seed={row.id} alt="" rounded="rounded-lg" />
+            </span>
+          )}
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm text-text-0">
               {row.primary}
@@ -191,6 +259,29 @@ function Row({ row, kind }: { row: MusicReferenceRow; kind: MusicReferenceKind }
             <span className="shrink-0 self-center rounded-full border border-cyan/40 px-2 text-[11px] text-cyan">
               {row.badge}
             </span>
+          )}
+          {kind !== "category" && (
+            <button
+              type="button"
+              onClick={() => setMode("cover")}
+              aria-label={`Обложка «${row.primary}»`}
+              className={`${iconButton} self-center`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="size-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <path d="M21 15l-5-5L5 21" />
+              </svg>
+            </button>
           )}
           <button
             type="button"
