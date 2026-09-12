@@ -25,6 +25,7 @@ import {
   toMusicTrackDetailDto,
   toMusicTrackDto,
 } from './music-track-dto';
+import { musicCoverBaseUrl } from './music-cover-file';
 
 /** Сколько записей и исполнителей показывает витрина. Ровно как в мокапах. */
 const SHOWCASE_FRESH = 10;
@@ -63,7 +64,7 @@ export class MusicCatalogService {
   ) {
     // Обложки лежат открыто и раздаются напрямую; аудио — нет, оно уйдёт
     // подписанной ссылкой на этапе 2.
-    this.publicBaseUrl = config.get<string>('S3_PUBLIC_URL') || undefined;
+    this.publicBaseUrl = musicCoverBaseUrl(config.get<string>('API_PUBLIC_URL'));
   }
 
   /**

@@ -9,6 +9,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { mayShareMusicActivity } from './music-activity-share';
 import { toMusicTrackDto } from './music-track-dto';
+import { musicCoverBaseUrl } from './music-cover-file';
 
 /**
  * Избранное.
@@ -38,7 +39,7 @@ export class MusicFavoritesService {
     private readonly bus: EventEmitter2,
     config: ConfigService,
   ) {
-    this.publicBaseUrl = config.get<string>('S3_PUBLIC_URL') || undefined;
+    this.publicBaseUrl = musicCoverBaseUrl(config.get<string>('API_PUBLIC_URL'));
   }
 
   async add(userId: string, trackId: string): Promise<{ favorited: true }> {

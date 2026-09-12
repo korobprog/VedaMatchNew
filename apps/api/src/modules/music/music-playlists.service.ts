@@ -24,6 +24,7 @@ import { mayShareMusicActivity } from './music-activity-share';
 import { toMusicTrackDto } from './music-track-dto';
 import {
   POSITION_STEP, nextPosition, positionForMove, renumber } from './playlist-order';
+import { musicCoverBaseUrl } from './music-cover-file';
 
 /** Сколько плейлистов у человека имеет смысл: дальше это не список, а свалка. */
 const MAX_PLAYLISTS_PER_USER = 100;
@@ -73,7 +74,7 @@ export class MusicPlaylistsService {
     private readonly access: PortalAccessService,
     config: ConfigService,
   ) {
-    this.publicBaseUrl = config.get<string>('S3_PUBLIC_URL') || undefined;
+    this.publicBaseUrl = musicCoverBaseUrl(config.get<string>('API_PUBLIC_URL'));
   }
 
   /**

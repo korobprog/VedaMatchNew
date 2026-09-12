@@ -9,7 +9,13 @@ import type {
   MusicCoverMime,
   MusicCoverScope,
 } from '@vedamatch/shared';
+import type { Readable } from 'node:stream';
 import { MusicStorageService } from './music-storage.service';
+import {
+  musicCoverContentType,
+  musicCoverKeyFrom,
+  type MusicCoverFileRequest,
+} from './music-cover-file';
 import {
   MUSIC_COVER_REJECTION_TEXT,
   buildMusicCoverKey,
@@ -37,6 +43,23 @@ const COVER_URL_TTL_SECONDS = 3600;
 @Injectable()
 export class MusicCoversService {
   constructor(private readonly storage: MusicStorageService) {}
+
+  /**
+   * Файл обложки: поток и тип картинки. `null` — такого объекта нет.
+   *
+   * Бакет не отдаёт объекты анонимно, поэтому файл достаёт портал своими
+   * ключами. Путь разбирается строго (см. `musicCoverKeyFrom`): маршрут открыт
+   * гостю, и свободная строка означала бы выдачу любого объекта бакета.
+   */
+  async readCover(
+    request: MusicCoverFileRequest,
+  ): Promise<{ stream: Readable; contentType: string } | null> {
+    const key = musicCoverKeyFrom(request);
+    const contentType = musicCoverContentType(request.file);
+    if (!key || !contentType || !this.storage.configured) return null;
+    const stream = await this.storage.getStream(key);
+    return stream ? { stream, contentType } : null;
+  }
 
   /**
    * Ссылка на заливку обложки. Проверка — до выписки: после неё поздно,

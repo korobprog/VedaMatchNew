@@ -58,7 +58,6 @@ export class MusicStorageService {
   private readonly logger = new Logger(MusicStorageService.name);
   private readonly s3Client: S3Client | null;
   private readonly bucket: string | undefined;
-  private readonly publicUrl: string | undefined;
 
   constructor(private readonly config: ConfigService) {
     const region = this.config.get<string>('S3_REGION');
@@ -67,7 +66,6 @@ export class MusicStorageService {
     const endpoint = this.config.get<string>('S3_ENDPOINT');
 
     this.bucket = this.config.get<string>('S3_BUCKET_NAME');
-    this.publicUrl = this.config.get<string>('S3_PUBLIC_URL');
     this.s3Client =
       region && accessKeyId && secretAccessKey
         ? new S3Client({
@@ -286,11 +284,5 @@ export class MusicStorageService {
     } catch (error) {
       this.logger.warn(`Не удалось удалить объект ${key}: ${String(error)}`);
     }
-  }
-
-  /** Публичный адрес обложки — единственное, что раздаётся напрямую. */
-  coverUrl(key: string | null): string | null {
-    if (!key || !this.publicUrl) return null;
-    return `${this.publicUrl.replace(/\/$/, '')}/${key}`;
   }
 }

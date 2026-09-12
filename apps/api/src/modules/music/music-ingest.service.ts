@@ -45,6 +45,7 @@ import {
   validateMusicIngestRequest,
   type MusicIngestLimits,
 } from './music-upload-validate';
+import { musicCoverBaseUrl } from './music-cover-file';
 
 /** Чем подписываем PUT архива, когда браузер о типе промолчал. */
 const ARCHIVE_MIME = 'application/zip';
@@ -115,7 +116,7 @@ export class MusicIngestService {
           : MUSIC_INGEST_DEFAULT_LIMITS.batchQuotaBytes,
     };
     // Обложки лежат открыто и раздаются напрямую — в отличие от аудио.
-    this.publicBaseUrl = config.get<string>('S3_PUBLIC_URL') || undefined;
+    this.publicBaseUrl = musicCoverBaseUrl(config.get<string>('API_PUBLIC_URL'));
   }
 
   /** 403 отдаёт guard прав, а не «не найдено»: раздел существует. */

@@ -23,6 +23,7 @@ import {
   toMusicCategoryDto,
   toMusicTrackDetailDto,
 } from './music-track-dto';
+import { musicCoverBaseUrl } from './music-cover-file';
 
 const MAX_NOTE_LENGTH = 500;
 const QUEUE_PAGE = 50;
@@ -52,7 +53,7 @@ export class MusicAdminQueueService {
     private readonly events: EventEmitter2,
     config: ConfigService,
   ) {
-    this.publicBaseUrl = config.get<string>('S3_PUBLIC_URL') || undefined;
+    this.publicBaseUrl = musicCoverBaseUrl(config.get<string>('API_PUBLIC_URL'));
   }
 
   private assertAdmin(viewerIsAdmin: boolean): void {

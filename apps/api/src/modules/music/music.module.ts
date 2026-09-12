@@ -11,6 +11,7 @@ import { MusicAdminQueueService } from './music-admin-queue.service';
 import { MusicCatalogController } from './music-catalog.controller';
 import { MusicCatalogService } from './music-catalog.service';
 import { MusicCoversController } from './music-covers.controller';
+import { MusicCoverFilesController } from './music-cover-files.controller';
 import { MusicCoversService } from './music-covers.service';
 import { MusicIngestController } from './music-ingest.controller';
 import { MusicIngestFetchService } from './music-ingest-fetch.service';
@@ -57,6 +58,7 @@ import { MusicWorkerService } from './music-worker.service';
     MusicCatalogController,
     MusicStreamController,
     MusicCoversController,
+    MusicCoverFilesController,
     MusicUploadsController,
     MusicReportsController,
     MusicPlaybackController,
