@@ -82,6 +82,7 @@ export default async function AdminMusicCatalogPage() {
             primary: artist.name,
             secondary: countLabel(artist.trackCount),
             badge: artist.isVerified ? "проверен" : null,
+            coverUrl: artist.coverUrl,
           }))}
         />
         <MusicReferenceList
@@ -95,6 +96,7 @@ export default async function AdminMusicCatalogPage() {
               .filter(Boolean)
               .join(" · "),
             badge: null,
+            coverUrl: album.coverUrl,
           }))}
         />
         <MusicReferenceList
