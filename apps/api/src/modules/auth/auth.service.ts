@@ -20,6 +20,7 @@ import {
   type UserRegisteredEvent,
 } from '@vedamatch/shared';
 import type { User } from '@prisma/client';
+import { publicOrigin } from '../../common/public-origin';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthProvidersService } from './auth-providers.service';
 import { readRegistrationMode } from '../billing/billing-mode';
@@ -114,8 +115,17 @@ export class AuthService implements OnModuleInit {
     return this.config.get<string>('API_PUBLIC_URL', 'http://localhost:4000');
   }
 
+  /**
+   * Куда вернуть человека после входа. `WEB_ORIGIN` — список доменов для
+   * CORS, и в редирект годится только первый: со всей строкой браузер
+   * получал `https://vedamatch.ru,https://vedamatch.com,…` и вход обрывался
+   * на последнем шаге.
+   */
   private get webOrigin(): string {
-    return this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000');
+    return (
+      publicOrigin(this.config.get<string>('WEB_ORIGIN')) ??
+      'http://localhost:3000'
+    );
   }
 
   private get cookieDomain(): string | undefined {
