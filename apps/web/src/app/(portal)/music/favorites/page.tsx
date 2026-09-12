@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { MusicRail } from "@/components/music/music-rail";
 import { MusicTrackList } from "@/components/music/music-track-list";
+import { MusicPlayAllButton } from "@/components/music/player/play-all-button";
+import { MusicPlayModeButtons } from "@/components/music/player/play-mode-buttons";
 import { getMyMusicFavorites } from "@/lib/music-api";
 
 export const metadata: Metadata = {
@@ -40,7 +42,14 @@ export default async function MusicFavoritesPage() {
             Пока пусто. Сердце есть на карточке записи и в полосе плеера.
           </p>
         ) : (
-          <MusicTrackList tracks={items} />
+          <>
+            {/* Избранное слушают и подряд, и вразнобой (VED-33). */}
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              <MusicPlayAllButton queue={items.map((track) => track.id)} />
+              <MusicPlayModeButtons queue={items.map((track) => track.id)} />
+            </div>
+            <MusicTrackList tracks={items} />
+          </>
         )}
       </div>
     </main>

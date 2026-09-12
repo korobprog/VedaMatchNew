@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MusicCover } from "@/components/music/music-cover";
 import { MusicPlayAllButton } from "@/components/music/player/play-all-button";
+import { MusicPlayModeButtons } from "@/components/music/player/play-mode-buttons";
 import { MusicTrackRow } from "@/components/music/music-track-row";
 import { MusicOfflinePlaylistButton } from "@/components/music/offline-playlist-button";
 import { MusicPlaylistVisibilityPicker } from "@/components/music/playlist-visibility";
@@ -116,6 +117,9 @@ export default async function MusicPlaylistPage({
               ведут на карточку записи, а не запускают её. */}
           <div className="mt-6">
             <MusicPlayAllButton queue={queue} />
+          {/* Порядок выбирают эти две (VED-33): одна запись, весь
+              плейлист до конца, вперемешку. */}
+          <MusicPlayModeButtons queue={queue} />
           </div>
 
           <ul className="mt-4 flex flex-col">

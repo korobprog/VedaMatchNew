@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMusicAlbum } from "@/lib/music-api";
 import { MusicCover } from "@/components/music/music-cover";
+import { MusicPlayAllButton } from "@/components/music/player/play-all-button";
+import { MusicPlayModeButtons } from "@/components/music/player/play-mode-buttons";
 import { MusicTrackRow } from "@/components/music/music-track-row";
 import { formatTotalDuration } from "@/lib/music-duration";
 import { plural } from "@/lib/plural";
@@ -86,6 +88,13 @@ export default async function MusicAlbumPage({
           <p className="text-sm text-text-2">{meta.join(" · ")}</p>
         </div>
       </header>
+
+      {/* Кнопки порядка (VED-33): «Слушать» — про «включи и не думай», эти
+          две про выбор: одна запись, весь альбом до конца, вперемешку. */}
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <MusicPlayAllButton queue={queue} />
+        <MusicPlayModeButtons queue={queue} />
+      </div>
 
       <section className="mt-8" aria-labelledby="album-tracks">
         <h2
