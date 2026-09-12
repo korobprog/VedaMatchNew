@@ -1,4 +1,6 @@
-import type { CSSProperties } from "react";
+"use client";
+
+import { useState, type CSSProperties } from "react";
 
 /**
  * Обложка записи, альбома или подборки.
@@ -72,13 +74,20 @@ export function MusicCover({
   fill?: boolean;
 }) {
   const size = fill ? "h-full w-full" : "";
-  if (url) {
+  /* Ссылка есть, а файл не пришёл — показываем ту же заглушку, что и у записи
+     без обложки. Битый значок с подписью «Обложка: …» выглядит поломкой
+     портала, хотя причина снаружи: хранилище может не отдать файл (403), а
+     объект — потеряться. Заглушка честнее: обложки просто нет. */
+  const [failed, setFailed] = useState(false);
+
+  if (url && !failed) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- обложка в нашем S3
       <img
         src={url}
         alt={alt}
         loading="lazy"
+        onError={() => setFailed(true)}
         className={`${size} object-cover ${rounded} ${className}`}
       />
     );
