@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMusicArtist } from "@/lib/music-api";
 import { MusicCover } from "@/components/music/music-cover";
+import { MusicPlayAllButton } from "@/components/music/player/play-all-button";
+import { MusicPlayModeButtons } from "@/components/music/player/play-mode-buttons";
 import { MusicTrackRow } from "@/components/music/music-track-row";
 import { plural } from "@/lib/plural";
 
@@ -68,6 +70,13 @@ export default async function MusicArtistPage({
           </p>
         </div>
       </header>
+
+      {/* Кнопки порядка (VED-33): «Слушать» рядом — про «включи и не думай»,
+          а эти про выбор: одна запись, весь список до конца, вперемешку. */}
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <MusicPlayAllButton queue={queue} />
+        <MusicPlayModeButtons queue={queue} />
+      </div>
 
       {artist.bio && (
         <p className="mt-6 max-w-2xl text-sm leading-relaxed text-text-1">
