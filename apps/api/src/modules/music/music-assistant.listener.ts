@@ -8,6 +8,7 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildCoverUrl } from './music-track-dto';
+import { musicCoverBaseUrl } from './music-cover-file';
 
 /**
  * Ассистент портала спрашивает Музыку о записях. Имя события дублируется в
@@ -23,7 +24,7 @@ export class MusicAssistantListener {
     private readonly prisma: PrismaService,
     config: ConfigService,
   ) {
-    this.publicBaseUrl = config.get<string>('S3_PUBLIC_URL') || undefined;
+    this.publicBaseUrl = musicCoverBaseUrl(config.get<string>('API_PUBLIC_URL'));
   }
 
   @OnEvent(MUSIC_SEARCH)

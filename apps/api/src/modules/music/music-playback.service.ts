@@ -23,6 +23,7 @@ import { mayShareMusicActivity } from './music-activity-share';
 import { toMusicTrackDto } from './music-track-dto';
 import { isNowPlayingStale } from './now-playing-visibility';
 import { keepExistingInOrder, normalizePlaybackQueue } from './playback-queue';
+import { musicCoverBaseUrl } from './music-cover-file';
 
 /**
  * Состояние плеера, тик воспроизведения и настройки прослушивания.
@@ -98,7 +99,7 @@ export class MusicPlaybackService {
     private readonly bus: EventEmitter2,
     config: ConfigService,
   ) {
-    this.publicBaseUrl = config.get<string>('S3_PUBLIC_URL') || undefined;
+    this.publicBaseUrl = musicCoverBaseUrl(config.get<string>('API_PUBLIC_URL'));
   }
 
   /**
