@@ -89,6 +89,32 @@ describe("Header", () => {
     );
   });
 
+  // VED-15: панель открывают ради сервисов, поэтому «Главная» стоит первой,
+  // за ней сервисы, и только потом служебное — админка и «Добавить новость».
+  it("ставит «Главную» и сервисы выше админских ссылок", () => {
+    render(
+      <NextIntlClientProvider locale="ru" messages={ru}>
+        <Header user={{ ...user, role: "admin" } as unknown as UserProfile} />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Открыть меню" }));
+    const dialog = screen.getByRole("dialog", { name: "Меню" });
+
+    const links = [...dialog.querySelectorAll("a")].map((a) =>
+      a.getAttribute("href"),
+    );
+    const home = links.indexOf("/");
+    const lastService = links.indexOf(
+      SERVICE_CONTENT[SERVICE_CONTENT.length - 1].route,
+    );
+    const admin = links.indexOf("/admin");
+
+    expect(home).toBe(0);
+    expect(lastService).toBeGreaterThan(home);
+    expect(admin).toBeGreaterThan(lastService);
+    expect(links.indexOf("/admin/changelog?new=1")).toBeGreaterThan(lastService);
+  });
+
   it("opens the drawer as a dialog, closes it on Escape and returns focus", async () => {
     renderHeader();
     const burger = screen.getByRole("button", { name: "Открыть меню" });
