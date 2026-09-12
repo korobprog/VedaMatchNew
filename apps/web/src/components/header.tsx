@@ -302,17 +302,39 @@ export function Header({ user }: { user: UserProfile }) {
                     <X size={20} />
                   </button>
                 </div>
-                {/* Админские ссылки — самыми первыми, а не под списком
-                    сервисов: администратор ходит сюда чаще, чем в любой из
-                    них, и мотать до низа ради «Добавить новость» — ровно то,
-                    от чего эту кнопку сюда и вынесли. Обычный участник блока
-                    не видит, и порядок для него не меняется. */}
+                <nav aria-label={t("services")} className="flex flex-col gap-1">
+                  {navItems.map((item, index) => (
+                    <motion.div
+                      key={item.href}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <Link
+                        href={item.href}
+                        aria-current={currentAttr(item.href)}
+                        onClick={closeDrawer}
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-text-0 hover:bg-glass transition-colors aria-[current=page]:bg-glass aria-[current=page]:text-text-0"
+                      >
+                        {item.icon}
+                        <span className="font-medium">{item.label}</span>
+                      </Link>
+                    </motion.div>
+                  ))}
+                </nav>
+                {/* Админка и «Добавить новость» — под списком сервисов
+                    (VED-15): первой в панели должна стоять «Главная», за
+                    ней сервисы, и только потом служебное. Раньше блок
+                    висел сверху и отодвигал сервисы вниз: администратору
+                    так было ближе, но панель открывают ради сервисов, а
+                    не ради админки. Обычный участник блока не видит, и
+                    для него ничего не меняется. */}
                 {isPortalAdmin(user) && (
                   <motion.div
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0 }}
-                    className="mb-4 pb-4 border-b border-glass-brd"
+                    className="mt-4 pt-4 border-t border-glass-brd"
                   >
                     {/* Один вход: разделы админки живут в её собственном
                         сайдбаре, дублировать их список в бургере незачем. */}
@@ -335,27 +357,6 @@ export function Header({ user }: { user: UserProfile }) {
                     </Link>
                   </motion.div>
                 )}
-                <nav aria-label={t("services")} className="flex flex-col gap-1">
-                  {navItems.map((item, index) => (
-                    <motion.div
-                      key={item.href}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                    >
-                      <Link
-                        href={item.href}
-                        aria-current={currentAttr(item.href)}
-                        onClick={closeDrawer}
-                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-text-0 hover:bg-glass transition-colors aria-[current=page]:bg-glass aria-[current=page]:text-text-0"
-                      >
-                        {item.icon}
-                        <span className="font-medium">{item.label}</span>
-                      </Link>
-                    </motion.div>
-                  ))}
-                </nav>
-                
 
                 <div className="mt-auto pt-4 border-t border-glass-brd space-y-1">
                   <div className="px-1 pb-3">
