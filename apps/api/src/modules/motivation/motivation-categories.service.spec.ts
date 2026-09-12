@@ -399,7 +399,10 @@ describe('MotivationCategoriesService.publicTree', () => {
   };
 
   it('считает только опубликованное: заготовки читателю не обещают', async () => {
-    const { service, groupBy } = build([root], [{ category: 'vedy', _count: { _all: 3 } }]);
+    const { service, groupBy } = build(
+      [root],
+      [{ category: 'vedy', _count: { _all: 3 } }],
+    );
 
     await service.publicTree();
 
@@ -411,7 +414,10 @@ describe('MotivationCategoriesService.publicTree', () => {
   });
 
   it('не считает рилсы участников без проверенного источника', async () => {
-    const { service, groupBy } = build([root], [{ category: 'vedy', _count: { _all: 3 } }]);
+    const { service, groupBy } = build(
+      [root],
+      [{ category: 'vedy', _count: { _all: 3 } }],
+    );
 
     await service.publicTree();
 

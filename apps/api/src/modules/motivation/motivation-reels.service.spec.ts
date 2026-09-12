@@ -837,7 +837,6 @@ describe('MotivationReelsService.appeal', () => {
 });
 
 describe('MotivationReelsService.adminUploadImage', () => {
-
   function build(post: Record<string, unknown> | null = { id: 'post-1' }) {
     const update = jest.fn().mockResolvedValue({});
     const create = jest.fn().mockResolvedValue({});

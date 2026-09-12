@@ -27,7 +27,10 @@ describe('explanationOf', () => {
 describe('explanationChanged', () => {
   it('правка самой цитаты автором трактовки не делает', () => {
     expect(
-      explanationChanged('Цитата\n\nПояснение', 'Цитата с опечаткой\n\nПояснение'),
+      explanationChanged(
+        'Цитата\n\nПояснение',
+        'Цитата с опечаткой\n\nПояснение',
+      ),
     ).toBe(false);
   });
 
@@ -80,9 +83,7 @@ describe('normalizeExplanation', () => {
   });
 
   it('переводы строк Windows не оставляют мусора', () => {
-    expect(normalizeExplanation('Первое.\r\nВторое.')).toBe(
-      'Первое.\nВторое.',
-    );
+    expect(normalizeExplanation('Первое.\r\nВторое.')).toBe('Первое.\nВторое.');
   });
 
   it('пустое пояснение — нечего хранить', () => {
