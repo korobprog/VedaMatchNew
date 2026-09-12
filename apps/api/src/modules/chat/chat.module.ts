@@ -12,6 +12,7 @@ import { ChatMessagesService } from './chat-messages.service';
 import { ChatPresenceService } from './chat-presence.service';
 import { ChatPurgeListener } from './chat-purge.listener';
 import { ChatVacanciesListener } from './chat-vacancies.listener';
+import { ChatWelcomeListener } from './chat-welcome.listener';
 import { ChatReportsService } from './chat-reports.service';
 import { ChatRetentionService } from './chat-retention.service';
 import { ChatSignedUrlsInterceptor } from './chat-signed-urls.interceptor';
@@ -59,6 +60,7 @@ import { PeopleService } from './people/people.service';
     ChatSignedUrlsInterceptor,
     ChatPurgeListener,
     ChatVacanciesListener,
+    ChatWelcomeListener,
     ChatRetentionService,
     ChatColorTemplatesService,
     ChatConversationThemeService,
