@@ -15,6 +15,16 @@ describe('publicOrigin', () => {
     ).toBe('https://vedamatch.ru');
   });
 
+  it('список глобального и российского контуров не склеивается', () => {
+    // Ровно то значение, на котором 12 сентября 2026 лёг вход через Google:
+    // редирект уходил на адрес с запятыми.
+    expect(
+      publicOrigin(
+        'https://vedamatch.ru,https://vedamatch.com,https://www.vedamatch.com',
+      ),
+    ).toBe('https://vedamatch.ru');
+  });
+
   it('снимает хвостовой слэш', () => {
     // Иначе ссылка выходит с двойным: https://сайт//work/join/...
     expect(publicOrigin('https://vedamatch.ru/')).toBe('https://vedamatch.ru');

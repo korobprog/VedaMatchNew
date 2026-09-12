@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
+import { publicOrigin } from '../../common/public-origin';
 import { PrismaService } from '../../prisma/prisma.service';
 import { REWARDS_CODE_BYTES, generateReferralCode } from './rewards-code';
 
@@ -22,8 +23,15 @@ export class RewardsAccountsService {
     private readonly config: ConfigService,
   ) {}
 
+  /**
+   * Адрес для реферальной ссылки. `WEB_ORIGIN` хранит список доменов для
+   * CORS — человеку уходит только первый, иначе ссылка выходит с запятыми.
+   */
   private get webOrigin(): string {
-    return this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000');
+    return (
+      publicOrigin(this.config.get<string>('WEB_ORIGIN')) ??
+      'http://localhost:3000'
+    );
   }
 
   /** Ссылка на лендинг с кодом. Собирается здесь, чтобы веб её не выдумывал. */

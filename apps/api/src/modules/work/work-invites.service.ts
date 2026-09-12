@@ -23,7 +23,7 @@ import {
 } from './work-invite';
 import { WORK_EVENTS, type WorkInviteReceivedEvent } from './work-events';
 import { assertWorkAccess, workRoleTitle } from './work-roles';
-import { publicOrigin } from './public-origin';
+import { publicOrigin } from '../../common/public-origin';
 import { WorkSpacesService } from './work-spaces.service';
 import { normalizeWorkColor } from './work-validate';
 
@@ -47,6 +47,7 @@ export class WorkInvitesService {
    * было невозможно.
    *
    * Правильное имя одно — `WEB_ORIGIN`, его читают вход, награды и CORS.
+   * Разбор списка общий для всех троих и лежит в `common/public-origin`.
    * Прежнее оставлено запасным: если кто-то успел его задать, ссылка от
    * правки не сломается.
    */
