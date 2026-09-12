@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type {
   MotivationCategoryDto,
@@ -51,6 +52,50 @@ describe("MotivationCollections", () => {
       "href",
       "/motivation/collections/gita",
     );
+  });
+
+  // VED-22: просили смотреть несколько папок сразу. Отметки уезжают в адрес
+  // одним параметром — такую подборку можно переслать ссылкой.
+  it("собирает несколько отмеченных папок в один переход", async () => {
+    const user = userEvent.setup();
+    render(
+      <MotivationCollections
+        categories={[
+          category(),
+          category({
+            id: "c",
+            slug: "gita",
+            title: "Гита",
+            parentId: "r",
+            postCount: 5,
+          }),
+        ]}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("checkbox", { name: /Смотреть «Веды» вместе/ }),
+    );
+    await user.click(
+      screen.getByRole("checkbox", { name: /Смотреть «Гита» вместе/ }),
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Смотреть выбранное: 2" }),
+    ).toHaveAttribute("href", "/motivation?category=vedy,gita");
+
+    await user.click(screen.getByRole("button", { name: "Снять отметки" }));
+
+    expect(screen.queryByRole("link", { name: /Смотреть выбранное/ })).toBeNull();
+  });
+
+  // Пустую папку отмечать нечем: за ней ничего не покажут.
+  it("не предлагает отметить пустой раздел", () => {
+    render(
+      <MotivationCollections categories={[category({ postCount: 0 })]} />,
+    );
+
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
   it("говорит, куда идти, когда разделов нет", () => {

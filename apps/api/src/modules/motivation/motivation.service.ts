@@ -61,6 +61,7 @@ import {
   feedPage,
 } from './motivation-feed';
 import { rankFeed, shuffleFeed } from './feed-ranking';
+import { feedCategories, feedCategoryWhere } from './feed-categories';
 import { attributionLine } from './postcard-events';
 import { adminAiVerdictOf, adminAppealOf } from './moderation-audit';
 import { MotivationSettingsService } from './motivation-settings.service';
@@ -236,7 +237,10 @@ export class MotivationService {
       limit = Math.max(1, Math.min(50, query.limit ?? 20));
     // Ярусы («свежее → непросмотренное → повтор») считаются только для
     // основной ленты: избранное и фильтр по категории остаются хронологией.
-    const ranked = !query.favorites && !query.category;
+    /* Папок может быть несколько: «?category=vedy,praktika» (VED-22).
+       Пустой список значит «папки не выбраны» — лента личная. */
+    const categories = feedCategories(query.category);
+    const ranked = !query.favorites && categories.length === 0;
     // Сессия листания: первая страница фиксирует момент и прошлый визит и
     // уносит их в курсор; дальше ленту считаем по ним, иначе просмотры,
     // сделанные при листании, сдвинули бы порядок между страницами.
@@ -271,7 +275,7 @@ export class MotivationService {
     // ним написано «9»: счётчик считает всё опубликованное, а выдача отдавала
     // выборку под профиль. Оглавление обещает содержимое папки — папка его и
     // отдаёт целиком.
-    const personalized = !query.category;
+    const personalized = categories.length === 0;
     const where = {
       ...(personalized
         ? {
@@ -322,7 +326,7 @@ export class MotivationService {
       // Опубликованное уже во время листания не втискивается в середину
       // сессии: оно придёт «свежим» при следующем открытии ленты.
       ...(ranked ? { publishedAt: { lte: since } } : {}),
-      ...(query.category ? { category: query.category } : {}),
+      ...(feedCategoryWhere(categories) ?? {}),
       ...(query.imageSource ? { imageSource: query.imageSource } : {}),
       ...(query.favorites ? { favorites: { some: { userId } } } : {}),
     };
