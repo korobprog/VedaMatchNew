@@ -13,7 +13,11 @@ import { IdentityService } from './identity.service';
 /**
  * refresh: ротация как CAS и reuse-detection. Google/OIDC здесь не трогаем.
  */
-function makeService(stored: Record<string, unknown> | null, rotatedCount = 1) {
+function makeService(
+  stored: Record<string, unknown> | null,
+  rotatedCount = 1,
+  env: Record<string, string> = {},
+) {
   const prisma = {
     refreshToken: {
       findUnique: jest.fn().mockResolvedValue(stored),
@@ -23,7 +27,7 @@ function makeService(stored: Record<string, unknown> | null, rotatedCount = 1) {
     user: { update: jest.fn() },
   };
   const config = {
-    get: jest.fn((key: string, fallback?: string) => fallback),
+    get: jest.fn((key: string, fallback?: string) => env[key] ?? fallback),
   };
   const jwt = { signAccessToken: jest.fn().mockResolvedValue('access') };
   const service = new AuthService(
@@ -35,7 +39,12 @@ function makeService(stored: Record<string, unknown> | null, rotatedCount = 1) {
     new AuthProvidersService(prisma as never),
   );
   const res = { cookie: jest.fn(), clearCookie: jest.fn() };
-  const req = { cookies: { refresh_token: 'raw-token' } };
+  // headers у настоящего запроса есть всегда, а контур входа читает из
+  // них хост: без них refresh и logout падали бы только в тесте.
+  const req = {
+    cookies: { refresh_token: 'raw-token' },
+    headers: { host: 'api.vedamatch.ru' },
+  };
   return { service, prisma, req, res };
 }
 
@@ -146,7 +155,7 @@ describe('AuthService.logout', () => {
     const { service, res } = makeService(null);
     const clearCookie = jest.fn();
     await service.logout(
-      { cookies: {} } as never,
+      { cookies: {}, headers: { host: 'api.vedamatch.ru' } } as never,
       { ...res, clearCookie } as never,
     );
     const names = clearCookie.mock.calls.map((call: unknown[]) => call[0]);
@@ -235,5 +244,49 @@ describe('AuthService.resolveGoogleProfile', () => {
     expect(created).toBe(false);
     expect(user.id).toBe('u-old');
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Контур входа: cookie снимаются на домене того портала, с которого пришёл
+ * запрос. Раньше домен брался из COOKIE_DOMAIN, один на весь сервис, и выход
+ * на глобальном контуре не снимал ничего: браузер отбрасывает cookie с
+ * Domain=.vedamatch.ru, выставленную с хоста api.vedamatch.com.
+ */
+describe('AuthService и контуры', () => {
+  const env = {
+    WEB_ORIGIN: 'https://vedamatch.ru,https://vedamatch.com',
+    COOKIE_DOMAIN: '.vedamatch.ru',
+  };
+
+  async function logoutFrom(host: string) {
+    const { service } = makeService(null, 1, env);
+    const clearCookie = jest.fn();
+    await service.logout(
+      { cookies: {}, headers: { host } } as never,
+      { cookie: jest.fn(), clearCookie } as never,
+    );
+    return clearCookie.mock.calls.map(
+      (call: unknown[]) => (call[1] as { domain?: string }).domain,
+    );
+  }
+
+  it('выход на глобальном контуре снимает cookie его домена', async () => {
+    expect(new Set(await logoutFrom('api.vedamatch.com'))).toEqual(
+      new Set(['.vedamatch.com']),
+    );
+  });
+
+  it('выход на российском контуре работает как прежде', async () => {
+    expect(new Set(await logoutFrom('api.vedamatch.ru'))).toEqual(
+      new Set(['.vedamatch.ru']),
+    );
+  });
+
+  it('незнакомый хост остаётся на настройке сервиса', async () => {
+    // Превью-деплои и вход по адресу сервера: заголовку Host доверия нет.
+    expect(new Set(await logoutFrom('api.evil.example'))).toEqual(
+      new Set(['.vedamatch.ru']),
+    );
   });
 });
