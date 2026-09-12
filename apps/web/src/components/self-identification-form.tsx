@@ -21,8 +21,9 @@ import {
   DEFAULT_ANSWERS,
   SelfIdentificationQuestions,
 } from "./self-identification-questions";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 const stageLabels: Record<string, string> = {
   seeker: "Ищущий",

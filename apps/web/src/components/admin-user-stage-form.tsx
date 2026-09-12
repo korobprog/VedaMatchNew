@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import type { DevoteeVerificationStatus, SpiritualStage } from "@vedamatch/shared";
 import { stageLabels, verificationLabels } from "@/lib/admin-labels";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 const stages: SpiritualStage[] = ["seeker", "practitioner", "yogi", "devotee"];
 const statuses: DevoteeVerificationStatus[] = [
   "self_identified",

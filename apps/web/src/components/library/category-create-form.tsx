@@ -13,8 +13,9 @@ import { LIBRARY_MAX_DEPTH } from "@vedamatch/shared";
 import { flattenTree } from "./category-tree";
 import { pickLocalized, t } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 export function CategoryCreateForm({
   locale,

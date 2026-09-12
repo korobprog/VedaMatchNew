@@ -6,8 +6,9 @@ import { Trash2 } from "lucide-react";
 import type { LibraryLocale } from "@vedamatch/shared";
 import { t } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /**
  * Удаление ссылки автором или админом. Подтверждение спрашиваем прямо в

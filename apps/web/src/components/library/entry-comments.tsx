@@ -5,8 +5,9 @@ import { Trash2 } from "lucide-react";
 import type { LibraryCommentDto, LibraryLocale } from "@vedamatch/shared";
 import { t } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 const MAX_BODY_LENGTH = 2000;
 
 /**

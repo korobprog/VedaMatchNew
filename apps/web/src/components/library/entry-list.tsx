@@ -7,8 +7,9 @@ import { buildLibraryQuery } from "@/lib/library-query";
 import { EntryCard } from "./entry-card";
 import { t } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 export function EntryList({
   initialFeed,

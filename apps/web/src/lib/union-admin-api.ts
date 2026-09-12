@@ -5,8 +5,9 @@ import type {
   UnionAdminProfileDto,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 async function command(path: string, body?: unknown) {
   const response = await apiFetch(`${API_URL}${path}`, {

@@ -38,8 +38,9 @@ import {
   STYLE_OPTIONS,
   type StageState,
 } from "./reel-wizard-copy";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 const MOTION_CHOICES = [
   { value: "calm", label: "Спокойное дыхание" },

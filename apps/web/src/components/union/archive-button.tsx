@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
 // Свой API_URL, как в swipe-deck.tsx: lib/union-api.ts — серверный модуль
 // (берёт токен через cookies()), из браузера он недоступен.
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /**
  * «Убрать совсем» — в отличие от крестика, который прячет анкету только до

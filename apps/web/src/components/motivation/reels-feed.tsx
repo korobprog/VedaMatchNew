@@ -47,8 +47,9 @@ import {
   shouldLoadMore,
   viewDelayMs,
 } from "./reels";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /**
  * Насколько прячется кадр. Пять секунд из просьбы: меньше — не успеть

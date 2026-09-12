@@ -37,8 +37,9 @@ import {
   type EntryLocator,
   type LibraryEntryDraft,
 } from "./entry-draft";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /** Заголовок и подсказка каждого шага — порядок задаёт номер шага. */
 const STEPS: { title: LibraryTextKey; hint: LibraryTextKey }[] = [

@@ -16,8 +16,9 @@ import { apiFetch } from "@/lib/http-client";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input, fieldClassName } from "@/components/ui/input";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 const REASON_MAX_LENGTH = 300;
 
 // Пустой вариант остался только для старых профилей, у которых пола нет:

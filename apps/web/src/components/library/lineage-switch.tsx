@@ -5,8 +5,9 @@ import type { LineageId, LineagePreference, LibraryLocale } from "@vedamatch/sha
 import { LineageSelect, inheritLabel } from "@/components/lineage-picker";
 import { apiFetch } from "@/lib/http-client";
 import { t } from "./i18n";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /**
  * Какую линию смотреть в Образовании. Настройка сервиса поверх профиля: по

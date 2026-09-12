@@ -5,6 +5,7 @@ import type { ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { NoticesFeedView } from "./notices-feed-view";
 import ru from "../../../messages/ru.json";
+import { apiBase } from "@/lib/api-base";
 
 /** Лента берёт локаль из next-intl — рендерим с настоящими сообщениями. */
 const render = (ui: ReactElement) =>
@@ -14,7 +15,7 @@ const render = (ui: ReactElement) =>
     </NextIntlClientProvider>,
   );
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /**
  * Фильтр по городу в API сравнивает точным совпадением (см.

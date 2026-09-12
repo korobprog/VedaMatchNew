@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { ImageUp } from "lucide-react";
 import { apiFetch } from "@/lib/http-client";
 import { secondaryButton } from "./ui";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /**
  * Готовая открытка с устройства.

@@ -14,9 +14,9 @@
 // cookie из next/headers, а не браузера.
 
 import { isAbort } from "./is-abort";
+import { apiBase } from "@/lib/api-base";
 
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+export const API_URL = apiBase();
 
 export const SESSION_EXPIRED_EVENT = "vedamatch:session-expired";
 

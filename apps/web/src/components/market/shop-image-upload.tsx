@@ -5,8 +5,9 @@ import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /**
  * Логотип и обложка магазина. Ключ в S3 фиксированный, поэтому перезалив

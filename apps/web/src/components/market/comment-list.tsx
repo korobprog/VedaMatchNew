@@ -8,8 +8,9 @@ import type { Locale } from "@/lib/locale";
 import { ReportButton } from "./report-dialog";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /** Публичные вопросы под объявлением. Личное — в переписку, о чём прямо
  *  сказано подсказкой: иначе в комментариях появляются адреса и телефоны. */

@@ -42,8 +42,9 @@ import {
   VACANCY_SEVA_TERM_LABELS,
   VACANCY_WORK_FORMAT_LABELS,
 } from "./vacancy-labels";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /** Роли, дающие право говорить от имени общины. */
 const POSTING_ROLES = new Set(["owner", "admin"]);

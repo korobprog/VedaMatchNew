@@ -6,8 +6,9 @@ import type { MouseEvent, ReactElement } from "react";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { DevLoginForm } from "@/components/dev-login-form";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 const DEV_AUTH = process.env.NEXT_PUBLIC_DEV_AUTH === "true";
 
 /** Значение cookie по имени; на сервере — пусто. */

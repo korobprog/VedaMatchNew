@@ -6,8 +6,9 @@ import { buildMarketQuery } from "@/lib/market-query";
 import type { Locale } from "@/lib/locale";
 import { ListingCard, type ListingCardLabels } from "./listing-card";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 export interface ListingGridLabels extends ListingCardLabels {
   empty: string;

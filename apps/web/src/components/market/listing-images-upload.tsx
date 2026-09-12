@@ -7,8 +7,9 @@ import { useTranslations } from "next-intl";
 import type { MarketListingImageDto } from "@vedamatch/shared";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 const MAX_IMAGES = 8;
 
 /** Фотографии объявления. Первая по порядку становится обложкой в ленте,

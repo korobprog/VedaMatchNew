@@ -8,8 +8,9 @@ import { bumpCartCount } from "@/lib/market-cart-badge";
 import { bumpCartItemQuantity, getCartItemQuantity } from "@/lib/market-cart-items";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 function postCartItem(listingId: string) {
   return apiFetch(`${API_URL}/market/cart/items`, {

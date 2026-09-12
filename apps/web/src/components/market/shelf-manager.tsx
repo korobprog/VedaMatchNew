@@ -7,8 +7,9 @@ import { useTranslations } from "next-intl";
 import type { MarketShelfDto } from "@vedamatch/shared";
 import { marketErrorCode, marketErrorText } from "./use-market-error";
 import { apiFetch } from "@/lib/http-client";
+import { apiBase } from "@/lib/api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = apiBase();
 
 /** Полки витрины. Удаление полки не трогает объявления — это ярлык, а не
  *  контейнер, поэтому подтверждения не спрашиваем. */
