@@ -1,7 +1,6 @@
 import {
   CHAT_MAX_ATTACHMENTS,
   CHAT_MESSAGE_MAX_LENGTH,
-  CHAT_REACTION_EMOJIS,
   type ChatAttachmentInput,
   type ChatAttachmentKind,
 } from '@vedamatch/shared';
@@ -80,9 +79,31 @@ export function assertStorageUrl(
     throw new ChatValidationError('Вложение не из нашего хранилища');
 }
 
+/** Любой символ-картинка Unicode: лица, сердца, ©️, 🏳️‍🌈 и прочее. */
+const PICTOGRAPH = /\p{Extended_Pictographic}/u;
+/** Флаг страны — пара «региональных букв», картинок в них нет. */
+const FLAG = /^\p{Regional_Indicator}{2}$/u;
+/** Цифра в квадрате (1️⃣, #️⃣) — тоже не картинка по Unicode. */
+const KEYCAP = /^[0-9#*]️?⃣$/u;
+const graphemes = new Intl.Segmenter('ru', { granularity: 'grapheme' });
+
+/**
+ * Реакция — ровно один смайлик, любой (VED-122).
+ *
+ * Раньше пропускались восемь из белого списка, и панель всех смайликов
+ * упиралась бы в «Такой реакции нет». Узость списка защищала от строк
+ * вместо реакций — это и проверяем: один видимый знак (семья через ZWJ,
+ * флаг и оттенок кожи — тоже один), и он смайлик, а не буква.
+ */
+export function isSingleEmoji(value: string): boolean {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 32)
+    return false;
+  if ([...graphemes.segment(value)].length !== 1) return false;
+  return FLAG.test(value) || KEYCAP.test(value) || PICTOGRAPH.test(value);
+}
+
 export function assertReactionEmoji(emoji: string): void {
-  if (!(CHAT_REACTION_EMOJIS as readonly string[]).includes(emoji))
-    throw new ChatValidationError('Такой реакции нет');
+  if (!isSingleEmoji(emoji)) throw new ChatValidationError('Такой реакции нет');
 }
 
 /**

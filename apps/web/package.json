@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "emoji:data": "node scripts/build-emoji-data.mjs"
   },
   "dependencies": {
     "@vedamatch/shared": "workspace:*",
@@ -34,6 +35,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "emojibase-data": "17.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "fake-indexeddb": "^6.2.5",

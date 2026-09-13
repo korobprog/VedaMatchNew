@@ -47,6 +47,48 @@ function setup(editing: ChatMessageDto | null) {
   return { ...view, onSaveEdit };
 }
 
+describe("ChatComposer — смайлики (VED-122)", () => {
+  it("открывает полную панель и вставляет смайлик туда, где курсор", async () => {
+    // Закреплённая рядом с полем кнопка — «Смайлы».
+    window.localStorage.setItem("vedamatch:chat-quick-slot", "emoji");
+    const user = userEvent.setup();
+    setup(null);
+
+    const field = screen.getByPlaceholderText("Сообщение…") as HTMLTextAreaElement;
+    await user.type(field, "Харе Кришна");
+    field.setSelectionRange(4, 4);
+    await user.click(screen.getByRole("button", { name: "Смайлы" }));
+    await user.click(await screen.findByRole("button", { name: "морда собаки" }));
+
+    expect(field).toHaveValue("Харе🐶 Кришна");
+    expect(
+      screen.getByRole("navigation", { name: "Категории смайликов" }),
+    ).toBeInTheDocument();
+    window.localStorage.clear();
+  });
+});
+
+describe("ChatComposer — смайлики (VED-122)", () => {
+  it("открывает полную панель и вставляет смайлик туда, где курсор", async () => {
+    // Закреплённая рядом с полем кнопка — «Смайлы».
+    window.localStorage.setItem("vedamatch:chat-quick-slot", "emoji");
+    const user = userEvent.setup();
+    setup(null);
+
+    const field = screen.getByPlaceholderText("Сообщение…") as HTMLTextAreaElement;
+    await user.type(field, "Харе Кришна");
+    field.setSelectionRange(4, 4);
+    await user.click(screen.getByRole("button", { name: "Смайлы" }));
+    await user.click(await screen.findByRole("button", { name: "морда собаки" }));
+
+    expect(field).toHaveValue("Харе🐶 Кришна");
+    expect(
+      screen.getByRole("navigation", { name: "Категории смайликов" }),
+    ).toBeInTheDocument();
+    window.localStorage.clear();
+  });
+});
+
 describe("ChatComposer", () => {
   it("правка начинается с прежнего текста сообщения", () => {
     // Пустое поле означало, что «Сохранить» молча ничего не делает: человек
