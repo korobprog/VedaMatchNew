@@ -485,7 +485,10 @@ describe('MotivationService feed tiers', () => {
       where: { slug: 'daily' },
       select: { title: true },
     });
-    expect(page).toMatchObject({ category: 'daily', categoryTitle: 'Каждый день' });
+    expect(page).toMatchObject({
+      category: 'daily',
+      categoryTitle: 'Каждый день',
+    });
   });
 
   it('falls back to the slug when the catalogue does not know it', async () => {
