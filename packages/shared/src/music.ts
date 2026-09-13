@@ -297,6 +297,13 @@ export interface CreateMusicUploadResponse {
 export interface CompleteMusicUploadRequest {
   fileName?: string;
   lineage?: LineageId | null;
+  /**
+   * Исполнитель из справочника (VED-114): загрузка со страницы исполнителя
+   * сразу подписывает запись его именем. Принимается только от редакции
+   * Музыки — участник со «своей записью» публикуется без проверки, и чужое
+   * имя на ней было бы подлогом. От остальных поле молча не учитывается.
+   */
+  artistId?: string | null;
 }
 
 export interface CompleteMusicUploadResponse {

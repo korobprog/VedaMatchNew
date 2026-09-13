@@ -277,6 +277,10 @@ export class MusicUploadsService {
     fileName: string | undefined,
     /** Матх или линия записи; не выбрана — слышат все. */
     requestedLineage?: LineageId | null,
+    /** Исполнитель из справочника — загрузка со страницы исполнителя. */
+    requestedArtistId?: string | null,
+    /** Может ли загрузивший подписывать запись исполнителем: только редакция. */
+    canAssignArtist = false,
   ): Promise<CompleteMusicUploadResponse> {
     const upload = await this.prisma.musicUpload.findUnique({
       where: { id: uploadId },
@@ -365,6 +369,10 @@ export class MusicUploadsService {
        угаданного. Поправить может модератор в очереди и редакция в форме
        правки каталога. */
     const lineage = this.uploadLineage(requestedLineage);
+    const artistId = await this.uploadArtist(
+      requestedArtistId,
+      canAssignArtist,
+    );
     const coverKey = embeddedCover
       ? await this.storeEmbeddedCover(userId, embeddedCover)
       : null;
@@ -381,10 +389,12 @@ export class MusicUploadsService {
           language: metadata.language,
           lineage,
           // Исполнителя из тега в каталог не заводим: справочником владеет
-          // редакция, а тег — всего лишь подсказка модератору.
+          // редакция, а тег — всего лишь подсказка модератору. Исполнитель
+          // ставится, только когда редакция грузит со страницы исполнителя.
           //
           // А вот статус решает основание прав: своё и свободное идут в
           // каталог сразу, чужое исполнение — через проверку.
+          ...(artistId ? { artistId } : {}),
           status,
           ...(status === 'published' ? { publishedAt: new Date() } : {}),
           ...(coverKey ? { coverKey } : {}),
@@ -432,6 +442,26 @@ export class MusicUploadsService {
     );
     const stored = await this.storage.put(key, cover.data, cover.mime);
     return stored ? key : null;
+  }
+
+  /**
+   * Исполнитель записи при загрузке (VED-114).
+   *
+   * Не отказ, а `null`, и когда права нет, и когда исполнителя в справочнике
+   * не нашлось: к этой минуте файл уже в бакете, и уронить заливку из-за
+   * подписи значило бы потерять саму запись. Исполнителя поставит модератор,
+   * как и раньше. Та же логика, что у линии в `uploadLineage`.
+   */
+  private async uploadArtist(
+    requested: string | null | undefined,
+    allowed: boolean,
+  ): Promise<string | null> {
+    if (!requested || !allowed) return null;
+    const artist = await this.prisma.musicArtist.findUnique({
+      where: { id: requested },
+      select: { id: true },
+    });
+    return artist?.id ?? null;
   }
 
   private async fail(uploadId: string, reason: string): Promise<void> {
