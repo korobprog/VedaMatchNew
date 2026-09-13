@@ -362,10 +362,27 @@ describe('ChatMessagesService', () => {
       expect(prisma.chatMessageReaction.create).not.toHaveBeenCalled();
     });
 
-    it('не принимает эмодзи вне белого списка', async () => {
-      await expect(
-        service.setReaction('me', 'message-1', '💩'),
-      ).rejects.toBeInstanceOf(BadRequestException);
+    // VED-122: реакцией ставят любой один смайлик из панели, но не строку.
+    it.each(['🙏 спасибо', 'ok', '🙏🙏'])(
+      'не принимает вместо реакции строку: %p',
+      async (value) => {
+        await expect(
+          service.setReaction('me', 'message-1', value),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(prisma.chatMessageReaction.create).not.toHaveBeenCalled();
+      },
+    );
+
+    it('принимает смайлик не из быстрых реакций', async () => {
+      prisma.chatMessageReaction.findUnique.mockResolvedValue(null);
+
+      await service.setReaction('me', 'message-1', '💩');
+
+      expect(prisma.chatMessageReaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ emoji: '💩' }),
+        }),
+      );
     });
 
     it('повторный тот же эмодзи снимает реакцию', async () => {
