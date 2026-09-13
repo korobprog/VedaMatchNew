@@ -120,3 +120,24 @@ export const fetchTrackStreamUrl = async (
   }
   return (await res.json()) as MusicTrackStreamUrlDto;
 };
+
+/**
+ * Ссылка на скачивание файлом (VED-107). В отличие от `fetchTrackStreamUrl`,
+ * подписана с `Content-Disposition: attachment` и понятным именем: переход по
+ * ней сохраняет файл, а не открывает плеер браузера.
+ */
+export const fetchTrackDownloadUrl = async (
+  trackId: string,
+): Promise<MusicTrackStreamUrlDto> => {
+  const res = await apiFetch(
+    `${API_URL}/music/tracks/${encodeURIComponent(trackId)}/download-url`,
+  );
+  if (!res.ok) {
+    throw new Error(
+      res.status === 404
+        ? "Запись больше не доступна"
+        : `Не удалось скачать запись (${res.status})`,
+    );
+  }
+  return (await res.json()) as MusicTrackStreamUrlDto;
+};
