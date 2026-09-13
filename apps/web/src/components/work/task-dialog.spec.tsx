@@ -9,6 +9,7 @@ import {
   taskEditsProblem,
 } from "./task-edits";
 import {
+  attachWorkFile,
   deleteWorkTaskForever,
   getWorkTask,
   updateWorkTask,
@@ -197,6 +198,70 @@ describe("WorkTaskDialog — кнопка «Сохранить» (VED-56)", () =
     });
     expect(props.onClose).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
+  });
+});
+
+describe("WorkTaskDialog — несколько вложений за раз (VED-112)", () => {
+  const shot = (name: string) =>
+    new File(["x"], name, { type: "image/png" });
+
+  it("прикрепляет все выбранные скриншоты по одному", async () => {
+    vi.mocked(attachWorkFile).mockReset();
+    vi.mocked(attachWorkFile).mockImplementation((_id, file) =>
+      Promise.resolve({
+        ...task,
+        attachments: [
+          {
+            id: file.name,
+            name: file.name,
+            mime: "image/png",
+            sizeBytes: 1,
+            url: `https://files.test/${file.name}`,
+            createdAt: "2026-09-13T00:00:00.000Z",
+          },
+        ],
+      } as unknown as WorkTaskDto),
+    );
+    const user = userEvent.setup();
+    const props = open();
+    const input = await screen.findByLabelText(
+      "Прикрепить картинки или файлы",
+    );
+
+    expect(input).toHaveAttribute("multiple");
+    await user.upload(input, [shot("1.png"), shot("2.png"), shot("3.png")]);
+
+    await waitFor(() => expect(attachWorkFile).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(attachWorkFile).mock.calls.map(([id, f]) => [id, f.name]))
+      .toEqual([
+        ["t1", "1.png"],
+        ["t1", "2.png"],
+        ["t1", "3.png"],
+      ]);
+    await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("называет скриншот, который не приложился, а остальные оставляет", async () => {
+    vi.mocked(attachWorkFile).mockReset();
+    vi.mocked(attachWorkFile).mockImplementation((_id, file) =>
+      file.name === "big.png"
+        ? Promise.reject(new Error("Файл больше 10 МБ"))
+        : Promise.resolve(task),
+    );
+    const user = userEvent.setup();
+    const props = open();
+    const input = await screen.findByLabelText(
+      "Прикрепить картинки или файлы",
+    );
+
+    await user.upload(input, [shot("a.png"), shot("big.png"), shot("c.png")]);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "«big.png» не приложился: Файл больше 10 МБ",
+    );
+    expect(attachWorkFile).toHaveBeenCalledTimes(3);
+    expect(props.onChanged).toHaveBeenCalled();
   });
 });
 
