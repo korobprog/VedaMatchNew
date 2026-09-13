@@ -19,7 +19,7 @@ function message(over: Partial<ChatMessageDto> = {}): ChatMessageDto {
 
 function setup(over: Partial<ChatMessageDto> = {}, props = {}) {
   const onReply = vi.fn();
-  render(
+  const { container } = render(
     <ChatMessage
       message={message(over)}
       mine={false}
@@ -35,7 +35,7 @@ function setup(over: Partial<ChatMessageDto> = {}, props = {}) {
       {...props}
     />,
   );
-  return { onReply };
+  return { onReply, container };
 }
 
 describe("ChatMessage", () => {
@@ -178,6 +178,40 @@ describe("ChatMessage", () => {
     await user.keyboard("{Escape}");
 
     expect(screen.queryByRole("group", { name: "Меню сообщения" })).toBeNull();
+  });
+
+  it("нажатие в пустое место строки рядом с пузырём закрывает меню", async () => {
+    const user = userEvent.setup();
+    const { container } = setup();
+
+    await user.click(screen.getByText("Харе Кришна"));
+    expect(screen.getByRole("group", { name: "Меню сообщения" })).toBeInTheDocument();
+
+    // Строка сообщения — во всю ширину ленты: нажатие слева от пузыря
+    // приходится на неё, а не на соседнее сообщение.
+    await user.click(container.firstElementChild as HTMLElement);
+
+    expect(screen.queryByRole("group", { name: "Меню сообщения" })).toBeNull();
+  });
+
+  it("открытое меню докручивается в видимую часть ленты", async () => {
+    const user = userEvent.setup();
+    const scrollIntoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      setup();
+
+      await user.click(screen.getByText("Харе Кришна"));
+
+      // У последнего сообщения меню иначе оказывается под полем ввода.
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+      expect(scrollIntoView.mock.contexts[0]).toBe(
+        screen.getByRole("group", { name: "Меню сообщения" }),
+      );
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
   });
 
   it("ещё не доехавшее говорит об этом вместо времени", () => {
