@@ -4,6 +4,7 @@ import Link from "next/link";
 import { chatCardLink } from "@/components/chat/chat-card-link";
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -81,6 +82,30 @@ export function ChatMessage({
   // Меню закрывается нажатием мимо и по Escape — как в мессенджерах.
   useDismissable(rootRef, close, open);
   const deleted = Boolean(message.deletedAt);
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Меню встаёт под пузырём, в самой ленте. У последнего сообщения — а
+  // нажимают чаще всего его — оно уходило под поле ввода, и на телефоне был
+  // виден один пункт «Ответить». Докручиваем ленту ровно настолько, чтобы
+  // меню поместилось целиком.
+  useEffect(() => {
+    if (open) menuRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [open]);
+
+  /**
+   * Строка сообщения — во всю ширину ленты, поэтому нажатие в пустое место
+   * рядом с пузырём попадает «внутрь» и `useDismissable` меню не закрывал.
+   * Закрываем сами: всё, что не пузырь, не меню и не кнопка.
+   */
+  function closeFromRow(event: MouseEvent<HTMLDivElement>) {
+    if (!open) return;
+    const target = event.target as HTMLElement;
+    if (bubbleRef.current?.contains(target)) return;
+    if (menuRef.current?.contains(target)) return;
+    if (target.closest("a, button")) return;
+    close();
+  }
 
   /**
    * Нажатие по сообщению открывает меню действий (VED-117), как в Telegram.
@@ -115,6 +140,7 @@ export function ChatMessage({
   return (
     <div
       ref={rootRef}
+      onClick={closeFromRow}
       className={`group flex w-full flex-col gap-1 ${mine ? "items-end" : "items-start"}`}
     >
       <div
@@ -139,6 +165,7 @@ export function ChatMessage({
           `openFromBubble`. Для клавиатуры и скринридера — кнопка рядом.
         */}
         <div
+          ref={bubbleRef}
           style={bubbleStyle}
           onClick={openFromBubble}
           className={`max-w-[85%] select-text px-3.5 py-2.5 text-left ${bubble} shadow-lg shadow-black/20 ${
@@ -325,6 +352,7 @@ export function ChatMessage({
           уровень глубже. Реакции — строкой сверху, действия — списком. */}
       {open && !deleted && (
         <div
+          ref={menuRef}
           role="group"
           aria-label="Меню сообщения"
           className={`w-56 overflow-hidden rounded-2xl border border-glass-brd bg-bg-1 shadow-xl shadow-black/30 ${
