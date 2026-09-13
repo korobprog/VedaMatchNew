@@ -125,7 +125,13 @@ function SearchResults({
           </h2>
           <div className="grid gap-3">
             {group.items.map((card, index) => (
-              <AssistantLinkCardView key={`${card.href}-${index}`} card={card} />
+              <AssistantLinkCardView
+                key={`${card.href}-${index}`}
+                card={card}
+                // Найденные слова подсвечены (VED-98): в карточке сразу
+                // видно, чем она ответила на запрос.
+                highlight={result.query ?? undefined}
+              />
             ))}
           </div>
         </section>

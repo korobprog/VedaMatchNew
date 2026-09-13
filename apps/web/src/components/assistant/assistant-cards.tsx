@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { AssistantActionCard, AssistantLinkCard } from "@vedamatch/shared";
+import { highlightParts } from "@/lib/search-highlight";
 import { serviceLabel } from "./assistant-share";
 
 /**
@@ -9,7 +10,20 @@ import { serviceLabel } from "./assistant-share";
  * только показывают. Картинка не обязательна: у стиха или трека её может
  * не быть, и карточка без неё читается как список.
  */
-export function AssistantLinkCardView({ card }: { card: AssistantLinkCard }) {
+export function AssistantLinkCardView({
+  card,
+  highlight,
+}: {
+  card: AssistantLinkCard;
+  /**
+   * Запрос, слова которого подсветить (VED-98). Передаёт выдача поиска; в
+   * чате ассистента подсвечивать нечего — там отвечают на вопрос, а не на
+   * набор слов.
+   */
+  highlight?: string;
+}) {
+  const text = (value: string) =>
+    highlight ? <Highlighted text={value} query={highlight} /> : value;
   return (
     <Link
       href={card.href}
@@ -28,18 +42,42 @@ export function AssistantLinkCardView({ card }: { card: AssistantLinkCard }) {
           {serviceLabel(card.service)}
         </span>
         <span className="font-display text-sm font-semibold leading-5 text-text-0">
-          {card.title}
+          {text(card.title)}
         </span>
         {card.subtitle && (
-          <span className="text-xs text-text-1">{card.subtitle}</span>
+          <span className="text-xs text-text-1">{text(card.subtitle)}</span>
         )}
         {card.body && (
           <span className="line-clamp-3 text-xs leading-4 text-text-2">
-            {card.body}
+            {text(card.body)}
           </span>
         )}
       </span>
     </Link>
+  );
+}
+
+/**
+ * Текст с подсвеченными словами запроса. `<mark>` — чтобы скринридер тоже
+ * знал, что это совпадение; фон тёплый, цвет текста остаётся своим: иначе
+ * серый отрывок с яркими словами читался бы вразнобой.
+ */
+function Highlighted({ text, query }: { text: string; query: string }) {
+  return (
+    <>
+      {highlightParts(text, query).map((part, index) =>
+        part.hit ? (
+          <mark
+            key={index}
+            className="rounded-sm bg-gold/25 px-0.5 font-semibold text-inherit"
+          >
+            {part.text}
+          </mark>
+        ) : (
+          part.text
+        ),
+      )}
+    </>
   );
 }
 
