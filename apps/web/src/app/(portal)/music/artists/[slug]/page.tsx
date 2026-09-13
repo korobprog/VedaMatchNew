@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { canAdminService } from "@vedamatch/shared";
+import { getProfile } from "@/lib/api";
 import { getMusicArtist } from "@/lib/music-api";
 import { MusicCover } from "@/components/music/music-cover";
 import { MusicPlayAllButton } from "@/components/music/player/play-all-button";
@@ -32,11 +34,22 @@ export default async function MusicArtistPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const page = await getMusicArtist(slug);
+  const [page, user] = await Promise.all([
+    getMusicArtist(slug),
+    getProfile().catch(() => null),
+  ]);
 
   if (!page) notFound();
 
   const { artist, albums, tracks } = page;
+  // Загрузка с именем исполнителя — работа редакции (VED-114): участнику
+  // сервер подпись не поставит, и кнопка ему только пообещала бы её.
+  const canUpload = user
+    ? canAdminService(
+        { role: user.role, adminServices: user.adminServices },
+        "music",
+      )
+    : false;
   // Очередь — записи исполнителя: см. комментарий на странице альбома.
   const queue = tracks.map((track) => track.id);
   const kind = KIND_LABELS[artist.kind] ?? "";
@@ -76,6 +89,28 @@ export default async function MusicArtistPage({
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <MusicPlayAllButton queue={queue} />
         <MusicPlayModeButtons queue={queue} />
+        {canUpload && (
+          <Link
+            href={`/music/uploads?artist=${encodeURIComponent(artist.slug)}`}
+            className="btn-mint flex h-10 items-center gap-2 rounded-xl px-3.5 text-sm font-bold"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 16V4" />
+              <path d="M8 8l4-4 4 4" />
+              <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+            </svg>
+            Загрузить треки
+          </Link>
+        )}
       </div>
 
       {artist.bio && (

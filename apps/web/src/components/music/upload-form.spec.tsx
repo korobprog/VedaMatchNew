@@ -83,3 +83,25 @@ describe("MusicUploadForm — матх записи", () => {
     expect(select.querySelector("option")).toHaveTextContent("Слышат все");
   });
 });
+
+describe("MusicUploadForm — со страницы исполнителя (VED-114)", () => {
+  it("называет исполнителя и отправляет его с каждым файлом", async () => {
+    const user = userEvent.setup();
+    render(<MusicUploadForm artist={{ id: "a1", name: "Avantika" }} />);
+
+    expect(screen.getByText("Avantika")).toBeInTheDocument();
+
+    await fillForm(user);
+    await user.click(screen.getByRole("button", { name: /Загрузить/i }));
+
+    await waitFor(() =>
+      expect(uploadMusicTrack).toHaveBeenCalledWith(
+        expect.any(File),
+        "own_recording",
+        expect.any(Function),
+        null,
+        "a1",
+      ),
+    );
+  });
+});

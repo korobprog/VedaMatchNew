@@ -15,6 +15,7 @@ import type {
   CreateMusicUploadRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { isAdmin } from './is-admin';
 import { MusicUploadsService } from './music-uploads.service';
 import { MusicReportsService } from './music-reports.service';
 
@@ -63,6 +64,8 @@ export class MusicUploadsController {
       id,
       body?.fileName,
       body?.lineage,
+      body?.artistId,
+      isAdmin(user),
     );
   }
 

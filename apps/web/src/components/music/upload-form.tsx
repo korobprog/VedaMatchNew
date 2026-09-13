@@ -36,7 +36,16 @@ const BASES: { value: MusicUploadRightsBasis; label: string }[] = [
  * разговоре не аргумент — отметка нужна модератору, который откроет запись
  * через полгода.
  */
-export function MusicUploadForm() {
+export function MusicUploadForm({
+  artist = null,
+}: {
+  /**
+   * Исполнитель, со страницы которого пришли (VED-114): все файлы пачки
+   * получают его имя. Передаётся только редакции — сервер от остальных это
+   * поле всё равно не примет.
+   */
+  artist?: { id: string; name: string } | null;
+} = {}) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -112,6 +121,7 @@ export function MusicUploadForm() {
           basis as MusicUploadRightsBasis,
           setProgress,
           lineageFromSelect(lineage),
+          ...(artist ? [artist.id] : []),
         );
         ok += 1;
         // Копию кладём тем же файлом, что только что уехал в бакет: байты уже
@@ -172,6 +182,12 @@ export function MusicUploadForm() {
         файле они записаны неточно, переделывать и перезаливать не нужно.
         Файлы уходят по очереди; неудача одного не останавливает остальные.
       </p>
+      {artist && (
+        <p className="mt-2 rounded-lg border border-cyan/40 bg-cyan/10 px-3 py-2 text-sm text-text-0">
+          Исполнитель: <span className="font-semibold">{artist.name}</span> —
+          его имя получат все выбранные файлы.
+        </p>
+      )}
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <label className="block">
