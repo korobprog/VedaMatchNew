@@ -2,6 +2,10 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ChatMessageDto } from "@vedamatch/shared";
+vi.mock("./emoji-data", () => ({
+  EMOJI_ROWS: [["🐶", 1, "морда собаки", "пёс"]],
+}));
+
 import { ChatMessage } from "./chat-message";
 
 function message(over: Partial<ChatMessageDto> = {}): ChatMessageDto {
@@ -171,6 +175,23 @@ describe("ChatMessage", () => {
     await user.click(screen.getByRole("button", { name: "Ответить" }));
     expect(onReply).toHaveBeenCalled();
     // Действие выполнено — меню закрылось.
+    expect(screen.queryByRole("group", { name: "Меню сообщения" })).toBeNull();
+  });
+
+  // VED-122: кроме восьми быстрых реакций — весь набор по «＋».
+  it("ставит реакцией любой смайлик из полной панели", async () => {
+    const user = userEvent.setup();
+    const onReact = vi.fn();
+    setup({}, { onReact });
+
+    await user.click(screen.getByText("Харе Кришна"));
+    await user.click(screen.getByRole("button", { name: "Другие реакции" }));
+    await user.click(await screen.findByRole("button", { name: "морда собаки" }));
+
+    expect(onReact).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "m-1" }),
+      "🐶",
+    );
     expect(screen.queryByRole("group", { name: "Меню сообщения" })).toBeNull();
   });
 

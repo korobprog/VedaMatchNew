@@ -28,12 +28,30 @@ describe('normalizeMessageBody', () => {
 });
 
 describe('assertReactionEmoji', () => {
-  it('пропускает эмодзи из белого списка', () => {
+  it('пропускает быстрые реакции', () => {
     expect(() => assertReactionEmoji('🙏')).not.toThrow();
   });
 
-  it('не пропускает произвольную строку', () => {
-    expect(() => assertReactionEmoji('💩')).toThrow(ChatValidationError);
+  // VED-122: реакцией можно поставить любой смайлик из панели.
+  it.each(['💩', '❤️', '👨‍👩‍👧', '🇷🇺', '1️⃣', '🏳️‍🌈', '👍🏽', '©️', '🕉️'])(
+    'пропускает любой один смайлик: %s',
+    (emoji) => {
+      expect(() => assertReactionEmoji(emoji)).not.toThrow();
+    },
+  );
+
+  it.each([
+    ['', 'пустоту'],
+    ['ok', 'текст'],
+    ['а', 'букву'],
+    ['7', 'цифру без квадрата'],
+    ['🙏🙏', 'два смайлика'],
+    ['🙏 спасибо', 'смайлик с текстом'],
+    ['<script>', 'разметку'],
+    ['🇷', 'половину флага'],
+    ['😀'.repeat(20), 'длинную строку'],
+  ])('не пропускает %p — %s', (value) => {
+    expect(() => assertReactionEmoji(value)).toThrow(ChatValidationError);
   });
 });
 

@@ -20,6 +20,7 @@ import type {
 } from "@vedamatch/shared";
 import { CHAT_REACTION_EMOJIS } from "@vedamatch/shared";
 import { authorPalette } from "./chat-author-color";
+import { ChatEmojiPicker } from "./chat-emoji-picker";
 import { formatBytes, formatDuration } from "./chat-time";
 import { ChatVoicePlayer } from "./chat-voice-player";
 
@@ -78,8 +79,13 @@ export function ChatMessage({
   pending?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  /** Вместо действий открыта панель всех смайликов для реакции (VED-122). */
+  const [moreReactions, setMoreReactions] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const close = useCallback(() => setOpen(false), []);
+  const close = useCallback(() => {
+    setOpen(false);
+    setMoreReactions(false);
+  }, []);
   // Меню закрывается нажатием мимо и по Escape — как в мессенджерах.
   useDismissable(rootRef, close, open);
   const deleted = Boolean(message.deletedAt);
@@ -92,7 +98,7 @@ export function ChatMessage({
   // меню поместилось целиком.
   useEffect(() => {
     if (open) menuRef.current?.scrollIntoView?.({ block: "nearest" });
-  }, [open]);
+  }, [open, moreReactions]);
 
   /**
    * Строка сообщения — во всю ширину ленты, поэтому нажатие в пустое место
@@ -356,7 +362,9 @@ export function ChatMessage({
           ref={menuRef}
           role="group"
           aria-label="Меню сообщения"
-          className={`w-56 overflow-hidden rounded-2xl border border-glass-brd bg-bg-1 shadow-xl shadow-black/30 ${
+          className={`${
+            moreReactions ? "w-[min(20.5rem,calc(100vw-2rem))]" : "w-56"
+          } overflow-hidden rounded-2xl border border-glass-brd bg-bg-1 shadow-xl shadow-black/30 ${
             mine ? "self-end" : avatar ? "ml-10 self-start" : "self-start"
           }`}
         >
@@ -375,7 +383,29 @@ export function ChatMessage({
                 {emoji}
               </button>
             ))}
+            {/* Весь набор смайликов, как в мессенджерах (VED-122): восемь
+                быстрых остаются под рукой, остальные — по «＋». */}
+            <button
+              type="button"
+              onClick={() => setMoreReactions((value) => !value)}
+              aria-expanded={moreReactions}
+              aria-label="Другие реакции"
+              className="flex size-9 items-center justify-center rounded-xl text-lg text-text-1 transition-colors hover:bg-white/10"
+            >
+              ＋
+            </button>
           </div>
+          {moreReactions ? (
+            <div className="p-1.5">
+              <ChatEmojiPicker
+                label="Все реакции"
+                onPick={(emoji) => {
+                  onReact(message, emoji);
+                  close();
+                }}
+              />
+            </div>
+          ) : (
           <div className="flex flex-col py-1">
             <MenuItem
               label="Ответить"
@@ -428,6 +458,7 @@ export function ChatMessage({
               />
             )}
           </div>
+          )}
         </div>
       )}
     </div>

@@ -15,6 +15,8 @@ import {
   attachTileMeta,
   tileToneClass,
 } from "./chat-attach-sheet";
+import { ChatEmojiPicker } from "./chat-emoji-picker";
+import { insertAtCaret } from "./emoji-picker";
 import { DEFAULT_INSTANT_MEDIA, readInstantMedia } from "./chat-send-settings";
 import {
   CHAT_QUICK_SLOT_STORAGE_KEY,
@@ -25,9 +27,6 @@ import {
 } from "./chat-quick-slot";
 import { formatDuration } from "./chat-time";
 import { ChatVoiceRecorder } from "./chat-voice-recorder";
-
-/** Быстрый ряд смайликов — те же, что были в чате Знакомств. */
-const QUICK_EMOJIS = ["😊", "🙏", "❤️", "😂", "👍", "🌸", "🕉️", "✨"];
 
 /**
  * Поле ввода с вложениями. Файл уезжает в S3 сразу при выборе, а в сообщение
@@ -78,6 +77,26 @@ export function ChatComposer({
   const [recordedSeconds, setRecordedSeconds] = useState(0);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const imageInput = useRef<HTMLInputElement | null>(null);
+  const textRef = useRef<HTMLTextAreaElement | null>(null);
+
+  /**
+   * Смайлик — туда, где стоит курсор, а не в конец текста. Фокус в поле не
+   * возвращаем: на телефоне он поднял бы клавиатуру поверх панели, и выбрать
+   * второй смайлик было бы уже нельзя. Место курсора поле помнит и без фокуса.
+   */
+  function insertEmoji(emoji: string) {
+    const field = textRef.current;
+    const next = insertAtCaret(
+      text,
+      emoji,
+      field?.selectionStart,
+      field?.selectionEnd,
+    );
+    setText(next.text);
+    requestAnimationFrame(() =>
+      textRef.current?.setSelectionRange(next.caret, next.caret),
+    );
+  }
 
   /* Быстрый слот читается эффектом: на сервере `localStorage` нет, и ленивый
      `useState` дал бы расхождение гидратации — как у панели горячих кнопок. */
@@ -345,20 +364,9 @@ export function ChatComposer({
         />
       )}
 
-      {emojiOpen && (
-        <div className="flex flex-wrap gap-1 rounded-2xl border border-glass-brd bg-glass p-2">
-          {QUICK_EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => setText((current) => `${current}${emoji}`)}
-              className="flex size-11 items-center justify-center rounded-xl text-lg hover:bg-white/10"
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Полный набор по категориям, как в мессенджерах (VED-122). Прежний
+          ряд из восьми смайликов стал «Недавними», пока своих нет. */}
+      {emojiOpen && <ChatEmojiPicker onPick={insertEmoji} />}
 
       <input
         ref={imageInput}
@@ -466,6 +474,7 @@ export function ChatComposer({
           </span>
         ) : (
           <textarea
+            ref={textRef}
             value={text}
             rows={1}
             onChange={(event) => {
