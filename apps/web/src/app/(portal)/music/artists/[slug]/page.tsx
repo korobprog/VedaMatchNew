@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { canAdminService } from "@vedamatch/shared";
+import { getProfile } from "@/lib/api";
 import { getMusicArtist } from "@/lib/music-api";
+import { MusicArtistAdminRename } from "@/components/music/artist-admin-rename";
 import { MusicCover } from "@/components/music/music-cover";
 import { MusicPlayAllButton } from "@/components/music/player/play-all-button";
 import { MusicPlayModeButtons } from "@/components/music/player/play-mode-buttons";
@@ -32,11 +35,21 @@ export default async function MusicArtistPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const page = await getMusicArtist(slug);
+  const [page, user] = await Promise.all([
+    getMusicArtist(slug),
+    getProfile().catch(() => null),
+  ]);
 
   if (!page) notFound();
 
   const { artist, albums, tracks } = page;
+  // Переименовать исполнителя на месте может только редакция (VED-102).
+  const canEdit = user
+    ? canAdminService(
+        { role: user.role, adminServices: user.adminServices },
+        "music",
+      )
+    : false;
   // Очередь — записи исполнителя: см. комментарий на странице альбома.
   const queue = tracks.map((track) => track.id);
   const kind = KIND_LABELS[artist.kind] ?? "";
@@ -59,10 +72,15 @@ export default async function MusicArtistPage({
             rounded="rounded-full"
           />
         </div>
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <h1 className="font-display text-2xl font-bold tracking-tight text-text-0">
-            {artist.name}
-          </h1>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-1">
+            <h1 className="font-display text-2xl font-bold tracking-tight text-text-0">
+              {artist.name}
+            </h1>
+            {canEdit && (
+              <MusicArtistAdminRename artistId={artist.id} name={artist.name} />
+            )}
+          </div>
           <p className="text-sm text-text-2">
             {[kind, `${artist.trackCount} ${plural(artist.trackCount, "запись", "записи", "записей")}`]
               .filter(Boolean)
