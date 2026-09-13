@@ -140,6 +140,7 @@ function build(
     moderation,
     generation,
     verification,
+    categories,
     events,
     audio,
     video,
@@ -290,6 +291,77 @@ describe('MotivationReelsService.create', () => {
     expect(stranger.tx.motivationPost.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ authorIsAdmin: false }),
+      }),
+    );
+  });
+
+  // VED-96: папку выбирает автор, а не «трек ленты», которого в оглавлении нет.
+  it('кладёт рилс в выбранную категорию', async () => {
+    const { service, tx, categories } = build();
+    categories.resolveSlug.mockResolvedValue('filosofiya');
+
+    await service.create('user-1', regularUser, {
+      ...ownInput,
+      category: 'filosofiya',
+    });
+
+    expect(categories.resolveSlug).toHaveBeenCalledWith('filosofiya');
+    expect(tx.motivationPost.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ category: 'filosofiya' }),
+      }),
+    );
+  });
+
+  it('неизвестную категорию отклоняет словами', async () => {
+    const { service, categories } = build();
+    categories.resolveSlug.mockRejectedValue(new Error('Unknown category'));
+
+    await expect(
+      service.create('user-1', regularUser, { ...ownInput, category: 'nope' }),
+    ).rejects.toThrow('Такой категории нет');
+  });
+
+  // Мастер больше не присылает трек: без него рилс всё равно создаётся.
+  it('без трека ставит универсальный', async () => {
+    const { service, tx } = build();
+    const input = { ...ownInput } as Record<string, unknown>;
+    delete input.audienceTrack;
+
+    await service.create('user-1', regularUser, input as never);
+
+    expect(tx.motivationPost.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ audienceTrack: 'universal' }),
+      }),
+    );
+  });
+
+  // VED-99: автор и источник — разные вопросы, и ответы на них хранятся порознь.
+  it('пишет источник своих слов отдельно от автора', async () => {
+    const { service, tx } = build();
+
+    await service.create('user-1', regularUser, {
+      ...ownInput,
+      source: {
+        kind: 'own',
+        text: 'Делай что должно, и будь что будет.',
+        author: 'Марк Аврелий',
+        work: '  Размышления  ',
+      },
+    });
+
+    expect(tx.motivationPost.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          attributionSpeaker: 'Марк Аврелий',
+          attributionWork: 'Размышления',
+        }),
+      }),
+    );
+    expect(tx.motivationQuote.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ work: 'Размышления' }),
       }),
     );
   });

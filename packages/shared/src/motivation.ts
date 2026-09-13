@@ -155,7 +155,16 @@ export type MotivationAiModerationMode = 'off' | 'assist' | 'autonomous';
  * Vedabase; сервер сверяет его с текстом главы, и рилс может попасть в «Для вас».
  */
 export type MotivationReelSource =
-  | { kind: 'own'; text: string; author?: string | null }
+  | {
+      kind: 'own';
+      text: string;
+      author?: string | null;
+      /**
+       * Откуда слова — книга, лекция, ссылка. Отдельно от автора (VED-99):
+       * «Марк Аврелий» и «Размышления» — два разных ответа на два вопроса.
+       */
+      work?: string | null;
+    }
   | { kind: 'vedabase'; text: string; bookSlug: string; chapterSlug: string };
 
 /** Найденный в книгах фрагмент: готов и к показу, и к проверке по главе. */
@@ -179,7 +188,16 @@ export interface MotivationReelBookDto {
 export interface MotivationReelCreateInput {
   source: MotivationReelSource;
   language: MotivationLanguage;
-  audienceTrack: MotivationAudienceTrack;
+  /**
+   * Папка ленты — слаг нынешней категории (VED-96). Пусто — категория по
+   * умолчанию.
+   */
+  category?: string | null;
+  /**
+   * Прежнее деление ленты на два трека. Мастер его больше не спрашивает
+   * (VED-96): без значения сервер ставит «универсальный».
+   */
+  audienceTrack?: MotivationAudienceTrack;
   visualStyle?: MotivationVisualStyle | null;
   /** Необязательная мысль автора под цитатой — показывается как «Пояснение». */
   explanation?: string | null;

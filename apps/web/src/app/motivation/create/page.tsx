@@ -5,7 +5,7 @@ import { Header } from "@/components/header";
 import { MotivationTopBar } from "@/components/motivation/motivation-top-bar";
 import { ReelWizard } from "@/components/motivation/reel-wizard";
 import { getDonationSettings, getProfile } from "@/lib/api";
-import { getMotivationPreferences } from "@/lib/motivation-api";
+import { getMotivationCategories } from "@/lib/motivation-api";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
@@ -20,10 +20,10 @@ export default async function MotivationCreatePage({
   searchParams: Promise<{ from?: string; book?: string; chapter?: string; text?: string; reel?: string }>;
 }) {
   const params = await searchParams;
-  const [user, donation, preferences] = await Promise.all([
+  const [user, donation, categories] = await Promise.all([
     getProfile(),
     getDonationSettings(),
-    getMotivationPreferences(),
+    getMotivationCategories(),
   ]);
   if (!user) redirectToLogin("/motivation/create");
   // Новичок идёт в мастер: там тот же вопрос об этапе, но после имени
@@ -35,8 +35,6 @@ export default async function MotivationCreatePage({
     params.from === "vedabase" && params.book && params.chapter && params.text
       ? { book: params.book, chapter: params.chapter, text: params.text }
       : {};
-  // Трек по умолчанию — тот, которого в настройках ленты у человека больше.
-  const defaultTrack = (preferences?.vaishnavaPercent ?? 50) > 50 ? "vaishnava" : "universal";
 
   return (
     <div className="relative min-h-dvh bg-bg-0">
@@ -58,7 +56,7 @@ export default async function MotivationCreatePage({
           <ReelWizard
             prefill={{ ...prefill, reelId: params.reel }}
             donation={donation}
-            defaultTrack={defaultTrack}
+            categories={categories ?? []}
             isAdmin={isAdmin}
           />
         </div>

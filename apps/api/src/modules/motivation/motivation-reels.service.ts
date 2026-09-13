@@ -79,6 +79,8 @@ const MAX_TEXT = 600;
 const MIN_TEXT = 12;
 const MAX_EXPLANATION = 800;
 const MAX_AUTHOR = 80;
+/** Источник своих слов: название книги, лекции или ссылка (VED-99). */
+const MAX_WORK = 120;
 const MAX_APPEAL = 1000;
 const allowedStyles = new Set<string>(Object.values(MotivationVisualStyle));
 const allowedTracks = new Set<string>(Object.values(MotivationAudienceTrack));
@@ -214,7 +216,17 @@ export class MotivationReelsService {
         : null;
 
     const profileType = stageProfiles[user.spiritualStage];
-    const category = await this.categories.resolveSlug(undefined);
+    // Папку выбирает автор (VED-96). Раньше рилс уходил в категорию по
+    // умолчанию, а мастер спрашивал «трек ленты» — деление на два, которого в
+    // оглавлении ленты давно нет. Неизвестный слаг — отказ словами, а не
+    // английское «Unknown category» из справочника.
+    const category = await this.categories
+      .resolveSlug(input.category ?? undefined)
+      .catch(() => {
+        throw new BadRequestException(
+          'Такой категории нет — выберите из списка',
+        );
+      });
     const now = new Date();
     const contentDate = startOfUtcDay(now);
     const author: string | null =
@@ -231,7 +243,7 @@ export class MotivationReelsService {
       : {
           attributionKind: 'ai_reflection' as const,
           attributionSpeaker: author,
-          attributionWork: null,
+          attributionWork: source.kind === 'own' ? (source.work ?? null) : null,
           attributionLocator: null,
           sourceVerified: false,
         };
@@ -251,7 +263,9 @@ export class MotivationReelsService {
               normalizedHash,
               originalLanguage: verified?.originalLanguage ?? language,
               author: author ?? 'Участник VedaMatch',
-              work: verified?.work ?? '',
+              work:
+                verified?.work ??
+                (source.kind === 'own' ? (source.work ?? '') : ''),
               locator: verified?.locator ?? '',
               sourceType: verified ? 'vedamatch_library' : 'manual',
               sourceUrl: null,
@@ -1117,7 +1131,11 @@ export class MotivationReelsService {
         typeof source.author === 'string'
           ? source.author.trim().slice(0, MAX_AUTHOR)
           : '';
-      return { kind: 'own', text, author: author || null };
+      const work =
+        typeof source.work === 'string'
+          ? source.work.trim().slice(0, MAX_WORK)
+          : '';
+      return { kind: 'own', text, author: author || null, work: work || null };
     }
     throw new BadRequestException('Неизвестный источник цитаты');
   }
@@ -1152,7 +1170,14 @@ export class MotivationReelsService {
     return value as MotivationLanguage;
   }
 
+  /**
+   * Трек больше не спрашивают (VED-96): его место заняла категория. Пустое
+   * значение — «универсальный», чтобы старые и новые клиенты создавали рилс
+   * одинаково. Неизвестная строка по-прежнему отказ: это ошибка клиента.
+   */
   private track(value: unknown): MotivationAudienceTrack {
+    if (value === undefined || value === null || value === '')
+      return 'universal' as MotivationAudienceTrack;
     if (typeof value !== 'string' || !allowedTracks.has(value))
       throw new BadRequestException('Неизвестный трек ленты');
     return value as MotivationAudienceTrack;
