@@ -12,6 +12,7 @@ import { MusicTrackLyrics } from "@/components/music/music-track-lyrics";
 import { MusicListenButton } from "@/components/music/player/listen-button";
 import { MusicQueueActions } from "@/components/music/player/queue-actions";
 import { formatTrackDuration } from "@/lib/music-duration";
+import { MusicDownloadButton } from "@/components/music/download-button";
 
 export async function generateMetadata({
   params,
@@ -129,6 +130,7 @@ export default async function MusicTrackPage({
             </Suspense>
             <MusicQueueActions trackId={track.id} />
             <MusicOfflineButton track={track} />
+            <MusicDownloadButton trackId={track.id} />
             <MusicSleepTimerButton />
           </div>
 

@@ -16,6 +16,10 @@ import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MusicStorageService } from './music-storage.service';
 import { isAdmin } from './is-admin';
+import {
+  attachmentDisposition,
+  musicDownloadFileName,
+} from './music-download-name';
 
 /**
  * Отдача аудио.
@@ -71,13 +75,42 @@ export class MusicStreamController {
     };
   }
 
+  /**
+   * Ссылка на скачивание файлом — кнопка «Скачать» в карточке записи
+   * (VED-107). Отдаётся каждому вошедшему, кому запись видна: те же байты
+   * он и так получает при прослушивании, а файл под понятным именем нужен,
+   * чтобы взять бхаджан с собой вне портала.
+   *
+   * Ответом, а не редиректом, по той же причине, что и `stream-url`: страница
+   * берёт ссылку запросом с обновлением сессии и уводит браузер уже на бакет,
+   * где `Content-Disposition: attachment` превращает переход в сохранение.
+   */
+  @Get(':id/download-url')
+  async downloadUrl(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ): Promise<MusicTrackStreamUrlDto> {
+    return {
+      url: await this.resolveUrl(user, id, true),
+      expiresInSeconds: MUSIC_STREAM_URL_TTL_SECONDS,
+    };
+  }
+
   private async resolveUrl(
     user: AccessTokenPayload,
     id: string,
+    asAttachment = false,
   ): Promise<string> {
     const track = await this.prisma.musicTrack.findUnique({
       where: { id },
-      select: { storageKey: true, status: true, uploadedById: true },
+      select: {
+        storageKey: true,
+        status: true,
+        uploadedById: true,
+        title: true,
+        mime: true,
+        artist: { select: { name: true } },
+      },
     });
 
     const visible =
@@ -90,7 +123,18 @@ export class MusicStreamController {
     // перебрать, какие черновики существуют.
     if (!track || !visible) throw new NotFoundException('Запись не найдена');
 
-    const url = await this.storage.presignGet(track.storageKey);
+    const url = await this.storage.presignGet(
+      track.storageKey,
+      asAttachment
+        ? attachmentDisposition(
+            musicDownloadFileName({
+              title: track.title,
+              artistName: track.artist?.name ?? null,
+              mime: track.mime,
+            }),
+          )
+        : undefined,
+    );
     if (!url) {
       throw new ServiceUnavailableException('Хранилище недоступно');
     }

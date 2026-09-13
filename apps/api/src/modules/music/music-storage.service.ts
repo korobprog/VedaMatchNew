@@ -193,13 +193,24 @@ export class MusicStorageService {
     }).done();
   }
 
-  /** Подписанная ссылка на прослушивание. */
-  async presignGet(key: string): Promise<string | null> {
+  /**
+   * Подписанная ссылка на прослушивание.
+   *
+   * `disposition` — для скачивания файлом (VED-107): S3 подставит его в
+   * ответ как `Content-Disposition`, и браузер сохранит запись под понятным
+   * именем, а не под служебным ключом. Заголовок входит в подпись, поэтому
+   * подменить имя в готовой ссылке нельзя.
+   */
+  async presignGet(key: string, disposition?: string): Promise<string | null> {
     if (!this.s3Client || !this.bucket) return null;
 
     return getSignedUrl(
       this.s3Client as unknown as Parameters<typeof getSignedUrl>[0],
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ...(disposition ? { ResponseContentDisposition: disposition } : {}),
+      }),
       { expiresIn: MUSIC_STREAM_URL_TTL_SECONDS },
     );
   }
