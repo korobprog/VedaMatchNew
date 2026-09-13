@@ -51,12 +51,15 @@ export class AuthController {
    */
   @Get('google')
   google(
+    @Req() req: Request,
     @Res() res: Response,
     @Query('returnTo') returnTo?: string,
     @Query('ref') ref?: string,
     @Query('fp') fp?: string,
   ) {
-    return this.auth.startGoogleLogin(res, returnTo, ref, fp);
+    // Хост запроса определяет контур: на нём собирается redirect_uri и домен
+    // cookie, иначе вход, начатый на .com, уезжает в российский портал.
+    return this.auth.startGoogleLogin(res, returnTo, ref, fp, req.headers.host);
   }
 
   @Get('google/callback')
@@ -112,9 +115,10 @@ export class AuthController {
   @UseGuards(AuthGuard)
   logoutEverywhere(
     @CurrentUser() user: AccessTokenPayload,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    return this.auth.logoutEverywhere(user.sub, res);
+    return this.auth.logoutEverywhere(user.sub, res, req.headers.host);
   }
 }
 

@@ -20,9 +20,9 @@ import {
   type UserRegisteredEvent,
 } from '@vedamatch/shared';
 import type { User } from '@prisma/client';
-import { publicOrigin } from '../../common/public-origin';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthProvidersService } from './auth-providers.service';
+import { resolveContour, type Contour } from './contour';
 import { readRegistrationMode } from '../billing/billing-mode';
 import { assertAccountActive } from '../users/account-status';
 import { IdentityService } from './identity.service';
@@ -111,25 +111,26 @@ export class AuthService implements OnModuleInit {
     );
   }
 
-  private get apiUrl(): string {
-    return this.config.get<string>('API_PUBLIC_URL', 'http://localhost:4000');
-  }
-
   /**
-   * Куда вернуть человека после входа. `WEB_ORIGIN` — список доменов для
-   * CORS, и в редирект годится только первый: со всей строкой браузер
-   * получал `https://vedamatch.ru,https://vedamatch.com,…` и вход обрывался
-   * на последнем шаге.
+   * Контур запроса: адрес API, портал для возврата и домен cookie.
+   *
+   * Раньше эти три значения брались из `API_PUBLIC_URL`, `WEB_ORIGIN` и
+   * `COOKIE_DOMAIN` — по одному на весь сервис, — и вход, начатый на
+   * `vedamatch.com`, уезжал в российский контур. Хост сверяется со списком
+   * `WEB_ORIGIN`, см. `contour.ts`: заголовок запроса сам по себе доверия не
+   * заслуживает, а `redirect_uri` из него уходит в OAuth-провайдера.
    */
-  private get webOrigin(): string {
-    return (
-      publicOrigin(this.config.get<string>('WEB_ORIGIN')) ??
-      'http://localhost:3000'
-    );
-  }
-
-  private get cookieDomain(): string | undefined {
-    return this.config.get<string>('COOKIE_DOMAIN') || undefined;
+  private contour(host?: string | null): Contour {
+    return resolveContour({
+      host,
+      webOrigins: this.config.get<string>('WEB_ORIGIN'),
+      fallbackApiOrigin: this.config.get<string>(
+        'API_PUBLIC_URL',
+        'http://localhost:4000',
+      ),
+      fallbackCookieDomain:
+        this.config.get<string>('COOKIE_DOMAIN') || undefined,
+    });
   }
 
   private requireGoogle(): oidc.Configuration {
@@ -144,8 +145,10 @@ export class AuthService implements OnModuleInit {
     returnTo?: string,
     referralCode?: string,
     deviceId?: string,
+    host?: string | null,
   ) {
     const google = this.requireGoogle();
+    const contour = this.contour(host);
     const codeVerifier = oidc.randomPKCECodeVerifier();
     const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
     const state = oidc.randomState();
@@ -167,13 +170,13 @@ export class AuthService implements OnModuleInit {
       httpOnly: true,
       secure: this.isProd,
       sameSite: 'lax',
-      domain: this.cookieDomain,
+      domain: contour.cookieDomain,
       maxAge: 10 * 60 * 1000,
       path: '/auth',
     });
 
     const url = oidc.buildAuthorizationUrl(google, {
-      redirect_uri: `${this.apiUrl}/auth/google/callback`,
+      redirect_uri: `${contour.apiOrigin}/auth/google/callback`,
       scope: 'openid email profile',
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
@@ -185,6 +188,7 @@ export class AuthService implements OnModuleInit {
 
   async handleGoogleCallback(req: Request, res: Response) {
     const google = this.requireGoogle();
+    const contour = this.contour(req.headers.host);
     const raw = (req.cookies as Record<string, string>)[OIDC_COOKIE];
     if (!raw) {
       throw new BadRequestException('OAuth-сессия не найдена или истекла');
@@ -200,7 +204,7 @@ export class AuthService implements OnModuleInit {
       fp?: string | null;
     };
 
-    const currentUrl = new URL(`${this.apiUrl}${req.originalUrl}`);
+    const currentUrl = new URL(`${contour.apiOrigin}${req.originalUrl}`);
     const tokens = await oidc.authorizationCodeGrant(google, currentUrl, {
       pkceCodeVerifier: codeVerifier,
       expectedState: state,
@@ -238,7 +242,10 @@ export class AuthService implements OnModuleInit {
           data: { email, avatarUrl },
         });
 
-    res.clearCookie(OIDC_COOKIE, { path: '/auth', domain: this.cookieDomain });
+    res.clearCookie(OIDC_COOKIE, {
+      path: '/auth',
+      domain: contour.cookieDomain,
+    });
     await this.issueSessionAndRedirect({
       req,
       res,
@@ -270,6 +277,7 @@ export class AuthService implements OnModuleInit {
     // Проверка здесь, а не только при выдаче списка кнопок: спрятанная
     // кнопка не делает способ недоступным, а важно, что вход невозможен.
     await this.providers.assertEnabled('yandex', req.hostname);
+    const contour = this.contour(req.headers.host);
     const { clientId } = this.requireYandex();
 
     const verifier = randomBytes(32).toString('base64url');
@@ -292,7 +300,7 @@ export class AuthService implements OnModuleInit {
         httpOnly: true,
         secure: this.isProd,
         sameSite: 'lax',
-        domain: this.cookieDomain,
+        domain: contour.cookieDomain,
         maxAge: 10 * 60 * 1000,
         path: '/auth',
       },
@@ -301,7 +309,10 @@ export class AuthService implements OnModuleInit {
     const url = new URL(YANDEX_AUTHORIZE);
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('client_id', clientId);
-    url.searchParams.set('redirect_uri', `${this.apiUrl}/auth/yandex/callback`);
+    url.searchParams.set(
+      'redirect_uri',
+      `${contour.apiOrigin}/auth/yandex/callback`,
+    );
     url.searchParams.set('state', state);
     url.searchParams.set('code_challenge', challenge);
     url.searchParams.set('code_challenge_method', 'S256');
@@ -311,6 +322,7 @@ export class AuthService implements OnModuleInit {
 
   async handleYandexCallback(req: Request, res: Response) {
     await this.providers.assertEnabled('yandex', req.hostname);
+    const contour = this.contour(req.headers.host);
     const { clientId, clientSecret } = this.requireYandex();
 
     const raw = (req.cookies as Record<string, string> | undefined)?.[
@@ -321,7 +333,7 @@ export class AuthService implements OnModuleInit {
     }
     res.clearCookie(YANDEX_COOKIE, {
       path: '/auth',
-      domain: this.cookieDomain,
+      domain: contour.cookieDomain,
     });
 
     let flow: {
@@ -426,8 +438,15 @@ export class AuthService implements OnModuleInit {
       this.announceRegistration(user.id, user.email, req, ref, fp);
     }
 
-    await this.issueTokens(user.id, user.email, toRole(user.role), res);
-    res.redirect(`${this.webOrigin}${safeReturnTo(returnTo)}`);
+    const contour = this.contour(req.headers.host);
+    await this.issueTokens(
+      user.id,
+      user.email,
+      toRole(user.role),
+      res,
+      req.headers.host,
+    );
+    res.redirect(`${contour.webOrigin}${safeReturnTo(returnTo)}`);
   }
 
   /**
@@ -571,7 +590,13 @@ export class AuthService implements OnModuleInit {
       },
     });
 
-    await this.issueTokens(user.id, user.email, toRole(user.role), res);
+    await this.issueTokens(
+      user.id,
+      user.email,
+      toRole(user.role),
+      res,
+      req.headers.host,
+    );
     return {
       ok: true,
       returnTo: safeReturnTo(body?.returnTo),
@@ -601,7 +626,9 @@ export class AuthService implements OnModuleInit {
     email: string,
     role: Role,
     res: Response,
+    host?: string | null,
   ) {
+    const contour = this.contour(host);
     const accessToken = await this.jwt.signAccessToken({
       sub: userId,
       email,
@@ -622,7 +649,7 @@ export class AuthService implements OnModuleInit {
       httpOnly: true,
       secure: this.isProd,
       sameSite: 'lax',
-      domain: this.cookieDomain,
+      domain: contour.cookieDomain,
       maxAge: this.accessTtlMs(),
       path: '/',
     });
@@ -630,7 +657,7 @@ export class AuthService implements OnModuleInit {
       httpOnly: true,
       secure: this.isProd,
       sameSite: 'lax',
-      domain: this.cookieDomain,
+      domain: contour.cookieDomain,
       maxAge: ttlDays * 24 * 60 * 60 * 1000,
       path: '/auth',
     });
@@ -638,21 +665,22 @@ export class AuthService implements OnModuleInit {
       httpOnly: false,
       secure: this.isProd,
       sameSite: 'lax',
-      domain: this.cookieDomain,
+      domain: contour.cookieDomain,
       maxAge: ttlDays * 24 * 60 * 60 * 1000,
       path: '/',
     });
   }
 
-  private clearSessionCookies(res: Response) {
-    res.clearCookie(ACCESS_COOKIE, { path: '/', domain: this.cookieDomain });
+  private clearSessionCookies(res: Response, host?: string | null) {
+    const contour = this.contour(host);
+    res.clearCookie(ACCESS_COOKIE, { path: '/', domain: contour.cookieDomain });
     res.clearCookie(REFRESH_COOKIE, {
       path: '/auth',
-      domain: this.cookieDomain,
+      domain: contour.cookieDomain,
     });
     res.clearCookie(SESSION_MARKER_COOKIE, {
       path: '/',
-      domain: this.cookieDomain,
+      domain: contour.cookieDomain,
     });
   }
 
@@ -677,7 +705,7 @@ export class AuthService implements OnModuleInit {
       if (error instanceof UnauthorizedException) {
         res.clearCookie(SESSION_MARKER_COOKIE, {
           path: '/',
-          domain: this.cookieDomain,
+          domain: this.contour(req.headers.host).cookieDomain,
         });
       }
       throw error;
@@ -721,6 +749,7 @@ export class AuthService implements OnModuleInit {
       stored.user.email,
       toRole(stored.user.role),
       res,
+      req.headers.host,
     );
     return { ok: true };
   }
@@ -733,17 +762,17 @@ export class AuthService implements OnModuleInit {
         data: { revoked: true },
       });
     }
-    this.clearSessionCookies(res);
+    this.clearSessionCookies(res, req.headers.host);
     return { ok: true };
   }
 
   /** Централизованный logout: отзыв всех refresh-токенов пользователя */
-  async logoutEverywhere(userId: string, res: Response) {
+  async logoutEverywhere(userId: string, res: Response, host?: string | null) {
     await this.prisma.refreshToken.updateMany({
       where: { userId, revoked: false },
       data: { revoked: true },
     });
-    this.clearSessionCookies(res);
+    this.clearSessionCookies(res, host);
     return { ok: true };
   }
 
