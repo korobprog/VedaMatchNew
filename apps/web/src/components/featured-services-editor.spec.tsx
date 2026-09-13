@@ -39,6 +39,25 @@ function savedChoice(): string[] | null {
 }
 
 describe("FeaturedServicesEditor", () => {
+  // VED-111: на телефоне в строке над сеткой подпись короткая, имя — полное.
+  it("на узком экране подписана коротко, но называется полностью", () => {
+    render(
+      <FeaturedServicesEditor
+        userId="u1"
+        current={["chat", "music", "calls"]}
+        options={OPTIONS}
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: "Настроить кнопки" });
+    expect(button).toHaveClass("whitespace-nowrap");
+    expect(button).toHaveTextContent("Кнопки");
+    // Полная подпись есть в разметке для широкого экрана.
+    expect(button.querySelector(".hidden.sm\\:inline")).toHaveTextContent(
+      "Настроить кнопки",
+    );
+  });
+
   it("saves the chosen services and redraws the home page", async () => {
     const user = userEvent.setup();
     render(

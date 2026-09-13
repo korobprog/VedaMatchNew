@@ -233,7 +233,7 @@ export function ServiceGrid({
             type="button"
             onClick={() => setReordering((on) => !on)}
             aria-pressed={reordering}
-            className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors sm:hidden ${
+            className={`whitespace-nowrap rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors sm:hidden ${
               reordering
                 ? "border-cyan/40 bg-cyan/10 text-cyan"
                 : "border-glass-brd text-text-2 hover:text-text-0"
