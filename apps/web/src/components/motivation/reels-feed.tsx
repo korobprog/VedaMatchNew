@@ -37,6 +37,7 @@ import {
   ExplanationDialog,
   type AddedExplanation,
 } from "./explanation-dialog";
+import { feedStyleOf, reelsHref, type ReelsTab } from "./feed-style";
 import { ReportDialog } from "./report-dialog";
 import { SourceLink } from "./source-link";
 import {
@@ -100,7 +101,7 @@ function subscribeToRail(onChange: () => void): () => void {
   return () => window.removeEventListener("storage", onChange);
 }
 
-export type ReelsTab = "forYou" | "saved";
+export type { ReelsTab } from "./feed-style";
 
 /**
  * Вертикальная лента по одному посту на экран: свайп вверх — следующий,
@@ -201,6 +202,10 @@ export function ReelsFeed({
       if (tab === "saved") query.set("filter", "favorites");
       if (order) query.set("order", order);
       if (category) query.set("category", category);
+      // Без стиля вторая страница «Открыток» приехала бы вперемешку с
+      // нейрокартинками — ровно то, от чего вкладки и разделили (VED-121).
+      const style = feedStyleOf(tab);
+      if (style) query.set("style", style);
       const response = await apiFetch(`${API_URL}/motivation/feed?${query}`, { credentials: "include" });
       if (!response.ok) throw new Error(await response.text());
       const page = (await response.json()) as MotivationFeedResponse;
@@ -388,10 +393,17 @@ export function ReelsFeed({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 rounded-3xl bg-[#0A0614] p-8 text-center text-white">
         <p className="font-display text-lg">
-          {tab === "saved" ? "В избранном пока пусто" : "Новые публикации скоро появятся"}
+          {tab === "saved"
+            ? "В избранном пока пусто"
+            : tab === "cards"
+              ? "Открыток здесь пока нет"
+              : "Новые публикации скоро появятся"}
         </p>
-        {tab === "saved" && (
-          <Link href="/motivation" className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold">
+        {tab !== "forYou" && (
+          <Link
+            href={reelsHref({ category: tab === "cards" ? category : undefined })}
+            className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold"
+          >
             К ленте
           </Link>
         )}
@@ -513,7 +525,11 @@ export function ReelsFeed({
           <RailLink
             label="Перемешать ленту"
             caption="Случайный"
-            href="/motivation?order=random"
+            // В открытках перемешивает открытки, а не уводит в «Для вас».
+            href={reelsHref({
+              tab: tab === "cards" ? "cards" : "forYou",
+              order: "random",
+            })}
           >
             <ShuffleIcon />
           </RailLink>
@@ -539,7 +555,7 @@ export function ReelsFeed({
           style={{ width: `${items.length ? ((activeIndex + 1) / items.length) * 100 : 0}%` }}
         />
       </div>
-      <Tabs tab={tab} />
+      <Tabs tab={tab} order={order} category={category} />
       {/* Звук выключен, пока его не попросили: иначе лента заговорит сама,
           стоит открыть страницу. Кнопка живёт над слайдами — как и ряд
           действий внизу, она одна на всю ленту. У немого ролика её нет вовсе:
@@ -675,13 +691,21 @@ type Slide =
   | { kind: "divider" }
   | { kind: "end" };
 
-function Tabs({ tab }: { tab: ReelsTab }) {
+function Tabs({
+  tab,
+  order,
+  category,
+}: {
+  tab: ReelsTab;
+  order?: "random";
+  category?: string;
+}) {
   const link = (key: ReelsTab | "mine", href: string, label: string) => (
     <Link
       key={key}
       href={href}
       aria-current={tab === key ? "page" : undefined}
-      className={`px-1 pb-1 text-sm font-semibold drop-shadow ${
+      className={`whitespace-nowrap pb-1 text-[13px] font-semibold drop-shadow sm:px-1 sm:text-sm ${
         tab === key ? "border-b-2 border-white text-white" : "text-white/65 hover:text-white"
       }`}
     >
@@ -689,8 +713,18 @@ function Tabs({ tab }: { tab: ReelsTab }) {
     </Link>
   );
   return (
-    <nav aria-label="Вкладки ленты" className="absolute left-0 right-0 top-4 z-20 flex justify-center gap-5">
-      {link("forYou", "/motivation", "Для вас")}
+    // Четыре вкладки на телефоне шире промежутка между кнопками «назад» и
+    // «меню»: при 14px и шаге 20 ряд занимал 29–346 точек из 375 и заходил
+    // под обе. Между кнопками и помельче — 245 точек, помещается и на 360.
+    <nav
+      aria-label="Вкладки ленты"
+      className="absolute inset-x-14 top-4 z-20 flex justify-center gap-3 sm:inset-x-0 sm:gap-5"
+    >
+      {/* Две ленты разного стиля (VED-121): порядок и папка переезжают
+          вместе с человеком — «Открытки» из папки «Пословицы» остаются
+          пословицами. */}
+      {link("forYou", reelsHref({ order, category }), "Для вас")}
+      {link("cards", reelsHref({ tab: "cards", order, category }), "Открытки")}
       {link("saved", "/motivation?tab=saved", "Избранное")}
       {link("mine", "/motivation/my", "Мои")}
     </nav>

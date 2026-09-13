@@ -420,6 +420,44 @@ describe('MotivationService feed tiers', () => {
       expect(input.where.publishedAt).toEqual({ lte: expect.any(Date) });
   });
 
+  // VED-121: две ленты — открытки с напечатанным текстом отдельно от
+  // картинок нейросети с цитатой поверх.
+  it('splits the feed into ready cards and neural-network art by style', async () => {
+    const { service, motivationPost } = build(day(10), []);
+
+    await service.feed('user-1', { style: 'cards' });
+    expect(motivationPost.findMany.mock.calls[0][0].where.captionInImage).toBe(
+      true,
+    );
+
+    motivationPost.findMany.mockClear();
+    await service.feed('user-1', { style: 'art' });
+    expect(motivationPost.findMany.mock.calls[0][0].where.captionInImage).toBe(
+      false,
+    );
+
+    // Без стиля — обе вместе: так читают избранное и список.
+    motivationPost.findMany.mockClear();
+    await service.feed('user-1', {});
+    expect(motivationPost.findMany.mock.calls[0][0].where).not.toHaveProperty(
+      'captionInImage',
+    );
+  });
+
+  it('does not record the visit from the cards tab', async () => {
+    // «Свежее» считается по основной ленте: заглянув в открытки, человек не
+    // должен потерять новые афоризмы «Для вас», так их и не увидев.
+    const { service, motivationPreference } = build(day(10), []);
+
+    await service.feed('user-1', { style: 'cards' });
+    expect(motivationPreference.upsert).not.toHaveBeenCalled();
+
+    await service.feed('user-1', { style: 'art' });
+    expect(motivationPreference.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: { lastSeenAt: expect.any(Date) } }),
+    );
+  });
+
   it('shows the category title from the catalogue, not its slug', async () => {
     const { service, prisma } = build(day(10), [post('a', day(12), null)]);
     prisma.motivationCategory.findMany.mockResolvedValue([

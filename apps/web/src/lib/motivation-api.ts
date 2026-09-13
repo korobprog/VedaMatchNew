@@ -70,6 +70,11 @@ export const getMotivationFeed = (
    * нейросеть. Папка показывает эти виды порознь.
    */
   imageSource?: "uploaded" | "generated",
+  /**
+   * Какая из двух лент (VED-121): `art` — нейросеть и цитата поверх,
+   * `cards` — готовые открытки. Без значения — обе вместе.
+   */
+  style?: "art" | "cards",
 ) => {
   const query = new URLSearchParams();
   if (filter === "favorites") query.set("filter", "favorites");
@@ -77,6 +82,7 @@ export const getMotivationFeed = (
   if (order) query.set("order", order);
   if (category) query.set("category", category);
   if (imageSource) query.set("imageSource", imageSource);
+  if (style) query.set("style", style);
   const suffix = query.toString();
   return motivationGet<MotivationFeedResponse>(
     `/motivation/feed${suffix ? `?${suffix}` : ""}`,
