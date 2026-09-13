@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { categoryLink } from "@/components/motivation/feed-style";
 import { getPublicMotivationPost } from "@/lib/motivation-api";
 
 /** Цитата и пояснение склеены пустой строкой — см. motivation-copy.service. */
@@ -43,6 +44,9 @@ export default async function PublicMotivationPostPage({ params }: { params: Pro
   const { slug } = await params;
   const post = await getPublicMotivationPost(slug);
   if (!post) notFound();
+  // Категория у каждого афоризма (VED-120): под меткой сервиса, ссылкой на
+  // ленту своей папки. Гостя вход перехватит и вернёт туда же.
+  const category = categoryLink(post);
   return <main className="min-h-dvh bg-bg-0 px-4 py-10 text-text-0"><article className="glass mx-auto max-w-2xl overflow-hidden rounded-3xl shadow-2xl">{post.videoUrl ? (
     // Постер обязателен: без него на время загрузки зритель видит пустой
     // прямоугольник вместо кадра. muted — иначе браузер не даст автозапуск.
@@ -50,5 +54,5 @@ export default async function PublicMotivationPostPage({ params }: { params: Pro
   ) : (
     /* eslint-disable-next-line @next/next/no-img-element */
     <img src={post.imageUrl} alt={post.title} className="aspect-[4/3] w-full object-cover" />
-  )}<div className="p-6 sm:p-10"><p className="text-sm font-semibold uppercase tracking-widest text-gold">VedaMatch Motivation</p><h1 className="mt-3 text-3xl font-bold">{post.title}</h1><p className="mt-5 whitespace-pre-line text-lg leading-8 text-text-1">{post.text}</p>{post.attributionSpeaker && <p className="mt-6 border-l-2 border-gold pl-4 text-sm text-text-2">{post.attributionSpeaker}{post.attributionWork ? ` · ${post.attributionWork}` : ""}</p>}<div className="mt-8 grid gap-3 sm:grid-cols-2"><a href={post.storyImageUrl} download className="rounded-xl border border-gold px-5 py-3 text-center font-medium text-gold">Скачать для Stories</a><Link href="/login" className="rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-5 py-3 text-center font-medium text-white">Войти или зарегистрироваться в VedaMatch</Link></div></div></article></main>;
+  )}<div className="p-6 sm:p-10"><p className="text-sm font-semibold uppercase tracking-widest text-gold">VedaMatch Motivation</p>{category && <Link href={category.href} aria-label={`Категория: ${category.title}`} className="glass mt-3 inline-flex items-center gap-1.5 rounded-full border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0"><span aria-hidden="true">📂</span>{category.title}</Link>}<h1 className="mt-3 text-3xl font-bold">{post.title}</h1><p className="mt-5 whitespace-pre-line text-lg leading-8 text-text-1">{post.text}</p>{post.attributionSpeaker && <p className="mt-6 border-l-2 border-gold pl-4 text-sm text-text-2">{post.attributionSpeaker}{post.attributionWork ? ` · ${post.attributionWork}` : ""}</p>}<div className="mt-8 grid gap-3 sm:grid-cols-2"><a href={post.storyImageUrl} download className="rounded-xl border border-gold px-5 py-3 text-center font-medium text-gold">Скачать для Stories</a><Link href="/login" className="rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-5 py-3 text-center font-medium text-white">Войти или зарегистрироваться в VedaMatch</Link></div></div></article></main>;
 }

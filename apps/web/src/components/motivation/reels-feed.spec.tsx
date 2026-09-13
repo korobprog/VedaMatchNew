@@ -447,6 +447,40 @@ describe("ReelsFeed", () => {
     );
   });
 
+  // VED-120: у каждого афоризма видна категория, и по ней открывается её лента.
+  it.each([
+    ["an illustration", {}, "/motivation?category=daily"],
+    ["a ready card", { captionInImage: true }, "/motivation?tab=cards&category=daily"],
+    ["a video", { videoUrl: "https://cdn/a.mp4" }, "/motivation?category=daily"],
+  ] as const)("shows the category of %s as a link to its feed", (_, overrides, href) => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a", overrides)], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Категория: Каждый день" }),
+    ).toHaveAttribute("href", href);
+  });
+
+  it("hides a category the catalogue does not know instead of showing its slug", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a", { categoryTitle: "daily" })], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    expect(screen.queryByRole("link", { name: /Категория/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("daily")).not.toBeInTheDocument();
+  });
+
   it("does not draw the quote over a video: the clip already carries it", () => {
     fetchOk({});
     render(

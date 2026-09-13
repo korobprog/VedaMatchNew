@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { MotivationPostDto } from "@vedamatch/shared";
 import { CollapsibleBlock } from "./collapsible-block";
+import { categoryLink } from "./feed-style";
 import {
   ExplanationDialog,
   type AddedExplanation,
@@ -28,6 +29,7 @@ export function MotivationPostCard({ post }: { post: MotivationPostDto }) {
   const quote = split.quote;
   const explanation = added?.text ?? split.explanation;
   const explanationAuthor = added?.author ?? post.explanationAuthor;
+  const category = categoryLink(post);
 
   async function toggleFavorite() {
     setPending(true);
@@ -64,7 +66,18 @@ export function MotivationPostCard({ post }: { post: MotivationPostDto }) {
           <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
             {trackLabels[post.audienceTrack]}
           </span>
-          <span className="text-zinc-500">{post.category}</span>
+          {/* Раньше здесь стоял слаг («poslovitsy»). Название — ссылкой на
+              ленту своей папки, как в рилсах (VED-120). */}
+          {category && (
+            <Link
+              href={category.href}
+              aria-label={`Категория: ${category.title}`}
+              className="text-zinc-500 underline-offset-4 hover:underline"
+            >
+              <span aria-hidden="true">📂 </span>
+              {category.title}
+            </Link>
+          )}
         </div>
         {/* У пользовательского афоризма «заголовок» — это название книги и
             стих («Бхагавад-гита 4.18»): перед цитатой он читается как её

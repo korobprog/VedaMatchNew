@@ -1,10 +1,42 @@
 import { describe, expect, it } from "vitest";
 import {
+  categoryLink,
   feedStyleOf,
   isPinnedCard,
   parseReelsTab,
   reelsHref,
 } from "./feed-style";
+
+describe("categoryLink", () => {
+  it("ведёт в ленту своей папки и называет её словами", () => {
+    expect(
+      categoryLink({
+        category: "poslovitsy",
+        categoryTitle: "Пословицы",
+        captionInImage: false,
+      }),
+    ).toEqual({ title: "Пословицы", href: "/motivation?category=poslovitsy" });
+  });
+
+  it("открытку ведёт в «Открытки» той же папки", () => {
+    expect(
+      categoryLink({
+        category: "poslovitsy",
+        categoryTitle: "Пословицы",
+        captionInImage: true,
+      })?.href,
+    ).toBe("/motivation?tab=cards&category=poslovitsy");
+  });
+
+  it("не показывает слаг, которого справочник не знает", () => {
+    expect(
+      categoryLink({ category: "daily", categoryTitle: "daily", captionInImage: false }),
+    ).toBeNull();
+    expect(
+      categoryLink({ category: "daily", categoryTitle: " ", captionInImage: false }),
+    ).toBeNull();
+  });
+});
 
 describe("isPinnedCard", () => {
   const card = { slug: "picture-1", captionInImage: true };

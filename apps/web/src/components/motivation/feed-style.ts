@@ -25,6 +25,31 @@ export function feedStyleOf(tab: ReelsTab): FeedStyle | undefined {
 }
 
 /**
+ * Чип категории у афоризма (VED-120): название и лента этой папки.
+ *
+ * Открытка ведёт в «Открытки» своей папки, остальное — в «Для вас»: чип не
+ * должен из ленты одного стиля уводить в другой. `null` — показывать
+ * нечего: без названия справочник категорию не знает, и слаг вроде `daily`
+ * вместо слов читался бы как поломка.
+ */
+export function categoryLink(post: {
+  category: string;
+  categoryTitle: string;
+  captionInImage: boolean;
+}): { title: string; href: string } | null {
+  // Старые ответы и кэш могут прийти без названия — не падаем, а молчим.
+  const title = (post.categoryTitle ?? "").trim();
+  if (!post.category || !title || title === post.category) return null;
+  return {
+    title,
+    href: reelsHref({
+      tab: post.captionInImage ? "cards" : "forYou",
+      category: post.category,
+    }),
+  };
+}
+
+/**
  * Ссылка `?post=` без вкладки ведёт на открытку — ей место в «Открытках».
  * Такие ссылки дают мастер, «Мои», плитки папки и админка, и открытка,
  * открытая в «Для вас», тянула бы за собой ленту другого стиля.

@@ -37,7 +37,12 @@ import {
   ExplanationDialog,
   type AddedExplanation,
 } from "./explanation-dialog";
-import { feedStyleOf, reelsHref, type ReelsTab } from "./feed-style";
+import {
+  categoryLink,
+  feedStyleOf,
+  reelsHref,
+  type ReelsTab,
+} from "./feed-style";
 import { ReportDialog } from "./report-dialog";
 import { SourceLink } from "./source-link";
 import {
@@ -1079,6 +1084,14 @@ function ReelSlide({
                 </span>
               </>
             )}
+            {/* Категория — тем же рядом: это ещё один ответ на «что это»,
+                и отдельная строка съела бы кадр (VED-120). */}
+            {categoryLink(post) && (
+              <>
+                <span aria-hidden="true" className="text-white/40">·</span>
+                <CategoryChip post={post} />
+              </>
+            )}
           </p>
         )}
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/75">
@@ -1087,6 +1100,7 @@ function ReelSlide({
               строкой поверх кадра: строка закрыла бы конец цитаты, а ряд уже
               есть и переносится сам. */}
           {kind !== "image" && <Byline post={post} />}
+          {kind !== "image" && <CategoryChip post={post} />}
           {kind !== "image" && (explanationToggle || explanationInvite)}
           {/* Замер добавляет случаи к прикидке, а не заменяет её: цитата длиннее
               ста семидесяти знаков обрезана в четырёх строках при любой
@@ -1335,6 +1349,25 @@ function RailButton({
         {caption}
       </span>
     </button>
+  );
+}
+
+/**
+ * Категория афоризма ссылкой на ленту своей папки (VED-120). Открытка ведёт
+ * в «Открытки» этой папки — см. `categoryLink`.
+ */
+function CategoryChip({ post }: { post: MotivationPostDto }) {
+  const link = categoryLink(post);
+  if (!link) return null;
+  return (
+    <Link
+      href={link.href}
+      aria-label={`Категория: ${link.title}`}
+      className="underline-offset-4 hover:underline"
+    >
+      <span aria-hidden="true">📂 </span>
+      {link.title}
+    </Link>
   );
 }
 
