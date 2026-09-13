@@ -46,7 +46,11 @@ import { buildAstroQuickAccess } from "@/lib/astro-quick-access";
 import { AstroQuickAccessWidget } from "@/components/astro/astro-quick-access-widget";
 import { getLibraryFeed } from "@/lib/library-api";
 import { LibraryQuickAccessWidget } from "@/components/library/library-quick-access-widget";
-import { getMotivationFeed } from "@/lib/motivation-api";
+import {
+  getMotivationCategories,
+  getMotivationFeed,
+} from "@/lib/motivation-api";
+import { loadWidgetFeed } from "@/lib/motivation-widget-feed";
 import { MotivationQuickAccessWidget } from "@/components/motivation/motivation-quick-access-widget";
 import { MusicFriendsBridge } from "@/components/activity/music-friends-bridge";
 import { getAstroState, getAstroToday } from "@/lib/astro-api";
@@ -122,8 +126,16 @@ export default async function Home({
     getActivityFeedServer().catch(() => null),
     getMusicPlaybackStateServer().catch(() => null),
     getMyMusicFavorites().catch(() => null),
-    // Цитата дня в карточке «Вдохновения». Упала лента — карточка без цитаты.
-    getMotivationFeed().catch(() => null),
+    // Цитата в карточке «Вдохновения» — из «Философии» вперемешку (VED-79):
+    // главную видят все, и афоризм здесь должен читаться без подготовки. Нет
+    // такой папки или она пуста — личная лента, как раньше.
+    loadWidgetFeed({
+      categories: () => getMotivationCategories(),
+      feed: (category) =>
+        category
+          ? getMotivationFeed("all", undefined, "random", category)
+          : getMotivationFeed(),
+    }).catch(() => null),
     // Свежий материал в карточке «Образования». Лента уже персональная:
     // линия и язык применяются на сервере.
     getLibraryFeed({ sort: "new" }).catch(() => null),
