@@ -56,10 +56,22 @@ export function FeaturedServicesEditor({
         type="button"
         onClick={open}
         disabled={pending}
-        className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-text-2 hover:text-text-0 disabled:opacity-50"
+        aria-label={pending ? undefined : "Настроить кнопки"}
+        className="inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-xs font-medium text-text-2 hover:text-text-0 disabled:opacity-50"
       >
         <SlidersHorizontal aria-hidden className="size-3.5" />
-        {pending ? "Сохраняем…" : "Настроить кнопки"}
+        {/* На телефоне в строке над сеткой ещё «Изменить порядок» и вид:
+            с полной подписью все трое не помещались в 343 точки, и обе
+            кнопки переносились в две строки. Короткое «Кнопки» с иконкой
+            читается так же, полное имя остаётся у скринридера. */}
+        {pending ? (
+          "Сохраняем…"
+        ) : (
+          <>
+            <span className="sm:hidden">Кнопки</span>
+            <span className="hidden sm:inline">Настроить кнопки</span>
+          </>
+        )}
       </button>
 
       <dialog
