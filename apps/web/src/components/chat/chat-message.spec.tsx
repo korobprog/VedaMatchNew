@@ -121,6 +121,65 @@ describe("ChatMessage", () => {
     ).not.toBeInTheDocument();
   });
 
+  // VED-117: как в Telegram — нажатие по сообщению открывает меню списком.
+  it("нажатие по сообщению открывает меню: реакции и действия списком", async () => {
+    const user = userEvent.setup();
+    const { onReply } = setup();
+
+    await user.click(screen.getByText("Харе Кришна"));
+
+    const menu = screen.getByRole("group", { name: "Меню сообщения" });
+    expect(menu).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Реакция 🙏" })).toBeInTheDocument();
+    // Чужое сообщение: пожаловаться можно, изменить и удалить — нет.
+    expect(screen.getByRole("button", { name: "Пожаловаться" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Удалить" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Ответить" }));
+    expect(onReply).toHaveBeenCalled();
+    // Действие выполнено — меню закрылось.
+    expect(screen.queryByRole("group", { name: "Меню сообщения" })).toBeNull();
+  });
+
+  it("у своего сообщения в меню «Изменить» и «Удалить»", async () => {
+    const user = userEvent.setup();
+    setup({}, { mine: true });
+
+    await user.click(screen.getByText("Харе Кришна"));
+
+    expect(screen.getByRole("button", { name: "Изменить" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Удалить" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Пожаловаться" })).toBeNull();
+  });
+
+  it("нажатие по цитате ведёт к сообщению, а меню не открывает", async () => {
+    const user = userEvent.setup();
+    const onJumpToReply = vi.fn();
+    setup(
+      {
+        replyTo: { id: "m-0", authorName: "Маму Тхакур дас", body: "Привет" },
+      } as Partial<ChatMessageDto>,
+      { onJumpToReply },
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Перейти к сообщению: Маму Тхакур дас" }),
+    );
+
+    expect(onJumpToReply).toHaveBeenCalledWith("m-0");
+    expect(screen.queryByRole("group", { name: "Меню сообщения" })).toBeNull();
+  });
+
+  it("закрывается по Escape", async () => {
+    const user = userEvent.setup();
+    setup();
+
+    await user.click(screen.getByText("Харе Кришна"));
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("group", { name: "Меню сообщения" })).toBeNull();
+  });
+
   it("ещё не доехавшее говорит об этом вместо времени", () => {
     setup({}, { mine: true, pending: true });
 

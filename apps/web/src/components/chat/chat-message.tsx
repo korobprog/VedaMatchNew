@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { chatCardLink } from "@/components/chat/chat-card-link";
-import { useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useCallback,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
+import { useDismissable } from "@/lib/use-dismissable";
 import type {
   ChatAttachmentDto,
   ChatMessageDto,
@@ -68,9 +76,26 @@ export function ChatMessage({
   pending?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  // Меню закрывается нажатием мимо и по Escape — как в мессенджерах.
+  useDismissable(rootRef, close, open);
   const deleted = Boolean(message.deletedAt);
+
+  /**
+   * Нажатие по сообщению открывает меню действий (VED-117), как в Telegram.
+   *
+   * Не всякое: цитата, вложение, ссылка и плеер внутри пузыря — свои кнопки,
+   * и нажатие по ним меню не открывает. Выделенный текст — тоже не повод:
+   * человек выделял, чтобы скопировать кусок, а не звать меню.
+   */
+  function openFromBubble(event: MouseEvent<HTMLDivElement>) {
+    if (deleted || pending) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("a, button, audio, video, input, textarea")) return;
+    if (window.getSelection()?.toString()) return;
+    setOpen((current) => !current);
+  }
   const palette = authorPalette(message.author.id);
 
   const bubble = mine
@@ -89,6 +114,7 @@ export function ChatMessage({
 
   return (
     <div
+      ref={rootRef}
       className={`group flex w-full flex-col gap-1 ${mine ? "items-end" : "items-start"}`}
     >
       <div
@@ -107,12 +133,17 @@ export function ChatMessage({
           было нельзя вовсе — жест уходил в обработчик. Скринридер при этом
           читал каждое сообщение как кнопку «Действия с сообщением».
 
-          Панель открывает отдельная кнопка рядом. На устройстве с мышью она
-          по-прежнему появляется при наведении — там это дешевле нажатия.
+          Теперь нажатие снова открывает меню (VED-117, как в Telegram), но
+          пузырь остаётся текстом: роли кнопки у него нет, нажатия по
+          вложенным кнопкам и выделение текста меню не зовут — см.
+          `openFromBubble`. Для клавиатуры и скринридера — кнопка рядом.
         */}
         <div
           style={bubbleStyle}
-          className={`max-w-[85%] select-text px-3.5 py-2.5 text-left ${bubble} shadow-lg shadow-black/20`}
+          onClick={openFromBubble}
+          className={`max-w-[85%] select-text px-3.5 py-2.5 text-left ${bubble} shadow-lg shadow-black/20 ${
+            deleted ? "" : "cursor-pointer"
+          }`}
         >
           {deleted ? (
             <span className="block text-[15px] italic leading-[21px] text-text-2">
@@ -197,21 +228,19 @@ export function ChatMessage({
           )}
         </div>
 
-        {/* Кнопка действий: то, что раньше делало нажатие по самому пузырю.
-            Порядок в строке ставит её со стороны, свободной от аватара, —
-            чтобы она не наезжала на знак собеседника. */}
+        {/* Кнопка действий — для клавиатуры и скринридера: пальцем и мышью
+            меню открывают нажатием по сообщению (VED-117), и видимые «…» у
+            каждого сообщения стали бы лишним шумом в ленте. Появляется при
+            фокусе с клавиатуры. Порядок ставит её со стороны, свободной от
+            аватара. */}
         {!deleted && (
           <button
             type="button"
             onClick={() => setOpen((current) => !current)}
             aria-expanded={open}
             aria-label={open ? "Скрыть действия" : "Действия с сообщением"}
-            className={`flex size-8 shrink-0 items-center justify-center self-end rounded-full text-text-2 transition-opacity hover:text-text-0 ${
+            className={`sr-only flex size-8 shrink-0 items-center justify-center self-end rounded-full text-text-2 hover:text-text-0 focus-visible:not-sr-only ${
               mine ? "order-first" : ""
-            } ${
-              open
-                ? "opacity-100"
-                : "opacity-60 group-hover:opacity-100 group-focus-within:opacity-100"
             }`}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -290,81 +319,88 @@ export function ChatMessage({
           </div>
         )}
 
-      {!deleted && (
+      {/* Меню действий — вертикальным списком по нажатию на сообщение, как
+          во всех мессенджерах (VED-117). Раньше это был ряд мелких кнопок в
+          строку под пузырём, а реакции и «Пожаловаться» прятались ещё на
+          уровень глубже. Реакции — строкой сверху, действия — списком. */}
+      {open && !deleted && (
         <div
-          className={`flex w-full items-center gap-1 px-1 transition-opacity ${
-            mine ? "justify-end" : avatar ? "pl-9" : ""
-          } ${open ? "opacity-100" : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"}`}
-          >
-            <SmallButton onClick={() => onReply(message)} label="Ответить" />
-            <CopyButton body={message.body} />
-            <SmallButton
-              onClick={() => setPickerOpen((current) => !current)}
-              label="Реакция"
-            />
-            {canPin && (
-              <SmallButton
-                onClick={() => onPin(message, !pinned)}
-                label={pinned ? "Открепить" : "Закрепить"}
-              />
-            )}
-            {forwardHref && (
-              <Link
-                href={forwardHref}
-                className="rounded-lg px-2 py-1 text-[11px] text-text-2 transition-colors hover:text-text-0"
-              >
-                Переслать
-              </Link>
-            )}
-            {mine ? (
-              <>
-                <SmallButton onClick={() => onEdit(message)} label="Изменить" />
-                <SmallButton onClick={() => onDelete(message)} label="Удалить" />
-              </>
-            ) : (
-              <SmallButton
-                onClick={() => setMenuOpen((current) => !current)}
-                label="Ещё"
-              />
-            )}
-          </div>
-        )}
-
-        {pickerOpen && (
-          <div
-            className={`flex flex-wrap gap-1 rounded-2xl border border-glass-brd bg-glass p-1.5 ${
-              mine ? "self-end" : "self-start"
-            }`}
-          >
+          role="group"
+          aria-label="Меню сообщения"
+          className={`w-56 overflow-hidden rounded-2xl border border-glass-brd bg-bg-1 shadow-xl shadow-black/30 ${
+            mine ? "self-end" : avatar ? "ml-10 self-start" : "self-start"
+          }`}
+        >
+          <div className="flex flex-wrap gap-0.5 border-b border-glass-brd p-1.5">
             {CHAT_REACTION_EMOJIS.map((emoji) => (
               <button
                 key={emoji}
                 type="button"
                 onClick={() => {
                   onReact(message, emoji);
-                  setPickerOpen(false);
+                  close();
                 }}
-                className="flex size-11 items-center justify-center rounded-xl text-lg transition-colors hover:bg-white/10"
+                className="flex size-9 items-center justify-center rounded-xl text-lg transition-colors hover:bg-white/10"
                 aria-label={`Реакция ${emoji}`}
               >
                 {emoji}
               </button>
             ))}
           </div>
-        )}
-
-        {menuOpen && (
-          <button
-            type="button"
-            onClick={() => {
-              onReport(message);
-              setMenuOpen(false);
-            }}
-            className="self-start rounded-xl border border-magenta/26 px-3 py-1.5 text-xs font-semibold text-magenta"
-          >
-            Пожаловаться
-          </button>
-        )}
+          <div className="flex flex-col py-1">
+            <MenuItem
+              label="Ответить"
+              onClick={() => {
+                onReply(message);
+                close();
+              }}
+            />
+            <CopyButton body={message.body} onCopied={close} />
+            {forwardHref && (
+              <Link href={forwardHref} className={menuItemClass}>
+                Переслать
+              </Link>
+            )}
+            {canPin && (
+              <MenuItem
+                label={pinned ? "Открепить" : "Закрепить"}
+                onClick={() => {
+                  onPin(message, !pinned);
+                  close();
+                }}
+              />
+            )}
+            {mine ? (
+              <>
+                <MenuItem
+                  label="Изменить"
+                  onClick={() => {
+                    onEdit(message);
+                    close();
+                  }}
+                />
+                <MenuItem
+                  label="Удалить"
+                  danger
+                  onClick={() => {
+                    onDelete(message);
+                    close();
+                  }}
+                />
+              </>
+            ) : (
+              <MenuItem
+                label="Пожаловаться"
+                danger
+                onClick={() => {
+                  onReport(message);
+                  close();
+                }}
+              />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -570,20 +606,32 @@ function ReadMark({ read }: { read: boolean }) {
  * не работало вовсе (нажатие уходило в разворот панели). Копируется только
  * текст: вложения — файлы, их в буфер не положить.
  */
-function CopyButton({ body }: { body: string }) {
+function CopyButton({
+  body,
+  onCopied,
+}: {
+  body: string;
+  /** Закрыть меню — после того, как человек увидел «Скопировано». */
+  onCopied?: () => void;
+}) {
   const [copied, setCopied] = useState(false);
 
   if (!body.trim()) return null;
 
   return (
-    <SmallButton
+    <MenuItem
       label={copied ? "Скопировано" : "Копировать"}
       onClick={() => {
         void navigator.clipboard
           .writeText(body)
           .then(() => {
             setCopied(true);
-            window.setTimeout(() => setCopied(false), 2000);
+            // Короткая пауза: без неё меню закрылось бы раньше, чем человек
+            // увидит, что копирование сработало.
+            window.setTimeout(() => {
+              setCopied(false);
+              onCopied?.();
+            }, 900);
           })
           .catch(() => {
             // Буфер закрыт настройками браузера — текст на экране, и теперь
@@ -594,18 +642,25 @@ function CopyButton({ body }: { body: string }) {
   );
 }
 
-function SmallButton({
+const menuItemClass =
+  "flex w-full items-center px-4 py-2.5 text-left text-sm text-text-0 transition-colors hover:bg-white/5";
+
+/** Пункт меню сообщения: строкой во всю ширину, как в мессенджерах. */
+function MenuItem({
   onClick,
   label,
+  danger = false,
 }: {
   onClick: () => void;
   label: string;
+  /** Удалить и пожаловаться — отличимы цветом, чтобы не нажать их мимоходом. */
+  danger?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg px-2 py-1 text-[11px] text-text-2 transition-colors hover:text-text-0"
+      className={`${menuItemClass} ${danger ? "text-magenta" : ""}`}
     >
       {label}
     </button>
