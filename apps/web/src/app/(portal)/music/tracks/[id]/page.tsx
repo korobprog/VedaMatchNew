@@ -13,6 +13,10 @@ import { MusicTrackLyrics } from "@/components/music/music-track-lyrics";
 import { MusicListenButton } from "@/components/music/player/listen-button";
 import { MusicQueueActions } from "@/components/music/player/queue-actions";
 import { formatTrackDuration } from "@/lib/music-duration";
+import { canAdminService } from "@vedamatch/shared";
+import { getProfile } from "@/lib/api";
+import { getMusicAdminArtists } from "@/lib/music-admin-api";
+import { MusicTrackAdminEditor } from "@/components/music/track-admin-editor";
 
 export async function generateMetadata({
   params,
@@ -45,9 +49,24 @@ export default async function MusicTrackPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const track = await getMusicTrack(id);
+  const [track, user] = await Promise.all([
+    getMusicTrack(id),
+    getProfile().catch(() => null),
+  ]);
 
   if (!track) notFound();
+
+  // Правка записи на месте — только редакции Музыки (VED-102, VED-109).
+  // Справочник исполнителей грузится лишь ей: остальным он не нужен.
+  const canEdit = user
+    ? canAdminService(
+        { role: user.role, adminServices: user.adminServices },
+        "music",
+      )
+    : false;
+  const adminArtists = canEdit
+    ? await getMusicAdminArtists().catch(() => null)
+    : null;
 
   const facts: { label: string; value: string }[] = [
     { label: "Длительность", value: formatTrackDuration(track.durationSeconds) },
@@ -153,6 +172,13 @@ export default async function MusicTrackPage({
           </dl>
         </div>
       </div>
+
+      {canEdit && (
+        <MusicTrackAdminEditor
+          track={track}
+          artists={adminArtists?.items ?? []}
+        />
+      )}
 
       <MusicTrackLyrics lyrics={track.lyrics} />
 
