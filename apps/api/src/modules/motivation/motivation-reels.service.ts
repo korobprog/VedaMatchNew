@@ -983,6 +983,7 @@ export class MotivationReelsService {
       videoVoice: boolean;
       videoTrackId: string | null;
       videoErrorCode: string | null;
+      captionInImage: boolean;
       generationErrorCode: string | null;
       attributionKind: MotivationPostDto['attributionKind'];
       attributionSpeaker: string | null;
@@ -1068,9 +1069,9 @@ export class MotivationReelsService {
         storyImageUrl: post.storyImageUrl ?? '',
         videoUrl: post.videoStatus === 'ready' ? (post.videoUrl ?? '') : '',
         videoHasSound: Boolean(post.videoVoice || post.videoTrackId),
-        // Готовые открытки кладёт только редакция (VED-87): у рилса участника
-        // текст всегда рисуем мы.
-        captionInImage: false,
+        // Готовую картинку с напечатанной цитатой теперь приносят и участники
+        // (VED-97): студия обязана показать её целиком, без нашей подписи.
+        captionInImage: post.captionInImage,
         title: translation?.title ?? '',
         text: translation?.text ?? '',
         storyText: translation?.storyText ?? '',

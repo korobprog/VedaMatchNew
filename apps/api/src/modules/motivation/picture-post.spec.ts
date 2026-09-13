@@ -13,25 +13,29 @@ describe('normalizePictureInput', () => {
         category: '  shastra ',
         text: '  Кто видит меня везде  ',
         author: ' Шри Кришна ',
+        work: '  Бхагавад-гита  ',
       }),
     ).toEqual({
       category: 'shastra',
       text: 'Кто видит меня везде',
       author: 'Шри Кришна',
+      work: 'Бхагавад-гита',
     });
   });
 
   // Картинку можно положить и без набранного текста: он уже на ней.
-  it('lets text, author and category be empty', () => {
+  it('lets text, author, source and category be empty', () => {
     expect(normalizePictureInput({})).toEqual({
       category: undefined,
       text: '',
       author: '',
+      work: '',
     });
     expect(normalizePictureInput(undefined)).toEqual({
       category: undefined,
       text: '',
       author: '',
+      work: '',
     });
   });
 
@@ -46,8 +50,13 @@ describe('normalizePictureInput', () => {
 
   it('ignores fields that are not strings', () => {
     expect(
-      normalizePictureInput({ category: ['a'], text: 7, author: null }),
-    ).toEqual({ category: undefined, text: '', author: '' });
+      normalizePictureInput({
+        category: ['a'],
+        text: 7,
+        author: null,
+        work: 3,
+      }),
+    ).toEqual({ category: undefined, text: '', author: '', work: '' });
   });
 
   it('refuses a text or an author that is too long', () => {

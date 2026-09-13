@@ -53,6 +53,7 @@ import { MotivationReelsService } from './motivation-reels.service';
 import { MotivationAdminReelsService } from './motivation-admin-reels.service';
 import { MotivationPostcardsService } from './motivation-postcards.service';
 import { MotivationAnalyticsService } from './motivation-analytics.service';
+import { MotivationPicturesService } from './motivation-pictures.service';
 import { MAX_REEL_IMAGE_BYTES, type UploadedReelImage } from './reel-image';
 
 @Controller()
@@ -70,6 +71,7 @@ export class MotivationController {
     private readonly adminReels: MotivationAdminReelsService,
     private readonly postcards: MotivationPostcardsService,
     private readonly analytics: MotivationAnalyticsService,
+    private readonly pictures: MotivationPicturesService,
   ) {}
 
   /**
@@ -267,6 +269,22 @@ export class MotivationController {
     @Body() input: MotivationReelCreateInput,
   ) {
     return this.reels.create(user.sub, user, input);
+  }
+  /**
+   * Готовая картинка с цитатой от участника — сразу в ленту (VED-97).
+   * Поля формы: `file`, `category`, необязательные `text`, `author`, `work`.
+   */
+  @Post('motivation/pictures')
+  @UseGuards(AuthGuard)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_REEL_IMAGE_BYTES } }),
+  )
+  createPicture(
+    @CurrentUser() user: AccessTokenPayload,
+    @UploadedFile() file: UploadedReelImage | undefined,
+    @Body() body: unknown,
+  ) {
+    return this.pictures.createOwn(user, file, body);
   }
   @Get('motivation/reels/:id')
   @UseGuards(AuthGuard)

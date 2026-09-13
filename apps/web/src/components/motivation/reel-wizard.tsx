@@ -19,6 +19,7 @@ import type {
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
+import { PicturePublishForm } from "./picture-publish-form";
 import { splitQuoteAndExplanation } from "./quote-text";
 import {
   ReelCategorySelect,
@@ -93,7 +94,10 @@ export function ReelWizard({
 }) {
   const fromBook = Boolean(prefill.book && prefill.chapter && prefill.text);
   const [step, setStep] = useState<Step>(prefill.reelId ? "review" : "text");
-  const [sourceKind, setSourceKind] = useState<"own" | "vedabase">(fromBook ? "vedabase" : "own");
+  /** `picture` — готовая картинка с цитатой: файл первым шагом (VED-97). */
+  const [sourceKind, setSourceKind] = useState<"own" | "vedabase" | "picture">(
+    fromBook ? "vedabase" : "own",
+  );
   // Фрагмент из книг: пришёл из читалки или выбран поиском прямо здесь.
   const [book, setBook] = useState<MotivationReelSourceHit | null>(
     fromBook
@@ -309,18 +313,46 @@ export function ReelWizard({
   }
 
   const exhausted = quotaExhausted(quota);
+  const picture = step === "text" && sourceKind === "picture";
+
+  /* Три пути в начале мастера. «Готовая картинка» — первой (VED-97): у
+     открытки цитата уже на картинке, и путь «набери текст → дойди до шага с
+     файлом» заставлял перепечатывать её зря. */
+  const sourceCards = (
+    <div className="grid gap-2 sm:grid-cols-3">
+      <ChoiceCard
+        active={sourceKind === "picture"}
+        onClick={() => setSourceKind("picture")}
+        title="🖼 Готовая картинка с цитатой"
+        hint="цитата уже на картинке"
+      />
+      <ChoiceCard
+        active={sourceKind === "own"}
+        onClick={() => setSourceKind("own")}
+        title="✍ Написать самому"
+        hint="своя мысль или цитата"
+      />
+      <ChoiceCard
+        active={sourceKind === "vedabase"}
+        onClick={() => setSourceKind("vedabase")}
+        title="📚 Взять из наших книг"
+        hint={book ? "фрагмент выбран" : "оглавление или поиск по словам"}
+      />
+    </div>
+  );
 
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div className="font-mono text-xs uppercase tracking-wide text-text-2">
-          {step === "text" && "Шаг 1 из 3 · Текст и источник"}
+          {picture && "Готовая картинка · один шаг"}
+          {step === "text" && !picture && "Шаг 1 из 3 · Текст и источник"}
           {step === "image" && "Шаг 2 из 3 · Картинка"}
           {step === "review" && "Шаг 3 из 3 · Проверка"}
         </div>
         {quota && <div className="text-xs text-text-2">{quotaLine(quota)}</div>}
       </header>
-      <StepBar step={step} />
+      {!picture && <StepBar step={step} />}
 
       {error && (
         <p role="alert" className="rounded-xl bg-red-100 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-200">
@@ -347,7 +379,27 @@ export function ReelWizard({
         </div>
       )}
 
-      {step === "text" && !exhausted && (
+      {picture && !exhausted && (
+        <div className="space-y-4">
+          {sourceCards}
+          <PicturePublishForm
+            categories={categories}
+            onPublished={() =>
+              setQuota((current) =>
+                current && !current.unlimited
+                  ? {
+                      ...current,
+                      used: current.used + 1,
+                      remaining: Math.max(0, current.remaining - 1),
+                    }
+                  : current,
+              )
+            }
+          />
+        </div>
+      )}
+
+      {step === "text" && !picture && !exhausted && (
         <form
           className="space-y-4"
           onSubmit={(event) => {
@@ -355,20 +407,7 @@ export function ReelWizard({
             if (!textError && trimmed) setStep("image");
           }}
         >
-          <div className="grid grid-cols-2 gap-2">
-            <ChoiceCard
-              active={sourceKind === "own"}
-              onClick={() => setSourceKind("own")}
-              title="✍ Написать самому"
-              hint="своя мысль или цитата"
-            />
-            <ChoiceCard
-              active={sourceKind === "vedabase"}
-              onClick={() => setSourceKind("vedabase")}
-              title="📚 Взять из наших книг"
-              hint={book ? "фрагмент выбран" : "оглавление или поиск по словам"}
-            />
-          </div>
+          {sourceCards}
           {sourceKind === "vedabase" && (
             <BookSource
               selected={book}

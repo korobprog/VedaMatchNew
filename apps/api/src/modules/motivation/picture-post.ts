@@ -11,6 +11,8 @@
 /** Текст на картинке, если его набрали: по нему ищут и его читает скринридер. */
 export const PICTURE_TEXT_MAX = 600;
 export const PICTURE_AUTHOR_MAX = 120;
+/** Источник — книга, лекция, ссылка; отдельно от автора (VED-99). */
+export const PICTURE_WORK_MAX = 120;
 /**
  * Длинная сторона после сжатия. Кадр не обрезается под 9:16 — надпись у края
  * пропала бы первой, — поэтому ограничиваем только размер.
@@ -24,9 +26,12 @@ export interface PictureInput {
   /** Цитата с картинки, набранная текстом. Необязательна. */
   text: string;
   author: string;
+  /** Откуда слова: книга, лекция, ссылка. Необязателен. */
+  work: string;
 }
 
-export type PictureInputProblem = 'text_too_long' | 'author_too_long';
+export type PictureInputProblem =
+  'text_too_long' | 'author_too_long' | 'work_too_long';
 
 /**
  * Поля приходят из `multipart/form-data`, то есть строками или вовсе не
@@ -41,10 +46,12 @@ export function normalizePictureInput(
   >;
   const text = cleanText(fields.text);
   const author = cleanLine(fields.author);
+  const work = cleanLine(fields.work);
   if (text.length > PICTURE_TEXT_MAX) return 'text_too_long';
   if (author.length > PICTURE_AUTHOR_MAX) return 'author_too_long';
+  if (work.length > PICTURE_WORK_MAX) return 'work_too_long';
   const category = cleanLine(fields.category);
-  return { category: category || undefined, text, author };
+  return { category: category || undefined, text, author, work };
 }
 
 export function pictureInputMessage(problem: PictureInputProblem): string {
@@ -53,6 +60,8 @@ export function pictureInputMessage(problem: PictureInputProblem): string {
       return `Текст длиннее ${PICTURE_TEXT_MAX} знаков — сократите его`;
     case 'author_too_long':
       return `Автор длиннее ${PICTURE_AUTHOR_MAX} знаков — сократите`;
+    case 'work_too_long':
+      return `Источник длиннее ${PICTURE_WORK_MAX} знаков — сократите`;
   }
 }
 

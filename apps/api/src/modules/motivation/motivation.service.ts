@@ -310,7 +310,8 @@ export class MotivationService {
         // он живёт во вкладке «Мои» и по прямой ссылке. Избранное —
         // исключение: туда пост мог попасть, пока правило было другим.
         // Афоризм администратора сервиса это правило не прячет (VED-9): он и
-        // есть тот, кто отвечает за ленту.
+        // есть тот, кто отвечает за ленту. Готовую картинку участника тоже
+        // (VED-97) — то же правило, что в `READER_VISIBLE_POSTS`.
         ...(query.favorites
           ? []
           : [
@@ -319,6 +320,7 @@ export class MotivationService {
                   origin: 'user' as const,
                   sourceVerified: false,
                   authorIsAdmin: false,
+                  captionInImage: false,
                 },
               },
             ]),
