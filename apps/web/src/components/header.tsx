@@ -285,23 +285,20 @@ export function Header({ user }: { user: UserProfile }) {
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
               className="fixed top-0 right-0 bottom-0 z-50 w-72 overflow-y-auto border-l border-glass-brd bg-bg-1 outline-none md:hidden"
             >
-              {/* Место под шапку больше не резервируем. Панель и шапка стоят
-                  на одном слое (z-50), панель в разметке ниже — и накрывает
-                  её целиком: сверху оставалась пустая полоса в высоту шапки,
-                  а вместе с шапкой уезжал под панель и её крестик, которым
-                  панель полагалось закрывать. Крестик теперь свой, стоит в
-                  той самой полосе, и место больше ничем не занято. */}
-              <div className="flex h-full flex-col p-6 pt-[calc(1.5rem+env(safe-area-inset-top))]">
-                <div className="mb-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={closeDrawer}
-                    aria-label={t("closeMenu")}
-                    className="rounded-lg p-2 text-text-1 transition-colors hover:bg-glass hover:text-text-0"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
+              {/* Место под шапку не резервируем: панель накрывает её целиком,
+                  и полоса в высоту шапки читалась как пустое место (VED-15).
+                  Своего ряда у крестика тоже нет — он занимал ту же пустую
+                  строку над «Главной». Теперь крестик стоит справа в строке
+                  «Главной», а список начинается от самого верха панели. */}
+              <div className="relative flex h-full flex-col p-6 pt-[calc(0.75rem+env(safe-area-inset-top))]">
+                <button
+                  type="button"
+                  onClick={closeDrawer}
+                  aria-label={t("closeMenu")}
+                  className="absolute right-3 top-[calc(1.125rem+env(safe-area-inset-top))] z-10 rounded-lg p-2 text-text-1 transition-colors hover:bg-glass hover:text-text-0"
+                >
+                  <X size={20} />
+                </button>
                 <nav aria-label={t("services")} className="flex flex-col gap-1">
                   {navItems.map((item, index) => (
                     <motion.div
@@ -314,7 +311,9 @@ export function Header({ user }: { user: UserProfile }) {
                         href={item.href}
                         aria-current={currentAttr(item.href)}
                         onClick={closeDrawer}
-                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-text-0 hover:bg-glass transition-colors aria-[current=page]:bg-glass aria-[current=page]:text-text-0"
+                        // Первой строке — место справа под крестик: иначе
+                        // подсветка «Главной» уходила бы под кнопку.
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-text-0 hover:bg-glass transition-colors aria-[current=page]:bg-glass aria-[current=page]:text-text-0 ${index === 0 ? "mr-8" : ""}`}
                       >
                         {item.icon}
                         <span className="font-medium">{item.label}</span>
