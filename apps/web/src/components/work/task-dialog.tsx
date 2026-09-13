@@ -21,6 +21,7 @@ import {
   updateWorkChecklistItem,
   updateWorkTask,
 } from "@/lib/work-api";
+import { uploadInTurn, uploadProblemMessage } from "./attach-files";
 import { dueFromInput, dueToInput } from "./task-due";
 import { PRIORITY_TITLE } from "./task-priority";
 import {
@@ -61,6 +62,11 @@ export function WorkTaskDialog({
   const [draft, setDraft] = useState({ title: "", description: "" });
   /** Только что сохранили — показать «Сохранено», пока снова не начали править. */
   const [justSaved, setJustSaved] = useState(false);
+  /** Идёт загрузка нескольких вложений: сколько ушло из скольких. */
+  const [uploading, setUploading] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
 
   const canEdit =
@@ -158,6 +164,32 @@ export function WorkTaskDialog({
 
   function patch(body: Parameters<typeof updateWorkTask>[1]) {
     void run(() => updateWorkTask(taskId, body));
+  }
+
+  /**
+   * Вложения по одному запросу на файл, по очереди (VED-112). Если какой-то
+   * не приложился, остальные остаются в карточке, а ошибка называет его по
+   * имени.
+   */
+  function attachFiles(files: File[]) {
+    if (files.length === 0) return;
+    void run(async () => {
+      try {
+        const result = await uploadInTurn(
+          files,
+          (file) => attachWorkFile(taskId, file),
+          (done, total) => setUploading({ done, total }),
+        );
+        const message = uploadProblemMessage(result);
+        if (!message) return result.last;
+        // Приложившиеся уже на сервере: показываем их, и только потом ошибку.
+        if (result.last) setTask(result.last);
+        await onChanged();
+        throw new Error(message);
+      } finally {
+        setUploading(null);
+      }
+    });
   }
 
   function edit(next: Partial<typeof draft>) {
@@ -563,18 +595,23 @@ export function WorkTaskDialog({
               // там, где выбирать нечего.
               <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-glass px-3 py-2 text-sm text-text-0">
                 <Paperclip aria-hidden className="size-4" />
-                Прикрепить картинку или файл
+                {uploading && uploading.total > 1
+                  ? `Прикрепляем ${Math.min(uploading.done + 1, uploading.total)} из ${uploading.total}…`
+                  : "Прикрепить картинки или файлы"}
+                {/* Несколько файлов за раз (VED-112): скриншоты к задаче
+                    обычно идут пачкой, а раньше каждый выбирался заново. */}
                 <input
                   type="file"
+                  multiple
                   className="sr-only"
                   disabled={busy}
                   accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
                   onChange={(event) => {
-                    const file = event.target.files?.[0];
+                    const files = Array.from(event.target.files ?? []);
                     // Поле очищается сразу: иначе тот же файл, выбранный
                     // второй раз, не поднимет change и молча не приложится.
                     event.target.value = "";
-                    if (file) void run(() => attachWorkFile(task.id, file));
+                    attachFiles(files);
                   }}
                 />
               </label>
