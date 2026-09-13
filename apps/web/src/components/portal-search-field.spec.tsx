@@ -23,6 +23,28 @@ describe("PortalSearchField", () => {
     expect(input).toHaveAttribute("minLength", "2");
   });
 
+  // VED-89: в подсказке только название, без перечня разделов.
+  it("подсказывает одним названием", () => {
+    render(<PortalSearchField />);
+
+    expect(screen.getByLabelText("Поиск по VedaMatch")).toHaveAttribute(
+      "placeholder",
+      "Поиск по VedaMatch",
+    );
+  });
+
+  it("на главной поле по ширине надписи, над выдачей — на всю строку", () => {
+    const { rerender } = render(<PortalSearchField compact />);
+    const field = () =>
+      screen.getByLabelText("Поиск по VedaMatch").closest("label");
+
+    expect(field()).toHaveClass("w-52", "flex-none");
+
+    rerender(<PortalSearchField />);
+    expect(field()).toHaveClass("flex-1");
+    expect(field()).not.toHaveClass("w-52");
+  });
+
   it("над выдачей показывает то, что уже искали", () => {
     render(<PortalSearchField defaultValue="киртан" />);
 

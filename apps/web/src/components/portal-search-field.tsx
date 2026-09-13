@@ -10,10 +10,17 @@ import { Search } from "lucide-react";
 export function PortalSearchField({
   defaultValue = "",
   autoFocus = false,
+  compact = false,
   className = "",
 }: {
   defaultValue?: string;
   autoFocus?: boolean;
+  /**
+   * Поле по ширине надписи, а не на всю строку (VED-89) — так на главной:
+   * там оно приглашает искать и не должно спорить с блоками ниже. Над
+   * выдачей поле остаётся широким: там правят длинный запрос.
+   */
+  compact?: boolean;
   className?: string;
 }) {
   return (
@@ -23,7 +30,9 @@ export function PortalSearchField({
       role="search"
       className={`flex gap-2 ${className}`}
     >
-      <label className="relative min-w-0 flex-1">
+      <label
+        className={`relative min-w-0 ${compact ? "w-52 flex-none" : "flex-1"}`}
+      >
         <span className="sr-only">Поиск по VedaMatch</span>
         <Search
           aria-hidden
@@ -38,7 +47,10 @@ export function PortalSearchField({
           minLength={2}
           maxLength={120}
           enterKeyHint="search"
-          placeholder="Поиск по VedaMatch: лекции, киртаны, объявления…"
+          // Только название (VED-89): перечень «лекции, киртаны, объявления»
+          // на телефоне всё равно обрывался на полуслове. Что именно ищется,
+          // сказано на странице выдачи.
+          placeholder="Поиск по VedaMatch"
           className="h-11 w-full rounded-xl border border-glass-brd bg-bg-1 pl-9 pr-3 text-sm text-text-0 placeholder:text-text-2"
         />
       </label>
