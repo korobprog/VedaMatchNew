@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type {
   DonationSettingsDto,
-  MotivationAudienceTrack,
+  MotivationCategoryDto,
   MotivationReelCreateInput,
   MotivationReelCreateResult,
   MotivationReelDto,
@@ -20,6 +20,10 @@ import type {
 import { apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
 import { splitQuoteAndExplanation } from "./quote-text";
+import {
+  ReelCategorySelect,
+  initialReelCategory,
+} from "./reel-category-select";
 import {
   formatImageSize,
   pastedImageName,
@@ -77,12 +81,13 @@ type Step = "text" | "image" | "review";
 export function ReelWizard({
   prefill,
   donation,
-  defaultTrack = "universal",
+  categories = [],
   isAdmin = false,
 }: {
   prefill: ReelWizardPrefill;
   donation: DonationSettingsDto | null;
-  defaultTrack?: MotivationAudienceTrack;
+  /** Нынешние категории ленты — из них выбирается папка рилса (VED-96). */
+  categories?: MotivationCategoryDto[];
   /** Администратор ручается за себя сам: его афоризм публикуется без очереди. */
   isAdmin?: boolean;
 }) {
@@ -103,8 +108,10 @@ export function ReelWizard({
   );
   const [text, setText] = useState(prefill.text ?? "");
   const [author, setAuthor] = useState("");
+  /** Источник своих слов — отдельно от автора (VED-99). */
+  const [work, setWork] = useState("");
   const [explanation, setExplanation] = useState("");
-  const [track, setTrack] = useState<MotivationAudienceTrack>(defaultTrack);
+  const [category, setCategory] = useState(() => initialReelCategory(categories));
   const [style, setStyle] = useState<MotivationVisualStyle | "">("");
   const [imageMode, setImageMode] = useState<"generate" | "upload">("generate");
   const [file, setFile] = useState<File | null>(null);
@@ -247,9 +254,14 @@ export function ReelWizard({
               bookSlug: book.bookSlug,
               chapterSlug: book.chapterSlug,
             }
-          : { kind: "own", text: trimmed, author: author.trim() || null },
+          : {
+              kind: "own",
+              text: trimmed,
+              author: author.trim() || null,
+              work: work.trim() || null,
+            },
       language: "ru",
-      audienceTrack: track,
+      category: category || null,
       visualStyle: style || null,
       explanation: explanation.trim() || null,
     };
@@ -400,7 +412,9 @@ export function ReelWizard({
           {/* Источник и автор — отдельным блоком, но на этом же экране. Для
               фрагмента из книг спрашивать нечего: источник известен из самого
               фрагмента, и здесь он только назван, чтобы человек видел, чем
-              подпишется. Для своих слов это одно необязательное поле. */}
+              подпишется. Для своих слов — два необязательных поля: кто
+              сказал и откуда взято (VED-99). Раньше это было одно поле, и
+              «Марк Аврелий, Размышления» приходилось втискивать в «Автора». */}
           <fieldset className="space-y-2 rounded-2xl border border-glass-brd p-3">
             <legend className="px-1 text-sm font-medium text-text-1">
               Источник / автор
@@ -427,6 +441,18 @@ export function ReelWizard({
                 </span>
               </label>
             )}
+            {sourceKind === "own" && (
+              <label className="block text-sm text-text-1">
+                Источник (необязательно)
+                <input
+                  value={work}
+                  onChange={(e) => setWork(e.target.value)}
+                  maxLength={120}
+                  placeholder="Книга, лекция или ссылка"
+                  className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
+                />
+              </label>
+            )}
           </fieldset>
           <p className="text-xs text-text-2">
             {sourceKind === "own"
@@ -451,13 +477,13 @@ export function ReelWizard({
             setStep("review");
           }}
         >
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-text-1">Трек ленты</legend>
-            <div className="grid grid-cols-2 gap-2">
-              <ChoiceCard active={track === "universal"} onClick={() => setTrack("universal")} title="Мудрость мира" hint="универсальная духовная мудрость" />
-              <ChoiceCard active={track === "vaishnava"} onClick={() => setTrack("vaishnava")} title="Вайшнавская мудрость" hint="бхакти, писания, ачарьи" />
-            </div>
-          </fieldset>
+          {/* Категория вместо «трека ленты» (VED-96): в оглавлении ленты
+              папки, а не два трека, и рилс должен лечь туда же, где его ищут. */}
+          <ReelCategorySelect
+            categories={categories}
+            value={category}
+            onChange={setCategory}
+          />
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium text-text-1">Картинка</legend>
             <div className="grid grid-cols-2 gap-2">
@@ -572,9 +598,21 @@ export function ReelWizard({
               <p className="mt-1 text-text-0">
                 {sourceKind === "vedabase" && book
                   ? `${book.bookTitle}${book.locator ? ` · ${book.locator}` : ""}`
-                  : author.trim() || "Ваши слова, подпишем вашим именем"}
+                  : [author.trim(), work.trim()].filter(Boolean).join(" · ") ||
+                    "Ваши слова, подпишем вашим именем"}
               </p>
             </div>
+            {categories.length > 0 && (
+              <div>
+                <p className="text-xs uppercase tracking-wide text-text-2">
+                  Категория
+                </p>
+                <p className="mt-1 text-text-0">
+                  {categories.find((item) => item.slug === category)?.title ??
+                    "По умолчанию"}
+                </p>
+              </div>
+            )}
             <div>
               <p className="text-xs uppercase tracking-wide text-text-2">
                 Картинка

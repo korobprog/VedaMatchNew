@@ -106,23 +106,30 @@ describe("ReelWizard", () => {
       "/motivation/reels": () => ({ id: "reel-1", stage: "generating", reason: null }),
     });
     const user = userEvent.setup();
-    render(<ReelWizard prefill={{}} donation={null} />);
+    const categories = [
+      { id: "c1", slug: "filosofiya", title: "Философия", sortOrder: 0, isDefault: true, parentId: null, postCount: 5 },
+      { id: "c2", slug: "vedy", title: "Веды", sortOrder: 1, isDefault: false, parentId: null, postCount: 3 },
+    ];
+    render(<ReelWizard prefill={{}} donation={null} categories={categories} />);
 
     await screen.findByText("Сегодня: 0 из 1");
     const next = screen.getByRole("button", { name: "Дальше: картинка" });
     expect(next).toBeDisabled();
     await user.type(screen.getByLabelText(/Текст цитаты/), "Делай что должно, и будь что будет.");
-    // Источник и автор — блоком на том же экране: для своих слов это одно поле.
+    // Источник и автор — блоком на том же экране, но двумя полями (VED-99).
     await user.type(screen.getByLabelText(/Автор/), "Марк Аврелий");
+    await user.type(screen.getByLabelText(/Источник/), "Размышления");
     await user.click(next);
 
-    // Шаг 2 — только картинка: трек, способ и стиль.
-    await user.click(screen.getByRole("button", { name: /Вайшнавская мудрость/ }));
+    // Шаг 2 — категория вместо «трека ленты» (VED-96), способ и стиль.
+    expect(screen.queryByText("Трек ленты")).toBeNull();
+    await user.selectOptions(screen.getByLabelText(/Категория/), "vedy");
     await user.selectOptions(screen.getByLabelText(/Визуальный стиль/), "indian_miniature");
     await user.click(screen.getByRole("button", { name: "Дальше: проверка" }));
 
     // Шаг 3 — обзор и одна кнопка.
-    expect(screen.getByText("Марк Аврелий")).toBeInTheDocument();
+    expect(screen.getByText("Марк Аврелий · Размышления")).toBeInTheDocument();
+    expect(screen.getByText("Веды")).toBeInTheDocument();
     await user.click(
       screen.getByRole("button", { name: "Отправить на проверку администраторам" }),
     );
@@ -131,9 +138,14 @@ describe("ReelWizard", () => {
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
     expect(post?.[0]).toContain("/motivation/reels");
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({
-      source: { kind: "own", text: "Делай что должно, и будь что будет.", author: "Марк Аврелий" },
+      source: {
+        kind: "own",
+        text: "Делай что должно, и будь что будет.",
+        author: "Марк Аврелий",
+        work: "Размышления",
+      },
       language: "ru",
-      audienceTrack: "vaishnava",
+      category: "vedy",
       visualStyle: "indian_miniature",
       explanation: null,
     });
