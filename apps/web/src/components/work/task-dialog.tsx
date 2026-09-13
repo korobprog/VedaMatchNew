@@ -364,28 +364,34 @@ export function WorkTaskDialog({
               <div className="sticky bottom-0 z-10 -mx-4 mt-3 flex flex-wrap items-center gap-2 border-t border-glass-brd bg-sheet px-4 py-3">
                 {dirty ? (
                   <>
+                    {/* На телефоне надпись — своей строкой, кнопки — под ней
+                        справа. В один ряд все трое не помещались, и
+                        «Сохранить» переносился в угол слева, отдельно от
+                        «Отменить правки» (VED-105). */}
                     <p
                       role={problem ? "alert" : undefined}
-                      className={`mr-auto text-sm ${problem ? "text-magenta" : "text-text-2"}`}
+                      className={`w-full text-sm sm:mr-auto sm:w-auto ${problem ? "text-magenta" : "text-text-2"}`}
                     >
                       {problem ?? "Есть несохранённые правки"}
                     </p>
-                    <button
-                      type="button"
-                      onClick={discard}
-                      disabled={busy}
-                      className="rounded-xl px-3 py-2 text-sm text-text-1 hover:text-text-0 disabled:opacity-50"
-                    >
-                      Отменить правки
-                    </button>
-                    <button
-                      type="button"
-                      onClick={save}
-                      disabled={busy || Boolean(problem)}
-                      className="rounded-xl bg-magenta px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                    >
-                      {busy ? "Сохраняем…" : "Сохранить"}
-                    </button>
+                    <div className="ml-auto flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={discard}
+                        disabled={busy}
+                        className="rounded-xl px-3 py-2 text-sm text-text-1 hover:text-text-0 disabled:opacity-50"
+                      >
+                        Отменить правки
+                      </button>
+                      <button
+                        type="button"
+                        onClick={save}
+                        disabled={busy || Boolean(problem)}
+                        className="rounded-xl bg-magenta px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        {busy ? "Сохраняем…" : "Сохранить"}
+                      </button>
+                    </div>
                   </>
                 ) : (
                   <p role="status" className="text-sm text-text-1">

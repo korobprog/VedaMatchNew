@@ -521,7 +521,12 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         <span className="rounded-full bg-glass px-2 py-0.5 font-mono text-xs uppercase text-text-2">
           {space.prefix}
         </span>
-        <div className="ml-auto flex items-center gap-2">
+        {/* Ряд переносится (VED-105). Без переноса «Свернуть все», «По
+            важности», «Архив» и «Пригласить» на телефоне не помещались и
+            распирали страницу вбок: 420 точек при экране 375. Вместе со
+            страницей растягивалось и окно задачи — полоса «Сохранить» у его
+            низа и правого края уходила за экран. */}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           {/* Только на телефоне, как и стрелки у колонок: шире sm колонки
               стоят в ряд, прятать их незачем. Одна кнопка, меняющая смысл, а
               не пара рядом: вторая всегда была бы бесполезной, а место
