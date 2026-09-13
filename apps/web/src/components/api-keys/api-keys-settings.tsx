@@ -9,6 +9,7 @@ import {
   type ApiKeyDto,
   type IssuedApiKeyDto,
 } from "@/lib/api-keys-api";
+import { copyText } from "@/lib/copy-text";
 
 /** Права, которые сейчас можно выдать. Совпадает с ALLOWED_API_KEY_SCOPES. */
 const SCOPES = [
@@ -143,8 +144,9 @@ export function ApiKeysSettings() {
             <button
               type="button"
               onClick={() => {
-                void navigator.clipboard.writeText(issued.token);
-                setCopied(true);
+                // «Скопировано» — только если правда скопировалось: ключ
+                // показывается один раз, и ложное «готово» стоило бы ключа.
+                void copyText(issued.token).then(setCopied);
               }}
               className="rounded-xl bg-[var(--vm-magenta)] px-3 py-2 text-sm font-semibold text-white"
             >

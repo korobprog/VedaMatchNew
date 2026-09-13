@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { UnionVisibleContacts } from "@vedamatch/shared";
+import { copyText } from "@/lib/copy-text";
 
 const messengerLabels: Record<string, string> = {
   telegram: "Telegram",
@@ -116,13 +117,10 @@ export function ContactList({ contacts }: { contacts: UnionVisibleContacts }) {
   if (items.length === 0) return null;
 
   async function copy(itemKey: string, value: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopiedKey(itemKey);
-      setTimeout(() => setCopiedKey((current) => (current === itemKey ? null : current)), 1500);
-    } catch {
-      // Буфер обмена недоступен (нет разрешения/HTTPS) — молча игнорируем.
-    }
+    // Не скопировалось ни одним способом — значение и так на экране.
+    if (!(await copyText(value))) return;
+    setCopiedKey(itemKey);
+    setTimeout(() => setCopiedKey((current) => (current === itemKey ? null : current)), 1500);
   }
 
   return (

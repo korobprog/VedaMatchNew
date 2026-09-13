@@ -31,6 +31,7 @@ import {
   toggleQuickAction,
   type QuickActionId,
 } from "./quick-actions";
+import { copyText } from "@/lib/copy-text";
 
 /** Раскладка панели живёт на устройстве — см. комментарий в quick-actions.ts. */
 const STORAGE_KEY = "vedamatch:quick-panel";
@@ -279,7 +280,7 @@ function InviteTile() {
       const response = await apiFetch(`${API_URL}/rewards/me`);
       if (!response.ok) throw new Error("rewards");
       const me = (await response.json()) as RewardsMeDto;
-      await navigator.clipboard.writeText(me.link);
+      if (!(await copyText(me.link))) throw new Error("clipboard");
       setState("copied");
       window.setTimeout(() => setState("idle"), 2000);
     } catch {

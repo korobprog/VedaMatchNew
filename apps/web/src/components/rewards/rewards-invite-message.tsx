@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { InviteService } from "@/lib/rewards-share";
+import { copyText } from "@/lib/copy-text";
 
 /**
  * Готовый текст приглашения. Человек, которому дали одну голую ссылку, пишет
@@ -21,15 +22,11 @@ export function RewardsInviteMessage({
   const [copied, setCopied] = useState(false);
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(message);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Буфер закрыт настройками браузера — текст на экране, его видно
-      // целиком и можно выделить руками.
-      setCopied(false);
-    }
+    // Не скопировалось ни одним способом — текст на экране, его видно
+    // целиком и можно выделить руками.
+    if (!(await copyText(message))) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
   }
 
   return (

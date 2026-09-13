@@ -16,6 +16,7 @@ import {
   listWorkInvites,
   revokeWorkInvite,
 } from "@/lib/work-api";
+import { copyText } from "@/lib/copy-text";
 import { emptyHint } from "./invite-hints";
 import { buildWorkInviteShareHref } from "./work-share";
 
@@ -151,14 +152,9 @@ export function WorkInvitePanel({
   }
 
   async function copy(url: string) {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-    } catch {
-      // Буфер обмена закрыт настройками браузера — ссылку видно и так,
-      // выделить её руками человек сможет.
-      setCopied(false);
-    }
+    // Не скопировалось ни одним способом — ссылку видно и так, выделить её
+    // руками человек сможет.
+    setCopied(await copyText(url));
   }
 
   return (

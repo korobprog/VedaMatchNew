@@ -22,6 +22,7 @@ import {
   SelfIdentificationQuestions,
 } from "./self-identification-questions";
 import { apiBase } from "@/lib/api-base";
+import { copyText } from "@/lib/copy-text";
 
 const API_URL = apiBase();
 
@@ -128,10 +129,10 @@ export function SelfIdentificationForm({
 
   async function copyMentorLink() {
     if (!mentorLink) return;
-    await navigator.clipboard.writeText(
+    const copied = await copyText(
       new URL(mentorLink, window.location.origin).toString(),
     );
-    setCopiedMentorLink(true);
+    if (copied) setCopiedMentorLink(true);
   }
 
   return (
