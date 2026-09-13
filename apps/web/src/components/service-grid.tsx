@@ -44,10 +44,17 @@ export function ServiceGrid({
   services,
   userId,
   extras,
+  toolbarStart,
 }: {
   services: ServiceCardType[];
   userId: string;
   extras?: Record<string, ServiceExtra>;
+  /**
+   * Левый край строки над сеткой. Сюда главная ставит «Настроить кнопки»
+   * (VED-111): все настройки вида главной — в одной строке, а не одна под
+   * кнопками, другая над сеткой через плеер.
+   */
+  toolbarStart?: ReactNode;
 }) {
   /**
    * Режим читается через `useSyncExternalStore`, а не эффектом: у него есть
@@ -217,6 +224,7 @@ export function ServiceGrid({
   return (
     <>
       <div className="mb-3 flex items-center justify-end gap-2">
+        {toolbarStart && <div className="mr-auto">{toolbarStart}</div>}
         {/* Перестановка нужна редко, поэтому переключатель тихий и только
             там, где нет перетаскивания мышью. В компактном режиме её нет
             вовсе: в плитке негде стоять ни ручке, ни стрелкам. */}

@@ -11,6 +11,7 @@ import {
 import { Header } from "@/components/header";
 import { ServiceGrid } from "@/components/service-grid";
 import { FeaturedServices } from "@/components/featured-services";
+import { FeaturedServicesEditor } from "@/components/featured-services-editor";
 import {
   HOME_FEATURED_COOKIE,
   homeFeaturedOptions,
@@ -306,12 +307,7 @@ export default async function Home({
         )}
         {/* Ходовые сервисы отдельной строкой над сеткой: за ними заходят
             чаще всего, и искать их среди равных плиток не нужно. */}
-        <FeaturedServices
-          items={featured}
-          options={featuredOptions}
-          userId={user.id}
-          unread={chatBadge}
-        />
+        <FeaturedServices items={featured} unread={chatBadge} />
         {/* Сразу под ходовыми сервисами, как в макете Main.dc.html: карточка
             возвращает к недослушанному, не заходя в Музыку. Её нет вовсе,
             когда возвращаться не к чему и избранное пусто. */}
@@ -320,6 +316,17 @@ export default async function Home({
           services={gridServices}
           userId={user.id}
           extras={serviceExtras}
+          /* «Настроить кнопки» — в строке над сеткой, рядом с «Изменить
+             порядок» и видом плиток (VED-111). Под тремя кнопками она
+             висела отдельной строкой, а плеер между ними отрывал её от
+             остальных настроек главной. */
+          toolbarStart={
+            <FeaturedServicesEditor
+              userId={user.id}
+              current={featured.map((item) => item.key)}
+              options={featuredOptions.map(({ key, name }) => ({ key, name }))}
+            />
+          }
         />
         {/* Подвал главной, под сеткой: действия людей, которые открыли
             доступ к себе (мэтч в Знакомствах, раскрытые контакты в

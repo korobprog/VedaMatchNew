@@ -50,17 +50,17 @@ export function FeaturedServicesEditor({
 
   return (
     <>
-      <div className="mt-2 flex justify-end">
-        <button
-          type="button"
-          onClick={open}
-          disabled={pending}
-          className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-text-2 hover:text-text-0 disabled:opacity-50"
-        >
-          <SlidersHorizontal aria-hidden className="size-3.5" />
-          {pending ? "Сохраняем…" : "Настроить кнопки"}
-        </button>
-      </div>
+      {/* Своей обёртки у кнопки нет: место выбирает главная — строка над
+          сеткой, рядом с «Изменить порядок» и видом плиток (VED-111). */}
+      <button
+        type="button"
+        onClick={open}
+        disabled={pending}
+        className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-text-2 hover:text-text-0 disabled:opacity-50"
+      >
+        <SlidersHorizontal aria-hidden className="size-3.5" />
+        {pending ? "Сохраняем…" : "Настроить кнопки"}
+      </button>
 
       <dialog
         ref={dialogRef}
