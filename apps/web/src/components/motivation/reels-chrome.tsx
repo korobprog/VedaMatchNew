@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowLeft, Menu, Shuffle, X } from "lucide-react";
+import { reelsHref, type ReelsTab } from "./feed-style";
 import { MotivationNav } from "./motivation-nav";
 
 /**
@@ -16,8 +17,11 @@ export function ReelsChrome({
   isAdmin,
   order,
   count,
+  tab = "forYou",
 }: {
   isAdmin: boolean;
+  /** Вкладка: «Вперемешку» в открытках перемешивает открытки (VED-121). */
+  tab?: ReelsTab;
   /** Текущий порядок ленты: кнопка показывает, чем её сменить. */
   order?: "random";
   /** Сколько всего вдохновений в сервисе. */
@@ -67,7 +71,10 @@ export function ReelsChrome({
               Ведёт на тот же адрес с другим параметром — лента перезапустится
               с новым семенем перемешивания. */}
           <Link
-            href={order === "random" ? "/motivation" : "/motivation?order=random"}
+            href={reelsHref({
+              tab: tab === "cards" ? "cards" : "forYou",
+              order: order === "random" ? undefined : "random",
+            })}
             onClick={() => setOpen(false)}
             className="mt-2 flex items-center justify-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 text-center text-xs font-medium text-white/80 transition hover:text-white"
           >

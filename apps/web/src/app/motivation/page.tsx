@@ -7,7 +7,13 @@ import { Header } from "@/components/header";
 import { MotivationFeed } from "@/components/motivation/motivation-feed";
 import { MotivationTopBar } from "@/components/motivation/motivation-top-bar";
 import { ReelsChrome } from "@/components/motivation/reels-chrome";
-import { ReelsFeed, type ReelsTab } from "@/components/motivation/reels-feed";
+import { ReelsFeed } from "@/components/motivation/reels-feed";
+import {
+  feedStyleOf,
+  isPinnedCard,
+  parseReelsTab,
+  reelsHref,
+} from "@/components/motivation/feed-style";
 import { getDonationSettings, getProfile } from "@/lib/api";
 import {
   getMotivationAudio,
@@ -20,7 +26,7 @@ import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 /**
  * Лента мотивации: по умолчанию — рилсы (один пост на экран, свайп вверх),
  * `?view=list` — прежняя карточная лента как запасной вид. `?tab=saved`
- * листает избранное в том же формате.
+ * листает избранное в том же формате, `?tab=cards` — готовые открытки.
  */
 export default async function MotivationPage({
   searchParams,
@@ -35,7 +41,7 @@ export default async function MotivationPage({
 }) {
   const params = await searchParams;
   const view = params.view === "list" ? "list" : "reels";
-  const tab: ReelsTab = params.tab === "saved" ? "saved" : "forYou";
+  const tab = parseReelsTab(params.tab);
   /* Случайный порядок. Живёт в адресе, а не в настройках: это не то, что
      выбирают однажды и надолго, — это «перемешай сейчас», и уходить за ним
      на страницу настроек дороже, чем нажать кнопку над лентой. */
@@ -43,6 +49,10 @@ export default async function MotivationPage({
   /* Лента одной папки. Тоже в адресе: из неё выходят кнопкой «назад», и
      состояние, которого нет в ссылке, при этом теряется молча. */
   const category = params.category || undefined;
+  /* Две ленты (VED-121): «Для вас» — нейросеть и цитата поверх, «Открытки» —
+     готовые картинки с напечатанным текстом. Список остаётся общим: у него
+     нет вкладок, и прятать там половину публикаций было бы нечем объяснить. */
+  const style = view === "reels" ? feedStyleOf(tab) : undefined;
   const [user, feed, donation, stats, audio] = await Promise.all([
     getProfile(),
     // `?post=slug` открывает ленту на конкретном рилсе — так работает переход
@@ -52,6 +62,8 @@ export default async function MotivationPage({
       params.post,
       order,
       category,
+      undefined,
+      style,
     ),
     getDonationSettings(),
     getMotivationStats(),
@@ -65,6 +77,29 @@ export default async function MotivationPage({
   if (needsWelcome(user)) redirect("/welcome");
   const isAdmin = user.role === "admin" || user.role === "service-admin";
   const initial = feed ?? { items: [], nextCursor: null };
+
+  /* Вкладка не выбрана явно, а просят открытку — ведём в «Открытки». Ссылок
+     вида `?post=` много: мастер, «Мои», плитки папки, админка, — и открытка,
+     открытая в «Для вас», тянула бы за собой ленту другого стиля. То же для
+     папки, где лежат одни открытки: иначе она открылась бы пустой. */
+  if (view === "reels" && !params.tab) {
+    if (isPinnedCard(params.post, initial.items[0])) {
+      redirect(reelsHref({ tab: "cards", order, category, post: params.post }));
+    }
+    if (category && initial.items.length === 0) {
+      const cards = await getMotivationFeed(
+        "all",
+        undefined,
+        order,
+        category,
+        undefined,
+        "cards",
+      );
+      if (cards?.items.length) {
+        redirect(reelsHref({ tab: "cards", order, category }));
+      }
+    }
+  }
 
   if (view === "list") {
     return (
@@ -123,7 +158,12 @@ export default async function MotivationPage({
           isAdmin={isAdmin}
           audio={audio}
         />
-        <ReelsChrome isAdmin={isAdmin} order={order} count={stats?.published} />
+        <ReelsChrome
+          isAdmin={isAdmin}
+          order={order}
+          count={stats?.published}
+          tab={tab}
+        />
       </div>
     </div>
   );

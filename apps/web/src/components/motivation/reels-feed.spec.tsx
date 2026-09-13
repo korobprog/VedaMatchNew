@@ -277,6 +277,94 @@ describe("ReelsFeed", () => {
     );
   });
 
+  // VED-121: картинки нейросети и готовые открытки — разные ленты.
+  it("shows the cards tab and keeps the folder and order in the tab links", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: null }}
+        tab="cards"
+        donation={null}
+        order="random"
+        category="poslovitsy"
+      />,
+    );
+
+    const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
+    expect(within(tabs).getByRole("link", { name: "Открытки" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(tabs).getByRole("link", { name: "Для вас" })).toHaveAttribute(
+      "href",
+      "/motivation?category=poslovitsy&order=random",
+    );
+    expect(within(tabs).getByRole("link", { name: "Открытки" })).toHaveAttribute(
+      "href",
+      "/motivation?tab=cards&category=poslovitsy&order=random",
+    );
+  });
+
+  it.each([
+    ["cards", "style=cards"],
+    ["forYou", "style=art"],
+  ] as const)(
+    "asks the next page of the %s tab in the same style",
+    async (tab, expected) => {
+      const fetchMock = fetchOk({ items: [], nextCursor: null });
+      class EagerObserver {
+        constructor(private readonly notify: (entries: unknown[]) => void) {}
+        observe(node: Element) {
+          this.notify([{ isIntersecting: true, intersectionRatio: 1, target: node }]);
+        }
+        disconnect() {}
+        unobserve() {}
+      }
+      vi.stubGlobal("IntersectionObserver", EagerObserver);
+
+      render(
+        <ReelsFeed
+          initial={{ items: [post("a")], nextCursor: "cursor-1" }}
+          tab={tab}
+          donation={null}
+        />,
+      );
+
+      // Без стиля вторая страница открыток пришла бы вперемешку с
+      // нейрокартинками.
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          expect.stringContaining(expected),
+          expect.anything(),
+        ),
+      );
+    },
+  );
+
+  it("does not split favourites by style", async () => {
+    const fetchMock = fetchOk({ items: [], nextCursor: null });
+    class EagerObserver {
+      constructor(private readonly notify: (entries: unknown[]) => void) {}
+      observe(node: Element) {
+        this.notify([{ isIntersecting: true, intersectionRatio: 1, target: node }]);
+      }
+      disconnect() {}
+      unobserve() {}
+    }
+    vi.stubGlobal("IntersectionObserver", EagerObserver);
+
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: "cursor-1" }}
+        tab="saved"
+        donation={null}
+      />,
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain("style=");
+  });
+
   it("offers the purport only for a post that came from a chapter of the Library", () => {
     fetchOk({});
     render(

@@ -221,6 +221,15 @@ export class MotivationService {
        * куче они неразличимы.
        */
       imageSource?: 'uploaded' | 'generated';
+      /**
+       * Какая из двух лент (VED-121). Стили вместе не показывают: над
+       * открыткой с напечатанным текстом и под нейрокартинкой с цитатой
+       * поверх глаз перестраивается на каждом свайпе.
+       * `cards` — готовые открытки (`captionInImage`), `art` — всё остальное:
+       * картинки нейросети, ролики из них и фотографии с цитатой поверх.
+       * Без значения — обе вместе, как в избранном и в списке.
+       */
+      style?: 'art' | 'cards';
     },
   ) {
     const user = await this.prisma.user.findUnique({
@@ -256,7 +265,15 @@ export class MotivationService {
     // «свежее», так и не показавшись. Больнее всего это било по автору —
     // мастер сам зовёт его «Открыть рилс» сразу после публикации, и этот
     // переход прятал от него его же публикацию.
-    if (ranked && cursor.since === undefined && !query.post)
+    // Вкладка открыток визит не отмечает: «свежее» считается по основной
+    // ленте, и заглянувший в открытки иначе потерял бы новые афоризмы «Для
+    // вас», так их и не увидев.
+    if (
+      ranked &&
+      cursor.since === undefined &&
+      !query.post &&
+      query.style !== 'cards'
+    )
       await this.touchLastSeen(userId, since);
     const blockedAuthorIds = (
       await this.prisma.userBlock.findMany({
@@ -330,6 +347,7 @@ export class MotivationService {
       ...(ranked ? { publishedAt: { lte: since } } : {}),
       ...(feedCategoryWhere(categories) ?? {}),
       ...(query.imageSource ? { imageSource: query.imageSource } : {}),
+      ...(query.style ? { captionInImage: query.style === 'cards' } : {}),
       ...(query.favorites ? { favorites: { some: { userId } } } : {}),
     };
     const include = {

@@ -113,6 +113,7 @@ export class MotivationController {
     @Query('post') post?: string,
     @Query('order') order?: string,
     @Query('imageSource') imageSource?: string,
+    @Query('style') style?: string,
   ) {
     return this.service.feed(user.sub, {
       cursor,
@@ -128,6 +129,9 @@ export class MotivationController {
         imageSource === 'uploaded' || imageSource === 'generated'
           ? imageSource
           : undefined,
+      // Две ленты (VED-121): `art` — картинка нейросети и цитата поверх неё,
+      // `cards` — готовая открытка с напечатанным текстом.
+      style: style === 'art' || style === 'cards' ? style : undefined,
       limit: limit ? Number(limit) : undefined,
     });
   }
