@@ -198,7 +198,9 @@ export function AddEntryWizard({
         }).catch(() => null);
       }
 
-      router.push(`/library/entry/${created.id}`);
+      // `replace` и пометка `created` (VED-91): мастер не остаётся позади в
+      // истории, и «Назад» на странице материала ведёт в портал.
+      router.replace(`/library/entry/${created.id}?created=1`);
     } catch {
       // Сюда доходит только сорванный запрос: ответ с кодом разобран выше.
       setError(t(locale, "add.networkError"));

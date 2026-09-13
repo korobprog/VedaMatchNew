@@ -14,9 +14,16 @@ import { t } from "./i18n";
 export function BackLink({
   locale,
   fallbackHref,
+  skipHistory = false,
 }: {
   locale: LibraryLocale;
   fallbackHref: string;
+  /**
+   * Сразу на `fallbackHref`, мимо истории. Нужно странице только что
+   * опубликованного материала (VED-91): позади в истории — форма добавления,
+   * и «назад» возвращал человека в редакцию вместо портала.
+   */
+  skipHistory?: boolean;
 }) {
   const router = useRouter();
 
@@ -24,6 +31,10 @@ export function BackLink({
     <button
       type="button"
       onClick={() => {
+        if (skipHistory) {
+          router.replace(fallbackHref);
+          return;
+        }
         if (window.history.length > 1) {
           router.back();
           return;

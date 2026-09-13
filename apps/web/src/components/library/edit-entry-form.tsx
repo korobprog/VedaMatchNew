@@ -355,7 +355,8 @@ function EntryFieldsForm({
         <input
           value={url}
           onChange={(event) => setUrl(event.target.value)}
-          type="url"
+          // Не `type="url"`: браузер не пускал «sampradaya.ru» без https://
+          // и молча не отправлял форму (VED-90). Схему дописывает сервер.
           inputMode="url"
           maxLength={MAX_URL_LENGTH}
           placeholder="https://"

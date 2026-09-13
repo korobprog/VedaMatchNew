@@ -7,9 +7,17 @@ export interface NormalizedUrl {
 }
 
 const TRACKING_PARAMS = /^(utm_|fbclid$|gclid$|yclid$|ref$|si$)/i;
+/** Начало вида `https:` или `mailto:` — схема указана, дописывать нечего. */
+const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 
 export function normalizeUrl(input: string): NormalizedUrl {
-  const raw = input.trim();
+  const trimmed = input.trim();
+  // Адрес сайта обычно вставляют так, как его пишут: «sampradaya.ru», без
+  // https:// (VED-90). Раньше такой адрес отклонялся, и ссылка у катхи не
+  // сохранялась. Схему дописываем сами, но только когда её нет вовсе:
+  // `javascript:` и `ftp:` по-прежнему уходят в отказ ниже.
+  const schemeAdded = trimmed !== '' && !HAS_SCHEME.test(trimmed);
+  const raw = schemeAdded ? `https://${trimmed}` : trimmed;
   let parsed: URL;
   try {
     parsed = new URL(raw);
@@ -17,6 +25,11 @@ export function normalizeUrl(input: string): NormalizedUrl {
     throw new Error('unsupported_url');
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('unsupported_url');
+  }
+  // С дописанной схемой любое слово стало бы «адресом»: `not-a-url` — это
+  // хост. Настоящий сайт без точки в имени сюда не приносят.
+  if (schemeAdded && !parsed.hostname.includes('.')) {
     throw new Error('unsupported_url');
   }
   if (
