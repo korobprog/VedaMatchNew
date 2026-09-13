@@ -71,7 +71,7 @@ import {
 import { WorkTaskDialog } from "./task-dialog";
 import { dueFromInput, endOfDayInput } from "./task-due";
 import { findTaskByKey, parseFocusKey } from "./task-focus";
-import { splitTaskDraft } from "./task-title";
+import { descriptionHasWholeText, splitTaskDraft } from "./task-title";
 import { PRIORITY_TITLE, priorityMark } from "./task-priority";
 import {
   groupTasksByPriority,
@@ -344,8 +344,8 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     if (!board || !draft.trim()) return;
     const dueAt = dueFromInput(draftDue);
     /* Поле подписано как название, но пишут в него задачу целиком. Длинный
-       текст делится сам: начало остаётся названием, остальное уезжает в
-       описание — см. splitTaskDraft. Ничего не теряется. */
+       текст делится сам: начало остаётся названием, а текст — в описании
+       (при разрезанной строке целиком) — см. splitTaskDraft. */
     const { title, description } = splitTaskDraft(draft);
     try {
       await createWorkTask(board.id, {
@@ -903,7 +903,9 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                           <span className="break-all text-text-1">
                             «{draftSplit.title}»
                           </span>{" "}
-                          — остальное уедет в описание.
+                          {descriptionHasWholeText(draftSplit)
+                            ? "— а весь текст сохранится в описании."
+                            : "— остальное уедет в описание."}
                         </p>
                       )}
                       <div className="mt-2 grid gap-2">
