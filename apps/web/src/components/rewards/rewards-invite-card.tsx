@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { RewardsMeDto } from "@vedamatch/shared";
 import { balanceNote, shareLink } from "@/lib/rewards-share";
+import { copyText } from "@/lib/copy-text";
 
 /**
  * Баланс и приглашение. Клиентский компонент: копирование ссылки и отклик
@@ -12,14 +13,10 @@ export function RewardsInviteCard({ data }: { data: RewardsMeDto }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(data.link);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Буфер закрыт настройками браузера — ссылка рядом, её можно выделить.
-      setCopied(false);
-    }
+    // Не скопировалось ни одним способом — ссылка рядом, её можно выделить.
+    if (!(await copyText(data.link))) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
   }
 
   return (

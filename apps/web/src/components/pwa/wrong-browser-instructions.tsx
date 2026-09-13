@@ -8,6 +8,7 @@ import {
   chromeAndroidPackage,
 } from "@/lib/pwa/open-in-browser";
 import { browserNames } from "@/lib/pwa/browser-names";
+import { copyText } from "@/lib/copy-text";
 
 
 /** Сколько ждём перехода, прежде чем решить, что Chrome на телефоне нет. */
@@ -58,12 +59,8 @@ export function WrongBrowserInstructions({
   }
 
   async function copyLink() {
-    try {
-      await navigator.clipboard.writeText(window.location.origin);
-      setCopied(true);
-    } catch {
-      setHandoffFailed(true);
-    }
+    if (await copyText(window.location.origin)) setCopied(true);
+    else setHandoffFailed(true);
   }
 
   const canShare =

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { copyText } from "@/lib/copy-text";
 import { detectDisplayMode } from "@/lib/pwa/browser";
 import {
   MESSENGER_LABELS,
@@ -47,14 +48,11 @@ export function ShareView({
   const file = isOwnFile(filePath) ? filePath : null;
 
   async function copy(what: "text" | "link") {
-    try {
-      await navigator.clipboard.writeText(what === "text" ? message : link);
-      setCopied(what);
-      setTimeout(() => setCopied(null), 1800);
-    } catch {
-      // Буфер закрыт настройками браузера — текст остаётся на экране, его
-      // можно выделить руками.
-    }
+    // Не скопировалось ни одним способом — текст остаётся на экране, его
+    // можно выделить руками.
+    if (!(await copyText(what === "text" ? message : link))) return;
+    setCopied(what);
+    setTimeout(() => setCopied(null), 1800);
   }
 
   /**

@@ -110,6 +110,39 @@ describe("ChatMessage", () => {
     ).toBeInTheDocument();
   });
 
+  // Встроенные браузеры приложений закрывают запись в буфер: раньше пункт
+  // «Копировать» в них молча ничего не делал.
+  it("копирует и тогда, когда браузер закрыл Clipboard API", async () => {
+    const user = userEvent.setup();
+    const denied = vi
+      .spyOn(navigator.clipboard, "writeText")
+      .mockRejectedValue(new DOMException("denied", "NotAllowedError"));
+    const execCommand = vi.fn(() => true);
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      writable: true,
+      value: execCommand,
+    });
+    try {
+      setup();
+
+      await user.click(screen.getByText("Харе Кришна"));
+      await user.click(screen.getByRole("button", { name: "Копировать" }));
+
+      expect(execCommand).toHaveBeenCalledWith("copy");
+      expect(
+        await screen.findByRole("button", { name: "Скопировано" }),
+      ).toBeInTheDocument();
+    } finally {
+      denied.mockRestore();
+      Object.defineProperty(document, "execCommand", {
+        configurable: true,
+        writable: true,
+        value: undefined,
+      });
+    }
+  });
+
   it("у сообщения без текста копировать нечего", async () => {
     const user = userEvent.setup();
     setup({ body: "", attachments: [{ id: "a1", kind: "voice" }] });

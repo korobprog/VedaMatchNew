@@ -11,6 +11,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
+import { copyText } from "@/lib/copy-text";
 import { useDismissable } from "@/lib/use-dismissable";
 import type {
   ChatAttachmentDto,
@@ -650,21 +651,18 @@ function CopyButton({
     <MenuItem
       label={copied ? "Скопировано" : "Копировать"}
       onClick={() => {
-        void navigator.clipboard
-          .writeText(body)
-          .then(() => {
-            setCopied(true);
-            // Короткая пауза: без неё меню закрылось бы раньше, чем человек
-            // увидит, что копирование сработало.
-            window.setTimeout(() => {
-              setCopied(false);
-              onCopied?.();
-            }, 900);
-          })
-          .catch(() => {
-            // Буфер закрыт настройками браузера — текст на экране, и теперь
-            // его наконец можно выделить руками.
-          });
+        void copyText(body).then((ok) => {
+          // Не скопировалось ни одним способом — текст на экране, и его
+          // можно выделить руками.
+          if (!ok) return;
+          setCopied(true);
+          // Короткая пауза: без неё меню закрылось бы раньше, чем человек
+          // увидит, что копирование сработало.
+          window.setTimeout(() => {
+            setCopied(false);
+            onCopied?.();
+          }, 900);
+        });
       }}
     />
   );

@@ -11,6 +11,7 @@ import {
 import { splitQuoteAndExplanation } from "./quote-text";
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
+import { copyText } from "@/lib/copy-text";
 
 const API_URL = apiBase();
 
@@ -51,7 +52,7 @@ export function MotivationPostCard({ post }: { post: MotivationPostDto }) {
       await navigator.share({ title: post.title, text: post.text, url });
       return;
     }
-    await navigator.clipboard.writeText(url);
+    await copyText(url);
   }
 
   return (

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { DonationRequisite, DonationSettingsDto } from "@vedamatch/shared";
 import { HeartHandshake } from "lucide-react";
+import { copyText } from "@/lib/copy-text";
 
 /**
  * Кнопка «Поддержать развитие VedaMatch» и шторка с реквизитами.
@@ -93,12 +94,8 @@ function RequisiteRow({ item }: { item: DonationRequisite }) {
   }, [copied]);
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(item.value);
-      setCopied(true);
-    } catch {
-      // Буфер недоступен (http, старый браузер) — значение и так на экране.
-    }
+    // Не скопировалось ни одним способом — значение и так на экране.
+    if (await copyText(item.value)) setCopied(true);
   }
 
   return (
