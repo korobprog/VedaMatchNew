@@ -305,6 +305,20 @@ describe("ReelsFeed", () => {
     );
   });
 
+  it("keeps the tabs on an empty cards feed so the reader can leave it", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed initial={{ items: [], nextCursor: null }} tab="cards" donation={null} />,
+    );
+
+    expect(screen.getByText("Открыток здесь пока нет")).toBeInTheDocument();
+    const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
+    expect(within(tabs).getByRole("link", { name: "Избранное" })).toHaveAttribute(
+      "href",
+      "/motivation?tab=saved",
+    );
+  });
+
   it.each([
     ["cards", "style=cards"],
     ["forYou", "style=art"],
