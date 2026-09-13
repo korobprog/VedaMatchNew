@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { HomeFeaturedOption } from "@/lib/home-featured";
-import { FeaturedServicesEditor } from "@/components/featured-services-editor";
 
 /**
  * Три ходовых сервиса крупным планом, над общей сеткой.
@@ -96,15 +95,10 @@ const FALLBACK_LOOK: FeaturedLook = { Icon: LayoutGrid, accent: "text-cyan" };
  */
 export function FeaturedServices({
   items,
-  options,
-  userId,
   unread = 0,
 }: {
   /** Что стоит наверху сейчас — ровно то, что отсеяно из сетки ниже. */
   items: HomeFeaturedOption[];
-  /** Из чего выбирать в настройке. */
-  options: HomeFeaturedOption[];
-  userId: string;
   unread?: number;
 }) {
   return (
@@ -149,11 +143,6 @@ export function FeaturedServices({
           );
         })}
       </ul>
-      <FeaturedServicesEditor
-        userId={userId}
-        current={items.map((item) => item.key)}
-        options={options.map(({ key, name }) => ({ key, name }))}
-      />
     </section>
   );
 }

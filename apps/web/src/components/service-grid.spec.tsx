@@ -68,6 +68,25 @@ describe("ServiceGrid", () => {
     );
   });
 
+  // VED-111: «Настроить кнопки» живёт в строке над сеткой, рядом с видом.
+  it("ставит переданную кнопку в строку над сеткой, перед видом сервисов", () => {
+    render(
+      <ServiceGrid
+        services={SERVICES}
+        userId={USER}
+        toolbarStart={<button type="button">Настроить кнопки</button>}
+      />,
+    );
+
+    const settings = screen.getByRole("button", { name: "Настроить кнопки" });
+    const view = screen.getByRole("group", { name: "Вид сервисов" });
+    // Одна строка: у кнопки и переключателя общий ряд.
+    expect(settings.closest("div.mb-3")).toBe(view.closest("div.mb-3"));
+    expect(
+      settings.compareDocumentPosition(view) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it("в компактном режиме описаний нет", () => {
     writeLayout(USER, { mode: "compact" });
     render(grid());
