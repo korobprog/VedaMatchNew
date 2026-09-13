@@ -157,7 +157,10 @@ export function AddEntryForm({
       }
 
       const created = (await res.json()) as { id: string };
-      router.push(`/library/entry/${created.id}`);
+      // `replace` и пометка `created` (VED-91): форма не остаётся позади в
+      // истории, и «Назад» на странице материала ведёт в портал, а не в
+      // редакцию.
+      router.replace(`/library/entry/${created.id}?created=1`);
     } catch {
       // Сюда доходит только сорванный запрос: ответ с кодом разобран выше.
       setError(t(locale, "add.networkError"));

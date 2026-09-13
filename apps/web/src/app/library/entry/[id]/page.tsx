@@ -22,9 +22,13 @@ import { EntryFiles } from "@/components/library/entry-files";
 
 export default async function LibraryEntryPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  /** `created` — сюда пришли прямо из формы публикации (VED-91). */
+  searchParams: Promise<{ created?: string | string[] }>;
 }) {
+  const justCreated = Boolean((await searchParams).created);
   const user = await getProfile();
   if (!user) {
     const { id } = await params;
@@ -67,7 +71,17 @@ export default async function LibraryEntryPage({
     <div className="relative min-h-dvh bg-bg-0">
       <Header user={user} />
       <main className="mx-auto max-w-3xl px-4 py-8 pb-24">
-        <BackLink locale={locale} fallbackHref="/library" />
+        {/* Только что опубликованный материал: «Назад» ведёт в его раздел,
+            а не по истории — там позади форма добавления (VED-91). */}
+        <BackLink
+          locale={locale}
+          fallbackHref={
+            entry.categories[0]
+              ? `/library/${entry.categories[0].slug}`
+              : "/library"
+          }
+          skipHistory={justCreated}
+        />
         <p className="mb-2 text-xs text-text-2">
           {/* Домена нет у материала без адреса — тогда и разделитель перед
               типом лишний, иначе строка начинается с висящей точки. */}

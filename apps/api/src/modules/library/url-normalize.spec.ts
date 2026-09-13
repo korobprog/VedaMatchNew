@@ -34,6 +34,15 @@ describe('normalizeUrl', () => {
     expect(short.normalized).toBe(watch.normalized);
   });
 
+  // VED-90: адрес сайта вставляют без https:// — он должен сохраняться.
+  it('accepts a site address typed without https://', () => {
+    const result = normalizeUrl('  sampradaya.ru/katha ');
+
+    expect(result.url).toBe('https://sampradaya.ru/katha');
+    expect(result.normalized).toBe('https://sampradaya.ru/katha');
+    expect(result.domain).toBe('sampradaya.ru');
+  });
+
   it.each([
     'ftp://example.com/file',
     'javascript:alert(1)',
