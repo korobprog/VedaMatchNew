@@ -12,9 +12,11 @@ export function MusicArtistBubble({ artist }: { artist: MusicArtistDto }) {
   return (
     <Link
       href={`/music/artists/${artist.slug}`}
-      className="flex w-24 shrink-0 flex-col items-center gap-2 text-center"
+      className="flex w-[4.5rem] shrink-0 flex-col items-center gap-1.5 text-center sm:w-24 sm:gap-2"
     >
-      <span className="relative h-[68px] w-[68px] overflow-hidden rounded-full">
+      {/* На телефоне кружок меньше: витрина там в два ряда по четыре-пять
+          исполнителей (VED-103), и при прежних 68px в ширину входило три. */}
+      <span className="relative size-14 overflow-hidden rounded-full sm:size-[68px]">
         <MusicCover
           url={artist.coverUrl}
           seed={artist.id}
@@ -23,7 +25,7 @@ export function MusicArtistBubble({ artist }: { artist: MusicArtistDto }) {
         />
       </span>
       <span className="flex flex-col gap-0.5">
-        <span className="text-xs font-semibold leading-tight text-text-0">
+        <span className="line-clamp-2 break-words text-xs font-semibold leading-tight text-text-0">
           {artist.name}
         </span>
         <span className="font-mono text-[11px] text-text-2">

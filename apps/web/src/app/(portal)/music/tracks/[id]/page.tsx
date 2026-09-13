@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMusicTrack } from "@/lib/music-api";
 import { MusicCover } from "@/components/music/music-cover";
+import { MusicFavoriteButton } from "@/components/music/favorites-provider";
 import { MusicReportForm } from "@/components/music/music-report-form";
 import { MusicAddToPlaylist } from "@/components/music/music-add-to-playlist";
 import { MusicOfflineButton } from "@/components/music/offline-button";
@@ -13,6 +14,10 @@ import { MusicListenButton } from "@/components/music/player/listen-button";
 import { MusicQueueActions } from "@/components/music/player/queue-actions";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicDownloadButton } from "@/components/music/download-button";
+import { canAdminService } from "@vedamatch/shared";
+import { getProfile } from "@/lib/api";
+import { getMusicAdminArtists } from "@/lib/music-admin-api";
+import { MusicTrackAdminEditor } from "@/components/music/track-admin-editor";
 
 export async function generateMetadata({
   params,
@@ -45,9 +50,24 @@ export default async function MusicTrackPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const track = await getMusicTrack(id);
+  const [track, user] = await Promise.all([
+    getMusicTrack(id),
+    getProfile().catch(() => null),
+  ]);
 
   if (!track) notFound();
+
+  // Правка записи на месте — только редакции Музыки (VED-102, VED-109).
+  // Справочник исполнителей грузится лишь ей: остальным он не нужен.
+  const canEdit = user
+    ? canAdminService(
+        { role: user.role, adminServices: user.adminServices },
+        "music",
+      )
+    : false;
+  const adminArtists = canEdit
+    ? await getMusicAdminArtists().catch(() => null)
+    : null;
 
   const facts: { label: string; value: string }[] = [
     { label: "Длительность", value: formatTrackDuration(track.durationSeconds) },
@@ -76,9 +96,19 @@ export default async function MusicTrackPage({
         </div>
 
         <div className="flex min-w-0 flex-col gap-3">
-          <h1 className="font-display text-2xl font-bold tracking-tight text-text-0 md:text-3xl">
-            {track.title}
-          </h1>
+          {/* Сердце — здесь, рядом с названием (VED-113): из строк списков его
+              убрали ради времени записи, и карточка стала местом, где запись
+              отмечают. */}
+          <div className="flex items-start gap-2">
+            <h1 className="min-w-0 flex-1 font-display text-2xl font-bold tracking-tight text-text-0 md:text-3xl">
+              {track.title}
+            </h1>
+            <MusicFavoriteButton
+              trackId={track.id}
+              title={track.title}
+              className="shrink-0 border border-glass-brd"
+            />
+          </div>
 
           {track.artist && (
             <Link
@@ -144,6 +174,13 @@ export default async function MusicTrackPage({
           </dl>
         </div>
       </div>
+
+      {canEdit && (
+        <MusicTrackAdminEditor
+          track={track}
+          artists={adminArtists?.items ?? []}
+        />
+      )}
 
       <MusicTrackLyrics lyrics={track.lyrics} />
 

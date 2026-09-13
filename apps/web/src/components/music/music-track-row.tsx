@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { MusicTrackDto } from "@vedamatch/shared";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicCover } from "./music-cover";
-import { MusicFavoriteButton } from "./favorites-provider";
 import { MusicPlayRow } from "./player/play-row";
 import { MusicMarqueeText } from "@/components/music/marquee-text";
 
@@ -13,7 +12,11 @@ import { MusicMarqueeText } from "@/components/music/marquee-text";
  *
  * Строка запускает запись, а не открывает карточку: список выбирают затем,
  * чтобы слушать подряд, и лишний переход на каждой записи ломал ровно это.
- * Карточка осталась — компактным значком справа, рядом с сердцем.
+ * Карточка осталась — компактным значком справа.
+ *
+ * Сердца в строке нет (VED-113): на телефоне оно отнимало место у времени
+ * записи, а в длинном списке время нужнее — по нему отличают короткий бхаджан
+ * от часовой программы. Отметить запись можно в её карточке и в полосе плеера.
  */
 export function MusicTrackRow({
   track,
@@ -31,9 +34,9 @@ export function MusicTrackRow({
   queue?: string[];
 }) {
   return (
-    // Сердце и значок карточки — соседи кнопки, а не её содержимое:
-    // интерактивное внутри интерактивного клавиатура и скринридер разбирают
-    // по-разному. Место под них держит правый отступ кнопки.
+    // Значок карточки — сосед кнопки, а не её содержимое: интерактивное
+    // внутри интерактивного клавиатура и скринридер разбирают по-разному.
+    // Место под него и под время держит правый отступ кнопки.
     <div className="group relative flex items-center">
       <MusicPlayRow
         trackId={track.id}
@@ -44,7 +47,7 @@ export function MusicTrackRow({
         // своего содержимого, длинное название вылезает за строку и наезжает
         // на значки справа, а титры не включаются — им кажется, что места
         // хватает.
-        className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-2 pl-2 pr-20 text-left transition-colors hover:bg-glass"
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-2 pl-2 pr-24 text-left transition-colors hover:bg-glass"
       >
         {position !== undefined && (
           <span className="w-6 shrink-0 text-right font-mono text-xs text-text-2">
@@ -73,11 +76,6 @@ export function MusicTrackRow({
             className="text-xs text-text-2"
           />
         </span>
-        {/* На телефоне длительность уступает место названию: узнать запись
-            важнее, чем заранее знать её длину, а строка одна на двоих. */}
-        <span className="ml-auto hidden shrink-0 font-mono text-xs text-text-2 sm:inline">
-          {formatTrackDuration(track.durationSeconds)}
-        </span>
       </MusicPlayRow>
 
       {/* Карточка записи — текст, плейлисты, сон-таймер, жалоба. Значок, а не
@@ -87,7 +85,7 @@ export function MusicTrackRow({
       <Link
         href={`/music/tracks/${track.id}`}
         aria-label={`Карточка записи: ${track.title}`}
-        className="absolute right-9 flex h-8 w-8 items-center justify-center rounded-lg text-text-2 hover:text-text-0"
+        className="absolute right-14 flex h-8 w-8 items-center justify-center rounded-lg text-text-2 hover:text-text-0"
       >
         <svg
           viewBox="0 0 24 24"
@@ -104,11 +102,13 @@ export function MusicTrackRow({
         </svg>
       </Link>
 
-      <MusicFavoriteButton
-        trackId={track.id}
-        title={track.title}
-        className="absolute right-1 shrink-0"
-      />
+      {/* Время — на месте прежнего сердца, крайним справа и на любой ширине.
+          Сквозное для нажатий: тап по нему — тап по строке, то есть запуск.
+          Ширина с запасом под часовую программу («1:12:40»), чтобы цифры не
+          наезжали на значок карточки. */}
+      <span className="pointer-events-none absolute right-2 w-11 text-right font-mono text-xs text-text-2">
+        {formatTrackDuration(track.durationSeconds)}
+      </span>
     </div>
   );
 }

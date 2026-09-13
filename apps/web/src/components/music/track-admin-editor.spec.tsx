@@ -1,0 +1,73 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { MusicArtistDto, MusicTrackDetailDto } from "@vedamatch/shared";
+import { MusicTrackAdminEditor } from "./track-admin-editor";
+
+const updateMusicTrack = vi.fn();
+const refresh = vi.fn();
+
+vi.mock("@/lib/music-admin-client-api", () => ({
+  updateMusicTrack: (...args: unknown[]) => updateMusicTrack(...args),
+}));
+vi.mock("@/lib/music-client-api", () => ({ uploadMusicCover: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+
+const track = {
+  id: "t1",
+  title: "Maha Mantra",
+  artist: { id: "a1", slug: "shanti-people", name: "Shanti people" },
+  lyrics: { lyrics: "Харе Кришна", transliteration: null, translation: null },
+} as unknown as MusicTrackDetailDto;
+
+const artists = [
+  { id: "a1", name: "Shanti people" },
+  { id: "a2", name: "Avantika" },
+] as MusicArtistDto[];
+
+beforeEach(() => {
+  updateMusicTrack.mockReset().mockResolvedValue({});
+  refresh.mockReset();
+});
+
+describe("MusicTrackAdminEditor", () => {
+  it("свёрнут, пока не нажали «Редактировать запись»", () => {
+    render(<MusicTrackAdminEditor track={track} artists={artists} />);
+
+    expect(screen.queryByLabelText("Название")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Редактировать запись" }),
+    ).toBeInTheDocument();
+  });
+
+  it("без правок «Сохранить» не нажимается", async () => {
+    const user = userEvent.setup();
+    render(<MusicTrackAdminEditor track={track} artists={artists} />);
+
+    await user.click(screen.getByRole("button", { name: "Редактировать запись" }));
+
+    expect(screen.getByRole("button", { name: "Сохранить" })).toBeDisabled();
+  });
+
+  it("уходит только изменённое: название, исполнитель и перевод (VED-102, VED-109)", async () => {
+    const user = userEvent.setup();
+    render(<MusicTrackAdminEditor track={track} artists={artists} />);
+
+    await user.click(screen.getByRole("button", { name: "Редактировать запись" }));
+    await user.clear(screen.getByLabelText("Название"));
+    await user.type(screen.getByLabelText("Название"), "Маха-мантра");
+    await user.selectOptions(screen.getByLabelText("Исполнитель"), "a2");
+    await user.type(screen.getByLabelText("Перевод"), "О Кришна");
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    await waitFor(() =>
+      expect(updateMusicTrack).toHaveBeenCalledWith("t1", {
+        title: "Маха-мантра",
+        artistId: "a2",
+        translation: "О Кришна",
+      }),
+    );
+    expect(refresh).toHaveBeenCalled();
+    expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
+  });
+});

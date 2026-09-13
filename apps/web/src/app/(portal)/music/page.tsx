@@ -312,7 +312,13 @@ export default async function MusicPage({
           >
             Исполнители
           </h2>
-          <ul className="scroll-slim mt-4 flex gap-5 overflow-x-auto pb-2">
+          {/* На телефоне — сетка по четыре кружка в ряд, заполняется слева
+              направо (VED-103, VED-115). Витрина отдаёт до восьми
+              исполнителей, так что это ровно два ряда, и все видны без
+              прокрутки. Первая попытка раскладывала колонки сверху вниз с
+              прокруткой вбок — и шестеро исполнителей вставали по три в ряд,
+              то есть так же, как было. С планшета — прежняя лента. */}
+          <ul className="scroll-slim mt-4 grid grid-cols-4 justify-items-center gap-x-1 gap-y-4 pb-2 sm:flex sm:justify-start sm:gap-5 sm:overflow-x-auto">
             {catalog.artists.map((artist) => (
               <li key={artist.id}>
                 <MusicArtistBubble artist={artist} />
