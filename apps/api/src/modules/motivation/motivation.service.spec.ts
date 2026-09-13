@@ -472,6 +472,22 @@ describe('MotivationService feed tiers', () => {
     });
   });
 
+  // VED-120: категория видна и на странице афоризма, словами, а не слагом.
+  it('gives the public post page the category title too', async () => {
+    const { service, prisma, motivationPost } = build(day(10), []);
+    motivationPost.findFirst.mockResolvedValue(post('a', day(12), null));
+    const findUnique = jest.fn().mockResolvedValue({ title: 'Каждый день' });
+    Object.assign(prisma.motivationCategory, { findUnique });
+
+    const page = await service.publicPost('a');
+
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { slug: 'daily' },
+      select: { title: true },
+    });
+    expect(page).toMatchObject({ category: 'daily', categoryTitle: 'Каждый день' });
+  });
+
   it('falls back to the slug when the catalogue does not know it', async () => {
     const { service } = build(day(10), [post('a', day(12), null)]);
 

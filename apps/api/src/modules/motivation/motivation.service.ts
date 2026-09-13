@@ -473,7 +473,18 @@ export class MotivationService {
       },
     });
     if (!post) throw new NotFoundException('Публикация не найдена');
-    return this.dto({ ...post, favorites: [], views: [] });
+    // Категория на странице афоризма читается словами, как в ленте (VED-120):
+    // на посте лежит только slug.
+    const category = await this.prisma.motivationCategory.findUnique({
+      where: { slug: post.category },
+      select: { title: true },
+    });
+    return this.dto({
+      ...post,
+      categoryTitle: category?.title ?? post.category,
+      favorites: [],
+      views: [],
+    });
   }
   async favorite(userId: string, postId: string, favorite: boolean) {
     const post = await this.ensurePublished(postId);

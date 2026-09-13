@@ -34,6 +34,25 @@ function post(over: Partial<MotivationPostDto> = {}): MotivationPostDto {
   } as unknown as MotivationPostDto;
 }
 
+describe("MotivationPostCard — категория (VED-120)", () => {
+  it("называет категорию словами и ведёт в её ленту, а не показывает слаг", () => {
+    render(
+      <MotivationPostCard
+        post={post({
+          category: "poslovitsy",
+          categoryTitle: "Пословицы",
+          captionInImage: false,
+        } as Partial<MotivationPostDto>)}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Категория: Пословицы" }),
+    ).toHaveAttribute("href", "/motivation?category=poslovitsy");
+    expect(screen.queryByText("poslovitsy")).toBeNull();
+  });
+});
+
 describe("MotivationPostCard — «Добавить пояснение» (VED-48, VED-49)", () => {
   it("предлагает написать трактовку, когда её ещё нет", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
