@@ -54,6 +54,11 @@ export async function uploadMusicTrack(
    * линию не угадывает, см. `CompleteMusicUploadRequest`.
    */
   lineage: LineageId | null = null,
+  /**
+   * Исполнитель из справочника — загрузка со страницы исполнителя (VED-114).
+   * Сервер учитывает его только от редакции Музыки.
+   */
+  artistId: string | null = null,
 ): Promise<CompleteMusicUploadResponse> {
   const created = await send<CreateMusicUploadResponse>("/music/uploads", {
     method: "POST",
@@ -71,7 +76,11 @@ export async function uploadMusicTrack(
     `/music/uploads/${created.uploadId}/complete`,
     {
       method: "POST",
-      body: JSON.stringify({ fileName: file.name, lineage }),
+      body: JSON.stringify({
+        fileName: file.name,
+        lineage,
+        ...(artistId ? { artistId } : {}),
+      }),
     },
   );
 }

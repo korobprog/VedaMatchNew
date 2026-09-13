@@ -66,6 +66,12 @@ function prismaMock() {
       // Портальный профиль читается ради линии записи: этап и линия
       // загрузившего. По умолчанию человека нет — линия падает в ISKCON.
       user: { findUnique: jest.fn().mockResolvedValue(null) },
+      // Справочник исполнителей: по умолчанию исполнитель есть.
+      musicArtist: {
+        findUnique: jest.fn((args: { where: { id: string } }) =>
+          Promise.resolve<{ id: string } | null>({ id: args.where.id }),
+        ),
+      },
       $transaction: jest.fn().mockImplementation((fn) => fn(tx)),
     },
   };
@@ -267,6 +273,67 @@ describe('MusicUploadsService.completeUpload', () => {
     // саму запись — а она уже залита.
     expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ lineage: null }),
+    });
+  });
+
+  it('редакция грузит со страницы исполнителя — запись сразу с его именем (VED-114)', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+
+    await service(prisma, storage).completeUpload(
+      'u1',
+      'up1',
+      'gaura.mp3',
+      null,
+      'artist-avantika',
+      true,
+    );
+
+    expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ artistId: 'artist-avantika' }),
+    });
+  });
+
+  it('участнику исполнителя не ставит: «своя запись» с чужим именем была бы подлогом', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+
+    await service(prisma, storage).completeUpload(
+      'u1',
+      'up1',
+      'gaura.mp3',
+      null,
+      'artist-avantika',
+      false,
+    );
+
+    expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
+      data: expect.not.objectContaining({ artistId: expect.anything() }),
+    });
+    // Не отказ: файл уже в бакете, и запись создаётся — просто без подписи.
+    expect(prisma.prisma.musicArtist.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('исполнителя нет в справочнике — запись без подписи, а не упавшая заливка', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+    prisma.prisma.musicArtist.findUnique.mockResolvedValue(null);
+
+    const result = await service(prisma, storage).completeUpload(
+      'u1',
+      'up1',
+      'gaura.mp3',
+      null,
+      'deleted-artist',
+      true,
+    );
+
+    expect(result.trackId).toBe('t1');
+    expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
+      data: expect.not.objectContaining({ artistId: expect.anything() }),
     });
   });
 

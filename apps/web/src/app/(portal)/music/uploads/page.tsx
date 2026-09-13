@@ -4,7 +4,7 @@ import { canAdminService } from "@vedamatch/shared";
 import { MusicRail } from "@/components/music/music-rail";
 import { MyMusicUploadsList } from "@/components/music/my-uploads-list";
 import { MusicUploadForm } from "@/components/music/upload-form";
-import { getMyMusicUploads } from "@/lib/music-api";
+import { getMusicArtist, getMyMusicUploads } from "@/lib/music-api";
 import { getProfile } from "@/lib/api";
 import { formatBytes } from "@/lib/music-duration";
 
@@ -25,7 +25,15 @@ export const metadata: Metadata = {
  * ссылается модератор, когда пишет решение, и «отклонено» без слов означает
  * повторную заливку того же файла завтра.
  */
-export default async function MyMusicUploadsPage() {
+export default async function MyMusicUploadsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ artist?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const artistSlug =
+    (Array.isArray(params.artist) ? params.artist[0] : params.artist)?.trim() ||
+    null;
   const [data, user] = await Promise.all([getMyMusicUploads(), getProfile()]);
 
   /**
@@ -42,6 +50,18 @@ export default async function MyMusicUploadsPage() {
     : false;
   const waiting =
     data?.items.filter((item) => item.status === "pending").length ?? 0;
+
+  /* Пришли со страницы исполнителя (VED-114) — форма сразу подписывает
+     записи его именем. Только у редакции: у участника сервер это поле не
+     примет, и обещать ему подпись, которой не будет, нельзя. Слаг, которого
+     нет, просто не даёт подписи — форма остаётся обычной. */
+  const artistPage =
+    canReview && artistSlug
+      ? await getMusicArtist(artistSlug).catch(() => null)
+      : null;
+  const artist = artistPage
+    ? { id: artistPage.artist.id, name: artistPage.artist.name }
+    : null;
 
   const pending =
     data?.items.filter((item) => item.status !== "published").length ?? 0;
@@ -71,7 +91,7 @@ export default async function MyMusicUploadsPage() {
       )}
 
       <div className="mt-5">
-        <MusicUploadForm />
+        <MusicUploadForm artist={artist} />
       </div>
 
       {canReview && waiting > 0 && (
