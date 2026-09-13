@@ -150,6 +150,11 @@ export default async function MotivationPage({
       <NoiseOverlay />
       <div className="relative mx-auto h-full w-full max-w-[480px]">
         <ReelsFeed
+          /* Лента держит публикации в своём состоянии. Без ключа переход по
+             вкладке внутри приложения приносил новую первую страницу, а на
+             экране оставалась прежняя: в «Открытках» листались афоризмы
+             «Для вас». Другая вкладка, порядок или папка — другая лента. */
+          key={[tab, order ?? "", category ?? "", params.post ?? ""].join("|")}
           initial={initial}
           tab={tab}
           donation={donation}

@@ -396,7 +396,10 @@ export function ReelsFeed({
 
   if (items.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 rounded-3xl bg-[#0A0614] p-8 text-center text-white">
+      <div className="relative flex h-full flex-col items-center justify-center gap-4 rounded-3xl bg-[#0A0614] p-8 text-center text-white">
+        {/* Вкладки и в пустой ленте: из пустых «Открыток» иначе можно было
+            уйти только в «Для вас», а до «Избранного» — никак. */}
+        <Tabs tab={tab} order={order} category={category} />
         <p className="font-display text-lg">
           {tab === "saved"
             ? "В избранном пока пусто"
