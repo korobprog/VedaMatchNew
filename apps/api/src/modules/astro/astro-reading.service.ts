@@ -21,6 +21,7 @@ import {
 import { AstroQuotaService } from './astro-quota.service';
 import { AstroSettingsService } from './astro-settings.service';
 import { missingFor } from './astro-sections';
+import { extractGeneratedText } from './generated-text';
 
 const DEFAULT_LOCALE = 'ru';
 
@@ -167,7 +168,14 @@ export class AstroReadingService {
       },
       select: { section: true, text: true },
     });
-    return new Map(rows.map((row) => [row.section, row.text]));
+    // Разборы, сохранённые до исправления, могли лечь в кэш с обёрткой
+    // ```json — распаковываются при чтении.
+    const texts = new Map<AstroSection, string>();
+    for (const row of rows) {
+      const text = extractGeneratedText(row.text);
+      if (text) texts.set(row.section, text);
+    }
+    return texts;
   }
 
   private sectionState(

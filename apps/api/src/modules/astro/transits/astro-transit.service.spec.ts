@@ -84,6 +84,38 @@ describe('AstroTransitService', () => {
     expect(quota.recordSystemUsage).not.toHaveBeenCalled();
   });
 
+  it('фразу, закэшированную с обёрткой ```json, отдаёт чистым текстом', async () => {
+    prisma.astroBirthData.findUnique.mockResolvedValue(birthRow);
+    prisma.astroTransitPhrase.findUnique.mockResolvedValue({
+      text: '```json\n{"text": "Сегодня день приглашает к покою"}\n```',
+    });
+
+    const digest = await service.today('user-1', NOW);
+
+    expect(digest!.text).toBe('Сегодня день приглашает к покою');
+    expect(generation.generateTransitPhrase).not.toHaveBeenCalled();
+  });
+
+  it('нечитаемую фразу в кэше заменяет новой', async () => {
+    prisma.astroBirthData.findUnique.mockResolvedValue(birthRow);
+    prisma.astroTransitPhrase.findUnique.mockResolvedValue({
+      text: '```json\n{"text": "Сегодня день',
+    });
+    generation.generateTransitPhrase.mockResolvedValue({
+      text: 'Новая фраза',
+      model: 'test',
+      tokensIn: 1,
+      tokensOut: 1,
+    });
+
+    const digest = await service.today('user-1', NOW);
+
+    expect(digest!.text).toBe('Новая фраза');
+    expect(prisma.astroTransitPhrase.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: { text: 'Новая фраза' } }),
+    );
+  });
+
   it('при выключенном ИИ факты остаются, фраза — null, без обращения к провайдеру', async () => {
     prisma.astroBirthData.findUnique.mockResolvedValue(birthRow);
     prisma.astroTransitPhrase.findUnique.mockResolvedValue(null);

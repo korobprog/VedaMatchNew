@@ -7,6 +7,7 @@ import {
   ASTRO_PROMPT_VERSION,
 } from '../astro-generation.service';
 import { AstroQuotaService } from '../astro-quota.service';
+import { extractGeneratedText } from '../generated-text';
 import type { EphemerisProvider } from '../ephemeris/ephemeris-provider';
 import { EPHEMERIS_PROVIDER } from '../ephemeris/ephemeris.token';
 import { buildVedicChart } from '../vedic/vedic-chart';
@@ -95,7 +96,11 @@ export class AstroTransitService {
         },
       },
     });
-    if (cached) return cached.text;
+    // Фраза, сохранённая до исправления разбора, могла лечь в кэш вместе с
+    // обёрткой ```json — распаковываем при чтении. Если текста из неё не
+    // достать, считаем кэш пустым: новая фраза перезапишет строку ниже.
+    const cachedText = cached ? extractGeneratedText(cached.text) : null;
+    if (cachedText) return cachedText;
 
     if (!(await this.quota.aiAvailable(now))) return null;
 

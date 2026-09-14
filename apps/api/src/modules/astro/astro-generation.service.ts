@@ -14,6 +14,7 @@ import {
   type GunaMilanScore,
   type VedicChart,
 } from '@vedamatch/shared';
+import { extractGeneratedText } from './generated-text';
 
 /**
  * Генерация текста разбора. По образцу MotivationGenerationService: тот же
@@ -145,18 +146,12 @@ export class AstroGenerationService {
 }
 
 function extractText(content: string): string {
-  try {
-    const parsed = JSON.parse(content) as { text?: unknown };
-    if (typeof parsed.text === 'string' && parsed.text.trim()) {
-      return parsed.text.trim();
-    }
-  } catch {
-    // Модель иногда игнорирует json_object и отвечает простым текстом. Это не
-    // повод терять готовый ответ — но и не повод молча принимать что угодно ниже.
-  }
-  const fallback = content.trim();
-  if (!fallback) throw new BadGatewayException('Пустой текст разбора');
-  return fallback;
+  // Простой текст принимается, JSON в обёртке блока кода — распаковывается.
+  // Оборванный или пустой ответ — ошибка провайдера: в кэш он не попадёт, и
+  // следующее обращение попробует снова.
+  const text = extractGeneratedText(content);
+  if (!text) throw new BadGatewayException('Пустой текст разбора');
+  return text;
 }
 
 /**
