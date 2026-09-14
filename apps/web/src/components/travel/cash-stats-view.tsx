@@ -124,7 +124,8 @@ export function CashStatsView({ stayId }: { stayId: string }) {
         <p className="text-sm text-text-2">Считаем…</p>
       ) : (
         <>
-          <dl className="grid grid-cols-3 gap-2">
+          {/* На телефоне столбиком: три суммы с копейками в ряд не помещаются. */}
+          <dl className="grid gap-2 sm:grid-cols-3">
             {(
               [
                 ["Доход", totals.incomeMinor],
@@ -137,7 +138,7 @@ export function CashStatsView({ stayId }: { stayId: string }) {
                 className="rounded-2xl border border-glass-brd bg-glass p-3"
               >
                 <dt className="text-xs text-text-2">{label}</dt>
-                <dd className="font-mono text-lg font-bold text-text-0">
+                <dd className="font-mono text-lg font-bold break-words text-text-0">
                   {label === "Итог"
                     ? formatSigned(value, currency)
                     : formatBalance(value, currency)}
@@ -294,7 +295,7 @@ function PeriodChart({
           {periods.map((period, index) => (
             <span
               key={period.key}
-              className="min-w-0 flex-1 truncate text-center"
+              className="min-w-0 flex-1 overflow-visible text-center whitespace-nowrap"
             >
               {index % labelEvery === 0 ? shortPeriod(period.key) : ""}
             </span>
