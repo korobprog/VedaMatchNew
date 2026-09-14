@@ -13,6 +13,7 @@ import {
   type LineageId,
 } from "@vedamatch/shared";
 import { CategoryPicker } from "./category-picker";
+import { COVER_IMAGE_ACCEPT, isCoverImage } from "./cover-image";
 import { LibraryCommunitySelect } from "./community-select";
 import { LineageSelect } from "@/components/lineage-picker";
 import { insertIntoTree, renameInTree } from "./category-tree";
@@ -82,6 +83,7 @@ export function AddEntryWizard({
   const [requestOpen, setRequestOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverRejected, setCoverRejected] = useState(false);
 
   const [draft, setDraft] = useState<LibraryEntryDraft>({
     url: "",
@@ -549,10 +551,17 @@ export function AddEntryWizard({
                   </span>
                   <input
                     type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={(event) =>
-                      setCoverFile(event.target.files?.[0] ?? null)
-                    }
+                    accept={COVER_IMAGE_ACCEPT}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      // Через файловый менеджер можно выбрать что угодно
+                      // (VED-134), а загрузка обложки после создания молчит
+                      // о неудаче — неподходящий файл отсекаем здесь.
+                      const unsupported = file !== null && !isCoverImage(file);
+                      setCoverRejected(unsupported);
+                      setCoverFile(unsupported ? null : file);
+                      if (unsupported) event.target.value = "";
+                    }}
                     aria-describedby="wizard-cover-hint"
                     className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-sm text-text-0"
                   />
@@ -564,6 +573,11 @@ export function AddEntryWizard({
                   {t(locale, "add.coverHint")}
                   {coverFile && ` · ${t(locale, "add.coverChosen")}: ${coverFile.name}`}
                 </span>
+                {coverRejected && (
+                  <span role="alert" className="mt-1 block text-xs text-magenta">
+                    {t(locale, "entry.previewUnsupportedType")}
+                  </span>
+                )}
               </div>
             )}
 
