@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  Put,
   Param,
   Post,
   Query,
@@ -62,6 +65,31 @@ export class TravelController {
     @Body() body: Record<string, unknown>,
   ) {
     return this.travel.createBooking(user.sub, body);
+  }
+
+  @Get('stays/:id/reviews')
+  reviews(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.travel.stayReviews(id, user.sub);
+  }
+
+  /** Отзыв по своей заявке: создать или поправить. */
+  @Put('bookings/:id/review')
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  saveReview(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.travel.saveReview(user.sub, id, body);
+  }
+
+  @Delete('bookings/:id/review')
+  @HttpCode(204)
+  async removeReview(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    await this.travel.removeReview(user.sub, id);
   }
 
   @Post('bookings/:id/cancel')

@@ -6,6 +6,12 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Prisma, TravelBooking } from '@prisma/client';
+import {
+  resolveDisplayName,
+  type TravelRatingSummary,
+  type TravelReviewDto,
+  type TravelReviewsResponse,
+} from '@vedamatch/shared';
 import type {
   TravelBookingDto,
   TravelPlaceDto,
@@ -23,6 +29,13 @@ import {
   type ParsedBookingInput,
 } from './travel-dto';
 import { bookingRecipients, TRAVEL_EVENTS } from './travel-events';
+import {
+  canReviewBooking,
+  parseReviewInput,
+  ratingSummary,
+} from './review-input';
+
+const NO_RATING: TravelRatingSummary = { average: null, count: 0 };
 
 /** Комнату показываем как «корпус, номер» — без корпуса просто номером. */
 export function roomLabel(
@@ -65,17 +78,22 @@ export function toStayCard(row: StayCardRow): TravelStayCardDto {
     currency: row.currency,
     photoUrl: row.photoUrls[0] ?? null,
     publicCode: row.publicCode,
+    // Оценку подставляют там, где её посчитали: список и карточка объекта.
+    // Параметром сюда её не передать — `rows.map(toStayCard)` отдал бы индекс.
+    rating: NO_RATING,
   };
 }
 
 export const bookingInclude = {
   stay: { select: { name: true } },
   room: { select: { building: true, number: true } },
+  review: { select: { rating: true, text: true } },
 } satisfies Prisma.TravelBookingInclude;
 
 type BookingRow = TravelBooking & {
   stay: { name: string };
   room: { building: string; number: string } | null;
+  review: { rating: number; text: string } | null;
 };
 
 export function toBookingDto(row: BookingRow): TravelBookingDto {
@@ -96,6 +114,27 @@ export function toBookingDto(row: BookingRow): TravelBookingDto {
     declineReason: row.declineReason,
     totalMinor: row.totalMinor,
     currency: row.currency,
+    createdAt: row.createdAt.toISOString(),
+    review: row.review,
+  };
+}
+
+export const reviewSelect = {
+  id: true,
+  rating: true,
+  text: true,
+  createdAt: true,
+  author: { select: { name: true, spiritualName: true } },
+} satisfies Prisma.TravelReviewSelect;
+
+type ReviewRow = Prisma.TravelReviewGetPayload<{ select: typeof reviewSelect }>;
+
+export function toReviewDto(row: ReviewRow): TravelReviewDto {
+  return {
+    id: row.id,
+    rating: row.rating,
+    text: row.text,
+    authorName: row.author ? resolveDisplayName(row.author) : null,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -150,7 +189,13 @@ export class TravelService {
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
-    return { items: rows.map(toStayCard) };
+    const ratings = await this.ratings(rows.map((row) => row.id));
+    return {
+      items: rows.map((row) => ({
+        ...toStayCard(row),
+        rating: ratings.get(row.id) ?? NO_RATING,
+      })),
+    };
   }
 
   /**
@@ -189,8 +234,10 @@ export class TravelService {
       throw new NotFoundException('Объект не найден');
     }
 
+    const ratings = await this.ratings([row.id]);
     return {
       ...toStayCard(row),
+      rating: ratings.get(row.id) ?? NO_RATING,
       description: row.description,
       sevaNote: row.sevaNote,
       photoUrls: row.photoUrls,
@@ -283,6 +330,100 @@ export class TravelService {
       userId,
     );
     return toBookingDto(booking);
+  }
+
+  /** Опубликованные отзывы объекта — видны тем же, кому виден объект. */
+  async stayReviews(
+    stayId: string,
+    viewerId: string,
+  ): Promise<TravelReviewsResponse> {
+    await this.stay(stayId, viewerId);
+    const [rows, ratings] = await Promise.all([
+      this.prisma.travelReview.findMany({
+        where: { stayId, status: 'published' },
+        select: reviewSelect,
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+      this.ratings([stayId]),
+    ]);
+    return {
+      summary: ratings.get(stayId) ?? NO_RATING,
+      items: rows.map(toReviewDto),
+    };
+  }
+
+  /**
+   * Оставить или поправить отзыв по своей заявке. Только после заезда и не
+   * больше одного на заявку: правка переписывает прежний, а не добавляет.
+   * Скрытый администрацией отзыв правкой не возвращается в ленту.
+   */
+  async saveReview(
+    userId: string,
+    bookingId: string,
+    body: Record<string, unknown>,
+  ): Promise<TravelBookingDto> {
+    const booking = await this.prisma.travelBooking.findUnique({
+      where: { id: bookingId },
+      select: { id: true, stayId: true, status: true, guestUserId: true },
+    });
+    if (!booking || booking.guestUserId !== userId) {
+      throw new NotFoundException('Заявка не найдена');
+    }
+    if (!canReviewBooking(booking.status)) {
+      throw new BadRequestException(
+        'Отзыв оставляют после заезда — когда хозяин отметит, что вы заселились',
+      );
+    }
+    let input: { rating: number; text: string };
+    try {
+      input = parseReviewInput(body);
+    } catch (error) {
+      if (error instanceof TravelInputError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+    await this.prisma.travelReview.upsert({
+      where: { bookingId },
+      create: { ...input, bookingId, stayId: booking.stayId, authorId: userId },
+      update: input,
+    });
+    const row = await this.prisma.travelBooking.findUniqueOrThrow({
+      where: { id: bookingId },
+      include: bookingInclude,
+    });
+    return toBookingDto(row);
+  }
+
+  async removeReview(userId: string, bookingId: string): Promise<void> {
+    const review = await this.prisma.travelReview.findUnique({
+      where: { bookingId },
+      select: { id: true, booking: { select: { guestUserId: true } } },
+    });
+    if (!review || review.booking.guestUserId !== userId) {
+      throw new NotFoundException('Отзыв не найден');
+    }
+    await this.prisma.travelReview.delete({ where: { id: review.id } });
+  }
+
+  /** Средняя оценка по опубликованным отзывам — одним запросом на весь список. */
+  private async ratings(
+    stayIds: string[],
+  ): Promise<Map<string, TravelRatingSummary>> {
+    if (stayIds.length === 0) return new Map();
+    const groups = await this.prisma.travelReview.groupBy({
+      by: ['stayId'],
+      where: { stayId: { in: stayIds }, status: 'published' },
+      _sum: { rating: true },
+      _count: { _all: true },
+    });
+    return new Map(
+      groups.map((group) => [
+        group.stayId,
+        ratingSummary(group._sum.rating, group._count._all),
+      ]),
+    );
   }
 
   /** Отменить свою заявку. Уехавшего гостя отменять поздно. */

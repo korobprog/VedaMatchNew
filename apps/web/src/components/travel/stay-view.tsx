@@ -9,6 +9,7 @@ import {
 } from "@vedamatch/shared";
 import { createTravelBooking, getTravelStay } from "@/lib/travel-api";
 import { priceLabel } from "./price";
+import { StayReviews } from "./stay-reviews";
 
 /** Завтра в виде ГГГГ-ММ-ДД: заезд задним числом API не примет. */
 function tomorrow(): string {
@@ -122,6 +123,8 @@ export function StayView({ stayId }: { stayId: string }) {
           </p>
         </section>
       ) : null}
+
+      <StayReviews stayId={stay.id} />
 
       {sentNumber ? (
         <p

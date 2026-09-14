@@ -2,6 +2,7 @@
 // у него другие маршруты и другие права, и мешать их в одном месте значит
 // однажды дёрнуть админский эндпоинт из пользовательского экрана.
 import type {
+  AdminTravelReviewsResponse,
   AdminTravelStayDto,
   AdminTravelStaysResponse,
   TravelPlacesResponse,
@@ -72,3 +73,18 @@ export const setAdminTravelStayStatus = (
     `/travel/admin/stays/${encodeURIComponent(id)}/status`,
     { method: "PATCH", ...json({ status }) },
   );
+
+export const getAdminTravelReviews = (signal?: AbortSignal) =>
+  request<AdminTravelReviewsResponse>("/travel/admin/reviews", {
+    method: "GET",
+    signal,
+  });
+
+export const setAdminTravelReviewStatus = (
+  id: string,
+  status: "published" | "hidden_by_admin",
+) =>
+  request<void>(`/travel/admin/reviews/${encodeURIComponent(id)}/status`, {
+    method: "PATCH",
+    ...json({ status }),
+  });

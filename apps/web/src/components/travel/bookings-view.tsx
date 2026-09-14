@@ -7,6 +7,7 @@ import {
   type TravelBookingDto,
 } from "@vedamatch/shared";
 import { cancelTravelBooking, getMyTravelBookings } from "@/lib/travel-api";
+import { BookingReview } from "./booking-review";
 import { formatPrice, nightsWord } from "./price";
 
 /** Заявку можно отменить, пока заезд не состоялся. */
@@ -99,6 +100,16 @@ export function BookingsView() {
                 Причина отказа: {booking.declineReason}
               </p>
             ) : null}
+            <BookingReview
+              booking={booking}
+              onChange={(updated) =>
+                setItems((current) =>
+                  (current ?? []).map((item) =>
+                    item.id === updated.id ? updated : item,
+                  ),
+                )
+              }
+            />
             {CANCELABLE.has(booking.status) ? (
               <button
                 type="button"

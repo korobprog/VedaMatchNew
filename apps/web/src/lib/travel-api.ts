@@ -2,6 +2,8 @@
 import type {
   CreateTravelBookingRequest,
   CreateTravelStayRequest,
+  SaveTravelReviewRequest,
+  TravelReviewsResponse,
   TravelBookingDto,
   TravelBookingsResponse,
   TravelPlacesResponse,
@@ -86,6 +88,26 @@ export const getMyTravelBookings = (signal?: AbortSignal) =>
 
 export const createTravelBooking = (body: CreateTravelBookingRequest) =>
   request<TravelBookingDto>("/travel/bookings", { method: "POST", ...json(body) });
+
+export const getStayReviews = (stayId: string, signal?: AbortSignal) =>
+  request<TravelReviewsResponse>(
+    `/travel/stays/${encodeURIComponent(stayId)}/reviews`,
+    { method: "GET", signal },
+  );
+
+export const saveBookingReview = (
+  bookingId: string,
+  body: SaveTravelReviewRequest,
+) =>
+  request<TravelBookingDto>(
+    `/travel/bookings/${encodeURIComponent(bookingId)}/review`,
+    { method: "PUT", ...json(body) },
+  );
+
+export const removeBookingReview = (bookingId: string) =>
+  request<void>(`/travel/bookings/${encodeURIComponent(bookingId)}/review`, {
+    method: "DELETE",
+  });
 
 export const cancelTravelBooking = (id: string) =>
   request<TravelBookingDto>(
