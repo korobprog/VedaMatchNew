@@ -10,6 +10,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 const TICK_MS = 60 * 60 * 1000;
 /** Отозванные держим неделю: хвост нужен для reuse-detection в AuthService.refresh. */
 export const REVOKED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * Коды входа приложения живут минуту. Час хвоста оставляем для разбора
+ * жалоб «не пускает»: видно, что код выдан и когда погашен.
+ */
+export const APP_LOGIN_CODE_RETENTION_MS = 60 * 60 * 1000;
 
 /**
  * Каждый refresh создаёт новую строку RefreshToken и помечает старую
@@ -37,6 +42,7 @@ export class RefreshTokenCleanupService
   }
 
   async tick(now = new Date()): Promise<number> {
+    await this.sweepAppLoginCodes(now);
     try {
       const { count } = await this.prisma.refreshToken.deleteMany({
         where: {
@@ -53,6 +59,26 @@ export class RefreshTokenCleanupService
       return count;
     } catch (error) {
       this.logger.warn(`Чистка refresh-токенов не удалась: ${String(error)}`);
+      return 0;
+    }
+  }
+
+  async sweepAppLoginCodes(now = new Date()): Promise<number> {
+    try {
+      const { count } = await this.prisma.appLoginCode.deleteMany({
+        where: {
+          expiresAt: {
+            lt: new Date(now.getTime() - APP_LOGIN_CODE_RETENTION_MS),
+          },
+        },
+      });
+      if (count > 0)
+        this.logger.log(`Удалено кодов входа приложения: ${count}`);
+      return count;
+    } catch (error) {
+      this.logger.warn(
+        `Чистка кодов входа приложения не удалась: ${String(error)}`,
+      );
       return 0;
     }
   }

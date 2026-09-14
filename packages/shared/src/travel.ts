@@ -238,6 +238,212 @@ export const TRAVEL_PUBLIC_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 /** Дольше месяца подряд — это уже не заявка на ночлег, а переезд. */
 export const TRAVEL_MAX_NIGHTS = 31;
 
+// ===== Касса объекта =====
+
+export const TRAVEL_CASH_KINDS = ['income', 'expense'] as const;
+export type TravelCashKind = (typeof TRAVEL_CASH_KINDS)[number];
+
+/**
+ * Значки статей кассы. Закрытый список ключей, а не имена иконок библиотеки:
+ * в базе лежит ключ, картинку к нему подбирает веб. Новый значок — строка
+ * здесь и в карте на вебе, без миграции.
+ */
+export const TRAVEL_CASH_ICONS = [
+  'house',
+  'bed',
+  'banknote',
+  'gift',
+  'seva',
+  'cart',
+  'food',
+  'cleaning',
+  'laundry',
+  'repair',
+  'utilities',
+  'water',
+  'internet',
+  'ads',
+  'salary',
+  'transport',
+  'fees',
+  'package',
+  'other',
+] as const;
+export type TravelCashIcon = (typeof TRAVEL_CASH_ICONS)[number];
+
+/** Группировка ленты кассы. */
+export const TRAVEL_CASH_GROUPINGS = ['day', 'week', 'month', 'year'] as const;
+export type TravelCashGrouping = (typeof TRAVEL_CASH_GROUPINGS)[number];
+
+export interface TravelCashCategoryDto {
+  id: string;
+  kind: TravelCashKind;
+  name: string;
+  icon: TravelCashIcon;
+  position: number;
+}
+
+export interface TravelCashEntryDto {
+  id: string;
+  kind: TravelCashKind;
+  /** Всегда положительная, знак задаёт `kind`. */
+  amountMinor: number;
+  /** ISO-дата без времени. */
+  occurredOn: string;
+  categoryId: string | null;
+  note: string;
+  tags: string[];
+  authorName: string | null;
+  createdAt: string;
+  /** Гость, от которого пришли деньги; null — запись не про гостя. */
+  guestId: string | null;
+  guestName: string | null;
+  guestColor: TravelGuestColor | null;
+  /** Сколько суток оплачено записью. */
+  nights: number | null;
+}
+
+export interface TravelCashCategoriesResponse {
+  items: TravelCashCategoryDto[];
+}
+
+/**
+ * Записи за промежуток и остаток на его начало. Остаток считает сервер: у
+ * клиента нет всей истории, а бюджет в шапке обязан сходиться с кассой.
+ */
+export interface TravelCashEntriesResponse {
+  stayName: string;
+  currency: TravelCurrency;
+  openingMinor: number;
+  /** Остаток на утро дня `from`: начальный плюс всё, что было раньше. */
+  balanceBeforeMinor: number;
+  /** Остаток сейчас, по всем записям, включая будущие даты. */
+  balanceMinor: number;
+  from: string;
+  to: string;
+  /** Цена суток объекта — подсказка суммы при оплате за N суток. */
+  nightPriceMinor: number | null;
+  /**
+   * Лента отфильтрована. Остатки по периодам тогда не считаются: сумма
+   * отобранных строк — это не движение кассы.
+   */
+  filtered: boolean;
+  items: TravelCashEntryDto[];
+}
+
+/** Фильтр ленты кассы. Суммы — в минорных единицах. */
+export interface TravelCashFilters {
+  q?: string;
+  kind?: TravelCashKind;
+  /** `none` — записи без статьи. */
+  categoryId?: string;
+  guestId?: string;
+  tag?: string;
+  minMinor?: number;
+  maxMinor?: number;
+}
+
+export interface SaveTravelCashEntryRequest {
+  kind: TravelCashKind;
+  amountMinor: number;
+  occurredOn: string;
+  categoryId?: string | null;
+  note?: string;
+  tags?: string[];
+  guestId?: string | null;
+  nights?: number | null;
+}
+
+// ===== Клиентская база объекта =====
+
+/**
+ * Цвет гостя — ключ токена темы, а не код цвета: рамка в ленте и метка в
+ * базе обязаны переключаться вместе с темой. `none` — без цвета.
+ */
+export const TRAVEL_GUEST_COLORS = [
+  'none',
+  'magenta',
+  'cyan',
+  'gold',
+  'violet',
+  'blue',
+] as const;
+export type TravelGuestColor = (typeof TRAVEL_GUEST_COLORS)[number];
+
+export const TRAVEL_GUEST_COLOR_LABELS: Record<TravelGuestColor, string> = {
+  none: 'Без цвета',
+  magenta: 'Малиновый',
+  cyan: 'Бирюзовый',
+  gold: 'Золотой',
+  violet: 'Фиолетовый',
+  blue: 'Синий',
+};
+
+/** Больше года одной оплатой не вносят — это почти всегда лишняя цифра. */
+export const TRAVEL_MAX_PAID_NIGHTS = 366;
+
+export interface TravelGuestDto {
+  id: string;
+  fullName: string;
+  phone: string;
+  /** Подписанная ссылка на фото; null — фото нет или хранилище не настроено. */
+  photoUrl: string | null;
+  keyLabel: string;
+  roomId: string | null;
+  /** «Корпус 2 · 14» — готовая подпись комнаты. */
+  roomLabel: string | null;
+  personalInfo: string;
+  color: TravelGuestColor;
+  checkInOn: string;
+  leftOn: string | null;
+  /** Живёт сейчас: не отмечен выезд. */
+  living: boolean;
+  /** Сумма оплаченных суток по записям кассы. */
+  paidNights: number;
+  /** Последний оплаченный день включительно; null — оплат ещё не было. */
+  paidThrough: string | null;
+  /** Сколько суток проживания по сегодня не оплачено; 0 — долга нет. */
+  unpaidNights: number;
+}
+
+export interface TravelGuestsResponse {
+  items: TravelGuestDto[];
+  rooms: { id: string; label: string }[];
+}
+
+export interface SaveTravelGuestRequest {
+  fullName: string;
+  phone?: string;
+  keyLabel?: string;
+  roomId?: string | null;
+  personalInfo?: string;
+  color?: TravelGuestColor;
+  checkInOn: string;
+  leftOn?: string | null;
+}
+
+export interface SaveTravelCashCategoryRequest {
+  kind: TravelCashKind;
+  name: string;
+  icon: TravelCashIcon;
+}
+
+export interface TravelCashTemplateDto {
+  id: string;
+  name: string;
+  kind: TravelCashKind;
+  /** null — сумму вводят каждый раз. */
+  amountMinor: number | null;
+  categoryId: string | null;
+  note: string;
+  tags: string[];
+}
+
+export interface TravelCashTemplatesResponse {
+  items: TravelCashTemplateDto[];
+}
+
+export type SaveTravelCashTemplateRequest = Omit<TravelCashTemplateDto, 'id'>;
 // ===== Отзывы о проживании =====
 
 /** Отзыв оставляют только после заезда — по заявке, а не по объекту. */
