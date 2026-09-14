@@ -182,6 +182,10 @@ export function createImageDirection(
     'Read figurative wording as metaphor: show what it means, not the objects it names.',
     styleInstructions[style],
     'Create a vertical 9:16 composition suitable for a mobile Story.',
+    // VED-124: модель ставила фигуры вплотную к краям, и на телефоне у них
+    // срезало головы и плечи. Лента теперь показывает кадр целиком, но кадр
+    // под обложку и сторис всё равно подрезается — важное держим в середине.
+    'Frame every essential element — faces, heads, hands and whole figures — well inside the picture with generous margins on all sides; nothing important may touch or be cut by the edges. Prefer a slightly wider, more compact framing over a tight crop.',
     'no text, no letters, no captions, no typography, no logos, no watermarks.',
     // Запрет писался против «нарисуй Эйнштейна», но в общей формулировке он
     // выхолащивал иллюстрации к священным текстам: традиционный сюжет — не

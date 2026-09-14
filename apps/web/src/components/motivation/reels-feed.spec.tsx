@@ -124,6 +124,26 @@ describe("ReelsFeed", () => {
     expect(within(slide).getByText("Кришна · Бхагавад-гита · 2.47")).toBeInTheDocument();
   });
 
+  // VED-124: обычная картинка 2:3 растягивалась на весь экран 9:19,5 и теряла
+  // треть ширины — у фигур по краям пропадали головы.
+  it("обычную картинку показывает целиком, на размытой подложке", () => {
+    fetchOk({});
+    render(<ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="forYou" donation={null} />);
+
+    const slide = within(screen.getByRole("feed", { name: "Лента вдохновения" })).getAllByRole("article")[0];
+    const pictures = [...slide.querySelectorAll("img")].filter(
+      (img) => img.getAttribute("src") === "https://cdn/a.webp",
+    );
+    const frame = pictures.find((img) => img.getAttribute("aria-hidden") !== "true");
+    const backdrop = pictures.find((img) => img.getAttribute("aria-hidden") === "true");
+
+    expect(frame).toHaveClass("object-contain");
+    expect(frame).not.toHaveClass("object-cover");
+    expect(backdrop).toHaveClass("object-cover", "blur-2xl");
+    // Цитата набрана поверх слайда — в alt её не дублируем.
+    expect(frame).toHaveAttribute("alt", "");
+  });
+
   it("отправка своим живёт внутри «Поделиться», а не соседней кнопкой", () => {
     fetchOk({});
     render(<ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="forYou" donation={null} />);
