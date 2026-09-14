@@ -285,6 +285,7 @@ model User {
   serviceAdminScopes                 ServiceAdmin[]
   loginAudits                        LoginAudit[]
   pushSubscriptions                  PushSubscription[]
+  notificationDevices                NotificationDevice[]
   astroBirthData                     AstroBirthData?
   astroUsage                         AstroUsage[]
   astroCompatibilityRequestsSent     AstroCompatibilityRequest[]   @relation("AstroCompatibilityRequester")
@@ -2072,6 +2073,26 @@ model PushSubscription {
   auth      String
   userAgent String?
   createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// Телефон с приложением VedaMatch, подписанный на пуши. Токен выдаёт служба
+/// доставки (FCM, позже RuStore) и сам меняет при переустановке, поэтому
+/// ключ — токен, а не пара «пользователь и устройство».
+model NotificationDevice {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Служба доставки: `fcm` или `rustore`.
+  provider   String
+  /// `android` или `ios`.
+  platform   String
+  token      String   @unique
+  /// Сборка приложения, например `ru-site`: по ней видно, откуда люди ставят.
+  appVariant String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([userId])
 }

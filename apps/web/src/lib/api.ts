@@ -24,6 +24,7 @@ import type {
   ContactsAdminStats,
   ContactsAdminTagDto,
   NotificationBroadcastDto,
+  NotificationDeviceStats,
   AdminReleaseDto,
   DonationSettingsDto,
   AdminRoadmapItemDto,
@@ -178,6 +179,9 @@ export const getAdminAudit = (query: AdminAuditQuery) => {
 /** История рассылок администрации. Команды над ними — в lib/broadcasts-api.ts. */
 export const getAdminBroadcasts = () =>
   apiGet<NotificationBroadcastDto[]>("/admin/notifications/broadcasts");
+/** Телефоны с приложением VedaMatch для админки уведомлений. */
+export const getAdminNotificationDevices = () =>
+  apiGet<NotificationDeviceStats>("/admin/notifications/devices");
 /** Сводка на главной админки; для роли service-admin API отвечает 403. */
 export const getAdminPortalStats = () =>
   apiGet<AdminPortalStats>("/admin/stats/portal");

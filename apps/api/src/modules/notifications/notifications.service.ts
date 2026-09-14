@@ -4,10 +4,12 @@ import type {
   NotificationInboxResponse,
   NotificationItemDto,
   NotificationPreferencesDto,
+  NotificationDeviceStats,
   PushSubscriptionRequest,
   UpdateNotificationPreferencesRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { normalizeDeviceRequest } from './device-request';
 
 const defaults: NotificationPreferencesDto = {
   enabled: true,
@@ -94,6 +96,57 @@ export class NotificationsService {
   /** Служебная чистка протухших endpoint'ов после 404/410 от push-сервиса. */
   async deleteSubscription(endpoint: string): Promise<void> {
     await this.prisma.pushSubscription.deleteMany({ where: { endpoint } });
+  }
+
+  /**
+   * Телефон с приложением. Токен выдаёт служба доставки, поэтому ключ — он:
+   * если на телефоне сменили аккаунт, телефон переезжает к новому человеку.
+   */
+  async saveDevice(userId: string, body: unknown): Promise<void> {
+    const device = normalizeDeviceRequest(body);
+    const data = { userId, ...device };
+    await this.prisma.notificationDevice.upsert({
+      where: { token: device.token },
+      create: data,
+      update: data,
+    });
+  }
+
+  /** Выход из приложения: удаляем только свой телефон, как и веб-подписку. */
+  async deleteOwnDevice(userId: string, token: unknown): Promise<void> {
+    if (typeof token !== 'string' || token.length === 0) {
+      throw new BadRequestException('Токен устройства обязателен');
+    }
+    await this.prisma.notificationDevice.deleteMany({
+      where: { token, userId },
+    });
+  }
+
+  async deviceStats(fcmConfigured: boolean): Promise<NotificationDeviceStats> {
+    const [groups, users] = await Promise.all([
+      this.prisma.notificationDevice.groupBy({
+        by: ['provider'],
+        _count: { _all: true },
+      }),
+      this.prisma.notificationDevice.findMany({
+        distinct: ['userId'],
+        select: { userId: true },
+      }),
+    ]);
+    const byProvider: NotificationDeviceStats['byProvider'] = {
+      fcm: 0,
+      rustore: 0,
+    };
+    for (const group of groups) {
+      if (group.provider === 'fcm' || group.provider === 'rustore')
+        byProvider[group.provider] = group._count._all;
+    }
+    return {
+      total: byProvider.fcm + byProvider.rustore,
+      users: users.length,
+      byProvider,
+      fcmConfigured,
+    };
   }
 
   async listSubscriptions(userId: string): Promise<StoredSubscription[]> {

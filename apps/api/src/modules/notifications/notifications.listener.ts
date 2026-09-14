@@ -4,6 +4,7 @@ import type { NotificationEvent, UserRegisteredEvent } from '@vedamatch/shared';
 import { USER_REGISTERED_EVENT, resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildNotification, notificationEventNames } from './notification-copy';
+import { NativePushService } from './native-push.service';
 import { NotificationsService } from './notifications.service';
 import { PushSenderService } from './push-sender.service';
 
@@ -15,6 +16,7 @@ export class NotificationsListener {
     private readonly notifications: NotificationsService,
     private readonly sender: PushSenderService,
     private readonly prisma: PrismaService,
+    private readonly nativePush: NativePushService,
   ) {}
 
   /**
@@ -235,23 +237,29 @@ export class NotificationsListener {
         category: content.category,
       });
 
-      const subscriptions = await this.notifications.listSubscriptions(
-        event.recipientId,
-      );
-      if (subscriptions.length === 0) {
-        this.logger.log(
-          `${event.name} для ${event.recipientId} пропущено: нет подписок`,
-        );
-        return;
-      }
       const payload = {
         title: content.title,
         body: content.body,
         url: content.url,
         tag: content.tag,
       };
+      // Телефоны с приложением получают тот же пуш, что и браузеры.
+      const native = await this.nativePush.sendToUsers(
+        [event.recipientId],
+        payload,
+      );
 
-      let delivered = 0;
+      const subscriptions = await this.notifications.listSubscriptions(
+        event.recipientId,
+      );
+      if (subscriptions.length === 0 && native.devices === 0) {
+        this.logger.log(
+          `${event.name} для ${event.recipientId} пропущено: нет подписок`,
+        );
+        return;
+      }
+
+      let delivered = native.delivered;
       for (const subscription of subscriptions) {
         const failure = await this.sender.send(subscription, payload);
         if (failure === null) delivered += 1;
@@ -260,7 +268,7 @@ export class NotificationsListener {
         }
       }
       this.logger.log(
-        `${event.name} для ${event.recipientId}: доставлено ${delivered} из ${subscriptions.length}`,
+        `${event.name} для ${event.recipientId}: доставлено ${delivered} из ${subscriptions.length + native.devices}`,
       );
     } catch (error) {
       // Вместе с именем — поля нагрузки: у безымянного события (издатель забыл

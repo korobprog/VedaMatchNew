@@ -5,6 +5,14 @@ import type { NotificationAudienceFilter } from '@vedamatch/shared';
  *  тик воркера дольше держит лиз и дольше не отпускает рассылку. */
 export const BROADCAST_BATCH_SIZE = 200;
 
+/** Есть куда слать пуш: браузер с подпиской или телефон с приложением. */
+export const hasPushTarget: Prisma.UserWhereInput = {
+  OR: [
+    { pushSubscriptions: { some: {} } },
+    { notificationDevices: { some: {} } },
+  ],
+};
+
 /**
  * Кому уходит рассылка. Заблокированные и удалённые исключены жёстко, а не
  * фильтром: рассылка администрации не должна доходить до того, кого эта же
@@ -46,7 +54,7 @@ export function buildAudienceWhere(
   }
 
   if (filter.withPushOnly) {
-    where.pushSubscriptions = { some: {} };
+    where.AND = [hasPushTarget];
   }
 
   return where;

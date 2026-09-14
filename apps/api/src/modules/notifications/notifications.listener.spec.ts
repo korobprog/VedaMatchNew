@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NativePushService } from './native-push.service';
 import { NotificationsListener } from './notifications.listener';
 import { notificationEventNames } from './notification-copy';
 import { NotificationsService } from './notifications.service';
@@ -83,7 +84,9 @@ function createListener(options: {
   } as unknown as PrismaService;
 
   return {
-    listener: new NotificationsListener(notifications, sender, prisma),
+    listener: new NotificationsListener(notifications, sender, prisma, {
+      sendToUsers: jest.fn(() => Promise.resolve({ devices: 0, delivered: 0 })),
+    } as unknown as NativePushService),
     prisma,
     notifications,
     sender,
@@ -247,6 +250,7 @@ describe('NotificationsListener wiring', () => {
         { provide: NotificationsService, useValue: {} },
         { provide: PushSenderService, useValue: {} },
         { provide: PrismaService, useValue: {} },
+        { provide: NativePushService, useValue: {} },
       ],
     }).compile();
 

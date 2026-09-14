@@ -13,6 +13,7 @@ import {
   buildAudienceWhere,
   normalizeAudience,
 } from './broadcast-audience';
+import { NativePushService } from './native-push.service';
 import { NotificationsService } from './notifications.service';
 import { PushSenderService } from './push-sender.service';
 
@@ -46,6 +47,7 @@ export class NotificationBroadcastWorkerService
     private readonly notifications: NotificationsService,
     private readonly sender: PushSenderService,
     config: ConfigService,
+    private readonly nativePush: NativePushService,
   ) {
     const host = config.get<string>('REDIS_HOST');
     this.redis = host
@@ -217,12 +219,13 @@ export class NotificationBroadcastWorkerService
     payload: { title: string; body: string; url: string; tag: string },
   ): Promise<number> {
     if (userIds.length === 0) return 0;
+    const native = await this.nativePush.sendToUsers(userIds, payload);
     const subscriptions = await this.prisma.pushSubscription.findMany({
       where: { userId: { in: userIds } },
       select: { id: true, endpoint: true, p256dh: true, auth: true },
     });
 
-    let delivered = 0;
+    let delivered = native.delivered;
     for (let i = 0; i < subscriptions.length; i += PUSH_CONCURRENCY) {
       const chunk = subscriptions.slice(i, i + PUSH_CONCURRENCY);
       const results = await Promise.all(
