@@ -5,6 +5,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolvePreviewUrl } from './preview-url';
@@ -77,6 +78,10 @@ export class LibraryPreviewsService {
     try {
       const stored = await this.store(entryId, remote);
       if (!stored) return;
+      const before = await this.prisma.libraryEntry.findUnique({
+        where: { id: entryId },
+        select: { previewKey: true },
+      });
       await this.prisma.libraryEntry.update({
         where: { id: entryId },
         data: {
@@ -86,6 +91,9 @@ export class LibraryPreviewsService {
           enrichedAt: new Date(),
         },
       });
+      // Ключ теперь новый на каждую загрузку — прежнюю копию не оставляем.
+      if (before?.previewKey && before.previewKey !== stored.key)
+        await this.remove(before.previewKey);
     } catch (error) {
       this.logger.warn(
         `Не удалось сохранить обложку записи ${entryId}: ${String(error)}`,
@@ -135,7 +143,12 @@ export class LibraryPreviewsService {
       .webp({ quality: PREVIEW_QUALITY })
       .toBuffer();
 
-    const key = `library/previews/${entryId}.webp`;
+    /* Новый ключ на каждую загрузку (VED-155). Объект отдаётся как
+       неизменный на год, и при одном ключе на запись новая обложка ложилась
+       по старому адресу: браузер и CDN показывали прежнюю, и казалось, что
+       сменить её нельзя. Прежний файл удаляет тот, кто записывает новый
+       ключ в запись. */
+    const key = `library/previews/${entryId}-${randomUUID().slice(0, 8)}.webp`;
     await this.s3Client.send(
       new PutObjectCommand({
         Bucket: this.bucket,

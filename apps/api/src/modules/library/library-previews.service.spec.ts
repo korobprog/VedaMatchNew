@@ -12,11 +12,17 @@ function configMock(env: Record<string, string> = S3_ENV) {
   return { get: (name: string) => env[name] };
 }
 
-function prismaMock() {
+function prismaMock(previousKey: string | null = null) {
   return {
-    libraryEntry: { update: jest.fn().mockResolvedValue({}) },
+    libraryEntry: {
+      findUnique: jest.fn().mockResolvedValue({ previewKey: previousKey }),
+      update: jest.fn().mockResolvedValue({}),
+    },
   };
 }
+
+/** Ключ копии обложки: новый на каждую загрузку (VED-155). */
+const FRESH_KEY = /^library\/previews\/entry-1-[0-9a-f]{8}\.webp$/;
 
 /** Однопиксельный png — sharp должен принять его как настоящее изображение. */
 const PNG_PIXEL = Buffer.from(
@@ -70,7 +76,8 @@ describe('LibraryPreviewsService', () => {
     );
 
     const put = send.mock.calls[0][0];
-    expect(put.input.Key).toBe('library/previews/entry-1.webp');
+    const key = put.input.Key as string;
+    expect(key).toMatch(FRESH_KEY);
     expect(put.input.ContentType).toBe('image/webp');
     expect(Buffer.isBuffer(put.input.Body)).toBe(true);
 
@@ -78,12 +85,42 @@ describe('LibraryPreviewsService', () => {
       expect.objectContaining({
         where: { id: 'entry-1' },
         data: expect.objectContaining({
-          previewKey: 'library/previews/entry-1.webp',
-          previewUrl: 'https://cdn.vedamatch.ru/library/previews/entry-1.webp',
+          previewKey: key,
+          previewUrl: `https://cdn.vedamatch.ru/${key}`,
           enrichmentStatus: 'ready',
         }) as object,
       }),
     );
+  });
+
+  // VED-155: при одном ключе на запись новая обложка ложилась по старому
+  // адресу, закэшированному на год, и выглядела неизменившейся.
+  it('кладёт новую обложку по новому адресу и убирает прежнюю копию', async () => {
+    global.fetch = fetchReturning(PNG_PIXEL) as never;
+    const prisma = prismaMock('library/previews/entry-1.webp');
+    const service = new LibraryPreviewsService(
+      prisma as never,
+      configMock() as never,
+    );
+    const send = jest.fn<
+      Promise<unknown>,
+      [{ input: Record<string, unknown> }]
+    >(() => Promise.resolve({}));
+    (service as unknown as { s3Client: { send: unknown } }).s3Client = { send };
+
+    await service.capture(
+      'entry-1',
+      'https://youtu.be/OXDrvBwIHLg',
+      'https://i.ytimg.com/vi/OXDrvBwIHLg/hqdefault.jpg',
+    );
+
+    const [put, remove] = send.mock.calls.map((call) => call[0].input);
+    expect(put.Key).toMatch(FRESH_KEY);
+    expect(put.Key).not.toBe('library/previews/entry-1.webp');
+    expect(remove).toEqual({
+      Bucket: 'vedamatch',
+      Key: 'library/previews/entry-1.webp',
+    });
   });
 
   it('keeps the entry untouched when the download fails', async () => {
