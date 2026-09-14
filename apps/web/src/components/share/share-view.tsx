@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { copyText } from "@/lib/copy-text";
 import { detectDisplayMode } from "@/lib/pwa/browser";
@@ -14,6 +14,7 @@ import {
   shouldFallBackToSite,
   type MessengerId,
 } from "./share-targets";
+import { shareFileName, toJpeg } from "./share-file";
 
 const MESSENGERS: MessengerId[] = ["telegram", "whatsapp", "vk"];
 
@@ -44,8 +45,42 @@ export function ShareView({
 }) {
   const [copied, setCopied] = useState<"text" | "link" | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  /** Картинка, готовая к отдаче: скачана и переведена в JPEG заранее. */
+  const [prepared, setPrepared] = useState<{ file: File; url: string } | null>(
+    null,
+  );
   const message = shareText({ text, source, link });
   const file = isOwnFile(filePath) ? filePath : null;
+
+  /* Готовим картинку сразу при открытии экрана (VED-156): шторка
+     открывается, только пока браузер помнит нажатие, и скачивание уже после
+     него на мобильной сети в это окно не укладывалось. Не вышло — кнопки
+     работают по-старому, со скачиванием по нажатию. */
+  useEffect(() => {
+    if (!file) return;
+    let cancelled = false;
+    let url: string | null = null;
+    void (async () => {
+      try {
+        const response = await fetch(file);
+        if (!response.ok) return;
+        const jpeg = await toJpeg(await response.blob());
+        if (cancelled) return;
+        const ready = new File([jpeg], shareFileName(file, jpeg.type), {
+          type: jpeg.type,
+        });
+        url = URL.createObjectURL(ready);
+        setPrepared({ file: ready, url });
+      } catch {
+        // Сеть или формат — останется запасной путь по нажатию.
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [file]);
 
   async function copy(what: "text" | "link") {
     // Не скопировалось ни одним способом — текст остаётся на экране, его
@@ -63,24 +98,52 @@ export function ShareView({
   async function shareFile() {
     if (!file) return;
     setFileError(null);
+    if (!navigator.share) {
+      setFileError(
+        "Этот браузер не умеет отдавать картинку в приложения — сохраните её и выложите вручную.",
+      );
+      return;
+    }
     try {
-      const response = await fetch(file);
-      if (!response.ok) throw new Error(String(response.status));
-      const blob = await response.blob();
-      const name = file.split("/").pop() || "vedamatch";
-      const payload = {
-        files: [new File([blob], `${name}.jpg`, { type: blob.type })],
-      };
-      if (!navigator.canShare?.(payload)) {
-        setFileError("Это устройство не умеет отдавать картинку в приложения — сохраните её и выложите вручную.");
+      // Готовая картинка — шторку зовём сразу, пока нажатие ещё «свежее».
+      let ready = prepared?.file;
+      if (!ready) {
+        const response = await fetch(file);
+        if (!response.ok) throw new Error(String(response.status));
+        const blob = await response.blob();
+        ready = new File([blob], shareFileName(file, blob.type), {
+          type: blob.type,
+        });
+      }
+      const payload = { files: [ready] };
+      if (navigator.canShare && !navigator.canShare(payload)) {
+        setFileError(
+          "Это устройство не умеет отдавать картинку в приложения — сохраните её и выложите вручную.",
+        );
         return;
       }
       await navigator.share(payload);
     } catch (cause) {
       // Человек закрыл шторку — не ошибка, её имя AbortError.
       if (cause instanceof Error && cause.name === "AbortError") return;
+      // Браузер забыл нажатие, пока картинка догружалась: второе нажатие
+      // сработает — картинка уже готова.
+      if (cause instanceof Error && cause.name === "NotAllowedError") {
+        setFileError("Картинка готова — нажмите «Отправить в приложение» ещё раз.");
+        return;
+      }
       setFileError("Не получилось передать картинку. Сохраните её кнопкой рядом.");
     }
+  }
+
+  /**
+   * Отклик на «Сохранить картинку» (VED-156): ссылка скачивания молчала, и
+   * было непонятно, нажалось ли. Самого конца загрузки браузер странице не
+   * сообщает — говорим, что сохраняем и где искать.
+   */
+  function markSaved() {
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 5000);
   }
 
   /**
@@ -139,11 +202,12 @@ export function ShareView({
         {file ? (
           <div className="flex flex-wrap gap-2">
             <a
-              href={file}
-              download
+              href={prepared?.url ?? file}
+              download={prepared?.file.name ?? shareFileName(file, "image/jpeg")}
+              onClick={markSaved}
               className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold"
             >
-              Сохранить картинку
+              {saved ? "✓ Картинка сохранена" : "Сохранить картинку"}
             </a>
             <button
               type="button"
@@ -156,6 +220,12 @@ export function ShareView({
         ) : (
           <p className="text-sm text-text-2">У этой карточки нет картинки.</p>
         )}
+        {/* Статус, а не всплывашка: скринридер прочитает, и глазу видно. */}
+        <p role="status" aria-live="polite" className="text-sm text-text-1">
+          {saved
+            ? "Картинка сохраняется в «Загрузки» — оттуда её можно выложить в историю или статус."
+            : ""}
+        </p>
         {fileError && (
           <p role="alert" className="text-sm text-magenta">
             {fileError}
