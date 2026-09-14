@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type {
+  SaveTravelCashEntryRequest,
+  TravelCashTemplateDto,
   TravelCashCategoryDto,
   TravelCashEntryDto,
   TravelCashKind,
@@ -18,11 +20,14 @@ import { CashIcon } from "./cash-icons";
 import { localToday } from "./cash-grouping";
 import { moneyInputValue, parseMoneyInput } from "./cash-money";
 import { guestPaymentLabel, suggestedAmountMinor } from "./guest-format";
+import { templateLabel } from "./cash-tools";
 
 export interface CashEntryDraft {
   kind: TravelCashKind;
   /** Запись, которую правят; null — новая. */
   entry: TravelCashEntryDto | null;
+  /** Значения новой записи — у дубля и записи из шаблона. */
+  prefill?: SaveTravelCashEntryRequest;
 }
 
 interface FormProps {
@@ -32,6 +37,7 @@ interface FormProps {
   /** Клиентская база: живущие сверху, как её отдаёт сервер. */
   guests: TravelGuestDto[];
   nightPriceMinor: number | null;
+  templates: TravelCashTemplateDto[];
   draft: CashEntryDraft;
   onCancel: () => void;
   onSaved: () => void;
@@ -95,29 +101,44 @@ function EntryForm({
   categories,
   guests,
   nightPriceMinor,
+  templates,
   draft,
   onCancel,
   onSaved,
 }: FormProps) {
   const { entry } = draft;
-  const [guestId, setGuestId] = useState(entry?.guestId ?? "");
+  // Правка берёт значения записи, дубль и шаблон — черновика.
+  const initial = entry ?? draft.prefill ?? null;
+  const [guestId, setGuestId] = useState(initial?.guestId ?? "");
   const [nights, setNights] = useState(
-    entry?.nights ? String(entry.nights) : "",
+    initial?.nights ? String(initial.nights) : "",
   );
   /** Сумму набрали руками — подсказка «сутки × цена» её больше не трогает. */
-  const [amountTouched, setAmountTouched] = useState(Boolean(entry));
-  const [kind, setKind] = useState<TravelCashKind>(entry?.kind ?? draft.kind);
+  const [amountTouched, setAmountTouched] = useState(Boolean(initial));
+  const [kind, setKind] = useState<TravelCashKind>(initial?.kind ?? draft.kind);
   const [amount, setAmount] = useState(
-    entry ? moneyInputValue(entry.amountMinor) : "",
+    initial ? moneyInputValue(initial.amountMinor) : "",
   );
   const [occurredOn, setOccurredOn] = useState(
-    () => entry?.occurredOn ?? localToday(),
+    () => initial?.occurredOn ?? localToday(),
   );
   const [categoryId, setCategoryId] = useState<string | null>(
-    entry?.categoryId ?? null,
+    initial?.categoryId ?? null,
   );
-  const [note, setNote] = useState(entry?.note ?? "");
-  const [tags, setTags] = useState(entry?.tags.join(", ") ?? "");
+  const [note, setNote] = useState(initial?.note ?? "");
+  const [tags, setTags] = useState(initial?.tags?.join(", ") ?? "");
+
+  const kindTemplates = templates.filter((template) => template.kind === kind);
+
+  function applyTemplate(template: TravelCashTemplateDto) {
+    if (template.amountMinor) {
+      setAmount(moneyInputValue(template.amountMinor));
+      setAmountTouched(true);
+    }
+    setCategoryId(template.categoryId);
+    if (template.note) setNote(template.note);
+    if (template.tags.length) setTags(template.tags.join(", "));
+  }
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -235,6 +256,25 @@ function EntryForm({
           </label>
         ))}
       </fieldset>
+
+      {!entry && kindTemplates.length > 0 ? (
+        <div>
+          <p className="text-sm text-text-1">Шаблоны</p>
+          <ul className="mt-1 flex flex-wrap gap-2">
+            {kindTemplates.map((template) => (
+              <li key={template.id}>
+                <button
+                  type="button"
+                  onClick={() => applyTemplate(template)}
+                  className="rounded-xl border border-glass-brd px-2.5 py-1.5 text-sm text-text-1"
+                >
+                  {templateLabel(template, currency)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-[1fr_auto] gap-3">
         <label className="block text-sm text-text-1">

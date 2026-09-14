@@ -16,6 +16,12 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { cashBalance, DEFAULT_CASH_CATEGORIES } from './cash-book';
 import {
+  cashFiltersWhere,
+  hasCashFilters,
+  parseCashFilters,
+  parseEntryIds,
+} from './cash-filters';
+import {
   CashInputError,
   parseCashCategoryInput,
   parseCashEntryInput,
@@ -187,7 +193,7 @@ export class TravelCashService {
   async entries(
     userId: string,
     stayId: string,
-    query: { from?: unknown; to?: unknown },
+    query: Record<string, unknown>,
   ): Promise<TravelCashEntriesResponse> {
     const stay = await this.prisma.travelStay.findFirst({
       where: { id: stayId, managers: { some: { userId } } },
@@ -203,10 +209,15 @@ export class TravelCashService {
     const { from, to } = this.parse(() =>
       parseCashRange(query.from, query.to, new Date()),
     );
+    const filters = this.parse(() => parseCashFilters(query));
 
     const [rows, before, total] = await Promise.all([
       this.prisma.travelCashEntry.findMany({
-        where: { stayId, occurredOn: { gte: from, lte: to } },
+        where: {
+          ...cashFiltersWhere(filters),
+          stayId,
+          occurredOn: { gte: from, lte: to },
+        },
         select: entrySelect,
         orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }],
         take: MAX_ENTRIES_PER_RESPONSE + 1,
@@ -230,6 +241,7 @@ export class TravelCashService {
       from: formatStayDate(from),
       to: formatStayDate(to),
       nightPriceMinor: stay.priceMinor,
+      filtered: hasCashFilters(filters),
       items: rows.map(toEntryDto),
     };
   }
@@ -279,6 +291,23 @@ export class TravelCashService {
     await this.assertManager(userId, stayId);
     await this.findEntry(stayId, entryId);
     await this.prisma.travelCashEntry.delete({ where: { id: entryId } });
+  }
+
+  /**
+   * Удалить выбранные записи. Условие по объекту — в самом запросе: чужой id
+   * в списке просто не совпадёт и не удалит запись другой кассы.
+   */
+  async removeEntries(
+    userId: string,
+    stayId: string,
+    body: { ids?: unknown },
+  ): Promise<{ removed: number }> {
+    await this.assertManager(userId, stayId);
+    const ids = this.parse(() => parseEntryIds(body.ids));
+    const { count } = await this.prisma.travelCashEntry.deleteMany({
+      where: { id: { in: ids }, stayId },
+    });
+    return { removed: count };
   }
 
   async setOpening(

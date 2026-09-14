@@ -319,7 +319,24 @@ export interface TravelCashEntriesResponse {
   to: string;
   /** Цена суток объекта — подсказка суммы при оплате за N суток. */
   nightPriceMinor: number | null;
+  /**
+   * Лента отфильтрована. Остатки по периодам тогда не считаются: сумма
+   * отобранных строк — это не движение кассы.
+   */
+  filtered: boolean;
   items: TravelCashEntryDto[];
+}
+
+/** Фильтр ленты кассы. Суммы — в минорных единицах. */
+export interface TravelCashFilters {
+  q?: string;
+  kind?: TravelCashKind;
+  /** `none` — записи без статьи. */
+  categoryId?: string;
+  guestId?: string;
+  tag?: string;
+  minMinor?: number;
+  maxMinor?: number;
 }
 
 export interface SaveTravelCashEntryRequest {
@@ -406,3 +423,20 @@ export interface SaveTravelCashCategoryRequest {
   name: string;
   icon: TravelCashIcon;
 }
+
+export interface TravelCashTemplateDto {
+  id: string;
+  name: string;
+  kind: TravelCashKind;
+  /** null — сумму вводят каждый раз. */
+  amountMinor: number | null;
+  categoryId: string | null;
+  note: string;
+  tags: string[];
+}
+
+export interface TravelCashTemplatesResponse {
+  items: TravelCashTemplateDto[];
+}
+
+export type SaveTravelCashTemplateRequest = Omit<TravelCashTemplateDto, 'id'>;

@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { TravelAdminController } from './travel-admin.controller';
 import { TravelAdminService } from './travel-admin.service';
 import { TravelCashController } from './travel-cash.controller';
+import { TravelCashTemplatesService } from './travel-cash-templates.service';
 import { TravelCashService } from './travel-cash.service';
 import { TravelGuestPhotosService } from './travel-guest-photos.service';
 import { TravelGuestsController } from './travel-guests.controller';
@@ -35,6 +36,7 @@ import { TravelService } from './travel.service';
     TravelService,
     TravelManageService,
     TravelCashService,
+    TravelCashTemplatesService,
     TravelGuestsService,
     TravelGuestPhotosService,
     TravelAdminService,

@@ -6225,6 +6225,7 @@ model TravelStay {
   cashCategories TravelCashCategory[]
   cashEntries    TravelCashEntry[]
   guests         TravelGuest[]
+  cashTemplates  TravelCashTemplate[]
   bookings TravelBooking[]
 
   @@index([status, kind])
@@ -6328,7 +6329,8 @@ model TravelCashCategory {
   position  Int            @default(0)
   createdAt DateTime       @default(now())
 
-  entries TravelCashEntry[]
+  entries   TravelCashEntry[]
+  templates TravelCashTemplate[]
 
   @@unique([stayId, kind, name])
   @@index([stayId, kind, position])
@@ -6372,6 +6374,26 @@ model TravelCashEntry {
   @@index([stayId, occurredOn(sort: Desc)])
   @@index([categoryId])
   @@index([guestId])
+}
+
+/// Шаблон записи кассы: «Проживание 850», «Стирка». Сумма необязательна — у
+/// закупки она каждый раз своя, а статья и заметка те же.
+model TravelCashTemplate {
+  id          String              @id @default(uuid())
+  stayId      String
+  stay        TravelStay          @relation(fields: [stayId], references: [id], onDelete: Cascade)
+  name        String
+  kind        TravelCashKind
+  amountMinor Int?
+  /// SetNull: удалённая статья оставляет шаблон, но без статьи.
+  categoryId  String?
+  category    TravelCashCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  note        String              @default("")
+  tags        String[]            @default([])
+  createdAt   DateTime            @default(now())
+
+  @@unique([stayId, name])
+  @@index([stayId, categoryId])
 }
 
 /// Гость хостела в клиентской базе объекта — не аккаунт портала: у человека
