@@ -86,6 +86,7 @@ import { MotivationSourceFetchService } from './motivation-source-fetch.service'
 import { QuoteDiscoveryService } from './quote-discovery.service';
 import { assertSafeFetchUrl } from './quote-source-policy';
 import { quoteFingerprint } from './quote-normalizer';
+import { libraryLinkFromAttribution } from './vedabase-link';
 import { MotivationModerationService } from './motivation-moderation.service';
 
 const stageProfiles: Record<SpiritualStage, MotivationProfileType> = {
@@ -1419,13 +1420,18 @@ export class MotivationService {
             ),
           }
         : null,
+      // Привязка цитаты к Библиотеке — первой; нет её (ручная публикация) —
+      // глава Гиты по подписи источника (VED-142).
       library:
         post.quote?.vedabaseBookSlug && post.quote?.vedabaseChapterSlug
           ? {
               bookSlug: post.quote.vedabaseBookSlug,
               chapterSlug: post.quote.vedabaseChapterSlug,
             }
-          : null,
+          : libraryLinkFromAttribution(
+              post.attributionWork,
+              post.attributionLocator,
+            ),
     };
   }
 }
