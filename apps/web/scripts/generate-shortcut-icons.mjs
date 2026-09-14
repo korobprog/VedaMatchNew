@@ -29,6 +29,7 @@ const SLUGS = [
   "union",
   "work",
   "notices",
+  "travel",
 ];
 const SIZES = [96, 192];
 
