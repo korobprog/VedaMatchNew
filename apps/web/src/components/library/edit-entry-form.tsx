@@ -13,6 +13,7 @@ import type {
 } from "@vedamatch/shared";
 import { CategoryPicker } from "./category-picker";
 import { LibraryCommunitySelect } from "./community-select";
+import { COVER_IMAGE_ACCEPT } from "./cover-image";
 import { LineageSelect } from "@/components/lineage-picker";
 import { flattenTree, insertIntoTree, renameInTree } from "./category-tree";
 import { entryTypeLabel, t, type LibraryTextKey } from "./i18n";
@@ -165,7 +166,9 @@ function PreviewUploader({
           <input
             ref={inputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            // С файловым менеджером на Android (VED-134); не-картинку
+            // отбивает сервер, и ответ разбирается в handleFile.
+            accept={COVER_IMAGE_ACCEPT}
             disabled={pending}
             onChange={(event) => {
               const file = event.target.files?.[0];
