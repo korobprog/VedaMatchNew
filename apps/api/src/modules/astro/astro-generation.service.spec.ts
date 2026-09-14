@@ -125,6 +125,22 @@ describe('AstroGenerationService', () => {
     expect(result.text).toBe('Просто текст без обёртки');
   });
 
+  // Так на проде в кэш легла фраза «Персональный день» — с обёрткой и JSON.
+  it('распаковывает JSON, обёрнутый в блок кода', async () => {
+    fetchMock.mockReturnValue(
+      okResponse('```json\n{"text": "Сегодня тихий день"}\n```'),
+    );
+    const result = await service.generateTransitPhrase(4);
+    expect(result.text).toBe('Сегодня тихий день');
+  });
+
+  it('оборванный JSON считается ошибкой, а не текстом', async () => {
+    fetchMock.mockReturnValue(okResponse('```json\n{"text": "Сегодня тих'));
+    await expect(service.generateTransitPhrase(4)).rejects.toThrow(
+      BadGatewayException,
+    );
+  });
+
   it('пустой ответ считается ошибкой провайдера', async () => {
     fetchMock.mockReturnValue(okResponse('   '));
     await expect(service.generate('overview', chart)).rejects.toThrow(

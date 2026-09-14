@@ -89,6 +89,18 @@ describe('AstroReadingService', () => {
       expect(overview.available).toBe(true);
     });
 
+    it('разбор, закэшированный с обёрткой ```json, отдаёт чистым текстом', async () => {
+      prisma.astroReading.findMany.mockResolvedValue([
+        {
+          section: 'overview',
+          text: '```json\n{"text": "Готовый разбор"}\n```',
+        },
+      ]);
+      const result = await service.list('user-1', 'ru', NOW);
+      const overview = result.sections.find((s) => s.section === 'overview')!;
+      expect(overview.text).toBe('Готовый разбор');
+    });
+
     it('при неизвестном времени блокирует разделы, требующие лагну и даши', async () => {
       charts.chart.mockResolvedValue(timelessChart);
       const result = await service.list('user-1', 'ru', NOW);

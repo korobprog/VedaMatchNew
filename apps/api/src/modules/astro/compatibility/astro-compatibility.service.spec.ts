@@ -411,6 +411,17 @@ describe('AstroCompatibilityService', () => {
       expect(quota.check).not.toHaveBeenCalled();
     });
 
+    it('разбор, закэшированный с обёрткой ```json, отдаёт чистым текстом', async () => {
+      prisma.astroCompatibilityReading.findUnique.mockResolvedValue({
+        text: '```json\n{"text": "Уже есть"}\n```',
+      });
+
+      const result = await service.reading('u1', 'req-1');
+
+      expect(result.text).toBe('Уже есть');
+      expect(generation.generateCompatibility).not.toHaveBeenCalled();
+    });
+
     it('кэш общий для обеих сторон вне зависимости от того, кто спрашивает', async () => {
       prisma.astroCompatibilityReading.findUnique.mockResolvedValue({
         text: 'Общий разбор',

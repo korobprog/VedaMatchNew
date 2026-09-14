@@ -31,6 +31,7 @@ import { AstroQuotaService } from '../astro-quota.service';
 import { AstroSettingsService } from '../astro-settings.service';
 import type { EphemerisProvider } from '../ephemeris/ephemeris-provider';
 import { EPHEMERIS_PROVIDER } from '../ephemeris/ephemeris.token';
+import { extractGeneratedText } from '../generated-text';
 import { buildVedicChart } from '../vedic/vedic-chart';
 import { computeGunaMilan, type MoonPlacement } from './guna-milan';
 
@@ -210,7 +211,11 @@ export class AstroCompatibilityService {
         },
       },
     });
-    if (cached) return { text: cached.text, available: true, blockedBy: null };
+    // Разбор, сохранённый до исправления, мог лечь в кэш с обёрткой ```json —
+    // распаковывается при чтении; нечитаемый считается отсутствующим.
+    const cachedText = cached ? extractGeneratedText(cached.text) : null;
+    if (cachedText)
+      return { text: cachedText, available: true, blockedBy: null };
 
     const settings = await this.settings.get();
     if (!settings.aiEnabled) {
