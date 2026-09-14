@@ -14,6 +14,7 @@ import type {
   TravelCashCategoryDto,
   TravelCashEntriesResponse,
   TravelCashEntryDto,
+  TravelGuestBookingResponse,
   TravelBookingDto,
   TravelBookingsResponse,
   TravelPlacesResponse,
@@ -98,6 +99,19 @@ export const getMyTravelBookings = (signal?: AbortSignal) =>
 
 export const createTravelBooking = (body: CreateTravelBookingRequest) =>
   request<TravelBookingDto>("/travel/bookings", { method: "POST", ...json(body) });
+
+/** Заявка со страницы по QR: гостю без аккаунта вернётся токен привязки. */
+export const createPublicTravelBooking = (body: CreateTravelBookingRequest) =>
+  request<TravelGuestBookingResponse>("/travel/public/bookings", {
+    method: "POST",
+    ...json(body),
+  });
+
+export const claimTravelBooking = (token: string) =>
+  request<TravelBookingDto>("/travel/bookings/claim", {
+    method: "POST",
+    ...json({ token }),
+  });
 
 export const cancelTravelBooking = (id: string) =>
   request<TravelBookingDto>(
