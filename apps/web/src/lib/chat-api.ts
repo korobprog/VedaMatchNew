@@ -11,6 +11,7 @@ import type {
   ChatListState,
   ChatChannelCommunitiesState,
   ChatDiscoverState,
+  ChatFavoriteEmojisDto,
   ChatMapState,
   ChatPublicMapState,
   ChatRequestsState,
@@ -115,6 +116,11 @@ export function getAdminChatStats(): Promise<AdminChatStats | null> {
 /** Раздел админки «Звонки»: тумблер, сводка за период и последние звонки. */
 export function getAdminChatCalls(): Promise<AdminChatCallsState | null> {
   return chatGet<AdminChatCallsState>("/admin/chat/calls");
+}
+
+/** Раздел админки «Смайлики»: набор «Избранных» по умолчанию (VED-123). */
+export function getAdminChatEmoji(): Promise<ChatFavoriteEmojisDto | null> {
+  return chatGet<ChatFavoriteEmojisDto>("/admin/chat/emoji");
 }
 
 /** Шаблоны цвета — для серверного рендера страницы /chat/appearance. */

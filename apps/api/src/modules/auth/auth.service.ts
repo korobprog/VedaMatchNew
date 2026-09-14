@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   ForbiddenException,
+  HttpException,
   Injectable,
   Logger,
   OnModuleInit,
@@ -21,6 +22,12 @@ import {
 } from '@vedamatch/shared';
 import type { User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  APP_LOGIN_CODE_TTL_MS,
+  appRedirectUrl,
+  verifyPkceS256,
+  type AppLoginRequest,
+} from './app-login';
 import { AuthProvidersService } from './auth-providers.service';
 import { resolveContour, type Contour } from './contour';
 import { readRegistrationMode } from '../billing/billing-mode';
@@ -37,6 +44,14 @@ import {
 } from './yandex.provider';
 
 export { toRole } from './role';
+
+/** Ответ приложению вместо cookie: пара токенов и сроки их жизни в секундах. */
+export interface AppTokenResponse {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  refreshExpiresIn: number;
+}
 
 const OIDC_COOKIE = 'oidc_flow';
 const YANDEX_COOKIE = 'yandex_oidc';
@@ -146,8 +161,14 @@ export class AuthService implements OnModuleInit {
     referralCode?: string,
     deviceId?: string,
     host?: string | null,
+    app?: AppLoginRequest | null,
   ) {
-    const google = this.requireGoogle();
+    // На старте входа человек уже в браузере, и ошибке JSON-ом там делать
+    // нечего: любой отказ, включая «провайдер не настроен», уезжает в
+    // приложение. На колбэке 5xx остаются исключениями: там они означают
+    // сбой, который должен попасть в логи как есть.
+    const google = await this.startForApp(app, res, () => this.requireGoogle());
+    if (!google) return;
     const contour = this.contour(host);
     const codeVerifier = oidc.randomPKCECodeVerifier();
     const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
@@ -165,6 +186,9 @@ export class AuthService implements OnModuleInit {
       // callback'а их больше негде сохранить, а Google-редирект их бы потерял.
       ref: shortToken(referralCode),
       fp: shortToken(deviceId),
+      // Вход из приложения: куда вернуть код и PKCE challenge приложения.
+      // Challenge Google — отдельный, он проверяется на обмене кода Google.
+      app: app ?? null,
     };
     res.cookie(OIDC_COOKIE, JSON.stringify(oidcPayload), {
       httpOnly: true,
@@ -193,7 +217,7 @@ export class AuthService implements OnModuleInit {
     if (!raw) {
       throw new BadRequestException('OAuth-сессия не найдена или истекла');
     }
-    const { codeVerifier, state, nonce, returnTo, ref, fp } = JSON.parse(
+    const { codeVerifier, state, nonce, returnTo, ref, fp, app } = JSON.parse(
       raw,
     ) as {
       codeVerifier: string;
@@ -202,59 +226,63 @@ export class AuthService implements OnModuleInit {
       returnTo?: string;
       ref?: string | null;
       fp?: string | null;
+      app?: AppLoginRequest | null;
     };
 
-    const currentUrl = new URL(`${contour.apiOrigin}${req.originalUrl}`);
-    const tokens = await oidc.authorizationCodeGrant(google, currentUrl, {
-      pkceCodeVerifier: codeVerifier,
-      expectedState: state,
-      expectedNonce: nonce,
-      idTokenExpected: true,
-    });
-    const claims = tokens.claims();
-    if (!claims?.email) {
-      throw new UnauthorizedException('Google не вернул email');
-    }
-    // Аккаунт линкуется по email: без подтверждённого адреса кто угодно с
-    // Google-аккаунтом на чужой непроверенный email получил бы чужой профиль.
-    if (claims.email_verified !== true) {
-      throw new UnauthorizedException('Google не подтвердил email');
-    }
-    const email = claims.email as string;
-    const avatarUrl = (claims.picture as string) ?? null;
-
-    const { user: resolved, created: isNewAccount } =
-      await this.resolveGoogleProfile({
-        sub: claims.sub,
-        email,
-        name: claims.name as string | undefined,
-        picture: avatarUrl,
-        requestIp: req.ip ?? null,
+    return this.withAppErrors(app, res, async () => {
+      const currentUrl = new URL(`${contour.apiOrigin}${req.originalUrl}`);
+      const tokens = await oidc.authorizationCodeGrant(google, currentUrl, {
+        pkceCodeVerifier: codeVerifier,
+        expectedState: state,
+        expectedNonce: nonce,
+        idTokenExpected: true,
       });
+      const claims = tokens.claims();
+      if (!claims?.email) {
+        throw new UnauthorizedException('Google не вернул email');
+      }
+      // Аккаунт линкуется по email: без подтверждённого адреса кто угодно с
+      // Google-аккаунтом на чужой непроверенный email получил бы чужой профиль.
+      if (claims.email_verified !== true) {
+        throw new UnauthorizedException('Google не подтвердил email');
+      }
+      const email = claims.email as string;
+      const avatarUrl = (claims.picture as string) ?? null;
 
-    // Адрес и аватар Google ведёт у себя, портал их догоняет: человек сменил
-    // почту — вход по прежней идентичности всё равно найдёт его аккаунт.
-    // Имя не трогаем: его правят в профиле, и вход не должен затирать правку.
-    const user = isNewAccount
-      ? resolved
-      : await this.prisma.user.update({
-          where: { id: resolved.id },
-          data: { email, avatarUrl },
+      const { user: resolved, created: isNewAccount } =
+        await this.resolveGoogleProfile({
+          sub: claims.sub,
+          email,
+          name: claims.name as string | undefined,
+          picture: avatarUrl,
+          requestIp: req.ip ?? null,
         });
 
-    res.clearCookie(OIDC_COOKIE, {
-      path: '/auth',
-      domain: contour.cookieDomain,
-    });
-    await this.issueSessionAndRedirect({
-      req,
-      res,
-      user,
-      provider: 'google',
-      isNewAccount,
-      returnTo,
-      ref,
-      fp,
+      // Адрес и аватар Google ведёт у себя, портал их догоняет: человек сменил
+      // почту — вход по прежней идентичности всё равно найдёт его аккаунт.
+      // Имя не трогаем: его правят в профиле, и вход не должен затирать правку.
+      const user = isNewAccount
+        ? resolved
+        : await this.prisma.user.update({
+            where: { id: resolved.id },
+            data: { email, avatarUrl },
+          });
+
+      res.clearCookie(OIDC_COOKIE, {
+        path: '/auth',
+        domain: contour.cookieDomain,
+      });
+      await this.issueSessionAndRedirect({
+        req,
+        res,
+        user,
+        provider: 'google',
+        isNewAccount,
+        returnTo,
+        ref,
+        fp,
+        app,
+      });
     });
   }
 
@@ -273,12 +301,17 @@ export class AuthService implements OnModuleInit {
     returnTo?: string,
     referralCode?: string,
     deviceId?: string,
+    app?: AppLoginRequest | null,
   ) {
     // Проверка здесь, а не только при выдаче списка кнопок: спрятанная
     // кнопка не делает способ недоступным, а важно, что вход невозможен.
-    await this.providers.assertEnabled('yandex', req.hostname);
+    const yandex = await this.startForApp(app, res, async () => {
+      await this.providers.assertEnabled('yandex', req.hostname);
+      return this.requireYandex();
+    });
+    if (!yandex) return;
     const contour = this.contour(req.headers.host);
-    const { clientId } = this.requireYandex();
+    const { clientId } = yandex;
 
     const verifier = randomBytes(32).toString('base64url');
     const challenge = createHash('sha256').update(verifier).digest('base64url');
@@ -295,6 +328,7 @@ export class AuthService implements OnModuleInit {
         returnTo: safeReturnTo(returnTo),
         ref: shortToken(referralCode),
         fp: shortToken(deviceId),
+        app: app ?? null,
       }),
       {
         httpOnly: true,
@@ -342,6 +376,7 @@ export class AuthService implements OnModuleInit {
       returnTo?: string;
       ref?: string | null;
       fp?: string | null;
+      app?: AppLoginRequest | null;
     };
     try {
       flow = JSON.parse(raw);
@@ -349,59 +384,109 @@ export class AuthService implements OnModuleInit {
       throw new BadRequestException('OAuth-сессия повреждена');
     }
 
-    // Сравнение постоянного времени тут излишне: state не секрет и живёт
-    // одну попытку, но длину проверяем — иначе пустая строка совпадёт с
-    // отсутствующим параметром.
-    if (!flow.state || req.query.state !== flow.state) {
-      throw new BadRequestException('Не совпало состояние запроса');
-    }
+    return this.withAppErrors(flow.app, res, async () => {
+      // Сравнение постоянного времени тут излишне: state не секрет и живёт
+      // одну попытку, но длину проверяем — иначе пустая строка совпадёт с
+      // отсутствующим параметром.
+      if (!flow.state || req.query.state !== flow.state) {
+        throw new BadRequestException('Не совпало состояние запроса');
+      }
 
-    const tokenRes = await fetch(YANDEX_TOKEN, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code: String(req.query.code ?? ''),
-        client_id: clientId,
-        client_secret: clientSecret,
-        code_verifier: flow.verifier,
-      }),
+      const tokenRes = await fetch(YANDEX_TOKEN, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code: String(req.query.code ?? ''),
+          client_id: clientId,
+          client_secret: clientSecret,
+          code_verifier: flow.verifier,
+        }),
+      });
+
+      if (!tokenRes.ok) {
+        throw new BadGatewayException('Яндекс не выдал токен');
+      }
+
+      const { access_token: accessToken } = (await tokenRes.json()) as {
+        access_token?: string;
+      };
+      if (!accessToken) {
+        throw new BadGatewayException('Яндекс не выдал токен');
+      }
+
+      const infoRes = await fetch(YANDEX_INFO, {
+        headers: { authorization: `OAuth ${accessToken}` },
+      });
+
+      if (!infoRes.ok) {
+        throw new BadGatewayException('Яндекс не отдал профиль');
+      }
+
+      const { user, created } = await this.identities.resolve(
+        {
+          ...mapYandexProfile(await infoRes.json()),
+          requestIp: req.ip ?? null,
+        },
+        { beforeCreate: () => this.assertRegistrationOpen() },
+      );
+
+      await this.issueSessionAndRedirect({
+        req,
+        res,
+        user,
+        provider: 'yandex',
+        isNewAccount: created,
+        returnTo: flow.returnTo,
+        ref: flow.ref,
+        fp: flow.fp,
+        app: flow.app,
+      });
     });
+  }
 
-    if (!tokenRes.ok) {
-      throw new BadGatewayException('Яндекс не выдал токен');
+  /**
+   * Ошибка входа из приложения не должна оставаться JSON-страницей в браузере:
+   * человек не видит, что делать дальше. Отказы с понятным текстом (закрытая
+   * регистрация, блокировка) уезжают в приложение на экран входа. Всё
+   * остальное бросается как раньше и попадает в логи.
+   */
+  /**
+   * Подготовка входа для приложения: отказ любого статуса возвращается в
+   * приложение текстом, а вход с сайта бросает исключение как раньше.
+   * Возвращает `null`, если ответ уже отправлен.
+   */
+  private async startForApp<T>(
+    app: AppLoginRequest | null | undefined,
+    res: Response,
+    run: () => T | Promise<T>,
+  ): Promise<T | null> {
+    try {
+      return await run();
+    } catch (error) {
+      if (!app || !(error instanceof HttpException)) throw error;
+      res.redirect(appRedirectUrl(app.redirect, { error: error.message }));
+      return null;
     }
+  }
 
-    const { access_token: accessToken } = (await tokenRes.json()) as {
-      access_token?: string;
-    };
-    if (!accessToken) {
-      throw new BadGatewayException('Яндекс не выдал токен');
+  private async withAppErrors(
+    app: AppLoginRequest | null | undefined,
+    res: Response,
+    run: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      await run();
+    } catch (error) {
+      if (
+        !app ||
+        !(error instanceof HttpException) ||
+        error.getStatus() >= 500
+      ) {
+        throw error;
+      }
+      res.redirect(appRedirectUrl(app.redirect, { error: error.message }));
     }
-
-    const infoRes = await fetch(YANDEX_INFO, {
-      headers: { authorization: `OAuth ${accessToken}` },
-    });
-
-    if (!infoRes.ok) {
-      throw new BadGatewayException('Яндекс не отдал профиль');
-    }
-
-    const { user, created } = await this.identities.resolve(
-      { ...mapYandexProfile(await infoRes.json()), requestIp: req.ip ?? null },
-      { beforeCreate: () => this.assertRegistrationOpen() },
-    );
-
-    await this.issueSessionAndRedirect({
-      req,
-      res,
-      user,
-      provider: 'yandex',
-      isNewAccount: created,
-      returnTo: flow.returnTo,
-      ref: flow.ref,
-      fp: flow.fp,
-    });
   }
 
   /**
@@ -419,8 +504,10 @@ export class AuthService implements OnModuleInit {
     returnTo?: string;
     ref?: string | null;
     fp?: string | null;
+    app?: AppLoginRequest | null;
   }) {
-    const { req, res, user, provider, isNewAccount, returnTo, ref, fp } = params;
+    const { req, res, user, provider, isNewAccount, returnTo, ref, fp, app } =
+      params;
 
     await assertAccountActive(this.prisma, user);
     await this.ensureContactsProfile(user.id);
@@ -438,6 +525,14 @@ export class AuthService implements OnModuleInit {
       this.announceRegistration(user.id, user.email, req, ref, fp);
     }
 
+    // Приложению — одноразовый код, а не cookie: токены оно заберёт само,
+    // предъявив PKCE-верификатор (см. exchangeAppLoginCode).
+    if (app) {
+      const code = await this.createAppLoginCode(user.id, app.challenge);
+      res.redirect(appRedirectUrl(app.redirect, { code }));
+      return;
+    }
+
     const contour = this.contour(req.headers.host);
     await this.issueTokens(
       user.id,
@@ -447,6 +542,90 @@ export class AuthService implements OnModuleInit {
       req.headers.host,
     );
     res.redirect(`${contour.webOrigin}${safeReturnTo(returnTo)}`);
+  }
+
+  private async createAppLoginCode(
+    userId: string,
+    codeChallenge: string,
+  ): Promise<string> {
+    const code = randomBytes(32).toString('base64url');
+    await this.prisma.appLoginCode.create({
+      data: {
+        codeHash: this.hash(code),
+        userId,
+        codeChallenge,
+        expiresAt: new Date(Date.now() + APP_LOGIN_CODE_TTL_MS),
+      },
+    });
+    return code;
+  }
+
+  /**
+   * Обмен одноразового кода на пару токенов. Код гасится до проверки
+   * верификатора: перебирать верификаторы на одном перехваченном коде
+   * нельзя, первая же неудача сжигает его. Все отказы отвечают одним текстом,
+   * чтобы по ответу нельзя было отличить протухший код от чужого.
+   */
+  async exchangeAppLoginCode(body: {
+    code?: unknown;
+    codeVerifier?: unknown;
+  }): Promise<AppTokenResponse> {
+    const invalid = new UnauthorizedException('Код входа недействителен');
+    const code = body?.code;
+    if (typeof code !== 'string' || !code || code.length > 128) throw invalid;
+
+    const stored = await this.prisma.appLoginCode.findUnique({
+      where: { codeHash: this.hash(code) },
+      include: { user: true },
+    });
+    if (!stored || stored.usedAt || stored.expiresAt < new Date()) {
+      throw invalid;
+    }
+    const claimed = await this.prisma.appLoginCode.updateMany({
+      where: { id: stored.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    if (claimed.count === 0) throw invalid;
+    if (!verifyPkceS256(body.codeVerifier, stored.codeChallenge)) throw invalid;
+
+    await assertAccountActive(this.prisma, stored.user);
+    return this.appTokens(stored.user);
+  }
+
+  /** Ротация refresh-токена приложения: те же правила, что у cookie-сессии. */
+  async refreshApp(body: {
+    refreshToken?: unknown;
+  }): Promise<AppTokenResponse> {
+    const token = body?.refreshToken;
+    const user = await this.consumeRefreshToken(
+      typeof token === 'string' ? token : undefined,
+    );
+    return this.appTokens(user);
+  }
+
+  async logoutApp(body: { refreshToken?: unknown }) {
+    const token = body?.refreshToken;
+    if (typeof token === 'string' && token) {
+      await this.prisma.refreshToken.updateMany({
+        where: { tokenHash: this.hash(token) },
+        data: { revoked: true },
+      });
+    }
+    return { ok: true };
+  }
+
+  private async appTokens(user: User): Promise<AppTokenResponse> {
+    const { accessToken, refreshToken, refreshTtlMs } = await this.mintTokens(
+      user.id,
+      user.email,
+      toRole(user.role),
+    );
+    return {
+      accessToken,
+      refreshToken,
+      expiresIn: Math.round(this.accessTtlMs() / 1000),
+      refreshExpiresIn: Math.round(refreshTtlMs / 1000),
+    };
   }
 
   /**
@@ -564,6 +743,37 @@ export class AuthService implements OnModuleInit {
     req: Request,
     res: Response,
   ) {
+    const user = await this.verifyDevCredentials(body, req);
+    await this.issueTokens(
+      user.id,
+      user.email,
+      toRole(user.role),
+      res,
+      req.headers.host,
+    );
+    return {
+      ok: true,
+      returnTo: safeReturnTo(body?.returnTo),
+      user: {
+        id: user.id,
+        email: user.email,
+        name: resolveDisplayName(user),
+      },
+    };
+  }
+
+  /** Dev-вход из приложения на эмуляторе: те же проверки, токены в ответе. */
+  async devLoginApp(
+    body: { email?: string; password?: string },
+    req: Request,
+  ): Promise<AppTokenResponse> {
+    return this.appTokens(await this.verifyDevCredentials(body, req));
+  }
+
+  private async verifyDevCredentials(
+    body: { email?: string; password?: string },
+    req: Request,
+  ): Promise<User> {
     if (!this.devAuthEnabled) {
       throw new ServiceUnavailableException('Dev-вход отключён');
     }
@@ -589,23 +799,7 @@ export class AuthService implements OnModuleInit {
         userAgent: req.headers['user-agent'] ?? null,
       },
     });
-
-    await this.issueTokens(
-      user.id,
-      user.email,
-      toRole(user.role),
-      res,
-      req.headers.host,
-    );
-    return {
-      ok: true,
-      returnTo: safeReturnTo(body?.returnTo),
-      user: {
-        id: user.id,
-        email: user.email,
-        name: resolveDisplayName(user),
-      },
-    };
+    return user;
   }
 
   /** Список демо-аккаунтов для формы dev-входа. */
@@ -629,21 +823,12 @@ export class AuthService implements OnModuleInit {
     host?: string | null,
   ) {
     const contour = this.contour(host);
-    const accessToken = await this.jwt.signAccessToken({
-      sub: userId,
+    const { accessToken, refreshToken, refreshTtlMs } = await this.mintTokens(
+      userId,
       email,
       role,
-    });
-    const refreshToken = randomBytes(48).toString('hex');
-    const ttlDays = Number(this.config.get('REFRESH_TOKEN_TTL_DAYS', '30'));
-
-    await this.prisma.refreshToken.create({
-      data: {
-        tokenHash: this.hash(refreshToken),
-        userId,
-        expiresAt: new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000),
-      },
-    });
+    );
+    const ttlDays = refreshTtlMs / (24 * 60 * 60 * 1000);
 
     res.cookie(ACCESS_COOKIE, accessToken, {
       httpOnly: true,
@@ -669,6 +854,27 @@ export class AuthService implements OnModuleInit {
       maxAge: ttlDays * 24 * 60 * 60 * 1000,
       path: '/',
     });
+  }
+
+  /** Пара токенов и запись refresh в базе. Куда их отдать, решает вызывающий. */
+  private async mintTokens(userId: string, email: string, role: Role) {
+    const accessToken = await this.jwt.signAccessToken({
+      sub: userId,
+      email,
+      role,
+    });
+    const refreshToken = randomBytes(48).toString('hex');
+    const ttlDays = Number(this.config.get('REFRESH_TOKEN_TTL_DAYS', '30'));
+    const refreshTtlMs = ttlDays * 24 * 60 * 60 * 1000;
+
+    await this.prisma.refreshToken.create({
+      data: {
+        tokenHash: this.hash(refreshToken),
+        userId,
+        expiresAt: new Date(Date.now() + refreshTtlMs),
+      },
+    });
+    return { accessToken, refreshToken, refreshTtlMs };
   }
 
   private clearSessionCookies(res: Response, host?: string | null) {
@@ -713,7 +919,24 @@ export class AuthService implements OnModuleInit {
   }
 
   private async rotateRefreshToken(req: Request, res: Response) {
-    const token = (req.cookies as Record<string, string>)[REFRESH_COOKIE];
+    const user = await this.consumeRefreshToken(
+      (req.cookies as Record<string, string>)[REFRESH_COOKIE],
+    );
+    await this.issueTokens(
+      user.id,
+      user.email,
+      toRole(user.role),
+      res,
+      req.headers.host,
+    );
+    return { ok: true };
+  }
+
+  /**
+   * Проверка и гашение refresh-токена, общая для cookie-сессии и приложения.
+   * Возвращает владельца; новую пару выдаёт вызывающий.
+   */
+  private async consumeRefreshToken(token: string | undefined): Promise<User> {
     if (!token) throw new UnauthorizedException('Нет refresh-токена');
 
     const stored = await this.prisma.refreshToken.findUnique({
@@ -744,14 +967,7 @@ export class AuthService implements OnModuleInit {
     if (rotated.count === 0) {
       throw new UnauthorizedException('Refresh-токен недействителен');
     }
-    await this.issueTokens(
-      stored.user.id,
-      stored.user.email,
-      toRole(stored.user.role),
-      res,
-      req.headers.host,
-    );
-    return { ok: true };
+    return stored.user;
   }
 
   async logout(req: Request, res: Response) {

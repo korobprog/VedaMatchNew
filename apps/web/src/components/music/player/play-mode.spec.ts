@@ -1,6 +1,7 @@
 import {
   endOfTrackAction,
   nextAlbumSlug,
+  nextArtistSlug,
   nextPlaybackMode,
   nextPlayStep,
   playbackModeLabel,
@@ -55,13 +56,34 @@ describe("nextAlbumSlug", () => {
     expect(nextAlbumSlug(albums, "old")).toBeNull();
   });
 
-  it("запись без альбома начинает с первого альбома исполнителя", () => {
-    expect(nextAlbumSlug(albums, null)).toBe("new");
+  // Её «папка» — сам исполнитель: дальше — следующий исполнитель, а не его же
+  // первый альбом с теми же записями.
+  it("у записи без альбома следующего альбома нет", () => {
+    expect(nextAlbumSlug(albums, null)).toBeNull();
   });
 
   it("чужой альбом и исполнитель без альбомов — конец", () => {
     expect(nextAlbumSlug(albums, "сборник")).toBeNull();
     expect(nextAlbumSlug([], "new")).toBeNull();
+  });
+});
+
+// На проде альбомов нет: «дальше» переходит к следующему исполнителю.
+describe("nextArtistSlug", () => {
+  const artists = [{ slug: "atmasfera" }, { slug: "avantika" }, { slug: "ragatmika" }];
+
+  it("берёт исполнителя, стоящего ниже в списке Медиатеки", () => {
+    expect(nextArtistSlug(artists, "atmasfera")).toBe("avantika");
+    expect(nextArtistSlug(artists, "avantika")).toBe("ragatmika");
+  });
+
+  it("после последнего — конец, по кругу не идёт", () => {
+    expect(nextArtistSlug(artists, "ragatmika")).toBeNull();
+  });
+
+  it("исполнителя нет в списке — конец", () => {
+    expect(nextArtistSlug(artists, "неизвестный")).toBeNull();
+    expect(nextArtistSlug([], "atmasfera")).toBeNull();
   });
 });
 

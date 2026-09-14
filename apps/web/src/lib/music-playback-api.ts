@@ -7,6 +7,7 @@
 import type {
   MusicAlbumPageDto,
   MusicArtistPageDto,
+  MusicCatalogDto,
   MusicHeartbeatRequest,
   MusicPlaybackStateDto,
   MusicSettingsDto,
@@ -69,9 +70,12 @@ export const stopPlayback = () =>
 export const getTrack = (id: string) =>
   quiet<MusicTrackDetailDto>(`/music/tracks/${encodeURIComponent(id)}`);
 
-/** Исполнитель с альбомами — режиму «после альбома — следующий» (VED-132). */
+/** Исполнитель с альбомами и записями — режиму «дальше» (VED-132). */
 export const getArtistPage = (slug: string) =>
   quiet<MusicArtistPageDto>(`/music/artists/${encodeURIComponent(slug)}`);
+
+/** Витрина Медиатеки: её список исполнителей задаёт, кто «следующий». */
+export const getCatalog = () => quiet<MusicCatalogDto>("/music/catalog");
 
 export const getAlbumPage = (slug: string) =>
   quiet<MusicAlbumPageDto>(`/music/albums/${encodeURIComponent(slug)}`);

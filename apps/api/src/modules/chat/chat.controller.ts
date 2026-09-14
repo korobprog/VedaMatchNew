@@ -35,6 +35,7 @@ import {
 import { ChatColorTemplatesService } from './chat-color-templates.service';
 import { ChatConversationThemeService } from './chat-conversation-theme.service';
 import { ChatConversationsService } from './chat-conversations.service';
+import { ChatEmojiService } from './chat-emoji.service';
 import { ChatMessagesService } from './chat-messages.service';
 import { ChatReportsService } from './chat-reports.service';
 import { PeopleService } from './people/people.service';
@@ -56,6 +57,7 @@ export class ChatController {
     private readonly directory: PeopleService,
     private readonly colorTemplates: ChatColorTemplatesService,
     private readonly conversationTheme: ChatConversationThemeService,
+    private readonly emoji: ChatEmojiService,
   ) {}
 
   @Get('conversations')
@@ -78,6 +80,15 @@ export class ChatController {
   @Get('channel-communities')
   channelCommunities(@CurrentUser() user: AccessTokenPayload) {
     return this.conversations.channelCommunities(user.sub);
+  }
+
+  /**
+   * «Избранные» смайлики по умолчанию (VED-123) — пока человек не собрал
+   * свой набор на устройстве.
+   */
+  @Get('emoji/favorites')
+  favoriteEmojis() {
+    return this.emoji.favorites();
   }
 
   /** Значок на плитке сервиса: сколько непрочитанного и запросов. */

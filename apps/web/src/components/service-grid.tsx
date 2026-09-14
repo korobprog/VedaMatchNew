@@ -223,8 +223,11 @@ export function ServiceGrid({
 
   return (
     <>
-      <div className="mb-3 flex items-center justify-end gap-2">
-        {toolbarStart && <div className="mr-auto">{toolbarStart}</div>}
+      {/* Кнопки настройки держатся слева одной группой, вид — справа
+          (VED-127): «Изменить порядок» стояла у переключателя вида, через
+          пустое место от «Кнопок», и читалась как часть переключателя. */}
+      <div className="mb-3 flex items-center gap-2">
+        {toolbarStart}
         {/* Перестановка нужна редко, поэтому переключатель тихий и только
             там, где нет перетаскивания мышью. В компактном режиме её нет
             вовсе: в плитке негде стоять ни ручке, ни стрелкам. */}
@@ -249,7 +252,7 @@ export function ServiceGrid({
         <div
           role="group"
           aria-label="Вид сервисов"
-          className="flex rounded-xl border border-glass-brd p-0.5"
+          className="ml-auto flex rounded-xl border border-glass-brd p-0.5"
         >
           {(
             [

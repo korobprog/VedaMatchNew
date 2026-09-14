@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CHAT_DEFAULT_FAVORITE_EMOJIS } from "@vedamatch/shared";
 import {
   EMOJI_TABS,
   RECENT_EMOJI_KEY,
@@ -10,6 +11,12 @@ import {
   withRecentEmoji,
   type EmojiRow,
 } from "./emoji-picker";
+import {
+  FAVORITE_EMOJI_KEY,
+  loadDefaultFavoriteEmojis,
+  parseFavoriteEmojis,
+  toggleFavoriteEmoji,
+} from "./favorite-emojis";
 
 function readRecent(): string[] {
   try {
@@ -20,9 +27,21 @@ function readRecent(): string[] {
   }
 }
 
+function readFavorites(): string[] | null {
+  try {
+    return parseFavoriteEmojis(window.localStorage.getItem(FAVORITE_EMOJI_KEY));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Панель смайликов (VED-122): поиск, «Недавние» и вкладки категорий, как во
  * всех мессенджерах. Раньше в переписке был один ряд из восьми смайликов.
+ *
+ * Первой идёт категория «Избранные» (VED-123): набор администрации, который
+ * каждый переделывает под себя — «Настроить», и нажатие на любой смайлик
+ * добавляет его в избранное или убирает оттуда.
  *
  * Набор — почти две тысячи смайликов с русскими названиями — подгружается
  * при открытии панели, а не вместе с перепиской: открывают её не каждый раз.
@@ -38,6 +57,12 @@ export function ChatEmojiPicker({
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState("");
   const [recent, setRecent] = useState<string[]>(readRecent);
+  // `null` — свой набор не собран, показываем набор администрации.
+  const [ownFavorites, setOwnFavorites] = useState<string[] | null>(readFavorites);
+  const [defaultFavorites, setDefaultFavorites] = useState<string[]>([
+    ...CHAT_DEFAULT_FAVORITE_EMOJIS,
+  ]);
+  const [editing, setEditing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<(HTMLElement | null)[]>([]);
 
@@ -50,11 +75,15 @@ export function ChatEmojiPicker({
       .catch(() => {
         if (alive) setFailed(true);
       });
+    void loadDefaultFavoriteEmojis().then((emojis) => {
+      if (alive) setDefaultFavorites(emojis);
+    });
     return () => {
       alive = false;
     };
   }, []);
 
+  const favorites = ownFavorites ?? defaultFavorites;
   const groups = useMemo(() => (rows ? groupEmojiRows(rows) : []), [rows]);
   // Подпись для скринридера и у недавних: их список хранит только сами знаки.
   const labels = useMemo(
@@ -66,7 +95,22 @@ export function ChatEmojiPicker({
     [rows, query],
   );
 
+  function saveFavorites(next: string[] | null) {
+    setOwnFavorites(next);
+    try {
+      if (next === null) window.localStorage.removeItem(FAVORITE_EMOJI_KEY);
+      else window.localStorage.setItem(FAVORITE_EMOJI_KEY, JSON.stringify(next));
+    } catch {
+      // Не запомнили — набор проживёт до закрытия панели.
+    }
+  }
+
   function pick(emoji: string) {
+    // В настройке нажатие правит избранное, а не пишет смайлик в сообщение.
+    if (editing) {
+      saveFavorites(toggleFavoriteEmoji(favorites, emoji));
+      return;
+    }
     onPick(emoji);
     const next = withRecentEmoji(recent, emoji);
     setRecent(next);
@@ -83,18 +127,26 @@ export function ChatEmojiPicker({
     if (section && box) box.scrollTop = section.offsetTop;
   }
 
-  const button = (emoji: string, name?: string) => (
-    <button
-      key={emoji}
-      type="button"
-      onClick={() => pick(emoji)}
-      aria-label={name ?? labels.get(emoji) ?? emoji}
-      title={name ?? labels.get(emoji)}
-      className="flex size-9 items-center justify-center rounded-lg text-2xl leading-none hover:bg-white/10"
-    >
-      {emoji}
-    </button>
-  );
+  const button = (emoji: string, name?: string) => {
+    const title = name ?? labels.get(emoji) ?? emoji;
+    const chosen = editing && favorites.includes(emoji);
+    return (
+      <button
+        key={emoji}
+        type="button"
+        onClick={() => pick(emoji)}
+        aria-label={title}
+        // В настройке кнопка — переключатель «в избранном или нет».
+        aria-pressed={editing ? chosen : undefined}
+        title={name ?? labels.get(emoji)}
+        className={`flex size-9 items-center justify-center rounded-lg text-2xl leading-none hover:bg-white/10 ${
+          chosen ? "bg-gold/20 ring-1 ring-gold/60" : ""
+        }`}
+      >
+        {emoji}
+      </button>
+    );
+  };
 
   return (
     <div
@@ -118,11 +170,20 @@ export function ChatEmojiPicker({
           aria-label="Категории смайликов"
           className="mb-1 flex gap-0.5 overflow-x-auto border-b border-glass-brd pb-1"
         >
+          <button
+            type="button"
+            onClick={() => jumpTo(0)}
+            aria-label="Избранные"
+            title="Избранные"
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-lg hover:bg-white/10"
+          >
+            ⭐
+          </button>
           {EMOJI_TABS.map((tab, index) => (
             <button
               key={tab.id}
               type="button"
-              onClick={() => jumpTo(index + 1)}
+              onClick={() => jumpTo(index + 2)}
               aria-label={tab.label}
               title={tab.label}
               disabled={!rows}
@@ -151,6 +212,48 @@ export function ChatEmojiPicker({
               ref={(node) => {
                 sectionRefs.current[0] = node;
               }}
+              aria-label="Избранные"
+            >
+              <div className="sticky top-0 z-[1] flex items-center justify-between gap-2 bg-bg-1/90 px-1 py-1">
+                <p className="text-xs text-text-2">Избранные</p>
+                <button
+                  type="button"
+                  onClick={() => setEditing((was) => !was)}
+                  aria-pressed={editing}
+                  className="text-xs font-medium text-text-1 underline-offset-2 hover:text-text-0 hover:underline"
+                >
+                  {editing ? "Готово" : "Настроить"}
+                </button>
+              </div>
+              {editing && (
+                <p className="px-1 pb-1 text-xs text-text-2">
+                  Нажмите на смайлик ниже, чтобы добавить его в избранные или
+                  убрать.{" "}
+                  {ownFavorites !== null && (
+                    <button
+                      type="button"
+                      onClick={() => saveFavorites(null)}
+                      className="font-medium text-text-1 underline underline-offset-2 hover:text-text-0"
+                    >
+                      Вернуть набор по умолчанию
+                    </button>
+                  )}
+                </p>
+              )}
+              {favorites.length > 0 ? (
+                <div className="grid grid-cols-8 gap-0.5">
+                  {favorites.map((emoji) => button(emoji))}
+                </div>
+              ) : (
+                <p className="px-1 py-2 text-xs text-text-2">
+                  Пусто — нажмите «Настроить» и выберите смайлики.
+                </p>
+              )}
+            </section>
+            <section
+              ref={(node) => {
+                sectionRefs.current[1] = node;
+              }}
               aria-label="Недавние"
             >
               <p className="sticky top-0 z-[1] bg-bg-1/90 px-1 py-1 text-xs text-text-2">
@@ -170,7 +273,7 @@ export function ChatEmojiPicker({
                 <section
                   key={EMOJI_TABS[index].id}
                   ref={(node) => {
-                    sectionRefs.current[index + 1] = node;
+                    sectionRefs.current[index + 2] = node;
                   }}
                   aria-label={EMOJI_TABS[index].label}
                   // Почти две тысячи кнопок: невидимые секции браузер не

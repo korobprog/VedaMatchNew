@@ -13,6 +13,23 @@ vi.mock("@/lib/chat-client", () => ({
     height: 10,
   }),
 }));
+// Настоящий набор — почти две тысячи кнопок, и поиск по ролям в jsdom на нём
+// под нагрузкой полного прогона не укладывается в таймаут. Для вставки у
+// курсора хватит четырёх.
+vi.mock("./emoji-data", () => ({
+  EMOJI_ROWS: [
+    ["😀", 0, "широко улыбается", "радость"],
+    ["🙏", 0, "сложенные руки", "молитва спасибо"],
+    ["🐶", 1, "морда собаки", "пёс"],
+    ["❤️", 6, "алое сердце", "любовь"],
+  ],
+}));
+// Панель смайликов спрашивает у API набор «Избранных» по умолчанию; в тесте
+// сеть не нужна, иначе запрос уходит на localhost и тормозит прогон.
+vi.mock("./favorite-emojis", async (importActual) => ({
+  ...(await importActual<typeof import("./favorite-emojis")>()),
+  loadDefaultFavoriteEmojis: () => Promise.resolve([]),
+}));
 
 import { ChatComposer } from "./chat-composer";
 
@@ -46,27 +63,6 @@ function setup(editing: ChatMessageDto | null) {
   );
   return { ...view, onSaveEdit };
 }
-
-describe("ChatComposer — смайлики (VED-122)", () => {
-  it("открывает полную панель и вставляет смайлик туда, где курсор", async () => {
-    // Закреплённая рядом с полем кнопка — «Смайлы».
-    window.localStorage.setItem("vedamatch:chat-quick-slot", "emoji");
-    const user = userEvent.setup();
-    setup(null);
-
-    const field = screen.getByPlaceholderText("Сообщение…") as HTMLTextAreaElement;
-    await user.type(field, "Харе Кришна");
-    field.setSelectionRange(4, 4);
-    await user.click(screen.getByRole("button", { name: "Смайлы" }));
-    await user.click(await screen.findByRole("button", { name: "морда собаки" }));
-
-    expect(field).toHaveValue("Харе🐶 Кришна");
-    expect(
-      screen.getByRole("navigation", { name: "Категории смайликов" }),
-    ).toBeInTheDocument();
-    window.localStorage.clear();
-  });
-});
 
 describe("ChatComposer — смайлики (VED-122)", () => {
   it("открывает полную панель и вставляет смайлик туда, где курсор", async () => {
