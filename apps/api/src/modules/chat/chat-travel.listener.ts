@@ -35,14 +35,27 @@ export class ChatTravelListener {
   async onContactRequested(
     event: TravelContactRequestedEvent,
   ): Promise<string | null> {
+    let conversationId: string;
     try {
       const conversation = await this.conversations.create(event.requesterId, {
         kind: 'direct',
         userId: event.recipientId,
       });
+      conversationId = conversation.id;
+    } catch (error) {
+      // Блокировка или отклонённый запрос: переписки нет и не будет.
+      this.logger.warn(
+        `Не удалось открыть переписку по объекту ${event.stayId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return null;
+    }
+
+    try {
       await this.messages.send(
         event.requesterId,
-        conversation.id,
+        conversationId,
         {
           body: event.message,
           attachments: [
@@ -56,16 +69,19 @@ export class ChatTravelListener {
             },
           ],
         },
-        conversation.id,
+        conversationId,
       );
-      return conversation.id;
     } catch (error) {
-      this.logger.warn(
-        `Не удалось открыть переписку по объекту ${event.stayId}: ${
+      // Беседа есть, но сообщение не ушло — чаще всего запрос ещё не принят,
+      // и второе сообщение до ответа хозяина чат не пропускает. Человека всё
+      // равно ведём в переписку: там видно «дождитесь ответа», а не ложное
+      // «переписка недоступна».
+      this.logger.log(
+        `Карточка объекта ${event.stayId} не отправлена в беседу ${conversationId}: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
-      return null;
     }
+    return conversationId;
   }
 }
