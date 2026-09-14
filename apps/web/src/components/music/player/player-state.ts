@@ -1,4 +1,8 @@
-import type { MusicRepeatMode } from "@vedamatch/shared";
+import {
+  DEFAULT_PLAYBACK_MODE,
+  isPlaybackMode,
+  type MusicPlaybackMode,
+} from "./play-mode";
 
 /**
  * Состояние плеера в `localStorage`.
@@ -26,15 +30,18 @@ export interface PersistedPlayerState {
   queue: string[];
   index: number;
   positionSeconds: number;
-  repeat: MusicRepeatMode;
+  /**
+   * Режим проигрывания (VED-132). Заменил `repeat`: версию схемы ради него не
+   * поднимали — иначе у всех стёрлась бы очередь, — поэтому состояние со
+   * старым `repeat` и без `playMode` читается как режим по умолчанию.
+   */
+  playMode: MusicPlaybackMode;
   shuffle: boolean;
   /** Seed перестановки: очередь не должна перетасовываться при перезагрузке. */
   shuffleSeed: number;
   rate: number;
   volume: number;
 }
-
-const REPEATS: MusicRepeatMode[] = ["off", "all", "one"];
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -84,9 +91,9 @@ export function parsePlayerState(
   if (queue.length === 0) return null;
 
   const index = Math.floor(number(value.index, 0));
-  const repeat = REPEATS.includes(value.repeat as MusicRepeatMode)
-    ? (value.repeat as MusicRepeatMode)
-    : "off";
+  const playMode = isPlaybackMode(value.playMode)
+    ? value.playMode
+    : DEFAULT_PLAYBACK_MODE;
 
   return {
     version: PLAYER_STATE_VERSION,
@@ -95,7 +102,7 @@ export function parsePlayerState(
     // начало, а не молчим о нём.
     index: index >= 0 && index < queue.length ? index : 0,
     positionSeconds: Math.max(0, Math.floor(number(value.positionSeconds, 0))),
-    repeat,
+    playMode,
     shuffle: value.shuffle === true,
     shuffleSeed: Math.floor(number(value.shuffleSeed, 1)) || 1,
     rate: clamp(number(value.rate, 1), PLAYER_RATE_MIN, PLAYER_RATE_MAX),

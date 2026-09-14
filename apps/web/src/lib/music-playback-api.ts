@@ -5,6 +5,8 @@
 // втащить). Здесь только то, что зовёт сам плеер, а он живёт в корневом
 // layout и работает на любой странице портала.
 import type {
+  MusicAlbumPageDto,
+  MusicArtistPageDto,
   MusicHeartbeatRequest,
   MusicPlaybackStateDto,
   MusicSettingsDto,
@@ -66,6 +68,13 @@ export const stopPlayback = () =>
 
 export const getTrack = (id: string) =>
   quiet<MusicTrackDetailDto>(`/music/tracks/${encodeURIComponent(id)}`);
+
+/** Исполнитель с альбомами — режиму «после альбома — следующий» (VED-132). */
+export const getArtistPage = (slug: string) =>
+  quiet<MusicArtistPageDto>(`/music/artists/${encodeURIComponent(slug)}`);
+
+export const getAlbumPage = (slug: string) =>
+  quiet<MusicAlbumPageDto>(`/music/albums/${encodeURIComponent(slug)}`);
 
 export const getMusicSettings = () =>
   quiet<MusicSettingsDto>("/music/settings");
