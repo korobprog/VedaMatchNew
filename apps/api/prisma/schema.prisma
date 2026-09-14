@@ -5825,6 +5825,9 @@ model ChatSettings {
   id           String   @id @default("global")
   /// Выключатель звонков на случай инцидента с TURN или злоупотреблений.
   callsEnabled Boolean  @default(true)
+  /// «Избранные» смайлики по умолчанию (VED-123). Пусто — встроенный набор
+  /// `CHAT_DEFAULT_FAVORITE_EMOJIS`; свой набор человек правит на устройстве.
+  favoriteEmojis String[] @default([])
   updatedAt    DateTime @updatedAt
 }
 

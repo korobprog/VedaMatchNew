@@ -115,6 +115,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         scope: "chat",
       },
       {
+        href: "/admin/chat/emoji",
+        label: "Общение — смайлики",
+        hint: "«Избранные» смайлики по умолчанию для всех участников",
+        scope: "chat",
+      },
+      {
         href: "/admin/notices",
         label: "Объявления",
         hint: "Жалобы на доску объявлений",

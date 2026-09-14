@@ -13,11 +13,13 @@ import type {
   AccessTokenPayload,
   AdminChatReportDecisionRequest,
   UpdateChatCallSettingsRequest,
+  UpdateChatFavoriteEmojisRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { ChatSignedUrlsInterceptor } from './chat-signed-urls.interceptor';
 import { ChatReportsService } from './chat-reports.service';
 import { ChatCallsService } from './calls/chat-calls.service';
+import { ChatEmojiService } from './chat-emoji.service';
 import { isAdmin } from './is-admin';
 
 /**
@@ -31,6 +33,7 @@ export class ChatAdminController {
   constructor(
     private readonly reports: ChatReportsService,
     private readonly calls: ChatCallsService,
+    private readonly emoji: ChatEmojiService,
   ) {}
 
   @Get('reports')
@@ -96,6 +99,22 @@ export class ChatAdminController {
   ) {
     this.assertAdmin(user);
     return this.calls.updateSettings(body);
+  }
+
+  /** «Избранные» смайлики по умолчанию для всех участников (VED-123). */
+  @Get('emoji')
+  emojiSettings(@CurrentUser() user: AccessTokenPayload) {
+    this.assertAdmin(user);
+    return this.emoji.favorites();
+  }
+
+  @Post('emoji')
+  updateEmojiSettings(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: UpdateChatFavoriteEmojisRequest,
+  ) {
+    this.assertAdmin(user);
+    return this.emoji.updateFavorites(body);
   }
 
   @Get('stats')
