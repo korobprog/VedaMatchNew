@@ -15,6 +15,8 @@ import type {
   NotificationPreferencesDto,
   NotificationUnreadCountResponse,
   PushSubscriptionRequest,
+  RegisterNotificationDeviceRequest,
+  UnregisterNotificationDeviceRequest,
   UpdateNotificationPreferencesRequest,
   VapidKeyResponse,
 } from '@vedamatch/shared';
@@ -53,6 +55,28 @@ export class NotificationsController {
     @Body() body: { endpoint: string },
   ): Promise<{ ok: true }> {
     await this.notifications.deleteOwnSubscription(user.sub, body?.endpoint);
+    return { ok: true };
+  }
+
+  /** Телефон с приложением VedaMatch сообщает токен пушей после входа. */
+  @UseGuards(AuthGuard)
+  @Post('devices')
+  async registerDevice(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: RegisterNotificationDeviceRequest,
+  ): Promise<{ ok: true }> {
+    await this.notifications.saveDevice(user.sub, body);
+    return { ok: true };
+  }
+
+  /** Выход из приложения: телефон больше не получает пуши этого человека. */
+  @UseGuards(AuthGuard)
+  @Delete('devices')
+  async unregisterDevice(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: UnregisterNotificationDeviceRequest,
+  ): Promise<{ ok: true }> {
+    await this.notifications.deleteOwnDevice(user.sub, body?.token);
     return { ok: true };
   }
 

@@ -1,4 +1,8 @@
-import { buildAudienceWhere, normalizeAudience } from './broadcast-audience';
+import {
+  buildAudienceWhere,
+  hasPushTarget,
+  normalizeAudience,
+} from './broadcast-audience';
 
 describe('buildAudienceWhere', () => {
   const now = new Date('2026-08-21T12:00:00.000Z');
@@ -44,9 +48,16 @@ describe('buildAudienceWhere', () => {
     });
   });
 
-  it('«только с пушем» требует хотя бы одну подписку', () => {
+  it('«только с пушем» требует браузер с подпиской или телефон с приложением', () => {
     expect(buildAudienceWhere({ withPushOnly: true }, now)).toMatchObject({
-      pushSubscriptions: { some: {} },
+      AND: [
+        {
+          OR: [
+            { pushSubscriptions: { some: {} } },
+            { notificationDevices: { some: {} } },
+          ],
+        },
+      ],
     });
   });
 
@@ -60,7 +71,7 @@ describe('buildAudienceWhere', () => {
       accountStatus: 'active',
       spiritualStage: { in: ['devotee'] },
       subscriptionPaidUntil: { gt: now },
-      pushSubscriptions: { some: {} },
+      AND: [hasPushTarget],
     });
   });
 });

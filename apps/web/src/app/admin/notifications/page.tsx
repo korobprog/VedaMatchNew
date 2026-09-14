@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { BroadcastComposer } from "@/components/admin/broadcast-composer";
 import { BroadcastList } from "@/components/admin/broadcast-list";
-import { getAdminBroadcasts } from "@/lib/api";
+import { NotificationDevicesPanel } from "@/components/admin/notification-devices-panel";
+import { getAdminBroadcasts, getAdminNotificationDevices } from "@/lib/api";
 import { requireUser } from "@/lib/require-user";
 
 export const metadata = {
@@ -15,7 +16,10 @@ export default async function AdminNotificationsPage() {
   // платформы, поэтому здесь только роль admin.
   if (user.role !== "admin") redirect("/");
 
-  const broadcasts = await getAdminBroadcasts();
+  const [broadcasts, devices] = await Promise.all([
+    getAdminBroadcasts(),
+    getAdminNotificationDevices().catch(() => null),
+  ]);
 
   return (
     <>
@@ -27,6 +31,8 @@ export default async function AdminNotificationsPage() {
         разрешил уведомления. Отправка идёт пакетами в фоне, счётчики в списке
         обновляются по ходу.
       </p>
+
+      <NotificationDevicesPanel stats={devices ?? null} />
 
       <BroadcastComposer />
 

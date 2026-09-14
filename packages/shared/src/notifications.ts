@@ -571,6 +571,39 @@ export interface PushSubscriptionRequest {
   keys: { p256dh: string; auth: string };
 }
 
+/** Служба доставки пушей в приложение. */
+export type NotificationDeviceProvider = 'fcm' | 'rustore';
+export type NotificationDevicePlatform = 'android' | 'ios';
+
+/** Телефон сообщает свой токен после входа и при каждой его смене. */
+export interface RegisterNotificationDeviceRequest {
+  token: string;
+  provider: NotificationDeviceProvider;
+  platform: NotificationDevicePlatform;
+  /** Сборка приложения, например `ru-site`. */
+  appVariant?: string;
+}
+
+export interface UnregisterNotificationDeviceRequest {
+  token: string;
+}
+
+/** Сводка по телефонам для админки уведомлений. */
+export interface NotificationDeviceStats {
+  total: number;
+  /** Уникальных людей хотя бы с одним телефоном. */
+  users: number;
+  byProvider: Record<NotificationDeviceProvider, number>;
+  /** Настроена ли отправка через FCM на сервере. */
+  fcmConfigured: boolean;
+}
+
+/** Итог тестового пуша себе: сколько телефонов и сколько приняли. */
+export interface NotificationDeviceTestResult {
+  devices: number;
+  delivered: number;
+}
+
 export interface VapidKeyResponse {
   publicKey: string;
 }

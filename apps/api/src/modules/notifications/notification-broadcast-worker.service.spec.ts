@@ -57,6 +57,9 @@ function createWorker(options: {
     notifications as unknown as NotificationsService,
     sender as unknown as PushSenderService,
     { get: () => undefined } as never,
+    {
+      sendToUsers: jest.fn(() => Promise.resolve({ devices: 0, delivered: 0 })),
+    } as never,
   );
   return { worker, prisma, notifications, sender };
 }
