@@ -439,6 +439,7 @@ model User {
   wellnessBasketItems                WellnessBasketItem[]         @relation("WellnessBasketItems")
   travelStaysManaged                 TravelStayManager[]          @relation("TravelStaysManaged")
   travelBookings                     TravelBooking[]              @relation("TravelBookingsPlaced")
+  travelCashEntries                  TravelCashEntry[]            @relation("TravelCashEntriesAuthored")
   workTravelBookings                 WorkTravelBooking[]          @relation("WorkTravelBookings")
 
   @@index([accountStatus])
@@ -6212,11 +6213,17 @@ model TravelStay {
   publicCode String           @unique
   status     TravelStayStatus @default(draft)
 
+  /// Остаток кассы на момент, с которого хозяин начал вести учёт в портале:
+  /// хостел приходит со своими деньгами в ящике, и бюджет с нуля врал бы.
+  cashOpeningMinor Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  managers TravelStayManager[]
-  rooms    TravelRoom[]
+  managers       TravelStayManager[]
+  rooms          TravelRoom[]
+  cashCategories TravelCashCategory[]
+  cashEntries    TravelCashEntry[]
   bookings TravelBooking[]
 
   @@index([status, kind])
@@ -6297,4 +6304,60 @@ model TravelBooking {
 
   @@index([stayId, status, createdAt(sort: Desc)])
   @@index([guestUserId, createdAt(sort: Desc)])
+}
+
+/// Доход или расход в кассе объекта.
+enum TravelCashKind {
+  income
+  expense
+}
+
+/// Статья кассы: «Проживание», «Продукты», «Ремонт». У каждой объект свой
+/// набор — хостелу при храме и отелю нужны разные. Значок — ключ из закрытого
+/// списка `TRAVEL_CASH_ICONS`, а не имя иконки библиотеки: смена библиотеки
+/// не должна требовать миграции данных.
+model TravelCashCategory {
+  id        String         @id @default(uuid())
+  stayId    String
+  stay      TravelStay     @relation(fields: [stayId], references: [id], onDelete: Cascade)
+  kind      TravelCashKind
+  name      String
+  icon      String
+  position  Int            @default(0)
+  createdAt DateTime       @default(now())
+
+  entries TravelCashEntry[]
+
+  @@unique([stayId, kind, name])
+  @@index([stayId, kind, position])
+}
+
+/// Запись кассы. Остаток нигде не хранится, а считается по записям: правка
+/// задним числом иначе разводила бы сохранённый итог и сумму строк.
+model TravelCashEntry {
+  id          String              @id @default(uuid())
+  stayId      String
+  stay        TravelStay          @relation(fields: [stayId], references: [id], onDelete: Cascade)
+  kind        TravelCashKind
+  /// Всегда положительная, знак задаёт `kind`. Минорные единицы, валюта — у
+  /// объекта.
+  amountMinor Int
+  /// День операции без времени: касса ведётся днями, как и ночлег.
+  occurredOn  DateTime            @db.Date
+  /// SetNull: удалённая статья не стирает деньги из истории.
+  categoryId  String?
+  category    TravelCashCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  note        String              @default("")
+  tags        String[]            @default([])
+
+  /// Кто внёс — управляющих у объекта бывает несколько. SetNull: запись
+  /// остаётся в кассе и после удаления аккаунта.
+  authorId String?
+  author   User?   @relation("TravelCashEntriesAuthored", fields: [authorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([stayId, occurredOn(sort: Desc)])
+  @@index([categoryId])
 }

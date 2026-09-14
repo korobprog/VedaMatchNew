@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   TRAVEL_BOOKING_STATUS_LABELS,
@@ -122,13 +123,21 @@ export function StayBookingsView({ stayId }: { stayId: string }) {
           Публичный код: {publicCode || "—"} ·{" "}
           {status === "published" ? "опубликован" : "не опубликован"}
         </p>
-        <button
-          type="button"
-          onClick={() => void publish()}
-          className="mt-2 rounded-xl border border-magenta px-3 py-2 text-sm text-text-0"
-        >
-          {status === "published" ? "Снять с публикации" : "Опубликовать"}
-        </button>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void publish()}
+            className="rounded-xl border border-magenta px-3 py-2 text-sm text-text-0"
+          >
+            {status === "published" ? "Снять с публикации" : "Опубликовать"}
+          </button>
+          <Link
+            href={`/travel/manage/${stayId}/cash`}
+            className="rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1"
+          >
+            Касса
+          </Link>
+        </div>
       </header>
 
       <form onSubmit={addRoom} className="flex flex-wrap items-end gap-3">

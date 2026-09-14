@@ -2,6 +2,12 @@
 import type {
   CreateTravelBookingRequest,
   CreateTravelStayRequest,
+  SaveTravelCashCategoryRequest,
+  SaveTravelCashEntryRequest,
+  TravelCashCategoriesResponse,
+  TravelCashCategoryDto,
+  TravelCashEntriesResponse,
+  TravelCashEntryDto,
   TravelBookingDto,
   TravelBookingsResponse,
   TravelPlacesResponse,
@@ -147,6 +153,82 @@ export const getStayBookings = (stayId: string, signal?: AbortSignal) =>
     `/travel/manage/stays/${encodeURIComponent(stayId)}/bookings`,
     { method: "GET", signal },
   );
+
+// ===== Касса объекта =====
+
+const cashPath = (stayId: string, rest: string) =>
+  `/travel/manage/stays/${encodeURIComponent(stayId)}/cash/${rest}`;
+
+export const getCashCategories = (stayId: string, signal?: AbortSignal) =>
+  request<TravelCashCategoriesResponse>(cashPath(stayId, "categories"), {
+    method: "GET",
+    signal,
+  });
+
+export const createCashCategory = (
+  stayId: string,
+  body: SaveTravelCashCategoryRequest,
+) =>
+  request<TravelCashCategoryDto>(cashPath(stayId, "categories"), {
+    method: "POST",
+    ...json(body),
+  });
+
+export const updateCashCategory = (
+  stayId: string,
+  categoryId: string,
+  body: Pick<SaveTravelCashCategoryRequest, "name" | "icon">,
+) =>
+  request<TravelCashCategoryDto>(
+    cashPath(stayId, `categories/${encodeURIComponent(categoryId)}`),
+    { method: "PATCH", ...json(body) },
+  );
+
+export const removeCashCategory = (stayId: string, categoryId: string) =>
+  request<void>(
+    cashPath(stayId, `categories/${encodeURIComponent(categoryId)}`),
+    { method: "DELETE" },
+  );
+
+export const getCashEntries = (
+  stayId: string,
+  range: { from: string; to: string },
+  signal?: AbortSignal,
+) =>
+  request<TravelCashEntriesResponse>(
+    cashPath(stayId, `entries?${new URLSearchParams(range)}`),
+    { method: "GET", signal },
+  );
+
+export const createCashEntry = (
+  stayId: string,
+  body: SaveTravelCashEntryRequest,
+) =>
+  request<TravelCashEntryDto>(cashPath(stayId, "entries"), {
+    method: "POST",
+    ...json(body),
+  });
+
+export const updateCashEntry = (
+  stayId: string,
+  entryId: string,
+  body: SaveTravelCashEntryRequest,
+) =>
+  request<TravelCashEntryDto>(
+    cashPath(stayId, `entries/${encodeURIComponent(entryId)}`),
+    { method: "PATCH", ...json(body) },
+  );
+
+export const removeCashEntry = (stayId: string, entryId: string) =>
+  request<void>(cashPath(stayId, `entries/${encodeURIComponent(entryId)}`), {
+    method: "DELETE",
+  });
+
+export const setCashOpening = (stayId: string, openingMinor: number) =>
+  request<{ openingMinor: number }>(cashPath(stayId, "opening"), {
+    method: "PATCH",
+    ...json({ openingMinor }),
+  });
 
 export const decideTravelBooking = (
   bookingId: string,
