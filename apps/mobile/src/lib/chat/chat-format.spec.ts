@@ -1,5 +1,14 @@
 import type { ChatConversationSummary, ChatMessageDto } from '@vedamatch/shared';
-import { formatChatDivider, formatChatStamp, initialOf, isNewDay, previewOf, unreadLabel } from './chat-format';
+import {
+  formatChatDivider,
+  formatChatStamp,
+  initialOf,
+  isNewDay,
+  officialNotifyLabel,
+  previewOf,
+  readonlyNotice,
+  unreadLabel,
+} from './chat-format';
 
 const now = new Date(2026, 8, 14, 15, 30);
 
@@ -90,5 +99,26 @@ describe('мелочи', () => {
     expect(initialOf('')).toBe('?');
     expect(unreadLabel(7)).toBe('7');
     expect(unreadLabel(140)).toBe('99+');
+  });
+});
+
+describe('readonlyNotice', () => {
+  it('запрос важнее вида беседы', () => {
+    expect(readonlyNotice({ state: 'request', kind: 'direct', official: false })).toMatch(/Запрос/);
+  });
+  it('официальный канал говорит от имени портала, а не общины', () => {
+    const text = readonlyNotice({ state: 'active', kind: 'channel', official: true });
+    expect(text).toMatch(/VedaMatch/);
+    expect(text).not.toMatch(/общин/);
+  });
+  it('обычный канал — от имени общины', () => {
+    expect(readonlyNotice({ state: 'active', kind: 'channel', official: false })).toMatch(/общины/);
+  });
+});
+
+describe('officialNotifyLabel', () => {
+  it('заглушённому предлагает включить, включившему — выключить', () => {
+    expect(officialNotifyLabel(true)).toBe('Включить уведомления');
+    expect(officialNotifyLabel(false)).toBe('Выключить уведомления');
   });
 });

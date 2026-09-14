@@ -23,7 +23,10 @@ export function ConversationRow({ conversation, onPress }: Props) {
   const avatarId = companion?.id ?? conversation.id;
   const avatarUri = conversation.kind === 'direct' ? companion?.avatarUrl : conversation.avatarUrl;
   const unread = conversation.unreadCount > 0;
-  const kindLabel = KIND_LABEL[conversation.kind];
+  // У официального канала своя плашка, а «без звука» — его обычное состояние,
+  // о котором нет смысла напоминать в каждой строке.
+  const kindLabel = conversation.official ? 'Официальный' : KIND_LABEL[conversation.kind];
+  const showMuted = conversation.muted && !conversation.official;
 
   return (
     <Pressable
@@ -44,7 +47,16 @@ export function ConversationRow({ conversation, onPress }: Props) {
             {conversation.title}
           </Text>
           {kindLabel ? (
-            <Text style={[styles.kind, { color: colors.text2, borderColor: colors.glassBorder }]}>{kindLabel}</Text>
+            <Text
+              style={[
+                styles.kind,
+                conversation.official
+                  ? { color: colors.onMint, backgroundColor: colors.mint, borderColor: colors.mint }
+                  : { color: colors.text2, borderColor: colors.glassBorder },
+              ]}
+            >
+              {kindLabel}
+            </Text>
           ) : null}
           <Text style={[styles.stamp, { color: colors.text2 }]}>{formatChatStamp(conversation.lastMessageAt)}</Text>
         </View>
@@ -56,7 +68,7 @@ export function ConversationRow({ conversation, onPress }: Props) {
             <View style={[styles.badge, { backgroundColor: conversation.muted ? colors.bg2 : colors.mint }]}>
               <Text style={[styles.badgeText, { color: conversation.muted ? colors.text1 : colors.onMint }]}>{unreadLabel(conversation.unreadCount)}</Text>
             </View>
-          ) : conversation.muted ? (
+          ) : showMuted ? (
             <Text style={[styles.muted, { color: colors.text2 }]}>без звука</Text>
           ) : null}
         </View>
