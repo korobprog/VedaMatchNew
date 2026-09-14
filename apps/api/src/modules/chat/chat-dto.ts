@@ -48,6 +48,11 @@ export type ChatMessageRow = ChatMessage & {
 export type ChatConversationRow = ChatConversation & {
   members: (ChatMember & { user: ChatUserRow })[];
   community?: Pick<Community, 'id' | 'slug' | 'name'> | null;
+  /**
+   * Число действующих участников из базы. У официального канала `members`
+   * урезан до смотрящего и администраторов, поэтому считать по нему нельзя.
+   */
+  _count?: { members: number };
   /** Закреплённое сообщение приезжает вместе с беседой — см. chat-selects. */
   pinnedMessage?: ChatMessageRow | null;
 };
@@ -211,7 +216,8 @@ export function toConversationSummary(
           name: row.community.name,
         }
       : null,
-    membersCount: row.members.filter((m) => !m.leftAt).length,
+    membersCount:
+      row._count?.members ?? row.members.filter((m) => !m.leftAt).length,
     unreadCount: extra.unreadCount,
     muted: Boolean(mine?.mutedUntil && mine.mutedUntil > now),
     pinned: Boolean(mine?.pinnedAt),

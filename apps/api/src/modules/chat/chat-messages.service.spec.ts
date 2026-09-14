@@ -236,8 +236,13 @@ describe('ChatMessagesService', () => {
       // перемежаются с синхронным emit из announceActivity(), у которого
       // нет recipientId, поэтому его отфильтровываем.
       const recipients = bus.emit.mock.calls
-        .map((call: unknown[]) => (call[1] as { recipientId?: string }).recipientId)
-        .filter((recipientId): recipientId is string => recipientId !== undefined);
+        .map(
+          (call: unknown[]) =>
+            (call[1] as { recipientId?: string }).recipientId,
+        )
+        .filter(
+          (recipientId): recipientId is string => recipientId !== undefined,
+        );
       expect(recipients).toEqual(['other']);
     });
 
@@ -256,8 +261,13 @@ describe('ChatMessagesService', () => {
       // recipientId и он не зависит от присутствия) — подавляется только
       // адресное уведомление, поэтому проверяем именно его отсутствие.
       const recipients = bus.emit.mock.calls
-        .map((call: unknown[]) => (call[1] as { recipientId?: string }).recipientId)
-        .filter((recipientId): recipientId is string => recipientId !== undefined);
+        .map(
+          (call: unknown[]) =>
+            (call[1] as { recipientId?: string }).recipientId,
+        )
+        .filter(
+          (recipientId): recipientId is string => recipientId !== undefined,
+        );
       expect(recipients).toEqual([]);
       // Живая доставка в открытый чат остаётся: подавляется только уведомление.
       expect(events.publish).toHaveBeenCalled();
@@ -439,6 +449,42 @@ describe('ChatMessagesService', () => {
         }
       ).data;
       expect(data.deletedAt).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('официальный канал', () => {
+    it('уведомления получают только включившие их: фильтрует база', async () => {
+      conversations.requireConversation.mockResolvedValue(
+        conversation({
+          kind: 'channel',
+          title: 'VedaMatch',
+          official: true,
+          members: [member('me', { role: 'admin' })],
+        }),
+      );
+      const findMany = fn(() => Promise.resolve([{ userId: 'fan' }]));
+      (prisma.chatMember as Record<string, jest.Mock>).findMany = findMany;
+
+      await service.send('me', 'conversation-1', { body: 'новость' });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const calls = findMany.mock.calls as [
+        { where: Record<string, unknown> },
+      ][];
+      expect(calls[0][0].where).toMatchObject({
+        conversationId: 'conversation-1',
+        leftAt: null,
+        userId: { not: 'me' },
+      });
+      const recipients = bus.emit.mock.calls
+        .map(
+          (call: unknown[]) =>
+            (call[1] as { recipientId?: string }).recipientId,
+        )
+        .filter(
+          (recipientId): recipientId is string => recipientId !== undefined,
+        );
+      expect(recipients).toEqual(['fan']);
     });
   });
 });

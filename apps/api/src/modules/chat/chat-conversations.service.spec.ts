@@ -513,4 +513,42 @@ describe('ChatConversationsService', () => {
       );
     });
   });
+
+  describe('официальный канал', () => {
+    it('адресаты событий берутся запросом, а не из урезанного members', async () => {
+      prisma.chatMember.findMany.mockResolvedValue([
+        { userId: 'a' },
+        { userId: 'b' },
+        { userId: 'c' },
+      ]);
+      const row = conversation({
+        kind: 'channel',
+        official: true,
+        members: [member('owner', { role: 'admin' })],
+      });
+
+      const ids = await service.recipients(row as never);
+
+      expect(ids).toEqual(['a', 'b', 'c']);
+      expect(prisma.chatMember.findMany).toHaveBeenCalledWith({
+        where: { conversationId: 'conversation-1', leftAt: null },
+        select: { userId: true },
+      });
+    });
+
+    it('у обычной беседы адресаты — загруженные участники без вышедших', async () => {
+      const row = conversation({
+        official: false,
+        members: [
+          member('owner', { role: 'owner' }),
+          member('gone', { leftAt: createdAt }),
+        ],
+      });
+
+      await expect(service.recipients(row as never)).resolves.toEqual([
+        'owner',
+      ]);
+      expect(prisma.chatMember.findMany).not.toHaveBeenCalled();
+    });
+  });
 });
