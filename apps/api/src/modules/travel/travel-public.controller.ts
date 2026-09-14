@@ -21,6 +21,14 @@ export class TravelPublicController {
     return this.travel.publicStay(code, user?.sub ?? null);
   }
 
+  @Get('stays/:code/reviews')
+  reviews(
+    @OptionalUser() user: AccessTokenPayload | undefined,
+    @Param('code') code: string,
+  ) {
+    return this.travel.publicStayReviews(code, user?.sub ?? null);
+  }
+
   /**
    * Строже, чем заявка из кабинета: адрес открыт всем, а заявка пишет
    * хозяину в колокольчик.

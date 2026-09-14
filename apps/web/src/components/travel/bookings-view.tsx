@@ -16,6 +16,7 @@ import {
   saveClaimTokens,
   withoutClaimTokens,
 } from "./claim-tokens";
+import { BookingReview } from "./booking-review";
 import { ContactHostButton } from "./contact-host-button";
 
 /**
@@ -133,6 +134,16 @@ export function BookingsView() {
                 Причина отказа: {booking.declineReason}
               </p>
             ) : null}
+            <BookingReview
+              booking={booking}
+              onChange={(updated) =>
+                setItems((current) =>
+                  (current ?? []).map((item) =>
+                    item.id === updated.id ? updated : item,
+                  ),
+                )
+              }
+            />
             <div className="mt-3">
               <ContactHostButton
                 stayId={booking.stayId}

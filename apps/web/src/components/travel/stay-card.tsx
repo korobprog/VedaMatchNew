@@ -4,6 +4,7 @@ import {
   type TravelStayCardDto,
 } from "@vedamatch/shared";
 import { priceLabel } from "./price";
+import { ratingLabel } from "./rating";
 
 /** Карточка объекта в списке. */
 export function StayCard({ stay }: { stay: TravelStayCardDto }) {
@@ -21,6 +22,14 @@ export function StayCard({ stay }: { stay: TravelStayCardDto }) {
         <p className="mt-2 text-sm text-text-1">
           {priceLabel(stay.priceMinor, stay.currency, stay.payment)}
         </p>
+        {stay.rating.count ? (
+          <p className="mt-1 text-sm text-text-1">
+            <span aria-hidden="true" className="text-gold">
+              ★{" "}
+            </span>
+            {ratingLabel(stay.rating)}
+          </p>
+        ) : null}
       </Link>
     </li>
   );
