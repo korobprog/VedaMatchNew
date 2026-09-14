@@ -12,6 +12,7 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '@/lib/auth/session';
+import { ChatStreamProvider } from '@/lib/chat/chat-stream';
 import { ThemeProvider, useTheme } from '@/theme/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -35,6 +36,7 @@ function RootStack() {
         </Stack.Protected>
         <Stack.Protected guard={status === 'signed'}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="chat/[id]" />
         </Stack.Protected>
       </Stack>
     </>
@@ -64,7 +66,9 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ThemeProvider>
           <SessionProvider>
-            <RootStack />
+            <ChatStreamProvider>
+              <RootStack />
+            </ChatStreamProvider>
           </SessionProvider>
         </ThemeProvider>
       </SafeAreaProvider>

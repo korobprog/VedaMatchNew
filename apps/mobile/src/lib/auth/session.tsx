@@ -39,6 +39,12 @@ export interface Session {
   status: SessionStatus;
   user: SessionUser | null;
   api: ApiClient;
+  /** Адрес API варианта сборки: нужен потоку событий, который ходит мимо клиента. */
+  apiOrigin: string;
+  /** Текущий access-токен для запросов вне ApiClient (поток событий). */
+  getAccessToken(): string | null;
+  /** Обновить access-токен; `null`, если сессия закончилась. */
+  refreshAccessToken(): Promise<string | null>;
   signIn(provider: LoginProvider): Promise<void>;
   /**
    * Завершение входа по адресу возврата `vedamatch://auth?...`. Android
@@ -205,6 +211,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [authApi, loadProfile],
   );
 
+  const getAccessToken = useCallback(() => tokensRef.current?.accessToken ?? null, []);
+
   const signOut = useCallback(async () => {
     const current = tokensRef.current;
     if (current) authApi.logout(current.refreshToken).catch(() => undefined);
@@ -212,8 +220,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [authApi, dropSession]);
 
   const value = useMemo<Session>(
-    () => ({ status, user, api, signIn, completeSignIn, signInDev, signOut }),
-    [status, user, api, signIn, completeSignIn, signInDev, signOut],
+    () => ({
+      status,
+      user,
+      api,
+      apiOrigin,
+      getAccessToken,
+      refreshAccessToken: refresh,
+      signIn,
+      completeSignIn,
+      signInDev,
+      signOut,
+    }),
+    [status, user, api, apiOrigin, getAccessToken, refresh, signIn, completeSignIn, signInDev, signOut],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
