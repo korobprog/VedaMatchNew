@@ -13,6 +13,13 @@ import { MusicPlayGlyph, playButtonLabel } from "./play-glyph";
 import { MusicSleepCountdown } from "./sleep-countdown";
 import { MusicQueuePanel } from "./queue-panel";
 import { useHoldSeek } from "./use-hold-seek";
+import { ArrowRightToLine, ChevronsRight, ListEnd } from "lucide-react";
+import {
+  DEFAULT_PLAYBACK_MODE,
+  nextPlaybackMode,
+  playbackModeLabel,
+  type MusicPlaybackMode,
+} from "./play-mode";
 
 /**
  * Полоса плеера внизу экрана. См. макет `.design/music/MiniPlayer.dc.html`.
@@ -121,7 +128,7 @@ export function MiniPlayer() {
     loadError,
     positionSeconds,
     durationSeconds,
-    repeat,
+    playMode,
     shuffle,
     rate,
     volume,
@@ -299,20 +306,16 @@ export function MiniPlayer() {
               строку. На `sm` ширина снова по содержимому — там ряд стоит по
               центру колонки. */}
           <div className="order-4 flex min-w-0 flex-1 items-center gap-1.5 sm:order-none sm:w-auto sm:flex-none sm:gap-2">
-            <button
-              type="button"
-              aria-label="Перемешать"
-              aria-pressed={shuffle}
-              onClick={player.toggleShuffle}
-              className={`${ctrl} hidden h-7 w-7 lg:flex ${shuffle ? "text-violet" : "text-text-2"}`}
-            >
-              <svg {...icon} className="h-[15px] w-[15px]">
-                <path d="M16 3l4 4-4 4" />
-                <path d="M20 7H8a4 4 0 0 0-4 4v1" />
-                <path d="M8 21l-4-4 4-4" />
-                <path d="M4 17h12a4 4 0 0 0 4-4v-1" />
-              </svg>
-            </button>
+            {/* С `md` — в ряду управления; на телефоне та же кнопка стоит
+                у дорожки, ниже (VED-133). Раньше обе прятались до `lg`, и с
+                телефона перемешать было нечем. Не с `sm`: на 640 средней
+                колонке достаётся ~118 точек, а ряд с двумя новыми кнопками
+                занимает 192 — наехал бы на название и кнопки записи. */}
+            <ShuffleButton
+              on={shuffle}
+              onToggle={player.toggleShuffle}
+              className={`${ctrl} hidden h-7 w-7 md:flex`}
+            />
 
             <button
               type="button"
@@ -399,40 +402,36 @@ export function MiniPlayer() {
               </svg>
             </button>
 
-            <button
-              type="button"
-              aria-label={
-                repeat === "off"
-                  ? "Повтор выключен"
-                  : repeat === "all"
-                    ? "Повтор очереди"
-                    : "Повтор одной записи"
-              }
-              onClick={() =>
-                player.setRepeat(
-                  repeat === "off" ? "all" : repeat === "all" ? "one" : "off",
-                )
-              }
-              className={`${ctrl} relative hidden h-7 w-7 lg:flex ${repeat === "off" ? "text-text-2" : "text-violet"}`}
-            >
-              <svg {...icon} className="h-[15px] w-[15px]">
-                <path d="M17 2l4 4-4 4" />
-                <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
-                <path d="M7 22l-4-4 4-4" />
-                <path d="M21 13v1a4 4 0 0 1-4 4H3" />
-              </svg>
-              {repeat === "one" && (
-                <span className="absolute mt-4 font-mono text-[8px]">1</span>
-              )}
-            </button>
+            {/* Режим проигрывания вместо «Повтора» (VED-132). */}
+            <PlayModeButton
+              mode={playMode}
+              onChange={player.setPlayMode}
+              className={`${ctrl} hidden h-7 w-7 md:flex`}
+            />
 
           </div>
 
+          {/* Телефон: третья строка — перемешивание, дорожка, режим. Во
+              второй места нет: пуск с переходами и четыре кнопки записи
+              занимают её до точки (326 из 327 на экране 375). Разрыв —
+              тот же приём, что после названия: на широком телефоне кнопки
+              иначе вскочили бы во вторую строку. */}
+          <span aria-hidden="true" className="order-6 h-0 w-full sm:hidden" />
+          <ShuffleButton
+            on={shuffle}
+            onToggle={player.toggleShuffle}
+            className={`${ctrl} order-7 h-9 w-9 sm:hidden`}
+          />
           <MusicPositionSlider
-            className="order-6 flex w-full min-w-0 items-center gap-2 sm:order-none sm:w-full sm:max-w-[340px]"
+            className="order-8 flex min-w-0 flex-1 items-center gap-2 sm:order-none sm:w-full sm:max-w-[340px] sm:flex-none"
             position={positionSeconds}
             total={total}
             onSeek={player.seek}
+          />
+          <PlayModeButton
+            mode={playMode}
+            onChange={player.setPlayMode}
+            className={`${ctrl} order-9 h-9 w-9 sm:hidden`}
           />
         </div>
 
@@ -624,6 +623,66 @@ export function MiniPlayer() {
       </section>
       )}
     </div>
+  );
+}
+
+/** «Перемешать». Один компонент на два места: ряд управления и строку дорожки. */
+function ShuffleButton({
+  on,
+  onToggle,
+  className,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  className: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label="Перемешать"
+      aria-pressed={on}
+      onClick={onToggle}
+      className={`${className} ${on ? "text-violet" : "text-text-2"}`}
+    >
+      <svg {...icon} className="h-[15px] w-[15px]">
+        <path d="M16 3l4 4-4 4" />
+        <path d="M20 7H8a4 4 0 0 0-4 4v1" />
+        <path d="M8 21l-4-4 4-4" />
+        <path d="M4 17h12a4 4 0 0 0 4-4v-1" />
+      </svg>
+    </button>
+  );
+}
+
+/**
+ * Режим проигрывания (VED-132): значки, а не подписи — так просили, чтобы
+ * поместилось на плеере. Имя кнопки называет текущий режим словами, `title`
+ * показывает его же при наведении. Режим по умолчанию («альбом до конца»)
+ * приглушён, остальные подсвечены: видно, что плеер поведёт себя иначе
+ * обычного.
+ */
+function PlayModeButton({
+  mode,
+  onChange,
+  className,
+}: {
+  mode: MusicPlaybackMode;
+  onChange: (mode: MusicPlaybackMode) => void;
+  className: string;
+}) {
+  const label = playbackModeLabel(mode);
+  const Glyph =
+    mode === "track" ? ArrowRightToLine : mode === "folder" ? ListEnd : ChevronsRight;
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={() => onChange(nextPlaybackMode(mode))}
+      className={`${className} ${mode === DEFAULT_PLAYBACK_MODE ? "text-text-2" : "text-violet"}`}
+    >
+      <Glyph aria-hidden className="h-4 w-4" />
+    </button>
   );
 }
 

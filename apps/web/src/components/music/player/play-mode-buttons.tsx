@@ -12,8 +12,9 @@ import { nextPlayStep, playStepLabel, randomTrackId } from "./play-mode";
  * и стоят второй строкой: человек, которому всё равно, нажимает первую кнопку
  * и не читает эти.
  *
- * Обе снимают повтор: «на последнем треке остановиться» — прямое требование
- * карточки, а включённый повтор тихо гонял бы список по кругу.
+ * Обе ставят режим «альбом до конца»: «на последнем треке остановиться» —
+ * прямое требование карточки, а оставшийся от прошлого прослушивания режим
+ * «дальше по альбомам» (VED-132) тихо увёл бы к следующему альбому.
  */
 export function MusicPlayModeButtons({ queue }: { queue: string[] }) {
   const player = useMusicPlayer();
@@ -36,7 +37,7 @@ export function MusicPlayModeButtons({ queue }: { queue: string[] }) {
       <button
         type="button"
         onClick={() => {
-          player?.setRepeat("off");
+          player?.setPlayMode("folder");
           setShuffle(false);
           // Один трек — это очередь из него одного: дойдя до конца, плееру
           // просто некуда идти, и он останавливается сам.
@@ -51,7 +52,7 @@ export function MusicPlayModeButtons({ queue }: { queue: string[] }) {
         onClick={() => {
           const start = randomTrackId(queue);
           if (!start) return;
-          player?.setRepeat("off");
+          player?.setPlayMode("folder");
           setShuffle(true);
           player?.play(start, [...queue]);
         }}

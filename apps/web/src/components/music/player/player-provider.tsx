@@ -19,6 +19,8 @@ import {
 import { resumeQueue } from "@/lib/music-resume-queue";
 import {
   fetchTrackStreamUrl,
+  getAlbumPage,
+  getArtistPage,
   getMusicSettings,
   getPlaybackState,
   getTrack,
@@ -65,6 +67,18 @@ import {
   parsePlayerState,
   serializePlayerState,
 } from "./player-state";
+import {
+  DEFAULT_PLAYBACK_MODE,
+  endOfTrackAction,
+  nextAlbumSlug,
+  type MusicPlaybackMode,
+} from "./play-mode";
+
+/**
+ * Очередь больше не зацикливается (VED-132): «Повтор» заменили режимы, и
+ * конец очереди решает `endOfTrackAction`, а не сама очередь.
+ */
+const REPEAT_OFF: MusicRepeatMode = "off";
 
 /**
  * Плеер портала. См. docs/music-service-plan.md, решение 6.
@@ -153,7 +167,8 @@ export interface MusicPlayerApi {
   loadError: string | null;
   positionSeconds: number;
   durationSeconds: number;
-  repeat: MusicRepeatMode;
+  /** Режим проигрывания (VED-132): одна запись, альбом, дальше по альбомам. */
+  playMode: MusicPlaybackMode;
   shuffle: boolean;
   rate: number;
   volume: number;
@@ -185,7 +200,7 @@ export interface MusicPlayerApi {
   prev(): void;
   seek(seconds: number): void;
   skip(delta: number): void;
-  setRepeat(mode: MusicRepeatMode): void;
+  setPlayMode(mode: MusicPlaybackMode): void;
   toggleShuffle(): void;
   setRate(rate: number): void;
   setVolume(volume: number): void;
@@ -247,7 +262,9 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [positionSeconds, setPositionSeconds] = useState(0);
   const [durationSeconds, setDurationSeconds] = useState(0);
-  const [repeat, setRepeatState] = useState<MusicRepeatMode>("off");
+  const [playMode, setPlayModeState] = useState<MusicPlaybackMode>(
+    DEFAULT_PLAYBACK_MODE,
+  );
   const [shuffle, setShuffle] = useState(false);
   const [shuffleSeed, setShuffleSeed] = useState(1);
   const [rate, setRateState] = useState(1);
@@ -324,9 +341,11 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   );
 
   const hasNext =
-    queueNext({ length: queue.length, index, repeat, shuffle, order }) !== null;
+    queueNext({ length: queue.length, index, repeat: REPEAT_OFF, shuffle, order }) !==
+    null;
   const hasPrev =
-    queuePrev({ length: queue.length, index, repeat, shuffle, order }) !== null;
+    queuePrev({ length: queue.length, index, repeat: REPEAT_OFF, shuffle, order }) !==
+    null;
 
   /**
    * Последняя запрошенная запись.
@@ -407,7 +426,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
        ленивый useState здесь даёт расхождение гидратации. */
     setQueue(stored.queue);
     setIndex(stored.index);
-    setRepeatState(stored.repeat);
+    setPlayModeState(stored.playMode);
     setShuffle(stored.shuffle);
     setShuffleSeed(stored.shuffleSeed);
     setRateState(stored.rate);
@@ -430,7 +449,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
           queue,
           index,
           positionSeconds,
-          repeat,
+          playMode,
           shuffle,
           shuffleSeed,
           rate,
@@ -440,7 +459,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     } catch {
       // Переполненное хранилище не должно ронять воспроизведение.
     }
-  }, [queue, index, positionSeconds, repeat, shuffle, shuffleSeed, rate, volume]);
+  }, [queue, index, positionSeconds, playMode, shuffle, shuffleSeed, rate, volume]);
 
   // ---------- Возобновление с сервера ----------
 
@@ -665,7 +684,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     const target = queueNext({
       length: queue.length,
       index,
-      repeat,
+      repeat: REPEAT_OFF,
       shuffle,
       order,
     });
@@ -675,20 +694,20 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     }
     setIndex(target);
     void loadTrack(queue[target]);
-  }, [queue, index, repeat, shuffle, order, loadTrack]);
+  }, [queue, index, shuffle, order, loadTrack]);
 
   const prev = useCallback(() => {
     const target = queuePrev({
       length: queue.length,
       index,
-      repeat,
+      repeat: REPEAT_OFF,
       shuffle,
       order,
     });
     if (target === null) return;
     setIndex(target);
     void loadTrack(queue[target]);
-  }, [queue, index, repeat, shuffle, order, loadTrack]);
+  }, [queue, index, shuffle, order, loadTrack]);
 
   /**
    * Прогрев следующей записи.
@@ -707,7 +726,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     const target = queueNext({
       length: queue.length,
       index,
-      repeat,
+      repeat: REPEAT_OFF,
       shuffle,
       order,
     });
@@ -733,7 +752,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [isPlaying, queue, index, repeat, shuffle, order]);
+  }, [isPlaying, queue, index, shuffle, order]);
 
   /**
    * Срабатывание сон-таймера. Проверяем секундами, а не одним `setTimeout` на
@@ -752,18 +771,44 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     return () => window.clearInterval(id);
   }, [sleepTimer]);
 
-  const handleEnded = useCallback(() => {
-    // `repeat: one` возвращает ту же позицию — перезапускаем вручную, иначе
-    // повтор одного трека не сработал бы вовсе.
-    if (repeat === "one") {
-      const audio = audioRef.current;
-      if (audio) {
-        audio.currentTime = 0;
-        void audio.play();
-      }
-      return;
-    }
+  /**
+   * `play` объявлена ниже по файлу, а переход к следующему альбому зовёт её
+   * из обработчика конца записи — через ref, иначе зависимость читалась бы до
+   * объявления.
+   */
+  const playRef = useRef<MusicPlayerApi["play"] | null>(null);
 
+  /**
+   * Режим «после альбома — следующий альбом исполнителя» (VED-132).
+   *
+   * Карточка дослушанной записи знает исполнителя и альбом; страница
+   * исполнителя отдаёт его альбомы в том же порядке, что видит человек.
+   * Не нашлось следующего — тишина, как в конце обычной очереди.
+   */
+  const continueWithNextAlbum = useCallback(
+    async (track: MusicTrackDto) => {
+      const stopHere = () => {
+        setIsPlaying(false);
+        void stopPlayback();
+      };
+      const artistSlug = track.artist?.slug;
+      if (!artistSlug) return stopHere();
+
+      const artist = await getArtistPage(artistSlug);
+      const slug = artist
+        ? nextAlbumSlug(artist.albums, track.album?.slug ?? null)
+        : null;
+      const album = slug ? await getAlbumPage(slug) : null;
+      // Пока шли запросы, человек мог включить что-то сам: его выбор главнее.
+      if (wantedTrackRef.current !== track.id) return;
+      const ids = album?.tracks.map((item) => item.id) ?? [];
+      if (ids.length === 0) return stopHere();
+      playRef.current?.(ids[0], ids);
+    },
+    [],
+  );
+
+  const handleEnded = useCallback(() => {
     // Сон-таймер сильнее автоперехода: человек просил тишины после этой
     // записи, и «следующая» здесь — прямое нарушение просьбы.
     if (shouldStopOnEnded(sleepTimer, Date.now())) {
@@ -774,18 +819,36 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Человек снял автопереход в настройках: останавливаемся на дослушанной
-    // записи, а не уходим к следующей. Строку «слушает сейчас» снимаем сразу
-    // — иначе друзья видели бы запись, которая давно кончилась.
-    if (!autoplay) {
+    // Человек снял автопереход в настройках или выбрал режим «одна запись»:
+    // останавливаемся на дослушанной, а не уходим к следующей. Строку
+    // «слушает сейчас» снимаем сразу — иначе друзья видели бы запись, которая
+    // давно кончилась.
+    const action = endOfTrackAction({ mode: playMode, hasNext });
+    if (!autoplay || playMode === "track") {
       setIsPlaying(false);
       if (current) void savePlaybackPosition(current.id, positionSeconds);
       void stopPlayback();
       return;
     }
 
+    if (action === "nextAlbum" && current) {
+      void continueWithNextAlbum(current);
+      return;
+    }
+
+    // Следующая запись, а в конце альбома — тишина: `next` сам гасит звук,
+    // когда идти некуда.
     next();
-  }, [repeat, autoplay, current, positionSeconds, next, sleepTimer]);
+  }, [
+    playMode,
+    hasNext,
+    autoplay,
+    current,
+    positionSeconds,
+    next,
+    sleepTimer,
+    continueWithNextAlbum,
+  ]);
 
   // ---------- Тик ----------
 
@@ -867,6 +930,9 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     },
     [loadTrack],
   );
+  useEffect(() => {
+    playRef.current = play;
+  }, [play]);
 
   /**
    * «Слушать дальше» — сразу за текущей записью, не трогая остальное.
@@ -1096,7 +1162,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       loadError,
       positionSeconds,
       durationSeconds,
-      repeat,
+      playMode,
       shuffle,
       rate,
       volume,
@@ -1116,7 +1182,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       prev,
       seek,
       skip,
-      setRepeat: setRepeatState,
+      setPlayMode: setPlayModeState,
       toggleShuffle,
       setRate: (value: number) =>
         setRateState(
@@ -1141,7 +1207,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       loadError,
       positionSeconds,
       durationSeconds,
-      repeat,
+      playMode,
       shuffle,
       rate,
       volume,

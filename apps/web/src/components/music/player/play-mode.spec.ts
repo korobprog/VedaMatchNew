@@ -1,5 +1,69 @@
-import { nextPlayStep, playStepLabel, randomTrackId } from "./play-mode";
+import {
+  endOfTrackAction,
+  nextAlbumSlug,
+  nextPlaybackMode,
+  nextPlayStep,
+  playbackModeLabel,
+  playStepLabel,
+  randomTrackId,
+} from "./play-mode";
 import { describe, expect, it } from "vitest";
+
+// VED-132: три режима на плеере вместо «Повтора».
+describe("nextPlaybackMode", () => {
+  it("перебирает одна запись → альбом → дальше → снова одна запись", () => {
+    expect(nextPlaybackMode("track")).toBe("folder");
+    expect(nextPlaybackMode("folder")).toBe("continue");
+    expect(nextPlaybackMode("continue")).toBe("track");
+  });
+
+  it("у каждого режима своё имя кнопки", () => {
+    const labels = new Set(
+      (["track", "folder", "continue"] as const).map(playbackModeLabel),
+    );
+    expect(labels.size).toBe(3);
+  });
+});
+
+describe("endOfTrackAction", () => {
+  it("«одна запись» останавливается, даже если в очереди есть ещё", () => {
+    expect(endOfTrackAction({ mode: "track", hasNext: true })).toBe("stop");
+  });
+
+  it("«альбом» идёт по очереди и молчит в её конце", () => {
+    expect(endOfTrackAction({ mode: "folder", hasNext: true })).toBe("next");
+    expect(endOfTrackAction({ mode: "folder", hasNext: false })).toBe("stop");
+  });
+
+  it("«дальше» в конце очереди уходит к следующему альбому", () => {
+    expect(endOfTrackAction({ mode: "continue", hasNext: true })).toBe("next");
+    expect(endOfTrackAction({ mode: "continue", hasNext: false })).toBe(
+      "nextAlbum",
+    );
+  });
+});
+
+describe("nextAlbumSlug", () => {
+  const albums = [{ slug: "new" }, { slug: "middle" }, { slug: "old" }];
+
+  it("берёт альбом, стоящий ниже в списке исполнителя", () => {
+    expect(nextAlbumSlug(albums, "new")).toBe("middle");
+    expect(nextAlbumSlug(albums, "middle")).toBe("old");
+  });
+
+  it("после последнего альбома — конец, по кругу не идёт", () => {
+    expect(nextAlbumSlug(albums, "old")).toBeNull();
+  });
+
+  it("запись без альбома начинает с первого альбома исполнителя", () => {
+    expect(nextAlbumSlug(albums, null)).toBe("new");
+  });
+
+  it("чужой альбом и исполнитель без альбомов — конец", () => {
+    expect(nextAlbumSlug(albums, "сборник")).toBeNull();
+    expect(nextAlbumSlug([], "new")).toBeNull();
+  });
+});
 
 describe("nextPlayStep", () => {
   it("молчащий плеер: первое нажатие — одна запись", () => {

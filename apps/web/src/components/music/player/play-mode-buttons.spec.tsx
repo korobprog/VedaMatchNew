@@ -12,7 +12,7 @@ function player(over: Record<string, unknown> = {}) {
     queue: [] as string[],
     shuffle: false,
     play: vi.fn(),
-    setRepeat: vi.fn(),
+    setPlayMode: vi.fn(),
     toggleShuffle: vi.fn(),
     ...over,
   };
@@ -21,7 +21,8 @@ function player(over: Record<string, unknown> = {}) {
 beforeEach(() => vi.mocked(useMusicPlayer).mockReset());
 
 describe("MusicPlayModeButtons", () => {
-  it("первое нажатие включает одну запись и снимает повтор", async () => {
+  // VED-132: «Повтор» заменили режимы — кнопки ставят «альбом до конца».
+  it("первое нажатие включает одну запись и ставит «альбом до конца»", async () => {
     const p = player();
     vi.mocked(useMusicPlayer).mockReturnValue(p as never);
     const user = userEvent.setup();
@@ -31,7 +32,7 @@ describe("MusicPlayModeButtons", () => {
 
     // Очередь из одной записи: дойдя до конца, плееру некуда идти.
     expect(p.play).toHaveBeenCalledWith("a", ["a"]);
-    expect(p.setRepeat).toHaveBeenCalledWith("off");
+    expect(p.setPlayMode).toHaveBeenCalledWith("folder");
   });
 
   it("второе нажатие раскрывает весь список до конца", async () => {
@@ -43,7 +44,7 @@ describe("MusicPlayModeButtons", () => {
     await user.click(screen.getByRole("button", { name: "Слушать всё до конца" }));
 
     expect(p.play).toHaveBeenCalledWith("a", ["a", "b", "c"]);
-    expect(p.setRepeat).toHaveBeenCalledWith("off");
+    expect(p.setPlayMode).toHaveBeenCalledWith("folder");
   });
 
   // Порядок задаёт кнопка: «Слушать» после «Перемешать» не должна остаться

@@ -11,7 +11,7 @@ const state: PersistedPlayerState = {
   queue: ["t1", "t2", "t3"],
   index: 1,
   positionSeconds: 128,
-  repeat: "all",
+  playMode: "continue",
   shuffle: true,
   shuffleSeed: 12345,
   rate: 1.25,
@@ -80,10 +80,21 @@ describe("parsePlayerState", () => {
     ).toBe(0);
   });
 
-  it("неизвестный режим повтора заменяет выключенным", () => {
+  // VED-132: «Повтор» заменили три режима; неизвестное — режим по умолчанию.
+  it("неизвестный режим заменяет «альбом до конца»", () => {
     expect(
-      parsePlayerState(JSON.stringify({ ...state, repeat: "всегда" }))?.repeat,
-    ).toBe("off");
+      parsePlayerState(JSON.stringify({ ...state, playMode: "всегда" }))
+        ?.playMode,
+    ).toBe("folder");
+  });
+
+  it("состояние от прежней сборки с «Повтором» читается, очередь не теряется", () => {
+    // `undefined` JSON.stringify выбрасывает: получается запись без playMode.
+    const legacy = JSON.stringify({ ...state, playMode: undefined, repeat: "all" });
+    const parsed = parsePlayerState(legacy);
+
+    expect(parsed?.queue).toEqual(state.queue);
+    expect(parsed?.playMode).toBe("folder");
   });
 
   describe("скорость", () => {
@@ -131,7 +142,7 @@ describe("parsePlayerState", () => {
       queue: ["t1"],
       index: 0,
       positionSeconds: 0,
-      repeat: "off",
+      playMode: "folder",
       shuffle: false,
       shuffleSeed: 1,
       rate: 1,
