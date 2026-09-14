@@ -57,7 +57,9 @@ export function FeaturedServicesEditor({
         onClick={open}
         disabled={pending}
         aria-label={pending ? undefined : "Настроить кнопки"}
-        className="inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-xs font-medium text-text-2 hover:text-text-0 disabled:opacity-50"
+        /* Рамка и отступы — как у соседней «Изменить порядок» (VED-127):
+           рядом стоят две кнопки, и без рамки эта читалась как подпись. */
+        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-glass-brd px-3 py-1.5 text-xs font-semibold text-text-2 hover:text-text-0 disabled:opacity-50"
       >
         <SlidersHorizontal aria-hidden className="size-3.5" />
         {/* На телефоне в строке над сеткой ещё «Изменить порядок» и вид:

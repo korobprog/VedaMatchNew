@@ -58,6 +58,21 @@ describe("FeaturedServicesEditor", () => {
     );
   });
 
+  // VED-127: кнопка в рамке, как соседняя «Изменить порядок».
+  it("выглядит кнопкой в рамке, а не подписью", () => {
+    render(
+      <FeaturedServicesEditor
+        userId="u1"
+        current={["chat", "music", "calls"]}
+        options={OPTIONS}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Настроить кнопки" }),
+    ).toHaveClass("rounded-xl", "border", "border-glass-brd");
+  });
+
   it("saves the chosen services and redraws the home page", async () => {
     const user = userEvent.setup();
     render(
