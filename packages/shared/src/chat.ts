@@ -58,6 +58,37 @@ export const CHAT_REACTION_EMOJIS = [
 
 export type ChatReactionEmoji = (typeof CHAT_REACTION_EMOJIS)[number];
 
+/**
+ * «Избранные» смайлики в панели переписки (VED-123). Этот набор — пока
+ * администрация не задала свой в админке чата. Каждый дальше правит свой
+ * набор сам; он хранится на устройстве, как «Недавние».
+ */
+export const CHAT_DEFAULT_FAVORITE_EMOJIS = [
+  '🙏',
+  '❤️',
+  '😊',
+  '🌸',
+  '🕉️',
+  '✨',
+  '👍',
+  '😂',
+] as const;
+
+/** Сколько смайликов в избранном: четыре строки панели. */
+export const CHAT_FAVORITE_EMOJI_MAX = 32;
+
+/** Набор «Избранных» по умолчанию — каким его задала администрация. */
+export interface ChatFavoriteEmojisDto {
+  emojis: string[];
+  /** `true` — администрация набор не задавала, отдан встроенный. */
+  isBuiltIn: boolean;
+}
+
+export interface UpdateChatFavoriteEmojisRequest {
+  /** Пустой список — вернуть встроенный набор. */
+  emojis: string[];
+}
+
 export interface ChatUserSummary {
   id: string;
   /** Уже разрешённое имя: духовное, если оно есть. */

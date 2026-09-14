@@ -7,6 +7,7 @@ import { ChatCallsService } from './calls/chat-calls.service';
 import { ChatColorTemplatesService } from './chat-color-templates.service';
 import { ChatConversationThemeService } from './chat-conversation-theme.service';
 import { ChatConversationsService } from './chat-conversations.service';
+import { ChatEmojiService } from './chat-emoji.service';
 import { ChatEventsService } from './chat-events.service';
 import { ChatMessagesService } from './chat-messages.service';
 import { ChatPresenceService } from './chat-presence.service';
@@ -64,6 +65,7 @@ import { PeopleService } from './people/people.service';
     ChatRetentionService,
     ChatColorTemplatesService,
     ChatConversationThemeService,
+    ChatEmojiService,
     PeopleService,
     PeopleRequestsService,
     PeopleAdminService,
