@@ -17,6 +17,7 @@ import {
 import { getDonationSettings, getProfile } from "@/lib/api";
 import {
   getMotivationAudio,
+  getMotivationCategories,
   getMotivationFeed,
   getMotivationStats,
 } from "@/lib/motivation-api";
@@ -53,7 +54,7 @@ export default async function MotivationPage({
      готовые картинки с напечатанным текстом. Список остаётся общим: у него
      нет вкладок, и прятать там половину публикаций было бы нечем объяснить. */
   const style = view === "reels" ? feedStyleOf(tab) : undefined;
-  const [user, feed, donation, stats, audio] = await Promise.all([
+  const [user, feed, donation, stats, audio, categories] = await Promise.all([
     getProfile(),
     // `?post=slug` открывает ленту на конкретном рилсе — так работает переход
     // из мастера и из «Моих рилсов».
@@ -69,6 +70,8 @@ export default async function MotivationPage({
     getMotivationStats(),
     // Фон для чтения. Пустой список — кнопки музыки в ленте не будет.
     getMotivationAudio(),
+    // Кнопки категорий на пустых экранах ленты (VED-135).
+    view === "reels" ? getMotivationCategories() : Promise.resolve(null),
   ]);
   if (!user) redirectToLogin("/motivation");
   // Новичок идёт в мастер: там тот же вопрос об этапе, но после имени
@@ -162,6 +165,7 @@ export default async function MotivationPage({
           category={category}
           isAdmin={isAdmin}
           audio={audio}
+          categories={categories ?? []}
         />
         <ReelsChrome
           isAdmin={isAdmin}

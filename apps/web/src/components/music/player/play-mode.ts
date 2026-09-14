@@ -78,7 +78,7 @@ export function playbackModeLabel(mode: MusicPlaybackMode): string {
     case 'folder':
       return 'Режим: альбом до конца и стоп';
     case 'continue':
-      return 'Режим: после альбома — следующий альбом исполнителя';
+      return 'Режим: дальше — следующий альбом или исполнитель';
   }
 }
 
@@ -108,20 +108,38 @@ export function endOfTrackAction({
  * Следующий альбом исполнителя после того, где лежит дослушанная запись.
  *
  * Порядок — как на странице исполнителя (свежие сверху): «следующий» — тот,
- * что стоит ниже. Последний альбом — конец, по кругу не идём: режим «дальше»,
- * а не «повтор». Запись без альбома начинает с первого альбома исполнителя.
- * Альбом, которого нет в списке исполнителя (сборник другого автора), —
- * тоже конец: угадывать, что считать «следующим», здесь не из чего.
+ * что стоит ниже. `null` — альбомом дальше идти некуда, и режим «дальше»
+ * переходит к следующему исполнителю (`nextArtistSlug`):
+ * - последний альбом — по кругу не идём, режим «дальше», а не «повтор»;
+ * - запись без альбома — её «папка» и есть исполнитель: начать с его же
+ *   первого альбома значило бы сыграть те же записи второй раз;
+ * - альбома нет в списке исполнителя (сборник другого автора) — угадывать,
+ *   что считать «следующим», здесь не из чего.
  */
 export function nextAlbumSlug(
   albums: readonly { slug: string }[],
   currentAlbumSlug: string | null,
 ): string | null {
-  if (albums.length === 0) return null;
-  if (!currentAlbumSlug) return albums[0].slug;
+  if (!currentAlbumSlug) return null;
   const at = albums.findIndex((album) => album.slug === currentAlbumSlug);
   if (at === -1 || at === albums.length - 1) return null;
   return albums[at + 1].slug;
+}
+
+/**
+ * Следующий исполнитель Медиатеки — когда альбомом дальше идти некуда.
+ *
+ * На проде альбомов нет вовсе: записи лежат у исполнителей, и «папка» в
+ * Медиатеке — это карточка исполнителя. Порядок — как в списке исполнителей
+ * Медиатеки. После последнего — тишина, по кругу не идём.
+ */
+export function nextArtistSlug(
+  artists: readonly { slug: string }[],
+  currentArtistSlug: string,
+): string | null {
+  const at = artists.findIndex((artist) => artist.slug === currentArtistSlug);
+  if (at === -1 || at === artists.length - 1) return null;
+  return artists[at + 1].slug;
 }
 
 /**
