@@ -4,11 +4,23 @@ import {
   nextArtistSlug,
   nextPlaybackMode,
   nextPlayStep,
+  pauseStopsPlayback,
   playbackModeLabel,
   playStepLabel,
   randomTrackId,
 } from "./play-mode";
 import { describe, expect, it } from "vitest";
+
+// VED-132: «переключает на следующий трек, но не проигрывает его».
+describe("pauseStopsPlayback", () => {
+  it("пауза посреди записи — остановка", () => {
+    expect(pauseStopsPlayback({ ended: false })).toBe(true);
+  });
+
+  it("пауза, которую браузер шлёт перед `ended`, — не остановка", () => {
+    expect(pauseStopsPlayback({ ended: true })).toBe(false);
+  });
+});
 
 // VED-132: три режима на плеере вместо «Повтора».
 describe("nextPlaybackMode", () => {
