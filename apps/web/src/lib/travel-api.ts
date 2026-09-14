@@ -1,6 +1,8 @@
 // API-клиент сервиса «Путешествия». См. docs/service-module-contract.md.
 import type {
   CreateTravelBookingRequest,
+  ContactTravelStayRequest,
+  ContactTravelStayResponse,
   CreateTravelStayRequest,
   SaveTravelCashCategoryRequest,
   SaveTravelCashEntryRequest,
@@ -112,6 +114,16 @@ export const claimTravelBooking = (token: string) =>
     method: "POST",
     ...json({ token }),
   });
+
+/** «Написать хозяину»: id беседы в «Общении». */
+export const contactTravelStay = (
+  stayId: string,
+  body: ContactTravelStayRequest = {},
+) =>
+  request<ContactTravelStayResponse>(
+    `/travel/stays/${encodeURIComponent(stayId)}/contact`,
+    { method: "POST", ...json(body) },
+  );
 
 export const cancelTravelBooking = (id: string) =>
   request<TravelBookingDto>(

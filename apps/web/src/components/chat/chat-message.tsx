@@ -596,6 +596,7 @@ function sourceLabel(attachment: ChatAttachmentDto): string {
   if (attachment.kind === "assistant") return "Ответ ассистента";
   if (attachment.kind === "work") return "Приглашение · Работа";
   if (attachment.kind === "vacancy") return "Отклик · Вакансии";
+  if (attachment.kind === "stay") return "Ночлег · Путешествия";
   return "Контакт";
 }
 

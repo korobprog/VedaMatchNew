@@ -74,6 +74,17 @@ export class TravelController {
     return this.travel.claimBooking(user.sub, body.token);
   }
 
+  /** «Написать хозяину» — открывает переписку в «Общении». */
+  @Post('stays/:id/contact')
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  contact(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: { bookingId?: unknown; message?: unknown },
+  ) {
+    return this.travel.contactManager(user.sub, id, body);
+  }
+
   @Post('bookings/:id/cancel')
   cancel(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.travel.cancelBooking(user.sub, id);

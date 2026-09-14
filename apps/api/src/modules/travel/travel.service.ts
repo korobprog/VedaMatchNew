@@ -6,6 +6,11 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Prisma, TravelBooking } from '@prisma/client';
+import {
+  TRAVEL_STAY_KIND_LABELS,
+  type ContactTravelStayResponse,
+  type TravelContactRequestedEvent,
+} from '@vedamatch/shared';
 import type {
   TravelBookingDto,
   TravelGuestBookingResponse,
@@ -25,7 +30,16 @@ import {
   TravelInputError,
   type ParsedBookingInput,
 } from './travel-dto';
-import { bookingRecipients, TRAVEL_EVENTS } from './travel-events';
+import {
+  contactCardBody,
+  contactMessage,
+  pickStayRecipient,
+} from './travel-contact';
+import {
+  bookingRecipients,
+  TRAVEL_CONTACT_REQUESTED_EVENT,
+  TRAVEL_EVENTS,
+} from './travel-events';
 
 /** Комнату показываем как «корпус, номер» — без корпуса просто номером. */
 export function roomLabel(
@@ -362,6 +376,73 @@ export class TravelService {
       userId,
     );
     return toBookingDto(booking);
+  }
+
+  /**
+   * «Написать хозяину». Писать можно по опубликованному объекту либо по
+   * своей заявке — хозяин снятого объекта остаётся на связи с теми, кто у
+   * него уже бронировал. Переписку открывает «Общение» по событию.
+   */
+  async contactManager(
+    userId: string,
+    stayId: string,
+    body: { bookingId?: unknown; message?: unknown },
+  ): Promise<ContactTravelStayResponse> {
+    const stay = await this.prisma.travelStay.findUnique({
+      where: { id: stayId },
+      select: {
+        id: true,
+        name: true,
+        kind: true,
+        status: true,
+        managers: { select: { userId: true, role: true } },
+      },
+    });
+    if (!stay) throw new NotFoundException('Объект не найден');
+
+    const bookingId =
+      typeof body.bookingId === 'string' && body.bookingId.trim()
+        ? body.bookingId.trim()
+        : null;
+    const booking = bookingId
+      ? await this.prisma.travelBooking.findFirst({
+          where: { id: bookingId, stayId, guestUserId: userId },
+          select: { id: true, number: true, checkIn: true, checkOut: true },
+        })
+      : null;
+    if (bookingId && !booking) throw new NotFoundException('Заявка не найдена');
+    if (stay.status !== 'published' && !booking) {
+      throw new NotFoundException('Объект не найден или снят с публикации');
+    }
+
+    const recipientId = pickStayRecipient(stay.managers, userId);
+    if (!recipientId) {
+      throw new BadRequestException('Это ваш объект — писать хозяину не нужно');
+    }
+
+    const event: TravelContactRequestedEvent = {
+      requesterId: userId,
+      recipientId,
+      stayId: stay.id,
+      stayName: stay.name,
+      stayKindLabel: TRAVEL_STAY_KIND_LABELS[stay.kind],
+      bookingId: booking?.id ?? null,
+      cardBody: contactCardBody(booking),
+      message: contactMessage(body.message),
+    };
+    const results: unknown[] = await this.events.emitAsync(
+      TRAVEL_CONTACT_REQUESTED_EVENT,
+      event,
+    );
+    const conversationId =
+      results.find((value): value is string => typeof value === 'string') ??
+      null;
+    if (!conversationId) {
+      throw new ForbiddenException(
+        'Переписка с хозяином недоступна — позвоните по телефону из карточки',
+      );
+    }
+    return { conversationId };
   }
 
   /** Отменить свою заявку. Уехавшего гостя отменять поздно. */

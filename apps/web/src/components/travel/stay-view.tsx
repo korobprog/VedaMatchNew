@@ -17,6 +17,7 @@ import {
   saveClaimTokens,
   withClaimToken,
 } from "./claim-tokens";
+import { ContactHostButton } from "./contact-host-button";
 import { priceLabel } from "./price";
 
 /** Завтра в виде ГГГГ-ММ-ДД: заезд задним числом API не примет. */
@@ -138,7 +139,21 @@ export function StayView({
           >
             Заявки на этот объект
           </Link>
-        ) : null}
+        ) : publicMode ? (
+          // Переписка живёт в «Общении» и требует входа. Ссылка ведёт на
+          // страницу объекта в портале: гостя без входа proxy сам отправит
+          // войти и вернёт обратно, к кнопке «Написать хозяину».
+          <Link
+            href={`/travel/stays/${stay.id}`}
+            className="mt-3 inline-block rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1"
+          >
+            Написать хозяину — нужен вход
+          </Link>
+        ) : (
+          <div className="mt-3">
+            <ContactHostButton stayId={stay.id} />
+          </div>
+        )}
       </header>
 
       {stay.description ? (

@@ -16,6 +16,7 @@ import {
   saveClaimTokens,
   withoutClaimTokens,
 } from "./claim-tokens";
+import { ContactHostButton } from "./contact-host-button";
 
 /**
  * Привязать заявки, поданные с этого браузера до входа. Отработанный токен —
@@ -132,6 +133,12 @@ export function BookingsView() {
                 Причина отказа: {booking.declineReason}
               </p>
             ) : null}
+            <div className="mt-3">
+              <ContactHostButton
+                stayId={booking.stayId}
+                bookingId={booking.id}
+              />
+            </div>
             {CANCELABLE.has(booking.status) ? (
               <button
                 type="button"
