@@ -233,3 +233,98 @@ export const TRAVEL_PUBLIC_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 /** Дольше месяца подряд — это уже не заявка на ночлег, а переезд. */
 export const TRAVEL_MAX_NIGHTS = 31;
+
+// ===== Касса объекта =====
+
+export const TRAVEL_CASH_KINDS = ['income', 'expense'] as const;
+export type TravelCashKind = (typeof TRAVEL_CASH_KINDS)[number];
+
+/**
+ * Значки статей кассы. Закрытый список ключей, а не имена иконок библиотеки:
+ * в базе лежит ключ, картинку к нему подбирает веб. Новый значок — строка
+ * здесь и в карте на вебе, без миграции.
+ */
+export const TRAVEL_CASH_ICONS = [
+  'house',
+  'bed',
+  'banknote',
+  'gift',
+  'seva',
+  'cart',
+  'food',
+  'cleaning',
+  'laundry',
+  'repair',
+  'utilities',
+  'water',
+  'internet',
+  'ads',
+  'salary',
+  'transport',
+  'fees',
+  'package',
+  'other',
+] as const;
+export type TravelCashIcon = (typeof TRAVEL_CASH_ICONS)[number];
+
+/** Группировка ленты кассы. */
+export const TRAVEL_CASH_GROUPINGS = ['day', 'week', 'month', 'year'] as const;
+export type TravelCashGrouping = (typeof TRAVEL_CASH_GROUPINGS)[number];
+
+export interface TravelCashCategoryDto {
+  id: string;
+  kind: TravelCashKind;
+  name: string;
+  icon: TravelCashIcon;
+  position: number;
+}
+
+export interface TravelCashEntryDto {
+  id: string;
+  kind: TravelCashKind;
+  /** Всегда положительная, знак задаёт `kind`. */
+  amountMinor: number;
+  /** ISO-дата без времени. */
+  occurredOn: string;
+  categoryId: string | null;
+  note: string;
+  tags: string[];
+  authorName: string | null;
+  createdAt: string;
+}
+
+export interface TravelCashCategoriesResponse {
+  items: TravelCashCategoryDto[];
+}
+
+/**
+ * Записи за промежуток и остаток на его начало. Остаток считает сервер: у
+ * клиента нет всей истории, а бюджет в шапке обязан сходиться с кассой.
+ */
+export interface TravelCashEntriesResponse {
+  stayName: string;
+  currency: TravelCurrency;
+  openingMinor: number;
+  /** Остаток на утро дня `from`: начальный плюс всё, что было раньше. */
+  balanceBeforeMinor: number;
+  /** Остаток сейчас, по всем записям, включая будущие даты. */
+  balanceMinor: number;
+  from: string;
+  to: string;
+  items: TravelCashEntryDto[];
+}
+
+export interface SaveTravelCashEntryRequest {
+  kind: TravelCashKind;
+  amountMinor: number;
+  occurredOn: string;
+  categoryId?: string | null;
+  note?: string;
+  tags?: string[];
+}
+
+export interface SaveTravelCashCategoryRequest {
+  kind: TravelCashKind;
+  name: string;
+  icon: TravelCashIcon;
+}

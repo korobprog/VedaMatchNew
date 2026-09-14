@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { TravelAdminController } from './travel-admin.controller';
 import { TravelAdminService } from './travel-admin.service';
+import { TravelCashController } from './travel-cash.controller';
+import { TravelCashService } from './travel-cash.service';
 import { TravelManageController } from './travel-manage.controller';
 import { TravelManageService } from './travel-manage.service';
 import { TravelPurgeListener } from './travel-purge.listener';
@@ -21,12 +23,14 @@ import { TravelService } from './travel.service';
   imports: [AuthModule],
   controllers: [
     TravelAdminController,
+    TravelCashController,
     TravelManageController,
     TravelController,
   ],
   providers: [
     TravelService,
     TravelManageService,
+    TravelCashService,
     TravelAdminService,
     TravelPurgeListener,
   ],
