@@ -6,7 +6,38 @@ import {
   TRAVEL_BOOKING_STATUS_LABELS,
   type TravelBookingDto,
 } from "@vedamatch/shared";
-import { cancelTravelBooking, getMyTravelBookings } from "@/lib/travel-api";
+import {
+  cancelTravelBooking,
+  claimTravelBooking,
+  getMyTravelBookings,
+} from "@/lib/travel-api";
+import {
+  readClaimTokens,
+  saveClaimTokens,
+  withoutClaimTokens,
+} from "./claim-tokens";
+
+/**
+ * Привязать заявки, поданные с этого браузера до входа. Отработанный токен —
+ * и привязанный, и отвергнутый сервером — убирается: второй раз он уже не
+ * сработает. Сетевая ошибка токен оставляет до следующего открытия.
+ */
+async function claimPendingBookings(): Promise<void> {
+  const tokens = readClaimTokens();
+  if (!tokens.length) return;
+  const done: string[] = [];
+  for (const token of tokens) {
+    try {
+      await claimTravelBooking(token);
+      done.push(token);
+    } catch (cause) {
+      if (cause instanceof Error && "status" in cause && cause.status === 404) {
+        done.push(token);
+      }
+    }
+  }
+  saveClaimTokens(withoutClaimTokens(readClaimTokens(), done));
+}
 import { formatPrice, nightsWord } from "./price";
 
 /** Заявку можно отменить, пока заезд не состоялся. */
@@ -19,7 +50,8 @@ export function BookingsView() {
 
   useEffect(() => {
     const controller = new AbortController();
-    getMyTravelBookings(controller.signal)
+    claimPendingBookings()
+      .then(() => getMyTravelBookings(controller.signal))
       .then((res) => setItems(res.items))
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
@@ -86,7 +118,8 @@ export function BookingsView() {
               {booking.stayName}
             </p>
             <p className="mt-1 text-sm text-text-1">
-              {booking.checkIn} — {booking.checkOut}, {nightsWord(booking.nights)}
+              {booking.checkIn} — {booking.checkOut},{" "}
+              {nightsWord(booking.nights)}
               {booking.roomLabel ? ` · ${booking.roomLabel}` : ""}
             </p>
             {booking.totalMinor !== null ? (

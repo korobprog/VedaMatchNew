@@ -13,6 +13,7 @@ import {
   setManagedStayStatus,
 } from "@/lib/travel-api";
 import { formatPrice, nightsWord } from "./price";
+import { StayQrDialog } from "./stay-qr-dialog";
 
 type Decision = "accepted" | "declined" | "checked_in" | "completed";
 
@@ -122,13 +123,20 @@ export function StayBookingsView({ stayId }: { stayId: string }) {
           Публичный код: {publicCode || "—"} ·{" "}
           {status === "published" ? "опубликован" : "не опубликован"}
         </p>
-        <button
-          type="button"
-          onClick={() => void publish()}
-          className="mt-2 rounded-xl border border-magenta px-3 py-2 text-sm text-text-0"
-        >
-          {status === "published" ? "Снять с публикации" : "Опубликовать"}
-        </button>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void publish()}
+            className="rounded-xl border border-magenta px-3 py-2 text-sm text-text-0"
+          >
+            {status === "published" ? "Снять с публикации" : "Опубликовать"}
+          </button>
+          {/* QR ведёт на страницу, которая открывается только у опубликованного
+              объекта: до публикации код на стойке показал бы «не найдено». */}
+          {status === "published" && publicCode ? (
+            <StayQrDialog code={publicCode} name={stayName} />
+          ) : null}
+        </div>
       </header>
 
       <form onSubmit={addRoom} className="flex flex-wrap items-end gap-3">

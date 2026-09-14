@@ -35,10 +35,19 @@ describe("proxy", () => {
       "/services/union",
       "/services/astro",
       "/vaishnava",
+      "/travel/s/ABC234",
     ]) {
       const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));
 
       expect(response.headers.get("location")).toBeNull();
+    }
+  });
+
+  it("keeps the rest of travel private: only the QR page is public", () => {
+    for (const path of ["/travel", "/travel/manage", "/travel/sX"]) {
+      const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));
+
+      expect(response.headers.get("location")).not.toBeNull();
     }
   });
 

@@ -64,6 +64,16 @@ export class TravelController {
     return this.travel.createBooking(user.sub, body);
   }
 
+  /** Привязать заявку, поданную со страницы по QR до входа. */
+  @Post('bookings/claim')
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  claim(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: { token?: unknown },
+  ) {
+    return this.travel.claimBooking(user.sub, body.token);
+  }
+
   @Post('bookings/:id/cancel')
   cancel(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.travel.cancelBooking(user.sub, id);
