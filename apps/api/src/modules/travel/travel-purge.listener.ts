@@ -33,13 +33,24 @@ export class TravelPurgeListener {
           { managers: { some: { userId } } },
         ],
       },
-      select: { photoUrls: true },
+      select: {
+        photoUrls: true,
+        // Объект уйдёт каскадом вместе с клиентской базой, а фото гостей
+        // лежат в S3 и сами не удалятся.
+        guests: {
+          where: { photoKey: { not: null } },
+          select: { photoKey: true },
+        },
+      },
     });
     const bookings = await this.prisma.travelBooking.count({
       where: { guestUserId: userId },
     });
 
-    const storageKeys = stays.flatMap((stay) => stay.photoUrls);
+    const storageKeys = stays.flatMap((stay) => [
+      ...stay.photoUrls,
+      ...stay.guests.map((guest) => guest.photoKey as string),
+    ]);
     return {
       storageKeys,
       counts: { travelStays: stays.length, travelBookings: bookings },

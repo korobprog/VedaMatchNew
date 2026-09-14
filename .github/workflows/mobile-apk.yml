@@ -1,0 +1,73 @@
+name: Mobile APK
+
+# Ручная сборка APK для проверки на телефоне. Подпись пока отладочная, как у
+# release-сборки из `expo prebuild`: такой APK ставится на телефон, но не
+# годится для магазинов и не обновит сборку с другим ключом. Релизный ключ
+# появится в фазе 7 и будет браться из секретов репозитория.
+
+on:
+  workflow_dispatch:
+    inputs:
+      contour:
+        description: Контур API
+        type: choice
+        options: [ru, com]
+        default: ru
+      channel:
+        description: Канал раздачи
+        type: choice
+        options: [site, store]
+        default: site
+
+concurrency:
+  group: mobile-apk-${{ github.ref }}-${{ inputs.contour }}-${{ inputs.channel }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: apk ${{ inputs.contour }}-${{ inputs.channel }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      APP_CONTOUR: ${{ inputs.contour }}
+      APP_CHANNEL: ${{ inputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck and test
+        run: |
+          pnpm --filter @vedamatch/mobile lint
+          pnpm --filter @vedamatch/mobile test
+
+      - name: Prebuild Android project
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Assemble release APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vedamatch-${{ inputs.contour }}-${{ inputs.channel }}-${{ github.sha }}
+          path: apps/mobile/android/app/build/outputs/apk/release/*.apk
+          retention-days: 14

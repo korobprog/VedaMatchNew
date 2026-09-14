@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   TRAVEL_BOOKING_STATUS_LABELS,
@@ -131,6 +132,12 @@ export function StayBookingsView({ stayId }: { stayId: string }) {
           >
             {status === "published" ? "Снять с публикации" : "Опубликовать"}
           </button>
+          <Link
+            href={`/travel/manage/${stayId}/cash`}
+            className="rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1"
+          >
+            Касса
+          </Link>
           {/* QR ведёт на страницу, которая открывается только у опубликованного
               объекта: до публикации код на стойке показал бы «не найдено». */}
           {status === "published" && publicCode ? (

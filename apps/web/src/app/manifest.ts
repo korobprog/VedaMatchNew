@@ -19,6 +19,8 @@ const SHORTCUTS = [
   { slug: "union", name: "Знакомства", url: "/union" },
   { slug: "work", name: "Работа", url: "/work" },
   { slug: "notices", name: "Объявления", url: "/notices" },
+  // Касса хостела: сразу форма дохода в последней открытой кассе.
+  { slug: "travel", name: "Касса", url: "/travel/cash" },
 ] as const;
 
 const SHORTCUT_ICON_SIZES = [96, 192] as const;

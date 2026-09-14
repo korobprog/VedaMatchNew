@@ -203,12 +203,26 @@ export function ManageView() {
               <p className="mt-1 text-sm text-text-1">
                 {priceLabel(stay.priceMinor, stay.currency, stay.payment)}
               </p>
-              <Link
-                href={`/travel/manage/${stay.id}/bookings`}
-                className="mt-2 inline-block text-sm text-cyan underline"
-              >
-                Заявки и комнаты
-              </Link>
+              <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                <Link
+                  href={`/travel/manage/${stay.id}/bookings`}
+                  className="text-text-0 underline underline-offset-4"
+                >
+                  Заявки и комнаты
+                </Link>
+                <Link
+                  href={`/travel/manage/${stay.id}/cash`}
+                  className="text-text-0 underline underline-offset-4"
+                >
+                  Касса
+                </Link>
+                <Link
+                  href={`/travel/manage/${stay.id}/guests`}
+                  className="text-text-0 underline underline-offset-4"
+                >
+                  Клиентская база
+                </Link>
+              </p>
             </li>
           ))}
         </ul>
