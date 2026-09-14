@@ -82,8 +82,13 @@ export class ChatConversationsService {
     const conversations = await Promise.all(
       rows.map(async (row) => this.summary(row, userId)),
     );
-    // Закреплённое человеком — вверху списка; порядок внутри групп прежний.
-    conversations.sort((a, b) => Number(b.pinned) - Number(a.pinned));
+    // Официальный канал VedaMatch первым, затем закреплённое человеком;
+    // порядок внутри групп прежний.
+    conversations.sort(
+      (a, b) =>
+        Number(b.official) - Number(a.official) ||
+        Number(b.pinned) - Number(a.pinned),
+    );
 
     const requestsCount = await this.prisma.chatConversation.count({
       where: {

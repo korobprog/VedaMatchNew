@@ -215,6 +215,7 @@ export function toConversationSummary(
     unreadCount: extra.unreadCount,
     muted: Boolean(mine?.mutedUntil && mine.mutedUntil > now),
     pinned: Boolean(mine?.pinnedAt),
+    official: row.official,
     canWrite: canWrite(
       {
         kind: row.kind,

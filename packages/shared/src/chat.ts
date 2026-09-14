@@ -190,6 +190,8 @@ export interface ChatConversationSummary {
   unreadCount: number;
   muted: boolean;
   pinned: boolean;
+  /** Официальный канал VedaMatch: один на портал, стоит первым в списке. */
+  official: boolean;
   /** Может ли смотрящий писать сюда прямо сейчас. */
   canWrite: boolean;
   lastMessage?: ChatMessageDto | null;
@@ -704,4 +706,22 @@ export interface AdminChatCallsState {
 
 export interface UpdateChatCallSettingsRequest {
   callsEnabled: boolean;
+}
+
+/** Сводка официального канала VedaMatch для админки. */
+export interface ChatOfficialChannelStats {
+  conversationId: string;
+  title: string;
+  subscribers: number;
+  /** Вышли из канала сами: «Подписать всех» их не возвращает. */
+  left: number;
+  /** Включили уведомления по каналу. */
+  notificationsOn: number;
+  /** Активные участники портала без строки членства. */
+  missing: number;
+}
+
+/** Ответ «Подписать всех»: сводка после синхронизации и число добавленных. */
+export interface ChatOfficialChannelSyncResult extends ChatOfficialChannelStats {
+  added: number;
 }
