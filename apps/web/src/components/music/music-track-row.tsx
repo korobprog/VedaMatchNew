@@ -50,7 +50,7 @@ export function MusicTrackRow({
         className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-2 pl-2 pr-24 text-left transition-colors hover:bg-glass"
       >
         {position !== undefined && (
-          <span className="w-6 shrink-0 text-right font-mono text-xs text-text-2">
+          <span className="w-6 shrink-0 text-right font-mono text-xs text-text-2 in-data-current:text-violet">
             {position}
           </span>
         )}
@@ -67,9 +67,11 @@ export function MusicTrackRow({
             ровно там, где начиналась разница. Строка едет только если не
             помещается, и стоит под `prefers-reduced-motion`. */}
         <span className="flex min-w-0 flex-col">
+          {/* Название играющей записи — цветом строки (VED-141). Признак
+              ставит кнопка: плеер знает её состояние, а эта строка серверная. */}
           <MusicMarqueeText
             text={track.title}
-            className="text-sm font-semibold text-text-0"
+            className="text-sm font-semibold text-text-0 in-data-current:text-violet"
           />
           <MusicMarqueeText
             text={track.artist?.name ?? "Исполнитель не указан"}
