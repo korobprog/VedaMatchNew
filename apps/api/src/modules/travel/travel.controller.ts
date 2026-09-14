@@ -64,6 +64,16 @@ export class TravelController {
     return this.travel.createBooking(user.sub, body);
   }
 
+  /** Привязать заявку, поданную со страницы по QR до входа. */
+  @Post('bookings/claim')
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  claim(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: { token?: unknown },
+  ) {
+    return this.travel.claimBooking(user.sub, body.token);
+  }
+
   /** «Написать хозяину» — открывает переписку в «Общении». */
   @Post('stays/:id/contact')
   @Throttle({ default: { ttl: 60_000, limit: 10 } })

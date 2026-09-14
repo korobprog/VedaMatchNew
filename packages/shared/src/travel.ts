@@ -171,6 +171,19 @@ export interface CreateTravelBookingRequest {
   comment?: string | null;
 }
 
+/**
+ * Ответ на заявку со страницы по QR. `claimToken` есть только у гостя без
+ * аккаунта: браузер хранит его и после входа привязывает заявку к человеку.
+ */
+export interface TravelGuestBookingResponse {
+  booking: TravelBookingDto;
+  claimToken: string | null;
+}
+
+export interface ClaimTravelBookingRequest {
+  token: string;
+}
+
 /** «Написать хозяину»: заявка — если вопрос по ней, сообщение — необязательно. */
 export interface ContactTravelStayRequest {
   bookingId?: string | null;

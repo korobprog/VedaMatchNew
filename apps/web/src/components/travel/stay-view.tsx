@@ -7,7 +7,16 @@ import {
   TRAVEL_STAY_PAYMENT_LABELS,
   type TravelStayDto,
 } from "@vedamatch/shared";
-import { createTravelBooking, getTravelStay } from "@/lib/travel-api";
+import {
+  createPublicTravelBooking,
+  createTravelBooking,
+  getTravelStay,
+} from "@/lib/travel-api";
+import {
+  readClaimTokens,
+  saveClaimTokens,
+  withClaimToken,
+} from "./claim-tokens";
 import { ContactHostButton } from "./contact-host-button";
 import { priceLabel } from "./price";
 
@@ -18,8 +27,23 @@ function tomorrow(): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function StayView({ stayId }: { stayId: string }) {
-  const [stay, setStay] = useState<TravelStayDto | null>(null);
+/**
+ * Карточка объекта с формой заявки. В кабинете грузит объект сама; на
+ * странице по QR (`publicMode`) получает его готовым с сервера и отправляет
+ * заявку на публичный адрес — гостю без аккаунта входить не нужно.
+ */
+export function StayView({
+  stayId,
+  initialStay = null,
+  publicMode = false,
+}: {
+  stayId: string;
+  initialStay?: TravelStayDto | null;
+  publicMode?: boolean;
+}) {
+  const [stay, setStay] = useState<TravelStayDto | null>(initialStay);
+  /** Заявку подал гость без аккаунта — подсказать, как увидеть ответ. */
+  const [sentAsGuest, setSentAsGuest] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [roomId, setRoomId] = useState("");
   const [guestName, setGuestName] = useState("");
@@ -33,6 +57,7 @@ export function StayView({ stayId }: { stayId: string }) {
   const [sentNumber, setSentNumber] = useState<number | null>(null);
 
   useEffect(() => {
+    if (initialStay) return;
     const controller = new AbortController();
     getTravelStay(stayId, controller.signal)
       .then(setStay)
@@ -43,14 +68,14 @@ export function StayView({ stayId }: { stayId: string }) {
         );
       });
     return () => controller.abort();
-  }, [stayId]);
+  }, [stayId, initialStay]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setSending(true);
     setFormError(null);
     try {
-      const booking = await createTravelBooking({
+      const body = {
         stayId,
         roomId: roomId || null,
         guestName,
@@ -59,8 +84,18 @@ export function StayView({ stayId }: { stayId: string }) {
         checkOut,
         guests,
         comment: comment || null,
-      });
-      setSentNumber(booking.number);
+      };
+      if (publicMode) {
+        const { booking, claimToken } = await createPublicTravelBooking(body);
+        if (claimToken) {
+          saveClaimTokens(withClaimToken(readClaimTokens(), claimToken));
+          setSentAsGuest(true);
+        }
+        setSentNumber(booking.number);
+      } else {
+        const booking = await createTravelBooking(body);
+        setSentNumber(booking.number);
+      }
     } catch (cause) {
       setFormError(
         cause instanceof Error ? cause.message : "Заявка не отправилась",
@@ -104,6 +139,16 @@ export function StayView({ stayId }: { stayId: string }) {
           >
             Заявки на этот объект
           </Link>
+        ) : publicMode ? (
+          // Переписка живёт в «Общении» и требует входа. Ссылка ведёт на
+          // страницу объекта в портале: гостя без входа proxy сам отправит
+          // войти и вернёт обратно, к кнопке «Написать хозяину».
+          <Link
+            href={`/travel/stays/${stay.id}`}
+            className="mt-3 inline-block rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1"
+          >
+            Написать хозяину — нужен вход
+          </Link>
         ) : (
           <div className="mt-3">
             <ContactHostButton stayId={stay.id} />
@@ -133,8 +178,25 @@ export function StayView({ stayId }: { stayId: string }) {
           role="status"
           className="rounded-2xl border border-glass-brd p-4 text-sm text-text-1"
         >
-          Заявка №{sentNumber} отправлена. Хозяин увидит её и ответит — решение
-          придёт в колокольчик, а список заявок лежит в разделе «Мои заявки».
+          Заявка №{sentNumber} отправлена.{" "}
+          {sentAsGuest ? (
+            <>
+              Хозяин свяжется с вами по телефону. Чтобы видеть ответ и в
+              кабинете,{" "}
+              <Link
+                href="/travel/bookings"
+                className="text-text-0 underline underline-offset-4"
+              >
+                войдите в VedaMatch
+              </Link>{" "}
+              с этого телефона — заявка привяжется сама.
+            </>
+          ) : (
+            <>
+              Хозяин увидит её и ответит — решение придёт в колокольчик, а
+              список заявок лежит в разделе «Мои заявки».
+            </>
+          )}
         </p>
       ) : (
         <form onSubmit={submit} className="space-y-3">

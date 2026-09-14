@@ -14,6 +14,7 @@ import {
   setManagedStayStatus,
 } from "@/lib/travel-api";
 import { formatPrice, nightsWord } from "./price";
+import { StayQrDialog } from "./stay-qr-dialog";
 
 type Decision = "accepted" | "declined" | "checked_in" | "completed";
 
@@ -137,6 +138,11 @@ export function StayBookingsView({ stayId }: { stayId: string }) {
           >
             Касса
           </Link>
+          {/* QR ведёт на страницу, которая открывается только у опубликованного
+              объекта: до публикации код на стойке показал бы «не найдено». */}
+          {status === "published" && publicCode ? (
+            <StayQrDialog code={publicCode} name={stayName} />
+          ) : null}
         </div>
       </header>
 

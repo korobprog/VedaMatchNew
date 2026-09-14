@@ -13,6 +13,7 @@ import {
 } from '@vedamatch/shared';
 import type {
   TravelBookingDto,
+  TravelGuestBookingResponse,
   TravelPlaceDto,
   TravelStayCardDto,
   TravelStayDto,
@@ -20,6 +21,8 @@ import type {
   TravelStayPayment,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { generateClaimToken, normalizeClaimToken } from './claim-token';
+import { normalizePublicCode } from './public-code';
 import { countNights, formatStayDate, rangesOverlap } from './travel-dates';
 import {
   calcTotalMinor,
@@ -226,9 +229,84 @@ export class TravelService {
     return { items: rows.map(toBookingDto) };
   }
 
+  /**
+   * Страница объекта по публичному коду — её открывают по QR без входа.
+   * Черновик и снятый объект по коду не открываются даже управляющему: код
+   * печатают на стойке, и гость не должен видеть неготовую карточку.
+   */
+  async publicStay(
+    rawCode: unknown,
+    viewerId: string | null,
+  ): Promise<TravelStayDto> {
+    const code = normalizePublicCode(rawCode);
+    const row = code
+      ? await this.prisma.travelStay.findUnique({
+          where: { publicCode: code },
+          select: { id: true, status: true },
+        })
+      : null;
+    if (!row || row.status !== 'published') {
+      throw new NotFoundException('Объект не найден или снят с публикации');
+    }
+    return this.stay(row.id, viewerId);
+  }
+
   async createBooking(
     userId: string,
     body: Record<string, unknown>,
+  ): Promise<TravelBookingDto> {
+    return this.placeBooking(userId, body, null);
+  }
+
+  /**
+   * Заявка со страницы по QR. Гость без аккаунта получает одноразовый токен:
+   * когда он войдёт, заявка привяжется к нему и появится в «Моих заявках».
+   * Вошедший человек получает обычную заявку без токена.
+   */
+  async createGuestBooking(
+    viewerId: string | null,
+    body: Record<string, unknown>,
+  ): Promise<TravelGuestBookingResponse> {
+    const claimToken = viewerId ? null : generateClaimToken();
+    const booking = await this.placeBooking(viewerId, body, claimToken);
+    return { booking, claimToken };
+  }
+
+  /**
+   * Привязать гостевую заявку к вошедшему человеку. Токен гасится той же
+   * операцией: повторная привязка или чужой вход по тому же токену ничего
+   * не найдут.
+   */
+  async claimBooking(
+    userId: string,
+    rawToken: unknown,
+  ): Promise<TravelBookingDto> {
+    const token = normalizeClaimToken(rawToken);
+    const { count } = token
+      ? await this.prisma.travelBooking.updateMany({
+          where: { claimToken: token, guestUserId: null },
+          data: { guestUserId: userId, claimToken: null },
+        })
+      : { count: 0 };
+    if (count === 0) {
+      throw new NotFoundException(
+        'Заявка по этой ссылке уже привязана или не найдена',
+      );
+    }
+    // Токен погашен, поэтому ищем по свежему владельцу: последняя его заявка
+    // и есть только что привязанная.
+    const row = await this.prisma.travelBooking.findFirstOrThrow({
+      where: { guestUserId: userId },
+      include: bookingInclude,
+      orderBy: { updatedAt: 'desc' },
+    });
+    return toBookingDto(row);
+  }
+
+  private async placeBooking(
+    userId: string | null,
+    body: Record<string, unknown>,
+    claimToken: string | null,
   ): Promise<TravelBookingDto> {
     let input: ParsedBookingInput;
     try {
@@ -280,6 +358,7 @@ export class TravelService {
         checkOut: input.checkOut,
         guests: input.guests,
         comment: input.comment,
+        claimToken,
         totalMinor: calcTotalMinor(
           input.nights,
           stay.priceMinor,
