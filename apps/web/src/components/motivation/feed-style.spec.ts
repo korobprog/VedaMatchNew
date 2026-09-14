@@ -109,9 +109,9 @@ describe("feedCategoryButtons (VED-135)", () => {
     sortOrder: number,
     postCount = 3,
     parentId: string | null = null,
-  ) => ({ slug, title, sortOrder, postCount, parentId });
+  ) => ({ id: slug, slug, title, sortOrder, postCount, parentId });
 
-  it("верхние непустые папки по порядку редакции, ссылкой на ленту папки", () => {
+  it("непустые папки в порядке дерева: верхняя, за ней её подпапки", () => {
     const buttons = feedCategoryButtons(
       [
         cat("acharyas", "Ачарьи", 2),
@@ -130,7 +130,36 @@ describe("feedCategoryButtons (VED-135)", () => {
         href: "/motivation?category=acharyas",
         current: false,
       },
+      {
+        slug: "vaishnavas",
+        title: "Вайшнавы",
+        href: "/motivation?category=vaishnavas",
+        current: false,
+      },
     ]);
+  });
+
+  // Так на проде: верхняя «Общая» пустая, всё опубликованное — в подпапках.
+  it("пустая верхняя папка не прячет свои непустые подпапки", () => {
+    const buttons = feedCategoryButtons(
+      [
+        cat("verified_quote", "Общая", 0, 0),
+        cat("praktika-2", "Веды", 20, 10, "verified_quote"),
+        cat("filosofiya-2", "Философия", 10, 3, "verified_quote"),
+        cat("poslovicy", "Пословицы", 50, 0, "verified_quote"),
+      ],
+      { tab: "forYou" },
+    );
+
+    expect(buttons.map((button) => button.title)).toEqual(["Философия", "Веды"]);
+  });
+
+  it("подпапка, чей родитель не пришёл, остаётся в кнопках", () => {
+    const buttons = feedCategoryButtons([cat("orphan", "Сирота", 1, 2, "gone")], {
+      tab: "forYou",
+    });
+
+    expect(buttons.map((button) => button.slug)).toEqual(["orphan"]);
   });
 
   it("не уводит из «Открыток» в другую ленту и помнит порядок", () => {
