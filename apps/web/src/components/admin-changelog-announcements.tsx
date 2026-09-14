@@ -42,10 +42,8 @@ export function AdminChangelogAnnouncements({
 
   return (
     <div className="space-y-4">
-      {announcements.map((item) => (
-        <AnnouncementCard key={item.id} item={item} />
-      ))}
-
+      {/* Форма — над списком (VED-136). Под всеми новостями и релизами до неё
+          приходилось листать, а открывают страницу чаще всего ради неё. */}
       {isCreating ? (
         <AnnouncementForm onDone={() => setIsCreating(false)} />
       ) : (
@@ -57,6 +55,10 @@ export function AdminChangelogAnnouncements({
           Добавить новость
         </button>
       )}
+
+      {announcements.map((item) => (
+        <AnnouncementCard key={item.id} item={item} />
+      ))}
     </div>
   );
 }
