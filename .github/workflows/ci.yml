@@ -44,6 +44,9 @@ jobs:
       - name: Typecheck importer
         run: pnpm --filter @vedamatch/vedabase-importer build
 
+      - name: Typecheck mobile
+        run: pnpm --filter @vedamatch/mobile lint
+
       # В api-скрипте lint стоит --fix; в CI линтим без записи.
       # Ошибок сейчас много (см. docs/review-2026-08-19.md) — пока не блокируем,
       # но выводим отчёт. Снять continue-on-error, когда долг разобран.
@@ -65,6 +68,9 @@ jobs:
 
       - name: Test importer
         run: pnpm --filter @vedamatch/vedabase-importer test
+
+      - name: Test mobile
+        run: pnpm --filter @vedamatch/mobile test
 
   docker:
     name: docker build
