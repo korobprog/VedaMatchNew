@@ -160,7 +160,7 @@ export class ChatMessagesService {
     });
 
     const dtoOut = toMessageDto(created, userId);
-    this.events.publish(this.conversations.recipients(conversation), {
+    this.events.publish(await this.conversations.recipients(conversation), {
       type: 'message.created',
       conversationId,
       message: dtoOut,
@@ -300,7 +300,7 @@ export class ChatMessagesService {
     });
 
     const dtoOut = toMessageDto(updated, userId);
-    this.events.publish(this.conversations.recipients(conversation), {
+    this.events.publish(await this.conversations.recipients(conversation), {
       type: 'message.updated',
       conversationId: message.conversationId,
       message: dtoOut,
@@ -329,7 +329,7 @@ export class ChatMessagesService {
       data: { deletedAt: new Date() },
     });
 
-    this.events.publish(this.conversations.recipients(conversation), {
+    this.events.publish(await this.conversations.recipients(conversation), {
       type: 'message.deleted',
       conversationId: message.conversationId,
       messageId,
@@ -379,7 +379,7 @@ export class ChatMessagesService {
 
     // В потоке каждый должен увидеть свою пометку «моя реакция», поэтому
     // сводка собирается на каждого получателя отдельно.
-    for (const recipientId of this.conversations.recipients(conversation))
+    for (const recipientId of await this.conversations.recipients(conversation))
       this.events.publish([recipientId], {
         type: 'reaction.set',
         conversationId: message.conversationId,
@@ -501,11 +501,14 @@ export class ChatMessagesService {
     const sender = conversation.members.find((m) => m.userId === senderId);
     if (!sender) return;
     const senderName = resolveDisplayName(sender.user);
-    const now = new Date();
 
-    for (const member of conversation.members) {
-      if (member.userId === senderId || member.leftAt) continue;
-      if (member.mutedUntil && member.mutedUntil > now) continue;
+    // Ожидание только у официального канала: обычная беседа отдаёт адресатов
+    // сразу, без лишнего такта перед отправкой.
+    const targets = conversation.official
+      ? await this.officialNotifyTargets(conversation.id, senderId)
+      : this.memberNotifyTargets(conversation, senderId);
+
+    for (const member of targets) {
       if (await this.presence.isViewing(member.userId, conversationId))
         continue;
 
@@ -531,6 +534,39 @@ export class ChatMessagesService {
             };
       this.bus.emit(event.name, event);
     }
+  }
+
+  /** Кому слать уведомление: действующие участники без глушения, кроме автора. */
+  private memberNotifyTargets(
+    conversation: ChatConversationRow,
+    senderId: string,
+  ): { userId: string }[] {
+    const now = new Date();
+    return conversation.members.filter(
+      (member) =>
+        member.userId !== senderId &&
+        !member.leftAt &&
+        !(member.mutedUntil && member.mutedUntil > now),
+    );
+  }
+
+  /**
+   * То же для официального канала. Там подписан весь портал и почти все
+   * заглушены, а `members` урезан, поэтому фильтрует база.
+   */
+  private officialNotifyTargets(
+    conversationId: string,
+    senderId: string,
+  ): Promise<{ userId: string }[]> {
+    return this.prisma.chatMember.findMany({
+      where: {
+        conversationId,
+        leftAt: null,
+        userId: { not: senderId },
+        OR: [{ mutedUntil: null }, { mutedUntil: { lte: new Date() } }],
+      },
+      select: { userId: true },
+    });
   }
 
   /** Ошибки проверки — это 400, а не 500. */

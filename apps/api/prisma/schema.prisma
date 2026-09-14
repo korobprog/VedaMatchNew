@@ -4097,6 +4097,10 @@ model ChatConversation {
   contextStatus  String?
   contextMeta    Json?
 
+  /// Официальный канал VedaMatch: один на портал, в нём подписаны все участники,
+  /// пишут администраторы портала. Единственность держит частичный уникальный
+  /// индекс из миграции chat_official_channel (см. docs/prisma-raw-sql-objects.md).
+  official  Boolean       @default(false)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   calls     ChatCall[]
@@ -6290,8 +6294,8 @@ model TravelStay {
   cashEntries    TravelCashEntry[]
   guests         TravelGuest[]
   cashTemplates  TravelCashTemplate[]
-  bookings TravelBooking[]
-  reviews  TravelReview[]
+  bookings       TravelBooking[]
+  reviews        TravelReview[]
 
   @@index([status, kind])
   @@index([placeId, status])

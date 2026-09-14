@@ -121,6 +121,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         scope: "chat",
       },
       {
+        href: "/admin/chat/official",
+        label: "Общение — официальный канал",
+        hint: "Канал VedaMatch: подписчики и подписка всех участников",
+        scope: "chat",
+      },
+      {
         href: "/admin/notices",
         label: "Объявления",
         hint: "Жалобы на доску объявлений",

@@ -168,8 +168,9 @@ export function ChatListView({
       );
   }, [state.conversations, tab, query]);
 
-  const pinned = visible.filter((c) => c.pinned);
-  const rest = visible.filter((c) => !c.pinned);
+  // Официальный канал VedaMatch стоит сверху наравне с закреплёнными.
+  const pinned = visible.filter((c) => c.pinned || c.official);
+  const rest = visible.filter((c) => !c.pinned && !c.official);
 
   return (
     <div className="flex flex-col gap-4">

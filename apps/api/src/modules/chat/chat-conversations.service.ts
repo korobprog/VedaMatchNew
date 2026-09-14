@@ -74,7 +74,7 @@ export class ChatConversationsService {
         state: { in: ['active', 'archived'] },
         members: { some: { userId, leftAt: null } },
       },
-      include: chatConversationInclude,
+      include: chatConversationInclude(userId),
       orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
       take: 200,
     });
@@ -82,8 +82,13 @@ export class ChatConversationsService {
     const conversations = await Promise.all(
       rows.map(async (row) => this.summary(row, userId)),
     );
-    // Закреплённое человеком — вверху списка; порядок внутри групп прежний.
-    conversations.sort((a, b) => Number(b.pinned) - Number(a.pinned));
+    // Официальный канал VedaMatch первым, затем закреплённое человеком;
+    // порядок внутри групп прежний.
+    conversations.sort(
+      (a, b) =>
+        Number(b.official) - Number(a.official) ||
+        Number(b.pinned) - Number(a.pinned),
+    );
 
     const requestsCount = await this.prisma.chatConversation.count({
       where: {
@@ -148,7 +153,7 @@ export class ChatConversationsService {
         requestedById: { not: userId },
         members: { some: { userId, leftAt: null } },
       },
-      include: chatConversationInclude,
+      include: chatConversationInclude(userId),
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
@@ -201,7 +206,7 @@ export class ChatConversationsService {
       },
       include: {
         ...chatMessageInclude,
-        conversation: { include: chatConversationInclude },
+        conversation: { include: chatConversationInclude(userId) },
       },
       orderBy: { createdAt: 'desc' },
       take: SEARCH_LIMIT + 1,
@@ -309,7 +314,7 @@ export class ChatConversationsService {
     const key = directKey(userId, targetId);
     const existing = await this.prisma.chatConversation.findUnique({
       where: { directKey: key },
-      include: chatConversationInclude,
+      include: chatConversationInclude(userId),
     });
     if (existing) {
       if (existing.state === 'declined' && existing.requestedById === userId)
@@ -332,7 +337,7 @@ export class ChatConversationsService {
           create: [{ userId }, { userId: targetId }],
         },
       },
-      include: chatConversationInclude,
+      include: chatConversationInclude(userId),
     });
 
     return this.summary(created, userId);
@@ -372,7 +377,7 @@ export class ChatConversationsService {
           ],
         },
       },
-      include: chatConversationInclude,
+      include: chatConversationInclude(userId),
     });
 
     const summary = await this.summary(created, userId);
@@ -406,7 +411,7 @@ export class ChatConversationsService {
         createdById: userId,
         members: { create: [{ userId, role: 'owner' }] },
       },
-      include: chatConversationInclude,
+      include: chatConversationInclude(userId),
     });
 
     return this.summary(created, userId);
@@ -455,7 +460,7 @@ export class ChatConversationsService {
     const updated = await this.prisma.chatConversation.update({
       where: { id: conversationId },
       data: { state: 'active' },
-      include: chatConversationInclude,
+      include: chatConversationInclude(userId),
     });
 
     const summary = await this.summary(updated, userId);
@@ -513,13 +518,13 @@ export class ChatConversationsService {
     const updated = await this.prisma.chatConversation.update({
       where: { id: conversationId },
       data: { pinnedMessageId: messageId },
-      include: chatConversationInclude,
+      include: chatConversationInclude(userId),
     });
 
     const pinned = updated.pinnedMessage
       ? toMessageDto(updated.pinnedMessage, userId)
       : null;
-    this.events.publish(this.recipients(updated), {
+    this.events.publish(await this.recipients(updated), {
       type: 'pinned',
       conversationId,
       message: pinned,
@@ -628,7 +633,7 @@ export class ChatConversationsService {
         })
       : [];
 
-    const recipients = this.recipients(row);
+    const recipients = await this.recipients(row);
     await this.prisma.chatConversation.delete({
       where: { id: conversationId },
     });
@@ -665,7 +670,7 @@ export class ChatConversationsService {
   async subscribe(userId: string, conversationId: string) {
     const row = await this.prisma.chatConversation.findUnique({
       where: { id: conversationId },
-      include: chatConversationInclude,
+      include: chatConversationInclude(userId),
     });
     if (!row) throw new NotFoundException('Беседа не найдена');
 
@@ -784,7 +789,7 @@ export class ChatConversationsService {
             }
           : {}),
       },
-      include: chatConversationInclude,
+      include: chatConversationInclude(userId),
       orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
       take: 50,
     });
@@ -822,7 +827,9 @@ export class ChatConversationsService {
 
   /** Убрать человека из группы или канала. */
   async removeMember(userId: string, conversationId: string, targetId: string) {
-    const row = await this.requireConversation(conversationId, userId);
+    const row = await this.requireConversation(conversationId, userId, [
+      targetId,
+    ]);
     const actor = row.members.find((m) => m.userId === userId);
     const target = row.members.find((m) => m.userId === targetId);
     if (!target) throw new NotFoundException('Участник не найден');
@@ -853,7 +860,9 @@ export class ChatConversationsService {
     targetId: string,
     role: 'admin' | 'member',
   ) {
-    const row = await this.requireConversation(conversationId, userId);
+    const row = await this.requireConversation(conversationId, userId, [
+      targetId,
+    ]);
     const actor = row.members.find((m) => m.userId === userId);
     const target = row.members.find((m) => m.userId === targetId);
     if (!target) throw new NotFoundException('Участник не найден');
@@ -919,11 +928,11 @@ export class ChatConversationsService {
           : {}),
         ...(patch.visibility ? { visibility: patch.visibility } : {}),
       },
-      include: chatConversationInclude,
+      include: chatConversationInclude(userId),
     });
 
     const summary = await this.summary(updated, userId);
-    this.events.publish(this.recipients(updated), {
+    this.events.publish(await this.recipients(updated), {
       type: 'conversation.upserted',
       conversation: summary,
     });
@@ -1005,10 +1014,12 @@ export class ChatConversationsService {
   async requireConversation(
     conversationId: string,
     userId: string,
+    /** Кого ещё загрузить в `members` официального канала: цель действия. */
+    alsoUserIds: string[] = [],
   ): Promise<ChatConversationRow> {
     const row = await this.prisma.chatConversation.findUnique({
       where: { id: conversationId },
-      include: chatConversationInclude,
+      include: chatConversationInclude(userId, alsoUserIds),
     });
     if (!row) throw new NotFoundException('Беседа не найдена');
     const mine = row.members.find((m) => m.userId === userId);
@@ -1120,8 +1131,17 @@ export class ChatConversationsService {
     };
   }
 
-  /** Кому доставлять событие: все, кто не выходил из беседы. */
-  recipients(row: ChatConversationRow): string[] {
-    return row.members.filter((m) => !m.leftAt).map((m) => m.userId);
+  /**
+   * Кому доставлять событие: все, кто не выходил из беседы. У официального
+   * канала `members` урезан, поэтому подписчиков берём узким запросом.
+   */
+  async recipients(row: ChatConversationRow): Promise<string[]> {
+    if (!row.official)
+      return row.members.filter((m) => !m.leftAt).map((m) => m.userId);
+    const members = await this.prisma.chatMember.findMany({
+      where: { conversationId: row.id, leftAt: null },
+      select: { userId: true },
+    });
+    return members.map((m) => m.userId);
   }
 }

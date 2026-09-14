@@ -1,6 +1,7 @@
 // API-клиент сервиса «Общение». См. docs/service-module-contract.md
 import { cookies } from "next/headers";
 import type {
+  ChatOfficialChannelStats,
   AdminChatCallsState,
   AdminChatConversationsState,
   AdminChatReportsState,
@@ -121,6 +122,11 @@ export function getAdminChatCalls(): Promise<AdminChatCallsState | null> {
 /** Раздел админки «Смайлики»: набор «Избранных» по умолчанию (VED-123). */
 export function getAdminChatEmoji(): Promise<ChatFavoriteEmojisDto | null> {
   return chatGet<ChatFavoriteEmojisDto>("/admin/chat/emoji");
+}
+
+/** Сводка официального канала VedaMatch для админки. */
+export function getAdminOfficialChannel(): Promise<ChatOfficialChannelStats | null> {
+  return chatGet<ChatOfficialChannelStats>("/admin/chat/official");
 }
 
 /** Шаблоны цвета — для серверного рендера страницы /chat/appearance. */
