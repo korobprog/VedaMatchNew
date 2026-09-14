@@ -14,5 +14,6 @@ export function shareSourceLabel(kind: ChatAttachmentKind): string {
   if (kind === "assistant") return "Ответ ассистента";
   if (kind === "work") return "Приглашение · Работа";
   if (kind === "vacancy") return "Предложение · Вакансии";
+  if (kind === "stay") return "Ночлег · Путешествия";
   return "Карточка";
 }

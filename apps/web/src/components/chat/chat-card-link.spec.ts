@@ -14,6 +14,12 @@ describe("chatCardLink", () => {
     });
   });
 
+  it("карточка объекта «Путешествий» ведёт на объект", () => {
+    expect(
+      chatCardLink({ sourceService: "travel", sourceId: "stay-1" }),
+    ).toEqual({ href: "/travel/stays/stay-1", label: "Открыть объект" });
+  });
+
   it("без идентификатора ссылки нет", () => {
     expect(chatCardLink(work(null))).toBeNull();
     expect(chatCardLink(work("   "))).toBeNull();

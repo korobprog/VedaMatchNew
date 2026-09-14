@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { getAnnouncements } from "@/lib/api";
 import { getServerLocale } from "@/i18n/get-locale";
+import { NewsImages } from "@/components/news-images";
 
 export default async function UpdatesNewsPage() {
   const [t, locale] = await Promise.all([
@@ -26,6 +27,11 @@ export default async function UpdatesNewsPage() {
           <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-text-1">
             {item.body}
           </p>
+          {item.images.length > 0 && (
+            <div className="mt-3">
+              <NewsImages images={item.images} title={item.title} />
+            </div>
+          )}
         </article>
       ))}
     </div>

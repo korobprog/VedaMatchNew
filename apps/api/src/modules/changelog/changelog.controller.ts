@@ -7,8 +7,12 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFiles,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { ANNOUNCEMENT_MAX_IMAGES } from '@vedamatch/shared';
 import type {
   AccessTokenPayload,
   BroadcastAnnouncementRequest,
@@ -20,6 +24,10 @@ import type {
   UpdateRoadmapItemRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import {
+  MAX_ANNOUNCEMENT_UPLOAD_BYTES,
+  type UploadedAnnouncementImage,
+} from './announcement-images.service';
 import { ChangelogService, type Lang } from './changelog.service';
 
 function resolveLang(value?: string): Lang {
@@ -130,6 +138,20 @@ export class AdminChangelogController {
   @Get('announcements')
   listAnnouncements(@CurrentUser() user: AccessTokenPayload) {
     return this.changelog.adminListAnnouncements(user.role);
+  }
+
+  /** Картинки к новости (VED-137): загружаются до сохранения самой новости. */
+  @Post('announcement-images')
+  @UseInterceptors(
+    FilesInterceptor('files', ANNOUNCEMENT_MAX_IMAGES, {
+      limits: { fileSize: MAX_ANNOUNCEMENT_UPLOAD_BYTES },
+    }),
+  )
+  uploadAnnouncementImages(
+    @CurrentUser() user: AccessTokenPayload,
+    @UploadedFiles() files?: UploadedAnnouncementImage[],
+  ) {
+    return this.changelog.adminUploadAnnouncementImages(user.role, files ?? []);
   }
 
   @Post('announcements')

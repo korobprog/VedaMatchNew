@@ -7,6 +7,9 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Prisma, TravelBooking } from '@prisma/client';
 import {
+  TRAVEL_STAY_KIND_LABELS,
+  type ContactTravelStayResponse,
+  type TravelContactRequestedEvent,
   resolveDisplayName,
   type TravelRatingSummary,
   type TravelReviewDto,
@@ -14,6 +17,7 @@ import {
 } from '@vedamatch/shared';
 import type {
   TravelBookingDto,
+  TravelGuestBookingResponse,
   TravelPlaceDto,
   TravelStayCardDto,
   TravelStayDto,
@@ -21,6 +25,8 @@ import type {
   TravelStayPayment,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { generateClaimToken, normalizeClaimToken } from './claim-token';
+import { normalizePublicCode } from './public-code';
 import { countNights, formatStayDate, rangesOverlap } from './travel-dates';
 import {
   calcTotalMinor,
@@ -28,7 +34,16 @@ import {
   TravelInputError,
   type ParsedBookingInput,
 } from './travel-dto';
-import { bookingRecipients, TRAVEL_EVENTS } from './travel-events';
+import {
+  contactCardBody,
+  contactMessage,
+  pickStayRecipient,
+} from './travel-contact';
+import {
+  bookingRecipients,
+  TRAVEL_CONTACT_REQUESTED_EVENT,
+  TRAVEL_EVENTS,
+} from './travel-events';
 import {
   canReviewBooking,
   parseReviewInput,
@@ -259,9 +274,93 @@ export class TravelService {
     return { items: rows.map(toBookingDto) };
   }
 
+  /**
+   * Страница объекта по публичному коду — её открывают по QR без входа.
+   * Черновик и снятый объект по коду не открываются даже управляющему: код
+   * печатают на стойке, и гость не должен видеть неготовую карточку.
+   */
+  async publicStay(
+    rawCode: unknown,
+    viewerId: string | null,
+  ): Promise<TravelStayDto> {
+    const code = normalizePublicCode(rawCode);
+    const row = code
+      ? await this.prisma.travelStay.findUnique({
+          where: { publicCode: code },
+          select: { id: true, status: true },
+        })
+      : null;
+    if (!row || row.status !== 'published') {
+      throw new NotFoundException('Объект не найден или снят с публикации');
+    }
+    return this.stay(row.id, viewerId);
+  }
+
+  /** Отзывы на странице по QR: гость выбирает, где ночевать, ещё до входа. */
+  async publicStayReviews(
+    rawCode: unknown,
+    viewerId: string | null,
+  ): Promise<TravelReviewsResponse> {
+    const stay = await this.publicStay(rawCode, viewerId);
+    return this.stayReviews(stay.id, viewerId);
+  }
+
   async createBooking(
     userId: string,
     body: Record<string, unknown>,
+  ): Promise<TravelBookingDto> {
+    return this.placeBooking(userId, body, null);
+  }
+
+  /**
+   * Заявка со страницы по QR. Гость без аккаунта получает одноразовый токен:
+   * когда он войдёт, заявка привяжется к нему и появится в «Моих заявках».
+   * Вошедший человек получает обычную заявку без токена.
+   */
+  async createGuestBooking(
+    viewerId: string | null,
+    body: Record<string, unknown>,
+  ): Promise<TravelGuestBookingResponse> {
+    const claimToken = viewerId ? null : generateClaimToken();
+    const booking = await this.placeBooking(viewerId, body, claimToken);
+    return { booking, claimToken };
+  }
+
+  /**
+   * Привязать гостевую заявку к вошедшему человеку. Токен гасится той же
+   * операцией: повторная привязка или чужой вход по тому же токену ничего
+   * не найдут.
+   */
+  async claimBooking(
+    userId: string,
+    rawToken: unknown,
+  ): Promise<TravelBookingDto> {
+    const token = normalizeClaimToken(rawToken);
+    const { count } = token
+      ? await this.prisma.travelBooking.updateMany({
+          where: { claimToken: token, guestUserId: null },
+          data: { guestUserId: userId, claimToken: null },
+        })
+      : { count: 0 };
+    if (count === 0) {
+      throw new NotFoundException(
+        'Заявка по этой ссылке уже привязана или не найдена',
+      );
+    }
+    // Токен погашен, поэтому ищем по свежему владельцу: последняя его заявка
+    // и есть только что привязанная.
+    const row = await this.prisma.travelBooking.findFirstOrThrow({
+      where: { guestUserId: userId },
+      include: bookingInclude,
+      orderBy: { updatedAt: 'desc' },
+    });
+    return toBookingDto(row);
+  }
+
+  private async placeBooking(
+    userId: string | null,
+    body: Record<string, unknown>,
+    claimToken: string | null,
   ): Promise<TravelBookingDto> {
     let input: ParsedBookingInput;
     try {
@@ -313,6 +412,7 @@ export class TravelService {
         checkOut: input.checkOut,
         guests: input.guests,
         comment: input.comment,
+        claimToken,
         totalMinor: calcTotalMinor(
           input.nights,
           stay.priceMinor,
@@ -332,10 +432,77 @@ export class TravelService {
     return toBookingDto(booking);
   }
 
+  /**
+   * «Написать хозяину». Писать можно по опубликованному объекту либо по
+   * своей заявке — хозяин снятого объекта остаётся на связи с теми, кто у
+   * него уже бронировал. Переписку открывает «Общение» по событию.
+   */
+  async contactManager(
+    userId: string,
+    stayId: string,
+    body: { bookingId?: unknown; message?: unknown },
+  ): Promise<ContactTravelStayResponse> {
+    const stay = await this.prisma.travelStay.findUnique({
+      where: { id: stayId },
+      select: {
+        id: true,
+        name: true,
+        kind: true,
+        status: true,
+        managers: { select: { userId: true, role: true } },
+      },
+    });
+    if (!stay) throw new NotFoundException('Объект не найден');
+
+    const bookingId =
+      typeof body.bookingId === 'string' && body.bookingId.trim()
+        ? body.bookingId.trim()
+        : null;
+    const booking = bookingId
+      ? await this.prisma.travelBooking.findFirst({
+          where: { id: bookingId, stayId, guestUserId: userId },
+          select: { id: true, number: true, checkIn: true, checkOut: true },
+        })
+      : null;
+    if (bookingId && !booking) throw new NotFoundException('Заявка не найдена');
+    if (stay.status !== 'published' && !booking) {
+      throw new NotFoundException('Объект не найден или снят с публикации');
+    }
+
+    const recipientId = pickStayRecipient(stay.managers, userId);
+    if (!recipientId) {
+      throw new BadRequestException('Это ваш объект — писать хозяину не нужно');
+    }
+
+    const event: TravelContactRequestedEvent = {
+      requesterId: userId,
+      recipientId,
+      stayId: stay.id,
+      stayName: stay.name,
+      stayKindLabel: TRAVEL_STAY_KIND_LABELS[stay.kind],
+      bookingId: booking?.id ?? null,
+      cardBody: contactCardBody(booking),
+      message: contactMessage(body.message),
+    };
+    const results: unknown[] = await this.events.emitAsync(
+      TRAVEL_CONTACT_REQUESTED_EVENT,
+      event,
+    );
+    const conversationId =
+      results.find((value): value is string => typeof value === 'string') ??
+      null;
+    if (!conversationId) {
+      throw new ForbiddenException(
+        'Переписка с хозяином недоступна — позвоните по телефону из карточки',
+      );
+    }
+    return { conversationId };
+  }
+
   /** Опубликованные отзывы объекта — видны тем же, кому виден объект. */
   async stayReviews(
     stayId: string,
-    viewerId: string,
+    viewerId: string | null,
   ): Promise<TravelReviewsResponse> {
     await this.stay(stayId, viewerId);
     const [rows, ratings] = await Promise.all([

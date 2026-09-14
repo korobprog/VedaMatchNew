@@ -175,6 +175,46 @@ export interface CreateTravelBookingRequest {
   comment?: string | null;
 }
 
+/**
+ * Ответ на заявку со страницы по QR. `claimToken` есть только у гостя без
+ * аккаунта: браузер хранит его и после входа привязывает заявку к человеку.
+ */
+export interface TravelGuestBookingResponse {
+  booking: TravelBookingDto;
+  claimToken: string | null;
+}
+
+export interface ClaimTravelBookingRequest {
+  token: string;
+}
+
+/** «Написать хозяину»: заявка — если вопрос по ней, сообщение — необязательно. */
+export interface ContactTravelStayRequest {
+  bookingId?: string | null;
+  message?: string | null;
+}
+
+/** Беседа в «Общении»; null — переписку открыть не вышло. */
+export interface ContactTravelStayResponse {
+  conversationId: string | null;
+}
+
+/**
+ * Событие шины: человек хочет написать хозяину объекта. Самодостаточно —
+ * подписчик в «Общении» не читает таблицы «Путешествий», поэтому подпись
+ * вида объекта и строка о заявке собраны здесь.
+ */
+export interface TravelContactRequestedEvent {
+  requesterId: string;
+  recipientId: string;
+  stayId: string;
+  stayName: string;
+  stayKindLabel: string;
+  bookingId: string | null;
+  cardBody: string;
+  message: string;
+}
+
 export interface UpdateTravelBookingStatusRequest {
   status: Extract<
     TravelBookingStatus,

@@ -73,6 +73,7 @@ import {
   endOfTrackAction,
   nextAlbumSlug,
   nextArtistSlug,
+  pauseStopsPlayback,
   type MusicPlaybackMode,
 } from "./play-mode";
 
@@ -793,8 +794,12 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     async (track: MusicTrackDto) => {
       const stopHere = () => {
         setIsPlaying(false);
+        setIsLoading(false);
         void stopPlayback();
       };
+      // Пока ищем следующий альбом или исполнителя, в кнопке вертушка: запись
+      // кончилась, а «играет» ещё горит — без неё это читалось бы как зависание.
+      setIsLoading(true);
       const artistSlug = track.artist?.slug;
       if (!artistSlug) return stopHere();
 
@@ -1271,7 +1276,10 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         }}
         /* Буфер кончился посреди записи — то же ожидание, что и в начале. */
         onWaiting={() => setIsLoading(true)}
-        onPause={() => {
+        onPause={(event) => {
+          // Пауза дослушанной записи приходит раньше `ended`: погасить здесь
+          // «играет» значило бы не дать следующей записи зазвучать (VED-132).
+          if (!pauseStopsPlayback(event.currentTarget)) return;
           setIsPlaying(false);
           setIsLoading(false);
         }}

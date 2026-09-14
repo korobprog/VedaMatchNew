@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { TravelReviewsResponse } from "@vedamatch/shared";
-import { getStayReviews } from "@/lib/travel-api";
+import { getPublicStayReviews, getStayReviews } from "@/lib/travel-api";
 import { ratingLabel, starsLabel, starsText } from "./rating";
 
 const reviewDate = new Intl.DateTimeFormat("ru-RU", {
@@ -11,18 +11,31 @@ const reviewDate = new Intl.DateTimeFormat("ru-RU", {
   year: "numeric",
 });
 
-/** Отзывы гостей в карточке объекта: средняя оценка и последние отзывы. */
-export function StayReviews({ stayId }: { stayId: string }) {
+/**
+ * Отзывы гостей в карточке объекта: средняя оценка и последние отзывы. С
+ * `publicCode` грузит их по открытому адресу — страница по QR работает без
+ * входа.
+ */
+export function StayReviews({
+  stayId,
+  publicCode = null,
+}: {
+  stayId: string;
+  publicCode?: string | null;
+}) {
   const [data, setData] = useState<TravelReviewsResponse | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    getStayReviews(stayId, controller.signal)
+    (publicCode
+      ? getPublicStayReviews(publicCode, controller.signal)
+      : getStayReviews(stayId, controller.signal)
+    )
       .then(setData)
       // Отзывы — дополнение к карточке: не загрузились — карточка остаётся.
       .catch(() => undefined);
     return () => controller.abort();
-  }, [stayId]);
+  }, [stayId, publicCode]);
 
   if (!data) return null;
 

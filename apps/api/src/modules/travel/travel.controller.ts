@@ -67,6 +67,27 @@ export class TravelController {
     return this.travel.createBooking(user.sub, body);
   }
 
+  /** Привязать заявку, поданную со страницы по QR до входа. */
+  @Post('bookings/claim')
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  claim(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: { token?: unknown },
+  ) {
+    return this.travel.claimBooking(user.sub, body.token);
+  }
+
+  /** «Написать хозяину» — открывает переписку в «Общении». */
+  @Post('stays/:id/contact')
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  contact(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: { bookingId?: unknown; message?: unknown },
+  ) {
+    return this.travel.contactManager(user.sub, id, body);
+  }
+
   @Get('stays/:id/reviews')
   reviews(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.travel.stayReviews(id, user.sub);

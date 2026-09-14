@@ -1,6 +1,8 @@
 // API-клиент сервиса «Путешествия». См. docs/service-module-contract.md.
 import type {
   CreateTravelBookingRequest,
+  ContactTravelStayRequest,
+  ContactTravelStayResponse,
   CreateTravelStayRequest,
   SaveTravelCashCategoryRequest,
   SaveTravelCashEntryRequest,
@@ -14,6 +16,7 @@ import type {
   TravelCashCategoryDto,
   TravelCashEntriesResponse,
   TravelCashEntryDto,
+  TravelGuestBookingResponse,
   SaveTravelReviewRequest,
   TravelReviewsResponse,
   TravelBookingDto,
@@ -101,9 +104,39 @@ export const getMyTravelBookings = (signal?: AbortSignal) =>
 export const createTravelBooking = (body: CreateTravelBookingRequest) =>
   request<TravelBookingDto>("/travel/bookings", { method: "POST", ...json(body) });
 
+/** Заявка со страницы по QR: гостю без аккаунта вернётся токен привязки. */
+export const createPublicTravelBooking = (body: CreateTravelBookingRequest) =>
+  request<TravelGuestBookingResponse>("/travel/public/bookings", {
+    method: "POST",
+    ...json(body),
+  });
+
+export const claimTravelBooking = (token: string) =>
+  request<TravelBookingDto>("/travel/bookings/claim", {
+    method: "POST",
+    ...json({ token }),
+  });
+
+/** «Написать хозяину»: id беседы в «Общении». */
+export const contactTravelStay = (
+  stayId: string,
+  body: ContactTravelStayRequest = {},
+) =>
+  request<ContactTravelStayResponse>(
+    `/travel/stays/${encodeURIComponent(stayId)}/contact`,
+    { method: "POST", ...json(body) },
+  );
+
 export const getStayReviews = (stayId: string, signal?: AbortSignal) =>
   request<TravelReviewsResponse>(
     `/travel/stays/${encodeURIComponent(stayId)}/reviews`,
+    { method: "GET", signal },
+  );
+
+/** Те же отзывы для страницы по QR — без входа, по публичному коду. */
+export const getPublicStayReviews = (code: string, signal?: AbortSignal) =>
+  request<TravelReviewsResponse>(
+    `/travel/public/stays/${encodeURIComponent(code)}/reviews`,
     { method: "GET", signal },
   );
 

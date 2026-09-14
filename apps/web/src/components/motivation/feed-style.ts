@@ -91,13 +91,16 @@ export function reelsHref({
  * всё новое» и «На сегодня это всё». Там человек как раз решает, что смотреть
  * дальше, а за категориями приходилось идти в меню.
  *
- * Только верхние папки и только непустые: подпапки на телефоне заняли бы весь
- * экран, а пустая кнопка ведёт в ленту «пока пусто». Вкладка сохраняется, как
- * у чипа категории, — из «Открыток» в «Открытки». Избранное без папок, поэтому
- * из него кнопки ведут в «Для вас».
+ * Все непустые папки любого уровня, в порядке дерева: верхняя, за ней её
+ * подпапки. Сначала брали только верхние — а на проде верхняя одна, «Общая»,
+ * и сама пустая: всё опубликованное лежит в подпапках, и кнопок не было вовсе.
+ * Пустые не показываем: такая кнопка ведёт в ленту «пока пусто». Вкладка
+ * сохраняется, как у чипа категории, — из «Открыток» в «Открытки». Избранное
+ * без папок, поэтому из него кнопки ведут в «Для вас».
  */
 export function feedCategoryButtons(
   categories: {
+    id: string;
     slug: string;
     title: string;
     sortOrder: number;
@@ -111,9 +114,22 @@ export function feedCategoryButtons(
   }: { tab: ReelsTab; order?: "random"; current?: string },
 ): { slug: string; title: string; href: string; current: boolean }[] {
   const target: ReelsTab = tab === "saved" ? "forYou" : tab;
-  return categories
-    .filter((category) => !category.parentId && category.postCount > 0)
-    .sort((a, b) => a.sortOrder - b.sortOrder)
+  const bySort = (a: { sortOrder: number }, b: { sortOrder: number }) =>
+    a.sortOrder - b.sortOrder;
+  const ids = new Set(categories.map((category) => category.id));
+  // Верхние — те, у кого родителя нет в списке: подпапка без родителя не
+  // должна пропасть из кнопок только потому, что родитель не пришёл.
+  const roots = categories
+    .filter((category) => !category.parentId || !ids.has(category.parentId))
+    .sort(bySort);
+  const ordered = roots.flatMap((root) => [
+    root,
+    ...categories
+      .filter((category) => category.parentId === root.id)
+      .sort(bySort),
+  ]);
+  return ordered
+    .filter((category) => category.postCount > 0)
     .map((category) => ({
       slug: category.slug,
       title: category.title,

@@ -10,6 +10,7 @@ import { TravelGuestsController } from './travel-guests.controller';
 import { TravelGuestsService } from './travel-guests.service';
 import { TravelManageController } from './travel-manage.controller';
 import { TravelManageService } from './travel-manage.service';
+import { TravelPublicController } from './travel-public.controller';
 import { TravelPurgeListener } from './travel-purge.listener';
 import { TravelController } from './travel.controller';
 import { TravelService } from './travel.service';
@@ -30,6 +31,7 @@ import { TravelService } from './travel.service';
     TravelCashController,
     TravelGuestsController,
     TravelManageController,
+    TravelPublicController,
     TravelController,
   ],
   providers: [
