@@ -17,6 +17,7 @@ import { isAdmin } from './is-admin';
 import { TravelAdminService } from './travel-admin.service';
 
 const ADMIN_STAY_STATUSES = ['removed_by_admin', 'published', 'draft'] as const;
+const ADMIN_REVIEW_STATUSES = ['published', 'hidden_by_admin'] as const;
 
 /**
  * Админский раздел сервиса. Буквальный путь `travel/admin/...`, поэтому
@@ -50,6 +51,33 @@ export class TravelAdminController {
   ) {
     this.assertAdmin(user);
     await this.admin.removePlace(id);
+  }
+
+  @Get('reviews')
+  reviews(@CurrentUser() user: AccessTokenPayload) {
+    this.assertAdmin(user);
+    return this.admin.reviews();
+  }
+
+  @Patch('reviews/:id/status')
+  @HttpCode(204)
+  async setReviewStatus(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: { status?: unknown },
+  ) {
+    this.assertAdmin(user);
+    const status = body.status;
+    if (
+      typeof status !== 'string' ||
+      !(ADMIN_REVIEW_STATUSES as readonly string[]).includes(status)
+    ) {
+      throw new BadRequestException('Неизвестное состояние отзыва');
+    }
+    await this.admin.setReviewStatus(
+      id,
+      status as (typeof ADMIN_REVIEW_STATUSES)[number],
+    );
   }
 
   @Get('stays')

@@ -49,6 +49,12 @@ export function MusicPlayRow({
     <button
       type="button"
       aria-label={playButtonLabel(state, title)}
+      // Текущая запись выделена цветом (VED-141): одного глифа на обложке в
+      // длинном списке не хватало, играющую строку искали глазами. Цвет тот
+      // же, что у текущей записи в очереди плеера. `data-current` красит и
+      // название — оно в серверном содержимом, см. MusicTrackRow.
+      aria-current={isCurrent ? "true" : undefined}
+      data-current={isCurrent ? "" : undefined}
       onClick={() => {
         // Пауза — только когда и запись, и очередь те же. Иначе нажатие
         // означает «играй отсюда»: та же запись в другом списке должна
@@ -57,7 +63,7 @@ export function MusicPlayRow({
           player?.toggle();
         else player?.play(trackId, queue);
       }}
-      className={className}
+      className={`${className} ${isCurrent ? "bg-violet/10 ring-1 ring-inset ring-violet/40" : ""}`}
     >
       {children}
       {/* Глиф поверх обложки, а не отдельной кнопкой рядом: строка и так

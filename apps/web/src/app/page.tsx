@@ -21,6 +21,7 @@ import {
 import { MemberCountLine } from "@/components/member-count-line";
 import { PortalNews } from "@/components/portal-news";
 import { PortalSearchField } from "@/components/portal-search-field";
+import { PortalSupportLink } from "@/components/portal-support-link";
 import { InviteFriendTeaser } from "@/components/rewards/invite-friend-teaser";
 import {
   getUnionChats,
@@ -275,7 +276,9 @@ export default async function Home({
       <NoiseOverlay />
       <Header user={user} />
       <main className="mx-auto max-w-6xl px-4 py-8 pb-24">
-        {/* Поиск по порталу — первым на странице (VED-75): человек, который
+        {/* Поддержка — первой, над поиском (VED-146). */}
+        <PortalSupportLink className="mb-3" />
+        {/* Поиск по порталу — сразу под поддержкой (VED-75): человек, который
             пришёл за конкретной лекцией или объявлением, не должен сначала
             угадывать, в каком она сервисе. */}
         <PortalSearchField compact className="mb-6" />

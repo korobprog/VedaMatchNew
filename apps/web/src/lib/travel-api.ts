@@ -17,6 +17,8 @@ import type {
   TravelCashEntriesResponse,
   TravelCashEntryDto,
   TravelGuestBookingResponse,
+  SaveTravelReviewRequest,
+  TravelReviewsResponse,
   TravelBookingDto,
   TravelBookingsResponse,
   TravelPlacesResponse,
@@ -124,6 +126,33 @@ export const contactTravelStay = (
     `/travel/stays/${encodeURIComponent(stayId)}/contact`,
     { method: "POST", ...json(body) },
   );
+
+export const getStayReviews = (stayId: string, signal?: AbortSignal) =>
+  request<TravelReviewsResponse>(
+    `/travel/stays/${encodeURIComponent(stayId)}/reviews`,
+    { method: "GET", signal },
+  );
+
+/** Те же отзывы для страницы по QR — без входа, по публичному коду. */
+export const getPublicStayReviews = (code: string, signal?: AbortSignal) =>
+  request<TravelReviewsResponse>(
+    `/travel/public/stays/${encodeURIComponent(code)}/reviews`,
+    { method: "GET", signal },
+  );
+
+export const saveBookingReview = (
+  bookingId: string,
+  body: SaveTravelReviewRequest,
+) =>
+  request<TravelBookingDto>(
+    `/travel/bookings/${encodeURIComponent(bookingId)}/review`,
+    { method: "PUT", ...json(body) },
+  );
+
+export const removeBookingReview = (bookingId: string) =>
+  request<void>(`/travel/bookings/${encodeURIComponent(bookingId)}/review`, {
+    method: "DELETE",
+  });
 
 export const cancelTravelBooking = (id: string) =>
   request<TravelBookingDto>(

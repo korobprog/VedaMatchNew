@@ -54,6 +54,7 @@ import { ReportDialog } from "./report-dialog";
 import { SourceLink } from "./source-link";
 import {
   attributionLine,
+  attributionParts,
   formatCount,
   mediaKindOf,
   seenDividerIndex,
@@ -809,7 +810,8 @@ function ReelSlide({
      Второй экземпляр поверх закрыл бы первый, а обрезка кадра под экран
      срезала бы края надписи. */
   const printed = kind === "image" && post.captionInImage;
-  const source = attributionLine(post);
+  const sourceParts = attributionParts(post);
+  const hasCategory = Boolean(categoryLink(post));
   const explanationToggle = explanation && (
     <button
       type="button"
@@ -1099,30 +1101,33 @@ function ReelSlide({
             переносится по словам и укладывается в одну-две строки. 11px, а
             не 12: подпись «автор · книга · стих · категория» на 375 так
             занимает две строки вместо трёх. */}
+        {/* Каждая графа — автор, книга, стих, категория — неразрывна
+            (VED-140): переносится графа целиком, а не «Шримад-» в конце
+            строки и «Бхагаватам» на следующей. */}
         {kind === "image" && (
           <p className="mt-1 text-[11px] leading-snug text-white/85">
-            <Byline post={post} />
-            {source && (
+            <CaptionField separated={sourceParts.length > 0 || hasCategory}>
+              <Byline post={post} />
+            </CaptionField>
+            {sourceParts.length > 0 && (
               <>
-                <span aria-hidden="true" className="text-white/40"> · </span>
-                <span>
-                  <span aria-hidden="true">📖 </span>
-                  {post.attributionSourceUrl ? (
-                    <SourceLink href={post.attributionSourceUrl} className="underline decoration-dotted underline-offset-4">
-                      {source}
-                    </SourceLink>
-                  ) : (
-                    source
-                  )}
-                </span>
+                {" "}
+                <SourceFields
+                  parts={sourceParts}
+                  href={post.attributionSourceUrl}
+                  separatedAfter={hasCategory}
+                  icon
+                />
               </>
             )}
             {/* Категория — тем же рядом: это ещё один ответ на «что это»,
                 и отдельная строка съела бы кадр (VED-120). */}
-            {categoryLink(post) && (
+            {hasCategory && (
               <>
-                <span aria-hidden="true" className="text-white/40"> · </span>
-                <CategoryChip post={post} />
+                {" "}
+                <CaptionField separated={false}>
+                  <CategoryChip post={post} />
+                </CaptionField>
               </>
             )}
           </p>
@@ -1142,7 +1147,7 @@ function ReelSlide({
               где замерить не вышло. У фото граница своя — под шесть строк. */}
           {!printed &&
             (isLongQuote(quote, kind === "image" ? LONG_IMAGE_QUOTE_CHARS : undefined) ||
-              quoteClamped) && <FullQuoteToggle quote={quote} source={source} />}
+              quoteClamped) && <FullQuoteToggle quote={quote} sourceParts={sourceParts} />}
           {/* Комментарий — слова комментатора о стихе, и живут они в
               Библиотеке. Своей копии не заводим: она разошлась бы с
               оригиналом на первой же правке книги. */}
@@ -1247,6 +1252,10 @@ function CenteredSheet({
 /**
  * Кто принёс пост: редакция или участник. У участника — имя, у редакции —
  * подпись сервиса, как в макете.
+ *
+ * Имя выровнено по базовой линии (VED-151). Без этого строка брала её у
+ * пустого кружка — по нижнему краю, — и имя сидело на 3,5 px выше соседнего
+ * текста подписи: «📂 Отношения» рядом выглядела съехавшей вниз.
  */
 function Byline({ post }: { post: MotivationPostDto }) {
   const mine = post.origin === "user";
@@ -1267,15 +1276,64 @@ function Byline({ post }: { post: MotivationPostDto }) {
         className="inline-flex min-w-0 items-center gap-1.5 underline-offset-4 hover:underline"
       >
         {dot}
-        <span className="truncate">{post.author.name}</span>
+        <span className="self-baseline truncate">{post.author.name}</span>
       </Link>
     );
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
       {dot}
-      <span className="truncate">{mine ? "Участник" : "VedaMatch"}</span>
+      <span className="self-baseline truncate">{mine ? "Участник" : "VedaMatch"}</span>
     </span>
   );
+}
+
+/**
+ * Графа подписи, которая не рвётся (VED-140). `inline-block` переносится
+ * целиком и разбивается внутри, только если сама длиннее строки. Точка-
+ * разделитель стоит внутри графы, а не между графами: иначе перенос мог
+ * начать следующую строку с «·».
+ */
+function CaptionField({ separated, children }: { separated: boolean; children: ReactNode }) {
+  return (
+    <span className="inline-block max-w-full">
+      {children}
+      {separated && (
+        <span aria-hidden="true" className="text-white/40">
+          {" ·"}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Автор, книга и стих — отдельными графами. Ссылка на источник одна на всю
+ * группу: три ссылки подряд на один адрес скринридер зачитывал бы трижды.
+ * Подчёркивание — на тексте графы: `inline-block` его от ссылки не наследует.
+ */
+function SourceFields({
+  parts,
+  href,
+  separatedAfter,
+  icon,
+}: {
+  parts: string[];
+  href: string | null;
+  separatedAfter: boolean;
+  icon: boolean;
+}) {
+  const fields = parts.map((part, index) => (
+    <Fragment key={index}>
+      {index > 0 && " "}
+      <CaptionField separated={index < parts.length - 1 || separatedAfter}>
+        {icon && index === 0 && <span aria-hidden="true">📖 </span>}
+        <span className={href ? "underline decoration-dotted underline-offset-4" : undefined}>
+          {part}
+        </span>
+      </CaptionField>
+    </Fragment>
+  ));
+  return href ? <SourceLink href={href}>{fields}</SourceLink> : <>{fields}</>;
 }
 
 /**
@@ -1284,7 +1342,7 @@ function Byline({ post }: { post: MotivationPostDto }) {
  * своей DOM-цитаты нет вовсе (текст вшит в кадр воркером), а полный текст
  * всё равно есть в данных поста — доставать его из видео не нужно.
  */
-function FullQuoteToggle({ quote, source }: { quote: string; source: string }) {
+function FullQuoteToggle({ quote, sourceParts }: { quote: string; sourceParts: string[] }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -1301,7 +1359,11 @@ function FullQuoteToggle({ quote, source }: { quote: string; source: string }) {
       {open && (
         <CenteredSheet title="Цитата целиком" onClose={() => setOpen(false)}>
           <p className="whitespace-pre-line">{quote}</p>
-          {source && <p className="mt-3 text-xs text-white/70">{source}</p>}
+          {sourceParts.length > 0 && (
+            <p className="mt-3 text-xs text-white/70">
+              <SourceFields parts={sourceParts} href={null} separatedAfter={false} icon={false} />
+            </p>
+          )}
         </CenteredSheet>
       )}
     </>

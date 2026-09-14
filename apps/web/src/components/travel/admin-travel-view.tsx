@@ -13,6 +13,7 @@ import {
   removeAdminTravelPlace,
   setAdminTravelStayStatus,
 } from "@/lib/travel-admin-api";
+import { AdminTravelReviews } from "./admin-travel-reviews";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Черновик",
@@ -218,6 +219,8 @@ export function AdminTravelView() {
           ))}
         </ul>
       </section>
+
+      <AdminTravelReviews />
     </div>
   );
 }

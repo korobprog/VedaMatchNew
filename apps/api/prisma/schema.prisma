@@ -440,6 +440,7 @@ model User {
   wellnessBasketItems                WellnessBasketItem[]          @relation("WellnessBasketItems")
   travelStaysManaged                 TravelStayManager[]           @relation("TravelStaysManaged")
   travelBookings                     TravelBooking[]               @relation("TravelBookingsPlaced")
+  travelReviews                      TravelReview[]                @relation("TravelReviewsWritten")
   travelCashEntries                  TravelCashEntry[]             @relation("TravelCashEntriesAuthored")
   workTravelBookings                 WorkTravelBooking[]           @relation("WorkTravelBookings")
 
@@ -6273,6 +6274,7 @@ model TravelStay {
   guests         TravelGuest[]
   cashTemplates  TravelCashTemplate[]
   bookings       TravelBooking[]
+  reviews        TravelReview[]
 
   @@index([status, kind])
   @@index([placeId, status])
@@ -6350,6 +6352,9 @@ model TravelBooking {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   decidedAt DateTime?
+
+  /// Отзыв гостя о проживании — не больше одного на заявку.
+  review TravelReview?
 
   @@index([stayId, status, createdAt(sort: Desc)])
   @@index([guestUserId, createdAt(sort: Desc)])
@@ -6473,4 +6478,32 @@ model TravelGuest {
   cashEntries TravelCashEntry[]
 
   @@index([stayId, leftOn])
+}
+
+enum TravelReviewStatus {
+  published
+  hidden_by_admin
+}
+
+/// Отзыв о проживании. Привязан к заявке, а не просто к объекту: оценку
+/// ставит только тот, кто действительно заехал, и только один раз за заезд.
+/// Среднее не хранится — считается агрегатом: отзывов у объекта десятки.
+model TravelReview {
+  id        String             @id @default(uuid())
+  stayId    String
+  stay      TravelStay         @relation(fields: [stayId], references: [id], onDelete: Cascade)
+  bookingId String             @unique
+  booking   TravelBooking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  /// SetNull: удалённый аккаунт не стирает отзыв из истории объекта.
+  authorId  String?
+  author    User?              @relation("TravelReviewsWritten", fields: [authorId], references: [id], onDelete: SetNull)
+  /// 1..5, проверяется в сервисе.
+  rating    Int
+  text      String             @default("")
+  status    TravelReviewStatus @default(published)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@index([stayId, status, createdAt(sort: Desc)])
+  @@index([authorId])
 }

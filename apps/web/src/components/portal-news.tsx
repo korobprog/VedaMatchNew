@@ -16,7 +16,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { PublicAnnouncementDto } from "@vedamatch/shared";
-import { HeadsetIcon } from "@/components/icons/notification-icons";
 import { NewsImages } from "@/components/news-images";
 import { API_URL, apiFetch } from "@/lib/http-client";
 import { isNewsTruncated, newsExcerpt } from "@/lib/portal-news-excerpt";
@@ -84,6 +83,9 @@ export function PortalNews({ items }: { items: PublicAnnouncementDto[] }) {
   const pinned = visible.find((item) => item.pinned) ?? null;
   const rest = visible.filter((item) => item.id !== pinned?.id).slice(0, 3);
   const opened = visible.find((item) => item.id === openId) ?? null;
+
+  // Без новостей блока нет совсем: пустая секция держала бы отступ.
+  if (visible.length === 0) return null;
 
   return (
     <section aria-label="Сообщения и новости от VedaMatch" className="mb-6 space-y-3">
@@ -192,8 +194,6 @@ export function PortalNews({ items }: { items: PublicAnnouncementDto[] }) {
           onClose={() => setOpenId(null)}
         />
       )}
-
-      <SupportLink />
     </section>
   );
 }
@@ -302,34 +302,5 @@ function NewsDialog({
         </div>
       </div>
     </div>
-  );
-}
-
-/**
- * Обратная связь под новостями.
- *
- * Новость — единственное место на портале, где администрация обращается к
- * человеку, и логично, что ответить он захочет там же. Ведёт в поддержку: там
- * обращение привязывается к аккаунту и получает статус, а не теряется в чате.
- */
-function SupportLink() {
-  return (
-    <Link
-      href="/support"
-      className="glass flex items-center gap-3 rounded-2xl border border-glass-brd px-4 py-3 transition-colors hover:border-cyan/40"
-    >
-      <HeadsetIcon className="h-8 w-8 shrink-0" />
-      <span className="min-w-0">
-        <span className="block text-sm font-medium text-text-0">
-          Написать в поддержку
-        </span>
-        <span className="block text-xs text-text-2">
-          Вопрос, идея или что-то сломалось — ответим и покажем статус обращения
-        </span>
-      </span>
-      <span aria-hidden="true" className="ml-auto text-text-2">
-        ›
-      </span>
-    </Link>
   );
 }

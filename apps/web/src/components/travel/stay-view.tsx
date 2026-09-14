@@ -19,6 +19,7 @@ import {
 } from "./claim-tokens";
 import { ContactHostButton } from "./contact-host-button";
 import { priceLabel } from "./price";
+import { StayReviews } from "./stay-reviews";
 
 /** Завтра в виде ГГГГ-ММ-ДД: заезд задним числом API не примет. */
 function tomorrow(): string {
@@ -172,6 +173,11 @@ export function StayView({
           </p>
         </section>
       ) : null}
+
+      <StayReviews
+        stayId={stay.id}
+        publicCode={publicMode ? stay.publicCode : null}
+      />
 
       {sentNumber ? (
         <p

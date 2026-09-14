@@ -127,13 +127,12 @@ describe("PortalNews", () => {
     );
   });
 
-  it("без новостей оставляет только обратную связь", async () => {
-    // Написать в поддержку человек хочет независимо от того, есть ли новости.
-    render(<PortalNews items={[]} />);
+  it("без новостей ничего не рисует", () => {
+    // Поддержка переехала над поиском (VED-146) и от новостей не зависит —
+    // её проверяет portal-support-link.spec.tsx.
+    const { container } = render(<PortalNews items={[]} />);
 
-    const support = await screen.findByRole("link", { name: /Написать в поддержку/ });
-    expect(support).toHaveAttribute("href", "/support");
-    expect(screen.queryByText("Все новости")).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
   });
 
   it("одной кнопкой отмечает все новости разом", async () => {

@@ -3,9 +3,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { AdminTravelStayDto, TravelPlaceDto } from '@vedamatch/shared';
+import type {
+  AdminTravelReviewsResponse,
+  AdminTravelStayDto,
+  TravelPlaceDto,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import { stayCardSelect, toStayCard } from './travel.service';
+import {
+  reviewSelect,
+  stayCardSelect,
+  toReviewDto,
+  toStayCard,
+} from './travel.service';
 
 /**
  * Слаг точки на карте: латиницей, из названия. Транслитерация продублирована
@@ -159,6 +168,41 @@ export class TravelAdminService {
       select: { ...stayCardSelect, status: true },
     });
     return { ...toStayCard(row), status: row.status };
+  }
+
+  /** Свежие отзывы всех объектов, включая скрытые, — экран модерации. */
+  async reviews(): Promise<AdminTravelReviewsResponse> {
+    const rows = await this.prisma.travelReview.findMany({
+      select: {
+        ...reviewSelect,
+        status: true,
+        stayId: true,
+        stay: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 300,
+    });
+    return {
+      items: rows.map((row) => ({
+        ...toReviewDto(row),
+        stayId: row.stayId,
+        stayName: row.stay.name,
+        status: row.status,
+      })),
+    };
+  }
+
+  /** Скрыть отзыв из ленты и средней оценки или вернуть его. */
+  async setReviewStatus(
+    id: string,
+    status: 'published' | 'hidden_by_admin',
+  ): Promise<void> {
+    const review = await this.prisma.travelReview.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!review) throw new NotFoundException('Отзыв не найден');
+    await this.prisma.travelReview.update({ where: { id }, data: { status } });
   }
 
   private async freeSlug(base: string): Promise<string> {

@@ -117,6 +117,8 @@ export interface TravelStayCardDto {
   photoUrl: string | null;
   /** Публичный код: адрес страницы с QR — `/travel/s/<code>`. */
   publicCode: string;
+  /** Оценка гостей; `count: 0` — отзывов ещё нет. */
+  rating: TravelRatingSummary;
 }
 
 export interface TravelRoomDto {
@@ -158,6 +160,8 @@ export interface TravelBookingDto {
   totalMinor: number | null;
   currency: TravelCurrency;
   createdAt: string;
+  /** Свой отзыв гостя о проживании; null — ещё не оставлен. */
+  review: { rating: number; text: string } | null;
 }
 
 export interface CreateTravelBookingRequest {
@@ -480,3 +484,46 @@ export interface TravelCashTemplatesResponse {
 }
 
 export type SaveTravelCashTemplateRequest = Omit<TravelCashTemplateDto, 'id'>;
+// ===== Отзывы о проживании =====
+
+/** Отзыв оставляют только после заезда — по заявке, а не по объекту. */
+export const TRAVEL_REVIEWABLE_STATUSES = ['checked_in', 'completed'] as const;
+
+export const TRAVEL_REVIEW_TEXT_MAX = 2000;
+
+export interface TravelRatingSummary {
+  /** Средняя оценка с одним знаком после запятой; null — отзывов нет. */
+  average: number | null;
+  count: number;
+}
+
+export interface TravelReviewDto {
+  id: string;
+  rating: number;
+  text: string;
+  authorName: string | null;
+  createdAt: string;
+}
+
+export interface TravelReviewsResponse {
+  summary: TravelRatingSummary;
+  items: TravelReviewDto[];
+}
+
+export interface SaveTravelReviewRequest {
+  rating: number;
+  text?: string;
+}
+
+export const TRAVEL_REVIEW_STATUSES = ['published', 'hidden_by_admin'] as const;
+export type TravelReviewStatus = (typeof TRAVEL_REVIEW_STATUSES)[number];
+
+export interface AdminTravelReviewDto extends TravelReviewDto {
+  stayId: string;
+  stayName: string;
+  status: TravelReviewStatus;
+}
+
+export interface AdminTravelReviewsResponse {
+  items: AdminTravelReviewDto[];
+}

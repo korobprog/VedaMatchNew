@@ -50,6 +50,13 @@ const post = (id: string, overrides: Partial<MotivationPostDto> = {}): Motivatio
   ...overrides,
 });
 
+/** Строка подписи под картинкой: автор, источник, категория. */
+function captionOf(slide: HTMLElement): HTMLElement {
+  const caption = [...slide.querySelectorAll("p")].find((p) => p.textContent?.includes("📖"));
+  if (!caption) throw new Error("подписи под картинкой нет");
+  return caption;
+}
+
 function fetchOk(body: unknown) {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,
@@ -87,7 +94,7 @@ describe("ReelsFeed", () => {
     const articles = within(feed).getAllByRole("article");
     expect(articles).toHaveLength(3);
     expect(within(articles[0]).getByText("Цитата a")).toBeInTheDocument();
-    expect(within(articles[0]).getByText("Кришна · Бхагавад-гита · 2.47")).toBeInTheDocument();
+    expect(captionOf(articles[0])).toHaveTextContent("Кришна · Бхагавад-гита · 2.47");
     // Разделитель стоит ровно перед первым повтором и после непросмотренного.
     const divider = within(feed).getByRole("region", { name: "Всё новое просмотрено" });
     expect(divider.compareDocumentPosition(articles[1]) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
@@ -172,7 +179,41 @@ describe("ReelsFeed", () => {
     const picture = within(slide).getByRole("img", { name: "Кто видит меня везде" });
     expect(picture).toHaveClass("object-contain");
     // Подпись источника остаётся: кто автор, на картинке может не значиться.
-    expect(within(slide).getByText("Кришна · Бхагавад-гита · 2.47")).toBeInTheDocument();
+    expect(captionOf(slide)).toHaveTextContent("Кришна · Бхагавад-гита · 2.47");
+  });
+
+  // VED-140: «Шримад-» оставалось в конце строки, «Бхагаватам» уезжало вниз.
+  it("каждую графу подписи держит неразрывной, переносятся графы целиком", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{
+          items: [
+            post("a", {
+              attributionSpeaker: "Шрила Шукадева Госвами",
+              attributionWork: "Шримад-Бхагаватам 1.2.12",
+              attributionLocator: null,
+            }),
+          ],
+          nextCursor: null,
+        }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    const slide = within(screen.getByRole("feed", { name: "Лента вдохновения" })).getAllByRole("article")[0];
+    const caption = captionOf(slide);
+    const fields = [...caption.children].map((field) => ({
+      text: field.textContent?.replace(/\s+/g, " ").trim(),
+      unbreakable: field.classList.contains("inline-block"),
+    }));
+    expect(fields).toEqual([
+      { text: "VedaMatch ·", unbreakable: true },
+      { text: "📖 Шрила Шукадева Госвами ·", unbreakable: true },
+      { text: "Шримад-Бхагаватам 1.2.12 ·", unbreakable: true },
+      { text: "📂 Каждый день", unbreakable: true },
+    ]);
   });
 
   // VED-124: обычная картинка 2:3 растягивалась на весь экран 9:19,5 и теряла
@@ -530,6 +571,25 @@ describe("ReelsFeed", () => {
       "href",
       "/chat/people/users/u-gopal",
     );
+  });
+
+  // VED-151: строка брала базовую линию у пустого кружка, и имя сидело выше
+  // соседнего текста подписи.
+  it("выравнивает имя в подписи по базовой линии текста, а не по кружку", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{
+          items: [post("a", { origin: "user", author: { id: "u-gopal", name: "Гопал" } }), post("b")],
+          nextCursor: null,
+        }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    expect(screen.getByText("Гопал")).toHaveClass("self-baseline");
+    expect(screen.getByText("VedaMatch")).toHaveClass("self-baseline");
   });
 
   // VED-120: у каждого афоризма видна категория, и по ней открывается её лента.
