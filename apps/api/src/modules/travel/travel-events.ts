@@ -38,6 +38,12 @@ export type TravelBookingStatusChangedEvent =
  */
 export const TRAVEL_BOOKING_DECIDED_EVENT = 'travel.booking.decided';
 
+/**
+ * «Написать хозяину». Слушает «Общение»: открывает личную переписку и
+ * возвращает id беседы — поэтому публикуется через emitAsync.
+ */
+export const TRAVEL_CONTACT_REQUESTED_EVENT = 'travel.contact.requested';
+
 export interface TravelBookingDecidedEvent {
   bookingId: string;
   status: string;

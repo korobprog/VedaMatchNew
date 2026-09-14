@@ -8,6 +8,7 @@ import {
   type TravelStayDto,
 } from "@vedamatch/shared";
 import { createTravelBooking, getTravelStay } from "@/lib/travel-api";
+import { ContactHostButton } from "./contact-host-button";
 import { priceLabel } from "./price";
 
 /** Завтра в виде ГГГГ-ММ-ДД: заезд задним числом API не примет. */
@@ -103,7 +104,11 @@ export function StayView({ stayId }: { stayId: string }) {
           >
             Заявки на этот объект
           </Link>
-        ) : null}
+        ) : (
+          <div className="mt-3">
+            <ContactHostButton stayId={stay.id} />
+          </div>
+        )}
       </header>
 
       {stay.description ? (

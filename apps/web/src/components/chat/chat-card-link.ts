@@ -43,6 +43,12 @@ export function chatCardLink(
         href: `/vacancies/${encodeURIComponent(id)}`,
         label: "Открыть предложение",
       };
+    case "travel":
+      // `sourceId` — id объекта: карточка «Написать хозяину» ведёт к нему.
+      return {
+        href: `/travel/stays/${encodeURIComponent(id)}`,
+        label: "Открыть объект",
+      };
     default:
       return null;
   }

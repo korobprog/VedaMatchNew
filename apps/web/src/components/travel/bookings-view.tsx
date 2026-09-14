@@ -7,6 +7,7 @@ import {
   type TravelBookingDto,
 } from "@vedamatch/shared";
 import { cancelTravelBooking, getMyTravelBookings } from "@/lib/travel-api";
+import { ContactHostButton } from "./contact-host-button";
 import { formatPrice, nightsWord } from "./price";
 
 /** Заявку можно отменить, пока заезд не состоялся. */
@@ -86,7 +87,8 @@ export function BookingsView() {
               {booking.stayName}
             </p>
             <p className="mt-1 text-sm text-text-1">
-              {booking.checkIn} — {booking.checkOut}, {nightsWord(booking.nights)}
+              {booking.checkIn} — {booking.checkOut},{" "}
+              {nightsWord(booking.nights)}
               {booking.roomLabel ? ` · ${booking.roomLabel}` : ""}
             </p>
             {booking.totalMinor !== null ? (
@@ -99,6 +101,12 @@ export function BookingsView() {
                 Причина отказа: {booking.declineReason}
               </p>
             ) : null}
+            <div className="mt-3">
+              <ContactHostButton
+                stayId={booking.stayId}
+                bookingId={booking.id}
+              />
+            </div>
             {CANCELABLE.has(booking.status) ? (
               <button
                 type="button"
