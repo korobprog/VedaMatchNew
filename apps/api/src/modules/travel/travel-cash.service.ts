@@ -11,6 +11,7 @@ import {
   type TravelCashEntriesResponse,
   type TravelCashEntryDto,
   type TravelCashIcon,
+  type TravelGuestColor,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { cashBalance, DEFAULT_CASH_CATEGORIES } from './cash-book';
@@ -21,6 +22,7 @@ import {
   parseCashRange,
   parseOpeningMinor,
 } from './cash-input';
+import { parseEntryGuest } from './guest-input';
 import { formatStayDate } from './travel-dates';
 
 /**
@@ -39,6 +41,9 @@ const entrySelect = {
   tags: true,
   createdAt: true,
   author: { select: { name: true, spiritualName: true } },
+  guestId: true,
+  nights: true,
+  guest: { select: { fullName: true, color: true } },
 } satisfies Prisma.TravelCashEntrySelect;
 
 type EntryRow = Prisma.TravelCashEntryGetPayload<{
@@ -56,6 +61,10 @@ function toEntryDto(row: EntryRow): TravelCashEntryDto {
     tags: row.tags,
     authorName: row.author ? resolveDisplayName(row.author) : null,
     createdAt: row.createdAt.toISOString(),
+    guestId: row.guestId,
+    guestName: row.guest?.fullName ?? null,
+    guestColor: (row.guest?.color as TravelGuestColor | undefined) ?? null,
+    nights: row.nights,
   };
 }
 
@@ -182,7 +191,12 @@ export class TravelCashService {
   ): Promise<TravelCashEntriesResponse> {
     const stay = await this.prisma.travelStay.findFirst({
       where: { id: stayId, managers: { some: { userId } } },
-      select: { name: true, currency: true, cashOpeningMinor: true },
+      select: {
+        name: true,
+        currency: true,
+        cashOpeningMinor: true,
+        priceMinor: true,
+      },
     });
     if (!stay) throw new NotFoundException('Объект не найден');
 
@@ -215,6 +229,7 @@ export class TravelCashService {
       balanceMinor: cashBalance(stay.cashOpeningMinor, total),
       from: formatStayDate(from),
       to: formatStayDate(to),
+      nightPriceMinor: stay.priceMinor,
       items: rows.map(toEntryDto),
     };
   }
@@ -226,9 +241,11 @@ export class TravelCashService {
   ): Promise<TravelCashEntryDto> {
     await this.assertManager(userId, stayId);
     const input = this.parse(() => parseCashEntryInput(body));
+    const guest = this.parse(() => parseEntryGuest(body, input.kind));
     await this.assertCategoryFits(stayId, input.categoryId, input.kind);
+    await this.assertGuest(stayId, guest.guestId);
     const row = await this.prisma.travelCashEntry.create({
-      data: { ...input, stayId, authorId: userId },
+      data: { ...input, ...guest, stayId, authorId: userId },
       select: entrySelect,
     });
     return toEntryDto(row);
@@ -243,10 +260,12 @@ export class TravelCashService {
     await this.assertManager(userId, stayId);
     await this.findEntry(stayId, entryId);
     const input = this.parse(() => parseCashEntryInput(body));
+    const guest = this.parse(() => parseEntryGuest(body, input.kind));
     await this.assertCategoryFits(stayId, input.categoryId, input.kind);
+    await this.assertGuest(stayId, guest.guestId);
     const row = await this.prisma.travelCashEntry.update({
       where: { id: entryId },
-      data: input,
+      data: { ...input, ...guest },
       select: entrySelect,
     });
     return toEntryDto(row);
@@ -318,6 +337,16 @@ export class TravelCashService {
           : 'Это статья доходов — для расхода выберите другую',
       );
     }
+  }
+
+  /** Гость обязан быть из клиентской базы этого же объекта. */
+  private async assertGuest(stayId: string, guestId: string | null) {
+    if (!guestId) return;
+    const guest = await this.prisma.travelGuest.findFirst({
+      where: { id: guestId, stayId },
+      select: { id: true },
+    });
+    if (!guest) throw new BadRequestException('Гость не найден');
   }
 
   private async findCategory(stayId: string, categoryId: string) {

@@ -291,6 +291,12 @@ export interface TravelCashEntryDto {
   tags: string[];
   authorName: string | null;
   createdAt: string;
+  /** Гость, от которого пришли деньги; null — запись не про гостя. */
+  guestId: string | null;
+  guestName: string | null;
+  guestColor: TravelGuestColor | null;
+  /** Сколько суток оплачено записью. */
+  nights: number | null;
 }
 
 export interface TravelCashCategoriesResponse {
@@ -311,6 +317,8 @@ export interface TravelCashEntriesResponse {
   balanceMinor: number;
   from: string;
   to: string;
+  /** Цена суток объекта — подсказка суммы при оплате за N суток. */
+  nightPriceMinor: number | null;
   items: TravelCashEntryDto[];
 }
 
@@ -321,6 +329,76 @@ export interface SaveTravelCashEntryRequest {
   categoryId?: string | null;
   note?: string;
   tags?: string[];
+  guestId?: string | null;
+  nights?: number | null;
+}
+
+// ===== Клиентская база объекта =====
+
+/**
+ * Цвет гостя — ключ токена темы, а не код цвета: рамка в ленте и метка в
+ * базе обязаны переключаться вместе с темой. `none` — без цвета.
+ */
+export const TRAVEL_GUEST_COLORS = [
+  'none',
+  'magenta',
+  'cyan',
+  'gold',
+  'violet',
+  'blue',
+] as const;
+export type TravelGuestColor = (typeof TRAVEL_GUEST_COLORS)[number];
+
+export const TRAVEL_GUEST_COLOR_LABELS: Record<TravelGuestColor, string> = {
+  none: 'Без цвета',
+  magenta: 'Малиновый',
+  cyan: 'Бирюзовый',
+  gold: 'Золотой',
+  violet: 'Фиолетовый',
+  blue: 'Синий',
+};
+
+/** Больше года одной оплатой не вносят — это почти всегда лишняя цифра. */
+export const TRAVEL_MAX_PAID_NIGHTS = 366;
+
+export interface TravelGuestDto {
+  id: string;
+  fullName: string;
+  phone: string;
+  /** Подписанная ссылка на фото; null — фото нет или хранилище не настроено. */
+  photoUrl: string | null;
+  keyLabel: string;
+  roomId: string | null;
+  /** «Корпус 2 · 14» — готовая подпись комнаты. */
+  roomLabel: string | null;
+  personalInfo: string;
+  color: TravelGuestColor;
+  checkInOn: string;
+  leftOn: string | null;
+  /** Живёт сейчас: не отмечен выезд. */
+  living: boolean;
+  /** Сумма оплаченных суток по записям кассы. */
+  paidNights: number;
+  /** Последний оплаченный день включительно; null — оплат ещё не было. */
+  paidThrough: string | null;
+  /** Сколько суток проживания по сегодня не оплачено; 0 — долга нет. */
+  unpaidNights: number;
+}
+
+export interface TravelGuestsResponse {
+  items: TravelGuestDto[];
+  rooms: { id: string; label: string }[];
+}
+
+export interface SaveTravelGuestRequest {
+  fullName: string;
+  phone?: string;
+  keyLabel?: string;
+  roomId?: string | null;
+  personalInfo?: string;
+  color?: TravelGuestColor;
+  checkInOn: string;
+  leftOn?: string | null;
 }
 
 export interface SaveTravelCashCategoryRequest {

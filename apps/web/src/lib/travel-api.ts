@@ -4,6 +4,9 @@ import type {
   CreateTravelStayRequest,
   SaveTravelCashCategoryRequest,
   SaveTravelCashEntryRequest,
+  SaveTravelGuestRequest,
+  TravelGuestDto,
+  TravelGuestsResponse,
   TravelCashCategoriesResponse,
   TravelCashCategoryDto,
   TravelCashEntriesResponse,
@@ -223,6 +226,47 @@ export const removeCashEntry = (stayId: string, entryId: string) =>
   request<void>(cashPath(stayId, `entries/${encodeURIComponent(entryId)}`), {
     method: "DELETE",
   });
+
+// ===== Клиентская база объекта =====
+
+const guestsPath = (stayId: string, rest = "") =>
+  `/travel/manage/stays/${encodeURIComponent(stayId)}/guests${rest}`;
+
+export const getGuests = (stayId: string, signal?: AbortSignal) =>
+  request<TravelGuestsResponse>(guestsPath(stayId), { method: "GET", signal });
+
+export const createGuest = (stayId: string, body: SaveTravelGuestRequest) =>
+  request<TravelGuestDto>(guestsPath(stayId), { method: "POST", ...json(body) });
+
+export const updateGuest = (
+  stayId: string,
+  guestId: string,
+  body: SaveTravelGuestRequest,
+) =>
+  request<TravelGuestDto>(guestsPath(stayId, `/${encodeURIComponent(guestId)}`), {
+    method: "PATCH",
+    ...json(body),
+  });
+
+export const removeGuest = (stayId: string, guestId: string) =>
+  request<void>(guestsPath(stayId, `/${encodeURIComponent(guestId)}`), {
+    method: "DELETE",
+  });
+
+export const uploadGuestPhoto = (stayId: string, guestId: string, file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return request<TravelGuestDto>(
+    guestsPath(stayId, `/${encodeURIComponent(guestId)}/photo`),
+    { method: "POST", body: form },
+  );
+};
+
+export const removeGuestPhoto = (stayId: string, guestId: string) =>
+  request<TravelGuestDto>(
+    guestsPath(stayId, `/${encodeURIComponent(guestId)}/photo`),
+    { method: "DELETE" },
+  );
 
 export const setCashOpening = (stayId: string, openingMinor: number) =>
   request<{ openingMinor: number }>(cashPath(stayId, "opening"), {

@@ -6245,6 +6245,7 @@ model TravelStay {
   rooms          TravelRoom[]
   cashCategories TravelCashCategory[]
   cashEntries    TravelCashEntry[]
+  guests         TravelGuest[]
   bookings TravelBooking[]
 
   @@index([status, kind])
@@ -6277,6 +6278,7 @@ model TravelRoom {
   priceMinor Int?
 
   bookings TravelBooking[]
+  guests   TravelGuest[]
 
   @@unique([stayId, building, number])
   @@index([stayId])
@@ -6376,9 +6378,52 @@ model TravelCashEntry {
   authorId String?
   author   User?   @relation("TravelCashEntriesAuthored", fields: [authorId], references: [id], onDelete: SetNull)
 
+  /// Гость, от которого пришли деньги. SetNull: удалённая карточка не стирает
+  /// доход из кассы.
+  guestId String?
+  guest   TravelGuest? @relation(fields: [guestId], references: [id], onDelete: SetNull)
+  /// Сколько суток оплачено этой записью. Из суммы таких записей считается
+  /// «оплачено по»: срок не хранится, поэтому правка или удаление оплаты
+  /// пересчитывают его сами.
+  nights  Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([stayId, occurredOn(sort: Desc)])
   @@index([categoryId])
+  @@index([guestId])
+}
+
+/// Гость хостела в клиентской базе объекта — не аккаунт портала: у человека
+/// на ресепшене его обычно нет. Карточку видят только управляющие объекта:
+/// телефон, фото и заметки — персональные данные.
+model TravelGuest {
+  id           String      @id @default(uuid())
+  stayId       String
+  stay         TravelStay  @relation(fields: [stayId], references: [id], onDelete: Cascade)
+  fullName     String
+  phone        String      @default("")
+  /// Ключ фото в приватном бакете; наружу уходит подписанная ссылка.
+  photoKey     String?
+  /// Номер или бирка выданного ключа.
+  keyLabel     String      @default("")
+  /// SetNull: убранная комната не стирает гостя.
+  roomId       String?
+  room         TravelRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  personalInfo String      @default("")
+  /// Ключ цвета из `TRAVEL_GUEST_COLORS`, а не код цвета: цвет берётся из
+  /// токенов темы и обязан переключаться вместе с ней.
+  color        String      @default("none")
+  /// День заезда — от него отсчитываются оплаченные сутки.
+  checkInOn    DateTime    @db.Date
+  /// День выезда; null — живёт сейчас.
+  leftOn       DateTime?   @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cashEntries TravelCashEntry[]
+
+  @@index([stayId, leftOn])
 }

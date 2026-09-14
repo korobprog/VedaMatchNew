@@ -8,8 +8,10 @@ import {
   type TravelCashCategoryDto,
   type TravelCashEntriesResponse,
   type TravelCashGrouping,
+  type TravelGuestDto,
 } from "@vedamatch/shared";
-import { getCashCategories, getCashEntries } from "@/lib/travel-api";
+import { getCashCategories, getCashEntries, getGuests } from "@/lib/travel-api";
+import { GUEST_BORDER_CLASS } from "./guest-format";
 import { CashCategoriesDialog } from "./cash-categories-dialog";
 import { CashEntryDialog, type CashEntryDraft } from "./cash-entry-dialog";
 import { cashRangeFor, groupCashEntries, localToday } from "./cash-grouping";
@@ -33,6 +35,7 @@ export function CashView({ stayId }: { stayId: string }) {
   const [pages, setPages] = useState(1);
   const [data, setData] = useState<TravelCashEntriesResponse | null>(null);
   const [categories, setCategories] = useState<TravelCashCategoryDto[]>([]);
+  const [guests, setGuests] = useState<TravelGuestDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   /** Ключ последнего завершённого запроса: пока он не совпал с текущим — грузим. */
   const [settledKey, setSettledKey] = useState<string | null>(null);
@@ -54,10 +57,12 @@ export function CashView({ stayId }: { stayId: string }) {
     void Promise.all([
       getCashEntries(stayId, range, controller.signal),
       getCashCategories(stayId, controller.signal),
+      getGuests(stayId, controller.signal),
     ])
-      .then(([entries, cats]) => {
+      .then(([entries, cats, base]) => {
         setData(entries);
         setCategories(cats.items);
+        setGuests(base.items);
         setError(null);
       })
       .catch((cause: unknown) => {
@@ -148,6 +153,12 @@ export function CashView({ stayId }: { stayId: string }) {
           >
             Статьи и остаток
           </button>
+          <Link
+            href={`/travel/manage/${stayId}/guests`}
+            className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1"
+          >
+            Клиентская база
+          </Link>
         </div>
 
         <fieldset className="flex flex-wrap gap-2">
@@ -260,6 +271,23 @@ export function CashView({ stayId }: { stayId: string }) {
                             <span className="block truncate text-sm font-semibold text-text-0">
                               {category?.name ?? "Без статьи"}
                             </span>
+                            {entry.guestName ? (
+                              // Гость — в рамке его цвета, как в кассовой
+                              // книге хостела; сутки — индексом у рамки.
+                              <span className="mt-0.5 flex items-start gap-1">
+                                <span
+                                  className={`max-w-full truncate rounded-lg border-2 px-2 py-0.5 text-sm text-text-0 ${GUEST_BORDER_CLASS[entry.guestColor ?? "none"]}`}
+                                >
+                                  {entry.guestName}
+                                </span>
+                                {entry.nights ? (
+                                  <span className="font-mono text-xs text-text-1">
+                                    <span className="sr-only">, суток: </span>
+                                    {entry.nights}
+                                  </span>
+                                ) : null}
+                              </span>
+                            ) : null}
                             {entry.note ? (
                               <span className="block truncate text-sm text-text-1">
                                 {entry.note}
@@ -323,6 +351,8 @@ export function CashView({ stayId }: { stayId: string }) {
         stayId={stayId}
         currency={currency}
         categories={categories}
+        guests={guests}
+        nightPriceMinor={data?.nightPriceMinor ?? null}
         draft={draft}
         onClose={() => setDraft(null)}
         onSaved={() => {

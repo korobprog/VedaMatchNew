@@ -216,6 +216,12 @@ export function ManageView() {
                 >
                   Касса
                 </Link>
+                <Link
+                  href={`/travel/manage/${stay.id}/guests`}
+                  className="text-text-0 underline underline-offset-4"
+                >
+                  Клиентская база
+                </Link>
               </p>
             </li>
           ))}
