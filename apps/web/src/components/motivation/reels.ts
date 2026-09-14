@@ -35,15 +35,27 @@ export function shouldLoadMore(activeIndex: number, total: number, hasMore: bool
   return hasMore && total > 0 && activeIndex >= total - 3;
 }
 
-/** Строка источника под цитатой: «Бхагавад-гита · 2.47». */
-export function attributionLine(
-  post: Pick<MotivationPostDto, "attributionSpeaker" | "attributionWork" | "attributionLocator">,
-): string {
+type AttributionSource = Pick<
+  MotivationPostDto,
+  "attributionSpeaker" | "attributionWork" | "attributionLocator"
+>;
+
+/**
+ * Графы источника по отдельности: автор, произведение, стих. Лента рисует
+ * каждую неразрывной (VED-140) — «Шримад-Бхагаватам» не должен рваться на
+ * дефисе посреди подписи.
+ */
+export function attributionParts(post: AttributionSource): string[] {
   const work = post.attributionWork?.trim() || null;
   const locator = stripWorkPrefix(post.attributionLocator?.trim() || null, work);
-  return [post.attributionSpeaker, work, locator]
-    .filter((part): part is string => Boolean(part && part.trim()))
-    .join(" · ");
+  return [post.attributionSpeaker?.trim(), work, locator].filter(
+    (part): part is string => Boolean(part),
+  );
+}
+
+/** Строка источника под цитатой: «Бхагавад-гита · 2.47». */
+export function attributionLine(post: AttributionSource): string {
+  return attributionParts(post).join(" · ");
 }
 
 /**

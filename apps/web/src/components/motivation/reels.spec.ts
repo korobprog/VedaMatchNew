@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { MotivationPostDto } from "@vedamatch/shared";
 import {
   attributionLine,
+  attributionParts,
   formatCount,
   mediaKindOf,
   seenDividerIndex,
@@ -69,6 +70,21 @@ describe("shouldLoadMore", () => {
     expect(shouldLoadMore(7, 10, true)).toBe(true);
     expect(shouldLoadMore(9, 10, false)).toBe(false);
     expect(shouldLoadMore(0, 0, true)).toBe(false);
+  });
+});
+
+describe("attributionParts", () => {
+  it("отдаёт графы по отдельности, без пустых и без повтора книги в стихе", () => {
+    expect(
+      attributionParts(
+        post({
+          attributionSpeaker: " Шрила Шукадева Госвами ",
+          attributionWork: "Шримад-Бхагаватам",
+          attributionLocator: "Шримад-Бхагаватам 1.2.12",
+        }),
+      ),
+    ).toEqual(["Шрила Шукадева Госвами", "Шримад-Бхагаватам", "1.2.12"]);
+    expect(attributionParts(post({}))).toEqual([]);
   });
 });
 
