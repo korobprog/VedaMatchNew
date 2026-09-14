@@ -7,16 +7,19 @@ import {
   type TravelCashCategoryDto,
   type TravelCashIcon,
   type TravelCashKind,
+  type TravelCashTemplateDto,
   type TravelCurrency,
 } from "@vedamatch/shared";
 import {
   createCashCategory,
   removeCashCategory,
+  removeCashTemplate,
   setCashOpening,
   updateCashCategory,
 } from "@/lib/travel-api";
 import { CASH_ICONS, CashIcon } from "./cash-icons";
 import { moneyInputValue, parseSignedMoneyInput } from "./cash-money";
+import { templateLabel } from "./cash-tools";
 
 const fieldClass =
   "rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0";
@@ -135,6 +138,7 @@ interface PanelProps {
   stayId: string;
   currency: TravelCurrency;
   categories: TravelCashCategoryDto[];
+  templates: TravelCashTemplateDto[];
   openingMinor: number;
   onChanged: () => void;
 }
@@ -181,10 +185,21 @@ function CategoriesPanel({
   stayId,
   currency,
   categories,
+  templates,
   openingMinor,
   onChanged,
   onCloseClick,
 }: PanelProps & { onCloseClick: () => void }) {
+  async function dropTemplate(template: TravelCashTemplateDto) {
+    if (!window.confirm(`Удалить шаблон «${template.name}»?`)) return;
+    try {
+      await removeCashTemplate(stayId, template.id);
+      onChanged();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Не удалилось");
+    }
+  }
+
   const [error, setError] = useState<string | null>(null);
   const [newKind, setNewKind] = useState<TravelCashKind>("expense");
   const [newName, setNewName] = useState("");
@@ -297,6 +312,39 @@ function CategoriesPanel({
           </ul>
         </section>
       ))}
+
+      <section aria-labelledby="cash-templates-title">
+        <h3
+          id="cash-templates-title"
+          className="font-display text-base text-text-0"
+        >
+          Шаблоны
+        </h3>
+        {templates.length ? (
+          <ul className="mt-2 space-y-2">
+            {templates.map((template) => (
+              <li key={template.id} className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-sm text-text-0">
+                  {template.kind === "income" ? "Доход" : "Расход"} ·{" "}
+                  {templateLabel(template, currency)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void dropTemplate(template)}
+                  className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-1"
+                >
+                  Удалить
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-1 text-sm text-text-2">
+            Шаблон сохраняется из записи: нажмите на неё в ленте и выберите
+            «Сохранить как шаблон».
+          </p>
+        )}
+      </section>
 
       <form
         onSubmit={(event) => void addCategory(event)}

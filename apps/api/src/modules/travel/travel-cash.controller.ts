@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import type { AccessTokenPayload } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { TravelCashTemplatesService } from './travel-cash-templates.service';
 import { TravelCashService } from './travel-cash.service';
 
 /**
@@ -21,7 +22,10 @@ import { TravelCashService } from './travel-cash.service';
 @Controller('travel/manage/stays/:stayId/cash')
 @UseGuards(AuthGuard)
 export class TravelCashController {
-  constructor(private readonly cash: TravelCashService) {}
+  constructor(
+    private readonly cash: TravelCashService,
+    private readonly templates: TravelCashTemplatesService,
+  ) {}
 
   @Get('categories')
   categories(
@@ -60,14 +64,61 @@ export class TravelCashController {
     await this.cash.removeCategory(user.sub, stayId, categoryId);
   }
 
+  /** Промежуток `from`/`to` и фильтры: q, kind, categoryId, guestId, tag, minMinor, maxMinor. */
   @Get('entries')
   entries(
     @CurrentUser() user: AccessTokenPayload,
     @Param('stayId') stayId: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
+    @Query() query: Record<string, unknown>,
   ) {
-    return this.cash.entries(user.sub, stayId, { from, to });
+    return this.cash.entries(user.sub, stayId, query);
+  }
+
+  /** Групповое удаление выбранных записей. */
+  @Post('entries/remove')
+  removeEntries(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('stayId') stayId: string,
+    @Body() body: { ids?: unknown },
+  ) {
+    return this.cash.removeEntries(user.sub, stayId, body);
+  }
+
+  @Get('templates')
+  templatesList(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('stayId') stayId: string,
+  ) {
+    return this.templates.list(user.sub, stayId);
+  }
+
+  @Post('templates')
+  createTemplate(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('stayId') stayId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.templates.create(user.sub, stayId, body);
+  }
+
+  @Patch('templates/:templateId')
+  updateTemplate(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('stayId') stayId: string,
+    @Param('templateId') templateId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.templates.update(user.sub, stayId, templateId, body);
+  }
+
+  @Delete('templates/:templateId')
+  @HttpCode(204)
+  async removeTemplate(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('stayId') stayId: string,
+    @Param('templateId') templateId: string,
+  ) {
+    await this.templates.remove(user.sub, stayId, templateId);
   }
 
   @Post('entries')

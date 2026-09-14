@@ -2,21 +2,42 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown, Plus, X } from "lucide-react";
 import {
   TRAVEL_CASH_GROUPINGS,
   type TravelCashCategoryDto,
   type TravelCashEntriesResponse,
+  type TravelCashEntryDto,
+  type TravelCashFilters,
   type TravelCashGrouping,
+  type TravelCashTemplateDto,
   type TravelGuestDto,
 } from "@vedamatch/shared";
-import { getCashCategories, getCashEntries, getGuests } from "@/lib/travel-api";
-import { GUEST_BORDER_CLASS } from "./guest-format";
+import {
+  createCashTemplate,
+  getCashCategories,
+  getCashEntries,
+  getCashTemplates,
+  getGuests,
+  removeCashEntries,
+  removeCashEntry,
+} from "@/lib/travel-api";
 import { CashCategoriesDialog } from "./cash-categories-dialog";
+import { CashEntryActions, type CashEntryAction } from "./cash-entry-actions";
 import { CashEntryDialog, type CashEntryDraft } from "./cash-entry-dialog";
+import { CashFiltersPanel } from "./cash-filters-panel";
 import { cashRangeFor, groupCashEntries, localToday } from "./cash-grouping";
 import { CashIcon } from "./cash-icons";
 import { formatBalance, formatSigned } from "./cash-money";
+import {
+  duplicateOf,
+  filterChips,
+  filtersToQuery,
+  selectionTotals,
+  templateOf,
+  withoutFilter,
+} from "./cash-tools";
+import { GUEST_BORDER_CLASS } from "./guest-format";
 
 const GROUPING_LABELS: Record<TravelCashGrouping, string> = {
   day: "День",
@@ -33,13 +54,22 @@ const GROUPING_LABELS: Record<TravelCashGrouping, string> = {
 export function CashView({ stayId }: { stayId: string }) {
   const [grouping, setGrouping] = useState<TravelCashGrouping>("day");
   const [pages, setPages] = useState(1);
+  const [filters, setFilters] = useState<TravelCashFilters>({});
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [data, setData] = useState<TravelCashEntriesResponse | null>(null);
   const [categories, setCategories] = useState<TravelCashCategoryDto[]>([]);
   const [guests, setGuests] = useState<TravelGuestDto[]>([]);
+  const [templates, setTemplates] = useState<TravelCashTemplateDto[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   /** Ключ последнего завершённого запроса: пока он не совпал с текущим — грузим. */
   const [settledKey, setSettledKey] = useState<string | null>(null);
   const [draft, setDraft] = useState<CashEntryDraft | null>(null);
+  const [actionEntry, setActionEntry] = useState<TravelCashEntryDto | null>(
+    null,
+  );
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [reloadKey, setReloadKey] = useState(0);
@@ -48,21 +78,24 @@ export function CashView({ stayId }: { stayId: string }) {
     () => cashRangeFor(grouping, localToday(), pages),
     [grouping, pages],
   );
+  const filterQuery = useMemo(() => filtersToQuery(filters), [filters]);
 
-  const requestKey = `${stayId}|${range.from}|${range.to}|${reloadKey}`;
+  const requestKey = `${stayId}|${range.from}|${range.to}|${JSON.stringify(filterQuery)}|${reloadKey}`;
   const loading = settledKey !== requestKey;
 
   useEffect(() => {
     const controller = new AbortController();
     void Promise.all([
-      getCashEntries(stayId, range, controller.signal),
+      getCashEntries(stayId, { ...filterQuery, ...range }, controller.signal),
       getCashCategories(stayId, controller.signal),
       getGuests(stayId, controller.signal),
+      getCashTemplates(stayId, controller.signal),
     ])
-      .then(([entries, cats, base]) => {
+      .then(([entries, cats, base, tpl]) => {
         setData(entries);
         setCategories(cats.items);
         setGuests(base.items);
+        setTemplates(tpl.items);
         setError(null);
       })
       .catch((cause: unknown) => {
@@ -75,7 +108,7 @@ export function CashView({ stayId }: { stayId: string }) {
         if (!controller.signal.aborted) setSettledKey(requestKey);
       });
     return () => controller.abort();
-  }, [stayId, range, requestKey]);
+  }, [stayId, range, filterQuery, requestKey]);
 
   const reload = useCallback(() => setReloadKey((key) => key + 1), []);
 
@@ -92,6 +125,11 @@ export function CashView({ stayId }: { stayId: string }) {
     [categories],
   );
 
+  const currency = data?.currency ?? "rub";
+  const filtered = data?.filtered ?? false;
+  const chips = filterChips(filters, categories, guests, currency);
+  const totals = selectionTotals(data?.items ?? [], selected);
+
   function toggleGroup(key: string) {
     setCollapsed((current) => {
       const next = new Set(current);
@@ -107,10 +145,101 @@ export function CashView({ stayId }: { stayId: string }) {
     setCollapsed(new Set());
   }
 
-  const currency = data?.currency ?? "rub";
+  function applyFilters(next: TravelCashFilters) {
+    setFilters(next);
+    setFiltersOpen(false);
+    setSelected(new Set());
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function stopSelecting() {
+    setSelecting(false);
+    setSelected(new Set());
+  }
+
+  async function onAction(action: CashEntryAction, entry: TravelCashEntryDto) {
+    setActionEntry(null);
+    setNotice(null);
+    setError(null);
+    switch (action) {
+      case "edit":
+        setDraft({ kind: entry.kind, entry });
+        return;
+      case "duplicate":
+        setDraft({
+          kind: entry.kind,
+          entry: null,
+          prefill: duplicateOf(entry, localToday()),
+        });
+        return;
+      case "template": {
+        const suggestion = entry.categoryId
+          ? (categoryById.get(entry.categoryId)?.name ?? "")
+          : "";
+        const name = window.prompt("Название шаблона", suggestion);
+        if (!name?.trim()) return;
+        try {
+          await createCashTemplate(stayId, templateOf(entry, name));
+          setNotice(`Шаблон «${name.trim()}» сохранён — он появится в форме`);
+          reload();
+        } catch (cause) {
+          setError(
+            cause instanceof Error ? cause.message : "Шаблон не сохранился",
+          );
+        }
+        return;
+      }
+      case "filter-category":
+        if (entry.categoryId) applyFilters({ categoryId: entry.categoryId });
+        return;
+      case "filter-guest":
+        if (entry.guestId) applyFilters({ guestId: entry.guestId });
+        return;
+      case "select":
+        setSelecting(true);
+        setSelected(new Set([entry.id]));
+        return;
+      case "delete":
+        if (!window.confirm("Удалить запись? Остатки пересчитаются.")) return;
+        try {
+          await removeCashEntry(stayId, entry.id);
+          reload();
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Не удалилось");
+        }
+        return;
+    }
+  }
+
+  async function removeSelected() {
+    if (totals.count === 0) return;
+    if (
+      !window.confirm(
+        `Удалить выбранные записи (${totals.count})? Остатки пересчитаются.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      const { removed } = await removeCashEntries(stayId, [...selected]);
+      setNotice(`Удалено записей: ${removed}`);
+      stopSelecting();
+      reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Не удалилось");
+    }
+  }
 
   return (
-    <div className="space-y-5 pb-24">
+    <div className="space-y-5 pb-28">
       <header className="space-y-3">
         <div>
           <p className="text-sm text-text-2">
@@ -148,6 +277,15 @@ export function CashView({ stayId }: { stayId: string }) {
           </button>
           <button
             type="button"
+            onClick={() => setFiltersOpen((open) => !open)}
+            aria-expanded={filtersOpen}
+            aria-controls="cash-filters"
+            className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1"
+          >
+            Фильтр{chips.length ? ` · ${chips.length}` : ""}
+          </button>
+          <button
+            type="button"
             onClick={() => setCategoriesOpen(true)}
             className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1"
           >
@@ -160,6 +298,36 @@ export function CashView({ stayId }: { stayId: string }) {
             Клиентская база
           </Link>
         </div>
+
+        {filtersOpen ? (
+          <div id="cash-filters">
+            <CashFiltersPanel
+              key={JSON.stringify(filterQuery)}
+              filters={filters}
+              categories={categories}
+              guests={guests}
+              onApply={applyFilters}
+            />
+          </div>
+        ) : null}
+
+        {chips.length ? (
+          <ul className="flex flex-wrap gap-2" aria-label="Активные фильтры">
+            {chips.map((chip) => (
+              <li key={chip.key}>
+                <button
+                  type="button"
+                  onClick={() => applyFilters(withoutFilter(filters, chip.key))}
+                  className="flex items-center gap-1 rounded-xl border border-magenta px-2.5 py-1 text-sm text-text-0"
+                >
+                  {chip.label}
+                  <X aria-hidden="true" className="size-3.5" />
+                  <span className="sr-only">— снять фильтр</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
 
         <fieldset className="flex flex-wrap gap-2">
           <legend className="sr-only">Группировать по</legend>
@@ -191,13 +359,24 @@ export function CashView({ stayId }: { stayId: string }) {
           {error}
         </p>
       ) : null}
+      {notice ? (
+        <p role="status" className="text-sm text-text-1">
+          {notice}
+        </p>
+      ) : null}
+      {filtered ? (
+        <p className="text-sm text-text-2">
+          Показаны отобранные записи — остатки по периодам не считаются.
+        </p>
+      ) : null}
 
       {!data && loading ? (
         <p className="text-sm text-text-2">Загружаем кассу…</p>
       ) : groups.length === 0 && data ? (
         <p className="rounded-2xl border border-glass-brd p-4 text-sm text-text-1">
-          За этот период записей нет. Внесите первый доход или расход — остаток
-          посчитается сам.
+          {filtered
+            ? "Под фильтр ничего не попало."
+            : "За этот период записей нет. Внесите первый доход или расход — остаток посчитается сам."}
         </p>
       ) : (
         <div className="space-y-3" aria-busy={loading}>
@@ -223,13 +402,19 @@ export function CashView({ stayId }: { stayId: string }) {
                       <span className="block font-display text-base text-text-0 first-letter:uppercase">
                         {group.label}
                       </span>
-                      <span className="mt-1 block font-mono text-sm text-text-1">
-                        {formatBalance(group.startMinor, currency)}{" "}
-                        {formatSigned(net, currency) || "±0"} ={" "}
-                        <span className="font-semibold text-text-0">
-                          {formatBalance(group.endMinor, currency)}
+                      {filtered ? (
+                        <span className="mt-1 block font-mono text-sm text-text-1">
+                          итог {formatSigned(net, currency)}
                         </span>
-                      </span>
+                      ) : (
+                        <span className="mt-1 block font-mono text-sm text-text-1">
+                          {formatBalance(group.startMinor, currency)}{" "}
+                          {formatSigned(net, currency)} ={" "}
+                          <span className="font-semibold text-text-0">
+                            {formatBalance(group.endMinor, currency)}
+                          </span>
+                        </span>
+                      )}
                       <span className="mt-0.5 block font-mono text-xs text-text-2">
                         доход {formatSigned(group.incomeMinor, currency)} ·
                         расход {formatSigned(-group.expenseMinor, currency)}
@@ -248,73 +433,23 @@ export function CashView({ stayId }: { stayId: string }) {
                   hidden={!open}
                   className="divide-y divide-glass-brd border-t border-glass-brd"
                 >
-                  {group.entries.map((entry) => {
-                    const category = entry.categoryId
-                      ? categoryById.get(entry.categoryId)
-                      : undefined;
-                    const signed =
-                      entry.kind === "income"
-                        ? entry.amountMinor
-                        : -entry.amountMinor;
-                    return (
-                      <li key={entry.id}>
-                        <button
-                          type="button"
-                          onClick={() => setDraft({ kind: entry.kind, entry })}
-                          className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-bg-1"
-                        >
-                          <CashIcon
-                            icon={category?.icon}
-                            className="size-6 shrink-0 text-text-1"
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold text-text-0">
-                              {category?.name ?? "Без статьи"}
-                            </span>
-                            {entry.guestName ? (
-                              // Гость — в рамке его цвета, как в кассовой
-                              // книге хостела; сутки — индексом у рамки.
-                              <span className="mt-0.5 flex items-start gap-1">
-                                <span
-                                  className={`max-w-full truncate rounded-lg border-2 px-2 py-0.5 text-sm text-text-0 ${GUEST_BORDER_CLASS[entry.guestColor ?? "none"]}`}
-                                >
-                                  {entry.guestName}
-                                </span>
-                                {entry.nights ? (
-                                  <span className="font-mono text-xs text-text-1">
-                                    <span className="sr-only">, суток: </span>
-                                    {entry.nights}
-                                  </span>
-                                ) : null}
-                              </span>
-                            ) : null}
-                            {entry.note ? (
-                              <span className="block truncate text-sm text-text-1">
-                                {entry.note}
-                              </span>
-                            ) : null}
-                            {entry.tags.length ? (
-                              <span className="block truncate text-xs text-text-2">
-                                {entry.tags.map((tag) => `#${tag}`).join(" ")}
-                              </span>
-                            ) : null}
-                          </span>
-                          {/* Цвет суммы — только крупным жирным кеглем: мелким
-                              текстом cyan и magenta не держат контраст на
-                              светлой теме. Знак дублирует цвет. */}
-                          <span
-                            className={`shrink-0 font-mono text-[1.1875rem] font-bold ${
-                              entry.kind === "income"
-                                ? "text-cyan"
-                                : "text-magenta"
-                            }`}
-                          >
-                            {formatSigned(signed, currency)}
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
+                  {group.entries.map((entry) => (
+                    <li key={entry.id}>
+                      <EntryRow
+                        entry={entry}
+                        category={
+                          entry.categoryId
+                            ? categoryById.get(entry.categoryId)
+                            : undefined
+                        }
+                        currency={currency}
+                        selecting={selecting}
+                        checked={selected.has(entry.id)}
+                        onOpen={() => setActionEntry(entry)}
+                        onToggle={() => toggleSelected(entry.id)}
+                      />
+                    </li>
+                  ))}
                 </ul>
               </section>
             );
@@ -338,20 +473,67 @@ export function CashView({ stayId }: { stayId: string }) {
         </div>
       ) : null}
 
-      <button
-        type="button"
-        onClick={() => setDraft({ kind: "income", entry: null })}
-        aria-label="Добавить запись в кассу"
-        className="btn-mint fixed right-5 bottom-[calc(1.25rem+env(safe-area-inset-bottom))] z-20 flex size-14 items-center justify-center rounded-2xl shadow-lg"
-      >
-        <Plus aria-hidden="true" className="size-7" />
-      </button>
+      {selecting ? (
+        <div
+          role="region"
+          aria-label="Выбранные записи"
+          className="fixed inset-x-0 bottom-0 z-20 border-t border-glass-brd bg-bg-0 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+        >
+          <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-2">
+            <p className="min-w-0 flex-1 font-mono text-sm text-text-0">
+              Выбрано {totals.count}
+              {totals.incomeMinor
+                ? ` · ${formatSigned(totals.incomeMinor, currency)}`
+                : ""}
+              {totals.expenseMinor
+                ? ` · ${formatSigned(-totals.expenseMinor, currency)}`
+                : ""}
+            </p>
+            <button
+              type="button"
+              onClick={() => void removeSelected()}
+              disabled={totals.count === 0}
+              className="rounded-xl border border-magenta px-4 py-2 text-sm text-text-0 disabled:opacity-50"
+            >
+              Удалить
+            </button>
+            <button
+              type="button"
+              onClick={stopSelecting}
+              className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1"
+            >
+              Готово
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setDraft({ kind: "income", entry: null })}
+          aria-label="Добавить запись в кассу"
+          className="btn-mint fixed right-5 bottom-[calc(1.25rem+env(safe-area-inset-bottom))] z-20 flex size-14 items-center justify-center rounded-2xl shadow-lg"
+        >
+          <Plus aria-hidden="true" className="size-7" />
+        </button>
+      )}
 
+      <CashEntryActions
+        entry={actionEntry}
+        category={
+          actionEntry?.categoryId
+            ? categoryById.get(actionEntry.categoryId)
+            : undefined
+        }
+        currency={currency}
+        onAction={(action, entry) => void onAction(action, entry)}
+        onClose={() => setActionEntry(null)}
+      />
       <CashEntryDialog
         stayId={stayId}
         currency={currency}
         categories={categories}
         guests={guests}
+        templates={templates}
         nightPriceMinor={data?.nightPriceMinor ?? null}
         draft={draft}
         onClose={() => setDraft(null)}
@@ -365,10 +547,101 @@ export function CashView({ stayId }: { stayId: string }) {
         stayId={stayId}
         currency={currency}
         categories={categories}
+        templates={templates}
         openingMinor={data?.openingMinor ?? 0}
         onClose={() => setCategoriesOpen(false)}
         onChanged={reload}
       />
     </div>
+  );
+}
+
+function EntryRow({
+  entry,
+  category,
+  currency,
+  selecting,
+  checked,
+  onOpen,
+  onToggle,
+}: {
+  entry: TravelCashEntryDto;
+  category: TravelCashCategoryDto | undefined;
+  currency: TravelCashEntriesResponse["currency"];
+  selecting: boolean;
+  checked: boolean;
+  onOpen: () => void;
+  onToggle: () => void;
+}) {
+  const signed =
+    entry.kind === "income" ? entry.amountMinor : -entry.amountMinor;
+  const body = (
+    <>
+      <CashIcon icon={category?.icon} className="size-6 shrink-0 text-text-1" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-text-0">
+          {category?.name ?? "Без статьи"}
+        </span>
+        {entry.guestName ? (
+          // Гость — в рамке его цвета, как в кассовой книге хостела; сутки —
+          // индексом у рамки.
+          <span className="mt-0.5 flex items-start gap-1">
+            <span
+              className={`max-w-full truncate rounded-lg border-2 px-2 py-0.5 text-sm text-text-0 ${GUEST_BORDER_CLASS[entry.guestColor ?? "none"]}`}
+            >
+              {entry.guestName}
+            </span>
+            {entry.nights ? (
+              <span className="font-mono text-xs text-text-1">
+                <span className="sr-only">, суток: </span>
+                {entry.nights}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
+        {entry.note ? (
+          <span className="block truncate text-sm text-text-1">
+            {entry.note}
+          </span>
+        ) : null}
+        {entry.tags.length ? (
+          <span className="block truncate text-xs text-text-2">
+            {entry.tags.map((tag) => `#${tag}`).join(" ")}
+          </span>
+        ) : null}
+      </span>
+      {/* Цвет суммы — только крупным жирным кеглем: мелким текстом cyan и
+          magenta не держат контраст на светлой теме. Знак дублирует цвет. */}
+      <span
+        className={`shrink-0 font-mono text-[1.1875rem] font-bold ${
+          entry.kind === "income" ? "text-cyan" : "text-magenta"
+        }`}
+      >
+        {formatSigned(signed, currency)}
+      </span>
+    </>
+  );
+
+  if (selecting) {
+    return (
+      <label className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-magenta">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onToggle}
+          className="size-5 shrink-0 accent-[var(--vm-magenta)]"
+        />
+        {body}
+      </label>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-bg-1"
+    >
+      {body}
+    </button>
   );
 }

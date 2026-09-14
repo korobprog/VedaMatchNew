@@ -5,6 +5,9 @@ import type {
   SaveTravelCashCategoryRequest,
   SaveTravelCashEntryRequest,
   SaveTravelGuestRequest,
+  SaveTravelCashTemplateRequest,
+  TravelCashTemplateDto,
+  TravelCashTemplatesResponse,
   TravelGuestDto,
   TravelGuestsResponse,
   TravelCashCategoriesResponse,
@@ -195,12 +198,39 @@ export const removeCashCategory = (stayId: string, categoryId: string) =>
 
 export const getCashEntries = (
   stayId: string,
-  range: { from: string; to: string },
+  query: { from: string; to: string } & Record<string, string>,
   signal?: AbortSignal,
 ) =>
   request<TravelCashEntriesResponse>(
-    cashPath(stayId, `entries?${new URLSearchParams(range)}`),
+    cashPath(stayId, `entries?${new URLSearchParams(query)}`),
     { method: "GET", signal },
+  );
+
+export const removeCashEntries = (stayId: string, ids: string[]) =>
+  request<{ removed: number }>(cashPath(stayId, "entries/remove"), {
+    method: "POST",
+    ...json({ ids }),
+  });
+
+export const getCashTemplates = (stayId: string, signal?: AbortSignal) =>
+  request<TravelCashTemplatesResponse>(cashPath(stayId, "templates"), {
+    method: "GET",
+    signal,
+  });
+
+export const createCashTemplate = (
+  stayId: string,
+  body: SaveTravelCashTemplateRequest,
+) =>
+  request<TravelCashTemplateDto>(cashPath(stayId, "templates"), {
+    method: "POST",
+    ...json(body),
+  });
+
+export const removeCashTemplate = (stayId: string, templateId: string) =>
+  request<void>(
+    cashPath(stayId, `templates/${encodeURIComponent(templateId)}`),
+    { method: "DELETE" },
   );
 
 export const createCashEntry = (
