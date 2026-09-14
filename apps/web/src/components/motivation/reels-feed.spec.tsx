@@ -532,6 +532,25 @@ describe("ReelsFeed", () => {
     );
   });
 
+  // VED-151: строка брала базовую линию у пустого кружка, и имя сидело выше
+  // соседнего текста подписи.
+  it("выравнивает имя в подписи по базовой линии текста, а не по кружку", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{
+          items: [post("a", { origin: "user", author: { id: "u-gopal", name: "Гопал" } }), post("b")],
+          nextCursor: null,
+        }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    expect(screen.getByText("Гопал")).toHaveClass("self-baseline");
+    expect(screen.getByText("VedaMatch")).toHaveClass("self-baseline");
+  });
+
   // VED-120: у каждого афоризма видна категория, и по ней открывается её лента.
   it.each([
     ["an illustration", {}, "/motivation?category=daily"],

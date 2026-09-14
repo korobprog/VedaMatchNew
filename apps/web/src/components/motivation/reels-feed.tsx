@@ -1247,6 +1247,10 @@ function CenteredSheet({
 /**
  * Кто принёс пост: редакция или участник. У участника — имя, у редакции —
  * подпись сервиса, как в макете.
+ *
+ * Имя выровнено по базовой линии (VED-151). Без этого строка брала её у
+ * пустого кружка — по нижнему краю, — и имя сидело на 3,5 px выше соседнего
+ * текста подписи: «📂 Отношения» рядом выглядела съехавшей вниз.
  */
 function Byline({ post }: { post: MotivationPostDto }) {
   const mine = post.origin === "user";
@@ -1267,13 +1271,13 @@ function Byline({ post }: { post: MotivationPostDto }) {
         className="inline-flex min-w-0 items-center gap-1.5 underline-offset-4 hover:underline"
       >
         {dot}
-        <span className="truncate">{post.author.name}</span>
+        <span className="self-baseline truncate">{post.author.name}</span>
       </Link>
     );
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
       {dot}
-      <span className="truncate">{mine ? "Участник" : "VedaMatch"}</span>
+      <span className="self-baseline truncate">{mine ? "Участник" : "VedaMatch"}</span>
     </span>
   );
 }
