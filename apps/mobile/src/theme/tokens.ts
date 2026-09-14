@@ -24,6 +24,10 @@ export interface Palette {
   blue: string;
   /** Текст поверх заливки `magenta`. */
   onAccent: string;
+  /** Подложка счётчиков непрочитанного, как `--vm-mint-from` на сайте. */
+  mint: string;
+  /** Текст поверх `mint`: 9,3:1 в обеих темах. */
+  onMint: string;
 }
 
 export const light: Palette = {
@@ -43,6 +47,8 @@ export const light: Palette = {
   violet: '#7A3FBF',
   blue: '#1F5FBF',
   onAccent: '#FFFFFF',
+  mint: '#33CCCC',
+  onMint: '#14212C',
 };
 
 export const dark: Palette = {
@@ -62,6 +68,8 @@ export const dark: Palette = {
   violet: '#C68BFF',
   blue: '#7FB4FF',
   onAccent: '#180F2C',
+  mint: '#33CCCC',
+  onMint: '#14212C',
 };
 
 /** Имена начертаний, под которыми шрифты регистрируются в `useFonts`. */
