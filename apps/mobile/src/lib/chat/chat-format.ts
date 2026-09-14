@@ -62,6 +62,7 @@ const ATTACHMENT_LABELS: Record<ChatAttachmentDto['kind'], string> = {
   assistant: 'Ответ ассистента',
   work: 'Задача',
   vacancy: 'Вакансия',
+  stay: 'Жильё',
   call: 'Звонок',
 };
 
