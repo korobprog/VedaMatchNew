@@ -21,8 +21,11 @@ export function MusicCategoryChips({
   categories: MusicCategoryDto[];
   active: string | null;
 }) {
+  // Поля 10 и промежутки 6, а не 14 и 8 (VED-145): «Всё», «Киртан»,
+  // «Бхаджан» и «Мантра» со счётчиками занимали 367 px при 343 на экране 375,
+  // и последний чип обрезался. Теперь ряд — 323 px, влезает и на 360.
   const chip =
-    "flex h-9 shrink-0 items-center gap-2 rounded-full border px-3.5 text-[13px] font-semibold transition-colors";
+    "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-semibold transition-colors";
   const idle = "border-glass-brd text-text-1 hover:text-text-0";
   const selected = "border-violet/40 bg-violet/15 text-text-0";
 
@@ -34,7 +37,7 @@ export function MusicCategoryChips({
 
   return (
     <nav aria-label="Разделы каталога">
-      <ul className="scroll-slim flex gap-2 overflow-x-auto pb-1">
+      <ul className="scroll-slim flex gap-1.5 overflow-x-auto pb-1">
         <li>
           <Link
             href="/music"
