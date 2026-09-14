@@ -32,6 +32,7 @@ import { CallButtons } from "./calls/call-buttons";
 import { ChatMessage } from "./chat-message";
 import { firstUnreadIndex } from "./unread-divider";
 import { scrollDeltaToCenter } from "./scroll-to-message";
+import { shouldStickToBottom } from "./image-frame";
 import {
   buildPendingMessage,
   dropPendingMessage,
@@ -93,6 +94,7 @@ export function ChatRoom({
     return at === null ? null : initial.messages[at]!.id;
   });
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const laneRef = useRef<HTMLDivElement | null>(null);
   const typingSentAt = useRef(0);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -138,6 +140,31 @@ export function ChatRoom({
     if (jumpingRef.current) return;
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
+
+  /* Картинка догрузилась и выросла — докручиваем вниз, если человек был
+     внизу (VED-148). Число сообщений при этом не меняется, и эффект выше
+     молчит: отправленное фото уезжало за край экрана. Нужно и для старых
+     вложений без сохранённых размеров. `load` не всплывает — слушаем на
+     перехвате. */
+  useEffect(() => {
+    const lane = laneRef.current;
+    if (!lane) return;
+    const onLoad = (event: Event) => {
+      if (!(event.target instanceof HTMLImageElement)) return;
+      if (jumpingRef.current) return;
+      const distanceFromBottom =
+        lane.scrollHeight - lane.scrollTop - lane.clientHeight;
+      if (
+        shouldStickToBottom({
+          distanceFromBottom,
+          grownBy: event.target.clientHeight,
+        })
+      )
+        bottomRef.current?.scrollIntoView({ block: "end" });
+    };
+    lane.addEventListener("load", onLoad, true);
+    return () => lane.removeEventListener("load", onLoad, true);
+  }, []);
 
   /**
    * Переход к сообщению, на которое отвечали.
@@ -584,7 +611,10 @@ export function ChatRoom({
         </div>
       )}
 
-      <div className="scroll-slim flex flex-1 flex-col gap-2.5 overflow-y-auto py-4">
+      <div
+        ref={laneRef}
+        className="scroll-slim flex flex-1 flex-col gap-2.5 overflow-y-auto py-4"
+      >
         {conversation.hasMore && (
           <button
             type="button"
