@@ -981,9 +981,15 @@ function ReelSlide({
             className="absolute inset-x-0 bottom-[4.5rem] top-0 w-full object-contain"
           />
         </div>
-      ) : printed ? (
+      ) : (
         // Кадр целиком, как у ролика: поля — размытая копия, а сам кадр
         // кончается над служебной строкой, чтобы та не легла на надпись.
+        //
+        // Так и у обычной картинки, не только у открытки (VED-124). Она
+        // рисуется 2:3, а слайд на телефоне — 9:19,5: растянутая на весь
+        // экран, она теряла треть ширины, и у фигур по краям пропадали головы
+        // и плечи. Кадр мельче, зато на нём всё, что нарисовано, — в том числе
+        // у картинок, сделанных до этой правки.
         <div className="absolute inset-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -992,24 +998,17 @@ function ReelSlide({
             aria-hidden="true"
             className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl"
           />
-          {/* Текст на картинке для скринридера — то, что набрала редакция.
-              Не набрала — хотя бы заголовок. */}
+          {/* Текст на открытке для скринридера — то, что набрала редакция.
+              Не набрала — хотя бы заголовок. У обычной картинки цитата
+              набрана поверх слайда, и повторять её в alt незачем. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={post.imageUrl}
-            alt={quote || post.title}
+            alt={printed ? quote || post.title : ""}
             loading={position < 2 ? "eager" : "lazy"}
             className="absolute inset-x-0 bottom-[4.5rem] top-0 h-[calc(100%-4.5rem)] w-full object-contain"
           />
         </div>
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={post.imageUrl}
-          alt=""
-          loading={position < 2 ? "eager" : "lazy"}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
       )}
       {/* Подложка под текст. У ролика подпись вшита в кадр и уже стоит на своей
           подложке — наш слой лежал бы поверх неё и глушил белый до серого,

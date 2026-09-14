@@ -92,6 +92,8 @@ describe('motivation image director', () => {
 
     expect(direction.style).toBe('warm_documentary');
     expect(direction.prompt).toContain('vertical 9:16');
+    // VED-124: фигуры по краям кадра обрезались.
+    expect(direction.prompt).toContain('generous margins on all sides');
     expect(direction.prompt).toContain('no text');
     expect(direction.prompt).toContain('no logos');
     expect(direction.prompt).toContain('respectful and non-sectarian');
