@@ -20,7 +20,12 @@ import type {
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
-import { isLongQuote, isTextClamped, splitQuoteAndExplanation } from "./quote-text";
+import {
+  LONG_IMAGE_QUOTE_CHARS,
+  isLongQuote,
+  isTextClamped,
+  splitQuoteAndExplanation,
+} from "./quote-text";
 import {
   BACKGROUND_VOLUME,
   hasBackgroundAudio,
@@ -785,13 +790,12 @@ function ReelSlide({
       type="button"
       aria-expanded={showExplanation}
       onClick={() => setShowExplanation((value) => !value)}
-      className={
-        kind === "image"
-          ? "mt-1 block text-xs text-white/85 underline-offset-4 hover:underline"
-          : "underline-offset-4 hover:underline"
-      }
+      // Короткая подпись (VED-126): кнопка стоит в одном ряду с «Читать
+      // полностью» и «Комментарием», длинная уезжала бы на свою строку.
+      // Стрелка и открывающийся лист и так говорят, что по ней раскроется.
+      className="underline-offset-4 hover:underline"
     >
-      {showExplanation ? "Скрыть пояснение" : "Пояснение — нажмите, чтобы раскрыть ›"}
+      {showExplanation ? "Скрыть пояснение" : "Пояснение ›"}
     </button>
   );
 
@@ -802,11 +806,7 @@ function ReelSlide({
     <ExplanationDialog
       postId={post.id}
       onAdded={setAdded}
-      className={
-        kind === "image"
-          ? "mt-1 block text-xs text-white/85 underline-offset-4 hover:underline"
-          : "underline-offset-4 hover:underline"
-      }
+      className="underline-offset-4 hover:underline"
     />
   );
 
@@ -838,7 +838,7 @@ function ReelSlide({
 
   /**
    * Обрезана ли цитата фото — вопрос к разметке, а не к длине текста.
-   * `line-clamp-4` режет по строкам, и сколько их выйдет, решают ширина кадра,
+   * `line-clamp-6` режет по строкам, и сколько их выйдет, решают ширина кадра,
    * перенос внутри шлоки и подставившийся шрифт. Замер отвечает на все три
    * сразу; счёт символов, стоявший здесь один, промахивался на шлоках примерно
    * от ста сорока знаков до ста семидесяти: текст обрезан, а кнопки нет.
@@ -858,7 +858,7 @@ function ReelSlide({
     // коробку и возвращает обратно — наблюдатель ловит и то, и другое.
     const observer = new ResizeObserver(measure);
     observer.observe(element);
-    // Подмену шрифта наблюдатель не заметит: под `line-clamp-4` высота коробки
+    // Подмену шрифта наблюдатель не заметит: под `line-clamp-6` высота коробки
     // фиксирована, меняется только перенос строк внутри неё.
     void document.fonts?.ready.then(measure).catch(() => {});
     return () => {
@@ -1054,12 +1054,12 @@ function ReelSlide({
       >
         {/* В ролик подпись вшита воркером, и вторая копия поверх кадра
             наезжала бы на первую. Для фото текст рисуем мы. */}
+        {/* Шесть строк, а не четыре (VED-126): служебные строки под цитатой
+            ужаты — подпись идёт сплошным текстом, «Пояснение» переехало в
+            ряд ссылок, — и освободившееся место отдано самой цитате. */}
         {kind === "image" && !printed && (
-          <p ref={quoteRef} className="line-clamp-4 font-display text-[17px] font-medium leading-snug drop-shadow-md">{quote}</p>
+          <p ref={quoteRef} className="line-clamp-6 font-display text-[17px] font-medium leading-snug drop-shadow-md">{quote}</p>
         )}
-        {/* У фото — сразу под цитатой, которую раскрывает. У ролика своей
-            цитаты в DOM нет, поэтому кнопка остаётся в общем ряду ниже. */}
-        {kind === "image" && (explanationToggle || explanationInvite)}
         {/* Подпись одной строкой: кто принёс и откуда взято.
             Раньше это были три этажа — источник, ряд кнопок и отдельная
             плашка автора с отступами сверху и снизу, — и они съедали кадр
@@ -1068,13 +1068,19 @@ function ReelSlide({
 
             У ролика подпись не дублируем: авторство и источник воркер вшивает
             в сам кадр, а вторая строка поверх закрывала бы конец цитаты. */}
+        {/* Сплошным текстом, а не рядом флекс-коробок (VED-126): коробка
+            «источник» не помещалась рядом с автором и уходила на свою
+            строку, за ней — категория, и подпись занимала три этажа. Текст
+            переносится по словам и укладывается в одну-две строки. 11px, а
+            не 12: подпись «автор · книга · стих · категория» на 375 так
+            занимает две строки вместо трёх. */}
         {kind === "image" && (
-          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-white/85">
+          <p className="mt-1 text-[11px] leading-snug text-white/85">
             <Byline post={post} />
             {source && (
               <>
-                <span aria-hidden="true" className="text-white/40">·</span>
-                <span className="min-w-0">
+                <span aria-hidden="true" className="text-white/40"> · </span>
+                <span>
                   <span aria-hidden="true">📖 </span>
                   {post.attributionSourceUrl ? (
                     <SourceLink href={post.attributionSourceUrl} className="underline decoration-dotted underline-offset-4">
@@ -1090,24 +1096,28 @@ function ReelSlide({
                 и отдельная строка съела бы кадр (VED-120). */}
             {categoryLink(post) && (
               <>
-                <span aria-hidden="true" className="text-white/40">·</span>
+                <span aria-hidden="true" className="text-white/40"> · </span>
                 <CategoryChip post={post} />
               </>
             )}
           </p>
         )}
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/75">
+        {/* Промежуток 8, а не 12 (VED-126): «Читать полностью», «Комментарий»
+            и «Добавить пояснение» на 375 занимают 342 из 343 и встают в одну
+            строку; на экране уже ряд просто переносится. */}
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/75">
           {/* У ролика подпись вшита в кадр воркером, но имя в кадре — картинка,
               нажать на неё нельзя. Ссылка встаёт в этот же ряд, а не отдельной
               строкой поверх кадра: строка закрыла бы конец цитаты, а ряд уже
               есть и переносится сам. */}
           {kind !== "image" && <Byline post={post} />}
           {kind !== "image" && <CategoryChip post={post} />}
-          {kind !== "image" && (explanationToggle || explanationInvite)}
           {/* Замер добавляет случаи к прикидке, а не заменяет её: цитата длиннее
-              ста семидесяти знаков обрезана в четырёх строках при любой
-              раскладке, и кнопка нужна ей даже там, где замерить не вышло. */}
-          {!printed && (isLongQuote(quote) || quoteClamped) && <FullQuoteToggle quote={quote} source={source} />}
+              границы обрезана при любой раскладке, и кнопка нужна ей даже там,
+              где замерить не вышло. У фото граница своя — под шесть строк. */}
+          {!printed &&
+            (isLongQuote(quote, kind === "image" ? LONG_IMAGE_QUOTE_CHARS : undefined) ||
+              quoteClamped) && <FullQuoteToggle quote={quote} source={source} />}
           {/* Комментарий — слова комментатора о стихе, и живут они в
               Библиотеке. Своей копии не заводим: она разошлась бы с
               оригиналом на первой же правке книги. */}
@@ -1122,6 +1132,9 @@ function ReelSlide({
               Комментарий ›
             </Link>
           )}
+          {/* Пояснение — в том же ряду и у фото (VED-126): отдельной строкой
+              под цитатой оно отнимало у неё целую строку. */}
+          {explanationToggle || explanationInvite}
           {post.origin === "user" && !post.isOwn && <ReportDialog postId={post.id} />}
         </div>
       </div>
