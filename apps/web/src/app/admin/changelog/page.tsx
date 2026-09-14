@@ -36,13 +36,8 @@ export default async function AdminChangelogPage({
         Версия и новости
       </h1>
 
-      <section>
-        <h2 className="mb-3 font-display text-lg font-semibold text-text-0">
-          Релизы
-        </h2>
-        <AdminChangelogReleases releases={releases} />
-      </section>
-
+      {/* Новости — первыми (VED-136): их пишут часто, релизы — редко, и форма
+          новости не должна прятаться под списком релизов. */}
       <section>
         <h2 className="mb-3 font-display text-lg font-semibold text-text-0">
           Новости
@@ -51,6 +46,13 @@ export default async function AdminChangelogPage({
           announcements={announcements}
           startCreating={startCreating}
         />
+      </section>
+
+      <section>
+        <h2 className="mb-3 font-display text-lg font-semibold text-text-0">
+          Релизы
+        </h2>
+        <AdminChangelogReleases releases={releases} />
       </section>
 
       <section>

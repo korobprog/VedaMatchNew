@@ -85,3 +85,39 @@ export function reelsHref({
   const suffix = query.toString();
   return `/motivation${suffix ? `?${suffix}` : ""}`;
 }
+
+/**
+ * Кнопки категорий на пустом тёмном экране ленты (VED-135): «Вы посмотрели
+ * всё новое» и «На сегодня это всё». Там человек как раз решает, что смотреть
+ * дальше, а за категориями приходилось идти в меню.
+ *
+ * Только верхние папки и только непустые: подпапки на телефоне заняли бы весь
+ * экран, а пустая кнопка ведёт в ленту «пока пусто». Вкладка сохраняется, как
+ * у чипа категории, — из «Открыток» в «Открытки». Избранное без папок, поэтому
+ * из него кнопки ведут в «Для вас».
+ */
+export function feedCategoryButtons(
+  categories: {
+    slug: string;
+    title: string;
+    sortOrder: number;
+    parentId: string | null;
+    postCount: number;
+  }[],
+  {
+    tab,
+    order,
+    current,
+  }: { tab: ReelsTab; order?: "random"; current?: string },
+): { slug: string; title: string; href: string; current: boolean }[] {
+  const target: ReelsTab = tab === "saved" ? "forYou" : tab;
+  return categories
+    .filter((category) => !category.parentId && category.postCount > 0)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((category) => ({
+      slug: category.slug,
+      title: category.title,
+      href: reelsHref({ tab: target, order, category: category.slug }),
+      current: category.slug === current,
+    }));
+}

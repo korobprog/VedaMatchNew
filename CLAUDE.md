@@ -22,6 +22,7 @@ pnpm --filter @vedamatch/api test -- -t "имя теста"       # один т�
 pnpm --filter @vedamatch/web test          # vitest, jsdom, все 85 файлов
 pnpm --filter @vedamatch/web exec vitest run src/lib/plural.spec.ts   # один файл
 pnpm --filter @vedamatch/web test:e2e      # playwright
+pnpm --filter @vedamatch/mobile test       # jest-expo
 ```
 
 База (из `apps/api`):
@@ -70,6 +71,17 @@ Notices, Library, Vedabase, Astro…). Полный документ —
   переехал справочник людей — бывший сервис «Контакты», теперь раздел
   `modules/chat/people/` с маршрутами `chat/people/*`; таблицы сохранили
   префикс `Contacts*`, см. «Известный долг» в документе контракта.
+
+### Мобильное приложение
+
+`apps/mobile` — Android-клиент на Expo SDK 57, описание в
+[apps/mobile/README.md](apps/mobile/README.md). Контур (`ru`/`com`) и канал
+(`site`/`store`) зашиваются в сборку, выбора контура в приложении нет. К API
+ходит с `Authorization: Bearer`, cookie не использует: вход через браузер с PKCE
+и одноразовым кодом на `vedamatch://auth`, маршруты `auth/app/*` в
+`modules/auth/app-login.ts` и `auth.service.ts`. Цены и призывы оплатить
+цифровое мимо магазина в приложении запрещены правилами Apple и Google, см.
+[docs/mobile-app-store-links.md](docs/mobile-app-store-links.md).
 
 ### База
 

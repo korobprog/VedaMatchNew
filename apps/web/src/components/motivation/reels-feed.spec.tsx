@@ -95,6 +95,57 @@ describe("ReelsFeed", () => {
     expect(within(feed).getByRole("region", { name: "Конец ленты" })).toBeInTheDocument();
   });
 
+  // VED-135: на пустом тёмном экране разделителя — кнопки категорий вверху.
+  it("ставит кнопки категорий на разделитель и в конец ленты", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{
+          items: [post("a", { feedTier: "fresh" }), post("c", { feedTier: "seen" })],
+          nextCursor: null,
+        }}
+        tab="cards"
+        donation={null}
+        category="guru"
+        categories={[
+          { id: "1", slug: "guru", title: "Гуру", sortOrder: 1, isDefault: false, parentId: null, postCount: 4 },
+          { id: "2", slug: "acharyas", title: "Ачарьи", sortOrder: 2, isDefault: false, parentId: null, postCount: 2 },
+          { id: "3", slug: "empty", title: "Пустая", sortOrder: 3, isDefault: false, parentId: null, postCount: 0 },
+        ]}
+      />,
+    );
+
+    const feed = screen.getByRole("feed", { name: "Лента вдохновения" });
+    for (const name of ["Всё новое просмотрено", "Конец ленты"]) {
+      const slide = within(feed).getByRole("region", { name });
+      const nav = within(slide).getByRole("navigation", { name: "Выбор категории" });
+      const links = within(nav).getAllByRole("link");
+      expect(links.map((link) => link.textContent)).toEqual(["Все", "Гуру", "Ачарьи"]);
+      expect(within(nav).getByRole("link", { name: "Все" })).toHaveAttribute("href", "/motivation?tab=cards");
+      expect(within(nav).getByRole("link", { name: "Ачарьи" })).toHaveAttribute(
+        "href",
+        "/motivation?tab=cards&category=acharyas",
+      );
+      expect(within(nav).getByRole("link", { name: "Гуру" })).toHaveAttribute("aria-current", "page");
+      // Кнопки стоят над текстом слайда, а не под ним.
+      const heading = within(slide).getByText(/Вы посмотрели всё новое|На сегодня это всё/);
+      expect(nav.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  });
+
+  it("без непустых категорий кнопок нет", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a", { feedTier: "seen" })], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    expect(screen.queryByRole("navigation", { name: "Выбор категории" })).not.toBeInTheDocument();
+  });
+
   // VED-87: цитата уже напечатана на открытке — второй экземпляр поверх
   // закрыл бы первый. Набранный текст уходит в alt для скринридера.
   it("не рисует цитату поверх готовой открытки и отдаёт её текст в alt", () => {
