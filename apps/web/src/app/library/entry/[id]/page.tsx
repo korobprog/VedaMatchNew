@@ -11,6 +11,7 @@ import { videoEmbedUrl, videoProviderName, videoSource } from "@vedamatch/shared
 import { Header } from "@/components/header";
 import { BackLink } from "@/components/library/back-link";
 import { BookmarkButton } from "@/components/library/bookmark-button";
+import { CoverPicture } from "@/components/library/cover-picture";
 import { DeleteEntryButton } from "@/components/library/delete-entry-button";
 import { EditEntryForm } from "@/components/library/edit-entry-form";
 import { EntryComments } from "@/components/library/entry-comments";
@@ -115,20 +116,16 @@ export default async function LibraryEntryPage({
               href={entry.url}
               className="mb-4 block overflow-hidden rounded-2xl border border-glass-brd"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element -- обложка лежит в нашем S3 */}
-              <img
+              <CoverPicture
                 src={entry.previewUrl}
                 alt={t(locale, "entry.preview")}
-                className="aspect-video w-full object-cover"
               />
             </OutsideLink>
           ) : (
             <span className="mb-4 block overflow-hidden rounded-2xl border border-glass-brd">
-              {/* eslint-disable-next-line @next/next/no-img-element -- обложка лежит в нашем S3 */}
-              <img
+              <CoverPicture
                 src={entry.previewUrl}
                 alt={t(locale, "entry.preview")}
-                className="aspect-video w-full object-cover"
               />
             </span>
           ))

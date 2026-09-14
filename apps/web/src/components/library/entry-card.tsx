@@ -6,6 +6,7 @@ import {
   lineageOption,
 } from "@vedamatch/shared";
 import { videoEmbedUrl } from "@vedamatch/shared";
+import { CoverPicture } from "./cover-picture";
 import { DeleteEntryButton } from "./delete-entry-button";
 import { OutsideLink } from "./outside-link";
 import { entryTypeLabel, pickLocalized, t } from "./i18n";
@@ -206,13 +207,5 @@ function PreviewImage({
   locale: LibraryLocale;
   src: string;
 }) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element -- обложка лежит в нашем S3
-    <img
-      src={src}
-      alt={t(locale, "entry.preview")}
-      loading="lazy"
-      className="aspect-video w-full object-cover"
-    />
-  );
+  return <CoverPicture src={src} alt={t(locale, "entry.preview")} lazy />;
 }
