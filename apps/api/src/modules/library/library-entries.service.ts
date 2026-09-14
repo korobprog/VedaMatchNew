@@ -725,6 +725,11 @@ export class LibraryEntriesService {
     const stored = await this.previews.storeBuffer(id, file.buffer);
     if (!stored) throw new BadRequestException('preview_upload_failed');
 
+    // Прежняя копия в бакете: у новой обложки свой ключ (VED-155).
+    const before = await this.prisma.libraryEntry.findUnique({
+      where: { id },
+      select: { previewKey: true },
+    });
     const updated = await this.prisma.libraryEntry.update({
       where: { id },
       data: {
@@ -736,6 +741,8 @@ export class LibraryEntriesService {
       },
       select: ENTRY_SELECT,
     });
+    if (before?.previewKey && before.previewKey !== stored.key)
+      await this.previews.remove(before.previewKey);
 
     return toEntryDto(updated, false, userId, viewerIsAdmin);
   }

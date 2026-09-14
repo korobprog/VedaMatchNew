@@ -1074,6 +1074,45 @@ describe('LibraryEntriesService.uploadPreview', () => {
     expect(result.hasCustomPreview).toBe(true);
   });
 
+  // VED-155: у новой обложки новый адрес, прежнюю копию в бакете убираем.
+  it('removes the previous preview copy after storing the new one', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest
+      .fn()
+      .mockResolvedValueOnce(entryRecord())
+      .mockResolvedValueOnce({ previewKey: 'library/previews/entry-1.webp' });
+    prisma.libraryEntry.update = jest
+      .fn()
+      .mockResolvedValue(entryRecord({ previewIsCustom: true }));
+    const previews = previewsMock({
+      storeBuffer: jest.fn().mockResolvedValue({
+        key: 'library/previews/entry-1-0a1b2c3d.webp',
+        url: 'https://cdn.vedamatch.ru/library/previews/entry-1-0a1b2c3d.webp',
+      }),
+    });
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previews as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communitiesMock() as never,
+      eventsMock() as never,
+    );
+
+    await service.uploadPreview('user-1', false, 'entry-1', makeFile());
+
+    expect(prisma.libraryEntry.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          previewKey: 'library/previews/entry-1-0a1b2c3d.webp',
+        }) as object,
+      }),
+    );
+    expect(previews.remove).toHaveBeenCalledWith(
+      'library/previews/entry-1.webp',
+    );
+  });
+
   it('rejects a file that is not an image', async () => {
     const prisma = prismaMock();
     prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(entryRecord());
