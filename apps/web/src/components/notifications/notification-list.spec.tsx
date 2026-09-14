@@ -122,6 +122,16 @@ describe("NotificationList", () => {
     expect(await screen.findByText("От администрации")).toBeInTheDocument();
   });
 
+  // VED-152: ссылка из комментария одним словом шире карточки растягивала
+  // страницу, и плеер внизу уезжал за край экрана.
+  it("переносит длинную ссылку в тексте, а не растягивает страницу", async () => {
+    const body = "Маму Тхакур дас: Сделано — https://github.com/korobprog/VedaMatchNew/pull/324, ждёт влития.";
+    fetchInbox.mockResolvedValue({ items: [item({ body })], unreadCount: 1 });
+    render(<NotificationList />);
+
+    expect(await screen.findByText(body)).toHaveClass("break-words");
+  });
+
   it("не подписывает так всё подряд", async () => {
     fetchInbox.mockResolvedValue({ items: [item()], unreadCount: 1 });
     render(<NotificationList />);
