@@ -4,10 +4,13 @@ import { welcomeMessage } from './welcome-message';
 function build(
   options: {
     greeter?: { id: string } | null;
-    newcomer?: { id: string } | null;
+    newcomer?: { name: string; spiritualName: string | null } | null;
   } = {},
 ) {
-  const { greeter = { id: 'admin-1' }, newcomer = { id: 'user-1' } } = options;
+  const {
+    greeter = { id: 'admin-1' },
+    newcomer = { name: 'Мадхава', spiritualName: null },
+  } = options;
   const prisma = {
     user: {
       findFirst: jest.fn().mockResolvedValue(greeter),
@@ -30,7 +33,7 @@ function build(
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 describe('ChatWelcomeListener', () => {
-  it('пишет новичку от имени администрации текстом команды', async () => {
+  it('пишет новичку от имени администрации текстом команды с его именем', async () => {
     const { listener, conversations, messages } = build();
 
     listener.onUserRegistered({ userId: 'user-1' });
@@ -52,10 +55,27 @@ describe('ChatWelcomeListener', () => {
     ];
     expect(author).toBe('admin-1');
     expect(conversationId).toBe('conv-1');
-    // VED-150: текст — дословно тот, что дала команда.
-    expect(dto.body).toBe(welcomeMessage());
+    // VED-150: текст команды, в первой строке — имя новичка.
+    expect(dto.body).toBe(welcomeMessage('Мадхава'));
+    expect(dto.body.startsWith('🌎 Мадхава, добро пожаловать')).toBe(true);
     // Колокольчик уже сказал «Добро пожаловать»: второй раз не звоним.
     expect(options.silent).toBe(true);
+  });
+
+  it('показывает духовное имя, если оно есть', async () => {
+    const { listener, messages } = build({
+      newcomer: { name: 'Максим', spiritualName: 'Маму Тхакур дас' },
+    });
+
+    listener.onUserRegistered({ userId: 'user-1' });
+    await settle();
+
+    const [, , dto] = messages.send.mock.calls[0] as [
+      string,
+      string,
+      { body: string },
+    ];
+    expect(dto.body).toContain('Маму Тхакур дас, добро пожаловать');
   });
 
   it('молчит, когда администратора в портале ещё нет', async () => {
