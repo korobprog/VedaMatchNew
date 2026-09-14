@@ -19,6 +19,7 @@ function news(overrides: Partial<PublicAnnouncementDto> = {}): PublicAnnouncemen
     body: "Свои рилсы живут в отдельном разделе",
     publishedAt: "2026-08-20T09:00:00.000Z",
     pinned: false,
+    images: [],
     acknowledged: false,
     ...overrides,
   };
@@ -220,5 +221,47 @@ describe("PortalNews", () => {
     expect(screen.getByText("Новость 0")).toBeInTheDocument();
     expect(screen.getByText("Новость 2")).toBeInTheDocument();
     expect(screen.queryByText("Новость 3")).not.toBeInTheDocument();
+  });
+
+  // VED-137: к новости прикладывают скриншоты.
+  it("на главной показывает первую картинку, все — в окне новости", async () => {
+    const user = userEvent.setup();
+    const image = (n: number) => ({
+      url: `https://cdn.test/announcements/${n}.webp`,
+      width: 1280,
+      height: 720,
+    });
+    render(
+      <PortalNews
+        items={[news({ pinned: true, images: [image(1), image(2), image(3)] })]}
+      />,
+    );
+
+    expect(
+      screen.getByRole("img", { name: "Картинка 1 к новости «Открыли Студию»" }),
+    ).toHaveAttribute("src", "https://cdn.test/announcements/1.webp");
+    expect(
+      screen.queryByRole("img", { name: "Картинка 2 к новости «Открыли Студию»" }),
+    ).not.toBeInTheDocument();
+
+    // Текст короткий, но картинок больше, чем видно, — окно всё равно нужно.
+    await user.click(screen.getByRole("button", { name: "Читать полностью" }));
+    const dialog = await screen.findByRole("dialog", { name: "Открыли Студию" });
+    expect(
+      Array.from(dialog.querySelectorAll("img")).map((img) => img.getAttribute("src")),
+    ).toEqual([
+      "https://cdn.test/announcements/1.webp",
+      "https://cdn.test/announcements/2.webp",
+      "https://cdn.test/announcements/3.webp",
+    ]);
+  });
+
+  it("короткую новость без картинок окном не предлагает", () => {
+    render(<PortalNews items={[news({ pinned: true })]} />);
+
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Читать полностью" }),
+    ).not.toBeInTheDocument();
   });
 });

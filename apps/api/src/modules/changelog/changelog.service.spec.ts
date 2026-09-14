@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChangelogService } from './changelog.service';
 
@@ -41,6 +45,7 @@ describe('ChangelogService', () => {
   const service = new ChangelogService(
     prisma as unknown as PrismaService,
     events as never,
+    {} as never,
   );
 
   beforeEach(() => {
@@ -175,6 +180,7 @@ describe('ChangelogService: рассылка новости', () => {
       service: new ChangelogService(
         prisma as unknown as PrismaService,
         events as never,
+        {} as never,
       ),
     };
   }
@@ -284,6 +290,7 @@ describe('ChangelogService: отметка «ознакомлен»', () => {
       service: new ChangelogService(
         prisma as unknown as PrismaService,
         { emit: jest.fn() } as never,
+        {} as never,
       ),
     };
   }
@@ -300,6 +307,7 @@ describe('ChangelogService: отметка «ознакомлен»', () => {
     titleEn: 'Studio',
     bodyRu: 'Текст',
     bodyEn: 'Body',
+    images: [],
   };
 
   it('без пользователя отметки не спрашивает и отдаёт acknowledged=false', async () => {
@@ -389,5 +397,224 @@ describe('ChangelogService: отметка «ознакомлен»', () => {
       count: 0,
     });
     expect(prisma.announcementAck.createMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('ChangelogService: картинки новостей (VED-137)', () => {
+  const KEY_A = 'announcements/0000000a-aaaa-4bbb-8ccc-dddddddddddd.webp';
+  const KEY_B = 'announcements/0000000b-aaaa-4bbb-8ccc-dddddddddddd.webp';
+  const row = (key: string, sortOrder: number) => ({
+    storageKey: key,
+    url: `https://cdn.test/${key}`,
+    width: 1280,
+    height: 720,
+    sortOrder,
+  });
+  const news = {
+    id: 'a1',
+    titleRu: 'Новость',
+    titleEn: 'News',
+    bodyRu: 'Текст',
+    bodyEn: 'Body',
+    status: 'draft',
+    publishedAt: null,
+    pinned: false,
+    publishAt: null,
+    expiresAt: null,
+    broadcastAt: null,
+    broadcastCount: 0,
+    createdAt: new Date('2026-09-14T00:00:00Z'),
+  };
+
+  function build() {
+    const tx = {
+      announcement: {
+        updateMany: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+      announcementImage: {
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn(),
+        createMany: jest.fn(),
+      },
+    };
+    const prisma = {
+      announcement: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        delete: jest.fn(),
+      },
+      announcementAck: { findMany: jest.fn().mockResolvedValue([]) },
+      $transaction: jest.fn((fn: (client: typeof tx) => unknown) => fn(tx)),
+    };
+    const images = {
+      configured: true,
+      urlFor: (key: string) => `https://cdn.test/${key}`,
+      validate: jest.fn().mockReturnValue(null),
+      store: jest.fn(),
+      removeMany: jest.fn(),
+    };
+    const service = new ChangelogService(
+      prisma as unknown as PrismaService,
+      { emit: jest.fn() } as never,
+      images as never,
+    );
+    return { service, prisma, tx, images };
+  }
+
+  it('создаёт новость с картинками в присланном порядке, адрес строит сам', async () => {
+    const { service, tx } = build();
+    tx.announcement.create.mockResolvedValue({
+      ...news,
+      images: [row(KEY_B, 0), row(KEY_A, 1)],
+    });
+
+    const created = await service.adminCreateAnnouncement('admin', {
+      titleRu: 'Новость',
+      titleEn: 'News',
+      bodyRu: 'Текст',
+      bodyEn: 'Body',
+      images: [
+        { key: KEY_B, width: 1280, height: 720 },
+        { key: KEY_A, width: 1280, height: 720 },
+      ],
+    });
+
+    expect(tx.announcement.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          images: { create: [row(KEY_B, 0), row(KEY_A, 1)] },
+        }),
+      }),
+    );
+    expect(created.images.map((image) => image.key)).toEqual([KEY_B, KEY_A]);
+  });
+
+  it('чужой ключ хранилища — 400, новость не создаётся', async () => {
+    const { service, tx } = build();
+
+    await expect(
+      service.adminCreateAnnouncement('admin', {
+        titleRu: 'Новость',
+        titleEn: 'News',
+        bodyRu: 'Текст',
+        bodyEn: 'Body',
+        images: [{ key: 'users/1/photo.webp', width: 10, height: 10 }],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.announcement.create).not.toHaveBeenCalled();
+  });
+
+  it('правка заменяет набор и убирает из хранилища только выброшенные картинки', async () => {
+    const { service, prisma, tx, images } = build();
+    prisma.announcement.findUnique.mockResolvedValue(news);
+    tx.announcementImage.findMany.mockResolvedValue([
+      { storageKey: KEY_A },
+      { storageKey: KEY_B },
+    ]);
+    tx.announcement.update.mockResolvedValue({
+      ...news,
+      images: [row(KEY_B, 0)],
+    });
+
+    await service.adminUpdateAnnouncement('admin', 'a1', {
+      images: [{ key: KEY_B, width: 1280, height: 720 }],
+    });
+
+    expect(tx.announcementImage.deleteMany).toHaveBeenCalledWith({
+      where: { announcementId: 'a1' },
+    });
+    expect(tx.announcementImage.createMany).toHaveBeenCalledWith({
+      data: [{ ...row(KEY_B, 0), announcementId: 'a1' }],
+    });
+    expect(images.removeMany).toHaveBeenCalledWith([KEY_A]);
+  });
+
+  it('правка без поля images картинки не трогает', async () => {
+    const { service, prisma, tx, images } = build();
+    prisma.announcement.findUnique.mockResolvedValue(news);
+    tx.announcement.update.mockResolvedValue({
+      ...news,
+      images: [row(KEY_A, 0)],
+    });
+
+    await service.adminUpdateAnnouncement('admin', 'a1', { titleRu: 'Иначе' });
+
+    expect(tx.announcementImage.deleteMany).not.toHaveBeenCalled();
+    expect(tx.announcementImage.createMany).not.toHaveBeenCalled();
+    expect(images.removeMany).toHaveBeenCalledWith([]);
+  });
+
+  it('удаление новости убирает её картинки из хранилища', async () => {
+    const { service, prisma, images } = build();
+    prisma.announcement.findUnique.mockResolvedValue({
+      id: 'a1',
+      images: [{ storageKey: KEY_A }],
+    });
+
+    await service.adminDeleteAnnouncement('admin', 'a1');
+
+    expect(prisma.announcement.delete).toHaveBeenCalledWith({
+      where: { id: 'a1' },
+    });
+    expect(images.removeMany).toHaveBeenCalledWith([KEY_A]);
+  });
+
+  it('публичный список отдаёт картинки без ключей хранилища', async () => {
+    const { service, prisma } = build();
+    prisma.announcement.findMany.mockResolvedValue([
+      {
+        ...news,
+        status: 'published',
+        publishedAt: new Date('2026-09-14T00:00:00Z'),
+        images: [row(KEY_A, 0)],
+      },
+    ]);
+
+    const [item] = await service.listAnnouncements('ru');
+
+    expect(item.images).toEqual([
+      { url: `https://cdn.test/${KEY_A}`, width: 1280, height: 720 },
+    ]);
+  });
+
+  it('загрузка: неподходящий и битый файл — в списке ошибок, остальные загружены', async () => {
+    const { service, images } = build();
+    const file = (name: string) => ({
+      buffer: Buffer.from('x'),
+      mimetype: 'image/png',
+      size: 1,
+      originalname: name,
+    });
+    images.validate.mockImplementation((f: { originalname: string }) =>
+      f.originalname === 'doc.pdf' ? 'Подходят JPG, PNG и WebP' : null,
+    );
+    images.store.mockImplementation((f: { originalname: string }) =>
+      f.originalname === 'broken.png'
+        ? Promise.reject(new Error('unsupported image format'))
+        : Promise.resolve({ key: KEY_A, url: 'u', width: 1, height: 1 }),
+    );
+
+    const result = await service.adminUploadAnnouncementImages('admin', [
+      file('shot.png'),
+      file('doc.pdf'),
+      file('broken.png'),
+    ]);
+
+    expect(result.images).toEqual([
+      { key: KEY_A, url: 'u', width: 1, height: 1 },
+    ]);
+    expect(result.failed).toEqual([
+      { fileName: 'doc.pdf', message: 'Подходят JPG, PNG и WebP' },
+      { fileName: 'broken.png', message: 'Не получилось прочитать картинку' },
+    ]);
+  });
+
+  it('загрузка картинок — только администратору', async () => {
+    const { service } = build();
+    await expect(
+      service.adminUploadAnnouncementImages('user', []),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

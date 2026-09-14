@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { PublicAnnouncementDto } from "@vedamatch/shared";
 import { HeadsetIcon } from "@/components/icons/notification-icons";
+import { NewsImages } from "@/components/news-images";
 import { API_URL, apiFetch } from "@/lib/http-client";
 import { isNewsTruncated, newsExcerpt } from "@/lib/portal-news-excerpt";
 
@@ -97,8 +98,15 @@ export function PortalNews({ items }: { items: PublicAnnouncementDto[] }) {
           <p className="mt-1 whitespace-pre-line text-sm text-text-1">
             {newsExcerpt(pinned.body)}
           </p>
+          {/* На главной — первая картинка (VED-137), остальные в полном тексте:
+              шесть скриншотов оттеснили бы сервисы вниз. */}
+          {pinned.images.length > 0 && (
+            <div className="mt-3">
+              <NewsImages images={pinned.images} title={pinned.title} limit={1} />
+            </div>
+          )}
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-            {isNewsTruncated(pinned.body) && (
+            {(isNewsTruncated(pinned.body) || pinned.images.length > 1) && (
               <button
                 type="button"
                 onClick={() => setOpenId(pinned.id)}
@@ -277,6 +285,11 @@ function NewsDialog({
         <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-text-1">
           {item.body}
         </p>
+        {item.images.length > 0 && (
+          <div className="mt-3">
+            <NewsImages images={item.images} title={item.title} />
+          </div>
+        )}
         <div className="mt-5 flex flex-wrap items-center gap-4">
           <AckCheckbox item={item} pending={pending} onAck={onAck} />
           <button

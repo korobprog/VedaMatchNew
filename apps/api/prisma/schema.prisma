@@ -2479,10 +2479,29 @@ model Announcement {
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
-  acks AnnouncementAck[]
+  acks   AnnouncementAck[]
+  images AnnouncementImage[]
 
   @@index([status, publishedAt(sort: Desc)])
   @@index([publishAt(sort: Desc)])
+}
+
+/// Картинка новости (VED-137): скриншот или фото, сжатое в webp. Объект в S3
+/// публичный — новость попадает в серверный HTML главной. Ключ уникален: по
+/// нему форма админки сохраняет набор, и одна загрузка не привяжется к двум
+/// новостям.
+model AnnouncementImage {
+  id             String       @id @default(uuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  storageKey     String       @unique
+  url            String
+  width          Int
+  height         Int
+  sortOrder      Int          @default(0)
+  createdAt      DateTime     @default(now())
+
+  @@index([announcementId, sortOrder])
 }
 
 /// Отметка «ознакомлен» участника с новостью.
