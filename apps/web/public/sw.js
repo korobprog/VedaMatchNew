@@ -1,5 +1,8 @@
 const CACHE_PREFIX = "vedamatch-shell-";
-const CACHE_NAME = `${CACHE_PREFIX}v2`;
+// v3 — манифест и значки перешли на «сначала сеть» (VED-78). Смена имени
+// удаляет при активации кэш v2: в нём у давно установивших лежит манифест
+// с быстрым меню из двух пунктов, и сам он оттуда уже никогда бы не ушёл.
+const CACHE_NAME = `${CACHE_PREFIX}v3`;
 // Кэши старого воркера Vedabase: удаляем при активации.
 const LEGACY_CACHE_PREFIX = "vedamatch-vedabase-";
 const PORTAL_SHELL = "/offline";
@@ -56,29 +59,56 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (!isCacheableAsset(url.pathname)) return;
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((response) => {
-        if (response.ok) {
-          const copy = response.clone();
-          void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-        }
-        return response;
-      });
-    }),
-  );
+  if (isImmutableAsset(url.pathname)) {
+    event.respondWith(cacheFirst(request));
+    return;
+  }
+  if (isRefreshableAsset(url.pathname)) {
+    event.respondWith(networkFirst(request));
+  }
 });
 
-function isCacheableAsset(pathname) {
+/** Чанки сборки: в имени хэш, под тем же адресом содержимое не меняется. */
+function isImmutableAsset(pathname) {
+  return pathname.startsWith("/_next/static/");
+}
+
+/**
+ * Файлы с постоянным адресом, содержимое которых меняется от выката к выкату.
+ *
+ * Раньше они шли тем же «нашёл в кэше — отдал», что и чанки, и манифест
+ * навсегда застревал в первой увиденной версии: быстрое меню значка
+ * приложения на телефоне показывало два старых пункта даже после
+ * переустановки — данные сайта при ней не стираются (VED-78).
+ */
+function isRefreshableAsset(pathname) {
   return (
-    pathname.startsWith("/_next/static/") ||
     pathname.startsWith("/icons/") ||
     pathname === PORTAL_SHELL ||
     pathname === VEDABASE_SHELL ||
     pathname === "/manifest.webmanifest"
   );
+}
+
+function cacheFirst(request) {
+  return caches.match(request).then((cached) => cached ?? fetchAndStore(request));
+}
+
+/** Сначала сеть; кэш — только когда сети нет. */
+function networkFirst(request) {
+  return fetchAndStore(request).catch(() =>
+    caches.match(request).then((cached) => cached ?? Response.error()),
+  );
+}
+
+function fetchAndStore(request) {
+  return fetch(request).then((response) => {
+    if (response.ok) {
+      const copy = response.clone();
+      void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+    }
+    return response;
+  });
 }
 
 self.addEventListener("push", (event) => {
