@@ -56,7 +56,13 @@ export function CashEntryDialog({
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (draft && !dialog.open) dialog.showModal();
+    if (draft && !dialog.open) {
+      dialog.showModal();
+      // showModal сам ставит фокус на первый элемент — переключатель
+      // «Доход». На ресепшене первым набирают сумму, поэтому переводим фокус
+      // туда явно: React-овский autoFocus срабатывает раньше и перебивается.
+      dialog.querySelector<HTMLInputElement>("[data-autofocus]")?.focus();
+    }
     if (!draft && dialog.open) dialog.close();
   }, [draft]);
 
@@ -209,7 +215,7 @@ function EntryForm({
             inputMode="decimal"
             autoComplete="off"
             required
-            autoFocus
+            data-autofocus
             placeholder="850"
             className={`${fieldClass} font-mono text-base`}
           />
