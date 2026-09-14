@@ -4,6 +4,9 @@ import { TravelAdminController } from './travel-admin.controller';
 import { TravelAdminService } from './travel-admin.service';
 import { TravelCashController } from './travel-cash.controller';
 import { TravelCashService } from './travel-cash.service';
+import { TravelGuestPhotosService } from './travel-guest-photos.service';
+import { TravelGuestsController } from './travel-guests.controller';
+import { TravelGuestsService } from './travel-guests.service';
 import { TravelManageController } from './travel-manage.controller';
 import { TravelManageService } from './travel-manage.service';
 import { TravelPurgeListener } from './travel-purge.listener';
@@ -24,6 +27,7 @@ import { TravelService } from './travel.service';
   controllers: [
     TravelAdminController,
     TravelCashController,
+    TravelGuestsController,
     TravelManageController,
     TravelController,
   ],
@@ -31,6 +35,8 @@ import { TravelService } from './travel.service';
     TravelService,
     TravelManageService,
     TravelCashService,
+    TravelGuestsService,
+    TravelGuestPhotosService,
     TravelAdminService,
     TravelPurgeListener,
   ],

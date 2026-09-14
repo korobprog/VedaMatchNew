@@ -26,6 +26,10 @@ function entry(
     tags: [],
     authorName: null,
     createdAt: `2026-05-20T10:00:${String(seq).padStart(2, "0")}.000Z`,
+    guestId: null,
+    guestName: null,
+    guestColor: null,
+    nights: null,
   };
 }
 

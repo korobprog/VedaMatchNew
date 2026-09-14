@@ -6,6 +6,7 @@ import type {
   TravelCashEntryDto,
   TravelCashKind,
   TravelCurrency,
+  TravelGuestDto,
 } from "@vedamatch/shared";
 import { TRAVEL_CURRENCY_SIGNS } from "@vedamatch/shared";
 import {
@@ -16,6 +17,7 @@ import {
 import { CashIcon } from "./cash-icons";
 import { localToday } from "./cash-grouping";
 import { moneyInputValue, parseMoneyInput } from "./cash-money";
+import { guestPaymentLabel, suggestedAmountMinor } from "./guest-format";
 
 export interface CashEntryDraft {
   kind: TravelCashKind;
@@ -27,6 +29,9 @@ interface FormProps {
   stayId: string;
   currency: TravelCurrency;
   categories: TravelCashCategoryDto[];
+  /** Клиентская база: живущие сверху, как её отдаёт сервер. */
+  guests: TravelGuestDto[];
+  nightPriceMinor: number | null;
   draft: CashEntryDraft;
   onCancel: () => void;
   onSaved: () => void;
@@ -88,11 +93,19 @@ function EntryForm({
   stayId,
   currency,
   categories,
+  guests,
+  nightPriceMinor,
   draft,
   onCancel,
   onSaved,
 }: FormProps) {
   const { entry } = draft;
+  const [guestId, setGuestId] = useState(entry?.guestId ?? "");
+  const [nights, setNights] = useState(
+    entry?.nights ? String(entry.nights) : "",
+  );
+  /** Сумму набрали руками — подсказка «сутки × цена» её больше не трогает. */
+  const [amountTouched, setAmountTouched] = useState(Boolean(entry));
   const [kind, setKind] = useState<TravelCashKind>(entry?.kind ?? draft.kind);
   const [amount, setAmount] = useState(
     entry ? moneyInputValue(entry.amountMinor) : "",
@@ -109,9 +122,21 @@ function EntryForm({
   const [error, setError] = useState<string | null>(null);
 
   const visible = categories.filter((category) => category.kind === kind);
+  const selectedGuest = guests.find((guest) => guest.id === guestId) ?? null;
+
+  function changeNights(value: string) {
+    setNights(value);
+    const suggestion = suggestedAmountMinor(
+      Number.parseInt(value, 10) || null,
+      nightPriceMinor,
+    );
+    if (!amountTouched && suggestion) setAmount(moneyInputValue(suggestion));
+  }
 
   function switchKind(next: TravelCashKind) {
     setKind(next);
+    // Сутки оплачивает только гость в доходе.
+    if (next === "expense") setNights("");
     // Статья другого вида сервер всё равно не примет — сбрасываем сразу.
     if (categories.find((c) => c.id === categoryId)?.kind !== next) {
       setCategoryId(null);
@@ -135,6 +160,11 @@ function EntryForm({
         .split(",")
         .map((tag) => tag.trim())
         .filter(Boolean),
+      guestId: guestId || null,
+      nights:
+        kind === "income" && guestId && nights
+          ? Number.parseInt(nights, 10)
+          : null,
     };
     setPending(true);
     setError(null);
@@ -211,7 +241,10 @@ function EntryForm({
           Сумма, {TRAVEL_CURRENCY_SIGNS[currency]}
           <input
             value={amount}
-            onChange={(event) => setAmount(event.target.value)}
+            onChange={(event) => {
+              setAmount(event.target.value);
+              setAmountTouched(true);
+            }}
             inputMode="decimal"
             autoComplete="off"
             required
@@ -267,6 +300,46 @@ function EntryForm({
           ) : null}
         </div>
       </fieldset>
+
+      {guests.length > 0 ? (
+        <div className="grid grid-cols-[1fr_auto] gap-3">
+          <label className="block text-sm text-text-1">
+            Гость
+            <select
+              value={guestId}
+              onChange={(event) => setGuestId(event.target.value)}
+              className={fieldClass}
+            >
+              <option value="">Не про гостя</option>
+              {guests.map((guest) => (
+                <option key={guest.id} value={guest.id}>
+                  {guest.fullName}
+                  {guest.living ? "" : " (выехал)"}
+                </option>
+              ))}
+            </select>
+          </label>
+          {kind === "income" && guestId ? (
+            <label className="block w-24 text-sm text-text-1">
+              Суток
+              <input
+                value={nights}
+                onChange={(event) => changeNights(event.target.value)}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="off"
+                placeholder="—"
+                className={`${fieldClass} font-mono`}
+              />
+            </label>
+          ) : null}
+          {selectedGuest ? (
+            <p className="col-span-2 -mt-2 text-xs text-text-2">
+              {guestPaymentLabel(selectedGuest) || "Выехал, долга нет"}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <label className="block text-sm text-text-1">
         Заметка
