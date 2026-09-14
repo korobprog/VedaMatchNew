@@ -1,5 +1,6 @@
 import { forwardRef } from "react";
 import type { VedabaseChapterDocument, VedabaseReadingUnit } from "@vedamatch/shared";
+import { CopyBlockButton } from "./copy-block-button";
 
 const fields: Array<{
   key: Exclude<keyof VedabaseReadingUnit, "id" | "title" | "sourceUrl">;
@@ -58,16 +59,20 @@ export const ChapterContent = forwardRef<
           {fields.map(({ key, label }) => {
             const html = unit[key];
             if (!html) return null;
+            const safeHtml = sanitizeReaderHtml(html);
             return (
               <section key={key} className="mt-5">
-                <h3 className="reader-muted mb-2 text-xs font-semibold uppercase tracking-wide">
-                  {label}
-                </h3>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <h3 className="reader-muted text-xs font-semibold uppercase tracking-wide">
+                    {label}
+                  </h3>
+                  <CopyBlockButton html={safeHtml} label={`${unit.title}, ${label}`} />
+                </div>
                 <div
                   data-vedabase-block={key}
                   data-testid={`block-${unit.id}-${key}`}
                   className="space-y-3 leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: sanitizeReaderHtml(html) }}
+                  dangerouslySetInnerHTML={{ __html: safeHtml }}
                 />
               </section>
             );
