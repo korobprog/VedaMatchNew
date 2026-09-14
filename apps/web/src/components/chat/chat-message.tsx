@@ -23,6 +23,7 @@ import { authorPalette } from "./chat-author-color";
 import { ChatEmojiPicker } from "./chat-emoji-picker";
 import { formatBytes, formatDuration } from "./chat-time";
 import { ChatVoicePlayer } from "./chat-voice-player";
+import { imageAspect } from "./image-frame";
 
 /**
  * Сообщение в переписке — по макету канвы: имя автора первой строкой внутри
@@ -466,24 +467,46 @@ export function ChatMessage({
 }
 
 function Attachment({ attachment }: { attachment: ChatAttachmentDto }) {
-  if (attachment.kind === "image")
+  if (attachment.kind === "image") {
+    /* Место под кадр — до загрузки (VED-148): без размеров картинка
+       вырастала уже после того, как лента докрутилась вниз, и отправленное
+       фото оказывалось за краем экрана — «исчезало» до перезагрузки. */
+    const aspect = imageAspect(attachment.width, attachment.height);
+    const frame = aspect ? { aspectRatio: aspect } : undefined;
+    // Черновик ещё без адреса: рамка того же размера вместо пустой картинки
+    // нулевой высоты, чтобы было видно, что фото уходит.
+    if (!attachment.url)
+      return (
+        <div
+          role="img"
+          aria-label="Фото отправляется"
+          style={frame}
+          className={`-mx-3.5 flex max-h-72 w-[calc(100%+1.75rem)] items-center justify-center rounded-lg bg-glass text-xs text-text-2 motion-safe:animate-pulse ${aspect ? "" : "h-40"}`}
+        >
+          Фото отправляется…
+        </div>
+      );
     return (
       // Отрицательные поля гасят паддинг пузыря (px-3.5): фото идёт в край
       // по бокам, а не остаётся в рамке из подложки пузыря вокруг картинки.
       <a
-        href={attachment.url ?? "#"}
+        href={attachment.url}
         target="_blank"
         rel="noreferrer"
         className="-mx-3.5 block"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={attachment.url ?? ""}
+          src={attachment.url}
           alt=""
-          className="max-h-72 w-[calc(100%+1.75rem)] rounded-lg object-cover"
+          width={attachment.width ?? undefined}
+          height={attachment.height ?? undefined}
+          style={frame}
+          className="h-auto max-h-72 w-[calc(100%+1.75rem)] rounded-lg object-cover"
         />
       </a>
     );
+  }
 
   if (attachment.kind === "voice")
     return (

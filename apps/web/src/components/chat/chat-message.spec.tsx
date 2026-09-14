@@ -284,3 +284,46 @@ describe("ChatMessage", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+// VED-148: отправленное фото «исчезало» — картинка без размеров вырастала уже
+// после того, как лента докрутилась вниз.
+describe("ChatMessage — картинки", () => {
+  const image = (over: Record<string, unknown> = {}) =>
+    ({
+      id: "a-1",
+      kind: "image",
+      url: "https://cdn.test/chat/photo.webp",
+      width: 1280,
+      height: 960,
+      ...over,
+    }) as ChatMessageDto["attachments"][number];
+
+  it("место под кадр отведено заранее, по размерам вложения", () => {
+    const { container } = setup({ body: "", attachments: [image()] });
+
+    const img = container.querySelector("img");
+    expect(img).toHaveAttribute("src", "https://cdn.test/chat/photo.webp");
+    expect(img).toHaveAttribute("width", "1280");
+    expect(img).toHaveAttribute("height", "960");
+    expect(img?.style.aspectRatio).toBe("1280 / 960");
+  });
+
+  it("черновик без адреса показывает рамку «Фото отправляется», а не пустую картинку", () => {
+    const { container } = setup({ body: "", attachments: [image({ url: null })] });
+
+    const frame = screen.getByRole("img", { name: "Фото отправляется" });
+    expect(frame.style.aspectRatio).toBe("1280 / 960");
+    expect(container.querySelector("img")).toBeNull();
+  });
+
+  it("старое вложение без размеров показывается как раньше", () => {
+    const { container } = setup({
+      body: "",
+      attachments: [image({ width: null, height: null })],
+    });
+
+    const img = container.querySelector("img");
+    expect(img).toHaveAttribute("src", "https://cdn.test/chat/photo.webp");
+    expect(img?.style.aspectRatio).toBe("");
+  });
+});

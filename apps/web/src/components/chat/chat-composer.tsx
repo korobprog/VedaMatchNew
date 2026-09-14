@@ -26,6 +26,7 @@ import {
   type ChatQuickSlotId,
 } from "./chat-quick-slot";
 import { formatDuration } from "./chat-time";
+import { composerHeight } from "./composer-height";
 import { ChatVoiceRecorder } from "./chat-voice-recorder";
 
 /**
@@ -78,6 +79,23 @@ export function ChatComposer({
   const fileInput = useRef<HTMLInputElement | null>(null);
   const imageInput = useRef<HTMLInputElement | null>(null);
   const textRef = useRef<HTMLTextAreaElement | null>(null);
+
+  /* Поле растёт вместе с текстом (VED-147): было в одну строку, и из
+     длинного сообщения на телефоне виднелись полторы. Высоту сначала
+     сбрасываем — иначе `scrollHeight` не уменьшится, когда текст стёрли.
+     Потолок — от видимого окна: при открытой клавиатуре оно ниже. */
+  useEffect(() => {
+    const field = textRef.current;
+    if (!field) return;
+    field.style.height = "auto";
+    const { height, scrolls } = composerHeight(
+      // `scrollHeight` без рамки, а высота задаётся вместе с ней.
+      field.scrollHeight + 2,
+      window.visualViewport?.height ?? window.innerHeight,
+    );
+    field.style.height = `${height}px`;
+    field.style.overflowY = scrolls ? "auto" : "hidden";
+  }, [text, recording]);
 
   /**
    * Смайлик — туда, где стоит курсор, а не в конец текста. Фокус в поле не
@@ -488,7 +506,7 @@ export function ChatComposer({
               }
             }}
             placeholder={editing ? "Новый текст сообщения" : "Сообщение…"}
-            className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border border-glass-brd bg-glass px-3.5 py-3 text-[15px] text-text-0 outline-none placeholder:text-text-2"
+            className="min-h-11 flex-1 resize-none rounded-2xl border border-glass-brd bg-glass px-3.5 py-3 text-[15px] text-text-0 outline-none placeholder:text-text-2"
           />
         )}
 
