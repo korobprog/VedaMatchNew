@@ -17,6 +17,7 @@ import { msUntilRefresh } from './jwt-expiry';
 import { buildLoginUrl, parseAuthRedirect, APP_AUTH_REDIRECT, type LoginProvider } from './login-flow';
 import { createPkcePair } from './pkce';
 import { clearTokens, readTokens, writeTokens, type TokenPair } from './token-store';
+import { unregisterDevice } from '@/lib/push/push-api';
 
 /**
  * Сессия приложения: токены в защищённом хранилище, обновление access-токена
@@ -215,9 +216,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     const current = tokensRef.current;
+    // Телефон снимаем до выхода: после него у запроса уже не будет токена.
+    await unregisterDevice(api);
     if (current) authApi.logout(current.refreshToken).catch(() => undefined);
     await dropSession();
-  }, [authApi, dropSession]);
+  }, [api, authApi, dropSession]);
 
   const value = useMemo<Session>(
     () => ({

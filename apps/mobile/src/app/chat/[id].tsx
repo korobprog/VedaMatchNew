@@ -28,6 +28,7 @@ import {
   settlePendingMessage,
 } from '@/lib/chat/chat-room-state';
 import { useChatStream } from '@/lib/chat/chat-stream';
+import { setActiveConversation } from '@/lib/push/active-chat';
 import { withPlural } from '@/lib/chat/plural';
 import { isOnline } from '@/lib/chat/presence';
 import { useTheme } from '@/theme/theme';
@@ -49,6 +50,12 @@ export default function ChatRoomScreen() {
   const { api, user } = useSession();
   const stream = useChatStream();
   const chatApi = useMemo(() => createChatApi(api), [api]);
+
+  // Пока беседа на экране, пуши о её сообщениях не показываются.
+  useEffect(() => {
+    setActiveConversation(conversationId);
+    return () => setActiveConversation(null);
+  }, [conversationId]);
 
   const [detail, setDetail] = useState<ChatConversationDetail | null>(null);
   const [messages, setMessages] = useState<ChatMessageDto[]>([]);

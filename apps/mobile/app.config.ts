@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 import { resolveVariant } from './src/config/variant.ts';
 
@@ -8,6 +9,11 @@ import { resolveVariant } from './src/config/variant.ts';
  */
 export default ({ config }: ConfigContext): ExpoConfig => {
   const variant = resolveVariant(process.env);
+  // Настройки Firebase не в репозитории: локально файл лежит рядом (он в
+  // .gitignore), в CI путь приходит переменной. Без файла сборка всё равно
+  // собирается, только без пушей FCM.
+  const googleServicesFile = process.env.GOOGLE_SERVICES_JSON ?? './google-services.json';
+  const withFirebase = existsSync(googleServicesFile);
 
   return {
     ...config,
@@ -20,6 +26,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     userInterfaceStyle: 'automatic',
     android: {
       package: 'com.vedamatch.app',
+      ...(withFirebase ? { googleServicesFile } : {}),
       versionCode: 1,
       adaptiveIcon: {
         backgroundColor: '#180F2C',
@@ -44,6 +51,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       'expo-image',
       'expo-status-bar',
       'expo-web-browser',
+      ['expo-notifications', { color: '#D71A80', defaultChannel: 'messages' }],
       [
         'expo-splash-screen',
         {
