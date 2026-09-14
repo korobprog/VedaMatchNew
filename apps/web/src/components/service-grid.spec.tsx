@@ -87,6 +87,24 @@ describe("ServiceGrid", () => {
     ).toBeTruthy();
   });
 
+  // VED-127: «Изменить порядок» стоит сразу за «Кнопками», вид — справа.
+  it("держит «Изменить порядок» рядом с настройкой кнопок, а вид — у правого края", () => {
+    render(
+      <ServiceGrid
+        services={SERVICES}
+        userId={USER}
+        toolbarStart={<button type="button">Настроить кнопки</button>}
+      />,
+    );
+
+    const settings = screen.getByRole("button", { name: "Настроить кнопки" });
+    const reorder = screen.getByRole("button", { name: "Изменить порядок" });
+    const view = screen.getByRole("group", { name: "Вид сервисов" });
+    expect(settings.nextElementSibling).toBe(reorder);
+    expect(reorder.nextElementSibling).toBe(view);
+    expect(view).toHaveClass("ml-auto");
+  });
+
   it("в компактном режиме описаний нет", () => {
     writeLayout(USER, { mode: "compact" });
     render(grid());
