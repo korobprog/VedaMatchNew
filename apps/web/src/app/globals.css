@@ -44,6 +44,8 @@
   --color-like: var(--vm-like);
   --color-violet: var(--vm-violet);
   --color-blue: var(--vm-blue);
+  --color-chart-income: var(--vm-chart-income);
+  --color-chart-expense: var(--vm-chart-expense);
 
   /* Text colors */
   --color-text-0: var(--vm-text-0);
@@ -144,6 +146,10 @@
      под мелкий текст (12px): 6,5:1 и 6,1:1 на --vm-bg-0. */
   --vm-violet: #7A3FBF;
   --vm-blue: #1F5FBF;
+  /* Доход и расход на графиках кассы. Пара проверена валидатором палитры
+     (скилл dataviz): дальтоники различают её, контраст с фоном не ниже 3:1. */
+  --vm-chart-income: #1F5FBF;
+  --vm-chart-expense: #D71A80;
 
   --vm-text-0: #180F2C;
   --vm-text-1: #4B3B6C;
@@ -228,6 +234,9 @@
 
   --vm-violet: #C68BFF;
   --vm-blue: #7FB4FF;
+  /* Тёмные ступени графика: #7FB4FF и #FF3E9E выходят за полосу светлоты. */
+  --vm-chart-income: #5B93E8;
+  --vm-chart-expense: #F0358F;
 
   --vm-text-0: #F6F1FF;
   --vm-text-1: #B8A9D9;
@@ -296,6 +305,8 @@
 
     --vm-violet: #C68BFF;
     --vm-blue: #7FB4FF;
+    --vm-chart-income: #5B93E8;
+    --vm-chart-expense: #F0358F;
 
     --vm-text-0: #F6F1FF;
     --vm-text-1: #B8A9D9;
