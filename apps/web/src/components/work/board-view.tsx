@@ -54,6 +54,7 @@ import {
 import {
   everyColumnCollapsed,
   expandCollapsedColumn,
+  expandColumns,
   readCollapsedColumns,
   toggleAllColumns,
   toggleCollapsedColumn,
@@ -505,6 +506,24 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     if (!isTaskQuery(value)) setMatches(null);
   }
 
+  /** «Показать все» (VED-131). На время поиска колонки с находками раскрыты
+      принудительно; простой сброс складывал их обратно, и у того, кто свернул
+      доску, найденные карточки пропадали под заголовками — кнопка выглядела
+      нерабочей. Эти колонки остаются раскрытыми, остальные — как были. */
+  function showWholeBoard() {
+    if (board && searchActive) {
+      const unfolded = expandColumns(
+        collapsed,
+        shownColumns.map((column) => column.id),
+      );
+      if (unfolded !== collapsed) {
+        setCollapsed(unfolded);
+        writeCollapsedColumns(board.id, unfolded);
+      }
+    }
+    changeQuery("");
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -601,15 +620,17 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           />
         </label>
         {searchActive && (
-          <p role="status" className="mt-2 flex items-center gap-2 text-xs text-text-1">
+          <p role="status" className="mt-1 flex items-center gap-2 text-xs text-text-1">
             {searchSummary(found, countTasks(board))}
             {searching && (
               <Loader2 aria-hidden className="size-3.5 animate-spin" />
             )}
+            {/* Высота 32 вместо 16 по строке текста: в такую пальцем
+                промахивались. */}
             <button
               type="button"
-              onClick={() => changeQuery("")}
-              className="font-semibold text-text-0 underline underline-offset-2"
+              onClick={showWholeBoard}
+              className="min-h-8 px-1 font-semibold text-text-0 underline underline-offset-2"
             >
               Показать все
             </button>
