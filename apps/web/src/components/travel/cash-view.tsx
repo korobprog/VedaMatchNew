@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, Plus, X } from "lucide-react";
 import {
@@ -10,6 +11,7 @@ import {
   type TravelCashEntryDto,
   type TravelCashFilters,
   type TravelCashGrouping,
+  type TravelCashKind,
   type TravelCashTemplateDto,
   type TravelGuestDto,
 } from "@vedamatch/shared";
@@ -22,7 +24,13 @@ import {
   removeCashEntries,
   removeCashEntry,
 } from "@/lib/travel-api";
+import {
+  CashActionPanel,
+  CashPanelSettingsDialog,
+  useCashPanelSettings,
+} from "./cash-action-panel";
 import { CashCategoriesDialog } from "./cash-categories-dialog";
+import { cashHotkey } from "./cash-panel";
 import { CashEntryActions, type CashEntryAction } from "./cash-entry-actions";
 import { CashEntryDialog, type CashEntryDraft } from "./cash-entry-dialog";
 import { CashFiltersPanel } from "./cash-filters-panel";
@@ -46,12 +54,25 @@ const GROUPING_LABELS: Record<TravelCashGrouping, string> = {
   year: "Год",
 };
 
+/** Ключ последнего открытого объекта — туда ведёт ярлык «Касса» приложения. */
+export const LAST_CASH_STAY_KEY = "vm.travel.cash.lastStay";
+
 /**
  * Касса объекта: лента доходов и расходов по периодам с остатком на начало и
  * конец каждого. Устроена как кассовая книга хостела: сверху новое, в шапке
  * дня — сколько было, сколько пришло и ушло, сколько стало.
  */
-export function CashView({ stayId }: { stayId: string }) {
+export function CashView({
+  stayId,
+  initialAdd,
+}: {
+  stayId: string;
+  /** Открыть форму сразу — так кассу открывает ярлык приложения. */
+  initialAdd?: TravelCashKind;
+}) {
+  const router = useRouter();
+  const [panel, setPanel] = useCashPanelSettings();
+  const [panelSettingsOpen, setPanelSettingsOpen] = useState(false);
   const [grouping, setGrouping] = useState<TravelCashGrouping>("day");
   const [pages, setPages] = useState(1);
   const [filters, setFilters] = useState<TravelCashFilters>({});
@@ -64,7 +85,9 @@ export function CashView({ stayId }: { stayId: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   /** Ключ последнего завершённого запроса: пока он не совпал с текущим — грузим. */
   const [settledKey, setSettledKey] = useState<string | null>(null);
-  const [draft, setDraft] = useState<CashEntryDraft | null>(null);
+  const [draft, setDraft] = useState<CashEntryDraft | null>(() =>
+    initialAdd ? { kind: initialAdd, entry: null } : null,
+  );
   const [actionEntry, setActionEntry] = useState<TravelCashEntryDto | null>(
     null,
   );
@@ -112,6 +135,50 @@ export function CashView({ stayId }: { stayId: string }) {
 
   const reload = useCallback(() => setReloadKey((key) => key + 1), []);
 
+  // Ярлык приложения ведёт на последнюю открытую кассу. Параметр `?add=`
+  // убираем из адреса: обновление страницы не должно снова открывать форму.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LAST_CASH_STAY_KEY, stayId);
+    } catch {
+      // Приватный режим — ярлык просто предложит выбрать объект.
+    }
+    if (initialAdd) {
+      router.replace(`/travel/manage/${stayId}/cash`, { scroll: false });
+    }
+  }, [stayId, initialAdd, router]);
+
+  // Горячие клавиши: «+» доход, «-» расход, «/» фильтр, «S» статистика.
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const editing = Boolean(
+        target &&
+        (target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)),
+      );
+      const action = cashHotkey({
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        editing,
+        dialogOpen: Boolean(document.querySelector("dialog[open]")),
+      });
+      if (!action) return;
+      event.preventDefault();
+      if (action === "income" || action === "expense") {
+        setDraft({ kind: action, entry: null });
+      } else if (action === "filter") {
+        setFiltersOpen(true);
+      } else {
+        router.push(`/travel/manage/${stayId}/cash/stats`);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [router, stayId]);
+
   const groups = useMemo(
     () =>
       data
@@ -129,6 +196,23 @@ export function CashView({ stayId }: { stayId: string }) {
   const filtered = data?.filtered ?? false;
   const chips = filterChips(filters, categories, guests, currency);
   const totals = selectionTotals(data?.items ?? [], selected);
+
+  const panelHandlers = {
+    stayId,
+    kindFilter: filters.kind,
+    filterCount: chips.length,
+    filtersOpen,
+    onAdd: (kind: TravelCashKind) => setDraft({ kind, entry: null }),
+    // «Доходы» и «Расходы» — быстрый фильтр по виду; повторное нажатие снимает.
+    onToggleKind: (kind: TravelCashKind) =>
+      applyFilters(
+        filters.kind === kind
+          ? withoutFilter(filters, "kind")
+          : { ...filters, kind },
+      ),
+    onCategories: () => setCategoriesOpen(true),
+    onToggleFilters: () => setFiltersOpen((open) => !open),
+  };
 
   function toggleGroup(key: string) {
     setCollapsed((current) => {
@@ -260,44 +344,13 @@ export function CashView({ stayId }: { stayId: string }) {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setDraft({ kind: "income", entry: null })}
-            className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold"
-          >
-            + Доход
-          </button>
-          <button
-            type="button"
-            onClick={() => setDraft({ kind: "expense", entry: null })}
-            className="rounded-xl border border-magenta px-4 py-2 text-sm font-semibold text-text-0"
-          >
-            − Расход
-          </button>
-          <button
-            type="button"
-            onClick={() => setFiltersOpen((open) => !open)}
-            aria-expanded={filtersOpen}
-            aria-controls="cash-filters"
-            className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1"
-          >
-            Фильтр{chips.length ? ` · ${chips.length}` : ""}
-          </button>
-          <button
-            type="button"
-            onClick={() => setCategoriesOpen(true)}
-            className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1"
-          >
-            Статьи и остаток
-          </button>
-          <Link
-            href={`/travel/manage/${stayId}/guests`}
-            className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1"
-          >
-            Клиентская база
-          </Link>
-        </div>
+        {panel.position === "top" ? (
+          <CashActionPanel
+            settings={panel}
+            onSettings={() => setPanelSettingsOpen(true)}
+            handlers={panelHandlers}
+          />
+        ) : null}
 
         {filtersOpen ? (
           <div id="cash-filters">
@@ -506,16 +559,31 @@ export function CashView({ stayId }: { stayId: string }) {
             </button>
           </div>
         </div>
+      ) : panel.position === "bottom" ? (
+        <CashActionPanel
+          settings={panel}
+          onSettings={() => setPanelSettingsOpen(true)}
+          handlers={panelHandlers}
+          className="fixed inset-x-0 bottom-0 z-20 overflow-x-auto border-t border-glass-brd bg-bg-0 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] [&>ul]:mx-auto [&>ul]:max-w-3xl [&>ul]:flex-nowrap"
+        />
       ) : (
         <button
           type="button"
           onClick={() => setDraft({ kind: "income", entry: null })}
           aria-label="Добавить запись в кассу"
+          aria-keyshortcuts="+"
           className="btn-mint fixed right-5 bottom-[calc(1.25rem+env(safe-area-inset-bottom))] z-20 flex size-14 items-center justify-center rounded-2xl shadow-lg"
         >
           <Plus aria-hidden="true" className="size-7" />
         </button>
       )}
+
+      <CashPanelSettingsDialog
+        open={panelSettingsOpen}
+        settings={panel}
+        onChange={setPanel}
+        onClose={() => setPanelSettingsOpen(false)}
+      />
 
       <CashEntryActions
         entry={actionEntry}

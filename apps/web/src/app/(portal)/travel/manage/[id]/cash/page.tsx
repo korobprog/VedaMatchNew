@@ -8,14 +8,20 @@ export const metadata = {
 
 export default async function StayCashPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ add?: string }>;
 }) {
   const { id } = await params;
+  const { add } = await searchParams;
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8">
       <TravelNav />
-      <CashView stayId={id} />
+      <CashView
+        stayId={id}
+        initialAdd={add === "income" || add === "expense" ? add : undefined}
+      />
     </main>
   );
 }
