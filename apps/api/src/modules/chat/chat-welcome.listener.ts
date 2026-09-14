@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChatConversationsService } from './chat-conversations.service';
 import { ChatMessagesService } from './chat-messages.service';
@@ -48,10 +47,10 @@ export class ChatWelcomeListener {
 
   private async welcome(userId: string): Promise<void> {
     try {
-      // Имя читаем сами: событие сообщает факт регистрации, а формулировку
-      // собирает подписчик. `User` — одна из четырёх портальных моделей,
-      // которые сервису читать разрешено, и духовное имя тянем рядом с
-      // мирским: наружу идёт то, которое человек показывает везде.
+      // Новичка проверяем сами: событие сообщает факт регистрации, а за
+      // секунду до письма аккаунт могли удалить. Имя не нужно — текст
+      // приветствия от команды без обращения (VED-150). `User` — одна из
+      // четырёх портальных моделей, которые сервису читать разрешено.
       const [greeter, newcomer] = await Promise.all([
         this.prisma.user.findFirst({
           where: { role: 'admin', accountStatus: 'active' },
@@ -60,7 +59,7 @@ export class ChatWelcomeListener {
         }),
         this.prisma.user.findUnique({
           where: { id: userId },
-          select: { name: true, spiritualName: true },
+          select: { id: true },
         }),
       ]);
       // Некому писать или некого приветствовать — молчим. Первым участником
@@ -74,7 +73,7 @@ export class ChatWelcomeListener {
       await this.messages.send(
         greeter.id,
         conversation.id,
-        { body: welcomeMessage(resolveDisplayName(newcomer)) },
+        { body: welcomeMessage() },
         conversation.id,
         { silent: true },
       );

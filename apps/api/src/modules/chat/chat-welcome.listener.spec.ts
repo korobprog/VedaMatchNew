@@ -1,15 +1,13 @@
 import { ChatWelcomeListener } from './chat-welcome.listener';
+import { welcomeMessage } from './welcome-message';
 
 function build(
   options: {
     greeter?: { id: string } | null;
-    newcomer?: { name: string; spiritualName: string | null } | null;
+    newcomer?: { id: string } | null;
   } = {},
 ) {
-  const {
-    greeter = { id: 'admin-1' },
-    newcomer = { name: 'Мадхава', spiritualName: null },
-  } = options;
+  const { greeter = { id: 'admin-1' }, newcomer = { id: 'user-1' } } = options;
   const prisma = {
     user: {
       findFirst: jest.fn().mockResolvedValue(greeter),
@@ -32,7 +30,7 @@ function build(
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 describe('ChatWelcomeListener', () => {
-  it('пишет новичку от имени администрации и обращается по имени', async () => {
+  it('пишет новичку от имени администрации текстом команды', async () => {
     const { listener, conversations, messages } = build();
 
     listener.onUserRegistered({ userId: 'user-1' });
@@ -54,22 +52,10 @@ describe('ChatWelcomeListener', () => {
     ];
     expect(author).toBe('admin-1');
     expect(conversationId).toBe('conv-1');
-    expect(dto.body).toContain('Мадхава, добро пожаловать');
+    // VED-150: текст — дословно тот, что дала команда.
+    expect(dto.body).toBe(welcomeMessage());
     // Колокольчик уже сказал «Добро пожаловать»: второй раз не звоним.
     expect(options.silent).toBe(true);
-  });
-
-  it('показывает духовное имя, если оно есть', async () => {
-    const { listener, messages } = build({
-      newcomer: { name: 'Максим', spiritualName: 'Маму Тхакур дас' },
-    });
-
-    listener.onUserRegistered({ userId: 'user-1' });
-    await settle();
-
-    expect((messages.send.mock.calls[0][2] as { body: string }).body).toContain(
-      'Маму Тхакур дас, добро пожаловать',
-    );
   });
 
   it('молчит, когда администратора в портале ещё нет', async () => {
