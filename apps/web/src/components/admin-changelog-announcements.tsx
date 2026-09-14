@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type {
   AdminAnnouncementDto,
+  AdminAnnouncementImageDto,
   AnnouncementAudienceStage,
   AnnouncementStatus,
   BroadcastAnnouncementResult,
@@ -14,6 +15,8 @@ import {
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
+import { AnnouncementImagesField } from "@/components/announcement-images-field";
+import { NewsImages } from "@/components/news-images";
 
 const API_URL = apiBase();
 
@@ -123,6 +126,11 @@ function AnnouncementCard({ item }: { item: AdminAnnouncementDto }) {
           </button>
         </div>
       </div>
+      {item.images.length > 0 && (
+        <div className="mt-3 max-w-sm">
+          <NewsImages images={item.images} title={item.titleRu} limit={2} />
+        </div>
+      )}
       {(item.publishAt || item.expiresAt) && (
         <p className="mt-2 text-xs text-text-2">
           {item.publishAt && `Выйдет ${formatWhen(item.publishAt)}. `}
@@ -288,6 +296,9 @@ function AnnouncementForm({
   const [bodyEn, setBodyEn] = useState(item?.bodyEn ?? "");
   const [status, setStatus] = useState<AnnouncementStatus>(item?.status ?? "draft");
   const [pinned, setPinned] = useState(item?.pinned ?? false);
+  const [images, setImages] = useState<AdminAnnouncementImageDto[]>(
+    item?.images ?? [],
+  );
   // `datetime-local` понимает только «YYYY-MM-DDTHH:mm» и работает в местном
   // времени, поэтому ISO из ответа режем и сдвигаем.
   const [publishAt, setPublishAt] = useState(toLocalInput(item?.publishAt));
@@ -308,6 +319,7 @@ function AnnouncementForm({
         pinned,
         publishAt: publishAt ? new Date(publishAt).toISOString() : null,
         expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+        images: images.map(({ key, width, height }) => ({ key, width, height })),
       };
       const url = item
         ? `${API_URL}/admin/changelog/announcements/${item.id}`
@@ -329,7 +341,7 @@ function AnnouncementForm({
   }
 
   return (
-    <div className="glass rounded-2xl border border-glass-brd p-4 space-y-3">
+    <div data-news-form className="glass rounded-2xl border border-glass-brd p-4 space-y-3">
       <div className="flex flex-wrap gap-3">
         <input
           value={titleRu}
@@ -358,6 +370,9 @@ function AnnouncementForm({
         rows={3}
         className="w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
       />
+      {/* Картинки — сразу под текстом (VED-137): это часть самой новости,
+          а не её настройки, как статус и сроки ниже. */}
+      <AnnouncementImagesField images={images} onChange={setImages} />
       <label className="flex items-center gap-2 text-sm text-text-1">
         Статус
         <select

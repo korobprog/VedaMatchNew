@@ -4,6 +4,16 @@ export type ReleaseChangeType = 'feature' | 'fix' | 'improvement';
 export type RoadmapStatus = 'planned' | 'in_progress' | 'done';
 export type AnnouncementStatus = 'draft' | 'published';
 
+/** Сколько картинок можно прикрепить к одной новости (VED-137). */
+export const ANNOUNCEMENT_MAX_IMAGES = 6;
+
+/** Картинка новости: скриншот или фото, уже сжатое сервером в webp. */
+export interface AnnouncementImageDto {
+  url: string;
+  width: number;
+  height: number;
+}
+
 // ===== Публичные DTO (уже выбранный по локали текст) =====
 
 export interface PublicReleaseChangeDto {
@@ -28,6 +38,8 @@ export interface PublicAnnouncementDto {
   publishedAt: string;
   /** Закреплённая новость идёт первой и показывается на главной крупно. */
   pinned: boolean;
+  /** Картинки в порядке, заданном администратором; пусто — без картинок. */
+  images: AnnouncementImageDto[];
   /**
    * Человек нажал «ознакомлен». Новость уходит с главной только по этой
    * отметке — сама она не пропадает. Для гостя и публичного списка всегда
@@ -80,6 +92,22 @@ export interface AdminAnnouncementDto {
   broadcastCount: number;
   /** Сколько человек нажали «ознакомлен»: копится с публикации. */
   acknowledgedCount: number;
+  images: AdminAnnouncementImageDto[];
+}
+
+/** В админке у картинки есть ещё ключ в хранилище — по нему форма её и сохраняет. */
+export interface AdminAnnouncementImageDto extends AnnouncementImageDto {
+  key: string;
+}
+
+/**
+ * Ответ загрузки картинок. Картинки ещё ни к чему не привязаны: форма
+ * добавляет их к новости при сохранении. Неудачные файлы — списком, чтобы
+ * одна битая картинка не отменяла остальные.
+ */
+export interface AnnouncementImageUploadResponse {
+  images: AdminAnnouncementImageDto[];
+  failed: { fileName: string; message: string }[];
 }
 
 export interface AdminRoadmapItemDto {
@@ -123,6 +151,18 @@ export interface CreateAnnouncementRequest {
   /** ISO-строка или null, чтобы снять расписание. */
   publishAt?: string | null;
   expiresAt?: string | null;
+  /**
+   * Картинки новости целиком, в нужном порядке. Не передано — при правке
+   * картинки не трогаются; пустой список — убрать все.
+   */
+  images?: AnnouncementImageInput[];
+}
+
+/** Картинка, загруженная через POST /admin/changelog/announcement-images. */
+export interface AnnouncementImageInput {
+  key: string;
+  width: number;
+  height: number;
 }
 
 export type UpdateAnnouncementRequest = Partial<CreateAnnouncementRequest>;

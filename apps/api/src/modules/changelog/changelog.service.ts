@@ -7,6 +7,7 @@ import {
 import type {
   AdminAnnouncementDto,
   AnnouncementAudienceStage,
+  AnnouncementImageUploadResponse,
   BroadcastAnnouncementRequest,
   BroadcastAnnouncementResult,
   AdminReleaseDto,
@@ -27,6 +28,14 @@ import type {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
+  AnnouncementImagesError,
+  normalizeAnnouncementImages,
+} from './announcement-images';
+import {
+  AnnouncementImagesService,
+  type UploadedAnnouncementImage,
+} from './announcement-images.service';
+import {
   announcementSortDate,
   isAnnouncementVisible,
   visibleAnnouncementWhere,
@@ -37,11 +46,15 @@ export type Lang = 'ru' | 'en';
 const ANNOUNCEMENT_STATUSES: AnnouncementStatus[] = ['draft', 'published'];
 const ROADMAP_STATUSES: RoadmapStatus[] = ['planned', 'in_progress', 'done'];
 
+/** Картинки новости в порядке показа — одинаково для всех чтений. */
+const ANNOUNCEMENT_IMAGES = { orderBy: { sortOrder: 'asc' as const } };
+
 @Injectable()
 export class ChangelogService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventEmitter2,
+    private readonly images: AnnouncementImagesService,
   ) {}
 
   // ===== Публичное чтение =====
@@ -72,6 +85,7 @@ export class ChangelogService {
   ): Promise<PublicAnnouncementDto[]> {
     const announcements = await this.prisma.announcement.findMany({
       where: visibleAnnouncementWhere(new Date()),
+      include: { images: ANNOUNCEMENT_IMAGES },
     });
     const acknowledged = userId
       ? new Set(
@@ -101,6 +115,11 @@ export class ChangelogService {
         body: lang === 'en' ? item.bodyEn : item.bodyRu,
         publishedAt: announcementSortDate(item).toISOString(),
         pinned: item.pinned,
+        images: item.images.map(({ url, width, height }) => ({
+          url,
+          width,
+          height,
+        })),
         acknowledged: acknowledged.has(item.id),
       }));
   }
@@ -265,9 +284,52 @@ export class ChangelogService {
     this.ensureAdmin(role);
     const items = await this.prisma.announcement.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { _count: { select: { acks: true } } },
+      include: {
+        _count: { select: { acks: true } },
+        images: ANNOUNCEMENT_IMAGES,
+      },
     });
     return items.map((item) => this.toAdminAnnouncement(item));
+  }
+
+  /**
+   * Загрузка картинок для новости (VED-137). Картинки ещё ни к чему не
+   * привязаны: форма добавляет их к новости при сохранении — так их можно
+   * приложить и к новости, которой в базе пока нет.
+   */
+  async adminUploadAnnouncementImages(
+    role: Role,
+    files: UploadedAnnouncementImage[],
+  ): Promise<AnnouncementImageUploadResponse> {
+    this.ensureAdmin(role);
+    const result: AnnouncementImageUploadResponse = { images: [], failed: [] };
+    for (const [index, file] of files.entries()) {
+      const fileName = file.originalname || `Файл ${index + 1}`;
+      if (!this.images.configured) {
+        result.failed.push({
+          fileName,
+          message: 'Загрузка картинок сейчас недоступна',
+        });
+        continue;
+      }
+      const invalid = this.images.validate(file);
+      if (invalid) {
+        result.failed.push({ fileName, message: invalid });
+        continue;
+      }
+      try {
+        const stored = await this.images.store(file);
+        if (stored) result.images.push(stored);
+      } catch {
+        // sharp отвергает битые и поддельные картинки — это ответ человеку,
+        // а не падение запроса: остальные файлы уже загружены.
+        result.failed.push({
+          fileName,
+          message: 'Не получилось прочитать картинку',
+        });
+      }
+    }
+    return result;
   }
 
   async adminCreateAnnouncement(
@@ -277,6 +339,7 @@ export class ChangelogService {
     this.ensureAdmin(role);
     const status = this.normalizeAnnouncementStatus(body.status);
     const schedule = this.announcementSchedule(body);
+    const images = this.announcementImageRows(body.images) ?? [];
     // Закреплённая всегда одна: снимаем прежнюю в той же транзакции, иначе
     // частичный уникальный индекс отвергнет вставку.
     const item = await this.prisma.$transaction(async (tx) => {
@@ -291,7 +354,9 @@ export class ChangelogService {
           pinned: Boolean(body.pinned),
           ...schedule,
           publishedAt: status === 'published' ? new Date() : null,
+          images: { create: images },
         },
+        include: { images: ANNOUNCEMENT_IMAGES },
       });
     });
     return this.toAdminAnnouncement(item);
@@ -315,15 +380,40 @@ export class ChangelogService {
       status === 'published' && existing.status !== 'published';
 
     const schedule = this.announcementSchedule(body);
-    const item = await this.prisma.$transaction(async (tx) => {
+    const images = this.announcementImageRows(body.images);
+    const { item, removedKeys } = await this.prisma.$transaction(async (tx) => {
       if (body.pinned)
         await tx.announcement.updateMany({
           where: { pinned: true, NOT: { id } },
           data: { pinned: false },
         });
-      return tx.announcement.update({
+      // Набор картинок приходит целиком: старый заменяем новым. Удалением и
+      // вставкой отдельными шагами, а не вложенной записью, — порядок шагов
+      // во вложенной записи не гарантирован, а тот же ключ может остаться.
+      let removedKeys: string[] = [];
+      if (images) {
+        const before = await tx.announcementImage.findMany({
+          where: { announcementId: id },
+          select: { storageKey: true },
+        });
+        const kept = new Set(images.map((image) => image.storageKey));
+        removedKeys = before
+          .map((image) => image.storageKey)
+          .filter((key) => !kept.has(key));
+        await tx.announcementImage.deleteMany({
+          where: { announcementId: id },
+        });
+        if (images.length > 0)
+          await tx.announcementImage.createMany({
+            data: images.map((image) => ({ ...image, announcementId: id })),
+          });
+      }
+      const item = await tx.announcement.update({
         where: { id },
-        include: { _count: { select: { acks: true } } },
+        include: {
+          _count: { select: { acks: true } },
+          images: ANNOUNCEMENT_IMAGES,
+        },
         data: {
           titleRu: body.titleRu,
           titleEn: body.titleEn,
@@ -335,8 +425,30 @@ export class ChangelogService {
           publishedAt: becamePublished ? new Date() : undefined,
         },
       });
+      return { item, removedKeys };
     });
+    // Файлы убираем после записи в базу: откатись транзакция — картинки
+    // новости остались бы без объектов в хранилище.
+    await this.images.removeMany(removedKeys);
     return this.toAdminAnnouncement(item);
+  }
+
+  /** Картинки из формы в строки базы; `undefined` — набор не передан. */
+  private announcementImageRows(input: unknown) {
+    if (input === undefined) return undefined;
+    try {
+      return normalizeAnnouncementImages(input).map((image, index) => ({
+        storageKey: image.key,
+        url: this.images.urlFor(image.key),
+        width: image.width,
+        height: image.height,
+        sortOrder: index,
+      }));
+    } catch (error) {
+      if (error instanceof AnnouncementImagesError)
+        throw new BadRequestException(error.message);
+      throw error;
+    }
   }
 
   /**
@@ -415,10 +527,13 @@ export class ChangelogService {
     this.ensureAdmin(role);
     const existing = await this.prisma.announcement.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, images: { select: { storageKey: true } } },
     });
     if (!existing) throw new NotFoundException('Новость не найдена');
     await this.prisma.announcement.delete({ where: { id } });
+    await this.images.removeMany(
+      existing.images.map((image) => image.storageKey),
+    );
     return { ok: true };
   }
 
@@ -585,6 +700,12 @@ export class ChangelogService {
     broadcastCount: number;
     /** Приходит из `_count`; у только что созданной новости его ещё нет. */
     _count?: { acks: number };
+    images: {
+      storageKey: string;
+      url: string;
+      width: number;
+      height: number;
+    }[];
   }): AdminAnnouncementDto {
     return {
       id: item.id,
@@ -600,6 +721,12 @@ export class ChangelogService {
       broadcastAt: item.broadcastAt?.toISOString() ?? null,
       broadcastCount: item.broadcastCount,
       acknowledgedCount: item._count?.acks ?? 0,
+      images: item.images.map((image) => ({
+        key: image.storageKey,
+        url: image.url,
+        width: image.width,
+        height: image.height,
+      })),
     };
   }
 
