@@ -14,6 +14,7 @@ import Link from "next/link";
 import type {
   DonationSettingsDto,
   MotivationAudioDto,
+  MotivationCategoryDto,
   MotivationFeedResponse,
   MotivationLikeResponse,
   MotivationPostDto,
@@ -44,6 +45,7 @@ import {
 } from "./explanation-dialog";
 import {
   categoryLink,
+  feedCategoryButtons,
   feedStyleOf,
   reelsHref,
   type ReelsTab,
@@ -135,8 +137,11 @@ export function ReelsFeed({
   category,
   isAdmin = false,
   audio = [],
+  categories = [],
 }: {
   initial: MotivationFeedResponse;
+  /** Папки для кнопок на пустых экранах ленты (VED-135). */
+  categories?: MotivationCategoryDto[];
   tab: ReelsTab;
   donation: DonationSettingsDto | null;
   /** Фон для чтения. Пустой список — кнопки музыки нет вовсе. */
@@ -397,6 +402,15 @@ export function ReelsFeed({
 
 
   const slides = buildSlides(items, dividerAt, Boolean(cursor));
+  const categoryNav = (className?: string) => (
+    <FeedCategoryNav
+      tab={tab}
+      order={order}
+      category={category}
+      categories={categories}
+      className={className}
+    />
+  );
 
 
   if (items.length === 0) {
@@ -405,6 +419,7 @@ export function ReelsFeed({
         {/* Вкладки и в пустой ленте: из пустых «Открыток» иначе можно было
             уйти только в «Для вас», а до «Избранного» — никак. */}
         <Tabs tab={tab} order={order} category={category} />
+        {categoryNav()}
         <p className="font-display text-lg">
           {tab === "saved"
             ? "В избранном пока пусто"
@@ -648,10 +663,20 @@ export function ReelsFeed({
                 first={position === 0}
                 donation={donation}
                 onNext={() => scrollBy(1)}
+                categoryNav={categoryNav}
               />
             );
           if (slide.kind === "end")
-            return <EndSlide key="end" donation={donation} tab={tab} error={error} onRetry={loadMore} />;
+            return (
+              <EndSlide
+                key="end"
+                donation={donation}
+                tab={tab}
+                error={error}
+                onRetry={loadMore}
+                categoryNav={categoryNav}
+              />
+            );
   return (
             <ReelSlide
               key={slide.post.id}
@@ -1386,38 +1411,100 @@ function CategoryChip({ post }: { post: MotivationPostDto }) {
   );
 }
 
+/**
+ * Кнопки категорий на пустом тёмном экране (VED-135). Стоят вверху, под
+ * вкладками: там на разделителе и в конце ленты было пустое место, а за
+ * категориями приходилось идти через меню. «Все» возвращает из папки в общую
+ * ленту той же вкладки.
+ */
+function FeedCategoryNav({
+  tab,
+  order,
+  category,
+  categories,
+  className = "",
+}: {
+  tab: ReelsTab;
+  order?: "random";
+  category?: string;
+  categories: MotivationCategoryDto[];
+  className?: string;
+}) {
+  const buttons = feedCategoryButtons(categories, { tab, order, current: category });
+  if (buttons.length === 0) return null;
+  const chip = (active: boolean) =>
+    `inline-flex min-h-9 items-center rounded-full border px-3 text-sm font-medium transition-colors ${
+      active
+        ? "border-white bg-white text-[#0A0614]"
+        : "border-white/25 bg-white/10 text-white hover:bg-white/20"
+    }`;
+  const allTab: ReelsTab = tab === "saved" ? "forYou" : tab;
+  return (
+    <nav aria-label="Выбор категории" className={`w-full ${className}`}>
+      <p className="mb-2 text-xs font-semibold text-white/70">Выберите категорию</p>
+      <ul className="flex flex-wrap justify-center gap-2">
+        <li>
+          <Link
+            href={reelsHref({ tab: allTab, order })}
+            aria-current={!category && tab !== "saved" ? "page" : undefined}
+            className={chip(!category && tab !== "saved")}
+          >
+            Все
+          </Link>
+        </li>
+        {buttons.map((button) => (
+          <li key={button.slug}>
+            <Link
+              href={button.href}
+              aria-current={button.current ? "page" : undefined}
+              className={chip(button.current)}
+            >
+              {button.title}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
 function DividerSlide({
   first,
   donation,
   onNext,
+  categoryNav,
 }: {
   /** Разделитель первым слайдом: нового не было вовсе, а не «кончилось». */
   first: boolean;
   donation: DonationSettingsDto | null;
   onNext: () => void;
+  categoryNav: (className?: string) => ReactNode;
 }) {
   return (
-    <section aria-label="Всё новое просмотрено" className="flex h-full w-full snap-start snap-always flex-col items-center justify-center gap-4 px-8 text-center">
-      <p className="font-display text-xl font-semibold">{first ? "Нового пока нет" : "Вы посмотрели всё новое"}</p>
-      <p className="max-w-xs text-sm text-white/75">
-        {first
-          ? "Завтра появится пост дня. А пока — то, что вы уже видели, начиная с самого давнего."
-          : "Дальше — публикации, которые вы уже видели, начиная с самых давних. Новое появится здесь при следующем открытии."}
-      </p>
-      <div className="flex flex-wrap justify-center gap-2">
-        <button type="button" onClick={onNext} className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold">
-          Листать дальше
-        </button>
-        {/* Место, где смотреть больше нечего, — лучшее для предложения
-            сделать своё: человек уже здесь и уже листает. */}
-        <Link href="/motivation/create" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">
-          ✨ Создать рилс
-        </Link>
-        <Link href="/motivation?tab=saved" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">
-          Избранное
-        </Link>
+    <section aria-label="Всё новое просмотрено" className="flex h-full w-full snap-start snap-always flex-col items-center px-8 text-center">
+      {categoryNav("shrink-0 pt-28")}
+      <div className="flex flex-1 flex-col items-center justify-center gap-4">
+        <p className="font-display text-xl font-semibold">{first ? "Нового пока нет" : "Вы посмотрели всё новое"}</p>
+        <p className="max-w-xs text-sm text-white/75">
+          {first
+            ? "Завтра появится пост дня. А пока — то, что вы уже видели, начиная с самого давнего."
+            : "Дальше — публикации, которые вы уже видели, начиная с самых давних. Новое появится здесь при следующем открытии."}
+        </p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <button type="button" onClick={onNext} className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold">
+            Листать дальше
+          </button>
+          {/* Место, где смотреть больше нечего, — лучшее для предложения
+              сделать своё: человек уже здесь и уже листает. */}
+          <Link href="/motivation/create" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">
+            ✨ Создать рилс
+          </Link>
+          <Link href="/motivation?tab=saved" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">
+            Избранное
+          </Link>
+        </div>
+        <DonateButton donation={donation} />
       </div>
-      <DonateButton donation={donation} />
     </section>
   );
 }
@@ -1427,39 +1514,44 @@ function EndSlide({
   tab,
   error,
   onRetry,
+  categoryNav,
 }: {
   donation: DonationSettingsDto | null;
   tab: ReelsTab;
   error: string | null;
   onRetry: () => void;
+  categoryNav: (className?: string) => ReactNode;
 }) {
   return (
-    <section aria-label="Конец ленты" className="flex h-full w-full snap-start snap-always flex-col items-center justify-center gap-4 px-8 text-center">
-      {error ? (
-        <>
-          <p className="text-sm text-[#FFB4D9]">{error}</p>
-          <button type="button" onClick={onRetry} className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold">
-            Повторить
-          </button>
-        </>
-      ) : (
-        <>
-          <p className="font-display text-xl font-semibold">{tab === "saved" ? "Это всё избранное" : "На сегодня это всё"}</p>
-          <p className="max-w-xs text-sm text-white/75">
-            Завтра появится новый пост дня. А сегодняшний вечер — повод сделать
-            свой: цитата, кадр и, если захотите, видео.
-          </p>
-          <div className="flex flex-wrap justify-center gap-2">
-            <Link href="/motivation/create" className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold">
-              ✨ Создать рилс
-            </Link>
-            <Link href="/motivation/settings" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">
-              Настройки ленты
-            </Link>
-          </div>
-          <DonateButton donation={donation} />
-        </>
-      )}
+    <section aria-label="Конец ленты" className="flex h-full w-full snap-start snap-always flex-col items-center px-8 text-center">
+      {!error && categoryNav("shrink-0 pt-28")}
+      <div className="flex flex-1 flex-col items-center justify-center gap-4">
+        {error ? (
+          <>
+            <p className="text-sm text-[#FFB4D9]">{error}</p>
+            <button type="button" onClick={onRetry} className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold">
+              Повторить
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="font-display text-xl font-semibold">{tab === "saved" ? "Это всё избранное" : "На сегодня это всё"}</p>
+            <p className="max-w-xs text-sm text-white/75">
+              Завтра появится новый пост дня. А сегодняшний вечер — повод сделать
+              свой: цитата, кадр и, если захотите, видео.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Link href="/motivation/create" className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold">
+                ✨ Создать рилс
+              </Link>
+              <Link href="/motivation/settings" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">
+                Настройки ленты
+              </Link>
+            </div>
+            <DonateButton donation={donation} />
+          </>
+        )}
+      </div>
     </section>
   );
 }

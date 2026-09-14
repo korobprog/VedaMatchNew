@@ -12,8 +12,15 @@ vi.mock("./emoji-data", () => ({
   ],
 }));
 
+// Набор администрации — без сети: тест не должен зависеть от API.
+vi.mock("./favorite-emojis", async (importActual) => ({
+  ...(await importActual<typeof import("./favorite-emojis")>()),
+  loadDefaultFavoriteEmojis: () => Promise.resolve(["🙏", "❤️"]),
+}));
+
 import { ChatEmojiPicker } from "./chat-emoji-picker";
 import { RECENT_EMOJI_KEY } from "./emoji-picker";
+import { FAVORITE_EMOJI_KEY } from "./favorite-emojis";
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -63,5 +70,62 @@ describe("ChatEmojiPicker (VED-122)", () => {
     expect(JSON.parse(window.localStorage.getItem(RECENT_EMOJI_KEY) ?? "[]")[0]).toBe(
       "🐶",
     );
+  });
+});
+
+describe("ChatEmojiPicker — «Избранные» (VED-123)", () => {
+  it("первой категорией показывает набор администрации", async () => {
+    render(<ChatEmojiPicker onPick={vi.fn()} />);
+
+    const favorites = screen.getByRole("region", { name: "Избранные" });
+    await within(favorites).findByRole("button", { name: "алое сердце" });
+    expect(
+      within(favorites)
+        .getAllByRole("button")
+        .filter((b) => b.textContent !== "Настроить")
+        .map((b) => b.textContent),
+    ).toEqual(["🙏", "❤️"]);
+  });
+
+  it("в настройке нажатие добавляет и убирает, а не вставляет смайлик", async () => {
+    const user = userEvent.setup();
+    const onPick = vi.fn();
+    render(<ChatEmojiPicker onPick={onPick} />);
+    const favorites = screen.getByRole("region", { name: "Избранные" });
+    await within(favorites).findByRole("button", { name: "алое сердце" });
+
+    await user.click(within(favorites).getByRole("button", { name: "Настроить" }));
+    // Добавить собаку из её категории…
+    const animals = screen.getByRole("region", { name: "Животные и природа" });
+    await user.click(within(animals).getByRole("button", { name: "морда собаки" }));
+    // …и убрать сердце из избранного.
+    await user.click(within(favorites).getByRole("button", { name: "алое сердце" }));
+
+    expect(onPick).not.toHaveBeenCalled();
+    expect(JSON.parse(window.localStorage.getItem(FAVORITE_EMOJI_KEY) ?? "null")).toEqual([
+      "🙏",
+      "🐶",
+    ]);
+
+    await user.click(within(favorites).getByRole("button", { name: "Готово" }));
+    await user.click(within(favorites).getByRole("button", { name: "морда собаки" }));
+    expect(onPick).toHaveBeenCalledWith("🐶");
+  });
+
+  it("свой набор возвращается к набору по умолчанию", async () => {
+    window.localStorage.setItem(FAVORITE_EMOJI_KEY, JSON.stringify(["🐶"]));
+    const user = userEvent.setup();
+    render(<ChatEmojiPicker onPick={vi.fn()} />);
+    const favorites = screen.getByRole("region", { name: "Избранные" });
+
+    await user.click(within(favorites).getByRole("button", { name: "Настроить" }));
+    await user.click(
+      within(favorites).getByRole("button", { name: "Вернуть набор по умолчанию" }),
+    );
+
+    expect(window.localStorage.getItem(FAVORITE_EMOJI_KEY)).toBeNull();
+    expect(
+      await within(favorites).findByRole("button", { name: "алое сердце" }),
+    ).toBeInTheDocument();
   });
 });

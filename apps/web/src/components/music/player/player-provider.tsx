@@ -21,6 +21,7 @@ import {
   fetchTrackStreamUrl,
   getAlbumPage,
   getArtistPage,
+  getCatalog,
   getMusicSettings,
   getPlaybackState,
   getTrack,
@@ -71,6 +72,7 @@ import {
   DEFAULT_PLAYBACK_MODE,
   endOfTrackAction,
   nextAlbumSlug,
+  nextArtistSlug,
   type MusicPlaybackMode,
 } from "./play-mode";
 
@@ -779,11 +781,13 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const playRef = useRef<MusicPlayerApi["play"] | null>(null);
 
   /**
-   * Режим «после альбома — следующий альбом исполнителя» (VED-132).
+   * Режим «дальше» (VED-132): очередь кончилась — следующий альбом того же
+   * исполнителя, а нет его — все записи следующего исполнителя Медиатеки.
    *
    * Карточка дослушанной записи знает исполнителя и альбом; страница
-   * исполнителя отдаёт его альбомы в том же порядке, что видит человек.
-   * Не нашлось следующего — тишина, как в конце обычной очереди.
+   * исполнителя отдаёт его альбомы, витрина — исполнителей, в том же порядке,
+   * что видит человек. Не нашлось ни того, ни другого — тишина, как в конце
+   * обычной очереди.
    */
   const continueWithNextAlbum = useCallback(
     async (track: MusicTrackDto) => {
@@ -795,13 +799,23 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       if (!artistSlug) return stopHere();
 
       const artist = await getArtistPage(artistSlug);
-      const slug = artist
+      const albumSlug = artist
         ? nextAlbumSlug(artist.albums, track.album?.slug ?? null)
         : null;
-      const album = slug ? await getAlbumPage(slug) : null;
+      const album = albumSlug ? await getAlbumPage(albumSlug) : null;
+      let ids = album?.tracks.map((item) => item.id) ?? [];
+
+      if (ids.length === 0) {
+        const catalog = await getCatalog();
+        const nextSlug = catalog
+          ? nextArtistSlug(catalog.artists, artistSlug)
+          : null;
+        const nextArtist = nextSlug ? await getArtistPage(nextSlug) : null;
+        ids = nextArtist?.tracks.map((item) => item.id) ?? [];
+      }
+
       // Пока шли запросы, человек мог включить что-то сам: его выбор главнее.
       if (wantedTrackRef.current !== track.id) return;
-      const ids = album?.tracks.map((item) => item.id) ?? [];
       if (ids.length === 0) return stopHere();
       playRef.current?.(ids[0], ids);
     },

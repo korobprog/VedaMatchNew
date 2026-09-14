@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   categoryLink,
+  feedCategoryButtons,
   feedStyleOf,
   isPinnedCard,
   parseReelsTab,
@@ -98,5 +99,61 @@ describe("reelsHref", () => {
     expect(reelsHref({ tab: "cards", post: "picture-1" })).toBe(
       "/motivation?tab=cards&post=picture-1",
     );
+  });
+});
+
+describe("feedCategoryButtons (VED-135)", () => {
+  const cat = (
+    slug: string,
+    title: string,
+    sortOrder: number,
+    postCount = 3,
+    parentId: string | null = null,
+  ) => ({ slug, title, sortOrder, postCount, parentId });
+
+  it("верхние непустые папки по порядку редакции, ссылкой на ленту папки", () => {
+    const buttons = feedCategoryButtons(
+      [
+        cat("acharyas", "Ачарьи", 2),
+        cat("guru", "Гуру", 1),
+        cat("empty", "Пустая", 0, 0),
+        cat("vaishnavas", "Вайшнавы", 3, 5, "acharyas"),
+      ],
+      { tab: "forYou" },
+    );
+
+    expect(buttons).toEqual([
+      { slug: "guru", title: "Гуру", href: "/motivation?category=guru", current: false },
+      {
+        slug: "acharyas",
+        title: "Ачарьи",
+        href: "/motivation?category=acharyas",
+        current: false,
+      },
+    ]);
+  });
+
+  it("не уводит из «Открыток» в другую ленту и помнит порядок", () => {
+    const [button] = feedCategoryButtons([cat("guru", "Гуру", 1)], {
+      tab: "cards",
+      order: "random",
+    });
+
+    expect(button.href).toBe("/motivation?tab=cards&category=guru&order=random");
+  });
+
+  it("из избранного ведёт в «Для вас»: у избранного папок нет", () => {
+    const [button] = feedCategoryButtons([cat("guru", "Гуру", 1)], { tab: "saved" });
+
+    expect(button.href).toBe("/motivation?category=guru");
+  });
+
+  it("отмечает папку, которую сейчас смотрят", () => {
+    const buttons = feedCategoryButtons(
+      [cat("guru", "Гуру", 1), cat("acharyas", "Ачарьи", 2)],
+      { tab: "forYou", current: "acharyas" },
+    );
+
+    expect(buttons.map((button) => button.current)).toEqual([false, true]);
   });
 });

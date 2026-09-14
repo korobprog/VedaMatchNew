@@ -1,0 +1,80 @@
+/**
+ * Токены дизайн-системы портала, перенесённые из `apps/web/src/app/globals.css`.
+ *
+ * Правило то же, что на сайте: цвет задаётся в обеих темах, хардкод `#RRGGBB`
+ * в экранах запрещён. Значения скопированы один в один; при правке токена на
+ * сайте его нужно поправить и здесь.
+ */
+
+export interface Palette {
+  bg0: string;
+  bg1: string;
+  bg2: string;
+  glass: string;
+  glassBorder: string;
+  sheet: string;
+  sheetBorder: string;
+  text0: string;
+  text1: string;
+  text2: string;
+  magenta: string;
+  cyan: string;
+  gold: string;
+  violet: string;
+  blue: string;
+  /** Текст поверх заливки `magenta`. */
+  onAccent: string;
+}
+
+export const light: Palette = {
+  bg0: '#FBF9FF',
+  bg1: '#F3EEFC',
+  bg2: '#EAE2F8',
+  glass: 'rgba(255, 255, 255, 0.72)',
+  glassBorder: 'rgba(74, 44, 122, 0.14)',
+  sheet: 'rgba(255, 255, 255, 0.86)',
+  sheetBorder: 'rgba(74, 44, 122, 0.16)',
+  text0: '#180F2C',
+  text1: '#4B3B6C',
+  text2: '#766591',
+  magenta: '#D71A80',
+  cyan: '#0B826F',
+  gold: '#B0770E',
+  violet: '#7A3FBF',
+  blue: '#1F5FBF',
+  onAccent: '#FFFFFF',
+};
+
+export const dark: Palette = {
+  bg0: '#0A0614',
+  bg1: '#150C24',
+  bg2: '#1B0F2E',
+  glass: 'rgba(255, 255, 255, 0.06)',
+  glassBorder: 'rgba(255, 255, 255, 0.12)',
+  sheet: 'rgba(26, 16, 44, 0.84)',
+  sheetBorder: 'rgba(255, 255, 255, 0.16)',
+  text0: '#F6F1FF',
+  text1: '#B8A9D9',
+  text2: '#7F719E',
+  magenta: '#FF3E9E',
+  cyan: '#23F0C7',
+  gold: '#FFC85C',
+  violet: '#C68BFF',
+  blue: '#7FB4FF',
+  onAccent: '#180F2C',
+};
+
+/** Имена начертаний, под которыми шрифты регистрируются в `useFonts`. */
+export const fonts = {
+  displayMedium: 'Unbounded_500Medium',
+  displayBold: 'Unbounded_700Bold',
+  body: 'Manrope_400Regular',
+  bodyMedium: 'Manrope_500Medium',
+  bodySemiBold: 'Manrope_600SemiBold',
+  bodyBold: 'Manrope_700Bold',
+} as const;
+
+export const radius = { sm: 12, md: 16 } as const;
+
+/** Минимальная зона нажатия, как в макете: меньше 44 px не бывает. */
+export const hitTarget = 44;
