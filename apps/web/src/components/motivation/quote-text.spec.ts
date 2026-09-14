@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  LONG_IMAGE_QUOTE_CHARS,
   isLongQuote,
   isTextClamped,
   joinQuoteAndExplanation,
@@ -19,6 +20,13 @@ describe("isLongQuote", () => {
   it("ровно на границе не считает длинной", () => {
     expect(isLongQuote("а".repeat(170))).toBe(false);
     expect(isLongQuote("а".repeat(171))).toBe(true);
+  });
+
+  // VED-126: у фото цитата в шесть строк, граница прикидки своя.
+  it("у фото граница под шесть строк", () => {
+    expect(isLongQuote("а".repeat(200), LONG_IMAGE_QUOTE_CHARS)).toBe(false);
+    expect(isLongQuote("а".repeat(220), LONG_IMAGE_QUOTE_CHARS)).toBe(false);
+    expect(isLongQuote("а".repeat(221), LONG_IMAGE_QUOTE_CHARS)).toBe(true);
   });
 });
 

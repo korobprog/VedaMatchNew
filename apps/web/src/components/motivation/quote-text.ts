@@ -44,8 +44,16 @@ export function joinQuoteAndExplanation(
  */
 const LONG_QUOTE_CHARS = 170;
 
-export function isLongQuote(text: string): boolean {
-  return text.trim().length > LONG_QUOTE_CHARS;
+/**
+ * То же для фото: цитата под `line-clamp-6` (VED-126). Замер на проде: в шесть
+ * строк Unbounded 17px на самой широкой колонке ленты (448 точек) влезает
+ * около 205 знаков, на телефоне — около 155. Длиннее 220 знаков цитата
+ * обрезана при любой ширине; до этой границы решает замер `isTextClamped`.
+ */
+export const LONG_IMAGE_QUOTE_CHARS = 220;
+
+export function isLongQuote(text: string, limit = LONG_QUOTE_CHARS): boolean {
+  return text.trim().length > limit;
 }
 
 /**
