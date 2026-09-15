@@ -140,6 +140,22 @@ export function DiscoverListSkeleton() {
   );
 }
 
+/**
+ * Сетка карточек «Сервисы» (VED-174): та же двухколоночная раскладка, что
+ * у настоящих карточек `components/services/service-card.tsx` — скелетон
+ * строк выглядел бы списком, а контент — сеткой (тот же урок, что дал
+ * дефект 5 в раунде оценки 005 про несовпадение формы скелетона и контента).
+ */
+export function ServiceGridSkeleton() {
+  return (
+    <View accessible accessibilityLabel="Загружаем сервисы" accessibilityRole="progressbar" style={styles.serviceGrid}>
+      {[0, 1, 2, 3, 4, 5].map((key) => (
+        <Block key={key} width="47%" height={hitTarget * 2} round={radius.md} />
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, minHeight: 76 },
   rowNoInset: { paddingHorizontal: 0 },
@@ -152,4 +168,5 @@ const styles = StyleSheet.create({
   communityList: { gap: 4 },
   communityRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, minHeight: 64 },
   discoverRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 68 },
+  serviceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
 });
