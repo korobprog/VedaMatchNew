@@ -51,3 +51,21 @@ describe.each([
     expect(contrastRatio(palette[text], palette[surface], palette.bg0)).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+/**
+ * Значки подтверждения (`components/verified-badge.tsx`, вариант `dot`):
+ * иконка — не текст, порог WCAG 1.4.11 мягче — 3:1, не 4.5:1.
+ */
+const NON_TEXT_PAIRS: { name: string; graphic: keyof Palette; surface: keyof Palette }[] = [
+  { name: 'иконка значка «Преданный» на кружке cyan', graphic: 'bg0', surface: 'cyan' },
+  { name: 'иконка значка «Фото проверено» на кружке gold', graphic: 'bg0', surface: 'gold' },
+];
+
+describe.each([
+  ['светлая тема', light],
+  ['тёмная тема', dark],
+])('контраст нетекстовой графики: %s', (_, palette) => {
+  it.each(NON_TEXT_PAIRS)('$name — не ниже 3:1', ({ graphic, surface }) => {
+    expect(contrastRatio(palette[graphic], palette[surface], palette.bg0)).toBeGreaterThanOrEqual(3);
+  });
+});

@@ -2,6 +2,8 @@ import type { ContactsCardDto } from '@vedamatch/shared';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
+import { PhotoVerifiedBadge, VerifiedBadge } from '@/components/verified-badge';
+import { verificationA11yParts, visibleVerificationBadges } from '@/lib/people/verification';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
@@ -12,14 +14,15 @@ interface Props {
   onPress(userId: string): void;
 }
 
-/** Строка справочника «Люди»: аватар, имя, заголовок карточки, город, значок преданного. */
+/** Строка справочника «Люди»: аватар, имя со значками подтверждения, заголовок карточки, город. */
 function PersonCardRowImpl({ card, onPress }: Props) {
   const { colors } = useTheme();
   const subtitle = card.headline ?? card.statusLine;
   const place = [card.city, card.country].filter(Boolean).join(', ');
-  const a11yParts = [card.name, subtitle, place, card.isVerifiedDevotee ? 'подтверждённый преданный' : null].filter(
-    (part): part is string => Boolean(part),
-  );
+  const badges = visibleVerificationBadges(card);
+  // Значки внутри строки не объявляются отдельно: строка — один
+  // Pressable-узел с общей подписью, значки в неё уже входят.
+  const a11yParts = [card.name, subtitle, place, ...verificationA11yParts(card)].filter((part): part is string => Boolean(part));
 
   return (
     <Pressable
@@ -31,9 +34,20 @@ function PersonCardRowImpl({ card, onPress }: Props) {
     >
       <ChatAvatar id={card.userId} name={card.name} uri={card.avatarUrl} size={52} />
       <View style={styles.body}>
-        <Text numberOfLines={1} style={[styles.name, { color: colors.text0 }]}>
-          {card.name}
-        </Text>
+        <View style={styles.nameRow}>
+          <Text numberOfLines={1} style={[styles.name, { color: colors.text0 }]}>
+            {card.name}
+          </Text>
+          {badges.length > 0 ? (
+            // Подписи значков уже вошли в accessibilityLabel строки —
+            // сами значки из дерева скринридера не выкусываем (они всё
+            // равно `accessible` для случая, когда компонент используется
+            // отдельно), а прячем именно вложенные узлы этой группы.
+            <View importantForAccessibility="no-hide-descendants" style={styles.badgeGroup}>
+              {badges.map((kind) => (kind === 'devotee' ? <VerifiedBadge key={kind} variant="dot" /> : <PhotoVerifiedBadge key={kind} variant="dot" />))}
+            </View>
+          ) : null}
+        </View>
         {subtitle ? (
           <Text numberOfLines={1} style={[styles.subtitle, { color: colors.text1 }]}>
             {subtitle}
@@ -45,11 +59,6 @@ function PersonCardRowImpl({ card, onPress }: Props) {
           </Text>
         ) : null}
       </View>
-      {card.isVerifiedDevotee ? (
-        <View style={[styles.badge, { backgroundColor: colors.mint }]}>
-          <Text style={[styles.badgeText, { color: colors.onMint }]}>Преданный</Text>
-        </View>
-      ) : null}
     </Pressable>
   );
 }
@@ -68,8 +77,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   body: { flex: 1, minWidth: 0, gap: 2 },
-  name: { fontFamily: fonts.bodyBold, fontSize: 15 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  name: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 15 },
+  badgeGroup: { flexDirection: 'row', flexShrink: 0, gap: 4 },
   subtitle: { fontFamily: fonts.body, fontSize: 13 },
-  badge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
-  badgeText: { fontFamily: fonts.bodySemiBold, fontSize: 11 },
 });

@@ -1,9 +1,8 @@
 import type { ContactsAshram, ContactsCardDto, ContactsFormat, ContactsRequestDto, SpiritualStage } from '@vedamatch/shared';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
 import { InlineError } from '@/components/inline-error';
@@ -11,11 +10,13 @@ import type { ContactsDetailsValue } from '@/components/people/people-details';
 import { PeopleDetails } from '@/components/people/people-details';
 import { RetryButton } from '@/components/retry-button';
 import { PersonCardSkeleton } from '@/components/skeleton';
+import { PhotoVerifiedBadge, VerifiedBadge } from '@/components/verified-badge';
 import { useSession } from '@/lib/auth/session';
 import { createChatApi } from '@/lib/chat/chat-api';
 import { confirmTap } from '@/lib/feedback';
 import { createPeopleApi } from '@/lib/people/people-api';
 import { CONTACTS_REQUEST_STATUS_LABELS, showRemainingToday } from '@/lib/people/people-requests-state';
+import { visibleVerificationBadges } from '@/lib/people/verification';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
@@ -72,7 +73,6 @@ export default function PersonScreen() {
   const userId = String(id);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
   const { api, user } = useSession();
   const peopleApi = useMemo(() => createPeopleApi(api), [api]);
   const chatApi = useMemo(() => createChatApi(api), [api]);
@@ -178,19 +178,27 @@ export default function PersonScreen() {
         }}
       />
 
-      <KeyboardAvoidingView style={styles.flexFill} behavior="padding" keyboardVerticalOffset={headerHeight - insets.bottom}>
-        {!card && loadError ? (
-          <View style={styles.center}>
-            <Text accessibilityRole="alert" style={[styles.centerText, { color: colors.text1 }]}>
-              {loadError}
-            </Text>
-            <RetryButton onPress={() => void loadCard()} />
-          </View>
-        ) : !card ? (
-          <PersonCardSkeleton />
-        ) : (
-          <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
-            <View style={styles.header}>
+      {!card && loadError ? (
+        <View style={styles.center}>
+          <Text accessibilityRole="alert" style={[styles.centerText, { color: colors.text1 }]}>
+            {loadError}
+          </Text>
+          <RetryButton onPress={() => void loadCard()} />
+        </View>
+      ) : !card ? (
+        <PersonCardSkeleton />
+      ) : (
+        // `bottomOffset` держит под фокусом не только сам инпут, но и то, что
+        // сразу под ним (подсказка + кнопка «Отправить запрос»): без него
+        // прокрутка поднимала поле ровно по верх клавиатуры, а кнопка ниже
+        // оставалась частично перекрыта до ручной докрутки (раунд оценки
+        // 005, дефект 3).
+        <KeyboardAwareScrollView
+          bottomOffset={160}
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
               <ChatAvatar id={card.userId} name={card.name} uri={card.avatarUrl} size={72} />
               <View style={styles.headerText}>
                 <Text style={[styles.name, { color: colors.text0 }]}>{card.name}</Text>
@@ -203,18 +211,12 @@ export default function PersonScreen() {
               </View>
             </View>
 
-            <View style={styles.badges}>
-              {card.isVerifiedDevotee ? (
-                <View style={[styles.badge, { backgroundColor: colors.mint }]}>
-                  <Text style={[styles.badgeText, { color: colors.onMint }]}>Подтверждённый преданный</Text>
-                </View>
-              ) : null}
-              {card.isPhotoVerified ? (
-                <View style={[styles.badge, { backgroundColor: colors.bg2 }]}>
-                  <Text style={[styles.badgeText, { color: colors.text0 }]}>Фото проверено</Text>
-                </View>
-              ) : null}
-            </View>
+            {visibleVerificationBadges(card).length > 0 ? (
+              <View style={styles.badges}>
+                {card.isVerifiedDevotee ? <VerifiedBadge variant="inline" /> : null}
+                {card.isPhotoVerified ? <PhotoVerifiedBadge variant="inline" /> : null}
+              </View>
+            ) : null}
 
             {detailRows(card).length > 0 ? (
               <View style={styles.detailRows}>
@@ -347,16 +349,14 @@ export default function PersonScreen() {
                 ) : null}
               </View>
             )}
-          </ScrollView>
-        )}
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  flexFill: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 20, gap: 16 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
   centerText: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, textAlign: 'center' },
@@ -365,8 +365,6 @@ const styles = StyleSheet.create({
   name: { fontFamily: fonts.displayBold, fontSize: 20 },
   headline: { fontFamily: fonts.body, fontSize: 14 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
-  badgeText: { fontFamily: fonts.bodySemiBold, fontSize: 12 },
   detailRows: { gap: 2 },
   detail: { fontFamily: fonts.body, fontSize: 13 },
   detailLabel: { fontFamily: fonts.bodySemiBold },
