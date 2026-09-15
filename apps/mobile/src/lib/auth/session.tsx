@@ -97,20 +97,30 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // без лишних зависимостей хуков.
   const adoptRef = useRef<(tokens: TokenPair | AppTokens) => Promise<void>>(async () => undefined);
 
-  const refresh = useCallback(async (): Promise<string | null> => {
-    const current = tokensRef.current;
-    if (!current) return null;
-    try {
-      const fresh = await authApi.refresh(current.refreshToken);
-      await adoptRef.current(fresh);
-      return fresh.accessToken;
-    } catch (error) {
-      // Сеть упала: токены ещё могут быть живы, сессию не трогаем.
-      if ((error as { status?: number }).status === 0) return current.accessToken;
-      await dropSession();
-      return null;
-    }
-  }, [authApi, dropSession]);
+  // Одно обновление на всё приложение: поток чата, запросы API и таймер
+  // приходят за токеном одновременно после сна телефона, а второй refresh с
+  // тем же одноразовым токеном сервер считает кражей и отзывает все сессии.
+  const refresh = useMemo(
+    () =>
+      singleFlight(async (): Promise<string | null> => {
+        const current = tokensRef.current;
+        if (!current) return null;
+        try {
+          const fresh = await authApi.refresh(current.refreshToken);
+          await adoptRef.current(fresh);
+          return fresh.accessToken;
+        } catch (error) {
+          // Сеть упала: токены ещё могут быть живы, сессию не трогаем.
+          if ((error as { status?: number }).status === 0) return current.accessToken;
+          // Пока ждали отказ, токены уже обновились: отказ относится к старой
+          // паре, а сессия жива.
+          if (tokensRef.current && tokensRef.current !== current) return tokensRef.current.accessToken;
+          await dropSession();
+          return null;
+        }
+      }),
+    [authApi, dropSession],
+  );
 
   const scheduleRefresh = useCallback(
     (accessToken: string) => {
