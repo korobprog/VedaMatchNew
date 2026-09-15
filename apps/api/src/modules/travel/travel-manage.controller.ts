@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import type { TravelBookingStatus } from '@prisma/client';
@@ -112,6 +113,17 @@ export class TravelManageController {
   @Get('stays/:id/bookings')
   bookings(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.manage.bookings(user.sub, id);
+  }
+
+  /** Шахматка: заявки по комнатам с номером, гостем и состоянием. */
+  @Get('stays/:id/occupancy')
+  occupancy(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.manage.occupancy(user.sub, id, from, to);
   }
 
   @Patch('bookings/:id')

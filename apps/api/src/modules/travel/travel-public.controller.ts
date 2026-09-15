@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { AccessTokenPayload } from '@vedamatch/shared';
 import { OptionalAuthGuard, OptionalUser } from '../auth/auth.guard';
@@ -27,6 +35,16 @@ export class TravelPublicController {
     @Param('code') code: string,
   ) {
     return this.travel.publicStayReviews(code, user?.sub ?? null);
+  }
+
+  @Get('stays/:code/occupancy')
+  occupancy(
+    @OptionalUser() user: AccessTokenPayload | undefined,
+    @Param('code') code: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.travel.publicOccupancy(code, user?.sub ?? null, from, to);
   }
 
   /**

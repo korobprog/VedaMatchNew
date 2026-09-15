@@ -528,3 +528,53 @@ export interface AdminTravelReviewDto extends TravelReviewDto {
 export interface AdminTravelReviewsResponse {
   items: AdminTravelReviewDto[];
 }
+
+// ===== Занятость комнат =====
+
+/** Промежуток проживания: выезд — день, когда комната уже свободна. */
+export interface TravelOccupancyRange {
+  checkIn: string;
+  checkOut: string;
+}
+
+/**
+ * Занятость комнаты для гостя — только даты. Кто живёт и по какой заявке,
+ * гостю знать незачем, а страница по QR открыта всем.
+ */
+export interface TravelRoomOccupancyDto {
+  roomId: string;
+  roomLabel: string;
+  capacity: number;
+  busy: TravelOccupancyRange[];
+}
+
+export interface TravelOccupancyResponse {
+  from: string;
+  to: string;
+  rooms: TravelRoomOccupancyDto[];
+}
+
+export interface TravelManagedOccupancyBooking extends TravelOccupancyRange {
+  bookingId: string;
+  number: number;
+  status: TravelBookingStatus;
+  guestName: string;
+}
+
+export interface TravelManagedRoomOccupancyDto {
+  roomId: string;
+  roomLabel: string;
+  capacity: number;
+  bookings: TravelManagedOccupancyBooking[];
+}
+
+/** Шахматка хозяина: заявки по комнатам и отдельно — ещё без комнаты. */
+export interface TravelManagedOccupancyResponse {
+  from: string;
+  to: string;
+  rooms: TravelManagedRoomOccupancyDto[];
+  unassigned: TravelManagedOccupancyBooking[];
+}
+
+/** Окно запроса занятости: четыре месяца — с запасом на любой календарь. */
+export const TRAVEL_OCCUPANCY_MAX_DAYS = 124;

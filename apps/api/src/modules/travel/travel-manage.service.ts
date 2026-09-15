@@ -6,9 +6,16 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { TravelBookingStatus } from '@prisma/client';
-import type { TravelBookingDto, TravelStayCardDto } from '@vedamatch/shared';
+import type {
+  TravelBookingDto,
+  TravelManagedOccupancyBooking,
+  TravelManagedOccupancyResponse,
+  TravelStayCardDto,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { groupOccupancy, MANAGED_OCCUPANCY_STATUSES } from './occupancy';
 import { generatePublicCode } from './public-code';
+import { formatStayDate } from './travel-dates';
 import { parseStayInput, TravelInputError } from './travel-dto';
 import {
   notifiesGuest,
@@ -17,6 +24,8 @@ import {
 } from './travel-events';
 import {
   bookingInclude,
+  occupancyWindow,
+  roomLabel,
   stayCardSelect,
   toBookingDto,
   toStayCard,
@@ -221,6 +230,67 @@ export class TravelManageService {
       take: 200,
     });
     return { items: rows.map(toBookingDto) };
+  }
+
+  /**
+   * Шахматка объекта: заявки по комнатам за окно. В отличие от гостевой
+   * занятости здесь есть номер, имя и состояние — хозяин и так видит их в
+   * списке заявок — и завершённые заезды: по ним сверяют прошлые месяцы.
+   */
+  async occupancy(
+    userId: string,
+    stayId: string,
+    rawFrom: unknown,
+    rawTo: unknown,
+  ): Promise<TravelManagedOccupancyResponse> {
+    const window = occupancyWindow(rawFrom, rawTo);
+    await this.assertManager(userId, stayId);
+    const [rooms, bookings] = await Promise.all([
+      this.prisma.travelRoom.findMany({
+        where: { stayId },
+        select: { id: true, building: true, number: true, capacity: true },
+        orderBy: [{ building: 'asc' }, { number: 'asc' }],
+      }),
+      this.prisma.travelBooking.findMany({
+        where: {
+          stayId,
+          status: { in: [...MANAGED_OCCUPANCY_STATUSES] },
+          checkIn: { lt: window.to },
+          checkOut: { gt: window.from },
+        },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          guestName: true,
+          roomId: true,
+          checkIn: true,
+          checkOut: true,
+        },
+      }),
+    ]);
+    const grouped = groupOccupancy(rooms, bookings, window);
+    const toDto = (
+      row: (typeof bookings)[number],
+    ): TravelManagedOccupancyBooking => ({
+      bookingId: row.id,
+      number: row.number,
+      status: row.status,
+      guestName: row.guestName,
+      checkIn: formatStayDate(row.checkIn),
+      checkOut: formatStayDate(row.checkOut),
+    });
+    return {
+      from: formatStayDate(window.from),
+      to: formatStayDate(window.to),
+      rooms: grouped.rooms.map(({ room, bookings: list }) => ({
+        roomId: room.id,
+        roomLabel: roomLabel(room) ?? room.number,
+        capacity: room.capacity,
+        bookings: list.map(toDto),
+      })),
+      unassigned: grouped.unassigned.map(toDto),
+    };
   }
 
   async decide(

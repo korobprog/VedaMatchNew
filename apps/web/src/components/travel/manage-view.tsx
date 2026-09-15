@@ -250,6 +250,12 @@ export function ManageView() {
                   Касса
                 </Link>
                 <Link
+                  href={`/travel/manage/${stay.id}/calendar`}
+                  className="text-text-0 underline underline-offset-4"
+                >
+                  Календарь
+                </Link>
+                <Link
                   href={`/travel/manage/${stay.id}/guests`}
                   className="text-text-0 underline underline-offset-4"
                 >
