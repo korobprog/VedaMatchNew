@@ -41,27 +41,26 @@ const DARK_BG0 = '#0A0614'; // theme/tokens.ts: dark.bg0 — фон сплэша
 // withAndroidIcons.js, диаметр 100% холста — то есть даже строже).
 const ADAPTIVE_SAFE_DIAMETER_RATIO = 72 / 108; // «видимый круг» лаунчеров ≈ 0.6667
 
-// Реальные лаунчеры (Samsung One UI и большинство других, см. eval-rubric.md:
-// «у Samsung One UI это, как правило, скруглённый квадрат») режут не
-// идеальным кругом, а сквирклом/скруглённым квадратом — суперэллипсом,
-// который на диагонали «дотягивается» дальше круга того же осевого радиуса.
-// exponent=4 — стандартная для таких масок степень суперэллипса.
+// Связывающее ограничение — СТРОГИЙ круг (exponent=2, `r = холст/3`, то есть
+// диаметр = ADAPTIVE_SAFE_DIAMETER_RATIO холста): часть популярных лаунчеров
+// (Pixel Launcher и другие) режут adaptive-иконку именно кругом, без запаса
+// сквиркла. Предыдущая версия этого файла считала знак по сквирклу
+// (exponent=4 — приближение скруглённого квадрата, которым режут Samsung
+// One UI и похожие) и получала знак крупнее, но с вылетом кончиков шеврона
+// за пределы точного круга — что и заметили на превью `02-circle-mask.png`
+// (`scripts/verify-brand-assets.mjs`): кончики были явно обрезаны.
 //
-// Сознательный компромисс (числа сняты `scripts/verify-brand-assets.mjs` по
-// РЕАЛЬНЫМ пикселям сгенерированного foreground при текущих ADAPTIVE_*):
-// при margin=0.95 итоговая доля холста ≈0.561 (близко к «~60% холста» из
-// ревью). Под сквирклом того же осевого радиуса — 0 пикселей знака вне маски
-// (полностью безопасно). Под ИДЕАЛЬНЫМ кругом (exponent=2, самый строгий
-// теоретический вариант, который не совпадает ни с одним реальным лаунчером
-// на практике) — вне маски оказываются ≈2381 пикселей на холсте 1024×1024,
-// максимальный вылет ≈44.6px (≈4.4% холста) на самом остром кончике нижнего
-// луча шеврона. Раньше (margin 0.9 от строгого круга, ratio ≈0.444) знак был
-// полностью безопасен и под кругом, но выглядел мельче, чем просили на
-// ревью. Выбор — в пользу размера, безопасного для реальных масок лаунчеров
-// (сквиркл), а не теоретического худшего случая, который на практике не
-// встречается.
+// `margin = 0.94` даёт запас ровно 2% холста между самым дальним пикселем
+// знака и границей круга (при `safeDiameterRatio = 0.6667`: запас =
+// `(safeDiameterRatio/2) * (1 - margin) * canvasSize = 0.3333 * 0.06 ≈
+// 0.02 * canvasSize`) — минимальный запас, который просили на ревью, знак
+// при этом максимально крупный из безопасных под кругом. Сквиркл
+// (exponent=4) считаем и логируем ниже только для сверки — раз знак вписан
+// в строгий круг, он тем более вписан и в любой более щедрый сквиркл того
+// же осевого радиуса (проверено числами и превью в
+// `scripts/verify-brand-assets.mjs`: 0 пикселей вне маски в обоих случаях).
 const ADAPTIVE_SQUIRCLE_EXPONENT = 4;
-const ADAPTIVE_SAFE_MARGIN = 0.95;
+const ADAPTIVE_SAFE_MARGIN = 0.94;
 
 // Monochrome-слой (Android 13+ themed icons) — дефект ревью был не про него
 // (там знак и так один цвет), оставляем прежнюю, более консервативную
@@ -170,10 +169,11 @@ async function main() {
   const markDarkPng = await toPng(markDark.data, markDark.width, markDark.height, markDark.channels);
 
   const referenceDimension = Math.max(markLight.width, markLight.height);
-  // Круг (exponent=2) — для монохромного слоя, который дефект не затронул.
+  // Круг (exponent=2) — связывающее ограничение для icon.png/foreground (см.
+  // комментарий у ADAPTIVE_SQUIRCLE_EXPONENT) и для монохромного слоя.
   const maxCornerDistanceCircle = maxCornerDistanceFromMask(markLight.mask, markLight.width, markLight.height, 2);
-  // Сквиркл (exponent=4) — для icon.png/foreground, см. комментарий у
-  // ADAPTIVE_SQUIRCLE_EXPONENT.
+  // Сквиркл (exponent=4) — только для сверки/лога, решение по размеру он не
+  // принимает.
   const maxCornerDistanceSquircle = maxCornerDistanceFromMask(
     markLight.mask,
     markLight.width,
@@ -181,6 +181,15 @@ async function main() {
     ADAPTIVE_SQUIRCLE_EXPONENT,
   );
   const adaptiveRatio = safeContainRatio({
+    maxCornerDistance: maxCornerDistanceCircle,
+    referenceDimension,
+    safeDiameterRatio: ADAPTIVE_SAFE_DIAMETER_RATIO,
+    margin: ADAPTIVE_SAFE_MARGIN,
+  });
+  // Тот же холст и margin, но по сквирклу — ожидаемо больше adaptiveRatio
+  // (сквиркл щедрее круга того же осевого радиуса), приведён только для
+  // сравнения в логе.
+  const adaptiveRatioSquircleForLog = safeContainRatio({
     maxCornerDistance: maxCornerDistanceSquircle,
     referenceDimension,
     safeDiameterRatio: ADAPTIVE_SAFE_DIAMETER_RATIO,
@@ -199,7 +208,7 @@ async function main() {
     margin: NOTIFICATION_SAFE_MARGIN,
   });
   console.log(
-    `Безопасная доля холста: icon/foreground (сквиркл) ≈ ${adaptiveRatio.toFixed(3)}, monochrome (круг) ≈ ${monochromeRatio.toFixed(3)}, notification ≈ ${notificationRatio.toFixed(3)}`,
+    `Безопасная доля холста: icon/foreground (круг, связывающее) ≈ ${adaptiveRatio.toFixed(4)} (для сравнения — сквиркл дал бы ≈ ${adaptiveRatioSquircleForLog.toFixed(4)}), monochrome (круг) ≈ ${monochromeRatio.toFixed(3)}, notification ≈ ${notificationRatio.toFixed(3)}`,
   );
 
   // 1. icon.png — непрозрачный фон фирменного светлого цвета (тот же, что и
