@@ -27,6 +27,12 @@ export function createChatApi(api: ApiClient) {
       api.request<{ lastReadAt: string }>(`/chat/conversations/${encodeURIComponent(conversationId)}/read`, {
         method: 'POST',
       }),
+    /** Беззвучный режим беседы. Для официального канала это согласие на уведомления. */
+    setMuted: (conversationId: string, muted: boolean) =>
+      api.request<{ muted: boolean }>(`/chat/conversations/${encodeURIComponent(conversationId)}/mute`, {
+        method: 'POST',
+        body: { muted },
+      }),
     typing: (conversationId: string) =>
       api.request<{ ok: true }>(`/chat/conversations/${encodeURIComponent(conversationId)}/typing`, { method: 'POST' }),
   };

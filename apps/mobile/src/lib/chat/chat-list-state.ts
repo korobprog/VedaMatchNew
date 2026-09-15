@@ -13,9 +13,13 @@ function sortKey(conversation: ChatConversationSummary): number {
   return Number.isNaN(time) ? 0 : time;
 }
 
-/** Закреплённые сверху, внутри групп — по последнему сообщению. */
+/**
+ * Официальный канал VedaMatch первым, за ним закреплённые, внутри групп — по
+ * последнему сообщению. Порядок тот же, что отдаёт сервер.
+ */
 export function sortConversations(list: readonly ChatConversationSummary[]): ChatConversationSummary[] {
   return [...list].sort((a, b) => {
+    if (Boolean(a.official) !== Boolean(b.official)) return a.official ? -1 : 1;
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     return sortKey(b) - sortKey(a);
   });

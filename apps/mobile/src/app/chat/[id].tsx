@@ -18,7 +18,7 @@ import { ChatAvatar } from '@/components/chat/chat-avatar';
 import { MessageBubble } from '@/components/chat/message-bubble';
 import { useSession } from '@/lib/auth/session';
 import { createChatApi } from '@/lib/chat/chat-api';
-import { formatChatDivider, isNewDay } from '@/lib/chat/chat-format';
+import { formatChatDivider, isNewDay, officialNotifyLabel, readonlyNotice } from '@/lib/chat/chat-format';
 import {
   applyReadByOther,
   applyRoomEvent,
@@ -28,6 +28,7 @@ import {
   settlePendingMessage,
 } from '@/lib/chat/chat-room-state';
 import { useChatStream } from '@/lib/chat/chat-stream';
+import { setActiveConversation } from '@/lib/push/active-chat';
 import { withPlural } from '@/lib/chat/plural';
 import { isOnline } from '@/lib/chat/presence';
 import { useTheme } from '@/theme/theme';
@@ -50,6 +51,12 @@ export default function ChatRoomScreen() {
   const stream = useChatStream();
   const chatApi = useMemo(() => createChatApi(api), [api]);
 
+  // Пока беседа на экране, пуши о её сообщениях не показываются.
+  useEffect(() => {
+    setActiveConversation(conversationId);
+    return () => setActiveConversation(null);
+  }, [conversationId]);
+
   const [detail, setDetail] = useState<ChatConversationDetail | null>(null);
   const [messages, setMessages] = useState<ChatMessageDto[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -58,6 +65,8 @@ export default function ChatRoomScreen() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [typingName, setTypingName] = useState<string | null>(null);
+  const [mutedBusy, setMutedBusy] = useState(false);
+  const [mutedError, setMutedError] = useState<string | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSent = useRef(0);
   const myId = user?.id ?? '';
@@ -176,6 +185,22 @@ export default function ChatRoomScreen() {
     }));
     return out.reverse();
   }, [messages]);
+
+  /** Уведомления официального канала выключены по умолчанию и включаются только здесь. */
+  const toggleMuted = useCallback(async () => {
+    if (!detail) return;
+    const next = !detail.muted;
+    setMutedBusy(true);
+    setMutedError(null);
+    try {
+      const result = await chatApi.setMuted(conversationId, next);
+      setDetail((current) => (current ? { ...current, muted: result.muted } : current));
+    } catch {
+      setMutedError('Не получилось, попробуйте ещё раз');
+    } finally {
+      setMutedBusy(false);
+    }
+  }, [chatApi, conversationId, detail]);
 
   const showAuthors = detail ? detail.kind !== 'direct' : false;
   const subtitle = detail
@@ -301,13 +326,33 @@ export default function ChatRoomScreen() {
             </View>
           ) : (
             <View style={[styles.readonly, { borderTopColor: colors.glassBorder, paddingBottom: insets.bottom + 12 }]}>
-              <Text style={[styles.info, { color: colors.text2 }]}>
-                {detail.state === 'request'
-                  ? 'Запрос на переписку. Принять или отклонить можно на сайте.'
-                  : detail.kind === 'channel'
-                    ? 'В канал пишет администрация общины.'
-                    : 'Писать в эту беседу нельзя.'}
-              </Text>
+              <Text style={[styles.info, { color: colors.text2 }]}>{readonlyNotice(detail)}</Text>
+              {detail.official ? (
+                <>
+                  <Pressable
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: !detail.muted, busy: mutedBusy }}
+                    disabled={mutedBusy}
+                    onPress={() => void toggleMuted()}
+                    style={({ pressed }) => [
+                      styles.notify,
+                      detail.muted
+                        ? { backgroundColor: colors.mint, borderColor: colors.mint }
+                        : { borderColor: colors.glassBorder },
+                      (pressed || mutedBusy) && { opacity: 0.7 },
+                    ]}
+                  >
+                    <Text style={[styles.notifyText, { color: detail.muted ? colors.onMint : colors.text0 }]}>
+                      {officialNotifyLabel(detail.muted)}
+                    </Text>
+                  </Pressable>
+                  {mutedError ? (
+                    <Text accessibilityRole="alert" style={[styles.info, { color: colors.magenta }]}>
+                      {mutedError}
+                    </Text>
+                  ) : null}
+                </>
+              ) : null}
             </View>
           )
         ) : null}
@@ -356,5 +401,14 @@ const styles = StyleSheet.create({
   },
   sendButton: { width: hitTarget + 2, height: hitTarget + 2, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
   sendError: { fontFamily: fonts.bodySemiBold, fontSize: 13 },
-  readonly: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 20, paddingTop: 12 },
+  readonly: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 20, paddingTop: 12, gap: 10 },
+  notify: {
+    alignSelf: 'center',
+    minHeight: hitTarget,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+  },
+  notifyText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
 });

@@ -90,3 +90,18 @@ export function initialOf(name: string | null | undefined): string {
 export function unreadLabel(count: number): string {
   return count > 99 ? '99+' : String(count);
 }
+
+/** Подпись вместо поля ввода, когда писать в беседу нельзя. */
+export function readonlyNotice(
+  conversation: Pick<ChatConversationSummary, 'state' | 'kind' | 'official'>,
+): string {
+  if (conversation.state === 'request') return 'Запрос на переписку. Принять или отклонить можно на сайте.';
+  if (conversation.official) return 'Новости VedaMatch и его сервисов. Пишет администрация портала.';
+  if (conversation.kind === 'channel') return 'В канал пишет администрация общины.';
+  return 'Писать в эту беседу нельзя.';
+}
+
+/** Кнопка уведомлений официального канала: включить — значит дать согласие. */
+export function officialNotifyLabel(muted: boolean): string {
+  return muted ? 'Включить уведомления' : 'Выключить уведомления';
+}

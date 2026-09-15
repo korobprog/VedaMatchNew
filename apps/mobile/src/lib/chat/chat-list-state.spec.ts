@@ -31,6 +31,21 @@ describe('sortConversations', () => {
     const sorted = sortConversations([...base, conv('p', '2026-01-01T00:00:00Z', { pinned: true })]);
     expect(sorted.map((c) => c.id)).toEqual(['p', 'a', 'b']);
   });
+
+  it('официальный канал выше закреплённых, даже без свежих сообщений', () => {
+    const sorted = sortConversations([
+      ...base,
+      conv('p', '2026-09-14T12:00:00Z', { pinned: true }),
+      conv('vm', '2026-01-01T00:00:00Z', { kind: 'channel', official: true }),
+    ]);
+    expect(sorted.map((c) => c.id)).toEqual(['vm', 'p', 'a', 'b']);
+  });
+
+  it('новое сообщение в обычной беседе не поднимает её над официальным каналом', () => {
+    const list = sortConversations([...base, conv('vm', '2026-01-01T00:00:00Z', { kind: 'channel', official: true })]);
+    const next = applyListEvent(list, { type: 'message.created', conversationId: 'b', message: msg('m', 'other', '2026-09-14T11:00:00Z') }, ME);
+    expect(next.map((c) => c.id)).toEqual(['vm', 'b', 'a']);
+  });
 });
 
 describe('applyListEvent', () => {

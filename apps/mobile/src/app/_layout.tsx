@@ -13,6 +13,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '@/lib/auth/session';
 import { ChatStreamProvider } from '@/lib/chat/chat-stream';
+import { PushBridge } from '@/lib/push/push-bridge';
 import { ThemeProvider, useTheme } from '@/theme/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -29,6 +30,7 @@ function RootStack() {
   return (
     <>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <PushBridge />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg0 } }}>
         <Stack.Protected guard={status === 'guest'}>
           <Stack.Screen name="login" />
