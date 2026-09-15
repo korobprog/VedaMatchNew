@@ -88,6 +88,17 @@ export class TravelController {
     return this.travel.contactManager(user.sub, id, body);
   }
 
+  /** Занятость комнат — только даты, для календаря в форме заявки. */
+  @Get('stays/:id/occupancy')
+  occupancy(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.travel.occupancy(id, user.sub, from, to);
+  }
+
   @Get('stays/:id/reviews')
   reviews(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.travel.stayReviews(id, user.sub);

@@ -5,11 +5,14 @@ import Link from "next/link";
 import {
   TRAVEL_STAY_KIND_LABELS,
   TRAVEL_STAY_PAYMENT_LABELS,
+  type TravelOccupancyResponse,
   type TravelStayDto,
 } from "@vedamatch/shared";
 import {
   createPublicTravelBooking,
   createTravelBooking,
+  getPublicStayOccupancy,
+  getStayOccupancy,
   getTravelStay,
 } from "@/lib/travel-api";
 import {
@@ -18,7 +21,9 @@ import {
   withClaimToken,
 } from "./claim-tokens";
 import { ContactHostButton } from "./contact-host-button";
+import { addDays, conflicts, todayIso } from "./occupancy";
 import { priceLabel } from "./price";
+import { RoomAvailability } from "./room-availability";
 import { StayReviews } from "./stay-reviews";
 
 /** Завтра в виде ГГГГ-ММ-ДД: заезд задним числом API не примет. */
@@ -27,6 +32,9 @@ function tomorrow(): string {
   date.setDate(date.getDate() + 1);
   return date.toISOString().slice(0, 10);
 }
+
+/** Сколько дней вперёд грузим занятость: заезд дальше API всё равно проверит. */
+const OCCUPANCY_DAYS = 120;
 
 /**
  * Карточка объекта с формой заявки. В кабинете грузит объект сама; на
@@ -56,6 +64,16 @@ export function StayView({
   const [sending, setSending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [sentNumber, setSentNumber] = useState<number | null>(null);
+  const [today] = useState(todayIso);
+  /**
+   * Занятость с ключом объекта, для которого загружена. Не загрузилась —
+   * календаря просто нет: занятость подсказка, сервер всё равно проверит
+   * даты при отправке.
+   */
+  const [occupancy, setOccupancy] = useState<{
+    key: string;
+    data: TravelOccupancyResponse;
+  } | null>(null);
 
   useEffect(() => {
     if (initialStay) return;
@@ -70,6 +88,33 @@ export function StayView({
       });
     return () => controller.abort();
   }, [stayId, initialStay]);
+
+  const stayKey = stay ? `${stay.id}:${publicMode ? stay.publicCode : ""}` : "";
+  const hasRooms = Boolean(stay?.rooms.length);
+  useEffect(() => {
+    if (!stay || !hasRooms) return;
+    const controller = new AbortController();
+    const range = { from: today, to: addDays(today, OCCUPANCY_DAYS) };
+    const load = publicMode
+      ? getPublicStayOccupancy(stay.publicCode, range, controller.signal)
+      : getStayOccupancy(stay.id, range, controller.signal);
+    load
+      .then((data) => setOccupancy({ key: stayKey, data }))
+      .catch(() => undefined);
+    return () => controller.abort();
+    // Объект целиком в зависимостях перезапускал бы запрос на каждый ответ
+    // сервера; достаточно того, что задаёт адрес.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stayKey, hasRooms, publicMode, today]);
+
+  const loadedOccupancy =
+    occupancy && occupancy.key === stayKey ? occupancy.data : null;
+  const roomOccupancy = roomId
+    ? (loadedOccupancy?.rooms.find((room) => room.roomId === roomId) ?? null)
+    : null;
+  const roomTaken = roomOccupancy
+    ? conflicts(roomOccupancy.busy, checkIn, checkOut)
+    : false;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -227,6 +272,17 @@ export function StayView({
             </label>
           ) : null}
 
+          {roomOccupancy && loadedOccupancy ? (
+            <RoomAvailability
+              roomLabel={roomOccupancy.roomLabel}
+              busy={roomOccupancy.busy}
+              checkIn={checkIn}
+              checkOut={checkOut}
+              today={today}
+              windowTo={loadedOccupancy.to}
+            />
+          ) : null}
+
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-xs text-text-2">
               Как вас зовут
@@ -293,6 +349,13 @@ export function StayView({
             />
           </label>
 
+          {roomTaken ? (
+            <p role="alert" className="text-sm text-text-0">
+              На эти даты комната уже занята — выберите другие даты или другую
+              комнату
+            </p>
+          ) : null}
+
           {formError ? (
             <p role="alert" className="text-sm text-magenta">
               {formError}
@@ -301,7 +364,7 @@ export function StayView({
 
           <button
             type="submit"
-            disabled={sending}
+            disabled={sending || roomTaken}
             className="rounded-xl border border-magenta px-4 py-2 text-sm text-text-0 disabled:opacity-60"
           >
             {sending ? "Отправляем…" : "Отправить заявку"}

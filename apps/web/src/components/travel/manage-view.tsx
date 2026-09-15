@@ -7,11 +7,16 @@ import {
   TRAVEL_STAY_KINDS,
   TRAVEL_STAY_PAYMENTS,
   TRAVEL_STAY_PAYMENT_LABELS,
+  type TravelPlaceDto,
   type TravelStayCardDto,
   type TravelStayKind,
   type TravelStayPayment,
 } from "@vedamatch/shared";
-import { createManagedStay, getManagedStays } from "@/lib/travel-api";
+import {
+  createManagedStay,
+  getManagedStays,
+  getTravelPlaces,
+} from "@/lib/travel-api";
 import { priceLabel } from "./price";
 
 export function ManageView() {
@@ -26,6 +31,8 @@ export function ManageView() {
   const [price, setPrice] = useState("");
   const [address, setAddress] = useState("");
   const [sevaNote, setSevaNote] = useState("");
+  const [placeId, setPlaceId] = useState("");
+  const [places, setPlaces] = useState<TravelPlaceDto[]>([]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -35,6 +42,11 @@ export function ManageView() {
         if (controller.signal.aborted) return;
         setError(cause instanceof Error ? cause.message : "Не загрузилось");
       });
+    // Точки — подсказка, а не условие формы: не загрузились — объект
+    // заводится без места, привязать его можно позже со страницы заявок.
+    getTravelPlaces(controller.signal)
+      .then((res) => setPlaces(res.items))
+      .catch(() => undefined);
     return () => controller.abort();
   }, []);
 
@@ -54,6 +66,7 @@ export function ManageView() {
         payment,
         priceMinor,
         address,
+        placeId: placeId || null,
         sevaNote: sevaNote || null,
       });
       setItems((current) => [created, ...(current ?? [])]);
@@ -62,6 +75,7 @@ export function ManageView() {
       setPrice("");
       setAddress("");
       setSevaNote("");
+      setPlaceId("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не сохранилось");
     } finally {
@@ -149,6 +163,22 @@ export function ManageView() {
           </div>
 
           <label className="flex flex-col gap-1 text-xs text-text-2">
+            Место на карте
+            <select
+              className={fieldClass}
+              value={placeId}
+              onChange={(event) => setPlaceId(event.target.value)}
+            >
+              <option value="">Не на карте</option>
+              {places.map((place) => (
+                <option key={place.id} value={place.id}>
+                  {place.name}, {place.country}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1 text-xs text-text-2">
             Адрес
             <input
               className={fieldClass}
@@ -200,6 +230,9 @@ export function ManageView() {
               <p className="mt-1 font-display text-lg text-text-0">
                 {stay.name}
               </p>
+              {stay.placeName ? (
+                <p className="mt-1 text-sm text-text-2">{stay.placeName}</p>
+              ) : null}
               <p className="mt-1 text-sm text-text-1">
                 {priceLabel(stay.priceMinor, stay.currency, stay.payment)}
               </p>
@@ -215,6 +248,12 @@ export function ManageView() {
                   className="text-text-0 underline underline-offset-4"
                 >
                   Касса
+                </Link>
+                <Link
+                  href={`/travel/manage/${stay.id}/calendar`}
+                  className="text-text-0 underline underline-offset-4"
+                >
+                  Календарь
                 </Link>
                 <Link
                   href={`/travel/manage/${stay.id}/guests`}

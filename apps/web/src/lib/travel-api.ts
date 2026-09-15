@@ -17,6 +17,8 @@ import type {
   TravelCashEntriesResponse,
   TravelCashEntryDto,
   TravelGuestBookingResponse,
+  TravelManagedOccupancyResponse,
+  TravelOccupancyResponse,
   SaveTravelReviewRequest,
   TravelReviewsResponse,
   TravelBookingDto,
@@ -140,6 +142,33 @@ export const getPublicStayReviews = (code: string, signal?: AbortSignal) =>
     { method: "GET", signal },
   );
 
+/** Окно занятости `[from, to)` — строки ГГГГ-ММ-ДД. */
+export interface OccupancyRange {
+  from: string;
+  to: string;
+}
+
+/** Занятость комнат для календаря в форме заявки — только даты. */
+export const getStayOccupancy = (
+  stayId: string,
+  range: OccupancyRange,
+  signal?: AbortSignal,
+) =>
+  request<TravelOccupancyResponse>(
+    `/travel/stays/${encodeURIComponent(stayId)}/occupancy?${new URLSearchParams({ ...range })}`,
+    { method: "GET", signal },
+  );
+
+export const getPublicStayOccupancy = (
+  code: string,
+  range: OccupancyRange,
+  signal?: AbortSignal,
+) =>
+  request<TravelOccupancyResponse>(
+    `/travel/public/stays/${encodeURIComponent(code)}/occupancy?${new URLSearchParams({ ...range })}`,
+    { method: "GET", signal },
+  );
+
 export const saveBookingReview = (
   bookingId: string,
   body: SaveTravelReviewRequest,
@@ -189,6 +218,13 @@ export const setManagedStayStatus = (
     { method: "PATCH", ...json({ status }) },
   );
 
+/** Место на карте; null — отвязать объект от точки. */
+export const setManagedStayPlace = (stayId: string, placeId: string | null) =>
+  request<TravelStayCardDto>(
+    `/travel/manage/stays/${encodeURIComponent(stayId)}/place`,
+    { method: "PATCH", ...json({ placeId }) },
+  );
+
 export const addManagedRoom = (
   stayId: string,
   body: {
@@ -212,6 +248,17 @@ export const removeManagedRoom = (stayId: string, roomId: string) =>
 export const getStayBookings = (stayId: string, signal?: AbortSignal) =>
   request<TravelBookingsResponse>(
     `/travel/manage/stays/${encodeURIComponent(stayId)}/bookings`,
+    { method: "GET", signal },
+  );
+
+/** Шахматка хозяина: заявки по комнатам с номером, гостем и состоянием. */
+export const getManagedStayOccupancy = (
+  stayId: string,
+  range: OccupancyRange,
+  signal?: AbortSignal,
+) =>
+  request<TravelManagedOccupancyResponse>(
+    `/travel/manage/stays/${encodeURIComponent(stayId)}/occupancy?${new URLSearchParams({ ...range })}`,
     { method: "GET", signal },
   );
 

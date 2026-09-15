@@ -5,12 +5,15 @@ import { useEffect, useState } from "react";
 import {
   TRAVEL_BOOKING_STATUS_LABELS,
   type TravelBookingDto,
+  type TravelPlaceDto,
 } from "@vedamatch/shared";
 import {
   addManagedRoom,
   decideTravelBooking,
   getStayBookings,
+  getTravelPlaces,
   getTravelStay,
+  setManagedStayPlace,
   setManagedStayStatus,
 } from "@/lib/travel-api";
 import { formatPrice, nightsWord } from "./price";
@@ -44,6 +47,10 @@ export function StayBookingsView({ stayId }: { stayId: string }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [roomNumber, setRoomNumber] = useState("");
   const [roomBuilding, setRoomBuilding] = useState("");
+  const [places, setPlaces] = useState<TravelPlaceDto[]>([]);
+  const [placeId, setPlaceId] = useState("");
+  const [placeNote, setPlaceNote] = useState<string | null>(null);
+  const [placeSaving, setPlaceSaving] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -55,14 +62,35 @@ export function StayBookingsView({ stayId }: { stayId: string }) {
         setStayName(stay.name);
         setPublicCode(stay.publicCode);
         setStatus(stay.status);
+        setPlaceId(stay.placeId ?? "");
         setItems(bookings.items);
       })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
         setError(cause instanceof Error ? cause.message : "Не загрузилось");
       });
+    getTravelPlaces(controller.signal)
+      .then((res) => setPlaces(res.items))
+      .catch(() => undefined);
     return () => controller.abort();
   }, [stayId]);
+
+  /** Место сохраняется сразу: отдельной кнопки у одного выпадающего списка нет. */
+  async function changePlace(next: string) {
+    const previous = placeId;
+    setPlaceId(next);
+    setPlaceSaving(true);
+    setPlaceNote(null);
+    try {
+      await setManagedStayPlace(stayId, next || null);
+      setPlaceNote("Сохранено");
+    } catch (cause) {
+      setPlaceId(previous);
+      setPlaceNote(cause instanceof Error ? cause.message : "Не сохранилось");
+    } finally {
+      setPlaceSaving(false);
+    }
+  }
 
   async function decide(id: string, next: Decision) {
     const reason =
@@ -138,11 +166,43 @@ export function StayBookingsView({ stayId }: { stayId: string }) {
           >
             Касса
           </Link>
+          <Link
+            href={`/travel/manage/${stayId}/calendar`}
+            className="rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1"
+          >
+            Календарь
+          </Link>
           {/* QR ведёт на страницу, которая открывается только у опубликованного
               объекта: до публикации код на стойке показал бы «не найдено». */}
           {status === "published" && publicCode ? (
             <StayQrDialog code={publicCode} name={stayName} />
           ) : null}
+        </div>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-xs text-text-2">
+            Место на карте
+            <select
+              className={fieldClass}
+              value={placeId}
+              disabled={placeSaving}
+              onChange={(event) => void changePlace(event.target.value)}
+            >
+              <option value="">Не на карте</option>
+              {/* Текущая точка видна и до загрузки списка — иначе select на миг
+                  показал бы «Не на карте» у привязанного объекта. */}
+              {placeId && !places.some((place) => place.id === placeId) ? (
+                <option value={placeId}>Текущее место</option>
+              ) : null}
+              {places.map((place) => (
+                <option key={place.id} value={place.id}>
+                  {place.name}, {place.country}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p role="status" className="pb-2 text-sm text-text-2">
+            {placeSaving ? "Сохраняем…" : placeNote}
+          </p>
         </div>
       </header>
 
