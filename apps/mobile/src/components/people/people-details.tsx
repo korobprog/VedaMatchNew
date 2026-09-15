@@ -18,7 +18,11 @@ const MESSENGER_LABELS: Record<keyof ProfileMessengers, string> = {
 
 const SOCIAL_LABELS: Record<keyof ProfileSocialLinks, string> = {
   instagram: 'Instagram',
-  telegram: 'Telegram',
+  // Не просто «Telegram»: у мессенджера та же подпись, а после дедупликации
+  // по значению здесь остаётся только канал/публичная ссылка, не личный
+  // контакт — разные вещи, и визуально это не должно читаться как дубль
+  // (раунд оценки 005, дефект 4).
+  telegram: 'Telegram-канал',
   x: 'X',
   facebook: 'Facebook',
   linkedin: 'LinkedIn',
@@ -28,12 +32,19 @@ const SOCIAL_LABELS: Record<keyof ProfileSocialLinks, string> = {
   website: 'Сайт',
 };
 
-function entries<T extends object>(labels: Record<keyof T & string, string>, values: T | null | undefined): [string, string][] {
-  const result: [string, string][] = [];
+interface ContactRow {
+  /** Уникален по группе+полю — иначе «Telegram» в мессенджерах и в соцсетях дают одинаковый `key` (раунд оценки 005, дефект 4). */
+  id: string;
+  label: string;
+  value: string;
+}
+
+function entries<T extends object>(group: 'messenger' | 'social', labels: Record<keyof T & string, string>, values: T | null | undefined): ContactRow[] {
+  const result: ContactRow[] = [];
   for (const [key, label] of Object.entries(labels) as [keyof T & string, string][]) {
     const value = values?.[key];
     const text = typeof value === 'string' ? value.trim() : '';
-    if (text) result.push([label, text]);
+    if (text) result.push({ id: `${group}:${key}`, label, value: text });
   }
   return result;
 }
@@ -46,7 +57,12 @@ function entries<T extends object>(labels: Record<keyof T & string, string>, val
 export function PeopleDetails({ contacts }: { contacts: ContactsDetailsValue }) {
   const { colors } = useTheme();
   // Мессенджеры первыми — за ними обычно и обращаются.
-  const rows = [...entries(MESSENGER_LABELS, contacts.messengers), ...entries(SOCIAL_LABELS, contacts.socialLinks)];
+  const messengerRows = entries('messenger', MESSENGER_LABELS, contacts.messengers);
+  const socialRows = entries('social', SOCIAL_LABELS, contacts.socialLinks);
+  // Одна и та же ссылка не повторяется дважды, если человек указал её и
+  // мессенджером, и социальной сетью (например, один Telegram в обоих полях).
+  const seenValues = new Set(messengerRows.map((row) => row.value));
+  const rows = [...messengerRows, ...socialRows.filter((row) => !seenValues.has(row.value))];
 
   if (rows.length === 0) {
     return (
@@ -56,11 +72,11 @@ export function PeopleDetails({ contacts }: { contacts: ContactsDetailsValue }) 
 
   return (
     <View style={styles.root}>
-      {rows.map(([label, value]) => (
-        <View key={label} style={[styles.row, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
-          <Text style={[styles.label, { color: colors.text1 }]}>{label}</Text>
+      {rows.map((row) => (
+        <View key={row.id} style={[styles.row, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
+          <Text style={[styles.label, { color: colors.text1 }]}>{row.label}</Text>
           <Text selectable style={[styles.value, { color: colors.text0 }]}>
-            {value}
+            {row.value}
           </Text>
         </View>
       ))}

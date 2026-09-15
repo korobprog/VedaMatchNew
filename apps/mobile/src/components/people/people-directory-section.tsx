@@ -12,7 +12,9 @@ import {
   debounce,
   directoryEmptyMessage,
   isCurrentSearchGeneration,
+  nextSearchBusy,
   nextSearchGeneration,
+  type PeopleSearchLoadMode,
 } from '@/lib/people/people-search-state';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
@@ -23,8 +25,6 @@ interface Props {
   peopleApi: PeopleApi;
   onOpenPerson(userId: string): void;
 }
-
-type LoadMode = 'initial' | 'search' | 'refresh' | 'more';
 
 const keyOf = (card: ContactsCardDto) => card.userId;
 
@@ -50,14 +50,20 @@ export function PeopleDirectorySection({ peopleApi, onOpenPerson }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // Индикатор поиска в поле — отдельный от `error`/`items` флаг: он должен
+  // включаться на любое изменение текста и гаснуть по факту завершения
+  // самого свежего поиска, успехом или ошибкой одинаково (раунд оценки 005,
+  // дефект 1; чистое правило — `nextSearchBusy` в `people-search-state.ts`).
+  const [searching, setSearching] = useState(false);
   const generation = useRef(0);
 
   const load = useCallback(
-    async (q: string, targetPage: number, mode: LoadMode) => {
+    async (q: string, targetPage: number, mode: PeopleSearchLoadMode) => {
       // Поколение растёт только у запросов, меняющих сам поиск — подгрузка
       // страницы («more») продолжает то поколение, на котором она стартовала.
       const gen = mode === 'more' ? generation.current : (generation.current = nextSearchGeneration(generation.current));
       if (mode === 'more') setLoadingMore(true);
+      else setSearching((current) => nextSearchBusy(current, { type: 'input-changed' }));
       try {
         const response = await peopleApi.search({ q, page: targetPage, pageSize: PEOPLE_SEARCH_PAGE_SIZE });
         if (isCurrentSearchGeneration(gen, generation.current)) {
@@ -73,6 +79,7 @@ export function PeopleDirectorySection({ peopleApi, onOpenPerson }: Props) {
         }
       } finally {
         if (mode === 'more') setLoadingMore(false);
+        else setSearching((current) => nextSearchBusy(current, { type: 'settled', generation: gen, currentGeneration: generation.current, mode }));
         setRefreshing(false);
       }
     },
@@ -90,6 +97,7 @@ export function PeopleDirectorySection({ peopleApi, onOpenPerson }: Props) {
   const onChangeQuery = useCallback(
     (value: string) => {
       setQuery(value);
+      setSearching((current) => nextSearchBusy(current, { type: 'input-changed' }));
       debouncedSearch(value);
     },
     [debouncedSearch],
@@ -124,11 +132,6 @@ export function PeopleDirectorySection({ peopleApi, onOpenPerson }: Props) {
   const retry = useCallback(() => void load(query, 1, items ? 'refresh' : 'initial'), [load, query, items]);
 
   const renderItem = useCallback<ListRenderItem<ContactsCardDto>>(({ item }) => <PersonCardRow card={item} onPress={onOpenPerson} />, [onOpenPerson]);
-
-  // Текст в поле уже разошёлся с применённым запросом — идёт (или ждёт
-  // debounce) новый поиск. Пока это так, не показываем «Ничего не нашлось»
-  // по ещё не устаревшей выдаче (раунд оценки 004, дефект 9).
-  const searching = query.trim() !== appliedQuery.trim();
 
   return (
     <View style={styles.root}>
@@ -166,7 +169,10 @@ export function PeopleDirectorySection({ peopleApi, onOpenPerson }: Props) {
           <RetryButton onPress={retry} />
         </View>
       ) : !items ? (
-        <ChatListSkeleton />
+        // Родитель (`(tabs)/people.tsx`) уже даёт горизонтальный отступ 20 —
+        // свой внутренний паддинг скелетона сдвигал бы строки правее строк
+        // настоящего контента (раунд оценки 005, дефект 5).
+        <ChatListSkeleton inset={false} />
       ) : (
         <FlatList
           data={items}

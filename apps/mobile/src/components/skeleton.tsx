@@ -15,11 +15,18 @@ function Block({ width, height, round }: { width: DimensionValue; height: number
 
 const ROW_WIDTHS: DimensionValue[] = ['62%', '48%', '70%', '55%', '40%', '66%', '52%'];
 
-export function ChatListSkeleton() {
+/**
+ * `inset` — свой горизонтальный отступ 16, как на вкладке «Чаты» и в
+ * запросах на переписку, где список ничем больше не отделён от края экрана.
+ * Экраны, где отступ уже даёт родитель (вкладка «Люди» — 20 через `.body`),
+ * должны передавать `inset={false}`, иначе строки скелетона съезжают правее
+ * строк настоящего контента (раунд оценки 005, дефект 5).
+ */
+export function ChatListSkeleton({ inset = true }: { inset?: boolean } = {}) {
   return (
     <View accessible accessibilityLabel="Загружаем беседы" accessibilityRole="progressbar">
       {ROW_WIDTHS.map((width, index) => (
-        <View key={index} style={styles.row}>
+        <View key={index} style={[styles.row, !inset && styles.rowNoInset]}>
           <Block width={52} height={52} round={16} />
           <View style={styles.rowBody}>
             <Block width={width} height={14} />
@@ -68,10 +75,33 @@ export function PersonCardSkeleton() {
   );
 }
 
+/** Строка «Запросов»: карточка выше и с местом под кнопки — не строка чата. */
+export function RequestCardSkeleton() {
+  return (
+    <View accessible accessibilityLabel="Загружаем запросы" accessibilityRole="progressbar" style={styles.requestList}>
+      {[0, 1, 2].map((key) => (
+        <View key={key} style={styles.requestCard}>
+          <View style={styles.personHeader}>
+            <Block width={44} height={44} round={14} />
+            <View style={styles.rowBody}>
+              <Block width="55%" height={14} />
+              <Block width="35%" height={12} />
+            </View>
+          </View>
+          <Block width="100%" height={44} round={radius.sm} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, minHeight: 76 },
+  rowNoInset: { paddingHorizontal: 0 },
   rowBody: { flex: 1, gap: 8 },
   messages: { flex: 1, justifyContent: 'flex-end', gap: 8, paddingHorizontal: 12, paddingVertical: 12 },
   person: { padding: 20, gap: 20 },
   personHeader: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  requestList: { gap: 10 },
+  requestCard: { borderRadius: radius.md, padding: 14, gap: 14 },
 });

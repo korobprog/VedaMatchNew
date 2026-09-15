@@ -2,7 +2,7 @@ import type { ContactsRequestDto, ContactsRequestsState } from '@vedamatch/share
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { ChatListSkeleton } from '@/components/skeleton';
+import { RequestCardSkeleton } from '@/components/skeleton';
 import { RetryButton } from '@/components/retry-button';
 import type { ChatApi } from '@/lib/chat/chat-api';
 import { confirmTap } from '@/lib/feedback';
@@ -51,7 +51,11 @@ export function PeopleRequestsSection({ peopleApi, chatApi, active }: Props) {
       if (version.current !== seq) return;
       setLoadError(e instanceof Error ? e.message : 'Не удалось загрузить запросы');
     } finally {
-      if (version.current === seq) setRefreshing(false);
+      // Безусловно: если пока этот `GET` летел, прошла мутация (`version`
+      // сдвинулся), его данные отбрасываются выше — но крутилку
+      // pull-to-refresh снять обязаны в любом случае, иначе она виснет
+      // навсегда (раунд оценки 005, дефект 2).
+      setRefreshing(false);
     }
   }, [peopleApi]);
 
@@ -144,7 +148,7 @@ export function PeopleRequestsSection({ peopleApi, chatApi, active }: Props) {
   }
 
   if (!state) {
-    return <ChatListSkeleton />;
+    return <RequestCardSkeleton />;
   }
 
   return (

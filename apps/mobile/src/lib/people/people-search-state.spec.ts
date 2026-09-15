@@ -6,6 +6,7 @@ import {
   debounce,
   directoryEmptyMessage,
   isCurrentSearchGeneration,
+  nextSearchBusy,
   nextSearchGeneration,
 } from './people-search-state';
 
@@ -90,6 +91,30 @@ describe('nextSearchGeneration / isCurrentSearchGeneration', () => {
     expect(isCurrentSearchGeneration(moreGeneration, generation)).toBe(true);
     // Затем приходит ответ поиска — тоже актуален, ничего не «отменяет».
     expect(isCurrentSearchGeneration(searchGeneration, generation)).toBe(true);
+  });
+});
+
+describe('nextSearchBusy', () => {
+  it('изменение текста поля всегда включает индикатор', () => {
+    expect(nextSearchBusy(false, { type: 'input-changed' })).toBe(true);
+    expect(nextSearchBusy(true, { type: 'input-changed' })).toBe(true);
+  });
+
+  it('ошибка поиска снимает индикатор так же, как успех (раунд 005, дефект 1)', () => {
+    // Раньше индикатор считался по query !== appliedQuery, и appliedQuery не
+    // обновлялся на ошибке — крутилка держалась вечно. `settled` не различает
+    // исход, поэтому и успешный, и ошибочный ответ гасят её одинаково.
+    expect(nextSearchBusy(true, { type: 'settled', generation: 1, currentGeneration: 1, mode: 'search' })).toBe(false);
+    expect(nextSearchBusy(true, { type: 'settled', generation: 1, currentGeneration: 1, mode: 'refresh' })).toBe(false);
+  });
+
+  it('подгрузка страницы не трогает индикатор поиска', () => {
+    expect(nextSearchBusy(true, { type: 'settled', generation: 1, currentGeneration: 1, mode: 'more' })).toBe(true);
+    expect(nextSearchBusy(false, { type: 'settled', generation: 1, currentGeneration: 1, mode: 'more' })).toBe(false);
+  });
+
+  it('устаревший (не текущего поколения) ответ индикатор не гасит', () => {
+    expect(nextSearchBusy(true, { type: 'settled', generation: 1, currentGeneration: 2, mode: 'search' })).toBe(true);
   });
 });
 

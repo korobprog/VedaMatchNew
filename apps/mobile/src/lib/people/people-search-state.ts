@@ -96,6 +96,32 @@ export function appendNextPage(
   return [...current, ...next.filter((item) => !known.has(item.userId))];
 }
 
+/** Режим запроса поиска: `more` — подгрузка страницы, остальные меняют сам поиск. */
+export type PeopleSearchLoadMode = 'initial' | 'search' | 'refresh' | 'more';
+
+export type SearchLifecycleEvent =
+  | { type: 'input-changed' }
+  | { type: 'settled'; generation: number; currentGeneration: number; mode: PeopleSearchLoadMode };
+
+/**
+ * Индикатор поиска в поле: включается при любом изменении текста
+ * (набор буквы, «✕», обновление) и гаснет, когда самый свежий поисковый
+ * запрос (не подгрузка страницы) settled — успехом ИЛИ ошибкой одинаково.
+ *
+ * Раньше индикатор считался по расхождению текста поля и последнего
+ * УСПЕШНО применённого запроса (`query !== appliedQuery`). После ошибки
+ * поиска (сеть, троттлинг) `appliedQuery` не обновлялся, расхождение
+ * никогда не исчезало сама, и крутилка вертелась вечно, а кнопка «✕»
+ * пропадала (раунд оценки 005, дефект 1). `settled` наступает в `finally`
+ * запроса независимо от исхода, поэтому этот баг не может повториться.
+ */
+export function nextSearchBusy(current: boolean, event: SearchLifecycleEvent): boolean {
+  if (event.type === 'input-changed') return true;
+  if (event.mode === 'more') return current;
+  if (!isCurrentSearchGeneration(event.generation, event.currentGeneration)) return current;
+  return false;
+}
+
 /** Текст пустой выдачи: разный для «ничего не нашлось» и «пока пусто». */
 export function directoryEmptyMessage(query: string): string {
   return query.trim()
