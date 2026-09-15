@@ -1,6 +1,6 @@
 import { StyleSheet, View, type DimensionValue } from 'react-native';
 import { useTheme } from '@/theme/theme';
-import { radius } from '@/theme/tokens';
+import { hitTarget, radius } from '@/theme/tokens';
 
 /**
  * Скелетоны первой загрузки: форма будущего экрана вместо крутилки, чтобы
@@ -95,6 +95,51 @@ export function RequestCardSkeleton() {
   );
 }
 
+/**
+ * Строка общины (`components/communities/community-badge-row.tsx`): аватар
+ * 48dp, без подложки в отличие от строки беседы — та же форма, что у
+ * настоящей строки, без своего горизонтального отступа (родитель — вкладка
+ * «Общины» — уже даёт 20, см. дефект 5 раунда оценки 005 про несовпадение
+ * скелетона со строками).
+ */
+export function CommunityListSkeleton() {
+  return (
+    <View accessible accessibilityLabel="Загружаем общины" accessibilityRole="progressbar" style={styles.communityList}>
+      {ROW_WIDTHS.slice(0, 3).map((width, index) => (
+        <View key={index} style={styles.communityRow}>
+          <Block width={48} height={48} round={14} />
+          <View style={styles.rowBody}>
+            <Block width={width} height={14} />
+            <Block width="50%" height={12} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Строка каталога бесед общины (`components/chat/discover-item-row.tsx`):
+ * аватар, две строки текста и место под кнопку «Открыть»/«Вступить» справа —
+ * иначе скелетон предполагал бы строку без действия, а в контенте оно есть.
+ */
+export function DiscoverListSkeleton() {
+  return (
+    <View accessible accessibilityLabel="Загружаем беседы общины" accessibilityRole="progressbar" style={styles.communityList}>
+      {ROW_WIDTHS.slice(0, 4).map((width, index) => (
+        <View key={index} style={styles.discoverRow}>
+          <Block width={48} height={48} round={14} />
+          <View style={styles.rowBody}>
+            <Block width={width} height={14} />
+            <Block width="40%" height={12} />
+          </View>
+          <Block width={92} height={hitTarget} round={radius.sm} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, minHeight: 76 },
   rowNoInset: { paddingHorizontal: 0 },
@@ -104,4 +149,7 @@ const styles = StyleSheet.create({
   personHeader: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   requestList: { gap: 10 },
   requestCard: { borderRadius: radius.md, padding: 14, gap: 14 },
+  communityList: { gap: 4 },
+  communityRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, minHeight: 64 },
+  discoverRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 68 },
 });
