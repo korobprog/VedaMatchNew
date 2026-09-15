@@ -97,6 +97,9 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       VAPID_SUBJECT: ${VAPID_SUBJECT}
+      # Пуши в приложение VedaMatch через FCM: JSON сервисного аккаунта одной
+      # строкой в base64. Без него пуши в приложение молча выключены.
+      FIREBASE_SERVICE_ACCOUNT: ${FIREBASE_SERVICE_ACCOUNT:-}
       # TURN для звонков в «Общении» (deploy/coturn, docs/chat-calls-plan.md).
       # Без хоста и секрета /chat/calls/ice-servers отдаёт только STUN.
       TURN_HOST: ${TURN_HOST:-}
