@@ -16,6 +16,7 @@ import { createAuthApi, type AppTokens } from './auth-api';
 import { msUntilRefresh } from './jwt-expiry';
 import { buildLoginUrl, parseAuthRedirect, APP_AUTH_REDIRECT, type LoginProvider } from './login-flow';
 import { createPkcePair } from './pkce';
+import { singleFlight } from './single-flight';
 import { clearTokens, readTokens, writeTokens, type TokenPair } from './token-store';
 import { unregisterDevice } from '@/lib/push/push-api';
 
