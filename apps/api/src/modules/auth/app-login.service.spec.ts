@@ -193,21 +193,37 @@ describe('AuthService: ошибки входа из приложения', () =>
   type WithAppErrors = {
     withAppErrors: (
       app: { redirect: string; challenge: string } | null,
-      res: { redirect: jest.Mock },
+      res: unknown,
       run: () => Promise<void>,
     ) => Promise<void>;
   };
   const app = { redirect: 'vedamatch://auth', challenge: 'c' };
+  const makeRes = () => {
+    const res = {
+      redirect: jest.fn(),
+      setHeader: jest.fn(),
+      send: jest.fn(),
+      type: jest.fn(),
+    };
+    res.type.mockReturnValue(res);
+    return res;
+  };
 
-  it('понятный отказ уезжает в приложение текстом', async () => {
+  it('понятный отказ уезжает в приложение текстом через страницу возврата', async () => {
     const { service } = makeService({});
-    const res = { redirect: jest.fn() };
+    const res = makeRes();
     await (service as unknown as WithAppErrors).withAppErrors(app, res, () =>
       Promise.reject(
         new ForbiddenException('Регистрация новых участников сейчас закрыта'),
       ),
     );
-    const url = new URL(res.redirect.mock.calls[0][0] as string);
+    // Редирект с колбэка Chrome может молча отбросить, страница с кнопкой — нет.
+    expect(res.redirect).not.toHaveBeenCalled();
+    expect(res.type).toHaveBeenCalledWith('html');
+    expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
+    const [[html]] = res.send.mock.calls as [string][];
+    const href = /href="([^"]+)"/.exec(html)?.[1].replace(/&amp;/g, '&');
+    const url = new URL(href as string);
     expect(url.protocol).toBe('vedamatch:');
     expect(url.searchParams.get('error')).toBe(
       'Регистрация новых участников сейчас закрыта',
@@ -216,7 +232,7 @@ describe('AuthService: ошибки входа из приложения', () =>
 
   it('вход с сайта и сбои сервера бросаются как раньше', async () => {
     const { service } = makeService({});
-    const res = { redirect: jest.fn() };
+    const res = makeRes();
     const subject = service as unknown as WithAppErrors;
     await expect(
       subject.withAppErrors(null, res, () =>
