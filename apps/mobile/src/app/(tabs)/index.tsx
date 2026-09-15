@@ -1,5 +1,5 @@
 import type { ChatConversationSummary } from '@vedamatch/shared';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View, type ListRenderItem } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,9 +41,13 @@ export default function ChatsScreen() {
     }
   }, [chatApi]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // При каждом возврате на вкладку: счётчик запросов мог измениться на экране
+  // запросов, а поток событий о нём не сообщает.
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
 
   useEffect(() => {
     const myId = user?.id ?? '';

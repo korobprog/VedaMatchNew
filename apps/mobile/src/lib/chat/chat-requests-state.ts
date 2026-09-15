@@ -24,3 +24,14 @@ export function requestPreview(request: Pick<ChatRequestSummary, 'message'>): st
 export function startsHidden(request: Pick<ChatRequestSummary, 'lowTrust'>): boolean {
   return request.lowTrust;
 }
+
+/** Какое действие идёт по карточке: крутилка только на нажатой кнопке. */
+export type RequestAction = 'accept' | 'decline';
+
+/**
+ * Свежий список с сервера без уже разобранных здесь запросов: ответ мог уйти
+ * раньше, чем сервер принял «Отклонить», и вернул бы карточку обратно.
+ */
+export function withoutHandled(requests: ChatRequestSummary[], handled: ReadonlySet<string>): ChatRequestSummary[] {
+  return handled.size === 0 ? requests : requests.filter((request) => !handled.has(request.conversation.id));
+}

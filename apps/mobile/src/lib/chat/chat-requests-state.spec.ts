@@ -1,5 +1,5 @@
 import type { ChatRequestSummary } from '@vedamatch/shared';
-import { requestPreview, startsHidden, withoutRequest } from './chat-requests-state';
+import { requestPreview, startsHidden, withoutHandled, withoutRequest } from './chat-requests-state';
 
 function request(id: string, overrides: Partial<ChatRequestSummary> = {}): ChatRequestSummary {
   return {
@@ -39,5 +39,17 @@ describe('startsHidden', () => {
   it('свёрнут только запрос с низким доверием', () => {
     expect(startsHidden(request('a', { lowTrust: true }))).toBe(true);
     expect(startsHidden(request('a'))).toBe(false);
+  });
+});
+
+describe('withoutHandled', () => {
+  it('не возвращает разобранные карточки из запоздавшего ответа', () => {
+    const list = [request('a'), request('b')];
+    expect(withoutHandled(list, new Set(['a'])).map((r) => r.conversation.id)).toEqual(['b']);
+  });
+
+  it('без разобранных отдаёт тот же массив', () => {
+    const list = [request('a')];
+    expect(withoutHandled(list, new Set())).toBe(list);
   });
 });

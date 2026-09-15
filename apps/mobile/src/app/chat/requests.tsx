@@ -1,13 +1,13 @@
 import type { ChatRequestSummary } from '@vedamatch/shared';
 import { Stack, router } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View, type ListRenderItem } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RequestCard } from '@/components/chat/request-card';
 import { ChatListSkeleton } from '@/components/skeleton';
 import { useSession } from '@/lib/auth/session';
 import { createChatApi } from '@/lib/chat/chat-api';
-import { withoutRequest } from '@/lib/chat/chat-requests-state';
+import { withoutHandled, withoutRequest, type RequestAction } from '@/lib/chat/chat-requests-state';
 import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
@@ -28,13 +28,16 @@ export default function ChatRequestsScreen() {
   const [requests, setRequests] = useState<ChatRequestSummary[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  // Занятость по каждой карточке: действия по двум карточкам не сбрасывают
+  // друг другу крутилку.
+  const [busy, setBusy] = useState<Record<string, RequestAction>>({});
+  const handled = useRef(new Set<string>());
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const state = await chatApi.requests();
-      setRequests(state.requests);
+      setRequests(withoutHandled(state.requests, handled.current));
       setLoadError(null);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Не удалось загрузить запросы');
@@ -55,19 +58,22 @@ export default function ChatRequestsScreen() {
     async (request: ChatRequestSummary) => {
       const id = request.conversation.id;
       confirmTap();
-      setBusyId(id);
+      setBusy((current) => ({ ...current, [id]: 'accept' }));
       setActionError(null);
       try {
         await chatApi.accept(id);
+        handled.current.add(id);
         setRequests((current) => (current ? withoutRequest(current, id) : current));
-        router.replace({ pathname: '/chat/[id]', params: { id } });
+        // Вперёд, а не заменой: «назад» из переписки вернёт к остальным запросам.
+        router.push({ pathname: '/chat/[id]', params: { id } });
       } catch (e) {
         // Запрос мог быть уже разобран в другом месте: повтор не поможет,
         // карточку убираем, а не оставляем сломанной.
         setActionError(e instanceof Error ? e.message : 'Не получилось принять запрос');
+        handled.current.add(id);
         setRequests((current) => (current ? withoutRequest(current, id) : current));
       } finally {
-        setBusyId(null);
+        setBusy(({ [id]: _done, ...rest }) => rest);
       }
     },
     [chatApi],
@@ -77,15 +83,16 @@ export default function ChatRequestsScreen() {
     async (request: ChatRequestSummary) => {
       const id = request.conversation.id;
       confirmTap();
-      setBusyId(id);
+      setBusy((current) => ({ ...current, [id]: 'decline' }));
       setActionError(null);
       try {
         await chatApi.decline(id);
+        handled.current.add(id);
         setRequests((current) => (current ? withoutRequest(current, id) : current));
       } catch (e) {
         setActionError(e instanceof Error ? e.message : 'Не получилось отклонить запрос');
       } finally {
-        setBusyId(null);
+        setBusy(({ [id]: _done, ...rest }) => rest);
       }
     },
     [chatApi],
@@ -93,9 +100,9 @@ export default function ChatRequestsScreen() {
 
   const renderItem = useCallback<ListRenderItem<ChatRequestSummary>>(
     ({ item }) => (
-      <RequestCard request={item} busy={busyId === item.conversation.id} onAccept={accept} onDecline={decline} />
+      <RequestCard request={item} busyAction={busy[item.conversation.id] ?? null} onAccept={accept} onDecline={decline} />
     ),
-    [busyId, accept, decline],
+    [busy, accept, decline],
   );
 
   const retryButton = (

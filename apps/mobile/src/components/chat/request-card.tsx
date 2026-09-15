@@ -2,7 +2,7 @@ import type { ChatRequestSummary } from '@vedamatch/shared';
 import { memo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatChatStamp } from '@/lib/chat/chat-format';
-import { requestPreview, startsHidden } from '@/lib/chat/chat-requests-state';
+import { requestPreview, startsHidden, type RequestAction } from '@/lib/chat/chat-requests-state';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
@@ -10,15 +10,16 @@ import { ChatAvatar } from './chat-avatar';
 
 interface Props {
   request: ChatRequestSummary;
-  /** Действие по этой карточке в процессе: обе кнопки заняты. */
-  busy: boolean;
+  /** Действие по этой карточке в процессе: обе кнопки заняты, крутится нажатая. */
+  busyAction: RequestAction | null;
   onAccept(request: ChatRequestSummary): void;
   onDecline(request: ChatRequestSummary): void;
 }
 
 /** Карточка запроса на переписку, как на сайте (`chat-requests-view.tsx`). */
-function RequestCardImpl({ request, busy, onAccept, onDecline }: Props) {
+function RequestCardImpl({ request, busyAction, onAccept, onDecline }: Props) {
   const { colors } = useTheme();
+  const busy = busyAction !== null;
   const [revealed, setRevealed] = useState(!startsHidden(request));
   const preview = requestPreview(request);
 
@@ -75,7 +76,7 @@ function RequestCardImpl({ request, busy, onAccept, onDecline }: Props) {
             busy ? styles.busy : pressedStyle(pressed),
           ]}
         >
-          {busy ? <ActivityIndicator color={colors.onMint} /> : <Text style={[styles.primaryText, { color: colors.onMint }]}>Принять</Text>}
+          {busyAction === 'accept' ? <ActivityIndicator color={colors.onMint} /> : <Text style={[styles.primaryText, { color: colors.onMint }]}>Принять</Text>}
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -91,7 +92,11 @@ function RequestCardImpl({ request, busy, onAccept, onDecline }: Props) {
             busy ? styles.busy : pressedStyle(pressed),
           ]}
         >
-          <Text style={[styles.secondaryText, { color: colors.text0 }]}>Отклонить</Text>
+          {busyAction === 'decline' ? (
+            <ActivityIndicator color={colors.text0} />
+          ) : (
+            <Text style={[styles.secondaryText, { color: colors.text0 }]}>Отклонить</Text>
+          )}
         </Pressable>
       </View>
     </View>
