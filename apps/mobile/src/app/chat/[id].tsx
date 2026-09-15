@@ -216,7 +216,9 @@ export default function ChatRoomScreen() {
   // встанут в это же меню.
   const onMessageLongPress = useCallback((message: ChatMessageDto) => {
     longPressTap();
-    Alert.alert('Сообщение', undefined, [
+    // Начало текста под заголовком: видно, что именно скопируется.
+    const preview = message.body.length > 140 ? `${message.body.slice(0, 140).trimEnd()}…` : message.body;
+    Alert.alert('Сообщение', preview, [
       { text: 'Копировать текст', onPress: () => void Clipboard.setStringAsync(message.body) },
       { text: 'Отмена', style: 'cancel' },
     ]);
