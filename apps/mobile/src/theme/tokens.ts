@@ -28,6 +28,14 @@ export interface Palette {
   mint: string;
   /** Текст поверх `mint`: 9,3:1 в обеих темах. */
   onMint: string;
+  /**
+   * Затемнение подложки под модальными листами/диалогами — как `bg-black/60`
+   * на сайте (`donate-sheet.tsx`, `task-dialog.tsx` и другие модалки). На
+   * сайте это не тема-зависимый CSS-токен, а буквальный класс Tailwind,
+   * поэтому здесь заведён отдельно, но с тем же значением в обеих темах —
+   * затемнение одинаково тёмное и на светлом, и на тёмном фоне.
+   */
+  scrim: string;
 }
 
 export const light: Palette = {
@@ -49,6 +57,7 @@ export const light: Palette = {
   onAccent: '#FFFFFF',
   mint: '#33CCCC',
   onMint: '#14212C',
+  scrim: 'rgba(0, 0, 0, 0.6)',
 };
 
 export const dark: Palette = {
@@ -70,6 +79,7 @@ export const dark: Palette = {
   onAccent: '#180F2C',
   mint: '#33CCCC',
   onMint: '#14212C',
+  scrim: 'rgba(0, 0, 0, 0.6)',
 };
 
 /** Имена начертаний, под которыми шрифты регистрируются в `useFonts`. */

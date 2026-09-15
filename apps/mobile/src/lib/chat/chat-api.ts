@@ -3,7 +3,10 @@ import type {
   ChatListState,
   ChatConversationSummary,
   ChatMessageDto,
+  ChatReactionSummary,
   ChatRequestsState,
+  ChatUploadResult,
+  EditChatMessageRequest,
   SendChatMessageRequest,
 } from '@vedamatch/shared';
 import type { ApiClient } from '@/lib/api/client';
@@ -43,6 +46,21 @@ export function createChatApi(api: ApiClient) {
       api.request<ChatConversationSummary>(`/chat/conversations/${encodeURIComponent(conversationId)}/accept`, { method: 'POST' }),
     decline: (conversationId: string) =>
       api.request<{ ok: true }>(`/chat/conversations/${encodeURIComponent(conversationId)}/decline`, { method: 'POST' }),
+    /** Вложение: файл уезжает в S3 сразу при выборе, в сообщение попадает уже ссылкой. */
+    upload: (conversationId: string, form: FormData) =>
+      api.request<ChatUploadResult>(`/chat/conversations/${encodeURIComponent(conversationId)}/uploads`, {
+        method: 'POST',
+        body: form,
+      }),
+    edit: (messageId: string, body: EditChatMessageRequest) =>
+      api.request<ChatMessageDto>(`/chat/messages/${encodeURIComponent(messageId)}/edit`, { method: 'POST', body }),
+    remove: (messageId: string) =>
+      api.request<{ ok: true }>(`/chat/messages/${encodeURIComponent(messageId)}`, { method: 'DELETE' }),
+    setReaction: (messageId: string, emoji: string) =>
+      api.request<{ reactions: ChatReactionSummary[] }>(`/chat/messages/${encodeURIComponent(messageId)}/reaction`, {
+        method: 'POST',
+        body: { emoji },
+      }),
   };
 }
 
