@@ -1,5 +1,6 @@
 import type { ChatConversationDetail, ChatMessageDto } from '@vedamatch/shared';
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import {
@@ -54,6 +55,7 @@ export default function ChatRoomScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const headerHeight = useHeaderHeight();
   const { api, user } = useSession();
   const stream = useChatStream();
   const chatApi = useMemo(() => createChatApi(api), [api]);
@@ -291,10 +293,15 @@ export default function ChatRoomScreen() {
         }}
       />
 
-      {/* Поле ввода идёт за клавиатурой кадр в кадр. Высота клавиатуры на
-          Android уже включает системную панель, а у поля ввода свой отступ
-          под неё: offset убирает двойной зазор. */}
-      <KeyboardAvoidingView style={styles.root} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
+      {/* Поле ввода идёт за клавиатурой кадр в кадр. Положение этого блока
+          меряется без системной шапки над ним, поэтому её высота прибавляется.
+          Высота клавиатуры на Android уже включает системную панель, а у поля
+          ввода свой отступ под неё: он вычитается, чтобы не было зазора. */}
+      <KeyboardAvoidingView
+        style={styles.root}
+        behavior="padding"
+        keyboardVerticalOffset={headerHeight - insets.bottom}
+      >
         {!detail && error ? (
           <View style={styles.center}>
             <Text accessibilityRole="alert" style={[styles.info, { color: colors.text1 }]}>
