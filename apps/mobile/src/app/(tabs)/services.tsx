@@ -9,9 +9,10 @@ import { RetryButton } from '@/components/retry-button';
 import { ServiceGridSkeleton } from '@/components/skeleton';
 import { ServiceCard } from '@/components/services/service-card';
 import { appVariant } from '@/config/app-variant';
-import { FALLBACK_SERVICES, serviceUrl } from '@/config/services';
+import { serviceUrl } from '@/config/services';
 import { useSession } from '@/lib/auth/session';
 import { createServicesApi } from '@/lib/services/services-api';
+import { describeServicesError } from '@/lib/services/services-error';
 import { visibleServices } from '@/lib/services/services-list';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
@@ -19,13 +20,17 @@ import { fonts, hitTarget, radius } from '@/theme/tokens';
 
 /**
  * Вкладка «Сервисы» (VED-174): настоящий каталог с `GET /services`, а не
- * хардкод шести латинских названий, как было в `config/services.ts` до этой
- * задачи. Названия и описания — те же, что на сайте под тем же аккаунтом:
- * их правит администратор из админки, и переписывать их здесь текстом
- * второй раз означало бы разойтись с сайтом при следующей правке каталога.
- * «Общение» из списка убрано — его уже покрывает нативная вкладка «Чаты»
- * (правило сторов: список сервисов второстепенный, дублировать то, что уже
- * есть в приложении, нельзя).
+ * хардкод. Названия и описания — те же, что на сайте под тем же аккаунтом:
+ * их правит администратор из админки (проверено на проде: у `music`
+ * название «Медиатека», не «Музыка» из старого сида — переписывать текст
+ * второй раз в приложении нельзя именно поэтому). «Общение» из списка
+ * убрано — его уже покрывает нативная вкладка «Чаты».
+ *
+ * Горизонтальный отступ 20dp у `styles.body`/`styles.staticBody` — ровно
+ * один на состояние (скелетон/ошибка/список), сама шапка своего
+ * `paddingHorizontal` не заводит: раунд оценки 007 поймал шапку с двойным
+ * отступом (40dp) против карточек (20dp) именно из-за второго, лишнего
+ * отступа на самой шапке.
  */
 export default function ServicesScreen() {
   const { colors } = useTheme();
@@ -37,6 +42,7 @@ export default function ServicesScreen() {
   const [data, setData] = useState<ServiceCardDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   // Несколько триггеров загрузки (фокус вкладки, «Повторить», pull-to-refresh)
   // могут перекрыться по времени — засчитывается только самый свежий запрос.
   const request = useRef(0);
@@ -51,10 +57,13 @@ export default function ServicesScreen() {
       }
     } catch (e) {
       if (request.current === id) {
-        setError(e instanceof Error ? e.message : 'Не удалось загрузить сервисы');
+        setError(describeServicesError(e));
       }
     } finally {
-      if (request.current === id) setRefreshing(false);
+      if (request.current === id) {
+        setRefreshing(false);
+        setRetrying(false);
+      }
     }
   }, [servicesApi]);
 
@@ -69,6 +78,11 @@ export default function ServicesScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
+    void load();
+  }, [load]);
+
+  const retry = useCallback(() => {
+    setRetrying(true);
     void load();
   }, [load]);
 
@@ -88,25 +102,37 @@ export default function ServicesScreen() {
     </View>
   );
 
-  // Первая загрузка ещё без ответа сети — скелетон вместо крутилки, форма
-  // совпадает с настоящей сеткой карточек.
-  if (!data && !error) {
+  // Ни одного успешного ответа не было, и первая попытка упала — обычное
+  // состояние «ошибка + Повторить», без резервного хардкода (раунд оценки
+  // 007, дефект 2: резерв быстро расходился с продом и не описан в спеке).
+  if (!data && error) {
     return (
       <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
-        {header}
-        <View style={styles.body}>
+        <View style={styles.staticBody}>
+          {header}
+          <View style={styles.center}>
+            <InlineError message={error} />
+            <RetryButton onPress={retry} busy={retrying} />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // Первая загрузка ещё без ответа сети — скелетон вместо крутилки, форма
+  // совпадает с настоящей сеткой карточек.
+  if (!data) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
+        <View style={styles.staticBody}>
+          {header}
           <ServiceGridSkeleton />
         </View>
       </View>
     );
   }
 
-  // Ни одного успешного ответа ещё не было (первый запуск офлайн, сервер
-  // недоступен) — небольшой резерв из `FALLBACK_SERVICES` вместо пустого
-  // экрана; «Повторить» тянет настоящий каталог, как только появится сеть, и
-  // экран больше не возвращается к резерву после первого успеха.
-  const usingFallback = !data;
-  const list = visibleServices(data ?? FALLBACK_SERVICES);
+  const list = visibleServices(data);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
@@ -118,10 +144,8 @@ export default function ServicesScreen() {
 
         {error ? (
           <View style={styles.errorBlock}>
-            <InlineError
-              message={usingFallback ? `${error}. Показан ограниченный список без сети.` : error}
-            />
-            <RetryButton onPress={() => void load()} />
+            <InlineError message={error} />
+            <RetryButton onPress={retry} busy={retrying} />
           </View>
         ) : null}
 
@@ -166,10 +190,17 @@ export default function ServicesScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingHorizontal: 20, gap: 6, marginBottom: 12 },
+  // Единственный горизонтальный отступ экрана — здесь, что для `ScrollView`
+  // (`contentContainerStyle`), что для статичного `View` в скелетоне и
+  // ошибке (`staticBody`). Шапка не заводит свой собственный
+  // `paddingHorizontal`, иначе он складывается с этим (раунд оценки 007,
+  // дефект 1).
   body: { paddingHorizontal: 20, gap: 12 },
+  staticBody: { flex: 1, paddingHorizontal: 20, gap: 12 },
+  header: { gap: 6, marginBottom: 4 },
   title: { fontFamily: fonts.displayBold, fontSize: 24 },
   subtitle: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingBottom: 48 },
   errorBlock: { gap: 8, marginBottom: 4 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   empty: {

@@ -1,4 +1,5 @@
 import { StyleSheet, View, type DimensionValue } from 'react-native';
+import { SERVICE_CARD_MIN_HEIGHT } from '@/components/services/service-card';
 import { useTheme } from '@/theme/theme';
 import { hitTarget, radius } from '@/theme/tokens';
 
@@ -150,7 +151,10 @@ export function ServiceGridSkeleton() {
   return (
     <View accessible accessibilityLabel="Загружаем сервисы" accessibilityRole="progressbar" style={styles.serviceGrid}>
       {[0, 1, 2, 3, 4, 5].map((key) => (
-        <Block key={key} width="47%" height={hitTarget * 2} round={radius.md} />
+        // Высота — общая константа с настоящей карточкой
+        // (`components/services/service-card.tsx`), а не своё число: раунд
+        // оценки 007 поймал разницу 88dp скелетона против 101dp карточки.
+        <Block key={key} width="47%" height={SERVICE_CARD_MIN_HEIGHT} round={radius.md} />
       ))}
     </View>
   );
