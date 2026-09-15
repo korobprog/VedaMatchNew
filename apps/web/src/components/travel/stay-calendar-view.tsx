@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   TRAVEL_BOOKING_STATUS_LABELS,
   type TravelBookingStatus,
@@ -103,6 +103,18 @@ export function StayCalendarView({ stayId }: { stayId: string }) {
 
   const current = loaded?.key === key ? loaded : null;
   const data = current?.data ?? null;
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // На телефоне в ширину влезает неделя, и таблица открывалась бы с 1-го
+  // числа — а хозяину нужны ближайшие дни. Прокручиваем так, чтобы сегодня
+  // стояло первым столбцом после закреплённой колонки комнат.
+  useEffect(() => {
+    const box = scrollRef.current;
+    const todayCell = box?.querySelector<HTMLElement>("[data-today]");
+    const roomCell = box?.querySelector<HTMLElement>("thead th");
+    if (!box || !todayCell) return;
+    box.scrollLeft = todayCell.offsetLeft - (roomCell?.offsetWidth ?? 0);
+  }, [data]);
   const days = monthDays(month);
   const monthEnd = shiftMonth(month, 1);
   const unassigned = (data?.unassigned ?? []).filter(
@@ -187,7 +199,10 @@ export function StayCalendarView({ stayId }: { stayId: string }) {
           Заведите комнаты на странице заявок — календарь строится по комнатам
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-glass-brd">
+        <div
+          ref={scrollRef}
+          className="overflow-x-auto rounded-2xl border border-glass-brd"
+        >
           <table className="min-w-max border-collapse text-xs">
             <caption className="sr-only">
               Занятость комнат, {monthTitle(month)}
@@ -209,6 +224,7 @@ export function StayCalendarView({ stayId }: { stayId: string }) {
                       scope="col"
                       abbr={dayTitle(day)}
                       aria-label={`${dayTitle(day)}${isToday ? ", сегодня" : ""}`}
+                      data-today={isToday ? "" : undefined}
                       className={`w-8 min-w-8 px-0 py-2 text-center font-mono font-normal ${
                         weekend ? "text-text-2" : "text-text-0"
                       } ${isToday ? "border-b-2 border-magenta" : ""}`}
@@ -229,7 +245,9 @@ export function StayCalendarView({ stayId }: { stayId: string }) {
                       className="sticky left-0 z-10 bg-bg-1 px-3 py-2 text-left font-normal whitespace-nowrap text-text-0"
                     >
                       {room.roomLabel}
-                      <span className="ml-1 text-text-2">· {room.capacity}</span>
+                      <span className="ml-1 text-text-2">
+                        · мест: {room.capacity}
+                      </span>
                     </th>
                     {days.map((day) => {
                       const booking = nights.get(day);
