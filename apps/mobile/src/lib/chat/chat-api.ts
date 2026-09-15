@@ -6,6 +6,7 @@ import type {
   ChatReactionSummary,
   ChatRequestsState,
   ChatUploadResult,
+  CreateChatConversationRequest,
   EditChatMessageRequest,
   SendChatMessageRequest,
 } from '@vedamatch/shared';
@@ -60,6 +61,16 @@ export function createChatApi(api: ApiClient) {
       api.request<{ reactions: ChatReactionSummary[] }>(`/chat/messages/${encodeURIComponent(messageId)}/reaction`, {
         method: 'POST',
         body: { emoji },
+      }),
+    /**
+     * Личный диалог с человеком из справочника «Люди»: идемпотентно — если
+     * беседа уже есть, сервер вернёт её же, а не заведёт вторую
+     * (`chat-conversations.service.ts:createDirect`).
+     */
+    createDirect: (userId: string) =>
+      api.request<ChatConversationSummary>('/chat/conversations', {
+        method: 'POST',
+        body: { kind: 'direct', userId } satisfies CreateChatConversationRequest,
       }),
   };
 }
