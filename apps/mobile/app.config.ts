@@ -21,6 +21,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     slug: 'vedamatch',
     version: '0.1.0',
     orientation: 'portrait',
+    // Иконка, слои adaptive-иконки, силуэт уведомлений и знак сплэша ниже —
+    // все перегенерируются одним скриптом из фирменных исходников веба
+    // (`apps/web/public/brand/mark*.png`): `pnpm --filter @vedamatch/mobile
+    // generate:brand-assets` (`scripts/generate-brand-assets.mjs`).
     icon: './assets/images/icon.png',
     scheme: 'vedamatch',
     userInterfaceStyle: 'automatic',
@@ -29,6 +33,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...(withFirebase ? { googleServicesFile } : {}),
       versionCode: 1,
       adaptiveIcon: {
+        // theme/tokens.ts: light.text0 — фон под фирменным знаком, одинаков в
+        // обеих темах интерфейса (это подложка самой иконки, а не
+        // темизируемый UI-фон). backgroundImage ниже перекрывает этот цвет
+        // (`@expo/prebuild-config` всегда предпочитает backgroundImage, если
+        // он задан), но оставляем backgroundColor как запасной путь.
         backgroundColor: '#180F2C',
         foregroundImage: './assets/images/android-icon-foreground.png',
         backgroundImage: './assets/images/android-icon-background.png',
@@ -51,14 +60,34 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       'expo-image',
       'expo-status-bar',
       'expo-web-browser',
-      ['expo-notifications', { color: '#D71A80', defaultChannel: 'messages' }],
+      [
+        'expo-notifications',
+        {
+          // theme/tokens.ts: light.magenta — заливка иконки в шторке.
+          color: '#D71A80',
+          defaultChannel: 'messages',
+          // Обязателен плоский белый силуэт на прозрачном фоне: Android
+          // рисует иконку статус-бара одним цветом по альфа-каналу, а любой
+          // не-белый пиксель источника превращается в сплошной прямоугольник
+          // (системное ограничение, не баг) — см. VED-173 в gan-harness/spec.md.
+          icon: './assets/images/notification-icon.png',
+        },
+      ],
       [
         'expo-splash-screen',
         {
           backgroundColor: '#FBF9FF',
-          dark: { backgroundColor: '#0A0614' },
+          dark: {
+            backgroundColor: '#0A0614',
+            // «M» в mark.png запечена тёмно-синим и тонет на тёмном фоне —
+            // как и на вебе (recolorMark в generate-icons.mjs), нужен
+            // отдельный файл с перекрашенной буквой, а не фильтр.
+            image: './assets/images/splash-icon-dark.png',
+          },
           image: './assets/images/splash-icon.png',
-          imageWidth: 76,
+          // Знак без подписи «VEDA MATCH» — места на неё при таком размере
+          // нет: имя приложения даёт системный сплэш стек.
+          imageWidth: 132,
         },
       ],
       // Тексты разрешений — только для iOS Info.plist (плагин их и добавляет);
