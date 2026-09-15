@@ -39,11 +39,41 @@ export function debounce<Args extends unknown[]>(fn: (...args: Args) => void, de
 }
 
 /**
- * Несколько запросов поиска могут лететь одновременно при быстром вводе:
- * ответ на устаревший запрос не должен перезаписать более новую выдачу.
+ * Поколение выдачи: увеличивается только у запросов, меняющих сам поиск
+ * (первая загрузка, новый ввод, обновление). Подгрузка следующей страницы
+ * («more») поколение не меняет, а лишь запоминает то, что было на момент
+ * её отправки.
+ *
+ * Раньше на все режимы был один общий счётчик — из-за этого более поздняя
+ * по времени, но менее приоритетная подгрузка страницы «отменяла» более
+ * ранний, но более важный ответ поиска (раунд оценки 004, дефект 3): ответ
+ * поиска считался устаревшим только потому, что подгрузка страницы успела
+ * запуститься позже. Поколение меняется только новым поиском, поэтому
+ * подгрузка старой страницы никогда не «отменяет» новый ввод, а сама
+ * корректно отбрасывается, если поиск успел обновить поколение раньше её
+ * ответа.
  */
-export function isStaleSearch(requestId: number, latestRequestId: number): boolean {
-  return requestId !== latestRequestId;
+export function nextSearchGeneration(currentGeneration: number): number {
+  return currentGeneration + 1;
+}
+
+/** Ответ применим, только если поколение поиска не сменилось с момента отправки запроса. */
+export function isCurrentSearchGeneration(requestGeneration: number, currentGeneration: number): boolean {
+  return requestGeneration === currentGeneration;
+}
+
+/**
+ * Подгружать следующую страницу можно только когда текст в поле уже совпал
+ * с применённым запросом (иначе список докрутки относится не к тому, что
+ * сейчас набрано) и нет ни другой подгрузки, ни ещё непройденных страниц.
+ */
+export function canLoadMore(state: {
+  query: string;
+  appliedQuery: string;
+  hasMore: boolean;
+  loadingMore: boolean;
+}): boolean {
+  return state.hasMore && !state.loadingMore && state.query.trim() === state.appliedQuery.trim();
 }
 
 /** Query-строка `GET /chat/people/search`: минимум параметров этой задачи. */

@@ -51,8 +51,27 @@ export function MessagesSkeleton() {
   );
 }
 
+/** Карточка человека (`app/people/[id].tsx`): аватар, имя, подпись, блок формы. */
+export function PersonCardSkeleton() {
+  return (
+    <View accessible accessibilityLabel="Загружаем карточку" accessibilityRole="progressbar" style={styles.person}>
+      <View style={styles.personHeader}>
+        <Block width={72} height={72} round={22} />
+        <View style={styles.rowBody}>
+          <Block width="60%" height={18} />
+          <Block width="80%" height={14} />
+          <Block width="45%" height={14} />
+        </View>
+      </View>
+      <Block width="100%" height={140} round={radius.md} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, minHeight: 76 },
   rowBody: { flex: 1, gap: 8 },
   messages: { flex: 1, justifyContent: 'flex-end', gap: 8, paddingHorizontal: 12, paddingVertical: 12 },
+  person: { padding: 20, gap: 20 },
+  personHeader: { flexDirection: 'row', alignItems: 'center', gap: 14 },
 });

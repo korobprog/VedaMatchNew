@@ -1,61 +1,91 @@
 import type { ContactsRequestDto, ContactsRequestsState } from '@vedamatch/shared';
-import { router } from 'expo-router';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ChatListSkeleton } from '@/components/skeleton';
+import { RetryButton } from '@/components/retry-button';
 import type { ChatApi } from '@/lib/chat/chat-api';
 import { confirmTap } from '@/lib/feedback';
 import type { PeopleApi } from '@/lib/people/people-api';
 import { showRemainingToday, type RequestAction } from '@/lib/people/people-requests-state';
-import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
-import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { fonts, radius } from '@/theme/tokens';
 import { RequestRow } from './request-row';
 
 interface Props {
   peopleApi: PeopleApi;
   chatApi: ChatApi;
+  /** Секция сейчас видна пользователю: сегмент «Запросы» выбран во вкладке. */
+  active: boolean;
 }
 
 /**
  * Запросы контакта: кто просит связи со мной и кого прошу я. Действия
  * обновляют список из ответа самого действия — сервер уже возвращает
- * пересчитанное состояние, повторный `GET /chat/people/requests` не нужен.
+ * пересчитанное состояние, повторный `GET /chat/people/requests` не нужен
+ * сразу после мутации, но список всё равно перечитывается при возврате на
+ * вкладку/сегмент, потому что отправка запроса с карточки человека меняет
+ * исходящие мимо этого экрана (раунд оценки 004, дефект 2).
  */
-export function PeopleRequestsSection({ peopleApi, chatApi }: Props) {
+export function PeopleRequestsSection({ peopleApi, chatApi, active }: Props) {
   const { colors } = useTheme();
   const [state, setState] = useState<ContactsRequestsState | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Record<string, RequestAction>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [refreshing, setRefreshing] = useState(false);
+  // Версия состояния: растёт и на каждый новый `GET`, и на каждую успешную
+  // мутацию. Ответ `GET`, пришедший позже, чем более свежая мутация, не
+  // применяется — иначе он перезаписал бы её результат старым снимком
+  // (раунд оценки 004, дефект 13).
+  const version = useRef(0);
 
   const load = useCallback(async () => {
+    const seq = (version.current += 1);
     try {
-      setState(await peopleApi.requests());
+      const next = await peopleApi.requests();
+      if (version.current !== seq) return;
+      setState(next);
       setLoadError(null);
     } catch (e) {
+      if (version.current !== seq) return;
       setLoadError(e instanceof Error ? e.message : 'Не удалось загрузить запросы');
+    } finally {
+      if (version.current === seq) setRefreshing(false);
     }
   }, [peopleApi]);
 
+  // Первая загрузка секции — независимо от того, активна она сейчас или скрыта:
+  // данные готовы заранее, до переключения на сегмент «Запросы».
   useEffect(() => {
     void load();
   }, [load]);
 
-  const onRefresh = useCallback(async () => {
+  // Перечитать при возврате на вкладку «Люди» (пуш карточки человека назад)
+  // и при переключении сегмента «Справочник» → «Запросы»: `useFocusEffect`
+  // срабатывает сразу, если экран уже в фокусе и зависимость `active` только
+  // что стала `true`, и повторно — при каждом возврате фокуса, пока `active`.
+  useFocusEffect(
+    useCallback(() => {
+      if (active) void load();
+    }, [active, load]),
+  );
+
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
-    await load();
-    setRefreshing(false);
+    void load();
   }, [load]);
 
   const run = useCallback(async (requestId: string, action: RequestAction, task: () => Promise<ContactsRequestsState>) => {
     confirmTap();
     setBusy((current) => ({ ...current, [requestId]: action }));
-    setActionError(null);
+    setErrors(({ [requestId]: _drop, ...rest }) => rest);
     try {
-      setState(await task());
+      const next = await task();
+      version.current += 1;
+      setState(next);
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Не удалось выполнить действие');
+      setErrors((current) => ({ ...current, [requestId]: e instanceof Error ? e.message : 'Не удалось выполнить действие' }));
     } finally {
       setBusy(({ [requestId]: _done, ...rest }) => rest);
     }
@@ -70,13 +100,14 @@ export function PeopleRequestsSection({ peopleApi, chatApi }: Props) {
 
   const write = useCallback(
     async (request: ContactsRequestDto) => {
+      confirmTap();
       setBusy((current) => ({ ...current, [request.id]: 'write' }));
-      setActionError(null);
+      setErrors(({ [request.id]: _drop, ...rest }) => rest);
       try {
         const conversation = await chatApi.createDirect(request.user.userId);
         router.push({ pathname: '/chat/[id]', params: { id: conversation.id } });
       } catch (e) {
-        setActionError(e instanceof Error ? e.message : 'Не удалось открыть переписку');
+        setErrors((current) => ({ ...current, [request.id]: e instanceof Error ? e.message : 'Не удалось открыть переписку' }));
       } finally {
         setBusy(({ [request.id]: _done, ...rest }) => rest);
       }
@@ -85,6 +116,21 @@ export function PeopleRequestsSection({ peopleApi, chatApi }: Props) {
   );
 
   const retry = useCallback(() => void load(), [load]);
+
+  const renderRow = useCallback(
+    (request: ContactsRequestDto) => (
+      <RequestRow
+        key={request.id}
+        request={request}
+        busyAction={busy[request.id] ?? null}
+        error={errors[request.id] ?? null}
+        onRespond={respond}
+        onCancel={cancel}
+        onWrite={write}
+      />
+    ),
+    [busy, errors, respond, cancel, write],
+  );
 
   if (!state && loadError) {
     return (
@@ -98,13 +144,7 @@ export function PeopleRequestsSection({ peopleApi, chatApi }: Props) {
   }
 
   if (!state) {
-    return (
-      <View style={styles.skeleton} accessible accessibilityLabel="Загружаем запросы" accessibilityRole="progressbar">
-        {[0, 1, 2].map((key) => (
-          <View key={key} style={[styles.skeletonRow, { backgroundColor: colors.bg2 }]} />
-        ))}
-      </View>
-    );
+    return <ChatListSkeleton />;
   }
 
   return (
@@ -112,16 +152,6 @@ export function PeopleRequestsSection({ peopleApi, chatApi }: Props) {
       contentContainerStyle={styles.scroll}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.magenta]} />}
     >
-      {actionError ? (
-        <Text
-          accessibilityRole="alert"
-          accessibilityLiveRegion="polite"
-          style={[styles.banner, { color: colors.text0, borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}
-        >
-          {actionError}
-        </Text>
-      ) : null}
-
       {loadError ? (
         <View style={[styles.bannerRow, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
           <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.bannerText, { color: colors.text0 }]}>
@@ -138,15 +168,11 @@ export function PeopleRequestsSection({ peopleApi, chatApi }: Props) {
       ) : null}
 
       <Section title="Входящие" count={state.incoming.length} empty="Входящих запросов пока нет.">
-        {state.incoming.map((request) => (
-          <RequestRow key={request.id} request={request} busyAction={busy[request.id] ?? null} onRespond={respond} onCancel={cancel} onWrite={write} />
-        ))}
+        {state.incoming.map(renderRow)}
       </Section>
 
       <Section title="Исходящие" count={state.outgoing.length} empty="Вы пока никому не отправляли запрос контакта.">
-        {state.outgoing.map((request) => (
-          <RequestRow key={request.id} request={request} busyAction={busy[request.id] ?? null} onRespond={respond} onCancel={cancel} onWrite={write} />
-        ))}
+        {state.outgoing.map(renderRow)}
       </Section>
     </ScrollView>
   );
@@ -168,23 +194,8 @@ function Section({ title, count, empty, children }: { title: string; count: numb
   );
 }
 
-function RetryButton({ onPress }: { onPress(): void }) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      android_ripple={ripple(colors.glassBorder)}
-      style={({ pressed }) => [styles.retry, { borderColor: colors.glassBorder }, pressedStyle(pressed)]}
-    >
-      <Text style={[styles.retryText, { color: colors.text0 }]}>Повторить</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   scroll: { paddingBottom: 24, gap: 20 },
-  banner: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, borderWidth: 1, borderRadius: radius.sm, padding: 12, overflow: 'hidden' },
   bannerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: radius.sm, padding: 12 },
   bannerText: { flex: 1, fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
   hint: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, borderWidth: 1, borderRadius: radius.sm, padding: 12, overflow: 'hidden' },
@@ -194,8 +205,4 @@ const styles = StyleSheet.create({
   empty: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, borderWidth: 1, borderRadius: radius.md, padding: 16, overflow: 'hidden' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
   centerText: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, textAlign: 'center' },
-  retry: { minHeight: hitTarget, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 20, justifyContent: 'center', overflow: 'hidden' },
-  retryText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
-  skeleton: { gap: 10, paddingTop: 4 },
-  skeletonRow: { height: 96, borderRadius: radius.md },
 });

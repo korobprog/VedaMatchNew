@@ -2,23 +2,27 @@ import type { ContactsRequestDto } from '@vedamatch/shared';
 import { memo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
+import { InlineError } from '@/components/inline-error';
 import { formatChatStamp } from '@/lib/chat/chat-format';
 import { CONTACTS_REQUEST_STATUS_LABELS, canCancel, canRespond, canWrite, type RequestAction } from '@/lib/people/people-requests-state';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { PeopleDetails } from './people-details';
 
 interface Props {
   request: ContactsRequestDto;
   /** Действие по этому запросу в процессе: занята только его кнопка. */
   busyAction: RequestAction | null;
+  /** Ошибка последнего действия по этому запросу — не общий баннер экрана. */
+  error: string | null;
   onRespond(request: ContactsRequestDto, accept: boolean): void;
   onCancel(request: ContactsRequestDto): void;
   onWrite(request: ContactsRequestDto): void;
 }
 
 /** Строка запроса контакта: входящий или исходящий — карточка знает сама по `direction`. */
-function RequestRowImpl({ request, busyAction, onRespond, onCancel, onWrite }: Props) {
+function RequestRowImpl({ request, busyAction, error, onRespond, onCancel, onWrite }: Props) {
   const { colors } = useTheme();
   const busy = busyAction !== null;
   const subtitle = [request.user.headline, request.user.city].filter(Boolean).join(' · ');
@@ -53,6 +57,12 @@ function RequestRowImpl({ request, busyAction, onRespond, onCancel, onWrite }: P
         {CONTACTS_REQUEST_STATUS_LABELS[request.status]}
         {request.respondedAt ? ` · ${formatChatStamp(request.respondedAt)}` : ''}
       </Text>
+
+      {/* Контакты — главный результат принятого запроса; без них «Контакты
+          открыты» была бы пустой формулировкой (раунд оценки 004, дефект 4). */}
+      {request.contacts ? <PeopleDetails contacts={request.contacts} /> : null}
+
+      {error ? <InlineError message={error} /> : null}
 
       {showRespond ? (
         <View style={styles.actions}>

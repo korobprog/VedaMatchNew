@@ -1,14 +1,21 @@
 import type { ContactsAshram, ContactsCardDto, ContactsFormat, ContactsRequestDto, SpiritualStage } from '@vedamatch/shared';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
+import { InlineError } from '@/components/inline-error';
+import type { ContactsDetailsValue } from '@/components/people/people-details';
+import { PeopleDetails } from '@/components/people/people-details';
+import { RetryButton } from '@/components/retry-button';
+import { PersonCardSkeleton } from '@/components/skeleton';
 import { useSession } from '@/lib/auth/session';
 import { createChatApi } from '@/lib/chat/chat-api';
 import { confirmTap } from '@/lib/feedback';
 import { createPeopleApi } from '@/lib/people/people-api';
-import { CONTACTS_REQUEST_STATUS_LABELS } from '@/lib/people/people-requests-state';
+import { CONTACTS_REQUEST_STATUS_LABELS, showRemainingToday } from '@/lib/people/people-requests-state';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
@@ -36,14 +43,22 @@ const STAGE_LABELS: Record<SpiritualStage, string> = {
   devotee: 'Преданный',
 };
 
-function detailLine(card: ContactsCardDto): string | null {
-  const parts = [
-    card.ashram ? ASHRAM_LABELS[card.ashram] : null,
-    FORMAT_LABELS[card.format],
-    card.spiritualStage ? STAGE_LABELS[card.spiritualStage] : null,
-    card.languages.length > 0 ? card.languages.join(', ') : null,
-  ].filter((part): part is string => Boolean(part));
-  return parts.length > 0 ? parts.join(' · ') : null;
+/**
+ * Подписанные пары «поле: значение», а не одна строка через точку — иначе
+ * непонятно, что из «Брахмачари · Преданный · английский» ашрам, что этап, а
+ * что язык (раунд оценки 004, дефект 10). Этап «Преданный» не повторяется,
+ * если рядом уже стоит значок «Подтверждённый преданный» — это один и тот же
+ * факт, а не два разных.
+ */
+function detailRows(card: ContactsCardDto): { label: string; value: string }[] {
+  const rows: { label: string; value: string }[] = [];
+  if (card.ashram) rows.push({ label: 'Ашрам', value: ASHRAM_LABELS[card.ashram] });
+  if (FORMAT_LABELS[card.format]) rows.push({ label: 'Формат', value: FORMAT_LABELS[card.format]! });
+  if (card.spiritualStage && !(card.isVerifiedDevotee && card.spiritualStage === 'devotee')) {
+    rows.push({ label: 'Этап', value: STAGE_LABELS[card.spiritualStage] });
+  }
+  if (card.languages.length > 0) rows.push({ label: 'Языки', value: card.languages.join(', ') });
+  return rows;
 }
 
 /**
@@ -57,6 +72,7 @@ export default function PersonScreen() {
   const userId = String(id);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const { api, user } = useSession();
   const peopleApi = useMemo(() => createPeopleApi(api), [api]);
   const chatApi = useMemo(() => createChatApi(api), [api]);
@@ -65,6 +81,11 @@ export default function PersonScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [outgoing, setOutgoing] = useState<ContactsRequestDto | null>(null);
   const [remainingToday, setRemainingToday] = useState<number | null>(null);
+  // Пока не пришёл ответ `requests()`, неизвестно, есть ли уже исходящий
+  // запрос на этого человека — форма/блок статуса не показываются, чтобы не
+  // мигнуть активной кнопкой, которая сервер тут же отобьёт 400 (раунд
+  // оценки 004, дефект 7).
+  const [hintLoading, setHintLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -85,7 +106,6 @@ export default function PersonScreen() {
     void loadCard();
   }, [loadCard]);
 
-  // Только подсказка: если запрос не пришёл, форма всё равно рабочая — решает бэкенд.
   useEffect(() => {
     let alive = true;
     peopleApi
@@ -95,7 +115,10 @@ export default function PersonScreen() {
         setOutgoing(state.outgoing.find((request) => request.user.userId === userId) ?? null);
         setRemainingToday(state.remainingToday);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (alive) setHintLoading(false);
+      });
     return () => {
       alive = false;
     };
@@ -120,6 +143,7 @@ export default function PersonScreen() {
 
   const write = useCallback(async () => {
     if (writeBusy) return;
+    confirmTap();
     setWriteBusy(true);
     setWriteError(null);
     try {
@@ -135,6 +159,11 @@ export default function PersonScreen() {
   const isSelf = user?.id === userId;
   const left = CONTACTS_MAX_MESSAGE_LENGTH - message.length;
   const limitReached = remainingToday === 0;
+  // Способы связи открывает действующее раскрытие — оно приходит либо прямо
+  // в карточке (её владелец уже открыл контакты именно мне), либо в исходящем
+  // запросе. Раньше это читалось только по статусу «принят», и сами контакты
+  // не показывались вовсе (раунд оценки 004, дефект 4).
+  const contacts: ContactsDetailsValue | null = card?.contacts ?? outgoing?.contacts ?? null;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
@@ -149,173 +178,188 @@ export default function PersonScreen() {
         }}
       />
 
-      {!card && loadError ? (
-        <View style={styles.center}>
-          <Text accessibilityRole="alert" style={[styles.centerText, { color: colors.text1 }]}>
-            {loadError}
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void loadCard()}
-            android_ripple={ripple(colors.glassBorder)}
-            style={({ pressed }) => [styles.retry, { borderColor: colors.glassBorder }, pressedStyle(pressed)]}
-          >
-            <Text style={[styles.retryText, { color: colors.text0 }]}>Повторить</Text>
-          </Pressable>
-        </View>
-      ) : !card ? (
-        <View style={styles.center} accessible accessibilityLabel="Загружаем карточку" accessibilityRole="progressbar">
-          <ActivityIndicator color={colors.magenta} />
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <ChatAvatar id={card.userId} name={card.name} uri={card.avatarUrl} size={72} />
-            <View style={styles.headerText}>
-              <Text style={[styles.name, { color: colors.text0 }]}>{card.name}</Text>
-              {card.headline ?? card.statusLine ? (
-                <Text style={[styles.headline, { color: colors.text1 }]}>{card.headline ?? card.statusLine}</Text>
-              ) : null}
-              {[card.city, card.country].filter(Boolean).join(', ') ? (
-                <Text style={[styles.headline, { color: colors.text1 }]}>{[card.city, card.country].filter(Boolean).join(', ')}</Text>
-              ) : null}
-            </View>
+      <KeyboardAvoidingView style={styles.flexFill} behavior="padding" keyboardVerticalOffset={headerHeight - insets.bottom}>
+        {!card && loadError ? (
+          <View style={styles.center}>
+            <Text accessibilityRole="alert" style={[styles.centerText, { color: colors.text1 }]}>
+              {loadError}
+            </Text>
+            <RetryButton onPress={() => void loadCard()} />
           </View>
-
-          <View style={styles.badges}>
-            {card.isVerifiedDevotee ? (
-              <View style={[styles.badge, { backgroundColor: colors.mint }]}>
-                <Text style={[styles.badgeText, { color: colors.onMint }]}>Подтверждённый преданный</Text>
+        ) : !card ? (
+          <PersonCardSkeleton />
+        ) : (
+          <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
+            <View style={styles.header}>
+              <ChatAvatar id={card.userId} name={card.name} uri={card.avatarUrl} size={72} />
+              <View style={styles.headerText}>
+                <Text style={[styles.name, { color: colors.text0 }]}>{card.name}</Text>
+                {card.headline ?? card.statusLine ? (
+                  <Text style={[styles.headline, { color: colors.text1 }]}>{card.headline ?? card.statusLine}</Text>
+                ) : null}
+                {[card.city, card.country].filter(Boolean).join(', ') ? (
+                  <Text style={[styles.headline, { color: colors.text1 }]}>{[card.city, card.country].filter(Boolean).join(', ')}</Text>
+                ) : null}
               </View>
-            ) : null}
-            {card.isPhotoVerified ? (
-              <View style={[styles.badge, { backgroundColor: colors.bg2 }]}>
-                <Text style={[styles.badgeText, { color: colors.text0 }]}>Фото проверено</Text>
-              </View>
-            ) : null}
-          </View>
-
-          {detailLine(card) ? <Text style={[styles.detail, { color: colors.text1 }]}>{detailLine(card)}</Text> : null}
-
-          {card.about ? (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text0 }]}>О себе</Text>
-              <Text selectable style={[styles.sectionText, { color: colors.text1 }]}>
-                {card.about}
-              </Text>
             </View>
-          ) : null}
 
-          {card.offers ? (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text0 }]}>Чем может помочь</Text>
-              <Text selectable style={[styles.sectionText, { color: colors.text1 }]}>
-                {card.offers}
-              </Text>
-            </View>
-          ) : null}
-
-          {card.tags.length > 0 ? (
-            <View style={styles.tags}>
-              {card.tags.map((tag) => (
-                <View key={tag.id} style={[styles.tag, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
-                  <Text style={[styles.tagText, { color: colors.text1 }]}>{tag.nameRu}</Text>
+            <View style={styles.badges}>
+              {card.isVerifiedDevotee ? (
+                <View style={[styles.badge, { backgroundColor: colors.mint }]}>
+                  <Text style={[styles.badgeText, { color: colors.onMint }]}>Подтверждённый преданный</Text>
                 </View>
-              ))}
+              ) : null}
+              {card.isPhotoVerified ? (
+                <View style={[styles.badge, { backgroundColor: colors.bg2 }]}>
+                  <Text style={[styles.badgeText, { color: colors.text0 }]}>Фото проверено</Text>
+                </View>
+              ) : null}
             </View>
-          ) : null}
 
-          {isSelf ? (
-            <View style={[styles.card, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
-              <Text style={[styles.cardTitle, { color: colors.text0 }]}>Это ваша карточка</Text>
-              <Text style={[styles.cardText, { color: colors.text1 }]}>Так вас видят другие участники справочника.</Text>
-            </View>
-          ) : outgoing?.status === 'accepted' ? (
-            <View style={[styles.card, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
-              <Text style={[styles.cardTitle, { color: colors.text0 }]}>{CONTACTS_REQUEST_STATUS_LABELS.accepted}</Text>
-              {writeError ? (
-                <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.sendError, { color: colors.text0 }]}>
-                  {writeError}
+            {detailRows(card).length > 0 ? (
+              <View style={styles.detailRows}>
+                {detailRows(card).map((row) => (
+                  <Text key={row.label} style={[styles.detail, { color: colors.text1 }]}>
+                    <Text style={[styles.detailLabel, { color: colors.text1 }]}>{row.label}: </Text>
+                    {row.value}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
+
+            {card.about ? (
+              <View style={styles.section}>
+                <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.text0 }]}>
+                  О себе
                 </Text>
-              ) : null}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Написать ${card.name}`}
-                accessibilityState={{ busy: writeBusy, disabled: writeBusy }}
-                disabled={writeBusy}
-                onPress={() => void write()}
-                android_ripple={ripple(colors.glassBorder)}
-                style={({ pressed }) => [styles.primary, { backgroundColor: colors.magenta, borderColor: colors.magenta }, writeBusy ? styles.busy : pressedStyle(pressed)]}
-              >
-                {writeBusy ? <ActivityIndicator color={colors.onAccent} /> : <Text style={[styles.primaryText, { color: colors.onAccent }]}>Написать</Text>}
-              </Pressable>
-            </View>
-          ) : outgoing?.status === 'pending' ? (
-            <View style={[styles.card, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
-              <Text style={[styles.cardTitle, { color: colors.text0 }]}>Запрос отправлен, ждём ответа</Text>
-              <Text style={[styles.cardText, { color: colors.text1 }]}>Человек сам решает, открывать ли контакты. Отозвать запрос можно на вкладке «Запросы».</Text>
-            </View>
-          ) : (
-            <View style={[styles.card, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
-              <Text style={[styles.cardTitle, { color: colors.text0 }]}>Запросить контакт</Text>
-              <Text style={[styles.cardText, { color: colors.text1 }]}>
-                Способы связи откроются, только если человек согласится. Коротко напишите, зачем вы обращаетесь.
-              </Text>
-              <TextInput
-                value={message}
-                onChangeText={setMessage}
-                maxLength={CONTACTS_MAX_MESSAGE_LENGTH}
-                multiline
-                editable={!limitReached && !sending}
-                placeholder="Например: ищу повара на программу в Москве 20 сентября"
-                placeholderTextColor={colors.text1}
-                accessibilityLabel="Сообщение к запросу контакта"
-                style={[styles.messageInput, { color: colors.text0, borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}
-              />
-              <Text style={[styles.hint, { color: colors.text1 }]}>Необязательно. Осталось символов: {left}</Text>
-
-              {limitReached ? <Text style={[styles.hint, { color: colors.text1 }]}>Лимит запросов на сегодня исчерпан. Попробуйте завтра.</Text> : null}
-
-              {sendError ? (
-                <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.sendError, { color: colors.text0 }]}>
-                  {sendError}
+                <Text selectable style={[styles.sectionText, { color: colors.text1 }]}>
+                  {card.about}
                 </Text>
-              ) : null}
+              </View>
+            ) : null}
 
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Отправить запрос контакта"
-                accessibilityState={{ busy: sending, disabled: sending || limitReached }}
-                disabled={sending || limitReached}
-                onPress={() => void send()}
-                android_ripple={ripple(colors.glassBorder)}
-                style={({ pressed }) => [
-                  styles.primary,
-                  { backgroundColor: colors.magenta, borderColor: colors.magenta },
-                  sending || limitReached ? styles.busy : pressedStyle(pressed),
-                ]}
-              >
-                {sending ? <ActivityIndicator color={colors.onAccent} /> : <Text style={[styles.primaryText, { color: colors.onAccent }]}>Отправить запрос</Text>}
-              </Pressable>
+            {card.offers ? (
+              <View style={styles.section}>
+                <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.text0 }]}>
+                  Чем может помочь
+                </Text>
+                <Text selectable style={[styles.sectionText, { color: colors.text1 }]}>
+                  {card.offers}
+                </Text>
+              </View>
+            ) : null}
 
-              {remainingToday !== null && !limitReached ? (
-                <Text style={[styles.hint, { color: colors.text1 }]}>Сегодня можно отправить ещё {remainingToday}.</Text>
-              ) : null}
-            </View>
-          )}
-        </ScrollView>
-      )}
+            {card.tags.length > 0 ? (
+              <View style={styles.tags}>
+                {card.tags.map((tag) => (
+                  <View key={tag.id} style={[styles.tag, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
+                    <Text style={[styles.tagText, { color: colors.text1 }]}>{tag.nameRu}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {isSelf ? (
+              <View style={[styles.card, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
+                <Text accessibilityRole="header" style={[styles.cardTitle, { color: colors.text0 }]}>
+                  Это ваша карточка
+                </Text>
+                <Text style={[styles.cardText, { color: colors.text1 }]}>Так вас видят другие участники справочника.</Text>
+              </View>
+            ) : hintLoading ? (
+              // Пока не пришёл ответ requests() — ни формы, ни блока статуса:
+              // им сначала нужно знать, есть ли уже исходящий запрос.
+              <View style={[styles.card, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
+                <View style={styles.hintLoadingRow}>
+                  <ActivityIndicator color={colors.text1} />
+                  <Text style={[styles.cardText, { color: colors.text1 }]}>Проверяем, отправляли ли вы запрос…</Text>
+                </View>
+              </View>
+            ) : contacts ? (
+              <View style={[styles.card, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
+                <Text accessibilityRole="header" style={[styles.cardTitle, { color: colors.text0 }]}>
+                  {CONTACTS_REQUEST_STATUS_LABELS.accepted}
+                </Text>
+                <PeopleDetails contacts={contacts} />
+                {writeError ? <InlineError message={writeError} /> : null}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Написать ${card.name}`}
+                  accessibilityState={{ busy: writeBusy, disabled: writeBusy }}
+                  disabled={writeBusy}
+                  onPress={() => void write()}
+                  android_ripple={ripple(colors.glassBorder)}
+                  style={({ pressed }) => [styles.primary, { backgroundColor: colors.magenta, borderColor: colors.magenta }, writeBusy ? styles.busy : pressedStyle(pressed)]}
+                >
+                  {writeBusy ? <ActivityIndicator color={colors.onAccent} /> : <Text style={[styles.primaryText, { color: colors.onAccent }]}>Написать</Text>}
+                </Pressable>
+              </View>
+            ) : outgoing?.status === 'pending' ? (
+              <View style={[styles.card, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
+                <Text accessibilityRole="header" style={[styles.cardTitle, { color: colors.text0 }]}>
+                  Запрос отправлен, ждём ответа
+                </Text>
+                <Text style={[styles.cardText, { color: colors.text1 }]}>Человек сам решает, открывать ли контакты. Отозвать запрос можно на вкладке «Запросы».</Text>
+              </View>
+            ) : (
+              <View style={[styles.card, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
+                <Text accessibilityRole="header" style={[styles.cardTitle, { color: colors.text0 }]}>
+                  Запросить контакт
+                </Text>
+                <Text style={[styles.cardText, { color: colors.text1 }]}>
+                  Способы связи откроются, только если человек согласится. Коротко напишите, зачем вы обращаетесь.
+                </Text>
+                <TextInput
+                  value={message}
+                  onChangeText={setMessage}
+                  maxLength={CONTACTS_MAX_MESSAGE_LENGTH}
+                  multiline
+                  editable={!limitReached && !sending}
+                  placeholder="Например: ищу повара на программу в Москве 20 сентября"
+                  placeholderTextColor={colors.text1}
+                  accessibilityLabel="Сообщение к запросу контакта"
+                  style={[styles.messageInput, { color: colors.text0, borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}
+                />
+                <Text style={[styles.hint, { color: colors.text1 }]}>Необязательно. Осталось символов: {left}</Text>
+
+                {limitReached ? <Text style={[styles.hint, { color: colors.text1 }]}>Лимит запросов на сегодня исчерпан. Попробуйте завтра.</Text> : null}
+
+                {sendError ? <InlineError message={sendError} /> : null}
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Отправить запрос контакта"
+                  accessibilityState={{ busy: sending, disabled: sending || limitReached }}
+                  disabled={sending || limitReached}
+                  onPress={() => void send()}
+                  android_ripple={ripple(colors.glassBorder)}
+                  style={({ pressed }) => [
+                    styles.primary,
+                    { backgroundColor: colors.magenta, borderColor: colors.magenta },
+                    sending || limitReached ? styles.busy : pressedStyle(pressed),
+                  ]}
+                >
+                  {sending ? <ActivityIndicator color={colors.onAccent} /> : <Text style={[styles.primaryText, { color: colors.onAccent }]}>Отправить запрос</Text>}
+                </Pressable>
+
+                {remainingToday !== null && !limitReached && showRemainingToday(remainingToday) ? (
+                  <Text style={[styles.hint, { color: colors.text1 }]}>Сегодня можно отправить ещё {remainingToday}.</Text>
+                ) : null}
+              </View>
+            )}
+          </ScrollView>
+        )}
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  flexFill: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 20, gap: 16 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
   centerText: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, textAlign: 'center' },
-  retry: { minHeight: hitTarget, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 20, justifyContent: 'center', overflow: 'hidden' },
-  retryText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   headerText: { flex: 1, minWidth: 0, gap: 2 },
   name: { fontFamily: fonts.displayBold, fontSize: 20 },
@@ -323,7 +367,9 @@ const styles = StyleSheet.create({
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
   badgeText: { fontFamily: fonts.bodySemiBold, fontSize: 12 },
+  detailRows: { gap: 2 },
   detail: { fontFamily: fonts.body, fontSize: 13 },
+  detailLabel: { fontFamily: fonts.bodySemiBold },
   section: { gap: 4 },
   sectionTitle: { fontFamily: fonts.bodyBold, fontSize: 15 },
   sectionText: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
@@ -333,9 +379,9 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: radius.md, padding: 16, gap: 10 },
   cardTitle: { fontFamily: fonts.bodyBold, fontSize: 15 },
   cardText: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19 },
+  hintLoadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   messageInput: { minHeight: 80, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 10, fontFamily: fonts.body, fontSize: 14, textAlignVertical: 'top' },
   hint: { fontFamily: fonts.body, fontSize: 12 },
-  sendError: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
   primary: { minHeight: hitTarget, borderWidth: 1, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, alignSelf: 'flex-start', overflow: 'hidden' },
   primaryText: { fontFamily: fonts.bodyBold, fontSize: 14 },
   busy: { opacity: 0.6 },

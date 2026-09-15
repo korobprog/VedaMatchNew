@@ -1,5 +1,13 @@
 import type { ContactsCardDto } from '@vedamatch/shared';
-import { appendNextPage, buildPeopleSearchQuery, debounce, directoryEmptyMessage, isStaleSearch } from './people-search-state';
+import {
+  appendNextPage,
+  buildPeopleSearchQuery,
+  canLoadMore,
+  debounce,
+  directoryEmptyMessage,
+  isCurrentSearchGeneration,
+  nextSearchGeneration,
+} from './people-search-state';
 
 function card(userId: string): ContactsCardDto {
   return {
@@ -55,10 +63,50 @@ describe('debounce', () => {
   });
 });
 
-describe('isStaleSearch', () => {
-  it('устаревшим считается любой запрос, кроме самого последнего', () => {
-    expect(isStaleSearch(1, 2)).toBe(true);
-    expect(isStaleSearch(2, 2)).toBe(false);
+describe('nextSearchGeneration / isCurrentSearchGeneration', () => {
+  it('ответ применим только пока поколение не сменилось новым поиском', () => {
+    let generation = 0;
+    generation = nextSearchGeneration(generation); // старт поиска A → поколение 1
+    const searchAGeneration = generation;
+    expect(isCurrentSearchGeneration(searchAGeneration, generation)).toBe(true);
+
+    generation = nextSearchGeneration(generation); // пользователь набрал ещё — поиск B → поколение 2
+    // Ответ на A пришёл после того, как B уже стартовал: устарел.
+    expect(isCurrentSearchGeneration(searchAGeneration, generation)).toBe(false);
+    // Ответ на B — по-прежнему актуальному поколению.
+    expect(isCurrentSearchGeneration(generation, generation)).toBe(true);
+  });
+
+  it('подгрузка страницы не меняет поколение и не «отменяет» более новый поиск (раунд 004, дефект 3)', () => {
+    let generation = 0;
+    generation = nextSearchGeneration(generation); // поиск запущен → поколение 1
+    const searchGeneration = generation;
+
+    // Пока ответ поиска летит, пользователь докручивает СТАРУЮ выдачу —
+    // подгрузка страницы запоминает то же поколение, не создаёт новое.
+    const moreGeneration = generation;
+
+    // Подгрузка страницы отвечает первой, поколение не поменялось.
+    expect(isCurrentSearchGeneration(moreGeneration, generation)).toBe(true);
+    // Затем приходит ответ поиска — тоже актуален, ничего не «отменяет».
+    expect(isCurrentSearchGeneration(searchGeneration, generation)).toBe(true);
+  });
+});
+
+describe('canLoadMore', () => {
+  it('нельзя грузить дальше, пока текст в поле не совпал с применённым запросом', () => {
+    expect(canLoadMore({ query: 'Моск', appliedQuery: 'Москва', hasMore: true, loadingMore: false })).toBe(false);
+  });
+
+  it('нельзя грузить дальше без hasMore или во время другой подгрузки', () => {
+    expect(canLoadMore({ query: 'а', appliedQuery: 'а', hasMore: false, loadingMore: false })).toBe(false);
+    expect(canLoadMore({ query: 'а', appliedQuery: 'а', hasMore: true, loadingMore: true })).toBe(false);
+  });
+
+  it('можно грузить дальше, когда запрос применён, есть следующая страница и подгрузка не идёт', () => {
+    expect(canLoadMore({ query: 'Москва', appliedQuery: 'Москва', hasMore: true, loadingMore: false })).toBe(true);
+    // Пробелы по краям не должны мешать сравнению.
+    expect(canLoadMore({ query: ' Москва ', appliedQuery: 'Москва', hasMore: true, loadingMore: false })).toBe(true);
   });
 });
 
