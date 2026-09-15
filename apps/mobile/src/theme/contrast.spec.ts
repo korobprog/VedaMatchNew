@@ -37,6 +37,10 @@ const PAIRS: { name: string; text: keyof Palette; surface: keyof Palette }[] = [
   // ленту сообщений). `magenta` на `bg1` в светлой теме даёт только ≈4.24:1,
   // поэтому «Удалить» тоже текстом `text0`, тот же пункт меню ниже.
   { name: 'пункт листа (меню сообщения / вложения)', text: 'text0', surface: 'bg1' },
+  // Активный сегмент «Справочник»/«Запросы» (`(tabs)/people.tsx`): заливка
+  // сменилась с `bg2` на `bg0` — прежняя пара `bg2` на контейнере `bg1`
+  // почти не отличалась глазом (раунд оценки 004, дефект 8).
+  { name: 'активный сегмент «Люди»', text: 'text0', surface: 'bg0' },
 ];
 
 describe.each([
@@ -45,5 +49,23 @@ describe.each([
 ])('контраст: %s', (_, palette) => {
   it.each(PAIRS)('$name — не ниже 4.5:1', ({ text, surface }) => {
     expect(contrastRatio(palette[text], palette[surface], palette.bg0)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+/**
+ * Значки подтверждения (`components/verified-badge.tsx`, вариант `dot`):
+ * иконка — не текст, порог WCAG 1.4.11 мягче — 3:1, не 4.5:1.
+ */
+const NON_TEXT_PAIRS: { name: string; graphic: keyof Palette; surface: keyof Palette }[] = [
+  { name: 'иконка значка «Преданный» на кружке cyan', graphic: 'bg0', surface: 'cyan' },
+  { name: 'иконка значка «Фото проверено» на кружке gold', graphic: 'bg0', surface: 'gold' },
+];
+
+describe.each([
+  ['светлая тема', light],
+  ['тёмная тема', dark],
+])('контраст нетекстовой графики: %s', (_, palette) => {
+  it.each(NON_TEXT_PAIRS)('$name — не ниже 3:1', ({ graphic, surface }) => {
+    expect(contrastRatio(palette[graphic], palette[surface], palette.bg0)).toBeGreaterThanOrEqual(3);
   });
 });
