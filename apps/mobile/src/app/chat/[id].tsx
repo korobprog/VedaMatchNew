@@ -1,8 +1,10 @@
 import type { ChatConversationDetail, ChatMessageDto } from '@vedamatch/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import * as Clipboard from 'expo-clipboard';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -11,11 +13,13 @@ import {
   Text,
   TextInput,
   View,
+  type ListRenderItem,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
 import { MessageBubble } from '@/components/chat/message-bubble';
+import { MessagesSkeleton } from '@/components/skeleton';
 import { useSession } from '@/lib/auth/session';
 import { createChatApi } from '@/lib/chat/chat-api';
 import { formatChatDivider, isNewDay, officialNotifyLabel, readonlyNotice } from '@/lib/chat/chat-format';
@@ -31,6 +35,8 @@ import { useChatStream } from '@/lib/chat/chat-stream';
 import { setActiveConversation } from '@/lib/push/active-chat';
 import { withPlural } from '@/lib/chat/plural';
 import { isOnline } from '@/lib/chat/presence';
+import { confirmTap, longPressTap } from '@/lib/feedback';
+import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
 
@@ -163,6 +169,7 @@ export default function ChatRoomScreen() {
       body,
       now: new Date(),
     });
+    confirmTap();
     setDraft('');
     setSendError(null);
     setMessages((current) => [...current, pending]);
@@ -190,6 +197,7 @@ export default function ChatRoomScreen() {
   const toggleMuted = useCallback(async () => {
     if (!detail) return;
     const next = !detail.muted;
+    confirmTap();
     setMutedBusy(true);
     setMutedError(null);
     try {
@@ -203,6 +211,33 @@ export default function ChatRoomScreen() {
   }, [chatApi, conversationId, detail]);
 
   const showAuthors = detail ? detail.kind !== 'direct' : false;
+
+  // Пока единственное действие — копирование. Ответы и реакции (VED-167)
+  // встанут в это же меню.
+  const onMessageLongPress = useCallback((message: ChatMessageDto) => {
+    longPressTap();
+    Alert.alert('Сообщение', undefined, [
+      { text: 'Копировать текст', onPress: () => void Clipboard.setStringAsync(message.body) },
+      { text: 'Отмена', style: 'cancel' },
+    ]);
+  }, []);
+
+  const renderRow = useCallback<ListRenderItem<Row>>(
+    ({ item }) => (
+      <View>
+        {item.divider ? (
+          <Text style={[styles.divider, { color: colors.text1, backgroundColor: colors.bg1 }]}>{item.divider}</Text>
+        ) : null}
+        <MessageBubble
+          message={item.message}
+          mine={item.message.author.id === myId}
+          showAuthor={showAuthors}
+          onLongPress={item.message.body ? onMessageLongPress : undefined}
+        />
+      </View>
+    ),
+    [colors, myId, showAuthors, onMessageLongPress],
+  );
   const subtitle = detail
     ? detail.kind === 'direct'
       ? isOnline(detail.companion?.lastSeenAt)
@@ -218,7 +253,8 @@ export default function ChatRoomScreen() {
           accessibilityRole="button"
           accessibilityLabel="Назад"
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-          style={styles.back}
+          android_ripple={ripple(colors.glassBorder, true)}
+          style={({ pressed }) => [styles.back, pressedStyle(pressed)]}
         >
           <Svg width={24} height={24} viewBox="0 0 24 24">
             <Path d="m15 18-6-6 6-6" stroke={colors.text0} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
@@ -245,38 +281,37 @@ export default function ChatRoomScreen() {
       </View>
 
       <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        {!detail ? (
+        {!detail && error ? (
           <View style={styles.center}>
-            {error ? (
-              <>
-                <Text style={[styles.info, { color: colors.text1 }]}>{error}</Text>
-                <Pressable accessibilityRole="button" onPress={() => void load()} style={[styles.retry, { borderColor: colors.glassBorder }]}>
-                  <Text style={[styles.retryText, { color: colors.text0 }]}>Повторить</Text>
-                </Pressable>
-              </>
-            ) : (
-              <ActivityIndicator color={colors.magenta} />
-            )}
+            <Text accessibilityRole="alert" style={[styles.info, { color: colors.text1 }]}>
+              {error}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void load()}
+              android_ripple={ripple(colors.glassBorder)}
+              style={({ pressed }) => [styles.retry, { borderColor: colors.glassBorder }, pressedStyle(pressed)]}
+            >
+              <Text style={[styles.retryText, { color: colors.text0 }]}>Повторить</Text>
+            </Pressable>
+          </View>
+        ) : !detail ? (
+          <MessagesSkeleton />
+        ) : rows.length === 0 ? (
+          // Пустая беседа — вне перевёрнутого списка: на Android пустой
+          // элемент такого списка отображался зеркально.
+          <View style={[styles.center, styles.emptyChat]}>
+            <Text style={[styles.info, { color: colors.text1 }]}>Сообщений пока нет. Напишите первым.</Text>
           </View>
         ) : (
           <FlatList
             inverted
             data={rows}
             keyExtractor={(row) => row.message.id}
-            renderItem={({ item }) => (
-              <View>
-                {item.divider ? (
-                  <Text style={[styles.divider, { color: colors.text2, backgroundColor: colors.bg1 }]}>{item.divider}</Text>
-                ) : null}
-                <MessageBubble message={item.message} mine={item.message.author.id === myId} showAuthor={showAuthors} />
-              </View>
-            )}
+            renderItem={renderRow}
             onEndReached={() => void loadOlder()}
             onEndReachedThreshold={0.4}
-            ListFooterComponent={loadingOlder ? <ActivityIndicator style={styles.older} color={colors.text2} /> : null}
-            ListEmptyComponent={
-              <Text style={[styles.info, styles.emptyInverted, { color: colors.text2 }]}>Сообщений пока нет. Напишите первым.</Text>
-            }
+            ListFooterComponent={loadingOlder ? <ActivityIndicator style={styles.older} color={colors.text1} /> : null}
             contentContainerStyle={styles.list}
             keyboardShouldPersistTaps="handled"
           />
@@ -295,7 +330,7 @@ export default function ChatRoomScreen() {
                   value={draft}
                   onChangeText={onChangeDraft}
                   placeholder="Сообщение"
-                  placeholderTextColor={colors.text2}
+                  placeholderTextColor={colors.text1}
                   multiline
                   maxLength={MAX_LENGTH}
                   style={[styles.input, { color: colors.text0, backgroundColor: colors.glass, borderColor: colors.glassBorder }]}
@@ -305,16 +340,17 @@ export default function ChatRoomScreen() {
                   accessibilityLabel="Отправить"
                   disabled={!draft.trim()}
                   onPress={() => void send()}
+                  android_ripple={ripple(colors.glassBorder, true)}
                   style={({ pressed }) => [
                     styles.sendButton,
                     { backgroundColor: draft.trim() ? colors.mint : colors.bg2 },
-                    pressed && { opacity: 0.7 },
+                    pressedStyle(pressed),
                   ]}
                 >
                   <Svg width={22} height={22} viewBox="0 0 24 24">
                     <Path
                       d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"
-                      stroke={draft.trim() ? colors.onMint : colors.text2}
+                      stroke={draft.trim() ? colors.onMint : colors.text1}
                       strokeWidth={2}
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -334,12 +370,14 @@ export default function ChatRoomScreen() {
                     accessibilityState={{ checked: !detail.muted, busy: mutedBusy }}
                     disabled={mutedBusy}
                     onPress={() => void toggleMuted()}
+                    android_ripple={ripple(colors.glassBorder)}
                     style={({ pressed }) => [
                       styles.notify,
                       detail.muted
                         ? { backgroundColor: colors.mint, borderColor: colors.mint }
                         : { borderColor: colors.glassBorder },
-                      (pressed || mutedBusy) && { opacity: 0.7 },
+                      mutedBusy && { opacity: 0.7 },
+                      pressedStyle(pressed),
                     ]}
                   >
                     <Text style={[styles.notifyText, { color: detail.muted ? colors.onMint : colors.text0 }]}>
@@ -370,7 +408,7 @@ const styles = StyleSheet.create({
   headerSub: { fontFamily: fonts.body, fontSize: 12 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
   info: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, textAlign: 'center' },
-  emptyInverted: { transform: [{ scaleY: -1 }], paddingTop: 40 },
+  emptyChat: { justifyContent: 'flex-end', paddingBottom: 40 },
   retry: { minHeight: hitTarget, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 20, justifyContent: 'center' },
   retryText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
   list: { paddingVertical: 12 },
@@ -399,7 +437,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 15,
   },
-  sendButton: { width: hitTarget + 2, height: hitTarget + 2, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  sendButton: { width: hitTarget + 2, height: hitTarget + 2, borderRadius: 23, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   sendError: { fontFamily: fonts.bodySemiBold, fontSize: 13 },
   readonly: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 20, paddingTop: 12, gap: 10 },
   notify: {
