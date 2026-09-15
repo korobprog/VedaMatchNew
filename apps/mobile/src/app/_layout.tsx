@@ -10,6 +10,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '@/lib/auth/session';
 import { ChatStreamProvider } from '@/lib/chat/chat-stream';
@@ -17,6 +18,10 @@ import { PushBridge } from '@/lib/push/push-bridge';
 import { ThemeProvider, useTheme } from '@/theme/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
+
+// Под беседой, открытой ссылкой или пушем с холодного старта, всегда лежат
+// вкладки: системная стрелка «назад» ведёт в список, а не закрывает приложение.
+export const unstable_settings = { anchor: '(tabs)' };
 
 /**
  * Гость видит только экран входа, вошедший — только вкладки. Пока сессия
@@ -66,13 +71,15 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <ThemeProvider>
-          <SessionProvider>
-            <ChatStreamProvider>
-              <RootStack />
-            </ChatStreamProvider>
-          </SessionProvider>
-        </ThemeProvider>
+        <KeyboardProvider>
+          <ThemeProvider>
+            <SessionProvider>
+              <ChatStreamProvider>
+                <RootStack />
+              </ChatStreamProvider>
+            </SessionProvider>
+          </ThemeProvider>
+        </KeyboardProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
