@@ -189,6 +189,13 @@ export const setManagedStayStatus = (
     { method: "PATCH", ...json({ status }) },
   );
 
+/** Место на карте; null — отвязать объект от точки. */
+export const setManagedStayPlace = (stayId: string, placeId: string | null) =>
+  request<TravelStayCardDto>(
+    `/travel/manage/stays/${encodeURIComponent(stayId)}/place`,
+    { method: "PATCH", ...json({ placeId }) },
+  );
+
 export const addManagedRoom = (
   stayId: string,
   body: {

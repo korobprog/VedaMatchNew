@@ -76,6 +76,20 @@ export class TravelManageController {
     );
   }
 
+  /** Место на карте: `placeId: null` отвязывает объект от точки. */
+  @Patch('stays/:id/place')
+  setPlace(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: { placeId?: unknown },
+  ) {
+    const placeId = body.placeId;
+    if (placeId !== null && typeof placeId !== 'string') {
+      throw new BadRequestException('Укажите точку на карте или null');
+    }
+    return this.manage.setStayPlace(user.sub, id, placeId?.trim() || null);
+  }
+
   @Post('stays/:id/rooms')
   addRoom(
     @CurrentUser() user: AccessTokenPayload,

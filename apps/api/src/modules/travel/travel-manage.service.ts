@@ -78,6 +78,7 @@ export class TravelManageService {
     body: Record<string, unknown>,
   ): Promise<TravelStayCardDto> {
     const input = this.parse(body);
+    await this.assertPlace(input.placeId);
     const row = await this.prisma.travelStay.create({
       data: {
         ...input,
@@ -98,9 +99,31 @@ export class TravelManageService {
     body: Record<string, unknown>,
   ): Promise<TravelStayCardDto> {
     await this.assertManager(userId, stayId);
+    const input = this.parse(body);
+    await this.assertPlace(input.placeId);
     const row = await this.prisma.travelStay.update({
       where: { id: stayId },
-      data: this.parse(body),
+      data: input,
+      select: stayCardSelect,
+    });
+    return toStayCard(row);
+  }
+
+  /**
+   * Привязать объект к точке на карте или отвязать. Отдельным маршрутом, а не
+   * через `updateStay`: тот требует всю карточку целиком, а хозяин меняет
+   * одно поле со страницы заявок.
+   */
+  async setStayPlace(
+    userId: string,
+    stayId: string,
+    placeId: string | null,
+  ): Promise<TravelStayCardDto> {
+    await this.assertManager(userId, stayId);
+    await this.assertPlace(placeId);
+    const row = await this.prisma.travelStay.update({
+      where: { id: stayId },
+      data: { placeId },
       select: stayCardSelect,
     });
     return toStayCard(row);
@@ -267,6 +290,19 @@ export class TravelManageService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Точка на карте существует. Без проверки неизвестный id дошёл бы до
+   * внешнего ключа, и хозяин увидел бы «внутреннюю ошибку» вместо причины.
+   */
+  private async assertPlace(placeId: string | null): Promise<void> {
+    if (!placeId) return;
+    const place = await this.prisma.travelPlace.findUnique({
+      where: { id: placeId },
+      select: { id: true },
+    });
+    if (!place) throw new BadRequestException('Такой точки на карте нет');
   }
 
   private async assertManager(userId: string, stayId: string) {

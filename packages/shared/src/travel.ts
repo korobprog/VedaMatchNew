@@ -106,7 +106,8 @@ export interface TravelStayCardDto {
   id: string;
   kind: TravelStayKind;
   name: string;
-  /** Название точки; null — объект ещё не привязан к месту на карте. */
+  /** Точка на карте; null — объект ещё не привязан к месту на карте. */
+  placeId: string | null;
   placeName: string | null;
   address: string;
   lat: number | null;

@@ -72,6 +72,7 @@ export const stayCardSelect = {
   currency: true,
   photoUrls: true,
   publicCode: true,
+  placeId: true,
   place: { select: { name: true } },
 } satisfies Prisma.TravelStaySelect;
 
@@ -84,6 +85,7 @@ export function toStayCard(row: StayCardRow): TravelStayCardDto {
     id: row.id,
     kind: row.kind,
     name: row.name,
+    placeId: row.placeId,
     placeName: row.place?.name ?? null,
     address: row.address,
     lat: row.lat,
