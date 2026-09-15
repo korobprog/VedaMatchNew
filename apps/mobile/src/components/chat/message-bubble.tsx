@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { attachmentLabel, formatTime } from '@/lib/chat/chat-format';
 import { isPendingMessage } from '@/lib/chat/chat-room-state';
+import { ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, radius } from '@/theme/tokens';
 
@@ -29,6 +30,9 @@ function MessageBubbleImpl({ message, mine, showAuthor, onLongPress }: Props) {
       <Pressable
         onLongPress={onLongPress && !pending && !deleted ? () => onLongPress(message) : undefined}
         delayLongPress={350}
+        // Удержание видно сразу: вибрация на многих телефонах тихая, а 350 мс
+        // без отклика выглядят как зависание.
+        android_ripple={onLongPress && !pending && !deleted ? ripple(colors.glassBorder) : undefined}
         accessibilityActions={onLongPress && !pending && !deleted ? [{ name: 'longpress', label: 'Действия с сообщением' }] : undefined}
         onAccessibilityAction={(event) => {
           if (event.nativeEvent.actionName === 'longpress') onLongPress?.(message);
@@ -121,7 +125,7 @@ const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 12, marginVertical: 3, maxWidth: '100%' },
   mine: { alignItems: 'flex-end' },
   theirs: { alignItems: 'flex-start' },
-  bubble: { maxWidth: '84%', borderWidth: 1, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
+  bubble: { maxWidth: '84%', borderWidth: 1, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 8, gap: 4, overflow: 'hidden' },
   author: { fontFamily: fonts.bodyBold, fontSize: 13 },
   body: { fontFamily: fonts.body, fontSize: 15, lineHeight: 21 },
   deleted: { fontFamily: fonts.body, fontSize: 14, fontStyle: 'italic' },

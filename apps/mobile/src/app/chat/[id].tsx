@@ -411,7 +411,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
   info: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, textAlign: 'center' },
   emptyChat: { justifyContent: 'flex-end', paddingBottom: 40 },
-  retry: { minHeight: hitTarget, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 20, justifyContent: 'center' },
+  retry: { minHeight: hitTarget, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 20, justifyContent: 'center', overflow: 'hidden' },
   retryText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
   list: { paddingVertical: 12 },
   older: { paddingVertical: 12 },
@@ -449,6 +449,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     paddingHorizontal: 20,
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   notifyText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
 });

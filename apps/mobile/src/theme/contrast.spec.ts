@@ -28,6 +28,8 @@ const PAIRS: { name: string; text: keyof Palette; surface: keyof Palette }[] = [
   { name: 'счётчик непрочитанного', text: 'onMint', surface: 'mint' },
   { name: 'приглушённый счётчик', text: 'text1', surface: 'bg2' },
   { name: 'текст на заливке magenta', text: 'onAccent', surface: 'magenta' },
+  { name: '«печатает…» в шапке переписки', text: 'cyan', surface: 'bg0' },
+  { name: 'текст ошибки отправки', text: 'magenta', surface: 'bg0' },
 ];
 
 describe.each([
