@@ -1,20 +1,20 @@
 import type { ChatConversationDetail, ChatMessageDto } from '@vedamatch/shared';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
+  useWindowDimensions,
   type ListRenderItem,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
@@ -53,6 +53,7 @@ export default function ChatRoomScreen() {
   const conversationId = String(id);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { api, user } = useSession();
   const stream = useChatStream();
   const chatApi = useMemo(() => createChatApi(api), [api]);
@@ -250,39 +251,50 @@ export default function ChatRoomScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: colors.glassBorder, backgroundColor: colors.bg0 }]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Назад"
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-          android_ripple={ripple(colors.glassBorder, true)}
-          style={({ pressed }) => [styles.back, pressedStyle(pressed)]}
-        >
-          <Svg width={24} height={24} viewBox="0 0 24 24">
-            <Path d="m15 18-6-6 6-6" stroke={colors.text0} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          </Svg>
-        </Pressable>
-        {detail ? (
-          <ChatAvatar
-            id={detail.companion?.id ?? detail.id}
-            name={detail.title}
-            uri={detail.kind === 'direct' ? detail.companion?.avatarUrl : detail.avatarUrl}
-            size={40}
-          />
-        ) : null}
-        <View style={styles.headerText}>
-          <Text numberOfLines={1} style={[styles.headerTitle, { color: colors.text0 }]}>
-            {detail?.title ?? ' '}
-          </Text>
-          {typingName || subtitle ? (
-            <Text numberOfLines={1} style={[styles.headerSub, { color: typingName ? colors.cyan : colors.text2 }]}>
-              {typingName ? `${detail?.kind === 'direct' ? '' : `${typingName} `}печатает…` : subtitle}
-            </Text>
-          ) : null}
-        </View>
-      </View>
+      {/* Системная шапка: стрелка «назад» и жест платформы, а не нарисованные
+          вручную. Аватар и имя — содержимое заголовка. */}
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: colors.bg0 },
+          headerTintColor: colors.text0,
+          headerShadowVisible: false,
+          headerBackButtonDisplayMode: 'minimal',
+          headerTitleAlign: 'left',
+          headerTitle: () => (
+            <View
+              accessible
+              accessibilityRole="header"
+              accessibilityLabel={[detail?.title, typingName ? 'печатает' : subtitle].filter(Boolean).join(', ')}
+              style={[styles.headerTitleRow, { maxWidth: width - 96 }]}
+            >
+              {detail ? (
+                <ChatAvatar
+                  id={detail.companion?.id ?? detail.id}
+                  name={detail.title}
+                  uri={detail.kind === 'direct' ? detail.companion?.avatarUrl : detail.avatarUrl}
+                  size={36}
+                />
+              ) : null}
+              <View style={styles.headerText}>
+                <Text numberOfLines={1} style={[styles.headerTitle, { color: colors.text0 }]}>
+                  {detail?.title ?? ' '}
+                </Text>
+                {typingName || subtitle ? (
+                  <Text numberOfLines={1} style={[styles.headerSub, { color: typingName ? colors.cyan : colors.text2 }]}>
+                    {typingName ? `${detail?.kind === 'direct' ? '' : `${typingName} `}печатает…` : subtitle}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          ),
+        }}
+      />
 
-      <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      {/* Поле ввода идёт за клавиатурой кадр в кадр. Высота клавиатуры на
+          Android уже включает системную панель, а у поля ввода свой отступ
+          под неё: offset убирает двойной зазор. */}
+      <KeyboardAvoidingView style={styles.root} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
         {!detail && error ? (
           <View style={styles.center}>
             <Text accessibilityRole="alert" style={[styles.info, { color: colors.text1 }]}>
@@ -403,8 +415,7 @@ export default function ChatRoomScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  back: { width: hitTarget, height: hitTarget, alignItems: 'center', justifyContent: 'center' },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerText: { flex: 1, minWidth: 0 },
   headerTitle: { fontFamily: fonts.bodyBold, fontSize: 17 },
   headerSub: { fontFamily: fonts.body, fontSize: 12 },
