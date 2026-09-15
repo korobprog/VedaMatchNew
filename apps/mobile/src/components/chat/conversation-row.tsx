@@ -1,14 +1,17 @@
 import type { ChatConversationSummary } from '@vedamatch/shared';
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { formatChatStamp, previewOf, unreadLabel } from '@/lib/chat/chat-format';
+import { conversationA11yLabel, formatChatStamp, previewOf, unreadLabel } from '@/lib/chat/chat-format';
 import { isOnline } from '@/lib/chat/presence';
+import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, radius } from '@/theme/tokens';
 import { ChatAvatar } from './chat-avatar';
 
 interface Props {
   conversation: ChatConversationSummary;
-  onPress(): void;
+  /** Id вместо замыкания: колбэк один на весь список, и memo строки не сбрасывается. */
+  onPress(id: string): void;
 }
 
 const KIND_LABEL: Record<ChatConversationSummary['kind'], string | null> = {
@@ -17,12 +20,13 @@ const KIND_LABEL: Record<ChatConversationSummary['kind'], string | null> = {
   channel: 'Канал',
 };
 
-export function ConversationRow({ conversation, onPress }: Props) {
+function ConversationRowImpl({ conversation, onPress }: Props) {
   const { colors } = useTheme();
   const companion = conversation.companion;
   const avatarId = companion?.id ?? conversation.id;
   const avatarUri = conversation.kind === 'direct' ? companion?.avatarUrl : conversation.avatarUrl;
   const unread = conversation.unreadCount > 0;
+  const online = conversation.kind === 'direct' && isOnline(companion?.lastSeenAt);
   // У официального канала своя плашка, а «без звука» — его обычное состояние,
   // о котором нет смысла напоминать в каждой строке.
   const kindLabel = conversation.official ? 'Официальный' : KIND_LABEL[conversation.kind];
@@ -31,16 +35,13 @@ export function ConversationRow({ conversation, onPress }: Props) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${conversation.title}${unread ? `, непрочитанных ${conversation.unreadCount}` : ''}`}
-      onPress={onPress}
-      style={({ pressed }) => [styles.row, { borderBottomColor: colors.glassBorder }, pressed && { backgroundColor: colors.bg1 }]}
+      accessibilityLabel={conversationA11yLabel(conversation, online)}
+      accessibilityHint={previewOf(conversation)}
+      onPress={() => onPress(conversation.id)}
+      android_ripple={ripple(colors.glassBorder)}
+      style={({ pressed }) => [styles.row, { borderBottomColor: colors.glassBorder }, pressedStyle(pressed)]}
     >
-      <ChatAvatar
-        id={avatarId}
-        name={conversation.title}
-        uri={avatarUri}
-        online={conversation.kind === 'direct' && isOnline(companion?.lastSeenAt)}
-      />
+      <ChatAvatar id={avatarId} name={conversation.title} uri={avatarUri} online={online} />
       <View style={styles.body}>
         <View style={styles.line}>
           <Text numberOfLines={1} style={[styles.title, { color: colors.text0 }]}>
@@ -66,7 +67,9 @@ export function ConversationRow({ conversation, onPress }: Props) {
           </Text>
           {unread ? (
             <View style={[styles.badge, { backgroundColor: conversation.muted ? colors.bg2 : colors.mint }]}>
-              <Text style={[styles.badgeText, { color: conversation.muted ? colors.text1 : colors.onMint }]}>{unreadLabel(conversation.unreadCount)}</Text>
+              <Text style={[styles.badgeText, { color: conversation.muted ? colors.text1 : colors.onMint }]}>
+                {unreadLabel(conversation.unreadCount)}
+              </Text>
             </View>
           ) : showMuted ? (
             <Text style={[styles.muted, { color: colors.text2 }]}>без звука</Text>
@@ -76,6 +79,9 @@ export function ConversationRow({ conversation, onPress }: Props) {
     </Pressable>
   );
 }
+
+/** Строка перерисовывается, только когда пришла новая версия её беседы. */
+export const ConversationRow = memo(ConversationRowImpl);
 
 const styles = StyleSheet.create({
   row: {
@@ -100,10 +106,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
-  stamp: { marginLeft: 'auto', fontFamily: fonts.body, fontSize: 12 },
+  stamp: { marginLeft: 'auto', fontFamily: fonts.body, fontSize: 12, fontVariant: ['tabular-nums'] },
   preview: { flex: 1, fontFamily: fonts.body, fontSize: 14 },
   badge: { minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
-  badgeText: { fontFamily: fonts.bodyBold, fontSize: 12 },
+  badgeText: { fontFamily: fonts.bodyBold, fontSize: 12, fontVariant: ['tabular-nums'] },
   muted: { fontFamily: fonts.body, fontSize: 12 },
 });
 

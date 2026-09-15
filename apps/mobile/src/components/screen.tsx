@@ -24,7 +24,7 @@ export function Screen({ title, subtitle, children }: Props) {
         <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
           {title}
         </Text>
-        {subtitle ? <Text style={[styles.subtitle, { color: colors.text2 }]}>{subtitle}</Text> : null}
+        {subtitle ? <Text style={[styles.subtitle, { color: colors.text1 }]}>{subtitle}</Text> : null}
       </View>
       {children}
     </ScrollView>

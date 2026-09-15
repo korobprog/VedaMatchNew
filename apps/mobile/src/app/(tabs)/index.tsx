@@ -1,15 +1,23 @@
 import type { ChatConversationSummary } from '@vedamatch/shared';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View, type ListRenderItem } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConversationRow } from '@/components/chat/conversation-row';
+import { ChatListSkeleton } from '@/components/skeleton';
 import { useSession } from '@/lib/auth/session';
 import { createChatApi } from '@/lib/chat/chat-api';
 import { applyListEvent, sortConversations } from '@/lib/chat/chat-list-state';
 import { useChatStream } from '@/lib/chat/chat-stream';
+import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+
+const keyOf = (item: ChatConversationSummary) => item.id;
+
+function openConversation(id: string) {
+  router.push({ pathname: '/chat/[id]', params: { id } });
+}
 
 export default function ChatsScreen() {
   const { colors } = useTheme();
@@ -55,6 +63,22 @@ export default function ChatsScreen() {
     setRefreshing(false);
   }, [load]);
 
+  const renderItem = useCallback<ListRenderItem<ChatConversationSummary>>(
+    ({ item }) => <ConversationRow conversation={item} onPress={openConversation} />,
+    [],
+  );
+
+  const retryButton = (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => void load()}
+      android_ripple={ripple(colors.glassBorder)}
+      style={({ pressed }) => [styles.retry, { borderColor: colors.glassBorder }, pressedStyle(pressed)]}
+    >
+      <Text style={[styles.retryText, { color: colors.text0 }]}>Повторить</Text>
+    </Pressable>
+  );
+
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
       <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
@@ -65,6 +89,15 @@ export default function ChatsScreen() {
           Запросов на переписку: {requestsCount}. Ответить можно на сайте.
         </Text>
       ) : null}
+      {/* Обновление не удалось, а список уже есть: он остаётся, ошибка — рядом. */}
+      {error && conversations ? (
+        <View style={[styles.banner, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
+          <Text accessibilityRole="alert" style={[styles.bannerText, { color: colors.text0 }]}>
+            {error}
+          </Text>
+          {retryButton}
+        </View>
+      ) : null}
     </View>
   );
 
@@ -74,17 +107,13 @@ export default function ChatsScreen() {
         {header}
         {error ? (
           <View style={styles.center}>
-            <Text style={[styles.empty, { color: colors.text1 }]}>{error}</Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => void load()}
-              style={[styles.retry, { borderColor: colors.glassBorder }]}
-            >
-              <Text style={[styles.retryText, { color: colors.text0 }]}>Повторить</Text>
-            </Pressable>
+            <Text accessibilityRole="alert" style={[styles.empty, { color: colors.text1 }]}>
+              {error}
+            </Text>
+            {retryButton}
           </View>
         ) : (
-          <ActivityIndicator style={styles.center} color={colors.magenta} />
+          <ChatListSkeleton />
         )}
       </View>
     );
@@ -94,11 +123,9 @@ export default function ChatsScreen() {
     <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
       <FlatList
         data={conversations}
-        keyExtractor={(item) => item.id}
+        keyExtractor={keyOf}
         ListHeaderComponent={header}
-        renderItem={({ item }) => (
-          <ConversationRow conversation={item} onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.id } })} />
-        )}
+        renderItem={renderItem}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.magenta]} />}
         ListEmptyComponent={
           <Text style={[styles.empty, { color: colors.text1, paddingHorizontal: 20 }]}>
@@ -116,8 +143,17 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 8, gap: 6 },
   title: { fontFamily: fonts.displayBold, fontSize: 24 },
   requests: { fontFamily: fonts.body, fontSize: 13 },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: radius.sm, padding: 12, marginTop: 4 },
+  bannerText: { flex: 1, fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
   empty: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, textAlign: 'center' },
-  retry: { minHeight: hitTarget, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 20, justifyContent: 'center' },
+  retry: {
+    minHeight: hitTarget,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
   retryText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
 });

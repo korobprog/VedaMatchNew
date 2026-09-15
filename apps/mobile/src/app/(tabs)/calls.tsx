@@ -1,5 +1,11 @@
-import { Screen } from '@/components/screen';
+import { SitePlaceholder } from '@/components/site-placeholder';
 
 export default function CallsScreen() {
-  return <Screen title="Звонки" subtitle="История звонков появится после входа." />;
+  return (
+    <SitePlaceholder
+      title="Звонки"
+      subtitle="Звонки и их история появятся в приложении в следующих версиях. Пока позвонить можно на сайте."
+      path="/chat/calls"
+    />
+  );
 }

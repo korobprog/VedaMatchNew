@@ -4,6 +4,7 @@ import { Screen } from '@/components/screen';
 import { appVariant } from '@/config/app-variant';
 import { useSession } from '@/lib/auth/session';
 import { SERVICE_LINKS, serviceUrl } from '@/config/services';
+import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
 
@@ -21,17 +22,15 @@ export default function ServicesScreen() {
             accessibilityRole="link"
             accessibilityHint="Открывает раздел на сайте"
             onPress={() => WebBrowser.openBrowserAsync(serviceUrl(webOrigin, link.path))}
+            android_ripple={ripple(colors.glassBorder)}
             style={({ pressed }) => [
               styles.card,
-              {
-                backgroundColor: colors.glass,
-                borderColor: colors.glassBorder,
-                opacity: pressed ? 0.7 : 1,
-              },
+              { backgroundColor: colors.glass, borderColor: colors.glassBorder },
+              pressedStyle(pressed),
             ]}
           >
             <Text style={[styles.title, { color: colors.text0 }]}>{link.title}</Text>
-            <Text style={[styles.description, { color: colors.text2 }]}>{link.description}</Text>
+            <Text style={[styles.description, { color: colors.text1 }]}>{link.description}</Text>
           </Pressable>
         ))}
       </View>
@@ -40,12 +39,13 @@ export default function ServicesScreen() {
           <Text numberOfLines={1} style={[styles.title, { color: colors.text0 }]}>
             {user?.name ?? 'Аккаунт'}
           </Text>
-          {user?.email ? <Text numberOfLines={1} style={[styles.description, { color: colors.text2 }]}>{user.email}</Text> : null}
+          {user?.email ? <Text numberOfLines={1} style={[styles.description, { color: colors.text1 }]}>{user.email}</Text> : null}
         </View>
         <Pressable
           accessibilityRole="button"
           onPress={() => void signOut()}
-          style={({ pressed }) => [styles.logout, { borderColor: colors.glassBorder }, pressed && { opacity: 0.7 }]}
+          android_ripple={ripple(colors.glassBorder)}
+          style={({ pressed }) => [styles.logout, { borderColor: colors.glassBorder }, pressedStyle(pressed)]}
         >
           <Text style={[styles.logoutText, { color: colors.text0 }]}>Выйти</Text>
         </Pressable>
@@ -65,11 +65,12 @@ const styles = StyleSheet.create({
     padding: 16,
     justifyContent: 'flex-end',
     gap: 2,
+    overflow: 'hidden',
   },
   title: { fontFamily: fonts.bodyBold, fontSize: 16 },
   description: { fontFamily: fonts.body, fontSize: 12 },
   profile: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: radius.md, padding: 16, marginTop: 8 },
   profileText: { flex: 1, minWidth: 0, gap: 2 },
-  logout: { minHeight: hitTarget, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 16, justifyContent: 'center' },
+  logout: { minHeight: hitTarget, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 16, justifyContent: 'center', overflow: 'hidden' },
   logoutText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
 });

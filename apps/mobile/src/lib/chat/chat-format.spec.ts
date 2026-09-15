@@ -1,5 +1,6 @@
 import type { ChatConversationSummary, ChatMessageDto } from '@vedamatch/shared';
 import {
+  conversationA11yLabel,
   formatChatDivider,
   formatChatStamp,
   initialOf,
@@ -113,6 +114,30 @@ describe('readonlyNotice', () => {
   });
   it('обычный канал — от имени общины', () => {
     expect(readonlyNotice({ state: 'active', kind: 'channel', official: false })).toMatch(/общины/);
+  });
+});
+
+describe('conversationA11yLabel', () => {
+  it('личная беседа: имя, в сети, непрочитанные и время', () => {
+    expect(conversationA11yLabel(conversation({ unreadCount: 3, lastMessageAt: new Date(2026, 8, 14, 9, 5).toISOString() }), true, now)).toBe(
+      'Кешава, в сети, непрочитанных 3, 09:05',
+    );
+  });
+
+  it('официальный канал не говорит «без звука» — это его обычное состояние', () => {
+    expect(
+      conversationA11yLabel(
+        conversation({ title: 'VedaMatch', kind: 'channel', official: true, muted: true, lastMessageAt: null }),
+        false,
+        now,
+      ),
+    ).toBe('VedaMatch, официальный канал');
+  });
+
+  it('заглушённая группа', () => {
+    expect(conversationA11yLabel(conversation({ title: 'Киртан', kind: 'group', muted: true, lastMessageAt: new Date(2026, 8, 14, 9, 5).toISOString() }), false, now)).toBe(
+      'Киртан, группа, без звука, 09:05',
+    );
   });
 });
 

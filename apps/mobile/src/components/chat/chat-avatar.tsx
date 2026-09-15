@@ -36,6 +36,12 @@ export function ChatAvatar({ id, name, uri, size = 52, online = false }: Props) 
           source={{ uri }}
           style={{ width: size, height: size, borderRadius: radius, backgroundColor: colors.bg2 }}
           contentFit="cover"
+          // Плавное появление вместо вспышки и кэш на диске: в списке одни и
+          // те же лица при каждом открытии. recyclingKey не даёт строке
+          // списка на мгновение показать чужой аватар.
+          transition={150}
+          cachePolicy="memory-disk"
+          recyclingKey={uri}
           accessibilityIgnoresInvertColors
         />
       ) : (
@@ -44,8 +50,10 @@ export function ChatAvatar({ id, name, uri, size = 52, online = false }: Props) 
         </View>
       )}
       {online ? (
+        // «В сети» озвучивается в подписи строки или шапки, у точки своей нет.
         <View
-          accessibilityLabel="в сети"
+          importantForAccessibility="no"
+          accessibilityElementsHidden
           style={[styles.online, { backgroundColor: colors.cyan, borderColor: colors.bg0 }]}
         />
       ) : null}
