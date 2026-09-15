@@ -2,6 +2,7 @@ import type {
   ChatConversationDetail,
   ChatListState,
   ChatConversationSummary,
+  ChatDiscoverState,
   ChatMessageDto,
   ChatReactionSummary,
   ChatRequestsState,
@@ -72,6 +73,22 @@ export function createChatApi(api: ApiClient) {
         method: 'POST',
         body: { kind: 'direct', userId } satisfies CreateChatConversationRequest,
       }),
+    /**
+     * Каталог открытых бесед: чаты и каналы, куда можно войти самому.
+     * `communityId` — фильтр по конкретной общине (вкладка «Общины», экран
+     * `communities/[id]`); без него сервер отдаёт вообще все публичные
+     * беседы портала, экран общины обязан всегда передавать id.
+     */
+    discover: (params: { communityId?: string; q?: string } = {}) => {
+      const search = new URLSearchParams();
+      if (params.communityId) search.set('communityId', params.communityId);
+      if (params.q) search.set('q', params.q);
+      const qs = search.toString();
+      return api.request<ChatDiscoverState>(`/chat/discover${qs ? `?${qs}` : ''}`);
+    },
+    /** Войти в открытую беседу самому: подписаться на канал или вступить в группу. */
+    subscribe: (conversationId: string) =>
+      api.request<{ ok: true }>(`/chat/conversations/${encodeURIComponent(conversationId)}/subscribe`, { method: 'POST' }),
   };
 }
 

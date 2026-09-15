@@ -1,11 +1,226 @@
-import { SitePlaceholder } from '@/components/site-placeholder';
+import type { CommunityBadgeDto, MyCommunitiesResponse } from '@vedamatch/shared';
+import * as WebBrowser from 'expo-web-browser';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CommunityBadgeRow } from '@/components/communities/community-badge-row';
+import { RetryButton } from '@/components/retry-button';
+import { CommunityListSkeleton } from '@/components/skeleton';
+import { appVariant } from '@/config/app-variant';
+import { serviceUrl } from '@/config/services';
+import { useSession } from '@/lib/auth/session';
+import { createCommunitiesApi } from '@/lib/communities/communities-api';
+import { sortMemberships } from '@/lib/communities/communities-list-state';
+import { pressedStyle, ripple } from '@/theme/press';
+import { useTheme } from '@/theme/theme';
+import { fonts, hitTarget, radius } from '@/theme/tokens';
 
+function openCommunity(community: CommunityBadgeDto) {
+  router.push({
+    pathname: '/communities/[id]',
+    params: {
+      id: community.id,
+      name: community.name,
+      kind: community.kind,
+      city: community.city ?? '',
+      isVerified: community.isVerified ? '1' : '',
+    },
+  });
+}
+
+/**
+ * Вкладка «Общины»: общины, где состоит участник, и его заявки на
+ * рассмотрении. Вступление в новую общину и поиск по каталогу — только на
+ * сайте (`SitePlaceholder`, ссылка в пустом состоянии) — в приложении не
+ * дублируется, спека VED-170.
+ */
 export default function CommunitiesScreen() {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { api } = useSession();
+  const { webOrigin } = appVariant();
+  const communitiesApi = useMemo(() => createCommunitiesApi(api), [api]);
+
+  const [data, setData] = useState<MyCommunitiesResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  // Несколько триггеров загрузки (фокус вкладки, «Повторить», pull-to-refresh)
+  // могут перекрыться по времени — засчитывается только самый свежий запрос.
+  const request = useRef(0);
+
+  const load = useCallback(async () => {
+    const id = (request.current += 1);
+    try {
+      const response = await communitiesApi.mine();
+      if (request.current === id) {
+        setData(response);
+        setError(null);
+      }
+    } catch (e) {
+      if (request.current === id) {
+        setError(e instanceof Error ? e.message : 'Не удалось загрузить общины');
+      }
+    } finally {
+      if (request.current === id) setRefreshing(false);
+    }
+  }, [communitiesApi]);
+
+  // Членство могло измениться на сайте (приняли в общину, разобрали заявку) —
+  // перечитываем при каждом возврате на вкладку, а не только при первом монтировании.
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void load();
+  }, [load]);
+
+  const openOnSite = useCallback(() => {
+    void WebBrowser.openBrowserAsync(serviceUrl(webOrigin, '/communities'));
+  }, [webOrigin]);
+
+  const header = (
+    <Text accessibilityRole="header" style={[styles.title, { color: colors.text0, paddingTop: insets.top + 16 }]}>
+      Общины
+    </Text>
+  );
+
+  if (!data && error) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
+        {header}
+        <View style={styles.center}>
+          <Text accessibilityRole="alert" style={[styles.centerText, { color: colors.text1 }]}>
+            {error}
+          </Text>
+          <RetryButton onPress={() => void load()} />
+        </View>
+      </View>
+    );
+  }
+
+  if (!data) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
+        {header}
+        <View style={styles.body}>
+          <CommunityListSkeleton />
+        </View>
+      </View>
+    );
+  }
+
+  const memberships = sortMemberships(data.memberships);
+  const pending = sortMemberships(data.pending);
+  const isEmpty = memberships.length === 0 && pending.length === 0;
+
   return (
-    <SitePlaceholder
-      title="Общины"
-      subtitle="Группы и каналы общин появятся в приложении в следующих версиях. Пока они есть на сайте."
-      path="/communities"
-    />
+    <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
+      <ScrollView
+        contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.magenta]} />}
+      >
+        {header}
+
+        {error ? (
+          <View style={[styles.banner, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
+            <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.bannerText, { color: colors.text0 }]}>
+              {error}
+            </Text>
+            <RetryButton onPress={() => void load()} />
+          </View>
+        ) : null}
+
+        {isEmpty ? (
+          <View style={styles.emptyWrap}>
+            <Text style={[styles.empty, { color: colors.text1, borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
+              Вы пока не состоите ни в одной общине. Найти свою и вступить можно на сайте.
+            </Text>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityHint="Открывает поиск общин на сайте в браузере"
+              onPress={openOnSite}
+              android_ripple={ripple(colors.glassBorder)}
+              style={({ pressed }) => [
+                styles.siteButton,
+                { borderColor: colors.glassBorder, backgroundColor: colors.glass },
+                pressedStyle(pressed),
+              ]}
+            >
+              <Text style={[styles.siteButtonText, { color: colors.text0 }]}>Найти общину на сайте</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            {memberships.length > 0 ? (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.text1 }]}>Мои общины</Text>
+                {memberships.map((community) => (
+                  <CommunityBadgeRow key={community.id} community={community} onPress={openCommunity} />
+                ))}
+              </View>
+            ) : null}
+
+            {pending.length > 0 ? (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.text1 }]}>Заявки на рассмотрении</Text>
+                <Text style={[styles.sectionHint, { color: colors.text1 }]}>
+                  Пока заявку не разберёт администрация общины, войти в её беседы нельзя.
+                </Text>
+                {pending.map((community) => (
+                  <CommunityBadgeRow key={community.id} community={community} />
+                ))}
+              </View>
+            ) : null}
+          </>
+        )}
+      </ScrollView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  body: { paddingHorizontal: 20, gap: 8 },
+  title: { fontFamily: fonts.displayBold, fontSize: 24, marginBottom: 8 },
+  section: { gap: 2, marginTop: 12 },
+  sectionTitle: { fontFamily: fonts.bodySemiBold, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 },
+  sectionHint: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, marginBottom: 8 },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    padding: 12,
+    marginBottom: 4,
+  },
+  bannerText: { flex: 1, fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
+  centerText: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, textAlign: 'center' },
+  emptyWrap: { gap: 14, marginTop: 12 },
+  empty: {
+    fontFamily: fonts.body,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: 32,
+    overflow: 'hidden',
+  },
+  siteButton: {
+    alignSelf: 'flex-start',
+    minHeight: hitTarget,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  siteButtonText: { fontFamily: fonts.bodySemiBold, fontSize: 15 },
+});
