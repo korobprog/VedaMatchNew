@@ -44,6 +44,7 @@ function RootStack() {
         <Stack.Protected guard={status === 'signed'}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="chat/[id]" />
+          <Stack.Screen name="chat/requests" />
         </Stack.Protected>
       </Stack>
     </>

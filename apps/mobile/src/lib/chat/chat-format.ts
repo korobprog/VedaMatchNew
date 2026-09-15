@@ -95,7 +95,7 @@ export function unreadLabel(count: number): string {
 export function readonlyNotice(
   conversation: Pick<ChatConversationSummary, 'state' | 'kind' | 'official'>,
 ): string {
-  if (conversation.state === 'request') return 'Запрос на переписку. Принять или отклонить можно на сайте.';
+  if (conversation.state === 'request') return 'Запрос на переписку. Ответить можно в разделе «Запросы на переписку» на вкладке «Чаты».';
   if (conversation.official) return 'Новости VedaMatch и его сервисов. Пишет администрация портала.';
   if (conversation.kind === 'channel') return 'В канал пишет администрация общины.';
   return 'Писать в эту беседу нельзя.';
