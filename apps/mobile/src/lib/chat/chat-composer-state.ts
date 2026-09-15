@@ -61,6 +61,19 @@ export function exitEditMode(savedDraft: string | null): { draft: string; draftB
   return { draft: savedDraft ?? '', draftBeforeEdit: null };
 }
 
+/**
+ * Ответ, отложенный на время правки, возвращается что при отмене, что при
+ * успешном сохранении — правка не должна тихо стирать то, что человек уже
+ * собирался отправить следующим (найдено в раунде оценки 003: раньше
+ * сохранение отбрасывало отложенный ответ, а отмена — нет).
+ */
+export function restoreReplyAfterEdit(savedReply: ChatMessageDto | null): {
+  replyTo: ChatMessageDto | null;
+  replyBeforeEdit: null;
+} {
+  return { replyTo: savedReply, replyBeforeEdit: null };
+}
+
 /** `null` — отправлять нечего (пусто и без вложений). */
 export function buildSendRequest(input: {
   body: string;

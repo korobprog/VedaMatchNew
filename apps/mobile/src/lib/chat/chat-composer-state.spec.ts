@@ -9,6 +9,7 @@ import {
   enterEditMode,
   exitEditMode,
   removeAttachmentAt,
+  restoreReplyAfterEdit,
   toAttachmentInput,
 } from './chat-composer-state';
 
@@ -77,6 +78,26 @@ describe('enterEditMode/exitEditMode', () => {
 
   it('отмена правки без черновика — пустое поле', () => {
     expect(exitEditMode(null)).toEqual({ draft: '', draftBeforeEdit: null });
+  });
+});
+
+describe('restoreReplyAfterEdit', () => {
+  const reply: ChatMessageDto = {
+    id: 'r1',
+    conversationId: 'c1',
+    author: { id: 'u2', name: 'Собеседник' },
+    body: 'Отложенный ответ',
+    attachments: [],
+    reactions: [],
+    createdAt: new Date().toISOString(),
+  };
+
+  it('возвращает отложенный ответ и сбрасывает отложенное состояние', () => {
+    expect(restoreReplyAfterEdit(reply)).toEqual({ replyTo: reply, replyBeforeEdit: null });
+  });
+
+  it('если ответа не было — остаётся null, а не теряется молча по-другому', () => {
+    expect(restoreReplyAfterEdit(null)).toEqual({ replyTo: null, replyBeforeEdit: null });
   });
 });
 

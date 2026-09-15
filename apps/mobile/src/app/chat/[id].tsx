@@ -40,6 +40,7 @@ import {
   enterEditMode,
   exitEditMode,
   removeAttachmentAt,
+  restoreReplyAfterEdit,
   toAttachmentInput,
 } from '@/lib/chat/chat-composer-state';
 import { attachmentLabel, formatChatDivider, isNewDay, officialNotifyLabel, readonlyNotice } from '@/lib/chat/chat-format';
@@ -144,6 +145,18 @@ export default function ChatRoomScreen() {
   const [pickError, setPickError] = useState<string | null>(null);
   const [menuMessage, setMenuMessage] = useState<ChatMessageDto | null>(null);
   const inputRef = useRef<TextInput>(null);
+
+  /**
+   * Отложенный фокус поля после «Ответить»/«Изменить»/отмены правки.
+   * Меню сообщения — системный `Modal` с fade-анимацией закрытия; пока окно
+   * диалога ещё держит фокус (~250 мс), `TextInput.focus()` выставляет
+   * `focused="true"` в дереве, но клавиатуру не поднимает — Android не
+   * получает событие показа IME, пока фокус формально не у Activity
+   * (`mInputShown=false`, раунд оценки 003). Ждём дольше анимации закрытия.
+   */
+  const focusComposerSoon = useCallback(() => {
+    setTimeout(() => inputRef.current?.focus(), 300);
+  }, []);
 
   const markRead = useCallback(() => {
     chatApi.markRead(conversationId).catch(() => undefined);
@@ -285,16 +298,19 @@ export default function ChatRoomScreen() {
       setEditing(null);
       setDraft(draftBeforeEdit ?? '');
       setDraftBeforeEdit(null);
-      // Отложенный ответ не восстанавливается: после сохранения правки поле
-      // ввода начинается с чистого листа, не с неожиданной плашки цитаты.
-      setReplyBeforeEdit(null);
+      // Ответ, начатый до правки, возвращается и здесь — что при отмене, что
+      // при успешном сохранении: правка не должна тихо стирать то, что
+      // человек уже собирался отправить следующим (раунд оценки 003).
+      const restored = restoreReplyAfterEdit(replyBeforeEdit);
+      setReplyTo(restored.replyTo);
+      setReplyBeforeEdit(restored.replyBeforeEdit);
     } catch (e) {
       // Текст остаётся в поле в режиме правки — можно поправить и повторить.
       setSendError(e instanceof Error ? e.message : 'Не сохранилось, попробуйте ещё раз');
     } finally {
       setSending(false);
     }
-  }, [chatApi, conversationId, draft, draftBeforeEdit, editing]);
+  }, [chatApi, conversationId, draft, draftBeforeEdit, editing, replyBeforeEdit]);
 
   const onComposerSubmit = useCallback(() => {
     if (editing) void saveEdit();
@@ -309,11 +325,12 @@ export default function ChatRoomScreen() {
     setDraftBeforeEdit(result.draftBeforeEdit);
     setEditing(null);
     // Ответ, начатый до правки, возвращается — он был отложен, не потерян.
-    setReplyTo(replyBeforeEdit);
-    setReplyBeforeEdit(null);
+    const restored = restoreReplyAfterEdit(replyBeforeEdit);
+    setReplyTo(restored.replyTo);
+    setReplyBeforeEdit(restored.replyBeforeEdit);
     setSendError(null);
-    requestAnimationFrame(() => inputRef.current?.focus());
-  }, [draftBeforeEdit, replyBeforeEdit]);
+    focusComposerSoon();
+  }, [draftBeforeEdit, replyBeforeEdit, focusComposerSoon]);
 
   // FlatList перевёрнут: новые снизу, данные в обратном порядке.
   const rows = useMemo<Row[]>(() => {
@@ -358,9 +375,9 @@ export default function ChatRoomScreen() {
       setReplyTo(message);
       closeMenu();
       // Плашка видна сразу — курсор идёт в поле, а не остаётся на пункте меню.
-      requestAnimationFrame(() => inputRef.current?.focus());
+      focusComposerSoon();
     },
-    [closeMenu],
+    [closeMenu, focusComposerSoon],
   );
 
   const copyMessage = useCallback(
@@ -388,9 +405,9 @@ export default function ChatRoomScreen() {
       setReplyTo(null);
       setSendError(null);
       closeMenu();
-      requestAnimationFrame(() => inputRef.current?.focus());
+      focusComposerSoon();
     },
-    [closeMenu, draft, draftBeforeEdit, editing, replyTo],
+    [closeMenu, draft, draftBeforeEdit, editing, replyTo, focusComposerSoon],
   );
 
   const confirmDelete = useCallback(
@@ -506,10 +523,18 @@ export default function ChatRoomScreen() {
 
   const retrySlot = useCallback(
     (slotId: string, candidate: NormalizedUpload) => {
+      // Ошибочные слоты место не занимают (см. `occupiedAttachmentSlots`),
+      // поэтому лимит можно было набрать десятью готовыми вложениями и всё
+      // равно повторить старую неудачу — файл ушёл бы в хранилище, а
+      // `addAttachment` молча отбросил бы результат (раунд оценки 003).
+      if (!canPickAttachment(occupiedAttachmentSlots)) {
+        setPickError('Нельзя прикрепить больше 10 вложений в одно сообщение');
+        return;
+      }
       setUploadSlots((current) => current.map((slot) => (slot.id === slotId ? { ...slot, status: 'uploading', error: undefined } : slot)));
       void performUpload(slotId, candidate);
     },
-    [performUpload],
+    [occupiedAttachmentSlots, performUpload],
   );
 
   const removeUploadSlot = useCallback((slotId: string) => {
@@ -784,7 +809,10 @@ export default function ChatRoomScreen() {
                   {uploadSlots
                     .filter((slot) => slot.status === 'uploading')
                     .map((slot) => (
-                      <View key={slot.id} style={[styles.chip, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
+                      <View
+                        key={slot.id}
+                        style={[styles.chip, styles.chipLoading, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}
+                      >
                         <ActivityIndicator size="small" color={colors.text1} />
                         <Text style={[styles.chipText, { color: colors.text1 }]}>Загрузка…</Text>
                       </View>
@@ -1012,6 +1040,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   chipText: { fontFamily: fonts.bodySemiBold, fontSize: 13, maxWidth: 150 },
+  // Готовый чип высотой 44 за счёт `chipRemoveBox` (44×44); у чипа
+  // «Загрузка…» такого элемента нет — без своих отступов он был заметно
+  // ниже, и ряд прыгал по высоте (раунд оценки 003).
+  chipLoading: { minHeight: hitTarget, paddingRight: 12, gap: 6 },
   // Был глиф 14px с hitSlop={8} (≈40dp по факту) — зона нажатия меньше 44dp,
   // найдено в раунде оценки 002. Сам `Pressable` теперь 44×44, не только
   // расширенная зона вокруг маленькой иконки.
