@@ -33,12 +33,16 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...(withFirebase ? { googleServicesFile } : {}),
       versionCode: 1,
       adaptiveIcon: {
-        // theme/tokens.ts: light.text0 — фон под фирменным знаком, одинаков в
+        // theme/tokens.ts: light.bg0 — фон под фирменным знаком, одинаков в
         // обеих темах интерфейса (это подложка самой иконки, а не
-        // темизируемый UI-фон). backgroundImage ниже перекрывает этот цвет
-        // (`@expo/prebuild-config` всегда предпочитает backgroundImage, если
-        // он задан), но оставляем backgroundColor как запасной путь.
-        backgroundColor: '#180F2C',
+        // темизируемый UI-фон); тот же цвет, что и у icon.png/сплэша.
+        // Раньше здесь стоял тёмно-фиолетовый light.text0 (#180F2C) — на
+        // ревью на устройстве тёмно-синий шеврон «M» на нём читался плохо
+        // (виден был только глобус, буква тонула в тёмном фоне). backgroundImage
+        // ниже перекрывает этот цвет (`@expo/prebuild-config` всегда
+        // предпочитает backgroundImage, если он задан), но оставляем
+        // backgroundColor как запасной путь.
+        backgroundColor: '#FBF9FF',
         foregroundImage: './assets/images/android-icon-foreground.png',
         backgroundImage: './assets/images/android-icon-background.png',
         monochromeImage: './assets/images/android-icon-monochrome.png',

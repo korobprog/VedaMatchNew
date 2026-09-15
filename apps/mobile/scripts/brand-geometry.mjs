@@ -7,31 +7,49 @@
 // Контекст (см. `docs/service-module-contract.md`-стиль комментария — почему
 // это отдельный модуль): `generate-brand-assets.mjs` резрешает через него,
 // какую долю холста должен занимать знак, чтобы не быть обрезанным ни одной
-// маской лаунчера — тремя независимыми потребителями:
-//   - adaptive-иконка Android (безопасная зона — круг диаметром 66% холста,
-//     `ADAPTIVE_BASELINE_PIXEL_SIZE = 108` в `@expo/prebuild-config`, круг —
-//     66dp из них);
+// маской лаунчера — несколькими независимыми потребителями:
+//   - adaptive-иконка Android (гарантированная безопасная зона — окружность
+//     диаметром 66% холста, `ADAPTIVE_BASELINE_PIXEL_SIZE = 108` в
+//     `@expo/prebuild-config`; видимая большинством лаунчеров область — как
+//     правило шире, около 72dp из тех же 108, и по форме это не круг, а
+//     сквиркл/скруглённый квадрат — Samsung One UI и похожие);
 //   - `ic_launcher_round.webp` — тот же `icon.png` обрезается по кругу
 //     диаметром 100% холста (`borderRadiusRatio: 0.5` в `withAndroidIcons.js`);
 //   - монохромный слой (Android 13+ themed icons) — использует тот же
 //     108dp-холст, что и adaptive-иконка.
+//
+// `exponent` в `maxCornerDistanceFromMask`/`isInsideSquircle` переключает
+// метрику между этими двумя формами: `2` — строгий круг (никогда не
+// обрезается никаким лаунчером, включая самые консервативные), больше —
+// приближение сквиркла (даёт больше места на диагоналях, ближе к тому, что
+// реально показывает большинство лаунчеров).
 
 /**
- * Расстояние от центра прямоугольника `width×height` до самого дальнего
- * закрашенного пикселя маски. Это и есть радиус минимальной окружности с
- * центром в центре холста, которая гарантированно вмещает весь рисунок —
- * дальше считать нечего, сам рисунок не обязан быть симметричным (шеврон
- * «M» шире у нижних углов, чем у верхних, где стоит глобус).
+ * «Расстояние» (p-норма степени `exponent`) от центра прямоугольника
+ * `width×height` до самого дальнего закрашенного пикселя маски.
+ *
+ * При `exponent = 2` (по умолчанию) это обычное евклидово расстояние — радиус
+ * минимальной ОКРУЖНОСТИ с центром в центре холста, которая гарантированно
+ * вмещает весь рисунок. При большем `exponent` метрика моделирует не круг, а
+ * сквиркл (суперэллипс `|dx/a|^n + |dy/a|^n = 1`) — реальную форму маски
+ * многих лаунчеров (Samsung One UI и похожие), которая на диагонали
+ * «дотягивается» дальше круга того же осевого радиуса. Дальше считать
+ * нечего, сам рисунок не обязан быть симметричным (шеврон «M» шире у нижних
+ * углов, чем у верхних, где стоит глобус).
  *
  * @param {Uint8Array | number[]} mask - 0/1 (или любое truthy/falsy) на
  *   пиксель, длина `width * height`, построчно.
+ * @param {number} [exponent] - степень p-нормы; 2 — круг, больше — сквиркл.
  */
-export function maxCornerDistanceFromMask(mask, width, height) {
+export function maxCornerDistanceFromMask(mask, width, height, exponent = 2) {
   if (width <= 0 || height <= 0) {
     throw new Error('maxCornerDistanceFromMask: width и height должны быть positive');
   }
   if (mask.length !== width * height) {
     throw new Error('maxCornerDistanceFromMask: длина маски не совпадает с width*height');
+  }
+  if (!(exponent >= 2)) {
+    throw new Error('maxCornerDistanceFromMask: exponent должен быть ≥ 2 (2 — круг)');
   }
   const cx = width / 2;
   const cy = height / 2;
@@ -40,13 +58,41 @@ export function maxCornerDistanceFromMask(mask, width, height) {
     for (let x = 0; x < width; x += 1) {
       if (!mask[y * width + x]) continue;
       // +0.5 — расстояние до центра пикселя, а не до его левого верхнего угла.
-      const dx = x + 0.5 - cx;
-      const dy = y + 0.5 - cy;
-      const d = Math.hypot(dx, dy);
+      const dx = Math.abs(x + 0.5 - cx);
+      const dy = Math.abs(y + 0.5 - cy);
+      const d = exponent === 2 ? Math.hypot(dx, dy) : (dx ** exponent + dy ** exponent) ** (1 / exponent);
       if (d > max) max = d;
     }
   }
   return max;
+}
+
+/**
+ * Точка `(dx, dy)` (смещение от центра) внутри круга радиуса `radius`?
+ * Тривиальная, но отдельная функция — используется скриптом проверки,
+ * чтобы строить одну и ту же геометрию, что и `maxCornerDistanceFromMask`
+ * с `exponent = 2`, а не пересчитывать её на месте.
+ */
+export function isInsideCircle(dx, dy, radius) {
+  if (!(radius > 0)) {
+    throw new Error('isInsideCircle: radius должен быть положительным');
+  }
+  return Math.hypot(dx, dy) <= radius;
+}
+
+/**
+ * Точка `(dx, dy)` внутри сквиркла (суперэллипса) с «осевым радиусом»
+ * `halfSize` и степенью `exponent`? При `exponent = 2` это ровно круг радиуса
+ * `halfSize` — та же метрика, что и в `maxCornerDistanceFromMask`.
+ */
+export function isInsideSquircle(dx, dy, halfSize, exponent) {
+  if (!(halfSize > 0)) {
+    throw new Error('isInsideSquircle: halfSize должен быть положительным');
+  }
+  if (!(exponent >= 2)) {
+    throw new Error('isInsideSquircle: exponent должен быть ≥ 2 (2 — круг)');
+  }
+  return (Math.abs(dx) / halfSize) ** exponent + (Math.abs(dy) / halfSize) ** exponent <= 1;
 }
 
 /**
