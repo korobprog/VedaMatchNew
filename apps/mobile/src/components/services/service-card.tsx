@@ -1,33 +1,44 @@
 import type { ServiceCard as ServiceCardDto } from '@vedamatch/shared';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { serviceIconKind } from '@/lib/services/service-icon-kind';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, radius } from '@/theme/tokens';
+import { ServiceIcon } from './service-icons';
 
 interface Props {
   service: ServiceCardDto;
   onPress(service: ServiceCardDto): void;
 }
 
-/**
- * Высота карточки — общая константа со скелетоном `ServiceGridSkeleton`
- * (раунд оценки 007, дефект 8: скелетон был 88dp, настоящая карточка с
- * описанием на 2 строки — 101dp, разница бросалась в глаза при переходе от
- * загрузки к списку). Без `numberOfLines` карточка может стать выше этого
- * значения на длинных описаниях — это пол, не потолок.
- */
-export const SERVICE_CARD_MIN_HEIGHT = 108;
+/** Размер иллюстрации над названием — как в подробном режиме на сайте. */
+const ICON_SIZE = 32;
 
 /**
- * Карточка каталога сервисов (VED-174): только название и описание, без
- * значка. `iconUrl` у всех сервисов в базе сейчас `null` (проверено по
- * `apps/api/prisma/seed.cjs` — поле правит только администратор из
- * админки), а копировать набор SVG-иконок `ServiceIcon` с сайта под 12
- * разных `slug` без общего кода между приложениями противоречит контракту
- * сервисного модуля (общие хелперы не импортируются между приложениями) и
- * не стоит цены новой сетки ради значков, которых на проде ещё нет —
- * поэтому решение сознательно в пользу чистых текстовых карточек.
+ * Высота карточки — общая константа со скелетоном `ServiceGridSkeleton`
+ * (раунд оценки 007, дефект 8: скелетон и настоящая карточка расходились по
+ * высоте после первой загрузки). Без `numberOfLines` у описания карточка
+ * может стать выше этого значения на длинных текстах — это пол, не потолок;
+ * иконка 32dp сверху увеличивает пол по сравнению с чисто текстовой
+ * версией карточки (было 108, стало 144 — плюс иконка и отступ до неё).
+ */
+export const SERVICE_CARD_MIN_HEIGHT = 144;
+
+/**
+ * Карточка каталога сервисов (VED-174, «Иконки»): иллюстрация
+ * `components/services/service-icons.tsx` над названием, порт
+ * `ServiceIcon` с сайта (`apps/web/src/components/icons/service-icons.tsx`,
+ * размещение — как в `apps/web/src/components/service-card.tsx` в
+ * подробном режиме). `iconUrl` у всех сервисов в базе сейчас `null`
+ * (проверено по `apps/api/prisma/seed.cjs`), поэтому источник картинки —
+ * не поле из API, а `serviceIconKind(service.slug, service.category)`, тот
+ * же выбор, что и на сайте.
+ *
+ * Иконка декоративная: `accessible={false}` и
+ * `importantForAccessibility="no-hide-descendants"` на обёртке — TalkBack
+ * читает только `accessibilityLabel` карточки с названием и описанием, а
+ * не проваливается в SVG.
  *
  * Описание рисуется без `numberOfLines`: с ограничением в 2 строки текст
  * почти везде обрезался на полуслове (раунд оценки 007, дефект 5) — на
@@ -36,6 +47,13 @@ export const SERVICE_CARD_MIN_HEIGHT = 108;
 function ServiceCardImpl({ service, onPress }: Props) {
   const { colors } = useTheme();
   const comingSoon = service.status === 'coming_soon';
+  const iconKind = serviceIconKind(service.slug, service.category);
+
+  const icon = (
+    <View accessible={false} importantForAccessibility="no-hide-descendants" style={styles.iconWrap}>
+      <ServiceIcon kind={iconKind} size={ICON_SIZE} />
+    </View>
+  );
 
   if (comingSoon) {
     return (
@@ -48,6 +66,7 @@ function ServiceCardImpl({ service, onPress }: Props) {
             длинное название уходит под него, если карточка выше минимума
             (раунд оценки 007, дефект 6). */}
         <Text style={[styles.badge, { color: colors.text1, backgroundColor: colors.bg2 }]}>Скоро</Text>
+        {icon}
         <Text style={[styles.title, { color: colors.text0 }]}>{service.name}</Text>
         <Text style={[styles.description, { color: colors.text1 }]}>{service.description}</Text>
       </View>
@@ -67,6 +86,7 @@ function ServiceCardImpl({ service, onPress }: Props) {
         pressedStyle(pressed),
       ]}
     >
+      {icon}
       <Text style={[styles.title, { color: colors.text0 }]}>{service.name}</Text>
       <Text style={[styles.description, { color: colors.text1 }]}>{service.description}</Text>
     </Pressable>
@@ -89,6 +109,7 @@ const styles = StyleSheet.create({
     gap: 4,
     overflow: 'hidden',
   },
+  iconWrap: { marginBottom: 2 },
   badge: {
     alignSelf: 'flex-start',
     fontFamily: fonts.bodySemiBold,

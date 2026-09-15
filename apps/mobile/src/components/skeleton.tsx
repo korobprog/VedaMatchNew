@@ -146,15 +146,26 @@ export function DiscoverListSkeleton() {
  * у настоящих карточек `components/services/service-card.tsx` — скелетон
  * строк выглядел бы списком, а контент — сеткой (тот же урок, что дал
  * дефект 5 в раунде оценки 005 про несовпадение формы скелетона и контента).
+ *
+ * Внутри карточки — отдельный квадратный блок под иллюстрацию
+ * («Иконки», VED-174) и три текстовые полоски под название/описание, а не
+ * один сплошной прямоугольник: настоящая карточка после появления иконки
+ * состоит из тех же двух зон, и скелетон одним цветным блоком перестал
+ * совпадать с её формой.
  */
 export function ServiceGridSkeleton() {
   return (
     <View accessible accessibilityLabel="Загружаем сервисы" accessibilityRole="progressbar" style={styles.serviceGrid}>
       {[0, 1, 2, 3, 4, 5].map((key) => (
-        // Высота — общая константа с настоящей карточкой
+        // Высота карточки — общая константа с настоящей карточкой
         // (`components/services/service-card.tsx`), а не своё число: раунд
-        // оценки 007 поймал разницу 88dp скелетона против 101dp карточки.
-        <Block key={key} width="47%" height={SERVICE_CARD_MIN_HEIGHT} round={radius.md} />
+        // оценки 007 поймал разницу скелетона и карточки по высоте.
+        <View key={key} style={[styles.serviceCard, { minHeight: SERVICE_CARD_MIN_HEIGHT }]}>
+          <Block width={32} height={32} round={10} />
+          <Block width="72%" height={16} />
+          <Block width="100%" height={12} />
+          <Block width="85%" height={12} />
+        </View>
       ))}
     </View>
   );
@@ -173,4 +184,7 @@ const styles = StyleSheet.create({
   communityRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, minHeight: 64 },
   discoverRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 68 },
   serviceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  // Ширина/паддинг — как у `styles.card` в `service-card.tsx`, без своего
+  // фона: карточка-скелетон здесь только контейнер под блоки.
+  serviceCard: { flexBasis: '47%', flexGrow: 0, padding: 16, justifyContent: 'flex-end', gap: 6 },
 });
