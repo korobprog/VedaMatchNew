@@ -28,6 +28,7 @@ import {
   verifyPkceS256,
   type AppLoginRequest,
 } from './app-login';
+import { appReturnPage, type AppReturnOutcome } from './app-return-page';
 import { AuthProvidersService } from './auth-providers.service';
 import { resolveContour, type Contour } from './contour';
 import { readRegistrationMode } from '../billing/billing-mode';
@@ -485,8 +486,27 @@ export class AuthService implements OnModuleInit {
       ) {
         throw error;
       }
-      res.redirect(appRedirectUrl(app.redirect, { error: error.message }));
+      this.returnToApp(
+        res,
+        appRedirectUrl(app.redirect, { error: error.message }),
+        'error',
+      );
     }
+  }
+
+  /**
+   * Возврат в приложение с колбэка провайдера — страницей, а не редиректом:
+   * см. `app-return-page.ts`. Старт входа (`startForApp`) редиректит как
+   * раньше: там цепочку начало само приложение, и Chrome её пропускает.
+   * В адресе одноразовый код, поэтому ответ не кэшируется.
+   */
+  private returnToApp(
+    res: Response,
+    target: string,
+    outcome: AppReturnOutcome,
+  ): void {
+    res.setHeader('Cache-Control', 'no-store');
+    res.type('html').send(appReturnPage(target, outcome));
   }
 
   /**
@@ -529,7 +549,7 @@ export class AuthService implements OnModuleInit {
     // предъявив PKCE-верификатор (см. exchangeAppLoginCode).
     if (app) {
       const code = await this.createAppLoginCode(user.id, app.challenge);
-      res.redirect(appRedirectUrl(app.redirect, { code }));
+      this.returnToApp(res, appRedirectUrl(app.redirect, { code }), 'code');
       return;
     }
 
