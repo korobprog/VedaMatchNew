@@ -5,6 +5,7 @@ import {
   buildEditRequest,
   buildSendRequest,
   canAddAttachment,
+  canSubmitComposer,
   enterEditMode,
   exitEditMode,
   removeAttachmentAt,
@@ -111,5 +112,22 @@ describe('buildEditRequest', () => {
 
   it('обрезает пробелы по краям', () => {
     expect(buildEditRequest('  Новый текст  ')).toEqual({ body: 'Новый текст' });
+  });
+});
+
+describe('canSubmitComposer', () => {
+  it('пока грузится вложение — нельзя отправить, даже если есть текст и готовые вложения', () => {
+    expect(canSubmitComposer({ editing: false, draft: 'Текст', attachmentsCount: 1, uploading: true })).toBe(false);
+  });
+
+  it('обычная отправка: текст или хотя бы одно готовое вложение', () => {
+    expect(canSubmitComposer({ editing: false, draft: '  ', attachmentsCount: 0, uploading: false })).toBe(false);
+    expect(canSubmitComposer({ editing: false, draft: 'Текст', attachmentsCount: 0, uploading: false })).toBe(true);
+    expect(canSubmitComposer({ editing: false, draft: '', attachmentsCount: 1, uploading: false })).toBe(true);
+  });
+
+  it('правка требует непустого текста, вложения не считаются', () => {
+    expect(canSubmitComposer({ editing: true, draft: '  ', attachmentsCount: 3, uploading: false })).toBe(false);
+    expect(canSubmitComposer({ editing: true, draft: 'Новый текст', attachmentsCount: 0, uploading: false })).toBe(true);
   });
 });

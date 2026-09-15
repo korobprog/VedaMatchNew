@@ -1,4 +1,4 @@
-import type { ChatReactionSummary } from '@vedamatch/shared';
+import type { ChatMessageDto, ChatReactionSummary } from '@vedamatch/shared';
 
 /**
  * Локальное предсказание реакции до ответа сервера — чтобы тап отвечал
@@ -35,4 +35,18 @@ export function applyOptimisticReaction(
     return next.map((reaction) => (reaction.emoji === emoji ? { ...reaction, count: reaction.count + 1, mine: true } : reaction));
   }
   return [...next, { emoji, count: 1, mine: true }];
+}
+
+/**
+ * Откат одного сообщения к реакциям до предсказания. Патчит только его —
+ * не весь снимок ленты, иначе всё, что пришло за время запроса (новые
+ * сообщения из потока, своя отправка, чужая правка), исчезло бы до
+ * следующего перечитывания экрана.
+ */
+export function rollbackReaction(
+  messages: readonly ChatMessageDto[],
+  messageId: string,
+  previousReactions: readonly ChatReactionSummary[],
+): ChatMessageDto[] {
+  return messages.map((message) => (message.id === messageId ? { ...message, reactions: [...previousReactions] } : message));
 }

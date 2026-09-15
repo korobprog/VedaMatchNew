@@ -30,11 +30,11 @@ export function MessageMenu({ message, myUserId, onClose, onReact, onReply, onCo
   const flags = message ? messageActionFlags(message, myUserId) : null;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Закрыть меню"
-        style={styles.backdrop}
+        style={[styles.backdrop, { backgroundColor: colors.scrim }]}
         onPress={onClose}
       />
       {message && flags ? (
@@ -42,7 +42,9 @@ export function MessageMenu({ message, myUserId, onClose, onReact, onReply, onCo
           accessibilityViewIsModal
           style={[
             styles.sheet,
-            { backgroundColor: colors.sheet, borderColor: colors.sheetBorder, paddingBottom: insets.bottom + 12 },
+            // Непрозрачная подложка: `bg1`, не полупрозрачный `sheet` —
+            // иначе сквозь лист видна лента сообщений (раунд оценки 002).
+            { backgroundColor: colors.bg1, borderColor: colors.glassBorder, paddingBottom: insets.bottom + 12 },
           ]}
         >
           <View style={[styles.handle, { backgroundColor: colors.glassBorder }]} />
@@ -92,13 +94,18 @@ function MenuRow({ label, onPress, destructive }: { label: string; onPress(): vo
       android_ripple={ripple(colors.glassBorder)}
       style={({ pressed }) => [styles.row, pressedStyle(pressed)]}
     >
-      <Text style={[styles.rowText, { color: destructive ? colors.magenta : colors.text0 }]}>{label}</Text>
+      {/* Текст пункта — всегда text0: magenta на непрозрачном `bg1` в
+          светлой теме даёт только ≈4.24:1, ниже порога 4.5. Красный цвет
+          остаётся только точкой-акцентом — она не текст, контраст к ней
+          не применяется. */}
+      {destructive ? <View style={[styles.destructiveDot, { backgroundColor: colors.magenta }]} /> : null}
+      <Text style={[styles.rowText, { color: colors.text0 }, destructive && styles.rowTextWithDot]}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.45)' },
+  backdrop: { flex: 1 },
   sheet: {
     borderTopLeftRadius: radius.md,
     borderTopRightRadius: radius.md,
@@ -112,6 +119,15 @@ const styles = StyleSheet.create({
   reactionButton: { width: hitTarget, height: hitTarget, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm },
   reactionEmoji: { fontSize: 24 },
   divider: { height: StyleSheet.hairlineWidth, marginVertical: 4 },
-  row: { minHeight: hitTarget, justifyContent: 'center', paddingHorizontal: 8, borderRadius: radius.sm, overflow: 'hidden' },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: hitTarget,
+    paddingHorizontal: 8,
+    borderRadius: radius.sm,
+    overflow: 'hidden',
+  },
   rowText: { fontFamily: fonts.bodyMedium, fontSize: 16 },
+  rowTextWithDot: { marginLeft: 8 },
+  destructiveDot: { width: 6, height: 6, borderRadius: 3 },
 });

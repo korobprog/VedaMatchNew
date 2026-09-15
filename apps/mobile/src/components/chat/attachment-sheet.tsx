@@ -18,13 +18,20 @@ export function AttachmentSheet({ visible, onClose, onPickGallery, onPickCamera,
   const insets = useSafeAreaInsets();
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Закрыть меню" style={styles.backdrop} onPress={onClose} />
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Закрыть меню"
+        style={[styles.backdrop, { backgroundColor: colors.scrim }]}
+        onPress={onClose}
+      />
       <View
         accessibilityViewIsModal
         style={[
           styles.sheet,
-          { backgroundColor: colors.sheet, borderColor: colors.sheetBorder, paddingBottom: insets.bottom + 12 },
+          // Непрозрачная подложка: `bg1`, не полупрозрачный `sheet` —
+          // иначе сквозь лист видна лента сообщений (раунд оценки 002).
+          { backgroundColor: colors.bg1, borderColor: colors.glassBorder, paddingBottom: insets.bottom + 12 },
         ]}
       >
         <View style={[styles.handle, { backgroundColor: colors.glassBorder }]} />
@@ -70,7 +77,7 @@ function Row({ label, onPress }: { label: string; onPress(): void }) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.45)' },
+  backdrop: { flex: 1 },
   sheet: {
     borderTopLeftRadius: radius.md,
     borderTopRightRadius: radius.md,

@@ -81,3 +81,21 @@ export function buildEditRequest(body: string): EditChatMessageRequest | null {
   const trimmed = body.trim();
   return trimmed ? { body: trimmed } : null;
 }
+
+/**
+ * Можно ли нажать «Отправить»/«Сохранить». Пока хоть одно вложение
+ * грузится — нельзя: иначе сообщение уходит без файла, а чип прицепляется
+ * уже к следующему (найдено в раунде оценки 002). Правка требует
+ * непустого текста, обычная отправка — текст или хотя бы одно готовое
+ * вложение.
+ */
+export function canSubmitComposer(input: {
+  editing: boolean;
+  draft: string;
+  attachmentsCount: number;
+  uploading: boolean;
+}): boolean {
+  if (input.uploading) return false;
+  if (input.editing) return Boolean(input.draft.trim());
+  return Boolean(input.draft.trim() || input.attachmentsCount > 0);
+}

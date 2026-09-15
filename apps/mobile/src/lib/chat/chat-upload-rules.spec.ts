@@ -1,11 +1,14 @@
+import { CHAT_MAX_ATTACHMENTS } from '@vedamatch/shared';
 import {
   MAX_FILE_BYTES,
   MAX_IMAGE_BYTES,
   attachmentKindFor,
   buildUploadFilePart,
+  canPickAttachment,
   maxBytesFor,
   normalizePickedDocument,
   normalizePickedImage,
+  remainingAttachmentSlots,
   uploadDenialMessage,
   validateUpload,
 } from './chat-upload-rules';
@@ -39,6 +42,20 @@ describe('validateUpload', () => {
   it('отказывает превышению лимита у своего типа', () => {
     expect(validateUpload({ mimeType: 'image/png', sizeBytes: MAX_IMAGE_BYTES + 1 })).toBe('file_too_large');
     expect(validateUpload({ mimeType: 'application/pdf', sizeBytes: MAX_FILE_BYTES + 1 })).toBe('file_too_large');
+  });
+});
+
+describe('remainingAttachmentSlots/canPickAttachment', () => {
+  it('считает остаток от лимита и не уходит в минус', () => {
+    expect(remainingAttachmentSlots(0)).toBe(CHAT_MAX_ATTACHMENTS);
+    expect(remainingAttachmentSlots(9)).toBe(1);
+    expect(remainingAttachmentSlots(CHAT_MAX_ATTACHMENTS)).toBe(0);
+    expect(remainingAttachmentSlots(CHAT_MAX_ATTACHMENTS + 5)).toBe(0);
+  });
+
+  it('нельзя открывать пикер, когда лимит уже занят — этого не хватало «Снять на камеру»', () => {
+    expect(canPickAttachment(CHAT_MAX_ATTACHMENTS - 1)).toBe(true);
+    expect(canPickAttachment(CHAT_MAX_ATTACHMENTS)).toBe(false);
   });
 });
 

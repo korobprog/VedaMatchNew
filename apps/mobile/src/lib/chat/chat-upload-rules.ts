@@ -1,3 +1,4 @@
+import { CHAT_MAX_ATTACHMENTS } from '@vedamatch/shared';
 import type { ChatAttachmentKind } from '@vedamatch/shared';
 
 /**
@@ -57,6 +58,22 @@ export function uploadDenialMessage(denial: UploadDenial): string {
   return denial === 'file_too_large'
     ? 'Файл слишком большой. Фото — до 10 МБ, документы — до 25 МБ.'
     : 'Такой файл нельзя отправить. Подходят фото (JPEG, PNG, WebP, GIF) и документы (PDF, Word, Excel, текст).';
+}
+
+/**
+ * Сколько вложений ещё можно набрать. Считается по «занятым» местам —
+ * не только уже загруженным, но и тем, что ещё грузятся: иначе камера
+ * (один файл за раз, без `selectionLimit` галереи) может уйти в S3 поверх
+ * лимита, который потом молча обрежет `addAttachment` (найдено в раунде
+ * оценки 002 — «Снять на камеру» не проверяла лимит).
+ */
+export function remainingAttachmentSlots(occupiedCount: number, max: number = CHAT_MAX_ATTACHMENTS): number {
+  return Math.max(0, max - occupiedCount);
+}
+
+/** Можно ли вообще открывать галерею/камеру/файл — лимит ещё не исчерпан. */
+export function canPickAttachment(occupiedCount: number, max: number = CHAT_MAX_ATTACHMENTS): boolean {
+  return remainingAttachmentSlots(occupiedCount, max) > 0;
 }
 
 /** Расширение из пути, когда галерея не отдала MIME (редко, но бывает). */

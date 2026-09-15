@@ -4,7 +4,6 @@ import type {
   ChatMessageDto,
   ChatReplyPreview,
 } from '@vedamatch/shared';
-import { CHAT_MAX_ATTACHMENTS } from '@vedamatch/shared';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -37,6 +36,7 @@ import {
   addAttachment,
   buildEditRequest,
   buildSendRequest,
+  canSubmitComposer,
   enterEditMode,
   exitEditMode,
   removeAttachmentAt,
@@ -51,13 +51,15 @@ import {
   prependOlder,
   settlePendingMessage,
 } from '@/lib/chat/chat-room-state';
-import { applyOptimisticReaction } from '@/lib/chat/chat-reactions';
+import { applyOptimisticReaction, rollbackReaction } from '@/lib/chat/chat-reactions';
 import { useChatStream } from '@/lib/chat/chat-stream';
 import {
   ALLOWED_FILE_MIME,
   buildUploadFilePart,
+  canPickAttachment,
   normalizePickedDocument,
   normalizePickedImage,
+  remainingAttachmentSlots,
   uploadDenialMessage,
   validateUpload,
   type NormalizedUpload,
@@ -77,6 +79,21 @@ const TYPING_THROTTLE_MS = 3_000;
 const TYPING_VISIBLE_MS = 5_000;
 
 type Row = { kind: 'message'; message: ChatMessageDto; divider: string | null };
+
+/**
+ * Одна загрузка вложения — от выбора файла до готового `ChatAttachmentInput`
+ * (тогда слот исчезает, а результат уходит в `attachments`) или ошибки.
+ * Каждый выбор — свой слот со своим `id`: раньше общий `uploadError` одной
+ * неудачи затирал другую при выборе нескольких фото подряд (раунд оценки 002).
+ */
+interface UploadSlot {
+  id: string;
+  candidate: NormalizedUpload;
+  status: 'uploading' | 'error';
+  error?: string;
+  /** Отказ по типу/размеру не имеет смысла повторять тем же файлом. */
+  retryable: boolean;
+}
 
 export default function ChatRoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -112,16 +129,21 @@ export default function ChatRoomScreen() {
 
   // Ответ и правка — состояние композера (VED-167). Черновик поля один на
   // оба режима: при входе в правку он откладывается и возвращается при
-  // отмене (`chat-composer-state.ts`, приём с сайта).
+  // отмене (`chat-composer-state.ts`, приём с сайта). Начатый ответ
+  // откладывается тем же приёмом — иначе он молча терялся при входе в правку.
   const [replyTo, setReplyTo] = useState<ChatMessageDto | null>(null);
   const [editing, setEditing] = useState<ChatMessageDto | null>(null);
   const [draftBeforeEdit, setDraftBeforeEdit] = useState<string | null>(null);
+  const [replyBeforeEdit, setReplyBeforeEdit] = useState<ChatMessageDto | null>(null);
   const [attachments, setAttachments] = useState<ChatAttachmentInput[]>([]);
   const [attachSheetOpen, setAttachSheetOpen] = useState(false);
-  const [uploadBusy, setUploadBusy] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [retryUpload, setRetryUpload] = useState<NormalizedUpload | null>(null);
+  const [uploadSlots, setUploadSlots] = useState<UploadSlot[]>([]);
+  // Ошибка самого выбора (лимит, отказ в разрешении, картинку не удалось
+  // разобрать) — отдельно от ошибок конкретной загрузки (`uploadSlots`),
+  // это не про файл, а про действие «открыть галерею/камеру/файл».
+  const [pickError, setPickError] = useState<string | null>(null);
   const [menuMessage, setMenuMessage] = useState<ChatMessageDto | null>(null);
+  const inputRef = useRef<TextInput>(null);
 
   const markRead = useCallback(() => {
     chatApi.markRead(conversationId).catch(() => undefined);
@@ -205,8 +227,15 @@ export default function ChatRoomScreen() {
     [chatApi, conversationId],
   );
 
+  const anyUploading = uploadSlots.some((slot) => slot.status === 'uploading');
+
   const send = useCallback(async () => {
     if (!user) return;
+    // Пока грузится хоть одно вложение — не отправлять: иначе сообщение
+    // уходит без файла, а чип прицепляется уже к следующему (раунд оценки
+    // 002). Кнопка и так неактивна (`canSubmit`), проверка здесь — на
+    // случай второго источника вызова (Enter/клавиатура).
+    if (anyUploading) return;
     const request = buildSendRequest({ body: draft, replyToId: replyTo?.id, attachments });
     if (!request) return;
     const bodyText = draft.trim();
@@ -241,12 +270,13 @@ export default function ChatRoomScreen() {
       setReplyTo(sentReply);
       setSendError(e instanceof Error ? e.message : 'Сообщение не отправлено');
     }
-  }, [attachments, chatApi, conversationId, draft, replyTo, user]);
+  }, [anyUploading, attachments, chatApi, conversationId, draft, replyTo, user]);
 
   const saveEdit = useCallback(async () => {
     if (!editing) return;
     const request = buildEditRequest(draft);
     if (!request) return;
+    confirmTap();
     setSendError(null);
     setSending(true);
     try {
@@ -255,6 +285,9 @@ export default function ChatRoomScreen() {
       setEditing(null);
       setDraft(draftBeforeEdit ?? '');
       setDraftBeforeEdit(null);
+      // Отложенный ответ не восстанавливается: после сохранения правки поле
+      // ввода начинается с чистого листа, не с неожиданной плашки цитаты.
+      setReplyBeforeEdit(null);
     } catch (e) {
       // Текст остаётся в поле в режиме правки — можно поправить и повторить.
       setSendError(e instanceof Error ? e.message : 'Не сохранилось, попробуйте ещё раз');
@@ -275,8 +308,12 @@ export default function ChatRoomScreen() {
     setDraft(result.draft);
     setDraftBeforeEdit(result.draftBeforeEdit);
     setEditing(null);
+    // Ответ, начатый до правки, возвращается — он был отложен, не потерян.
+    setReplyTo(replyBeforeEdit);
+    setReplyBeforeEdit(null);
     setSendError(null);
-  }, [draftBeforeEdit]);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [draftBeforeEdit, replyBeforeEdit]);
 
   // FlatList перевёрнут: новые снизу, данные в обратном порядке.
   const rows = useMemo<Row[]>(() => {
@@ -320,6 +357,8 @@ export default function ChatRoomScreen() {
     (message: ChatMessageDto) => {
       setReplyTo(message);
       closeMenu();
+      // Плашка видна сразу — курсор идёт в поле, а не остаётся на пункте меню.
+      requestAnimationFrame(() => inputRef.current?.focus());
     },
     [closeMenu],
   );
@@ -343,11 +382,15 @@ export default function ChatRoomScreen() {
       setDraft(result.draft);
       setDraftBeforeEdit(result.draftBeforeEdit);
       setEditing(message);
+      // Начатый ответ откладывается тем же приёмом, что черновик — только на
+      // первый вход, иначе переключение между правками затрёт отложенное.
+      setReplyBeforeEdit((current) => (editing ? current : replyTo));
       setReplyTo(null);
       setSendError(null);
       closeMenu();
+      requestAnimationFrame(() => inputRef.current?.focus());
     },
-    [closeMenu, draft, draftBeforeEdit, editing],
+    [closeMenu, draft, draftBeforeEdit, editing, replyTo],
   );
 
   const confirmDelete = useCallback(
@@ -378,14 +421,16 @@ export default function ChatRoomScreen() {
 
   const reactToMessage = useCallback(
     (message: ChatMessageDto, emoji: string) => {
-      let previous: ChatMessageDto[] = [];
+      // Снимок только реакций этого сообщения — не всей ленты: если снимок
+      // всей ленты откатить на ошибке, пропадёт всё, что пришло за время
+      // запроса (новые сообщения из потока, своя отправка, чужая правка).
+      const previousReactions = message.reactions;
       // Предсказание сразу, не дожидаясь сети — откатывается на ошибке.
-      setMessages((current) => {
-        previous = current;
-        return current.map((item) =>
+      setMessages((current) =>
+        current.map((item) =>
           item.id === message.id ? { ...item, reactions: applyOptimisticReaction(item.reactions, emoji) } : item,
-        );
-      });
+        ),
+      );
       void (async () => {
         try {
           const result = await chatApi.setReaction(message.id, emoji);
@@ -397,7 +442,7 @@ export default function ChatRoomScreen() {
             ),
           );
         } catch {
-          setMessages(previous);
+          setMessages((current) => rollbackReaction(current, message.id, previousReactions));
           Alert.alert('Не получилось', 'Реакция не поставилась, попробуйте ещё раз');
         }
       })();
@@ -415,61 +460,98 @@ export default function ChatRoomScreen() {
 
   // ===== Вложения: галерея, камера, файл =====
 
-  const uploadCandidate = useCallback(
-    async (candidate: NormalizedUpload) => {
-      const denial = validateUpload({ mimeType: candidate.type, sizeBytes: candidate.sizeBytes });
-      if (denial) {
-        setUploadError(uploadDenialMessage(denial));
-        setRetryUpload(null);
-        return;
-      }
-      setUploadBusy(true);
-      setUploadError(null);
-      setRetryUpload(null);
+  // «Занятые» места — готовые вложения и те, что прямо сейчас грузятся:
+  // camera даёт один файл за раз и раньше не видела чужих слотов вовсе.
+  const occupiedAttachmentSlots = attachments.length + uploadSlots.filter((slot) => slot.status === 'uploading').length;
+
+  const performUpload = useCallback(
+    async (slotId: string, candidate: NormalizedUpload) => {
       try {
         const form = new FormData();
         form.append('file', buildUploadFilePart(candidate) as unknown as Blob);
         const result = await chatApi.upload(conversationId, form);
         setAttachments((current) => addAttachment(current, toAttachmentInput(result, candidate.name)));
+        setUploadSlots((current) => current.filter((slot) => slot.id !== slotId));
       } catch (e) {
-        // Кандидат остаётся: «Повторить» пробует загрузить его же, без похода в галерею заново.
-        setRetryUpload(candidate);
-        setUploadError(e instanceof Error ? e.message : 'Файл не загрузился');
-      } finally {
-        setUploadBusy(false);
+        setUploadSlots((current) =>
+          current.map((slot) =>
+            slot.id === slotId
+              ? { ...slot, status: 'error', error: e instanceof Error ? e.message : 'Файл не загрузился' }
+              : slot,
+          ),
+        );
       }
     },
     [chatApi, conversationId],
   );
 
-  const remainingAttachmentSlots = CHAT_MAX_ATTACHMENTS - attachments.length;
+  const uploadCandidate = useCallback(
+    async (candidate: NormalizedUpload) => {
+      const slotId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const denial = validateUpload({ mimeType: candidate.type, sizeBytes: candidate.sizeBytes });
+      if (denial) {
+        // Свой слот на каждый файл: неудача одного больше не затирает ошибку
+        // другого при выборе нескольких фото подряд (раунд оценки 002).
+        setUploadSlots((current) => [
+          ...current,
+          { id: slotId, candidate, status: 'error', error: uploadDenialMessage(denial), retryable: false },
+        ]);
+        return;
+      }
+      setUploadSlots((current) => [...current, { id: slotId, candidate, status: 'uploading', retryable: true }]);
+      await performUpload(slotId, candidate);
+    },
+    [performUpload],
+  );
+
+  const retrySlot = useCallback(
+    (slotId: string, candidate: NormalizedUpload) => {
+      setUploadSlots((current) => current.map((slot) => (slot.id === slotId ? { ...slot, status: 'uploading', error: undefined } : slot)));
+      void performUpload(slotId, candidate);
+    },
+    [performUpload],
+  );
+
+  const removeUploadSlot = useCallback((slotId: string) => {
+    setUploadSlots((current) => current.filter((slot) => slot.id !== slotId));
+  }, []);
 
   const pickFromGallery = useCallback(async () => {
-    if (remainingAttachmentSlots <= 0) {
-      setUploadError('Нельзя прикрепить больше 10 вложений в одно сообщение');
+    setPickError(null);
+    const remaining = remainingAttachmentSlots(occupiedAttachmentSlots);
+    if (remaining <= 0) {
+      setPickError('Нельзя прикрепить больше 10 вложений в одно сообщение');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsMultipleSelection: true,
-      selectionLimit: remainingAttachmentSlots,
+      selectionLimit: remaining,
       quality: 0.9,
     });
     if (result.canceled) return;
     for (const asset of result.assets) {
       const normalized = normalizePickedImage(asset);
       if (!normalized) {
-        setUploadError('Не удалось определить тип фото');
+        setPickError('Не удалось определить тип фото');
         continue;
       }
       await uploadCandidate(normalized);
     }
-  }, [remainingAttachmentSlots, uploadCandidate]);
+  }, [occupiedAttachmentSlots, uploadCandidate]);
 
   const pickFromCamera = useCallback(async () => {
+    setPickError(null);
+    // Лимит проверяется до похода в камеру — иначе снимок всё равно уходит
+    // в хранилище лишней загрузкой, а `addAttachment` потом молча его
+    // отбрасывает без объяснения (раунд оценки 002).
+    if (!canPickAttachment(occupiedAttachmentSlots)) {
+      setPickError('Нельзя прикрепить больше 10 вложений в одно сообщение');
+      return;
+    }
     // Разрешение спрашивается только тут, не при открытии приложения.
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      setUploadError('Нет доступа к камере. Разрешите доступ в настройках телефона.');
+      setPickError('Нет доступа к камере. Разрешите доступ в настройках телефона.');
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.9 });
@@ -477,15 +559,16 @@ export default function ChatRoomScreen() {
     const asset = result.assets[0];
     const normalized = asset ? normalizePickedImage(asset) : null;
     if (!normalized) {
-      setUploadError('Не удалось получить фото с камеры');
+      setPickError('Не удалось получить фото с камеры');
       return;
     }
     await uploadCandidate(normalized);
-  }, [uploadCandidate]);
+  }, [occupiedAttachmentSlots, uploadCandidate]);
 
   const pickDocument = useCallback(async () => {
-    if (remainingAttachmentSlots <= 0) {
-      setUploadError('Нельзя прикрепить больше 10 вложений в одно сообщение');
+    setPickError(null);
+    if (!canPickAttachment(occupiedAttachmentSlots)) {
+      setPickError('Нельзя прикрепить больше 10 вложений в одно сообщение');
       return;
     }
     const result = await DocumentPicker.getDocumentAsync({ type: Array.from(ALLOWED_FILE_MIME), multiple: false });
@@ -493,15 +576,11 @@ export default function ChatRoomScreen() {
     const asset = result.assets[0];
     const normalized = asset ? normalizePickedDocument(asset) : null;
     if (!normalized) {
-      setUploadError('Не удалось определить тип файла');
+      setPickError('Не удалось определить тип файла');
       return;
     }
     await uploadCandidate(normalized);
-  }, [remainingAttachmentSlots, uploadCandidate]);
-
-  const retryFailedUpload = useCallback(() => {
-    if (retryUpload) void uploadCandidate(retryUpload);
-  }, [retryUpload, uploadCandidate]);
+  }, [occupiedAttachmentSlots, uploadCandidate]);
 
   const removeAttachment = useCallback((index: number) => {
     setAttachments((current) => removeAttachmentAt(current, index));
@@ -532,7 +611,13 @@ export default function ChatRoomScreen() {
       : withPlural(detail.membersCount, detail.kind === 'channel' ? 'подписчик' : 'участник', detail.kind === 'channel' ? 'подписчика' : 'участника', detail.kind === 'channel' ? 'подписчиков' : 'участников')
     : '';
 
-  const canSubmit = editing ? Boolean(draft.trim()) : Boolean(draft.trim() || attachments.length > 0);
+  const canSubmit = canSubmitComposer({
+    editing: Boolean(editing),
+    draft,
+    attachmentsCount: attachments.length,
+    uploading: anyUploading,
+  });
+  const attachDisabled = anyUploading || !canPickAttachment(occupiedAttachmentSlots);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
@@ -587,7 +672,7 @@ export default function ChatRoomScreen() {
       >
         {!detail && error ? (
           <View style={styles.center}>
-            <Text accessibilityRole="alert" style={[styles.info, { color: colors.text1 }]}>
+            <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.info, { color: colors.text1 }]}>
               {error}
             </Text>
             <Pressable
@@ -625,7 +710,7 @@ export default function ChatRoomScreen() {
           detail.canWrite ? (
             <View style={[styles.composer, { borderTopColor: colors.glassBorder, paddingBottom: insets.bottom + 8, backgroundColor: colors.bg0 }]}>
               {sendError ? (
-                <Text accessibilityRole="alert" style={[styles.sendError, { color: colors.magenta }]}>
+                <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.sendError, { color: colors.magenta }]}>
                   {sendError}
                 </Text>
               ) : null}
@@ -672,26 +757,13 @@ export default function ChatRoomScreen() {
                 </View>
               ) : null}
 
-              {uploadError ? (
-                <View style={styles.uploadErrorRow}>
-                  <Text accessibilityRole="alert" style={[styles.sendError, styles.uploadErrorText, { color: colors.magenta }]}>
-                    {uploadError}
-                  </Text>
-                  {retryUpload ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Повторить загрузку"
-                      onPress={retryFailedUpload}
-                      android_ripple={ripple(colors.glassBorder)}
-                      style={({ pressed }) => [styles.retrySmall, { borderColor: colors.glassBorder }, pressedStyle(pressed)]}
-                    >
-                      <Text style={[styles.retrySmallText, { color: colors.text0 }]}>Повторить</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
+              {pickError ? (
+                <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.sendError, { color: colors.magenta }]}>
+                  {pickError}
+                </Text>
               ) : null}
 
-              {attachments.length > 0 || uploadBusy ? (
+              {attachments.length > 0 || uploadSlots.length > 0 ? (
                 <View style={styles.attachmentsRow}>
                   {attachments.map((attachment, index) => (
                     <View key={`${attachment.key}-${index}`} style={[styles.chip, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
@@ -702,33 +774,80 @@ export default function ChatRoomScreen() {
                         accessibilityRole="button"
                         accessibilityLabel="Убрать вложение"
                         onPress={() => removeAttachment(index)}
-                        hitSlop={8}
+                        android_ripple={ripple(colors.glassBorder, true)}
+                        style={styles.chipRemoveBox}
                       >
                         <Text style={[styles.chipRemove, { color: colors.text1 }]}>✕</Text>
                       </Pressable>
                     </View>
                   ))}
-                  {uploadBusy ? (
-                    <View style={[styles.chip, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
-                      <ActivityIndicator size="small" color={colors.text1} />
-                      <Text style={[styles.chipText, { color: colors.text1 }]}>Загрузка…</Text>
-                    </View>
-                  ) : null}
+                  {uploadSlots
+                    .filter((slot) => slot.status === 'uploading')
+                    .map((slot) => (
+                      <View key={slot.id} style={[styles.chip, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
+                        <ActivityIndicator size="small" color={colors.text1} />
+                        <Text style={[styles.chipText, { color: colors.text1 }]}>Загрузка…</Text>
+                      </View>
+                    ))}
                 </View>
               ) : null}
+
+              {/* Каждая неудачная загрузка — своя строка: несколько ошибок
+                  подряд (выбрали два фото, оба не загрузились) не затирают
+                  друг друга, у каждой свой «Повторить»/«Убрать». */}
+              {uploadSlots
+                .filter((slot) => slot.status === 'error')
+                .map((slot) => (
+                  <View key={slot.id} style={styles.uploadErrorRow}>
+                    <Text
+                      accessibilityRole="alert"
+                      accessibilityLiveRegion="polite"
+                      style={[styles.sendError, styles.uploadErrorText, { color: colors.magenta }]}
+                    >
+                      {slot.error}
+                    </Text>
+                    {slot.retryable ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Повторить загрузку"
+                        onPress={() => retrySlot(slot.id, slot.candidate)}
+                        android_ripple={ripple(colors.glassBorder)}
+                        style={({ pressed }) => [styles.retrySmall, { borderColor: colors.glassBorder }, pressedStyle(pressed)]}
+                      >
+                        <Text style={[styles.retrySmallText, { color: colors.text0 }]}>Повторить</Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Убрать вложение"
+                      onPress={() => removeUploadSlot(slot.id)}
+                      android_ripple={ripple(colors.glassBorder, true)}
+                      style={styles.chipRemoveBox}
+                    >
+                      <Text style={[styles.chipRemove, { color: colors.text1 }]}>✕</Text>
+                    </Pressable>
+                  </View>
+                ))}
 
               <View style={styles.composerRow}>
                 {!editing ? (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Вложение"
-                    accessibilityState={{ disabled: uploadBusy }}
-                    disabled={uploadBusy}
-                    onPress={() => setAttachSheetOpen(true)}
+                    accessibilityState={{ disabled: attachDisabled }}
+                    disabled={attachDisabled}
+                    onPress={() => {
+                      // Иначе после отмены системной галереи/камеры Android
+                      // сам возвращает фокус и открывает клавиатуру (раунд
+                      // оценки 002) — а поле в этот момент прячется под листом.
+                      inputRef.current?.blur();
+                      setAttachSheetOpen(true);
+                    }}
                     android_ripple={ripple(colors.glassBorder, true)}
                     style={({ pressed }) => [
                       styles.attachButton,
                       { borderColor: colors.glassBorder, backgroundColor: colors.glass },
+                      attachDisabled && styles.attachButtonDisabled,
                       pressedStyle(pressed),
                     ]}
                   >
@@ -739,6 +858,7 @@ export default function ChatRoomScreen() {
                   </Pressable>
                 ) : null}
                 <TextInput
+                  ref={inputRef}
                   value={draft}
                   onChangeText={onChangeDraft}
                   placeholder={editing ? 'Новый текст сообщения' : 'Сообщение'}
@@ -813,7 +933,7 @@ export default function ChatRoomScreen() {
                     </Text>
                   </Pressable>
                   {mutedError ? (
-                    <Text accessibilityRole="alert" style={[styles.info, { color: colors.magenta }]}>
+                    <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.info, { color: colors.magenta }]}>
                       {mutedError}
                     </Text>
                   ) : null}
@@ -875,25 +995,31 @@ const styles = StyleSheet.create({
   bannerBody: { fontFamily: fonts.body, fontSize: 13 },
   bannerClose: { width: hitTarget, height: hitTarget, alignItems: 'center', justifyContent: 'center' },
   bannerCloseText: { fontSize: 16 },
-  uploadErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  uploadErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   uploadErrorText: { flex: 1 },
-  retrySmall: { minHeight: 32, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 12, justifyContent: 'center' },
+  // Было minHeight: 32 (≈84 px на 420dpi) — меньше 44dp, найдено в раунде
+  // оценки 002.
+  retrySmall: { minHeight: hitTarget, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 12, justifyContent: 'center' },
   retrySmallText: { fontFamily: fonts.bodySemiBold, fontSize: 12 },
   attachmentsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
     borderWidth: 1,
     borderRadius: radius.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingLeft: 10,
     maxWidth: '100%',
+    overflow: 'hidden',
   },
-  chipText: { fontFamily: fonts.bodySemiBold, fontSize: 13, maxWidth: 160 },
-  chipRemove: { fontSize: 14, paddingHorizontal: 2 },
+  chipText: { fontFamily: fonts.bodySemiBold, fontSize: 13, maxWidth: 150 },
+  // Был глиф 14px с hitSlop={8} (≈40dp по факту) — зона нажатия меньше 44dp,
+  // найдено в раунде оценки 002. Сам `Pressable` теперь 44×44, не только
+  // расширенная зона вокруг маленькой иконки.
+  chipRemoveBox: { width: hitTarget, height: hitTarget, alignItems: 'center', justifyContent: 'center' },
+  chipRemove: { fontSize: 14 },
   composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   attachButton: { width: hitTarget, height: hitTarget, borderWidth: 1, borderRadius: 22, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  attachButtonDisabled: { opacity: 0.5 },
   input: {
     flex: 1,
     minHeight: hitTarget,
