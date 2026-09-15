@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LayerGroup, Map as LeafletMap } from "leaflet";
 import type { TravelPlaceDto } from "@vedamatch/shared";
 // Стили Leaflet обязательны: без них слои плиток позиционируются как обычные
@@ -39,6 +39,10 @@ export function TravelMap({ places, onSelectPlace }: TravelMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<LayerGroup | null>(null);
+  // Карта создаётся асинхронно (Leaflet грузится отдельным чанком), а места
+  // приходят раньше неё. Без флага эффект меток отрабатывал до готовности
+  // карты, выходил ни с чем и больше не запускался — метки не появлялись.
+  const [ready, setReady] = useState(false);
   // Обработчик в ref: метки перерисовываются реже, чем меняется замыкание, и
   // без этого карта звала бы устаревшую версию. Присваивание — в эффекте, а
   // не в теле: правка ref во время рендера ломает конкурентный рендер React.
@@ -78,6 +82,7 @@ export function TravelMap({ places, onSelectPlace }: TravelMapProps) {
       }).addTo(map);
       markersRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
+      setReady(true);
     })();
 
     return () => {
@@ -85,6 +90,7 @@ export function TravelMap({ places, onSelectPlace }: TravelMapProps) {
       map?.remove();
       mapRef.current = null;
       markersRef.current = null;
+      setReady(false);
     };
   }, []);
 
@@ -122,7 +128,7 @@ export function TravelMap({ places, onSelectPlace }: TravelMapProps) {
     return () => {
       disposed = true;
     };
-  }, [places]);
+  }, [places, ready]);
 
   return (
     <div
