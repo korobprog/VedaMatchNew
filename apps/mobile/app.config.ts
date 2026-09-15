@@ -61,6 +61,18 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           imageWidth: 76,
         },
       ],
+      // Тексты разрешений — только для iOS Info.plist (плагин их и добавляет);
+      // на Android пакет сам просит CAMERA/READ_MEDIA_IMAGES без этих строк.
+      // Приложение сейчас только под Android, но плагин обязателен, чтобы
+      // `expo prebuild` вообще собрал модуль камеры/галереи в APK.
+      [
+        'expo-image-picker',
+        {
+          photosPermission: 'Разрешите доступ к фото, чтобы прикладывать их к сообщениям.',
+          cameraPermission: 'Разрешите доступ к камере, чтобы снимать фото прямо в переписке.',
+          microphonePermission: false,
+        },
+      ],
     ],
     experiments: { typedRoutes: true, reactCompiler: true },
     extra: { variant },

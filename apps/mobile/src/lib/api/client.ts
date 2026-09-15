@@ -78,8 +78,13 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   function send(path: string, init: RequestOptions, token: string | null) {
     const headers: Record<string, string> = { Accept: 'application/json', ...init.headers };
     if (token) headers.Authorization = `Bearer ${token}`;
-    let body: string | undefined;
-    if (init.body !== undefined) {
+    let body: BodyInit | undefined;
+    if (init.body instanceof FormData) {
+      // Вложение чата: `FormData` не сериализуется и не получает свой
+      // `Content-Type` — RN сам подставит `multipart/form-data; boundary=…`
+      // по объекту `FormData`, ручной заголовок его ломает.
+      body = init.body;
+    } else if (init.body !== undefined) {
       headers['Content-Type'] = 'application/json';
       body = JSON.stringify(init.body);
     }

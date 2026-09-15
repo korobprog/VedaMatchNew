@@ -1,8 +1,16 @@
-import type { ChatConversationDetail, ChatMessageDto } from '@vedamatch/shared';
+import type {
+  ChatAttachmentInput,
+  ChatConversationDetail,
+  ChatMessageDto,
+  ChatReplyPreview,
+} from '@vedamatch/shared';
+import { CHAT_MAX_ATTACHMENTS } from '@vedamatch/shared';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import {
   ActivityIndicator,
   Alert,
@@ -18,12 +26,23 @@ import {
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+import { AttachmentSheet } from '@/components/chat/attachment-sheet';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
 import { MessageBubble } from '@/components/chat/message-bubble';
+import { MessageMenu } from '@/components/chat/message-menu';
 import { MessagesSkeleton } from '@/components/skeleton';
 import { useSession } from '@/lib/auth/session';
 import { createChatApi } from '@/lib/chat/chat-api';
-import { formatChatDivider, isNewDay, officialNotifyLabel, readonlyNotice } from '@/lib/chat/chat-format';
+import {
+  addAttachment,
+  buildEditRequest,
+  buildSendRequest,
+  enterEditMode,
+  exitEditMode,
+  removeAttachmentAt,
+  toAttachmentInput,
+} from '@/lib/chat/chat-composer-state';
+import { attachmentLabel, formatChatDivider, isNewDay, officialNotifyLabel, readonlyNotice } from '@/lib/chat/chat-format';
 import {
   applyReadByOther,
   applyRoomEvent,
@@ -32,7 +51,17 @@ import {
   prependOlder,
   settlePendingMessage,
 } from '@/lib/chat/chat-room-state';
+import { applyOptimisticReaction } from '@/lib/chat/chat-reactions';
 import { useChatStream } from '@/lib/chat/chat-stream';
+import {
+  ALLOWED_FILE_MIME,
+  buildUploadFilePart,
+  normalizePickedDocument,
+  normalizePickedImage,
+  uploadDenialMessage,
+  validateUpload,
+  type NormalizedUpload,
+} from '@/lib/chat/chat-upload-rules';
 import { setActiveConversation } from '@/lib/push/active-chat';
 import { withPlural } from '@/lib/chat/plural';
 import { isOnline } from '@/lib/chat/presence';
@@ -72,6 +101,7 @@ export default function ChatRoomScreen() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState('');
   const [typingName, setTypingName] = useState<string | null>(null);
   const [mutedBusy, setMutedBusy] = useState(false);
@@ -79,6 +109,19 @@ export default function ChatRoomScreen() {
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSent = useRef(0);
   const myId = user?.id ?? '';
+
+  // Ответ и правка — состояние композера (VED-167). Черновик поля один на
+  // оба режима: при входе в правку он откладывается и возвращается при
+  // отмене (`chat-composer-state.ts`, приём с сайта).
+  const [replyTo, setReplyTo] = useState<ChatMessageDto | null>(null);
+  const [editing, setEditing] = useState<ChatMessageDto | null>(null);
+  const [draftBeforeEdit, setDraftBeforeEdit] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<ChatAttachmentInput[]>([]);
+  const [attachSheetOpen, setAttachSheetOpen] = useState(false);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [retryUpload, setRetryUpload] = useState<NormalizedUpload | null>(null);
+  const [menuMessage, setMenuMessage] = useState<ChatMessageDto | null>(null);
 
   const markRead = useCallback(() => {
     chatApi.markRead(conversationId).catch(() => undefined);
@@ -163,28 +206,77 @@ export default function ChatRoomScreen() {
   );
 
   const send = useCallback(async () => {
-    const body = draft.trim();
-    if (!body || !user) return;
+    if (!user) return;
+    const request = buildSendRequest({ body: draft, replyToId: replyTo?.id, attachments });
+    if (!request) return;
+    const bodyText = draft.trim();
+    const replyPreview: ChatReplyPreview | null = replyTo
+      ? { id: replyTo.id, authorName: replyTo.author.name, body: replyTo.body, attachmentKind: replyTo.attachments[0]?.kind ?? null }
+      : null;
     const pending = buildPendingMessage({
       seed: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       conversationId,
       author: { id: user.id, name: user.name, avatarUrl: user.avatarUrl },
-      body,
+      body: bodyText,
       now: new Date(),
+      attachments,
+      replyTo: replyPreview,
     });
+    const sentAttachments = attachments;
+    const sentReply = replyTo;
     confirmTap();
     setDraft('');
+    setAttachments([]);
+    setReplyTo(null);
     setSendError(null);
     setMessages((current) => [...current, pending]);
     try {
-      const saved = await chatApi.send(conversationId, { body });
+      const saved = await chatApi.send(conversationId, request);
       setMessages((current) => settlePendingMessage(current, pending.id, saved));
     } catch (e) {
+      // Черновик, вложения и плашка ответа возвращаются — можно отправить ещё раз.
       setMessages((current) => dropPendingMessage(current, pending.id));
-      setDraft((current) => current || body);
+      setDraft((current) => current || bodyText);
+      setAttachments(sentAttachments);
+      setReplyTo(sentReply);
       setSendError(e instanceof Error ? e.message : 'Сообщение не отправлено');
     }
-  }, [chatApi, conversationId, draft, user]);
+  }, [attachments, chatApi, conversationId, draft, replyTo, user]);
+
+  const saveEdit = useCallback(async () => {
+    if (!editing) return;
+    const request = buildEditRequest(draft);
+    if (!request) return;
+    setSendError(null);
+    setSending(true);
+    try {
+      const saved = await chatApi.edit(editing.id, request);
+      setMessages((current) => applyRoomEvent(current, { type: 'message.updated', conversationId, message: saved }, conversationId));
+      setEditing(null);
+      setDraft(draftBeforeEdit ?? '');
+      setDraftBeforeEdit(null);
+    } catch (e) {
+      // Текст остаётся в поле в режиме правки — можно поправить и повторить.
+      setSendError(e instanceof Error ? e.message : 'Не сохранилось, попробуйте ещё раз');
+    } finally {
+      setSending(false);
+    }
+  }, [chatApi, conversationId, draft, draftBeforeEdit, editing]);
+
+  const onComposerSubmit = useCallback(() => {
+    if (editing) void saveEdit();
+    else void send();
+  }, [editing, saveEdit, send]);
+
+  const cancelReply = useCallback(() => setReplyTo(null), []);
+
+  const cancelEdit = useCallback(() => {
+    const result = exitEditMode(draftBeforeEdit);
+    setDraft(result.draft);
+    setDraftBeforeEdit(result.draftBeforeEdit);
+    setEditing(null);
+    setSendError(null);
+  }, [draftBeforeEdit]);
 
   // FlatList перевёрнут: новые снизу, данные в обратном порядке.
   const rows = useMemo<Row[]>(() => {
@@ -215,16 +307,204 @@ export default function ChatRoomScreen() {
 
   const showAuthors = detail ? detail.kind !== 'direct' : false;
 
-  // Пока единственное действие — копирование. Ответы и реакции (VED-167)
-  // встанут в это же меню.
-  const onMessageLongPress = useCallback((message: ChatMessageDto) => {
+  // ===== Меню долгого нажатия: ответить, реакция, копировать, изменить, удалить =====
+
+  const openMenu = useCallback((message: ChatMessageDto) => {
     longPressTap();
-    // Начало текста под заголовком: видно, что именно скопируется.
-    const preview = message.body.length > 140 ? `${message.body.slice(0, 140).trimEnd()}…` : message.body;
-    Alert.alert('Сообщение', preview, [
-      { text: 'Копировать текст', onPress: () => void Clipboard.setStringAsync(message.body) },
-      { text: 'Отмена', style: 'cancel' },
-    ]);
+    setMenuMessage(message);
+  }, []);
+
+  const closeMenu = useCallback(() => setMenuMessage(null), []);
+
+  const startReply = useCallback(
+    (message: ChatMessageDto) => {
+      setReplyTo(message);
+      closeMenu();
+    },
+    [closeMenu],
+  );
+
+  const copyMessage = useCallback(
+    (message: ChatMessageDto) => {
+      void Clipboard.setStringAsync(message.body);
+      closeMenu();
+    },
+    [closeMenu],
+  );
+
+  const startEdit = useCallback(
+    (message: ChatMessageDto) => {
+      const result = enterEditMode({
+        currentEditingId: editing?.id ?? null,
+        nextMessage: message,
+        currentDraft: draft,
+        savedDraft: draftBeforeEdit,
+      });
+      setDraft(result.draft);
+      setDraftBeforeEdit(result.draftBeforeEdit);
+      setEditing(message);
+      setReplyTo(null);
+      setSendError(null);
+      closeMenu();
+    },
+    [closeMenu, draft, draftBeforeEdit, editing],
+  );
+
+  const confirmDelete = useCallback(
+    (message: ChatMessageDto) => {
+      closeMenu();
+      Alert.alert('Удалить сообщение?', undefined, [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Удалить',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              try {
+                await chatApi.remove(message.id);
+                setMessages((current) =>
+                  applyRoomEvent(current, { type: 'message.deleted', conversationId, messageId: message.id }, conversationId),
+                );
+              } catch (e) {
+                Alert.alert('Не получилось', e instanceof Error ? e.message : 'Сообщение не удалено, попробуйте ещё раз');
+              }
+            })();
+          },
+        },
+      ]);
+    },
+    [chatApi, closeMenu, conversationId],
+  );
+
+  const reactToMessage = useCallback(
+    (message: ChatMessageDto, emoji: string) => {
+      let previous: ChatMessageDto[] = [];
+      // Предсказание сразу, не дожидаясь сети — откатывается на ошибке.
+      setMessages((current) => {
+        previous = current;
+        return current.map((item) =>
+          item.id === message.id ? { ...item, reactions: applyOptimisticReaction(item.reactions, emoji) } : item,
+        );
+      });
+      void (async () => {
+        try {
+          const result = await chatApi.setReaction(message.id, emoji);
+          setMessages((current) =>
+            applyRoomEvent(
+              current,
+              { type: 'reaction.set', conversationId, messageId: message.id, reactions: result.reactions },
+              conversationId,
+            ),
+          );
+        } catch {
+          setMessages(previous);
+          Alert.alert('Не получилось', 'Реакция не поставилась, попробуйте ещё раз');
+        }
+      })();
+    },
+    [chatApi, conversationId],
+  );
+
+  const onMenuReact = useCallback(
+    (message: ChatMessageDto, emoji: string) => {
+      closeMenu();
+      reactToMessage(message, emoji);
+    },
+    [closeMenu, reactToMessage],
+  );
+
+  // ===== Вложения: галерея, камера, файл =====
+
+  const uploadCandidate = useCallback(
+    async (candidate: NormalizedUpload) => {
+      const denial = validateUpload({ mimeType: candidate.type, sizeBytes: candidate.sizeBytes });
+      if (denial) {
+        setUploadError(uploadDenialMessage(denial));
+        setRetryUpload(null);
+        return;
+      }
+      setUploadBusy(true);
+      setUploadError(null);
+      setRetryUpload(null);
+      try {
+        const form = new FormData();
+        form.append('file', buildUploadFilePart(candidate) as unknown as Blob);
+        const result = await chatApi.upload(conversationId, form);
+        setAttachments((current) => addAttachment(current, toAttachmentInput(result, candidate.name)));
+      } catch (e) {
+        // Кандидат остаётся: «Повторить» пробует загрузить его же, без похода в галерею заново.
+        setRetryUpload(candidate);
+        setUploadError(e instanceof Error ? e.message : 'Файл не загрузился');
+      } finally {
+        setUploadBusy(false);
+      }
+    },
+    [chatApi, conversationId],
+  );
+
+  const remainingAttachmentSlots = CHAT_MAX_ATTACHMENTS - attachments.length;
+
+  const pickFromGallery = useCallback(async () => {
+    if (remainingAttachmentSlots <= 0) {
+      setUploadError('Нельзя прикрепить больше 10 вложений в одно сообщение');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsMultipleSelection: true,
+      selectionLimit: remainingAttachmentSlots,
+      quality: 0.9,
+    });
+    if (result.canceled) return;
+    for (const asset of result.assets) {
+      const normalized = normalizePickedImage(asset);
+      if (!normalized) {
+        setUploadError('Не удалось определить тип фото');
+        continue;
+      }
+      await uploadCandidate(normalized);
+    }
+  }, [remainingAttachmentSlots, uploadCandidate]);
+
+  const pickFromCamera = useCallback(async () => {
+    // Разрешение спрашивается только тут, не при открытии приложения.
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      setUploadError('Нет доступа к камере. Разрешите доступ в настройках телефона.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.9 });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    const normalized = asset ? normalizePickedImage(asset) : null;
+    if (!normalized) {
+      setUploadError('Не удалось получить фото с камеры');
+      return;
+    }
+    await uploadCandidate(normalized);
+  }, [uploadCandidate]);
+
+  const pickDocument = useCallback(async () => {
+    if (remainingAttachmentSlots <= 0) {
+      setUploadError('Нельзя прикрепить больше 10 вложений в одно сообщение');
+      return;
+    }
+    const result = await DocumentPicker.getDocumentAsync({ type: Array.from(ALLOWED_FILE_MIME), multiple: false });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    const normalized = asset ? normalizePickedDocument(asset) : null;
+    if (!normalized) {
+      setUploadError('Не удалось определить тип файла');
+      return;
+    }
+    await uploadCandidate(normalized);
+  }, [remainingAttachmentSlots, uploadCandidate]);
+
+  const retryFailedUpload = useCallback(() => {
+    if (retryUpload) void uploadCandidate(retryUpload);
+  }, [retryUpload, uploadCandidate]);
+
+  const removeAttachment = useCallback((index: number) => {
+    setAttachments((current) => removeAttachmentAt(current, index));
   }, []);
 
   const renderRow = useCallback<ListRenderItem<Row>>(
@@ -237,11 +517,12 @@ export default function ChatRoomScreen() {
           message={item.message}
           mine={item.message.author.id === myId}
           showAuthor={showAuthors}
-          onLongPress={item.message.body ? onMessageLongPress : undefined}
+          onLongPress={openMenu}
+          onReactionPress={reactToMessage}
         />
       </View>
     ),
-    [colors, myId, showAuthors, onMessageLongPress],
+    [colors, myId, showAuthors, openMenu, reactToMessage],
   );
   const subtitle = detail
     ? detail.kind === 'direct'
@@ -250,6 +531,8 @@ export default function ChatRoomScreen() {
         : ''
       : withPlural(detail.membersCount, detail.kind === 'channel' ? 'подписчик' : 'участник', detail.kind === 'channel' ? 'подписчика' : 'участника', detail.kind === 'channel' ? 'подписчиков' : 'участников')
     : '';
+
+  const canSubmit = editing ? Boolean(draft.trim()) : Boolean(draft.trim() || attachments.length > 0);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
@@ -346,11 +629,119 @@ export default function ChatRoomScreen() {
                   {sendError}
                 </Text>
               ) : null}
+
+              {replyTo && !editing ? (
+                <View style={[styles.banner, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
+                  <View style={styles.bannerText}>
+                    <Text numberOfLines={1} style={[styles.bannerAuthor, { color: colors.violet }]}>
+                      {replyTo.author.name}
+                    </Text>
+                    <Text numberOfLines={1} style={[styles.bannerBody, { color: colors.text1 }]}>
+                      {replyTo.body || attachmentLabel(replyTo.attachments[0]?.kind ?? 'file')}
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Отменить ответ"
+                    onPress={cancelReply}
+                    android_ripple={ripple(colors.glassBorder, true)}
+                    style={styles.bannerClose}
+                  >
+                    <Text style={[styles.bannerCloseText, { color: colors.text1 }]}>✕</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
+              {editing ? (
+                <View style={[styles.banner, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
+                  <View style={styles.bannerText}>
+                    <Text style={[styles.bannerAuthor, { color: colors.text0 }]}>Изменение сообщения</Text>
+                    <Text numberOfLines={1} style={[styles.bannerBody, { color: colors.text1 }]}>
+                      было: «{editing.body}»
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Отменить изменение"
+                    onPress={cancelEdit}
+                    android_ripple={ripple(colors.glassBorder, true)}
+                    style={styles.bannerClose}
+                  >
+                    <Text style={[styles.bannerCloseText, { color: colors.text1 }]}>✕</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
+              {uploadError ? (
+                <View style={styles.uploadErrorRow}>
+                  <Text accessibilityRole="alert" style={[styles.sendError, styles.uploadErrorText, { color: colors.magenta }]}>
+                    {uploadError}
+                  </Text>
+                  {retryUpload ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Повторить загрузку"
+                      onPress={retryFailedUpload}
+                      android_ripple={ripple(colors.glassBorder)}
+                      style={({ pressed }) => [styles.retrySmall, { borderColor: colors.glassBorder }, pressedStyle(pressed)]}
+                    >
+                      <Text style={[styles.retrySmallText, { color: colors.text0 }]}>Повторить</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {attachments.length > 0 || uploadBusy ? (
+                <View style={styles.attachmentsRow}>
+                  {attachments.map((attachment, index) => (
+                    <View key={`${attachment.key}-${index}`} style={[styles.chip, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
+                      <Text numberOfLines={1} style={[styles.chipText, { color: colors.text1 }]}>
+                        {attachment.title || attachmentLabel(attachment.kind)}
+                      </Text>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Убрать вложение"
+                        onPress={() => removeAttachment(index)}
+                        hitSlop={8}
+                      >
+                        <Text style={[styles.chipRemove, { color: colors.text1 }]}>✕</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                  {uploadBusy ? (
+                    <View style={[styles.chip, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
+                      <ActivityIndicator size="small" color={colors.text1} />
+                      <Text style={[styles.chipText, { color: colors.text1 }]}>Загрузка…</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
               <View style={styles.composerRow}>
+                {!editing ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Вложение"
+                    accessibilityState={{ disabled: uploadBusy }}
+                    disabled={uploadBusy}
+                    onPress={() => setAttachSheetOpen(true)}
+                    android_ripple={ripple(colors.glassBorder, true)}
+                    style={({ pressed }) => [
+                      styles.attachButton,
+                      { borderColor: colors.glassBorder, backgroundColor: colors.glass },
+                      pressedStyle(pressed),
+                    ]}
+                  >
+                    <Svg width={20} height={20} viewBox="0 0 24 24">
+                      <Path d="M12 5v14" stroke={colors.text1} strokeWidth={2} strokeLinecap="round" />
+                      <Path d="M5 12h14" stroke={colors.text1} strokeWidth={2} strokeLinecap="round" />
+                    </Svg>
+                  </Pressable>
+                ) : null}
                 <TextInput
                   value={draft}
                   onChangeText={onChangeDraft}
-                  placeholder="Сообщение"
+                  placeholder={editing ? 'Новый текст сообщения' : 'Сообщение'}
                   placeholderTextColor={colors.text1}
                   multiline
                   maxLength={MAX_LENGTH}
@@ -358,26 +749,42 @@ export default function ChatRoomScreen() {
                 />
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Отправить"
-                  disabled={!draft.trim()}
-                  onPress={() => void send()}
+                  accessibilityLabel={editing ? 'Сохранить' : 'Отправить'}
+                  accessibilityState={{ disabled: !canSubmit || sending, busy: sending }}
+                  disabled={!canSubmit || sending}
+                  onPress={onComposerSubmit}
                   android_ripple={ripple(colors.glassBorder, true)}
                   style={({ pressed }) => [
                     styles.sendButton,
-                    { backgroundColor: draft.trim() ? colors.mint : colors.bg2 },
+                    { backgroundColor: canSubmit ? colors.mint : colors.bg2 },
                     pressedStyle(pressed),
                   ]}
                 >
-                  <Svg width={22} height={22} viewBox="0 0 24 24">
-                    <Path
-                      d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"
-                      stroke={draft.trim() ? colors.onMint : colors.text1}
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      fill="none"
-                    />
-                  </Svg>
+                  {sending ? (
+                    <ActivityIndicator size="small" color={canSubmit ? colors.onMint : colors.text1} />
+                  ) : editing ? (
+                    <Svg width={20} height={20} viewBox="0 0 24 24">
+                      <Path
+                        d="M4.5 12.5 9 17l10.5-11"
+                        stroke={canSubmit ? colors.onMint : colors.text1}
+                        strokeWidth={2.2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        fill="none"
+                      />
+                    </Svg>
+                  ) : (
+                    <Svg width={22} height={22} viewBox="0 0 24 24">
+                      <Path
+                        d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"
+                        stroke={canSubmit ? colors.onMint : colors.text1}
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        fill="none"
+                      />
+                    </Svg>
+                  )}
                 </Pressable>
               </View>
             </View>
@@ -416,6 +823,24 @@ export default function ChatRoomScreen() {
           )
         ) : null}
       </KeyboardAvoidingView>
+
+      <MessageMenu
+        message={menuMessage}
+        myUserId={myId}
+        onClose={closeMenu}
+        onReact={onMenuReact}
+        onReply={startReply}
+        onCopy={copyMessage}
+        onEdit={startEdit}
+        onDelete={confirmDelete}
+      />
+      <AttachmentSheet
+        visible={attachSheetOpen}
+        onClose={() => setAttachSheetOpen(false)}
+        onPickGallery={() => void pickFromGallery()}
+        onPickCamera={() => void pickFromCamera()}
+        onPickFile={() => void pickDocument()}
+      />
     </View>
   );
 }
@@ -444,7 +869,31 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
   composer: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingTop: 8, gap: 6 },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 8 },
+  bannerText: { flex: 1, minWidth: 0, gap: 1 },
+  bannerAuthor: { fontFamily: fonts.bodyBold, fontSize: 12 },
+  bannerBody: { fontFamily: fonts.body, fontSize: 13 },
+  bannerClose: { width: hitTarget, height: hitTarget, alignItems: 'center', justifyContent: 'center' },
+  bannerCloseText: { fontSize: 16 },
+  uploadErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  uploadErrorText: { flex: 1 },
+  retrySmall: { minHeight: 32, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 12, justifyContent: 'center' },
+  retrySmallText: { fontFamily: fonts.bodySemiBold, fontSize: 12 },
+  attachmentsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    maxWidth: '100%',
+  },
+  chipText: { fontFamily: fonts.bodySemiBold, fontSize: 13, maxWidth: 160 },
+  chipRemove: { fontSize: 14, paddingHorizontal: 2 },
   composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  attachButton: { width: hitTarget, height: hitTarget, borderWidth: 1, borderRadius: 22, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   input: {
     flex: 1,
     minHeight: hitTarget,

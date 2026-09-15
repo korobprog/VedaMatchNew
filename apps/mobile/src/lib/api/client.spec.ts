@@ -115,6 +115,20 @@ describe('createApiClient', () => {
     expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
   });
 
+  it('FormData не сериализуется и не получает ручной Content-Type', async () => {
+    const fetchImpl = jest.fn(async () => json(201, { key: 'chat/x/1' }));
+    const { session } = sessionWith('t', null);
+    const api = createApiClient({ baseUrl: 'https://api', session, fetchImpl });
+
+    const form = new FormData();
+    form.append('file', { uri: 'file:///tmp/photo.jpg', name: 'photo.jpg', type: 'image/jpeg' } as unknown as Blob);
+
+    await api.request('/chat/conversations/c1/uploads', { method: 'POST', body: form });
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.body).toBe(form);
+    expect((init.headers as Record<string, string>)['Content-Type']).toBeUndefined();
+  });
+
   it('пустой ответ 204 возвращает null', async () => {
     const { session } = sessionWith('t', null);
     const api = createApiClient({ baseUrl: 'https://api', session, fetchImpl: async () => new Response(null, { status: 204 }) });

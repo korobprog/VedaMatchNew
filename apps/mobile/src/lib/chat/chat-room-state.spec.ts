@@ -41,6 +41,21 @@ describe('черновик отправки', () => {
     const draft = buildPendingMessage({ seed: 's1', conversationId: 'c1', author, body: 'hi', now: new Date() });
     expect(dropPendingMessage([msg('a'), draft], draft.id).map((m) => m.id)).toEqual(['a']);
   });
+
+  it('несёт вложения и цитату ответа, пока отправляется', () => {
+    const draft = buildPendingMessage({
+      seed: 's2',
+      conversationId: 'c1',
+      author,
+      body: '',
+      now: new Date(),
+      attachments: [{ kind: 'image', url: 'https://x/1', key: '1', mimeType: 'image/jpeg', sizeBytes: 10 }],
+      replyTo: { id: 'orig', authorName: 'Другой', body: 'Исходный текст' },
+    });
+    expect(draft.attachments).toHaveLength(1);
+    expect(draft.attachments[0].kind).toBe('image');
+    expect(draft.replyTo?.id).toBe('orig');
+  });
 });
 
 describe('applyRoomEvent', () => {
