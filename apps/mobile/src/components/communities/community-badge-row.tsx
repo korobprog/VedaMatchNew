@@ -62,7 +62,8 @@ function CommunityBadgeRowImpl({ community, onPress }: Props) {
           <Text numberOfLines={1} style={[styles.title, { color: colors.text0 }]}>
             {community.name}
           </Text>
-          {community.isVerified ? <CommunityVerifiedBadge /> : null}
+          {/* Подпись строки уже содержит «, подтверждена» — значок декоративный, второй раз не фокусируется (раунд оценки 006, дефект 6). */}
+          {community.isVerified ? <CommunityVerifiedBadge decorative /> : null}
         </View>
         <Text numberOfLines={1} style={[styles.subtitle, { color: colors.text1 }]}>
           {subtitle}

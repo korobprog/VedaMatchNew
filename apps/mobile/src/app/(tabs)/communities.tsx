@@ -83,6 +83,11 @@ export default function CommunitiesScreen() {
     void WebBrowser.openBrowserAsync(serviceUrl(webOrigin, '/communities'));
   }, [webOrigin]);
 
+  // Заголовок — отдельный от прокручиваемого содержимого блок с собственным
+  // горизонтальным отступом: раньше он лежал то прямо в корне (скелетон,
+  // полноэкранная ошибка, без отступа), то внутри `ScrollView` с отступом
+  // `body` (список) — заголовок прыгал при появлении данных (раунд оценки
+  // 006, дефект 2). Теперь он всегда одна и та же строка вне `body`.
   const header = (
     <Text accessibilityRole="header" style={[styles.title, { color: colors.text0, paddingTop: insets.top + 16 }]}>
       Общины
@@ -94,7 +99,7 @@ export default function CommunitiesScreen() {
       <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
         {header}
         <View style={styles.center}>
-          <Text accessibilityRole="alert" style={[styles.centerText, { color: colors.text1 }]}>
+          <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.centerText, { color: colors.text1 }]}>
             {error}
           </Text>
           <RetryButton onPress={() => void load()} />
@@ -108,6 +113,12 @@ export default function CommunitiesScreen() {
       <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
         {header}
         <View style={styles.body}>
+          {/* Плашка раздела уже здесь, в том же месте, что и у настоящего
+              контента ниже — строки скелетона не сдвигаются вниз, когда
+              появляются данные (раунд оценки 006, дефект 2). */}
+          <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.text1 }]}>
+            Мои общины
+          </Text>
           <CommunityListSkeleton />
         </View>
       </View>
@@ -120,12 +131,13 @@ export default function CommunitiesScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
+      {header}
       <ScrollView
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.magenta]} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.magenta]} progressViewOffset={insets.top} />
+        }
       >
-        {header}
-
         {error ? (
           <View style={[styles.banner, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
             <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.bannerText, { color: colors.text0 }]}>
@@ -158,7 +170,9 @@ export default function CommunitiesScreen() {
           <>
             {memberships.length > 0 ? (
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text1 }]}>Мои общины</Text>
+                <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.text1 }]}>
+                  Мои общины
+                </Text>
                 {memberships.map((community) => (
                   <CommunityBadgeRow key={community.id} community={community} onPress={openCommunity} />
                 ))}
@@ -167,7 +181,9 @@ export default function CommunitiesScreen() {
 
             {pending.length > 0 ? (
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text1 }]}>Заявки на рассмотрении</Text>
+                <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.text1 }]}>
+                  Заявки на рассмотрении
+                </Text>
                 <Text style={[styles.sectionHint, { color: colors.text1 }]}>
                   Пока заявку не разберёт администрация общины, войти в её беседы нельзя.
                 </Text>
@@ -185,8 +201,8 @@ export default function CommunitiesScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  title: { fontFamily: fonts.displayBold, fontSize: 24, paddingHorizontal: 20, paddingBottom: 8 },
   body: { paddingHorizontal: 20, gap: 8 },
-  title: { fontFamily: fonts.displayBold, fontSize: 24, marginBottom: 8 },
   section: { gap: 2, marginTop: 12 },
   sectionTitle: { fontFamily: fonts.bodySemiBold, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 },
   sectionHint: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, marginBottom: 8 },

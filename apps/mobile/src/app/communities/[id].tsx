@@ -1,10 +1,9 @@
 import type { ChatDiscoverItem, CommunityKind } from '@vedamatch/shared';
 import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, View, type ListRenderItem } from 'react-native';
+import { Alert, FlatList, RefreshControl, StyleSheet, Text, View, type ListRenderItem } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DiscoverItemRow } from '@/components/chat/discover-item-row';
-import { InlineError } from '@/components/inline-error';
 import { RetryButton } from '@/components/retry-button';
 import { DiscoverListSkeleton } from '@/components/skeleton';
 import { useSession } from '@/lib/auth/session';
@@ -37,10 +36,17 @@ export default function CommunityDiscoverScreen() {
 
   const [items, setItems] = useState<ChatDiscoverItem[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  // Ошибка стоит у той строки, по которой нажали, а не общим баннером сверху
+  // списка — в каталоге может быть до 50 бесед, нажатая строка часто ниже
+  // первого экрана (раунд оценки 006, дефект 4).
+  const [actionError, setActionError] = useState<{ id: string; message: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const request = useRef(0);
+  // `busyId` меняется только после ререндера — двух быстрых тапов по одной
+  // кнопке достаточно, чтобы уйти в `subscribe` дважды и открыть беседу в
+  // стеке два раза (раунд оценки 006, дефект 7). Ref блокирует синхронно.
+  const joiningRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     const id = (request.current += 1);
@@ -76,9 +82,10 @@ export default function CommunityDiscoverScreen() {
     router.push({ pathname: '/chat/[id]', params: { id: conversationId } });
   }, []);
 
-  const join = useCallback(
+  const performJoin = useCallback(
     async (item: ChatDiscoverItem) => {
       const id = item.conversation.id;
+      joiningRef.current = id;
       confirmTap();
       setBusyId(id);
       setActionError(null);
@@ -87,12 +94,34 @@ export default function CommunityDiscoverScreen() {
         openConversation(id);
         setItems((current) => (current ? markJoined(current, id) : current));
       } catch (e) {
-        setActionError(e instanceof Error ? e.message : 'Не получилось войти в беседу');
+        setActionError({ id, message: e instanceof Error ? e.message : 'Не получилось войти в беседу' });
       } finally {
+        joiningRef.current = null;
         setBusyId(null);
       }
     },
     [chatApi, openConversation],
+  );
+
+  const join = useCallback(
+    (item: ChatDiscoverItem) => {
+      // Пока идёт подписка/вступление по любой беседе, вторая заявка не
+      // стартует — синхронная проверка ref, а не `busyId`, успевает до
+      // повторного тапа между кадрами.
+      if (joiningRef.current) return;
+      if (item.conversation.kind === 'group') {
+        // Вступление в группу видно остальным её участникам — в отличие от
+        // подписки на канал, это заметное действие и требует подтверждения
+        // (тот же приём, что `confirmDelete` в `chat/[id].tsx`).
+        Alert.alert(`Вступить в «${item.conversation.title}»?`, 'Участники группы увидят, что вы вступили.', [
+          { text: 'Отмена', style: 'cancel' },
+          { text: 'Вступить', onPress: () => void performJoin(item) },
+        ]);
+        return;
+      }
+      void performJoin(item);
+    },
+    [performJoin],
   );
 
   const renderItem = useCallback<ListRenderItem<ChatDiscoverItem>>(
@@ -101,11 +130,12 @@ export default function CommunityDiscoverScreen() {
         item={item}
         busy={busyId === item.conversation.id}
         disabled={busyId !== null && busyId !== item.conversation.id}
+        error={actionError?.id === item.conversation.id ? actionError.message : null}
         onOpen={openConversation}
         onJoin={join}
       />
     ),
-    [busyId, openConversation, join],
+    [busyId, actionError, openConversation, join],
   );
 
   const contextLine = [kindLabel, city].filter(Boolean).join(' · ');
@@ -113,10 +143,9 @@ export default function CommunityDiscoverScreen() {
   const header = (
     <View style={styles.headerBlock}>
       {contextLine ? <Text style={[styles.context, { color: colors.text1 }]}>{contextLine}</Text> : null}
-      {actionError ? <InlineError message={actionError} /> : null}
       {loadError && items ? (
         <View style={[styles.bannerRow, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
-          <Text accessibilityRole="alert" style={[styles.bannerText, { color: colors.text0 }]}>
+          <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.bannerText, { color: colors.text0 }]}>
             {loadError}
           </Text>
           <RetryButton onPress={() => void load()} />
@@ -139,7 +168,7 @@ export default function CommunityDiscoverScreen() {
       />
       {!items && loadError ? (
         <View style={styles.center}>
-          <Text accessibilityRole="alert" style={[styles.empty, { color: colors.text1 }]}>
+          <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.empty, { color: colors.text1 }]}>
             {loadError}
           </Text>
           <RetryButton onPress={() => void load()} />
