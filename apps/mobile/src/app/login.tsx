@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '@/lib/auth/session';
 import type { LoginProvider } from '@/lib/auth/login-flow';
+import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
 
@@ -57,7 +58,8 @@ export default function LoginScreen() {
           accessibilityRole="button"
           disabled={busy !== null}
           onPress={() => run('google', () => signIn('google'))}
-          style={({ pressed }) => [...buttonBase, pressed && styles.pressed]}
+          android_ripple={ripple(colors.glassBorder)}
+          style={({ pressed }) => [...buttonBase, pressedStyle(pressed)]}
         >
           {busy === 'google' ? <ActivityIndicator color={colors.text0} /> : <Text style={[styles.buttonText, { color: colors.text0 }]}>Войти через Google</Text>}
         </Pressable>
@@ -65,7 +67,8 @@ export default function LoginScreen() {
           accessibilityRole="button"
           disabled={busy !== null}
           onPress={() => run('yandex', () => signIn('yandex'))}
-          style={({ pressed }) => [...buttonBase, pressed && styles.pressed]}
+          android_ripple={ripple(colors.glassBorder)}
+          style={({ pressed }) => [...buttonBase, pressedStyle(pressed)]}
         >
           {busy === 'yandex' ? <ActivityIndicator color={colors.text0} /> : <Text style={[styles.buttonText, { color: colors.text0 }]}>Войти через Яндекс</Text>}
         </Pressable>
@@ -100,7 +103,8 @@ export default function LoginScreen() {
             accessibilityRole="button"
             disabled={busy !== null}
             onPress={() => run('dev', () => signInDev(email.trim(), password))}
-            style={({ pressed }) => [styles.button, { backgroundColor: colors.magenta, borderColor: colors.magenta }, pressed && styles.pressed]}
+            android_ripple={ripple(colors.glassBorder)}
+            style={({ pressed }) => [styles.button, { backgroundColor: colors.magenta, borderColor: colors.magenta }, pressedStyle(pressed)]}
           >
             {busy === 'dev' ? <ActivityIndicator color={colors.onAccent} /> : <Text style={[styles.buttonText, { color: colors.onAccent }]}>Войти</Text>}
           </Pressable>
@@ -124,8 +128,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
+    overflow: 'hidden',
   },
-  pressed: { opacity: 0.7 },
   buttonText: { fontFamily: fonts.bodyBold, fontSize: 16 },
   error: { fontFamily: fonts.bodySemiBold, fontSize: 14, lineHeight: 20 },
   dev: { marginTop: 'auto', gap: 10, borderTopWidth: 1, paddingTop: 16 },

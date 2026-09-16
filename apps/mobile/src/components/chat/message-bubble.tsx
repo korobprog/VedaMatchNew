@@ -1,9 +1,10 @@
 import type { ChatMessageDto } from '@vedamatch/shared';
 import { Image } from 'expo-image';
 import { memo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { attachmentLabel, formatTime } from '@/lib/chat/chat-format';
 import { isPendingMessage } from '@/lib/chat/chat-room-state';
+import { ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, radius } from '@/theme/tokens';
 
@@ -12,9 +13,11 @@ interface Props {
   mine: boolean;
   /** Имя автора над пузырём: в группах и каналах для чужих сообщений. */
   showAuthor: boolean;
+  /** Долгое нажатие: меню действий, задел под ответы и реакции (VED-167). */
+  onLongPress?(message: ChatMessageDto): void;
 }
 
-function MessageBubbleImpl({ message, mine, showAuthor }: Props) {
+function MessageBubbleImpl({ message, mine, showAuthor, onLongPress }: Props) {
   const { colors } = useTheme();
   const pending = isPendingMessage(message);
   const deleted = Boolean(message.deletedAt);
@@ -24,7 +27,16 @@ function MessageBubbleImpl({ message, mine, showAuthor }: Props) {
 
   return (
     <View style={[styles.wrap, mine ? styles.mine : styles.theirs]}>
-      <View
+      <Pressable
+        onLongPress={onLongPress && !pending && !deleted ? () => onLongPress(message) : undefined}
+        delayLongPress={350}
+        // Удержание видно сразу: вибрация на многих телефонах тихая, а 350 мс
+        // без отклика выглядят как зависание.
+        android_ripple={onLongPress && !pending && !deleted ? ripple(colors.glassBorder) : undefined}
+        accessibilityActions={onLongPress && !pending && !deleted ? [{ name: 'longpress', label: 'Действия с сообщением' }] : undefined}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === 'longpress') onLongPress?.(message);
+        }}
         style={[
           styles.bubble,
           mine
@@ -39,20 +51,20 @@ function MessageBubbleImpl({ message, mine, showAuthor }: Props) {
           </Text>
         ) : null}
         {message.forwardedFrom ? (
-          <Text style={[styles.meta, { color: colors.text2 }]}>Переслано · {message.forwardedFrom}</Text>
+          <Text style={[styles.meta, { color: colors.text1 }]}>Переслано · {message.forwardedFrom}</Text>
         ) : null}
         {message.replyTo && !deleted ? (
           <View style={[styles.reply, { borderLeftColor: colors.magenta }]}>
             <Text numberOfLines={1} style={[styles.replyAuthor, { color: colors.text1 }]}>
               {message.replyTo.authorName}
             </Text>
-            <Text numberOfLines={1} style={[styles.replyBody, { color: colors.text2 }]}>
+            <Text numberOfLines={1} style={[styles.replyBody, { color: colors.text1 }]}>
               {message.replyTo.body || (message.replyTo.attachmentKind ? attachmentLabel(message.replyTo.attachmentKind) : '')}
             </Text>
           </View>
         ) : null}
         {deleted ? (
-          <Text style={[styles.deleted, { color: colors.text2 }]}>Сообщение удалено</Text>
+          <Text style={[styles.deleted, { color: colors.text1 }]}>Сообщение удалено</Text>
         ) : (
           <>
             {images.map((image) => (
@@ -64,6 +76,9 @@ function MessageBubbleImpl({ message, mine, showAuthor }: Props) {
                   { backgroundColor: colors.bg1, aspectRatio: image.width && image.height ? image.width / image.height : 4 / 3 },
                 ]}
                 contentFit="cover"
+                transition={150}
+                cachePolicy="memory-disk"
+                recyclingKey={image.id}
                 accessibilityLabel={image.title ?? 'Фото'}
               />
             ))}
@@ -77,12 +92,12 @@ function MessageBubbleImpl({ message, mine, showAuthor }: Props) {
             {message.body ? <Text style={[styles.body, { color: colors.text0 }]}>{message.body}</Text> : null}
           </>
         )}
-        <Text style={[styles.meta, styles.time, { color: colors.text2 }]}>
+        <Text style={[styles.meta, styles.time, { color: colors.text1 }]}>
           {message.editedAt && !deleted ? 'изменено · ' : ''}
           {formatTime(new Date(message.createdAt))}
           {status}
         </Text>
-      </View>
+      </Pressable>
       {message.reactions.length > 0 && !deleted ? (
         <View style={[styles.reactions, mine ? styles.mine : styles.theirs]}>
           {message.reactions.map((reaction) => (
@@ -110,12 +125,12 @@ const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 12, marginVertical: 3, maxWidth: '100%' },
   mine: { alignItems: 'flex-end' },
   theirs: { alignItems: 'flex-start' },
-  bubble: { maxWidth: '84%', borderWidth: 1, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
+  bubble: { maxWidth: '84%', borderWidth: 1, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 8, gap: 4, overflow: 'hidden' },
   author: { fontFamily: fonts.bodyBold, fontSize: 13 },
   body: { fontFamily: fonts.body, fontSize: 15, lineHeight: 21 },
   deleted: { fontFamily: fonts.body, fontSize: 14, fontStyle: 'italic' },
   meta: { fontFamily: fonts.body, fontSize: 11 },
-  time: { alignSelf: 'flex-end' },
+  time: { alignSelf: 'flex-end', fontVariant: ['tabular-nums'] },
   reply: { borderLeftWidth: 3, paddingLeft: 8, gap: 1 },
   replyAuthor: { fontFamily: fonts.bodySemiBold, fontSize: 12 },
   replyBody: { fontFamily: fonts.body, fontSize: 12 },
