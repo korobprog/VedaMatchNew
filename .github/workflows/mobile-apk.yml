@@ -90,6 +90,9 @@ jobs:
       - name: Android release signing
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
             echo "::warning::Секрет ANDROID_KEYSTORE_BASE64 не задан: APK будет с отладочной подписью"
@@ -99,9 +102,11 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
           {
             echo "ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH"
-            echo "ANDROID_KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
-            echo "ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}"
-            echo "ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}"
+            # Через env шага, а не подстановкой в текст команды: спецсимволы
+            # в пароле не ломают скрипт.
+            echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "ANDROID_KEY_ALIAS=$KEY_ALIAS"
+            echo "ANDROID_KEY_PASSWORD=$KEY_PASSWORD"
           } >> "$GITHUB_ENV"
 
       - name: Prebuild Android project

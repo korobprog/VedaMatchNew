@@ -44,6 +44,14 @@ describe("proxy", () => {
     }
   });
 
+  it("opens exactly /app, not every path that starts with it", () => {
+    for (const path of ["/apps", "/app-settings", "/application"]) {
+      const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));
+
+      expect(response.headers.get("location")).toContain("returnTo=");
+    }
+  });
+
   it("keeps the rest of travel private: only the QR page is public", () => {
     for (const path of ["/travel", "/travel/manage", "/travel/sX"]) {
       const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));
