@@ -32,6 +32,11 @@ const PAIRS: { name: string; text: keyof Palette; surface: keyof Palette }[] = [
   { name: 'текст ошибки отправки', text: 'magenta', surface: 'bg0' },
   { name: 'заголовок карточки на стекле', text: 'text0', surface: 'glass' },
   { name: 'текст плашки ошибки', text: 'text0', surface: 'bg1' },
+  // Листы (`message-menu.tsx`, `attachment-sheet.tsx`) непрозрачные — `bg1`,
+  // не полупрозрачный `sheet` (раунд оценки 002: сквозь `sheet` было видно
+  // ленту сообщений). `magenta` на `bg1` в светлой теме даёт только ≈4.24:1,
+  // поэтому «Удалить» тоже текстом `text0`, тот же пункт меню ниже.
+  { name: 'пункт листа (меню сообщения / вложения)', text: 'text0', surface: 'bg1' },
 ];
 
 describe.each([

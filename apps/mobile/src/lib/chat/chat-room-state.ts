@@ -1,4 +1,4 @@
-import type { ChatMessageDto, ChatStreamEvent, ChatUserSummary } from '@vedamatch/shared';
+import type { ChatAttachmentInput, ChatMessageDto, ChatReplyPreview, ChatStreamEvent, ChatUserSummary } from '@vedamatch/shared';
 
 /**
  * Лента открытой беседы. Сообщения хранятся по возрастанию времени, как их
@@ -19,13 +19,29 @@ export function buildPendingMessage(input: {
   author: ChatUserSummary;
   body: string;
   now: Date;
+  /** Вложения и цитата ответа — видны в пузыре, пока сообщение отправляется. */
+  attachments?: ChatAttachmentInput[];
+  replyTo?: ChatReplyPreview | null;
 }): ChatMessageDto {
   return {
     id: `${PENDING_PREFIX}${input.seed}`,
     conversationId: input.conversationId,
     author: input.author,
     body: input.body,
-    attachments: [],
+    replyTo: input.replyTo ?? null,
+    // Вложение ещё не имеет id с сервера — подставляем индекс, только чтобы
+    // список отрисовался; после settle заменяется настоящим сообщением.
+    attachments: (input.attachments ?? []).map((attachment, index) => ({
+      id: `${PENDING_PREFIX}att-${index}`,
+      kind: attachment.kind,
+      url: attachment.url,
+      previewUrl: attachment.url,
+      title: attachment.title,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+      width: attachment.width,
+      height: attachment.height,
+    })),
     reactions: [],
     createdAt: input.now.toISOString(),
     readByOthers: false,

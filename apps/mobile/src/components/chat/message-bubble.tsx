@@ -13,11 +13,13 @@ interface Props {
   mine: boolean;
   /** Имя автора над пузырём: в группах и каналах для чужих сообщений. */
   showAuthor: boolean;
-  /** Долгое нажатие: меню действий, задел под ответы и реакции (VED-167). */
+  /** Долгое нажатие: меню действий — ответ, реакции, копирование, правка, удаление. */
   onLongPress?(message: ChatMessageDto): void;
+  /** Тап по уже стоящей реакции на пузыре — ставит/снимает тот же эмодзи. */
+  onReactionPress?(message: ChatMessageDto, emoji: string): void;
 }
 
-function MessageBubbleImpl({ message, mine, showAuthor, onLongPress }: Props) {
+function MessageBubbleImpl({ message, mine, showAuthor, onLongPress, onReactionPress }: Props) {
   const { colors } = useTheme();
   const pending = isPendingMessage(message);
   const deleted = Boolean(message.deletedAt);
@@ -101,8 +103,15 @@ function MessageBubbleImpl({ message, mine, showAuthor, onLongPress }: Props) {
       {message.reactions.length > 0 && !deleted ? (
         <View style={[styles.reactions, mine ? styles.mine : styles.theirs]}>
           {message.reactions.map((reaction) => (
-            <View
+            <Pressable
               key={reaction.emoji}
+              accessibilityRole="button"
+              accessibilityLabel={`Реакция ${reaction.emoji}, ${reaction.count}`}
+              accessibilityState={{ selected: reaction.mine }}
+              onPress={onReactionPress ? () => onReactionPress(message, reaction.emoji) : undefined}
+              disabled={!onReactionPress}
+              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+              android_ripple={onReactionPress ? ripple(colors.glassBorder, true) : undefined}
               style={[
                 styles.reaction,
                 { borderColor: reaction.mine ? colors.magenta : colors.glassBorder, backgroundColor: colors.glass },
@@ -111,7 +120,7 @@ function MessageBubbleImpl({ message, mine, showAuthor, onLongPress }: Props) {
               <Text style={[styles.reactionText, { color: colors.text0 }]}>
                 {reaction.emoji} {reaction.count}
               </Text>
-            </View>
+            </Pressable>
           ))}
         </View>
       ) : null}
