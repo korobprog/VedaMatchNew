@@ -104,7 +104,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         {
           photosPermission: 'Разрешите доступ к фото, чтобы прикладывать их к сообщениям.',
           cameraPermission: 'Разрешите доступ к камере, чтобы снимать фото прямо в переписке.',
-          microphonePermission: false,
+          // Не false: false у этого плагина не просто молчит, а вписывает
+          // RECORD_AUDIO в blockedPermissions всего приложения, и звонки
+          // остаются без микрофона. Текст нужен iOS для видео с камеры.
+          microphonePermission: 'Разрешите доступ к микрофону, чтобы говорить в звонках и снимать видео со звуком.',
         },
       ],
       // Ставит разрешения WebRTC на Android (CAMERA, RECORD_AUDIO и т.д. —
