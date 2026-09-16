@@ -10,6 +10,7 @@ import android.provider.Settings
 import android.telecom.PhoneAccount
 import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
+import android.util.Log
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.lang.ref.WeakReference
@@ -24,6 +25,7 @@ import java.lang.ref.WeakReference
 class VedamatchCallsModule : Module() {
   companion object {
     private const val ACCOUNT_ID = "vedamatch"
+    private const val TAG = "VedamatchCalls"
 
     @Volatile
     private var instance: WeakReference<VedamatchCallsModule>? = null
@@ -101,6 +103,10 @@ class VedamatchCallsModule : Module() {
         val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
         telecomManager.addNewIncomingCall(phoneAccountHandle(context), extras)
       } catch (error: Exception) {
+        // Без лога на живом устройстве это будет нечем объяснить постфактум,
+        // кроме «звонок почему-то не поднял self-managed соединение»
+        // (feedback-002.md, non-blocking п.4).
+        Log.w(TAG, "Telecom отказал, деградация до обычного уведомления", error)
         CallNotifications.show(context, info)
       }
     }

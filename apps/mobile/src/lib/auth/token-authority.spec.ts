@@ -125,6 +125,37 @@ describe('createTokenAuthority', () => {
     expect(authority.peekAccessToken()).toBeNull();
   });
 
+  it('403 от сервера — тоже явный отказ, стирает сессию (симметрично 401)', async () => {
+    const authApi = fakeAuthApi(async () => {
+      throw Object.assign(new Error('forbidden'), { status: 403 });
+    });
+    const authority = createTokenAuthority({ authApi });
+
+    await expect(authority.refresh()).resolves.toBeNull();
+    expect(store.tokens).toBeNull();
+  });
+
+  it('5xx от сервера — временная недоступность, не разлогин (feedback-002, важное п.2 / подозрение на VED-234)', async () => {
+    const authApi = fakeAuthApi(async () => {
+      throw Object.assign(new Error('bad gateway'), { status: 502 });
+    });
+    const authority = createTokenAuthority({ authApi });
+
+    await expect(authority.refresh()).resolves.toBe('access-1');
+    expect(store.tokens).toEqual({ accessToken: 'access-1', refreshToken: 'refresh-1' });
+    expect(authority.peekAccessToken()).toBe('access-1');
+  });
+
+  it('статус ответа неизвестен/не проставлен — тоже не разлогин, только явные 401/403 стирают', async () => {
+    const authApi = fakeAuthApi(async () => {
+      throw new Error('что-то пошло не так, без status');
+    });
+    const authority = createTokenAuthority({ authApi });
+
+    await expect(authority.refresh()).resolves.toBe('access-1');
+    expect(store.tokens).not.toBeNull();
+  });
+
   it('сеть недоступна — токены не стираются, отдаётся то, что было', async () => {
     const authApi = fakeAuthApi(async () => {
       throw Object.assign(new Error('offline'), { status: 0 });

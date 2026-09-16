@@ -104,8 +104,18 @@ export function createTokenAuthority(deps: TokenAuthorityDeps = {}): TokenAuthor
       await setCached(pair);
       return pair.accessToken;
     } catch (error) {
-      // Сеть недоступна — токены ещё могут быть живы, сессию не трогаем.
-      if ((error as { status?: number }).status === 0) return before.accessToken;
+      const status = (error as { status?: number }).status;
+      // Сервер явно ОТВЕРГ этот refresh-токен — только тогда он действительно
+      // мёртв. Любой другой исход (сеть недоступна — `status === 0`, сервер
+      // временно лёг — 5xx, необычный ответ) не значит того же самого: стирать
+      // токены здесь означало бы разлогинивать человека из-за недоступности
+      // сервера или сна телефона, а не из-за реального конца сессии
+      // (`gan-harness/feedback/feedback-002.md`, важное п.2). Раньше стирался
+      // при любом отказе, кроме `status === 0` — 5xx (например, временная
+      // недоступность `/auth/app/refresh`) считался бы концом сессии, что и
+      // подозревается причиной VED-234 («приложение теряет вход после
+      // обновления/перерыва»).
+      if (status !== 401 && status !== 403) return before.accessToken;
       // Отказ мог относиться к уже устаревшей паре: если SecureStore за это
       // время обновился (кто-то другой успел раньше), это не смерть сессии.
       const latest = await readTokens();

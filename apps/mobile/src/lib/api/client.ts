@@ -96,13 +96,23 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     const token = await options.session.getAccessToken();
     let response = await send(path, init, token);
 
-    if (response.status === 401 && token) {
-      const fresh = await refreshOnce();
-      if (fresh) {
-        response = await send(path, init, fresh);
-      }
-      if (!fresh || response.status === 401) {
+    if (response.status === 401) {
+      if (!token) {
+        // Запрос ушёл вовсе без токена (сессия уже мертва по мнению
+        // клиента) и сервер это подтвердил — сообщить об этом надо всё
+        // равно: молчание здесь раньше означало «запрос просто падает
+        // ApiError», а UI остаётся в состоянии «вошёл», хотя выйти не
+        // может ничем, кроме перезапуска приложения
+        // (`gan-harness/feedback/feedback-002.md`, блокирующий п.1).
         options.onSessionExpired?.();
+      } else {
+        const fresh = await refreshOnce();
+        if (fresh) {
+          response = await send(path, init, fresh);
+        }
+        if (!fresh || response.status === 401) {
+          options.onSessionExpired?.();
+        }
       }
     }
 

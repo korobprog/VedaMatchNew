@@ -27,15 +27,22 @@ describe('createApiClient', () => {
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer access-1');
   });
 
-  it('без токена не шлёт Authorization и не пытается обновиться на 401', async () => {
+  it('без токена не шлёт Authorization и не пытается обновиться на 401, но сообщает о конце сессии', async () => {
+    // Токена нет вовсе (не «протух», а отсутствует) — обновляться нечем, но
+    // молчать тоже нельзя: раньше `response.status === 401 && token` было
+    // ложно при отсутствующем токене, и `onSessionExpired` не звался вовсе
+    // — приложение оставалось в «вошёл», хотя сервер уже сказал обратное
+    // (`gan-harness/feedback/feedback-002.md`, блокирующий п.1).
     const fetchImpl = jest.fn(async () => json(401, { message: 'Unauthorized' }));
     const { session, refresh } = sessionWith(null, 'never');
-    const api = createApiClient({ baseUrl: 'https://api', session, fetchImpl });
+    const onSessionExpired = jest.fn();
+    const api = createApiClient({ baseUrl: 'https://api', session, fetchImpl, onSessionExpired });
 
     await expect(api.request('/me')).rejects.toMatchObject({ status: 401 });
     const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
     expect(refresh).not.toHaveBeenCalled();
+    expect(onSessionExpired).toHaveBeenCalledTimes(1);
   });
 
   it('на 401 обновляет токен и повторяет запрос один раз', async () => {

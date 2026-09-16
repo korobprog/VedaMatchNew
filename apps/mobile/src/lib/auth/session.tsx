@@ -16,6 +16,7 @@ import { createAuthApi, type AppTokens } from './auth-api';
 import { msUntilRefresh } from './jwt-expiry';
 import { buildLoginUrl, parseAuthRedirect, APP_AUTH_REDIRECT, type LoginProvider } from './login-flow';
 import { createPkcePair } from './pkce';
+import { reactToTokenChange } from './session-token-reaction';
 import { tokenAuthority } from './token-authority';
 import type { TokenPair } from './token-store';
 import { unregisterDevice } from '@/lib/push/push-api';
@@ -84,6 +85,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const pendingVerifier = useRef<string | null>(null);
 
+  // Актуальный статус для колбэков вне цикла рендера (подписка на
+  // `tokenAuthority` ниже) — не значение из замыкания рендера, которое
+  // регистрировалось один раз (`gan-harness/feedback/feedback-002.md`,
+  // блокирующий п.1: `scheduleRefresh` стабилен на весь процесс →
+  // `useEffect([scheduleRefresh])` выполняется один раз при монтировании →
+  // колбэк внутри навсегда помнил бы `status`, каким он был на первом
+  // рендере). Обновляется синхронно с `setStatus` в отдельном эффекте
+  // ниже — React гарантированно прогоняет эффекты после каждого коммита.
+  const statusRef = useRef<SessionStatus>(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
   // Токены и их обновление — не здесь: `tokenAuthority`
   // (`token-authority.ts`) один на процесс, его же использует фоновое
   // отклонение звонка (`background-decline.ts`). Раньше у `SessionProvider`
@@ -112,14 +126,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
 
-  const adopt = useCallback(
-    async (tokens: TokenPair | AppTokens) => {
-      const pair = { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
-      await tokenAuthority.adopt(pair);
-      scheduleRefresh(pair.accessToken);
-    },
-    [scheduleRefresh],
-  );
+  const adopt = useCallback(async (tokens: TokenPair | AppTokens) => {
+    const pair = { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
+    // `tokenAuthority.adopt` уведомляет подписчиков синхронно (`setCached`
+    // → `notify`) — тот же `SessionProvider` подписан ниже и сам
+    // перепланирует таймер через `reactToTokenChange(...) === 'reschedule'`
+    // (или `'mark-signed'`, если раньше был гостем). Второй явный вызов
+    // `scheduleRefresh` здесь был бы избыточным дублем одной и той же
+    // работы (`feedback-002.md`, non-blocking п.2).
+    await tokenAuthority.adopt(pair);
+  }, []);
 
   const api = useMemo(
     () =>
@@ -172,21 +188,40 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
   }, [loadProfile, scheduleRefresh]);
 
-  // Токены могли обновиться не отсюда — фоновое отклонение звонка
-  // (тот же `tokenAuthority` в том же процессе). Держим таймер и, если
-  // сессию извне признали мёртвой (`drop()`), UI в согласии с этим —
-  // без этого слушателя `SessionProvider` узнал бы о разлогине только на
-  // следующем собственном запросе/таймере.
+  // Токены могли обновиться не отсюда — фоновое отклонение звонка (тот же
+  // `tokenAuthority` в том же процессе). Подписка регистрируется один раз
+  // (`scheduleRefresh` стабилен на весь процесс — `refresh` не меняет
+  // идентичность), поэтому решение «что делать» читает `statusRef.current`
+  // (актуальный на момент СОБЫТИЯ, а не на момент регистрации подписки),
+  // а не сам `status` из замыкания — иначе эффект с зависимостью
+  // `[scheduleRefresh]` захватил бы `status`, какой он был при
+  // монтировании, навсегда (`feedback-002.md`, блокирующий п.1: без этого
+  // `SessionProvider` мог остаться в `'signed'` даже после того, как
+  // сессия на самом деле умерла в фоне — UI выглядел бы вошедшим, но
+  // ничего не работало бы). Никакого `eslint-disable`: все использованные
+  // здесь значения либо стабильны (`scheduleRefresh`, `tokenAuthority`),
+  // либо читаются через `ref` — оба варианта exhaustive-deps устраивают
+  // без подавления.
   useEffect(() => {
     return tokenAuthority.subscribe((tokens) => {
-      if (tokens) scheduleRefresh(tokens.accessToken);
-      else if (status !== 'loading') {
-        if (refreshTimer.current) clearTimeout(refreshTimer.current);
-        setUser(null);
-        setStatus('guest');
+      const reaction = reactToTokenChange(statusRef.current, Boolean(tokens));
+      switch (reaction) {
+        case 'ignore':
+          return;
+        case 'reschedule':
+          scheduleRefresh(tokens!.accessToken);
+          return;
+        case 'mark-signed':
+          scheduleRefresh(tokens!.accessToken);
+          setStatus('signed');
+          return;
+        case 'mark-guest':
+          if (refreshTimer.current) clearTimeout(refreshTimer.current);
+          setUser(null);
+          setStatus('guest');
+          return;
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleRefresh]);
 
   const completeSignIn = useCallback(
