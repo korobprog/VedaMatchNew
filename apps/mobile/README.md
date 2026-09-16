@@ -79,7 +79,7 @@ self-managed `ConnectionService`; фоновый пуш для звонка по
 шторки/блокировки идёт headless JS задачей без открытия приложения
 (`src/lib/calls/decline-call-headless-task.ts`,
 `src/lib/calls/background-decline.ts`), «Ответить» открывает экран звонка
-и сам принимает вызов. Разбор понятие/подробности — `docs/mobile-calls-native.md`,
+и сам принимает вызов. Подробности — `docs/mobile-calls-native.md`,
 §11. На Android 14+, если система не выдала `USE_FULL_SCREEN_INTENT` молча,
 на вкладке «Звонки» есть кнопка «Разрешить в настройках».
 
