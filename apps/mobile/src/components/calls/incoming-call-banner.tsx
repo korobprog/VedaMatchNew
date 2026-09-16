@@ -1,6 +1,8 @@
+import { usePathname } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
+import { overlayTopOffset } from '@/lib/calls/call-overlay-position';
 import { companionOf } from '@/lib/calls/call-machine';
 import { useChatCalls } from '@/lib/calls/call-provider';
 import { confirmTap } from '@/lib/feedback';
@@ -14,10 +16,15 @@ import { fonts, hitTarget, radius } from '@/theme/tokens';
  * не сразу полный экран: «ответить»/«отклонить» — два жеста, которым не
  * нужен весь экран до того, как решение принято (полный экран появляется
  * после ответа — `app/call/[id].tsx`, через `call-provider.tsx`).
+ *
+ * Отступ сверху учитывает системную шапку текущего маршрута (если она
+ * есть) — тот же приём, что у `ReturnToCallBanner`, без него баннер лёг бы
+ * на шапку `chat/[id]` (кнопка «назад», имя, кнопки звонка).
  */
 export function IncomingCallBanner() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   const calls = useChatCalls();
 
   if (!calls || calls.state.phase !== 'incoming' || !calls.state.call) return null;
@@ -37,7 +44,7 @@ export function IncomingCallBanner() {
     <View
       style={[
         styles.root,
-        { top: insets.top + 10, backgroundColor: colors.bg1, borderColor: colors.glassBorder },
+        { top: overlayTopOffset(pathname, insets.top) + 10, backgroundColor: colors.bg1, borderColor: colors.glassBorder },
       ]}
     >
       {/* `accessible` только на строке имени: она без интерактивных детей,

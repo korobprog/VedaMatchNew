@@ -1,6 +1,7 @@
-import { router } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { overlayTopOffset } from '@/lib/calls/call-overlay-position';
 import { shouldShowReturnBanner } from '@/lib/calls/call-screen-return';
 import { useChatCalls } from '@/lib/calls/call-provider';
 import { useElapsedLabel } from '@/lib/calls/use-elapsed-label';
@@ -17,10 +18,17 @@ import { fonts, hitTarget, radius } from '@/theme/tokens';
  * `call-provider.tsx` живёт дальше. Без этой плашки к нему было бы
  * физически не вернуться и не видно, что он ещё идёт (`call-screen-return.ts`
  * решает когда — чисто, со `spec`).
+ *
+ * Провайдер рисует плашку вне навигатора, поэтому своей системной шапки под
+ * ней не видно — на живом устройстве плашка на `chat/[id]` заезжала на
+ * шапку переписки (кнопку «назад», имя, кнопки звонка). `overlayTopOffset`
+ * (`call-overlay-position.ts`) по текущему пути решает, есть ли под
+ * safe-area ещё и системная шапка, которую нужно не закрывать.
  */
 export function ReturnToCallBanner() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   const calls = useChatCalls();
   const phase = calls?.state.phase ?? 'idle';
   const elapsed = useElapsedLabel(phase === 'active' ? (calls?.state.connectedAt ?? null) : null);
@@ -33,7 +41,7 @@ export function ReturnToCallBanner() {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Звонок свёрнут, ${statusLine.toLowerCase()} — вернуться на экран звонка`}
+      accessibilityLabel={`Вернуться к звонку, ${statusLine.toLowerCase()}`}
       onPress={() => {
         confirmTap();
         router.push({ pathname: '/call/[id]', params: { id: call.id } });
@@ -41,7 +49,7 @@ export function ReturnToCallBanner() {
       android_ripple={ripple(colors.glassBorder)}
       style={({ pressed }) => [
         styles.root,
-        { top: insets.top + 10, backgroundColor: colors.bg1, borderColor: colors.glassBorder },
+        { top: overlayTopOffset(pathname, insets.top) + 10, backgroundColor: colors.bg1, borderColor: colors.glassBorder },
         pressedStyle(pressed),
       ]}
     >

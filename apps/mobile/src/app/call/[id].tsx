@@ -211,7 +211,7 @@ export default function CallScreen() {
               <MicIcon off={state!.muted} color={colors.text0} />
             </ControlButton>
 
-            <ControlButton label={speakerOn ? 'Выключить громкую связь' : 'Включить громкую связь'} active={speakerOn} onPress={toggleSpeaker}>
+            <ControlButton label={`Громкая связь: ${speakerOn ? 'вкл' : 'выкл'}`} active={speakerOn} onPress={toggleSpeaker}>
               <SpeakerIcon on={speakerOn} color={colors.text0} />
             </ControlButton>
 
@@ -322,11 +322,18 @@ function SwitchCameraIcon({ color }: { color: string }) {
   );
 }
 
+/**
+ * Выключено — обычный разговорный динамик (звук идёт, просто не на весь
+ * телефон), не «звук выключен»: перечёркнутый конус раньше читался как
+ * немой звонок, хотя на «Вызов…»/«Соединение…» он всегда выключен по
+ * умолчанию у аудиозвонка — замечено при живой проверке. Включено —
+ * тот же конус с дугами громкой связи, без зачёркивания.
+ */
 function SpeakerIcon({ on, color }: { on: boolean; color: string }) {
   return (
     <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
       <Path d="M4 9v6h4l5 4V5L8 9H4z" />
-      {on ? <Path d="M16.5 8.5a5 5 0 0 1 0 7M19.5 6a9 9 0 0 1 0 12" /> : <Path d="M17 9l4 6M21 9l-4 6" />}
+      {on ? <Path d="M16.5 8.5a5 5 0 0 1 0 7M19.5 6a9 9 0 0 1 0 12" /> : null}
     </Svg>
   );
 }

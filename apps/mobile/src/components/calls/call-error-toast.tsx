@@ -1,5 +1,7 @@
+import { usePathname } from 'expo-router';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { overlayBottomOffset } from '@/lib/calls/call-overlay-position';
 import { useChatCalls } from '@/lib/calls/call-provider';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
@@ -13,10 +15,15 @@ import { fonts, hitTarget, radius } from '@/theme/tokens';
  * нажатие «Позвонить» или «Ответить» — до появления экрана звонка, который
  * в этом случае вообще не открывается (`call-provider.tsx`: `start()` не
  * меняет фазу с `idle` при ошибке).
+ *
+ * Ошибка от несостоявшегося «Ответить» может случиться на любой вкладке
+ * (входящий баннер отвечает откуда угодно) — отступ снизу учитывает нижнее
+ * меню вкладок тем же приёмом, что верхние баннеры учитывают шапку.
  */
 export function CallErrorToast() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   const calls = useChatCalls();
   if (!calls || calls.state.phase !== 'idle' || !calls.state.error) return null;
 
@@ -30,7 +37,7 @@ export function CallErrorToast() {
       accessibilityRole="alert"
       style={[
         styles.root,
-        { bottom: insets.bottom + 16, backgroundColor: colors.bg1, borderColor: colors.glassBorder },
+        { bottom: overlayBottomOffset(pathname, insets.bottom) + 16, backgroundColor: colors.bg1, borderColor: colors.glassBorder },
       ]}
     >
       <Text style={[styles.text, { color: colors.text0 }]}>{calls.state.error}</Text>
