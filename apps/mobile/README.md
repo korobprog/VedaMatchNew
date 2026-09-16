@@ -80,7 +80,7 @@ self-managed `ConnectionService`; фоновый пуш для звонка по
 (`src/lib/calls/decline-call-headless-task.ts`,
 `src/lib/calls/background-decline.ts`), «Ответить» открывает экран звонка
 и сам принимает вызов. Разбор понятие/подробности — `docs/mobile-calls-native.md`,
-§9. На Android 14+, если система не выдала `USE_FULL_SCREEN_INTENT` молча,
+§11. На Android 14+, если система не выдала `USE_FULL_SCREEN_INTENT` молча,
 на вкладке «Звонки» есть кнопка «Разрешить в настройках».
 
 Служебный экран «Проверка связи» (замер relay STUN/TURN на текущей сети)

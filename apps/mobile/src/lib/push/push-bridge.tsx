@@ -53,7 +53,7 @@ function openFromNotification(url: string | null): void {
  * человеку.
  *
  * Приём FCM целиком у `@react-native-firebase/messaging` — решение этапа 0
- * (`docs/mobile-calls-native.md`, §4 и §9): `expo-notifications` больше не
+ * (`docs/mobile-calls-native.md`, §4 и §11): `expo-notifications` больше не
  * регистрирует свой `FirebaseMessagingService` (манифест правит
  * `plugins/with-native-calls.js`), два приёмника на один intent-filter
  * `com.google.firebase.MESSAGING_EVENT` были бы гонкой без гарантии

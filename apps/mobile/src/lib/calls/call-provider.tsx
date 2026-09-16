@@ -29,6 +29,7 @@ import { ReturnToCallBanner } from '@/components/calls/return-to-call-banner';
 import { createChatCallsApi } from './chat-calls-client';
 import { IDLE_STATE, reduceCall, roleIn, type CallState } from './call-machine';
 import { clearNativeCall, consumeLaunchCall, subscribeToNativeCallEvents } from './native-call-bridge';
+import { navigatedCallIdAfterPhase, nextNavigatedCallId, shouldAutoNavigateToCallScreen } from './call-screen-return';
 import { startRingtone } from './ringtone';
 import { CallSession } from './webrtc-session';
 
@@ -108,22 +109,32 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const queuedSignals = useRef<ChatCallSignal[]>([]);
   const stopRingtone = useRef<(() => void) | null>(null);
   /**
-   * На какой звонок уже толкали `router.push` — эффект ниже толкает ровно
-   * один раз на смену звонка, а не при каждой отрисовке. Читается и в
-   * `reportCallScreenMounted`: когда экран уходит не из-за конца звонка
-   * (свернули «назад»), метка сбрасывается, чтобы новый виток мог
-   * подтолкнуть снова, если понадобится.
+   * Для какого звонка экран уже поднимался хоть раз — решает
+   * `shouldAutoNavigateToCallScreen`/`nextNavigatedCallId`
+   * (`call-screen-return.ts`). Раньше сбрасывался в `null` при уходе
+   * экрана («назад»), что и было гонкой из `feedback-002.md`: следующая
+   * смена фазы принудительно открывала экран заново, без участия
+   * пользователя. Теперь метка меняется только через `nextNavigatedCallId`
+   * — при уходе с экрана она не сбрасывается.
    */
   const navigatedCallId = useRef<string | null>(null);
 
   const reportCallScreenMounted = useCallback((visible: boolean) => {
     setScreenVisible(visible);
-    if (visible) return;
-    const current = stateRef.current;
-    if (current.call && current.phase !== 'idle' && current.phase !== 'ended') {
-      navigatedCallId.current = null;
-    }
+    navigatedCallId.current = nextNavigatedCallId(visible, stateRef.current.call?.id ?? null, navigatedCallId.current);
   }, []);
+
+  /**
+   * Для какого звонка человек сам нажал «Ответить» на этом устройстве —
+   * читает `shouldAutoNavigateToCallScreen` для решения об `ended`
+   * (`feedback-003.md`): обычный пропущенный/отменённый/отвеченный на
+   * другом устройстве входящий не должен принудительно поднимать экран,
+   * а отказ дать микрофон/камеру сразу после «Ответить» — должен, иначе
+   * причина финала останется необъяснённой. Ставится в начале `accept()`,
+   * до `await`, поэтому отражает факт нажатия, а не то, успел ли локально
+   * дойти до фазы `connecting`.
+   */
+  const answerAttemptCallId = useRef<string | null>(null);
 
   const closeSession = useCallback(() => {
     sessionRef.current?.close();
@@ -408,6 +419,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const accept = useCallback(async () => {
     const call = stateRef.current.call;
     if (!call || stateRef.current.phase !== 'incoming') return;
+    answerAttemptCallId.current = call.id;
     try {
       const servers = await iceServers();
       const session = createSession('callee', servers);
@@ -523,18 +535,25 @@ export function CallProvider({ children }: { children: ReactNode }) {
   // виден отдельным маршрутом — там видео на весь экран и кнопки. Баннер
   // входящего (см. `IncomingCallBanner`) остаётся баннером: два жеста
   // «ответить/отклонить» не заслуживают целого экрана до того, как решение
-  // принято. Экран сам уходит назад, когда провайдер сбрасывает фазу в idle
-  // (`app/call/[id].tsx`). `navigatedCallId` объявлен выше, у остальных ref.
+  // принято. Пушим не при каждой смене фазы, а по решению
+  // `shouldAutoNavigateToCallScreen` (`call-screen-return.ts`) — один раз на
+  // звонок: если пользователь уже видел экран и свернул его «назад», смена
+  // фазы (собеседник ответил, пока человек в другом разделе) не должна
+  // выдёргивать его обратно без действия с его стороны (`feedback-002.md`).
+  // `navigatedCallId` объявлен выше, у остальных ref.
   useEffect(() => {
     const call = state.call;
-    const showsScreen =
-      Boolean(call) &&
-      (state.phase === 'outgoing' || state.phase === 'connecting' || state.phase === 'active' || state.phase === 'ended');
-    if (showsScreen && call && navigatedCallId.current !== call.id) {
-      navigatedCallId.current = call.id;
-      router.push({ pathname: '/call/[id]', params: { id: call.id } });
+    const callId = call?.id ?? null;
+    const answerAttempted = callId !== null && answerAttemptCallId.current === callId;
+    if (shouldAutoNavigateToCallScreen(state.phase, callId, navigatedCallId.current, answerAttempted)) {
+      navigatedCallId.current = callId;
+      router.push({ pathname: '/call/[id]', params: { id: callId! } });
+      return;
     }
-    if (!showsScreen) navigatedCallId.current = null;
+    // Фаза совсем вне «экрану есть что показывать» (idle/incoming) — метка
+    // прошлого звонка больше ничего не решает (`navigatedCallIdAfterPhase`,
+    // `call-screen-return.ts`).
+    navigatedCallId.current = navigatedCallIdAfterPhase(state.phase, navigatedCallId.current);
   }, [state.phase, state.call]);
 
   return (
