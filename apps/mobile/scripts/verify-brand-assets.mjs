@@ -71,6 +71,34 @@ async function applyMask(composedBuffer, size, alpha) {
     .toBuffer();
 }
 
+/**
+ * Композиция сплэша: знак (без своего холста) по центру сплошного фона
+ * `size×size` — то же, что делает `expo-splash-screen` на устройстве
+ * (`backgroundColor`/`dark.backgroundColor` + `image`/`dark.image` из
+ * `app.config.ts`), только здесь фон квадратный для превью, а не под размер
+ * экрана.
+ */
+async function composeSplashPreview(backgroundHex, markPath, size) {
+  const mark = await sharp(markPath).resize({ width: Math.round(size * 0.5) }).png().toBuffer();
+  const { width: markWidth, height: markHeight } = await sharp(mark).metadata();
+  return sharp({
+    create: { width: size, height: size, channels: 4, background: hexToRgbaObject(backgroundHex) },
+  })
+    .composite([{ input: mark, left: Math.round((size - markWidth) / 2), top: Math.round((size - markHeight) / 2) }])
+    .png()
+    .toBuffer();
+}
+
+function hexToRgbaObject(hex) {
+  const value = hex.replace('#', '');
+  return {
+    r: parseInt(value.slice(0, 2), 16),
+    g: parseInt(value.slice(2, 4), 16),
+    b: parseInt(value.slice(4, 6), 16),
+    alpha: 1,
+  };
+}
+
 async function main() {
   await mkdir(outDir, { recursive: true });
 
@@ -96,10 +124,70 @@ async function main() {
   const squircleAlpha = buildMaskAlpha(size, (dx, dy) => isInsideSquircle(dx, dy, circleRadius, SQUIRCLE_EXPONENT));
   await writeFile(path.join(outDir, '03-squircle-mask.png'), await applyMask(composed, size, squircleAlpha));
 
+  // Сплэш в обеих темах — фон из app.config.ts (`expo-splash-screen`), знак —
+  // `splash-icon.png`/`splash-icon-dark.png`.
+  const splashLight = await composeSplashPreview('#FBF9FF', path.join(assetsDir, 'splash-icon.png'), 800);
+  await writeFile(path.join(outDir, '04-splash-light.png'), splashLight);
+  const splashDark = await composeSplashPreview('#0A0614', path.join(assetsDir, 'splash-icon-dark.png'), 800);
+  await writeFile(path.join(outDir, '05-splash-dark.png'), splashDark);
+
+  // Monochrome/notification — прозрачные силуэты, на просвет не видны на
+  // белом фоне Read-просмотрщика; накладываем на тёмный фон (как система
+  // красит themed icon/значок статус-бара по альфе).
+  const monochromePath = path.join(assetsDir, 'android-icon-monochrome.png');
+  const monochromeOnDark = await sharp({
+    create: { width: size, height: size, channels: 4, background: hexToRgbaObject('#0A0614') },
+  })
+    .composite([{ input: await sharp(monochromePath).resize(size, size).toBuffer() }])
+    .png()
+    .toBuffer();
+  await writeFile(path.join(outDir, '06-monochrome-on-dark.png'), monochromeOnDark);
+
+  const notificationPath = path.join(assetsDir, 'notification-icon.png');
+  const { width: notificationSize } = await sharp(notificationPath).metadata();
+  const notificationOnDark = await sharp({
+    create: { width: notificationSize, height: notificationSize, channels: 4, background: hexToRgbaObject('#0A0614') },
+  })
+    .composite([{ input: await sharp(notificationPath).toBuffer() }])
+    .png()
+    .toBuffer();
+  await writeFile(path.join(outDir, '07-notification-on-dark.png'), notificationOnDark);
+
+  // Численная проверка (не только глазами по превью): считаем закрашенные
+  // (альфа > 10) пиксели реального foreground вне круга r = 1/3 холста.
+  const { data: foregroundRaw } = await sharp(foregroundPath)
+    .resize(size, size)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let outsideCircleCount = 0;
+  let maxOutsideDistancePx = 0;
+  const cx = size / 2;
+  const cy = size / 2;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const alpha = foregroundRaw[(y * size + x) * 4 + 3];
+      if (alpha <= 10) continue;
+      const dx = x + 0.5 - cx;
+      const dy = y + 0.5 - cy;
+      const distance = Math.hypot(dx, dy);
+      if (distance > circleRadius) {
+        outsideCircleCount += 1;
+        maxOutsideDistancePx = Math.max(maxOutsideDistancePx, distance - circleRadius);
+      }
+    }
+  }
+  console.log(
+    `Пикселей foreground вне круга r=1/3 холста (${circleRadius.toFixed(1)}px): ${outsideCircleCount}` +
+      (outsideCircleCount > 0 ? `, максимальный вылет ≈${maxOutsideDistancePx.toFixed(2)}px` : ' (0 — не обрезано)'),
+  );
+
   console.log(`Превью записаны в ${outDir}:`);
   console.log('  01-composed-no-mask.png — фон+знак без маски (для сравнения)');
   console.log('  02-circle-mask.png — маска: круг r = 1/3 холста (72dp из 108dp)');
   console.log('  03-squircle-mask.png — маска: сквиркл того же осевого радиуса, exponent = 4');
+  console.log('  04-splash-light.png / 05-splash-dark.png — сплэш в обеих темах');
+  console.log('  06-monochrome-on-dark.png / 07-notification-on-dark.png — силуэты на тёмном фоне');
 }
 
 main().catch((error) => {

@@ -22,9 +22,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     version: '0.1.0',
     orientation: 'portrait',
     // Иконка, слои adaptive-иконки, силуэт уведомлений и знак сплэша ниже —
-    // все перегенерируются одним скриптом из фирменных исходников веба
-    // (`apps/web/public/brand/mark*.png`): `pnpm --filter @vedamatch/mobile
-    // generate:brand-assets` (`scripts/generate-brand-assets.mjs`).
+    // все перегенерируются одним скриптом из фирменных исходников бренд-кита
+    // для соцсетей (`assets/brand-src/mark-transparent*.png`, см. README там
+    // же): `pnpm --filter @vedamatch/mobile generate:brand-assets`
+    // (`scripts/generate-brand-assets.mjs`).
     icon: './assets/images/icon.png',
     scheme: 'vedamatch',
     userInterfaceStyle: 'automatic',
@@ -83,9 +84,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           backgroundColor: '#FBF9FF',
           dark: {
             backgroundColor: '#0A0614',
-            // «M» в mark.png запечена тёмно-синим и тонет на тёмном фоне —
-            // как и на вебе (recolorMark в generate-icons.mjs), нужен
-            // отдельный файл с перекрашенной буквой, а не фильтр.
+            // «M» в mark-transparent.png запечена тёмно-синим и тонет на
+            // тёмном фоне — нужен отдельный файл с перекрашенной буквой
+            // (mark-transparent-dark.png из бренд-кита), а не фильтр.
             image: './assets/images/splash-icon-dark.png',
           },
           image: './assets/images/splash-icon.png',

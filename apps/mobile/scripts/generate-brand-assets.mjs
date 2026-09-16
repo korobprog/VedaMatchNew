@@ -1,20 +1,25 @@
 #!/usr/bin/env node
-// Генератор фирменных растров мобильного приложения (VED-173).
+// Генератор фирменных растров мобильного приложения (VED-173, итерация 3).
 //
-// Источник знака — те же файлы, что у веба (`apps/web/public/brand/mark.png`,
-// `mark-dark.png`), собранные `apps/web/scripts/generate-icons.mjs` из
-// `apps/web/public/logo_tilak_kvadrat.png`. Здесь их не перерисовывают, а
-// только перекомпоновывают под форматы Android: обычная иконка, три слоя
-// adaptive-иконки, силуэт для шторки уведомлений и знак для сплэша в обеих
-// темах.
+// Источник знака — `assets/brand-src/mark-transparent.png` и
+// `mark-transparent-dark.png` (см. README там же): копии файлов официального
+// бренд-кита для соцсетей (`vedamatch-brand-kit/mark-transparent*.png`),
+// который сам собран отдельным (внешним для этого репозитория) скриптом из
+// `apps/web/public/logo_tilak*.png`. До этой итерации скрипт читал
+// `apps/web/public/brand/mark*.png` — тот же знак, но из другого прогона;
+// переключено на кит, чтобы у приложения и у набора для соцсетей был один
+// общий источник. Здесь знак не перерисовывают, а только перекомпоновывают
+// под форматы Android: обычная иконка (на процедурном фоне со свечениями, как
+// у аватаров кита), три слоя adaptive-иконки, силуэт для шторки уведомлений и
+// знак для сплэша в обеих темах.
 //
 // Запуск:
 //   pnpm --filter @vedamatch/mobile generate:brand-assets
 //   (или node apps/mobile/scripts/generate-brand-assets.mjs из корня)
 //
-// Пересборка нужна только если правится сам знак на сайте (тогда файлы веба
-// перегенерируются `apps/web/scripts/generate-icons.mjs`, а этот скрипт —
-// повторным запуском здесь) — цвета фонов и токены ниже продублированы из
+// Пересборка нужна, если обновился бренд-кит (тогда скопировать новые
+// `mark-transparent*.png` в `assets/brand-src/` и перегенерировать) или
+// поменялась тема — цвета фонов и токены ниже продублированы из
 // `apps/mobile/src/theme/tokens.ts` и `app.config.ts`, при правке темы их
 // нужно поправить и тут.
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -25,11 +30,13 @@ import { maxCornerDistanceFromMask, safeContainRatio, silhouettePixel } from './
 
 const mobileRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const assetsDir = path.join(mobileRoot, 'assets/images');
-const webBrandDir = path.resolve(mobileRoot, '../web/public/brand');
+const brandSrcDir = path.join(mobileRoot, 'assets/brand-src');
 
 // --- Токены (см. apps/mobile/src/theme/tokens.ts) -------------------------
 const LIGHT_BG0 = '#FBF9FF'; // theme/tokens.ts: light.bg0 — фон сплэша/фирменный фон обычной иконки И фон adaptive-иконки (см. правку дефекта ниже)
 const DARK_BG0 = '#0A0614'; // theme/tokens.ts: dark.bg0 — фон сплэша в тёмной теме
+const LIGHT_MAGENTA = '#D71A80'; // theme/tokens.ts: light.magenta — свечение сверху слева на фоне icon.png/android-icon-background.png
+const LIGHT_CYAN = '#0B826F'; // theme/tokens.ts: light.cyan — свечение снизу справа там же
 
 // --- Геометрия безопасной зоны adaptive-иконки Android ---------------------
 // Круг диаметром 66% холста (66dp из 108dp, ADAPTIVE_BASELINE_PIXEL_SIZE в
@@ -93,7 +100,7 @@ function hexToRgb(hex) {
 
 /** Загружает знак, обрезает прозрачные поля по альфа-каналу и строит булеву маску. */
 async function loadTrimmedMark(fileName) {
-  const source = path.join(webBrandDir, fileName);
+  const source = path.join(brandSrcDir, fileName);
   const { data, info } = await sharp(source)
     .ensureAlpha()
     .trim({ threshold: 10 })
@@ -134,21 +141,68 @@ async function buildSilhouette(mark, colorHex) {
 }
 
 /**
- * Вписывает изображение знака в холст `canvasSize×canvasSize` методом
- * contain по доле `ratio` (0..1), центрирует и кладёт на подложку —
- * сплошной цвет (`backgroundHex`) либо прозрачность (`backgroundHex === null`).
+ * Процедурный фон в духе аватаров бренд-кита
+ * (`vedamatch-brand-kit/avatar-512.png`): светлый фон `LIGHT_BG0` со свечением
+ * магенты сверху слева и циана снизу справа. Не сплошная заливка, а два
+ * мягких радиальных градиента низкой прозрачности (0% → 100% альфы к краю) —
+ * тот же визуальный приём, что даёт блюр в ките, но без фильтра `feGaussianBlur`
+ * (надёжнее рендерится librsvg на больших радиусах).
+ *
+ * Центры свечений сдвинуты от самых углов холста к безопасной окружности
+ * (радиус `ADAPTIVE_SAFE_DIAMETER_RATIO/2 * canvasSize` — см. геометрию выше):
+ * при `canvasSize = 1024` центр магенты на расстоянии ≈0.30×холста от центра —
+ * это внутри безопасного круга (≈0.333×холста), то есть свечение видно и под
+ * маской лаунчера, а не только в углах, которые обрежет любая маска.
  */
-async function composeOnCanvas(markBuffer, ratio, canvasSize, backgroundHex) {
+function buildIconGlowBackgroundSvg(canvasSize) {
+  return `
+<svg xmlns="http://www.w3.org/2000/svg" width="${canvasSize}" height="${canvasSize}" viewBox="0 0 ${canvasSize} ${canvasSize}">
+  <defs>
+    <radialGradient id="glowMagenta" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="${LIGHT_MAGENTA}" stop-opacity="0.34" />
+      <stop offset="100%" stop-color="${LIGHT_MAGENTA}" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="glowCyan" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="${LIGHT_CYAN}" stop-opacity="0.26" />
+      <stop offset="100%" stop-color="${LIGHT_CYAN}" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect x="0" y="0" width="${canvasSize}" height="${canvasSize}" fill="${LIGHT_BG0}" />
+  <circle cx="${canvasSize * 0.3}" cy="${canvasSize * 0.28}" r="${canvasSize * 0.46}" fill="url(#glowMagenta)" />
+  <circle cx="${canvasSize * 0.72}" cy="${canvasSize * 0.74}" r="${canvasSize * 0.46}" fill="url(#glowCyan)" />
+</svg>`;
+}
+
+/** Растеризует `buildIconGlowBackgroundSvg` в непрозрачный PNG-буфер `canvasSize×canvasSize`. */
+async function buildIconGlowBackground(canvasSize) {
+  return sharp(Buffer.from(buildIconGlowBackgroundSvg(canvasSize))).png().toBuffer();
+}
+
+/**
+ * Вписывает изображение знака в холст `canvasSize×canvasSize` методом
+ * contain по доле `ratio` (0..1), центрирует и кладёт на подложку: сплошной
+ * цвет (`background` — строка-hex), готовое изображение (`background` —
+ * Buffer, например результат `buildIconGlowBackground`) либо прозрачность
+ * (`background === null`).
+ */
+async function composeOnCanvas(markBuffer, ratio, canvasSize, background) {
   const boxSize = Math.max(1, Math.round(canvasSize * ratio));
   const resizedMark = await sharp(markBuffer)
     .resize(boxSize, boxSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .png()
     .toBuffer();
   const offset = Math.round((canvasSize - boxSize) / 2);
-  const background = backgroundHex
-    ? { ...hexToRgb(backgroundHex), alpha: 1 }
-    : { r: 0, g: 0, b: 0, alpha: 0 };
-  return sharp({ create: { width: canvasSize, height: canvasSize, channels: 4, background } })
+  const base = Buffer.isBuffer(background)
+    ? sharp(background).resize(canvasSize, canvasSize)
+    : sharp({
+        create: {
+          width: canvasSize,
+          height: canvasSize,
+          channels: 4,
+          background: background ? { ...hexToRgb(background), alpha: 1 } : { r: 0, g: 0, b: 0, alpha: 0 },
+        },
+      });
+  return base
     .composite([{ input: resizedMark, left: offset, top: offset }])
     .png()
     .toBuffer();
@@ -163,8 +217,8 @@ async function writeAsset(fileName, buffer, note) {
 async function main() {
   await mkdir(assetsDir, { recursive: true });
 
-  const markLight = await loadTrimmedMark('mark.png');
-  const markDark = await loadTrimmedMark('mark-dark.png');
+  const markLight = await loadTrimmedMark('mark-transparent.png');
+  const markDark = await loadTrimmedMark('mark-transparent-dark.png');
   const markLightPng = await toPng(markLight.data, markLight.width, markLight.height, markLight.channels);
   const markDarkPng = await toPng(markDark.data, markDark.width, markDark.height, markDark.channels);
 
@@ -211,27 +265,30 @@ async function main() {
     `Безопасная доля холста: icon/foreground (круг, связывающее) ≈ ${adaptiveRatio.toFixed(4)} (для сравнения — сквиркл дал бы ≈ ${adaptiveRatioSquircleForLog.toFixed(4)}), monochrome (круг) ≈ ${monochromeRatio.toFixed(3)}, notification ≈ ${notificationRatio.toFixed(3)}`,
   );
 
-  // 1. icon.png — непрозрачный фон фирменного светлого цвета (тот же, что и
-  //    у adaptive-иконки ниже — до фикса дефекта тут стоял он же, светлый,
-  //    поэтому этот файл не менялся дефектом ревью).
+  // Общий процедурный фон для icon.png и android-icon-background.png (оба
+  // 1024×1024) — светлый бренд-кита с мягкими свечениями магенты/циана, как
+  // у `vedamatch-brand-kit/avatar-512.png`, а не сплошная заливка. Один и тот
+  // же буфер годится для обоих файлов, потому что `CANVAS_ICON === CANVAS_ADAPTIVE`.
+  const iconGlowBackground = await buildIconGlowBackground(CANVAS_ICON);
+
+  // 1. icon.png — непрозрачный фон со свечениями, знак сверху (обрезается
+  //    Android в круг диаметром 100% холста при генерации `ic_launcher_round.webp`).
   await writeAsset(
     'icon.png',
-    await composeOnCanvas(markLightPng, adaptiveRatio, CANVAS_ICON, LIGHT_BG0),
-    `${CANVAS_ICON}x${CANVAS_ICON}, непрозрачный фон ${LIGHT_BG0}`,
+    await composeOnCanvas(markLightPng, adaptiveRatio, CANVAS_ICON, iconGlowBackground),
+    `${CANVAS_ICON}x${CANVAS_ICON}, непрозрачный фон со свечениями (${LIGHT_BG0} + ${LIGHT_MAGENTA}/${LIGHT_CYAN})`,
   );
 
-  // 2. Фон adaptive-иконки — светлый фирменный (light.bg0), а НЕ тёмно-
-  //    фиолетовый: дефект с ревью на устройстве — тёмно-синий шеврон «M» на
-  //    тёмном фоне adaptiveIcon.backgroundColor читался плохо (виден был
-  //    только глобус). Меняем на тот же токен, что у icon.png/сплэша.
+  // 2. Фон adaptive-иконки — тот же процедурный слой (не сплошная заливка):
+  //    свечения центрированы так, что видны и внутри безопасного круга 72dp
+  //    из 108dp, а не только в углах, которые обрежет маска лаунчера. Раньше
+  //    здесь стояла сплошная заливка LIGHT_BG0 (фикс дефекта «тёмно-синий
+  //    шеврон на тёмном фоне» из итерации 2) — цвет базы остался тем же
+  //    токеном, добавлены только свечения.
   await writeAsset(
     'android-icon-background.png',
-    await sharp({
-      create: { width: CANVAS_ADAPTIVE, height: CANVAS_ADAPTIVE, channels: 4, background: { ...hexToRgb(LIGHT_BG0), alpha: 1 } },
-    })
-      .png()
-      .toBuffer(),
-    `${CANVAS_ADAPTIVE}x${CANVAS_ADAPTIVE}, заливка ${LIGHT_BG0} (theme/tokens.ts light.bg0)`,
+    iconGlowBackground,
+    `${CANVAS_ADAPTIVE}x${CANVAS_ADAPTIVE}, фон ${LIGHT_BG0} (theme/tokens.ts light.bg0) со свечениями ${LIGHT_MAGENTA}/${LIGHT_CYAN}`,
   );
 
   // 3. Foreground adaptive-иконки — знак на прозрачном фоне внутри
