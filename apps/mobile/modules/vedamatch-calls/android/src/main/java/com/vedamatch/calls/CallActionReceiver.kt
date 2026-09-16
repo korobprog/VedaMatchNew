@@ -18,7 +18,7 @@ import android.telecom.DisconnectCause
  * есть токены сессии и, если понадобится, живой WebRTC. «Отклонить» —
  * наоборот, не должно открывать UI вовсе: запускает headless-задачу
  * (`DeclineHeadlessTaskService`), которая сама сходит на
- * `POST /chat/calls/:id/decline` (`background-decline.ts`). «Завершить» —
+ * `POST /chat/calls/:id/decline` (`background-call-action.ts`). «Завершить» —
  * кнопка на уведомлении уже ИДУЩЕГО разговора (`CallForegroundService`,
  * `CallNotifications.buildOngoing`): рвёт self-managed `Connection` и шлёт
  * JS то же событие `end`, что и `Connection.onDisconnect()` (гарнитура,

@@ -96,11 +96,27 @@ class CallForegroundService : Service() {
    *   энергосбережения некоторых производителей, см. этап 4/VED-223) —
    *   разрывать самим, пока это ещё можно сделать чисто, безопаснее, чем
    *   оставить зависший self-managed звонок.
+   *
+   * Сервер и собеседник узнают о конце разговора через
+   * `HangupHeadlessTaskService` (исправление `feedback-001.md` этого этапа,
+   * блокирующий п.2) — не через `VedamatchCallsModule.sendEndEvent`/
+   * `NativeEventEmitter`, как было: у события нет гарантии, что JS-мост ещё
+   * жив в момент, когда Activity уже разрушается, а `HeadlessJsTaskService`
+   * с собственным wake lock — тот же проверенный паттерн, что уже несёт
+   * `DeclineHeadlessTaskService` для симметричного случая «Отклонить из
+   * фона». Локальная уборка (self-managed `Connection`, уведомление, сама
+   * служба) остаётся синхронной и не ждёт сети — сервер может быть временно
+   * недоступен, а Telecom и системная шторка обязаны освободиться сразу.
    */
   override fun onTaskRemoved(rootIntent: Intent?) {
     super.onTaskRemoved(rootIntent)
-    PendingCallStore.anyConnection()?.let { connection ->
-      VedamatchCallsModule.sendEndEvent(connection.callId)
+    val connection = PendingCallStore.anyConnection()
+    if (connection != null) {
+      // Запускается ДО остановки этой службы: свежий `HeadlessJsTaskService`
+      // держит процесс живым через собственный wake lock, пока идёт HTTP —
+      // порядок важен, иначе окно между `stopSelf()` этой службы и стартом
+      // headless-задачи могло бы дать системе повод убить процесс раньше.
+      HangupHeadlessTaskService.start(this, connection.callId)
       connection.disconnectFromApp()
     }
     ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)

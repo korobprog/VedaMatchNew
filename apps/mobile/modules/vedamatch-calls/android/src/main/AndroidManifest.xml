@@ -21,6 +21,17 @@
       android:name="com.vedamatch.calls.DeclineHeadlessTaskService"
       android:exported="false" />
 
+    <!-- Headless JS задача «завершить» из onTaskRemoved (VED-222, п.1 —
+         исправление feedback-001.md этого этапа, блокирующий п.2): тот же
+         механизм, что DeclineHeadlessTaskService выше, только для случая
+         «приложение смахнули из списка последних задач во время разговора» —
+         CallForegroundService.onTaskRemoved() не может полагаться на живой
+         JS-мост, HTTP-запрос серверу должен уйти из собственного сервиса
+         с wake lock. -->
+    <service
+      android:name="com.vedamatch.calls.HangupHeadlessTaskService"
+      android:exported="false" />
+
     <!-- Служба «Идёт звонок» на время разговора (VED-222,
          docs/mobile-calls-native.md §12). Android 14 (API 34) требует
          объявить в манифесте каждый foregroundServiceType, который сервис

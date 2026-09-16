@@ -70,6 +70,21 @@ class VedamatchConnection(
     onRejectCallback(callId)
   }
 
+  /**
+   * Намеренно дублируется с `endCall` (`VedamatchCallsModule.kt`) —
+   * не недосмотр (`feedback-001.md` этого этапа, non-blocking п.3).
+   * `onEndCallback(callId)` доводит до JS `onEnd` → `hangUp()` →
+   * `callsApi.end(...)`, и та же цепочка в `call-provider.tsx`
+   * (`nativeClearedFor`-эффект на `phase === 'ended'`) следом вызывает
+   * `clearNativeCall` → `endCall`, который СНОВА зовёт
+   * `CallForegroundService.stop()`/`CallNotifications.cancel()`/
+   * `connectionFor(callId)?.disconnectFromApp()` на уже отсутствующем к
+   * этому моменту соединении. Все четыре операции здесь и в `endCall`
+   * идемпотентны на отсутствующем состоянии (`stopService`/`cancel` на не
+   * запущенном/не существующем — no-op, `connectionFor` после
+   * `removeConnection` возвращает `null`) — двойной проход безопасен и
+   * ожидаем, а не гонка, которую нужно устранять.
+   */
   override fun onDisconnect() {
     setDisconnected(DisconnectCause(DisconnectCause.LOCAL))
     destroy()

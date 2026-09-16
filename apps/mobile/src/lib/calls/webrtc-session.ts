@@ -47,6 +47,16 @@ export class CallSession {
   private local: MediaStream | null = null;
   private disconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
+  /** Флаг «перезапуск ICE уже идёт» (VED-222, п.6 — исправление
+   *  `feedback-001.md` этого этапа, non-blocking п.1): защищает от
+   *  ПАРАЛЛЕЛЬНОГО вызова `restartIce()` (например, `'failed'` из
+   *  `onconnectionstatechange` и смена сети из `ice-restart-policy.ts`
+   *  почти одновременно) — без него второй `createOffer({iceRestart:true})`
+   *  мог бы стартовать до того, как `setLocalDescription` первого
+   *  завершился, и уйти сигналом поверх ещё не отправленного. Отдельно от
+   *  дебаунса по времени в `ice-restart-policy.ts` (тот защищает от частого
+   *  флаппинга сети, не от одновременности) — нужны оба. */
+  private restartingIce = false;
 
   constructor(
     iceServers: ChatIceServerDto[],
@@ -140,7 +150,8 @@ export class CallSession {
   }
 
   async restartIce(): Promise<void> {
-    if (this.closed || this.role !== 'caller') return;
+    if (this.closed || this.role !== 'caller' || this.restartingIce) return;
+    this.restartingIce = true;
     try {
       const offer = await this.pc.createOffer({ iceRestart: true });
       await this.pc.setLocalDescription(offer);
@@ -150,6 +161,8 @@ export class CallSession {
       });
     } catch {
       // Соединение уже закрыто — таймер обрыва доведёт дело до конца.
+    } finally {
+      this.restartingIce = false;
     }
   }
 

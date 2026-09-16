@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { AppState } from 'react-native';
+import InCallManager from 'react-native-incall-manager';
 import type { MediaStream } from 'react-native-webrtc';
 import type {
   ChatCallKind,
@@ -27,6 +28,7 @@ import { CallErrorToast } from '@/components/calls/call-error-toast';
 import { IncomingCallBanner } from '@/components/calls/incoming-call-banner';
 import { ReturnToCallBanner } from '@/components/calls/return-to-call-banner';
 import { createChatCallsApi } from './chat-calls-client';
+import { isAudioSessionLive } from './audio-session-policy';
 import { shouldDeclineAsBusy } from './call-busy-decision';
 import { IDLE_STATE, companionOf, reduceCall, roleIn, type CallState } from './call-machine';
 import { shouldRestartIceOnNetworkChange } from './ice-restart-policy';
@@ -568,19 +570,73 @@ export function CallProvider({ children }: { children: ReactNode }) {
     void clearNativeCall(call.id, nativeEndReason(state.phase, state.endedStatus));
   }, [state.phase, state.call, state.endedStatus]);
 
+  /**
+   * Аудиосессия (`InCallManager.start()`/`stop()`) — исправление
+   * `feedback-001.md`, блокирующий п.1: раньше жила в `useEffect`
+   * `app/call/[id].tsx` с cleanup на размонтирование экрана, а экран умеет
+   * сворачиваться по «назад» ВО ВРЕМЯ активного разговора, не завершая его
+   * (`call-screen-return.ts`, `backMinimizesCall`) — в этот момент
+   * `InCallManager.stop()` реально срабатывал и снимал аудиофокус,
+   * `MODE_IN_COMMUNICATION`, Bluetooth SCO/гарнитуру и датчик приближения,
+   * хотя разговор (служба переднего плана, self-managed `Connection`)
+   * продолжал идти. Теперь следует за фазой звонка тем же паттерном, что уже
+   * применён для `CallForegroundService`/`Connection` выше: один
+   * `start()` на весь `connecting`→`active`, один `stop()` на выходе из этого
+   * окна (`isAudioSessionLive`, `audio-session-policy.ts`, +spec). Экран
+   * звонка (`app/call/[id].tsx`) больше не вызывает `start()`/`stop()` вовсе
+   * — только маршрут (громкая/динамик/Bluetooth) и датчик приближения,
+   * которые осмысленны лишь пока сам экран виден.
+   */
+  const audioSessionLive = useRef(false);
+  useEffect(() => {
+    const call = state.call;
+    const live = call ? isAudioSessionLive(state.phase) : false;
+    if (live && !audioSessionLive.current) {
+      audioSessionLive.current = true;
+      InCallManager.start({ media: call!.kind });
+    } else if (!live && audioSessionLive.current) {
+      audioSessionLive.current = false;
+      InCallManager.stop();
+    }
+  }, [state.phase, state.call]);
+  // Провайдер живёт в корневом layout и обычно не размонтируется, но на
+  // всякий случай (быстрый logout/выход) не оставлять аудиосессию висеть.
+  useEffect(
+    () => () => {
+      if (audioSessionLive.current) {
+        audioSessionLive.current = false;
+        InCallManager.stop();
+      }
+    },
+    [],
+  );
+
   // VED-222, п.6: смена сети (Wi-Fi ↔ LTE) во время разговора — перезапуск
   // ICE немедленно, не дожидаясь таймера обрыва (`ice-restart-policy.ts`,
-  // спека там же документирует асимметрию «только звонящий»).
+  // спека там же документирует асимметрию «только звонящий»). Дебаунс
+  // (`lastIceRestartAt`, исправление `feedback-001.md` этого этапа,
+  // non-blocking п.1) — отдельно от флага «уже идёт» внутри самой сессии
+  // (`webrtc-session.ts#restartIce`): один защищает от частой смены
+  // транспорта на границе покрытия, другой — от параллельного вызова.
   const lastTransport = useRef<NetworkTransport | null>(null);
+  const lastIceRestartAt = useRef<number | null>(null);
   useEffect(() => {
-    if (state.phase !== 'active') lastTransport.current = null;
+    if (state.phase !== 'active') {
+      lastTransport.current = null;
+      lastIceRestartAt.current = null;
+    }
   }, [state.phase]);
   useEffect(() => {
     return subscribeToNetworkTransportChanges((transport) => {
       const previous = lastTransport.current;
       lastTransport.current = transport;
-      if (shouldRestartIceOnNetworkChange(stateRef.current.phase, role ?? 'callee', previous, transport))
+      const now = Date.now();
+      if (
+        shouldRestartIceOnNetworkChange(stateRef.current.phase, role ?? 'callee', previous, transport, now, lastIceRestartAt.current)
+      ) {
+        lastIceRestartAt.current = now;
         void sessionRef.current?.restartIce();
+      }
     });
   }, [role]);
 

@@ -15,6 +15,7 @@ import {
   type AudioRouteState,
   type CallAudioRoute,
 } from '@/lib/calls/audio-route';
+import { shouldEnableProximity } from '@/lib/calls/audio-session-policy';
 import { companionOf, endedLabel, roleIn } from '@/lib/calls/call-machine';
 import { useChatCalls } from '@/lib/calls/call-provider';
 import { backMinimizesCall } from '@/lib/calls/call-screen-return';
@@ -108,35 +109,42 @@ export default function CallScreen() {
   const [audioRoute, setAudioRoute] = useState<AudioRouteState>(EMPTY_AUDIO_ROUTE_STATE);
   const [routeMenuOpen, setRouteMenuOpen] = useState(false);
 
-  // Аудиомаршрутизация звонка (VED-222, п.2): `InCallManager.start()` сам
-  // выбирает разговорный динамик по умолчанию для аудио и громкую связь для
-  // видео, поднимает аудиофокус (`AUDIOFOCUS_GAIN_TRANSIENT`/
-  // `MODE_IN_COMMUNICATION` — ставит на паузу музыку любого другого
-  // приложения и плеер самого VedaMatch, если он играл), заводит Bluetooth
-  // SCO и проводную гарнитуру, включает датчик приближения (гасит экран у
-  // уха, только пока маршрут — разговорный динамик, не на громкой связи и не
-  // на видео — решение и обоснование в `audio-route.ts`).
-  //
-  // «Не гасить экран» (VED-222, п.4) — отдельно от `InCallManager.start()`,
-  // который сам всегда включает keep-screen-on: `shouldKeepScreenAwake`
-  // перекрывает это значение сразу после старта, чтобы аудиозвонок не держал
-  // экран принудительно (только датчик приближения решает, когда его
-  // погасить), а видео — держало, пока этот экран открыт.
+  // «Не гасить экран» (VED-222, п.4) — только пока этот экран открыт, и
+  // только на видео (`shouldKeepScreenAwake`). Аудиосессия сама
+  // (`InCallManager.start()`/`stop()`, маршрут по умолчанию, аудиофокус,
+  // Bluetooth/гарнитура) больше НЕ здесь — исправление `feedback-001.md`,
+  // блокирующий п.1: экран умеет сворачиваться по «назад» ВО ВРЕМЯ
+  // активного разговора, не завершая его (`call-screen-return.ts`), и
+  // `InCallManager.stop()` в cleanup этого компонента реально снимал бы
+  // аудиофокус/SCO/датчик у ещё идущего звонка. Жизненный цикл аудиосессии
+  // теперь в `call-provider.tsx`, привязан к ФАЗЕ звонка
+  // (`audio-session-policy.ts`, +spec), а не к монтированию экрана.
   useEffect(() => {
     if (!call) return;
-    InCallManager.start({ media: call.kind });
     InCallManager.setKeepScreenOn(shouldKeepScreenAwake(call.kind));
-    return () => {
-      InCallManager.setKeepScreenOn(false);
-      InCallManager.stop();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [call?.id]);
+    return () => InCallManager.setKeepScreenOn(false);
+  }, [call?.id, call?.kind]);
 
   useEffect(() => {
     if (!call) return;
     return subscribeToAudioRouteChanges(setAudioRoute);
   }, [call?.id]);
+
+  // Датчик приближения (VED-222, п.3) — единственная часть аудиосессии,
+  // которая по смыслу привязана именно к ЭТОМУ экрану, а не к звонку вообще
+  // (`shouldEnableProximity`, `audio-session-policy.ts`, +spec): гасить
+  // экран у уха имеет смысл, только пока человек смотрит на экран звонка,
+  // а не на что-то ещё в приложении, до чего он мог поднести телефон по
+  // совсем другой причине. Уход с экрана (в том числе «назад» во время
+  // разговора) выключает датчик через cleanup — сам разговор при этом
+  // продолжается, снятие датчика не затрагивает ни аудиофокус, ни маршрут.
+  useEffect(() => {
+    if (!call || !state) return;
+    const enabled = shouldEnableProximity(state.phase, call.kind, true, audioRoute.selected);
+    if (enabled) InCallManager.startProximitySensor();
+    else InCallManager.stopProximitySensor();
+    return () => InCallManager.stopProximitySensor();
+  }, [call?.id, call?.kind, state?.phase, audioRoute.selected]);
 
   // Картинка в картинке (VED-222, п.5): пока этот экран открыт и разговор
   // подходит (видео, `active`) — разрешить автовход при уходе из приложения

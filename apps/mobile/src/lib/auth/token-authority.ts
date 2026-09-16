@@ -7,7 +7,7 @@ import { clearTokens, readTokens, writeTokens, type TokenPair } from './token-st
 /**
  * Единый источник правды для токенов сессии (VED-221, `feedback-001.md`,
  * блокирующий п.1). До этого модуля живой `SessionProvider` (`session.tsx`)
- * и фоновое отклонение звонка (`background-decline.ts`) держали каждый
+ * и фоновое отклонение звонка (`background-call-action.ts`) держали каждый
  * свою in-memory копию пары токенов и свой собственный `singleFlight`
  * `refresh` — два независимых замыкания в одном процессе. Когда приложение
  * просто свёрнуто (не убито), `DeclineHeadlessTaskService` переиспользует
@@ -153,5 +153,5 @@ export function createTokenAuthority(deps: TokenAuthorityDeps = {}): TokenAuthor
 }
 
 /** Инстанс на процесс — то, чем реально пользуются `session.tsx` и
- *  `background-decline.ts`. */
+ *  `background-call-action.ts`. */
 export const tokenAuthority = createTokenAuthority();

@@ -102,7 +102,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   // Токены и их обновление — не здесь: `tokenAuthority`
   // (`token-authority.ts`) один на процесс, его же использует фоновое
-  // отклонение звонка (`background-decline.ts`). Раньше у `SessionProvider`
+  // отклонение звонка (`background-call-action.ts`). Раньше у `SessionProvider`
   // была своя копия токенов и свой `singleFlight refresh`, независимый от
   // headless-задачи — когда приложение было просто свёрнуто (не убито), обе
   // ветки жили в одном JS-движке, но не знали друг о друге; ротация

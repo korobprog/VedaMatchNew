@@ -6,7 +6,7 @@ import VedamatchCalls, {
   type LaunchCall,
   type NetworkTransport,
 } from '../../../modules/vedamatch-calls';
-import { declineCallInBackground } from './background-decline';
+import { declineCallInBackground } from './background-call-action';
 import { shouldDeclineAsBusy } from './call-busy-decision';
 import { callLifecycleTracker } from './call-push-dedup';
 import { isIncomingCallExpired, type CallEndedPush, type IncomingCallPush } from './incoming-call-push';
@@ -46,7 +46,7 @@ function toEndReason(reason: string): EndCallReason {
  * `shouldDeclineAsBusy` (чистый модуль, `call-busy-decision.ts`) над сырыми
  * фактами `VedamatchCalls.callConflictState()`. Занятое устройство отклоняет
  * звонок ровно тем же путём, что и кнопка «Отклонить» из шторки
- * (`declineCallInBackground`, `background-decline.ts`) — headless-совместимый
+ * (`declineCallInBackground`, `background-call-action.ts`) — headless-совместимый
  * HTTP-запрос без открытия UI и без Telecom/уведомления вовсе: показывать и
  * тут же гасить звонок было бы хуже, чем не показать его совсем. Сервер не
  * различает причину отказа (`decline` без тела — см.
