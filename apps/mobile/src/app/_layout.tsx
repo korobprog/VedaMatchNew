@@ -47,6 +47,7 @@ function RootStack() {
           <Stack.Screen name="chat/requests" />
           <Stack.Screen name="people/[id]" />
           <Stack.Screen name="communities/[id]" />
+          <Stack.Screen name="calls-probe" />
         </Stack.Protected>
       </Stack>
     </>

@@ -13,18 +13,20 @@ interface Props {
   subtitle: string;
   /** Раздел сайта, где это уже работает. */
   path: string;
+  /** Скрытое действие на долгое нажатие заголовка (служебные экраны). */
+  onTitleLongPress?: () => void;
 }
 
 /**
  * Вкладка, чей нативный экран ещё не готов. Пустой экран без действия —
  * тупик, поэтому ведёт туда, где раздел уже работает.
  */
-export function SitePlaceholder({ title, subtitle, path }: Props) {
+export function SitePlaceholder({ title, subtitle, path, onTitleLongPress }: Props) {
   const { colors } = useTheme();
   const { webOrigin } = appVariant();
 
   return (
-    <Screen title={title} subtitle={subtitle}>
+    <Screen title={title} subtitle={subtitle} onTitleLongPress={onTitleLongPress}>
       <Pressable
         accessibilityRole="link"
         accessibilityHint="Открывает раздел на сайте в браузере"

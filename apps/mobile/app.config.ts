@@ -107,6 +107,17 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           microphonePermission: false,
         },
       ],
+      // Ставит разрешения WebRTC на Android (CAMERA, RECORD_AUDIO и т.д. —
+      // список зашит в плагине) и подписи для iOS Info.plist. Android не
+      // читает эти тексты для системного диалога разрешений — рационале
+      // показывает экран звонка сам, словами, по нажатию (этап 1).
+      [
+        '@config-plugins/react-native-webrtc',
+        {
+          cameraPermission: 'VedaMatch использует камеру для видеозвонков.',
+          microphonePermission: 'VedaMatch использует микрофон для звонков.',
+        },
+      ],
     ],
     experiments: { typedRoutes: true, reactCompiler: true },
     extra: { variant },

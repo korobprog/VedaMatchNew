@@ -55,3 +55,20 @@ Expo Go не подходит: звонки требуют нативный мо
 
 `google-services.json` в репозиторий не кладётся. Проект Firebase —
 `vedamathai`, пакет — `com.vedamatch.app`.
+
+## Звонки
+
+Разведка (этап 0, VED-218) закрыта: `react-native-webrtc` +
+`@config-plugins/react-native-webrtc` собираются с RN 0.86 new
+architecture; `react-native-callkeep` не берём (сломан под new arch,
+релиз не выходил два года) — вместо него свой тонкий Expo-модуль на
+self-managed `ConnectionService`; фоновый пуш для звонка поднимает
+`@react-native-firebase/messaging`, а не фоновая задача
+`expo-notifications`. Подробности, ссылки и поправки к следующим этапам —
+`docs/mobile-calls-native.md`.
+
+Служебный экран «Проверка связи» (замер relay STUN/TURN на текущей сети)
+скрыт: долгое нажатие на заголовок вкладки «Звонки» открывает
+`/calls-probe`. Это инструмент команды, не часть продукта — запускать с
+разных сетей (домашний Wi-Fi, мобильный интернет) и присылать строку
+итога в отчёт.
