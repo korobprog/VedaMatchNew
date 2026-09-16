@@ -11,7 +11,7 @@ new architecture, можно ли доверять `react-native-callkeep`, и �
 | Шаг | Команда | Результат |
 |---|---|---|
 | Установка | `pnpm --filter @vedamatch/mobile add react-native-webrtc@124.0.8 @config-plugins/react-native-webrtc@15.0.2` | Чисто, `pnpm ls` подтверждает версии; `pnpm install --frozen-lockfile` после этого проходит. |
-| `expo prebuild --platform android --clean` | `APP_CONTOUR=ru APP_CHANNEL=site npx expo prebuild --platform android --clean` | Успех. `AndroidManifest.xml` получил `CAMERA`, `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH`, `ACCESS_NETWORK_STATE`, `SYSTEM_ALERT_WINDOW`, `WAKE_LOCK`, `INTERNET` — список плагина `@config-plugins/react-native-webrtc`, без ручной правки манифеста. |
+| `expo prebuild --platform android --clean` | `APP_CONTOUR=ru APP_CHANNEL=site npx expo prebuild --platform android --clean` | Успех. `AndroidManifest.xml` получил `CAMERA`, `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH`, `ACCESS_NETWORK_STATE`, `SYSTEM_ALERT_WINDOW`, `WAKE_LOCK`, `INTERNET` — список плагина `@config-plugins/react-native-webrtc`, без ручной правки манифеста. См. «Конфликт с blockedPermissions» ниже. |
 | `./gradlew assembleDebug` | `JAVA_HOME` — JBR из Android Studio, `ANDROID_HOME=~/Library/Android/sdk` | См. ниже — результат вписан после завершения фонового запуска. |
 
 Версии подобраны по таблице совместимости из README
@@ -56,8 +56,8 @@ new architecture, можно ли доверять `react-native-callkeep`, и �
   мейнтейнера `saghul` в issue
   [#1736 «not working on New Architecture»](https://github.com/react-native-webrtc/react-native-webrtc/issues/1736)
   (2025-09-24): «The compatibility layer should work out of the box».
-  Другой комментатор [#822](https://github.com/react-native-webrtc/react-native-webrtc-callkeep/issues/822)-класса
-  проблем (см. ниже про callkeep) у webrtc не встретил.
+  Отчётов о падениях уровня callkeep #822 (см. ниже) у самого webrtc
+  не нашлось.
 - `android/build.gradle` пакета — обычный `com.android.library` без
   Fabric-специфичных секций, `RTCVideoViewManager.java` — классический
   `SimpleViewManager`, не Fabric `ViewManager` с кодогеном. Значит именно
@@ -67,15 +67,30 @@ new architecture, можно ли доверять `react-native-callkeep`, и �
   2026-08-15), таблица версий в README явно поддерживает наш Expo/webrtc
   диапазон.
 
+### Конфликт с blockedPermissions
+
+`@config-plugins/react-native-webrtc` (`withWebRTC.js`) безусловно добавляет
+`SYSTEM_ALERT_WINDOW`, а `app.config.ts` держит это разрешение в
+`android.blockedPermissions`. Проверено по сгенерированным манифестам:
+в `src/main/AndroidManifest.xml` разрешение стоит с `tools:node="remove"`,
+то есть blockedPermissions срабатывает после плагина и из релизной и
+магазинной сборки разрешение вырезается. В отладочном APK оно остаётся
+из стандартного отладочного манифеста React Native (`src/debug`), к плагину
+отношения не имеет. Показ поверх окон звонкам не нужен: входящий на экране
+блокировки делается полноэкранным уведомлением (`USE_FULL_SCREEN_INTENT`,
+этап 2), не наложением. Правило для этапов 1–4: после каждого нового
+плагина сверять итоговый манифест release-сборки
+(`aapt dump permissions` по APK), а не только список в app.config.ts.
+
 ### react-native-callkeep — решение «нет»
 
 - Последний npm-релиз `4.3.16` — **2024-11-28**, почти два года без
   публикации относительно текущей даты. Репозиторий при этом живой
   (`pushed_at: 2026-09-14`, `open_issues: 352`), то есть работа идёт, но
   до npm не доезжает.
-- Открытый issue [#822](https://github.com/react-native-webrtc/react-native-webrtc-callkeep/issues/822)
+- Открытый issue [#822](https://github.com/react-native-webrtc/react-native-callkeep/issues/822)
   «are you planning on supporting react native new architecture any time
-  soon?» (апрель 2026, не закрыт). В комментариях —
+  soon?» (открыт 2024-12-09, не закрыт). В комментариях —
   конкретный краш на Android под new arch:
   ```
   Exception in HostObject::get for prop 'RNCallKeep':
