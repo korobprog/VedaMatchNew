@@ -28,7 +28,7 @@ import { IncomingCallBanner } from '@/components/calls/incoming-call-banner';
 import { ReturnToCallBanner } from '@/components/calls/return-to-call-banner';
 import { createChatCallsApi } from './chat-calls-client';
 import { IDLE_STATE, reduceCall, roleIn, type CallState } from './call-machine';
-import { nextNavigatedCallId, shouldAutoNavigateToCallScreen } from './call-screen-return';
+import { navigatedCallIdAfterPhase, nextNavigatedCallId, shouldAutoNavigateToCallScreen } from './call-screen-return';
 import { startRingtone } from './ringtone';
 import { CallSession } from './webrtc-session';
 
@@ -122,6 +122,18 @@ export function CallProvider({ children }: { children: ReactNode }) {
     setScreenVisible(visible);
     navigatedCallId.current = nextNavigatedCallId(visible, stateRef.current.call?.id ?? null, navigatedCallId.current);
   }, []);
+
+  /**
+   * Для какого звонка человек сам нажал «Ответить» на этом устройстве —
+   * читает `shouldAutoNavigateToCallScreen` для решения об `ended`
+   * (`feedback-003.md`): обычный пропущенный/отменённый/отвеченный на
+   * другом устройстве входящий не должен принудительно поднимать экран,
+   * а отказ дать микрофон/камеру сразу после «Ответить» — должен, иначе
+   * причина финала останется необъяснённой. Ставится в начале `accept()`,
+   * до `await`, поэтому отражает факт нажатия, а не то, успел ли локально
+   * дойти до фазы `connecting`.
+   */
+  const answerAttemptCallId = useRef<string | null>(null);
 
   const closeSession = useCallback(() => {
     sessionRef.current?.close();
@@ -406,6 +418,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const accept = useCallback(async () => {
     const call = stateRef.current.call;
     if (!call || stateRef.current.phase !== 'incoming') return;
+    answerAttemptCallId.current = call.id;
     try {
       const servers = await iceServers();
       const session = createSession('callee', servers);
@@ -479,14 +492,16 @@ export function CallProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const call = state.call;
     const callId = call?.id ?? null;
-    if (shouldAutoNavigateToCallScreen(state.phase, callId, navigatedCallId.current)) {
+    const answerAttempted = callId !== null && answerAttemptCallId.current === callId;
+    if (shouldAutoNavigateToCallScreen(state.phase, callId, navigatedCallId.current, answerAttempted)) {
       navigatedCallId.current = callId;
       router.push({ pathname: '/call/[id]', params: { id: callId! } });
       return;
     }
     // Фаза совсем вне «экрану есть что показывать» (idle/incoming) — метка
-    // прошлого звонка больше ничего не решает, чистим её на будущее.
-    if (state.phase === 'idle' || state.phase === 'incoming') navigatedCallId.current = null;
+    // прошлого звонка больше ничего не решает (`navigatedCallIdAfterPhase`,
+    // `call-screen-return.ts`).
+    navigatedCallId.current = navigatedCallIdAfterPhase(state.phase, navigatedCallId.current);
   }, [state.phase, state.call]);
 
   return (

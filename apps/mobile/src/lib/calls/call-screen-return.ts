@@ -38,15 +38,6 @@ export function shouldShowReturnBanner(phase: CallPhase, screenVisible: boolean)
 }
 
 /**
- * Фазы, при которых у звонка вообще должен быть полноэкранный вид —
- * `ended` включён отдельно от «живых» `IN_PROGRESS_PHASES`: экран нужен и
- * когда звонок уже закончился, но ещё ни разу не открывался (например,
- * отказ в микрофоне при «Ответить» — `call-provider.tsx`, `accept()` —
- * сразу даёт `ended` с причиной, которую надо показать).
- */
-const SCREEN_PHASES: ReadonlySet<CallPhase> = new Set(['outgoing', 'connecting', 'active', 'ended']);
-
-/**
  * Пушить ли `/call/[id]` прямо сейчас — решение эффекта-автонавигатора в
  * `call-provider.tsx`, вынесенное в чистую функцию (`feedback-002.md`,
  * блокирующий пункт 1). Один раз на звонок: если для этого `callId` экран
@@ -58,14 +49,42 @@ const SCREEN_PHASES: ReadonlySet<CallPhase> = new Set(['outgoing', 'connecting',
  * сам свернул. `navigatedCallId` при этом не сбрасывается на «назад»
  * (`nextNavigatedCallId` ниже) — сбрасывать его при уходе с экрана и было
  * причиной гонки.
+ *
+ * `ended` — особый случай (`feedback-003.md`): сам по себе он **не**
+ * повод открывать экран, если тот ещё ни разу не поднимался для этого
+ * звонка. Обычный входящий, который пропустили, который отменил звонящий
+ * или на который ответили с другого устройства, должен просто убрать
+ * баннер — полноэкранная карточка «Пропущенный звонок» на 3 секунды поверх
+ * текущего раздела была бы навязчивой ради события, которое пользователь и
+ * так не ждал. Экран всё же нужен, когда человек сам нажал «Ответить», а
+ * дальше что-то не задалось до того, как успела появиться фаза `connecting`
+ * (`answerAttempted`, например отказ в микрофоне — `call-provider.tsx`,
+ * `accept()`): там причину финала обязательно нужно показать, иначе
+ * нажатие «Ответить» осталось бы без всякого объяснения.
  */
 export function shouldAutoNavigateToCallScreen(
   phase: CallPhase,
   callId: string | null,
   navigatedCallId: string | null,
+  answerAttempted = false,
 ): boolean {
   if (!callId || navigatedCallId === callId) return false;
-  return SCREEN_PHASES.has(phase);
+  if (phase === 'ended') return answerAttempted;
+  return IN_PROGRESS_PHASES.has(phase);
+}
+
+/**
+ * Метка `navigatedCallId` после смены фазы, если сама фаза больше ничего
+ * не решает (`idle`/`incoming`) — экрану нечего показывать, память о
+ * прошлом звонке никому не нужна (`feedback-003.md`, non-blocking №1,
+ * `call-provider.tsx:488-489` раньше держал это внутри необтестированного
+ * эффекта). Строго избыточно для корректности — сравнение `id` в
+ * `shouldAutoNavigateToCallScreen` само отличает новый звонок от старого
+ * независимо от того, обнулена метка или нет, — но так решение целиком
+ * живёт в одном протестированном месте, а не «на всякий случай» в эффекте.
+ */
+export function navigatedCallIdAfterPhase(phase: CallPhase, current: string | null): string | null {
+  return phase === 'idle' || phase === 'incoming' ? null : current;
 }
 
 /**

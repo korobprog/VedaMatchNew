@@ -1,6 +1,7 @@
 import type { CallPhase } from './call-machine';
 import {
   backMinimizesCall,
+  navigatedCallIdAfterPhase,
   nextNavigatedCallId,
   shouldAutoNavigateToCallScreen,
   shouldShowReturnBanner,
@@ -51,26 +52,42 @@ describe('shouldShowReturnBanner', () => {
 });
 
 describe('shouldAutoNavigateToCallScreen', () => {
-  it('звонок в «экранной» фазе, ещё не показывался — да', () => {
-    for (const phase of ['outgoing', 'connecting', 'active', 'ended'] as const) {
+  it('дозвон/разговор, ещё не показывался — да, вне зависимости от answerAttempted', () => {
+    for (const phase of ['outgoing', 'connecting', 'active'] as const) {
       expect(shouldAutoNavigateToCallScreen(phase, 'c1', null)).toBe(true);
       expect(shouldAutoNavigateToCallScreen(phase, 'c1', 'other-call')).toBe(true);
+      expect(shouldAutoNavigateToCallScreen(phase, 'c1', null, true)).toBe(true);
     }
   });
 
   it('этот же звонок уже показывался — нет, при любой фазе', () => {
     for (const phase of ['outgoing', 'connecting', 'active', 'ended'] as const) {
       expect(shouldAutoNavigateToCallScreen(phase, 'c1', 'c1')).toBe(false);
+      expect(shouldAutoNavigateToCallScreen(phase, 'c1', 'c1', true)).toBe(false);
     }
   });
 
-  it('idle/incoming — экрану нечего показывать, независимо от метки', () => {
+  it('idle/incoming — экрану нечего показывать, независимо от метки и answerAttempted', () => {
     expect(shouldAutoNavigateToCallScreen('idle', 'c1', null)).toBe(false);
     expect(shouldAutoNavigateToCallScreen('incoming', 'c1', null)).toBe(false);
+    expect(shouldAutoNavigateToCallScreen('incoming', 'c1', null, true)).toBe(false);
   });
 
   it('нет звонка — нет и перехода', () => {
     expect(shouldAutoNavigateToCallScreen('outgoing', null, null)).toBe(false);
+  });
+
+  describe('ended, ещё не показывался — только если сам нажал «Ответить» (feedback-003.md)', () => {
+    it('без answerAttempted (по умолчанию false) — нет перехода: обычный пропущенный/отменённый/отвеченный на другом устройстве', () => {
+      expect(shouldAutoNavigateToCallScreen('ended', 'c1', null)).toBe(false);
+      expect(shouldAutoNavigateToCallScreen('ended', 'c1', null, false)).toBe(false);
+      expect(shouldAutoNavigateToCallScreen('ended', 'c1', 'other-call', false)).toBe(false);
+    });
+
+    it('answerAttempted — да: нажал «Ответить», а звонок не состоялся (отказ в разрешении/ошибка соединения)', () => {
+      expect(shouldAutoNavigateToCallScreen('ended', 'c1', null, true)).toBe(true);
+      expect(shouldAutoNavigateToCallScreen('ended', 'c1', 'other-call', true)).toBe(true);
+    });
   });
 });
 
@@ -86,6 +103,20 @@ describe('nextNavigatedCallId', () => {
   });
 });
 
+describe('navigatedCallIdAfterPhase', () => {
+  it('idle/incoming — метка обнуляется, прошлому звонку больше нечего решать', () => {
+    expect(navigatedCallIdAfterPhase('idle', 'c1')).toBeNull();
+    expect(navigatedCallIdAfterPhase('incoming', 'c1')).toBeNull();
+  });
+
+  it('остальные фазы — метка не трогается', () => {
+    for (const phase of ['outgoing', 'connecting', 'active', 'ended'] as const) {
+      expect(navigatedCallIdAfterPhase(phase, 'c1')).toBe('c1');
+      expect(navigatedCallIdAfterPhase(phase, null)).toBeNull();
+    }
+  });
+});
+
 /**
  * Сценарии из `feedback-002.md` — провайдер целиком не тестируется (сеть,
  * WebRTC, `expo-router`), но его решения о навигации — чистая функция двух
@@ -94,13 +125,18 @@ describe('nextNavigatedCallId', () => {
  * сообщает о своей видимости» тем же порядком вызовов, что в
  * `call-provider.tsx`.
  */
-describe('сценарии автоперехода (feedback-002.md)', () => {
-  function simulate(events: Array<{ phase: CallPhase; screenMounted?: boolean }>) {
+describe('сценарии автоперехода (feedback-002.md, feedback-003.md)', () => {
+  /**
+   * `answerAttempted` — один флаг на весь сценарий, как в
+   * `call-provider.tsx`: `answerAttemptCallId.current` ставится один раз
+   * при нажатии «Ответить» и живёт до конца звонка, не завязан на фазу.
+   */
+  function simulate(events: Array<{ phase: CallPhase; screenMounted?: boolean }>, answerAttempted = false) {
     const callId = 'c1';
     let navigatedCallId: string | null = null;
     const pushes: CallPhase[] = [];
     for (const event of events) {
-      if (shouldAutoNavigateToCallScreen(event.phase, callId, navigatedCallId)) {
+      if (shouldAutoNavigateToCallScreen(event.phase, callId, navigatedCallId, answerAttempted)) {
         navigatedCallId = callId;
         pushes.push(event.phase);
       }
@@ -151,8 +187,28 @@ describe('сценарии автоперехода (feedback-002.md)', () => {
     expect(result.pushes).toEqual(['connecting']);
   });
 
-  it('отказ в разрешении при «Ответить»: экран для ещё не показанного звонка поднимается на ended', () => {
-    const result = simulate([{ phase: 'incoming' }, { phase: 'ended' }]);
+  it('«Ответить» + отказ микрофона: экран для ещё не показанного звонка поднимается на ended, чтобы показать причину', () => {
+    // answerAttempted=true — эквивалент answerAttemptCallId.current === call.id
+    // в call-provider.tsx, ставится в начале accept() до любых await.
+    const result = simulate([{ phase: 'incoming' }, { phase: 'ended' }], true);
     expect(result.pushes).toEqual(['ended']);
+  });
+
+  it('пропущенный входящий (таймаут, никто не нажимал «Ответить»): экран не поднимается', () => {
+    const result = simulate([{ phase: 'incoming' }, { phase: 'ended' }]);
+    expect(result.pushes).toEqual([]);
+  });
+
+  it('входящий отменён звонящим до ответа: экран не поднимается', () => {
+    // Тот же переход incoming → ended для клиента-получателя — сервер сам
+    // решает, что случилось (missed/cancelled), для решения о навигации
+    // важен только факт «никто не жал «Ответить»» на этом устройстве.
+    const result = simulate([{ phase: 'incoming' }, { phase: 'ended' }]);
+    expect(result.pushes).toEqual([]);
+  });
+
+  it('на входящий ответили с другого устройства: этот экран не поднимается', () => {
+    const result = simulate([{ phase: 'incoming' }, { phase: 'ended' }]);
+    expect(result.pushes).toEqual([]);
   });
 });
