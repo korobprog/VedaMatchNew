@@ -39,7 +39,10 @@ function makeService(
     prisma as never,
     jwt as never,
     { emit: jest.fn() } as never,
-    new IdentityService(prisma as never, new PersonalDataService(prisma as never, { isEnabled: false } as never)),
+    new IdentityService(
+      prisma as never,
+      new PersonalDataService(prisma as never, { isEnabled: false } as never),
+    ),
     new AuthProvidersService(prisma as never),
   );
   const res = { cookie: jest.fn(), clearCookie: jest.fn() };
@@ -109,9 +112,9 @@ describe('AuthService.refresh', () => {
       service.refresh(req as never, res as never),
     ).rejects.toBeInstanceOf(RefreshRaceException);
     expect(prisma.refreshToken.create).not.toHaveBeenCalled();
-    // Победитель гонки уже поставил браузеру свежие cookie.
-    const cleared = res.clearCookie.mock.calls.map((call: unknown[]) => call[0]);
-    expect(cleared).toEqual(['vm_session']);
+    // Победитель гонки уже поставил браузеру свежие cookie и маркер —
+    // стирать нельзя ни одну.
+    expect(res.clearCookie).not.toHaveBeenCalled();
   });
 
   it('при мёртвом refresh снимает все cookie сессии, а не только маркер', async () => {
@@ -193,6 +196,10 @@ describe('AuthService.refresh', () => {
     ).rejects.toBeInstanceOf(RefreshRaceException);
     expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
     expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    // Свежие cookie соседнего запроса не стираются, маркер тоже.
+    expect(
+      (res as { clearCookie: jest.Mock }).clearCookie,
+    ).not.toHaveBeenCalled();
   });
 
   it('refreshApp: давний повтор не трогает сессии других входов', async () => {
@@ -293,7 +300,10 @@ describe('safeReturnTo', () => {
  * та часть, где по claims находят человека, — она вынесена в отдельный метод.
  */
 function makeGoogleService(prisma: Record<string, unknown>) {
-  const identities = new IdentityService(prisma as never, new PersonalDataService(prisma as never, { isEnabled: false } as never));
+  const identities = new IdentityService(
+    prisma as never,
+    new PersonalDataService(prisma as never, { isEnabled: false } as never),
+  );
   return new AuthService(
     { get: jest.fn((_key: string, fallback?: string) => fallback) } as never,
     prisma as never,
@@ -308,15 +318,24 @@ describe('AuthService.resolveGoogleProfile', () => {
   it('не отдаёт существующий аккаунт при совпадении почты у нового googleId', async () => {
     // Пользователь с этим адресом есть, но идентичности google с таким sub нет.
     const service = makeGoogleService({
-      userIdentity: { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn() },
+      userIdentity: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        update: jest.fn(),
+      },
       user: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'victim', email: 'a@b.c' }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'victim', email: 'a@b.c' }),
         create: jest.fn(),
       },
     });
 
     await expect(
-      service.resolveGoogleProfile({ sub: 'new-sub', email: 'a@b.c', name: 'Кто-то' }),
+      service.resolveGoogleProfile({
+        sub: 'new-sub',
+        email: 'a@b.c',
+        name: 'Кто-то',
+      }),
     ).rejects.toThrow(/уже используется/);
   });
 
@@ -326,7 +345,10 @@ describe('AuthService.resolveGoogleProfile', () => {
       userIdentity: {
         findUnique: jest
           .fn()
-          .mockResolvedValue({ id: 'i1', user: { id: 'u-old', email: 'a@b.c' } }),
+          .mockResolvedValue({
+            id: 'i1',
+            user: { id: 'u-old', email: 'a@b.c' },
+          }),
         update: jest.fn(),
       },
       user: { findUnique: jest.fn(), create },

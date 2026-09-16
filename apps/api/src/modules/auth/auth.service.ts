@@ -960,12 +960,13 @@ export class AuthService implements OnModuleInit {
       // отзывал все сессии человека, включая приложение (VED-233).
       // Гонка ротации — исключение: соседний запрос этого же браузера
       // только что получил свежие cookie, и стирать их нельзя.
-      if (error instanceof RefreshRaceException) {
-        res.clearCookie(SESSION_MARKER_COOKIE, {
-          path: '/',
-          domain: this.contour(req.headers.host).cookieDomain,
-        });
-      } else if (error instanceof UnauthorizedException) {
+      // При гонке не трогаем ни одну cookie: ответ соседнего запроса мог
+      // прийти раньше и уже положить свежую пару и маркер — очистка в этом
+      // ответе стёрла бы их и выбросила человека на лендинг.
+      if (
+        error instanceof UnauthorizedException &&
+        !(error instanceof RefreshRaceException)
+      ) {
         this.clearSessionCookies(res, req.headers.host);
       }
       throw error;
