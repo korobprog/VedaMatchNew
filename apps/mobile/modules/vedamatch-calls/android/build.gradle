@@ -1,0 +1,27 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'expo-module-gradle-plugin'
+
+group = 'com.vedamatch.calls'
+version = '1.0.0'
+
+android {
+  namespace "com.vedamatch.calls"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // NotificationCompat.CallStyle (androidx.core >= 1.12) — версия, которую
+  // тащит сам React Native/Expo, может быть старше; фиксируем явно, чтобы
+  // сборка не зависела от транзитивного разрешения версий другими модулями.
+  implementation "androidx.core:core-ktx:1.13.1"
+  // HeadlessJsTaskService/HeadlessJsTaskConfig/Arguments (DeclineHeadlessTaskService.kt).
+  // expo-modules-core тоже зависит от неё, но своим `implementation` — Gradle
+  // не пробрасывает такие зависимости транзитивно на compile classpath
+  // потребителя, нужна своя строка с тем же координатом (версия берётся из
+  // общего для проекта React Native Gradle Plugin, как и у expo-modules-core).
+  implementation 'com.facebook.react:react-android'
+}

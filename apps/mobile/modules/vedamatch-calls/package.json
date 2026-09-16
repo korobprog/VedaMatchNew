@@ -1,0 +1,8 @@
+{
+  "name": "vedamatch-calls",
+  "version": "1.0.0",
+  "description": "Свой Expo-модуль (self-managed ConnectionService) для входящего звонка при свёрнутом и закрытом приложении. Только Android — решение этапа 0 (docs/mobile-calls-native.md, §3).",
+  "main": "index.ts",
+  "license": "UNLICENSED",
+  "private": true
+}

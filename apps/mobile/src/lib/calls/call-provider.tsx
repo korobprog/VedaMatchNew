@@ -28,6 +28,7 @@ import { IncomingCallBanner } from '@/components/calls/incoming-call-banner';
 import { ReturnToCallBanner } from '@/components/calls/return-to-call-banner';
 import { createChatCallsApi } from './chat-calls-client';
 import { IDLE_STATE, reduceCall, roleIn, type CallState } from './call-machine';
+import { clearNativeCall, consumeLaunchCall, subscribeToNativeCallEvents } from './native-call-bridge';
 import { startRingtone } from './ringtone';
 import { CallSession } from './webrtc-session';
 
@@ -430,6 +431,57 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const switchCamera = useCallback(() => sessionRef.current?.switchCamera(), []);
   const dismiss = useCallback(() => dispatch({ type: 'reset' }), []);
 
+  // ---------- нативный модуль звонков (VED-221) ----------
+
+  /** Чем `Activity` была поднята на этот раз — читается один раз при
+   *  старте. «Ответить» с уведомления/блокировки уже перевело self-managed
+   *  `Connection` в активную (`CallActionReceiver.kt`) — здесь остаётся
+   *  принять звонок тем же путём, что и обычное нажатие на баннер, когда
+   *  `reconcile()` (эффект выше) подтянет этот звонок из
+   *  `/chat/calls/active` и переведёт фазу в `incoming`. */
+  const pendingNativeAnswer = useRef<string | null>(null);
+  useEffect(() => {
+    const launch = consumeLaunchCall();
+    if (launch?.action === 'answer') pendingNativeAnswer.current = launch.callId;
+  }, []);
+  useEffect(() => {
+    if (state.phase !== 'incoming' || !state.call) return;
+    if (pendingNativeAnswer.current !== state.call.id) return;
+    pendingNativeAnswer.current = null;
+    void accept();
+  }, [state.phase, state.call, accept]);
+
+  // Ответ/отклонение системным путём (гарнитура, Bluetooth, Android Auto),
+  // пока JS жив — путь через нашу кнопку в уведомлении их не поднимает
+  // (отвечает/отклоняет напрямую в `CallActionReceiver.kt`, минуя JS для
+  // убитого приложения).
+  useEffect(() => {
+    return subscribeToNativeCallEvents({
+      onAnswer: (callId) => {
+        if (stateRef.current.call?.id === callId && stateRef.current.phase === 'incoming') void accept();
+      },
+      onDecline: (callId) => {
+        if (stateRef.current.call?.id === callId) void decline();
+      },
+    });
+  }, [accept, decline]);
+
+  // Гасит уведомление/self-managed Connection, как только у звонка внутри
+  // приложения появилось «настоящее» состояние (разговор пошёл) или он
+  // закончился — нативная сторона нужна была только для дозвона, пока
+  // приложение было не видно. Аудио- и Bluetooth-интеграция самого
+  // разговора через Telecom — этап 3 (VED-222), здесь self-managed
+  // `Connection` сознательно живёт только до `active`.
+  const nativeClearedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const call = state.call;
+    if (!call) return;
+    if (state.phase !== 'active' && state.phase !== 'ended') return;
+    if (nativeClearedFor.current === call.id) return;
+    nativeClearedFor.current = call.id;
+    void clearNativeCall(call.id, nativeEndReason(state.phase, state.endedStatus));
+  }, [state.phase, state.call, state.endedStatus]);
+
   const apiValue = useMemo<ChatCallsApi>(
     () => ({
       state,
@@ -497,6 +549,24 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
 function isCallEvent(event: ChatStreamEvent): event is ChatCallStreamEvent {
   return event.type.startsWith('call.');
+}
+
+/** `ChatCallStatus` сервера → причина для нативного модуля
+ *  (`EndCallReason`, `native-call-bridge.ts`) — наборы почти совпадают,
+ *  кроме `ringing`/`accepted` (звонок в этих статусах не гасят) и
+ *  `answered_elsewhere` (сервер отдельно шлёт его только data-пушем,
+ *  не в `ChatCallDto.status`, — до провайдера он этим путём не доходит). */
+function nativeEndReason(phase: CallState['phase'], status: CallState['endedStatus']): 'ended' | 'declined' | 'missed' | 'cancelled' | 'failed' {
+  if (phase === 'active') return 'ended';
+  switch (status) {
+    case 'declined':
+    case 'missed':
+    case 'cancelled':
+    case 'failed':
+      return status;
+    default:
+      return 'ended';
+  }
 }
 
 /** Отказ в доступе к микрофону/камере и прочие ошибки медиа — словами. */

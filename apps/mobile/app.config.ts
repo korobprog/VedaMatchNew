@@ -57,8 +57,31 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         'android.permission.READ_EXTERNAL_STORAGE',
         'android.permission.WRITE_EXTERNAL_STORAGE',
       ],
+      // Входящий звонок при свёрнутом/закрытом приложении (VED-221,
+      // docs/mobile-calls-native.md §3). MANAGE_OWN_CALLS и
+      // FOREGROUND_SERVICE(_PHONE_CALL) — «обычные», Android выдаёт их
+      // автоматически по объявлению; USE_FULL_SCREEN_INTENT с Android 14
+      // может не выдаться молча (`canUseFullScreenIntent()`,
+      // `native-call-bridge.ts`) — деградация до heads-up описана в
+      // `docs/mobile-calls-native.md`. POST_NOTIFICATIONS уже приходит из
+      // плагина `expo-notifications` ниже.
+      permissions: [
+        'android.permission.MANAGE_OWN_CALLS',
+        'android.permission.USE_FULL_SCREEN_INTENT',
+        'android.permission.FOREGROUND_SERVICE',
+        'android.permission.FOREGROUND_SERVICE_PHONE_CALL',
+      ],
     },
     plugins: [
+      // Правки манифеста для VED-221 (см. комментарий в самом файле) должны
+      // выполниться последними среди всех `withAndroidManifest`-плагинов
+      // ниже — а `@expo/config-plugins` компилирует их в порядке, ОБРАТНОМ
+      // регистрации (каждый новый `withAndroidManifest` оборачивает
+      // предыдущий и вызывается раньше него, см. `withMod`/`withBaseMod` в
+      // `@expo/config-plugins`): поэтому плагин стоит здесь, первым в
+      // списке, а не последним, как было бы естественно ожидать по имени
+      // файла.
+      './plugins/with-native-calls.js',
       'expo-router',
       'expo-secure-store',
       'expo-font',
@@ -133,6 +156,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           enableBackgroundPlayback: false,
         },
       ],
+      // Входящий звонок в свёрнутом/закрытом приложении (этап 2, VED-221,
+      // docs/mobile-calls-native.md §3-4). Плагин `@react-native-firebase/app`
+      // копирует `google-services.json` и подключает Gradle-плагин Google
+      // Services — без файла (см. `withFirebase` выше) он падает на
+      // `withDangerousMod`, поэтому подключаем условно, как и сам файл;
+      // нативные модули RNFB при этом всё равно собираются автолинкингом
+      // (это не зависит от плагина) — без файла FCM просто не инициализируется.
+      ...(withFirebase ? ['@react-native-firebase/app'] : []),
     ],
     experiments: { typedRoutes: true, reactCompiler: true },
     extra: { variant },

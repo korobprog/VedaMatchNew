@@ -367,3 +367,254 @@ Android аппаратная «назад»/системный жест штат
 уведомлением (этап 3, VED-222); в рамках этапа 1 это осознанный пробел,
 отмеченный в `gan-harness/generator-state.md`.
 
+## 9. Этап 2 (VED-221) — входящий при свёрнутом и закрытом приложении
+
+Ветка `feat/mobile-calls-2-lockscreen`. Реализует решения §3-4 выше: свой
+Expo-модуль на self-managed `ConnectionService` и `@react-native-firebase/messaging`
+как единственный приёмник FCM.
+
+### Приём FCM — RNFB, разведённая версия API
+
+Разведка (§4) называла `@react-native-firebase/messaging@26.4.0` — на
+момент установки это оказалась версия с **уже убранной namespaced API**
+(`import messaging from '@react-native-firebase/messaging'; messaging()...`).
+Пакет экспортирует только модульный стиль: `getMessaging()`, `getToken()`,
+`onMessage()`, `onTokenRefresh()`, `getInitialNotification()`,
+`onNotificationOpenedApp()`, `setBackgroundMessageHandler()` — свободные
+функции, первым аргументом принимающие инстанс `Messaging` от
+`getMessaging()`. Это не решение этой сессии, а факт версии — код
+(`src/lib/push/push-bridge.tsx`, `src/lib/push/background-handler.ts`)
+целиком на модульном API, `messaging()` нигде не используется.
+
+### Кто что принимает: RNFB vs expo-notifications
+
+Оба остаются, но с разными обязанностями:
+
+- **Приём FCM** — только `@react-native-firebase/messaging`. Манифест
+  `expo-notifications` регистрирует свой `ExpoFirebaseMessagingService` на
+  тот же `com.google.firebase.MESSAGING_EVENT` независимо от того, вызываем
+  ли мы её приёмный путь — конфликт двух `<service>` на одно системное
+  событие Android не гарантирует победителя (риск §4). Плагин
+  `apps/mobile/plugins/with-native-calls.js` (`withAndroidManifest`,
+  выполняется после `expo-notifications` в списке `plugins` из
+  `app.config.ts`) вырезает из объединённого манифеста любой `<service>` с
+  `MESSAGING_EVENT`, чьё имя не содержит `ReactNativeFirebaseMessaging`.
+  Работает независимо от наличия `google-services.json` — RNFB подключает
+  свой сервис автолинкингом (обычная Android-библиотека в `node_modules`),
+  а не плагином конфигурации.
+- **Показ/презентация** остаётся у `expo-notifications`: канал, разрешение,
+  `Notifications.scheduleNotificationAsync` для сообщения, пришедшего на
+  переднем плане, нажатие на уведомление — тот же код, что и раньше
+  (`push-bridge.tsx`), только источник токена и данных пуша — RNFB, а не
+  собственный приёмный путь `expo-notifications`.
+- Обычные пуши чата (`buildFcmMessage`, `notification`-блок) в фоне/убитом
+  приложении система показывает сама, минуя весь наш код на Android
+  (штатное поведение FCM для сообщений с `notification`) — ни RNFB, ни
+  `expo-notifications` этот путь не трогают, и не должны: `onMessageReceived`
+  для таких сообщений в фоне не вызывается вовсе.
+
+### Точка входа — `index.js`
+
+`package.json#main` был `expo-router/entry`, стал `./index.js`. Новый файл
+регистрирует headless-задачу отклонения (`AppRegistry.registerHeadlessTask`)
+и импортирует `src/lib/push/background-handler.ts` (побочный эффект:
+`setBackgroundMessageHandler`) **до** `require('expo-router/entry')` —
+порядок обязателен, обработчик должен быть на месте раньше первого рендера
+и раньше того, как Android успеет доставить холодный пуш.
+
+### Разбор пуша и дедупликация — чистые модули
+
+- `src/lib/calls/incoming-call-push.ts` (+`spec`) — `parseCallPush` и
+  `isIncomingCallExpired`, без сети и нативных модулей, разбирает `data`
+  ровно в том формате, что шлёт `buildCallIncomingMessage`/
+  `buildCallEndedMessage` (`apps/api/.../fcm.ts`).
+- `src/lib/calls/call-push-dedup.ts` (+`spec`) — `CallLifecycleTracker`:
+  повторный `call.incoming` с тем же `callId`, пока он ещё «звонит», не
+  поднимает второй системный вызов; `call.ended` обрабатывается один раз.
+  Общий инстанс (`callLifecycleTracker`) на процесс — фоновый обработчик и
+  (потенциально) передний план сверяются с одной картой, а не с двумя.
+- `src/lib/calls/native-call-bridge.ts` — тонкая склейка: дедуп/просрочка →
+  вызов нативного модуля. Без своего `spec`: вызывает
+  `requireNativeModule('VedamatchCalls')`, которого в Jest нет (как и
+  `call-provider.tsx`, у которого тоже нет спека по той же причине) —
+  чистая часть решения уже покрыта тестами выше.
+
+**Почему звонок не поднимает системный UI, пока приложение на переднем
+плане.** `push-bridge.tsx`'s `onMessage` сознательно игнорирует
+`call.incoming`/`call.ended`: пока приложение видно, тот же самый звонок уже
+идёт через общий поток `chat-stream.tsx` → `call-provider.tsx` →
+`IncomingCallBanner` (этап 1) — FCM доставляет тот же факт вторым путём
+независимо от того, открыто ли приложение (сервер этого не знает). Показ
+системного полноэкранного вызова поверх уже видимого баннера был бы
+дублем. RNFB сам разводит это на уровне доставки: `ReactNativeFirebaseMessagingReceiver`
+проверяет `SharedUtils.isAppInForeground(context)` и уводит фон/убитое
+состояние в headless-путь (`setBackgroundMessageHandler`), а передний план —
+в `onMessage`; наш код лишь не дублирует то, что уже показывает SSE.
+
+### Свой нативный модуль — `modules/vedamatch-calls`
+
+Expo Modules API (Kotlin), локальный модуль (автолинкуется из `./modules`
+без публикации в npm, `expo-module.config.json` без `publication`).
+
+- `VedamatchCallsModule.kt` — JS-интерфейс: `showIncomingCall`, `endCall`,
+  `getLaunchCall`, `canUseFullScreenIntent`, `openFullScreenIntentSettings`,
+  `setCallScreenActive`, события `answer`/`decline`.
+  `showIncomingCall` регистрирует `PhoneAccount` (self-managed, лениво при
+  первом звонке) и зовёт `TelecomManager.addNewIncomingCall` с метаданными
+  в `extras` — единственный канал донести `callId`/имя/тип до
+  `onCreateIncomingConnection`, которую вызывает система, а не наш код.
+- `VedamatchConnectionService.kt`/`VedamatchConnection.kt` — self-managed
+  `ConnectionService`/`Connection`. `onShowIncomingCallUi` строит
+  уведомление (`CallNotifications`); `onAnswer`/`onReject` — путь ответа
+  системными средствами (гарнитура, Bluetooth, Android Auto), не наша
+  кнопка в уведомлении (та отвечает напрямую, см. ниже).
+- `CallNotifications.kt` — канал «Звонки» (`IMPORTANCE_HIGH`, вибрация,
+  системный рингтон по умолчанию — см. «Отклонение» ниже про WAV),
+  `NotificationCompat.CallStyle.forIncomingCall` на API 31+, обычные две
+  кнопки действий на более старых, `fullScreenIntent` на главную `Activity`
+  приложения (берётся через `getLaunchIntentForPackage`, не по имени класса:
+  модуль не знает `MainActivity` хоста на этапе компиляции — другой
+  Gradle-модуль).
+- `CallActionReceiver.kt` — «Ответить»/«Отклонить» из уведомления/блокировки
+  без открытия UI. «Ответить»: `connection.setActive()` + запись в
+  `PendingCallStore.setPendingLaunch(callId, "answer")` + запуск главной
+  `Activity` — `call-provider.tsx` при старте читает это через
+  `getLaunchCall()` и сам вызывает `accept()` (обычный путь принятия
+  звонка, с теми же микрофон/ICE шагами, что и нажатие в баннере — не
+  отдельная ветка). «Отклонить»: рвёт self-managed `Connection` локально и
+  **не открывает приложение** — запускает `DeclineHeadlessTaskService`.
+- `DeclineHeadlessTaskService.kt` — `HeadlessJsTaskService`, тот же
+  механизм, которым сам RNFB поднимает `setBackgroundMessageHandler` из
+  убитого приложения (`context.startService` +
+  `HeadlessJsTaskService.acquireWakeLockNow`, скопировано с
+  `ReactNativeFirebaseMessagingReceiver.java` из самого пакета) — если
+  фоновый обработчик пуша надёжен, этот путь настолько же надёжен, а не
+  отдельная гипотеза.
+- `PendingCallStore.kt` — единственное состояние в процессе, общее для
+  всех этих классов (они не имеют друг у друга прямых ссылок: Telecom и
+  `BroadcastReceiver` создают свои объекты сами). Тот же приём, что
+  `ExpoLinkingModule.initialURL` в `expo-linking`.
+
+**Решение: Headless JS задача, а не прямой HTTP из Kotlin (п.4 спеки).**
+Реализация на JS (`background-decline.ts`) переиспользует уже написанный и
+протестированный код обновления токена (`createApiClient`, `createAuthApi`,
+`singleFlight` — тот же протокол, что у `lib/auth/session.tsx`) вместо
+повторной реализации Android Keystore/refresh-логики на Kotlin. Экономия
+кода и меньше риска: `expo-secure-store` шифрует записи форматом,
+завязанным на его же Kotlin-реализацию (`SecureStoreOptions`,
+`AESEncryptor`) — читать их из стороннего Kotlin-кода означало бы
+дублировать эту логику, а не просто читать `SharedPreferences`.
+
+**Известное ограничение — рингтон.** Канал уведомлений использует
+системный рингтон по умолчанию
+(`RingtoneManager.getActualDefaultRingtoneUri`), не собственный
+`ringtone-incoming.wav`: тот — JS/Metro-ассет (`require(...)` в
+`lib/calls/ringtone.ts`), а не Android `raw`-ресурс, и по прямому URI из
+Kotlin недоступен. Брендированный рингтон на экране блокировки — доработка
+(копия WAV в `res/raw` модуля при сборке), не входит в объём этапа 2.
+
+**Жизненный цикл self-managed `Connection` ограничен дозвоном.**
+`call-provider.tsx` зовёт `clearNativeCall` (гасит уведомление и рвёт
+`Connection`), как только звонок внутри приложения доходит до `active` —
+Telecom-интеграция самого разговора (аудио-маршрутизация, Bluetooth,
+«занято» при сотовом) — это этап 3 (VED-222), здесь `Connection` живёт
+только пока идёт дозвон/показывается системный UI.
+
+### Разрешения
+
+`app.config.ts` → `android.permissions`: `MANAGE_OWN_CALLS`,
+`USE_FULL_SCREEN_INTENT`, `FOREGROUND_SERVICE`,
+`FOREGROUND_SERVICE_PHONE_CALL`. Первые два — «обычные» (Android выдаёт по
+объявлению, без диалога), `FOREGROUND_SERVICE*` объявлены про запас под
+этап 3 (фоновый сервис самого разговора), в этапе 2 не используются
+рантаймом. `POST_NOTIFICATIONS` уже приходит из плагина `expo-notifications`.
+`USE_FULL_SCREEN_INTENT` на Android 14+ может быть автоматически не выдан
+(`NotificationManager.canUseFullScreenIntent()` возвращает `false`) — тест
+на это в `app-config.spec.ts` не заменяет живую проверку (система решает
+рантаймом, не по манифесту). Деградация: кнопка «Разрешить в настройках»
+на вкладке «Звонки» (`(tabs)/calls.tsx`, `openFullScreenIntentSettings`),
+без разрешения звонок всё равно придёт — обычным heads-up уведомлением,
+не пропадает совсем.
+
+### Сборка
+
+`APP_CONTOUR=ru APP_CHANNEL=site npx expo prebuild --platform android --clean`
+проходит чисто. `./gradlew assembleRelease -x lint` дошёл до
+`BUILD SUCCESSFUL` не с первой попытки — по пути реальная сборка нашла
+шесть отдельных ошибок, ни одна из них не была видна ни `tsc`, ни `jest`
+(они не трогают Kotlin/Gradle/манифест вовсе, поэтому этот прогон и
+обязателен перед PR, а не факультативен):
+
+1. `modules/vedamatch-calls/android/build.gradle` не задавал
+   `defaultConfig.versionName` — обязателен для Android-модуля с
+   публикацией через `expo-module-gradle-plugin`, даже без реальной
+   публикации в Maven. Добавлены `versionCode`/`versionName`.
+2. Манифест приложения и библиотечный манифест `@react-native-firebase/messaging`
+   объявляют одни и те же `<meta-data>` дефолтного канала/цвета с разными
+   значениями — `processReleaseMainManifest` падал без явного
+   `tools:replace`. Решение и объяснение — в самом
+   `plugins/with-native-calls.js` и в §4 этого документа.
+3. Порядок `withAndroidManifest`-плагинов в `@expo/config-plugins`
+   компилируется в порядке, ОБРАТНОМ регистрации в `plugins`
+   (`app.config.ts`) — находка, сделанная эмпирически именно на этой
+   сборке (см. комментарий в `with-native-calls.js`). Плагин пришлось
+   переставить в начало массива, а не в конец, как подсказывала бы
+   интуиция по имени/смыслу.
+4. Убрать чужой `FirebaseMessagingService` фильтрацией `modResults` не
+   получилось в принципе: он объявлен в собственном библиотечном
+   `AndroidManifest.xml` `expo-notifications`, а не добавлен через
+   конфиг-плагин, и на этапе `expo prebuild` в файле приложения его попросту
+   нет — библиотечные манифесты сливает Android Gradle Plugin только на
+   этапе `./gradlew`. Сработал только штатный приём: добавить в манифест
+   приложения тот же узел (полное имя класса из `namespace` в
+   `expo-notifications/android/build.gradle`) с `tools:node="remove"`.
+5. `modules/vedamatch-calls/android/build.gradle` не тянул
+   `com.facebook.react:react-android` явно — `expo-modules-core` зависит от
+   неё через `implementation`, а Gradle не пробрасывает такие зависимости
+   транзитивно на compile classpath потребителя. Без неё не резолвились
+   `HeadlessJsTaskService`/`HeadlessJsTaskConfig`/`Arguments`
+   (`DeclineHeadlessTaskService.kt`).
+6. Три мелкие, но настоящие ошибки Kotlin/Telecom API, пойманные только
+   компилятором: `Connection` в `onCreateOutgoingConnection` — абстрактный
+   класс, нельзя `Connection()` напрямую (`Connection.createFailedConnection(...)`
+   вместо этого); `HeadlessJsTaskService.getTaskConfig` ждёт `Intent?`, а
+   не `Intent`; конструкторские параметры `VedamatchConnection` были
+   названы `onAnswer`/`onReject` — так же, как переопределённые методы
+   `Connection.onAnswer()`/`onReject()` в том же классе, что зажигало риск
+   неоднозначного резолва вызова — переименованы в `onAnswerCallback`/`onRejectCallback`.
+
+Финальный прогон: `BUILD SUCCESSFUL in 5m 5s`, `853 actionable tasks: 183
+executed, 670 up-to-date`. APK —
+`apps/mobile/android/app/build/outputs/apk/release/app-release.apk` (≈162 МБ,
+неотстрипанный релиз без сплита по ABI — тот же профиль, что у отладочных
+сборок предыдущих этапов, стриппинг/сплит не в объёме VED-221).
+
+Манифест проверен по факту, а не на словах:
+`aapt dump permissions app-release.apk` (build-tools 36.1.0) показывает
+все четыре разрешения (`MANAGE_OWN_CALLS`, `USE_FULL_SCREEN_INTENT`,
+`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_PHONE_CALL`) и подтверждает, что
+`SYSTEM_ALERT_WINDOW`/`READ_EXTERNAL_STORAGE`/`WRITE_EXTERNAL_STORAGE`
+по-прежнему вырезаны (`blockedPermissions`, этап 0). В
+`android/app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml`
+ровно один `FirebaseMessagingService` уровня приложения —
+`io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService`
+(`ExpoFirebaseMessagingService` отсутствует полностью); второе совпадение
+по `MESSAGING_EVENT` в файле — служебный `com.google.firebase.messaging.FirebaseMessagingService`
+самого Firebase SDK с `android:priority="-500"`, он есть в манифесте любого
+Android-приложения с Firebase и не конкурирует с приёмником приложения.
+`VedamatchConnectionService` (`android.telecom.ConnectionService`),
+`CallActionReceiver`, `DeclineHeadlessTaskService` — все три на месте с
+ожидаемыми атрибутами (`BIND_TELECOM_CONNECTION_SERVICE`,
+`exported="false"`).
+
+### Что ждёт живого телефона
+
+Перечислено чек-листом в `gan-harness/generator-state.md`: показ на
+заблокированном экране, ответ из полностью убитого приложения, отклонение
+из фона без открытия UI, гашение рингтона по `call.ended`/ответу на другом
+устройстве, поведение `USE_FULL_SCREEN_INTENT` на конкретном Android 14+
+устройстве. Ничего из этого не подделано и не имитировано в коде — там, где
+поведение зависит от системы (Doze, ограничения фона у конкретного
+вендора, реальный `TelecomManager`), оно оставлено непроверенным, а не
+описано как готовое.
+

@@ -67,6 +67,22 @@ self-managed `ConnectionService`; фоновый пуш для звонка по
 `expo-notifications`. Подробности, ссылки и поправки к следующим этапам —
 `docs/mobile-calls-native.md`.
 
+Звонок при открытом приложении и история звонков (этап 1, VED-219) —
+вкладка «Звонки», экран `call/[id]`, `src/lib/calls/*`.
+
+Входящий звонок при свёрнутом и закрытом приложении (этап 2, VED-221):
+`@react-native-firebase/messaging` — единственный приёмник FCM на Android
+(манифест правит `plugins/with-native-calls.js`, `expo-notifications`
+остаётся только презентацией обычных пушей чата); свой нативный модуль
+`modules/vedamatch-calls` поднимает self-managed `ConnectionService` и
+полноэкранное уведомление с `CallStyle.forIncomingCall`; «Отклонить» из
+шторки/блокировки идёт headless JS задачей без открытия приложения
+(`src/lib/calls/decline-call-headless-task.ts`,
+`src/lib/calls/background-decline.ts`), «Ответить» открывает экран звонка
+и сам принимает вызов. Разбор понятие/подробности — `docs/mobile-calls-native.md`,
+§9. На Android 14+, если система не выдала `USE_FULL_SCREEN_INTENT` молча,
+на вкладке «Звонки» есть кнопка «Разрешить в настройках».
+
 Служебный экран «Проверка связи» (замер relay STUN/TURN на текущей сети)
 скрыт: долгое нажатие на заголовок вкладки «Звонки» открывает
 `/calls-probe`. Это инструмент команды, не часть продукта — запускать с

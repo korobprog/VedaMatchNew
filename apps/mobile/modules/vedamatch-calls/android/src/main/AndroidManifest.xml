@@ -1,0 +1,28 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <!-- Self-managed ConnectionService (VED-221, docs/mobile-calls-native.md §3):
+         BIND_TELECOM_CONNECTION_SERVICE обязателен для системы, чтобы отдать
+         управление звонком только Telecom, а не любому вызывающему. -->
+    <service
+      android:name="com.vedamatch.calls.VedamatchConnectionService"
+      android:exported="true"
+      android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE">
+      <intent-filter>
+        <action android:name="android.telecom.ConnectionService" />
+      </intent-filter>
+    </service>
+
+    <!-- Headless JS задача «отклонить из фона» (п.4 спеки) — тот же
+         механизм, которым @react-native-firebase/messaging уже поднимает
+         фоновый обработчик пуша (ReactNativeFirebaseMessagingHeadlessService),
+         свой сервис нужен, чтобы стартовать задачу по нажатию на действие
+         уведомления, а не только по FCM. -->
+    <service
+      android:name="com.vedamatch.calls.DeclineHeadlessTaskService"
+      android:exported="false" />
+
+    <receiver
+      android:name="com.vedamatch.calls.CallActionReceiver"
+      android:exported="false" />
+  </application>
+</manifest>

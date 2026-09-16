@@ -1,11 +1,13 @@
 {
   "name": "@vedamatch/mobile",
-  "main": "expo-router/entry",
+  "main": "./index.js",
   "version": "0.1.0",
   "dependencies": {
     "@config-plugins/react-native-webrtc": "15.0.2",
     "@expo-google-fonts/manrope": "^0.4.2",
     "@expo-google-fonts/unbounded": "^0.4.1",
+    "@react-native-firebase/app": "26.4.0",
+    "@react-native-firebase/messaging": "26.4.0",
     "@vedamatch/shared": "workspace:*",
     "expo": "~57.0.22",
     "expo-audio": "57.0.5",
@@ -18,6 +20,7 @@
     "expo-image": "~57.0.5",
     "expo-image-picker": "~57.0.17",
     "expo-linking": "~57.0.10",
+    "expo-modules-core": "57.0.18",
     "expo-notifications": "~57.0.18",
     "expo-router": "~57.0.21",
     "expo-secure-store": "~57.0.4",
