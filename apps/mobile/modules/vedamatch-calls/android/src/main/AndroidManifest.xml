@@ -21,6 +21,18 @@
       android:name="com.vedamatch.calls.DeclineHeadlessTaskService"
       android:exported="false" />
 
+    <!-- Служба «Идёт звонок» на время разговора (VED-222,
+         docs/mobile-calls-native.md §12). Android 14 (API 34) требует
+         объявить в манифесте каждый foregroundServiceType, который сервис
+         передаст в startForeground(id, notification, type) в рантайме —
+         здесь объявлены все три (аудиозвонок использует phoneCall и
+         microphone, видео добавляет camera), а конкретный вызов выбирает
+         подмножество по типу звонка (CallForegroundService.kt). -->
+    <service
+      android:name="com.vedamatch.calls.CallForegroundService"
+      android:exported="false"
+      android:foregroundServiceType="phoneCall|microphone|camera" />
+
     <receiver
       android:name="com.vedamatch.calls.CallActionReceiver"
       android:exported="false" />

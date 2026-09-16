@@ -1,4 +1,4 @@
-const { withAndroidManifest, AndroidConfig } = require('expo/config-plugins');
+const { withAndroidManifest, withMainActivity, AndroidConfig } = require('expo/config-plugins');
 
 /**
  * Поправки манифеста для VED-221 (`docs/mobile-calls-native.md`, §9):
@@ -56,6 +56,19 @@ const FCM_META_DATA_REPLACE = {
 
 const FOREIGN_FCM_SERVICES = ['expo.modules.notifications.service.ExpoFirebaseMessagingService'];
 
+/**
+ * ## 3. Картинка в картинке (VED-222, п.5)
+ *
+ * `expo-router`/`expo`'s prebuild-config не даёт настроить
+ * `android:supportsPictureInPicture` на `MainActivity` иначе как этой же
+ * правкой манифеста — свойства `android.*` в `app.config.ts` под это нет
+ * (`@expo/config-plugins` не знает про PiP вовсе). Тот же узел `<activity>`
+ * у RN-шаблона уже несёт `android:configChanges` со всем нужным для PiP
+ * набором (`screenSize|screenLayout|smallestScreenSize|orientation` —
+ * без них смена размера окна PiP пересоздаёт `Activity`, теряя WebRTC-сессию
+ * в JS) — здесь только добавляется недостающий атрибут, конфигурация не
+ * трогается.
+ */
 const withNativeCalls = (config) =>
   withAndroidManifest(config, (config) => {
     const application = AndroidConfig.Manifest.getMainApplicationOrThrow(config.modResults);
@@ -72,7 +85,73 @@ const withNativeCalls = (config) =>
       if (replaceAttr) metaData.$['tools:replace'] = replaceAttr;
     }
 
+    const mainActivity = application.activity?.find((activity) => activity.$?.['android:name'] === '.MainActivity');
+    if (mainActivity) mainActivity.$['android:supportsPictureInPicture'] = 'true';
+
     return config;
   });
 
-module.exports = withNativeCalls;
+/**
+ * `MainActivity.kt` — правка текстом, а не AST: `withMainActivity` даёт
+ * только строку исходника (`modResults.contents`) и её язык
+ * (`modResults.language`), без парсера Kotlin в комплекте
+ * `@expo/config-plugins`. Вставка перед последней закрывающей скобкой файла
+ * (закрывает `class MainActivity`) — тот же приём, которым большинство
+ * community config-plugins правят `MainActivity`/`MainApplication`: искать
+ * маркер конца класса надёжнее, чем номер строки, который сломает любое
+ * будущее изменение шаблона Expo/RN.
+ *
+ * `onUserLeaveHint()` — единственный штатный колбэк для РУЧНОГО входа в PiP
+ * на API 26-30 (нет `setAutoEnterEnabled`, см. `VedamatchCallsModule.setPipEligible`);
+ * на API 31+ система входит сама по тем же параметрам, вызывать
+ * `enterPictureInPictureMode()` самим не нужно и вредно (может привести
+ * к двойному входу). `onPictureInPictureModeChanged` сообщает JS о смене
+ * режима в обе стороны — экран звонка прячет кнопки только в PiP.
+ */
+const MAIN_ACTIVITY_IMPORTS = `import android.app.PictureInPictureParams
+import android.content.res.Configuration
+import android.util.Rational
+import com.vedamatch.calls.PipState
+import com.vedamatch.calls.VedamatchCallsModule
+`;
+
+const MAIN_ACTIVITY_METHODS = `
+  // VED-222, п.5: правка plugins/with-native-calls.js (withMainActivity) — картинка в картинке.
+  override fun onUserLeaveHint() {
+    super.onUserLeaveHint()
+    if (Build.VERSION.SDK_INT in Build.VERSION_CODES.O..Build.VERSION_CODES.R && PipState.eligible) {
+      val params = PictureInPictureParams.Builder().setAspectRatio(Rational(9, 16)).build()
+      try {
+        enterPictureInPictureMode(params)
+      } catch (error: Exception) {
+        // Устройство/OEM отказало входить в PiP — экран звонка просто
+        // остаётся обычным, разговор не рвётся.
+      }
+    }
+  }
+
+  override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+    super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+    VedamatchCallsModule.sendPipModeChanged(isInPictureInPictureMode)
+  }
+`;
+
+const withCallPip = (config) =>
+  withMainActivity(config, (config) => {
+    if (config.modResults.language !== 'kt') return config;
+    let contents = config.modResults.contents;
+
+    if (!contents.includes('com.vedamatch.calls.PipState')) {
+      contents = contents.replace(/^package .+\n/, (match) => `${match}${MAIN_ACTIVITY_IMPORTS}`);
+    }
+
+    if (!contents.includes('onPictureInPictureModeChanged')) {
+      const lastBrace = contents.lastIndexOf('}');
+      contents = `${contents.slice(0, lastBrace)}${MAIN_ACTIVITY_METHODS}${contents.slice(lastBrace)}`;
+    }
+
+    config.modResults.contents = contents;
+    return config;
+  });
+
+module.exports = (config) => withCallPip(withNativeCalls(config));

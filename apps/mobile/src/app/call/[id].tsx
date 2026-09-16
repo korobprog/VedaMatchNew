@@ -6,10 +6,21 @@ import { RTCView } from 'react-native-webrtc';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
+import { chooseAudioRoute, subscribeToAudioRouteChanges } from '@/lib/calls/audio-route-bridge';
+import {
+  currentRouteLabel,
+  EMPTY_AUDIO_ROUTE_STATE,
+  shouldShowRoutePicker,
+  AUDIO_ROUTE_LABELS,
+  type AudioRouteState,
+  type CallAudioRoute,
+} from '@/lib/calls/audio-route';
 import { companionOf, endedLabel, roleIn } from '@/lib/calls/call-machine';
 import { useChatCalls } from '@/lib/calls/call-provider';
 import { backMinimizesCall } from '@/lib/calls/call-screen-return';
-import { setCallScreenActive } from '@/lib/calls/native-call-bridge';
+import { shouldKeepScreenAwake } from '@/lib/calls/keep-awake';
+import { setCallScreenActive, setPipEligible, subscribeToPipModeChanges } from '@/lib/calls/native-call-bridge';
+import { isPipEligible } from '@/lib/calls/pip-eligibility';
 import { useElapsedLabel } from '@/lib/calls/use-elapsed-label';
 import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
@@ -94,19 +105,55 @@ export default function CallScreen() {
 
   const isVideo = call?.kind === 'video';
   const [speakerOn, setSpeakerOn] = useState(isVideo);
+  const [audioRoute, setAudioRoute] = useState<AudioRouteState>(EMPTY_AUDIO_ROUTE_STATE);
+  const [routeMenuOpen, setRouteMenuOpen] = useState(false);
 
-  // Аудиомаршрутизация звонка (наушник/динамик по умолчанию под тип
-  // звонка) и «не гасить экран» — на время, пока этот экран открыт.
+  // Аудиомаршрутизация звонка (VED-222, п.2): `InCallManager.start()` сам
+  // выбирает разговорный динамик по умолчанию для аудио и громкую связь для
+  // видео, поднимает аудиофокус (`AUDIOFOCUS_GAIN_TRANSIENT`/
+  // `MODE_IN_COMMUNICATION` — ставит на паузу музыку любого другого
+  // приложения и плеер самого VedaMatch, если он играл), заводит Bluetooth
+  // SCO и проводную гарнитуру, включает датчик приближения (гасит экран у
+  // уха, только пока маршрут — разговорный динамик, не на громкой связи и не
+  // на видео — решение и обоснование в `audio-route.ts`).
+  //
+  // «Не гасить экран» (VED-222, п.4) — отдельно от `InCallManager.start()`,
+  // который сам всегда включает keep-screen-on: `shouldKeepScreenAwake`
+  // перекрывает это значение сразу после старта, чтобы аудиозвонок не держал
+  // экран принудительно (только датчик приближения решает, когда его
+  // погасить), а видео — держало, пока этот экран открыт.
   useEffect(() => {
     if (!call) return;
     InCallManager.start({ media: call.kind });
-    InCallManager.setKeepScreenOn(true);
+    InCallManager.setKeepScreenOn(shouldKeepScreenAwake(call.kind));
     return () => {
       InCallManager.setKeepScreenOn(false);
       InCallManager.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [call?.id]);
+
+  useEffect(() => {
+    if (!call) return;
+    return subscribeToAudioRouteChanges(setAudioRoute);
+  }, [call?.id]);
+
+  // Картинка в картинке (VED-222, п.5): пока этот экран открыт и разговор
+  // подходит (видео, `active`) — разрешить автовход при уходе из приложения
+  // (`isPipEligible`, `setPipEligible`), и запретить при любом отклонении от
+  // этих условий (ушли «назад», разговор кончился, дозвон ещё идёт) — иначе
+  // человек мог бы неожиданно провалиться в PiP на «Вызов…» без картинки.
+  const [inPip, setInPip] = useState(false);
+  useEffect(() => {
+    const eligible = call && state ? isPipEligible(call.kind, state.phase, true) : false;
+    setPipEligible(eligible);
+    return () => setPipEligible(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [call?.id, call?.kind, state?.phase]);
+  useEffect(() => subscribeToPipModeChanges(setInPip), []);
+
+  const showsRoutePicker = shouldShowRoutePicker(audioRoute);
+  const routeLabel = currentRouteLabel(audioRoute, speakerOn);
 
   const toggleSpeaker = () => {
     confirmTap();
@@ -115,6 +162,12 @@ export default function CallScreen() {
       InCallManager.setForceSpeakerphoneOn(next);
       return next;
     });
+  };
+
+  const selectAudioRoute = (route: CallAudioRoute) => {
+    confirmTap();
+    chooseAudioRoute(route);
+    setRouteMenuOpen(false);
   };
 
   const elapsed = useElapsedLabel(state?.phase === 'active' ? state.connectedAt : null);
@@ -147,14 +200,14 @@ export default function CallScreen() {
             style={StyleSheet.absoluteFill}
             objectFit="cover"
           />
-        ) : (
+        ) : !inPip ? (
           <View style={styles.companion}>
             <ChatAvatar id={companion.id} name={companion.name} uri={companion.avatarUrl} size={112} />
             <Text style={[styles.companionName, { color: colors.text0 }]}>{companion.name}</Text>
           </View>
-        )}
+        ) : null}
 
-        {showsLocalPreview ? (
+        {showsLocalPreview && !inPip ? (
           <RTCView
             streamURL={calls.localStream!.toURL()}
             style={[
@@ -168,7 +221,7 @@ export default function CallScreen() {
           />
         ) : null}
 
-        {calls.relayed && state!.phase === 'active' ? (
+        {calls.relayed && state!.phase === 'active' && !inPip ? (
           <View
             style={[styles.relayBadge, { top: insets.top + 12, backgroundColor: colors.glass, borderColor: colors.glassBorder }]}
           >
@@ -177,6 +230,10 @@ export default function CallScreen() {
         ) : null}
       </View>
 
+      {/* VED-222, п.5: в картинке-в-картинке — только видео собеседника, без
+          статуса, кнопок и плашек (спека прямо требует «без кнопок»); окно
+          PiP и так крошечное, любой текст в нём нечитаем. */}
+      {!inPip ? (
       <View style={[styles.footer, { paddingBottom: insets.bottom + 28 }]}>
         <Text accessibilityLiveRegion="polite" style={[styles.status, { color: state!.phase === 'ended' ? colors.text0 : colors.text2 }]}>
           {statusLine}
@@ -210,23 +267,65 @@ export default function CallScreen() {
             <Text style={[styles.closeText, { color: colors.text0 }]}>Закрыть</Text>
           </Pressable>
         ) : (
-          <View style={styles.controls}>
-            <ControlButton
-              label={state!.muted ? 'Включить микрофон' : 'Выключить микрофон'}
-              active={state!.muted}
-              onPress={() => {
-                confirmTap();
-                calls.toggleMute();
-              }}
-            >
-              <MicIcon off={state!.muted} color={colors.text0} />
-            </ControlButton>
+          <>
+            {showsRoutePicker && routeMenuOpen ? (
+              <View
+                accessibilityRole="menu"
+                style={[styles.routeMenu, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}
+              >
+                {audioRoute.available.map((route) => (
+                  <Pressable
+                    key={route}
+                    accessibilityRole="menuitem"
+                    accessibilityLabel={AUDIO_ROUTE_LABELS[route]}
+                    accessibilityState={{ selected: audioRoute.selected === route }}
+                    onPress={() => selectAudioRoute(route)}
+                    android_ripple={ripple(colors.glassBorder)}
+                    style={({ pressed }) => [styles.routeMenuItem, pressedStyle(pressed)]}
+                  >
+                    <Text
+                      style={[
+                        styles.routeMenuText,
+                        { color: audioRoute.selected === route ? colors.magenta : colors.text0 },
+                      ]}
+                    >
+                      {AUDIO_ROUTE_LABELS[route]}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
 
-            <ControlButton label={`Громкая связь: ${speakerOn ? 'вкл' : 'выкл'}`} active={speakerOn} onPress={toggleSpeaker}>
-              <SpeakerIcon on={speakerOn} color={colors.text0} />
-            </ControlButton>
+            <View style={styles.controls}>
+              <ControlButton
+                label={state!.muted ? 'Включить микрофон' : 'Выключить микрофон'}
+                active={state!.muted}
+                onPress={() => {
+                  confirmTap();
+                  calls.toggleMute();
+                }}
+              >
+                <MicIcon off={state!.muted} color={colors.text0} />
+              </ControlButton>
 
-            {isVideo ? (
+              {showsRoutePicker ? (
+                <ControlButton
+                  label={`Звук: ${routeLabel} — выбрать устройство`}
+                  active={routeMenuOpen}
+                  onPress={() => {
+                    confirmTap();
+                    setRouteMenuOpen((open) => !open);
+                  }}
+                >
+                  <SpeakerIcon on={audioRoute.selected === 'SPEAKER_PHONE'} color={colors.text0} />
+                </ControlButton>
+              ) : (
+                <ControlButton label={`Громкая связь: ${speakerOn ? 'вкл' : 'выкл'}`} active={speakerOn} onPress={toggleSpeaker}>
+                  <SpeakerIcon on={speakerOn} color={colors.text0} />
+                </ControlButton>
+              )}
+
+              {isVideo ? (
               <ControlButton
                 label={state!.cameraOff ? 'Включить камеру' : 'Выключить камеру'}
                 active={state!.cameraOff}
@@ -264,9 +363,11 @@ export default function CallScreen() {
             >
               <HangUpIcon color={colors.onAccent} />
             </Pressable>
-          </View>
+            </View>
+          </>
         )}
       </View>
+      ) : null}
     </View>
   );
 }
@@ -381,6 +482,14 @@ const styles = StyleSheet.create({
   closeButton: { minHeight: hitTarget, borderWidth: 1, borderRadius: 999, paddingHorizontal: 24, justifyContent: 'center', overflow: 'hidden' },
   closeText: { fontFamily: fonts.bodySemiBold, fontSize: 15 },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, flexWrap: 'wrap' },
+  routeMenu: {
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  routeMenuItem: { minHeight: hitTarget, minWidth: 160, justifyContent: 'center', paddingHorizontal: 18 },
+  routeMenuText: { fontFamily: fonts.bodySemiBold, fontSize: 15, textAlign: 'center' },
   control: {
     width: hitTarget + 12,
     height: hitTarget + 12,

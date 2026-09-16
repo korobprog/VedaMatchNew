@@ -10,20 +10,36 @@ import android.telecom.DisconnectCause
  * self-managed сервиса (в отличие от managed ConnectionService системной
  * звонилки): это делает `CallNotifications` по сигналу `onShowIncomingCallUi`.
  *
- * `onAnswer`/`onReject` здесь — путь, которым Telecom сообщает об ответе не
- * через нашу собственную кнопку в уведомлении (`CallActionReceiver`), а
- * системно: гарнитура, Bluetooth-кнопка, Android Auto. Наша кнопка отвечает
- * напрямую через `CallActionReceiver` и тоже переводит соединение в нужное
- * состояние — события ниже это дублирует для остальных путей, а не только
- * для UI.
+ * `onAnswer`/`onReject`/`onDisconnect` здесь — путь, которым Telecom сообщает
+ * о решении не через нашу собственную кнопку в уведомлении/сервисе
+ * (`CallActionReceiver`), а системно: гарнитура, Bluetooth-кнопка (play/pause,
+ * hook), Android Auto, и — для `onDisconnect` во время разговора — момент,
+ * когда систему просит завершить нас кто-то ещё в Telecom (типично: пришёл
+ * сотовый звонок, а наш self-managed аккаунт не объявляет `CAPABILITY_HOLD`,
+ * см. `docs/mobile-calls-native.md` §12 — решение «завершить, а не отложить
+ * на удержание»). Наша кнопка в уведомлении отвечает/завершает напрямую
+ * через `CallActionReceiver` и тоже переводит соединение в нужное состояние
+ * без похода через эти колбэки — события ниже дублируют результат для JS
+ * ровно для «системных» путей, не только для нашего собственного UI.
  */
 class VedamatchConnection(
-  private val callId: String,
+  /** Публично: `CallForegroundService.onTaskRemoved` и `PendingCallStore`
+   *  читают его снаружи, чтобы завершить единственный активный звонок, не
+   *  зная его заранее (`anyConnection()`). */
+  val callId: String,
   // Имена с суффиксом `Callback`, а не `onAnswer`/`onReject`: в Kotlin
   // свойство и переопределённый метод с одинаковым именем в одном классе —
   // риск неоднозначного резолва вызова, а не только стиль.
   private val onAnswerCallback: (String) -> Unit,
   private val onRejectCallback: (String) -> Unit,
+  /** VED-222: единственный сигнал JS о том, что Telecom сам завершил активный
+   *  разговор — гарнитура/Bluetooth-кнопка во время разговора, преемption
+   *  сотовым звонком, Android Auto. Раньше `onDisconnect()` не звал никакой
+   *  колбэк вовсе: Telecom-состояние обновлялось, а `CallSession`/WebRTC в JS
+   *  продолжали жить бесконечно, ничего не зная о том, что разговор кончен
+   *  (найдено при подготовке этапа 3 — тот же класс дефектов, что
+   *  `feedback-001.md` уже находил у `onReject()`). */
+  private val onEndCallback: (String) -> Unit,
 ) : Connection() {
 
   override fun onShowIncomingCallUi() {
@@ -58,11 +74,15 @@ class VedamatchConnection(
     setDisconnected(DisconnectCause(DisconnectCause.LOCAL))
     destroy()
     PendingCallStore.removeConnection(callId)
+    VedamatchCallsModule.applicationContextOrNull()?.let { CallForegroundService.stop(it) }
+    onEndCallback(callId)
   }
 
   /** Звонок сняли со стороны приложения — `call.ended`-пуш или обычное
-   *  завершение внутри работающего экрана звонка (`endCall` в JS-обёртке).
-   *  Не `onDisconnect()`: та обозначает запрос от Telecom, это — от нас. */
+   *  завершение внутри работающего экрана звонка (`endCall` в JS-обёртке,
+   *  кнопка «Завершить» в уведомлении разговора). Не `onDisconnect()`: та
+   *  обозначает запрос ОТ Telecom, это — от нас, колбэк в JS звать не нужно
+   *  (JS и так уже знает — это он попросил). */
   fun disconnectFromApp() {
     setDisconnected(DisconnectCause(DisconnectCause.REMOTE))
     destroy()

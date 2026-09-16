@@ -1,9 +1,13 @@
 package com.vedamatch.calls
 
 import android.app.NotificationManager
+import android.app.PictureInPictureParams
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -11,16 +15,18 @@ import android.telecom.PhoneAccount
 import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
 import android.util.Log
+import android.util.Rational
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.lang.ref.WeakReference
 
 /**
- * Публичный JS-интерфейс модуля звонков (VED-221) — обёртка описана в
+ * Публичный JS-интерфейс модуля звонков (VED-221/222) — обёртка описана в
  * `modules/vedamatch-calls/index.ts`. Реализация опирается на self-managed
- * `ConnectionService` (`VedamatchConnectionService`/`VedamatchConnection`)
- * и полноэкранные уведомления (`CallNotifications`); решение записано в
- * `docs/mobile-calls-native.md`, §3.
+ * `ConnectionService` (`VedamatchConnectionService`/`VedamatchConnection`),
+ * полноэкранные/постоянные уведомления (`CallNotifications`) и службу
+ * переднего плана разговора (`CallForegroundService`); решения записаны в
+ * `docs/mobile-calls-native.md`, §3 и §12.
  */
 class VedamatchCallsModule : Module() {
   companion object {
@@ -38,8 +44,22 @@ class VedamatchCallsModule : Module() {
       instance?.get()?.sendEvent("decline", mapOf("callId" to callId))
     }
 
-    /** Контекст приложения для классов вне модуля (`VedamatchConnection`),
-     *  у которых нет своего `Module.appContext`. */
+    /** VED-222: Telecom (гарнитура/Bluetooth/Android Auto, преемption
+     *  сотовым) или наша кнопка «Завершить» на уведомлении разговора положили
+     *  трубку — см. `VedamatchConnection.onDisconnect`/`CallActionReceiver`. */
+    fun sendEndEvent(callId: String) {
+      instance?.get()?.sendEvent("end", mapOf("callId" to callId))
+    }
+
+    /** VED-222, п.5: `MainActivity.onPictureInPictureModeChanged` (плагин,
+     *  `withMainActivity`) сообщает JS, вошли/вышли из PiP — экран звонка
+     *  (`app/call/[id].tsx`) по этому прячет/возвращает кнопки. */
+    fun sendPipModeChanged(inPip: Boolean) {
+      instance?.get()?.sendEvent("pipModeChanged", mapOf("inPip" to inPip))
+    }
+
+    /** Контекст приложения для классов вне модуля (`VedamatchConnection`,
+     *  `CallForegroundService`), у которых нет своего `Module.appContext`. */
     fun applicationContextOrNull(): Context? = instance?.get()?.appContext?.reactContext?.applicationContext
 
     private fun phoneAccountHandle(context: Context): PhoneAccountHandle =
@@ -60,13 +80,71 @@ class VedamatchCallsModule : Module() {
     get() = appContext.reactContext?.applicationContext
       ?: throw IllegalStateException("VedamatchCalls: нет ReactContext")
 
+  /** Слушатель смены транспорта сети (VED-222, п.6) — живёт ровно во время
+   *  разговора, регистрируется в `startOngoingCall`, снимается в `endCall`.
+   *  Решение «перезапускать ли ICE прямо сейчас» — не здесь: модуль только
+   *  репортит факт смены транспорта, чистая логика — `ice-restart-policy.ts`
+   *  на JS-стороне (спека там же), Kotlin ничего не решает. */
+  private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
+  private fun currentTransport(): String {
+    val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val network = manager.activeNetwork ?: return "none"
+    val caps = manager.getNetworkCapabilities(network) ?: return "none"
+    return when {
+      caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+      caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+      caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
+      else -> "other"
+    }
+  }
+
+  private fun startNetworkWatch() {
+    if (networkCallback != null) return
+    val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val callback = object : ConnectivityManager.NetworkCallback() {
+      override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+        sendEvent("networkTransportChanged", mapOf("transport" to currentTransport()))
+      }
+
+      override fun onLost(network: Network) {
+        sendEvent("networkTransportChanged", mapOf("transport" to "none"))
+      }
+    }
+    try {
+      manager.registerDefaultNetworkCallback(callback)
+      networkCallback = callback
+    } catch (error: Exception) {
+      // ACCESS_NETWORK_STATE уже есть (плагин WebRTC, этап 0), но отказ
+      // конкретного OEM не должен ронять сам звонок — просто не будет
+      // немедленного перезапуска ICE при смене сети, останется обычный
+      // таймер обрыва (`webrtc-session.ts`, `DISCONNECT_GRACE_MS`).
+      Log.w(TAG, "Не удалось подписаться на смену сети", error)
+    }
+  }
+
+  private fun stopNetworkWatch() {
+    val callback = networkCallback ?: return
+    networkCallback = null
+    val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    try {
+      manager.unregisterNetworkCallback(callback)
+    } catch (_: Exception) {
+      // Уже отписан (например, второй `endCall` подряд) — не наша забота.
+    }
+  }
+
   override fun definition() = ModuleDefinition {
     Name("VedamatchCalls")
 
-    Events("answer", "decline")
+    Events("answer", "decline", "end", "networkTransportChanged", "pipModeChanged")
 
     OnCreate {
       instance = WeakReference(this@VedamatchCallsModule)
+    }
+
+    OnDestroy {
+      stopNetworkWatch()
     }
 
     AsyncFunction("showIncomingCall") { options: ShowIncomingCallOptions ->
@@ -111,10 +189,81 @@ class VedamatchCallsModule : Module() {
       }
     }
 
+    /**
+     * VED-222, п.1: система должна знать про исходящий разговор так же, как
+     * про входящий — `TelecomManager.placeCall` для self-managed аккаунта
+     * (не `CALL_PHONE`/обычный набор номера: наш `PhoneAccount` объявлен
+     * `CAPABILITY_SELF_MANAGED`, поэтому достаточно уже выданного
+     * `MANAGE_OWN_CALLS`). Best-effort, как и `showIncomingCall`: отказ
+     * Telecom не должен мешать самому WebRTC-дозвону, который от него не
+     * зависит (`call-provider.tsx` не ждёт результата).
+     */
+    AsyncFunction("placeOutgoingCall") { options: OngoingCallOptions ->
+      val callId = options.callId
+      if (callId.isEmpty()) return@AsyncFunction
+      try {
+        ensurePhoneAccount(context)
+        val extras = android.os.Bundle().apply {
+          putString(PendingCallStore.EXTRA_CALL_ID, callId)
+          putString(PendingCallStore.EXTRA_CALLER_NAME, options.callerName)
+          putString(PendingCallStore.EXTRA_KIND, options.kind)
+          putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, phoneAccountHandle(context))
+        }
+        val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+        val address = Uri.fromParts("tel", "vedamatch-$callId", null)
+        telecomManager.placeCall(address, extras)
+      } catch (error: Exception) {
+        Log.w(TAG, "Telecom отказал в регистрации исходящего", error)
+      }
+    }
+
+    /**
+     * VED-222, п.1: разговор пошёл (`state.phase === 'active'` в
+     * `call-provider.tsx`, для обеих ролей) — перевести self-managed
+     * `Connection` в активное состояние, если он вообще был зарегистрирован
+     * (`placeOutgoingCall`/`showIncomingCall` — для звонка, отвеченного
+     * целиком внутри уже открытого приложения без пуша, соединения может не
+     * быть вовсе, тогда это no-op, см. `docs/mobile-calls-native.md` §12,
+     * «известное ограничение»), поднять службу переднего плана с постоянным
+     * уведомлением и начать слушать смену сети.
+     */
+    AsyncFunction("startOngoingCall") { options: OngoingCallOptions ->
+      val callId = options.callId
+      if (callId.isEmpty()) return@AsyncFunction
+      PendingCallStore.connectionFor(callId)?.setActive()
+      CallForegroundService.start(context, callId, options.callerName, options.kind)
+      startNetworkWatch()
+    }
+
     AsyncFunction("endCall") { callId: String, _: String ->
+      stopNetworkWatch()
+      CallForegroundService.stop(context)
       CallNotifications.cancel(context, callId)
       PendingCallStore.connectionFor(callId)?.disconnectFromApp()
       PendingCallStore.removeInfo(callId)
+    }
+
+    /**
+     * VED-222, п.7: «занято» решает JS (`call-busy-decision.ts`) — этот
+     * вызов только репортит два независимых факта, ничего не решает сам:
+     * `hasOwnCall` — уже идёт свой self-managed звонок (`PendingCallStore`);
+     * `systemBusy` — Telecom считает устройство занятым чем-то ещё
+     * (сотовый разговор или другое self-managed приложение). Обёрнуто в
+     * `try/catch`: `TelecomManager.isInCall()` без `READ_PHONE_STATE` на
+     * части OEM/версий может бросить `SecurityException` — тогда считаем
+     * систему свободной (fail-open): ложное «не занято» просто покажет
+     * входящий баннер как обычно, а не потеряет звонок молча.
+     */
+    Function("callConflictState") {
+      val hasOwnCall = PendingCallStore.hasAnyConnection()
+      val systemBusy = try {
+        val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+        telecomManager.isInCall()
+      } catch (error: Exception) {
+        Log.w(TAG, "Не удалось спросить Telecom про занятость устройства", error)
+        false
+      }
+      mapOf("hasOwnCall" to hasOwnCall, "systemBusy" to systemBusy)
     }
 
     Function("getLaunchCall") {
@@ -150,6 +299,37 @@ class VedamatchCallsModule : Module() {
       if (active) {
         val keyguard = activity.getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
         keyguard?.requestDismissKeyguard(activity, null)
+      }
+    }
+
+    /**
+     * VED-222, п.5: картинка в картинке — только видеозвонок, только пока
+     * `app/call/[id].tsx` смонтирован и разговор `active`
+     * (`call-provider.tsx` решает это тем же способом, что и
+     * `startOngoingCall`/`shouldKeepScreenAwake`, но здесь решение принимает
+     * сам экран звонка, не провайдер — PiP это состояние конкретного экрана,
+     * а не звонка вообще). На API 31+ включает автовход
+     * (`setAutoEnterEnabled`) — система сама поднимает PiP, когда человек
+     * уходит домой/переключает приложение, без вызова
+     * `enterPictureInPictureMode()` из кода. На API 26-30 автовхода нет:
+     * `MainActivity.onUserLeaveHint()` (плагин, `withMainActivity`) читает
+     * `PipState.eligible` и входит в PiP вручную. Ниже API 26 — PiP не
+     * поддерживается системой вовсе, вызов no-op.
+     */
+    Function("setPipEligible") { eligible: Boolean ->
+      PipState.eligible = eligible
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return@Function
+      val activity = appContext.currentActivity ?: return@Function
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val params = PictureInPictureParams.Builder()
+          .setAspectRatio(Rational(9, 16))
+          .setAutoEnterEnabled(eligible)
+          .build()
+        try {
+          activity.setPictureInPictureParams(params)
+        } catch (error: Exception) {
+          Log.w(TAG, "Не удалось обновить параметры PiP", error)
+        }
       }
     }
   }

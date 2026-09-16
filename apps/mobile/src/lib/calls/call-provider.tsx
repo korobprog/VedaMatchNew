@@ -27,12 +27,23 @@ import { CallErrorToast } from '@/components/calls/call-error-toast';
 import { IncomingCallBanner } from '@/components/calls/incoming-call-banner';
 import { ReturnToCallBanner } from '@/components/calls/return-to-call-banner';
 import { createChatCallsApi } from './chat-calls-client';
-import { IDLE_STATE, reduceCall, roleIn, type CallState } from './call-machine';
-import { clearNativeCall, consumeLaunchCall, subscribeToNativeCallEvents } from './native-call-bridge';
+import { shouldDeclineAsBusy } from './call-busy-decision';
+import { IDLE_STATE, companionOf, reduceCall, roleIn, type CallState } from './call-machine';
+import { shouldRestartIceOnNetworkChange } from './ice-restart-policy';
+import {
+  clearNativeCall,
+  consumeLaunchCall,
+  getCallConflictState,
+  placeOutgoingCall,
+  startOngoingCall,
+  subscribeToNativeCallEvents,
+  subscribeToNetworkTransportChanges,
+} from './native-call-bridge';
 import { navigatedCallIdAfterPhase, nextNavigatedCallId, shouldAutoNavigateToCallScreen } from './call-screen-return';
 import { PendingCallAnswer } from './pending-call-answer';
 import { startRingtone } from './ringtone';
 import { CallSession } from './webrtc-session';
+import type { NetworkTransport } from '../../../modules/vedamatch-calls';
 
 /**
  * Провайдер звонков — перенос `apps/web/src/components/chat/calls/call-provider.tsx`.
@@ -399,6 +410,13 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const start = useCallback(
     async (conversationId: string, kind: ChatCallKind) => {
       if (stateRef.current.phase !== 'idle') return;
+      // VED-222, п.7: то же «занято», что и для входящего (`native-call-bridge.ts`,
+      // `handleIncomingCallPush`) — до getUserMedia/сети, отказ должен быть
+      // мгновенным и понятным, а не тихим зависанием на «Вызов…».
+      if (shouldDeclineAsBusy(getCallConflictState())) {
+        dispatch({ type: 'failed', error: 'Устройство сейчас занято другим звонком' });
+        return;
+      }
       try {
         // Микрофон/камера — до звонка: отказ в доступе не должен будить собеседника.
         const servers = await iceServers();
@@ -496,24 +514,75 @@ export function CallProvider({ children }: { children: ReactNode }) {
       onDecline: (callId) => {
         if (stateRef.current.call?.id === callId) void decline();
       },
+      // VED-222: гарнитура/Bluetooth/Android Auto во время разговора или
+      // кнопка «Завершить» на постоянном уведомлении — обычный hangUp, тот
+      // же путь, что кнопка на самом экране звонка.
+      onEnd: (callId) => {
+        if (stateRef.current.call?.id === callId) void hangUp();
+      },
     });
-  }, [accept, decline, pendingAnswer, reconcile]);
+  }, [accept, decline, hangUp, pendingAnswer, reconcile]);
 
-  // Гасит уведомление/self-managed Connection, как только у звонка внутри
-  // приложения появилось «настоящее» состояние (разговор пошёл) или он
-  // закончился — нативная сторона нужна была только для дозвона, пока
-  // приложение было не видно. Аудио- и Bluetooth-интеграция самого
-  // разговора через Telecom — этап 3 (VED-222), здесь self-managed
-  // `Connection` сознательно живёт только до `active`.
+  // VED-222, п.1: система должна знать про исходящий разговор так же, как
+  // про входящий (`TelecomManager.placeCall`) — регистрируем один раз, как
+  // только у звонка появились гудки. Best-effort (см. `native-call-bridge.ts`):
+  // WebRTC-дозвон от результата не зависит.
+  const placedOutgoingFor = useRef<string | null>(null);
+  useEffect(() => {
+    const call = state.call;
+    if (!call || state.phase !== 'outgoing') return;
+    if (placedOutgoingFor.current === call.id) return;
+    placedOutgoingFor.current = call.id;
+    void placeOutgoingCall(call.id, companionOf(call, userId).name, call.kind);
+  }, [state.phase, state.call, userId]);
+
+  // VED-222, п.1: разговор пошёл — служба переднего плана с постоянным
+  // уведомлением «Идёт звонок» и (если self-managed `Connection`
+  // регистрировался — исходящий всегда, входящий из push почти всегда, см.
+  // `docs/mobile-calls-native.md` §12) перевод его в активное состояние.
+  // Один раз на звонок, независимо от того, сработает ли ниже эффект
+  // очистки при `ended` — это два независимых события жизненного цикла, не
+  // взаимоисключающие ветки одного «либо-либо», как было раньше (стадия 2:
+  // тогда единственный `nativeClearedFor` гасил self-managed `Connection`
+  // ровно в момент, когда разговор только начинался — ошибка, которую
+  // стадия 3 и должна была исправить).
+  const startedOngoingFor = useRef<string | null>(null);
+  useEffect(() => {
+    const call = state.call;
+    if (!call || state.phase !== 'active') return;
+    if (startedOngoingFor.current === call.id) return;
+    startedOngoingFor.current = call.id;
+    void startOngoingCall(call.id, companionOf(call, userId).name, call.kind);
+  }, [state.phase, state.call, userId]);
+
+  // Гасит уведомление/self-managed Connection и службу переднего плана, как
+  // только звонок внутри приложения закончился — независимо от того, дошёл
+  // ли он до `active` (исходящий, отменённый до ответа, тоже должен снять
+  // с Telecom регистрацию, сделанную выше).
   const nativeClearedFor = useRef<string | null>(null);
   useEffect(() => {
     const call = state.call;
-    if (!call) return;
-    if (state.phase !== 'active' && state.phase !== 'ended') return;
+    if (!call || state.phase !== 'ended') return;
     if (nativeClearedFor.current === call.id) return;
     nativeClearedFor.current = call.id;
     void clearNativeCall(call.id, nativeEndReason(state.phase, state.endedStatus));
   }, [state.phase, state.call, state.endedStatus]);
+
+  // VED-222, п.6: смена сети (Wi-Fi ↔ LTE) во время разговора — перезапуск
+  // ICE немедленно, не дожидаясь таймера обрыва (`ice-restart-policy.ts`,
+  // спека там же документирует асимметрию «только звонящий»).
+  const lastTransport = useRef<NetworkTransport | null>(null);
+  useEffect(() => {
+    if (state.phase !== 'active') lastTransport.current = null;
+  }, [state.phase]);
+  useEffect(() => {
+    return subscribeToNetworkTransportChanges((transport) => {
+      const previous = lastTransport.current;
+      lastTransport.current = transport;
+      if (shouldRestartIceOnNetworkChange(stateRef.current.phase, role ?? 'callee', previous, transport))
+        void sessionRef.current?.restartIce();
+    });
+  }, [role]);
 
   const apiValue = useMemo<ChatCallsApi>(
     () => ({
