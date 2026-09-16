@@ -1,7 +1,9 @@
 import type {
   ChatConversationDetail,
   ChatListState,
+  ChatConversationSummary,
   ChatMessageDto,
+  ChatRequestsState,
   SendChatMessageRequest,
 } from '@vedamatch/shared';
 import type { ApiClient } from '@/lib/api/client';
@@ -35,6 +37,12 @@ export function createChatApi(api: ApiClient) {
       }),
     typing: (conversationId: string) =>
       api.request<{ ok: true }>(`/chat/conversations/${encodeURIComponent(conversationId)}/typing`, { method: 'POST' }),
+    /** Запросы на переписку: первые сообщения от незнакомых людей. */
+    requests: () => api.request<ChatRequestsState>('/chat/requests'),
+    accept: (conversationId: string) =>
+      api.request<ChatConversationSummary>(`/chat/conversations/${encodeURIComponent(conversationId)}/accept`, { method: 'POST' }),
+    decline: (conversationId: string) =>
+      api.request<{ ok: true }>(`/chat/conversations/${encodeURIComponent(conversationId)}/decline`, { method: 'POST' }),
   };
 }
 

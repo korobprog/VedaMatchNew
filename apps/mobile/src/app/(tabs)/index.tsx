@@ -1,5 +1,5 @@
 import type { ChatConversationSummary } from '@vedamatch/shared';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View, type ListRenderItem } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,9 +41,13 @@ export default function ChatsScreen() {
     }
   }, [chatApi]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // При каждом возврате на вкладку: счётчик запросов мог измениться на экране
+  // запросов, а поток событий о нём не сообщает.
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
 
   useEffect(() => {
     const myId = user?.id ?? '';
@@ -85,9 +89,17 @@ export default function ChatsScreen() {
         Чаты
       </Text>
       {requestsCount > 0 ? (
-        <Text style={[styles.requests, { color: colors.text1 }]}>
-          Запросов на переписку: {requestsCount}. Ответить можно на сайте.
-        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Запросов на переписку: ${requestsCount}`}
+          accessibilityHint="Открывает список запросов"
+          onPress={() => router.push('/chat/requests')}
+          android_ripple={ripple(colors.glassBorder)}
+          style={({ pressed }) => [styles.requestsRow, { borderColor: colors.glassBorder, backgroundColor: colors.glass }, pressedStyle(pressed)]}
+        >
+          <Text style={[styles.requests, { color: colors.text0 }]}>Запросов на переписку: {requestsCount}</Text>
+          <Text style={[styles.requestsChevron, { color: colors.text1 }]}>›</Text>
+        </Pressable>
       ) : null}
       {/* Обновление не удалось, а список уже есть: он остаётся, ошибка — рядом. */}
       {error && conversations ? (
@@ -142,7 +154,18 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { paddingHorizontal: 20, paddingBottom: 8, gap: 6 },
   title: { fontFamily: fonts.displayBold, fontSize: 24 },
-  requests: { fontFamily: fonts.body, fontSize: 13 },
+  requestsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: hitTarget,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingHorizontal: 14,
+    marginTop: 4,
+    overflow: 'hidden',
+  },
+  requests: { flex: 1, fontFamily: fonts.bodySemiBold, fontSize: 14 },
+  requestsChevron: { fontFamily: fonts.bodyBold, fontSize: 20 },
   banner: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: radius.sm, padding: 12, marginTop: 4 },
   bannerText: { flex: 1, fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
