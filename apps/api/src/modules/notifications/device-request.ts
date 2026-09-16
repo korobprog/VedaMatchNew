@@ -16,6 +16,8 @@ export interface NormalizedDevice {
   provider: NotificationDeviceProvider;
   platform: NotificationDevicePlatform;
   appVariant: string | null;
+  /** Умеет ли устройство нативный экран звонка по data-пушу (VED-220). */
+  nativeCalls: boolean;
 }
 
 /** Проверка тела регистрации телефона: DTO-валидаторов в модуле нет. */
@@ -28,6 +30,8 @@ export function normalizeDeviceRequest(body: unknown): NormalizedDevice {
     throw new BadRequestException('Неизвестная служба доставки');
   if (!PLATFORMS.includes(input.platform as NotificationDevicePlatform))
     throw new BadRequestException('Неизвестная платформа');
+  if (input.nativeCalls !== undefined && typeof input.nativeCalls !== 'boolean')
+    throw new BadRequestException('nativeCalls должно быть булевым');
   const appVariant =
     typeof input.appVariant === 'string' && input.appVariant.trim()
       ? input.appVariant.trim().slice(0, MAX_VARIANT_LENGTH)
@@ -37,5 +41,6 @@ export function normalizeDeviceRequest(body: unknown): NormalizedDevice {
     provider: input.provider as NotificationDeviceProvider,
     platform: input.platform as NotificationDevicePlatform,
     appVariant,
+    nativeCalls: input.nativeCalls === true,
   };
 }

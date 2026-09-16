@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
+import { CHAT_CALL_ENDED_EVENT } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NativePushService } from './native-push.service';
 import { NotificationsListener } from './notifications.listener';
@@ -83,13 +84,25 @@ function createListener(options: {
     },
   } as unknown as PrismaService;
 
+  const nativePush = {
+    sendToUsers: jest.fn(() => Promise.resolve({ devices: 0, delivered: 0 })),
+    sendCallIncoming: jest.fn(() =>
+      Promise.resolve({ devices: 0, delivered: 0 }),
+    ),
+    sendCallEnded: jest.fn(() => Promise.resolve({ devices: 0, delivered: 0 })),
+  } as unknown as NativePushService;
+
   return {
-    listener: new NotificationsListener(notifications, sender, prisma, {
-      sendToUsers: jest.fn(() => Promise.resolve({ devices: 0, delivered: 0 })),
-    } as unknown as NativePushService),
+    listener: new NotificationsListener(
+      notifications,
+      sender,
+      prisma,
+      nativePush,
+    ),
     prisma,
     notifications,
     sender,
+    nativePush,
     deleted,
     sent,
     inbox,
@@ -206,6 +219,87 @@ describe('NotificationsListener.deliver', () => {
 
     await expect(listener.deliver(chatEvent)).resolves.toBeUndefined();
   });
+
+  it('входящий звонок идёт через sendCallIncoming, а не sendToUsers', async () => {
+    const { listener, nativePush } = createListener({});
+
+    await listener.deliver({
+      name: 'chat.call-incoming',
+      recipientId: 'user-1',
+      callerName: 'Радха',
+      callerAvatarUrl: 'https://cdn.example/a.jpg',
+      callId: 'call-1',
+      conversationId: 'conv-1',
+      callKind: 'video',
+      expiresAt: '2026-09-17T10:00:45.000Z',
+    });
+
+    expect(nativePush.sendCallIncoming).toHaveBeenCalledWith(
+      'user-1',
+      {
+        callId: 'call-1',
+        conversationId: 'conv-1',
+        kind: 'video',
+        callerName: 'Радха',
+        callerAvatarUrl: 'https://cdn.example/a.jpg',
+        expiresAt: '2026-09-17T10:00:45.000Z',
+      },
+      {
+        title: 'Радха',
+        body: 'Входящий видеозвонок',
+        url: '/chat/conv-1?call=call-1',
+        tag: 'call:call-1',
+      },
+    );
+    expect(nativePush.sendToUsers).not.toHaveBeenCalled();
+  });
+
+  it('прочие события всё ещё идут через sendToUsers', async () => {
+    const { listener, nativePush } = createListener({});
+
+    await listener.deliver(chatEvent);
+
+    expect(nativePush.sendToUsers).toHaveBeenCalledTimes(1);
+    expect(nativePush.sendCallIncoming).not.toHaveBeenCalled();
+  });
+});
+
+describe('NotificationsListener «звонок снят»', () => {
+  it('не идёт в колокольчик и веб-пуш — только data-пуш нативным устройствам', async () => {
+    const { listener, nativePush, notifications, sender } = createListener({});
+
+    listener.onChatCallEnded({
+      name: CHAT_CALL_ENDED_EVENT,
+      recipientId: 'user-1',
+      callId: 'call-1',
+      reason: 'declined',
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(nativePush.sendCallEnded).toHaveBeenCalledWith(
+      'user-1',
+      'call-1',
+      'declined',
+    );
+    expect(notifications.addToInbox).not.toHaveBeenCalled();
+    expect(sender.send).not.toHaveBeenCalled();
+  });
+
+  it('не роняет процесс, если пуш-сервис недоступен', () => {
+    const { listener, nativePush } = createListener({});
+    jest
+      .mocked(nativePush.sendCallEnded)
+      .mockRejectedValueOnce(new Error('fcm down'));
+
+    expect(() =>
+      listener.onChatCallEnded({
+        name: CHAT_CALL_ENDED_EVENT,
+        recipientId: 'user-1',
+        callId: 'call-1',
+        reason: 'missed',
+      }),
+    ).not.toThrow();
+  });
 });
 
 /**
@@ -269,6 +363,43 @@ describe('NotificationsListener wiring', () => {
 
     expect(deliverSpy).toHaveBeenCalledTimes(
       Object.values(notificationEventNames).length,
+    );
+
+    await app.close();
+  });
+
+  it('has a live @OnEvent handler for chat.call-ended', async () => {
+    const nativePush = {
+      sendCallEnded: jest.fn(() =>
+        Promise.resolve({ devices: 0, delivered: 0 }),
+      ),
+    };
+    const moduleRef = await Test.createTestingModule({
+      imports: [EventEmitterModule.forRoot()],
+      providers: [
+        NotificationsListener,
+        { provide: NotificationsService, useValue: {} },
+        { provide: PushSenderService, useValue: {} },
+        { provide: PrismaService, useValue: {} },
+        { provide: NativePushService, useValue: nativePush },
+      ],
+    }).compile();
+
+    const app = moduleRef.createNestApplication();
+    await app.init();
+    const emitter = moduleRef.get(EventEmitter2);
+
+    emitter.emit(CHAT_CALL_ENDED_EVENT, {
+      name: CHAT_CALL_ENDED_EVENT,
+      recipientId: 'user-1',
+      callId: 'call-1',
+      reason: 'ended',
+    });
+
+    expect(nativePush.sendCallEnded).toHaveBeenCalledWith(
+      'user-1',
+      'call-1',
+      'ended',
     );
 
     await app.close();

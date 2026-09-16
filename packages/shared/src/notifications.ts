@@ -264,13 +264,23 @@ export type NotificationEvent =
       conversationId: string;
     }
   | {
-      /** Входящий звонок в «Общении»: пуш с кнопками «Ответить / Отклонить». */
+      /**
+       * Входящий звонок в «Общении»: пуш с кнопками «Ответить / Отклонить»
+       * для обычных устройств, data-only FCM для нативных с флагом
+       * `nativeCalls` (см. `NotificationDevice`, `native-push.service.ts`).
+       * `callerAvatarUrl` и `expiresAt` нужны именно нативному экрану
+       * входящего вызова — карточка звонка рисуется без похода в API.
+       */
       name: 'chat.call-incoming';
       recipientId: string;
       callerName: string;
+      /** `null`, когда у звонившего нет аватара. */
+      callerAvatarUrl: string | null;
       callId: string;
       conversationId: string;
       callKind: 'audio' | 'video';
+      /** ISO-момент, когда дозвон истечёт (сейчас — `RING_TIMEOUT_MS` вперёд). */
+      expiresAt: string;
     }
   | {
       /** Звонок не приняли за время дозвона. */
@@ -566,6 +576,32 @@ export interface NotificationPreferencesDto
 export type UpdateNotificationPreferencesRequest =
   Partial<NotificationPreferencesDto>;
 
+/**
+ * Имя события «звонок снят». Публикует `modules/chat/calls`, слушает
+ * `NotificationsListener` — чистый сигнал для FCM data-only пуша, гасящий
+ * рингтон на нативных устройствах, которые получили `chat.call-incoming`, но
+ * не участвуют в разговоре (ответили на другом устройстве, отменили,
+ * отклонили, пропустили по таймауту, завершили). В колокольчик и веб-пуш это
+ * событие не идёт — своего текста у него нет, см. `USER_REGISTERED_EVENT` за
+ * образец события вне `NotificationEvent`.
+ */
+export const CHAT_CALL_ENDED_EVENT = 'chat.call-ended';
+
+export type ChatCallEndedPushReason =
+  | 'answered_elsewhere'
+  | 'declined'
+  | 'missed'
+  | 'cancelled'
+  | 'ended'
+  | 'failed';
+
+export interface ChatCallEndedEvent {
+  name: typeof CHAT_CALL_ENDED_EVENT;
+  recipientId: string;
+  callId: string;
+  reason: ChatCallEndedPushReason;
+}
+
 export interface PushSubscriptionRequest {
   endpoint: string;
   keys: { p256dh: string; auth: string };
@@ -582,6 +618,13 @@ export interface RegisterNotificationDeviceRequest {
   platform: NotificationDevicePlatform;
   /** Сборка приложения, например `ru-site`. */
   appVariant?: string;
+  /**
+   * Приложение умеет показывать нативный экран звонка по data-пушу
+   * (`@react-native-firebase/messaging`, VED-220). Пока не прислано — `false`:
+   * такому устройству звонок приходит обычным пушем с уведомлением, как
+   * раньше, и двойного звонка не будет.
+   */
+  nativeCalls?: boolean;
 }
 
 export interface UnregisterNotificationDeviceRequest {

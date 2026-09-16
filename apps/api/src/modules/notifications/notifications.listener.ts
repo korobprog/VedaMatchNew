@@ -1,7 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import type { NotificationEvent, UserRegisteredEvent } from '@vedamatch/shared';
-import { USER_REGISTERED_EVENT, resolveDisplayName } from '@vedamatch/shared';
+import type {
+  ChatCallEndedEvent,
+  NotificationEvent,
+  UserRegisteredEvent,
+} from '@vedamatch/shared';
+import {
+  CHAT_CALL_ENDED_EVENT,
+  USER_REGISTERED_EVENT,
+  resolveDisplayName,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildNotification, notificationEventNames } from './notification-copy';
 import { NativePushService } from './native-push.service';
@@ -76,6 +84,22 @@ export class NotificationsListener {
   @OnEvent(notificationEventNames.portalChatCallMissed)
   onPortalChatCallMissed(event: NotificationEvent): void {
     void this.deliver(event);
+  }
+
+  /**
+   * «Звонок снят» — вне обычного конвейера уведомлений: нет строки в
+   * колокольчике, нет веб-пуша, только data-пуш нативным устройствам,
+   * гасящий рингтон. См. `CHAT_CALL_ENDED_EVENT` в `@vedamatch/shared`.
+   */
+  @OnEvent(CHAT_CALL_ENDED_EVENT)
+  onChatCallEnded(event: ChatCallEndedEvent): void {
+    void this.nativePush
+      .sendCallEnded(event.recipientId, event.callId, event.reason)
+      .catch((error) =>
+        this.logger.warn(
+          `«Звонок снят» не доставлен (${event.callId}): ${String(error)}`,
+        ),
+      );
   }
 
   @OnEvent(notificationEventNames.connectionRequested)
@@ -243,11 +267,24 @@ export class NotificationsListener {
         url: content.url,
         tag: content.tag,
       };
-      // Телефоны с приложением получают тот же пуш, что и браузеры.
-      const native = await this.nativePush.sendToUsers(
-        [event.recipientId],
-        payload,
-      );
+      // Телефоны с приложением получают тот же пуш, что и браузеры — кроме
+      // входящего звонка: устройствам с `nativeCalls` он идёт data-only
+      // (свой экран вызова и рингтон), остальным — как обычное уведомление.
+      const native =
+        event.name === 'chat.call-incoming'
+          ? await this.nativePush.sendCallIncoming(
+              event.recipientId,
+              {
+                callId: event.callId,
+                conversationId: event.conversationId,
+                kind: event.callKind,
+                callerName: event.callerName,
+                callerAvatarUrl: event.callerAvatarUrl,
+                expiresAt: event.expiresAt,
+              },
+              payload,
+            )
+          : await this.nativePush.sendToUsers([event.recipientId], payload);
 
       const subscriptions = await this.notifications.listSubscriptions(
         event.recipientId,

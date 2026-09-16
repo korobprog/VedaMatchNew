@@ -292,6 +292,45 @@ relay через TCP 443 из России держит меньше 90 % зво
   завершение, карточка в ленте, отклонённый видеозвонок, отмена до ответа,
   админка и выключатель.
 
+## Пуши для нативных приложений (VED-220)
+
+Сервер готов к звонку на телефоне с `apps/mobile` ещё до того, как там
+появится сам экран вызова (это этапы 1–2 нативного плана,
+`gan-harness/spec.md`). Изнутри `modules/chat/calls` в `modules/notifications`
+ничего не импортирует — только `EventEmitter2`, как и раньше.
+
+- **`NotificationDevice.nativeCalls`** (миграция
+  `20260917100000_notification_device_native_calls`): устройство сообщает об
+  этом в `POST /notifications/devices` полем `nativeCalls: true`. Мобильное
+  приложение выставляет его после того, как поднимет
+  `@react-native-firebase/messaging` с `setBackgroundMessageHandler` (решение
+  разведки, `gan-harness/mobile-calls-native.md`, §4) — до этого момента
+  телефон получает звонок как обычный пуш с уведомлением, никакой перестройки
+  на сервере это не требует.
+- **Входящий звонок.** `chat.call-incoming` несёт теперь ещё
+  `callerAvatarUrl` и `expiresAt` (ISO, момент истечения дозвона —
+  `RING_TIMEOUT_MS`). `NativePushService.sendCallIncoming` разводит устройства
+  одного человека по этому флагу: с `nativeCalls` — data-only FCM
+  (`android.priority = high`, `ttl = 45s`, без блока `notification`, поля
+  `type=call.incoming, callId, conversationId, kind, callerName,
+  callerAvatarUrl?, expiresAt` строками), без него — прежний пуш с текстом.
+  Так один и тот же звонок не звонит на телефоне дважды.
+- **«Звонок снят».** Отдельное событие `CHAT_CALL_ENDED_EVENT`
+  (`chat.call-ended` в `@vedamatch/shared`, вне `NotificationEvent`: своего
+  текста и колокольчика у него нет) публикует `ChatCallsService` — на ответ,
+  отмену, отклонение, пропуск по таймауту и обычное завершение, причина
+  указана в `reason`. `NotificationsListener` шлёт по нему data-only пуш
+  (`type=call.ended, callId, reason`) только устройствам с `nativeCalls`:
+  остальным гасить нечего, у них не было рингтона от data-пуша.
+- Переменных окружения не прибавилось: `FIREBASE_SERVICE_ACCOUNT` в
+  `portal/docker-compose.dokploy.yml` уже покрывает оба вида FCM-сообщений.
+- Тесты чистой логики: `fcm.spec.ts` (`buildCallIncomingMessage`,
+  `buildCallEndedMessage`), `native-push.service.spec.ts` (разводка
+  нативных/обычных устройств), `call-state.spec.ts` (`callEndedPushReason`),
+  `device-request.spec.ts` (валидация `nativeCalls`),
+  `notifications.listener.spec.ts` (маршрутизация `chat.call-incoming` и
+  обработчик `chat.call-ended`).
+
 ## Известные ограничения
 
 - Таймер дозвона живёт в процессе, принявшем звонок; при нескольких

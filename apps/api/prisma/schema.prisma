@@ -2090,9 +2090,13 @@ model NotificationDevice {
   platform   String
   token      String   @unique
   /// Сборка приложения, например `ru-site`: по ней видно, откуда люди ставят.
-  appVariant String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  appVariant  String?
+  /// Приложение умеет нативный экран звонка по data-пушу FCM (VED-220):
+  /// такому устройству входящий звонок шлётся data-only, а не обычным
+  /// пушем с уведомлением — иначе звонок звонил бы дважды.
+  nativeCalls Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([userId])
 }

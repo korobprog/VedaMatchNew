@@ -55,6 +55,21 @@ export class FcmSenderService {
 
   /** Никогда не бросает: вызывается из слушателей событий и воркера. */
   async send(token: string, payload: PushPayload): Promise<PushFailure | null> {
+    if (!this.account) return 'transient';
+    return this.post(buildFcmMessage(token, payload));
+  }
+
+  /**
+   * Тело сообщения собрано снаружи (data-only пуши звонка —
+   * `buildCallIncomingMessage`/`buildCallEndedMessage`): здесь только сеть,
+   * токен доступа и разбор ответа, общие для любого вида FCM-сообщения.
+   */
+  async sendRaw(message: object): Promise<PushFailure | null> {
+    if (!this.account) return 'transient';
+    return this.post(message);
+  }
+
+  private async post(message: object): Promise<PushFailure | null> {
     const account = this.account;
     if (!account) return 'transient';
     try {
@@ -68,7 +83,7 @@ export class FcmSenderService {
             Authorization: `Bearer ${await this.accessToken(account)}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(buildFcmMessage(token, payload)),
+          body: JSON.stringify(message),
         },
       );
       if (response.ok) return null;
