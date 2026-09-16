@@ -36,3 +36,54 @@ export function backMinimizesCall(phase: CallPhase): boolean {
 export function shouldShowReturnBanner(phase: CallPhase, screenVisible: boolean): boolean {
   return !screenVisible && IN_PROGRESS_PHASES.has(phase);
 }
+
+/**
+ * Фазы, при которых у звонка вообще должен быть полноэкранный вид —
+ * `ended` включён отдельно от «живых» `IN_PROGRESS_PHASES`: экран нужен и
+ * когда звонок уже закончился, но ещё ни разу не открывался (например,
+ * отказ в микрофоне при «Ответить» — `call-provider.tsx`, `accept()` —
+ * сразу даёт `ended` с причиной, которую надо показать).
+ */
+const SCREEN_PHASES: ReadonlySet<CallPhase> = new Set(['outgoing', 'connecting', 'active', 'ended']);
+
+/**
+ * Пушить ли `/call/[id]` прямо сейчас — решение эффекта-автонавигатора в
+ * `call-provider.tsx`, вынесенное в чистую функцию (`feedback-002.md`,
+ * блокирующий пункт 1). Один раз на звонок: если для этого `callId` экран
+ * уже поднимался хоть раз (`navigatedCallId === callId`) — не поднимать
+ * снова. Это и есть весь механизм «после «назад» никаких автопереходов до
+ * конца звонка»: смена фазы (собеседник ответил, пока пользователь ушёл в
+ * другой раздел, — `call-machine.ts`, `reduceStream`) сама по себе не
+ * повод выдёргивать человека на полный экран, если он его уже видел и
+ * сам свернул. `navigatedCallId` при этом не сбрасывается на «назад»
+ * (`nextNavigatedCallId` ниже) — сбрасывать его при уходе с экрана и было
+ * причиной гонки.
+ */
+export function shouldAutoNavigateToCallScreen(
+  phase: CallPhase,
+  callId: string | null,
+  navigatedCallId: string | null,
+): boolean {
+  if (!callId || navigatedCallId === callId) return false;
+  return SCREEN_PHASES.has(phase);
+}
+
+/**
+ * Новое значение метки `navigatedCallId` после того, как экран звонка
+ * сообщил о своей видимости (`reportCallScreenMounted`) — не важно, кто её
+ * вызвал: автонавигатор, плашка «вернуться» (прямой `router.push` в обход
+ * провайдера) или будущий deep link. Появился на экране — звонок «уже
+ * открыт», метка встаёт на его `callId`. Ушёл с экрана — это **не**
+ * «звонок больше не открывался»: если сбросить метку в `null` здесь (как
+ * было раньше), следующая смена фазы («назад» → собеседник ответил, пока
+ * пользователь в другом разделе) увидит «звонок ещё не показывали» и
+ * принудительно откроет экран заново — ровно баг feedback-002.md. Поэтому
+ * при уходе метка остаётся как есть.
+ */
+export function nextNavigatedCallId(
+  screenVisible: boolean,
+  callId: string | null,
+  previousNavigatedCallId: string | null,
+): string | null {
+  return screenVisible ? callId : previousNavigatedCallId;
+}
