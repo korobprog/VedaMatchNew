@@ -60,7 +60,26 @@ export interface Session {
   completeSignIn(url: string): Promise<void>;
   signInDev(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
+  /**
+   * Регистрирует колбэк, который `signOut()` дождётся (best-effort, с общим
+   * таймаутом на все колбэки) ДО того, как снять push-токен и отозвать
+   * сессию — единственный способ для другого модуля (звонков,
+   * `call-provider.tsx`/`session-call-guard.ts`) сделать сетевой запрос с
+   * ещё живым access-токеном на явном выходе из аккаунта, а не только
+   * прибраться локально уже ПОСЛЕ того, как `status` сменился на `'guest'`
+   * и токенов больше нет (`gan-harness/feedback/feedback-002.md`, блокирующий
+   * п.1). Сама сессия ничего не знает про звонки — это общий, не
+   * специфичный для них механизм; несколько регистраций складываются,
+   * отписка — возвращаемой функцией.
+   */
+  registerBeforeSignOut(hook: () => Promise<void>): () => void;
 }
+
+/** Сколько максимум ждать все `registerBeforeSignOut`-колбэки в сумме,
+ *  прежде чем всё равно продолжить выход — «best-effort», а не гарантия
+ *  доставки: сеть может быть недоступна, и разлогин не должен зависеть от
+ *  чужого HTTP-запроса дольше разумного. */
+const BEFORE_SIGN_OUT_TIMEOUT_MS = 2000;
 
 const SessionContext = createContext<Session | null>(null);
 
@@ -86,6 +105,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [user, setUser] = useState<SessionUser | null>(null);
   const pendingVerifier = useRef<string | null>(null);
+  const beforeSignOutHooks = useRef<Set<() => Promise<void>>>(new Set());
+
+  const registerBeforeSignOut = useCallback((hook: () => Promise<void>) => {
+    beforeSignOutHooks.current.add(hook);
+    return () => {
+      beforeSignOutHooks.current.delete(hook);
+    };
+  }, []);
 
   // Актуальный статус для колбэков вне цикла рендера (подписка на
   // `tokenAuthority` ниже) — не значение из замыкания рендера, которое
@@ -315,6 +342,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const getAccessToken = useCallback(() => tokenAuthority.peekAccessToken(), []);
 
   const signOut = useCallback(async () => {
+    // Порядок важен (`gan-harness/feedback/feedback-002.md`, блокирующий
+    // п.1): сначала — то, что зависит от ещё живого access-токена (для
+    // звонков это единственный шанс успеть POST /chat/calls/:id/end, пока
+    // токен не отозван), потом снимаем push-токен, и только в конце —
+    // logout на сервере/`dropSession()`, после которого токенов уже нет.
+    await Promise.race([
+      Promise.allSettled([...beforeSignOutHooks.current].map((hook) => hook())),
+      new Promise<void>((resolve) => setTimeout(resolve, BEFORE_SIGN_OUT_TIMEOUT_MS)),
+    ]);
     const current = await tokenAuthority.hydrate();
     // Телефон снимаем до выхода: после него у запроса уже не будет токена.
     await unregisterDevice(api);
@@ -334,8 +370,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       completeSignIn,
       signInDev,
       signOut,
+      registerBeforeSignOut,
     }),
-    [status, user, api, apiOrigin, getAccessToken, refresh, signIn, completeSignIn, signInDev, signOut],
+    [
+      status,
+      user,
+      api,
+      apiOrigin,
+      getAccessToken,
+      refresh,
+      signIn,
+      completeSignIn,
+      signInDev,
+      signOut,
+      registerBeforeSignOut,
+    ],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

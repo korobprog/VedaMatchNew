@@ -44,6 +44,7 @@ import {
 import { navigatedCallIdAfterPhase, nextNavigatedCallId, shouldAutoNavigateToCallScreen } from './call-screen-return';
 import { PendingCallAnswer } from './pending-call-answer';
 import { startRingtone } from './ringtone';
+import { shouldEndCallOnSessionChange } from './session-call-guard';
 import { CallSession } from './webrtc-session';
 import type { NetworkTransport } from '../../../modules/vedamatch-calls';
 
@@ -100,7 +101,7 @@ const ERROR_AUTOCLEAR_MS = 5000;
 const RELAY_POLL_MS = 5000;
 
 export function CallProvider({ children }: { children: ReactNode }) {
-  const { status, api, user } = useSession();
+  const { status, api, user, registerBeforeSignOut } = useSession();
   const stream = useChatStream();
   const callsApi = useMemo(() => createChatCallsApi(api), [api]);
   const userId = user?.id ?? '';
@@ -482,6 +483,50 @@ export function CallProvider({ children }: { children: ReactNode }) {
    * двойной `accept()` (см. spec `pending-call-answer.spec.ts`).
    */
   const pendingAnswer = useRef(new PendingCallAnswer()).current;
+
+  /**
+   * Выход из аккаунта во время разговора (`gan-harness/feedback/feedback-002.md`,
+   * блокирующий п.1) — `CallProvider` смонтирован выше `Stack.Protected`
+   * (`_layout.tsx`) и НЕ размонтируется при потере сессии, поэтому единственный
+   * способ закончить звонок сам, не дожидаясь, пока человек полезет в шторку
+   * уведомлений, — явно завершить его здесь. Локальная уборка (WebRTC, аудиосессия,
+   * foreground-служба, self-managed `Connection`) не требует отдельного кода:
+   * `hangUpWith('hangup')` синхронно переводит `phase` в `ended` ДО сетевого
+   * запроса (`finishLocally`+`closeSession()`), а все существующие эффекты
+   * (`audioSessionLive`, `nativeClearedFor`) уже следят именно за `phase`, не
+   * за `status` — они сработают сами. Рингтон (эффект на `state.phase`) гасится
+   * тем же переходом. `pendingAnswer.clear()` — отдельно, он не завязан на
+   * `phase` вовсе.
+   */
+  const endCallForLogout = useCallback(async () => {
+    pendingAnswer.clear();
+    await hangUpWith('hangup');
+  }, [hangUpWith, pendingAnswer]);
+
+  // Путь 1: явный `signOut()` — `session.tsx` дожидается этого колбэка (best-effort,
+  // с общим таймаутом ~2 с) ДО отзыва токенов, чтобы POST /chat/calls/:id/end
+  // ушёл с ещё живым access-токеном, а не после того, как `status` уже стал
+  // `'guest'` и токена не осталось.
+  useEffect(() => {
+    return registerBeforeSignOut(endCallForLogout);
+  }, [registerBeforeSignOut, endCallForLogout]);
+
+  // Путь 2: общий предохранитель на ЛЮБУЮ потерю сессии, не только через
+  // `signOut()` (например, `onSessionExpired` в `client.ts` зовёт `dropSession()`
+  // напрямую при 401) — токены к этому моменту уже могут быть стёрты
+  // (`dropSession()` роняет их раньше, чем `status` меняется), сетевой запрос
+  // тогда просто не пройдёт (уже проглатывается `try/catch` в `hangUpWith`),
+  // но ЛОКАЛЬНАЯ уборка (микрофон/камера, служба, `Connection`) случится в
+  // любом случае — это и есть главный приватностный риск, который решает
+  // этот путь. Чистое решение «нужно ли завершать» — `shouldEndCallOnSessionChange`
+  // (`session-call-guard.ts`, +spec), а не голая проверка `status` тут же.
+  const previousStatusRef = useRef(status);
+  useEffect(() => {
+    const previous = previousStatusRef.current;
+    previousStatusRef.current = status;
+    if (shouldEndCallOnSessionChange(previous, status, stateRef.current.phase)) void endCallForLogout();
+  }, [status, endCallForLogout]);
+
   useEffect(() => {
     const launch = consumeLaunchCall();
     if (launch?.action === 'answer') pendingAnswer.request(launch.callId);
@@ -599,8 +644,18 @@ export function CallProvider({ children }: { children: ReactNode }) {
       InCallManager.stop();
     }
   }, [state.phase, state.call]);
-  // Провайдер живёт в корневом layout и обычно не размонтируется, но на
-  // всякий случай (быстрый logout/выход) не оставлять аудиосессию висеть.
+  // Поправка комментария по факту (`gan-harness/feedback/feedback-002.md`,
+  // блокирующий п.1): `CallProvider` смонтирован в `_layout.tsx` ВЫШЕ
+  // `Stack.Protected` и в реальном дереве приложения НЕ размонтируется
+  // никогда, в т.ч. при логауте — этот cleanup поэтому недостижим на
+  // практике прямо сейчас, а не страховка «на случай logout», как было
+  // написано раньше (тот сценарий закрывает не unmount, а отдельный эффект
+  // на `status`, см. `endCallForLogout`/`session-call-guard.ts` выше).
+  // Оставлен как корректный defensive cleanup на случай, если у `RootLayout`
+  // когда-нибудь появится условный размонт `CallProvider`, а не убран как
+  // мёртвый код — он не создаёт риска (просто никогда не выполняется), а
+  // без него провайдер тихо предполагал бы, что размонтирования не бывает
+  // вовсе.
   useEffect(
     () => () => {
       if (audioSessionLive.current) {
@@ -705,9 +760,20 @@ export function CallProvider({ children }: { children: ReactNode }) {
   return (
     <ChatCallsContext.Provider value={apiValue}>
       {children}
-      <IncomingCallBanner />
-      <ReturnToCallBanner />
-      <CallErrorToast />
+      {/* VED-222 (feedback-002.md, блокирующий п.1): баннеры — только для
+          вошедшего. Без этого `ReturnToCallBanner` мог бы на мгновение
+          нарисоваться поверх экрана входа (гость, `Stack.Protected` уже не
+          знает маршрут `/call/[id]`, на который она ведёт) — состояние
+          звонка к этому моменту уже сброшено эффектом на `status` выше, но
+          гейт рендера здесь — независимая, более простая для чтения защита
+          от той же ситуации, а не дубль той же логики другим способом. */}
+      {status === 'signed' ? (
+        <>
+          <IncomingCallBanner />
+          <ReturnToCallBanner />
+          <CallErrorToast />
+        </>
+      ) : null}
     </ChatCallsContext.Provider>
   );
 }

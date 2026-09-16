@@ -31,6 +31,24 @@ class CallForegroundService : Service() {
     private const val EXTRA_KIND = "kind"
     private const val EXTRA_STARTED_AT = "startedAt"
 
+    /**
+     * `callId` идущего разговора — исправление `feedback-002.md`, non-blocking
+     * п.1: раньше `onTaskRemoved()` брал `callId` ТОЛЬКО из
+     * `PendingCallStore.anyConnection()`, а self-managed `Connection`
+     * регистрируется не для всех путей ответа (узкий случай из
+     * `docs/mobile-calls-native.md` §12.10 — входящий, отвеченный тапом по
+     * внутриприложенческому баннеру, пока приложение уже было открыто, без
+     * похода через Telecom вовсе). Для такого разговора смах из списка
+     * последних задач раньше прибирал СЛУЖБУ локально, но не слал headless
+     * `hangup` — сервер/собеседник узнавали о конце только по таймеру обрыва
+     * WebRTC (`DISCONNECT_GRACE_MS`, 15 с). Источник правды здесь — сама
+     * служба (`startOngoingCall`/`endCall` всегда идут с реальным `callId`,
+     * независимо от того, был ли зарегистрирован `Connection`), не
+     * `PendingCallStore`.
+     */
+    @Volatile
+    private var currentCallId: String? = null
+
     fun start(context: Context, callId: String, callerName: String, kind: String) {
       val intent = Intent(context, CallForegroundService::class.java).apply {
         putExtra(EXTRA_CALL_ID, callId)
@@ -54,6 +72,7 @@ class CallForegroundService : Service() {
       stopSelf()
       return START_NOT_STICKY
     }
+    currentCallId = callId
     val callerName = intent.getStringExtra(EXTRA_CALLER_NAME) ?: ""
     val kind = intent.getStringExtra(EXTRA_KIND) ?: "audio"
     val startedAt = intent.getLongExtra(EXTRA_STARTED_AT, System.currentTimeMillis())
@@ -73,9 +92,9 @@ class CallForegroundService : Service() {
 
     // Разговор пережил перезапуск процесса системой (крайне маловероятно,
     // но `START_STICKY` — тот же выбор, что у большинства foreground-служб
-    // разговора/музыки): без активного `callId` в `PendingCallStore` службе
-    // всё равно нечего показывать, она сама остановится на следующем
-    // `onStartCommand(null)`.
+    // разговора/музыки): без сохранённого `intent` (система перезапускает
+    // службу с `intent == null`) `callId` взять неоткуда, службе нечего
+    // показывать — она сама остановится на следующем `onStartCommand(null)`.
     return START_STICKY
   }
 
@@ -107,23 +126,31 @@ class CallForegroundService : Service() {
    * фона». Локальная уборка (self-managed `Connection`, уведомление, сама
    * служба) остаётся синхронной и не ждёт сети — сервер может быть временно
    * недоступен, а Telecom и системная шторка обязаны освободиться сразу.
+   *
+   * `callId` берётся из `currentCallId` (сама служба знает его всегда —
+   * `startOngoingCall` передаёт его при каждом старте), а не из
+   * `PendingCallStore.anyConnection()`: `Connection` регистрируется не для
+   * всех путей ответа (`feedback-002.md`, non-blocking п.1) — headless
+   * `hangup` теперь уходит для ЛЮБОГО идущего разговора, `Connection`
+   * (если он есть) по-прежнему разрывается отдельно, локально.
    */
   override fun onTaskRemoved(rootIntent: Intent?) {
     super.onTaskRemoved(rootIntent)
-    val connection = PendingCallStore.anyConnection()
-    if (connection != null) {
+    val callId = currentCallId
+    if (callId != null) {
       // Запускается ДО остановки этой службы: свежий `HeadlessJsTaskService`
       // держит процесс живым через собственный wake lock, пока идёт HTTP —
       // порядок важен, иначе окно между `stopSelf()` этой службы и стартом
       // headless-задачи могло бы дать системе повод убить процесс раньше.
-      HangupHeadlessTaskService.start(this, connection.callId)
-      connection.disconnectFromApp()
+      HangupHeadlessTaskService.start(this, callId)
+      PendingCallStore.anyConnection()?.disconnectFromApp()
     }
     ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
     stopSelf()
   }
 
   override fun onDestroy() {
+    currentCallId = null
     ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
     super.onDestroy()
   }
