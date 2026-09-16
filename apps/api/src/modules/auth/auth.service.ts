@@ -12,7 +12,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Request, Response } from 'express';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import * as oidc from 'openid-client';
 import {
   USER_REGISTERED_EVENT,
@@ -28,6 +28,7 @@ import {
   verifyPkceS256,
   type AppLoginRequest,
 } from './app-login';
+import { judgeRevokedRefresh, rotationFamily } from './refresh-reuse';
 import { appReturnPage, type AppReturnOutcome } from './app-return-page';
 import { AuthProvidersService } from './auth-providers.service';
 import { resolveContour, type Contour } from './contour';
@@ -94,6 +95,17 @@ export function shortToken(value: unknown, maxLength = 64): string | null {
   if (!trimmed || trimmed.length > maxLength) return null;
   if (!/^[\w-]+$/.test(trimmed)) return null;
   return trimmed;
+}
+
+/**
+ * Отказ refresh из-за гонки ротации: токен только что обменял соседний
+ * запрос того же клиента. Для клиента это обычный 401, но cookie браузера
+ * при нём не стираются — в них уже может лежать свежая пара.
+ */
+export class RefreshRaceException extends UnauthorizedException {
+  constructor() {
+    super('Refresh-токен недействителен');
+  }
 }
 
 @Injectable()
@@ -617,10 +629,10 @@ export class AuthService implements OnModuleInit {
     refreshToken?: unknown;
   }): Promise<AppTokenResponse> {
     const token = body?.refreshToken;
-    const user = await this.consumeRefreshToken(
+    const { user, familyId } = await this.consumeRefreshToken(
       typeof token === 'string' ? token : undefined,
     );
-    return this.appTokens(user);
+    return this.appTokens(user, familyId);
   }
 
   async logoutApp(body: { refreshToken?: unknown }) {
@@ -628,17 +640,21 @@ export class AuthService implements OnModuleInit {
     if (typeof token === 'string' && token) {
       await this.prisma.refreshToken.updateMany({
         where: { tokenHash: this.hash(token) },
-        data: { revoked: true },
+        data: { revoked: true, revokedAt: new Date() },
       });
     }
     return { ok: true };
   }
 
-  private async appTokens(user: User): Promise<AppTokenResponse> {
+  private async appTokens(
+    user: User,
+    familyId?: string,
+  ): Promise<AppTokenResponse> {
     const { accessToken, refreshToken, refreshTtlMs } = await this.mintTokens(
       user.id,
       user.email,
       toRole(user.role),
+      familyId,
     );
     return {
       accessToken,
@@ -841,12 +857,14 @@ export class AuthService implements OnModuleInit {
     role: Role,
     res: Response,
     host?: string | null,
+    familyId?: string,
   ) {
     const contour = this.contour(host);
     const { accessToken, refreshToken, refreshTtlMs } = await this.mintTokens(
       userId,
       email,
       role,
+      familyId,
     );
     const ttlDays = refreshTtlMs / (24 * 60 * 60 * 1000);
 
@@ -876,8 +894,16 @@ export class AuthService implements OnModuleInit {
     });
   }
 
-  /** Пара токенов и запись refresh в базе. Куда их отдать, решает вызывающий. */
-  private async mintTokens(userId: string, email: string, role: Role) {
+  /**
+   * Пара токенов и запись refresh в базе. Куда их отдать, решает вызывающий.
+   * Без `familyId` — новый вход и новое семейство; ротация передаёт своё.
+   */
+  private async mintTokens(
+    userId: string,
+    email: string,
+    role: Role,
+    familyId: string = randomUUID(),
+  ) {
     const accessToken = await this.jwt.signAccessToken({
       sub: userId,
       email,
@@ -891,6 +917,7 @@ export class AuthService implements OnModuleInit {
       data: {
         tokenHash: this.hash(refreshToken),
         userId,
+        familyId,
         expiresAt: new Date(Date.now() + refreshTtlMs),
       },
     });
@@ -926,20 +953,27 @@ export class AuthService implements OnModuleInit {
     try {
       return await this.rotateRefreshToken(req, res);
     } catch (error) {
-      // Refresh мёртв — снимаем и маркер сессии, иначе web будет крутить
-      // splash «Восстанавливаем сессию» вместо лендинга/формы входа.
-      if (error instanceof UnauthorizedException) {
+      // Refresh мёртв — снимаем все cookie сессии. Маркер — чтобы web не
+      // крутил splash «Восстанавливаем сессию». Саму refresh-cookie — чтобы
+      // вкладка не предъявляла отозванный токен снова: потоки событий сайта
+      // переподключаются через refresh бесконечно, и каждый такой повтор
+      // отзывал все сессии человека, включая приложение (VED-233).
+      // Гонка ротации — исключение: соседний запрос этого же браузера
+      // только что получил свежие cookie, и стирать их нельзя.
+      if (error instanceof RefreshRaceException) {
         res.clearCookie(SESSION_MARKER_COOKIE, {
           path: '/',
           domain: this.contour(req.headers.host).cookieDomain,
         });
+      } else if (error instanceof UnauthorizedException) {
+        this.clearSessionCookies(res, req.headers.host);
       }
       throw error;
     }
   }
 
   private async rotateRefreshToken(req: Request, res: Response) {
-    const user = await this.consumeRefreshToken(
+    const { user, familyId } = await this.consumeRefreshToken(
       (req.cookies as Record<string, string>)[REFRESH_COOKIE],
     );
     await this.issueTokens(
@@ -948,15 +982,18 @@ export class AuthService implements OnModuleInit {
       toRole(user.role),
       res,
       req.headers.host,
+      familyId,
     );
     return { ok: true };
   }
 
   /**
    * Проверка и гашение refresh-токена, общая для cookie-сессии и приложения.
-   * Возвращает владельца; новую пару выдаёт вызывающий.
+   * Возвращает владельца и семейство для новой пары; пару выдаёт вызывающий.
    */
-  private async consumeRefreshToken(token: string | undefined): Promise<User> {
+  private async consumeRefreshToken(
+    token: string | undefined,
+  ): Promise<{ user: User; familyId: string }> {
     if (!token) throw new UnauthorizedException('Нет refresh-токена');
 
     const stored = await this.prisma.refreshToken.findUnique({
@@ -968,11 +1005,15 @@ export class AuthService implements OnModuleInit {
     }
     // Повторное предъявление уже отозванного токена — признак кражи
     // (легитимный клиент после ротации им больше не пользуется). Отзываем
-    // все токены пользователя: и у вора, и у жертвы придётся войти заново.
+    // семейство токена: и у вора, и у жертвы этого входа придётся войти
+    // заново. Остальные входы человека не трогаем, а повтор сразу после
+    // ротации считаем гонкой — см. refresh-reuse.ts.
     if (stored.revoked) {
+      const verdict = judgeRevokedRefresh(stored, new Date());
+      if (verdict.kind === 'race') throw new RefreshRaceException();
       await this.prisma.refreshToken.updateMany({
-        where: { userId: stored.userId, revoked: false },
-        data: { revoked: true },
+        where: verdict.where,
+        data: { revoked: true, revokedAt: new Date() },
       });
       throw new UnauthorizedException('Refresh-токен недействителен');
     }
@@ -980,14 +1021,15 @@ export class AuthService implements OnModuleInit {
 
     // Ротация как CAS: два одновременных refresh с одним cookie не должны
     // оба выдать пары — выигрывает тот, кто первым перевёл revoked в true.
+    // Семейство проставляется и старому токену: его повтор должен найти
+    // продолжение цепочки, даже если токен выдан до появления семейств.
+    const familyId = rotationFamily(stored);
     const rotated = await this.prisma.refreshToken.updateMany({
       where: { id: stored.id, revoked: false },
-      data: { revoked: true },
+      data: { revoked: true, revokedAt: new Date(), familyId },
     });
-    if (rotated.count === 0) {
-      throw new UnauthorizedException('Refresh-токен недействителен');
-    }
-    return stored.user;
+    if (rotated.count === 0) throw new RefreshRaceException();
+    return { user: stored.user, familyId };
   }
 
   async logout(req: Request, res: Response) {
@@ -995,7 +1037,7 @@ export class AuthService implements OnModuleInit {
     if (token) {
       await this.prisma.refreshToken.updateMany({
         where: { tokenHash: this.hash(token) },
-        data: { revoked: true },
+        data: { revoked: true, revokedAt: new Date() },
       });
     }
     this.clearSessionCookies(res, req.headers.host);
@@ -1006,7 +1048,7 @@ export class AuthService implements OnModuleInit {
   async logoutEverywhere(userId: string, res: Response, host?: string | null) {
     await this.prisma.refreshToken.updateMany({
       where: { userId, revoked: false },
-      data: { revoked: true },
+      data: { revoked: true, revokedAt: new Date() },
     });
     this.clearSessionCookies(res, host);
     return { ok: true };

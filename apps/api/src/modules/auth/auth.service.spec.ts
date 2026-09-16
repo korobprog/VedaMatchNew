@@ -5,7 +5,11 @@ import { UnauthorizedException } from '@nestjs/common';
 jest.mock('openid-client', () => ({}));
 jest.mock('./jwt.service', () => ({ JwtSignService: class {} }));
 
-import { AuthService, safeReturnTo } from './auth.service';
+import {
+  AuthService,
+  RefreshRaceException,
+  safeReturnTo,
+} from './auth.service';
 import { AuthProvidersService } from './auth-providers.service';
 import { PersonalDataService } from '../personal-data/personal-data.service';
 import { IdentityService } from './identity.service';
@@ -71,9 +75,13 @@ describe('AuthService.refresh', () => {
     });
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
       where: { id: 'rt1', revoked: false },
-      data: { revoked: true },
+      // Токен из времён до семейств открывает семейство своим id.
+      data: { revoked: true, revokedAt: expect.any(Date), familyId: 'rt1' },
     });
     expect(prisma.refreshToken.create).toHaveBeenCalledTimes(1);
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ familyId: 'rt1' }),
+    });
     // access + refresh + маркер vm_session
     expect(res.cookie).toHaveBeenCalledTimes(3);
     const marker = res.cookie.mock.calls.find(
@@ -84,12 +92,14 @@ describe('AuthService.refresh', () => {
     expect(marker[2].path).toBe('/');
   });
 
-  it('проигравший гонку параллельный refresh получает 401 без новой пары', async () => {
+  it('проигравший гонку параллельный refresh получает 401 без новой пары и не стирает cookie', async () => {
     const { service, prisma, req, res } = makeService(
       {
         id: 'rt1',
         userId: 'u1',
         revoked: false,
+        familyId: 'f1',
+        revokedAt: null,
         expiresAt: new Date(Date.now() + 60_000),
         user: activeUser,
       },
@@ -97,11 +107,14 @@ describe('AuthService.refresh', () => {
     );
     await expect(
       service.refresh(req as never, res as never),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toBeInstanceOf(RefreshRaceException);
     expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    // Победитель гонки уже поставил браузеру свежие cookie.
+    const cleared = res.clearCookie.mock.calls.map((call: unknown[]) => call[0]);
+    expect(cleared).toEqual(['vm_session']);
   });
 
-  it('при мёртвом refresh снимает маркер vm_session', async () => {
+  it('при мёртвом refresh снимает все cookie сессии, а не только маркер', async () => {
     const { service, req, res } = makeService(null);
     await expect(
       service.refresh(req as never, res as never),
@@ -110,13 +123,49 @@ describe('AuthService.refresh', () => {
       'vm_session',
       expect.objectContaining({ path: '/' }),
     );
+    // Без этого вкладка сайта предъявляла отозванный токен снова и снова.
+    expect(res.clearCookie).toHaveBeenCalledWith(
+      'refresh_token',
+      expect.objectContaining({ path: '/auth' }),
+    );
+    expect(res.clearCookie).toHaveBeenCalledWith(
+      'access_token',
+      expect.objectContaining({ path: '/' }),
+    );
   });
 
-  it('повторное предъявление отозванного токена отзывает все токены пользователя', async () => {
+  it('давний повтор отозванного токена отзывает его семейство, а не все сессии пользователя', async () => {
     const { service, prisma, req, res } = makeService({
       id: 'rt1',
       userId: 'u1',
       revoked: true,
+      familyId: 'web-family',
+      revokedAt: new Date(Date.now() - 10 * 60_000),
+      expiresAt: new Date(Date.now() + 60_000),
+      user: activeUser,
+    });
+    await expect(
+      service.refresh(req as never, res as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'u1', familyId: 'web-family', revoked: false },
+      data: { revoked: true, revokedAt: expect.any(Date) },
+    });
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    expect(res.clearCookie).toHaveBeenCalledWith(
+      'refresh_token',
+      expect.objectContaining({ path: '/auth' }),
+    );
+  });
+
+  it('отозванный до семейств токен отзывает только безсемейные токены', async () => {
+    const { service, prisma, req, res } = makeService({
+      id: 'rt1',
+      userId: 'u1',
+      revoked: true,
+      familyId: null,
+      revokedAt: null,
       expiresAt: new Date(Date.now() + 60_000),
       user: activeUser,
     });
@@ -124,10 +173,58 @@ describe('AuthService.refresh', () => {
       service.refresh(req as never, res as never),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
-      where: { userId: 'u1', revoked: false },
-      data: { revoked: true },
+      where: { userId: 'u1', familyId: null, revoked: false },
+      data: { revoked: true, revokedAt: expect.any(Date) },
     });
+  });
+
+  it('повтор только что ротированного токена — гонка: ничего не отзывает', async () => {
+    const { service, prisma, req, res } = makeService({
+      id: 'rt1',
+      userId: 'u1',
+      revoked: true,
+      familyId: 'f1',
+      revokedAt: new Date(Date.now() - 2_000),
+      expiresAt: new Date(Date.now() + 60_000),
+      user: activeUser,
+    });
+    await expect(
+      service.refresh(req as never, res as never),
+    ).rejects.toBeInstanceOf(RefreshRaceException);
+    expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
     expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+  });
+
+  it('refreshApp: давний повтор не трогает сессии других входов', async () => {
+    const { service, prisma } = makeService({
+      id: 'rt9',
+      userId: 'u1',
+      revoked: true,
+      familyId: 'app-family',
+      revokedAt: new Date(Date.now() - 60 * 60_000),
+      expiresAt: new Date(Date.now() + 60_000),
+      user: activeUser,
+    });
+    await expect(
+      service.refreshApp({ refreshToken: 'raw' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    const where = prisma.refreshToken.updateMany.mock.calls[0][0].where;
+    expect(where).toEqual({
+      userId: 'u1',
+      familyId: 'app-family',
+      revoked: false,
+    });
+  });
+
+  it('новый вход открывает новое семейство', async () => {
+    const { service, prisma } = makeService(null);
+    await (
+      service as unknown as {
+        appTokens: (user: typeof activeUser) => Promise<unknown>;
+      }
+    ).appTokens(activeUser);
+    const data = prisma.refreshToken.create.mock.calls[0][0].data;
+    expect(data.familyId).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('access-cookie живёт столько же, сколько ACCESS_TOKEN_TTL', async () => {

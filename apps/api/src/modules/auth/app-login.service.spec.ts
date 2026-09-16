@@ -156,6 +156,8 @@ describe('AuthService.refreshApp и logoutApp', () => {
         id: 'rt1',
         userId: 'u1',
         revoked: false,
+        familyId: 'fam-app',
+        revokedAt: null,
         expiresAt: new Date(Date.now() + 60_000),
         user: activeUser,
       },
@@ -164,7 +166,11 @@ describe('AuthService.refreshApp и logoutApp', () => {
     expect(tokens.accessToken).toBe('access-jwt');
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
       where: { id: 'rt1', revoked: false },
-      data: { revoked: true },
+      data: { revoked: true, revokedAt: expect.any(Date), familyId: 'fam-app' },
+    });
+    // Новая пара остаётся в семействе входа приложения.
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: 'u1', familyId: 'fam-app' }),
     });
   });
 
@@ -184,7 +190,7 @@ describe('AuthService.refreshApp и logoutApp', () => {
       ok: true,
     });
     const call = prisma.refreshToken.updateMany.mock.calls[0][0];
-    expect(call.data).toEqual({ revoked: true });
+    expect(call.data).toEqual({ revoked: true, revokedAt: expect.any(Date) });
     expect(call.where.tokenHash).toMatch(/^[0-9a-f]{64}$/);
   });
 });
