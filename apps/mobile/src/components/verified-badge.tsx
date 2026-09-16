@@ -23,7 +23,7 @@ interface BadgeProps {
   variant?: Variant;
 }
 
-function CheckShieldIcon({ color, size }: { color: string; size: number }) {
+export function CheckShieldIcon({ color, size }: { color: string; size: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
       <Path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
@@ -79,6 +79,35 @@ function Badge({
 /** Значок преданного, чей статус подтвердила администрация. */
 export function VerifiedBadge({ variant = 'inline' }: BadgeProps) {
   return <Badge variant={variant} accent="cyan" label={VERIFICATION_BADGE_LABELS.devotee} inlineText="Проверен" Icon={CheckShieldIcon} />;
+}
+
+/**
+ * Тот же кружок `cyan` с галочкой, что у `VerifiedBadge` варианта `dot`, но
+ * со своей подписью для скринридера — пригодится сущностям за пределами
+ * подтверждения человека (община, `community-verified-badge.tsx`), у
+ * которых слова «Преданный подтверждён администрацией» не подходят по
+ * смыслу. Экспортирован отдельно, чтобы контур и размер иконки не
+ * расходились между значком человека и значком общины (раунд оценки 006,
+ * дефект 8).
+ *
+ * `decorative` — когда значок стоит внутри кнопки/строки, чья подпись уже
+ * включает факт подтверждения: тогда он не должен фокусироваться отдельным
+ * шагом скринридера (раунд оценки 006, дефект 6).
+ */
+export function VerifiedDot({ label, decorative = false }: { label: string; decorative?: boolean }) {
+  const { colors } = useTheme();
+  return (
+    <View
+      accessible={!decorative}
+      accessibilityLabel={decorative ? undefined : label}
+      importantForAccessibility={decorative ? 'no-hide-descendants' : undefined}
+      style={[styles.dot, { backgroundColor: colors.cyan }]}
+    >
+      <View importantForAccessibility="no">
+        <CheckShieldIcon color={colors.bg0} size={11} />
+      </View>
+    </View>
+  );
 }
 
 /** Значок: администрация сверила фото с живым человеком. */
