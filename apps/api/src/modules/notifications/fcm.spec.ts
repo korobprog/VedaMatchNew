@@ -1,7 +1,13 @@
 import { createVerify, generateKeyPairSync } from 'node:crypto';
 import {
   ANDROID_CHANNEL_ID,
+  buildCallEndedMessage,
+  buildCallIncomingMessage,
   buildFcmMessage,
+  CALL_ENDED_TTL_SECONDS,
+  CALL_INCOMING_TTL_SECONDS,
+  CALL_PUSH_TYPE_ENDED,
+  CALL_PUSH_TYPE_INCOMING,
   classifyFcmError,
   FCM_SCOPE,
   GOOGLE_TOKEN_URL,
@@ -78,6 +84,71 @@ describe('buildFcmMessage', () => {
     expect(body.message.android.notification.channel_id).toBe(
       ANDROID_CHANNEL_ID,
     );
+  });
+});
+
+describe('buildCallIncomingMessage', () => {
+  const data = {
+    callId: 'c1',
+    conversationId: 'conv1',
+    kind: 'video' as const,
+    callerName: 'Радха',
+    callerAvatarUrl: 'https://cdn.example/a.jpg',
+    expiresAt: '2026-09-17T10:00:45.000Z',
+  };
+
+  it('data-only, без блока notification, priority high и ttl 45 с', () => {
+    const body = buildCallIncomingMessage('tok', data);
+    expect(body.message.token).toBe('tok');
+    expect(body.message).not.toHaveProperty('notification');
+    expect(body.message.android).toEqual({
+      priority: 'high',
+      ttl: '45s',
+    });
+    expect(CALL_INCOMING_TTL_SECONDS).toBe(45);
+  });
+
+  it('все поля данных — строки, тип звонка помечен call.incoming', () => {
+    const body = buildCallIncomingMessage('tok', data);
+    expect(body.message.data).toEqual({
+      type: CALL_PUSH_TYPE_INCOMING,
+      callId: 'c1',
+      conversationId: 'conv1',
+      kind: 'video',
+      callerName: 'Радха',
+      callerAvatarUrl: 'https://cdn.example/a.jpg',
+      expiresAt: '2026-09-17T10:00:45.000Z',
+    });
+    for (const value of Object.values(body.message.data)) {
+      expect(typeof value).toBe('string');
+    }
+  });
+
+  it('без аватара у звонившего ключ callerAvatarUrl не попадает в data', () => {
+    const body = buildCallIncomingMessage('tok', {
+      ...data,
+      callerAvatarUrl: null,
+    });
+    expect(body.message.data).not.toHaveProperty('callerAvatarUrl');
+  });
+});
+
+describe('buildCallEndedMessage', () => {
+  it('data-only сигнал с причиной, без notification', () => {
+    const body = buildCallEndedMessage('tok', {
+      callId: 'c1',
+      reason: 'declined',
+    });
+    expect(body.message).not.toHaveProperty('notification');
+    expect(body.message.data).toEqual({
+      type: CALL_PUSH_TYPE_ENDED,
+      callId: 'c1',
+      reason: 'declined',
+    });
+    expect(body.message.android).toEqual({
+      priority: 'high',
+      ttl: `${CALL_ENDED_TTL_SECONDS}s`,
+    });
   });
 });
 
