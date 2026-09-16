@@ -49,7 +49,7 @@ describe('createTokenAuthority', () => {
     });
     const authority = createTokenAuthority({ authApi });
 
-    await expect(authority.refresh()).resolves.toBe('access-2');
+    await expect(authority.refresh()).resolves.toEqual({ kind: 'refreshed', accessToken: 'access-2' });
     expect(store.tokens).toEqual({ accessToken: 'access-2', refreshToken: 'refresh-2' });
     expect(authority.peekAccessToken()).toBe('access-2');
   });
@@ -64,8 +64,8 @@ describe('createTokenAuthority', () => {
     const authority = createTokenAuthority({ authApi });
 
     const [a, b] = await Promise.all([authority.refresh(), authority.refresh()]);
-    expect(a).toBe('access-2');
-    expect(b).toBe('access-2');
+    expect(a).toEqual({ kind: 'refreshed', accessToken: 'access-2' });
+    expect(b).toEqual({ kind: 'refreshed', accessToken: 'access-2' });
     expect(calls).toBe(1);
   });
 
@@ -98,7 +98,7 @@ describe('createTokenAuthority', () => {
 
     store.tokens = { accessToken: 'access-9', refreshToken: 'refresh-9' };
 
-    await expect(authority.refresh()).resolves.toBe('access-10');
+    await expect(authority.refresh()).resolves.toEqual({ kind: 'refreshed', accessToken: 'access-10' });
   });
 
   it('refresh отказал (сессия истекла), но SecureStore уже обновился другим путём — не роняет сессию', async () => {
@@ -110,7 +110,7 @@ describe('createTokenAuthority', () => {
     });
     const authority = createTokenAuthority({ authApi });
 
-    await expect(authority.refresh()).resolves.toBe('access-fresh');
+    await expect(authority.refresh()).resolves.toEqual({ kind: 'refreshed', accessToken: 'access-fresh' });
     expect(store.tokens).toEqual({ accessToken: 'access-fresh', refreshToken: 'refresh-fresh' });
   });
 
@@ -120,7 +120,7 @@ describe('createTokenAuthority', () => {
     });
     const authority = createTokenAuthority({ authApi });
 
-    await expect(authority.refresh()).resolves.toBeNull();
+    await expect(authority.refresh()).resolves.toEqual({ kind: 'rejected' });
     expect(store.tokens).toBeNull();
     expect(authority.peekAccessToken()).toBeNull();
   });
@@ -131,17 +131,17 @@ describe('createTokenAuthority', () => {
     });
     const authority = createTokenAuthority({ authApi });
 
-    await expect(authority.refresh()).resolves.toBeNull();
+    await expect(authority.refresh()).resolves.toEqual({ kind: 'rejected' });
     expect(store.tokens).toBeNull();
   });
 
-  it('5xx от сервера — временная недоступность, не разлогин (feedback-002, важное п.2 / подозрение на VED-234)', async () => {
+  it('5xx от сервера — временная недоступность, не разлогин, токены не тронуты (feedback-003, блокирующий п.1)', async () => {
     const authApi = fakeAuthApi(async () => {
       throw Object.assign(new Error('bad gateway'), { status: 502 });
     });
     const authority = createTokenAuthority({ authApi });
 
-    await expect(authority.refresh()).resolves.toBe('access-1');
+    await expect(authority.refresh()).resolves.toEqual({ kind: 'unavailable' });
     expect(store.tokens).toEqual({ accessToken: 'access-1', refreshToken: 'refresh-1' });
     expect(authority.peekAccessToken()).toBe('access-1');
   });
@@ -152,18 +152,28 @@ describe('createTokenAuthority', () => {
     });
     const authority = createTokenAuthority({ authApi });
 
-    await expect(authority.refresh()).resolves.toBe('access-1');
+    await expect(authority.refresh()).resolves.toEqual({ kind: 'unavailable' });
     expect(store.tokens).not.toBeNull();
   });
 
-  it('сеть недоступна — токены не стираются, отдаётся то, что было', async () => {
+  it('сеть недоступна — токены не стираются, kind unavailable', async () => {
     const authApi = fakeAuthApi(async () => {
       throw Object.assign(new Error('offline'), { status: 0 });
     });
     const authority = createTokenAuthority({ authApi });
 
-    await expect(authority.refresh()).resolves.toBe('access-1');
+    await expect(authority.refresh()).resolves.toEqual({ kind: 'unavailable' });
     expect(store.tokens).toEqual({ accessToken: 'access-1', refreshToken: 'refresh-1' });
+  });
+
+  it('refresh() без токенов в хранилище вовсе — rejected, не unavailable (нечем спасать)', async () => {
+    store.tokens = null;
+    const authApi = fakeAuthApi(async () => {
+      throw new Error('не должен звать сеть — нет refresh-токена');
+    });
+    const authority = createTokenAuthority({ authApi });
+
+    await expect(authority.refresh()).resolves.toEqual({ kind: 'rejected' });
   });
 
   it('adopt()/drop() будят подписчиков', async () => {

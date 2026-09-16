@@ -101,7 +101,12 @@ export function ChatStreamProvider({ children }: { children: ReactNode }) {
       });
       next.addEventListener('error', (event) => {
         if ('xhrStatus' in event && event.xhrStatus === 401) {
-          void refreshAccessToken().then((fresh) => (fresh ? scheduleRetry() : close()));
+          // 'rejected' — сессия действительно закончилась, дальше пробовать
+          // нечем. 'refreshed'/'unavailable' — обычный повтор через тот же
+          // бэкофф потока: для 'unavailable' новый токен появится позже сам
+          // (проактивный ретрай `session.tsx`), а `open()` всё равно читает
+          // токен заново при каждой попытке.
+          void refreshAccessToken().then((result) => (result.kind === 'rejected' ? close() : scheduleRetry()));
           return;
         }
         scheduleRetry();

@@ -10,7 +10,7 @@ function fakeAuthority(overrides: Partial<TokenAuthority> = {}): TokenAuthority 
     peekAccessToken: () => null,
     getAccessToken: async () => 'access-1',
     rereadAccessToken: async () => null,
-    refresh: async () => null,
+    refresh: async () => ({ kind: 'rejected' }),
     adopt: async () => undefined,
     drop: async () => undefined,
     hydrate: async () => null,
@@ -70,18 +70,32 @@ describe('createBackgroundDecline', () => {
     });
     const authority = fakeAuthority({
       rereadAccessToken: async () => 'access-1',
-      refresh: async () => 'access-3',
+      refresh: async () => ({ kind: 'refreshed', accessToken: 'access-3' }),
     });
     const decline = createBackgroundDecline({ fetchImpl, tokenAuthority: authority });
     await expect(decline('call-1')).resolves.toBe(true);
     expect(calls).toBe(2);
   });
 
-  it('refresh() не восстановил сессию — false, не бросает', async () => {
+  it('refresh() отверг сессию (rejected) — false, не бросает', async () => {
     const fetchImpl = jest.fn(async () => jsonResponse(401));
-    const authority = fakeAuthority({ rereadAccessToken: async () => 'access-1', refresh: async () => null });
+    const authority = fakeAuthority({
+      rereadAccessToken: async () => 'access-1',
+      refresh: async () => ({ kind: 'rejected' }),
+    });
     const decline = createBackgroundDecline({ fetchImpl, tokenAuthority: authority });
     await expect(decline('call-1')).resolves.toBe(false);
+  });
+
+  it('refresh() unavailable (сеть/5xx) — false, не бросает, не повторяет запрос (feedback-003, п.4)', async () => {
+    const fetchImpl = jest.fn(async () => jsonResponse(401));
+    const refresh = jest.fn(async () => ({ kind: 'unavailable' }) as const);
+    const authority = fakeAuthority({ rereadAccessToken: async () => 'access-1', refresh });
+    const decline = createBackgroundDecline({ fetchImpl, tokenAuthority: authority });
+    await expect(decline('call-1')).resolves.toBe(false);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    // Только исходный запрос — тем же протухшим токеном не повторяли.
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it('звонок уже закрыт на сервере (404) — false, не бросает', async () => {

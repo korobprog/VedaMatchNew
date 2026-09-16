@@ -43,8 +43,18 @@ export function createBackgroundDecline(deps: BackgroundDeclineDeps = {}) {
       let response = await post(token);
       if (response.status === 401) {
         const reread = await authority.rereadAccessToken();
-        token = reread && reread !== token ? reread : await authority.refresh();
-        if (!token) return false;
+        if (reread && reread !== token) {
+          token = reread;
+        } else {
+          const result = await authority.refresh();
+          // 'rejected' — сессия действительно кончилась (уже стёрта внутри
+          // refresh()). 'unavailable' — сеть/сервер сейчас недоступны, но
+          // токены НЕ тронуты (`token-authority.ts`) — в обоих случаях
+          // здесь просто нечем повторить запрос сейчас, не наше дело их
+          // стирать самим (`gan-harness/feedback/feedback-003.md`, п.4).
+          if (result.kind !== 'refreshed') return false;
+          token = result.accessToken;
+        }
         response = await post(token);
       }
       return response.ok;

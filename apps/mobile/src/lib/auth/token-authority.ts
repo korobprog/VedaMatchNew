@@ -1,4 +1,5 @@
 import { appVariant } from '@/config/app-variant';
+import type { SessionRefreshResult } from '@/lib/api/client';
 import { createAuthApi, type AuthApi } from './auth-api';
 import { singleFlight } from './single-flight';
 import { clearTokens, readTokens, writeTokens, type TokenPair } from './token-store';
@@ -41,8 +42,11 @@ export interface TokenAuthority {
    *  процессе) мог уже обновить пару, пока мы решали, что делать с 401. */
   rereadAccessToken(): Promise<string | null>;
   /** Единственный на процесс сетевой refresh — `singleFlight`: несколько
-   *  одновременных вызовов делят один обмен по сети. */
-  refresh(): Promise<string | null>;
+   *  одновременных вызовов делят один обмен по сети. Три различимых исхода
+   *  (`SessionRefreshResult`), а не голая строка: `client.ts` должен уметь
+   *  отличить «получили новый токен» от «сейчас не вышло, но сессия жива»
+   *  (`gan-harness/feedback/feedback-003.md`, блокирующий п.1). */
+  refresh(): Promise<SessionRefreshResult>;
   /** Вход/обмен кода/dev-login — пара уже известна, сеть не нужна. */
   adopt(tokens: TokenPair): Promise<void>;
   /** Выход/невосстановимый отказ обновления — стирает `SecureStore`. */
@@ -89,7 +93,7 @@ export function createTokenAuthority(deps: TokenAuthorityDeps = {}): TokenAuthor
 
   // Один экземпляр на модуль: singleFlight делит один сетевой обмен между
   // всеми, кто позвал refresh() параллельно, откуда бы они ни звали.
-  const refresh = singleFlight(async (): Promise<string | null> => {
+  const refresh = singleFlight(async (): Promise<SessionRefreshResult> => {
     // Перечитать, а не доверять `cached`: другой вызывающий (в этом же
     // процессе) мог обновить пару в SecureStore уже после того, как этот
     // вызов встал в очередь singleFlight, но до того, как получил
@@ -97,12 +101,15 @@ export function createTokenAuthority(deps: TokenAuthorityDeps = {}): TokenAuthor
     const before = await readTokens();
     cached = before;
     hydrated = true;
-    if (!before) return null;
+    // Пары нет вовсе (не «сеть подвела», а реально нечем обновляться) —
+    // для вызывающего это неотличимо от явного отказа: сессии, которую
+    // можно было бы спасти повтором, тут нет.
+    if (!before) return { kind: 'rejected' };
     try {
       const fresh = await authApi.refresh(before.refreshToken);
       const pair: TokenPair = { accessToken: fresh.accessToken, refreshToken: fresh.refreshToken };
       await setCached(pair);
-      return pair.accessToken;
+      return { kind: 'refreshed', accessToken: pair.accessToken };
     } catch (error) {
       const status = (error as { status?: number }).status;
       // Сервер явно ОТВЕРГ этот refresh-токен — только тогда он действительно
@@ -110,21 +117,23 @@ export function createTokenAuthority(deps: TokenAuthorityDeps = {}): TokenAuthor
       // временно лёг — 5xx, необычный ответ) не значит того же самого: стирать
       // токены здесь означало бы разлогинивать человека из-за недоступности
       // сервера или сна телефона, а не из-за реального конца сессии
-      // (`gan-harness/feedback/feedback-002.md`, важное п.2). Раньше стирался
-      // при любом отказе, кроме `status === 0` — 5xx (например, временная
-      // недоступность `/auth/app/refresh`) считался бы концом сессии, что и
-      // подозревается причиной VED-234 («приложение теряет вход после
-      // обновления/перерыва»).
-      if (status !== 401 && status !== 403) return before.accessToken;
+      // (`gan-harness/feedback/feedback-002.md`, важное п.2). Раньше в этом
+      // случае возвращался СТАРЫЙ access-токен как если бы обновление
+      // удалось — `client.ts` слепо повторял запрос тем же уже отвергнутым
+      // токеном, получал второй 401 и трактовал это как конец сессии, сводя
+      // защиту на нет (`feedback-003.md`, блокирующий п.1). Теперь исход
+      // различим по `kind`, и `client.ts` для `'unavailable'` вообще не
+      // повторяет запрос и не трогает сессию.
+      if (status !== 401 && status !== 403) return { kind: 'unavailable' };
       // Отказ мог относиться к уже устаревшей паре: если SecureStore за это
       // время обновился (кто-то другой успел раньше), это не смерть сессии.
       const latest = await readTokens();
       if (latest && latest.refreshToken !== before.refreshToken) {
         cached = latest;
-        return latest.accessToken;
+        return { kind: 'refreshed', accessToken: latest.accessToken };
       }
       await setCached(null);
-      return null;
+      return { kind: 'rejected' };
     }
   });
 

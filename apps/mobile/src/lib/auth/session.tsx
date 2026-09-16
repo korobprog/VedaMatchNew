@@ -10,12 +10,14 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { AppState } from 'react-native';
 import { appVariant } from '@/config/app-variant';
-import { createApiClient, type ApiClient } from '@/lib/api/client';
+import { createApiClient, type ApiClient, type SessionRefreshResult } from '@/lib/api/client';
 import { createAuthApi, type AppTokens } from './auth-api';
 import { msUntilRefresh } from './jwt-expiry';
 import { buildLoginUrl, parseAuthRedirect, APP_AUTH_REDIRECT, type LoginProvider } from './login-flow';
 import { createPkcePair } from './pkce';
+import { nextRefreshBackoffMs } from './refresh-backoff';
 import { reactToTokenChange } from './session-token-reaction';
 import { tokenAuthority } from './token-authority';
 import type { TokenPair } from './token-store';
@@ -46,8 +48,8 @@ export interface Session {
   apiOrigin: string;
   /** Текущий access-токен для запросов вне ApiClient (поток событий). */
   getAccessToken(): string | null;
-  /** Обновить access-токен; `null`, если сессия закончилась. */
-  refreshAccessToken(): Promise<string | null>;
+  /** Обновить access-токен — три различимых исхода, см. `SessionRefreshResult`. */
+  refreshAccessToken(): Promise<SessionRefreshResult>;
   signIn(provider: LoginProvider): Promise<void>;
   /**
    * Завершение входа по адресу возврата `vedamatch://auth?...`. Android
@@ -110,21 +112,71 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // (`gan-harness/feedback/feedback-001.md`, блокирующий п.1).
   const refresh = tokenAuthority.refresh;
 
+  // Сколько подряд проактивных refresh() отработали 'unavailable' (сеть/5xx,
+  // не явный отказ) — растущая пауза между повторами читает этот счётчик
+  // (`refresh-backoff.ts`). Без этого таймер был бы одноразовым: после
+  // первой неудачи проактивная сторона молчала бы до следующего явного
+  // триггера, которым на практике оказывался бы обычный запрос через
+  // `client.ts` — тот теперь и сам не трогает сессию на `'unavailable'`
+  // (`gan-harness/feedback/feedback-003.md`, блокирующий п.1-2), но без
+  // повторных попыток проактивная сторона так и не восстановилась бы сама.
+  const backoffAttempt = useRef(0);
+
   const dropSession = useCallback(async () => {
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    backoffAttempt.current = 0;
     await tokenAuthority.drop();
     setUser(null);
     setStatus('guest');
   }, []);
 
+  /** Тело и обычного проактивного обновления (по истечении access), и
+   *  повторной попытки после `'unavailable'` — один и тот же таймер
+   *  `refreshTimer`, одна и та же функция. `'refreshed'`/`'rejected'` уже
+   *  прошли через `setCached()` → `notify()` → подписку ниже, которая сама
+   *  перепланирует обычный таймер (`reschedule`/`mark-signed`) или
+   *  остановит всё (`mark-guest`) — здесь для них делать больше нечего. */
+  const runProactiveRefresh = useCallback(async () => {
+    const result = await tokenAuthority.refresh();
+    if (result.kind === 'unavailable') {
+      const delay = nextRefreshBackoffMs(backoffAttempt.current);
+      backoffAttempt.current += 1;
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+      refreshTimer.current = setTimeout(() => void runProactiveRefresh(), delay);
+    } else {
+      backoffAttempt.current = 0;
+    }
+  }, []);
+
   const scheduleRefresh = useCallback(
     (accessToken: string) => {
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
+      backoffAttempt.current = 0;
       const delay = msUntilRefresh(accessToken, Date.now());
-      refreshTimer.current = setTimeout(() => void refresh(), Math.max(delay, 5_000));
+      refreshTimer.current = setTimeout(() => void runProactiveRefresh(), Math.max(delay, 5_000));
     },
-    [refresh],
+    [runProactiveRefresh],
   );
+
+  // Пока в цикле бэкоффа (`'unavailable'` уже случался и ждём следующей
+  // попытки) — возврат в передний план не должен ждать оставшуюся паузу,
+  // сеть могла уже вернуться; уход в фон, наоборот, останавливает таймер —
+  // незачем жечь батарею повторами, которых никто не увидит, следующий
+  // возврат в foreground или явный запрос попробуют снова.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active') {
+        if (backoffAttempt.current > 0) {
+          if (refreshTimer.current) clearTimeout(refreshTimer.current);
+          void runProactiveRefresh();
+        }
+      } else if (next === 'background' && backoffAttempt.current > 0 && refreshTimer.current) {
+        clearTimeout(refreshTimer.current);
+        refreshTimer.current = null;
+      }
+    });
+    return () => subscription.remove();
+  }, [runProactiveRefresh]);
 
   const adopt = useCallback(async (tokens: TokenPair | AppTokens) => {
     const pair = { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
@@ -217,6 +269,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           return;
         case 'mark-guest':
           if (refreshTimer.current) clearTimeout(refreshTimer.current);
+          backoffAttempt.current = 0;
           setUser(null);
           setStatus('guest');
           return;
