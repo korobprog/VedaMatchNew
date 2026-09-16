@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { BackHandler, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import InCallManager from 'react-native-incall-manager';
 import { RTCView } from 'react-native-webrtc';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,6 +8,8 @@ import Svg, { Path } from 'react-native-svg';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
 import { companionOf, endedLabel, roleIn } from '@/lib/calls/call-machine';
 import { useChatCalls } from '@/lib/calls/call-provider';
+import { backMinimizesCall } from '@/lib/calls/call-screen-return';
+import { useElapsedLabel } from '@/lib/calls/use-elapsed-label';
 import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
@@ -19,6 +21,19 @@ import { fonts, hitTarget, radius } from '@/theme/tokens';
  * из `call-provider.tsx`, не своё: `id` в адресе только для того, чтобы
  * системная кнопка «назад»/жест не открывали чужой звонок случайно после
  * восстановления состояния приложения.
+ *
+ * Системное «назад» на Android сворачивает звонок, а не завершает его
+ * (`gan-harness/feedback/feedback-001.md`, блокирующий пункт 1):
+ * `gestureEnabled: false` в `_layout.tsx` — свойство только для iOS
+ * (`react-native-screens`), на Android хардварная «назад»/системный жест
+ * штатно снимает экран сама. `CallSession` при этом продолжает жить в
+ * `call-provider.tsx` — специально: разговор не обрывается, как у обычной
+ * звонилки при уходе на рабочий стол. Чтобы это не выглядело потерей
+ * звонка, экран (1) сам явно перехватывает «назад», пока звонок идёт
+ * (`backMinimizesCall`), и уходит тем же путём, что обычно, и (2) сообщает
+ * провайдеру о своей видимости (`reportCallScreenMounted`) — по ней
+ * `ReturnToCallBanner` показывает плашку «вернуться» везде в приложении,
+ * пока звонок жив, а этого экрана не видно.
  */
 export default function CallScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -38,6 +53,33 @@ export default function CallScreen() {
     if (router.canGoBack()) router.back();
     else router.replace('/');
   }, [calls, matches, state?.phase]);
+
+  // Экран виден — провайдер это знает и не показывает плашку «вернуться»
+  // (`ReturnToCallBanner`). Уход отсюда (в том числе через «назад» ниже)
+  // сбрасывает видимость и, если звонок ещё жив, метку последней навигации
+  // (`call-provider.tsx`, `reportCallScreenMounted`), чтобы было куда
+  // вернуться.
+  useEffect(() => {
+    calls?.reportCallScreenMounted(true);
+    return () => calls?.reportCallScreenMounted(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calls?.reportCallScreenMounted]);
+
+  // «Назад», пока идёт дозвон или разговор, не должно ни завершать звонок
+  // молча, ни просто теряться в поведении по умолчанию модального
+  // презентейшена react-native-screens на Android (там оно не всегда
+  // надёжно эквивалентно обычному pop) — экран берёт это на себя явно и
+  // уходит тем же путём, что и обычный pop; звонок продолжается, плашка
+  // выше даёт дорогу назад.
+  useEffect(() => {
+    if (!calls || !state || !backMinimizesCall(state.phase)) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (router.canGoBack()) router.back();
+      else router.replace('/');
+      return true;
+    });
+    return () => subscription.remove();
+  }, [calls, state?.phase]);
 
   const isVideo = call?.kind === 'video';
   const [speakerOn, setSpeakerOn] = useState(isVideo);
@@ -64,7 +106,7 @@ export default function CallScreen() {
     });
   };
 
-  const elapsed = useElapsed(state?.phase === 'active' ? state.connectedAt : null);
+  const elapsed = useElapsedLabel(state?.phase === 'active' ? state.connectedAt : null);
 
   if (!calls || !call || !matches) return null;
   const role = roleIn(state!, calls.selfId);
@@ -216,24 +258,6 @@ export default function CallScreen() {
       </View>
     </View>
   );
-}
-
-function useElapsed(since: number | null): string {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!since) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [since]);
-  return useMemo(() => {
-    if (!since) return '0:00';
-    const total = Math.max(0, Math.floor((now - since) / 1000));
-    const h = Math.floor(total / 3600);
-    const m = Math.floor((total % 3600) / 60);
-    const s = total % 60;
-    const mm = h > 0 ? String(m).padStart(2, '0') : String(m);
-    return `${h > 0 ? `${h}:` : ''}${mm}:${String(s).padStart(2, '0')}`;
-  }, [now, since]);
 }
 
 function ControlButton({

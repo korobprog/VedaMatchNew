@@ -25,6 +25,7 @@ import { useSession } from '@/lib/auth/session';
 import { useChatStream } from '@/lib/chat/chat-stream';
 import { CallErrorToast } from '@/components/calls/call-error-toast';
 import { IncomingCallBanner } from '@/components/calls/incoming-call-banner';
+import { ReturnToCallBanner } from '@/components/calls/return-to-call-banner';
 import { createChatCallsApi } from './chat-calls-client';
 import { IDLE_STATE, reduceCall, roleIn, type CallState } from './call-machine';
 import { startRingtone } from './ringtone';
@@ -50,6 +51,15 @@ export interface ChatCallsApi {
   remoteStream: MediaStream | null;
   /** Пошёл ли разговор через TURN — обновляется, пока `phase === 'active'`. */
   relayed: boolean | null;
+  /**
+   * Открыт ли сейчас полноэкранный `app/call/[id].tsx`. Системное «назад»
+   * снимает этот экран (feedback-001.md, блокирующий пункт 1), но не
+   * завершает звонок — `screenVisible` даёт `ReturnToCallBanner` понять,
+   * что показать плашку «вернуться» (`call-screen-return.ts`).
+   */
+  screenVisible: boolean;
+  /** Экран звонка вызывает при монтировании/размонтировании. */
+  reportCallScreenMounted: (visible: boolean) => void;
   start: (conversationId: string, kind: ChatCallKind) => Promise<void>;
   accept: () => Promise<void>;
   decline: () => Promise<void>;
@@ -83,6 +93,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [relayed, setRelayed] = useState<boolean | null>(null);
+  const [screenVisible, setScreenVisible] = useState(false);
 
   const stateRef = useRef(state);
   // Обработчики читают свежее состояние через ref: обновляем его после
@@ -95,6 +106,23 @@ export function CallProvider({ children }: { children: ReactNode }) {
   /** Сигналы, пришедшие раньше, чем поднялась сессия. */
   const queuedSignals = useRef<ChatCallSignal[]>([]);
   const stopRingtone = useRef<(() => void) | null>(null);
+  /**
+   * На какой звонок уже толкали `router.push` — эффект ниже толкает ровно
+   * один раз на смену звонка, а не при каждой отрисовке. Читается и в
+   * `reportCallScreenMounted`: когда экран уходит не из-за конца звонка
+   * (свернули «назад»), метка сбрасывается, чтобы новый виток мог
+   * подтолкнуть снова, если понадобится.
+   */
+  const navigatedCallId = useRef<string | null>(null);
+
+  const reportCallScreenMounted = useCallback((visible: boolean) => {
+    setScreenVisible(visible);
+    if (visible) return;
+    const current = stateRef.current;
+    if (current.call && current.phase !== 'idle' && current.phase !== 'ended') {
+      navigatedCallId.current = null;
+    }
+  }, []);
 
   const closeSession = useCallback(() => {
     sessionRef.current?.close();
@@ -409,6 +437,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
       localStream,
       remoteStream,
       relayed,
+      screenVisible,
+      reportCallScreenMounted,
       start,
       accept,
       decline,
@@ -424,6 +454,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
       localStream,
       remoteStream,
       relayed,
+      screenVisible,
+      reportCallScreenMounted,
       start,
       accept,
       decline,
@@ -440,8 +472,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
   // входящего (см. `IncomingCallBanner`) остаётся баннером: два жеста
   // «ответить/отклонить» не заслуживают целого экрана до того, как решение
   // принято. Экран сам уходит назад, когда провайдер сбрасывает фазу в idle
-  // (`app/call/[id].tsx`).
-  const navigatedCallId = useRef<string | null>(null);
+  // (`app/call/[id].tsx`). `navigatedCallId` объявлен выше, у остальных ref.
   useEffect(() => {
     const call = state.call;
     const showsScreen =
@@ -458,6 +489,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     <ChatCallsContext.Provider value={apiValue}>
       {children}
       <IncomingCallBanner />
+      <ReturnToCallBanner />
       <CallErrorToast />
     </ChatCallsContext.Provider>
   );
