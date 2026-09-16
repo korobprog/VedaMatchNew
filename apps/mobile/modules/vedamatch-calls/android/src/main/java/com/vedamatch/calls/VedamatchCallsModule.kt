@@ -74,26 +74,35 @@ class VedamatchCallsModule : Module() {
       val kind = options.kind
       val avatarUrl = options.avatarUrl
 
-      ensurePhoneAccount(context)
       val notificationId = CallNotifications.notificationIdFor(callId)
-      PendingCallStore.putInfo(
-        PendingCallStore.CallInfo(
-          callId = callId,
-          callerName = callerName,
-          kind = kind,
-          avatarUrl = avatarUrl,
-          notificationId = notificationId,
-        ),
+      val info = PendingCallStore.CallInfo(
+        callId = callId,
+        callerName = callerName,
+        kind = kind,
+        avatarUrl = avatarUrl,
+        notificationId = notificationId,
       )
+      PendingCallStore.putInfo(info)
 
-      val extras = android.os.Bundle().apply {
-        putString(PendingCallStore.EXTRA_CALL_ID, callId)
-        putString(PendingCallStore.EXTRA_CALLER_NAME, callerName)
-        putString(PendingCallStore.EXTRA_KIND, kind)
-        avatarUrl?.let { putString(PendingCallStore.EXTRA_AVATAR_URL, it) }
+      // Отказ Telecom (конфликт с другим self-managed приложением, запрет
+      // конкретного OEM, SecurityException при регистрации PhoneAccount)
+      // не должен топить звонок молча — деградация до того же уведомления,
+      // которое в штатном пути рисует `Connection.onShowIncomingCallUi()`
+      // (`CallNotifications`), просто без самого self-managed звонка и
+      // системной интеграции с ним (feedback-001.md, non-blocking п.1).
+      try {
+        ensurePhoneAccount(context)
+        val extras = android.os.Bundle().apply {
+          putString(PendingCallStore.EXTRA_CALL_ID, callId)
+          putString(PendingCallStore.EXTRA_CALLER_NAME, callerName)
+          putString(PendingCallStore.EXTRA_KIND, kind)
+          avatarUrl?.let { putString(PendingCallStore.EXTRA_AVATAR_URL, it) }
+        }
+        val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+        telecomManager.addNewIncomingCall(phoneAccountHandle(context), extras)
+      } catch (error: Exception) {
+        CallNotifications.show(context, info)
       }
-      val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
-      telecomManager.addNewIncomingCall(phoneAccountHandle(context), extras)
     }
 
     AsyncFunction("endCall") { callId: String, _: String ->

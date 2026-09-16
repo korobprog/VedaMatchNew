@@ -1,4 +1,4 @@
-import { pushTarget, pushUrlOf } from './push-url';
+import { pushTarget, pushUrlOf, rnfbMessageUrlOf } from './push-url';
 
 describe('pushTarget', () => {
   it('беседа и звонок ведут в беседу', () => {
@@ -30,5 +30,22 @@ describe('pushUrlOf', () => {
 
   it('без ссылки даёт null', () => {
     expect(pushUrlOf({ request: { content: {} } })).toBeNull();
+  });
+});
+
+describe('rnfbMessageUrlOf', () => {
+  it('берёт ссылку из data сырого FCM-сообщения', () => {
+    expect(rnfbMessageUrlOf({ data: { url: '/chat/c-1' } })).toBe('/chat/c-1');
+  });
+
+  it('без data, без url или без сообщения вовсе — null, не падает', () => {
+    expect(rnfbMessageUrlOf({ data: {} })).toBeNull();
+    expect(rnfbMessageUrlOf({})).toBeNull();
+    expect(rnfbMessageUrlOf(null)).toBeNull();
+    expect(rnfbMessageUrlOf(undefined)).toBeNull();
+  });
+
+  it('url не строка — null', () => {
+    expect(rnfbMessageUrlOf({ data: { url: { nested: true } } })).toBeNull();
   });
 });

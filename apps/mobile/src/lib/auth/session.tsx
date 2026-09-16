@@ -16,8 +16,8 @@ import { createAuthApi, type AppTokens } from './auth-api';
 import { msUntilRefresh } from './jwt-expiry';
 import { buildLoginUrl, parseAuthRedirect, APP_AUTH_REDIRECT, type LoginProvider } from './login-flow';
 import { createPkcePair } from './pkce';
-import { singleFlight } from './single-flight';
-import { clearTokens, readTokens, writeTokens, type TokenPair } from './token-store';
+import { tokenAuthority } from './token-authority';
+import type { TokenPair } from './token-store';
 import { unregisterDevice } from '@/lib/push/push-api';
 
 /**
@@ -79,48 +79,29 @@ interface ProfileResponse {
 export function SessionProvider({ children }: { children: ReactNode }) {
   const { apiOrigin } = appVariant();
   const authApi = useMemo(() => createAuthApi(apiOrigin), [apiOrigin]);
-  const tokensRef = useRef<TokenPair | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [user, setUser] = useState<SessionUser | null>(null);
   const pendingVerifier = useRef<string | null>(null);
 
+  // Токены и их обновление — не здесь: `tokenAuthority`
+  // (`token-authority.ts`) один на процесс, его же использует фоновое
+  // отклонение звонка (`background-decline.ts`). Раньше у `SessionProvider`
+  // была своя копия токенов и свой `singleFlight refresh`, независимый от
+  // headless-задачи — когда приложение было просто свёрнуто (не убито), обе
+  // ветки жили в одном JS-движке, но не знали друг о друге; ротация
+  // refresh-токена одной из них делала копию другой протухшей, и её
+  // следующее предъявление сервер (детектор повторного использования)
+  // читал как кражу и отзывал все сессии человека
+  // (`gan-harness/feedback/feedback-001.md`, блокирующий п.1).
+  const refresh = tokenAuthority.refresh;
+
   const dropSession = useCallback(async () => {
-    tokensRef.current = null;
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
-    await clearTokens();
+    await tokenAuthority.drop();
     setUser(null);
     setStatus('guest');
   }, []);
-
-  // Объявлено через ref, чтобы refresh и adopt могли ссылаться друг на друга
-  // без лишних зависимостей хуков.
-  const adoptRef = useRef<(tokens: TokenPair | AppTokens) => Promise<void>>(async () => undefined);
-
-  // Одно обновление на всё приложение: поток чата, запросы API и таймер
-  // приходят за токеном одновременно после сна телефона, а второй refresh с
-  // тем же одноразовым токеном сервер считает кражей и отзывает все сессии.
-  const refresh = useMemo(
-    () =>
-      singleFlight(async (): Promise<string | null> => {
-        const current = tokensRef.current;
-        if (!current) return null;
-        try {
-          const fresh = await authApi.refresh(current.refreshToken);
-          await adoptRef.current(fresh);
-          return fresh.accessToken;
-        } catch (error) {
-          // Сеть упала: токены ещё могут быть живы, сессию не трогаем.
-          if ((error as { status?: number }).status === 0) return current.accessToken;
-          // Пока ждали отказ, токены уже обновились: отказ относится к старой
-          // паре, а сессия жива.
-          if (tokensRef.current && tokensRef.current !== current) return tokensRef.current.accessToken;
-          await dropSession();
-          return null;
-        }
-      }),
-    [authApi, dropSession],
-  );
 
   const scheduleRefresh = useCallback(
     (accessToken: string) => {
@@ -131,19 +112,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
 
-  adoptRef.current = async (tokens) => {
-    const pair = { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
-    tokensRef.current = pair;
-    await writeTokens(pair);
-    scheduleRefresh(pair.accessToken);
-  };
+  const adopt = useCallback(
+    async (tokens: TokenPair | AppTokens) => {
+      const pair = { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
+      await tokenAuthority.adopt(pair);
+      scheduleRefresh(pair.accessToken);
+    },
+    [scheduleRefresh],
+  );
 
   const api = useMemo(
     () =>
       createApiClient({
         baseUrl: apiOrigin,
         session: {
-          getAccessToken: async () => tokensRef.current?.accessToken ?? null,
+          getAccessToken: async () => tokenAuthority.getAccessToken(),
           refresh,
         },
         onSessionExpired: () => void dropSession(),
@@ -162,24 +145,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setStatus('signed');
   }, [api]);
 
-  // Восстановление при запуске: токены из хранилища, профиль с сервера.
+  // Восстановление при запуске: токены из хранилища (через `tokenAuthority`
+  // — если фоновая задача уже что-то туда писала до первого рендера
+  // приложения, подхватится оно), профиль с сервера.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const stored = await readTokens();
+      const stored = await tokenAuthority.hydrate();
       if (cancelled) return;
       if (!stored) {
         setStatus('guest');
         return;
       }
-      tokensRef.current = stored;
       scheduleRefresh(stored.accessToken);
       try {
         await loadProfile();
       } catch {
         // Профиль не загрузился, а сессия не сброшена: сеть. Пускаем в
         // приложение с тем, что есть, профиль догрузится позже.
-        if (tokensRef.current) setStatus('signed');
+        if (tokenAuthority.peekAccessToken()) setStatus('signed');
       }
     })();
     return () => {
@@ -187,6 +171,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
     };
   }, [loadProfile, scheduleRefresh]);
+
+  // Токены могли обновиться не отсюда — фоновое отклонение звонка
+  // (тот же `tokenAuthority` в том же процессе). Держим таймер и, если
+  // сессию извне признали мёртвой (`drop()`), UI в согласии с этим —
+  // без этого слушателя `SessionProvider` узнал бы о разлогине только на
+  // следующем собственном запросе/таймере.
+  useEffect(() => {
+    return tokenAuthority.subscribe((tokens) => {
+      if (tokens) scheduleRefresh(tokens.accessToken);
+      else if (status !== 'loading') {
+        if (refreshTimer.current) clearTimeout(refreshTimer.current);
+        setUser(null);
+        setStatus('guest');
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduleRefresh]);
 
   const completeSignIn = useCallback(
     async (url: string) => {
@@ -196,10 +197,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (parsed.kind === 'invalid') return;
       pendingVerifier.current = null;
       if (parsed.kind === 'error') throw new Error(parsed.message);
-      await adoptRef.current(await authApi.exchangeCode(parsed.code, verifier));
+      await adopt(await authApi.exchangeCode(parsed.code, verifier));
       await loadProfile();
     },
-    [authApi, loadProfile],
+    [authApi, adopt, loadProfile],
   );
 
   const signIn = useCallback(
@@ -217,16 +218,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signInDev = useCallback(
     async (email: string, password: string) => {
-      await adoptRef.current(await authApi.devLogin(email, password));
+      await adopt(await authApi.devLogin(email, password));
       await loadProfile();
     },
-    [authApi, loadProfile],
+    [authApi, adopt, loadProfile],
   );
 
-  const getAccessToken = useCallback(() => tokensRef.current?.accessToken ?? null, []);
+  const getAccessToken = useCallback(() => tokenAuthority.peekAccessToken(), []);
 
   const signOut = useCallback(async () => {
-    const current = tokensRef.current;
+    const current = await tokenAuthority.hydrate();
     // Телефон снимаем до выхода: после него у запроса уже не будет токена.
     await unregisterDevice(api);
     if (current) authApi.logout(current.refreshToken).catch(() => undefined);

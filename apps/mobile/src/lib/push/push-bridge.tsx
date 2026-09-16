@@ -15,7 +15,7 @@ import { parseCallPush } from '@/lib/calls/incoming-call-push';
 import { useSession } from '@/lib/auth/session';
 import { isConversationOpen } from './active-chat';
 import { registerDevice } from './push-api';
-import { pushTarget, pushUrlOf } from './push-url';
+import { pushTarget, pushUrlOf, rnfbMessageUrlOf } from './push-url';
 
 /** Тот же идентификатор канала, что шлёт сервер в `android.notification.channel_id`. */
 const CHANNEL_ID = 'messages';
@@ -159,12 +159,10 @@ export function PushBridge() {
     if (Platform.OS === 'android') {
       void getInitialNotification(getMessaging()).then((message) => {
         if (cancelled || !message) return;
-        const url = message.data?.url;
-        openFromNotification(typeof url === 'string' ? url : null);
+        openFromNotification(rnfbMessageUrlOf(message));
       });
       unsubscribeOpenedApp = onNotificationOpenedApp(getMessaging(), (message) => {
-        const url = message.data?.url;
-        openFromNotification(typeof url === 'string' ? url : null);
+        openFromNotification(rnfbMessageUrlOf(message));
       });
     }
 

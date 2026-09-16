@@ -34,7 +34,7 @@ class VedamatchConnection(
 
   override fun onAnswer() {
     setActive()
-    CallNotifications.cancel(VedamatchCallsModule.applicationContextOrNull() ?: return, callId)
+    VedamatchCallsModule.applicationContextOrNull()?.let { CallNotifications.cancel(it, callId) }
     onAnswerCallback(callId)
   }
 
@@ -45,7 +45,12 @@ class VedamatchConnection(
   override fun onReject() {
     setDisconnected(DisconnectCause(DisconnectCause.REJECTED))
     destroy()
-    CallNotifications.cancel(VedamatchCallsModule.applicationContextOrNull() ?: return, callId)
+    // Симметрично `onDisconnect()`/`disconnectFromApp()` ниже: отклонение —
+    // тоже терминальное состояние, запись про это соединение больше не
+    // нужна (feedback-001.md, non-blocking п.2 — раньше не убиралась,
+    // жила в HashMap до случайной перезаписи тем же callId).
+    PendingCallStore.removeConnection(callId)
+    VedamatchCallsModule.applicationContextOrNull()?.let { CallNotifications.cancel(it, callId) }
     onRejectCallback(callId)
   }
 

@@ -30,6 +30,7 @@ import { createChatCallsApi } from './chat-calls-client';
 import { IDLE_STATE, reduceCall, roleIn, type CallState } from './call-machine';
 import { clearNativeCall, consumeLaunchCall, subscribeToNativeCallEvents } from './native-call-bridge';
 import { navigatedCallIdAfterPhase, nextNavigatedCallId, shouldAutoNavigateToCallScreen } from './call-screen-return';
+import { PendingCallAnswer } from './pending-call-answer';
 import { startRingtone } from './ringtone';
 import { CallSession } from './webrtc-session';
 
@@ -445,38 +446,58 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   // ---------- нативный модуль звонков (VED-221) ----------
 
-  /** Чем `Activity` была поднята на этот раз — читается один раз при
-   *  старте. «Ответить» с уведомления/блокировки уже перевело self-managed
-   *  `Connection` в активную (`CallActionReceiver.kt`) — здесь остаётся
-   *  принять звонок тем же путём, что и обычное нажатие на баннер, когда
-   *  `reconcile()` (эффект выше) подтянет этот звонок из
-   *  `/chat/calls/active` и переведёт фазу в `incoming`. */
-  const pendingNativeAnswer = useRef<string | null>(null);
+  /**
+   * Отложенный ответ (`feedback-001.md`, блокирующий п.2): нажатие
+   * «Ответить» на уведомлении/блокировке при свёрнутом, но НЕ убитом,
+   * приложении шлёт JS-событие `answer` синхронно — раньше, чем поток
+   * событий переоткроется (`chat-stream.tsx`) и `reconcile()` (эффект
+   * выше) успеет узнать звонок через `/chat/calls/active`. Раньше здесь
+   * стоял точный guard `phase === 'incoming'` в момент события — тот
+   * промахивался почти всегда, событие терялось безвозвратно, и человеку
+   * приходилось нажимать «Ответить» второй раз уже внутри приложения.
+   * `PendingCallAnswer` (`pending-call-answer.ts`) запоминает `callId` до
+   * тех пор, пока звонок не появится в состоянии — из холодного старта
+   * (`getLaunchCall()`) и из события `answer`, пока JS уже жив, — единая
+   * очередь на оба пути, поэтому одновременное срабатывание обоих не даёт
+   * двойной `accept()` (см. spec `pending-call-answer.spec.ts`).
+   */
+  const pendingAnswer = useRef(new PendingCallAnswer()).current;
   useEffect(() => {
     const launch = consumeLaunchCall();
-    if (launch?.action === 'answer') pendingNativeAnswer.current = launch.callId;
-  }, []);
+    if (launch?.action === 'answer') pendingAnswer.request(launch.callId);
+  }, [pendingAnswer]);
+  // Звонок появился в состоянии (реконсайл или call.ringing из потока) —
+  // если на него есть отложенный ответ, принять его самим, без второго
+  // нажатия человеком.
   useEffect(() => {
     if (state.phase !== 'incoming' || !state.call) return;
-    if (pendingNativeAnswer.current !== state.call.id) return;
-    pendingNativeAnswer.current = null;
+    if (!pendingAnswer.consume(state.call.id)) return;
     void accept();
-  }, [state.phase, state.call, accept]);
+  }, [state.phase, state.call, accept, pendingAnswer]);
 
-  // Ответ/отклонение системным путём (гарнитура, Bluetooth, Android Auto),
-  // пока JS жив — путь через нашу кнопку в уведомлении их не поднимает
-  // (отвечает/отклоняет напрямую в `CallActionReceiver.kt`, минуя JS для
-  // убитого приложения).
+  // Ответ/отклонение системным путём (гарнитура, Bluetooth, Android Auto,
+  // а для убитого приложения — сюда же приходит и наша кнопка в
+  // уведомлении, `CallActionReceiver.kt` шлёт `answer` синхронно с
+  // запуском Activity), пока JS жив.
   useEffect(() => {
     return subscribeToNativeCallEvents({
       onAnswer: (callId) => {
-        if (stateRef.current.call?.id === callId && stateRef.current.phase === 'incoming') void accept();
+        const current = stateRef.current;
+        if (current.call?.id === callId && current.phase === 'incoming') {
+          void accept();
+          return;
+        }
+        // Стрима с этим звонком ещё нет (типичный случай «свёрнуто, не
+        // убито» — поток закрылся в фоне) — запомнить и сразу спросить
+        // сервер, не дожидаясь обычного ресинка по AppState.
+        pendingAnswer.request(callId);
+        void reconcile();
       },
       onDecline: (callId) => {
         if (stateRef.current.call?.id === callId) void decline();
       },
     });
-  }, [accept, decline]);
+  }, [accept, decline, pendingAnswer, reconcile]);
 
   // Гасит уведомление/self-managed Connection, как только у звонка внутри
   // приложения появилось «настоящее» состояние (разговор пошёл) или он

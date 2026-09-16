@@ -20,8 +20,15 @@ export function pushTarget(url: unknown): PushTarget {
 }
 
 /**
- * Ссылка из уведомления. Когда приложение закрыто, Android показывает пуш
- * сам, и данные FCM лежат не в `content.data`, а в `trigger.remoteMessage`.
+ * Ссылка из уведомления, презентованного самим приложением
+ * (`Notifications.scheduleNotificationAsync`, `push-bridge.tsx`) —
+ * `content.data` содержит то, что мы сами туда положили. `trigger.remoteMessage`
+ * — путь expo-notifications для пушей, принятых её собственным
+ * `FirebaseMessagingService`; с VED-221 этот сервис вырезан из манифеста
+ * (`plugins/with-native-calls.js`, `docs/mobile-calls-native.md` §4/§11),
+ * приём FCM целиком у RNFB — ветка оставлена как безопасный второй путь на
+ * случай будущих локальных уведомлений с этой формой `trigger`, но в
+ * проде сейчас не срабатывает.
  */
 export function pushUrlOf(notification: {
   request: { content: { data?: unknown }; trigger?: unknown };
@@ -34,4 +41,18 @@ export function pushUrlOf(notification: {
     | undefined;
   const remote = trigger?.remoteMessage?.data?.url;
   return typeof remote === 'string' ? remote : null;
+}
+
+/**
+ * Та же ссылка, но из «сырого» FCM-сообщения RNFB (`RemoteMessage.data`) —
+ * источник для пушей, которые показала сама система (приложение свёрнуто
+ * или убито), а не мы через `expo-notifications`: `getInitialNotification`/
+ * `onNotificationOpenedApp` (`@react-native-firebase/messaging`,
+ * `push-bridge.tsx`). Отдельная функция, а не веточка внутри `pushUrlOf`:
+ * форма данных другая (`RemoteMessage`, не `Notifications.Notification`),
+ * общий у них только `pushTarget()` на результате.
+ */
+export function rnfbMessageUrlOf(message: { data?: Record<string, unknown> } | null | undefined): string | null {
+  const url = message?.data?.url;
+  return typeof url === 'string' ? url : null;
 }

@@ -1,73 +1,58 @@
 import { appVariant } from '@/config/app-variant';
-import { createApiClient } from '@/lib/api/client';
-import { createAuthApi } from '@/lib/auth/auth-api';
-import { singleFlight } from '@/lib/auth/single-flight';
-import { clearTokens, readTokens, writeTokens, type TokenPair } from '@/lib/auth/token-store';
+import { tokenAuthority, type TokenAuthority } from '@/lib/auth/token-authority';
 
 /**
  * «Отклонить» с экрана блокировки/из шторки без открытия приложения
  * (VED-221, п.4). Срабатывает из headless JS задачи
  * (`decline-call-headless-task.ts`), которую нативный модуль
  * (`modules/vedamatch-calls`) поднимает по нажатию на действие
- * уведомления — там нет ни `SessionProvider`, ни другого React-дерева,
- * поэтому токены и обновление читаются напрямую здесь, тем же
- * хранилищем (`token-store.ts`, Android Keystore через `expo-secure-store`)
- * и тем же протоколом, что и обычная сессия (`lib/auth/session.tsx`):
- * access в `Authorization: Bearer`, при 401 — один обмен по
- * `POST /auth/app/refresh` на все параллельные вызовы (`singleFlight`,
- * как в `api/client.ts`).
+ * уведомления — там нет готового React-дерева, но токены читаются и
+ * обновляются через тот же `tokenAuthority` (`lib/auth/token-authority.ts`),
+ * которым пользуется и `session.tsx`: если приложение просто свёрнуто (не
+ * убито), headless-задача выполняется в том же JS-процессе, и это буквально
+ * один и тот же `singleFlight`, а не два независимых обновления одного
+ * refresh-токена (`feedback-001.md`, блокирующий п.1 — второе обновление
+ * тем же токеном сервер читает как кражу и отзывает все сессии).
  *
- * Отдельный, а не переиспользованный инстанс `SessionProvider`: у headless
- * задачи может не быть готового к этому моменту дерева React вовсе — свой,
- * независимый набор токенов и refresh делает функцию самодостаточной.
+ * Порядок при 401 — сначала дёшево, потом по сети: сперва просто перечитать
+ * `SecureStore` (`rereadAccessToken`, без похода в сеть) — кто-то другой в
+ * этом же процессе мог уже обновиться; сетевой `refresh()` только если
+ * перечитанный токен тот же, что уже не сработал.
  */
 
 export interface BackgroundDeclineDeps {
   fetchImpl?: typeof fetch;
+  tokenAuthority?: TokenAuthority;
 }
 
 export function createBackgroundDecline(deps: BackgroundDeclineDeps = {}) {
   const fetchImpl = deps.fetchImpl ?? fetch;
+  const authority = deps.tokenAuthority ?? tokenAuthority;
 
   return async function declineCallInBackground(callId: string): Promise<boolean> {
-    const stored = await readTokens();
-    if (!stored) return false;
-
     const { apiOrigin } = appVariant();
-    const authApi = createAuthApi(apiOrigin, fetchImpl);
-    let current: TokenPair = stored;
+    const url = `${apiOrigin.replace(/\/+$/, '')}/chat/calls/${callId}/decline`;
 
-    const refresh = singleFlight(async (): Promise<string | null> => {
-      try {
-        const fresh = await authApi.refresh(current.refreshToken);
-        current = { accessToken: fresh.accessToken, refreshToken: fresh.refreshToken };
-        await writeTokens(current);
-        return current.accessToken;
-      } catch (error) {
-        // Сеть недоступна — токены ещё могут быть живы, пробуем со старым access.
-        if ((error as { status?: number }).status === 0) return current.accessToken;
-        await clearTokens();
-        return null;
-      }
-    });
+    const post = (token: string) =>
+      fetchImpl(url, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
 
-    const api = createApiClient({
-      baseUrl: apiOrigin,
-      fetchImpl,
-      session: {
-        getAccessToken: async () => current.accessToken,
-        refresh,
-      },
-    });
+    let token = await authority.getAccessToken();
+    if (!token) return false;
 
     try {
-      await api.request<void>(`/chat/calls/${callId}/decline`, { method: 'POST' });
-      return true;
+      let response = await post(token);
+      if (response.status === 401) {
+        const reread = await authority.rereadAccessToken();
+        token = reread && reread !== token ? reread : await authority.refresh();
+        if (!token) return false;
+        response = await post(token);
+      }
+      return response.ok;
     } catch {
-      // Звонок мог уже кончиться сам (пропуск по таймауту, ответ с другого
-      // устройства) — POST на уже закрытый звонок сервер отклонит, это не
-      // повод считать headless-задачу упавшей: рингтон там гасит отдельный
-      // `call.ended`-пуш, а не ответ этого запроса.
+      // Сеть/звонок мог уже кончиться сам (пропуск по таймауту, ответ с
+      // другого устройства) — POST на уже закрытый звонок сервер отклонит,
+      // это не повод считать headless-задачу упавшей: рингтон там гасит
+      // отдельный `call.ended`-пуш, а не ответ этого запроса.
       return false;
     }
   };
