@@ -21,11 +21,14 @@ export function isDeletionScheduled(
   return status.pendingDeletionAt != null;
 }
 
-/** Дата удаления по-русски для карточки «Аккаунт будет удалён …». */
+/**
+ * Дата удаления по-русски для карточки «Аккаунт будет удалён …».
+ *
+ * Без завершающей точки: русский формат сам кончается на «г.», и фраза
+ * получалась с двумя точками подряд — «2 октября 2026 г..».
+ */
 export function formatDeletionDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  return new Date(iso)
+    .toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+    .replace(/\.$/, '');
 }
