@@ -158,6 +158,11 @@
   данные живого портала ради косметики — сделано осознанно, и новые модели
   раздела именуются уже с префиксом сервиса-владельца.
 - `union-chat.service.ts` и его инъекция `UsersService` — см. оговорку выше.
+- Сводка админки (`apps/api/src/modules/stats/admin-stats.service.ts`)
+  читает чужие таблицы напрямую: `UserReport`, `SupportTicket`,
+  `MentorVerificationRequest`, а с вехи 7 iPhone-PRD ещё и `LoginAudit`
+  (входы по источникам). Это только чтение агрегатов для админа; вынос в
+  события или отчётные сервисы владельцев отложен.
 - Сервис «Здоровье» во всех слоях зовётся `wellness`, а не `health`: слаг
   `health` занят техническим liveness-эндпоинтом для Docker HEALTHCHECK
   (`apps/api/src/modules/health/`). Название для людей задаётся записью

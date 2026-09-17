@@ -3,6 +3,7 @@ import type { AdminPortalStats, AdminQueueCounter } from "@vedamatch/shared";
 import { getAdminPortalStats } from "@/lib/api";
 import { visibleAdminNav } from "@/lib/admin-nav";
 import { requireUser } from "@/lib/require-user";
+import { buildLoginFunnelTable, formatReturnRate } from "@/lib/admin-login-funnel-view";
 
 export const metadata = {
   title: "Админка",
@@ -79,6 +80,21 @@ export default async function AdminHomePage() {
             </h2>
             <QueueList queues={stats.queues} />
           </section>
+
+          <section className="mt-8" aria-labelledby="admin-logins">
+            <h2
+              id="admin-logins"
+              className="mb-3 font-display text-lg font-semibold text-text-0"
+            >
+              Входы по источникам
+            </h2>
+            <LoginFunnelTable logins={stats.logins} />
+            <p className="mt-2 text-xs text-text-2">
+              «Возврат 7 дн» — доля людей, впервые вошедших через источник за 30
+              дней не позже недели назад и вошедших снова через неделю и позже —
+              любым способом.
+            </p>
+          </section>
         </>
       )}
 
@@ -137,6 +153,41 @@ function QueueList({ queues }: { queues: AdminPortalStats["queues"] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function LoginFunnelTable({ logins }: { logins: AdminPortalStats["logins"] }) {
+  const rows = buildLoginFunnelTable(logins);
+
+  return (
+    <div className="glass overflow-x-auto rounded-2xl border border-glass-brd">
+      <table className="w-full min-w-[36rem] text-sm">
+        <thead>
+          <tr className="border-b border-glass-brd text-left text-text-2">
+            <th className="px-4 py-3 font-medium">Источник</th>
+            <th className="px-4 py-3 font-medium">Входы, 7 дн</th>
+            <th className="px-4 py-3 font-medium">Люди, 7 дн</th>
+            <th className="px-4 py-3 font-medium">Входы, 30 дн</th>
+            <th className="px-4 py-3 font-medium">Люди, 30 дн</th>
+            <th className="px-4 py-3 font-medium">Возврат, 7 дн</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.client} className="border-b border-glass-brd last:border-0">
+              <td className="px-4 py-3 text-text-0">{row.label}</td>
+              <td className="px-4 py-3 font-mono text-text-1">{row.logins7}</td>
+              <td className="px-4 py-3 font-mono text-text-1">{row.users7}</td>
+              <td className="px-4 py-3 font-mono text-text-1">{row.logins30}</td>
+              <td className="px-4 py-3 font-mono text-text-1">{row.users30}</td>
+              <td className="px-4 py-3 font-mono text-text-1">
+                {formatReturnRate(row.returnRatePercent)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

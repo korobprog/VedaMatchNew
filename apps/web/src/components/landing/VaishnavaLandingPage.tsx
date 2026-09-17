@@ -175,6 +175,7 @@ export function VaishnavaLandingPage({
   totalCommunities,
   communities = [],
   appManifest,
+  showTelegram = false,
 }: {
   plan?: PricingPlan;
   totalMembers?: number;
@@ -183,6 +184,8 @@ export function VaishnavaLandingPage({
   /** Общины для карты; пусто — секции карты не будет. */
   communities?: ChatMapCommunity[];
   appManifest?: AppManifest | null;
+  /** Хост запроса — контур `vedamatch.com` (см. `app-download-contour.ts`). */
+  showTelegram?: boolean;
 }) {
   const t = useTranslations("Vaishnava");
   const tNav = useTranslations("Landing.nav");
@@ -721,7 +724,7 @@ export function VaishnavaLandingPage({
         </div>
       </section>
 
-      <AppDownloadSection manifest={appManifest ?? null} />
+      <AppDownloadSection manifest={appManifest ?? null} showTelegram={showTelegram} />
 
       <Footer />
       <InstallBanner />

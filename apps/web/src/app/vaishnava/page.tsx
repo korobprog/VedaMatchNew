@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { VaishnavaLandingPage } from "@/components/landing/VaishnavaLandingPage";
 import { getBillingPlan, getCommunityStats } from "@/lib/api";
 import { getAppManifest } from "@/lib/app-download-api";
+import { isComContourHost } from "@/lib/app-download-contour";
 import { getChatPublicMap } from "@/lib/chat-api";
 
 /**
@@ -39,11 +40,12 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function VaishnavaPage() {
   // Каждый источник в своём catch: упавшая статистика убирает счётчики,
   // молчащая карта — секцию карты, но не лендинг целиком.
-  const [plan, communityStats, publicMap, appManifest] = await Promise.all([
+  const [plan, communityStats, publicMap, appManifest, host] = await Promise.all([
     getBillingPlan().catch(() => null),
     getCommunityStats().catch(() => null),
     getChatPublicMap().catch(() => null),
     getAppManifest().catch(() => null),
+    headers().then((h) => h.get("host")),
   ]);
 
   return (
@@ -54,6 +56,7 @@ export default async function VaishnavaPage() {
       totalCommunities={communityStats?.totalCommunities}
       communities={publicMap?.communities ?? []}
       appManifest={appManifest}
+      showTelegram={isComContourHost(host)}
     />
   );
 }

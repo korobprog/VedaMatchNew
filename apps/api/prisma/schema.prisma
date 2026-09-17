@@ -1167,11 +1167,16 @@ model LoginAudit {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider  String
+  /// Источник входа для воронки метрик (веха 7 «Запуск»): 'site' | 'web-app'
+  /// | 'telegram' | 'android'. `null` — записи до этой миграции и dev-вход
+  /// по паролю (см. `login-client.ts`, `AuthService.completeLogin`).
+  client    String?
   ip        String?
   userAgent String?
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 model SelfIdentificationResponse {

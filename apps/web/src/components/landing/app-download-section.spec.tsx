@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppManifest } from "@/lib/app-download";
 import { AppDownloadSection } from "./AppDownloadSection";
 
@@ -10,6 +10,21 @@ import { AppDownloadSection } from "./AppDownloadSection";
 vi.mock("@/components/pwa/install-button", () => ({
   InstallButton: () => null,
 }));
+
+const DEFAULT_UA = window.navigator.userAgent;
+const IOS_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+
+function setUserAgent(value: string) {
+  Object.defineProperty(window.navigator, "userAgent", {
+    configurable: true,
+    value,
+  });
+}
+
+afterEach(() => {
+  setUserAgent(DEFAULT_UA);
+});
 
 const MANIFEST: AppManifest = {
   versionName: "0.2.0+abc1234",
@@ -72,5 +87,44 @@ describe("AppDownloadSection", () => {
 
     render(<AppDownloadSection manifest={null} variant="full" />);
     expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
+  });
+
+  it("shows the iPhone web-app block to iPhone guests even in the embed variant", () => {
+    setUserAgent(IOS_UA);
+    render(<AppDownloadSection manifest={null} variant="embed" />);
+
+    const link = screen.getByRole("link", { name: /Открыть веб-версию/ });
+    expect(link).toHaveAttribute("href", "https://ios.vedamatch.com");
+  });
+
+  it("hides the iPhone web-app block from non-iPhone guests in the embed variant", () => {
+    render(<AppDownloadSection manifest={null} variant="embed" />);
+
+    expect(
+      screen.queryByRole("link", { name: /Открыть веб-версию/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("always shows the iPhone web-app block on the full page, regardless of device", () => {
+    render(<AppDownloadSection manifest={null} variant="full" />);
+
+    expect(
+      screen.getByRole("link", { name: /Открыть веб-версию/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the Telegram button unless the .com contour asked for it", () => {
+    render(<AppDownloadSection manifest={null} variant="full" />);
+
+    expect(
+      screen.queryByRole("link", { name: /Открыть в Telegram/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the Telegram button on the .com contour", () => {
+    render(<AppDownloadSection manifest={null} variant="full" showTelegram />);
+
+    const link = screen.getByRole("link", { name: /Открыть в Telegram/ });
+    expect(link).toHaveAttribute("href", "https://t.me/vedamatch_bot");
   });
 });
