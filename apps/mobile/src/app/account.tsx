@@ -1,6 +1,15 @@
 import { Stack } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { InlineError } from '@/components/inline-error';
 import { RetryButton } from '@/components/retry-button';
@@ -18,10 +27,13 @@ import type { IdentitiesResponse } from '@/lib/auth/identities-api';
 import { createIdentitiesApi } from '@/lib/auth/identities-api';
 import { describeIdentitiesError } from '@/lib/auth/identities-error';
 import { useSession } from '@/lib/auth/session';
-import { telegramLaunch } from '@/lib/telegram/web-app';
+import { createTelegramNotificationsApi } from '@/lib/notifications/telegram-notifications-api';
+import { describeTelegramNotificationsSection } from '@/lib/notifications/telegram-notifications-state';
+import { loadTelegramWebApp, telegramLaunch } from '@/lib/telegram/web-app';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import type { TelegramNotificationStatusResponse } from '@vedamatch/shared';
 
 const IS_WEB = Platform.OS === 'web';
 
@@ -38,6 +50,7 @@ export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const { user, api, apiOrigin, signOut } = useSession();
   const identitiesApi = useMemo(() => createIdentitiesApi(api), [api]);
+  const telegramNotificationsApi = useMemo(() => createTelegramNotificationsApi(api), [api]);
 
   const [data, setData] = useState<IdentitiesResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -46,6 +59,13 @@ export default function AccountScreen() {
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const [busyProvider, setBusyProvider] = useState<AccountProvider | null>(null);
   const request = useRef(0);
+
+  // Секция «Уведомления в Telegram» (веха 4): загружается независимо от
+  // способов входа — `null` отличает «ещё не знаем» от «бот не подключён».
+  const [telegramStatus, setTelegramStatus] = useState<TelegramNotificationStatusResponse | null>(null);
+  const [telegramError, setTelegramError] = useState<string | null>(null);
+  const [telegramBusy, setTelegramBusy] = useState(false);
+  const telegramRequest = useRef(0);
 
   const load = useCallback(async () => {
     const id = (request.current += 1);
@@ -65,6 +85,22 @@ export default function AccountScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadTelegramStatus = useCallback(async () => {
+    const id = (telegramRequest.current += 1);
+    try {
+      const response = await telegramNotificationsApi.status();
+      if (telegramRequest.current === id) setTelegramStatus(response);
+    } catch {
+      // Молчаливый отказ: секция ниже способов входа необязательна для
+      // страницы целиком, а неудачную загрузку статуса покажет попытка
+      // тумблера или кнопки, если человек до них дойдёт.
+    }
+  }, [telegramNotificationsApi]);
+
+  useEffect(() => {
+    void loadTelegramStatus();
+  }, [loadTelegramStatus]);
 
   // Возврат с колбэка привязки (`?linked=google` / `?linkError=conflict`):
   // только веб, только один раз — адрес чистится сразу, иначе обновление
@@ -140,6 +176,50 @@ export default function AccountScreen() {
     },
     [identitiesApi, load],
   );
+
+  const toggleTelegramNotifications = useCallback(
+    async (enabled: boolean) => {
+      setTelegramBusy(true);
+      setTelegramError(null);
+      try {
+        setTelegramStatus(await telegramNotificationsApi.setEnabled(enabled));
+      } catch (e) {
+        setTelegramError(describeIdentitiesError(e));
+      } finally {
+        setTelegramBusy(false);
+      }
+    },
+    [telegramNotificationsApi],
+  );
+
+  /**
+   * «Разрешить боту писать мне»: только внутри мини-приложения. Telegram
+   * отдаёт согласие колбэком, а не промисом (`WebApp.requestWriteAccess`,
+   * Bot API 6.9+) — на клиентах старее метода нет вовсе, отсюда проверка
+   * перед вызовом, а не просто «ничего не произойдёт».
+   */
+  const enableTelegramNotifications = useCallback(async () => {
+    if (!telegramLaunch) return;
+    setTelegramBusy(true);
+    setTelegramError(null);
+    try {
+      const app = await loadTelegramWebApp();
+      if (!app?.requestWriteAccess) {
+        setTelegramError('Обновите Telegram до последней версии и попробуйте снова.');
+        return;
+      }
+      const granted = await new Promise<boolean>((resolve) => app.requestWriteAccess!(resolve));
+      if (!granted) {
+        setTelegramError('Доступ не выдан — боту нечем будет написать.');
+        return;
+      }
+      setTelegramStatus(await telegramNotificationsApi.enable(telegramLaunch.initData));
+    } catch (e) {
+      setTelegramError(describeIdentitiesError(e));
+    } finally {
+      setTelegramBusy(false);
+    }
+  }, [telegramNotificationsApi]);
 
   const header = (
     <Stack.Screen
@@ -245,6 +325,15 @@ export default function AccountScreen() {
           ))}
         </View>
 
+        <TelegramNotificationsSection
+          connected={telegramStatus?.connected ?? false}
+          enabled={telegramStatus?.enabled ?? true}
+          busy={telegramBusy}
+          error={telegramError}
+          onToggle={(next) => void toggleTelegramNotifications(next)}
+          onEnable={() => void enableTelegramNotifications()}
+        />
+
         <Pressable
           accessibilityRole="button"
           onPress={() => void signOut()}
@@ -344,6 +433,88 @@ function ProviderRowView({ row, busy, onLink, onUnlink }: ProviderRowProps) {
   );
 }
 
+interface TelegramNotificationsSectionProps {
+  connected: boolean;
+  enabled: boolean;
+  busy: boolean;
+  error: string | null;
+  onToggle(next: boolean): void;
+  onEnable(): void;
+}
+
+/**
+ * «Уведомления в Telegram» (веха 4): тумблер, если бот уже может писать
+ * (`connected`); внутри мини-приложения без разрешения — кнопка запроса
+ * доступа; вне Telegram без разрешения — подсказка открыть бота.
+ * `describeTelegramNotificationsSection` — чистое правило, своя `*.spec.ts`.
+ */
+function TelegramNotificationsSection({
+  connected,
+  enabled,
+  busy,
+  error,
+  onToggle,
+  onEnable,
+}: TelegramNotificationsSectionProps) {
+  const { colors } = useTheme();
+  const section = describeTelegramNotificationsSection({
+    inTelegram: Boolean(telegramLaunch),
+    connected,
+  });
+
+  return (
+    <View style={styles.telegramSection}>
+      <Text style={[styles.sectionTitle, { color: colors.text1 }]}>Уведомления в Telegram</Text>
+      {/* Кнопка с длинной подписью рядом с текстом сжимала его в узкую колонку
+          с переносами посреди слов — тогда карточка раскладывается в столбец. */}
+      <View
+        style={[
+          styles.row,
+          section.showEnableButton && !section.showToggle ? styles.rowStacked : null,
+          { borderColor: colors.glassBorder, backgroundColor: colors.glass },
+        ]}
+      >
+        <View style={styles.rowText}>
+          <Text style={[styles.rowLabel, { color: colors.text0 }]}>Сообщения от @vedamatch_bot</Text>
+          <Text style={[styles.rowNote, { color: colors.text2 }]}>
+            {section.showToggle
+              ? 'Личные сообщения и звонки со ссылкой в переписку.'
+              : (section.hint ?? 'Разрешите боту писать вам, чтобы получать уведомления здесь.')}
+          </Text>
+        </View>
+        {section.showToggle ? (
+          <Switch
+            accessibilityRole="switch"
+            accessibilityLabel="Получать уведомления от бота VedaMatch в Telegram"
+            accessibilityState={{ disabled: busy, checked: enabled }}
+            disabled={busy}
+            value={enabled}
+            onValueChange={onToggle}
+            trackColor={{ false: colors.glassBorder, true: colors.cyan }}
+            thumbColor={colors.onAccent}
+          />
+        ) : section.showEnableButton ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ busy, disabled: busy }}
+            disabled={busy}
+            onPress={onEnable}
+            android_ripple={ripple(colors.glassBorder)}
+            style={({ pressed }) => [styles.rowButton, { borderColor: colors.glassBorder }, pressedStyle(pressed)]}
+          >
+            {busy ? (
+              <ActivityIndicator color={colors.text0} />
+            ) : (
+              <Text style={[styles.rowButtonText, { color: colors.text0 }]}>Разрешить боту писать мне</Text>
+            )}
+          </Pressable>
+        ) : null}
+      </View>
+      {error ? <InlineError message={error} /> : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
   body: { paddingHorizontal: 20, paddingTop: 16, gap: 12 },
@@ -361,6 +532,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   list: { gap: 10 },
+  telegramSection: { gap: 8, marginTop: 4 },
+  sectionTitle: { fontFamily: fonts.bodySemiBold, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.4 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -370,6 +543,7 @@ const styles = StyleSheet.create({
     padding: 14,
     minHeight: hitTarget,
   },
+  rowStacked: { flexDirection: 'column', alignItems: 'stretch' },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
   rowLabel: { fontFamily: fonts.bodySemiBold, fontSize: 16 },
   rowState: { fontFamily: fonts.body, fontSize: 13 },

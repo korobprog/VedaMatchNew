@@ -223,3 +223,40 @@ export interface UserRegisteredEvent {
   deviceId: string | null;
   occurredAt: string;
 }
+
+/**
+ * Имя события «способ входа Telegram появился». Издатель — `auth`: при
+ * входе через мини-приложение (`loginWithTelegramWebApp`) и при привязке
+ * живой сессией (`linkTelegram`). Слушатель — `notifications`: заводит или
+ * обновляет устройство доставки `provider: 'telegram'`, не читая при этом
+ * `UserIdentity` — событие самодостаточно.
+ */
+export const AUTH_TELEGRAM_CONNECTED_EVENT = 'auth.telegram.connected';
+
+/**
+ * `canWrite` — может ли бот `@vedamatch_bot` написать человеку в личку:
+ * `true`, когда Telegram прислал `allows_write_to_pm: true` в данных запуска
+ * мини-приложения (человек уже открывал бота), либо когда доступ получен
+ * явно через `WebApp.requestWriteAccess()` (см. `POST
+ * /notifications/telegram/enable`). `false` не значит «отписался» — это
+ * может быть первый вход без выданного разрешения; устройство в этом случае
+ * не заводится, и вернуть его может либо новый вход с `allows_write_to_pm`,
+ * либо кнопка «Разрешить боту писать мне».
+ */
+export interface AuthTelegramConnectedEvent {
+  name: typeof AUTH_TELEGRAM_CONNECTED_EVENT;
+  userId: string;
+  /** `Telegram.WebApp.initDataUnsafe.user.id`, строкой — id личного чата с ботом. */
+  telegramUserId: string;
+  canWrite: boolean;
+}
+
+/** Имя события «способ входа Telegram отвязан». Издатель — `auth`
+ *  (`DELETE /auth/identities/telegram`). Гасит устройство `provider:
+ *  'telegram'`, если оно было. */
+export const AUTH_TELEGRAM_DISCONNECTED_EVENT = 'auth.telegram.disconnected';
+
+export interface AuthTelegramDisconnectedEvent {
+  name: typeof AUTH_TELEGRAM_DISCONNECTED_EVENT;
+  userId: string;
+}

@@ -9,6 +9,7 @@ import { AuthGuard, OptionalAuthGuard } from './auth.guard';
 import { IdentityService } from './identity.service';
 import { JwtSignService } from './jwt.service';
 import { RefreshTokenCleanupService } from './refresh-token-cleanup.service';
+import { TelegramInitDataVerifierService } from './telegram-init-data-verifier.service';
 
 @Module({
   controllers: [
@@ -26,6 +27,7 @@ import { RefreshTokenCleanupService } from './refresh-token-cleanup.service';
     AuthGuard,
     OptionalAuthGuard,
     RefreshTokenCleanupService,
+    TelegramInitDataVerifierService,
   ],
   exports: [
     JwtSignService,
@@ -34,6 +36,9 @@ import { RefreshTokenCleanupService } from './refresh-token-cleanup.service';
     OptionalAuthGuard,
     IdentityService,
     AuthProvidersService,
+    // Инфраструктура для «Уведомлений»: проверка подписи мини-приложения без
+    // доступа к `UserIdentity` — см. комментарий в самом сервисе.
+    TelegramInitDataVerifierService,
   ],
 })
 export class AuthModule {}

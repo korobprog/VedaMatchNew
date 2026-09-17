@@ -10,6 +10,9 @@ import { NotificationsController } from './notifications.controller';
 import { NotificationsListener } from './notifications.listener';
 import { NotificationsService } from './notifications.service';
 import { PushSenderService } from './push-sender.service';
+import { TelegramNotificationsController } from './telegram-notifications.controller';
+import { TelegramNotificationsService } from './telegram-notifications.service';
+import { TelegramSenderService } from './telegram-sender.service';
 
 @Module({
   imports: [AuthModule],
@@ -17,6 +20,7 @@ import { PushSenderService } from './push-sender.service';
     NotificationsController,
     NotificationBroadcastController,
     NotificationDevicesAdminController,
+    TelegramNotificationsController,
   ],
   providers: [
     NotificationsService,
@@ -26,6 +30,8 @@ import { PushSenderService } from './push-sender.service';
     NotificationsListener,
     NotificationBroadcastService,
     NotificationBroadcastWorkerService,
+    TelegramNotificationsService,
+    TelegramSenderService,
   ],
 })
 export class NotificationsModule {}

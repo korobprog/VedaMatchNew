@@ -17,6 +17,14 @@ export type TelegramUser = {
   username?: string;
   languageCode?: string;
   photoUrl?: string;
+  /**
+   * Разрешил ли человек боту писать ему в личку. Telegram присылает поле,
+   * только когда мини-приложение открыто через прямую ссылку или кнопку
+   * меню бота — при запуске другим путём его нет, и тогда `undefined`
+   * (не «отказал», а «неизвестно»). См. `AuthTelegramConnectedEvent.canWrite`
+   * в `@vedamatch/shared`.
+   */
+  allowsWriteToPm?: boolean;
 };
 
 export type TelegramInitDataResult =
@@ -74,6 +82,10 @@ function parseUser(json: string | undefined): TelegramUser | null {
     username: optionalString(u.username, 64),
     languageCode: optionalString(u.language_code, 16),
     photoUrl: photoUrl?.startsWith('https://') ? photoUrl : undefined,
+    allowsWriteToPm:
+      typeof u.allows_write_to_pm === 'boolean'
+        ? u.allows_write_to_pm
+        : undefined,
   };
 }
 

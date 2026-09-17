@@ -31,6 +31,7 @@ const всеВключены = {
   work: true,
   travel: true,
   announcements: true,
+  telegram: true,
 };
 
 vi.mock("@/lib/notifications-api", () => ({

@@ -2154,6 +2154,10 @@ model NotificationPreference {
   /// по своей заявке у гостя. Своя колонка, а не `market`: человек, который
   /// выключил торговлю, ночлег на пути терять не должен.
   travel        Boolean  @default(true)
+  /// Сообщения от @vedamatch_bot (веха 4). Общий выключатель поверх
+  /// категорий выше: `chat` включён, а `telegram` выключен — пуш в браузер
+  /// и колокольчик идут как обычно, бот молчит.
+  telegram      Boolean  @default(true)
   updatedAt     DateTime @updatedAt
 }
 

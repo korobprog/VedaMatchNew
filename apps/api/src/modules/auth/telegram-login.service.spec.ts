@@ -59,11 +59,12 @@ function setup(options: { token?: string; enabled?: boolean } = {}) {
         : Promise.resolve(),
     ),
   };
+  const events = { emit: jest.fn() };
   const service = new AuthService(
     config as never,
     prisma as never,
     jwt as never,
-    { emit: jest.fn() } as never,
+    events as never,
     identities as never,
     providers as never,
   );
@@ -73,12 +74,12 @@ function setup(options: { token?: string; enabled?: boolean } = {}) {
     ip: '10.0.0.1',
   };
   const res = { cookie: jest.fn() };
-  return { service, identities, providers, req, res };
+  return { service, identities, providers, events, req, res };
 }
 
 describe('AuthService.loginWithTelegramWebApp', () => {
   it('подлинные данные — аккаунт telegram и cookie сессии на домене контура', async () => {
-    const { service, identities, providers, req, res } = setup();
+    const { service, identities, providers, events, req, res } = setup();
 
     await expect(
       service.loginWithTelegramWebApp(
@@ -110,6 +111,31 @@ describe('AuthService.loginWithTelegramWebApp', () => {
         ['access_token', '.vedamatch.com'],
         ['refresh_token', '.vedamatch.com'],
       ]),
+    );
+    // Без allows_write_to_pm в initData — «Уведомления» узнают о связке, но
+    // устройство не заведут: canWrite решает именно это поле.
+    expect(events.emit).toHaveBeenCalledWith(
+      'auth.telegram.connected',
+      expect.objectContaining({
+        userId: 'u42',
+        telegramUserId: '42',
+        canWrite: false,
+      }),
+    );
+  });
+
+  it('allows_write_to_pm в данных запуска — canWrite уходит true', async () => {
+    const { service, events, req, res } = setup();
+
+    await service.loginWithTelegramWebApp(
+      { initData: initData(TOKEN, { ...TG_USER, allows_write_to_pm: true }) },
+      req as never,
+      res as never,
+    );
+
+    expect(events.emit).toHaveBeenCalledWith(
+      'auth.telegram.connected',
+      expect.objectContaining({ canWrite: true }),
     );
   });
 
