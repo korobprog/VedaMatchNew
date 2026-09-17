@@ -53,3 +53,4 @@ google-services.json
 
 # Веб-сборка ios.vedamatch.com (pnpm export:web)
 dist-web/
+dist-web-b/

@@ -14,7 +14,71 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <!-- Сброс стилей, который рекомендует react-native-web:
+
+    <!-- Веха 6 («Скорость», gan-harness/spec.md): шрифты не должны блокировать
+         первый кадр. Самохостящиеся woff2-подмножества (кириллица+латиница)
+         под теми же именами семейств, что в src/theme/tokens.ts (`fonts.*`) —
+         стилям в компонентах правка не нужна: `font-family: Unbounded_700Bold`
+         находит это правило напрямую. `font-display: swap` — до загрузки
+         текст рисуется системным шрифтом (`useFonts` на вебе не запускается
+         вовсе, см. src/app/_layout.web.tsx), после загрузки браузер сам
+         подменяет начертание. -->
+    <style id="expo-fonts">
+      @font-face {
+        font-family: 'Manrope_400Regular';
+        src: url('/fonts/Manrope_400Regular.woff2') format('woff2');
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Manrope_500Medium';
+        src: url('/fonts/Manrope_500Medium.woff2') format('woff2');
+        font-weight: 500;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Manrope_600SemiBold';
+        src: url('/fonts/Manrope_600SemiBold.woff2') format('woff2');
+        font-weight: 600;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Manrope_700Bold';
+        src: url('/fonts/Manrope_700Bold.woff2') format('woff2');
+        font-weight: 700;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Unbounded_500Medium';
+        src: url('/fonts/Unbounded_500Medium.woff2') format('woff2');
+        font-weight: 500;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Unbounded_700Bold';
+        src: url('/fonts/Unbounded_700Bold.woff2') format('woff2');
+        font-weight: 700;
+        font-style: normal;
+        font-display: swap;
+      }
+    </style>
+    <!-- Шрифты сознательно НЕ в `<link rel="preload">`: сеть на первой загрузке
+         УЖЕ узкое место (замер на 1,6 Мбит, gan-harness/perf-baseline.md), а
+         `Network.emulateNetworkConditions`/реальный throttling делит одну и
+         ту же полосу между всеми одновременными закачками — предзагрузка
+         шрифтов (даже лёгких woff2-подмножеств) отбирает полосу у главного
+         бандла и на медленной сети ЗАМЕДЛЯЕТ появление первого экрана
+         сильнее, чем экономит на смене шрифта потом (проверено: с
+         предзагрузкой первый экран был на ~0,3–0,7 с медленнее). `swap`
+         догрузит их сам, как только браузеру понадобится нарисовать текст
+         этим начертанием — без резервирования полосы заранее.
+
+         Сброс стилей, который рекомендует react-native-web:
          https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
       html,
@@ -37,12 +101,85 @@
         height: 100%;
         flex: 1;
       }
+
+      /* Оболочка до подключения React (веха 6): фирменный знак и индикатор,
+         занимающие место #root, чтобы первая отрисовка не была пустым
+         экраном. React полностью заменяет содержимое #root при рендере —
+         эти узлы разметки временные и исчезают сами. */
+      #app-shell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        width: 100%;
+      }
+      #app-shell .shell-mark {
+        width: 56px;
+        height: 56px;
+        color: #d71a80;
+      }
+      @media (prefers-color-scheme: dark) {
+        #app-shell .shell-mark {
+          color: #ff3e9e;
+        }
+      }
+      #app-shell .shell-brand {
+        font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+        font-weight: 700;
+        font-size: 13px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: #d71a80;
+      }
+      @media (prefers-color-scheme: dark) {
+        #app-shell .shell-brand {
+          color: #ff3e9e;
+        }
+      }
+      #app-shell .shell-spinner {
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        border: 2.5px solid rgba(74, 44, 122, 0.16);
+        border-top-color: #d71a80;
+        animation: shell-spin 0.8s linear infinite;
+      }
+      @media (prefers-color-scheme: dark) {
+        #app-shell .shell-spinner {
+          border-color: rgba(255, 255, 255, 0.14);
+          border-top-color: #ff3e9e;
+        }
+      }
+      @keyframes shell-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #app-shell .shell-spinner {
+          animation: none;
+        }
+      }
     </style>
   </head>
 
   <body>
     <noscript>Для работы VedaMatch включите JavaScript.</noscript>
-    <div id="root"></div>
+    <div id="root">
+      <div id="app-shell" role="presentation" aria-hidden="true">
+        <!-- Инлайн-SVG, а не /icons/icon-192.png: на первой загрузке сеть уже
+             узкое место, лишний файл в критическом пути отбирает полосу у
+             главного бандла (та же причина, что у отказа от предзагрузки
+             шрифтов выше). -->
+        <svg class="shell-mark" viewBox="0 0 56 56" width="56" height="56">
+          <rect width="56" height="56" rx="16" fill="currentColor" opacity="0.14" />
+          <text x="28" y="36" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="21" fill="currentColor">VM</text>
+        </svg>
+        <span class="shell-brand">VedaMatch</span>
+        <span class="shell-spinner"></span>
+      </div>
+    </div>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function () {

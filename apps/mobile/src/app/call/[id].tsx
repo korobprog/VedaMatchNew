@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
-import { BackHandler, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import InCallManager from 'react-native-incall-manager';
 import { RTCView } from 'react-native-webrtc';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,17 +16,21 @@ import {
   type CallAudioRoute,
 } from '@/lib/calls/audio-route';
 import { shouldEnableProximity } from '@/lib/calls/audio-session-policy';
+import { isPermissionDeniedMessage } from '@/lib/calls/call-media-error';
 import { companionOf, endedLabel, roleIn } from '@/lib/calls/call-machine';
 import { useChatCalls } from '@/lib/calls/call-provider';
 import { backMinimizesCall } from '@/lib/calls/call-screen-return';
 import { shouldKeepScreenAwake } from '@/lib/calls/keep-awake';
 import { setCallScreenActive, setPipEligible, subscribeToPipModeChanges } from '@/lib/calls/native-call-bridge';
 import { isPipEligible } from '@/lib/calls/pip-eligibility';
+import { needsSeparateRemoteAudioElement } from '@/lib/calls/remote-audio-playback';
 import { useElapsedLabel } from '@/lib/calls/use-elapsed-label';
 import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+
+const IS_WEB = Platform.OS === 'web';
 
 /**
  * Экран звонка — перенос `apps/web/src/components/chat/calls/call-overlay.tsx`
@@ -197,7 +201,14 @@ export default function CallScreen() {
 
   const showsRemoteVideo = isVideo && calls.remoteStream && state!.phase === 'active';
   const showsLocalPreview = isVideo && calls.localStream && state!.phase !== 'ended';
-  const permissionDenied = state!.phase === 'ended' && Boolean(state!.error?.includes('настройках'));
+  const permissionDenied = state!.phase === 'ended' && isPermissionDeniedMessage(state!.error);
+  // Веб: без картинки (аудиозвонок) звук собеседника всё равно должен
+  // звучать — `RTCView` тут не рендерится вовсе, значит нужен отдельный
+  // скрытый плеер (`needsSeparateRemoteAudioElement`). На Android/iOS-нативе
+  // звук идёт через аудиосессию телефона независимо от экрана, лишний
+  // элемент не нужен и не добавляется.
+  const needsWebRemoteAudio =
+    IS_WEB && call && needsSeparateRemoteAudioElement(call.kind, state!.phase, Boolean(calls.remoteStream));
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
@@ -236,6 +247,10 @@ export default function CallScreen() {
             <Text style={[styles.relayText, { color: colors.text1 }]}>Через ретранслятор</Text>
           </View>
         ) : null}
+
+        {needsWebRemoteAudio ? (
+          <RTCView streamURL={calls.remoteStream!.toURL()} style={styles.hiddenRemoteAudio} objectFit="cover" />
+        ) : null}
       </View>
 
       {/* VED-222, п.5: в картинке-в-картинке — только видео собеседника, без
@@ -249,14 +264,21 @@ export default function CallScreen() {
         </Text>
 
         {permissionDenied ? (
+          // `Linking.openSettings()` открывает системные настройки приложения
+          // — на вебе такого экрана нет (`react-native-web` не реализует этот
+          // метод вовсе, вызов бросил бы `TypeError`), там разрешение живёт в
+          // настройках сайта в самом браузере, и после того, как человек его
+          // выдал, страницу достаточно перезагрузить.
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Открыть настройки приложения"
-            onPress={() => void Linking.openSettings()}
+            accessibilityLabel={IS_WEB ? 'Обновить страницу' : 'Открыть настройки приложения'}
+            onPress={() => (IS_WEB ? window.location.reload() : void Linking.openSettings())}
             android_ripple={ripple(colors.glassBorder)}
             style={({ pressed }) => [styles.settingsButton, { borderColor: colors.glassBorder }, pressedStyle(pressed)]}
           >
-            <Text style={[styles.settingsText, { color: colors.text0 }]}>Открыть настройки</Text>
+            <Text style={[styles.settingsText, { color: colors.text0 }]}>
+              {IS_WEB ? 'Обновить страницу' : 'Открыть настройки'}
+            </Text>
           </Pressable>
         ) : null}
 
@@ -276,7 +298,7 @@ export default function CallScreen() {
           </Pressable>
         ) : (
           <>
-            {showsRoutePicker && routeMenuOpen ? (
+            {!IS_WEB && showsRoutePicker && routeMenuOpen ? (
               <View
                 accessibilityRole="menu"
                 style={[styles.routeMenu, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}
@@ -316,7 +338,14 @@ export default function CallScreen() {
                 <MicIcon off={state!.muted} color={colors.text0} />
               </ControlButton>
 
-              {showsRoutePicker ? (
+              {/* Выбор аудиомаршрута (наушники/Bluetooth/громкая связь) — весь
+                  этот блок работает через `InCallManager`
+                  (`audio-route-bridge.ts`), которого на вебе нет вовсе
+                  (`SUPPORTED = Platform.OS === 'android'`): кнопка ничего бы
+                  не переключала, только обманывала нажатием без результата.
+                  Браузер сам решает звуковой маршрут (динамики/наушники по
+                  системному выбору ОС), отдельного управления оттуда нет. */}
+              {IS_WEB ? null : showsRoutePicker ? (
                 <ControlButton
                   label={`Звук: ${routeLabel} — выбрать устройство`}
                   active={routeMenuOpen}
@@ -481,6 +510,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   localPreviewHidden: { opacity: 0 },
+  // Только веб (`needsWebRemoteAudio`): звук собеседника на аудиозвонке без
+  // видимого видео — картинка не нужна, 1×1 и вне потока разметки, лишь бы
+  // элемент был смонтирован и играл.
+  hiddenRemoteAudio: { position: 'absolute', width: 1, height: 1, opacity: 0 },
   relayBadge: { position: 'absolute', left: 12, borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   relayText: { fontFamily: fonts.bodySemiBold, fontSize: 12 },
   footer: { alignItems: 'center', gap: 18, paddingHorizontal: 24, paddingTop: 12 },

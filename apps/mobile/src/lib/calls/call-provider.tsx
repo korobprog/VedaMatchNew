@@ -30,7 +30,9 @@ import { IncomingCallBanner } from '@/components/calls/incoming-call-banner';
 import { ReturnToCallBanner } from '@/components/calls/return-to-call-banner';
 import { createChatCallsApi } from './chat-calls-client';
 import { isAudioSessionLive } from './audio-session-policy';
+import { decideBackgroundIncomingAction } from './call-app-background-policy';
 import { shouldDeclineAsBusy } from './call-busy-decision';
+import { describeMediaError } from './call-media-error';
 import { buildLaunchPreviewCall } from './call-launch-preview';
 import { CONNECTING_TIMEOUT_MS, decideConnectingTimeout } from './call-connect-timeout';
 import { IDLE_STATE, companionOf, reduceCall, roleIn, type CallState } from './call-machine';
@@ -457,7 +459,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         if (cancelled) return;
         closeSession();
-        dispatch({ type: 'failed', error: describeMediaError(error) });
+        dispatch({ type: 'failed', error: describeMediaError(error, Platform.OS) });
       }
     })();
     return () => {
@@ -481,7 +483,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         if (cancelled) return;
         closeSession();
-        dispatch({ type: 'failed', error: describeMediaError(error) });
+        dispatch({ type: 'failed', error: describeMediaError(error, Platform.OS) });
       }
     })();
     return () => {
@@ -587,14 +589,26 @@ export function CallProvider({ children }: { children: ReactNode }) {
   // показать входящий поверх блокировки (VED-222, живая проверка BUG D) —
   // поднимаем его тем же `showIncomingCallFromStream`, что и обнаружение по
   // SSE в фоне выше (дедуп по `callId` не даст поднять второй раз, если
-  // нативный уже как-то шёл). На iOS альтернативы нет — decline как раньше.
+  // нативный уже как-то шёл).
+  //
+  // Веб (веха 5) — НЕ decline: `AppState` на вебе отражает
+  // `document.visibilitychange` (`react-native-web`), а не «телефон
+  // заблокирован» — переключение вкладки браузера, обычное и частое
+  // действие, не должно сбрасывать ещё не отвеченный звонок под
+  // собеседником. Решение вынесено в `decideBackgroundIncomingAction`
+  // (`call-app-background-policy.ts`, +spec) — раньше здесь была ветка «не
+  // Android — значит iOS, значит decline», которая на практике (в этом
+  // продукте нет нативной iOS-сборки, только веб, см. `PLAN.md`) всегда
+  // означала именно веб.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       if (next !== 'background') return;
       const current = stateRef.current;
       if (!current.call || current.phase === 'idle' || current.phase === 'ended') return;
       if (current.phase !== 'incoming') return;
-      if (Platform.OS === 'android') {
+      const action = decideBackgroundIncomingAction(Platform.OS);
+      if (action === 'ignore') return;
+      if (action === 'native') {
         const from = companionOf(current.call, userId);
         void showIncomingCallFromStream({
           callId: current.call.id,
@@ -640,7 +654,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
         closeSession();
         dispatch({
           type: 'failed',
-          error: error instanceof ApiError ? error.message : describeMediaError(error),
+          error: error instanceof ApiError ? error.message : describeMediaError(error, Platform.OS),
         });
       }
     },
@@ -691,7 +705,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       await drainQueuedSignals();
     } catch (error) {
       closeSession();
-      const message = error instanceof ApiError ? error.message : describeMediaError(error);
+      const message = error instanceof ApiError ? error.message : describeMediaError(error, Platform.OS);
       // eslint-disable-next-line no-console
       console.warn('[calls] accept: отказ, отправляю decline', { callId: call.id, reason: message });
       // Микрофон/камеру не дали — звонок для нас кончился, а собеседнику скажем.
@@ -1090,15 +1104,4 @@ function nativeEndReason(phase: CallState['phase'], status: CallState['endedStat
     default:
       return 'ended';
   }
-}
-
-/** Отказ в доступе к микрофону/камере и прочие ошибки медиа — словами. */
-function describeMediaError(error: unknown): string {
-  const name = (error as { name?: string })?.name;
-  if (name === 'NotAllowedError' || name === 'SecurityError')
-    return 'Нет доступа к микрофону или камере — разрешите его в настройках телефона';
-  if (name === 'NotFoundError') return 'Микрофон или камера не найдены';
-  if (name === 'NotReadableError') return 'Микрофон или камера заняты другим приложением';
-  if (error instanceof Error && error.message) return error.message;
-  return 'Не удалось начать звонок';
 }
