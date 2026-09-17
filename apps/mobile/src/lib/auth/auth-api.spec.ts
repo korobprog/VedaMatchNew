@@ -35,6 +35,15 @@ describe('createAuthApi', () => {
     const api = createAuthApi('https://api', reply(200, { ok: true }));
     await expect(api.refresh('r')).rejects.toMatchObject({ status: 502 });
   });
+
+  it('вход мини-приложения Telegram запрашивает режим токенов', async () => {
+    const fetchImpl = reply(200, TOKENS);
+    const api = createAuthApi('https://api', fetchImpl);
+    await expect(api.loginWithTelegram('init-data')).resolves.toEqual(TOKENS);
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api/auth/telegram/webapp');
+    expect(JSON.parse(init.body as string)).toEqual({ initData: 'init-data', mode: 'token' });
+  });
 });
 
 describe('isAppTokens', () => {

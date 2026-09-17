@@ -48,7 +48,10 @@ function setup(options: { token?: string; enabled?: boolean } = {}) {
   const config = {
     get: jest.fn((key: string, fallback?: string) => values[key] ?? fallback),
   };
-  const jwt = { signAccessToken: jest.fn().mockResolvedValue('access-jwt') };
+  const jwt = {
+    signAccessToken: jest.fn().mockResolvedValue('access-jwt'),
+    verifyAccessToken: jest.fn(),
+  };
   const identities = {
     resolve: jest.fn().mockResolvedValue({ user: account, created: false }),
   };
@@ -190,5 +193,68 @@ describe('AuthService.loginWithTelegramWebApp', () => {
     await expect(
       service.loginWithTelegramWebApp({}, req as never, res as never),
     ).rejects.toMatchObject({ status: 401 });
+  });
+
+  it('неизвестный mode — 400 до проверки подписи', async () => {
+    const { service, identities, req, res } = setup();
+    await expect(
+      service.loginWithTelegramWebApp(
+        { initData: initData(), mode: 'cookies' },
+        req as never,
+        res as never,
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(identities.resolve).not.toHaveBeenCalled();
+  });
+});
+
+describe("AuthService.loginWithTelegramWebApp — mode: 'token'", () => {
+  it('подлинные данные — пара токенов в ответе, без единой cookie', async () => {
+    const { service, prisma, req, res } = setup();
+
+    const result = await service.loginWithTelegramWebApp(
+      { initData: initData(), mode: 'token' },
+      req as never,
+      res as never,
+    );
+
+    expect(result).toEqual({
+      accessToken: 'access-jwt',
+      refreshToken: expect.any(String),
+      expiresIn: expect.any(Number),
+      refreshExpiresIn: expect.any(Number),
+    });
+    expect(res.cookie).not.toHaveBeenCalled();
+    // Refresh-токен всё равно заводится в базе — им пользуется /auth/app/refresh.
+    expect(prisma.refreshToken.create).toHaveBeenCalled();
+  });
+
+  it('дефолтный режим (без mode) — по-прежнему cookie, ни одного токена в теле', async () => {
+    const { service, req, res } = setup();
+
+    const result = await service.loginWithTelegramWebApp(
+      { initData: initData() },
+      req as never,
+      res as never,
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(res.cookie).toHaveBeenCalled();
+  });
+
+  it('чужая подпись — 401 и в режиме токенов, cookie не выставляются', async () => {
+    const { service, identities, res, req } = setup();
+    await expect(
+      service.loginWithTelegramWebApp(
+        {
+          initData: initData('999:other-token-0000000000000000000'),
+          mode: 'token',
+        },
+        req as never,
+        res as never,
+      ),
+    ).rejects.toMatchObject({ status: 401 });
+    expect(identities.resolve).not.toHaveBeenCalled();
+    expect(res.cookie).not.toHaveBeenCalled();
   });
 });
