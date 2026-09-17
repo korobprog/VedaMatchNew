@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  MESSENGERS,
+  MESSENGER_LABELS,
   isOwnFile,
   messengerAppLink,
   messengerLink,
@@ -23,6 +25,23 @@ describe("messengerLink", () => {
     expect(link).toBe(
       `https://wa.me/?text=${encodeURIComponent("Цитата https://vm.ru/m/a")}`,
     );
+  });
+
+  it("Max получает одну строку через официальный диплинк :share", () => {
+    const link = messengerLink("max", "https://vm.ru/m/a", "Цитата & мысль");
+
+    expect(link).toBe(
+      `https://max.ru/:share?text=${encodeURIComponent("Цитата & мысль https://vm.ru/m/a")}`,
+    );
+    // Амперсанд из цитаты не должен рвать параметр.
+    expect(new URL(link).searchParams.get("text")).toBe(
+      "Цитата & мысль https://vm.ru/m/a",
+    );
+  });
+
+  it("Max есть среди кнопок переписки, с подписью", () => {
+    expect(MESSENGERS).toContain("max");
+    expect(MESSENGER_LABELS.max).toBe("Max");
   });
 
   it("ВКонтакте получает ссылку и заголовок", () => {
@@ -73,6 +92,10 @@ describe("messengerAppLink", () => {
     expect(link).toContain(
       encodeURIComponent("Цитата https://vm.ru/m/a"),
     );
+  });
+
+  it("у Max публичной схемы нет — открываем max.ru", () => {
+    expect(messengerAppLink("max", "https://vm.ru/m/a", "Цитата")).toBeNull();
   });
 
   it("у ВКонтакте схемы нет — остаётся сайт", () => {

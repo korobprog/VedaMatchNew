@@ -17,12 +17,14 @@ function makeService(
   stored: Record<string, unknown> | null,
   rotatedCount = 1,
   env: Record<string, string> = {},
+  aliveInFamily = 1,
 ) {
   const prisma = {
     refreshToken: {
       findUnique: jest.fn().mockResolvedValue(stored),
       updateMany: jest.fn().mockResolvedValue({ count: rotatedCount }),
       create: jest.fn().mockResolvedValue({}),
+      count: jest.fn().mockResolvedValue(aliveInFamily),
     },
     user: { update: jest.fn() },
   };
@@ -35,7 +37,10 @@ function makeService(
     prisma as never,
     jwt as never,
     { emit: jest.fn() } as never,
-    new IdentityService(prisma as never, new PersonalDataService(prisma as never, { isEnabled: false } as never)),
+    new IdentityService(
+      prisma as never,
+      new PersonalDataService(prisma as never, { isEnabled: false } as never),
+    ),
     new AuthProvidersService(prisma as never),
   );
   const res = { cookie: jest.fn(), clearCookie: jest.fn() };
@@ -71,9 +76,13 @@ describe('AuthService.refresh', () => {
     });
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
       where: { id: 'rt1', revoked: false },
-      data: { revoked: true },
+      // Токен из времён до семейств открывает семейство своим id.
+      data: { revoked: true, revokedAt: expect.any(Date), familyId: 'rt1' },
     });
     expect(prisma.refreshToken.create).toHaveBeenCalledTimes(1);
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ familyId: 'rt1' }),
+    });
     // access + refresh + маркер vm_session
     expect(res.cookie).toHaveBeenCalledTimes(3);
     const marker = res.cookie.mock.calls.find(
@@ -84,24 +93,31 @@ describe('AuthService.refresh', () => {
     expect(marker[2].path).toBe('/');
   });
 
-  it('проигравший гонку параллельный refresh получает 401 без новой пары', async () => {
+  it('проигравший гонку параллельный refresh получает свою пару того же семейства', async () => {
     const { service, prisma, req, res } = makeService(
       {
         id: 'rt1',
         userId: 'u1',
         revoked: false,
+        familyId: 'f1',
+        revokedAt: null,
         expiresAt: new Date(Date.now() + 60_000),
         user: activeUser,
       },
       0,
     );
-    await expect(
-      service.refresh(req as never, res as never),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
-    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    // Вторая вкладка не должна уходить на лендинг из-за того, что первая
+    // обновилась на миллисекунду раньше.
+    await expect(service.refresh(req as never, res as never)).resolves.toEqual({
+      ok: true,
+    });
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ familyId: 'f1' }),
+    });
+    expect(res.clearCookie).not.toHaveBeenCalled();
   });
 
-  it('при мёртвом refresh снимает маркер vm_session', async () => {
+  it('при мёртвом refresh снимает все cookie сессии, а не только маркер', async () => {
     const { service, req, res } = makeService(null);
     await expect(
       service.refresh(req as never, res as never),
@@ -110,13 +126,49 @@ describe('AuthService.refresh', () => {
       'vm_session',
       expect.objectContaining({ path: '/' }),
     );
+    // Без этого вкладка сайта предъявляла отозванный токен снова и снова.
+    expect(res.clearCookie).toHaveBeenCalledWith(
+      'refresh_token',
+      expect.objectContaining({ path: '/auth' }),
+    );
+    expect(res.clearCookie).toHaveBeenCalledWith(
+      'access_token',
+      expect.objectContaining({ path: '/' }),
+    );
   });
 
-  it('повторное предъявление отозванного токена отзывает все токены пользователя', async () => {
+  it('давний повтор отозванного токена отзывает его семейство, а не все сессии пользователя', async () => {
     const { service, prisma, req, res } = makeService({
       id: 'rt1',
       userId: 'u1',
       revoked: true,
+      familyId: 'web-family',
+      revokedAt: new Date(Date.now() - 10 * 60_000),
+      expiresAt: new Date(Date.now() + 60_000),
+      user: activeUser,
+    });
+    await expect(
+      service.refresh(req as never, res as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'u1', familyId: 'web-family', revoked: false },
+      data: { revoked: true, revokedAt: expect.any(Date) },
+    });
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    expect(res.clearCookie).toHaveBeenCalledWith(
+      'refresh_token',
+      expect.objectContaining({ path: '/auth' }),
+    );
+  });
+
+  it('отозванный до семейств токен отзывает только безсемейные токены', async () => {
+    const { service, prisma, req, res } = makeService({
+      id: 'rt1',
+      userId: 'u1',
+      revoked: true,
+      familyId: null,
+      revokedAt: null,
       expiresAt: new Date(Date.now() + 60_000),
       user: activeUser,
     });
@@ -124,10 +176,124 @@ describe('AuthService.refresh', () => {
       service.refresh(req as never, res as never),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
-      where: { userId: 'u1', revoked: false },
-      data: { revoked: true },
+      where: { userId: 'u1', familyId: null, revoked: false },
+      data: { revoked: true, revokedAt: expect.any(Date) },
     });
+  });
+
+  it('повтор только что ротированного токена — тот же клиент: новая пара, ничего не отзывается', async () => {
+    const { service, prisma, req, res } = makeService({
+      id: 'rt1',
+      userId: 'u1',
+      revoked: true,
+      familyId: 'f1',
+      revokedAt: new Date(Date.now() - 2_000),
+      expiresAt: new Date(Date.now() + 60_000),
+      user: activeUser,
+    });
+    // Ответ с новой парой потерялся в мобильной сети — клиент пришёл со
+    // старой cookie. Раньше это 401, а через минуту — отзыв входа.
+    await expect(service.refresh(req as never, res as never)).resolves.toEqual({
+      ok: true,
+    });
+    expect(prisma.refreshToken.count).toHaveBeenCalledWith({
+      where: { familyId: 'f1', revoked: false },
+    });
+    expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ familyId: 'f1', userId: 'u1' }),
+    });
+    expect(res.cookie).toHaveBeenCalledTimes(3);
+    expect(res.clearCookie).not.toHaveBeenCalled();
+  });
+
+  it('свежий повтор после выхода пары не получает: живых токенов в семействе нет', async () => {
+    const { service, prisma, req, res } = makeService(
+      {
+        id: 'rt1',
+        userId: 'u1',
+        revoked: true,
+        familyId: 'f1',
+        revokedAt: new Date(Date.now() - 2_000),
+        expiresAt: new Date(Date.now() + 60_000),
+        user: activeUser,
+      },
+      1,
+      {},
+      0,
+    );
+    await expect(
+      service.refresh(req as never, res as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    expect(res.cookie).not.toHaveBeenCalled();
+    expect(res.clearCookie).toHaveBeenCalledWith(
+      'refresh_token',
+      expect.objectContaining({ path: '/auth' }),
+    );
+  });
+
+  it('свежий повтор заблокированного аккаунта пары не получает', async () => {
+    const { service, prisma, req, res } = makeService({
+      id: 'rt1',
+      userId: 'u1',
+      revoked: true,
+      familyId: 'f1',
+      revokedAt: new Date(Date.now() - 2_000),
+      expiresAt: new Date(Date.now() + 60_000),
+      user: { ...activeUser, accountStatus: 'blocked' },
+    });
+    await expect(service.refresh(req as never, res as never)).rejects.toThrow();
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+  });
+
+  it('refreshApp: свежий повтор после обрыва связи выдаёт приложению пару', async () => {
+    const { service, prisma } = makeService({
+      id: 'rt9',
+      userId: 'u1',
+      revoked: true,
+      familyId: 'app-family',
+      revokedAt: new Date(Date.now() - 30_000),
+      expiresAt: new Date(Date.now() + 60_000),
+      user: activeUser,
+    });
+    const tokens = await service.refreshApp({ refreshToken: 'raw' });
+    expect(tokens.accessToken).toBe('access');
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ familyId: 'app-family' }),
+    });
+  });
+
+  it('refreshApp: давний повтор не трогает сессии других входов', async () => {
+    const { service, prisma } = makeService({
+      id: 'rt9',
+      userId: 'u1',
+      revoked: true,
+      familyId: 'app-family',
+      revokedAt: new Date(Date.now() - 60 * 60_000),
+      expiresAt: new Date(Date.now() + 60_000),
+      user: activeUser,
+    });
+    await expect(
+      service.refreshApp({ refreshToken: 'raw' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    const where = prisma.refreshToken.updateMany.mock.calls[0][0].where;
+    expect(where).toEqual({
+      userId: 'u1',
+      familyId: 'app-family',
+      revoked: false,
+    });
+  });
+
+  it('новый вход открывает новое семейство', async () => {
+    const { service, prisma } = makeService(null);
+    await (
+      service as unknown as {
+        appTokens: (user: typeof activeUser) => Promise<unknown>;
+      }
+    ).appTokens(activeUser);
+    const data = prisma.refreshToken.create.mock.calls[0][0].data;
+    expect(data.familyId).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('access-cookie живёт столько же, сколько ACCESS_TOKEN_TTL', async () => {
@@ -196,7 +362,10 @@ describe('safeReturnTo', () => {
  * та часть, где по claims находят человека, — она вынесена в отдельный метод.
  */
 function makeGoogleService(prisma: Record<string, unknown>) {
-  const identities = new IdentityService(prisma as never, new PersonalDataService(prisma as never, { isEnabled: false } as never));
+  const identities = new IdentityService(
+    prisma as never,
+    new PersonalDataService(prisma as never, { isEnabled: false } as never),
+  );
   return new AuthService(
     { get: jest.fn((_key: string, fallback?: string) => fallback) } as never,
     prisma as never,
@@ -211,15 +380,24 @@ describe('AuthService.resolveGoogleProfile', () => {
   it('не отдаёт существующий аккаунт при совпадении почты у нового googleId', async () => {
     // Пользователь с этим адресом есть, но идентичности google с таким sub нет.
     const service = makeGoogleService({
-      userIdentity: { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn() },
+      userIdentity: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        update: jest.fn(),
+      },
       user: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'victim', email: 'a@b.c' }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'victim', email: 'a@b.c' }),
         create: jest.fn(),
       },
     });
 
     await expect(
-      service.resolveGoogleProfile({ sub: 'new-sub', email: 'a@b.c', name: 'Кто-то' }),
+      service.resolveGoogleProfile({
+        sub: 'new-sub',
+        email: 'a@b.c',
+        name: 'Кто-то',
+      }),
     ).rejects.toThrow(/уже используется/);
   });
 
@@ -227,9 +405,10 @@ describe('AuthService.resolveGoogleProfile', () => {
     const create = jest.fn();
     const service = makeGoogleService({
       userIdentity: {
-        findUnique: jest
-          .fn()
-          .mockResolvedValue({ id: 'i1', user: { id: 'u-old', email: 'a@b.c' } }),
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'i1',
+          user: { id: 'u-old', email: 'a@b.c' },
+        }),
         update: jest.fn(),
       },
       user: { findUnique: jest.fn(), create },

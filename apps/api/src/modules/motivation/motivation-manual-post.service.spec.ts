@@ -152,18 +152,54 @@ describe('MotivationManualPostService', () => {
     expect(english.text).toBe('Не сдавайся на полпути.');
   });
 
-  it('falls back to the primary copy for a translation without a title', async () => {
+  // Заголовка в форме больше нет (VED-199): перевод узнаётся по пояснению.
+  it('keeps a translation that has only an explanation, with the primary title', async () => {
     const { service, transaction } = setup();
 
     await service.create(admin, 'actor-1', {
       ...validInput,
-      translations: { en: { title: '  ', explanation: 'Orphan explanation.' } },
+      translations: { en: { title: '  ', explanation: 'Own explanation.' } },
     });
 
     const english = postData(transaction).translations.create.find(
       (item: { language: string }) => item.language === 'en',
     );
     expect(english.title).toBe('Идти до конца');
+    expect(english.text).toBe('Не сдавайся на полпути.\n\nOwn explanation.');
+  });
+
+  it('falls back to the primary copy for an empty translation', async () => {
+    const { service, transaction } = setup();
+
+    await service.create(admin, 'actor-1', {
+      ...validInput,
+      translations: { en: { title: ' ', explanation: ' ' } },
+    });
+
+    const english = postData(transaction).translations.create.find(
+      (item: { language: string }) => item.language === 'en',
+    );
+    expect(english.text).toBe(
+      `Не сдавайся на полпути.\n\n${validInput.copy.explanation}`,
+    );
+  });
+
+  it('builds the title from the quote when none is given', async () => {
+    const { service, transaction } = setup();
+
+    await service.create(admin, 'actor-1', {
+      ...validInput,
+      copy: { explanation: 'Пояснение.' },
+    });
+
+    const titles = postData(transaction).translations.create.map(
+      (item: { title: string }) => item.title,
+    );
+    expect(titles).toEqual([
+      'Не сдавайся на полпути.',
+      'Не сдавайся на полпути.',
+      'Не сдавайся на полпути.',
+    ]);
   });
 
   it('keeps the text quote-only when no explanation is given', async () => {
@@ -232,11 +268,6 @@ describe('MotivationManualPostService', () => {
       'Quote text and author are required',
     ],
     ['author', { author: '' }, 'Quote text and author are required'],
-    [
-      'title',
-      { copy: { title: '', explanation: 'text' } },
-      'Title is required',
-    ],
     ['audience', { profileTypes: [] }, 'Pick at least one audience'],
     [
       'unknown audience',

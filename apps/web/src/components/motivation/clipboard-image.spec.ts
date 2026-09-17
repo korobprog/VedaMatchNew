@@ -7,6 +7,7 @@ import {
   pickClipboardType,
   pickPastedImage,
   REEL_IMAGE_MAX_BYTES,
+  withImageTypeFromName,
 } from "./clipboard-image";
 
 const file = (type: string, size = 1024, name = "x") =>
@@ -107,5 +108,23 @@ describe("formatImageSize", () => {
     expect(formatImageSize(512)).toBe("512 Б");
     expect(formatImageSize(2048)).toBe("2 КБ");
     expect(formatImageSize(2_516_582)).toBe("2,4 МБ");
+  });
+});
+
+describe("withImageTypeFromName (VED-154)", () => {
+  it("достраивает тип по расширению, если файловый менеджер его не дал", () => {
+    const file = new File(["x"], "Открытка.JPG", { type: "" });
+    const typed = withImageTypeFromName(file);
+    expect(typed.type).toBe("image/jpeg");
+    expect(typed.name).toBe("Открытка.JPG");
+    expect(pastedImageRejection(typed)).toBeNull();
+  });
+
+  it("не трогает файл с типом и незнакомое расширение", () => {
+    const png = new File(["x"], "a.jpg", { type: "image/png" });
+    expect(withImageTypeFromName(png)).toBe(png);
+    const doc = new File(["x"], "a.pdf", { type: "" });
+    expect(withImageTypeFromName(doc)).toBe(doc);
+    expect(pastedImageRejection(doc)).toBe("Подойдёт JPEG, PNG или WebP");
   });
 });

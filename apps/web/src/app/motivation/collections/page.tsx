@@ -3,20 +3,42 @@ import { redirectToLogin } from "@/lib/require-user";
 import { needsWelcome } from "@/lib/welcome";
 import { Header } from "@/components/header";
 import { MotivationTopBar } from "@/components/motivation/motivation-top-bar";
-import { MotivationCollections } from "@/components/motivation/collections-view";
+import {
+  CategoryFeedSwitch,
+  MotivationCollections,
+} from "@/components/motivation/collections-view";
+import {
+  feedStyleOf,
+  parseReelsTab,
+  reelsHref,
+} from "@/components/motivation/feed-style";
 import { getProfile } from "@/lib/api";
 import { getMotivationCategories } from "@/lib/motivation-api";
 
 /**
  * Папки готовых карточек. Лента отвечает на «покажи что-нибудь», этот экран —
  * на «покажи про Веды».
+ *
+ * У «Для вас» и «Открыток» меню своё (VED-139): `?tab=cards` — категории и
+ * счётчики открыток, без него — афоризмов с иллюстрацией. Избранное папок не
+ * имеет, поэтому `?tab=saved` читается как «Для вас».
  */
-export default async function MotivationCollectionsPage() {
+export default async function MotivationCollectionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const parsed = parseReelsTab((await searchParams).tab);
+  const tab = parsed === "cards" ? "cards" : "forYou";
   const [user, categories] = await Promise.all([
     getProfile(),
-    getMotivationCategories(),
+    getMotivationCategories(feedStyleOf(tab)),
   ]);
-  if (!user) redirectToLogin("/motivation/collections");
+  if (!user) redirectToLogin(
+      tab === "cards"
+        ? "/motivation/collections?tab=cards"
+        : "/motivation/collections",
+    );
   if (needsWelcome(user)) redirect("/welcome");
   const isAdmin = user.role === "admin" || user.role === "service-admin";
 
@@ -28,10 +50,12 @@ export default async function MotivationCollectionsPage() {
           active="collections"
           isAdmin={isAdmin}
           title="Категории"
-          action={{ href: "/motivation", label: "Лента" }}
+          // Назад — в ту же ленту, чьё это меню.
+          action={{ href: reelsHref({ tab }), label: "Лента" }}
         />
-        <div className="mt-4 px-2">
-          <MotivationCollections categories={categories ?? []} />
+        <div className="mt-4 space-y-4 px-2">
+          <CategoryFeedSwitch tab={tab} />
+          <MotivationCollections categories={categories ?? []} tab={tab} />
         </div>
       </main>
     </div>

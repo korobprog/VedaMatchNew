@@ -47,6 +47,15 @@ services:
       YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
       VK_CLIENT_ID: ${VK_CLIENT_ID:-}
       VK_CLIENT_SECRET: ${VK_CLIENT_SECRET:-}
+      # Бот @vedamatch_bot: ключ проверки подписи мини-приложения
+      # (POST /auth/telegram/webapp). Пусто — вход через Telegram отвечает 503.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      # Веха 4, «Уведомления через Telegram-бота» (TelegramSenderService):
+      # адрес Bot API и адрес мини-приложения для кнопки «Открыть» в
+      # сообщении бота. Дефолты совпадают со значениями в коде — переменные
+      # нужны только для переопределения (свой прокси к Bot API, другой домен).
+      TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-https://api.telegram.org}
+      TELEGRAM_WEBAPP_URL: ${TELEGRAM_WEBAPP_URL:-https://ios.vedamatch.com}
       JWT_PRIVATE_KEY_BASE64: ${JWT_PRIVATE_KEY_BASE64}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL}
       REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS}
@@ -97,6 +106,9 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       VAPID_SUBJECT: ${VAPID_SUBJECT}
+      # Пуши в приложение VedaMatch через FCM: JSON сервисного аккаунта одной
+      # строкой в base64. Без него пуши в приложение молча выключены.
+      FIREBASE_SERVICE_ACCOUNT: ${FIREBASE_SERVICE_ACCOUNT:-}
       # TURN для звонков в «Общении» (deploy/coturn, docs/chat-calls-plan.md).
       # Без хоста и секрета /chat/calls/ice-servers отдаёт только STUN.
       TURN_HOST: ${TURN_HOST:-}
@@ -126,6 +138,12 @@ services:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       API_INTERNAL_URL: ${API_INTERNAL_URL}
+      # Публичный адрес S3-хранилища портала — по умолчанию тот же
+      # S3_PUBLIC_URL, что у api, отдельная переменная нужна только если APK
+      # раздаются из другого места. Страница /app и секция загрузки на
+      # лендингах читают отсюда mobile/android/ru-site/latest.json (VED-176).
+      # Пусто — карточка Android честно показывает «скоро», без падения.
+      APP_DOWNLOAD_BASE_URL: ${APP_DOWNLOAD_BASE_URL:-${S3_PUBLIC_URL:-}}
     depends_on:
       api:
         condition: service_healthy
@@ -133,6 +151,23 @@ services:
       - dokploy-network
     expose:
       - "3000"
+
+  # Веб-версия мобильного приложения — ios.vedamatch.com
+  # (docs/prds/iphone-app.prd.md). Статика nginx, от API не зависит: ходит в
+  # api.vedamatch.com из браузера. Домен в Dokploy: ios.vedamatch.com → 80.
+  # Адрес поддомена должен быть в WEB_ORIGIN API — иначе CORS и возврат
+  # после входа (resolveReturnOrigin) его не пустят.
+  app-web:
+    build:
+      context: ..
+      dockerfile: apps/mobile/Dockerfile.web
+      args:
+        APP_CONTOUR: com
+    restart: unless-stopped
+    networks:
+      - dokploy-network
+    expose:
+      - "80"
 
 networks:
   dokploy-network:

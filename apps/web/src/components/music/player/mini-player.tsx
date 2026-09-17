@@ -12,8 +12,16 @@ import { SEEK_STEP_SECONDS, useMusicPlayer } from "./player-provider";
 import { MusicPlayGlyph, playButtonLabel } from "./play-glyph";
 import { MusicSleepCountdown } from "./sleep-countdown";
 import { MusicQueuePanel } from "./queue-panel";
+import { MusicLyricsButton } from "./lyrics-button";
 import { useHoldSeek } from "./use-hold-seek";
-import { ArrowRightToLine, ChevronsRight, ListEnd } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowRightToLine,
+  ArrowUpToLine,
+  ChevronsRight,
+  ListEnd,
+} from "lucide-react";
+import { LIFTED_KEY, liftButtonLabel, parseLifted, serializeLifted } from "./player-lift";
 import {
   DEFAULT_PLAYBACK_MODE,
   nextPlaybackMode,
@@ -58,6 +66,7 @@ export function MiniPlayer() {
   const pathname = usePathname();
   const [queueOpen, setQueueOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [lifted, setLifted] = useState(false);
 
   /* Читаем эффектом, а не ленивым `useState`: на сервере `localStorage` нет,
      инициализатор вернул бы «развёрнута», а на клиенте — «свёрнута», и это
@@ -72,6 +81,9 @@ export function MiniPlayer() {
       if (window.localStorage.getItem(COLLAPSED_KEY) === "1") {
         setCollapsed(true);
       }
+      if (parseLifted(window.localStorage.getItem(LIFTED_KEY))) {
+        setLifted(true);
+      }
     } catch {
       // Приватный режим и запрет хранилища — не повод не работать.
     }
@@ -83,6 +95,18 @@ export function MiniPlayer() {
       const next = !was;
       try {
         window.localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        // см. выше
+      }
+      return next;
+    });
+  };
+
+  const toggleLifted = () => {
+    setLifted((was) => {
+      const next = !was;
+      try {
+        window.localStorage.setItem(LIFTED_KEY, serializeLifted(next));
       } catch {
         // см. выше
       }
@@ -167,6 +191,9 @@ export function MiniPlayer() {
       // следовать за ней: иначе под полоской в 48 точек остаётся дыра в 150.
       // Правило — в globals.css рядом с основным.
       data-collapsed={collapsed ? "true" : "false"}
+      // Поднятая полоса (VED-194) стоит выше на `--vm-player-lift`, и отступ
+      // страницы растёт вместе с ней — правило там же, в globals.css.
+      data-lifted={lifted ? "true" : "false"}
       className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
     >
       {collapsed ? (
@@ -222,6 +249,12 @@ export function MiniPlayer() {
             </svg>
           </button>
 
+          <LiftButton
+            lifted={lifted}
+            onToggle={toggleLifted}
+            className={`${ctrl} size-8`}
+          />
+
           <button
             type="button"
             aria-label="Закрыть плеер"
@@ -241,7 +274,12 @@ export function MiniPlayer() {
         // записи сжималось в ноль. Поэтому здесь `flex-wrap` и порядок
         // элементов задан явно, а с `sm` возвращается однострочная раскладка
         // из PortalWide.dc.html.
-        className="player-bar pointer-events-auto mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-3 py-2 sm:h-16 sm:flex-nowrap sm:gap-5 sm:px-[18px] sm:py-0"
+        //
+        // `relative` — контекст позиционирования для MusicLyricsPanel: она
+        // якорится от всей полосы, а не от узкой кнопки-триггера в середине
+        // ряда, иначе на 360-390px уезжает за левый край экрана (VED-248,
+        // круг 2).
+        className="player-bar pointer-events-auto relative mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-3 py-2 sm:h-16 sm:flex-nowrap sm:gap-5 sm:px-[18px] sm:py-0"
       >
         {/* Что играет */}
         <div className="order-1 flex min-w-0 flex-1 items-center gap-3 sm:order-none sm:w-40 sm:flex-none lg:w-56">
@@ -422,12 +460,24 @@ export function MiniPlayer() {
             onToggle={player.toggleShuffle}
             className={`${ctrl} order-7 h-9 w-9 sm:hidden`}
           />
-          <MusicPositionSlider
-            className="order-8 flex min-w-0 flex-1 items-center gap-2 sm:order-none sm:w-full sm:max-w-[340px] sm:flex-none"
-            position={positionSeconds}
-            total={total}
-            onSeek={player.seek}
-          />
+          {/* Дорожка и «Текст» — один ряд: третья строка мобильной раскладки
+              свободнее второй (там уже 326 из 327px на экране 375, см.
+              комментарий выше про перемешивание/дорожку/режим) — дорожка
+              достаточно тянется, чтобы отдать кнопке ~48px без переноса.
+              Рядом с дорожкой, а не у очереди (как в плане VED-248): очередь
+              стоит во второй строке, где места нет вовсе. */}
+          <div className="order-8 flex min-w-0 flex-1 items-center gap-1.5 sm:order-none sm:w-full sm:max-w-[380px] sm:flex-none">
+            <MusicPositionSlider
+              className="flex min-w-0 flex-1 items-center gap-2"
+              position={positionSeconds}
+              total={total}
+              onSeek={player.seek}
+            />
+            <MusicLyricsButton
+              trackId={current.id}
+              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8`}
+            />
+          </div>
           <PlayModeButton
             mode={playMode}
             onChange={player.setPlayMode}
@@ -608,6 +658,15 @@ export function MiniPlayer() {
               </svg>
             </button>
 
+            {/* Между «свернуть» и «закрыть» — так в карточке VED-194, и так
+                же в свёрнутом виде: кнопка про положение полосы, а не про
+                запись, и стоит с другими такими же. */}
+            <LiftButton
+              lifted={lifted}
+              onToggle={toggleLifted}
+              className={`${ctrl} h-9 w-9 sm:h-8 sm:w-8`}
+            />
+
             <button
               type="button"
               aria-label="Закрыть плеер"
@@ -623,6 +682,32 @@ export function MiniPlayer() {
       </section>
       )}
     </div>
+  );
+}
+
+/** «Поднять/опустить плеер» (VED-194). Один компонент на оба вида полосы. */
+function LiftButton({
+  lifted,
+  onToggle,
+  className,
+}: {
+  lifted: boolean;
+  onToggle: () => void;
+  className: string;
+}) {
+  const label = liftButtonLabel(lifted);
+  const Glyph = lifted ? ArrowDownToLine : ArrowUpToLine;
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      aria-pressed={lifted}
+      onClick={onToggle}
+      className={`${className} ${lifted ? "text-violet" : "text-text-2"}`}
+    >
+      <Glyph aria-hidden className="h-4 w-4" />
+    </button>
   );
 }
 

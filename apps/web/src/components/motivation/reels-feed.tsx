@@ -22,11 +22,11 @@ import type {
 import { apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
 import {
-  LONG_IMAGE_QUOTE_CHARS,
   isLongQuote,
   isTextClamped,
   splitQuoteAndExplanation,
 } from "./quote-text";
+import { needsFullQuote, pictureTextOf } from "./picture-text";
 import {
   BACKGROUND_VOLUME,
   hasBackgroundAudio,
@@ -45,12 +45,20 @@ import {
 } from "./explanation-dialog";
 import {
   categoryLink,
+  collectionsHref,
   feedCategoryButtons,
   feedStyleOf,
   reelsHref,
   type ReelsTab,
 } from "./feed-style";
 import { ReportDialog } from "./report-dialog";
+import {
+  attributionFields,
+  filterHref,
+  type AttributionFieldKind,
+  type FeedFilterState,
+} from "./attribution-filter";
+import { FeedAttributionFilter } from "./feed-attribution-filter";
 import { SourceLink } from "./source-link";
 import {
   attributionLine,
@@ -130,6 +138,15 @@ function quoteOf(post: MotivationPostDto): string {
   return splitQuoteAndExplanation(post.text).quote;
 }
 
+/**
+ * Текст для «Поделиться». У открытки текст на самой картинке, и поле `text`
+ * часто пустое — а экран `/share` без текста уводит на главную (VED-205).
+ * Заголовок у поста заполнен всегда, им и подменяем.
+ */
+function shareQuoteOf(post: MotivationPostDto): string {
+  return quoteOf(post) || post.title;
+}
+
 export function ReelsFeed({
   initial,
   tab,
@@ -139,8 +156,16 @@ export function ReelsFeed({
   isAdmin = false,
   audio = [],
   categories = [],
+  speaker,
+  work,
 }: {
   initial: MotivationFeedResponse;
+  /**
+   * Фильтр по автору и источнику (VED-206). Уезжает и в подгрузку, как
+   * папка: иначе вторая страница Гиты пришла бы из всей ленты.
+   */
+  speaker?: string;
+  work?: string;
   /** Папки для кнопок на пустых экранах ленты (VED-135). */
   categories?: MotivationCategoryDto[];
   tab: ReelsTab;
@@ -218,6 +243,8 @@ export function ReelsFeed({
       if (tab === "saved") query.set("filter", "favorites");
       if (order) query.set("order", order);
       if (category) query.set("category", category);
+      if (speaker) query.set("speaker", speaker);
+      if (work) query.set("work", work);
       // Без стиля вторая страница «Открыток» приехала бы вперемешку с
       // нейрокартинками — ровно то, от чего вкладки и разделили (VED-121).
       const style = feedStyleOf(tab);
@@ -235,7 +262,7 @@ export function ReelsFeed({
     } finally {
       setPending(false);
     }
-  }, [cursor, pending, tab, order, category]);
+  }, [cursor, pending, tab, order, category, speaker, work]);
 
   // Подгрузка запускается из обработчика активации слайда, а не из эффекта:
   // так setState не каскадирует, а момент тот же — человек долистал до конца.
@@ -403,6 +430,7 @@ export function ReelsFeed({
 
 
   const slides = buildSlides(items, dividerAt, Boolean(cursor));
+  const filterState: FeedFilterState = { tab, order, category, speaker, work };
   const categoryNav = (className?: string) => (
     <FeedCategoryNav
       tab={tab}
@@ -418,8 +446,13 @@ export function ReelsFeed({
     return (
       <div className="relative flex h-full flex-col items-center justify-center gap-4 rounded-3xl bg-[#0A0614] p-8 text-center text-white">
         {/* Вкладки и в пустой ленте: из пустых «Открыток» иначе можно было
-            уйти только в «Для вас», а до «Избранного» — никак. */}
+            уйти только в «Ленту», а до «Избранного» — никак. */}
         <Tabs tab={tab} order={order} category={category} />
+        {/* VED-252, круг 4: значок фильтра здесь — не в ряду вкладок (тот
+            `absolute`, из потока `flex-col` исключён), а отдельной строкой,
+            поэтому вариант `"chip"` — самостоятельная пилюля с подписью,
+            а не голый значок без опоры (см. JSDoc FeedAttributionFilter). */}
+        <FeedAttributionFilter state={filterState} variant="chip" />
         {categoryNav()}
         <p className="font-display text-lg">
           {tab === "saved"
@@ -478,8 +511,8 @@ export function ReelsFeed({
           pathname: "/share",
           query: {
             kind: "story",
-            title: quoteOf(activePost).slice(0, 200),
-            text: quoteOf(activePost),
+            title: shareQuoteOf(activePost).slice(0, 200),
+            text: shareQuoteOf(activePost),
             subtitle: attributionLine(activePost),
             link: `/m/${encodeURIComponent(activePost.slug)}`,
             file: `/m/${encodeURIComponent(activePost.slug)}/story`,
@@ -531,7 +564,9 @@ export function ReelsFeed({
         ) : null,
         create: (
           <Link
-        href="/motivation/create"
+        // VED-240: из «Открыток» — сразу на «Готовая картинка с цитатой»,
+        // а не на «Написать самому» по умолчанию (см. ReelWizardPrefill.tab).
+        href={tab === "cards" ? "/motivation/create?tab=cards" : "/motivation/create"}
         aria-label="Создать свой рилс"
         className={railItemClass}
       >
@@ -545,7 +580,8 @@ export function ReelsFeed({
           <RailLink
             label="Категории ленты"
             caption="Категории"
-            href="/motivation/collections"
+            // Меню той ленты, что открыта (VED-139): из «Открыток» — открытки.
+            href={collectionsHref(tab)}
           >
             <FolderIcon />
           </RailLink>
@@ -584,7 +620,9 @@ export function ReelsFeed({
           style={{ width: `${items.length ? ((activeIndex + 1) / items.length) * 100 : 0}%` }}
         />
       </div>
-      <Tabs tab={tab} order={order} category={category} />
+      {/* Значок фильтра по автору и источнику (VED-206) — в самом ряду
+          вкладок (VED-252), а не отдельной строкой под ним. */}
+      <Tabs tab={tab} order={order} category={category} filterState={filterState} />
       {/* Звук выключен, пока его не попросили: иначе лента заговорит сама,
           стоит открыть страницу. Кнопка живёт над слайдами — как и ряд
           действий внизу, она одна на всю ленту. У немого ролика её нет вовсе:
@@ -594,7 +632,7 @@ export function ReelsFeed({
           type="button"
           onClick={() => setSoundOn((value) => !value)}
           aria-pressed={soundOn}
-          className="absolute right-3 top-16 z-30 rounded-full border border-white/25 bg-black/40 px-3 py-1.5 text-xs font-medium text-white backdrop-blur"
+          className="absolute right-3 top-[5.5rem] z-30 rounded-full border border-white/25 bg-black/40 px-3 py-1.5 text-xs font-medium text-white backdrop-blur"
         >
           {soundOn ? "🔊 Звук включён" : "🔇 Включить звук"}
         </button>
@@ -609,7 +647,7 @@ export function ReelsFeed({
           onClick={() => setMusicOn((value) => !value)}
           aria-pressed={musicOn}
           aria-label={musicOn ? "Выключить музыку" : "Включить музыку"}
-          className={`absolute left-3 top-16 z-30 rounded-full border px-3 py-1.5 text-xs font-medium backdrop-blur ${
+          className={`absolute left-3 top-[5.5rem] z-30 rounded-full border px-3 py-1.5 text-xs font-medium backdrop-blur ${
             musicOn
               ? "border-mint-edge bg-mint text-on-mint"
               : "border-white/25 bg-black/40 text-white"
@@ -663,6 +701,7 @@ export function ReelsFeed({
                 key="divider"
                 first={position === 0}
                 donation={donation}
+                tab={tab}
                 onNext={() => scrollBy(1)}
                 categoryNav={categoryNav}
               />
@@ -686,6 +725,7 @@ export function ReelsFeed({
               active={slide.index === activeIndex}
               soundOn={soundOn}
               textHidden={textHidden}
+              filterState={filterState}
               onActive={() => activate(slide.index)}
             />
           );
@@ -734,10 +774,13 @@ function Tabs({
   tab,
   order,
   category,
+  filterState,
 }: {
   tab: ReelsTab;
   order?: "random";
   category?: string;
+  /** Значок фильтра встаёт между «Открытки» и «Избранное» (VED-252). */
+  filterState?: FeedFilterState;
 }) {
   const link = (key: ReelsTab | "mine", href: string, label: string) => (
     <Link
@@ -752,18 +795,40 @@ function Tabs({
     </Link>
   );
   return (
-    // Четыре вкладки на телефоне шире промежутка между кнопками «назад» и
-    // «меню»: при 14px и шаге 20 ряд занимал 29–346 точек из 375 и заходил
-    // под обе. Между кнопками и помельче — 245 точек, помещается и на 360.
+    // VED-252, круг 3: `gap-x-1` (круг 2) визуально склеивал соседние пункты
+    // («Избранное Мои», «Лента Открытки» читались одной фразой) даже на
+    // 412px, где по краям оставался пустой запас — узкий промежуток был
+    // хуже, чем узкий ряд. Заменил на `gap-x-2` (8px) + `min-[390px]:gap-x-3`
+    // (12px, обычные телефоны шире 390px) — карточка просила «немного»
+    // уменьшить (было 12px), а не свести к минимуму.
+    //
+    // Бюджет по-прежнему считаю от живого замера в браузере (круг 2,
+    // 360×780, коммит 778cca75): коридор между кнопками ←/меню — 264px
+    // (x 48–312, `inset-x-12` берёт ряд вплотную к нему). Раскладочная
+    // ширина значка фильтра в круге 3 — не хит-зона, а видимая иконка с
+    // небольшим полем (`w-7`=28px в `FeedAttributionFilter`; хит-зона
+    // 40×40 держится отдельно, прозрачным `before:`, вне потока — см.
+    // комментарий там же). Ширина текстовых пунктов из замера круга 2 не
+    // изменилась: «Лента» 39, «Открытки» 62, «Избранное» 71, «Мои» 27 —
+    // сумма 199 + 28 (значок) = 227px.
+    //   360–389px (`gap-x-2`, 4×8=32): 227+32=259 ≤ 264, запас 5px.
+    //   390px+ (`min-[390px]:gap-x-3`, 4×12=48): при 390px доступно
+    //   390−96=294, 227+48=275 ≤ 294, запас 19px; при 412px доступно
+    //   412−96=316, запас 41px.
+    // `top-2` — тот же отступ, что у ←/меню (`ReelsChrome`, `left-2 top-2`),
+    // ряд `items-center` по высоте самого высокого пункта (значок, `h-10`) —
+    // так центр ряда совпадает с центром кнопок по краям.
+    // `flex-wrap` — страховка на экранах у́же 360px, не расчёт на неё здесь.
     <nav
       aria-label="Вкладки ленты"
-      className="absolute inset-x-14 top-4 z-20 flex justify-center gap-3 sm:inset-x-0 sm:gap-5"
+      className="absolute inset-x-12 top-2 z-20 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 min-[390px]:gap-x-3 sm:inset-x-0"
     >
       {/* Две ленты разного стиля (VED-121): порядок и папка переезжают
           вместе с человеком — «Открытки» из папки «Пословицы» остаются
           пословицами. */}
-      {link("forYou", reelsHref({ order, category }), "Для вас")}
+      {link("forYou", reelsHref({ order, category }), "Лента")}
       {link("cards", reelsHref({ tab: "cards", order, category }), "Открытки")}
+      {filterState && <FeedAttributionFilter state={filterState} />}
       {link("saved", "/motivation?tab=saved", "Избранное")}
       {link("mine", "/motivation/my", "Мои")}
     </nav>
@@ -776,6 +841,7 @@ function ReelSlide({
   active,
   soundOn,
   textHidden = false,
+  filterState,
   onActive,
 }: {
   post: MotivationPostDto;
@@ -784,6 +850,8 @@ function ReelSlide({
   soundOn: boolean;
   /** Текст убран — остаётся одно изображение. */
   textHidden?: boolean;
+  /** Лента, в которой стоит слайд: автор и книга в подписи сужают её. */
+  filterState?: FeedFilterState;
   onActive: () => void;
 }) {
   const ref = useRef<HTMLElement>(null);
@@ -806,11 +874,15 @@ function ReelSlide({
   const explanation = added?.text ?? stored;
   const explanationAuthor = added?.author ?? post.explanationAuthor;
   const kind = mediaKindOf(post);
+  /* Надпись на картинке редакция правит отдельно от полного текста (VED-241):
+     пусто — на картинке та же цитата, что и в «Читать полностью». */
+  const pictureText = pictureTextOf(post.imageText, quote);
   /* Готовая открытка редакции (VED-87): цитата уже напечатана на картинке.
      Второй экземпляр поверх закрыл бы первый, а обрезка кадра под экран
      срезала бы края надписи. */
   const printed = kind === "image" && post.captionInImage;
   const sourceParts = attributionParts(post);
+  const sourceFields = attributionFields(post);
   const hasCategory = Boolean(categoryLink(post));
   const explanationToggle = explanation && (
     <button
@@ -892,7 +964,7 @@ function ReelSlide({
       alive = false;
       observer.disconnect();
     };
-  }, [kind, printed, quote]);
+  }, [kind, printed, pictureText]);
 
   // Колбэк в ref: родитель пересоздаёт его каждый рендер, а наблюдатель
   // должен жить один на слайд, иначе при каждом лайке он переподписывается.
@@ -1085,7 +1157,7 @@ function ReelSlide({
             ужаты — подпись идёт сплошным текстом, «Пояснение» переехало в
             ряд ссылок, — и освободившееся место отдано самой цитате. */}
         {kind === "image" && !printed && (
-          <p ref={quoteRef} className="line-clamp-6 font-display text-[17px] font-medium leading-snug drop-shadow-md">{quote}</p>
+          <p ref={quoteRef} className="line-clamp-6 font-display text-[17px] font-medium leading-snug drop-shadow-md">{pictureText}</p>
         )}
         {/* Подпись одной строкой: кто принёс и откуда взято.
             Раньше это были три этажа — источник, ряд кнопок и отдельная
@@ -1113,9 +1185,10 @@ function ReelSlide({
               <>
                 {" "}
                 <SourceFields
-                  parts={sourceParts}
+                  fields={sourceFields}
                   href={post.attributionSourceUrl}
                   separatedAfter={hasCategory}
+                  filterState={filterState}
                   icon
                 />
               </>
@@ -1145,9 +1218,15 @@ function ReelSlide({
           {/* Замер добавляет случаи к прикидке, а не заменяет её: цитата длиннее
               границы обрезана при любой раскладке, и кнопка нужна ей даже там,
               где замерить не вышло. У фото граница своя — под шесть строк. */}
+          {/* У фото надпись может быть поправлена отдельно от полного
+              текста (VED-241) — тогда кнопка нужна всегда: окно покажет
+              цитату целиком, а не то, что стоит на картинке. */}
           {!printed &&
-            (isLongQuote(quote, kind === "image" ? LONG_IMAGE_QUOTE_CHARS : undefined) ||
-              quoteClamped) && <FullQuoteToggle quote={quote} sourceParts={sourceParts} />}
+            (kind === "image"
+              ? needsFullQuote({ pictureText, quote, clamped: quoteClamped })
+              : isLongQuote(quote) || quoteClamped) && (
+              <FullQuoteToggle quote={quote} sourceParts={sourceParts} />
+            )}
           {/* Комментарий — слова комментатора о стихе, и живут они в
               Библиотеке. Своей копии не заводим: она разошлась бы с
               оригиналом на первой же правке книги. */}
@@ -1307,33 +1386,84 @@ function CaptionField({ separated, children }: { separated: boolean; children: R
 }
 
 /**
- * Автор, книга и стих — отдельными графами. Ссылка на источник одна на всю
- * группу: три ссылки подряд на один адрес скринридер зачитывал бы трижды.
+ * Автор, книга и стих — отдельными графами.
+ *
+ * Автор и книга — кнопки фильтра (VED-206): нажал «Бхагавад-гита» — лента
+ * осталась с одной Гитой. Ссылка на первоисточник — на номере стиха: он и
+ * есть адрес в книге. Нет номера — первоисточник открывает значок «↗» в
+ * конце, иначе он потерялся бы вовсе. Без ленты вокруг (окно «Цитата
+ * целиком») графы остаются текстом, а ссылка на первоисточник, если она
+ * есть, одна на всю группу: несколько ссылок подряд на один адрес скринридер
+ * зачитывал бы по разу.
  * Подчёркивание — на тексте графы: `inline-block` его от ссылки не наследует.
  */
 function SourceFields({
-  parts,
+  fields,
   href,
   separatedAfter,
+  filterState,
   icon,
 }: {
-  parts: string[];
+  fields: { kind: AttributionFieldKind; text: string }[];
   href: string | null;
   separatedAfter: boolean;
+  filterState?: FeedFilterState;
   icon: boolean;
 }) {
-  const fields = parts.map((part, index) => (
-    <Fragment key={index}>
-      {index > 0 && " "}
-      <CaptionField separated={index < parts.length - 1 || separatedAfter}>
+  const hasLocator = fields.some((field) => field.kind === "locator");
+  const splitLinks = Boolean(filterState);
+  const orphanSource = splitLinks && href && !hasLocator;
+  const nodes = fields.map((field, index) => {
+    const last = index === fields.length - 1;
+    const text = (
+      <>
         {icon && index === 0 && <span aria-hidden="true">📖 </span>}
-        <span className={href ? "underline decoration-dotted underline-offset-4" : undefined}>
-          {part}
+        {/* Постоянное подчёркивание убрано (VED-249) — кликабельность видна
+            по наведению и фокус-обводке, а не по линии в состоянии покоя. */}
+        <span className={href || splitLinks ? "hover:underline underline-offset-4" : undefined}>
+          {field.text}
         </span>
-      </CaptionField>
-    </Fragment>
-  ));
-  return href ? <SourceLink href={href}>{fields}</SourceLink> : <>{fields}</>;
+      </>
+    );
+    let content = text;
+    if (filterState && field.kind !== "locator") {
+      const change = field.kind === "work" ? { work: field.text } : { speaker: field.text };
+      content = (
+        <Link
+          href={filterHref(filterState, change)}
+          aria-label={`${field.kind === "work" ? "Только источник" : "Только автор"}: ${field.text}`}
+        >
+          {text}
+        </Link>
+      );
+    } else if (splitLinks && href && field.kind === "locator") {
+      content = <SourceLink href={href}>{text}</SourceLink>;
+    }
+    return (
+      <Fragment key={index}>
+        {index > 0 && " "}
+        <CaptionField separated={!last || separatedAfter || Boolean(orphanSource)}>{content}</CaptionField>
+      </Fragment>
+    );
+  });
+  if (!splitLinks)
+    return href ? <SourceLink href={href}>{nodes}</SourceLink> : <>{nodes}</>;
+  return (
+    <>
+      {nodes}
+      {orphanSource && (
+        <>
+          {" "}
+          <CaptionField separated={separatedAfter}>
+            <SourceLink href={href}>
+              <span className="sr-only">Первоисточник</span>
+              <span aria-hidden="true">↗</span>
+            </SourceLink>
+          </CaptionField>
+        </>
+      )}
+    </>
+  );
 }
 
 /**
@@ -1361,7 +1491,12 @@ function FullQuoteToggle({ quote, sourceParts }: { quote: string; sourceParts: s
           <p className="whitespace-pre-line">{quote}</p>
           {sourceParts.length > 0 && (
             <p className="mt-3 text-xs text-white/70">
-              <SourceFields parts={sourceParts} href={null} separatedAfter={false} icon={false} />
+              <SourceFields
+                fields={sourceParts.map((text) => ({ kind: "locator" as const, text }))}
+                href={null}
+                separatedAfter={false}
+                icon={false}
+              />
             </p>
           )}
         </CenteredSheet>
@@ -1533,12 +1668,14 @@ function FeedCategoryNav({
 function DividerSlide({
   first,
   donation,
+  tab,
   onNext,
   categoryNav,
 }: {
   /** Разделитель первым слайдом: нового не было вовсе, а не «кончилось». */
   first: boolean;
   donation: DonationSettingsDto | null;
+  tab: ReelsTab;
   onNext: () => void;
   categoryNav: (className?: string) => ReactNode;
 }) {
@@ -1557,8 +1694,12 @@ function DividerSlide({
             Листать дальше
           </button>
           {/* Место, где смотреть больше нечего, — лучшее для предложения
-              сделать своё: человек уже здесь и уже листает. */}
-          <Link href="/motivation/create" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">
+              сделать своё: человек уже здесь и уже листает. Из «Открыток»
+              (VED-240) — сразу на «Готовая картинка с цитатой». */}
+          <Link
+            href={tab === "cards" ? "/motivation/create?tab=cards" : "/motivation/create"}
+            className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10"
+          >
             ✨ Создать рилс
           </Link>
           <Link href="/motivation?tab=saved" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">
@@ -1603,7 +1744,12 @@ function EndSlide({
               свой: цитата, кадр и, если захотите, видео.
             </p>
             <div className="flex flex-wrap justify-center gap-2">
-              <Link href="/motivation/create" className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold">
+              {/* Из «Открыток» (VED-240) — сразу на «Готовая картинка с
+                  цитатой», а не на «Написать самому» по умолчанию. */}
+              <Link
+                href={tab === "cards" ? "/motivation/create?tab=cards" : "/motivation/create"}
+                className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold"
+              >
                 ✨ Создать рилс
               </Link>
               <Link href="/motivation/settings" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">

@@ -1,15 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ImagePlus, X } from "lucide-react";
+import { FolderOpen, ImagePlus, X } from "lucide-react";
 import type {
   MotivationCategoryDto,
   MotivationPictureResult,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
-import { REEL_IMAGE_MIME, formatImageSize } from "../clipboard-image";
+import {
+  REEL_IMAGE_MIME,
+  formatImageSize,
+  withImageTypeFromName,
+} from "../clipboard-image";
 import { CategorySelect } from "./category-select";
+import {
+  categoriesAcceptingStyle,
+  collectionHref,
+  reelsHref,
+} from "../feed-style";
 import {
   PICTURE_TEXT_MAX,
   addPictures,
@@ -35,13 +44,20 @@ const nextId = () => `picture-${++lastId}`;
  * живёт access-токен.
  */
 export function PictureUploadForm({
-  categories,
+  categories: allCategories,
   initialCategory,
 }: {
   categories: MotivationCategoryDto[];
   initialCategory?: string;
 }) {
+  // Открытку кладут только в общую категорию или в категорию открыток
+  // (VED-139): категорию «Для вас» сервер для неё не примет.
+  const categories = useMemo(
+    () => categoriesAcceptingStyle(allCategories, "cards"),
+    [allCategories],
+  );
   const inputRef = useRef<HTMLInputElement>(null);
+  const filesRef = useRef<HTMLInputElement>(null);
   const [category, setCategory] = useState(
     () =>
       categories.find((item) => item.slug === initialCategory)?.slug ??
@@ -56,7 +72,7 @@ export function PictureUploadForm({
 
   function addFiles(files: File[]) {
     if (sending || files.length === 0) return;
-    const next = addPictures(queue, files, nextId);
+    const next = addPictures(queue, files.map(withImageTypeFromName), nextId);
     // Превью создаём здесь, в обработчике, а не эффектом по очереди: ссылка
     // на blob нужна ровно тем файлам, что только что добавили.
     const urls = Object.fromEntries(
@@ -198,15 +214,40 @@ export function PictureUploadForm({
       </label>
 
       <div>
-        <button
-          type="button"
-          disabled={sending}
-          onClick={() => inputRef.current?.click()}
-          className={secondaryButton}
-        >
-          <ImagePlus className="h-4 w-4" aria-hidden />
-          Выбрать картинки
-        </button>
+        {/* Две кнопки (VED-154): на Android поле с `accept` картинок
+            открывает только галерею, а открытки часто лежат в «Загрузках» и
+            папках мессенджеров — туда ведёт «Из файлов», поле без `accept`. */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={sending}
+            onClick={() => inputRef.current?.click()}
+            className={secondaryButton}
+          >
+            <ImagePlus className="h-4 w-4" aria-hidden />
+            Из галереи
+          </button>
+          <button
+            type="button"
+            disabled={sending}
+            onClick={() => filesRef.current?.click()}
+            className={secondaryButton}
+          >
+            <FolderOpen className="h-4 w-4" aria-hidden />
+            Из файлов
+          </button>
+        </div>
+        <input
+          ref={filesRef}
+          type="file"
+          multiple
+          hidden
+          aria-label="Картинки с афоризмами из файлов"
+          onChange={(event) => {
+            addFiles(Array.from(event.target.files ?? []));
+            event.target.value = "";
+          }}
+        />
         <input
           ref={inputRef}
           type="file"
@@ -221,8 +262,9 @@ export function PictureUploadForm({
           }}
         />
         <p className="mt-2 text-xs text-text-2">
-          JPEG, PNG или WebP до 12 МБ. Можно выбрать несколько или вставить
-          скопированную картинку (Ctrl+V). Картинка показывается целиком, без
+          JPEG, PNG или WebP до 12 МБ. Можно выбрать несколько — из галереи
+          или через файловый менеджер («Загрузки», папки мессенджеров) — или
+          вставить скопированную картинку (Ctrl+V). Картинка показывается целиком, без
           обрезки, и публикуется сразу.
         </p>
       </div>
@@ -302,7 +344,7 @@ export function PictureUploadForm({
           <p role="status" className="text-sm text-text-1">
             {summary}.{" "}
             <Link
-              href={`/motivation/collections/${encodeURIComponent(category)}?view=photo`}
+              href={collectionHref(category, "cards")}
               className="text-cyan underline underline-offset-2"
             >
               Открыть категорию
@@ -329,7 +371,7 @@ function PictureStatusLine({
         Опубликовано.{" "}
         {item.slug && (
           <Link
-            href={`/motivation?post=${encodeURIComponent(item.slug)}&category=${encodeURIComponent(category)}`}
+            href={reelsHref({ tab: "cards", post: item.slug, category })}
             className="text-cyan underline underline-offset-2"
           >
             Открыть

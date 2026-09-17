@@ -1,6 +1,7 @@
 import {
   BadGatewayException,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   HttpException,
   Injectable,
@@ -12,11 +13,15 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Request, Response } from 'express';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import * as oidc from 'openid-client';
 import {
+  AUTH_TELEGRAM_CONNECTED_EVENT,
+  AUTH_TELEGRAM_DISCONNECTED_EVENT,
   USER_REGISTERED_EVENT,
   resolveDisplayName,
+  type AuthTelegramConnectedEvent,
+  type AuthTelegramDisconnectedEvent,
   type Role,
   type UserRegisteredEvent,
 } from '@vedamatch/shared';
@@ -28,12 +33,23 @@ import {
   verifyPkceS256,
   type AppLoginRequest,
 } from './app-login';
+import { judgeRevokedRefresh, rotationFamily } from './refresh-reuse';
+import { appReturnPage, type AppReturnOutcome } from './app-return-page';
 import { AuthProvidersService } from './auth-providers.service';
-import { resolveContour, type Contour } from './contour';
+import {
+  resolveContour,
+  resolveReturnOrigin,
+  returnOriginCandidate,
+  type Contour,
+} from './contour';
+import { verifyTelegramInitData } from './telegram-init-data';
+import { mapTelegramProfile } from './telegram.provider';
 import { readRegistrationMode } from '../billing/billing-mode';
 import { assertAccountActive } from '../users/account-status';
-import { IdentityService } from './identity.service';
+import { isAuthProvider } from './identity-link';
+import { IdentityService, type IdentitySummary } from './identity.service';
 import { JwtSignService } from './jwt.service';
+import { resolveLoginClient, type LoginClient } from './login-client';
 import { verifyPassword } from './password';
 import { toRole } from './role';
 import {
@@ -156,12 +172,15 @@ export class AuthService implements OnModuleInit {
   }
 
   async startGoogleLogin(
+    req: Request,
     res: Response,
     returnTo?: string,
     referralCode?: string,
     deviceId?: string,
     host?: string | null,
     app?: AppLoginRequest | null,
+    returnOrigin?: string,
+    link?: boolean,
   ) {
     // На старте входа человек уже в браузере, и ошибке JSON-ом там делать
     // нечего: любой отказ, включая «провайдер не настроен», уезжает в
@@ -170,6 +189,20 @@ export class AuthService implements OnModuleInit {
     const google = await this.startForApp(app, res, () => this.requireGoogle());
     if (!google) return;
     const contour = this.contour(host);
+
+    // Привязка (не вход) требует живой сессии уже на старте: без неё Google
+    // привязался бы к кому попало вместо человека, который жмёт «Привязать»
+    // на экране «Аккаунт». Отказ — редирект назад с `?linkError=session`, а
+    // не голая ошибка: разговор начала навигация браузера.
+    let linkUserId: string | null = null;
+    if (link) {
+      linkUserId = await this.readSessionUserId(req);
+      if (!linkUserId) {
+        this.redirectLinkError(res, contour, returnTo, returnOrigin, 'session');
+        return;
+      }
+    }
+
     const codeVerifier = oidc.randomPKCECodeVerifier();
     const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
     const state = oidc.randomState();
@@ -186,9 +219,16 @@ export class AuthService implements OnModuleInit {
       // callback'а их больше негде сохранить, а Google-редирект их бы потерял.
       ref: shortToken(referralCode),
       fp: shortToken(deviceId),
+      // Вход начат на поддомене портала (веб-версия приложения): проверяется
+      // на колбэке, в контуре, который выдаёт cookie (resolveReturnOrigin).
+      returnOrigin: returnOriginCandidate(returnOrigin),
       // Вход из приложения: куда вернуть код и PKCE challenge приложения.
       // Challenge Google — отдельный, он проверяется на обмене кода Google.
       app: app ?? null,
+      // Привязка живой сессией: id перепроверяется на колбэке заново, а не
+      // просто читается отсюда — cookie может подменить кто угодно до
+      // возврата от Google.
+      link: linkUserId,
     };
     res.cookie(OIDC_COOKIE, JSON.stringify(oidcPayload), {
       httpOnly: true,
@@ -217,16 +257,26 @@ export class AuthService implements OnModuleInit {
     if (!raw) {
       throw new BadRequestException('OAuth-сессия не найдена или истекла');
     }
-    const { codeVerifier, state, nonce, returnTo, ref, fp, app } = JSON.parse(
-      raw,
-    ) as {
+    const {
+      codeVerifier,
+      state,
+      nonce,
+      returnTo,
+      returnOrigin,
+      ref,
+      fp,
+      app,
+      link,
+    } = JSON.parse(raw) as {
       codeVerifier: string;
       state: string;
       nonce: string;
       returnTo?: string;
+      returnOrigin?: string | null;
       ref?: string | null;
       fp?: string | null;
       app?: AppLoginRequest | null;
+      link?: string | null;
     };
 
     return this.withAppErrors(app, res, async () => {
@@ -246,6 +296,31 @@ export class AuthService implements OnModuleInit {
       if (claims.email_verified !== true) {
         throw new UnauthorizedException('Google не подтвердил email');
       }
+
+      res.clearCookie(OIDC_COOKIE, {
+        path: '/auth',
+        domain: contour.cookieDomain,
+      });
+
+      // Привязка способа входа живой сессией — не вход: аккаунт не ищется
+      // и не заводится по email/sub, а Google-идентичность прикрепляется к
+      // уже вошедшему человеку. Сессия перепроверяется здесь заново (а не
+      // читается из cookie старта): подмена `oidc_flow` до колбэка не
+      // должна привязать провайдера мимо владельца сессии.
+      if (link) {
+        await this.finishLinking({
+          req,
+          res,
+          contour,
+          expectedUserId: link,
+          provider: 'google',
+          externalId: claims.sub,
+          returnTo,
+          returnOrigin,
+        });
+        return;
+      }
+
       const email = claims.email as string;
       const avatarUrl = (claims.picture as string) ?? null;
 
@@ -268,10 +343,6 @@ export class AuthService implements OnModuleInit {
             data: { email, avatarUrl },
           });
 
-      res.clearCookie(OIDC_COOKIE, {
-        path: '/auth',
-        domain: contour.cookieDomain,
-      });
       await this.issueSessionAndRedirect({
         req,
         res,
@@ -279,6 +350,7 @@ export class AuthService implements OnModuleInit {
         provider: 'google',
         isNewAccount,
         returnTo,
+        returnOrigin,
         ref,
         fp,
         app,
@@ -302,6 +374,8 @@ export class AuthService implements OnModuleInit {
     referralCode?: string,
     deviceId?: string,
     app?: AppLoginRequest | null,
+    returnOrigin?: string,
+    link?: boolean,
   ) {
     // Проверка здесь, а не только при выдаче списка кнопок: спрятанная
     // кнопка не делает способ недоступным, а важно, что вход невозможен.
@@ -312,6 +386,17 @@ export class AuthService implements OnModuleInit {
     if (!yandex) return;
     const contour = this.contour(req.headers.host);
     const { clientId } = yandex;
+
+    // См. комментарий у startGoogleLogin: привязка требует живой сессии уже
+    // на старте, иначе провайдер привязался бы к чужому браузеру.
+    let linkUserId: string | null = null;
+    if (link) {
+      linkUserId = await this.readSessionUserId(req);
+      if (!linkUserId) {
+        this.redirectLinkError(res, contour, returnTo, returnOrigin, 'session');
+        return;
+      }
+    }
 
     const verifier = randomBytes(32).toString('base64url');
     const challenge = createHash('sha256').update(verifier).digest('base64url');
@@ -326,9 +411,11 @@ export class AuthService implements OnModuleInit {
         verifier,
         state,
         returnTo: safeReturnTo(returnTo),
+        returnOrigin: returnOriginCandidate(returnOrigin),
         ref: shortToken(referralCode),
         fp: shortToken(deviceId),
         app: app ?? null,
+        link: linkUserId,
       }),
       {
         httpOnly: true,
@@ -374,9 +461,11 @@ export class AuthService implements OnModuleInit {
       verifier: string;
       state: string;
       returnTo?: string;
+      returnOrigin?: string | null;
       ref?: string | null;
       fp?: string | null;
       app?: AppLoginRequest | null;
+      link?: string | null;
     };
     try {
       flow = JSON.parse(raw);
@@ -423,11 +512,27 @@ export class AuthService implements OnModuleInit {
         throw new BadGatewayException('Яндекс не отдал профиль');
       }
 
+      const profile = mapYandexProfile(await infoRes.json());
+
+      // Привязка живой сессией — см. подробный комментарий в
+      // handleGoogleCallback: аккаунт не ищется по email/id, идентичность
+      // прикрепляется к перепроверенному владельцу сессии.
+      if (flow.link) {
+        await this.finishLinking({
+          req,
+          res,
+          contour,
+          expectedUserId: flow.link,
+          provider: 'yandex',
+          externalId: profile.externalId,
+          returnTo: flow.returnTo,
+          returnOrigin: flow.returnOrigin,
+        });
+        return;
+      }
+
       const { user, created } = await this.identities.resolve(
-        {
-          ...mapYandexProfile(await infoRes.json()),
-          requestIp: req.ip ?? null,
-        },
+        { ...profile, requestIp: req.ip ?? null },
         { beforeCreate: () => this.assertRegistrationOpen() },
       );
 
@@ -438,6 +543,7 @@ export class AuthService implements OnModuleInit {
         provider: 'yandex',
         isNewAccount: created,
         returnTo: flow.returnTo,
+        returnOrigin: flow.returnOrigin,
         ref: flow.ref,
         fp: flow.fp,
         app: flow.app,
@@ -485,8 +591,27 @@ export class AuthService implements OnModuleInit {
       ) {
         throw error;
       }
-      res.redirect(appRedirectUrl(app.redirect, { error: error.message }));
+      this.returnToApp(
+        res,
+        appRedirectUrl(app.redirect, { error: error.message }),
+        'error',
+      );
     }
+  }
+
+  /**
+   * Возврат в приложение с колбэка провайдера — страницей, а не редиректом:
+   * см. `app-return-page.ts`. Старт входа (`startForApp`) редиректит как
+   * раньше: там цепочку начало само приложение, и Chrome её пропускает.
+   * В адресе одноразовый код, поэтому ответ не кэшируется.
+   */
+  private returnToApp(
+    res: Response,
+    target: string,
+    outcome: AppReturnOutcome,
+  ): void {
+    res.setHeader('Cache-Control', 'no-store');
+    res.type('html').send(appReturnPage(target, outcome));
   }
 
   /**
@@ -502,13 +627,85 @@ export class AuthService implements OnModuleInit {
     provider: string;
     isNewAccount: boolean;
     returnTo?: string;
+    returnOrigin?: string | null;
     ref?: string | null;
     fp?: string | null;
     app?: AppLoginRequest | null;
   }) {
-    const { req, res, user, provider, isNewAccount, returnTo, ref, fp, app } =
-      params;
+    const {
+      req,
+      res,
+      user,
+      provider,
+      isNewAccount,
+      returnTo,
+      returnOrigin,
+      ref,
+      fp,
+      app,
+    } = params;
 
+    // Контур и итоговый адрес возврата нужны и для метки источника входа
+    // (`resolveLoginClient`), и для самого редиректа ниже — считаем один
+    // раз, до записи в журнал, чтобы `LoginAudit.client` не разъезжался с
+    // тем, куда человек реально попадёт.
+    const contour = this.contour(req.headers.host);
+    const resolvedOrigin = resolveReturnOrigin({
+      requested: returnOrigin,
+      webOrigins: this.config.get<string>('WEB_ORIGIN'),
+      contour,
+    });
+    const client: LoginClient = app
+      ? resolveLoginClient({ kind: 'app' })
+      : resolveLoginClient({
+          kind: 'oauth',
+          resolvedOrigin,
+          contourWebOrigin: contour.webOrigin,
+        });
+
+    await this.completeLogin({
+      req,
+      user,
+      provider,
+      isNewAccount,
+      ref,
+      fp,
+      client,
+    });
+
+    // Приложению — одноразовый код, а не cookie: токены оно заберёт само,
+    // предъявив PKCE-верификатор (см. exchangeAppLoginCode).
+    if (app) {
+      const code = await this.createAppLoginCode(user.id, app.challenge);
+      this.returnToApp(res, appRedirectUrl(app.redirect, { code }), 'code');
+      return;
+    }
+
+    await this.issueTokens(
+      user.id,
+      user.email,
+      toRole(user.role),
+      res,
+      req.headers.host,
+    );
+    res.redirect(`${resolvedOrigin}${safeReturnTo(returnTo)}`);
+  }
+
+  /**
+   * Проверки и учёт, одинаковые для любого входа, куда бы потом ни ушёл
+   * ответ — редиректом (OAuth) или JSON-ом (мини-приложение Telegram).
+   */
+  private async completeLogin(params: {
+    req: Request;
+    user: User;
+    provider: string;
+    isNewAccount: boolean;
+    ref?: string | null;
+    fp?: string | null;
+    /** Источник входа для воронки метрик — см. `login-client.ts`. */
+    client: LoginClient;
+  }) {
+    const { req, user, provider, isNewAccount, ref, fp, client } = params;
     await assertAccountActive(this.prisma, user);
     await this.ensureContactsProfile(user.id);
 
@@ -516,6 +713,7 @@ export class AuthService implements OnModuleInit {
       data: {
         userId: user.id,
         provider,
+        client,
         ip: req.ip,
         userAgent: req.headers['user-agent'] ?? null,
       },
@@ -524,16 +722,204 @@ export class AuthService implements OnModuleInit {
     if (isNewAccount) {
       this.announceRegistration(user.id, user.email, req, ref, fp);
     }
+  }
 
-    // Приложению — одноразовый код, а не cookie: токены оно заберёт само,
-    // предъявив PKCE-верификатор (см. exchangeAppLoginCode).
-    if (app) {
-      const code = await this.createAppLoginCode(user.id, app.challenge);
-      res.redirect(appRedirectUrl(app.redirect, { code }));
+  /**
+   * Владелец сессии из `access_token` cookie — для привязки способа входа,
+   * где логика ровно та же, что у AuthGuard (тот же `JwtSignService`), но
+   * гостя пускать некуда: возврат `null`, решение принимает вызывающий.
+   *
+   * Refresh здесь намеренно не делается: `access_token` живёт 15 минут
+   * (`ACCESS_TOKEN_TTL`), и человек, долго читавший экран «Аккаунт» перед
+   * нажатием «Привязать», рискует получить `linkError=session`, хотя
+   * `refresh_token` ещё жив. Это не дыра безопасности (человек просто
+   * повторит попытку), а UX-шероховатость — закрыта на клиенте:
+   * веб-версия перед переходом на `/auth/<provider>?link=1` сама дёргает
+   * лёгкий запрос через `ApiClient` (`account.tsx`, `startLink`), и его
+   * встроенный 401→refresh обновляет cookie ДО перехода сюда.
+   */
+  private async readSessionUserId(req: Request): Promise<string | null> {
+    const token = (req.cookies as Record<string, string> | undefined)?.[
+      ACCESS_COOKIE
+    ];
+    if (!token) return null;
+    try {
+      return (await this.jwt.verifyAccessToken(token)).sub;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Отказ в привязке — редирект на экран «Аккаунт», а не JSON-ошибка:
+   * разговор начала навигация браузера (`window.location.assign`), и
+   * человек должен увидеть понятный текст на своём экране, а не голый ответ
+   * сервера.
+   */
+  private redirectLinkError(
+    res: Response,
+    contour: Contour,
+    returnTo: string | undefined,
+    returnOrigin: string | null | undefined,
+    code: string,
+  ): void {
+    const origin = resolveReturnOrigin({
+      requested: returnOrigin,
+      webOrigins: this.config.get<string>('WEB_ORIGIN'),
+      contour,
+    });
+    res.redirect(`${origin}${safeReturnTo(returnTo)}?linkError=${code}`);
+  }
+
+  /**
+   * Общий хвост колбэка привязки Google/Яндекс: сессия перепроверяется
+   * заново (см. комментарий у `handleGoogleCallback`), идентичность
+   * прикрепляется через `IdentityService.link`, отказ конфликтом уезжает
+   * понятным текстом, а не 409 в браузер.
+   */
+  private async finishLinking(params: {
+    req: Request;
+    res: Response;
+    contour: Contour;
+    expectedUserId: string;
+    provider: 'google' | 'yandex';
+    externalId: string;
+    returnTo?: string;
+    returnOrigin?: string | null;
+  }): Promise<void> {
+    const {
+      req,
+      res,
+      contour,
+      expectedUserId,
+      provider,
+      externalId,
+      returnTo,
+      returnOrigin,
+    } = params;
+    const currentUserId = await this.readSessionUserId(req);
+    if (!currentUserId || currentUserId !== expectedUserId) {
+      this.redirectLinkError(res, contour, returnTo, returnOrigin, 'session');
       return;
     }
+    try {
+      await this.identities.link(currentUserId, provider, externalId);
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        this.redirectLinkError(
+          res,
+          contour,
+          returnTo,
+          returnOrigin,
+          'conflict',
+        );
+        return;
+      }
+      throw error;
+    }
+    const origin = resolveReturnOrigin({
+      requested: returnOrigin,
+      webOrigins: this.config.get<string>('WEB_ORIGIN'),
+      contour,
+    });
+    res.redirect(`${origin}${safeReturnTo(returnTo)}?linked=${provider}`);
+  }
 
-    const contour = this.contour(req.headers.host);
+  /** Список способов входа для экрана «Аккаунт». */
+  async listIdentities(userId: string): Promise<IdentitySummary[]> {
+    return this.identities.listIdentities(userId);
+  }
+
+  /** Отвязка способа входа; провайдер из URL проверяется здесь же. */
+  async unlinkIdentity(
+    userId: string,
+    provider: string,
+  ): Promise<{ ok: true }> {
+    if (!isAuthProvider(provider)) {
+      throw new BadRequestException('Неизвестный способ входа');
+    }
+    await this.identities.unlink(userId, provider);
+    if (provider === 'telegram') {
+      // «Уведомления» гасят устройство `provider: 'telegram'` по этому
+      // событию — сами они `UserIdentity` не читают (контракт сервисных
+      // модулей), поэтому факт отвязки сообщает `auth`.
+      const event: AuthTelegramDisconnectedEvent = {
+        name: AUTH_TELEGRAM_DISCONNECTED_EVENT,
+        userId,
+      };
+      this.events.emit(event.name, event);
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Привязка Telegram живой сессией (не вход): для случая, когда веб-версия
+   * открыта внутри Telegram, а человек уже вошёл через Google/Яндекс и хочет
+   * добавить Telegram как запасной способ.
+   */
+  async linkTelegram(
+    userId: string,
+    body: { initData?: unknown },
+    req: Request,
+  ): Promise<{ ok: true }> {
+    await this.providers.assertEnabled('telegram', req.hostname);
+    const verified = verifyTelegramInitData({
+      raw: body?.initData,
+      botToken: this.config.get<string>('TELEGRAM_BOT_TOKEN'),
+      nowSec: Math.floor(Date.now() / 1000),
+    });
+    if (!verified.ok) {
+      if (verified.reason === 'not-configured') {
+        throw new ServiceUnavailableException(
+          'Вход через Telegram не настроен',
+        );
+      }
+      throw new UnauthorizedException('Telegram не подтвердил вход');
+    }
+    await this.identities.link(userId, 'telegram', String(verified.user.id));
+    this.announceTelegramConnected(userId, verified.user);
+    return { ok: true };
+  }
+
+  /**
+   * Вход из мини-приложения Telegram (`@vedamatch_bot` → ios.vedamatch.com).
+   * Подпись данных запуска проверяется у себя ключом бота; дальше — тот же
+   * путь, что у OAuth: способ включён для домена, аккаунт по паре
+   * «telegram + id», закрытая регистрация, общие проверки и cookie сессии.
+   */
+  async loginWithTelegramWebApp(
+    body: { initData?: unknown; ref?: unknown; fp?: unknown },
+    req: Request,
+    res: Response,
+  ) {
+    await this.providers.assertEnabled('telegram', req.hostname);
+    const verified = verifyTelegramInitData({
+      raw: body?.initData,
+      botToken: this.config.get<string>('TELEGRAM_BOT_TOKEN'),
+      nowSec: Math.floor(Date.now() / 1000),
+    });
+    if (!verified.ok) {
+      if (verified.reason === 'not-configured') {
+        throw new ServiceUnavailableException(
+          'Вход через Telegram не настроен',
+        );
+      }
+      throw new UnauthorizedException('Telegram не подтвердил вход');
+    }
+
+    const { user, created } = await this.identities.resolve(
+      { ...mapTelegramProfile(verified.user), requestIp: req.ip ?? null },
+      { beforeCreate: () => this.assertRegistrationOpen() },
+    );
+    await this.completeLogin({
+      req,
+      user,
+      provider: 'telegram',
+      isNewAccount: created,
+      ref: shortToken(body?.ref),
+      fp: shortToken(body?.fp),
+      client: resolveLoginClient({ kind: 'telegram' }),
+    });
     await this.issueTokens(
       user.id,
       user.email,
@@ -541,7 +927,27 @@ export class AuthService implements OnModuleInit {
       res,
       req.headers.host,
     );
-    res.redirect(`${contour.webOrigin}${safeReturnTo(returnTo)}`);
+    this.announceTelegramConnected(user.id, verified.user);
+    return { ok: true };
+  }
+
+  /**
+   * Факт «есть живая связка с Telegram» — для «Уведомлений»: заводят или
+   * обновляют устройство `provider: 'telegram'`, не читая `UserIdentity`.
+   * Шлётся и при входе через мини-приложение, и при привязке живой сессией:
+   * оба пути одинаково подтверждают подписью бота владение чатом с ним.
+   */
+  private announceTelegramConnected(
+    userId: string,
+    telegramUser: { id: number; allowsWriteToPm?: boolean },
+  ): void {
+    const event: AuthTelegramConnectedEvent = {
+      name: AUTH_TELEGRAM_CONNECTED_EVENT,
+      userId,
+      telegramUserId: String(telegramUser.id),
+      canWrite: telegramUser.allowsWriteToPm === true,
+    };
+    this.events.emit(event.name, event);
   }
 
   private async createAppLoginCode(
@@ -597,10 +1003,10 @@ export class AuthService implements OnModuleInit {
     refreshToken?: unknown;
   }): Promise<AppTokenResponse> {
     const token = body?.refreshToken;
-    const user = await this.consumeRefreshToken(
+    const { user, familyId } = await this.consumeRefreshToken(
       typeof token === 'string' ? token : undefined,
     );
-    return this.appTokens(user);
+    return this.appTokens(user, familyId);
   }
 
   async logoutApp(body: { refreshToken?: unknown }) {
@@ -608,17 +1014,21 @@ export class AuthService implements OnModuleInit {
     if (typeof token === 'string' && token) {
       await this.prisma.refreshToken.updateMany({
         where: { tokenHash: this.hash(token) },
-        data: { revoked: true },
+        data: { revoked: true, revokedAt: new Date() },
       });
     }
     return { ok: true };
   }
 
-  private async appTokens(user: User): Promise<AppTokenResponse> {
+  private async appTokens(
+    user: User,
+    familyId?: string,
+  ): Promise<AppTokenResponse> {
     const { accessToken, refreshToken, refreshTtlMs } = await this.mintTokens(
       user.id,
       user.email,
       toRole(user.role),
+      familyId,
     );
     return {
       accessToken,
@@ -821,12 +1231,14 @@ export class AuthService implements OnModuleInit {
     role: Role,
     res: Response,
     host?: string | null,
+    familyId?: string,
   ) {
     const contour = this.contour(host);
     const { accessToken, refreshToken, refreshTtlMs } = await this.mintTokens(
       userId,
       email,
       role,
+      familyId,
     );
     const ttlDays = refreshTtlMs / (24 * 60 * 60 * 1000);
 
@@ -856,8 +1268,16 @@ export class AuthService implements OnModuleInit {
     });
   }
 
-  /** Пара токенов и запись refresh в базе. Куда их отдать, решает вызывающий. */
-  private async mintTokens(userId: string, email: string, role: Role) {
+  /**
+   * Пара токенов и запись refresh в базе. Куда их отдать, решает вызывающий.
+   * Без `familyId` — новый вход и новое семейство; ротация передаёт своё.
+   */
+  private async mintTokens(
+    userId: string,
+    email: string,
+    role: Role,
+    familyId: string = randomUUID(),
+  ) {
     const accessToken = await this.jwt.signAccessToken({
       sub: userId,
       email,
@@ -871,6 +1291,7 @@ export class AuthService implements OnModuleInit {
       data: {
         tokenHash: this.hash(refreshToken),
         userId,
+        familyId,
         expiresAt: new Date(Date.now() + refreshTtlMs),
       },
     });
@@ -906,20 +1327,22 @@ export class AuthService implements OnModuleInit {
     try {
       return await this.rotateRefreshToken(req, res);
     } catch (error) {
-      // Refresh мёртв — снимаем и маркер сессии, иначе web будет крутить
-      // splash «Восстанавливаем сессию» вместо лендинга/формы входа.
+      // Refresh мёртв — снимаем все cookie сессии. Маркер — чтобы web не
+      // крутил splash «Восстанавливаем сессию». Саму refresh-cookie — чтобы
+      // вкладка не предъявляла отозванный токен снова: потоки событий сайта
+      // переподключаются через refresh бесконечно, и каждый такой повтор
+      // отзывал все сессии человека, включая приложение (VED-233).
+      // Гонка ротации сюда не доходит: проигравший запрос получает свою
+      // пару (см. consumeRefreshToken), так что 401 здесь — сессии нет.
       if (error instanceof UnauthorizedException) {
-        res.clearCookie(SESSION_MARKER_COOKIE, {
-          path: '/',
-          domain: this.contour(req.headers.host).cookieDomain,
-        });
+        this.clearSessionCookies(res, req.headers.host);
       }
       throw error;
     }
   }
 
   private async rotateRefreshToken(req: Request, res: Response) {
-    const user = await this.consumeRefreshToken(
+    const { user, familyId } = await this.consumeRefreshToken(
       (req.cookies as Record<string, string>)[REFRESH_COOKIE],
     );
     await this.issueTokens(
@@ -928,15 +1351,18 @@ export class AuthService implements OnModuleInit {
       toRole(user.role),
       res,
       req.headers.host,
+      familyId,
     );
     return { ok: true };
   }
 
   /**
    * Проверка и гашение refresh-токена, общая для cookie-сессии и приложения.
-   * Возвращает владельца; новую пару выдаёт вызывающий.
+   * Возвращает владельца и семейство для новой пары; пару выдаёт вызывающий.
    */
-  private async consumeRefreshToken(token: string | undefined): Promise<User> {
+  private async consumeRefreshToken(
+    token: string | undefined,
+  ): Promise<{ user: User; familyId: string }> {
     if (!token) throw new UnauthorizedException('Нет refresh-токена');
 
     const stored = await this.prisma.refreshToken.findUnique({
@@ -948,26 +1374,43 @@ export class AuthService implements OnModuleInit {
     }
     // Повторное предъявление уже отозванного токена — признак кражи
     // (легитимный клиент после ротации им больше не пользуется). Отзываем
-    // все токены пользователя: и у вора, и у жертвы придётся войти заново.
+    // семейство токена: и у вора, и у жертвы этого входа придётся войти
+    // заново. Остальные входы человека не трогаем, а повтор сразу после
+    // ротации — тот же клиент, ему новая пара; см. refresh-reuse.ts.
     if (stored.revoked) {
+      const verdict = judgeRevokedRefresh(stored, new Date());
+      if (verdict.kind === 'reissue') {
+        // Живой токен в семействе — вход не закрыт. После выхода или отзыва
+        // семейства живых нет, и свежий `revokedAt` пары не даёт.
+        const alive = await this.prisma.refreshToken.count({
+          where: { familyId: verdict.familyId, revoked: false },
+        });
+        if (alive === 0) {
+          throw new UnauthorizedException('Refresh-токен недействителен');
+        }
+        await assertAccountActive(this.prisma, stored.user);
+        return { user: stored.user, familyId: verdict.familyId };
+      }
       await this.prisma.refreshToken.updateMany({
-        where: { userId: stored.userId, revoked: false },
-        data: { revoked: true },
+        where: verdict.where,
+        data: { revoked: true, revokedAt: new Date() },
       });
       throw new UnauthorizedException('Refresh-токен недействителен');
     }
     await assertAccountActive(this.prisma, stored.user);
 
-    // Ротация как CAS: два одновременных refresh с одним cookie не должны
-    // оба выдать пары — выигрывает тот, кто первым перевёл revoked в true.
-    const rotated = await this.prisma.refreshToken.updateMany({
+    // Ротация как CAS: токен гасит ровно один запрос. Проигравший — второй
+    // запрос того же клиента в ту же миллисекунду (две вкладки); ему такая
+    // же пара того же семейства, как повтору в окне. Живой токен победителя
+    // здесь не проверяем: победитель мог ещё не успеть его записать.
+    // Семейство проставляется и старому токену: его повтор должен найти
+    // продолжение цепочки, даже если токен выдан до появления семейств.
+    const familyId = rotationFamily(stored);
+    await this.prisma.refreshToken.updateMany({
       where: { id: stored.id, revoked: false },
-      data: { revoked: true },
+      data: { revoked: true, revokedAt: new Date(), familyId },
     });
-    if (rotated.count === 0) {
-      throw new UnauthorizedException('Refresh-токен недействителен');
-    }
-    return stored.user;
+    return { user: stored.user, familyId };
   }
 
   async logout(req: Request, res: Response) {
@@ -975,7 +1418,7 @@ export class AuthService implements OnModuleInit {
     if (token) {
       await this.prisma.refreshToken.updateMany({
         where: { tokenHash: this.hash(token) },
-        data: { revoked: true },
+        data: { revoked: true, revokedAt: new Date() },
       });
     }
     this.clearSessionCookies(res, req.headers.host);
@@ -986,7 +1429,7 @@ export class AuthService implements OnModuleInit {
   async logoutEverywhere(userId: string, res: Response, host?: string | null) {
     await this.prisma.refreshToken.updateMany({
       where: { userId, revoked: false },
-      data: { revoked: true },
+      data: { revoked: true, revokedAt: new Date() },
     });
     this.clearSessionCookies(res, host);
     return { ok: true };

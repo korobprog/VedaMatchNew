@@ -1,6 +1,14 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { categoriesAcceptingStyle } from "./feed-style";
 import Link from "next/link";
 import type {
   DonationSettingsDto,
@@ -60,6 +68,12 @@ export interface ReelWizardPrefill {
   text?: string;
   /** Открыть сразу экран статуса уже созданного рилса. */
   reelId?: string;
+  /**
+   * Из какой вкладки ленты нажали «Создать» (VED-240): «Открытки» — там
+   * цитата уже на картинке, поэтому первый выбор мастера должен стоять на
+   * «Готовая картинка с цитатой», а не на «Написать самому» по умолчанию.
+   */
+  tab?: "cards";
 }
 
 type Step = "text" | "image" | "review";
@@ -82,7 +96,7 @@ type Step = "text" | "image" | "review";
 export function ReelWizard({
   prefill,
   donation,
-  categories = [],
+  categories: allCategories = [],
   isAdmin = false,
 }: {
   prefill: ReelWizardPrefill;
@@ -92,11 +106,19 @@ export function ReelWizard({
   /** Администратор ручается за себя сам: его афоризм публикуется без очереди. */
   isAdmin?: boolean;
 }) {
+  // Афоризм с иллюстрацией — только общие категории и категории «Для вас»
+  // (VED-139): в категорию открыток сервер его не примет.
+  const categories = useMemo(
+    () => categoriesAcceptingStyle(allCategories, "art"),
+    [allCategories],
+  );
   const fromBook = Boolean(prefill.book && prefill.chapter && prefill.text);
   const [step, setStep] = useState<Step>(prefill.reelId ? "review" : "text");
-  /** `picture` — готовая картинка с цитатой: файл первым шагом (VED-97). */
+  /** `picture` — готовая картинка с цитатой: файл первым шагом (VED-97).
+   * Из «Открыток» ленты (VED-240) по умолчанию — тоже «Готовая картинка»:
+   * туда и пришли делать открытку, а не печатать цитату поверх фото. */
   const [sourceKind, setSourceKind] = useState<"own" | "vedabase" | "picture">(
-    fromBook ? "vedabase" : "own",
+    fromBook ? "vedabase" : prefill.tab === "cards" ? "picture" : "own",
   );
   // Фрагмент из книг: пришёл из читалки или выбран поиском прямо здесь.
   const [book, setBook] = useState<MotivationReelSourceHit | null>(
@@ -383,7 +405,7 @@ export function ReelWizard({
         <div className="space-y-4">
           {sourceCards}
           <PicturePublishForm
-            categories={categories}
+            categories={allCategories}
             onPublished={() =>
               setQuota((current) =>
                 current && !current.unlimited

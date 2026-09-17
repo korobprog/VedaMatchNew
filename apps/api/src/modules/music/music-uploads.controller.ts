@@ -15,6 +15,7 @@ import type {
   CreateMusicUploadRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { AdminUnlimited } from '../auth/admin-unlimited.guard';
 import { isAdmin } from './is-admin';
 import { MusicUploadsService } from './music-uploads.service';
 import { MusicReportsService } from './music-reports.service';
@@ -26,9 +27,14 @@ import { MusicReportsService } from './music-reports.service';
  *
  * Лимит запросов низкий не ради базы, а ради бакета: каждая выданная ссылка
  * — это разрешение положить туда сто мегабайт.
+ *
+ * Администратора Музыки лимит не касается: он наполняет каталог папками, а
+ * одна запись стоит двух запросов (`create` и `complete`), так что 40 в час
+ * кончались на двадцатом файле, и остаток пачки падал с 429.
  */
 @Controller('music/uploads')
 @UseGuards(AuthGuard)
+@AdminUnlimited('music')
 @Throttle({ default: { ttl: 3_600_000, limit: 40 } })
 export class MusicUploadsController {
   constructor(private readonly uploads: MusicUploadsService) {}

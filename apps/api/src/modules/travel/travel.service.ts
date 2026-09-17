@@ -10,6 +10,7 @@ import {
   TRAVEL_STAY_KIND_LABELS,
   type ContactTravelStayResponse,
   type TravelContactRequestedEvent,
+  type TravelOccupancyResponse,
   resolveDisplayName,
   type TravelRatingSummary,
   type TravelReviewDto,
@@ -27,7 +28,17 @@ import type {
 import { PrismaService } from '../../prisma/prisma.service';
 import { generateClaimToken, normalizeClaimToken } from './claim-token';
 import { normalizePublicCode } from './public-code';
-import { countNights, formatStayDate, rangesOverlap } from './travel-dates';
+import {
+  groupOccupancy,
+  OCCUPYING_STATUSES,
+  parseOccupancyWindow,
+} from './occupancy';
+import {
+  countNights,
+  formatStayDate,
+  rangesOverlap,
+  TravelDateError,
+} from './travel-dates';
 import {
   calcTotalMinor,
   parseBookingInput,
@@ -72,6 +83,7 @@ export const stayCardSelect = {
   currency: true,
   photoUrls: true,
   publicCode: true,
+  placeId: true,
   place: { select: { name: true } },
 } satisfies Prisma.TravelStaySelect;
 
@@ -84,6 +96,7 @@ export function toStayCard(row: StayCardRow): TravelStayCardDto {
     id: row.id,
     kind: row.kind,
     name: row.name,
+    placeId: row.placeId,
     placeName: row.place?.name ?? null,
     address: row.address,
     lat: row.lat,
@@ -152,6 +165,21 @@ export function toReviewDto(row: ReviewRow): TravelReviewDto {
     authorName: row.author ? resolveDisplayName(row.author) : null,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/** Окно занятости: ошибка в датах — это 400, а не внутренняя ошибка. */
+export function occupancyWindow(
+  rawFrom: unknown,
+  rawTo: unknown,
+): { from: Date; to: Date } {
+  try {
+    return parseOccupancyWindow(rawFrom, rawTo, new Date());
+  } catch (error) {
+    if (error instanceof TravelDateError) {
+      throw new BadRequestException(error.message);
+    }
+    throw error;
+  }
 }
 
 @Injectable()
@@ -261,6 +289,56 @@ export class TravelService {
       rooms: row.rooms,
       manageable,
     };
+  }
+
+  /**
+   * Занятость комнат для календаря в форме заявки. Наружу — только даты:
+   * кто живёт и по какой заявке, гостю знать незачем. Видна тем же, кому
+   * виден объект.
+   */
+  async occupancy(
+    stayId: string,
+    viewerId: string | null,
+    rawFrom: unknown,
+    rawTo: unknown,
+  ): Promise<TravelOccupancyResponse> {
+    const window = occupancyWindow(rawFrom, rawTo);
+    const stay = await this.stay(stayId, viewerId);
+    const bookings = await this.prisma.travelBooking.findMany({
+      where: {
+        stayId: stay.id,
+        roomId: { not: null },
+        status: { in: [...OCCUPYING_STATUSES] },
+        checkIn: { lt: window.to },
+        checkOut: { gt: window.from },
+      },
+      select: { roomId: true, checkIn: true, checkOut: true },
+    });
+    const grouped = groupOccupancy(stay.rooms, bookings, window);
+    return {
+      from: formatStayDate(window.from),
+      to: formatStayDate(window.to),
+      rooms: grouped.rooms.map(({ room, bookings: busy }) => ({
+        roomId: room.id,
+        roomLabel: roomLabel(room) ?? room.number,
+        capacity: room.capacity,
+        busy: busy.map((range) => ({
+          checkIn: formatStayDate(range.checkIn),
+          checkOut: formatStayDate(range.checkOut),
+        })),
+      })),
+    };
+  }
+
+  /** Та же занятость на странице по QR — по публичному коду, без входа. */
+  async publicOccupancy(
+    rawCode: unknown,
+    viewerId: string | null,
+    rawFrom: unknown,
+    rawTo: unknown,
+  ): Promise<TravelOccupancyResponse> {
+    const stay = await this.publicStay(rawCode, viewerId);
+    return this.occupancy(stay.id, viewerId, rawFrom, rawTo);
   }
 
   /** Заявки, поданные человеком. */

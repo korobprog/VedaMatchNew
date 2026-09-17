@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
   MusicAdminTrackDto,
@@ -20,6 +20,15 @@ import {
   lineageToSelect,
 } from "@/components/lineage-picker";
 import { Alert } from "@/components/ui/alert";
+import { MusicBulkArtistBar } from "./bulk-artist-bar";
+import {
+  ARTIST_FILTER_ALL,
+  ARTIST_FILTER_NONE,
+  filterByArtist,
+  selectionState,
+  toggleAllShown,
+  type ArtistFilter,
+} from "./bulk-artist";
 
 const STATUS_LABELS: Record<MusicAdminTrackDto["status"], string> = {
   draft: "черновик",
@@ -72,16 +81,35 @@ export function MusicTrackList({
   categories: MusicCategoryDto[];
 }) {
   const [query, setQuery] = useState("");
+  const [artistFilter, setArtistFilter] = useState<ArtistFilter>(ARTIST_FILTER_ALL);
+  /* Выбор для массовой смены исполнителя (VED-226). Переживает поиск и
+     фильтр: набрать записи из двух выдач — нормальный сценарий. Записи,
+     пропавшие из списка после `router.refresh()`, из выбора выпадают. */
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   const shown = useMemo(() => {
+    const byArtist = filterByArtist(tracks, artistFilter);
     const needle = query.trim().toLowerCase();
-    if (!needle) return tracks;
-    return tracks.filter((track) =>
+    if (!needle) return byArtist;
+    return byArtist.filter((track) =>
       [track.title, track.artistName, track.albumTitle]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(needle)),
     );
-  }, [query, tracks]);
+  }, [query, tracks, artistFilter]);
+
+  const known = useMemo(() => new Set(tracks.map((t) => t.id)), [tracks]);
+  const selectedIds = [...selected].filter((id) => known.has(id));
+  const shownIds = shown.map((t) => t.id);
+  const allState = selectionState(shownIds, selected);
+
+  const toggleOne = (id: string) =>
+    setSelected((was) => {
+      const next = new Set(was);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   return (
     <section className="glass rounded-2xl border border-glass-brd p-4">
@@ -103,16 +131,51 @@ export function MusicTrackList({
         </p>
       ) : (
         <>
-          <label className="mb-3 block">
-            <span className="sr-only">Поиск по названию</span>
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Название, исполнитель, альбом"
-              className="h-9 w-full rounded-lg border border-glass-brd bg-bg-1 px-2.5 text-sm text-text-0 sm:max-w-sm"
+          <div className="mb-3 flex flex-wrap gap-2">
+            <label className="block min-w-0 flex-1 sm:max-w-sm">
+              <span className="sr-only">Поиск по названию</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Название, исполнитель, альбом"
+                className="h-9 w-full rounded-lg border border-glass-brd bg-bg-1 px-2.5 text-sm text-text-0"
+              />
+            </label>
+            {/* Фильтр по исполнителю — чтобы выбрать «все записи
+                исполнителя» одной галочкой: поиск по подстроке цепляет и
+                названия, и соседние имена. */}
+            <label className="block w-full sm:w-56">
+              <span className="sr-only">Фильтр по исполнителю</span>
+              <select
+                value={artistFilter}
+                onChange={(event) => setArtistFilter(event.target.value)}
+                className={field}
+              >
+                <option value={ARTIST_FILTER_ALL}>Все исполнители</option>
+                <option value={ARTIST_FILTER_NONE}>Без исполнителя</option>
+                {artists.map((artist) => (
+                  <option key={artist.id} value={artist.id}>
+                    {artist.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <MusicBulkArtistBar
+            selectedIds={selectedIds}
+            artists={artists}
+            onClear={() => setSelected(new Set())}
+          />
+
+          {shown.length > 0 && (
+            <SelectAllShown
+              state={allState}
+              count={shown.length}
+              onToggle={() => setSelected((was) => toggleAllShown(shownIds, was))}
             />
-          </label>
+          )}
 
           {shown.length === 0 ? (
             <p className="text-sm text-text-2">Ничего не нашлось.</p>
@@ -122,6 +185,8 @@ export function MusicTrackList({
                 <TrackRow
                   key={track.id}
                   track={track}
+                  selected={selected.has(track.id)}
+                  onToggleSelected={() => toggleOne(track.id)}
                   artists={artists}
                   albums={albums}
                   categories={categories}
@@ -135,13 +200,45 @@ export function MusicTrackList({
   );
 }
 
+/** Общая галочка над списком: выбирает всё показанное с учётом поиска и фильтра. */
+function SelectAllShown({
+  state,
+  count,
+  onToggle,
+}: {
+  state: "none" | "some" | "all";
+  count: number;
+  onToggle: () => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = state === "some";
+  }, [state]);
+  return (
+    <label className="mb-1 flex min-h-9 items-center gap-2 px-1 text-sm text-text-1">
+      <input
+        ref={ref}
+        type="checkbox"
+        checked={state === "all"}
+        onChange={onToggle}
+        className="size-4"
+      />
+      Выбрать все показанные ({count})
+    </label>
+  );
+}
+
 function TrackRow({
   track,
+  selected,
+  onToggleSelected,
   artists,
   albums,
   categories,
 }: {
   track: MusicAdminTrackDto;
+  selected: boolean;
+  onToggleSelected: () => void;
   artists: MusicArtistDto[];
   albums: MusicAlbumDto[];
   categories: MusicCategoryDto[];
@@ -204,6 +301,17 @@ function TrackRow({
         </div>
       ) : (
         <div className="flex items-baseline gap-2">
+          {/* Цель 32×32 вокруг галочки 16: мелкий квадрат пальцем не
+              попадается, а меньше 24×24 не проходит по WCAG 2.5.8. */}
+          <label className="flex size-8 shrink-0 cursor-pointer items-center justify-center self-center">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggleSelected}
+              aria-label={`Выбрать «${track.title}»`}
+              className="size-4"
+            />
+          </label>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm text-text-0">
               {track.title}

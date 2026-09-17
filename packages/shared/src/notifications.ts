@@ -264,13 +264,23 @@ export type NotificationEvent =
       conversationId: string;
     }
   | {
-      /** Входящий звонок в «Общении»: пуш с кнопками «Ответить / Отклонить». */
+      /**
+       * Входящий звонок в «Общении»: пуш с кнопками «Ответить / Отклонить»
+       * для обычных устройств, data-only FCM для нативных с флагом
+       * `nativeCalls` (см. `NotificationDevice`, `native-push.service.ts`).
+       * `callerAvatarUrl` и `expiresAt` нужны именно нативному экрану
+       * входящего вызова — карточка звонка рисуется без похода в API.
+       */
       name: 'chat.call-incoming';
       recipientId: string;
       callerName: string;
+      /** `null`, когда у звонившего нет аватара. */
+      callerAvatarUrl: string | null;
       callId: string;
       conversationId: string;
       callKind: 'audio' | 'video';
+      /** ISO-момент, когда дозвон истечёт (сейчас — `RING_TIMEOUT_MS` вперёд). */
+      expiresAt: string;
     }
   | {
       /** Звонок не приняли за время дозвона. */
@@ -561,18 +571,122 @@ export interface NotificationPreferencesDto
    *  из админки: выключение гасит пуш, а важная рассылка всё равно появится
    *  в колокольчике — см. `important` у рассылки. */
   announcements: boolean;
+  /**
+   * Сообщения от `@vedamatch_bot` — общий выключатель поверх категорий выше:
+   * `chat` включён, а `telegram` выключен — пуш в браузер и колокольчик идут
+   * как обычно, а бот молчит. Не влияет на то, заведено ли устройство
+   * `provider: 'telegram'` — оно живёт, пока Telegram не отвязан
+   * (`auth.telegram.disconnected`) или пока бота не заблокировали.
+   */
+  telegram: boolean;
 }
 
 export type UpdateNotificationPreferencesRequest =
   Partial<NotificationPreferencesDto>;
+
+/**
+ * Имя события «звонок снят». Публикует `modules/chat/calls`, слушает
+ * `NotificationsListener` — чистый сигнал для FCM data-only пуша, гасящий
+ * рингтон на нативных устройствах, которые получили `chat.call-incoming`, но
+ * не участвуют в разговоре (ответили на другом устройстве, отменили,
+ * отклонили, пропустили по таймауту, завершили). В колокольчик и веб-пуш это
+ * событие не идёт — своего текста у него нет, см. `USER_REGISTERED_EVENT` за
+ * образец события вне `NotificationEvent`.
+ */
+export const CHAT_CALL_ENDED_EVENT = 'chat.call-ended';
+
+export type ChatCallEndedPushReason =
+  | 'answered_elsewhere'
+  | 'declined'
+  | 'missed'
+  | 'cancelled'
+  | 'ended'
+  | 'failed';
+
+export interface ChatCallEndedEvent {
+  name: typeof CHAT_CALL_ENDED_EVENT;
+  recipientId: string;
+  callId: string;
+  reason: ChatCallEndedPushReason;
+}
 
 export interface PushSubscriptionRequest {
   endpoint: string;
   keys: { p256dh: string; auth: string };
 }
 
+/** Служба доставки пушей в приложение. */
+export type NotificationDeviceProvider = 'fcm' | 'rustore';
+export type NotificationDevicePlatform = 'android' | 'ios';
+
+/** Телефон сообщает свой токен после входа и при каждой его смене. */
+export interface RegisterNotificationDeviceRequest {
+  token: string;
+  provider: NotificationDeviceProvider;
+  platform: NotificationDevicePlatform;
+  /** Сборка приложения, например `ru-site`. */
+  appVariant?: string;
+  /**
+   * Приложение умеет показывать нативный экран звонка по data-пушу
+   * (`@react-native-firebase/messaging`, VED-220). Пока не прислано — `false`:
+   * такому устройству звонок приходит обычным пушем с уведомлением, как
+   * раньше, и двойного звонка не будет.
+   */
+  nativeCalls?: boolean;
+}
+
+export interface UnregisterNotificationDeviceRequest {
+  token: string;
+}
+
+/** Сводка по телефонам для админки уведомлений. */
+export interface NotificationDeviceStats {
+  total: number;
+  /** Уникальных людей хотя бы с одним телефоном. */
+  users: number;
+  byProvider: Record<NotificationDeviceProvider, number>;
+  /** Настроена ли отправка через FCM на сервере. */
+  fcmConfigured: boolean;
+}
+
+/** Итог тестового пуша себе: сколько телефонов и сколько приняли. */
+export interface NotificationDeviceTestResult {
+  devices: number;
+  delivered: number;
+}
+
 export interface VapidKeyResponse {
   publicKey: string;
+}
+
+// ===== Уведомления через Telegram-бота =====
+
+/** Экран «Аккаунт»: привязан ли Telegram, и включена ли доставка бота. */
+export interface TelegramNotificationStatusResponse {
+  /** Есть живое устройство `provider: 'telegram'` — бот может написать. */
+  connected: boolean;
+  /** Тумблер `NotificationPreference.telegram`. */
+  enabled: boolean;
+}
+
+export interface UpdateTelegramNotificationStatusRequest {
+  enabled: boolean;
+}
+
+/** После `WebApp.requestWriteAccess()` — подтверждение подписью бота. */
+export interface EnableTelegramNotificationsRequest {
+  initData: string;
+}
+
+/** Админский эндпоинт `GET /notifications/telegram/status`: проверка с
+ *  прода, что сервер вообще достаёт до Telegram. */
+export interface TelegramBotStatusResponse {
+  /** Задан ли `TELEGRAM_BOT_TOKEN`. */
+  configured: boolean;
+  /** Ответил ли Bot API на `getMe`. */
+  reachable: boolean;
+  /** `username` бота из `getMe`; `null`, если не настроен или недоступен. */
+  username: string | null;
 }
 
 // ===== Рассылки администрации =====

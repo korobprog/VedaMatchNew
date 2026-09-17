@@ -227,6 +227,13 @@ export class ChatController {
     return this.conversations.addMembers(user.sub, id, body?.userIds ?? []);
   }
 
+  // Объявлен раньше `members/:userId`: Nest сверяет маршруты по порядку, и
+  // иначе «me» уходит в удаление участника с ответом «Участник не найден».
+  @Delete('conversations/:id/members/me')
+  leave(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.conversations.leave(user.sub, id);
+  }
+
   @Delete('conversations/:id/members/:userId')
   removeMember(
     @CurrentUser() user: AccessTokenPayload,
@@ -274,11 +281,6 @@ export class ChatController {
     @Param('id') id: string,
   ) {
     return this.conversations.remove(user.sub, id);
-  }
-
-  @Delete('conversations/:id/members/me')
-  leave(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
-    return this.conversations.leave(user.sub, id);
   }
 
   /** Вложение: файл сначала уезжает в S3, ссылка потом идёт в сообщение. */

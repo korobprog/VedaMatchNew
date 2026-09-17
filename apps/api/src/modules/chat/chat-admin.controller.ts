@@ -21,6 +21,7 @@ import { ChatReportsService } from './chat-reports.service';
 import { ChatCallsService } from './calls/chat-calls.service';
 import { ChatEmojiService } from './chat-emoji.service';
 import { isAdmin } from './is-admin';
+import { ChatOfficialChannelService } from './chat-official-channel.service';
 
 /**
  * Раздел админки сервиса. Сервис не считается готовым, пока им нельзя
@@ -34,6 +35,7 @@ export class ChatAdminController {
     private readonly reports: ChatReportsService,
     private readonly calls: ChatCallsService,
     private readonly emoji: ChatEmojiService,
+    private readonly official: ChatOfficialChannelService,
   ) {}
 
   @Get('reports')
@@ -99,6 +101,20 @@ export class ChatAdminController {
   ) {
     this.assertAdmin(user);
     return this.calls.updateSettings(body);
+  }
+
+  /** Официальный канал VedaMatch: подписчики, вышедшие, кого не хватает. */
+  @Get('official')
+  officialChannel(@CurrentUser() user: AccessTokenPayload) {
+    this.assertAdmin(user);
+    return this.official.stats();
+  }
+
+  /** «Подписать всех»: добавить недостающих, вышедших не возвращать. */
+  @Post('official/sync')
+  syncOfficialChannel(@CurrentUser() user: AccessTokenPayload) {
+    this.assertAdmin(user);
+    return this.official.syncMembers();
   }
 
   /** «Избранные» смайлики по умолчанию для всех участников (VED-123). */

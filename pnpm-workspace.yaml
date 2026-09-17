@@ -15,6 +15,8 @@ allowBuilds:
   argon2: true
   '@parcel/watcher': false
   '@swc/core': false
+  '@firebase/util': true
+  protobufjs: true
 
 # Закрытие advisory в транзитивных зависимостях (pnpm audit --prod, сентябрь 2026).
 # Диапазоны минимальны и не выходят за мажор, который ждёт потребитель.

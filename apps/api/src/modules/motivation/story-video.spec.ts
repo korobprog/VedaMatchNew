@@ -176,7 +176,15 @@ describe('buildReelOverlayInput', () => {
       text: 'Цитата',
       attribution: 'Автор',
       maxQuoteLines: REEL_MAX_QUOTE_LINES,
+      layout: 'row',
     });
+  });
+
+  it('раскладка низа кадра — row, знак в углу, подпись рядом (VED-227/VED-201а)', () => {
+    // Раньше layout не передавался, и renderStoryOverlay() брал дефолт
+    // 'stacked' — это и было видно в превью Max и на самом ролике.
+    const overlay = buildReelOverlayInput('Цитата', 'Автор');
+    expect(overlay.layout).toBe('row');
   });
 
   it('лимит роликов меньше, чем у открытки', () => {

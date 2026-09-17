@@ -456,4 +456,63 @@ describe('MotivationCategoriesService.publicTree', () => {
       'gita',
     ]);
   });
+  it('с лентой отдаёт её меню: свои категории и свои счётчики (VED-139)', async () => {
+    const { service, groupBy } = build(
+      [
+        { ...root, feed: 'both' },
+        { ...empty, feed: 'cards' },
+        { ...child, feed: 'both' },
+      ],
+      [
+        { category: 'vedy', captionInImage: false, _count: { _all: 10 } },
+        { category: 'gita', captionInImage: true, _count: { _all: 2 } },
+        { category: 'gita', captionInImage: false, _count: { _all: 1 } },
+      ] as never,
+    );
+
+    const cards = await service.publicTree('cards');
+    expect(groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({ by: ['category', 'captionInImage'] }),
+    );
+    // «Веды» остаются только как родитель «Гиты», и без чужих десяти.
+    expect(cards.map((item) => [item.slug, item.postCount])).toEqual([
+      ['vedy', 0],
+      ['gita', 2],
+      ['pustaya', 0],
+    ]);
+    const art = await service.publicTree('art');
+    expect(art.map((item) => [item.slug, item.postCount])).toEqual([
+      ['vedy', 10],
+      ['gita', 1],
+    ]);
+  });
+});
+
+describe('MotivationCategoriesService.resolveSlug с лентой (VED-139)', () => {
+  function build(found: { slug: string; feed: string } | null) {
+    return new MotivationCategoriesService({
+      motivationCategory: { findUnique: jest.fn().mockResolvedValue(found) },
+    } as never);
+  }
+
+  it('не кладёт открытку в категорию «Для вас»', async () => {
+    await expect(
+      build({ slug: 'vedy', feed: 'art' }).resolveSlug('vedy', 'cards'),
+    ).rejects.toThrow('открытки туда не кладут');
+  });
+
+  it('пускает в общую категорию и в категорию своей ленты', async () => {
+    await expect(
+      build({ slug: 'vedy', feed: 'both' }).resolveSlug('vedy', 'cards'),
+    ).resolves.toBe('vedy');
+    await expect(
+      build({ slug: 'vedy', feed: 'cards' }).resolveSlug('vedy', 'cards'),
+    ).resolves.toBe('vedy');
+  });
+
+  it('без ленты проверяет только существование — правка редакции', async () => {
+    await expect(
+      build({ slug: 'vedy', feed: 'art' }).resolveSlug('vedy'),
+    ).resolves.toBe('vedy');
+  });
 });

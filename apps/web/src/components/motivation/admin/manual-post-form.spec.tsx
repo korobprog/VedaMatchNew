@@ -16,6 +16,9 @@ const categories: MotivationCategoryDto[] = [
     isDefault: true,
     parentId: null,
     postCount: 0,
+    feed: "both",
+    artCount: 0,
+    cardsCount: 0,
   },
 ];
 
@@ -41,7 +44,6 @@ function sentBody(fetchMock: ReturnType<typeof vi.fn>) {
 async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Текст цитаты"), "Не сдавайся.");
   await user.type(screen.getByLabelText("Автор"), "Шрила Прабхупада");
-  await user.type(screen.getByLabelText("Заголовок"), "Идти до конца");
 }
 
 describe("ManualPostForm", () => {
@@ -57,14 +59,15 @@ describe("ManualPostForm", () => {
     const submit = screen.getByRole("button", { name: /Создать/ });
     expect(submit).toBeDisabled();
     expect(
-      screen.getByText(/Осталось заполнить: текст цитаты, автор, заголовок/),
+      screen.getByText(/Осталось заполнить: текст цитаты, автор\./),
     ).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Текст цитаты"), "Не сдавайся.");
-    expect(screen.getByText(/Осталось заполнить: автор, заголовок/)).toBeInTheDocument();
+    expect(screen.getByText(/Осталось заполнить: автор\./)).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Автор"), "Шрила Прабхупада");
-    await user.type(screen.getByLabelText("Заголовок"), "Идти до конца");
+    // Заголовка нет (VED-199) — сервер соберёт его из цитаты.
+    expect(screen.queryByLabelText("Заголовок")).toBeNull();
     // Пояснение не заполнено, но оно необязательно.
     expect(screen.queryByText(/Осталось заполнить/)).toBeNull();
     expect(submit).toBeEnabled();
@@ -94,7 +97,7 @@ describe("ManualPostForm", () => {
     expect(sentBody(fetchMock)).toMatchObject({
       originalText: "Не сдавайся.",
       author: "Шрила Прабхупада",
-      copy: { title: "Идти до конца", explanation: "Своими словами." },
+      copy: { explanation: "Своими словами." },
       profileTypes: ["user"],
       audienceTrack: "universal",
       category: "smirenie",
@@ -109,17 +112,17 @@ describe("ManualPostForm", () => {
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /Создать/ }));
 
-    expect(sentBody(fetchMock).copy).toEqual({ title: "Идти до конца" });
+    expect(sentBody(fetchMock).copy).toEqual({});
   });
 
-  it("omits an extra language that has no title", async () => {
+  it("omits an extra language that has no explanation", async () => {
     const fetchMock = okFetch();
     const user = userEvent.setup();
 
     render(<ManualPostForm categories={categories} />);
     await fillRequired(user);
-    // Пояснение без заголовка переводом не считается — язык возьмёт основной текст.
-    await user.type(screen.getByLabelText("Пояснение · English"), "In my words.");
+    // Пустой язык переводом не считается — он возьмёт основной текст.
+    await user.type(screen.getByLabelText("Пояснение · English"), "   ");
     await user.click(screen.getByRole("button", { name: /Создать/ }));
 
     expect(sentBody(fetchMock)).not.toHaveProperty("translations");
@@ -131,12 +134,11 @@ describe("ManualPostForm", () => {
 
     render(<ManualPostForm categories={categories} />);
     await fillRequired(user);
-    await user.type(screen.getByLabelText("Заголовок · English"), "Go on");
     await user.type(screen.getByLabelText("Пояснение · English"), "In my words.");
     await user.click(screen.getByRole("button", { name: /Создать/ }));
 
     expect(sentBody(fetchMock).translations).toEqual({
-      en: { title: "Go on", explanation: "In my words.", storyText: "" },
+      en: { explanation: "In my words.", storyText: "" },
     });
   });
 
@@ -168,12 +170,11 @@ describe("ManualPostForm", () => {
     render(<ManualPostForm categories={categories} />);
 
     const preview = screen.getByLabelText("Предпросмотр");
-    expect(preview).toHaveTextContent("Заголовок");
+    expect(preview).toHaveTextContent("Текст цитаты");
 
-    await user.type(screen.getByLabelText("Заголовок"), "Идти до конца");
     await user.type(screen.getByLabelText("Текст цитаты"), "Не сдавайся.");
-    expect(preview).toHaveTextContent("Идти до конца");
     expect(preview).toHaveTextContent("Не сдавайся.");
+    expect(preview).not.toHaveTextContent("Заголовок");
   });
 
   it("reports that the text is already approved and links to the queue", async () => {

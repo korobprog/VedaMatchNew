@@ -3,20 +3,16 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getSafeReturnTo } from "@/lib/return-to";
-import { apiBase } from "@/lib/api-base";
-
-const API_URL = apiBase();
+import { refreshSession } from "@/lib/http-client";
 
 export function SilentRefresh({ returnTo }: { returnTo?: string }) {
   const router = useRouter();
 
   useEffect(() => {
-    fetch(`${API_URL}/auth/refresh`, {
-      method: "POST",
-      credentials: "include",
-    })
-      .then((res) => {
-        if (res.ok) {
+    // Через общий refreshSession: у открытых вкладок одна очередь на refresh.
+    refreshSession()
+      .then((ok) => {
+        if (ok) {
           router.replace(getSafeReturnTo(returnTo));
           router.refresh();
         }

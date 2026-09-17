@@ -42,5 +42,15 @@ example
 /ios
 /android
 
+# Сборочные артефакты локальных Expo-модулей (modules/*/android — свой
+# исходный код, но его Gradle-`build/`/`.cxx` — то же самое, что /android
+# выше, просто на уровень глубже).
+modules/*/android/build/
+modules/*/android/.cxx/
+
 # Firebase config is copied in from outside the repo
 google-services.json
+
+# Веб-сборка ios.vedamatch.com (pnpm export:web)
+dist-web/
+dist-web-b/

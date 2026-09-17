@@ -10,6 +10,7 @@ import type {
   CreateMusicArtistRequest,
   CreateMusicCategoryRequest,
   CreateMusicPlaylistRequest,
+  MusicBulkTrackArtistResult,
   MusicCoverScope,
   UpdateMusicAlbumRequest,
   UpdateMusicArtistRequest,
@@ -23,6 +24,7 @@ import { MusicCoversService } from './music-covers.service';
 import { MusicStorageService } from './music-storage.service';
 import { buildMusicSlug, withMusicSlugSuffix } from './music-slug';
 import { nextPosition } from './playlist-order';
+import { BulkArtistError, planBulkArtist } from './bulk-track-artist';
 
 const MAX_NAME_LENGTH = 160;
 const MAX_BIO_LENGTH = 2000;
@@ -684,6 +686,67 @@ export class MusicAdminCatalogService {
         },
       });
     });
+  }
+
+  /**
+   * Массовая смена исполнителя (VED-226): выбранные записи — к одному
+   * исполнителю. По имени ищем без учёта регистра, как разбор тегов
+   * (`music-artist-tags.service`), и заводим нового, только если такого нет:
+   * иначе «Aindra das» и «AINDRA DAS» снова разъехались бы по двум страницам.
+   *
+   * Альбомы не трогаем: у альбома свой исполнитель, и программа с записями
+   * нескольких людей не должна переезжать целиком из-за одной правки.
+   */
+  async setTracksArtist(
+    viewerIsAdmin: boolean,
+    body: unknown,
+  ): Promise<MusicBulkTrackArtistResult> {
+    this.assertAdmin(viewerIsAdmin);
+    let plan: ReturnType<typeof planBulkArtist>;
+    try {
+      plan = planBulkArtist(body);
+    } catch (cause) {
+      if (cause instanceof BulkArtistError) {
+        throw new BadRequestException(cause.message);
+      }
+      throw cause;
+    }
+
+    const found = await this.prisma.musicTrack.findMany({
+      where: { id: { in: plan.trackIds } },
+      select: { id: true },
+    });
+    if (found.length !== plan.trackIds.length) {
+      throw new NotFoundException('Часть записей не найдена — обновите список');
+    }
+
+    let artist: MusicBulkTrackArtistResult['artist'] = null;
+    let created = false;
+    const { target } = plan;
+    if (target.kind === 'id') {
+      artist = await this.prisma.musicArtist.findUnique({
+        where: { id: target.artistId },
+        select: { id: true, name: true, slug: true },
+      });
+      if (!artist) throw new BadRequestException('Исполнитель не найден');
+    } else if (target.kind === 'name') {
+      artist = await this.prisma.musicArtist.findFirst({
+        where: { name: { equals: target.name, mode: 'insensitive' } },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, name: true, slug: true },
+      });
+      if (!artist) {
+        const made = await this.createArtist(true, { name: target.name });
+        artist = { id: made.id, name: made.name, slug: made.slug };
+        created = true;
+      }
+    }
+
+    const { count } = await this.prisma.musicTrack.updateMany({
+      where: { id: { in: plan.trackIds } },
+      data: { artistId: artist?.id ?? null },
+    });
+    return { artist, created, updated: count };
   }
 
   private async replaceCategories(

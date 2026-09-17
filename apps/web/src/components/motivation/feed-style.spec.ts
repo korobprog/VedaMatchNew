@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  categoriesAcceptingStyle,
   categoryLink,
+  collectionHref,
+  collectionsHref,
   feedCategoryButtons,
   feedStyleOf,
   isPinnedCard,
@@ -184,5 +187,37 @@ describe("feedCategoryButtons (VED-135)", () => {
     );
 
     expect(buttons.map((button) => button.current)).toEqual([false, true]);
+  });
+});
+
+describe("меню категорий у каждой ленты (VED-139)", () => {
+  it("«Категории» и папка открываются во вкладке ленты", () => {
+    expect(collectionsHref("cards")).toBe("/motivation/collections?tab=cards");
+    expect(collectionsHref("forYou")).toBe("/motivation/collections");
+    expect(collectionsHref("saved")).toBe("/motivation/collections");
+    expect(collectionHref("vedy", "cards")).toBe(
+      "/motivation/collections/vedy?tab=cards",
+    );
+    expect(collectionHref("vedy")).toBe("/motivation/collections/vedy");
+  });
+
+  it("в форму открытки идут общие категории и категории открыток", () => {
+    const list = [
+      { id: "a", parentId: null, feed: "art" },
+      { id: "a1", parentId: "a", feed: "both" },
+      { id: "b", parentId: null, feed: "both" },
+      { id: "c", parentId: null, feed: "cards" },
+      { id: "old", parentId: null },
+    ];
+    expect(categoriesAcceptingStyle(list, "cards")).toEqual([
+      // Родитель чужой ленты ушёл — подкатегория поднялась наверх.
+      { id: "a1", parentId: null, feed: "both" },
+      { id: "b", parentId: null, feed: "both" },
+      { id: "c", parentId: null, feed: "cards" },
+      { id: "old", parentId: null },
+    ]);
+    expect(
+      categoriesAcceptingStyle(list, "art").map((item) => item.id),
+    ).toEqual(["a", "a1", "b", "old"]);
   });
 });

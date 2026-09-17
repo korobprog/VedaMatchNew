@@ -3,37 +3,60 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { categoryLink } from "@/components/motivation/feed-style";
 import { getPublicMotivationPost } from "@/lib/motivation-api";
-
-/** Цитата и пояснение склеены пустой строкой — см. motivation-copy.service. */
-const SEPARATOR = "\n\n";
+import {
+  OG_IMAGE_HEIGHT,
+  OG_IMAGE_TYPE,
+  OG_IMAGE_WIDTH,
+  ogImagePath,
+  ogImageSource,
+} from "@/lib/motivation-og-image";
+import { buildShareMeta } from "./share-meta";
 
 /**
  * Карточка ссылки в мессенджерах. У рилса с роликом отдаём и видео: без
  * `og:video` Telegram и WhatsApp показывают только неподвижный кадр, а ссылка
  * на рилс должна разворачиваться в рилс.
+ *
+ * Картинка превью — не сам сторис-кадр, а его лёгкая JPEG-копия со своего
+ * домена (VED-201): PNG на 5 МБ разворачивал только Max.
+ *
+ * Заголовок и описание превью — из `buildShareMeta()` (VED-201б): раньше
+ * `description` был полным текстом цитаты, тем же, что уже уходит в тело
+ * сообщения при «Поделиться» (`share-targets.ts`) — мессенджер показывал её
+ * дважды. `<title>` страницы (ниже) при этом не меняется: то, что видно на
+ * вкладке браузера и на самой странице, — отдельно от превью-карточки.
  */
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const post = await getPublicMotivationPost(slug);
   if (!post) return { title: "VedaMatch Inspiration" };
-  // Описание — цитата без пояснения: пояснение в карточку всё равно не влезет.
-  const description = post.text.split(SEPARATOR)[0].slice(0, 300);
-  const poster = post.storyImageUrl || post.imageUrl;
+  const { title: shareTitle, description } = buildShareMeta(post);
+  const poster = ogImageSource(post) ? ogImagePath(slug) : null;
   return {
     title: `${post.title} — Inspiration`,
     description,
     openGraph: {
       type: post.videoUrl ? "video.other" : "article",
-      title: post.title,
+      title: shareTitle,
       description,
-      images: poster ? [{ url: poster, width: 1080, height: 1920 }] : [],
+      images: poster
+        ? [
+            {
+              url: poster,
+              type: OG_IMAGE_TYPE,
+              width: OG_IMAGE_WIDTH,
+              height: OG_IMAGE_HEIGHT,
+              alt: shareTitle,
+            },
+          ]
+        : [],
       ...(post.videoUrl
         ? { videos: [{ url: post.videoUrl, type: "video/mp4", width: 1080, height: 1920 }] }
         : {}),
     },
     twitter: {
       card: post.videoUrl ? "player" : "summary_large_image",
-      title: post.title,
+      title: shareTitle,
       description,
       images: poster ? [poster] : [],
     },

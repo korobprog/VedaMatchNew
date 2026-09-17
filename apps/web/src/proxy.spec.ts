@@ -36,10 +36,19 @@ describe("proxy", () => {
       "/services/astro",
       "/vaishnava",
       "/travel/s/ABC234",
+      "/app",
     ]) {
       const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));
 
       expect(response.headers.get("location")).toBeNull();
+    }
+  });
+
+  it("opens exactly /app, not every path that starts with it", () => {
+    for (const path of ["/apps", "/app-settings", "/application"]) {
+      const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));
+
+      expect(response.headers.get("location")).toContain("returnTo=");
     }
   });
 

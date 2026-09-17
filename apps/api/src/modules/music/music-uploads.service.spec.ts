@@ -148,6 +148,29 @@ describe('MusicUploadsService.createUpload', () => {
     expect(result.headers['Content-Length']).toBe('4000000');
   });
 
+  it('m4a с Android (audio/x-m4a) подписывает под каноническим типом (VED-195)', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+
+    const result = await service(prisma, storage).createUpload(
+      'u1',
+      body({ mime: 'audio/x-m4a', fileName: 'Golden Avatar.m4a' }),
+    );
+
+    expect(storage.buildKey).toHaveBeenCalledWith('u1', 'm4a');
+    expect(storage.presignPut).toHaveBeenCalledWith(
+      expect.any(String),
+      'audio/mp4',
+      4_000_000,
+    );
+    // Клиент кладёт в PUT именно этот тип, а не file.type: иначе подпись
+    // разойдётся и S3 ответит 403.
+    expect(result.headers['Content-Type']).toBe('audio/mp4');
+    expect(prisma.prisma.musicUpload.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ mime: 'audio/mp4' }),
+    });
+  });
+
   it('без настроенного хранилища отвечает «недоступно», а не падает', async () => {
     const prisma = prismaMock();
     const storage = storageMock({ configured: false });

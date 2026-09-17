@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import type { TravelBookingStatus } from '@prisma/client';
@@ -76,6 +77,20 @@ export class TravelManageController {
     );
   }
 
+  /** Место на карте: `placeId: null` отвязывает объект от точки. */
+  @Patch('stays/:id/place')
+  setPlace(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: { placeId?: unknown },
+  ) {
+    const placeId = body.placeId;
+    if (placeId !== null && typeof placeId !== 'string') {
+      throw new BadRequestException('Укажите точку на карте или null');
+    }
+    return this.manage.setStayPlace(user.sub, id, placeId?.trim() || null);
+  }
+
   @Post('stays/:id/rooms')
   addRoom(
     @CurrentUser() user: AccessTokenPayload,
@@ -98,6 +113,17 @@ export class TravelManageController {
   @Get('stays/:id/bookings')
   bookings(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.manage.bookings(user.sub, id);
+  }
+
+  /** Шахматка: заявки по комнатам с номером, гостем и состоянием. */
+  @Get('stays/:id/occupancy')
+  occupancy(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.manage.occupancy(user.sub, id, from, to);
   }
 
   @Patch('bookings/:id')

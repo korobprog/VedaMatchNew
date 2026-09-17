@@ -17,7 +17,11 @@ import type {
   UpdateNotificationBroadcastRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import { buildAudienceWhere, normalizeAudience } from './broadcast-audience';
+import {
+  buildAudienceWhere,
+  hasPushTarget,
+  normalizeAudience,
+} from './broadcast-audience';
 
 /** Поля, из которых собирается DTO. Автор нужен строкой, а не связью. */
 const broadcastSelect = {
@@ -185,10 +189,21 @@ export class NotificationBroadcastService {
       this.prisma.user.count({
         where: {
           ...where,
-          pushSubscriptions: { some: {} },
-          OR: [
-            { notificationPreference: null },
-            { notificationPreference: { enabled: true, announcements: true } },
+          // Через AND, а не соседними ключами: `OR` фильтра оплаты иначе
+          // затёрся бы условием настроек.
+          AND: [
+            hasPushTarget,
+            {
+              OR: [
+                { notificationPreference: null },
+                {
+                  notificationPreference: {
+                    enabled: true,
+                    announcements: true,
+                  },
+                },
+              ],
+            },
           ],
         },
       }),

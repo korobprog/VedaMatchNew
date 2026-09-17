@@ -12,6 +12,7 @@ function prismaMock() {
     musicTrack: {
       findMany: jest.fn().mockResolvedValue([]),
       groupBy: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
     },
     musicCategory: { findMany: jest.fn().mockResolvedValue([]) },
     musicTrackCategory: { groupBy: jest.fn().mockResolvedValue([]) },
@@ -157,5 +158,35 @@ describe('MusicCatalogService — линия слушателя', () => {
       status: 'published',
       AND: [{ OR: [{ lineage: 'ipbys' }, { lineage: null }] }],
     });
+  });
+
+  it('витрина отдаёт общее число записей с тем же фильтром по линии (VED-239)', async () => {
+    const prisma = prismaMock();
+    prisma.musicSettings.findUnique.mockResolvedValue({ lineage: 'ipbys' });
+    prisma.musicTrack.count.mockResolvedValue(128);
+    const { service: catalog } = service(prisma);
+
+    const result = await catalog.showcase('u1');
+
+    expect(result.totalTracks).toBe(128);
+    expect(prisma.musicTrack.count).toHaveBeenCalledWith({
+      where: {
+        status: 'published',
+        AND: [{ OR: [{ lineage: 'ipbys' }, { lineage: null }] }],
+      },
+    });
+  });
+});
+
+describe('MusicCatalogService — исполнители витрины', () => {
+  it('отдаёт всех, а не первые восемь (VED-224)', async () => {
+    const { service: catalog, prisma } = service();
+
+    await catalog.showcase(null);
+
+    const args = prisma.musicArtist.findMany.mock.calls[0][0] as {
+      take?: number;
+    };
+    expect(args.take ?? Infinity).toBeGreaterThan(8);
   });
 });

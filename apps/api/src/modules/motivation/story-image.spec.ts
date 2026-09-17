@@ -9,6 +9,7 @@ import {
   composeStoryImage,
   escapeXml,
   fitQuote,
+  metaMaxWidth,
   STORY_HEIGHT,
   STORY_WIDTH,
   wrapText,
@@ -126,9 +127,7 @@ describe('buildStoryOverlaySvg', () => {
     const svg = buildStoryOverlaySvg(input);
     const box = brandLogoBox({ quoteLines: 1, metaLines: 1 });
     const baselines = (kind: string) =>
-      [
-        ...svg.matchAll(/<text[^>]*y="(\d+(?:\.\d+)?)"[^>]*class="([a-z]+)"/g),
-      ]
+      [...svg.matchAll(/<text[^>]*y="(\d+(?:\.\d+)?)"[^>]*class="([a-z]+)"/g)]
         .filter((match) => match[2] === kind)
         .map((match) => Number(match[1]));
 
@@ -168,6 +167,35 @@ describe('buildStoryOverlaySvg', () => {
     expect(svg).toContain(AI_DISCLOSURE);
     expect(baseline('disclosure')).toBeGreaterThan(baseline('meta'));
     expect(baseline('disclosure')).toBeLessThan(STORY_HEIGHT);
+  });
+
+  it('без disclosure остаётся прежняя ИИ-метка — сторис и ролики не меняются (VED-247)', () => {
+    const svg = buildStoryOverlaySvg({ text: 'Цитата' });
+    expect(svg).toContain(AI_DISCLOSURE);
+  });
+
+  it('переданный disclosure заменяет ИИ-метку в кадре — так открытка добавляет «Скачано с VedaMatch.ru» (VED-247)', () => {
+    const svg = buildStoryOverlaySvg({
+      text: 'Цитата',
+      disclosure: 'Скачано с VedaMatch.ru · Создано нейросетью',
+    });
+    expect(svg).toContain('Скачано с VedaMatch.ru · Создано нейросетью');
+    // Прежний текст не остаётся рядом вторым куском — строка одна, заменена
+    // целиком, а не дополнена.
+    expect(svg).not.toContain(AI_DISCLOSURE);
+  });
+
+  it('renderStoryOverlay рисует другие пиксели под disclosure — параметр реально доходит до кадра', async () => {
+    // renderStoryOverlay прокидывает input в buildStoryOverlaySvg целиком, но
+    // это деталь реализации; проверяем результат — готовый слой с disclosure
+    // визуально отличается от слоя без него, а не только текст SVG.
+    const input = { text: 'Цитата' };
+    const withoutOverride = await renderStoryOverlay(input);
+    const withOverride = await renderStoryOverlay({
+      ...input,
+      disclosure: 'Скачано с VedaMatch.ru · Создано нейросетью',
+    });
+    expect(Buffer.compare(withoutOverride, withOverride)).not.toBe(0);
   });
 
   it('рисует знак в готовом слое подписи', async () => {
@@ -242,6 +270,149 @@ describe('buildStoryOverlaySvg', () => {
   });
 });
 
+describe('buildStoryOverlaySvg · знак в углу, подпись рядом (VED-227)', () => {
+  const texts = (svg: string, kind: string) =>
+    [
+      ...svg.matchAll(
+        /<text x="(\d+(?:\.\d+)?)" y="(-?\d+(?:\.\d+)?)"[^>]*class="([a-z]+)"/g,
+      ),
+    ]
+      .filter((match) => match[3] === kind)
+      .map((match) => ({ x: Number(match[1]), y: Number(match[2]) }));
+
+  const input = {
+    text: 'Я больше не знаю, в чем состоит мой долг.',
+    // Не завязано на конкретный текст фолбэка автора (VED-245) — тут только
+    // геометрия строчной раскладки, длина строки должна остаться в одну
+    // строку, как и раньше; сам фолбэк и его перенос — отдельный блок ниже.
+    attribution: 'Шри Кришна · Бхагавад-гита 2.7',
+    layout: 'row' as const,
+  };
+
+  it('ставит знак в левый нижний угол, ниже цитаты', () => {
+    const svg = buildStoryOverlaySvg(input);
+    const box = brandLogoBox({ quoteLines: 1, metaLines: 1, layout: 'row' });
+
+    expect(box.left).toBe(88);
+    expect(box.top + box.height).toBeLessThan(STORY_HEIGHT);
+    // Нижний край знака — в самой нижней полосе кадра.
+    expect(box.top + box.height).toBeGreaterThan(STORY_HEIGHT - 120);
+    for (const { y } of texts(svg, 'quote'))
+      expect(y).toBeLessThanOrEqual(box.top);
+  });
+
+  it('подпись и отметка об ИИ стоят справа от знака, на его уровне', () => {
+    const svg = buildStoryOverlaySvg(input);
+    const box = brandLogoBox({ quoteLines: 1, metaLines: 1, layout: 'row' });
+    const side = [...texts(svg, 'meta'), ...texts(svg, 'disclosure')];
+
+    expect(side).toHaveLength(2);
+    for (const { x, y } of side) {
+      expect(x).toBeGreaterThan(box.left + box.width);
+      // Базовая линия — в пределах высоты знака: строки рядом, а не под ним.
+      expect(y).toBeGreaterThan(box.top);
+      expect(y).toBeLessThanOrEqual(box.top + box.height);
+    }
+    const [meta] = texts(svg, 'meta');
+    const [disclosure] = texts(svg, 'disclosure');
+    expect(meta.x).toBe(disclosure.x);
+    expect(disclosure.y).toBeGreaterThan(meta.y);
+  });
+
+  it('компактнее прежнего столбика: цитата опускается ниже', () => {
+    const stacked = texts(
+      buildStoryOverlaySvg({ ...input, layout: undefined }),
+      'quote',
+    );
+    const row = texts(buildStoryOverlaySvg(input), 'quote');
+    expect(row[0].y).toBeGreaterThan(stacked[0].y);
+  });
+
+  it('переносит подпись по суженной ширине и держит её в полосе знака', () => {
+    const svg = buildStoryOverlaySvg({
+      ...input,
+      attribution:
+        'А. Ч. Бхактиведанта Свами Прабхупада · Прабхупада-лиламрита · Глава 6',
+    });
+    const meta = texts(svg, 'meta');
+    const box = brandLogoBox({ quoteLines: 1, metaLines: 2, layout: 'row' });
+
+    expect(meta).toHaveLength(2);
+    expect(metaMaxWidth('row')).toBeLessThan(metaMaxWidth('stacked'));
+    for (const { y } of texts(svg, 'quote'))
+      expect(y).toBeLessThanOrEqual(Math.min(box.top, meta[0].y - 30));
+  });
+
+  it('без подписи рядом со знаком остаётся одна отметка об ИИ', () => {
+    const svg = buildStoryOverlaySvg({ ...input, attribution: null });
+    const box = brandLogoBox({ quoteLines: 1, metaLines: 0, layout: 'row' });
+    const [disclosure] = texts(svg, 'disclosure');
+
+    expect(texts(svg, 'meta')).toHaveLength(0);
+    expect(disclosure.x).toBeGreaterThan(box.left + box.width);
+    expect(disclosure.y).toBeGreaterThan(box.top);
+    expect(disclosure.y).toBeLessThan(box.top + box.height);
+  });
+
+  it('по умолчанию раскладка прежняя — её использует ролик ленты', () => {
+    const svg = buildStoryOverlaySvg({ ...input, layout: undefined });
+    for (const { x } of [...texts(svg, 'meta'), ...texts(svg, 'disclosure')])
+      expect(x).toBe(88);
+  });
+
+  it('рисует знак в углу готового слоя', async () => {
+    const overlay = await renderStoryOverlay(input);
+    const box = brandLogoBox({ quoteLines: 1, metaLines: 1, layout: 'row' });
+    const { data, info } = await sharp(overlay)
+      .extract({
+        left: box.left,
+        top: box.top,
+        width: box.width,
+        height: box.height,
+      })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    let visible = 0;
+    for (let i = info.channels - 1; i < data.length; i += info.channels)
+      if (data[i] > 8) visible++;
+    expect(visible).toBeGreaterThan(0);
+  });
+});
+
+describe('перенос длинной подписи «автор · источник» (VED-245)', () => {
+  // Новый фолбэк автора («Участник Портала Саморазвития VedaMatch») длиннее
+  // прежнего почти вдвое — проверяем ровно ту связку из примера в карточке:
+  // номер стиха не должен теряться под многоточием clampLines().
+  const attribution =
+    'Участник Портала Саморазвития VedaMatch · Бхагавад-гита 2.11';
+
+  it('около 60 символов — укладывается в лимит строк целиком, источник не обрезан', () => {
+    const wrapped = wrapText(attribution, 30, metaMaxWidth('row'));
+    const clamped = clampLines(wrapped, 2);
+
+    expect(clamped).toHaveLength(2);
+    // Многоточия нет — обрезки не было, а не просто «конец совпал с лимитом».
+    expect(clamped.some((line) => line.includes('…'))).toBe(false);
+    expect(clamped.join(' ')).toContain('Бхагавад-гита 2.11');
+  });
+
+  it('в готовом SVG вторая строка подписи — источник целиком, без обрубка', () => {
+    const svg = buildStoryOverlaySvg({
+      text: 'Я больше не знаю, в чем состоит мой долг.',
+      attribution,
+      layout: 'row',
+    });
+    // «meta» — класс строк подписи (см. buildStoryOverlaySvg); ищем текст
+    // внутри тегов, а не считаем сегменты по x/y, как в тестах выше.
+    const metaTexts = [...svg.matchAll(/class="meta">([^<]*)<\/text>/g)].map(
+      (match) => match[1],
+    );
+    expect(metaTexts.join(' ')).toContain('Бхагавад-гита 2.11');
+    expect(metaTexts.some((line) => line.includes('…'))).toBe(false);
+  });
+});
+
 describe('composeStoryImage', () => {
   // Модель отдаёт 2:3, а сторис вертикальнее — фон обязан докадрироваться.
   const background = () =>
@@ -266,6 +437,28 @@ describe('composeStoryImage', () => {
     expect(meta.width).toBe(STORY_WIDTH);
     expect(meta.height).toBe(STORY_HEIGHT);
     expect(meta.format).toBe('png');
+  });
+
+  it('сохраняемая картинка собирается со знаком в углу (VED-227)', async () => {
+    const composed = await composeStoryImage(await background(), {
+      text: 'Цитата',
+    });
+    const box = brandLogoBox({ quoteLines: 1, metaLines: 0, layout: 'row' });
+    const { data, info } = await sharp(composed)
+      .extract({
+        left: box.left,
+        top: box.top,
+        width: box.width,
+        height: box.height,
+      })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    // Фон тёмный, знак белый: светлые точки в углу есть только от знака.
+    let bright = 0;
+    for (let i = 0; i < data.length; i += info.channels)
+      if (data[i] > 200 && data[i + 1] > 200 && data[i + 2] > 200) bright++;
+    expect(bright).toBeGreaterThan(50);
   });
 
   it('changes the pixels it draws over', async () => {

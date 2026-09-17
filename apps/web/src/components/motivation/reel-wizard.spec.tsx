@@ -35,6 +35,7 @@ function reelDto(overrides: Partial<MotivationReelDto>): MotivationReelDto {
       title: "Свой рилс",
       text: "Делай что должно, и будь что будет.",
       storyText: "",
+      imageText: "",
       attributionKind: "ai_reflection",
       attributionSpeaker: null,
       attributionWork: null,
@@ -107,8 +108,8 @@ describe("ReelWizard", () => {
     });
     const user = userEvent.setup();
     const categories = [
-      { id: "c1", slug: "filosofiya", title: "Философия", sortOrder: 0, isDefault: true, parentId: null, postCount: 5 },
-      { id: "c2", slug: "vedy", title: "Веды", sortOrder: 1, isDefault: false, parentId: null, postCount: 3 },
+      { id: "c1", slug: "filosofiya", title: "Философия", sortOrder: 0, isDefault: true, parentId: null, postCount: 5, feed: "both" as const, artCount: 5, cardsCount: 0 },
+      { id: "c2", slug: "vedy", title: "Веды", sortOrder: 1, isDefault: false, parentId: null, postCount: 3, feed: "both" as const, artCount: 3, cardsCount: 0 },
     ];
     render(<ReelWizard prefill={{}} donation={null} categories={categories} />);
 
@@ -184,6 +185,56 @@ describe("ReelWizard", () => {
       bookSlug: "bg",
       chapterSlug: "2",
     });
+  });
+
+  // VED-240: из вкладки «Открытки» ленты нажали «Создать» — первым выбором
+  // должна стоять «Готовая картинка с цитатой», а не «Написать самому».
+  it("из «Открыток» ленты открывает мастер с активной «Готовой картинкой»", async () => {
+    routeFetch({ "/motivation/reels/quota": () => quota });
+    render(<ReelWizard prefill={{ tab: "cards" }} donation={null} />);
+
+    await screen.findByText("Сегодня: 0 из 1");
+    expect(screen.getByRole("button", { name: /Готовая картинка с цитатой/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: /Написать самому/ })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("без вкладки «Открытки» по умолчанию активно «Написать самому»", async () => {
+    routeFetch({ "/motivation/reels/quota": () => quota });
+    render(<ReelWizard prefill={{}} donation={null} />);
+
+    await screen.findByText("Сегодня: 0 из 1");
+    expect(screen.getByRole("button", { name: /Написать самому/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: /Готовая картинка с цитатой/ })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("фрагмент из книг (читалка) важнее вкладки «Открытки»", async () => {
+    // fromBook выигрывает и без VED-240: источник уже известен из читалки,
+    // а `tab=cards` в это же время быть не может (разные точки входа).
+    routeFetch({ "/motivation/reels/quota": () => quota });
+    render(
+      <ReelWizard
+        prefill={{ book: "bg", chapter: "2", text: "Ты имеешь право лишь на действие.", tab: "cards" }}
+        donation={null}
+      />,
+    );
+
+    await screen.findByText("Сегодня: 0 из 1");
+    expect(screen.getByRole("button", { name: /Взять из наших книг/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("lets a person find a verse in the books without coming from the reader", async () => {

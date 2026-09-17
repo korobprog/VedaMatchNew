@@ -12,6 +12,23 @@ const META_SIZE = 30;
 /** Высота знака в кадре. Ширина считается из пропорций исходника. */
 const BRAND_LOGO_HEIGHT = 76;
 const DISCLOSURE_SIZE = 22;
+/**
+ * Строчная раскладка низа (VED-227): знак в левом нижнем углу, подпись и
+ * отметка об ИИ — справа от него, в одной полосе. Знак чуть крупнее, чем в
+ * столбике: рядом с двумя строками текста маленький кружок терялся.
+ */
+const ROW_LOGO_HEIGHT = 88;
+const ROW_GAP = 28;
+/** Промежуток между строкой подписи и отметкой об ИИ под ней. */
+const ROW_DISCLOSURE_STEP = 38;
+/** Воздух между последней строкой цитаты и полосой со знаком. */
+const ROW_QUOTE_GAP = 48;
+/**
+ * Высота заглавных над базовой линией в долях кегля — чтобы центрировать знак
+ * по видимому тексту, а не по базовым линиям.
+ */
+const CAP_HEIGHT = 0.72;
+const DESCENT = 0.22;
 /** Поздравление открытки: кегль и отступ сверху. */
 const GREETING_SIZE = 62;
 const GREETING_LINE_HEIGHT = 78;
@@ -223,7 +240,54 @@ export type StoryOverlayInput = {
   greeting?: string | null;
   /** Сколько строк цитаты вместить в кадр. По умолчанию — MAX_QUOTE_LINES. */
   maxQuoteLines?: number;
+  /**
+   * Раскладка низа кадра. `stacked` — знак над подписью (VED-7), так вшита
+   * подпись в ролики ленты. `row` — знак в углу, подпись справа от него
+   * (VED-227), так собирается сохраняемая картинка. По умолчанию `stacked`:
+   * ролик в ленте — основное отображение, и оно меняться не должно.
+   */
+  layout?: StoryLayoutKind;
+  /**
+   * Строка последней строкой блока — по умолчанию `AI_DISCLOSURE`
+   * (маркировка ИИ-контента по AI Act, см. комментарий там же). Открытка
+   * (VED-247) передаёт своё: «Скачано с VedaMatch.ru» рядом с той же
+   * ИИ-меткой — маркировку не убираем, у неё юридический вес. Сторис и
+   * ролики параметр не передают, для них ничего не меняется.
+   */
+  disclosure?: string;
 };
+
+export type StoryLayoutKind = 'stacked' | 'row';
+
+/** Размер знака для раскладки: в строке он крупнее. */
+function logoSize(layout: StoryLayoutKind): { width: number; height: number } {
+  const height = layout === 'row' ? ROW_LOGO_HEIGHT : BRAND_LOGO_HEIGHT;
+  return { width: Math.round(height * BRAND_LOGO_ASPECT), height };
+}
+
+/** С какой точки начинаются подпись и отметка об ИИ. */
+function metaLeft(layout: StoryLayoutKind): number {
+  return layout === 'row'
+    ? SIDE_PADDING + logoSize('row').width + ROW_GAP
+    : SIDE_PADDING;
+}
+
+/** Ширина, в которую переносится подпись: в строке её сужает знак слева. */
+export function metaMaxWidth(layout: StoryLayoutKind = 'stacked'): number {
+  return (STORY_WIDTH - SIDE_PADDING - metaLeft(layout)) * WIDTH_SAFETY;
+}
+
+function metaLinesFor(
+  attribution: string | null | undefined,
+  layout: StoryLayoutKind,
+): string[] {
+  return attribution?.trim()
+    ? clampLines(
+        wrapText(attribution, META_SIZE, metaMaxWidth(layout)),
+        MAX_META_LINES,
+      )
+    : [];
+}
 
 /**
  * Вся вёрстка нижнего блока разом.
@@ -248,19 +312,52 @@ export function storyLayout(input: {
    */
   quoteLineHeight?: number;
   quoteSize?: number;
+  layout?: StoryLayoutKind;
 }): {
   logo: { left: number; top: number; width: number; height: number };
   firstLineY: number;
   metaTop: number;
+  /** Левый край подписи и отметки об ИИ. */
+  metaLeft: number;
   disclosureBaseline: number;
   scrimTop: number;
 } {
-  const height = BRAND_LOGO_HEIGHT;
-  const width = Math.round(height * BRAND_LOGO_ASPECT);
-
+  const layout = input.layout ?? 'stacked';
+  const { width, height } = logoSize(layout);
+  const lineHeight = input.quoteLineHeight ?? QUOTE_LINE_HEIGHT;
+  const quoteSize = input.quoteSize ?? QUOTE_SIZE;
   const disclosureBaseline = STORY_HEIGHT - BOTTOM_PADDING + 90;
+
+  if (layout === 'row') {
+    /* Текстовая полоса собирается снизу: отметка об ИИ на прежней нижней
+       линии, подпись над ней. Знак центруется по видимой высоте полосы —
+       от верха заглавных первой строки до хвостов последней. */
+    const metaTop =
+      disclosureBaseline -
+      ROW_DISCLOSURE_STEP -
+      Math.max(0, input.metaLines - 1) * META_LINE_HEIGHT;
+    const bandTop =
+      input.metaLines > 0
+        ? metaTop - META_SIZE * CAP_HEIGHT
+        : disclosureBaseline - DISCLOSURE_SIZE * CAP_HEIGHT;
+    const bandBottom = disclosureBaseline + DISCLOSURE_SIZE * DESCENT;
+    const logoTop = Math.round((bandTop + bandBottom) / 2 - height / 2);
+    const quoteBottom = Math.floor(Math.min(logoTop, bandTop) - ROW_QUOTE_GAP);
+    const firstLineY =
+      quoteBottom - Math.max(0, input.quoteLines - 1) * lineHeight;
+    return {
+      logo: { left: SIDE_PADDING, top: logoTop, width, height },
+      firstLineY,
+      metaTop,
+      metaLeft: metaLeft('row'),
+      disclosureBaseline,
+      scrimTop: Math.max(0, firstLineY - quoteSize - 60),
+    };
+  }
+
   const metaBottom = disclosureBaseline - 48;
-  const metaTop = metaBottom - Math.max(0, input.metaLines - 1) * META_LINE_HEIGHT;
+  const metaTop =
+    metaBottom - Math.max(0, input.metaLines - 1) * META_LINE_HEIGHT;
   /* Знак стоит на той же линии, на которой раньше заканчивалась цитата:
      над подписью и отметкой об ИИ, но под самим текстом. От длины цитаты
      он больше не зависит — вверх едет сам текст. */
@@ -269,8 +366,6 @@ export function storyLayout(input: {
   const logoTop = logoBaseline - height;
   // Цитата заканчивается над знаком, с тем же воздухом, что был над ним.
   const quoteBottom = logoTop - 28;
-  const lineHeight = input.quoteLineHeight ?? QUOTE_LINE_HEIGHT;
-  const quoteSize = input.quoteSize ?? QUOTE_SIZE;
   const firstLineY =
     quoteBottom - Math.max(0, input.quoteLines - 1) * lineHeight;
 
@@ -278,6 +373,7 @@ export function storyLayout(input: {
     logo: { left: SIDE_PADDING, top: logoTop, width, height },
     firstLineY,
     metaTop,
+    metaLeft: SIDE_PADDING,
     disclosureBaseline,
     // Подложка начинается над первой строкой цитаты: теперь верхний край
     // блока — текст, а не знак, и светлый фон съедал бы именно его.
@@ -291,6 +387,7 @@ export function brandLogoBox(input?: {
   metaLines: number;
   quoteLineHeight?: number;
   quoteSize?: number;
+  layout?: StoryLayoutKind;
 }): { left: number; top: number; width: number; height: number } {
   return storyLayout(input ?? { quoteLines: 1, metaLines: 0 }).logo;
 }
@@ -299,20 +396,17 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
   const maxWidth = (STORY_WIDTH - SIDE_PADDING * 2) * WIDTH_SAFETY;
   const quote = fitQuote(input.text, maxWidth, input.maxQuoteLines);
   const lines = quote.lines;
+  const layoutKind = input.layout ?? 'stacked';
   // Атрибуция переносится так же, как цитата: одной строкой длинная связка
   // «автор · произведение · глава» уезжала за правый край.
-  const metaLines = input.attribution?.trim()
-    ? clampLines(
-        wrapText(input.attribution, META_SIZE, maxWidth),
-        MAX_META_LINES,
-      )
-    : [];
+  const metaLines = metaLinesFor(input.attribution, layoutKind);
 
   const layout = storyLayout({
     quoteLines: lines.length,
     metaLines: metaLines.length,
     quoteLineHeight: quote.lineHeight,
     quoteSize: quote.size,
+    layout: layoutKind,
   });
   const { firstLineY, metaTop, scrimTop } = layout;
 
@@ -341,7 +435,7 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
   const attributionLine = metaLines
     .map(
       (line, index) =>
-        `<text x="${SIDE_PADDING}" y="${metaTop + index * META_LINE_HEIGHT}" class="meta">${escapeXml(line)}</text>`,
+        `<text x="${layout.metaLeft}" y="${metaTop + index * META_LINE_HEIGHT}" class="meta">${escapeXml(line)}</text>`,
     )
     .join('');
 
@@ -369,7 +463,7 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
   ${greetingBlock}
   ${quoteLines}
   ${attributionLine}
-  <text x="${SIDE_PADDING}" y="${layout.disclosureBaseline}" class="disclosure">${escapeXml(AI_DISCLOSURE)}</text>
+  <text x="${layout.metaLeft}" y="${layout.disclosureBaseline}" class="disclosure">${escapeXml(input.disclosure ?? AI_DISCLOSURE)}</text>
 </svg>`;
 }
 
@@ -391,10 +485,9 @@ export async function renderStoryOverlay(
     quoteLines: quote.lines.length,
     quoteLineHeight: quote.lineHeight,
     quoteSize: quote.size,
-    metaLines: input.attribution?.trim()
-      ? clampLines(wrapText(input.attribution, META_SIZE, maxWidth), MAX_META_LINES)
-          .length
-      : 0,
+    metaLines: metaLinesFor(input.attribution, input.layout ?? 'stacked')
+      .length,
+    layout: input.layout,
   });
   const logo = await sharp(brandLogoBuffer())
     .resize(box.width, box.height, { fit: 'contain', background: TRANSPARENT })
@@ -413,6 +506,10 @@ export async function renderStoryOverlay(
  * картинка в сторис легла бы с полями. Текст накладываем сами, а не просим
  * нейросеть: цитата обязана быть дословной, а проверить буквы на пикселях
  * нечем.
+ *
+ * Картинку сохраняют и пересылают, поэтому низ у неё компактный — знак в
+ * углу, подпись рядом (VED-227). Ролик ленты этой правки не получает, у него
+ * своя раскладка по умолчанию.
  */
 export async function composeStoryImage(
   background: Buffer,
@@ -422,7 +519,13 @@ export async function composeStoryImage(
     .resize(STORY_WIDTH, STORY_HEIGHT, { fit: 'cover', position: 'attention' })
     .toBuffer();
   const framed = await sharp(canvas)
-    .composite([{ input: await renderStoryOverlay(overlay), top: 0, left: 0 }])
+    .composite([
+      {
+        input: await renderStoryOverlay({ layout: 'row', ...overlay }),
+        top: 0,
+        left: 0,
+      },
+    ])
     .png()
     .toBuffer();
   // Та же отметка, что и на пикселях, но в метаданных: надпись площадка может

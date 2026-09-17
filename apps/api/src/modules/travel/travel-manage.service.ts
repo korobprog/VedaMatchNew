@@ -6,9 +6,16 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { TravelBookingStatus } from '@prisma/client';
-import type { TravelBookingDto, TravelStayCardDto } from '@vedamatch/shared';
+import type {
+  TravelBookingDto,
+  TravelManagedOccupancyBooking,
+  TravelManagedOccupancyResponse,
+  TravelStayCardDto,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { groupOccupancy, MANAGED_OCCUPANCY_STATUSES } from './occupancy';
 import { generatePublicCode } from './public-code';
+import { formatStayDate } from './travel-dates';
 import { parseStayInput, TravelInputError } from './travel-dto';
 import {
   notifiesGuest,
@@ -17,6 +24,8 @@ import {
 } from './travel-events';
 import {
   bookingInclude,
+  occupancyWindow,
+  roomLabel,
   stayCardSelect,
   toBookingDto,
   toStayCard,
@@ -78,6 +87,7 @@ export class TravelManageService {
     body: Record<string, unknown>,
   ): Promise<TravelStayCardDto> {
     const input = this.parse(body);
+    await this.assertPlace(input.placeId);
     const row = await this.prisma.travelStay.create({
       data: {
         ...input,
@@ -98,9 +108,31 @@ export class TravelManageService {
     body: Record<string, unknown>,
   ): Promise<TravelStayCardDto> {
     await this.assertManager(userId, stayId);
+    const input = this.parse(body);
+    await this.assertPlace(input.placeId);
     const row = await this.prisma.travelStay.update({
       where: { id: stayId },
-      data: this.parse(body),
+      data: input,
+      select: stayCardSelect,
+    });
+    return toStayCard(row);
+  }
+
+  /**
+   * Привязать объект к точке на карте или отвязать. Отдельным маршрутом, а не
+   * через `updateStay`: тот требует всю карточку целиком, а хозяин меняет
+   * одно поле со страницы заявок.
+   */
+  async setStayPlace(
+    userId: string,
+    stayId: string,
+    placeId: string | null,
+  ): Promise<TravelStayCardDto> {
+    await this.assertManager(userId, stayId);
+    await this.assertPlace(placeId);
+    const row = await this.prisma.travelStay.update({
+      where: { id: stayId },
+      data: { placeId },
       select: stayCardSelect,
     });
     return toStayCard(row);
@@ -200,6 +232,67 @@ export class TravelManageService {
     return { items: rows.map(toBookingDto) };
   }
 
+  /**
+   * Шахматка объекта: заявки по комнатам за окно. В отличие от гостевой
+   * занятости здесь есть номер, имя и состояние — хозяин и так видит их в
+   * списке заявок — и завершённые заезды: по ним сверяют прошлые месяцы.
+   */
+  async occupancy(
+    userId: string,
+    stayId: string,
+    rawFrom: unknown,
+    rawTo: unknown,
+  ): Promise<TravelManagedOccupancyResponse> {
+    const window = occupancyWindow(rawFrom, rawTo);
+    await this.assertManager(userId, stayId);
+    const [rooms, bookings] = await Promise.all([
+      this.prisma.travelRoom.findMany({
+        where: { stayId },
+        select: { id: true, building: true, number: true, capacity: true },
+        orderBy: [{ building: 'asc' }, { number: 'asc' }],
+      }),
+      this.prisma.travelBooking.findMany({
+        where: {
+          stayId,
+          status: { in: [...MANAGED_OCCUPANCY_STATUSES] },
+          checkIn: { lt: window.to },
+          checkOut: { gt: window.from },
+        },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          guestName: true,
+          roomId: true,
+          checkIn: true,
+          checkOut: true,
+        },
+      }),
+    ]);
+    const grouped = groupOccupancy(rooms, bookings, window);
+    const toDto = (
+      row: (typeof bookings)[number],
+    ): TravelManagedOccupancyBooking => ({
+      bookingId: row.id,
+      number: row.number,
+      status: row.status,
+      guestName: row.guestName,
+      checkIn: formatStayDate(row.checkIn),
+      checkOut: formatStayDate(row.checkOut),
+    });
+    return {
+      from: formatStayDate(window.from),
+      to: formatStayDate(window.to),
+      rooms: grouped.rooms.map(({ room, bookings: list }) => ({
+        roomId: room.id,
+        roomLabel: roomLabel(room) ?? room.number,
+        capacity: room.capacity,
+        bookings: list.map(toDto),
+      })),
+      unassigned: grouped.unassigned.map(toDto),
+    };
+  }
+
   async decide(
     userId: string,
     bookingId: string,
@@ -267,6 +360,19 @@ export class TravelManageService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Точка на карте существует. Без проверки неизвестный id дошёл бы до
+   * внешнего ключа, и хозяин увидел бы «внутреннюю ошибку» вместо причины.
+   */
+  private async assertPlace(placeId: string | null): Promise<void> {
+    if (!placeId) return;
+    const place = await this.prisma.travelPlace.findUnique({
+      where: { id: placeId },
+      select: { id: true },
+    });
+    if (!place) throw new BadRequestException('Такой точки на карте нет');
   }
 
   private async assertManager(userId: string, stayId: string) {

@@ -221,7 +221,7 @@ export class MotivationReelsService {
     // оглавлении ленты давно нет. Неизвестный слаг — отказ словами, а не
     // английское «Unknown category» из справочника.
     const category = await this.categories
-      .resolveSlug(input.category ?? undefined)
+      .resolveSlug(input.category ?? undefined, 'art')
       .catch(() => {
         throw new BadRequestException(
           'Такой категории нет — выберите из списка',
@@ -262,7 +262,12 @@ export class MotivationReelsService {
               originalText: source.text,
               normalizedHash,
               originalLanguage: verified?.originalLanguage ?? language,
-              author: author ?? 'Участник VedaMatch',
+              // VED-245: короткое «Участник VedaMatch» не говорило, что за
+              // портал — конкретное название читается только на этой
+              // странице. Правка только для новых цитат: старые записи в
+              // базе не трогаем (bulk-миграция — отдельная задача с
+              // согласием на расход бюджета генерации, см. карточку).
+              author: author ?? 'Участник Портала Саморазвития VedaMatch',
               work:
                 verified?.work ??
                 (source.kind === 'own' ? (source.work ?? '') : ''),
@@ -999,6 +1004,7 @@ export class MotivationReelsService {
         title: string;
         text: string;
         storyText: string;
+        imageText?: string | null;
       }[];
       favorites: unknown[];
       views: unknown[];
@@ -1075,6 +1081,7 @@ export class MotivationReelsService {
         title: translation?.title ?? '',
         text: translation?.text ?? '',
         storyText: translation?.storyText ?? '',
+        imageText: translation?.imageText ?? '',
         attributionKind: post.attributionKind,
         attributionSpeaker: post.attributionSpeaker,
         attributionWork: post.attributionWork,

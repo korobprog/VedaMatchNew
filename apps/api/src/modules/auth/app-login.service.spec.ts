@@ -156,6 +156,8 @@ describe('AuthService.refreshApp и logoutApp', () => {
         id: 'rt1',
         userId: 'u1',
         revoked: false,
+        familyId: 'fam-app',
+        revokedAt: null,
         expiresAt: new Date(Date.now() + 60_000),
         user: activeUser,
       },
@@ -164,7 +166,11 @@ describe('AuthService.refreshApp и logoutApp', () => {
     expect(tokens.accessToken).toBe('access-jwt');
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
       where: { id: 'rt1', revoked: false },
-      data: { revoked: true },
+      data: { revoked: true, revokedAt: expect.any(Date), familyId: 'fam-app' },
+    });
+    // Новая пара остаётся в семействе входа приложения.
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: 'u1', familyId: 'fam-app' }),
     });
   });
 
@@ -184,7 +190,7 @@ describe('AuthService.refreshApp и logoutApp', () => {
       ok: true,
     });
     const call = prisma.refreshToken.updateMany.mock.calls[0][0];
-    expect(call.data).toEqual({ revoked: true });
+    expect(call.data).toEqual({ revoked: true, revokedAt: expect.any(Date) });
     expect(call.where.tokenHash).toMatch(/^[0-9a-f]{64}$/);
   });
 });
@@ -193,21 +199,37 @@ describe('AuthService: ошибки входа из приложения', () =>
   type WithAppErrors = {
     withAppErrors: (
       app: { redirect: string; challenge: string } | null,
-      res: { redirect: jest.Mock },
+      res: unknown,
       run: () => Promise<void>,
     ) => Promise<void>;
   };
   const app = { redirect: 'vedamatch://auth', challenge: 'c' };
+  const makeRes = () => {
+    const res = {
+      redirect: jest.fn(),
+      setHeader: jest.fn(),
+      send: jest.fn(),
+      type: jest.fn(),
+    };
+    res.type.mockReturnValue(res);
+    return res;
+  };
 
-  it('понятный отказ уезжает в приложение текстом', async () => {
+  it('понятный отказ уезжает в приложение текстом через страницу возврата', async () => {
     const { service } = makeService({});
-    const res = { redirect: jest.fn() };
+    const res = makeRes();
     await (service as unknown as WithAppErrors).withAppErrors(app, res, () =>
       Promise.reject(
         new ForbiddenException('Регистрация новых участников сейчас закрыта'),
       ),
     );
-    const url = new URL(res.redirect.mock.calls[0][0] as string);
+    // Редирект с колбэка Chrome может молча отбросить, страница с кнопкой — нет.
+    expect(res.redirect).not.toHaveBeenCalled();
+    expect(res.type).toHaveBeenCalledWith('html');
+    expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
+    const [[html]] = res.send.mock.calls as [string][];
+    const href = /href="([^"]+)"/.exec(html)?.[1].replace(/&amp;/g, '&');
+    const url = new URL(href as string);
     expect(url.protocol).toBe('vedamatch:');
     expect(url.searchParams.get('error')).toBe(
       'Регистрация новых участников сейчас закрыта',
@@ -216,7 +238,7 @@ describe('AuthService: ошибки входа из приложения', () =>
 
   it('вход с сайта и сбои сервера бросаются как раньше', async () => {
     const { service } = makeService({});
-    const res = { redirect: jest.fn() };
+    const res = makeRes();
     const subject = service as unknown as WithAppErrors;
     await expect(
       subject.withAppErrors(null, res, () =>
@@ -235,8 +257,10 @@ describe('AuthService: провайдер не настроен при вход�
 
   it('Google без ключей возвращает ошибку в приложение, а не JSON в браузер', async () => {
     const { service } = makeService({});
+    const req = { cookies: {} };
     const res = { redirect: jest.fn(), cookie: jest.fn() };
     await service.startGoogleLogin(
+      req as never,
       res as never,
       undefined,
       undefined,
@@ -251,9 +275,11 @@ describe('AuthService: провайдер не настроен при вход�
 
   it('вход с сайта без ключей по-прежнему отвечает 503', async () => {
     const { service } = makeService({});
+    const req = { cookies: {} };
     const res = { redirect: jest.fn(), cookie: jest.fn() };
     await expect(
       service.startGoogleLogin(
+        req as never,
         res as never,
         undefined,
         undefined,
@@ -263,5 +289,123 @@ describe('AuthService: провайдер не настроен при вход�
       ),
     ).rejects.toMatchObject({ status: 503 });
     expect(res.redirect).not.toHaveBeenCalled();
+  });
+});
+
+// Веб-версия приложения (ios.vedamatch.com): вход начат на поддомене, и после
+// колбэка человек должен вернуться туда же, а не на портал.
+describe('AuthService: возврат после входа на поддомен', () => {
+  type WithRedirect = {
+    ensureContactsProfile(userId: string): Promise<void>;
+    issueSessionAndRedirect(params: Record<string, unknown>): Promise<void>;
+  };
+
+  function setup(webOrigins: string) {
+    const { service, prisma } = makeService({});
+    const extended = prisma as unknown as Record<string, unknown>;
+    const loginAuditCreate = jest.fn().mockResolvedValue({});
+    extended.loginAudit = { create: loginAuditCreate };
+    extended.user = { findUnique: jest.fn().mockResolvedValue(activeUser) };
+    const config = (service as unknown as { config: { get: jest.Mock } })
+      .config;
+    config.get.mockImplementation((key: string, fallback?: string) =>
+      key === 'WEB_ORIGIN' ? webOrigins : fallback,
+    );
+    const subject = service as unknown as WithRedirect;
+    jest.spyOn(subject, 'ensureContactsProfile').mockResolvedValue();
+    const res = { redirect: jest.fn(), cookie: jest.fn() };
+    const req = {
+      headers: { host: 'api.vedamatch.com', 'user-agent': 'test' },
+      ip: '127.0.0.1',
+    };
+    return { subject, res, req, loginAuditCreate };
+  }
+
+  const params = (returnOrigin: string | null) => ({
+    user: activeUser,
+    provider: 'google',
+    isNewAccount: false,
+    returnTo: '/chat/c1',
+    returnOrigin,
+    app: null,
+  });
+
+  it('разрешённый поддомен — туда, с тем же путём, а в журнале — web-app', async () => {
+    const { subject, res, req, loginAuditCreate } = setup(
+      'https://vedamatch.com,https://ios.vedamatch.com',
+    );
+    await subject.issueSessionAndRedirect({
+      req,
+      res,
+      ...params('https://ios.vedamatch.com'),
+    });
+    expect(res.redirect).toHaveBeenCalledWith(
+      'https://ios.vedamatch.com/chat/c1',
+    );
+    expect(loginAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ client: 'web-app' }),
+      }),
+    );
+  });
+
+  it('без поддомена в WEB_ORIGIN — на портал контура, а в журнале — site', async () => {
+    const { subject, res, req, loginAuditCreate } = setup(
+      'https://vedamatch.com',
+    );
+    await subject.issueSessionAndRedirect({
+      req,
+      res,
+      ...params('https://ios.vedamatch.com'),
+    });
+    expect(res.redirect).toHaveBeenCalledWith('https://vedamatch.com/chat/c1');
+    expect(loginAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ client: 'site' }),
+      }),
+    );
+  });
+
+  it('вход с PKCE приложения — код возврата, а в журнале — android, независимо от returnOrigin', async () => {
+    const { service, prisma } = makeService({});
+    const extended = prisma as unknown as Record<string, unknown>;
+    const loginAuditCreate = jest.fn().mockResolvedValue({});
+    extended.loginAudit = { create: loginAuditCreate };
+    extended.appLoginCode = { create: jest.fn().mockResolvedValue({}) };
+    const config = (service as unknown as { config: { get: jest.Mock } })
+      .config;
+    config.get.mockImplementation((key: string, fallback?: string) =>
+      key === 'WEB_ORIGIN'
+        ? 'https://vedamatch.com,https://ios.vedamatch.com'
+        : fallback,
+    );
+    const subject = service as unknown as WithRedirect;
+    jest.spyOn(subject, 'ensureContactsProfile').mockResolvedValue();
+    const res = {
+      redirect: jest.fn(),
+      cookie: jest.fn(),
+      setHeader: jest.fn(),
+      type: jest.fn().mockReturnThis(),
+      send: jest.fn(),
+    };
+    const req = {
+      headers: { host: 'api.vedamatch.com', 'user-agent': 'test' },
+      ip: '127.0.0.1',
+    };
+
+    await subject.issueSessionAndRedirect({
+      req,
+      res,
+      ...params('https://ios.vedamatch.com'),
+      app: { redirect: 'vedamatch://auth', challenge: 'c' },
+    });
+
+    expect(res.redirect).not.toHaveBeenCalled();
+    expect(res.send).toHaveBeenCalled();
+    expect(loginAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ client: 'android' }),
+      }),
+    );
   });
 });

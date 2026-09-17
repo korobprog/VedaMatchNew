@@ -285,6 +285,7 @@ model User {
   serviceAdminScopes                 ServiceAdmin[]
   loginAudits                        LoginAudit[]
   pushSubscriptions                  PushSubscription[]
+  notificationDevices                NotificationDevice[]
   astroBirthData                     AstroBirthData?
   astroUsage                         AstroUsage[]
   astroCompatibilityRequestsSent     AstroCompatibilityRequest[]   @relation("AstroCompatibilityRequester")
@@ -765,16 +766,19 @@ enum MotivationTrackStatus {
 /// категорию верхнего уровня, у которой `parentId` всегда null. Глубже нельзя —
 /// правило держит `MotivationCategoriesService`.
 model MotivationCategory {
-  id        String               @id @default(uuid())
-  slug      String               @unique
+  id        String                 @id @default(uuid())
+  slug      String                 @unique
   title     String
-  sortOrder Int                  @default(0)
-  isDefault Boolean              @default(false)
+  sortOrder Int                    @default(0)
+  isDefault Boolean                @default(false)
+  /// В меню какой ленты стоит категория (VED-139): `art` — «Для вас»,
+  /// `cards` — «Открытки», `both` — в обеих, пока в ней лежит своё.
+  feed      MotivationCategoryFeed @default(both)
   parentId  String?
-  parent    MotivationCategory?  @relation("MotivationCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children  MotivationCategory[] @relation("MotivationCategoryTree")
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
+  parent    MotivationCategory?    @relation("MotivationCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  MotivationCategory[]   @relation("MotivationCategoryTree")
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
 
   @@index([sortOrder])
   @@index([parentId])
@@ -846,6 +850,11 @@ model MotivationPostTranslation {
   title     String
   text      String
   storyText String
+  /// Текст поверх картинки в ленте (VED-241). Пусто — картинка берёт цитату
+  /// из `text`, как и раньше; «Читать полностью» всегда показывает `text`.
+  /// Не `storyText`: тот уже занят подписью, вшитой в Stories и ролик, и у
+  /// старых постов в нём то пояснение, то короткий слоган.
+  imageText String?
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
@@ -989,15 +998,21 @@ model MotivationSourceWatch {
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid())
-  tokenHash String   @unique
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
-  revoked   Boolean  @default(false)
-  createdAt DateTime @default(now())
+  revoked   Boolean   @default(false)
+  /// Когда отозван: повтор только что ротированного токена — гонка, а не кража.
+  revokedAt DateTime?
+  /// Семейство — один вход и все его ротации. Повтор отозванного токена
+  /// отзывает только своё семейство. null — токены до появления семейств.
+  familyId  String?
+  createdAt DateTime  @default(now())
 
   @@index([userId])
+  @@index([familyId])
   // Под чистку протухших/отозванных (RefreshTokenCleanupService).
   @@index([expiresAt])
   @@index([revoked, createdAt])
@@ -1036,6 +1051,8 @@ enum AuthProvider {
   vk
   yandex
   email
+  /// Мини-приложение @vedamatch_bot и вход через Telegram (контур com).
+  telegram
 }
 
 /// Способ входа, привязанный к аккаунту. Пара «провайдер + внешний
@@ -1150,11 +1167,16 @@ model LoginAudit {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider  String
+  /// Источник входа для воронки метрик (веха 7 «Запуск»): 'site' | 'web-app'
+  /// | 'telegram' | 'android'. `null` — записи до этой миграции и dev-вход
+  /// по паролю (см. `login-client.ts`, `AuthService.completeLogin`).
+  client    String?
   ip        String?
   userAgent String?
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 model SelfIdentificationResponse {
@@ -2076,6 +2098,30 @@ model PushSubscription {
   @@index([userId])
 }
 
+/// Телефон с приложением VedaMatch, подписанный на пуши. Токен выдаёт служба
+/// доставки (FCM, позже RuStore) и сам меняет при переустановке, поэтому
+/// ключ — токен, а не пара «пользователь и устройство».
+model NotificationDevice {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Служба доставки: `fcm` или `rustore`.
+  provider    String
+  /// `android` или `ios`.
+  platform    String
+  token       String   @unique
+  /// Сборка приложения, например `ru-site`: по ней видно, откуда люди ставят.
+  appVariant  String?
+  /// Приложение умеет нативный экран звонка по data-пушу FCM (VED-220):
+  /// такому устройству входящий звонок шлётся data-only, а не обычным
+  /// пушем с уведомлением — иначе звонок звонил бы дважды.
+  nativeCalls Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
 /// Настройки уведомлений. Отсутствие строки означает «включено всё»,
 /// поэтому при регистрации её создавать не нужно.
 model NotificationPreference {
@@ -2113,6 +2159,10 @@ model NotificationPreference {
   /// по своей заявке у гостя. Своя колонка, а не `market`: человек, который
   /// выключил торговлю, ночлег на пути терять не должен.
   travel        Boolean  @default(true)
+  /// Сообщения от @vedamatch_bot (веха 4). Общий выключатель поверх
+  /// категорий выше: `chat` включён, а `telegram` выключен — пуш в браузер
+  /// и колокольчик идут как обычно, бот молчит.
+  telegram      Boolean  @default(true)
   updatedAt     DateTime @updatedAt
 }
 
@@ -4076,6 +4126,10 @@ model ChatConversation {
   contextStatus  String?
   contextMeta    Json?
 
+  /// Официальный канал VedaMatch: один на портал, в нём подписаны все участники,
+  /// пишут администраторы портала. Единственность держит частичный уникальный
+  /// индекс из миграции chat_official_channel (см. docs/prisma-raw-sql-objects.md).
+  official  Boolean       @default(false)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   calls     ChatCall[]
@@ -6269,8 +6323,8 @@ model TravelStay {
   cashEntries    TravelCashEntry[]
   guests         TravelGuest[]
   cashTemplates  TravelCashTemplate[]
-  bookings TravelBooking[]
-  reviews  TravelReview[]
+  bookings       TravelBooking[]
+  reviews        TravelReview[]
 
   @@index([status, kind])
   @@index([placeId, status])
@@ -6502,4 +6556,12 @@ model TravelReview {
 
   @@index([stayId, status, createdAt(sort: Desc)])
   @@index([authorId])
+}
+
+/// Лента, к которой относится категория Вдохновения (VED-139). Открытки и
+/// афоризмы с иллюстрацией нейросети — два разных меню категорий.
+enum MotivationCategoryFeed {
+  both
+  art
+  cards
 }

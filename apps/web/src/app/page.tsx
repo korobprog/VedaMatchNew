@@ -1,5 +1,5 @@
 import { needsLineageChoice } from "@vedamatch/shared";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   getBillingPlan,
@@ -71,6 +71,8 @@ import { getActivityFeedServer } from "@/lib/activity-server-api";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { LandingPage } from "@/components/landing";
+import { getAppManifest } from "@/lib/app-download-api";
+import { isComContourHost } from "@/lib/app-download-contour";
 import { SessionRestore } from "@/components/session-restore";
 import { needsSessionRestore } from "@/lib/session-marker";
 import { InstallBanner } from "@/components/pwa/install-banner";
@@ -148,6 +150,12 @@ export default async function Home({
     if (!user && (await needsSessionRestore())) {
       return <SessionRestore returnTo={returnTo} />;
     }
+    // Манифест приложения — только для гостя: карточка загрузки есть лишь
+    // на лендинге, портал вошедшего её не показывает.
+    const [appManifest, host] = await Promise.all([
+      getAppManifest().catch(() => null),
+      headers().then((h) => h.get("host")),
+    ]);
     return (
       <LandingPage
         returnTo={returnTo}
@@ -155,6 +163,8 @@ export default async function Home({
         totalMembers={communityStats?.totalMembers}
         totalCities={communityStats?.totalCities}
         totalCommunities={communityStats?.totalCommunities}
+        appManifest={appManifest}
+        showTelegram={isComContourHost(host)}
       />
     );
   }

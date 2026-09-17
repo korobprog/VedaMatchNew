@@ -28,6 +28,7 @@ const post = (id: string, overrides: Partial<MotivationPostDto> = {}): Motivatio
   title: `Пост ${id}`,
   text: `Цитата ${id}\n\nПояснение ${id}`,
   storyText: "",
+  imageText: "",
   attributionKind: "exact_quote",
   attributionSpeaker: "Кришна",
   attributionWork: "Бхагавад-гита",
@@ -102,6 +103,41 @@ describe("ReelsFeed", () => {
     expect(within(feed).getByRole("region", { name: "Конец ленты" })).toBeInTheDocument();
   });
 
+  // VED-252: «Для вас» переименована в «Ленту», значок фильтра встал в тот
+  // же ряд между «Открытки» и «Избранное», подписи у него нет.
+  it("верхний ряд — пять пунктов, вкладка называется «Лента», у значка фильтра нет подписи", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="forYou" donation={null} />,
+    );
+
+    const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
+    const labels = [...tabs.children].map((node) => node.textContent);
+    expect(labels).toEqual(["Лента", "Открытки", "", "Избранное", "Мои"]);
+    expect(within(tabs).queryByText("Для вас")).not.toBeInTheDocument();
+    expect(within(tabs).queryByText("Автор и источник")).not.toBeInTheDocument();
+    expect(
+      within(tabs).getByRole("button", { name: "Фильтр по автору и источнику" }),
+    ).toBeInTheDocument();
+  });
+
+  // VED-252, круг 2: у избранного фильтров нет — значок должен молча
+  // исчезнуть из самого ряда `Tabs()` (не только у `FeedAttributionFilter`
+  // в изоляции), оставляя ровно четыре пункта без дыры на его месте.
+  it("на вкладке «Избранное» в ряду вкладок нет значка фильтра — четыре пункта", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="saved" donation={null} />,
+    );
+
+    const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
+    const labels = [...tabs.children].map((node) => node.textContent);
+    expect(labels).toEqual(["Лента", "Открытки", "Избранное", "Мои"]);
+    expect(
+      within(tabs).queryByRole("button", { name: /Фильтр по автору и источнику/ }),
+    ).not.toBeInTheDocument();
+  });
+
   // VED-135: на пустом тёмном экране разделителя — кнопки категорий вверху.
   it("ставит кнопки категорий на разделитель и в конец ленты", () => {
     fetchOk({});
@@ -115,9 +151,9 @@ describe("ReelsFeed", () => {
         donation={null}
         category="guru"
         categories={[
-          { id: "1", slug: "guru", title: "Гуру", sortOrder: 1, isDefault: false, parentId: null, postCount: 4 },
-          { id: "2", slug: "acharyas", title: "Ачарьи", sortOrder: 2, isDefault: false, parentId: null, postCount: 2 },
-          { id: "3", slug: "empty", title: "Пустая", sortOrder: 3, isDefault: false, parentId: null, postCount: 0 },
+          { id: "1", slug: "guru", title: "Гуру", sortOrder: 1, isDefault: false, parentId: null, postCount: 4, feed: "both" as const, artCount: 4, cardsCount: 0 },
+          { id: "2", slug: "acharyas", title: "Ачарьи", sortOrder: 2, isDefault: false, parentId: null, postCount: 2, feed: "both" as const, artCount: 2, cardsCount: 0 },
+          { id: "3", slug: "empty", title: "Пустая", sortOrder: 3, isDefault: false, parentId: null, postCount: 0, feed: "both" as const, artCount: 0, cardsCount: 0 },
         ]}
       />,
     );
@@ -216,6 +252,71 @@ describe("ReelsFeed", () => {
     ]);
   });
 
+  // VED-206: автор и книга в подписи включают фильтр, стих ведёт в источник.
+  it("делает автора и книгу в подписи кнопками фильтра, а стих — ссылкой на источник", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{
+          items: [
+            post("a", { attributionSourceUrl: "https://vedabase.io/ru/library/bg/2/47/" }),
+            post("b", { attributionLocator: null, attributionSourceUrl: "https://t.me/x/1" }),
+          ],
+          nextCursor: null,
+        }}
+        tab="cards"
+        category="vedy"
+        donation={null}
+      />,
+    );
+
+    const [first, second] = within(screen.getByRole("feed", { name: "Лента вдохновения" })).getAllByRole(
+      "article",
+    );
+    const work = within(captionOf(first)).getByRole("link", { name: "Только источник: Бхагавад-гита" });
+    expect(Object.fromEntries(new URL(work.getAttribute("href")!, "https://x").searchParams)).toEqual({
+      tab: "cards",
+      category: "vedy",
+      work: "Бхагавад-гита",
+    });
+    expect(within(captionOf(first)).getByRole("link", { name: "Только автор: Кришна" })).toBeInTheDocument();
+    expect(within(captionOf(first)).getByRole("link", { name: "2.47" })).toHaveAttribute(
+      "href",
+      "https://vedabase.io/ru/library/bg/2/47/",
+    );
+    // Нет номера стиха — первоисточник не теряется, он за значком в конце.
+    expect(within(captionOf(second)).getByRole("link", { name: /Первоисточник/ })).toHaveAttribute(
+      "href",
+      "https://t.me/x/1",
+    );
+  });
+
+  // VED-249: постоянная пунктирная линия под каждой графой источника мешала
+  // читать подпись — подчёркивание остаётся только при наведении мышью.
+  it("не подчёркивает графы источника в состоянии покоя, только при наведении", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a", { attributionSourceUrl: "https://vedabase.io/ru/library/bg/2/47/" })], nextCursor: null }}
+        tab="cards"
+        category="vedy"
+        donation={null}
+      />,
+    );
+
+    const caption = captionOf(
+      within(screen.getByRole("feed", { name: "Лента вдохновения" })).getAllByRole("article")[0],
+    );
+    const work = within(caption).getByRole("link", { name: "Только источник: Бхагавад-гита" });
+    const locator = within(caption).getByRole("link", { name: "2.47" });
+    for (const link of [work, locator]) {
+      const textSpan = link.querySelector("span");
+      expect(textSpan?.className.split(" ")).not.toContain("underline");
+      expect(textSpan?.className.split(" ")).not.toContain("decoration-dotted");
+      expect(textSpan?.className.split(" ")).toContain("hover:underline");
+    }
+  });
+
   // VED-124: обычная картинка 2:3 растягивалась на весь экран 9:19,5 и теряла
   // треть ширины — у фигур по краям пропадали головы.
   it("обычную картинку показывает целиком, на размытой подложке", () => {
@@ -257,6 +358,26 @@ describe("ReelsFeed", () => {
     expect(query.get("subtitle")).toBe("Кришна · Бхагавад-гита · 2.47");
     expect(query.get("link")).toBe("/m/a");
     expect(query.get("file")).toBe("/m/a/story");
+  });
+
+  it("открытка без набранного текста делится заголовком, а не пустотой (VED-205)", () => {
+    // Экран /share без text уводит на главную — у открытки текст на картинке.
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{
+          items: [post("card", { captionInImage: true, text: "", title: "Картинка из раздела «Каждый день»" })],
+          nextCursor: null,
+        }}
+        tab="cards"
+        donation={null}
+      />,
+    );
+
+    const href = screen.getByRole("link", { name: "Поделиться афоризмом" }).getAttribute("href") ?? "";
+    const query = new URLSearchParams(href.slice(href.indexOf("?") + 1));
+    expect(query.get("text")).toBe("Картинка из раздела «Каждый день»");
+    expect(query.get("title")).toBe("Картинка из раздела «Каждый день»");
   });
 
   it("нижний ряд слушается раскладки с устройства", () => {
@@ -407,7 +528,7 @@ describe("ReelsFeed", () => {
       "aria-current",
       "page",
     );
-    expect(within(tabs).getByRole("link", { name: "Для вас" })).toHaveAttribute(
+    expect(within(tabs).getByRole("link", { name: "Лента" })).toHaveAttribute(
       "href",
       "/motivation?category=poslovitsy&order=random",
     );
@@ -429,6 +550,48 @@ describe("ReelsFeed", () => {
       "href",
       "/motivation?tab=saved",
     );
+  });
+
+  // VED-252: пустое состояние держит Tabs()/FeedAttributionFilter в обычном
+  // потоке (flex-col), а не в абсолютном ряду — с активным фильтром чип
+  // должен просто показаться строкой, без поломки раскладки колонки.
+  it("на пустой ленте с активным фильтром чип виден и не ломает колонку", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{ items: [], nextCursor: null }}
+        tab="cards"
+        donation={null}
+        work="Бхагавад-гита"
+      />,
+    );
+
+    expect(screen.getByText("Открыток здесь пока нет")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Убрать фильтр по источнику: Бхагавад-гита" }),
+    ).toBeInTheDocument();
+  });
+
+  // VED-252, круг 4: значок фильтра здесь — не в ряду вкладок (тот
+  // `absolute`, из потока `flex-col` исключён), а отдельной строкой; без
+  // подписи и подложки он висел бы голой полупрозрачной иконкой, ничего не
+  // объясняя (баг, который не ловил ни один из первых трёх кругов).
+  // `variant="chip"` должен вернуть самостоятельную пилюлю с подписью,
+  // видимой, пока фильтр не выбран.
+  it("на пустой ленте без активного фильтра кнопка подписана, а не голый значок", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed initial={{ items: [], nextCursor: null }} tab="cards" donation={null} />,
+    );
+
+    expect(screen.getByText("Открыток здесь пока нет")).toBeInTheDocument();
+    const trigger = screen.getByRole("button", { name: "Фильтр по автору и источнику" });
+    expect(trigger).toHaveTextContent("Автор и источник");
+    // Самостоятельная пилюля — рамка и подложка, а не «inline»-значок без
+    // подписи (`w-7`), уместный только внутри ряда вкладок.
+    expect(trigger.className).toMatch(/rounded-full/);
+    expect(trigger.className).toMatch(/\bborder\b/);
+    expect(trigger.className).not.toMatch(/\bw-7\b/);
   });
 
   it.each([
@@ -711,6 +874,25 @@ describe("ReelsFeed", () => {
     expect(create[0]).toHaveAttribute("href", "/motivation/create");
   });
 
+  // VED-240: из вкладки «Открытки» ссылка «Создать» ведёт в мастер с
+  // ?tab=cards — так первым выбором там стоит «Готовая картинка с цитатой»,
+  // а не «Написать самому». На «Ленте» параметра быть не должно (проверено
+  // выше, тест не переписан специально ради этого).
+  it("на вкладке «Открытки» ссылки «Создать» несут ?tab=cards", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="cards" donation={null} />,
+    );
+
+    expect(screen.getByRole("link", { name: "Создать свой рилс" })).toHaveAttribute(
+      "href",
+      "/motivation/create?tab=cards",
+    );
+    for (const link of screen.getAllByRole("link", { name: /Создать рилс/ })) {
+      expect(link).toHaveAttribute("href", "/motivation/create?tab=cards");
+    }
+  });
+
   it("tells an empty saved tab where to go", () => {
     fetchOk({});
     render(<ReelsFeed initial={{ items: [], nextCursor: null }} tab="saved" donation={null} />);
@@ -737,6 +919,35 @@ describe("ReelsFeed", () => {
     await userEvent.click(toggle);
 
     expect(screen.getByText("Цитата целиком")).toBeInTheDocument();
+  });
+
+  // VED-241: надпись на картинке и полный текст правятся порознь.
+  it("кладёт на картинку поправленную надпись, а в «Читать полностью» — полный текст", async () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{
+          items: [
+            post("a", {
+              text: "Полный текст шлоки целиком\n\nПояснение",
+              imageText: "Короткая надпись",
+            }),
+          ],
+          nextCursor: null,
+        }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    expect(screen.getByText("Короткая надпись")).toBeInTheDocument();
+    expect(screen.queryByText("Полный текст шлоки целиком")).not.toBeInTheDocument();
+
+    // Надпись короткая, но отличается от полного текста — кнопка нужна.
+    await userEvent.click(
+      screen.getByRole("button", { name: "Читать полностью ›" }),
+    );
+    expect(screen.getByText("Полный текст шлоки целиком")).toBeInTheDocument();
   });
 
   it("не показывает «Читать полностью» у короткой цитаты", () => {

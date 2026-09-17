@@ -19,6 +19,7 @@ import type {
   UpdateMusicAlbumRequest,
   UpdateMusicArtistRequest,
   MusicArtistsFromTagsRequest,
+  MusicBulkTrackArtistRequest,
   MusicModerationDecisionRequest,
   MusicReportDecisionRequest,
   UpdateMusicCategoryRequest,
@@ -226,6 +227,19 @@ export class MusicAdminCatalogController {
     @Param('id') id: string,
   ) {
     return this.catalog.deleteCategory(isAdmin(user), id);
+  }
+
+  /**
+   * Массовая смена исполнителя (VED-226). Стоит перед `tracks/:id` не по
+   * необходимости — метод другой, — а чтобы читалось рядом с правкой записи.
+   * Тело разбирает сервис (`planBulkArtist`): там же и отказы.
+   */
+  @Post('tracks/artist')
+  setTracksArtist(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: MusicBulkTrackArtistRequest,
+  ) {
+    return this.catalog.setTracksArtist(isAdmin(user), body);
   }
 
   @Patch('tracks/:id')

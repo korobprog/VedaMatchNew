@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LayerGroup, Map as LeafletMap } from "leaflet";
 import type { TravelPlaceDto } from "@vedamatch/shared";
 // Стили Leaflet обязательны: без них слои плиток позиционируются как обычные
@@ -11,6 +11,8 @@ import "leaflet/dist/leaflet.css";
 const DEFAULT_CENTER: [number, number] = [40, 60];
 const DEFAULT_ZOOM = 3;
 const PLACE_ZOOM = 10;
+/** Ближе при подгонке не подходим: одна точка иначе открылась бы улицей. */
+const FIT_MAX_ZOOM = 6;
 
 const BRAND_PREFIX =
   '<span class="notices-map-brand">' +
@@ -39,6 +41,11 @@ export function TravelMap({ places, onSelectPlace }: TravelMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<LayerGroup | null>(null);
+  // Карта создаётся асинхронно (Leaflet грузится отдельным чанком), а места
+  // приходят раньше неё. Без флага эффект меток отрабатывал до готовности
+  // карты, выходил ни с чем и больше не запускался — метки не появлялись.
+  const [ready, setReady] = useState(false);
+  const fittedRef = useRef(false);
   // Обработчик в ref: метки перерисовываются реже, чем меняется замыкание, и
   // без этого карта звала бы устаревшую версию. Присваивание — в эффекте, а
   // не в теле: правка ref во время рендера ломает конкурентный рендер React.
@@ -58,13 +65,11 @@ export function TravelMap({ places, onSelectPlace }: TravelMapProps) {
       map = L.map(containerRef.current, {
         center: DEFAULT_CENTER,
         zoom: DEFAULT_ZOOM,
-        // Колесо включается по клику: иначе страница ловится в ловушку.
-        scrollWheelZoom: false,
+        // Колесо приближает сразу: карта здесь — главный способ выбрать
+        // место, и требование сперва кликнуть люди не угадывали. На телефоне
+        // зум двумя пальцами Leaflet включает сам (touchZoom по умолчанию).
+        scrollWheelZoom: true,
         attributionControl: false,
-      });
-      map.on("click", () => map?.scrollWheelZoom.enable());
-      containerRef.current.addEventListener("mouseleave", () => {
-        map?.scrollWheelZoom.disable();
       });
       L.control
         .attribution({ position: "bottomright", prefix: BRAND_PREFIX })
@@ -78,6 +83,7 @@ export function TravelMap({ places, onSelectPlace }: TravelMapProps) {
       }).addTo(map);
       markersRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
+      setReady(true);
     })();
 
     return () => {
@@ -85,6 +91,8 @@ export function TravelMap({ places, onSelectPlace }: TravelMapProps) {
       map?.remove();
       mapRef.current = null;
       markersRef.current = null;
+      fittedRef.current = false;
+      setReady(false);
     };
   }, []);
 
@@ -117,12 +125,23 @@ export function TravelMap({ places, onSelectPlace }: TravelMapProps) {
           })
           .addTo(layer);
       }
+
+      // Первый вид — по точкам, а не пол-Евразии: все места в Индии, и на
+      // общем плане подписи слипались в одну кучу. Только один раз, чтобы
+      // перерисовка меток не сбрасывала зум, который человек уже выбрал.
+      if (!fittedRef.current && places.length) {
+        fittedRef.current = true;
+        map.fitBounds(
+          L.latLngBounds(places.map((place) => [place.lat, place.lng])),
+          { padding: [48, 48], maxZoom: FIT_MAX_ZOOM },
+        );
+      }
     })();
 
     return () => {
       disposed = true;
     };
-  }, [places]);
+  }, [places, ready]);
 
   return (
     <div

@@ -34,6 +34,7 @@ function prismaMock() {
     prisma: {
       musicArtist: {
         findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
         delete: jest.fn().mockResolvedValue({}),
         create: jest
           .fn()
@@ -65,6 +66,8 @@ function prismaMock() {
       },
       musicTrack: {
         findUnique: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       $transaction: jest.fn().mockImplementation((fn) => fn(tx)),
     },
@@ -98,6 +101,123 @@ function service(
 }
 
 describe('MusicAdminCatalogService', () => {
+  describe('setTracksArtist (VED-226)', () => {
+    function withTracks(ids: string[]) {
+      const mock = prismaMock();
+      mock.prisma.musicTrack.findMany.mockResolvedValue(
+        ids.map((id) => ({ id })),
+      );
+      mock.prisma.musicTrack.updateMany.mockResolvedValue({
+        count: ids.length,
+      });
+      return mock;
+    }
+
+    it('не пускает не-администратора', async () => {
+      await expect(
+        service(prismaMock()).setTracksArtist(false, {
+          trackIds: ['t1'],
+          artistName: 'X',
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('переносит к найденному по имени без учёта регистра', async () => {
+      const mock = withTracks(['t1', 't2']);
+      mock.prisma.musicArtist.findFirst.mockResolvedValue({
+        id: 'a7',
+        name: 'Aindra das',
+        slug: 'aindra-das',
+      });
+
+      const result = await service(mock).setTracksArtist(true, {
+        trackIds: ['t1', 't2'],
+        artistName: ' AINDRA  DAS ',
+      });
+
+      expect(mock.prisma.musicArtist.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { name: { equals: 'AINDRA DAS', mode: 'insensitive' } },
+        }),
+      );
+      expect(mock.prisma.musicArtist.create).not.toHaveBeenCalled();
+      expect(mock.prisma.musicTrack.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['t1', 't2'] } },
+        data: { artistId: 'a7' },
+      });
+      expect(result).toEqual({
+        artist: { id: 'a7', name: 'Aindra das', slug: 'aindra-das' },
+        created: false,
+        updated: 2,
+      });
+    });
+
+    it('заводит исполнителя, если такого нет', async () => {
+      const mock = withTracks(['t1']);
+
+      const result = await service(mock).setTracksArtist(true, {
+        trackIds: ['t1'],
+        artistName: 'Гаура дас',
+      });
+
+      expect(mock.prisma.musicArtist.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ name: 'Гаура дас', slug: 'gaura-das' }),
+      });
+      expect(result.created).toBe(true);
+      expect(result.artist).toEqual({
+        id: 'a1',
+        name: 'Гаура дас',
+        slug: 'gaura-das',
+      });
+      expect(mock.prisma.musicTrack.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['t1'] } },
+        data: { artistId: 'a1' },
+      });
+    });
+
+    it('по идентификатору — только к существующему', async () => {
+      const mock = withTracks(['t1']);
+      await expect(
+        service(mock).setTracksArtist(true, {
+          trackIds: ['t1'],
+          artistId: 'missing',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mock.prisma.musicTrack.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('artistId: null снимает исполнителя', async () => {
+      const mock = withTracks(['t1']);
+      const result = await service(mock).setTracksArtist(true, {
+        trackIds: ['t1'],
+        artistId: null,
+      });
+      expect(mock.prisma.musicTrack.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['t1'] } },
+        data: { artistId: null },
+      });
+      expect(result).toEqual({ artist: null, created: false, updated: 1 });
+    });
+
+    it('не трогает ничего, если часть записей пропала', async () => {
+      const mock = withTracks(['t1']);
+      await expect(
+        service(mock).setTracksArtist(true, {
+          trackIds: ['t1', 'gone'],
+          artistName: 'X',
+        }),
+      ).rejects.toThrow(NotFoundException);
+      expect(mock.prisma.musicArtist.create).not.toHaveBeenCalled();
+      expect(mock.prisma.musicTrack.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('кривое тело — 400', async () => {
+      await expect(
+        service(prismaMock()).setTracksArtist(true, { trackIds: [] }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
   describe('права', () => {
     it('не пускает не-администратора никуда', async () => {
       const svc = service(prismaMock());

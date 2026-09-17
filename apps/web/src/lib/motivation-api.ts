@@ -54,9 +54,14 @@ async function motivationGetPublic<T>(path: string): Promise<T | null> {
 export const getMotivationStats = () =>
   motivationGet<MotivationStatsDto>("/motivation/stats");
 
-/** Разделы вдохновения для читателя: дерево категорий без пустых веток. */
-export const getMotivationCategories = () =>
-  motivationGet<MotivationCategoryDto[]>("/motivation/categories");
+/**
+ * Разделы вдохновения для читателя: дерево категорий. С `style` — меню одной
+ * ленты (VED-139): только её категории и её счётчики.
+ */
+export const getMotivationCategories = (style?: "art" | "cards") =>
+  motivationGet<MotivationCategoryDto[]>(
+    `/motivation/categories${style ? `?style=${style}` : ""}`,
+  );
 
 export const getMotivationFeed = (
   filter: "all" | "favorites" = "all",
@@ -75,8 +80,12 @@ export const getMotivationFeed = (
    * `cards` — готовые открытки. Без значения — обе вместе.
    */
   style?: "art" | "cards",
+  /** Фильтр по автору и источнику (VED-206). */
+  attribution?: { speaker?: string; work?: string },
 ) => {
   const query = new URLSearchParams();
+  if (attribution?.speaker) query.set("speaker", attribution.speaker);
+  if (attribution?.work) query.set("work", attribution.work);
   if (filter === "favorites") query.set("filter", "favorites");
   if (post) query.set("post", post);
   if (order) query.set("order", order);

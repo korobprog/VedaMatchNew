@@ -15,6 +15,9 @@ const root: MotivationCategoryDto = {
   isDefault: true,
   parentId: null,
   postCount: 4,
+  feed: "both",
+  artCount: 3,
+  cardsCount: 1,
 };
 const child: MotivationCategoryDto = {
   id: "cat-2",
@@ -24,6 +27,9 @@ const child: MotivationCategoryDto = {
   isDefault: false,
   parentId: "cat-1",
   postCount: 0,
+  feed: "both",
+  artCount: 0,
+  cardsCount: 0,
 };
 
 // Пустое тело, как у Nest на void-хендлере: стаб с готовым json() скрывал
@@ -60,7 +66,7 @@ describe("CategoryManager", () => {
 
     expect(lastCall(fetchMock)).toMatchObject({
       method: "POST",
-      body: { title: "Вера", parentId: null },
+      body: { title: "Вера", parentId: null, feed: "both" },
     });
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
@@ -78,7 +84,7 @@ describe("CategoryManager", () => {
     await user.click(screen.getAllByRole("button", { name: "Добавить" }).at(-1)!);
 
     expect(lastCall(fetchMock)).toMatchObject({
-      body: { title: "Утренняя практика", parentId: "cat-1" },
+      body: { title: "Утренняя практика", parentId: "cat-1", feed: "both" },
     });
   });
 
@@ -102,6 +108,24 @@ describe("CategoryManager", () => {
     expect(lastCall(fetchMock)).toMatchObject({
       method: "PATCH",
       body: { isDefault: true },
+    });
+    expect(lastCall(fetchMock).url).toContain("/admin/motivation/categories/cat-2");
+  });
+
+  it("переводит категорию в меню открыток (VED-139)", async () => {
+    const fetchMock = okFetch();
+    const user = userEvent.setup();
+
+    render(<CategoryManager categories={[root, child]} />);
+    expect(screen.getByText(/для вас: 3 · открыток: 1/)).toBeInTheDocument();
+    await user.selectOptions(
+      screen.getByLabelText("Лента категории «Утренняя практика»"),
+      "cards",
+    );
+
+    expect(lastCall(fetchMock)).toMatchObject({
+      method: "PATCH",
+      body: { feed: "cards" },
     });
     expect(lastCall(fetchMock).url).toContain("/admin/motivation/categories/cat-2");
   });

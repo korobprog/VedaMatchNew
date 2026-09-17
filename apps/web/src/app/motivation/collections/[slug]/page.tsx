@@ -19,6 +19,12 @@ import {
   isStoryView,
   parseCollectionView,
 } from "@/components/motivation/folder-view";
+import {
+  collectionHref,
+  collectionsHref,
+  feedStyleOf,
+  parseReelsTab,
+} from "@/components/motivation/feed-style";
 
 /** Карточки одной папки — сеткой картинок. */
 export default async function MotivationCollectionPage({
@@ -26,30 +32,45 @@ export default async function MotivationCollectionPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; tab?: string }>;
 }) {
   const { slug } = await params;
+  const query = await searchParams;
+  /* Чьё меню (VED-139): `?tab=cards` — папка открыток, иначе — афоризмов с
+     иллюстрацией. Счётчики, подпапки и сами карточки — только этой ленты. */
+  const tab = parseReelsTab(query.tab) === "cards" ? "cards" : "forYou";
+  const style = feedStyleOf(tab);
   /* Вид папки живёт в адресе, как и сама папка: из плитки уходят в ленту и
      возвращаются кнопкой «назад», а состояние, которого нет в ссылке, при
      этом теряется молча. Разбор — в folder-view.ts, там же и старый
      ?view=story. */
-  const view = parseCollectionView((await searchParams).view);
+  // У открыток вид один: картинку с текстом они уже и есть.
+  const view = tab === "cards" ? "image" : parseCollectionView(query.view);
   const [user, categories, feed] = await Promise.all([
     getProfile(),
-    getMotivationCategories(),
+    getMotivationCategories(style),
     getMotivationFeed(
       "all",
       undefined,
       undefined,
       slug,
       collectionImageSource(view),
+      style,
     ),
   ]);
-  if (!user) redirectToLogin(`/motivation/collections/${slug}`);
+  if (!user) redirectToLogin(collectionHref(slug, tab));
   if (needsWelcome(user)) redirect("/welcome");
 
   const category = (categories ?? []).find((item) => item.slug === slug);
-  if (!category) notFound();
+  if (!category) {
+    /* Папки нет в меню этой ленты — возможно, она в меню другой: старые
+       ссылки без `?tab=` ведут в «Для вас», а папка может быть открыточной. */
+    const otherTab = tab === "cards" ? "forYou" : "cards";
+    const other = await getMotivationCategories(feedStyleOf(otherTab));
+    if (other?.some((item) => item.slug === slug))
+      redirect(collectionHref(slug, otherTab));
+    notFound();
+  }
   const isAdmin = user.role === "admin" || user.role === "service-admin";
   // Кнопка загрузки — только тем, кому откроется сама загрузка: у админа
   // другого сервиса ссылка вела бы на отказ.
@@ -66,7 +87,7 @@ export default async function MotivationCollectionPage({
           active="collections"
           isAdmin={isAdmin}
           title={category.title}
-          action={{ href: "/motivation/collections", label: "Все подборки" }}
+          action={{ href: collectionsHref(tab), label: "Все подборки" }}
           count={category.postCount}
         />
         <div className="mt-4 space-y-4 px-2">
@@ -80,7 +101,7 @@ export default async function MotivationCollectionPage({
                       всех подборок. */}
                   {child.postCount > 0 ? (
                     <Link
-                      href={`/motivation/collections/${child.slug}`}
+                      href={collectionHref(child.slug, tab)}
                       className="glass inline-flex items-center gap-1.5 rounded-full border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0"
                     >
                       {child.title}
@@ -106,6 +127,7 @@ export default async function MotivationCollectionPage({
               наложены на фотографии людьми: в общей куче с работой нейросети
               их не различить. Переключатель ссылками, а не кнопкой: вид
               уезжает в адрес, им делятся и на него возвращаются «назад». */}
+          {tab !== "cards" && (
           <div
             className="flex flex-wrap gap-2"
             role="group"
@@ -122,9 +144,11 @@ export default async function MotivationCollectionPage({
               </Link>
             ))}
           </div>
+          )}
           {/* Готовые открытки кладут прямо отсюда (VED-87): редакция смотрит
               в папку, видит, чего не хватает, и тут же добавляет. */}
-          {canAddPictures && (
+          {/* В категорию «Для вас» открытку не положить (VED-139). */}
+          {canAddPictures && category.feed !== "art" && (
             <Link
               href={`/admin/motivation/pictures?category=${encodeURIComponent(slug)}`}
               className="inline-flex rounded-full border border-dashed border-cyan/50 px-3 py-1.5 text-sm text-text-1 hover:text-text-0"
@@ -135,8 +159,13 @@ export default async function MotivationCollectionPage({
           <MotivationCollectionGrid
             posts={feed?.items ?? []}
             category={slug}
+            tab={tab}
             variant={isStoryView(view) ? "story" : "image"}
-            empty={collectionEmptyText(view)}
+            empty={
+              tab === "cards"
+                ? "Открыток в этой папке пока нет."
+                : collectionEmptyText(view)
+            }
           />
         </div>
       </main>

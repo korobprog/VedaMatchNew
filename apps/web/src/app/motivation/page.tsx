@@ -38,6 +38,8 @@ export default async function MotivationPage({
     post?: string;
     order?: string;
     category?: string;
+    speaker?: string;
+    work?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -50,6 +52,11 @@ export default async function MotivationPage({
   /* Лента одной папки. Тоже в адресе: из неё выходят кнопкой «назад», и
      состояние, которого нет в ссылке, при этом теряется молча. */
   const category = params.category || undefined;
+  /* Фильтр по автору и источнику (VED-206) — там же, в адресе, и по той же
+     причине. Повторённый параметр приходит массивом — его не принимаем. */
+  const text = (value: unknown) =>
+    typeof value === "string" && value.trim() ? value.trim() : undefined;
+  const attribution = { speaker: text(params.speaker), work: text(params.work) };
   /* Две ленты (VED-121): «Для вас» — нейросеть и цитата поверх, «Открытки» —
      готовые картинки с напечатанным текстом. Список остаётся общим: у него
      нет вкладок, и прятать там половину публикаций было бы нечем объяснить. */
@@ -65,13 +72,17 @@ export default async function MotivationPage({
       category,
       undefined,
       style,
+      attribution,
     ),
     getDonationSettings(),
     getMotivationStats(),
     // Фон для чтения. Пустой список — кнопки музыки в ленте не будет.
     getMotivationAudio(),
-    // Кнопки категорий на пустых экранах ленты (VED-135).
-    view === "reels" ? getMotivationCategories() : Promise.resolve(null),
+    // Кнопки категорий на пустых экранах ленты (VED-135) — из меню своей
+    // ленты (VED-139). Из избранного кнопки ведут в «Для вас».
+    view === "reels"
+      ? getMotivationCategories(style ?? "art")
+      : Promise.resolve(null),
   ]);
   if (!user) redirectToLogin("/motivation");
   // Новичок идёт в мастер: там тот же вопрос об этапе, но после имени
@@ -87,7 +98,7 @@ export default async function MotivationPage({
      папки, где лежат одни открытки: иначе она открылась бы пустой. */
   if (view === "reels" && !params.tab) {
     if (isPinnedCard(params.post, initial.items[0])) {
-      redirect(reelsHref({ tab: "cards", order, category, post: params.post }));
+      redirect(reelsHref({ tab: "cards", order, category, post: params.post, ...attribution }));
     }
     if (category && initial.items.length === 0) {
       const cards = await getMotivationFeed(
@@ -97,9 +108,10 @@ export default async function MotivationPage({
         category,
         undefined,
         "cards",
+        attribution,
       );
       if (cards?.items.length) {
-        redirect(reelsHref({ tab: "cards", order, category }));
+        redirect(reelsHref({ tab: "cards", order, category, ...attribution }));
       }
     }
   }
@@ -157,12 +169,21 @@ export default async function MotivationPage({
              вкладке внутри приложения приносил новую первую страницу, а на
              экране оставалась прежняя: в «Открытках» листались афоризмы
              «Для вас». Другая вкладка, порядок или папка — другая лента. */
-          key={[tab, order ?? "", category ?? "", params.post ?? ""].join("|")}
+          key={[
+            tab,
+            order ?? "",
+            category ?? "",
+            params.post ?? "",
+            attribution.speaker ?? "",
+            attribution.work ?? "",
+          ].join("|")}
           initial={initial}
           tab={tab}
           donation={donation}
           order={order}
           category={category}
+          speaker={attribution.speaker}
+          work={attribution.work}
           isAdmin={isAdmin}
           audio={audio}
           categories={categories ?? []}

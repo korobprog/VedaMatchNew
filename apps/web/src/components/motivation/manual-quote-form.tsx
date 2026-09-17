@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
@@ -8,6 +8,7 @@ import type { MotivationCategoryDto } from "@vedamatch/shared";
 import { apiRequest } from "./motivation-admin-api";
 import { CollapsibleBlock } from "./collapsible-block";
 import { CategorySelect } from "./admin/category-select";
+import { categoriesAcceptingStyle } from "./feed-style";
 import { PipelineStages } from "./admin/pipeline-stages";
 import {
   cardClass,
@@ -38,10 +39,16 @@ const emptyForm = {
 };
 
 export function ManualQuoteForm({
-  categories = [],
+  categories: allCategories = [],
 }: {
   categories?: MotivationCategoryDto[];
 }) {
+  // Афоризм с иллюстрацией — только общие категории и категории «Для вас»
+  // (VED-139): в категорию открыток сервер его не примет.
+  const categories = useMemo(
+    () => categoriesAcceptingStyle(allCategories, "art"),
+    [allCategories],
+  );
   const router = useRouter();
   const [form, setForm] = useState(emptyForm);
   const [languageTouched, setLanguageTouched] = useState(false);

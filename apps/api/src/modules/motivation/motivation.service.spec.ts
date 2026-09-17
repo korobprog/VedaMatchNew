@@ -325,8 +325,8 @@ describe('MotivationService feed tiers', () => {
       videoStatus: 'none',
       attributionKind: 'ai_reflection',
       attributionSpeaker: null,
-      attributionWork: null,
-      attributionLocator: null,
+      attributionWork: null as string | null,
+      attributionLocator: null as string | null,
       attributionSourceUrl: null,
       sourceVerified: false,
       publishedAt,
@@ -442,6 +442,206 @@ describe('MotivationService feed tiers', () => {
     expect(motivationPost.findMany.mock.calls[0][0].where).not.toHaveProperty(
       'captionInImage',
     );
+  });
+
+  interface FindArgs {
+    select?: Record<string, boolean>;
+    distinct?: string[];
+    include?: unknown;
+    orderBy?: unknown;
+    where: Record<string, unknown>;
+  }
+  const findCall = (mock: jest.Mock, pick: (args: FindArgs) => unknown) =>
+    (mock.mock.calls as [FindArgs][]).map(([args]) => args).find(pick)!;
+
+  // VED-206 + VED-125: лента одного источника — вся книга по порядку стихов.
+  it('filters by work across spellings and orders it by verse', async () => {
+    const verse = (id: string, work: string, locator: string) => ({
+      ...post(id, day(5), null),
+      attributionWork: work,
+      attributionLocator: locator,
+    });
+    const all = [
+      verse('v214', 'Бхагавад-гита', '2.14'),
+      verse('v1025', 'бхагавад-гита ', '10.25'),
+      verse('v213', 'Бхагавад-гита', '2.13'),
+      verse('v125', 'Бхагавад-гита', '1.25'),
+    ];
+    const { service, motivationPost, motivationPreference } = build(
+      day(10),
+      [],
+    );
+    motivationPost.findMany.mockImplementation(
+      (args: {
+        distinct?: string[];
+        select?: Record<string, boolean>;
+        where: { id?: { in: string[] } };
+      }) => {
+        if (args.distinct)
+          return Promise.resolve([
+            { attributionWork: 'Бхагавад-гита' },
+            { attributionWork: 'бхагавад-гита ' },
+            { attributionWork: 'Шримад-Бхагаватам' },
+          ]);
+        if (args.select) return Promise.resolve(all);
+        const ids = args.where.id?.in ?? [];
+        // База отдаёт страницу в своём порядке — сервис обязан вернуть свой.
+        return Promise.resolve(all.filter((item) => ids.includes(item.id)));
+      },
+    );
+
+    const first = await service.feed('user-1', {
+      work: ' БХАГАВАД-ГИТА',
+      style: 'art',
+      category: 'vedy',
+      limit: 3,
+    });
+
+    expect(first.items.map((item) => item.id)).toEqual([
+      'v125',
+      'v213',
+      'v214',
+    ]);
+    const light = findCall(
+      motivationPost.findMany,
+      (args) => args.select && !args.distinct,
+    );
+    expect(light.where).toMatchObject({
+      attributionWork: { in: ['Бхагавад-гита', 'бхагавад-гита '] },
+      category: 'vedy',
+      captionInImage: false,
+      publishedAt: { lte: expect.any(Date) as unknown },
+    });
+    // Фильтр — явная просьба, как папка: без подбора под путь и без визита.
+    expect(light.where).not.toHaveProperty('OR');
+    expect(motivationPreference.upsert).not.toHaveBeenCalled();
+
+    const second = await service.feed('user-1', {
+      work: 'Бхагавад-гита',
+      cursor: first.nextCursor ?? undefined,
+      limit: 3,
+    });
+    expect(second.items.map((item) => item.id)).toEqual(['v1025']);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it('shows an empty feed for an unknown work instead of the whole feed', async () => {
+    const { service, motivationPost } = build(day(10), []);
+    motivationPost.findMany.mockImplementation(
+      (args: { distinct?: string[] }) =>
+        Promise.resolve(
+          args.distinct ? [{ attributionWork: 'Бхагавад-гита' }] : [],
+        ),
+    );
+
+    const page = await service.feed('user-1', { work: 'Веды' });
+
+    expect(page.items).toEqual([]);
+    const light = findCall(
+      motivationPost.findMany,
+      (args) => args.select && !args.distinct,
+    );
+    expect(light.where.attributionWork).toEqual({ in: [] });
+  });
+
+  it('filters by speaker chronologically without verse order', async () => {
+    const { service, motivationPost } = build(day(10), [
+      post('a', day(12), null),
+    ]);
+    motivationPost.findMany.mockImplementation(
+      (args: { distinct?: string[] }) =>
+        Promise.resolve(
+          args.distinct
+            ? [{ attributionSpeaker: 'Шрила Прабхупада' }]
+            : [post('a', day(12), null)],
+        ),
+    );
+
+    const page = await service.feed('user-1', { speaker: 'шрила прабхупада' });
+
+    expect(page.items.map((item) => item.id)).toEqual(['a']);
+    expect(page.items[0]).not.toHaveProperty('feedTier');
+    const main = findCall(motivationPost.findMany, (args) => args.include);
+    expect(main.where.attributionSpeaker).toEqual({
+      in: ['Шрила Прабхупада'],
+    });
+    expect(main.orderBy).toEqual([{ publishedAt: 'desc' }, { id: 'desc' }]);
+  });
+
+  it('keeps verses of one book in order inside a tier of the personal feed', async () => {
+    const verse = (
+      id: string,
+      publishedAt: Date,
+      viewedAt: Date | null,
+      locator: string,
+    ) => ({
+      ...post(id, publishedAt, viewedAt),
+      attributionWork: 'Бхагавад-гита',
+      attributionLocator: locator,
+    });
+    const { service } = build(day(10), [
+      verse('fresh214', day(13), null, '2.14'),
+      verse('fresh213', day(12), null, '2.13'),
+      verse('seen101', day(1), day(2), '1.1'),
+    ]);
+
+    const page = await service.feed('user-1', {});
+
+    expect(page.items.map((item) => `${item.feedTier}:${item.id}`)).toEqual([
+      'fresh:fresh213',
+      'fresh:fresh214',
+      // Ранний, но уже виденный стих не перепрыгивает в «свежее».
+      'seen:seen101',
+    ]);
+  });
+
+  it('lists speakers and works with counts, merged across spellings', async () => {
+    const { service, motivationPost } = build(day(10), []);
+    const groupBy = jest.fn(
+      (args: { by: string[]; where: Record<string, unknown> }) =>
+        Promise.resolve(
+          args.by[0] === 'attributionWork'
+            ? [
+                { attributionWork: 'Бхагавад-гита', _count: { _all: 4 } },
+                { attributionWork: 'бхагавад-гита', _count: { _all: 1 } },
+                { attributionWork: 'Упанишады', _count: { _all: 2 } },
+              ]
+            : [{ attributionSpeaker: 'Шрила Прабхупада', _count: { _all: 3 } }],
+        ),
+    );
+    Object.assign(motivationPost, { groupBy });
+    motivationPost.findMany.mockResolvedValue([
+      { attributionSpeaker: 'Шрила Прабхупада' },
+    ]);
+
+    const result = await service.feedAttributions({
+      style: 'cards',
+      category: 'vedy',
+      speaker: 'Шрила  Прабхупада',
+    });
+
+    expect(result).toEqual({
+      speakers: [{ label: 'Шрила Прабхупада', count: 3 }],
+      works: [
+        { label: 'Бхагавад-гита', count: 5 },
+        { label: 'Упанишады', count: 2 },
+      ],
+    });
+    const works = groupBy.mock.calls.find(
+      ([args]) => args.by[0] === 'attributionWork',
+    )![0];
+    // Выбранный автор сужает список источников; видимость — как у ленты.
+    expect(works.where).toMatchObject({
+      status: 'published',
+      category: 'vedy',
+      captionInImage: true,
+      attributionSpeaker: { in: ['Шрила Прабхупада'] },
+      attributionWork: { not: null },
+    });
+    const speakers = groupBy.mock.calls.find(
+      ([args]) => args.by[0] === 'attributionSpeaker',
+    )![0];
+    expect(speakers.where).toMatchObject({ attributionSpeaker: { not: null } });
   });
 
   it('does not record the visit from the cards tab', async () => {
@@ -1064,7 +1264,7 @@ describe('MotivationService.addManualQuote', () => {
       category: 'smirenie',
     });
 
-    expect(categories.resolveSlug).toHaveBeenCalledWith('smirenie');
+    expect(categories.resolveSlug).toHaveBeenCalledWith('smirenie', 'art');
     expect(
       (copy as { prepareCandidate: jest.Mock }).prepareCandidate,
     ).toHaveBeenCalledWith('quote-1', 'smirenie');
@@ -1339,6 +1539,82 @@ describe('MotivationService.adminUpdate', () => {
         update: { title: 'Заголовок', text: 'Текст', storyText: 'Подпись' },
       }),
     );
+  });
+
+  // VED-199: заголовка и подписи в форме нет — прежние не затираются.
+  it('без заголовка и подписи для Stories оставляет прежние', async () => {
+    const { service, upsert } = build();
+
+    await service.adminUpdate(admin, 'post-1', {
+      translations: { ru: { text: 'Цитата' } },
+    });
+
+    expect(upsert.mock.calls[0][0].update).toEqual({ text: 'Цитата' });
+    // Новому переводу пустых полей не бывает — собираем их из цитаты.
+    expect(upsert.mock.calls[0][0].create).toMatchObject({
+      title: 'Цитата',
+      storyText: 'Цитата',
+    });
+  });
+
+  it('заголовок, собранный из цитаты, идёт вслед за ней', async () => {
+    const { service, upsert, findUnique } = build();
+    findUnique.mockResolvedValue({
+      text: 'Старая цитата\n\nПояснение',
+      title: 'Старая цитата',
+    });
+
+    await service.adminUpdate(admin, 'post-1', {
+      translations: { ru: { text: 'Новая цитата\n\nПояснение' } },
+    });
+
+    expect(upsert.mock.calls[0][0].update).toMatchObject({
+      title: 'Новая цитата',
+    });
+  });
+
+  it('заголовок, написанный руками, правка цитаты не трогает', async () => {
+    const { service, upsert, findUnique } = build();
+    findUnique.mockResolvedValue({
+      text: 'Старая цитата',
+      title: 'Душа вечна',
+    });
+
+    await service.adminUpdate(admin, 'post-1', {
+      translations: { ru: { text: 'Новая цитата' } },
+    });
+
+    expect(upsert.mock.calls[0][0].update).not.toHaveProperty('title');
+  });
+
+  // VED-241: текст на картинке правится отдельно от полного.
+  it('пишет текст на картинке, а пустой — сбрасывает к цитате', async () => {
+    const { service, upsert } = build();
+
+    await service.adminUpdate(admin, 'post-1', {
+      translations: {
+        ru: { text: 'Длинная цитата\n\nПояснение', imageText: ' Короче ' },
+      },
+    });
+    await service.adminUpdate(admin, 'post-1', {
+      translations: { ru: { text: 'Длинная цитата', imageText: '  ' } },
+    });
+
+    expect(upsert.mock.calls[0][0].update).toMatchObject({
+      imageText: 'Короче',
+    });
+    expect(upsert.mock.calls[1][0].update).toMatchObject({ imageText: null });
+  });
+
+  it('не присланный текст на картинке не трогает', async () => {
+    const { service, upsert } = build();
+
+    await service.adminUpdate(admin, 'post-1', {
+      translations: { ru: { text: 'Цитата' } },
+    });
+
+    expect(upsert.mock.calls[0][0].update).not.toHaveProperty('imageText');
+    expect(upsert.mock.calls[0][0].create).not.toHaveProperty('imageText');
   });
 
   it('правка подписи снимает отметку о проверке источника', async () => {

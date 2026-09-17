@@ -94,6 +94,12 @@ export interface MotivationPostDto {
   title: string;
   text: string;
   storyText: string;
+  /**
+   * Текст поверх картинки в ленте, если редакция поправила его отдельно от
+   * полного (VED-241). Пусто — на картинке цитата из `text`. Окно «Читать
+   * полностью» всегда показывает `text`.
+   */
+  imageText: string;
   attributionKind: MotivationAttributionKind;
   attributionSpeaker: string | null;
   attributionWork: string | null;
@@ -297,6 +303,20 @@ export interface MotivationReelCreateResult {
 }
 
 export interface MotivationFeedResponse { items: MotivationPostDto[]; nextCursor: string | null }
+/**
+ * Пункт фильтра ленты по автору или источнику (VED-206). `label` — как
+ * показать и что отправить в `?speaker=` / `?work=`: сервер сравнивает без
+ * регистра и лишних пробелов.
+ */
+export interface MotivationAttributionOptionDto {
+  label: string;
+  count: number;
+}
+/** Авторы и источники, по которым можно отфильтровать ленту. */
+export interface MotivationFeedAttributionsDto {
+  speakers: MotivationAttributionOptionDto[];
+  works: MotivationAttributionOptionDto[];
+}
 export interface MotivationLikeResponse { likeCount: number; isLiked: boolean }
 export type MotivationPostStatus = 'draft' | 'generating' | 'published' | 'failed' | 'hidden';
 /** Сколько вдохновений в сервисе — цифра над лентой. */
@@ -755,7 +775,24 @@ export interface MotivationAdminUpdate {
   hidden?: boolean;
   category?: string;
   translations?: Partial<
-    Record<MotivationLanguage, { title: string; text: string; storyText: string }>
+    Record<
+      MotivationLanguage,
+      {
+        /**
+         * Заголовка в формах больше нет (VED-199). Не прислали — сервер
+         * оставит прежний, а у нового перевода соберёт его из цитаты.
+         */
+        title?: string;
+        text: string;
+        /** Не прислали — подпись для Stories и ролика не меняется. */
+        storyText?: string;
+        /**
+         * Текст на картинке (VED-241). Пустая строка — картинка снова берёт
+         * цитату из `text`; не прислали — не меняется.
+         */
+        imageText?: string;
+      }
+    >
   >;
   /**
    * Подпись: кто сказал, где и в каком месте. Правка снимает отметку о
@@ -805,14 +842,41 @@ export interface MotivationCategoryDto {
   sortOrder: number;
   isDefault: boolean;
   parentId: string | null;
+  /**
+   * Число публикаций. В ответе с `?style=` — только этой ленты, иначе всех.
+   */
   postCount: number;
+  /** В меню какой ленты стоит категория (VED-139). */
+  feed: MotivationCategoryFeed;
+  /** Сколько в категории афоризмов с иллюстрацией («Для вас»). */
+  artCount: number;
+  /** Сколько в категории открыток. */
+  cardsCount: number;
 }
-export interface MotivationCategoryInput { title: string; parentId?: string | null }
+
+/**
+ * Лента категории (VED-139): у «Для вас» и «Открыток» свои меню категорий.
+ * `both` — категория общая и стоит в меню той ленты, где в ней что-то есть;
+ * пустая общая видна в обоих меню, пока редакция не решит, чья она.
+ */
+export type MotivationCategoryFeed = 'both' | 'art' | 'cards';
+export const MOTIVATION_CATEGORY_FEEDS: readonly MotivationCategoryFeed[] = [
+  'both',
+  'art',
+  'cards',
+];
+
+export interface MotivationCategoryInput {
+  title: string;
+  parentId?: string | null;
+  feed?: MotivationCategoryFeed;
+}
 export interface MotivationCategoryUpdate {
   title?: string;
   sortOrder?: number;
   isDefault?: boolean;
   parentId?: string | null;
+  feed?: MotivationCategoryFeed;
 }
 
 /** Обязательны только текст и автор — остальное уточняется по желанию. */
@@ -832,11 +896,12 @@ export interface MotivationManualQuoteResult {
 }
 
 /**
- * Текст мотивации на одном языке, написанный админом. Обязателен только
- * заголовок: без пояснения карточка показывает одну цитату.
+ * Текст мотивации на одном языке, написанный админом. Все поля
+ * необязательны: без пояснения карточка показывает одну цитату.
  */
 export interface MotivationManualCopy {
-  title: string;
+  /** Необязателен (VED-199): пустой сервер соберёт из первых слов цитаты. */
+  title?: string;
   explanation?: string;
   storyText?: string;
 }

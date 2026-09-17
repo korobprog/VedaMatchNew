@@ -250,9 +250,25 @@ export default async function MusicPage({
       <div className="min-w-0 flex-1">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-1.5">
-          <h1 className="font-display text-2xl font-bold tracking-tight text-text-0 md:text-3xl">
-            {serviceName}
-          </h1>
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <h1 className="font-display text-2xl font-bold tracking-tight text-text-0 md:text-3xl">
+              {serviceName}
+            </h1>
+            {/* Рядом с названием, а не отдельной плашкой: это ответ на «а
+                много ли тут вообще» — и спрашивают его ровно тогда, когда
+                читают заголовок (тот же приём, что в шапке «Вдохновения»,
+                motivation-top-bar.tsx). Число — как остальная витрина: с
+                учётом линии зрителя, а не по всей базе. */}
+            {catalog.totalTracks > 0 && (
+              <span
+                title={`Всего записей в каталоге: ${catalog.totalTracks}`}
+                className="font-mono text-xs font-medium text-text-2"
+              >
+                {catalog.totalTracks}{" "}
+                {plural(catalog.totalTracks, "запись", "записи", "записей")}
+              </span>
+            )}
+          </div>
           {/* Подписи может и не быть: администратор вправе оставить описание
               пустым, и пустой абзац на её месте — лишний отступ под
               заголовком. */}
@@ -312,13 +328,12 @@ export default async function MusicPage({
           >
             Исполнители
           </h2>
-          {/* На телефоне — сетка по четыре кружка в ряд, заполняется слева
-              направо (VED-103, VED-115). Витрина отдаёт до восьми
-              исполнителей, так что это ровно два ряда, и все видны без
-              прокрутки. Первая попытка раскладывала колонки сверху вниз с
-              прокруткой вбок — и шестеро исполнителей вставали по три в ряд,
-              то есть так же, как было. С планшета — прежняя лента. */}
-          <ul className="scroll-slim mt-4 grid grid-cols-4 justify-items-center gap-x-1 gap-y-4 pb-2 sm:flex sm:justify-start sm:gap-5 sm:overflow-x-auto">
+          {/* Сетка по четыре кружка в ряд, заполняется слева направо
+              (VED-103, VED-115). Витрина отдаёт всех исполнителей, и каждый
+              следующий после восьмого встаёт новым рядом снизу (VED-224) —
+              прокрутки вбок нет ни на телефоне, ни на широком экране: лента
+              прятала хвост за краем. */}
+          <ul className="mt-4 grid max-w-lg grid-cols-4 justify-items-center gap-x-1 gap-y-4 pb-2 sm:gap-x-5">
             {catalog.artists.map((artist) => (
               <li key={artist.id}>
                 <MusicArtistBubble artist={artist} />

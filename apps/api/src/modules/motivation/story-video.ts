@@ -135,12 +135,23 @@ export const REEL_MAX_QUOTE_LINES = 4;
  *
  * Вынесено чистой функцией по той же причине, что и `buildStoryVideoArgs`:
  * проверить лимит строк можно без мока всего воркера и без запуска ffmpeg.
+ *
+ * `layout: 'row'` (VED-227/VED-201а): знак стоит в углу, подпись — рядом с
+ * ним в одной полосе, как на сохраняемой картинке (`composeStoryImage`).
+ * Раньше здесь не передавался layout вовсе, и `renderStoryOverlay()` брал
+ * дефолт `'stacked'` — старую раскладку со знаком над подписью; это и было
+ * видно в превью Max и на самом ролике.
  */
 export function buildReelOverlayInput(
   text: string,
   attribution: string,
 ): StoryOverlayInput {
-  return { text, attribution, maxQuoteLines: REEL_MAX_QUOTE_LINES };
+  return {
+    text,
+    attribution,
+    maxQuoteLines: REEL_MAX_QUOTE_LINES,
+    layout: 'row',
+  };
 }
 
 export function buildStoryVideoArgs(input: StoryVideoArgs): string[] {

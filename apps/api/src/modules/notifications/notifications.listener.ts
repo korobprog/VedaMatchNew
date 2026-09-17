@@ -1,11 +1,27 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import type { NotificationEvent, UserRegisteredEvent } from '@vedamatch/shared';
-import { USER_REGISTERED_EVENT, resolveDisplayName } from '@vedamatch/shared';
+import type {
+  AuthTelegramConnectedEvent,
+  AuthTelegramDisconnectedEvent,
+  ChatCallEndedEvent,
+  NotificationEvent,
+  UserRegisteredEvent,
+} from '@vedamatch/shared';
+import {
+  AUTH_TELEGRAM_CONNECTED_EVENT,
+  AUTH_TELEGRAM_DISCONNECTED_EVENT,
+  CHAT_CALL_ENDED_EVENT,
+  USER_REGISTERED_EVENT,
+  resolveDisplayName,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildNotification, notificationEventNames } from './notification-copy';
+import { NativePushService } from './native-push.service';
 import { NotificationsService } from './notifications.service';
 import { PushSenderService } from './push-sender.service';
+import { buildTelegramNotificationText } from './telegram-copy';
+import { TelegramNotificationsService } from './telegram-notifications.service';
+import { TelegramSenderService } from './telegram-sender.service';
 
 @Injectable()
 export class NotificationsListener {
@@ -15,7 +31,39 @@ export class NotificationsListener {
     private readonly notifications: NotificationsService,
     private readonly sender: PushSenderService,
     private readonly prisma: PrismaService,
+    private readonly nativePush: NativePushService,
+    private readonly telegramNotifications: TelegramNotificationsService,
+    private readonly telegramSender: TelegramSenderService,
   ) {}
+
+  /**
+   * Заведена или подтверждена связка с Telegram (вход через мини-приложение
+   * или привязка живой сессией, см. `AuthService`). `UserIdentity` здесь не
+   * читаем — событие самодостаточно, только заводит устройство доставки.
+   */
+  @OnEvent(AUTH_TELEGRAM_CONNECTED_EVENT)
+  onTelegramConnected(event: AuthTelegramConnectedEvent): void {
+    void this.telegramNotifications
+      .setConnected(event.userId, event.telegramUserId, event.canWrite)
+      .catch((error) =>
+        this.logger.warn(
+          `Устройство Telegram не заведено для ${event.userId}: ${String(error)}`,
+        ),
+      );
+  }
+
+  /** Telegram отвязан (`DELETE /auth/identities/telegram`) — боту больше
+   *  некому писать, устройство гасится. */
+  @OnEvent(AUTH_TELEGRAM_DISCONNECTED_EVENT)
+  onTelegramDisconnected(event: AuthTelegramDisconnectedEvent): void {
+    void this.telegramNotifications
+      .disconnect(event.userId)
+      .catch((error) =>
+        this.logger.warn(
+          `Устройство Telegram не отвязано для ${event.userId}: ${String(error)}`,
+        ),
+      );
+  }
 
   /**
    * Приветствие новому участнику. Слушаем событие регистрации, а не ждём от
@@ -74,6 +122,22 @@ export class NotificationsListener {
   @OnEvent(notificationEventNames.portalChatCallMissed)
   onPortalChatCallMissed(event: NotificationEvent): void {
     void this.deliver(event);
+  }
+
+  /**
+   * «Звонок снят» — вне обычного конвейера уведомлений: нет строки в
+   * колокольчике, нет веб-пуша, только data-пуш нативным устройствам,
+   * гасящий рингтон. См. `CHAT_CALL_ENDED_EVENT` в `@vedamatch/shared`.
+   */
+  @OnEvent(CHAT_CALL_ENDED_EVENT)
+  onChatCallEnded(event: ChatCallEndedEvent): void {
+    void this.nativePush
+      .sendCallEnded(event.recipientId, event.callId, event.reason)
+      .catch((error) =>
+        this.logger.warn(
+          `«Звонок снят» не доставлен (${event.callId}): ${String(error)}`,
+        ),
+      );
   }
 
   @OnEvent(notificationEventNames.connectionRequested)
@@ -235,23 +299,52 @@ export class NotificationsListener {
         category: content.category,
       });
 
-      const subscriptions = await this.notifications.listSubscriptions(
-        event.recipientId,
-      );
-      if (subscriptions.length === 0) {
-        this.logger.log(
-          `${event.name} для ${event.recipientId} пропущено: нет подписок`,
-        );
-        return;
-      }
       const payload = {
         title: content.title,
         body: content.body,
         url: content.url,
         tag: content.tag,
       };
+      // Телефоны с приложением получают тот же пуш, что и браузеры — кроме
+      // входящего звонка: устройствам с `nativeCalls` он идёт data-only
+      // (свой экран вызова и рингтон), остальным — как обычное уведомление.
+      const native =
+        event.name === 'chat.call-incoming'
+          ? await this.nativePush.sendCallIncoming(
+              event.recipientId,
+              {
+                callId: event.callId,
+                conversationId: event.conversationId,
+                kind: event.callKind,
+                callerName: event.callerName,
+                callerAvatarUrl: event.callerAvatarUrl,
+                expiresAt: event.expiresAt,
+              },
+              payload,
+            )
+          : await this.nativePush.sendToUsers([event.recipientId], payload);
 
-      let delivered = 0;
+      const subscriptions = await this.notifications.listSubscriptions(
+        event.recipientId,
+      );
+      // Тумблер `telegram` — канал доставки, а не категория: категория уже
+      // проверена выше и решает про колокольчик, браузер и телефон разом,
+      // а этот тумблер выключает только бота, не трогая остальное.
+      const telegramDevices = preferences.telegram
+        ? await this.telegramNotifications.listDevices(event.recipientId)
+        : [];
+      if (
+        subscriptions.length === 0 &&
+        native.devices === 0 &&
+        telegramDevices.length === 0
+      ) {
+        this.logger.log(
+          `${event.name} для ${event.recipientId} пропущено: нет подписок`,
+        );
+        return;
+      }
+
+      let delivered = native.delivered;
       for (const subscription of subscriptions) {
         const failure = await this.sender.send(subscription, payload);
         if (failure === null) delivered += 1;
@@ -259,8 +352,27 @@ export class NotificationsListener {
           await this.notifications.deleteSubscription(subscription.endpoint);
         }
       }
+
+      if (telegramDevices.length > 0) {
+        const text = buildTelegramNotificationText(content, event);
+        for (const device of telegramDevices) {
+          const failure = await this.telegramSender.sendMessage({
+            chatId: device.token,
+            title: text.title,
+            body: text.body,
+            notificationUrl: content.url,
+          });
+          if (failure === null) delivered += 1;
+          if (failure === 'gone') {
+            await this.telegramNotifications.deleteDevice(device.token);
+          }
+        }
+      }
+
       this.logger.log(
-        `${event.name} для ${event.recipientId}: доставлено ${delivered} из ${subscriptions.length}`,
+        `${event.name} для ${event.recipientId}: доставлено ${delivered} из ${
+          subscriptions.length + native.devices + telegramDevices.length
+        }`,
       );
     } catch (error) {
       // Вместе с именем — поля нагрузки: у безымянного события (издатель забыл
