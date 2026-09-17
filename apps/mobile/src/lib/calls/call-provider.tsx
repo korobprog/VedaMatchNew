@@ -31,7 +31,14 @@ import { createChatCallsApi } from './chat-calls-client';
 import { isAudioSessionLive } from './audio-session-policy';
 import { shouldDeclineAsBusy } from './call-busy-decision';
 import { buildLaunchPreviewCall } from './call-launch-preview';
+import { CONNECTING_TIMEOUT_MS, decideConnectingTimeout } from './call-connect-timeout';
 import { IDLE_STATE, companionOf, reduceCall, roleIn, type CallState } from './call-machine';
+import {
+  admitCallSignal,
+  INITIAL_SIGNAL_SEQ_STATE,
+  shouldCatchUpCallSignals,
+  type SignalSeqState,
+} from './call-signal-catchup';
 import { shouldRestartIceOnNetworkChange } from './ice-restart-policy';
 import {
   clearNativeCall,
@@ -125,6 +132,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
   /** Сигналы, пришедшие раньше, чем поднялась сессия. */
   const queuedSignals = useRef<ChatCallSignal[]>([]);
   const stopRingtone = useRef<(() => void) | null>(null);
+  /** Наибольший применённый `seq` сигнала этого звонка (VED-261) — общий
+   *  для потока и для дочитывания через `chat-calls-client.ts#signals`. */
+  const signalSeqRef = useRef<SignalSeqState>(INITIAL_SIGNAL_SEQ_STATE);
   /**
    * Для какого звонка экран уже поднимался хоть раз — решает
    * `shouldAutoNavigateToCallScreen`/`nextNavigatedCallId`
@@ -157,6 +167,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     sessionRef.current?.close();
     sessionRef.current = null;
     queuedSignals.current = [];
+    signalSeqRef.current = INITIAL_SIGNAL_SEQ_STATE;
     setLocalStream(null);
     setRemoteStream(null);
     setRelayed(null);
@@ -182,7 +193,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   /** Сообщить серверу о конце и закрыть медиа. Идемпотентно. */
   const hangUpWith = useCallback(
-    async (reason: 'hangup' | 'network') => {
+    async (reason: 'hangup' | 'network', errorMessage?: string) => {
       const current = stateRef.current;
       const call = current.call;
       if (!call || current.phase === 'idle' || current.phase === 'ended') return;
@@ -195,7 +206,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
             : reason === 'network'
               ? 'failed'
               : 'ended';
-      finishLocally(localStatus);
+      finishLocally(localStatus, errorMessage);
       closeSession();
       // eslint-disable-next-line no-console -- диагностика для живого теста
       // (`gan-harness`-задание: «decline с причиной» — видно в logcat релиза
@@ -240,6 +251,52 @@ export function CallProvider({ children }: { children: ReactNode }) {
       await session.handleSignal(signal).catch(() => undefined);
   }, []);
 
+  /**
+   * Единственная точка применения сигнала — что бы его ни принесло: сам
+   * поток или дочитывание после обрыва/пересинхронизации (VED-261).
+   * `admitCallSignal` решает по общему `signalSeqRef`, применять ли его ещё
+   * раз, поэтому неважно, в каком порядке подоспеют оба источника —
+   * переприменения не будет.
+   */
+  const applySignal = useCallback(async (seq: number | undefined, signal: ChatCallSignal) => {
+    const { admit, next } = admitCallSignal(signalSeqRef.current, seq);
+    if (!admit) return;
+    signalSeqRef.current = next;
+    const session = sessionRef.current;
+    if (session) await session.handleSignal(signal).catch(() => undefined);
+    else queuedSignals.current.push(signal);
+  }, []);
+
+  /**
+   * Запрос и применение — без проверки фазы: используется и там, где фаза
+   * заведомо верная (сразу после успешного `accept()`, до того как React
+   * перерисовал `stateRef`), и там, где её стоит перепроверить
+   * (`catchUpSignals` ниже). Сеть — не повод падать: следующая попытка
+   * (пересинхронизация потока или таймаут `connecting`) повторит сама.
+   */
+  const fetchAndApplySignals = useCallback(
+    async (callId: string) => {
+      try {
+        const { signals } = await callsApi.signals(callId, signalSeqRef.current.lastSeq);
+        for (const item of signals) await applySignal(item.seq, item.signal);
+      } catch {
+        // Следующая попытка (ресинк/таймаут) повторит.
+      }
+    },
+    [applySignal, callsApi],
+  );
+
+  /**
+   * То же самое, но только в фазах «соединяемся»/«разговор» — для
+   * пересинхронизации потока (`stream.onResync`) и таймаута `connecting`,
+   * где звонка в состоянии может уже не быть вовсе или он мог завершиться.
+   */
+  const catchUpSignals = useCallback(async () => {
+    const call = stateRef.current.call;
+    if (!call || !shouldCatchUpCallSignals(stateRef.current.phase)) return;
+    await fetchAndApplySignals(call.id);
+  }, [fetchAndApplySignals]);
+
   // ---------- общий поток событий ----------
 
   useEffect(() => {
@@ -248,9 +305,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       if (!isCallEvent(event)) return;
       if (event.type === 'call.signal') {
         if (event.callId !== stateRef.current.call?.id) return;
-        const session = sessionRef.current;
-        if (session) void session.handleSignal(event.signal).catch(() => undefined);
-        else queuedSignals.current.push(event.signal);
+        void applySignal(event.seq, event.signal);
         return;
       }
       // BUG D (VED-222, живая проверка): настоящий чужой входящий, узнанный
@@ -284,7 +339,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       if (event.type === 'call.ended' && event.call.id === stateRef.current.call?.id)
         closeSession();
     });
-  }, [status, stream, userId, closeSession]);
+  }, [status, stream, userId, closeSession, applySignal]);
 
   /**
    * Звонок, о котором думает сервер, — при первом входе и при каждой
@@ -327,8 +382,13 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (status !== 'signed') return;
-    return stream.onResync(() => void reconcile());
-  }, [status, stream, reconcile]);
+    return stream.onResync(() => {
+      void reconcile();
+      // VED-261: поток был закрыт (фон/обрыв) — `call.signal`, посланный в
+      // это время, мог уйти в пустоту, если мы как раз ждали offer/answer.
+      void catchUpSignals();
+    });
+  }, [status, stream, reconcile, catchUpSignals]);
 
   // ---------- реакции на смену фазы ----------
 
@@ -409,6 +469,58 @@ export function CallProvider({ children }: { children: ReactNode }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.phase, role]);
+
+  /**
+   * Застряли в «соединяемся» дольше 20 секунд (VED-261) — факт с
+   * устройства: телефон нажал «Ответить», сервер подтвердил, а offer от
+   * сайта так и не пришёл (поток был закрыт в момент рассылки), и звонок
+   * висел в «Соединение…» больше двух минут без единого предупреждения.
+   * `arm` — рекурсивный таймер (обычная вложенная функция, не хук, — та же
+   * форма, что на сайте, `apps/web/.../call-provider.tsx`): по срабатыванию
+   * сперва пробует дочитать сигналы (`catchUpSignals`), и если это принесло
+   * что-то новое, даёт ещё одно окно (`decideConnectingTimeout` → `extend`)
+   * — иначе решает, что звонок действительно потерян, и вешает трубку с
+   * понятной причиной вместо бесконечного «Соединение…».
+   */
+  const connectingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (connectingTimerRef.current) {
+      clearTimeout(connectingTimerRef.current);
+      connectingTimerRef.current = null;
+    }
+    if (state.phase !== 'connecting' || !state.call) return;
+    const callId = state.call.id;
+
+    const arm = (alreadyExtended: boolean) => {
+      connectingTimerRef.current = setTimeout(() => {
+        void (async () => {
+          const before = signalSeqRef.current.lastSeq;
+          await catchUpSignals();
+          const decision = decideConnectingTimeout({
+            phase: stateRef.current.phase,
+            timeoutCallId: callId,
+            currentCallId: stateRef.current.call?.id ?? null,
+            madeProgress: signalSeqRef.current.lastSeq > before,
+            alreadyExtended,
+          });
+          if (decision === 'ignore') return;
+          if (decision === 'extend') {
+            arm(true);
+            return;
+          }
+          void hangUpWith('network', 'Не удалось соединиться — проверьте интернет');
+        })();
+      }, CONNECTING_TIMEOUT_MS);
+    };
+    arm(false);
+
+    return () => {
+      if (connectingTimerRef.current) {
+        clearTimeout(connectingTimerRef.current);
+        connectingTimerRef.current = null;
+      }
+    };
+  }, [state.phase, state.call, catchUpSignals, hangUpWith]);
 
   // Разговор идёт: раз в несколько секунд смотрим, не пошёл ли звук через
   // ретранслятор — для пометки на экране звонка (`app/call/[id].tsx`).
@@ -549,6 +661,13 @@ export function CallProvider({ children }: { children: ReactNode }) {
       await callsApi.accept(call.id);
       // eslint-disable-next-line no-console
       console.warn('[calls] accept: сервер подтвердил', { callId: call.id });
+      // VED-261: факт с устройства — пока телефон принимал звонок, сервер
+      // уже мог разослать offer тому, чей поток `chat-stream.tsx` в этот
+      // момент не слушал (медленная сеть, поток ещё поднимается). Дочитать
+      // явно, не дожидаясь пересинхронизации потока (`stateRef.current.phase`
+      // тут ещё может не быть «connecting» — React не перерисовал, поэтому
+      // идём в обход фазовой проверки `catchUpSignals`, а не через неё).
+      await fetchAndApplySignals(call.id);
       await drainQueuedSignals();
     } catch (error) {
       closeSession();
@@ -561,7 +680,15 @@ export function CallProvider({ children }: { children: ReactNode }) {
     } finally {
       if (acceptingCallId.current === call.id) acceptingCallId.current = null;
     }
-  }, [callsApi, closeSession, createSession, drainQueuedSignals, finishLocally, iceServers]);
+  }, [
+    callsApi,
+    closeSession,
+    createSession,
+    drainQueuedSignals,
+    fetchAndApplySignals,
+    finishLocally,
+    iceServers,
+  ]);
 
   const decline = useCallback(() => hangUpWith('hangup'), [hangUpWith]);
   const hangUp = useCallback(() => hangUpWith('hangup'), [hangUpWith]);

@@ -21,6 +21,7 @@ import type {
   ChatCallEndedEvent,
   ChatCallEndReason,
   ChatCallSignal,
+  ChatCallSignalEnvelope,
   ChatCallStatus,
   EndChatCallRequest,
   NotificationEvent,
@@ -56,6 +57,18 @@ type ChatCallRow = Prisma.ChatCallGetPayload<{ include: typeof callInclude }>;
 const BUSY_PREFIX = 'chat:call:busy:';
 /** Больше — и сигналинг превращается в канал для чего угодно. */
 const MAX_SIGNAL_BYTES = 32 * 1024;
+/** Ключи хранения последних сигналов активного звонка (VED-261). */
+const SIGNAL_PREFIX = 'chat:call:signals:';
+const SIGNAL_SEQ_PREFIX = 'chat:call:signal-seq:';
+/** «50 на сторону» из карточки задачи: дольше этого сигналинг звонка не
+ *  живёт, а держать больше — платить памятью за то, что клиент отбросит. */
+const MAX_SIGNALS_PER_RECIPIENT = 50;
+
+interface StoredCallSignal {
+  seq: number;
+  fromUserId: string;
+  signal: ChatCallSignal;
+}
 
 /**
  * Звонки один на один внутри личного диалога.
@@ -69,6 +82,15 @@ const MAX_SIGNAL_BYTES = 32 * 1024;
  * одном инстансе, как у присутствия), таймер — в процессе, который принял
  * звонок. Если этот процесс перезапустился, застрявший `ringing` добивается
  * при следующем обращении к звонку (`expireIfStale`).
+ *
+ * Последние сигналы (offer/answer/ICE) активного звонка хранятся тем же
+ * приёмом, что и занятость: Redis, если он настроен (переживает несколько
+ * инстансов API за Traefik), иначе в памяти процесса. Signal-в-БД не пишет
+ * никто — это по-прежнему секунды жизни, но `GET /chat/calls/:id/signals`
+ * должен быть способен отдать пропущенное клиенту, у которого в момент
+ * рассылки `call.signal` не было открытого `/chat/stream` (VED-261: именно
+ * так терялся offer на телефоне на медленной сети). Очищаются безусловно в
+ * `finish()` — держать сигналинг завершённого звонка незачем.
  */
 @Injectable()
 export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
@@ -79,6 +101,13 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
     { callId: string; expiresAt: number }
   >();
   private readonly ringTimers = new Map<string, NodeJS.Timeout>();
+  /** callId → следующий seq (без Redis, один инстанс). */
+  private readonly localSignalSeq = new Map<string, number>();
+  /** callId → (toUserId → сигналы по возрастанию seq). */
+  private readonly localSignals = new Map<
+    string,
+    Map<string, StoredCallSignal[]>
+  >();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -306,6 +335,12 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
    * Перенести offer/answer/ICE второй стороне. Сервер содержимое не
    * разбирает; проверяет только, что это участник живого звонка и что
    * посылка разумного размера.
+   *
+   * Помимо рассылки в `/chat/stream`, сигнал ещё и откладывается в очередь
+   * получателя (`storeSignal`) с растущим `seq` — если в момент рассылки
+   * поток получателя не был подключён (обрыв, медленная сеть, только что
+   * запущенное приложение), событие уйдёт в пустоту, но останется доступно
+   * через `signalsSince`.
    */
   async signal(
     userId: string,
@@ -319,12 +354,35 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
     const row = await this.requireCall(callId, userId);
     if (isFinal(row.status)) throw new ConflictException('Звонок уже завершён');
     const to = row.callerId === userId ? row.calleeId : row.callerId;
+    const seq = await this.nextSignalSeq(callId);
+    await this.storeSignal(callId, to, { seq, fromUserId: userId, signal });
     this.events.publish([to], {
       type: 'call.signal',
       callId,
       fromUserId: userId,
       signal,
+      seq,
     });
+  }
+
+  /**
+   * Сигналы этого звонка, адресованные вызывающему, начиная со `seq`
+   * строго больше `after`, по возрастанию. Участник может дочитать их в
+   * любой фазе — то, что звонок уже завершился к моменту запроса, не повод
+   * отказывать: `readSignals` в этом случае просто вернёт пусто (очередь
+   * уже очищена `finish()`), а не 409.
+   */
+  async signalsSince(
+    userId: string,
+    callId: string,
+    after: number,
+  ): Promise<ChatCallSignalEnvelope[]> {
+    await this.requireCall(callId, userId);
+    const entries = await this.readSignals(callId, userId);
+    return entries
+      .filter((entry) => entry.seq > after)
+      .sort((a, b) => a.seq - b.seq)
+      .map(({ seq, fromUserId, signal }) => ({ seq, fromUserId, signal }));
   }
 
   /** Незавершённый звонок человека — чтобы вкладка после перезагрузки
@@ -452,6 +510,10 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
       where: { id: row.id },
       include: callInclude,
     });
+    // Идемпотентно и на гонке (claimed.count === 0 — кто-то уже дофиналил
+    // звонок): сигналинг завершённого звонка не нужен никому, очистка не
+    // должна ждать, кто именно выиграл гонку финалов.
+    await this.clearSignals(updated);
     if (claimed.count === 0) return toCallDto(updated);
 
     await Promise.all([
@@ -712,6 +774,112 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
     }
     if (this.localBusy.get(userId)?.callId === callId)
       this.localBusy.delete(userId);
+  }
+
+  // ---------- сигналы звонка (VED-261) ----------
+
+  /**
+   * Общий счётчик `seq` на звонок (не на получателя): порядок среди
+   * сигналов ОДНОГО адресата от этого остаётся строго возрастающим — то,
+   * что нужно клиенту для `after=` — а с Redis `INCR` он ещё и атомарен
+   * между инстансами, где один POST /signal мог обработать инстанс A, а
+   * другой — инстанс B.
+   */
+  private async nextSignalSeq(callId: string): Promise<number> {
+    if (this.redis?.status === 'ready') {
+      try {
+        return await this.redis.incr(`${SIGNAL_SEQ_PREFIX}${callId}`);
+      } catch (error) {
+        this.logger.warn(`Seq сигнала не выдан через Redis: ${String(error)}`);
+      }
+    }
+    const next = (this.localSignalSeq.get(callId) ?? 0) + 1;
+    this.localSignalSeq.set(callId, next);
+    return next;
+  }
+
+  private async storeSignal(
+    callId: string,
+    toUserId: string,
+    entry: StoredCallSignal,
+  ): Promise<void> {
+    if (this.redis?.status === 'ready') {
+      try {
+        const key = `${SIGNAL_PREFIX}${callId}:${toUserId}`;
+        await this.redis
+          .multi()
+          .rpush(key, JSON.stringify(entry))
+          // Последние MAX_SIGNALS_PER_RECIPIENT — LTRIM с отрицательным
+          // началом держит хвост списка, а не голову.
+          .ltrim(key, -MAX_SIGNALS_PER_RECIPIENT, -1)
+          // TTL — подстраховка на случай, если finish() не выполнится
+          // (упавший процесс): та же продолжительность, что у «занятости»
+          // принятого звонка, самого долгого случая.
+          .expire(key, Math.ceil(BUSY_TTL_ACTIVE_MS / 1000))
+          .exec();
+        return;
+      } catch (error) {
+        this.logger.warn(`Сигнал не сохранён в Redis: ${String(error)}`);
+      }
+    }
+    const byRecipient =
+      this.localSignals.get(callId) ?? new Map<string, StoredCallSignal[]>();
+    this.localSignals.set(callId, byRecipient);
+    const list = byRecipient.get(toUserId) ?? [];
+    list.push(entry);
+    if (list.length > MAX_SIGNALS_PER_RECIPIENT) list.shift();
+    byRecipient.set(toUserId, list);
+  }
+
+  private async readSignals(
+    callId: string,
+    toUserId: string,
+  ): Promise<StoredCallSignal[]> {
+    if (this.redis?.status === 'ready') {
+      try {
+        const raw = await this.redis.lrange(
+          `${SIGNAL_PREFIX}${callId}:${toUserId}`,
+          0,
+          -1,
+        );
+        return raw
+          .map((item) => this.parseStoredSignal(item))
+          .filter((entry): entry is StoredCallSignal => entry !== null);
+      } catch (error) {
+        this.logger.warn(`Сигналы не прочитаны из Redis: ${String(error)}`);
+        return [];
+      }
+    }
+    return this.localSignals.get(callId)?.get(toUserId) ?? [];
+  }
+
+  private parseStoredSignal(raw: string): StoredCallSignal | null {
+    try {
+      return JSON.parse(raw) as StoredCallSignal;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Вызывается из `finish()` — сигналинг завершённого звонка не нужен. */
+  private async clearSignals(row: {
+    id: string;
+    callerId: string;
+    calleeId: string;
+  }): Promise<void> {
+    this.localSignalSeq.delete(row.id);
+    this.localSignals.delete(row.id);
+    if (this.redis?.status === 'ready') {
+      try {
+        await this.redis.del(
+          `${SIGNAL_SEQ_PREFIX}${row.id}`,
+          `${SIGNAL_PREFIX}${row.id}:${row.callerId}`,
+          `${SIGNAL_PREFIX}${row.id}:${row.calleeId}`,
+        );
+      } catch (error) {
+        this.logger.warn(`Сигналы не очищены в Redis: ${String(error)}`);
+      }
+    }
   }
 }
 
