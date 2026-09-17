@@ -118,8 +118,12 @@ describe("ReelWizard", () => {
     expect(next).toBeDisabled();
     await user.type(screen.getByLabelText(/Текст цитаты/), "Делай что должно, и будь что будет.");
     // Источник и автор — блоком на том же экране, но двумя полями (VED-99).
-    await user.type(screen.getByLabelText(/Автор/), "Марк Аврелий");
-    await user.type(screen.getByLabelText(/Источник/), "Размышления");
+    // Регэксп от начала строки, а не /Автор/: группа-обёртка (fieldset)
+    // сама несёт aria-label "Источник и автор" (VED-203) и подошла бы под
+    // свободный поиск подстроки, а у самого поля «Автор» текст label ещё и
+    // включает подсказку ниже — точная строка тоже не совпала бы.
+    await user.type(screen.getByLabelText(/^Автор \(необязательно\)/), "Марк Аврелий");
+    await user.type(screen.getByLabelText("Источник (необязательно)"), "Размышления");
     await user.click(next);
 
     // Шаг 2 — категория вместо «трека ленты» (VED-96), способ и стиль.
@@ -168,9 +172,12 @@ describe("ReelWizard", () => {
     await screen.findByText("Сегодня: 0 из 1");
     expect(screen.getByLabelText(/Текст цитаты/)).toHaveValue("Ты имеешь право лишь на действие.");
     // У фрагмента из книг источник известен: его называют, а не спрашивают, и
-    // отдельный экран ради этого не заводится.
-    expect(screen.queryByLabelText(/Автор/)).not.toBeInTheDocument();
-    expect(screen.getByText("Источник / автор")).toBeInTheDocument();
+    // отдельный экран ради этого не заводится. Точное совпадение — группа
+    // сама несёт aria-label "Источник и автор" и тоже подошла бы под /Автор/.
+    expect(screen.queryByLabelText("Автор (необязательно)")).not.toBeInTheDocument();
+    // Видимого заголовка группы нет (VED-203) — имя группы для скринридера
+    // задаёт aria-label на fieldset, доступное через роль "group".
+    expect(screen.getByRole("group", { name: "Источник и автор" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Дальше: картинка" }));
     await user.click(screen.getByRole("button", { name: "Дальше: проверка" }));
     await user.click(
