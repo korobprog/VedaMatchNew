@@ -11,6 +11,8 @@ import type {
   CreateMusicCategoryRequest,
   CreateMusicPlaylistRequest,
   MusicBulkTrackArtistResult,
+  MusicBulkTrackRootCategoryRequest,
+  MusicBulkTrackRootCategoryResult,
   MusicCoverScope,
   UpdateMusicAlbumRequest,
   UpdateMusicArtistRequest,
@@ -270,6 +272,9 @@ export class MusicAdminCatalogService {
           false,
         ),
         position: body.position ?? 0,
+        // Не указано — поле само примет умолчание схемы (`style`): дважды
+        // писать одно и то же умолчание незачем.
+        ...(body.kind === undefined ? {} : { kind: body.kind }),
       },
     });
   }
@@ -305,6 +310,7 @@ export class MusicAdminCatalogService {
               ),
             }),
         ...(body.position === undefined ? {} : { position: body.position }),
+        ...(body.kind === undefined ? {} : { kind: body.kind }),
       },
     });
   }
@@ -747,6 +753,81 @@ export class MusicAdminCatalogService {
       data: { artistId: artist?.id ?? null },
     });
     return { artist, created, updated: count };
+  }
+
+  /**
+   * Массовая простановка корневой категории (VED-165): без переразметки
+   * каталога фильтр «Традиционное»/«Современное» показывает пустой список,
+   * а руками разводить по одной записи — то же самое узкое место, ради
+   * которого когда-то завели массовую смену исполнителя (VED-226).
+   *
+   * Стилевые категории (киртан, мантра…) не трогаем — снимается и ставится
+   * только корневая, второе измерение фильтра у записи остаётся как было.
+   * `updateMany` здесь не подходит: `MusicTrackCategory` — таблица связи, а
+   * не колонка на самой записи, и «снять прежнюю корневую, не тронув стиль»
+   * требует прочитать текущий набор тегов каждой записи.
+   */
+  async setTracksRootCategory(
+    viewerIsAdmin: boolean,
+    body: MusicBulkTrackRootCategoryRequest,
+  ): Promise<MusicBulkTrackRootCategoryResult> {
+    this.assertAdmin(viewerIsAdmin);
+    const trackIds = [...new Set(body.trackIds ?? [])];
+    if (trackIds.length === 0) {
+      throw new BadRequestException('Нужно выбрать хотя бы одну запись');
+    }
+
+    if (body.rootCategoryId !== null) {
+      const category = await this.prisma.musicCategory.findUnique({
+        where: { id: body.rootCategoryId },
+        select: { id: true, kind: true },
+      });
+      if (!category) throw new BadRequestException('Категория не найдена');
+      if (category.kind !== 'root') {
+        throw new BadRequestException('Это не корневая категория');
+      }
+    }
+
+    const found = await this.prisma.musicTrack.findMany({
+      where: { id: { in: trackIds } },
+      select: { id: true },
+    });
+    if (found.length !== trackIds.length) {
+      throw new NotFoundException('Часть записей не найдена — обновите список');
+    }
+
+    // Все корневые id разом — чтобы снять прежнюю корневую у записи, не
+    // трогая стилевые теги: с одним запросом на всю операцию, а не на
+    // запись.
+    const roots = await this.prisma.musicCategory.findMany({
+      where: { kind: 'root' },
+      select: { id: true },
+    });
+    const rootIds = new Set(roots.map((row) => row.id));
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const trackId of trackIds) {
+        const existing = await tx.musicTrackCategory.findMany({
+          where: { trackId },
+          select: { categoryId: true },
+        });
+        const keep = existing
+          .map((row) => row.categoryId)
+          .filter((categoryId) => !rootIds.has(categoryId));
+        const next = body.rootCategoryId
+          ? [...keep, body.rootCategoryId]
+          : keep;
+
+        await tx.musicTrackCategory.deleteMany({ where: { trackId } });
+        if (next.length > 0) {
+          await tx.musicTrackCategory.createMany({
+            data: next.map((categoryId) => ({ trackId, categoryId })),
+          });
+        }
+      }
+    });
+
+    return { updated: trackIds.length };
   }
 
   private async replaceCategories(

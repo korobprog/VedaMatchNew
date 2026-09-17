@@ -15,6 +15,7 @@ function prismaMock() {
       findMany: jest.fn().mockResolvedValue([]),
     },
     musicTrackCategory: {
+      findMany: jest.fn().mockResolvedValue([]),
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       createMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
@@ -215,6 +216,158 @@ describe('MusicAdminCatalogService', () => {
       await expect(
         service(prismaMock()).setTracksArtist(true, { trackIds: [] }),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('setTracksRootCategory (VED-165)', () => {
+    function withCategoriesAndTracks(
+      mock: ReturnType<typeof prismaMock>,
+      byTrack: Record<string, string[]>,
+    ) {
+      mock.prisma.musicTrack.findMany.mockResolvedValue(
+        Object.keys(byTrack).map((id) => ({ id })),
+      );
+      // Две корневые категории каталога — ровно как заводит сид.
+      mock.prisma.musicCategory.findMany.mockResolvedValue([
+        { id: 'root-old' },
+        { id: 'root-new' },
+      ]);
+      mock.tx.musicTrackCategory.findMany.mockImplementation(
+        ({ where }: { where: { trackId: string } }) =>
+          Promise.resolve(
+            (byTrack[where.trackId] ?? []).map((categoryId) => ({
+              categoryId,
+            })),
+          ),
+      );
+    }
+
+    it('не пускает не-администратора', async () => {
+      await expect(
+        service(prismaMock()).setTracksRootCategory(false, {
+          trackIds: ['t1'],
+          rootCategoryId: 'root-new',
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('пустой список записей — 400', async () => {
+      await expect(
+        service(prismaMock()).setTracksRootCategory(true, {
+          trackIds: [],
+          rootCategoryId: 'root-new',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('несуществующая категория — 400', async () => {
+      const mock = prismaMock();
+      mock.prisma.musicCategory.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service(mock).setTracksRootCategory(true, {
+          trackIds: ['t1'],
+          rootCategoryId: 'missing',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mock.prisma.musicTrack.findMany).not.toHaveBeenCalled();
+    });
+
+    it('стилевую категорию корневой не поставить — 400', async () => {
+      const mock = prismaMock();
+      mock.prisma.musicCategory.findUnique.mockResolvedValue({
+        id: 'style-mantra',
+        kind: 'style',
+      });
+
+      await expect(
+        service(mock).setTracksRootCategory(true, {
+          trackIds: ['t1'],
+          rootCategoryId: 'style-mantra',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('не трогает ничего, если часть записей пропала', async () => {
+      const mock = prismaMock();
+      mock.prisma.musicCategory.findUnique.mockResolvedValue({
+        id: 'root-new',
+        kind: 'root',
+      });
+      mock.prisma.musicTrack.findMany.mockResolvedValue([{ id: 't1' }]);
+
+      await expect(
+        service(mock).setTracksRootCategory(true, {
+          trackIds: ['t1', 'gone'],
+          rootCategoryId: 'root-new',
+        }),
+      ).rejects.toThrow(NotFoundException);
+      expect(mock.tx.musicTrackCategory.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('ставит корневую, снимая прежнюю и не трогая стиль', async () => {
+      const mock = prismaMock();
+      mock.prisma.musicCategory.findUnique.mockResolvedValue({
+        id: 'root-new',
+        kind: 'root',
+      });
+      withCategoriesAndTracks(mock, {
+        t1: ['root-old', 'style-mantra'],
+        t2: ['style-kirtan'],
+      });
+
+      const result = await service(mock).setTracksRootCategory(true, {
+        trackIds: ['t1', 't2'],
+        rootCategoryId: 'root-new',
+      });
+
+      expect(result).toEqual({ updated: 2 });
+      expect(mock.tx.musicTrackCategory.deleteMany).toHaveBeenCalledWith({
+        where: { trackId: 't1' },
+      });
+      expect(mock.tx.musicTrackCategory.createMany).toHaveBeenCalledWith({
+        data: [
+          { trackId: 't1', categoryId: 'style-mantra' },
+          { trackId: 't1', categoryId: 'root-new' },
+        ],
+      });
+      expect(mock.tx.musicTrackCategory.createMany).toHaveBeenCalledWith({
+        data: [
+          { trackId: 't2', categoryId: 'style-kirtan' },
+          { trackId: 't2', categoryId: 'root-new' },
+        ],
+      });
+    });
+
+    it('rootCategoryId: null снимает корневую, стиль остаётся', async () => {
+      const mock = prismaMock();
+      withCategoriesAndTracks(mock, { t1: ['root-old', 'style-mantra'] });
+
+      const result = await service(mock).setTracksRootCategory(true, {
+        trackIds: ['t1'],
+        rootCategoryId: null,
+      });
+
+      expect(result).toEqual({ updated: 1 });
+      expect(mock.prisma.musicCategory.findUnique).not.toHaveBeenCalled();
+      expect(mock.tx.musicTrackCategory.createMany).toHaveBeenCalledWith({
+        data: [{ trackId: 't1', categoryId: 'style-mantra' }],
+      });
+    });
+
+    it('rootCategoryId: null у записи без стиля — createMany не зовётся', async () => {
+      const mock = prismaMock();
+      withCategoriesAndTracks(mock, { t1: ['root-old'] });
+
+      await service(mock).setTracksRootCategory(true, {
+        trackIds: ['t1'],
+        rootCategoryId: null,
+      });
+
+      expect(mock.tx.musicTrackCategory.deleteMany).toHaveBeenCalledWith({
+        where: { trackId: 't1' },
+      });
+      expect(mock.tx.musicTrackCategory.createMany).not.toHaveBeenCalled();
     });
   });
 
@@ -553,9 +706,9 @@ describe('MusicAdminCatalogService', () => {
       expect(remove).toHaveBeenCalledWith('covers/t1.jpg');
       // Порядок важен: осиротевший объект найдёт чистка, а строка,
       // ссылающаяся в пустоту, останется навсегда.
-      expect(mock.tx.musicTrack.delete.mock.invocationCallOrder[0]).toBeLessThan(
-        remove.mock.invocationCallOrder[0],
-      );
+      expect(
+        mock.tx.musicTrack.delete.mock.invocationCallOrder[0],
+      ).toBeLessThan(remove.mock.invocationCallOrder[0]);
     });
   });
 });

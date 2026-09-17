@@ -4,6 +4,7 @@ import type {
   MusicArtistDto,
   MusicArtistKind,
   MusicCategoryDto,
+  MusicCategoryKind,
   MusicTrackDetailDto,
   MusicTrackDto,
   MusicTrackStatus,
@@ -47,6 +48,7 @@ export interface MusicCategoryRow {
   slug: string;
   title: string;
   position: number;
+  kind: MusicCategoryKind;
 }
 
 export interface MusicTrackRow extends MusicCoverSource {
@@ -197,6 +199,7 @@ export function toMusicCategoryDto(
     slug: row.slug,
     title: row.title,
     position: row.position,
+    kind: row.kind,
     trackCount,
   };
 }

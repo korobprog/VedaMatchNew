@@ -1,7 +1,4 @@
-import {
-  MusicCatalogService,
-  lineageCondition,
-} from './music-catalog.service';
+import { MusicCatalogService, lineageCondition } from './music-catalog.service';
 
 /**
  * Витрина и поиск с точки зрения линии: кто что слышит. Остальное чтение
@@ -34,6 +31,7 @@ function service(prisma = prismaMock()) {
 
 const query = {
   q: null,
+  root: null,
   category: null,
   artist: null,
   language: null,
@@ -46,9 +44,11 @@ const query = {
 };
 
 const whereOf = (prisma: ReturnType<typeof prismaMock>) =>
-  (prisma.musicTrack.findMany.mock.calls[0][0] as {
-    where: Record<string, unknown>;
-  }).where;
+  (
+    prisma.musicTrack.findMany.mock.calls[0][0] as {
+      where: Record<string, unknown>;
+    }
+  ).where;
 
 describe('lineageCondition', () => {
   it('без линии не добавляет в where ничего', () => {
@@ -175,6 +175,60 @@ describe('MusicCatalogService — линия слушателя', () => {
         AND: [{ OR: [{ lineage: 'ipbys' }, { lineage: null }] }],
       },
     });
+  });
+});
+
+// VED-165: корневая категория («Традиционное»/«Современное») и стиль
+// (киртан, мантра…) — два независимых тега на одном треке, и фильтр обязан
+// требовать оба одновременно (пересечение), а не любой из них (объединение).
+describe('MusicCatalogService — корневая категория и стиль', () => {
+  it('без обоих фильтров ничего не добавляет в where — «Все» не прячет неразмеченное', async () => {
+    const { service: catalog, prisma } = service();
+
+    await catalog.listTracks(query, null);
+
+    expect(whereOf(prisma)).not.toHaveProperty('AND');
+  });
+
+  it('root один — одно условие some в AND', async () => {
+    const { service: catalog, prisma } = service();
+
+    await catalog.listTracks({ ...query, root: 'traditional' }, null);
+
+    expect(whereOf(prisma).AND).toEqual([
+      { categories: { some: { category: { slug: 'traditional' } } } },
+    ]);
+  });
+
+  it('root и category вместе — оба условия в одном AND, то есть пересечение', async () => {
+    const { service: catalog, prisma } = service();
+
+    await catalog.listTracks(
+      { ...query, root: 'traditional', category: 'mantra' },
+      null,
+    );
+
+    expect(whereOf(prisma).AND).toEqual([
+      { categories: { some: { category: { slug: 'traditional' } } } },
+      { categories: { some: { category: { slug: 'mantra' } } } },
+    ]);
+  });
+
+  it('root, category и линия одновременно — все три в одном AND, ни один не теряется', async () => {
+    const prisma = prismaMock();
+    prisma.musicSettings.findUnique.mockResolvedValue({ lineage: 'ipbys' });
+    const { service: catalog } = service(prisma);
+
+    await catalog.listTracks(
+      { ...query, root: 'modern', category: 'bhajan' },
+      'u1',
+    );
+
+    expect(whereOf(prisma).AND).toEqual([
+      { OR: [{ lineage: 'ipbys' }, { lineage: null }] },
+      { categories: { some: { category: { slug: 'modern' } } } },
+      { categories: { some: { category: { slug: 'bhajan' } } } },
+    ]);
   });
 });
 

@@ -3,6 +3,7 @@ import {
   resolveTrackCoverKey,
   toMusicAlbumDto,
   toMusicArtistDto,
+  toMusicCategoryDto,
   toMusicTrackDetailDto,
   toMusicTrackDto,
 } from './music-track-dto';
@@ -47,7 +48,15 @@ const track: MusicTrackRow = {
   artist,
   album,
   categories: [
-    { category: { id: 'c1', slug: 'kirtan', title: 'Киртан', position: 0 } },
+    {
+      category: {
+        id: 'c1',
+        slug: 'kirtan',
+        title: 'Киртан',
+        position: 0,
+        kind: 'style',
+      },
+    },
   ],
   coverKey: 'music/tracks/t1.jpg',
 };
@@ -204,5 +213,45 @@ describe('toMusicAlbumDto', () => {
     expect(dto.coverUrl).toBe(
       'https://cdn.example.org/bucket/music/artists/a1.jpg',
     );
+  });
+});
+
+// VED-165: `kind` — единственное новое поле категории, и его молчаливая
+// потеря на полпути к DTO значила бы, что фильтр «Стиль» вдруг не отличает
+// корневые категории от стилевых.
+describe('toMusicCategoryDto', () => {
+  it('прокидывает kind как есть — и root, и style', () => {
+    expect(
+      toMusicCategoryDto(
+        {
+          id: 'c1',
+          slug: 'traditional',
+          title: 'Традиционное',
+          position: 0,
+          kind: 'root',
+        },
+        5,
+      ),
+    ).toEqual({
+      id: 'c1',
+      slug: 'traditional',
+      title: 'Традиционное',
+      position: 0,
+      kind: 'root',
+      trackCount: 5,
+    });
+
+    expect(
+      toMusicCategoryDto(
+        {
+          id: 'c2',
+          slug: 'mantra',
+          title: 'Мантра',
+          position: 2,
+          kind: 'style',
+        },
+        0,
+      ).kind,
+    ).toBe('style');
   });
 });

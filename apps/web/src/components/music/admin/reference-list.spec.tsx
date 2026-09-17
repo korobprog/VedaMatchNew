@@ -113,3 +113,46 @@ describe("MusicReferenceList — обложка (VED-19)", () => {
     expect(screen.queryByRole("button", { name: /Обложка/ })).toBeNull();
   });
 });
+
+// VED-165: переключатель «Корневая»/«Стиль» — без него узнать и поправить
+// вид раздела можно было бы только запросом в базу.
+describe("MusicReferenceList — вид раздела (VED-165)", () => {
+  it("нажатие переключает style → root и обратно", async () => {
+    const { updateMusicCategory } = await import("@/lib/music-admin-client-api");
+    vi.mocked(updateMusicCategory).mockResolvedValue({} as never);
+    const user = userEvent.setup();
+    render(
+      <MusicReferenceList
+        kind="category"
+        title="Разделы"
+        empty="Пусто."
+        rows={[
+          {
+            id: "c1",
+            primary: "Мантра",
+            secondary: "3 записи",
+            badge: null,
+            categoryKind: "style",
+          },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /сейчас: стиль/ }));
+
+    expect(updateMusicCategory).toHaveBeenCalledWith("c1", { kind: "root" });
+  });
+
+  it("без categoryKind переключатель не показывается", () => {
+    render(
+      <MusicReferenceList
+        kind="category"
+        title="Разделы"
+        empty="Пусто."
+        rows={[{ id: "c1", primary: "Мантра", secondary: "3 записи", badge: null }]}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /сейчас:/ })).toBeNull();
+  });
+});

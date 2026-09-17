@@ -38,6 +38,13 @@ export const MUSIC_DURATION_BUCKETS: Record<
 
 export interface NormalizedMusicTrackQuery {
   q: string | null;
+  /**
+   * Корневая категория витрины — «Традиционное»/«Современное» (VED-165).
+   * Отдельно от `category`: оба фильтруют как пересечение (AND), а не
+   * замена, — трек с обоими тегами проходит оба условия сразу.
+   */
+  root: string | null;
+  /** Стиль — прежний плоский список (киртан, бхаджан, мантра…). */
   category: string | null;
   artist: string | null;
   language: string | null;
@@ -99,6 +106,7 @@ function normalizeSearch(value: RawQueryValue): string | null {
 
 export function normalizeMusicTrackQuery(query: {
   q?: RawQueryValue;
+  root?: RawQueryValue;
   category?: RawQueryValue;
   artist?: RawQueryValue;
   language?: RawQueryValue;
@@ -115,6 +123,7 @@ export function normalizeMusicTrackQuery(query: {
 
   return {
     q: normalizeSearch(query.q),
+    root: firstString(query.root),
     category: firstString(query.category),
     artist: firstString(query.artist),
     language: firstString(query.language),
