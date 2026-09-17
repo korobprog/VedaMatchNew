@@ -76,10 +76,28 @@ export class CallSession {
     // `iceCandidatePoolSize` НЕ ставим (было `2`, убрано на прошлом круге
     // живой проверки — react-native-webrtc/libwebrtc на Android пре-гатерит
     // пул сразу в конструкторе, до первого `setLocalDescription`, и не
-    // успевает STUN/TURN за отведённые ~500-600мс). Само по себе это
-    // соединило звонок (следующая живая проверка подтвердила), но кандидаты
-    // ВСЁ РАВНО оставались только `host` — настоящая причина глубже, в
-    // формате `iceServers` (BUG C, следующий круг живой проверки): сервер
+    // успевает STUN/TURN за отведённые ~500-600мс).
+    //
+    // `continualGatheringPolicy: 'gather_continually'` (BUG C, живая
+    // проверка @b992e50a) — настоящая причина «только host»: буферизация
+    // кандидатов до своего `setLocalDescription` (§12.20, ниже в
+    // `handleSignal`) не помогла — в одной сети с собеседником рабочая пара
+    // становится writable через миллисекунды после SLD, раньше, чем
+    // STUN/TURN успевают ответить. У libwebrtc `P2PTransportChannel` при
+    // умолчании `GATHER_ONCE` `MaybeStopPortAllocatorSessions` останавливает
+    // сбор, как только появляется ХОТЬ ОДНА writable-пара, — не важно, когда
+    // именно вызван `addIceCandidate` относительно `setLocalDescription`.
+    // Подтверждено экспериментом в `ice-probe-runner.ts#runAnswererProbe`:
+    // ранний РЕАЛЬНЫЙ кандидат — только `host`; ранний ЗАВЕДОМО
+    // НЕДОСТИЖИМЫЙ (TEST-NET) кандидат — честно `host`+`srflx`+`relay` (пара
+    // никогда не становится writable, стоп-условию не сработать).
+    // `gather_continually` — «приватный» ключ у `WebRTCModule.java`
+    // (`parseRTCConfiguration`, парсит), но не объявлен в опубликованных
+    // типах пакета (`RTCConfiguration` в `lib/typescript/RTCPeerConnection.d.ts`
+    // его не содержит) — задан через расширяемый тип и приведён `as` только
+    // на границе конструктора ниже, не общим `any` по файлу.
+    //
+    // Формат `iceServers` (BUG C, предыдущий круг живой проверки): сервер
     // (`GET /chat/calls/ice-servers`) кладёт TURN тремя URL-схемами
     // транспорта в ОДИН объект `urls` — валидно по спецификации, но
     // react-native-webrtc/libwebrtc на этом же телефоне не собирал по нему
@@ -94,15 +112,17 @@ export class CallSession {
     // eslint-disable-next-line no-console -- диагностика живой проверки
     // BUG C (VED-222): реально переданная конфигурация без секретов — число
     // серверов, схема/транспорт/факт учётки на каждый; `iceTransportPolicy`/
-    // `bundlePolicy` ниже не переопределяются (умолчания платформы —
-    // `RTCConfiguration` их и так не получает).
+    // `bundlePolicy` не переопределяются (умолчания платформы —
+    // `RTCConfiguration` их и так не получает), `continualGatheringPolicy` —
+    // теперь `gather_continually`.
     console.warn('[calls] RTCPeerConnection: конфигурация iceServers', {
       count: normalized.length,
       servers: normalized.map(describeIceServerForLog),
       iceTransportPolicy: 'не переопределён (умолчание платформы)',
       bundlePolicy: 'не переопределён (умолчание платформы)',
+      continualGatheringPolicy: 'gather_continually',
     });
-    // Явный объект конфигурации — только эти два ключа, ничего больше не
+    // Явный объект конфигурации — только эти ключи, ничего больше не
     // просачивается сюда случайно из будущих правок. Глубокая копия через
     // JSON (не просто `{...config}`) — по прямой просьбе координатора
     // (живая проверка BUG C): `normalized` собран `normalizeIceServers`
@@ -111,7 +131,10 @@ export class CallSession {
     // какими бы они ни оказались, — так конструктор `RTCPeerConnection`
     // точно получает то же самое, что видно в логе ниже, а не что-то, что
     // могло не пережить сериализацию через нативный мост незамеченным.
-    const config: { iceServers: ReturnType<typeof normalizeIceServers> } = { iceServers: normalized };
+    const config: { iceServers: ReturnType<typeof normalizeIceServers>; continualGatheringPolicy: string } = {
+      iceServers: normalized,
+      continualGatheringPolicy: 'gather_continually',
+    };
     const clonedConfig = JSON.parse(JSON.stringify(config)) as typeof config;
     // eslint-disable-next-line no-console -- диагностика живой проверки
     // BUG C: дословно то, что уходит в `new RTCPeerConnection(...)`, без
@@ -126,7 +149,7 @@ export class CallSession {
         key === 'username' || key === 'credential' ? '<redacted>' : value,
       ),
     );
-    this.pc = new RTCPeerConnection(clonedConfig);
+    this.pc = new RTCPeerConnection(clonedConfig as ConstructorParameters<typeof RTCPeerConnection>[0]);
 
     this.pc.onicecandidate = ((event: IceCandidateEvent) => {
       const c = event.candidate;
@@ -268,6 +291,18 @@ export class CallSession {
    * приходят по одному событию каждый и не гарантированно ждут друг друга
    * (`call-provider.tsx`: `void session.handleSignal(...)` без ожидания
    * предыдущего вызова).
+   *
+   * ЧЕСТНО (следующая живая проверка, @b992e50a): эта буферизация сама по
+   * себе НЕ была настоящей причиной — реальный звонок в той же сети
+   * продолжал собирать только `host` и после неё. Кандидат от собеседника
+   * доходит через миллисекунды после `setLocalDescription` в любом случае,
+   * а `P2PTransportChannel` (libwebrtc) при `GATHER_ONCE` останавливает
+   * сбор при первой writable-паре независимо от порядка вызовов JS —
+   * настоящее исправление ниже, в конструкторе
+   * (`continualGatheringPolicy: 'gather_continually'`). Буферизация тут
+   * оставлена — она не мешает и логически всё равно правильнее (кандидаты
+   * до применения `setRemoteDescription` добавлять и правда рано), просто
+   * недостаточна сама по себе.
    */
   async handleSignal(signal: ChatCallSignal): Promise<void> {
     if (this.closed) return;

@@ -6,7 +6,13 @@ import Svg, { Path } from 'react-native-svg';
 import { useSession } from '@/lib/auth/session';
 import { createChatCallsApi } from '@/lib/calls/chat-calls-client';
 import { buildProbePlan, formatSummary, type ProbeStep, type StepOutcome, type StepResult } from '@/lib/calls/ice-probe';
-import { runAnswererProbe, runLoopback, runStep, type AnswererProbeResult } from '@/lib/calls/ice-probe-runner';
+import {
+  runAnswererProbe,
+  runLoopback,
+  runStep,
+  type AnswererProbeOptions,
+  type AnswererProbeResult,
+} from '@/lib/calls/ice-probe-runner';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
 
@@ -40,46 +46,51 @@ export default function CallsProbeScreen() {
   // «Проверка как у звонка» (VED-222, живая проверка BUG C) — отдельная от
   // основного прогона выше: тот строит `RTCPeerConnection` офферером
   // (`pc.createOffer()`), настоящий же звонок на приёме — ответчиком
-  // (`setRemoteDescription` → `createAnswer`). Если здесь тоже только
-  // `host` — дело не в конкретном offer'е сайта, а в самой связке «роль
-  // ответчика + эти iceServers» на этом телефоне (см. `runAnswererProbe`).
-  // Второй прогон (`addLocalTrackFirst`) — с микрофоном, добавленным ДО
-  // `setRemoteDescription`, той же последовательностью, что
-  // `call-provider.tsx#accept()` готовит настоящий `CallSession`: живая
-  // проверка на прошлом круге показала, что ПРОСТАЯ проба (без трека)
-  // уверенно получает host/srflx/relay, а настоящий звонок — только host,
-  // и это единственная оставшаяся, ещё не проверенная разница.
-  // Третий прогон (`applyRemoteCandidateBeforeAnswer`) — воспроизводит
-  // СТАРЫЙ порядок `CallSession.handleSignal` (до правки этого круга живой
-  // проверки): кандидаты собеседника применялись сразу после
-  // `setRemoteDescription`, ещё до `createAnswer`/`setLocalDescription`.
-  // Живая проверка нашла: и без трека, и с треком до offer'а проба честно
-  // получает host/srflx/relay — единственное оставшееся отличие настоящего
-  // звонка (LAN, кандидаты сайта применяются рано) воспроизводится именно
-  // этим прогоном.
+  // (`setRemoteDescription` → `createAnswer`). Пять прогонов подряд,
+  // каждый следующий сужает гипотезу дальше предыдущего живого прогона:
+  // 1 — без трека (базовый случай, уже подтверждённо получает
+  //     host/srflx/relay);
+  // 2 — с микрофоном, добавленным ДО `setRemoteDescription`, тем же
+  //     порядком, что `call-provider.tsx#accept()` готовит `CallSession`;
+  // 3 — плюс ранний РЕАЛЬНЫЙ (LAN) кандидат собеседника СРАЗУ после
+  //     `setRemoteDescription` — старый (до правки §12.20) порядок
+  //     `CallSession.handleSignal`, воспроизводит «только host»;
+  // 4 — то же самое, но кандидат заведомо НЕДОСТИЖИМЫЙ (TEST-NET,
+  //     192.0.2.1) — проверяет гипотезу «сбор останавливается при первой
+  //     writable-паре, а не из-за самого факта раннего кандидата»;
+  // 5 — ранний LAN-кандидат (как в 3) плюс `continualGatheringPolicy:
+  //     'gather_continually'` на ответчике — проверяет, спасает ли
+  //     непрерывный сбор даже при мгновенно writable-паре.
+  const RESULT_LABELS = [
+    'Без трека',
+    'С микрофоном до offer’а',
+    'Плюс ранний LAN-кандидат (старый порядок)',
+    'Ранний НЕДОСТИЖИМЫЙ кандидат',
+    'Ранний LAN-кандидат + gather_continually',
+  ] as const;
   const [answererPhase, setAnswererPhase] = useState<'idle' | 'running' | 'error'>('idle');
-  const [answererResult, setAnswererResult] = useState<AnswererProbeResult | null>(null);
-  const [answererWithTrackResult, setAnswererWithTrackResult] = useState<AnswererProbeResult | null>(null);
-  const [answererEarlyCandidateResult, setAnswererEarlyCandidateResult] = useState<AnswererProbeResult | null>(null);
+  const [answererResults, setAnswererResults] = useState<(AnswererProbeResult | null)[]>([]);
   const [answererError, setAnswererError] = useState<string | null>(null);
 
   const runAnswerer = useCallback(async () => {
     setAnswererPhase('running');
     setAnswererError(null);
-    setAnswererResult(null);
-    setAnswererWithTrackResult(null);
-    setAnswererEarlyCandidateResult(null);
+    setAnswererResults([]);
     try {
       const callsApi = createChatCallsApi(api);
       const state = await callsApi.iceServers();
-      setAnswererResult(await runAnswererProbe(state.iceServers));
-      setAnswererWithTrackResult(await runAnswererProbe(state.iceServers, { addLocalTrackFirst: true }));
-      setAnswererEarlyCandidateResult(
-        await runAnswererProbe(state.iceServers, {
-          addLocalTrackFirst: true,
-          applyRemoteCandidateBeforeAnswer: true,
-        }),
-      );
+      const runs: AnswererProbeOptions[] = [
+        {},
+        { addLocalTrackFirst: true },
+        { addLocalTrackFirst: true, applyRemoteCandidateBeforeAnswer: true },
+        { addLocalTrackFirst: true, applyRemoteCandidateBeforeAnswer: true, useUnreachableEarlyCandidate: true },
+        { addLocalTrackFirst: true, applyRemoteCandidateBeforeAnswer: true, continualGathering: true },
+      ];
+      const collected: (AnswererProbeResult | null)[] = [];
+      for (const runOptions of runs) {
+        collected.push(await runAnswererProbe(state.iceServers, runOptions));
+        setAnswererResults([...collected]);
+      }
       setAnswererPhase('idle');
     } catch (e) {
       setAnswererError(e instanceof Error ? e.message : String(e));
@@ -213,9 +224,9 @@ export default function CallsProbeScreen() {
           <Text style={[styles.lead, { color: colors.text1 }]}>
             Проверка как у звонка: та же связка iceServers, но соединение играет роль ОТВЕЧАЮЩЕГО
             (`setRemoteDescription` → `createAnswer`), как настоящий входящий звонок — не офферера, как
-            шаги выше. Запускает три прогона подряд: без трека, с микрофоном, добавленным ДО offer'а
-            (как готовит настоящий звонок `accept()`), и с ранним кандидатом собеседника (старый
-            порядок `handleSignal` до правки этого круга живой проверки).
+            шаги выше. Пять прогонов подряд, каждый сужает гипотезу: без трека → с микрофоном до offer'а
+            → плюс ранний LAN-кандидат → ранний НЕДОСТИЖИМЫЙ кандидат → ранний LAN-кандидат с
+            `gather_continually`.
           </Text>
           <Pressable
             accessibilityRole="button"
@@ -238,29 +249,18 @@ export default function CallsProbeScreen() {
               Не удалось: {answererError}
             </Text>
           ) : null}
-          {answererResult ? (
-            <Text selectable style={[styles.summary, { color: colors.text0, borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
-              Без трека — типы: {answererResult.candidateTypes.length > 0 ? answererResult.candidateTypes.join(', ') : 'ни одного'}
-              {'\n'}Сбор: {answererResult.ms} мс{answererResult.timedOut ? ' (оборвано по таймауту 8с)' : ' (дошёл до конца)'}
-            </Text>
-          ) : null}
-          {answererWithTrackResult ? (
-            <Text selectable style={[styles.summary, { color: colors.text0, borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
-              С микрофоном до offer'а — типы: {answererWithTrackResult.candidateTypes.length > 0 ? answererWithTrackResult.candidateTypes.join(', ') : 'ни одного'}
-              {'\n'}Сбор: {answererWithTrackResult.ms} мс
-              {answererWithTrackResult.timedOut ? ' (оборвано по таймауту 8с)' : ' (дошёл до конца)'}
-            </Text>
-          ) : null}
-          {answererEarlyCandidateResult ? (
-            <Text selectable style={[styles.summary, { color: colors.text0, borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
-              С ранним кандидатом (старый порядок до правки) — типы:{' '}
-              {answererEarlyCandidateResult.candidateTypes.length > 0
-                ? answererEarlyCandidateResult.candidateTypes.join(', ')
-                : 'ни одного'}
-              {'\n'}Сбор: {answererEarlyCandidateResult.ms} мс
-              {answererEarlyCandidateResult.timedOut ? ' (оборвано по таймауту 8с)' : ' (дошёл до конца)'}
-            </Text>
-          ) : null}
+          {answererResults.map((result, index) =>
+            result ? (
+              <Text
+                key={RESULT_LABELS[index]}
+                selectable
+                style={[styles.summary, { color: colors.text0, borderColor: colors.glassBorder, backgroundColor: colors.glass }]}
+              >
+                {RESULT_LABELS[index]} — типы: {result.candidateTypes.length > 0 ? result.candidateTypes.join(', ') : 'ни одного'}
+                {'\n'}Сбор: {result.ms} мс{result.timedOut ? ' (оборвано по таймауту 8с)' : ' (дошёл до конца)'}
+              </Text>
+            ) : null,
+          )}
         </View>
       </View>
     </View>

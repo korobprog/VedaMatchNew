@@ -172,7 +172,33 @@ export interface AnswererProbeOptions {
    * тот же самый, который и проверяется этим экспериментом.
    */
   applyRemoteCandidateBeforeAnswer?: boolean;
+  /**
+   * Вместо настоящего кандидата офферера — заведомо НЕДОСТИЖИМЫЙ
+   * (`192.0.2.1`, TEST-NET-1, RFC 5737): пара с ним никогда не станет
+   * writable. VED-222, живая проверка BUG C — гипотеза координатора после
+   * того, как буферизация до `setLocalDescription` (§12.20) не помогла: у
+   * `P2PTransportChannel` (libwebrtc) при `GATHER_ONCE`
+   * `MaybeStopPortAllocatorSessions` останавливает сбор, как только
+   * появляется ХОТЬ ОДНА writable-пара, — не важно, когда именно JS-код
+   * вызвал `addIceCandidate` относительно `setLocalDescription`. Если с
+   * недостижимым кандидатом проба всё-таки наберёт srflx/relay (пара
+   * никогда не станет writable, стоп-условию не сработать) — гипотеза
+   * подтверждена.
+   */
+  useUnreachableEarlyCandidate?: boolean;
+  /**
+   * `continualGatheringPolicy: 'gather_continually'` на стороне ответчика
+   * (VED-222, живая проверка BUG C) — если `MaybeStopPortAllocatorSessions`
+   * останавливает сбор при первой writable-паре именно из-за
+   * `GATHER_ONCE` (умолчание), непрерывный сбор не должен на этом
+   * останавливаться.
+   */
+  continualGathering?: boolean;
 }
+
+/** RFC 5737 TEST-NET-1 — гарантированно недостижимый адрес, синтаксически
+ *  валидный ICE-кандидат для `useUnreachableEarlyCandidate`. */
+const UNREACHABLE_CANDIDATE = 'candidate:1 1 udp 2130706431 192.0.2.1 54321 typ host';
 
 /**
  * «Проверка как у звонка» (VED-222, живая проверка BUG C, запрошено
@@ -195,7 +221,9 @@ export async function runAnswererProbe(
 ): Promise<AnswererProbeResult> {
   const offerer = new RTCPeerConnection({});
   const offererCandidates: string[] = [];
-  if (options.applyRemoteCandidateBeforeAnswer) {
+  const wantsEarlyCandidate = options.applyRemoteCandidateBeforeAnswer;
+  const collectRealCandidate = wantsEarlyCandidate && !options.useUnreachableEarlyCandidate;
+  if (collectRealCandidate) {
     offerer.onicecandidate = ((event: IceCandidateEvent) => {
       if (event.candidate) offererCandidates.push(event.candidate.candidate);
     }) as typeof offerer.onicecandidate;
@@ -205,7 +233,7 @@ export async function runAnswererProbe(
   const offer = await offerer.createOffer();
   await offerer.setLocalDescription(offer);
 
-  if (options.applyRemoteCandidateBeforeAnswer) {
+  if (collectRealCandidate) {
     // Подождать хотя бы один кандидат офферера — тот же порядок, что у
     // настоящего звонка: удалённые кандидаты уже лежат в буфере к моменту,
     // когда обрабатывается offer. На loopback обычно доли секунды.
@@ -214,8 +242,18 @@ export async function runAnswererProbe(
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
   }
+  const earlyCandidates = options.useUnreachableEarlyCandidate ? [UNREACHABLE_CANDIDATE] : offererCandidates;
 
-  const answerer = new RTCPeerConnection({ iceServers: normalizeIceServers(servers) });
+  // `continualGatheringPolicy` — «приватный» ключ (WebRTCModule.java его
+  // парсит, но `RTCConfiguration` в опубликованных типах пакета его не
+  // объявляет вовсе, см. `webrtc-session.ts`) — конфигурация собрана как
+  // расширяемый объект и приведена явным `as` только на границе конструктора,
+  // не как общий `any` по всему файлу.
+  const answererConfig: { iceServers: ReturnType<typeof normalizeIceServers>; continualGatheringPolicy?: string } = {
+    iceServers: normalizeIceServers(servers),
+  };
+  if (options.continualGathering) answererConfig.continualGatheringPolicy = 'gather_continually';
+  const answerer = new RTCPeerConnection(answererConfig as ConstructorParameters<typeof RTCPeerConnection>[0]);
   let localStream: MediaStream | null = null;
   if (options.addLocalTrackFirst) {
     localStream = await mediaDevices.getUserMedia({ audio: true });
@@ -237,12 +275,14 @@ export async function runAnswererProbe(
     answerer
       .setRemoteDescription({ type: 'offer', sdp: offer.sdp ?? '' })
       .then(async () => {
-        // Старый (до правки BUG C) порядок `CallSession.handleSignal`:
-        // кандидаты применяются СРАЗУ после `setRemoteDescription`, ещё до
-        // `createAnswer`/`setLocalDescription` — тут и проверяется, что
-        // именно этот порядок обрывает собственный гатеринг.
-        if (options.applyRemoteCandidateBeforeAnswer) {
-          for (const candidate of offererCandidates) {
+        // Ранний кандидат (реальный LAN-кандидат офферера или заведомо
+        // недостижимый TEST-NET) — СРАЗУ после `setRemoteDescription`, ещё
+        // до `createAnswer`/`setLocalDescription`, как раньше делал
+        // `CallSession.handleSignal` до правки §12.20 — тут и проверяется
+        // гипотеза «останов сбора при первой writable-паре», не порядок
+        // вызовов сам по себе (тот уже исправлен и не помог).
+        if (wantsEarlyCandidate) {
+          for (const candidate of earlyCandidates) {
             await answerer
               .addIceCandidate({ candidate, sdpMid: '0', sdpMLineIndex: 0 })
               .catch(() => undefined);
