@@ -690,13 +690,30 @@ export class NoticesService {
     await this.recountRubric(notice.rubricId);
 
     if (notice.authorId !== userId) {
+      // Журнал самодостаточен: имя автора кладём в details сразу, а не
+      // оставляем сырой userId — иначе строку «кто, чьё, заголовок» читающий
+      // не соберёт без похода в карточку пользователя (VED-42, отзыв
+      // тестировщика — запись должна быть понятной, а не только существовать).
+      //
+      // Имя здесь **мирское** (`select: { name: true }`, без spiritualName),
+      // не `resolveDisplayName()`: журнал — тот же identity-критичный экран,
+      // что и модерация («кто, чьё, когда»), а не публичная витрина, где
+      // духовное имя уместно. То же исключение из контракта, что у админки и
+      // поддержки, и тот же выбор, что уже сделан для `MusicAdminQueueService`
+      // (`music-admin-queue.service.ts`). Заодно строка перестаёт спорить сама
+      // с собой: `actorName` (кто удалил, `admin-audit.service.ts`) уже
+      // мирской — `authorName` (чьё объявление) должен решать вопрос так же.
+      const author = await this.prisma.user.findUnique({
+        where: { id: notice.authorId },
+        select: { name: true },
+      });
       const event: AdminAuditEvent = {
         actorId: userId,
         action: 'notices.notice-deleted',
         targetType: 'notice',
         targetId: id,
         details: {
-          authorId: notice.authorId,
+          authorName: author?.name ?? notice.authorId,
           title: notice.titleRu ?? notice.titleEn ?? '',
         },
       };

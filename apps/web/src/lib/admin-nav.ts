@@ -1,12 +1,15 @@
-import { canAdminService } from "@vedamatch/shared";
+import { canAdminService, isPortalAdmin } from "@vedamatch/shared";
 import type { AdminServiceSlug, Role } from "@vedamatch/shared";
 
 /**
  * Кому виден раздел админки. `portal` — общепортальные разделы (пользователи,
  * поддержка, биллинг): только роль `admin`. Слаг сервиса — раздел сервиса, его
- * видит и `admin`, и `service-admin`, которому этот сервис выдан.
+ * видит и `admin`, и `service-admin`, которому этот сервис выдан. `staff` —
+ * отдельный случай для журнала действий (VED-42): раздел не принадлежит
+ * одному сервису, но `service-admin` должен в него попасть, чтобы увидеть
+ * записи своих сервисов — список внутри уже отфильтрует бэкенд по scopeActions.
  */
-export type AdminNavScope = "portal" | AdminServiceSlug;
+export type AdminNavScope = "portal" | "staff" | AdminServiceSlug;
 
 export interface AdminNavItem {
   href: string;
@@ -177,7 +180,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         href: "/admin/audit",
         label: "Журнал действий",
         hint: "Кто и что сделал в админке",
-        scope: "portal",
+        scope: "staff",
       },
       {
         href: "/admin/notifications",
@@ -221,6 +224,12 @@ export function canOpenAdminSection(
   scope: AdminNavScope,
 ): boolean {
   if (scope === "portal") return user.role === "admin";
+  // service-admin без единого сервиса — конфигурационная ошибка (роль есть,
+  // прав нет); пункт меню в этом случае не показываем, иначе он вёл бы на
+  // заведомо пустой журнал без единой подсказки почему.
+  if (scope === "staff") {
+    return isPortalAdmin(user) && (user.role === "admin" || (user.adminServices?.length ?? 0) > 0);
+  }
   return canAdminService(user, scope);
 }
 

@@ -52,13 +52,22 @@ export class AdminAuditService {
     }
   }
 
-  async list(query: AdminAuditQuery): Promise<AdminAuditListResponse> {
+  /**
+   * `scopeActions` — список действий, видимых вызывающему; передаёт контроллер
+   * для `service-admin` (VED-42). `undefined` — без ограничения (роль
+   * `admin`). Фильтр внутри `WHERE`, а не постфильтром: иначе `total` и
+   * пагинация разъехались бы со списком строк.
+   */
+  async list(
+    query: AdminAuditQuery,
+    scopeActions?: readonly AdminAuditAction[],
+  ): Promise<AdminAuditListResponse> {
     const page = Math.max(1, Number(query.page) || 1);
     const pageSize = Math.min(
       MAX_PAGE_SIZE,
       Math.max(1, Number(query.pageSize) || DEFAULT_PAGE_SIZE),
     );
-    const where = buildWhere(query);
+    const where = buildWhere(query, scopeActions);
 
     const [rows, total] = await Promise.all([
       this.prisma.adminAuditEntry.findMany({
@@ -107,10 +116,15 @@ export class AdminAuditService {
  */
 export function buildWhere(
   query: AdminAuditQuery,
+  scopeActions?: readonly AdminAuditAction[],
 ): Prisma.AdminAuditEntryWhereInput {
   const where: Prisma.AdminAuditEntryWhereInput = {};
   if (query.action && isKnownAuditAction(query.action)) {
+    // Конкретное действие в запросе — контроллер уже проверил, что оно входит
+    // в scopeActions (или ограничения нет вовсе), повторно пересекать не надо.
     where.action = query.action;
+  } else if (scopeActions) {
+    where.action = { in: [...scopeActions] };
   }
   if (query.actorId) where.actorId = query.actorId;
   if (query.targetId) where.targetId = query.targetId;
