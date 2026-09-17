@@ -62,6 +62,33 @@ pnpm --filter @vedamatch/mobile generate:web-icons           # иконки из
 - `public/` — шаблон страницы, манифест, иконки и service worker (кэширует
   только оболочку, ответы API — никогда).
 
+### Мини-приложение Telegram
+
+Тот же адрес открывает бот `@vedamatch_bot` (BotFather → Configure Mini App
+и Menu Button → `https://ios.vedamatch.com`). Telegram добавляет к адресу
+`#tgWebAppData=…` — по нему `src/lib/telegram/launch.ts` узнаёт запуск, и
+только тогда подключается `telegram-web-app.js`
+(`src/lib/telegram/web-app.web.ts`).
+
+- **Вход без экрана входа:** если сессии ещё нет, `session.web.tsx`
+  отправляет подписанные данные на `POST /auth/telegram/webapp`. Сервер
+  проверяет подпись ключом бота (`TELEGRAM_BOT_TOKEN`,
+  `apps/api/src/modules/auth/telegram-init-data.ts`) и ставит обычную cookie
+  сессии. Уже вошли (например, через Google прямо в Telegram) — сессия не
+  трогается, второго аккаунта не будет.
+- **Аккаунт из Telegram** получает служебную почту
+  `tg-<id>@users.vedamatch.invalid` — Telegram почту не сообщает.
+- **Оболочка** (`telegram-shell.web.tsx`): `ready()`, `expand()`, цвета шапки,
+  запрет свайпа вниз, системная кнопка «Назад» вместо своей на вложенных
+  экранах.
+- Способ `telegram` включён только для `vedamatch.com`
+  (`AuthProviderSetting`).
+
+Проверить локально: API с `TELEGRAM_BOT_TOKEN=<любой тестовый>`, открыть
+`http://localhost:8093/#tgWebAppData=<данные, подписанные этим токеном по
+формуле из telegram-init-data.ts>&tgWebAppVersion=8.0` — страницу, а не
+только фрагмент, нужно загрузить заново.
+
 Раздача — сервис `app-web` в `portal/docker-compose.dokploy.yml`
 (`Dockerfile.web`, nginx). Домен `ios.vedamatch.com` → порт 80; поддомен
 обязан быть в `WEB_ORIGIN` API.

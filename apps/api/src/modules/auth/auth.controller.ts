@@ -127,6 +127,19 @@ export class AuthController {
     return this.auth.devLogin(body, req, res);
   }
 
+  // Мини-приложение @vedamatch_bot: подписанные данные запуска → cookie
+  // сессии. Троттлинг как у входа по паролю: подпись не подобрать, но
+  // перебирать её незачем разрешать.
+  @Post('telegram/webapp')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  telegramWebApp(
+    @Body() body: { initData?: unknown; ref?: unknown; fp?: unknown },
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.auth.loginWithTelegramWebApp(body, req, res);
+  }
+
   @Get('dev-accounts')
   devAccounts() {
     return this.auth.devAccounts();

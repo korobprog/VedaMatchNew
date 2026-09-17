@@ -16,14 +16,15 @@ import { fonts, hitTarget, radius } from '@/theme/tokens';
 export default function LoginScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { signIn, signInDev } = useSession();
+  const { signIn, signInDev, loginError } = useSession();
   const [busy, setBusy] = useState<LoginProvider | 'dev' | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Ошибка, с которой вернул маршрут auth после неудачного входа через браузер.
   const params = useLocalSearchParams<{ error?: string }>();
   useEffect(() => {
     if (typeof params.error === 'string' && params.error) setError(params.error);
-  }, [params.error]);
+    else if (loginError) setError(loginError);
+  }, [params.error, loginError]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 

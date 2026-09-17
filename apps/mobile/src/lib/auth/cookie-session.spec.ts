@@ -90,3 +90,26 @@ describe('createCookieAuthApi', () => {
     await expect(api.devLogin('a@b', 'x')).rejects.toThrow('Неверный пароль');
   });
 });
+
+describe('createCookieAuthApi.telegramLogin', () => {
+  it('отправляет данные запуска и ждёт cookie', async () => {
+    const fetchImpl = jest.fn(async () => response(201, { ok: true }));
+    await createCookieAuthApi('https://api', fetchImpl).telegramLogin('auth_date=1&hash=x');
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api/auth/telegram/webapp');
+    expect(init.credentials).toBe('include');
+    expect(JSON.parse(init.body as string)).toEqual({ initData: 'auth_date=1&hash=x' });
+  });
+
+  it('отказ сервера — текст сервера, без сети — понятный текст', async () => {
+    await expect(
+      createCookieAuthApi('https://api', async () => response(401, { message: 'Telegram не подтвердил вход' }))
+        .telegramLogin('x'),
+    ).rejects.toThrow('Telegram не подтвердил вход');
+    await expect(
+      createCookieAuthApi('https://api', async () => {
+        throw new TypeError('Failed to fetch');
+      }).telegramLogin('x'),
+    ).rejects.toThrow('Нет связи с сервером');
+  });
+});

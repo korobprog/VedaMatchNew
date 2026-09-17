@@ -4,6 +4,7 @@ import { ApiError, createApiClient } from '@/lib/api/client';
 import { buildWebLoginUrl, createCookieAuthApi } from './cookie-session';
 import type { LoginProvider } from './login-flow';
 import { hasSessionMarker } from './session-marker';
+import { telegramLaunch } from '@/lib/telegram/web-app';
 import type { Session, SessionStatus, SessionUser } from './session';
 
 /**
@@ -37,6 +38,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const authApi = useMemo(() => createCookieAuthApi(apiOrigin), [apiOrigin]);
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const beforeSignOutHooks = useRef<Set<() => Promise<void>>>(new Set());
 
   const registerBeforeSignOut = useCallback((hook: () => Promise<void>) => {
@@ -74,8 +76,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [api]);
 
   useEffect(() => {
+    const signedBefore = hasSessionMarker(document.cookie);
+    // Мини-приложение Telegram без сессии: входим по подписанным данным
+    // запуска, экран входа не нужен. Уже есть сессия (вошли через Google
+    // прямо в Telegram) — не трогаем её: иначе появился бы второй аккаунт.
+    if (!signedBefore && telegramLaunch) {
+      authApi
+        .telegramLogin(telegramLaunch.initData)
+        .then(loadProfile)
+        .catch((error: unknown) => {
+          setLoginError(error instanceof Error ? error.message : 'Не удалось войти через Telegram');
+          dropSession();
+        });
+      return;
+    }
     // Маркера нет — сессии нет наверняка: экран входа сразу, без запроса.
-    if (!hasSessionMarker(document.cookie)) {
+    if (!signedBefore) {
       setStatus('guest');
       return;
     }
@@ -86,7 +102,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (error instanceof ApiError && error.status === 401) dropSession();
       else setStatus('signed');
     });
-  }, [loadProfile, dropSession]);
+  }, [authApi, loadProfile, dropSession]);
 
   const signIn = useCallback(
     async (provider: LoginProvider) => {
@@ -125,6 +141,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       api,
       apiOrigin,
       cookieSession: true,
+      loginError,
       getAccessToken,
       refreshAccessToken: authApi.refresh,
       signIn,
@@ -133,7 +150,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       signOut,
       registerBeforeSignOut,
     }),
-    [status, user, api, apiOrigin, getAccessToken, authApi, signIn, completeSignIn, signInDev, signOut, registerBeforeSignOut],
+    [
+      status,
+      user,
+      loginError,
+      api,
+      apiOrigin,
+      getAccessToken,
+      authApi,
+      signIn,
+      completeSignIn,
+      signInDev,
+      signOut,
+      registerBeforeSignOut,
+    ],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
