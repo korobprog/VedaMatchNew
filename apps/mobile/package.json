@@ -66,9 +66,8 @@
     "generate:app-manifest": "node scripts/app-manifest.mjs",
     "export:android": "expo export --platform android --output-dir dist",
     "generate:web-icons": "node scripts/generate-web-icons.mjs",
-    "export:web": "expo export --platform web --output-dir dist-web && node scripts/patch-web-preloads.mjs",
-    "test:web-shims": "node --test web-shims/resolve.test.mjs",
-    "test:web-preload-chunks": "node --test scripts/web-preload-chunks.test.mjs"
+    "export:web": "expo export --platform web --output-dir dist-web",
+    "test:web-shims": "node --test web-shims/resolve.test.mjs"
   },
   "private": true,
   "jest": {
