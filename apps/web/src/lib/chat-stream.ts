@@ -16,13 +16,17 @@ import { API_URL, refreshSession } from "@/lib/http-client";
  */
 
 type Listener = (event: ChatStreamEvent) => void;
+type ReconnectListener = () => void;
 
 interface SharedStream {
   listeners: Set<Listener>;
+  reconnectListeners: Set<ReconnectListener>;
   source: EventSource | null;
   retryDelay: number;
   retryTimer: ReturnType<typeof setTimeout> | null;
   closed: boolean;
+  /** Соединение открывалось хоть раз — следующее «open» уже переподключение. */
+  everOpened: boolean;
 }
 
 let shared: SharedStream | null = null;
@@ -55,6 +59,18 @@ function connect(stream: SharedStream): void {
 
   source.addEventListener("open", () => {
     stream.retryDelay = 1000;
+    // Пока поток был разорван (обрыв сети, протухший токен), сервер мог
+    // разослать call.signal, который некому было принять — переподключение
+    // само по себе повод дочитать пропущенное (`getChatCallSignals`).
+    if (stream.everOpened)
+      for (const listener of stream.reconnectListeners) {
+        try {
+          listener();
+        } catch {
+          // Ошибка одного подписчика не должна ронять остальных.
+        }
+      }
+    stream.everOpened = true;
   });
 
   source.addEventListener("error", () => {
@@ -77,18 +93,34 @@ function connect(stream: SharedStream): void {
   });
 }
 
-export function subscribeToChat(onEvent: Listener): () => void {
+function ensureStream(): SharedStream {
   if (!shared || shared.closed) {
     shared = {
       listeners: new Set(),
+      reconnectListeners: new Set(),
       source: null,
       retryDelay: 1000,
       retryTimer: null,
       closed: false,
+      everOpened: false,
     };
     connect(shared);
   }
-  const stream = shared;
+  return shared;
+}
+
+/** Живёт, пока у стрима есть хоть один слушатель события ИЛИ переподключения. */
+function releaseIfIdle(stream: SharedStream): void {
+  if (stream.listeners.size > 0 || stream.reconnectListeners.size > 0) return;
+  stream.closed = true;
+  if (stream.retryTimer) clearTimeout(stream.retryTimer);
+  stream.source?.close();
+  stream.source = null;
+  if (shared === stream) shared = null;
+}
+
+export function subscribeToChat(onEvent: Listener): () => void {
+  const stream = ensureStream();
   stream.listeners.add(onEvent);
 
   let active = true;
@@ -96,11 +128,25 @@ export function subscribeToChat(onEvent: Listener): () => void {
     if (!active) return;
     active = false;
     stream.listeners.delete(onEvent);
-    if (stream.listeners.size > 0) return;
-    stream.closed = true;
-    if (stream.retryTimer) clearTimeout(stream.retryTimer);
-    stream.source?.close();
-    stream.source = null;
-    if (shared === stream) shared = null;
+    releaseIfIdle(stream);
+  };
+}
+
+/**
+ * Досинхронизация после обрыва: тот же приём, что `onResync` в приложении
+ * (`apps/mobile/src/lib/chat/chat-stream.tsx`). Не вызывается при самом
+ * первом подключении вкладки — только когда соединение действительно
+ * переустановилось.
+ */
+export function subscribeToChatReconnect(onReconnect: ReconnectListener): () => void {
+  const stream = ensureStream();
+  stream.reconnectListeners.add(onReconnect);
+
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    stream.reconnectListeners.delete(onReconnect);
+    releaseIfIdle(stream);
   };
 }

@@ -5,6 +5,7 @@ import type {
   ChatCallDto,
   ChatCallKind,
   ChatCallSignal,
+  ChatCallSignalsResponse,
   ChatIceServersState,
   EndChatCallRequest,
 } from "@vedamatch/shared";
@@ -80,9 +81,24 @@ export function endChatCall(
 export function sendChatCallSignal(
   callId: string,
   signal: ChatCallSignal,
+  clientSignalId?: string,
 ): Promise<void> {
   return send<void>(`/chat/calls/${callId}/signal`, {
     method: "POST",
-    body: JSON.stringify({ signal }),
+    body: JSON.stringify({ signal, clientSignalId }),
   });
+}
+
+/**
+ * Дочитать сигналы, пропущенные, пока `/chat/stream` не был подключён
+ * (VED-261) — `call-provider.tsx` вызывает это после `accept()` и после
+ * каждого переподключения потока в фазах «соединяемся»/«разговор».
+ */
+export function getChatCallSignals(
+  callId: string,
+  after: number,
+): Promise<ChatCallSignalsResponse> {
+  return send<ChatCallSignalsResponse>(
+    `/chat/calls/${callId}/signals?after=${after}`,
+  );
 }

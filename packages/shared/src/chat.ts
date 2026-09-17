@@ -664,6 +664,16 @@ export type ChatCallSignal =
 
 export interface ChatCallSignalRequest {
   signal: ChatCallSignal;
+  /**
+   * Идемпотентный ключ ОДНОГО сигнала (VED-261, feedback-002): клиент
+   * генерирует его один раз, до первой попытки отправки, и посылает тот же
+   * ключ во всех повторах (`sendWithRetry`/`SignalSendQueue`) — партиальный
+   * успех («сервер сохранил, ответ потерялся») не должен породить второй
+   * сигнал с новым `seq`. Необязательное поле — обратная совместимость:
+   * без него сервер обрабатывает сигнал как раньше, без дедупликации по
+   * повтору (только по `seq` на приёме, как и было).
+   */
+  clientSignalId?: string;
 }
 
 /** `GET /chat/calls/active`: звонок, в котором человек прямо сейчас. */
@@ -685,7 +695,38 @@ export type ChatCallStreamEvent =
       callId: string;
       fromUserId: string;
       signal: ChatCallSignal;
+      /**
+       * Порядковый номер сигнала в очереди получателя (VED-261): растёт
+       * монотонно для одного звонка и одного адресата. Нужен, чтобы клиент
+       * после обрыва `/chat/stream` понял, что он пропустил, и дочитал
+       * недостающее через `GET /chat/calls/:id/signals?after=<seq>`.
+       * Необязательное поле — обратная совместимость на случай, если старый
+       * инстанс API ещё не проставляет его при скользящем деплое.
+       */
+      seq?: number;
     };
+
+/**
+ * Один сигнал из очереди звонка, адресованный текущему пользователю —
+ * элемент ответа `GET /chat/calls/:id/signals` (VED-261).
+ */
+export interface ChatCallSignalEnvelope {
+  seq: number;
+  fromUserId: string;
+  signal: ChatCallSignal;
+}
+
+/**
+ * `GET /chat/calls/:id/signals?after=<seq>` — сигналы конкретного звонка,
+ * адресованные текущему пользователю, с номером строго больше `after`, по
+ * возрастанию. Клиент вызывает это после `accept()` и после каждого
+ * переподключения `/chat/stream` в фазах «соединяемся»/«разговор» — на
+ * случай, если offer/answer/ICE-кандидат пришёл событием, пока поток не был
+ * подключён (VED-261: медленная сеть на телефоне теряла offer именно так).
+ */
+export interface ChatCallSignalsResponse {
+  signals: ChatCallSignalEnvelope[];
+}
 
 /** Раздел админки: звонки. */
 export interface AdminChatCallStats {

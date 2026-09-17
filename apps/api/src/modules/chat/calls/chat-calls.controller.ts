@@ -5,6 +5,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -14,12 +15,14 @@ import type {
   ChatActiveCallState,
   ChatCallDto,
   ChatCallSignalRequest,
+  ChatCallSignalsResponse,
   ChatIceServersState,
   EndChatCallRequest,
   StartChatCallRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../../auth/auth.guard';
 import { ChatCallsService } from './chat-calls.service';
+import { parseSignalsAfter } from './signals-query';
 import {
   buildIceServers,
   buildTurnCredentials,
@@ -126,6 +129,23 @@ export class ChatCallsController {
     @Param('id') id: string,
     @Body() body: ChatCallSignalRequest,
   ): Promise<void> {
-    await this.calls.signal(user.sub, id, body?.signal);
+    await this.calls.signal(user.sub, id, body?.signal, body?.clientSignalId);
+  }
+
+  /**
+   * Дочитать сигналы, пропущенные, пока `/chat/stream` не был подключён
+   * (VED-261) — вызывается клиентом после `accept()` и после каждого
+   * переподключения потока в фазах «соединяемся»/«разговор». Тот же лимит,
+   * что у самого `signal`: клиент опрашивает это не чаще, чем шлёт кандидаты.
+   */
+  @Get(':id/signals')
+  @Throttle({ default: { limit: 240, ttl: 60_000 } })
+  async signals(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Query('after') after?: string,
+  ): Promise<ChatCallSignalsResponse> {
+    const afterSeq = parseSignalsAfter(after);
+    return { signals: await this.calls.signalsSince(user.sub, id, afterSeq) };
   }
 }

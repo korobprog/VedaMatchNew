@@ -1,6 +1,7 @@
 "use client";
 
 import type { ChatCallKind, ChatCallSignal, ChatIceServerDto } from "@vedamatch/shared";
+import { decideSdpApply, type SignalingState } from "./webrtc-signal-guard";
 
 /**
  * Обёртка над `RTCPeerConnection` для звонка один на один.
@@ -11,7 +12,8 @@ import type { ChatCallKind, ChatCallSignal, ChatIceServerDto } from "@vedamatch/
  * Сигналы наружу уходят через `onSignal`; чем их доставить — дело хука.
  *
  * В jsdom не запускается: это склейка вокруг браузерного API, решения
- * живут в `call-machine.ts`.
+ * живут в `call-machine.ts` и `webrtc-signal-guard.ts` (последний — таблица
+ * состояний переговоров, тестируется отдельно и без браузера).
  */
 
 export interface SessionHandlers {
@@ -130,6 +132,22 @@ export class CallSession {
   async handleSignal(signal: ChatCallSignal): Promise<void> {
     if (this.closed) return;
     if (signal.kind === "sdp") {
+      // Defence-in-depth (VED-261, feedback-002): идемпотентность на
+      // сервере уже не даёт партиальному успеху ретрая породить второй
+      // сигнал, но если дубль/поздний ответ второй стороны всё же дошёл
+      // (старый клиент без clientSignalId, ручной вызов API) — не даём
+      // `setRemoteDescription` бросить `InvalidStateError` и не запускаем
+      // незапрошенную реегоциацию поверх уже идущих переговоров (glare).
+      const decision = decideSdpApply(
+        signal.sdp.type,
+        this.pc.signalingState as SignalingState,
+      );
+      if (decision !== "apply") {
+        console.warn(
+          `[calls] ${signal.sdp.type} проигнорирован: signalingState=${this.pc.signalingState} (${decision})`,
+        );
+        return;
+      }
       await this.pc.setRemoteDescription(signal.sdp);
       this.remoteSet = true;
       for (const candidate of this.pending.splice(0))
