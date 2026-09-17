@@ -151,6 +151,11 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           S3_PUBLIC_URL: ${{ secrets.S3_PUBLIC_URL }}
+          # Свой набор корней AWS CLI не знает GlobalSign Root R6, которым
+          # подписан сертификат нашего хранилища («self-signed certificate in
+          # certificate chain»). Системный набор Ubuntu его знает — проверка
+          # SSL остаётся включённой.
+          AWS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
         run: |
           if [ -z "$S3_ENDPOINT" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$S3_BUCKET_NAME" ] || [ -z "$S3_PUBLIC_URL" ]; then
             echo "::warning::Секреты S3 не заданы целиком: публикация пропущена, в артефактах запуска остался только APK"
