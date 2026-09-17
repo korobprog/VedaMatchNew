@@ -326,7 +326,24 @@ class VedamatchCallsModule : Module() {
 
     Function("getLaunchCall") {
       val launch = PendingCallStore.consumeLaunch() ?: return@Function null
-      mapOf("callId" to launch.callId, "action" to launch.action)
+      // Имя/вид/аватар — правка по факту живой проверки (Samsung Galaxy
+      // A51, BUG B этапа VED-222): `fullScreenIntent` поднимает Activity
+      // раньше, чем `reconcile()` (JS, `GET /chat/calls/active`) успевает
+      // сходить на сервер, — до этого момента показать входящий было
+      // нечем, JS видел только `callId`/`action` и ждал сеть. Эти три поля
+      // уже лежат в `PendingCallStore.infoFor()` — их положил туда же
+      // `showIncomingCall()` из пуша, которым звонок начался; `null`, если
+      // информация уже вычищена (`removeInfo`, например, второй быстрый
+      // `getLaunchCall()` подряд — тогда JS достроит карточку сам через
+      // `reconcile()`, `action`/`callId` тут не пострадали).
+      val info = PendingCallStore.infoFor(launch.callId)
+      mapOf(
+        "callId" to launch.callId,
+        "action" to launch.action,
+        "callerName" to info?.callerName,
+        "kind" to info?.kind,
+        "avatarUrl" to info?.avatarUrl,
+      )
     }
 
     Function("canUseFullScreenIntent") {

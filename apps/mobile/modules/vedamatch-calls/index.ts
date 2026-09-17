@@ -38,10 +38,21 @@ export type LaunchCallAction = 'answer' | 'open';
 
 /** Чем приложение было поднято: ответом с уведомления/блокировки (сразу
  *  принять звонок) или обычным открытием/полноэкранным intent (показать
- *  как обычно — входящий баннер решит, что делать). */
+ *  как обычно — входящий баннер решит, что делать).
+ *
+ *  `callerName`/`kind`/`avatarUrl` — правка по факту живой проверки (BUG B,
+ *  VED-222): для `action: 'open'` (`fullScreenIntent`, звонок ещё звонит)
+ *  этого достаточно, чтобы JS показал входящий немедленно, не дожидаясь
+ *  `reconcile()` (`call-launch-preview.ts`) — те же данные, что несёт
+ *  `showIncomingCall`, только прочитанные обратно из `PendingCallStore`.
+ *  Могут быть `null`/не переданы, если нативная сторона их уже не помнит —
+ *  вызывающий код тогда просто не строит карточку и ждёт сеть, как раньше. */
 export interface LaunchCall {
   callId: string;
   action: LaunchCallAction;
+  callerName?: string | null;
+  kind?: VedamatchCallKind | null;
+  avatarUrl?: string | null;
 }
 
 /** Аргумент `placeOutgoingCall`/`startOngoingCall` (VED-222) — те же три

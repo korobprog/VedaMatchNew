@@ -1,5 +1,6 @@
 import { mediaDevices, MediaStream, RTCPeerConnection } from 'react-native-webrtc';
 import type { ChatCallKind, ChatCallSignal, ChatIceServerDto } from '@vedamatch/shared';
+import { parseCandidate } from './ice-probe';
 import { relayedFromStats, type RtcStatsReport } from './relay-stats';
 
 /**
@@ -57,16 +58,49 @@ export class CallSession {
    *  дебаунса по времени в `ice-restart-policy.ts` (тот защищает от частого
    *  флаппинга сети, не от одновременности) — нужны оба. */
   private restartingIce = false;
+  /** Счётчик реально отправленных кандидатов — только для диагностики живой
+   *  проверки BUG A (VED-222), см. комментарий у `onicecandidate` ниже. */
+  private sentCandidates = 0;
 
   constructor(
     iceServers: ChatIceServerDto[],
     private readonly role: 'caller' | 'callee',
     private readonly handlers: SessionHandlers,
   ) {
-    this.pc = new RTCPeerConnection({ iceServers, iceCandidatePoolSize: 2 });
+    // `iceCandidatePoolSize` НЕ ставим (было `2` — живая проверка на Samsung
+    // A51, BUG A этапа VED-222): react-native-webrtc/libwebrtc на Android
+    // начинают пре-гатеринг пула сразу в конструкторе, до первого
+    // `setLocalDescription`, — на созвон уходило только ~500-600мс между
+    // `ctor` и первым `setLocalDescription` (лог: `ctor +4m` до этого — то
+    // время простоя приложения, не гатеринга; сам пул успевал собрать не
+    // больше пары host-кандидатов до того, как первый `setLocalDescription`
+    // его выгребал). На STUN/TURN за такое время рассчитывать нельзя —
+    // `onIceGatheringChange` уходил в `COMPLETE` через десятки миллисекунд,
+    // сдав ровно один кандидат за раунд, и на трёх раундах переговоров
+    // подряд (первый offer сайта + два его же ICE-restart, пока звонок не
+    // соединился) ни разу не набрал relay/srflx. `ice-probe-runner.ts`
+    // (этап 0), который на ЭТОМ ЖЕ телефоне уверенно получал relay, пул НЕ
+    // использует вовсе — гатеринг у него честно стартует с
+    // `setLocalDescription` и получает полные `GATHER_TIMEOUT_MS` (8с), а
+    // не остаток от предварительного пула.
+    this.pc = new RTCPeerConnection({ iceServers });
 
     this.pc.onicecandidate = ((event: IceCandidateEvent) => {
       const c = event.candidate;
+      // eslint-disable-next-line no-console -- диагностика живой проверки
+      // BUG A (VED-222): тип кандидата и счётчик отправленных, без адреса —
+      // в logcat релиза видно как `W ReactNativeJS`.
+      if (c) {
+        this.sentCandidates += 1;
+        console.warn('[calls] local ICE candidate', {
+          type: parseCandidate(c.candidate)?.type ?? 'unknown',
+          sent: this.sentCandidates,
+        });
+      } else {
+        console.warn('[calls] local ICE gathering: конец сбора (candidate=null)', {
+          sent: this.sentCandidates,
+        });
+      }
       handlers.onSignal({
         kind: 'candidate',
         candidate: c

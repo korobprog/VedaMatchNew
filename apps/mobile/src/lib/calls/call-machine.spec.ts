@@ -132,6 +132,27 @@ describe('reduceCall', () => {
     ).toBe('connecting');
   });
 
+  it('preview из idle — incoming с флагом callIsPreview, повторно не перебивает живой звонок', () => {
+    const previewed = reduceCall(IDLE_STATE, { type: 'preview', call: call() });
+    expect(previewed.phase).toBe('incoming');
+    expect(previewed.callIsPreview).toBe(true);
+    expect(previewed.call?.id).toBe('c1');
+
+    // Уже что-то идёт (например, настоящий call.ringing по SSE успел раньше
+    // фонового launch-события) — предпросмотр не должен перебить состояние.
+    const alreadyIncoming = incoming();
+    expect(reduceCall(alreadyIncoming, { type: 'preview', call: call({ id: 'c2' }) })).toBe(
+      alreadyIncoming,
+    );
+  });
+
+  it('restore поверх preview снимает флаг callIsPreview (реконсайл подтвердил настоящие данные)', () => {
+    const previewed = reduceCall(IDLE_STATE, { type: 'preview', call: call() });
+    const restored = reduceCall(previewed, { type: 'restore', call: call(), selfId: 'me' });
+    expect(restored.callIsPreview).toBe(false);
+    expect(restored.phase).toBe('incoming');
+  });
+
   it('reset возвращает в idle, local-ended в idle ничего не делает', () => {
     const ended = reduceCall(incoming(), { type: 'local-ended', status: 'declined' });
     expect(ended.phase).toBe('ended');

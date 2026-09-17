@@ -142,6 +142,7 @@ const MAIN_ACTIVITY_IMPORTS = `import android.app.PictureInPictureParams
 import android.content.Intent
 import android.content.res.Configuration
 import android.util.Rational
+import com.vedamatch.calls.PendingCallStore
 import com.vedamatch.calls.PipState
 import com.vedamatch.calls.VedamatchCallsModule
 `;
@@ -179,6 +180,18 @@ const MAIN_ACTIVITY_METHODS = `
   private fun vedamatchApplyCallWindowFlags(intent: Intent?) {
     val callId = intent?.getStringExtra("callId")
     if (callId.isNullOrEmpty()) return
+    // Правка по факту живой проверки (BUG B, VED-222, Samsung Galaxy A51):
+    // fullScreenIntent (CallNotifications.show(), extra vedamatchCallAction=
+    // "open") поднимает эту Activity для ЕЩЁ НЕ ОТВЕЧЕННОГО звонка, но
+    // раньше ничего не клало в PendingCallStore.pendingLaunch — JS
+    // (getLaunchCall()) видел null и ждал реконсайл по сети, пока звонок не
+    // уходил в пропущенные. «Ответить» с уведомления (CallActionReceiver)
+    // этот же pendingLaunch уже сам выставляет ДО запуска Activity (action
+    // "answer", другое значение extra) — здесь трогаем только "open", чтобы
+    // не перезаписать её работу при гонке между приёмником и Activity.
+    if (intent?.getStringExtra("vedamatchCallAction") == "open") {
+      PendingCallStore.setPendingLaunch(callId, "open")
+    }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
       setShowWhenLocked(true)
       setTurnScreenOn(true)

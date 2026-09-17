@@ -30,6 +30,7 @@ import { ReturnToCallBanner } from '@/components/calls/return-to-call-banner';
 import { createChatCallsApi } from './chat-calls-client';
 import { isAudioSessionLive } from './audio-session-policy';
 import { shouldDeclineAsBusy } from './call-busy-decision';
+import { buildLaunchPreviewCall } from './call-launch-preview';
 import { IDLE_STATE, companionOf, reduceCall, roleIn, type CallState } from './call-machine';
 import { shouldRestartIceOnNetworkChange } from './ice-restart-policy';
 import {
@@ -46,7 +47,7 @@ import { PendingCallAnswer } from './pending-call-answer';
 import { startRingtone } from './ringtone';
 import { shouldEndCallOnSessionChange } from './session-call-guard';
 import { CallSession } from './webrtc-session';
-import type { NetworkTransport } from '../../../modules/vedamatch-calls';
+import type { LaunchCall, NetworkTransport } from '../../../modules/vedamatch-calls';
 
 /**
  * Провайдер звонков — перенос `apps/web/src/components/chat/calls/call-provider.tsx`.
@@ -165,6 +166,12 @@ export function CallProvider({ children }: { children: ReactNode }) {
     // свежую, а не держим одну на сессию.
     const res = await callsApi.iceServers();
     iceRef.current = res.iceServers;
+    if (res.iceServers.length === 0) {
+      // eslint-disable-next-line no-console -- диагностика живой проверки
+      // BUG A (VED-222): пустой список сразу объясняет «не соединился», не
+      // заставляя гадать по ICE-логам ниже.
+      console.warn('[calls] iceServers: сервер вернул пустой список — STUN/TURN недоступны для этого звонка');
+    }
     return res.iceServers;
   }, [callsApi]);
 
@@ -264,7 +271,17 @@ export function CallProvider({ children }: { children: ReactNode }) {
     try {
       const { call: activeCall } = await callsApi.active();
       if (activeCall) {
-        if (stateRef.current.phase === 'idle') dispatch({ type: 'restore', call: activeCall, selfId: userId });
+        const current = stateRef.current;
+        // Из простоя — как раньше. Поверх «карточки предпросмотра»
+        // (`callIsPreview`, BUG B этапа VED-222) — тоже можно: сервер
+        // подтверждает те же данные точнее, ничего не теряется. Только
+        // пока фаза ещё `incoming` — стоит человек уже нажал «Ответить»
+        // (фаза ушла в `connecting`), затирать состояние снимком, где
+        // сервер мог ещё не увидеть наш `accept()` (status всё ещё
+        // `ringing`), нельзя — вернуло бы входящий баннер поверх идущего
+        // соединения и создало риск повторного accept().
+        if (current.phase === 'idle' || (current.phase === 'incoming' && current.callIsPreview))
+          dispatch({ type: 'restore', call: activeCall, selfId: userId });
         return;
       }
       const current = stateRef.current;
@@ -559,10 +576,34 @@ export function CallProvider({ children }: { children: ReactNode }) {
     if (shouldEndCallOnSessionChange(previous, status, stateRef.current.phase)) void endCallForLogout();
   }, [status, endCallForLogout]);
 
+  // `action === 'open'`: `fullScreenIntent` поднял Activity для ещё не
+  // отвеченного звонка (BUG B, живая проверка VED-222) — читаем один раз при
+  // монтировании (`getLaunchCall()` одноразовый), но карточку строим только
+  // когда известен `userId` (`callee.id` в `buildLaunchPreviewCall` — без
+  // него `roleIn()` не узнал бы нас в собственном звонке): на холодном
+  // старте `CallProvider` может смонтироваться на кадр раньше, чем сессия
+  // дочитается из хранилища.
+  const pendingOpenLaunch = useRef<LaunchCall | null>(null);
   useEffect(() => {
     const launch = consumeLaunchCall();
-    if (launch?.action === 'answer') pendingAnswer.request(launch.callId);
+    if (!launch) return;
+    if (launch.action === 'answer') {
+      pendingAnswer.request(launch.callId);
+      return;
+    }
+    pendingOpenLaunch.current = launch;
   }, [pendingAnswer]);
+  useEffect(() => {
+    const launch = pendingOpenLaunch.current;
+    if (!launch || !userId) return;
+    pendingOpenLaunch.current = null;
+    // `reconcile()` всё равно уходит на `/chat/calls/active` на этом же
+    // монтировании и подтвердит/поправит карточку точнее (`callIsPreview` в
+    // `call-machine.ts`) — здесь только немедленный первый кадр. Перебить
+    // уже идущее сама `reduceCall` не даст (только из простоя).
+    const preview = buildLaunchPreviewCall(launch, userId);
+    if (preview) dispatch({ type: 'preview', call: preview });
+  }, [userId]);
   // Звонок появился в состоянии (реконсайл или call.ringing из потока) —
   // если на него есть отложенный ответ, принять его самим, без второго
   // нажатия человеком.
