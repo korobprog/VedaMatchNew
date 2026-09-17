@@ -1680,6 +1680,88 @@ JSX) — `IncomingCallBanner`/`ReturnToCallBanner`/`CallErrorToast` теперь
   `CallStyle` (`Person` с именем + `fullScreenIntent`/foreground-служба)
   всё же не выполнятся.
 
+### 12.15. Живая проверка PR #363 (versionCode 1012, релизный ключ) — два новых дефекта
+
+Регистрация PhoneAccount/`addNewIncomingCall`/`onCreateIncomingConnection`/
+`onShowIncomingCallUi`/уведомление на канале `calls` с двумя действиями —
+всё подтверждено рабочим, Telecom корректно держит `RINGING` 45 с и сам
+переводит в `DISCONNECTED` по таймауту. Живой лог нашёл два новых дефекта.
+
+**Экран блокировки: `sysui_fullscreen_notification` поднял `MainActivity`,
+но экран не включился, keyguard остался.** Причина — `setShowWhenLocked`/
+`setTurnScreenOn` выставлялись из JS (`setCallScreenActive`, вызывается
+`app/call/[id].tsx` уже ПОСЛЕ монтирования React-дерева) — на погашенном
+заблокированном экране это на кадры позже, чем система решает «показывать
+поверх блокировки или нет» при первом `onCreate`. Починено синхронной
+установкой этих флагов прямо в нативном `MainActivity.onCreate`/`onNewIntent`
+(новый `onNewIntent` — `plugins/with-native-calls.js`, §4) по признаку,
+который уже есть в стартующем `Intent` (`callId`-экстра — кладут и
+`fullScreenIntent`, и «Ответить»), не дожидаясь JS вовсе. Заодно убран
+безусловный `KeyguardManager.requestDismissKeyguard` из `setCallScreenActive`
+(снимал блокировку экрана при КАЖДОМ ответе на звонок) — `setShowWhenLocked`
+уже показывает разговор поверх блокировки без её снятия, как у системной
+звонилки; принудительная разблокировка не нужна и не была об этом просьбы.
+`endCall` (`VedamatchCallsModule.kt`) защитно снимает оба флага на текущей
+`Activity` — на случай звонка, снятого/пропущенного ДО того, как открылся
+сам экран `app/call/[id].tsx` и успел вызвать `setCallScreenActive(false)`.
+
+**Критично: «Ответить» из heads-up (телефон разблокирован, приложение в
+фоне) привёл к `decline`, а не `accept`.** Сервер получил decline
+(`endReason: hangup`, `answeredAt: null`) практически сразу после нажатия,
+хотя JS-путь `accept()` при этом РЕАЛЬНО пошёл (в логе — `rn-webrtc:pc:DEBUG
+ctor`/`addTrack`/`close`, т.е. локальные медиа успели захватиться и потом
+закрыться). Разобрано по коду, не гипотезой: `AudioManager.getMode()` в
+момент ответа был `MODE_IN_COMMUNICATION` (`mode=3`, лог: `setMode(mode=3,
+caller=com.android.server.telecom)`), а не `MODE_IN_CALL` (`mode=2`) —
+значит подозрение из задания («новая проверка `MODE_IN_CALL` топит
+собственный звонок после `setActive()`») не подтвердилось само по себе: она
+проверяет ровно `mode=2`, `mode=3` под неё не подходит. Настоящая причина —
+глубже в той же функции: `PendingCallStore.hasAnyConnection()`
+(`callConflictState`, `VedamatchCallsModule.kt`) заносит self-managed
+`Connection` в реестр уже в `onCreateIncomingConnection` (пока звонок ТОЛЬКО
+звонит, задолго до ответа) — значит `hasOwnCall` был `true` для СВОЕГО ЖЕ
+звонка с самого начала. Если `call.incoming` был доставлен `RNFirebaseMsgReceiver`
+повторно (сетевой ретрай/redelivery — обычное дело для high-priority
+data-сообщений сразу после того, как система разбудила устройство) —
+`handleIncomingCallPush` (`native-call-bridge.ts`) для этого повторного
+пуша спрашивал `callConflictState()` без исключений, видел `hasOwnCall: true`
+(свой же, уже отвечаемый звонок) и слал `decline` НАПРЯМУЮ на сервер
+(`declineCallInBackground`, в обход `call-provider.tsx`/`accept()` целиком)
+— параллельно с тем, что JS уже честно отвечал на звонок изнутри
+приложения. Оба пути реальны и независимы, поэтому в логе видны следы ОБОИХ:
+быстрый `decline` от повторного пуша и чуть более медленный, самостоятельно
+идущий (и в итоге отвергнутый сервером) `accept()`.
+
+Починено: `callConflictState`/`PendingCallStore` теперь принимают
+`excludeCallId` — self-managed `Connection` ДЛЯ ЭТОГО ЖЕ `callId` не
+считается занятостью (`PendingCallStore.hasOtherConnection`, +JS-обвязка
+`native-call-bridge.ts`/`modules/vedamatch-calls/index.ts`). Занятость
+теперь означает буквально «идёт ДРУГОЙ звонок», не «этот же снова
+доставлен». Дополнительно, как дешёвая защита от того же класса гонки на
+будущее (живая проверка не подтвердила двойной вызов именно отсюда, но код
+уже разбирался под эту проверку): `accept()` (`call-provider.tsx`) обзавёлся
+guard'ом от повторного вызова для одного и того же `callId`
+(`acceptingCallId`). Диагностика — `console.warn` (виден в logcat релиза
+как `W ReactNativeJS`, без персональных данных, только `callId`/`phase`/
+`reason`) на: native `onAnswer` получен, `accept()` начат/подтверждён
+сервером/отказ, `hangUpWith` (decline/end) с причиной, decline «занято» с
+сырыми `hasOwnCall`/`systemBusy`.
+
+**Мелочь.** `NativeEventEmitter() was called with a non-null argument
+without the required addListener method` — источник `audio-route-bridge.ts`:
+`new NativeEventEmitter(NativeModules.InCallManager)`, а `InCallManager` не
+реализует `addListener`/`removeListeners` (шлёт события напрямую через
+`RCTDeviceEventEmitter`). По исходнику `NativeEventEmitter.js` аргумент
+обязателен только на iOS — на Android конструктор без аргумента работает
+идентично (тот же глобальный эмиттер под капотом) и не предупреждает.
+
+Автотестов на сам фикс `excludeCallId` нет: логика живёт в Kotlin
+(`PendingCallStore.hasOtherConnection`), а в `modules/vedamatch-calls`
+никогда не было Kotlin/JUnit-инфраструктуры (не заводилась и здесь — риск
+несоразмерен размеру правки). Пройденные `pnpm test` покрывают JS-часть, не
+изменившуюся по существу (`shouldDeclineAsBusy`, `pending-call-answer.ts`);
+подтверждение самого фикса — следующий живой прогон.
+
 ### Что ждёт живого телефона (этап 3)
 
 Ничего из перечисленного ниже не проверялось на реальном устройстве в этой

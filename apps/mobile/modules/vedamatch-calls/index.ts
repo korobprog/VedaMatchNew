@@ -118,8 +118,17 @@ declare class VedamatchCallsNativeModule extends NativeModule<VedamatchCallsEven
    *  — вызвавший код должен считать её использованной, повторный вызов до
    *  следующего запуска/`onNewIntent` вернёт `null`. */
   getLaunchCall(): LaunchCall | null;
-  /** VED-222, п.7: сырые факты «занято ли устройство» — см. `CallConflictState`. */
-  callConflictState(): CallConflictState;
+  /** VED-222, п.7: сырые факты «занято ли устройство» — см. `CallConflictState`.
+   *  `excludeCallId` — правка по факту живой проверки (Samsung Galaxy A51):
+   *  свой self-managed `Connection` для ЭТОГО ЖЕ звонка (уже звонит/уже
+   *  отвечен) не считается занятостью — иначе повторно доставленный push
+   *  `call.incoming` для звонка, на который человек в этот момент отвечает,
+   *  топит его decline'ом как «занято своим же звонком». Пустая строка —
+   *  «нет своего звонка, который надо бы исключить» (обычная проверка перед
+   *  НОВЫМ исходящим); не `string | undefined`, чтобы не зависеть от того,
+   *  как именно мост expo-modules-core сводит пропущенный JS-аргумент с
+   *  необязательным параметром на стороне Kotlin. */
+  callConflictState(excludeCallId: string): CallConflictState;
   /** Android 14+: может ли приложение показать полноэкранный intent без
    *  ручного разрешения в настройках (`NotificationManager.canUseFullScreenIntent`).
    *  На более старых версиях всегда `true` — разрешение появилось только в 14. */

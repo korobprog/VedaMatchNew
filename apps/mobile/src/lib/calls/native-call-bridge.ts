@@ -57,7 +57,16 @@ export async function handleIncomingCallPush(push: IncomingCallPush, nowMs = Dat
   if (!SUPPORTED) return;
   if (isIncomingCallExpired(push, nowMs)) return;
   if (callLifecycleTracker.handleIncoming(push.callId, nowMs) === 'duplicate') return;
-  if (shouldDeclineAsBusy(VedamatchCalls.callConflictState())) {
+  // `excludeCallId: push.callId` — правка по факту живой проверки (Samsung
+  // Galaxy A51): без исключения своего же звонка повторно доставленный
+  // push для звонка, на который человек в этот момент отвечает, читался
+  // как «занято своим же звонком» и топил его decline'ом параллельно с
+  // ответом изнутри приложения (`callConflictState`, `VedamatchCallsModule.kt`).
+  const conflict = VedamatchCalls.callConflictState(push.callId);
+  if (shouldDeclineAsBusy(conflict)) {
+    // eslint-disable-next-line no-console -- диагностика для живого теста
+    // (`console.warn` виден в logcat релизной сборки как `W ReactNativeJS`).
+    console.warn('[calls] decline as busy', { callId: push.callId, ...conflict });
     void declineCallInBackground(push.callId);
     return;
   }
@@ -106,10 +115,12 @@ export async function startOngoingCall(callId: string, companionName: string, ki
 /** VED-222, п.7: сырые факты «занято ли устройство» — решение принимает
  *  `shouldDeclineAsBusy` (`call-busy-decision.ts`). На платформах без
  *  модуля — «свободно»: без него нет и self-managed интеграции, которая
- *  вообще может заметить конфликт. */
-export function getCallConflictState(): CallConflictState {
+ *  вообще может заметить конфликт. `excludeCallId` — не считать занятостью
+ *  self-managed `Connection` этого же звонка (см. `handleIncomingCallPush`
+ *  выше); для проверки перед НОВЫМ исходящим не передаётся вовсе. */
+export function getCallConflictState(excludeCallId?: string): CallConflictState {
   if (!SUPPORTED) return { hasOwnCall: false, systemBusy: false };
-  return VedamatchCalls.callConflictState();
+  return VedamatchCalls.callConflictState(excludeCallId ?? '');
 }
 
 const KNOWN_TRANSPORTS: ReadonlySet<string> = new Set(['wifi', 'cellular', 'ethernet', 'other', 'none']);

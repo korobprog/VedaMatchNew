@@ -189,6 +189,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
               : 'ended';
       finishLocally(localStatus);
       closeSession();
+      // eslint-disable-next-line no-console -- диагностика для живого теста
+      // (`gan-harness`-задание: «decline с причиной» — видно в logcat релиза
+      // как `W ReactNativeJS`).
+      console.warn('[calls] hangUpWith', { callId: call.id, phase: current.phase, reason, localStatus });
       try {
         if (current.phase === 'incoming') await callsApi.decline(call.id);
         else await callsApi.end(call.id, { reason, relayed: wasRelayed });
@@ -438,23 +442,51 @@ export function CallProvider({ children }: { children: ReactNode }) {
     [callsApi, closeSession, createSession, iceServers],
   );
 
+  /**
+   * Правка по факту живой проверки (Samsung Galaxy A51, VED-222): без этой
+   * метки `accept()` не защищён от повторного вызова для ОДНОГО И ТОГО ЖЕ
+   * звонка — двух источников «Ответить» (`onAnswer`-эффект и
+   * `pendingAnswer.consume()`-эффект ниже) с разными условиями срабатывания.
+   * Оба они и раньше не должны были совпасть на одном и том же рендере
+   * (взаимоисключающие ветки/идемпотентный `consume()`), живая проверка не
+   * подтвердила двойной вызов ИМЕННО отсюда — настоящая причина найденного
+   * decline'а оказалась в `callConflictState` (`excludeCallId`, выше по
+   * файлу) — но guard добавлен как дешёвая защита от того же класса гонки
+   * на будущее, раз код уже разбирался специально под эту живую проверку.
+   */
+  const acceptingCallId = useRef<string | null>(null);
+
   const accept = useCallback(async () => {
     const call = stateRef.current.call;
     if (!call || stateRef.current.phase !== 'incoming') return;
+    if (acceptingCallId.current === call.id) {
+      // eslint-disable-next-line no-console
+      console.warn('[calls] accept: уже отвечаем на этот звонок, повторный вызов пропущен', { callId: call.id });
+      return;
+    }
+    acceptingCallId.current = call.id;
     answerAttemptCallId.current = call.id;
+    // eslint-disable-next-line no-console
+    console.warn('[calls] accept: начат', { callId: call.id });
     try {
       const servers = await iceServers();
       const session = createSession('callee', servers);
       setLocalStream(await session.startLocalMedia(call.kind));
       dispatch({ type: 'accepting' });
       await callsApi.accept(call.id);
+      // eslint-disable-next-line no-console
+      console.warn('[calls] accept: сервер подтвердил', { callId: call.id });
       await drainQueuedSignals();
     } catch (error) {
       closeSession();
       const message = error instanceof ApiError ? error.message : describeMediaError(error);
+      // eslint-disable-next-line no-console
+      console.warn('[calls] accept: отказ, отправляю decline', { callId: call.id, reason: message });
       // Микрофон/камеру не дали — звонок для нас кончился, а собеседнику скажем.
       finishLocally('declined', message);
       void callsApi.decline(call.id).catch(() => undefined);
+    } finally {
+      if (acceptingCallId.current === call.id) acceptingCallId.current = null;
     }
   }, [callsApi, closeSession, createSession, drainQueuedSignals, finishLocally, iceServers]);
 
@@ -548,6 +580,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
     return subscribeToNativeCallEvents({
       onAnswer: (callId) => {
         const current = stateRef.current;
+        // eslint-disable-next-line no-console -- диагностика для живого теста.
+        console.warn('[calls] native onAnswer получен', { callId, phase: current.phase, knownCallId: current.call?.id });
         if (current.call?.id === callId && current.phase === 'incoming') {
           void accept();
           return;

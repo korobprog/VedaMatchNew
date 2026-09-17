@@ -76,6 +76,36 @@ object PendingCallStore {
   @Synchronized
   fun hasAnyConnection(): Boolean = anyConnection() != null
 
+  /**
+   * Тот же вопрос, но исключая ОДИН конкретный `callId` — правка по факту
+   * живой проверки (Samsung Galaxy A51, живой лог: «Ответить» на входящий
+   * привело к decline того же звонка). `PendingCallStore.putConnection()`
+   * заносит запись про звонок ЕЩЁ ДО того, как на него ответили (в момент
+   * `onCreateIncomingConnection`, пока он только звонит) — плоское
+   * `hasAnyConnection()` в `callConflictState` поэтому уже видело «свой
+   * звонок идёт» для ТОГО ЖЕ САМОГО звонка, которому пришёл повторно
+   * доставленный (или пришедший с гонкой по времени) push `call.incoming`:
+   * `handleIncomingCallPush` (`native-call-bridge.ts`) читал это как
+   * «занято» и слал `decline` на сервер параллельно с тем, что человек в
+   * этот момент уже отвечал на ЭТОТ ЖЕ звонок изнутри приложения. Занятость
+   * своим ЖЕ звонком, для которого пришёл повторный push, — не конфликт,
+   * конфликт — только ВТОРОЙ, ДРУГОЙ звонок.
+   */
+  @Synchronized
+  fun hasOtherConnection(excludeCallId: String): Boolean {
+    val iterator = connections.entries.iterator()
+    while (iterator.hasNext()) {
+      val entry = iterator.next()
+      val connection = entry.value.get()
+      if (connection == null) {
+        iterator.remove()
+        continue
+      }
+      if (connection.callId != excludeCallId) return true
+    }
+    return false
+  }
+
   @Synchronized
   fun putInfo(info: CallInfo) {
     infos[info.callId] = info

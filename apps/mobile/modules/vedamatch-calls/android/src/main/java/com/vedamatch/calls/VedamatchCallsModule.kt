@@ -259,6 +259,19 @@ class VedamatchCallsModule : Module() {
       CallNotifications.cancel(context, callId)
       PendingCallStore.connectionFor(callId)?.disconnectFromApp()
       PendingCallStore.removeInfo(callId)
+      // Правка по факту живой проверки: снимает показ-поверх-блокировки/
+      // turnScreenOn защитно — на случай, если звонок пропущен/снят ДО
+      // того, как открылся сам экран звонка (`app/call/[id].tsx`) и успел
+      // вызвать `setCallScreenActive(false)` сам. Флаги мог выставить
+      // синхронно `MainActivity.onCreate`/`onNewIntent` (§4,
+      // `plugins/with-native-calls.js`) сразу по полноэкранному `Intent`,
+      // не дожидаясь React-дерева вовсе.
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+        appContext.currentActivity?.let {
+          it.setShowWhenLocked(false)
+          it.setTurnScreenOn(false)
+        }
+      }
     }
 
     /**
@@ -286,9 +299,26 @@ class VedamatchCallsModule : Module() {
      * `MODE_IN_COMMUNICATION` — это как раз не такое надёжное «занято», ради
      * которого стоило бы рисковать ложным срабатыванием (человек мог просто
      * недавно закончить звонок в другом приложении, не сбросившем режим).
+     *
+     * `excludeCallId` (правка по факту живой проверки, Samsung Galaxy A51) —
+     * звонок, который САМ проверяет «занято ли устройство ДРУГИМ звонком»,
+     * не должен засчитывать самого себя: `PendingCallStore.putConnection()`
+     * заносит запись про self-managed `Connection` уже в момент
+     * `onCreateIncomingConnection` (пока звонок только звонит, задолго до
+     * ответа) — плоский `hasAnyConnection()` поэтому всегда видел «свой
+     * звонок идёт» для повторно доставленного/пришедшего с гонкой push
+     * `call.incoming` ТОГО ЖЕ звонка и топил его decline'ом параллельно с
+     * тем, что человек в этот момент отвечал на него изнутри приложения
+     * (`native-call-bridge.ts#handleIncomingCallPush` передаёт сюда
+     * `push.callId`; `call-provider.tsx#start()` для НОВОГО исходящего
+     * звонка своего `callId` ещё не имеет — там аргумент пустая строка,
+     * тогда считается любой существующий `Connection`, как и раньше).
      */
-    Function("callConflictState") {
-      val hasOwnCall = PendingCallStore.hasAnyConnection()
+    Function("callConflictState") { excludeCallId: String ->
+      val hasOwnCall = if (excludeCallId.isEmpty())
+        PendingCallStore.hasAnyConnection()
+      else
+        PendingCallStore.hasOtherConnection(excludeCallId)
       val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
       val systemBusy = audioManager.mode == AudioManager.MODE_IN_CALL
       mapOf("hasOwnCall" to hasOwnCall, "systemBusy" to systemBusy)
@@ -318,15 +348,25 @@ class VedamatchCallsModule : Module() {
       }
     }
 
+    /**
+     * Правка по факту живой проверки (Samsung Galaxy A51): `requestDismissKeyguard`
+     * убран — вызывался безусловно при `active = true` и принудительно снимал
+     * блокировку экрана при каждом ответе на звонок, хотя `setShowWhenLocked(true)`
+     * уже показывает разговор ПОВЕРХ блокировки без её снятия, ровно как у
+     * системной звонилки (ответить/говорить можно, не разблокируя телефон
+     * для всего остального). Сами флаги теперь дублируют то, что уже
+     * выставляет `MainActivity` синхронно в `onCreate`/`onNewIntent`
+     * (`plugins/with-native-calls.js`, §4) — этот вызов остаётся как явный
+     * путь СНЯТИЯ флагов, когда экран звонка размонтируется
+     * (`app/call/[id].tsx`), и как путь их установки для случая, когда
+     * человек открыл экран звонка НЕ через полноэкранный intent (например,
+     * ответил тапом по баннеру внутри уже открытого приложения).
+     */
     Function("setCallScreenActive") { active: Boolean ->
       val activity = appContext.currentActivity ?: return@Function
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
         activity.setShowWhenLocked(active)
         activity.setTurnScreenOn(active)
-      }
-      if (active) {
-        val keyguard = activity.getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
-        keyguard?.requestDismissKeyguard(activity, null)
       }
     }
 
