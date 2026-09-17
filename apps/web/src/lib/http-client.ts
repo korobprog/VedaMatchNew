@@ -15,6 +15,7 @@
 
 import { isAbort } from "./is-abort";
 import { apiBase } from "@/lib/api-base";
+import { coordinatedRefresh } from "./refresh-coordinator";
 
 export const API_URL = apiBase();
 
@@ -52,17 +53,33 @@ export class NetworkError extends ApiError {
 let refreshInFlight: Promise<boolean> | null = null;
 
 /**
+ * Сколько ждать ответа refresh. Пока запрос висит, соседние вкладки стоят в
+ * очереди за ним (см. refresh-coordinator), поэтому оборванный мобильной
+ * сетью запрос нельзя ждать вечно.
+ */
+export const REFRESH_TIMEOUT_MS = 15_000;
+
+function requestRefresh(): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS);
+  return fetch(`${API_URL}/auth/refresh`, {
+    method: "POST",
+    credentials: "include",
+    signal: controller.signal,
+  })
+    .then((res) => res.ok)
+    .catch(() => false)
+    .finally(() => clearTimeout(timer));
+}
+
+/**
  * Один refresh на все одновременные 401: десять запросов страницы после
- * простоя не должны устраивать десять ротаций refresh-токена (каждая
- * отзывает предыдущий — часть из них гарантированно проиграет гонку).
+ * простоя не должны устраивать десять ротаций refresh-токена. Внутри вкладки
+ * их склеивает общий промис, между вкладками — очередь refresh-coordinator.
  */
 export function refreshSession(): Promise<boolean> {
   if (!refreshInFlight) {
-    refreshInFlight = fetch(`${API_URL}/auth/refresh`, {
-      method: "POST",
-      credentials: "include",
-    })
-      .then((res) => res.ok)
+    refreshInFlight = coordinatedRefresh(requestRefresh)
       .catch(() => false)
       .finally(() => {
         refreshInFlight = null;

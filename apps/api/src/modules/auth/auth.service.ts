@@ -97,17 +97,6 @@ export function shortToken(value: unknown, maxLength = 64): string | null {
   return trimmed;
 }
 
-/**
- * Отказ refresh из-за гонки ротации: токен только что обменял соседний
- * запрос того же клиента. Для клиента это обычный 401, но cookie браузера
- * при нём не стираются — в них уже может лежать свежая пара.
- */
-export class RefreshRaceException extends UnauthorizedException {
-  constructor() {
-    super('Refresh-токен недействителен');
-  }
-}
-
 @Injectable()
 export class AuthService implements OnModuleInit {
   private readonly logger = new Logger(AuthService.name);
@@ -958,15 +947,9 @@ export class AuthService implements OnModuleInit {
       // вкладка не предъявляла отозванный токен снова: потоки событий сайта
       // переподключаются через refresh бесконечно, и каждый такой повтор
       // отзывал все сессии человека, включая приложение (VED-233).
-      // Гонка ротации — исключение: соседний запрос этого же браузера
-      // только что получил свежие cookie, и стирать их нельзя.
-      // При гонке не трогаем ни одну cookie: ответ соседнего запроса мог
-      // прийти раньше и уже положить свежую пару и маркер — очистка в этом
-      // ответе стёрла бы их и выбросила человека на лендинг.
-      if (
-        error instanceof UnauthorizedException &&
-        !(error instanceof RefreshRaceException)
-      ) {
+      // Гонка ротации сюда не доходит: проигравший запрос получает свою
+      // пару (см. consumeRefreshToken), так что 401 здесь — сессии нет.
+      if (error instanceof UnauthorizedException) {
         this.clearSessionCookies(res, req.headers.host);
       }
       throw error;
@@ -1008,10 +991,21 @@ export class AuthService implements OnModuleInit {
     // (легитимный клиент после ротации им больше не пользуется). Отзываем
     // семейство токена: и у вора, и у жертвы этого входа придётся войти
     // заново. Остальные входы человека не трогаем, а повтор сразу после
-    // ротации считаем гонкой — см. refresh-reuse.ts.
+    // ротации — тот же клиент, ему новая пара; см. refresh-reuse.ts.
     if (stored.revoked) {
       const verdict = judgeRevokedRefresh(stored, new Date());
-      if (verdict.kind === 'race') throw new RefreshRaceException();
+      if (verdict.kind === 'reissue') {
+        // Живой токен в семействе — вход не закрыт. После выхода или отзыва
+        // семейства живых нет, и свежий `revokedAt` пары не даёт.
+        const alive = await this.prisma.refreshToken.count({
+          where: { familyId: verdict.familyId, revoked: false },
+        });
+        if (alive === 0) {
+          throw new UnauthorizedException('Refresh-токен недействителен');
+        }
+        await assertAccountActive(this.prisma, stored.user);
+        return { user: stored.user, familyId: verdict.familyId };
+      }
       await this.prisma.refreshToken.updateMany({
         where: verdict.where,
         data: { revoked: true, revokedAt: new Date() },
@@ -1020,16 +1014,17 @@ export class AuthService implements OnModuleInit {
     }
     await assertAccountActive(this.prisma, stored.user);
 
-    // Ротация как CAS: два одновременных refresh с одним cookie не должны
-    // оба выдать пары — выигрывает тот, кто первым перевёл revoked в true.
+    // Ротация как CAS: токен гасит ровно один запрос. Проигравший — второй
+    // запрос того же клиента в ту же миллисекунду (две вкладки); ему такая
+    // же пара того же семейства, как повтору в окне. Живой токен победителя
+    // здесь не проверяем: победитель мог ещё не успеть его записать.
     // Семейство проставляется и старому токену: его повтор должен найти
     // продолжение цепочки, даже если токен выдан до появления семейств.
     const familyId = rotationFamily(stored);
-    const rotated = await this.prisma.refreshToken.updateMany({
+    await this.prisma.refreshToken.updateMany({
       where: { id: stored.id, revoked: false },
       data: { revoked: true, revokedAt: new Date(), familyId },
     });
-    if (rotated.count === 0) throw new RefreshRaceException();
     return { user: stored.user, familyId };
   }
 

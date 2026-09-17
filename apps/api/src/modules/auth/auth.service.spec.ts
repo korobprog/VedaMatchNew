@@ -5,11 +5,7 @@ import { UnauthorizedException } from '@nestjs/common';
 jest.mock('openid-client', () => ({}));
 jest.mock('./jwt.service', () => ({ JwtSignService: class {} }));
 
-import {
-  AuthService,
-  RefreshRaceException,
-  safeReturnTo,
-} from './auth.service';
+import { AuthService, safeReturnTo } from './auth.service';
 import { AuthProvidersService } from './auth-providers.service';
 import { PersonalDataService } from '../personal-data/personal-data.service';
 import { IdentityService } from './identity.service';
@@ -21,12 +17,14 @@ function makeService(
   stored: Record<string, unknown> | null,
   rotatedCount = 1,
   env: Record<string, string> = {},
+  aliveInFamily = 1,
 ) {
   const prisma = {
     refreshToken: {
       findUnique: jest.fn().mockResolvedValue(stored),
       updateMany: jest.fn().mockResolvedValue({ count: rotatedCount }),
       create: jest.fn().mockResolvedValue({}),
+      count: jest.fn().mockResolvedValue(aliveInFamily),
     },
     user: { update: jest.fn() },
   };
@@ -95,7 +93,7 @@ describe('AuthService.refresh', () => {
     expect(marker[2].path).toBe('/');
   });
 
-  it('проигравший гонку параллельный refresh получает 401 без новой пары и не стирает cookie', async () => {
+  it('проигравший гонку параллельный refresh получает свою пару того же семейства', async () => {
     const { service, prisma, req, res } = makeService(
       {
         id: 'rt1',
@@ -108,12 +106,14 @@ describe('AuthService.refresh', () => {
       },
       0,
     );
-    await expect(
-      service.refresh(req as never, res as never),
-    ).rejects.toBeInstanceOf(RefreshRaceException);
-    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
-    // Победитель гонки уже поставил браузеру свежие cookie и маркер —
-    // стирать нельзя ни одну.
+    // Вторая вкладка не должна уходить на лендинг из-за того, что первая
+    // обновилась на миллисекунду раньше.
+    await expect(service.refresh(req as never, res as never)).resolves.toEqual({
+      ok: true,
+    });
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ familyId: 'f1' }),
+    });
     expect(res.clearCookie).not.toHaveBeenCalled();
   });
 
@@ -181,7 +181,7 @@ describe('AuthService.refresh', () => {
     });
   });
 
-  it('повтор только что ротированного токена — гонка: ничего не отзывает', async () => {
+  it('повтор только что ротированного токена — тот же клиент: новая пара, ничего не отзывается', async () => {
     const { service, prisma, req, res } = makeService({
       id: 'rt1',
       userId: 'u1',
@@ -191,15 +191,77 @@ describe('AuthService.refresh', () => {
       expiresAt: new Date(Date.now() + 60_000),
       user: activeUser,
     });
+    // Ответ с новой парой потерялся в мобильной сети — клиент пришёл со
+    // старой cookie. Раньше это 401, а через минуту — отзыв входа.
+    await expect(service.refresh(req as never, res as never)).resolves.toEqual({
+      ok: true,
+    });
+    expect(prisma.refreshToken.count).toHaveBeenCalledWith({
+      where: { familyId: 'f1', revoked: false },
+    });
+    expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ familyId: 'f1', userId: 'u1' }),
+    });
+    expect(res.cookie).toHaveBeenCalledTimes(3);
+    expect(res.clearCookie).not.toHaveBeenCalled();
+  });
+
+  it('свежий повтор после выхода пары не получает: живых токенов в семействе нет', async () => {
+    const { service, prisma, req, res } = makeService(
+      {
+        id: 'rt1',
+        userId: 'u1',
+        revoked: true,
+        familyId: 'f1',
+        revokedAt: new Date(Date.now() - 2_000),
+        expiresAt: new Date(Date.now() + 60_000),
+        user: activeUser,
+      },
+      1,
+      {},
+      0,
+    );
     await expect(
       service.refresh(req as never, res as never),
-    ).rejects.toBeInstanceOf(RefreshRaceException);
-    expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
+    ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(prisma.refreshToken.create).not.toHaveBeenCalled();
-    // Свежие cookie соседнего запроса не стираются, маркер тоже.
-    expect(
-      (res as { clearCookie: jest.Mock }).clearCookie,
-    ).not.toHaveBeenCalled();
+    expect(res.cookie).not.toHaveBeenCalled();
+    expect(res.clearCookie).toHaveBeenCalledWith(
+      'refresh_token',
+      expect.objectContaining({ path: '/auth' }),
+    );
+  });
+
+  it('свежий повтор заблокированного аккаунта пары не получает', async () => {
+    const { service, prisma, req, res } = makeService({
+      id: 'rt1',
+      userId: 'u1',
+      revoked: true,
+      familyId: 'f1',
+      revokedAt: new Date(Date.now() - 2_000),
+      expiresAt: new Date(Date.now() + 60_000),
+      user: { ...activeUser, accountStatus: 'blocked' },
+    });
+    await expect(service.refresh(req as never, res as never)).rejects.toThrow();
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+  });
+
+  it('refreshApp: свежий повтор после обрыва связи выдаёт приложению пару', async () => {
+    const { service, prisma } = makeService({
+      id: 'rt9',
+      userId: 'u1',
+      revoked: true,
+      familyId: 'app-family',
+      revokedAt: new Date(Date.now() - 30_000),
+      expiresAt: new Date(Date.now() + 60_000),
+      user: activeUser,
+    });
+    const tokens = await service.refreshApp({ refreshToken: 'raw' });
+    expect(tokens.accessToken).toBe('access');
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ familyId: 'app-family' }),
+    });
   });
 
   it('refreshApp: давний повтор не трогает сессии других входов', async () => {
@@ -343,12 +405,10 @@ describe('AuthService.resolveGoogleProfile', () => {
     const create = jest.fn();
     const service = makeGoogleService({
       userIdentity: {
-        findUnique: jest
-          .fn()
-          .mockResolvedValue({
-            id: 'i1',
-            user: { id: 'u-old', email: 'a@b.c' },
-          }),
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'i1',
+          user: { id: 'u-old', email: 'a@b.c' },
+        }),
         update: jest.fn(),
       },
       user: { findUnique: jest.fn(), create },
