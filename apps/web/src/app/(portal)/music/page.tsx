@@ -16,7 +16,7 @@ import {
   getMyMusicUploads,
 } from "@/lib/music-api";
 import { LineageStatus } from "@/components/lineage-status";
-import { MusicArtistBubble } from "@/components/music/music-artist-bubble";
+import { MusicArtistsSection } from "@/components/music/music-artists-section";
 import { MusicCategoryChips } from "@/components/music/music-category-chips";
 import { MusicCover } from "@/components/music/music-cover";
 import {
@@ -332,14 +332,9 @@ export default async function MusicPage({
               (VED-103, VED-115). Витрина отдаёт всех исполнителей, и каждый
               следующий после восьмого встаёт новым рядом снизу (VED-224) —
               прокрутки вбок нет ни на телефоне, ни на широком экране: лента
-              прятала хвост за краем. */}
-          <ul className="mt-4 grid max-w-lg grid-cols-4 justify-items-center gap-x-1 gap-y-4 pb-2 sm:gap-x-5">
-            {catalog.artists.map((artist) => (
-              <li key={artist.id}>
-                <MusicArtistBubble artist={artist} />
-              </li>
-            ))}
-          </ul>
+              прятала хвост за краем. Переключатель вида — «плиткой»/«списком»
+              — внутри компонента, тем же приёмом, что у записей ниже (VED-225). */}
+          <MusicArtistsSection artists={catalog.artists} />
         </section>
       )}
 
