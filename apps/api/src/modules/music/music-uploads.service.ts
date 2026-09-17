@@ -15,7 +15,11 @@ import type {
   MusicStorageUsageDto,
   MyMusicUploadsDto,
 } from '@vedamatch/shared';
-import { isLineageId, MUSIC_ACCEPTED_MIME } from '@vedamatch/shared';
+import {
+  isLineageId,
+  MUSIC_ACCEPTED_MIME,
+  normalizeMusicMime,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MusicStorageService } from './music-storage.service';
 import {
@@ -211,10 +215,10 @@ export class MusicUploadsService {
       );
     }
 
-    const mime = body.mime?.split(';')[0]?.trim().toLowerCase() ?? '';
+    const mime = normalizeMusicMime(body.mime, body.fileName);
     const rejection = validateMusicUploadRequest(
       {
-        mime: body.mime,
+        mime,
         sizeBytes: body.sizeBytes,
         rightsBasis: body.rightsBasis,
         usedBytes: await this.usedBytes(userId),

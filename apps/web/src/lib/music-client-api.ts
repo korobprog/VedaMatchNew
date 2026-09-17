@@ -70,7 +70,12 @@ export async function uploadMusicTrack(
     }),
   });
 
-  await putWithProgress(created.url, file, onProgress);
+  await putWithProgress(
+    created.url,
+    file,
+    onProgress,
+    created.headers["Content-Type"],
+  );
 
   return send<CompleteMusicUploadResponse>(
     `/music/uploads/${created.uploadId}/complete`,
@@ -126,13 +131,18 @@ function putWithProgress(
   url: string,
   file: File,
   onProgress?: (fraction: number) => void,
+  /**
+   * Тип, под который сервер подписал ссылку. Он может отличаться от
+   * `file.type`: `audio/x-m4a` сервер приводит к `audio/mp4` (VED-195).
+   */
+  contentType: string = file.type,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
     // Content-Type входит в подпись: разойдётся — S3 ответит 403, и понять
     // это по логам браузера крайне неприятно.
-    xhr.setRequestHeader("Content-Type", file.type);
+    xhr.setRequestHeader("Content-Type", contentType);
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && onProgress) {
         onProgress(event.loaded / event.total);
