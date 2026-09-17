@@ -1,6 +1,6 @@
 import type { ServiceCard as ServiceCardDto } from '@vedamatch/shared';
 import * as WebBrowser from 'expo-web-browser';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -183,6 +183,18 @@ export default function ServicesScreen() {
             <Text style={[styles.logoutText, { color: colors.text0 }]}>Выйти</Text>
           </Pressable>
         </View>
+
+        {/* Экран «Аккаунт и способы входа» (VED-379, веха 3): список
+            привязанных Google/Яндекс/Telegram, привязка и отвязка. */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/account')}
+          android_ripple={ripple(colors.glassBorder)}
+          style={({ pressed }) => [styles.accountLink, { borderColor: colors.glassBorder, backgroundColor: colors.glass }, pressedStyle(pressed)]}
+        >
+          <Text style={[styles.accountLinkText, { color: colors.text0 }]}>Аккаунт и способы входа</Text>
+          <Text style={[styles.accountLinkArrow, { color: colors.text1 }]}>›</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -219,4 +231,16 @@ const styles = StyleSheet.create({
   profileEmail: { fontFamily: fonts.body, fontSize: 12 },
   logout: { minHeight: hitTarget, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 16, justifyContent: 'center', overflow: 'hidden' },
   logoutText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
+  accountLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: hitTarget,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: 16,
+    overflow: 'hidden',
+  },
+  accountLinkText: { fontFamily: fonts.bodySemiBold, fontSize: 15 },
+  accountLinkArrow: { fontFamily: fonts.body, fontSize: 20 },
 });
