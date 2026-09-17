@@ -560,7 +560,9 @@ export function ReelsFeed({
         ) : null,
         create: (
           <Link
-        href="/motivation/create"
+        // VED-240: из «Открыток» — сразу на «Готовая картинка с цитатой»,
+        // а не на «Написать самому» по умолчанию (см. ReelWizardPrefill.tab).
+        href={tab === "cards" ? "/motivation/create?tab=cards" : "/motivation/create"}
         aria-label="Создать свой рилс"
         className={railItemClass}
       >
@@ -695,6 +697,7 @@ export function ReelsFeed({
                 key="divider"
                 first={position === 0}
                 donation={donation}
+                tab={tab}
                 onNext={() => scrollBy(1)}
                 categoryNav={categoryNav}
               />
@@ -1636,12 +1639,14 @@ function FeedCategoryNav({
 function DividerSlide({
   first,
   donation,
+  tab,
   onNext,
   categoryNav,
 }: {
   /** Разделитель первым слайдом: нового не было вовсе, а не «кончилось». */
   first: boolean;
   donation: DonationSettingsDto | null;
+  tab: ReelsTab;
   onNext: () => void;
   categoryNav: (className?: string) => ReactNode;
 }) {
@@ -1660,8 +1665,12 @@ function DividerSlide({
             Листать дальше
           </button>
           {/* Место, где смотреть больше нечего, — лучшее для предложения
-              сделать своё: человек уже здесь и уже листает. */}
-          <Link href="/motivation/create" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">
+              сделать своё: человек уже здесь и уже листает. Из «Открыток»
+              (VED-240) — сразу на «Готовая картинка с цитатой». */}
+          <Link
+            href={tab === "cards" ? "/motivation/create?tab=cards" : "/motivation/create"}
+            className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10"
+          >
             ✨ Создать рилс
           </Link>
           <Link href="/motivation?tab=saved" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">
@@ -1706,7 +1715,12 @@ function EndSlide({
               свой: цитата, кадр и, если захотите, видео.
             </p>
             <div className="flex flex-wrap justify-center gap-2">
-              <Link href="/motivation/create" className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold">
+              {/* Из «Открыток» (VED-240) — сразу на «Готовая картинка с
+                  цитатой», а не на «Написать самому» по умолчанию. */}
+              <Link
+                href={tab === "cards" ? "/motivation/create?tab=cards" : "/motivation/create"}
+                className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold"
+              >
                 ✨ Создать рилс
               </Link>
               <Link href="/motivation/settings" className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10">

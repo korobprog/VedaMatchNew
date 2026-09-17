@@ -12,12 +12,21 @@ import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 /**
  * «Свой рилс»: мастер из трёх шагов. Из читалки приходит `?from=vedabase&
  * book=…&chapter=…&text=…` — цитата подставляется и сверяется с главой;
- * `?reel=<id>` открывает экран статуса уже созданного рилса.
+ * `?reel=<id>` открывает экран статуса уже созданного рилса; `?tab=cards`
+ * (VED-240) — пришли из вкладки «Открытки» ленты, и первый выбор мастера
+ * должен стоять на «Готовая картинка с цитатой».
  */
 export default async function MotivationCreatePage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; book?: string; chapter?: string; text?: string; reel?: string }>;
+  searchParams: Promise<{
+    from?: string;
+    book?: string;
+    chapter?: string;
+    text?: string;
+    reel?: string;
+    tab?: string;
+  }>;
 }) {
   const params = await searchParams;
   const [user, donation, categories] = await Promise.all([
@@ -54,7 +63,11 @@ export default async function MotivationCreatePage({
         </p>
         <div className="mt-4 px-2">
           <ReelWizard
-            prefill={{ ...prefill, reelId: params.reel }}
+            prefill={{
+              ...prefill,
+              reelId: params.reel,
+              tab: params.tab === "cards" ? "cards" : undefined,
+            }}
             donation={donation}
             categories={categories ?? []}
             isAdmin={isAdmin}
