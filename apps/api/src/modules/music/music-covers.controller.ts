@@ -5,6 +5,7 @@ import type {
   CreateMusicCoverUploadRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { AdminUnlimited } from '../auth/admin-unlimited.guard';
 import { MusicCoversService } from './music-covers.service';
 
 /**
@@ -17,9 +18,11 @@ import { MusicCoversService } from './music-covers.service';
  * где карточка правится.
  *
  * Лимит скромный: обложку меняют раз в жизни карточки, а не раз в минуту.
+ * Кроме администратора Музыки — он оформляет справочники пачкой.
  */
 @Controller('music/covers')
 @UseGuards(AuthGuard)
+@AdminUnlimited('music')
 @Throttle({ default: { ttl: 3_600_000, limit: 60 } })
 export class MusicCoversController {
   constructor(private readonly covers: MusicCoversService) {}
