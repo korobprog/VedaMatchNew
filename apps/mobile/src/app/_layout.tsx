@@ -13,6 +13,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '@/lib/auth/session';
+import { CallProvider } from '@/lib/calls/call-provider';
 import { ChatStreamProvider } from '@/lib/chat/chat-stream';
 import { PushBridge } from '@/lib/push/push-bridge';
 import { ThemeProvider, useTheme } from '@/theme/theme';
@@ -48,6 +49,12 @@ function RootStack() {
           <Stack.Screen name="people/[id]" />
           <Stack.Screen name="communities/[id]" />
           <Stack.Screen name="calls-probe" />
+          {/* Экран звонка (VED-219): модалью на весь экран, без системной
+              шапки и без жеста «назад» — трубку кладут кнопкой, не свайпом. */}
+          <Stack.Screen
+            name="call/[id]"
+            options={{ presentation: 'fullScreenModal', headerShown: false, gestureEnabled: false, animation: 'fade' }}
+          />
         </Stack.Protected>
       </Stack>
     </>
@@ -79,7 +86,9 @@ export default function RootLayout() {
           <ThemeProvider>
             <SessionProvider>
               <ChatStreamProvider>
-                <RootStack />
+                <CallProvider>
+                  <RootStack />
+                </CallProvider>
               </ChatStreamProvider>
             </SessionProvider>
           </ThemeProvider>

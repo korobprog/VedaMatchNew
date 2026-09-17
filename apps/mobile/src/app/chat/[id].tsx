@@ -26,6 +26,7 @@ import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { AttachmentSheet } from '@/components/chat/attachment-sheet';
+import { CallHeaderButtons } from '@/components/calls/call-header-buttons';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
 import { MessageBubble } from '@/components/chat/message-bubble';
 import { MessageMenu } from '@/components/chat/message-menu';
@@ -683,6 +684,9 @@ export default function ChatRoomScreen() {
               </View>
             </View>
           ),
+          // Только кнопки — остальная шапка (заголовок, стрелка назад) вне
+          // зоны звонков, см. VedaMatchNew-mobile-coordination.md.
+          headerRight: () => <CallHeaderButtons conversation={detail} />,
         }}
       />
 
