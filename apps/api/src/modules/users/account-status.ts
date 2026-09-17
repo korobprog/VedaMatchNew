@@ -1,5 +1,5 @@
 import { UnauthorizedException } from '@nestjs/common';
-import type { PrismaClient, User } from '@prisma/client';
+import type { Prisma, PrismaClient, User } from '@prisma/client';
 
 /** Сколько дней у пользователя есть на отмену самостоятельного удаления. */
 export const SELF_DELETE_GRACE_DAYS = 14;
@@ -95,4 +95,64 @@ export async function assertAccountActive(
     throw new UnauthorizedException('Аккаунт удалён');
   }
   return current;
+}
+
+/**
+ * Кандидаты на фоновое завершение самостоятельного удаления: окно отмены
+ * истекло, а `accountStatus` всё ещё `active`. `finalizeAccountStatus`
+ * переводит такой аккаунт в `deleted` только при живом входе (гвард, логин,
+ * refresh) — человек, который запросил удаление и после этого ни разу не
+ * открыл портал, никогда бы туда не попал, и `AccountAnonymizeService` (он
+ * смотрит только на уже `deleted`) никогда бы его не анонимизировал.
+ */
+export function pendingSelfDeleteWhere(
+  now: Date = new Date(),
+): Prisma.UserWhereInput {
+  return {
+    accountStatus: 'active',
+    pendingDeletionAt: {
+      not: null,
+      lte: new Date(
+        now.getTime() - SELF_DELETE_GRACE_DAYS * 24 * 60 * 60 * 1000,
+      ),
+    },
+  };
+}
+
+/**
+ * Пакетно доводит просроченные самостоятельные запросы на удаление до
+ * `deleted`, отзывая refresh-токены — тот же переход, что и у
+ * `finalizeAccountStatus`, вызванный фоновым тиком вместо запроса живого
+ * человека. Переиспользует `resolveAccountStatus`, чтобы условие перехода
+ * не разошлось в двух местах. Возвращает число завершённых аккаунтов —
+ * вызывающая сторона (`AccountAnonymizeService.tick`) использует его для лога.
+ */
+export async function finalizeExpiredSelfDeletions(
+  prisma: PrismaClient,
+  now: Date = new Date(),
+): Promise<number> {
+  const candidates = await prisma.user.findMany({
+    where: pendingSelfDeleteWhere(now),
+  });
+  let count = 0;
+  for (const user of candidates) {
+    if (resolveAccountStatus(user, now) !== 'deleted') continue;
+    await prisma.$transaction([
+      prisma.refreshToken.updateMany({
+        where: { userId: user.id, revoked: false },
+        data: { revoked: true },
+      }),
+      prisma.user.update({
+        where: { id: user.id },
+        data: {
+          accountStatus: 'deleted',
+          deletedAt: now,
+          statusActor: 'system',
+          statusChangedAt: now,
+        },
+      }),
+    ]);
+    count += 1;
+  }
+  return count;
 }
