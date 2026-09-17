@@ -15,6 +15,8 @@ import type {
   CreateMusicIngestBatchRequest,
   MusicArtistsFromTagsRequest,
   MusicArtistsFromTagsResult,
+  MusicBulkTrackArtistRequest,
+  MusicBulkTrackArtistResult,
   MusicIngestBatchDetailDto,
   MusicIngestBatchDto,
   MusicModerationDecisionRequest,
@@ -70,6 +72,13 @@ export const scanMusicArtistsFromTags = (
 export const updateMusicTrack = (id: string, body: UpdateMusicTrackRequest) =>
   send<unknown>(`/music/admin/catalog/tracks/${id}`, {
     method: "PATCH",
+    body: JSON.stringify(body),
+  });
+
+/** Массовая смена исполнителя у выбранных записей (VED-226). */
+export const setMusicTracksArtist = (body: MusicBulkTrackArtistRequest) =>
+  send<MusicBulkTrackArtistResult>(`/music/admin/catalog/tracks/artist`, {
+    method: "POST",
     body: JSON.stringify(body),
   });
 

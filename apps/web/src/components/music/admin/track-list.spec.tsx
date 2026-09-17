@@ -11,10 +11,12 @@ import { MusicTrackList } from "./track-list";
 
 const updateMusicTrack = vi.fn();
 const deleteMusicTrack = vi.fn();
+const setMusicTracksArtist = vi.fn();
 
 vi.mock("@/lib/music-admin-client-api", () => ({
   updateMusicTrack: (...args: unknown[]) => updateMusicTrack(...args),
   deleteMusicTrack: (...args: unknown[]) => deleteMusicTrack(...args),
+  setMusicTracksArtist: (...args: unknown[]) => setMusicTracksArtist(...args),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -65,6 +67,70 @@ function renderList(items: MusicAdminTrackDto[] = [track()]) {
 beforeEach(() => {
   updateMusicTrack.mockReset().mockResolvedValue({});
   deleteMusicTrack.mockReset().mockResolvedValue({});
+  setMusicTracksArtist.mockReset();
+});
+
+describe("MusicTrackList — массовая смена исполнителя (VED-226)", () => {
+  const items = [
+    track({ id: "t1", title: "Первая", artistId: "a1", artistName: "Аджамил" }),
+    track({ id: "t2", title: "Вторая", artistId: "a1", artistName: "Аджамил" }),
+    track({ id: "t3", title: "Третья" }),
+  ];
+
+  it("выбирает все записи исполнителя и переносит их к существующему", async () => {
+    setMusicTracksArtist.mockResolvedValue({
+      artist: { id: "a2", name: "Мадхава", slug: "madhava" },
+      created: false,
+      updated: 2,
+    });
+    renderList(items);
+
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Фильтр по исполнителю" }),
+      "a1",
+    );
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: /Выбрать все показанные \(2\)/ }),
+    );
+    expect(screen.getByText(/Выбрано: 2 записи/)).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сменить исполнителя" }),
+    );
+    await userEvent.type(
+      screen.getByRole("combobox", { name: "Исполнитель для выбранных записей" }),
+      "мадхава",
+    );
+    expect(
+      screen.getByText(/перейдут к существующему исполнителю «Мадхава»/),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+
+    expect(setMusicTracksArtist).toHaveBeenCalledWith({
+      trackIds: ["t1", "t2"],
+      artistName: "мадхава",
+    });
+    await waitFor(() =>
+      expect(screen.getByText(/2 записи — теперь у исполнителя «Мадхава»/))
+        .toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/Выбрано:/)).not.toBeInTheDocument();
+  });
+
+  it("предупреждает, что незнакомое имя заведёт нового исполнителя", async () => {
+    renderList(items);
+    await userEvent.click(screen.getByRole("checkbox", { name: "Выбрать «Третья»" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сменить исполнителя" }),
+    );
+    await userEvent.type(
+      screen.getByRole("combobox", { name: "Исполнитель для выбранных записей" }),
+      "Гаура  дас",
+    );
+    expect(
+      screen.getByText("Такого исполнителя нет — будет заведён новый: «Гаура дас»."),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("MusicTrackList", () => {

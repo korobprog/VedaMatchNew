@@ -319,6 +319,27 @@ export interface UpdateMusicTrackRequest {
   coverKey?: string | null;
 }
 
+/**
+ * Массовая смена исполнителя у записей (VED-226). Ровно одно из
+ * `artistId` / `artistName`: выбран из справочника — переносим к нему;
+ * введено имя — ищем такого исполнителя без учёта регистра и, если нет,
+ * заводим. `artistId: null` — снять исполнителя у всех выбранных.
+ */
+export interface MusicBulkTrackArtistRequest {
+  trackIds: string[];
+  artistId?: string | null;
+  artistName?: string;
+}
+
+export interface MusicBulkTrackArtistResult {
+  /** Исполнитель, к которому ушли записи; `null` — исполнитель снят. */
+  artist: { id: string; name: string; slug: string } | null;
+  /** Исполнитель заведён этим действием, а не найден в справочнике. */
+  created: boolean;
+  /** Сколько записей поменялось. */
+  updated: number;
+}
+
 // ===== Загрузка (этап 2) =====
 
 /**
