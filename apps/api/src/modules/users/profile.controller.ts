@@ -9,6 +9,7 @@
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import type {
   AccessTokenPayload,
   ProfileUpdateRequest,
@@ -52,6 +53,10 @@ export class ProfileController {
     return this.users.deleteAvatar(user.sub);
   }
 
+  // Разрушительное действие с окном отмены — 5/час защищает от случайного
+  // спама кнопкой и не мешает обычному сценарию «запросил → передумал →
+  // отменил → запросил снова» внутри одной сессии тестирования.
+  @Throttle({ default: { ttl: 3_600_000, limit: 5 } })
   @Post('delete-request')
   requestDeletion(@CurrentUser() user: AccessTokenPayload) {
     return this.users.requestSelfDeletion(user.sub);

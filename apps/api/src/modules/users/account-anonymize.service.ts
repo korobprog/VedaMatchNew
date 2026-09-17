@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserGalleryService } from './user-gallery.service';
 import { PersonalDataService } from '../personal-data/personal-data.service';
+import { finalizeExpiredSelfDeletions } from './account-status';
 
 /** Раз в час: анонимизация не срочная, а кандидатов единицы. */
 const TICK_MS = 60 * 60 * 1000;
@@ -85,6 +86,12 @@ export interface AnonymizeResult {
  * Идемпотентен: анонимизированный (по префиксу email) в выборку не попадает,
  * поэтому реплики без лока могут тикать параллельно — в худшем случае один
  * update повторится с теми же данными.
+ *
+ * Первым шагом каждого тика — `finalizeExpiredSelfDeletions`: доводит до
+ * `deleted` самостоятельные запросы на удаление, чьё окно отмены истекло, но
+ * человек с тех пор не заходил (иначе это сделал бы `assertAccountActive` на
+ * входе). Без этого шага такой аккаунт остался бы `active` навсегда и никогда
+ * не дошёл бы до анонимизации ниже.
  */
 @Injectable()
 export class AccountAnonymizeService implements OnModuleInit, OnModuleDestroy {
@@ -109,6 +116,18 @@ export class AccountAnonymizeService implements OnModuleInit, OnModuleDestroy {
 
   async tick(now = new Date()): Promise<AnonymizeResult> {
     const result: AnonymizeResult = { anonymized: 0, storageObjects: 0 };
+    try {
+      const finalized = await finalizeExpiredSelfDeletions(this.prisma, now);
+      if (finalized > 0) {
+        this.logger.log(
+          `Просроченных самостоятельных удалений завершено: ${finalized}`,
+        );
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Завершение просроченных самостоятельных удалений не удалось: ${String(error)}`,
+      );
+    }
     try {
       const candidates = await this.prisma.user.findMany({
         where: anonymizeCandidatesWhere(now),

@@ -8,6 +8,7 @@ import {
   anonymizedEmail,
   isAnonymizedEmail,
 } from './account-anonymize.service';
+import { SELF_DELETE_GRACE_DAYS } from './account-status';
 
 function makePrisma(
   candidates: Array<{ id: string; avatarKey: string | null }>,
@@ -166,6 +167,85 @@ describe('AccountAnonymizeService', () => {
       anonymized: 1,
       storageObjects: 1,
     });
+  });
+
+  it('первым шагом заканчивает просроченные самостоятельные удаления и отзывает токены', async () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const expiredSelfDelete = {
+      id: 'sd1',
+      accountStatus: 'active',
+      blockedUntil: null,
+      pendingDeletionAt: new Date(
+        now.getTime() - (SELF_DELETE_GRACE_DAYS + 1) * DAY_MS,
+      ),
+    };
+    const prisma = {
+      user: {
+        // Разные выборки одного тика: сначала просроченные self-delete
+        // (по `pendingDeletionAt`), потом кандидаты на анонимизацию (по
+        // `deletedAt`) — различаем по форме `where`, как это делают сами
+        // функции.
+        findMany: jest.fn((args: { where: Record<string, unknown> }) =>
+          Promise.resolve(
+            'pendingDeletionAt' in args.where ? [expiredSelfDelete] : [],
+          ),
+        ),
+        update: jest.fn((args: unknown) => ({ op: 'user.update', args })),
+      },
+      userPhoto: {
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn((args: unknown) => ({
+          op: 'userPhoto.deleteMany',
+          args,
+        })),
+      },
+      astroBirthData: {
+        deleteMany: jest.fn((args: unknown) => ({
+          op: 'astro.deleteMany',
+          args,
+        })),
+      },
+      refreshToken: {
+        updateMany: jest.fn((args: unknown) => ({
+          op: 'refresh.updateMany',
+          args,
+        })),
+      },
+      $transaction: jest.fn().mockResolvedValue([]),
+    };
+    const gallery = { removeStorageObjects: jest.fn() };
+    const service = new AccountAnonymizeService(
+      prisma as never,
+      gallery as never,
+      new PersonalDataService(prisma as never, { isEnabled: false } as never),
+    );
+
+    await expect(service.tick(now)).resolves.toEqual({
+      anonymized: 0,
+      storageObjects: 0,
+    });
+
+    expect(prisma.$transaction).toHaveBeenCalledWith([
+      {
+        op: 'refresh.updateMany',
+        args: {
+          where: { userId: 'sd1', revoked: false },
+          data: { revoked: true },
+        },
+      },
+      {
+        op: 'user.update',
+        args: {
+          where: { id: 'sd1' },
+          data: {
+            accountStatus: 'deleted',
+            deletedAt: now,
+            statusActor: 'system',
+            statusChangedAt: now,
+          },
+        },
+      },
+    ]);
   });
 
   it('ошибка выборки не роняет тик', async () => {

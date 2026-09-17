@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { InlineError } from '@/components/inline-error';
 import { RetryButton } from '@/components/retry-button';
 import {
@@ -27,6 +28,8 @@ import type { IdentitiesResponse } from '@/lib/auth/identities-api';
 import { createIdentitiesApi } from '@/lib/auth/identities-api';
 import { describeIdentitiesError } from '@/lib/auth/identities-error';
 import { useSession } from '@/lib/auth/session';
+import { createAccountDeletionApi } from '@/lib/account/deletion-api';
+import { formatDeletionDate, isDeletionScheduled, type DeletionStatus } from '@/lib/account/deletion';
 import { createTelegramNotificationsApi } from '@/lib/notifications/telegram-notifications-api';
 import { describeTelegramNotificationsSection } from '@/lib/notifications/telegram-notifications-state';
 import { loadTelegramWebApp, telegramLaunch } from '@/lib/telegram/web-app';
@@ -53,6 +56,7 @@ export default function AccountScreen() {
   const { user, api, apiOrigin, signOut } = useSession();
   const identitiesApi = useMemo(() => createIdentitiesApi(api), [api]);
   const telegramNotificationsApi = useMemo(() => createTelegramNotificationsApi(api), [api]);
+  const deletionApi = useMemo(() => createAccountDeletionApi(api), [api]);
 
   const [data, setData] = useState<IdentitiesResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -68,6 +72,17 @@ export default function AccountScreen() {
   const [telegramError, setTelegramError] = useState<string | null>(null);
   const [telegramBusy, setTelegramBusy] = useState(false);
   const telegramRequest = useRef(0);
+
+  // Раздел «Удаление аккаунта» (внизу экрана): состояние загружается
+  // независимо от способов входа, тем же приёмом, что и статус Telegram —
+  // `null` значит «ещё не знаем», отдельная ошибка не блокирует остальной
+  // экран.
+  const [deletionStatus, setDeletionStatus] = useState<DeletionStatus | null>(null);
+  const [deletionLoadError, setDeletionLoadError] = useState<string | null>(null);
+  const [deletionActionError, setDeletionActionError] = useState<string | null>(null);
+  const [deletionBusy, setDeletionBusy] = useState(false);
+  const [deletionConfirmVisible, setDeletionConfirmVisible] = useState(false);
+  const deletionRequest = useRef(0);
 
   const load = useCallback(async () => {
     const id = (request.current += 1);
@@ -103,6 +118,48 @@ export default function AccountScreen() {
   useEffect(() => {
     void loadTelegramStatus();
   }, [loadTelegramStatus]);
+
+  const loadDeletionStatus = useCallback(async () => {
+    const id = (deletionRequest.current += 1);
+    try {
+      const response = await deletionApi.status();
+      if (deletionRequest.current === id) {
+        setDeletionStatus(response);
+        setDeletionLoadError(null);
+      }
+    } catch (e) {
+      if (deletionRequest.current === id) setDeletionLoadError(describeIdentitiesError(e));
+    }
+  }, [deletionApi]);
+
+  useEffect(() => {
+    void loadDeletionStatus();
+  }, [loadDeletionStatus]);
+
+  const requestAccountDeletion = useCallback(async () => {
+    setDeletionBusy(true);
+    setDeletionActionError(null);
+    try {
+      setDeletionStatus(await deletionApi.request());
+      setDeletionConfirmVisible(false);
+    } catch (e) {
+      setDeletionActionError(describeIdentitiesError(e));
+    } finally {
+      setDeletionBusy(false);
+    }
+  }, [deletionApi]);
+
+  const cancelAccountDeletion = useCallback(async () => {
+    setDeletionBusy(true);
+    setDeletionActionError(null);
+    try {
+      setDeletionStatus(await deletionApi.cancel());
+    } catch (e) {
+      setDeletionActionError(describeIdentitiesError(e));
+    } finally {
+      setDeletionBusy(false);
+    }
+  }, [deletionApi]);
 
   // Возврат с колбэка привязки (`?linked=google` / `?linkError=conflict`):
   // только веб, только один раз — адрес чистится сразу, иначе обновление
@@ -345,6 +402,26 @@ export default function AccountScreen() {
           <Text style={[styles.logoutText, { color: colors.text0 }]}>Выйти</Text>
         </Pressable>
 
+        <DeletionSection
+          status={deletionStatus}
+          loadError={deletionLoadError}
+          actionError={deletionActionError}
+          busy={deletionBusy}
+          onRequest={() => setDeletionConfirmVisible(true)}
+          onCancel={() => void cancelAccountDeletion()}
+        />
+
+        <ConfirmDialog
+          visible={deletionConfirmVisible}
+          title="Удалить аккаунт?"
+          message="Профиль скроется от других участников. Удаление станет окончательным через 14 дней — до этого момента его можно отменить здесь же."
+          confirmLabel="Удалить"
+          destructive
+          busy={deletionBusy}
+          onConfirm={() => void requestAccountDeletion()}
+          onCancel={() => setDeletionConfirmVisible(false)}
+        />
+
         {/* Видно, свежая ли открылась сборка: в мини-приложении Telegram и в
             установленном на экран «Домой» PWA страница может прийти из кэша. */}
         {stamp ? (
@@ -525,6 +602,86 @@ function TelegramNotificationsSection({
   );
 }
 
+interface DeletionSectionProps {
+  status: DeletionStatus | null;
+  loadError: string | null;
+  actionError: string | null;
+  busy: boolean;
+  onRequest(): void;
+  onCancel(): void;
+}
+
+/**
+ * «Удаление аккаунта» — самый низ экрана, отдельно от остальных настроек.
+ * Зеркалит веб (`delete-account-section.tsx`): без запроса — объяснение и
+ * кнопка, открывающая `ConfirmDialog` (не `Alert.alert` — тот на вебе и в
+ * Telegram Mini App не срабатывает, см. комментарий в `confirm-dialog.tsx`);
+ * с запросом — дата, до которой ещё можно отменить.
+ */
+function DeletionSection({ status, loadError, actionError, busy, onRequest, onCancel }: DeletionSectionProps) {
+  const { colors } = useTheme();
+  const scheduled = status ? isDeletionScheduled(status) : false;
+
+  return (
+    <View style={[styles.dangerZone, { borderColor: colors.magenta }]}>
+      <Text style={[styles.sectionTitle, { color: colors.magenta }]}>Удаление аккаунта</Text>
+
+      {loadError ? (
+        <InlineError message={loadError} />
+      ) : !status ? (
+        <ActivityIndicator color={colors.text1} />
+      ) : scheduled ? (
+        <>
+          <Text style={[styles.dangerText, { color: colors.text0 }]}>
+            Аккаунт будет удалён
+            {status.deletionEligibleAt ? ` ${formatDeletionDate(status.deletionEligibleAt)}` : ''}.
+          </Text>
+          <Text style={[styles.rowNote, { color: colors.text2 }]}>
+            До этой даты можно отменить удаление — профиль и все данные останутся как есть.
+          </Text>
+          {actionError ? <InlineError message={actionError} /> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ busy, disabled: busy }}
+            disabled={busy}
+            onPress={onCancel}
+            android_ripple={ripple(colors.glassBorder)}
+            style={({ pressed }) => [styles.dangerButton, { borderColor: colors.glassBorder }, pressedStyle(pressed)]}
+          >
+            {busy ? (
+              <ActivityIndicator color={colors.text0} />
+            ) : (
+              <Text style={[styles.rowButtonText, { color: colors.text0 }]}>Отменить удаление</Text>
+            )}
+          </Pressable>
+        </>
+      ) : (
+        <>
+          <Text style={[styles.dangerText, { color: colors.text1 }]}>
+            Профиль скроется от других участников. Через 14 дней после запроса аккаунт удаляется
+            окончательно — до этого момента удаление можно отменить.
+          </Text>
+          {actionError ? <InlineError message={actionError} /> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ busy, disabled: busy }}
+            disabled={busy}
+            onPress={onRequest}
+            android_ripple={ripple(colors.magenta)}
+            style={({ pressed }) => [styles.dangerButton, { borderColor: colors.magenta }, pressedStyle(pressed)]}
+          >
+            {busy ? (
+              <ActivityIndicator color={colors.magenta} />
+            ) : (
+              <Text style={[styles.rowButtonText, { color: colors.magenta }]}>Удалить аккаунт</Text>
+            )}
+          </Pressable>
+        </>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
   body: { paddingHorizontal: 20, paddingTop: 16, gap: 12 },
@@ -581,4 +738,21 @@ const styles = StyleSheet.create({
   },
   stamp: { fontFamily: fonts.body, fontSize: 12, textAlign: 'center', marginTop: 12 },
   logoutText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
+  dangerZone: {
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: 14,
+    gap: 8,
+    marginTop: 16,
+  },
+  dangerText: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
+  dangerButton: {
+    minHeight: hitTarget,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
 });
