@@ -54,6 +54,62 @@ export const MUSIC_ACCEPTED_MIME = ['audio/mpeg', 'audio/mp4'] as const;
 
 export type MusicAcceptedMime = (typeof MUSIC_ACCEPTED_MIME)[number];
 
+/**
+ * Расширения для `accept` у поля выбора файла. Одних MIME мало: файловый
+ * выбор Android не знает `audio/mp4` за m4a и гасит такие файлы серым.
+ */
+export const MUSIC_ACCEPTED_EXTENSIONS = ['.mp3', '.m4a'] as const;
+
+/**
+ * Одни и те же форматы браузеры называют по-разному: Chrome на Android
+ * отдаёт m4a как `audio/x-m4a`, старые Safari — mp3 как `audio/mp3` (VED-195).
+ */
+const MUSIC_MIME_ALIASES: Record<string, MusicAcceptedMime> = {
+  'audio/mpeg': 'audio/mpeg',
+  'audio/mp3': 'audio/mpeg',
+  'audio/x-mp3': 'audio/mpeg',
+  'audio/mpeg3': 'audio/mpeg',
+  'audio/x-mpeg': 'audio/mpeg',
+  'audio/x-mpeg-3': 'audio/mpeg',
+  'audio/mpg': 'audio/mpeg',
+  'audio/mp4': 'audio/mp4',
+  'audio/x-m4a': 'audio/mp4',
+  'audio/m4a': 'audio/mp4',
+  'audio/mp4a-latm': 'audio/mp4',
+  'audio/x-mp4': 'audio/mp4',
+};
+
+const MUSIC_MIME_BY_EXTENSION: Record<string, MusicAcceptedMime> = {
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+};
+
+/**
+ * Приводит заявленный браузером тип к одному из `MUSIC_ACCEPTED_MIME`.
+ *
+ * Синоним сводится к каноническому типу. Пустой тип и
+ * `application/octet-stream` — браузер формат не узнал — решаются по
+ * расширению имени файла. Всё прочее возвращается как есть (без параметров,
+ * в нижнем регистре), чтобы проверка отказала по настоящему типу.
+ */
+export function normalizeMusicMime(
+  mime: string | null | undefined,
+  fileName?: string | null,
+): string {
+  const bare = mime?.split(';')[0]?.trim().toLowerCase() ?? '';
+  const alias = MUSIC_MIME_ALIASES[bare];
+  if (alias) return alias;
+  if ((bare === '' || bare === 'application/octet-stream') && fileName) {
+    const dot = fileName.lastIndexOf('.');
+    if (dot > 0) {
+      const byExtension =
+        MUSIC_MIME_BY_EXTENSION[fileName.slice(dot + 1).trim().toLowerCase()];
+      if (byExtension) return byExtension;
+    }
+  }
+  return bare;
+}
+
 /** Сколько живёт подписанная ссылка на аудио. Файлы в бакете не публичные. */
 export const MUSIC_STREAM_URL_TTL_SECONDS = 6 * 60 * 60;
 

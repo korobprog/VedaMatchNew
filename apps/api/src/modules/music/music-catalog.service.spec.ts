@@ -159,3 +159,16 @@ describe('MusicCatalogService — линия слушателя', () => {
     });
   });
 });
+
+describe('MusicCatalogService — исполнители витрины', () => {
+  it('отдаёт всех, а не первые восемь (VED-224)', async () => {
+    const { service: catalog, prisma } = service();
+
+    await catalog.showcase(null);
+
+    const args = prisma.musicArtist.findMany.mock.calls[0][0] as {
+      take?: number;
+    };
+    expect(args.take ?? Infinity).toBeGreaterThan(8);
+  });
+});

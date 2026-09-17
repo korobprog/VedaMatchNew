@@ -3,7 +3,10 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MusicUploadRightsBasis } from "@vedamatch/shared";
-import { MUSIC_ACCEPTED_MIME } from "@vedamatch/shared";
+import {
+  MUSIC_ACCEPTED_EXTENSIONS,
+  MUSIC_ACCEPTED_MIME,
+} from "@vedamatch/shared";
 import { uploadMusicTrack } from "@/lib/music-client-api";
 import {
   LineageSelect,
@@ -198,7 +201,7 @@ export function MusicUploadForm({
             ref={inputRef}
             type="file"
             multiple
-            accept={MUSIC_ACCEPTED_MIME.join(",")}
+            accept={[...MUSIC_ACCEPTED_MIME, ...MUSIC_ACCEPTED_EXTENSIONS].join(",")}
             disabled={busy}
             onChange={(event) =>
               setFiles(Array.from(event.target.files ?? []))

@@ -290,3 +290,55 @@ describe('validateMusicIngestRequest', () => {
     ).toBeNull();
   });
 });
+
+describe('validateMusicUploadRequest: как браузеры называют форматы (VED-195)', () => {
+  it.each(['audio/x-m4a', 'audio/m4a', 'audio/mp4a-latm', 'audio/mp3', 'AUDIO/X-M4A; codecs=mp4a'])(
+    '%s принимается',
+    (mime) => {
+      expect(validateMusicUploadRequest(request({ mime }), limits)).toBeNull();
+    },
+  );
+
+  it('тип не узнан — решает расширение имени', () => {
+    expect(
+      validateMusicUploadRequest(
+        request({ mime: '', fileName: 'Golden Avatar.m4a' }),
+        limits,
+      ),
+    ).toBeNull();
+    expect(
+      validateMusicUploadRequest(
+        request({ mime: 'application/octet-stream', fileName: 'Intro.MP3' }),
+        limits,
+      ),
+    ).toBeNull();
+  });
+
+  it('расширение не спасает заявленный чужой тип', () => {
+    expect(
+      validateMusicUploadRequest(
+        request({ mime: 'audio/flac', fileName: 'trick.mp3' }),
+        limits,
+      ),
+    ).toBe('mime_not_accepted');
+  });
+
+  it('без типа и без понятного расширения — отказ', () => {
+    expect(
+      validateMusicUploadRequest(request({ mime: '', fileName: 'kirtan' }), limits),
+    ).toBe('mime_not_accepted');
+    expect(
+      validateMusicUploadRequest(request({ mime: '', fileName: 'a.wav' }), limits),
+    ).toBe('mime_not_accepted');
+  });
+
+  it('редакционная партия понимает те же синонимы', () => {
+    expect(
+      validateMusicIngestRequest({
+        mime: 'audio/x-m4a',
+        sizeBytes: 10,
+        batchUsedBytes: 0,
+      }),
+    ).toBeNull();
+  });
+});

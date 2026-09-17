@@ -130,6 +130,15 @@ function quoteOf(post: MotivationPostDto): string {
   return splitQuoteAndExplanation(post.text).quote;
 }
 
+/**
+ * Текст для «Поделиться». У открытки текст на самой картинке, и поле `text`
+ * часто пустое — а экран `/share` без текста уводит на главную (VED-205).
+ * Заголовок у поста заполнен всегда, им и подменяем.
+ */
+function shareQuoteOf(post: MotivationPostDto): string {
+  return quoteOf(post) || post.title;
+}
+
 export function ReelsFeed({
   initial,
   tab,
@@ -478,8 +487,8 @@ export function ReelsFeed({
           pathname: "/share",
           query: {
             kind: "story",
-            title: quoteOf(activePost).slice(0, 200),
-            text: quoteOf(activePost),
+            title: shareQuoteOf(activePost).slice(0, 200),
+            text: shareQuoteOf(activePost),
             subtitle: attributionLine(activePost),
             link: `/m/${encodeURIComponent(activePost.slug)}`,
             file: `/m/${encodeURIComponent(activePost.slug)}/story`,
