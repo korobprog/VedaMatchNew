@@ -94,6 +94,12 @@ export interface MotivationPostDto {
   title: string;
   text: string;
   storyText: string;
+  /**
+   * Текст поверх картинки в ленте, если редакция поправила его отдельно от
+   * полного (VED-241). Пусто — на картинке цитата из `text`. Окно «Читать
+   * полностью» всегда показывает `text`.
+   */
+  imageText: string;
   attributionKind: MotivationAttributionKind;
   attributionSpeaker: string | null;
   attributionWork: string | null;
@@ -769,7 +775,24 @@ export interface MotivationAdminUpdate {
   hidden?: boolean;
   category?: string;
   translations?: Partial<
-    Record<MotivationLanguage, { title: string; text: string; storyText: string }>
+    Record<
+      MotivationLanguage,
+      {
+        /**
+         * Заголовка в формах больше нет (VED-199). Не прислали — сервер
+         * оставит прежний, а у нового перевода соберёт его из цитаты.
+         */
+        title?: string;
+        text: string;
+        /** Не прислали — подпись для Stories и ролика не меняется. */
+        storyText?: string;
+        /**
+         * Текст на картинке (VED-241). Пустая строка — картинка снова берёт
+         * цитату из `text`; не прислали — не меняется.
+         */
+        imageText?: string;
+      }
+    >
   >;
   /**
    * Подпись: кто сказал, где и в каком месте. Правка снимает отметку о
@@ -846,11 +869,12 @@ export interface MotivationManualQuoteResult {
 }
 
 /**
- * Текст мотивации на одном языке, написанный админом. Обязателен только
- * заголовок: без пояснения карточка показывает одну цитату.
+ * Текст мотивации на одном языке, написанный админом. Все поля
+ * необязательны: без пояснения карточка показывает одну цитату.
  */
 export interface MotivationManualCopy {
-  title: string;
+  /** Необязателен (VED-199): пустой сервер соберёт из первых слов цитаты. */
+  title?: string;
   explanation?: string;
   storyText?: string;
 }

@@ -98,6 +98,7 @@ import { MotivationCopyService } from './motivation-copy.service';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { MotivationSourceFetchService } from './motivation-source-fetch.service';
 import { QuoteDiscoveryService } from './quote-discovery.service';
+import { pictureTitle } from './picture-post';
 import { assertSafeFetchUrl } from './quote-source-policy';
 import { quoteFingerprint } from './quote-normalizer';
 import { libraryLinkFromAttribution } from './vedabase-link';
@@ -1066,7 +1067,7 @@ export class MotivationService {
          чужих словах не делает их твоими. */
       const before = await this.prisma.motivationPostTranslation.findUnique({
         where: { postId_language: { postId: id, language } },
-        select: { text: true },
+        select: { text: true, title: true },
       });
       if (explanationChanged(before?.text ?? '', translation.text)) {
         await this.prisma.motivationPost.update({
@@ -1078,19 +1079,42 @@ export class MotivationService {
           },
         });
       }
+      /* Заголовок и подпись для Stories форма больше не шлёт (VED-199):
+         не прислали — остаются прежними. Новому переводу их собираем из
+         цитаты — у поля в базе нет пустого значения. Заголовок, который и
+         был собран из цитаты, идёт вслед за ней: иначе после правки текста
+         админка и скринридер называли бы карточку старыми словами. */
+      const quote = quoteOf(translation.text);
+      const titleFollowsQuote =
+        !!before?.title &&
+        before.title === pictureTitle(quoteOf(before.text), post.category);
+      const title = translation.title?.trim()
+        ? { title: translation.title.trim() }
+        : titleFollowsQuote && quote
+          ? { title: pictureTitle(quote, post.category) }
+          : {};
+      const imageText =
+        translation.imageText === undefined
+          ? {}
+          : { imageText: translation.imageText.trim() || null };
       await this.prisma.motivationPostTranslation.upsert({
         where: { postId_language: { postId: id, language } },
         create: {
           postId: id,
           language,
-          title: translation.title,
+          title:
+            translation.title?.trim() || pictureTitle(quote, post.category),
           text: translation.text,
-          storyText: translation.storyText,
+          storyText: translation.storyText ?? quote,
+          ...imageText,
         },
         update: {
-          title: translation.title,
+          ...title,
           text: translation.text,
-          storyText: translation.storyText,
+          ...(translation.storyText !== undefined
+            ? { storyText: translation.storyText }
+            : {}),
+          ...imageText,
         },
       });
     }
@@ -1557,6 +1581,7 @@ export class MotivationService {
       title: t?.title ?? '',
       text: post.explanationHiddenAt ? quoteOf(t?.text ?? '') : (t?.text ?? ''),
       storyText: t?.storyText ?? '',
+      imageText: t?.imageText ?? '',
       attributionKind: post.attributionKind,
       attributionSpeaker: post.attributionSpeaker,
       attributionWork: post.attributionWork,

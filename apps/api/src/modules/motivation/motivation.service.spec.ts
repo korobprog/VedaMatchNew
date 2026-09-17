@@ -1541,6 +1541,82 @@ describe('MotivationService.adminUpdate', () => {
     );
   });
 
+  // VED-199: заголовка и подписи в форме нет — прежние не затираются.
+  it('без заголовка и подписи для Stories оставляет прежние', async () => {
+    const { service, upsert } = build();
+
+    await service.adminUpdate(admin, 'post-1', {
+      translations: { ru: { text: 'Цитата' } },
+    });
+
+    expect(upsert.mock.calls[0][0].update).toEqual({ text: 'Цитата' });
+    // Новому переводу пустых полей не бывает — собираем их из цитаты.
+    expect(upsert.mock.calls[0][0].create).toMatchObject({
+      title: 'Цитата',
+      storyText: 'Цитата',
+    });
+  });
+
+  it('заголовок, собранный из цитаты, идёт вслед за ней', async () => {
+    const { service, upsert, findUnique } = build();
+    findUnique.mockResolvedValue({
+      text: 'Старая цитата\n\nПояснение',
+      title: 'Старая цитата',
+    });
+
+    await service.adminUpdate(admin, 'post-1', {
+      translations: { ru: { text: 'Новая цитата\n\nПояснение' } },
+    });
+
+    expect(upsert.mock.calls[0][0].update).toMatchObject({
+      title: 'Новая цитата',
+    });
+  });
+
+  it('заголовок, написанный руками, правка цитаты не трогает', async () => {
+    const { service, upsert, findUnique } = build();
+    findUnique.mockResolvedValue({
+      text: 'Старая цитата',
+      title: 'Душа вечна',
+    });
+
+    await service.adminUpdate(admin, 'post-1', {
+      translations: { ru: { text: 'Новая цитата' } },
+    });
+
+    expect(upsert.mock.calls[0][0].update).not.toHaveProperty('title');
+  });
+
+  // VED-241: текст на картинке правится отдельно от полного.
+  it('пишет текст на картинке, а пустой — сбрасывает к цитате', async () => {
+    const { service, upsert } = build();
+
+    await service.adminUpdate(admin, 'post-1', {
+      translations: {
+        ru: { text: 'Длинная цитата\n\nПояснение', imageText: ' Короче ' },
+      },
+    });
+    await service.adminUpdate(admin, 'post-1', {
+      translations: { ru: { text: 'Длинная цитата', imageText: '  ' } },
+    });
+
+    expect(upsert.mock.calls[0][0].update).toMatchObject({
+      imageText: 'Короче',
+    });
+    expect(upsert.mock.calls[1][0].update).toMatchObject({ imageText: null });
+  });
+
+  it('не присланный текст на картинке не трогает', async () => {
+    const { service, upsert } = build();
+
+    await service.adminUpdate(admin, 'post-1', {
+      translations: { ru: { text: 'Цитата' } },
+    });
+
+    expect(upsert.mock.calls[0][0].update).not.toHaveProperty('imageText');
+    expect(upsert.mock.calls[0][0].create).not.toHaveProperty('imageText');
+  });
+
   it('правка подписи снимает отметку о проверке источника', async () => {
     const { service, update } = build();
 

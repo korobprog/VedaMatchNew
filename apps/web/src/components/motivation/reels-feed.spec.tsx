@@ -28,6 +28,7 @@ const post = (id: string, overrides: Partial<MotivationPostDto> = {}): Motivatio
   title: `Пост ${id}`,
   text: `Цитата ${id}\n\nПояснение ${id}`,
   storyText: "",
+  imageText: "",
   attributionKind: "exact_quote",
   attributionSpeaker: "Кришна",
   attributionWork: "Бхагавад-гита",
@@ -796,6 +797,35 @@ describe("ReelsFeed", () => {
     await userEvent.click(toggle);
 
     expect(screen.getByText("Цитата целиком")).toBeInTheDocument();
+  });
+
+  // VED-241: надпись на картинке и полный текст правятся порознь.
+  it("кладёт на картинку поправленную надпись, а в «Читать полностью» — полный текст", async () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{
+          items: [
+            post("a", {
+              text: "Полный текст шлоки целиком\n\nПояснение",
+              imageText: "Короткая надпись",
+            }),
+          ],
+          nextCursor: null,
+        }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    expect(screen.getByText("Короткая надпись")).toBeInTheDocument();
+    expect(screen.queryByText("Полный текст шлоки целиком")).not.toBeInTheDocument();
+
+    // Надпись короткая, но отличается от полного текста — кнопка нужна.
+    await userEvent.click(
+      screen.getByRole("button", { name: "Читать полностью ›" }),
+    );
+    expect(screen.getByText("Полный текст шлоки целиком")).toBeInTheDocument();
   });
 
   it("не показывает «Читать полностью» у короткой цитаты", () => {

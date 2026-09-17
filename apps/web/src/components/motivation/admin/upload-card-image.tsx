@@ -2,9 +2,9 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ImageUp } from "lucide-react";
+import { ImageUp, Loader2 } from "lucide-react";
 import { apiFetch } from "@/lib/http-client";
-import { secondaryButton } from "./ui";
+import { iconButton, secondaryButton } from "./ui";
 import { apiBase } from "@/lib/api-base";
 
 const API_URL = apiBase();
@@ -24,18 +24,35 @@ const API_URL = apiBase();
 export function UploadCardImage({
   postId,
   label = "Своя картинка",
+  iconOnly = false,
+  onError,
 }: {
   postId: string;
   label?: string;
+  /**
+   * Квадрат со значком без подписи — для карточки опубликованного (VED-199).
+   * Подпись уходит в `aria-label` и всплывающую подсказку.
+   */
+  iconOnly?: boolean;
+  /**
+   * Ошибку показывает родитель. Квадратная кнопка стоит в сетке значков, и
+   * текст под ней сжался бы до ширины клетки.
+   */
+  onError?: (message: string | null) => void;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  function report(message: string | null) {
+    setError(message);
+    onError?.(message);
+  }
+
   async function upload(file: File) {
     setPending(true);
-    setError(null);
+    report(null);
     try {
       const body = new FormData();
       body.append("file", file);
@@ -46,12 +63,12 @@ export function UploadCardImage({
       if (!response.ok) {
         // Сервер отвечает человеческим текстом («Файл больше 12 МБ»,
         // «Картинка слишком мелкая») — показываем его, а не «ошибка 400».
-        setError((await response.text()) || "Не удалось загрузить картинку");
+        report((await response.text()) || "Не удалось загрузить картинку");
         return;
       }
       router.refresh();
     } catch {
-      setError("Не удалось загрузить картинку");
+      report("Не удалось загрузить картинку");
     } finally {
       setPending(false);
       // Сброс, иначе тот же файл второй раз не выберется: `change` не
@@ -62,15 +79,33 @@ export function UploadCardImage({
 
   return (
     <>
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() => inputRef.current?.click()}
-        className={secondaryButton}
-      >
-        <ImageUp className="h-4 w-4" />
-        {pending ? "Загружаем…" : label}
-      </button>
+      {iconOnly ? (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => inputRef.current?.click()}
+          aria-label={pending ? "Загружаем картинку…" : label}
+          title={pending ? "Загружаем картинку…" : label}
+          aria-busy={pending}
+          className={iconButton}
+        >
+          {pending ? (
+            <Loader2 aria-hidden className="size-5 motion-safe:animate-spin" />
+          ) : (
+            <ImageUp aria-hidden className="size-5" />
+          )}
+        </button>
+      ) : (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => inputRef.current?.click()}
+          className={secondaryButton}
+        >
+          <ImageUp className="h-4 w-4" />
+          {pending ? "Загружаем…" : label}
+        </button>
+      )}
       <input
         ref={inputRef}
         type="file"
@@ -81,7 +116,7 @@ export function UploadCardImage({
           if (file) void upload(file);
         }}
       />
-      {error && (
+      {error && !onError && (
         <p role="alert" className="mt-2 w-full text-sm font-medium text-red-500">
           {error}
         </p>

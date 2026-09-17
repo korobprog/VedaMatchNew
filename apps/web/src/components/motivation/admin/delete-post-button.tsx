@@ -41,6 +41,37 @@ export function DeletePostButton({
     );
 
   return (
+    <DeletePostConfirm
+      postId={postId}
+      isPublished={isPublished}
+      pendingAction={pendingAction}
+      run={run}
+      onCancel={() => setArmed(false)}
+    />
+  );
+}
+
+/**
+ * Второе нажатие — само подтверждение. Отдельно от кнопки для карточки
+ * опубликованного (VED-199): там кнопка — квадрат в ряду значков, и
+ * вопрос с двумя кнопками в её клетку не помещается — он встаёт под
+ * карточкой во всю ширину.
+ */
+export function DeletePostConfirm({
+  postId,
+  isPublished,
+  pendingAction,
+  run,
+  onCancel,
+}: {
+  postId: string;
+  isPublished: boolean;
+  pendingAction: string | undefined;
+  run: RunCommand;
+  onCancel: () => void;
+}) {
+  const disabled = pendingAction !== undefined;
+  return (
     <div className="w-full rounded-xl border border-red-400/40 bg-red-500/10 p-3">
       <p className="text-sm text-text-0">
         Удалить вдохновение вместе с цитатой?
@@ -65,7 +96,7 @@ export function DeletePostButton({
         <button
           type="button"
           disabled={disabled}
-          onClick={() => setArmed(false)}
+          onClick={onCancel}
           className={secondaryButton}
         >
           Отмена

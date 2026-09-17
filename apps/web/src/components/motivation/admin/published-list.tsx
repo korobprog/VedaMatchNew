@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, EyeOff, Pencil, X } from "lucide-react";
+import {
+  ArrowLeft,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  Pencil,
+  Trash2,
+  X,
+} from "lucide-react";
 import type {
   MotivationAdminCandidateDto,
   MotivationCategoryDto,
@@ -12,7 +20,7 @@ import {
   splitQuoteAndExplanation,
 } from "../quote-text";
 import { CategorySelect } from "./category-select";
-import { DeletePostButton } from "./delete-post-button";
+import { DeletePostConfirm } from "./delete-post-button";
 import { UploadCardImage } from "./upload-card-image";
 import { LoadFailure } from "./load-failure";
 import { useAdminCommand } from "./use-admin-command";
@@ -20,6 +28,8 @@ import {
   badgeClass,
   cardClass,
   fieldClass,
+  iconButton,
+  iconDangerButton,
   labelClass,
   secondaryButton,
 } from "./ui";
@@ -32,7 +42,13 @@ import {
  * вышедшую карточку можно было только развернув «Уже прошли очередь».
  *
  * Список, а не сетка карточек: сюда приходят с готовым вопросом — поправить
- * опечатку, снять с показа, удалить, — и разглядывать иллюстрации незачем.
+ * опечатку, снять с показа, удалить.
+ *
+ * Карточка ужата вдвое (VED-199): картинка крупнее — по ней узнают афоризм
+ * быстрее, чем по тексту, — из текста остался один афоризм (автор и источник
+ * только занимали место), а пять кнопок во всю ширину стали квадратами со
+ * значками в два ряда рядом с картинкой. Подпись у каждого значка — в
+ * `aria-label` и всплывающей подсказке.
  * Поиск по названию и цитате: за полгода публикаций пролистать до нужной
  * дороже, чем набрать три слова.
  */
@@ -57,6 +73,12 @@ export function MotivationPublishedList({
     [posts, openSlug],
   );
   const [editing, setEditing] = useState<string | null>(openId);
+  /** Карточка, у которой спросили «удалить?»: вопрос встаёт под ней. */
+  const [deleting, setDeleting] = useState<string | null>(null);
+  /** Ошибки загрузки картинки — под карточкой, а не в клетке значка. */
+  const [uploadErrors, setUploadErrors] = useState<
+    Record<string, string | null>
+  >({});
 
   /**
    * Пришли из ленты — подводим к той самой карточке.
@@ -114,7 +136,7 @@ export function MotivationPublishedList({
       )}
 
       <label className="block max-w-md">
-        <span className={labelClass}>Найти по названию, цитате или автору</span>
+        <span className={labelClass}>Найти по цитате или автору</span>
         <input
           type="search"
           value={query}
@@ -146,7 +168,9 @@ export function MotivationPublishedList({
           Ничего не нашлось. Попробуйте другое слово.
         </p>
       ) : (
-        <ul className="mt-4 space-y-3">
+        // На широком экране — две колонки: карточка стала узкой и высокой, и
+        // в одну колонку справа от кнопок оставалась пустая полоса.
+        <ul className="mt-4 grid items-start gap-3 lg:grid-cols-2">
           {found.map((post) => (
             <li
               key={post.id}
@@ -157,7 +181,9 @@ export function MotivationPublishedList({
                 post.id === openId ? "ring-2 ring-magenta" : ""
               }`}
             >
-              <div className="flex flex-wrap items-start gap-3">
+              <div className="flex items-start gap-3 sm:gap-4">
+                {/* Картинка крупнее прежней миниатюры (VED-199): 2:3, как её
+                    рисуют, — редактор узнаёт карточку по ней, а не по тексту. */}
                 {post.imageUrl ? (
                   // Ссылка на хранилище подписана и может истечь — next/image
                   // не годится для произвольно меняющегося домена подписи.
@@ -165,108 +191,68 @@ export function MotivationPublishedList({
                   <img
                     src={post.imageUrl}
                     alt=""
-                    className="h-16 w-16 shrink-0 rounded-xl object-cover"
+                    className="aspect-[2/3] w-28 shrink-0 rounded-xl object-cover sm:w-36"
                   />
                 ) : (
-                  <div className="h-16 w-16 shrink-0 rounded-xl bg-bg-1" />
+                  <div className="aspect-[2/3] w-28 shrink-0 rounded-xl bg-bg-1 sm:w-36" />
                 )}
 
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-text-0">
-                    {post.title || post.slug}
-                  </p>
-                  <p className="mt-0.5 line-clamp-2 text-sm text-text-1">
-                    {post.text}
-                  </p>
-                  <p className="mt-1 text-xs text-text-2">
-                    {post.contentDate} · {post.categoryTitle || post.category}
-                    {post.attributionSpeaker
-                      ? ` · ${post.attributionSpeaker}`
-                      : ""}
+                  {/* Только сам афоризм: заголовок убран вовсе, автор,
+                      дата и категория только занимали место. У открытки
+                      текст бывает пустым — тогда хоть заголовок, собранный
+                      сервером. */}
+                  <p className="line-clamp-4 text-sm text-text-0">
+                    {aphorismOf(post)}
                   </p>
                   {post.status === "hidden" && (
                     <span className={`${badgeClass} mt-1`}>Скрыто из ленты</span>
                   )}
+
+                  <PostActions
+                    post={post}
+                    returning={post.id === openId}
+                    editing={editing === post.id}
+                    deleting={deleting === post.id}
+                    pendingAction={pending[post.id]}
+                    onEdit={() =>
+                      setEditing((current) =>
+                        current === post.id ? null : post.id,
+                      )
+                    }
+                    onDelete={() =>
+                      setDeleting((current) =>
+                        current === post.id ? null : post.id,
+                      )
+                    }
+                    onUploadError={(message) =>
+                      setUploadErrors((current) => ({
+                        ...current,
+                        [post.id]: message,
+                      }))
+                    }
+                    run={run}
+                  />
                 </div>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                {/* Открывает ленту прямо на этой карточке — тем же адресом,
-                    что и переход из «Студии»: у админа один способ увидеть
-                    публикацию глазами читателя.
+              {deleting === post.id && (
+                <div className="mt-3">
+                  <DeletePostConfirm
+                    postId={post.id}
+                    isPublished={post.status === "published"}
+                    pendingAction={pending[post.id]}
+                    run={run}
+                    onCancel={() => setDeleting(null)}
+                  />
+                </div>
+              )}
 
-                    У карточки, ради которой пришли из ленты, та же ссылка
-                    подписана возвращением: адрес совпадает с дорогой назад, и
-                    называть её «открыть» значило прятать выход на виду. */}
-                <Link
-                  href={`/motivation?post=${encodeURIComponent(post.slug)}`}
-                  className={secondaryButton}
-                >
-                  {post.id === openId ? (
-                    <>
-                      <ArrowLeft aria-hidden className="size-4" />
-                      Вернуться в ленту
-                    </>
-                  ) : (
-                    "Открыть в ленте"
-                  )}
-                </Link>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setEditing((current) =>
-                      current === post.id ? null : post.id,
-                    )
-                  }
-                  aria-expanded={editing === post.id}
-                  className={secondaryButton}
-                >
-                  {editing === post.id ? (
-                    <>
-                      <X className="h-4 w-4" />
-                      Не править
-                    </>
-                  ) : (
-                    <>
-                      <Pencil className="h-4 w-4" />
-                      Править текст
-                    </>
-                  )}
-                </button>
-
-                {/* Скрыть, а не удалить: снятая с показа карточка уходит из
-                    ленты, но остаётся у тех, кто уже сохранил её в избранном
-                    как запись, — и решение можно отменить. */}
-                <button
-                  type="button"
-                  disabled={pending[post.id] !== undefined}
-                  onClick={() =>
-                    run(post.id, "hide", {
-                      path: `/admin/motivation/posts/${post.id}`,
-                      method: "PATCH",
-                      body: { hidden: post.status !== "hidden" },
-                    })
-                  }
-                  className={secondaryButton}
-                >
-                  <EyeOff className="h-4 w-4" />
-                  {post.status === "hidden" ? "Вернуть в ленту" : "Скрыть"}
-                </button>
-
-                {/* Открытку редакция рисует сама — генерация нарисует не то.
-                    Замена картинки со стадией карточки ничего не делает:
-                    опубликованная остаётся опубликованной. */}
-                <UploadCardImage postId={post.id} label="Заменить картинку" />
-
-                <DeletePostButton
-                  postId={post.id}
-                  title={post.title || post.slug}
-                  isPublished={post.status === "published"}
-                  pendingAction={pending[post.id]}
-                  run={run}
-                />
-              </div>
+              {uploadErrors[post.id] && (
+                <p role="alert" className="mt-2 text-sm font-medium text-red-500">
+                  {uploadErrors[post.id]}
+                </p>
+              )}
 
               {errors[post.id] && (
                 <p role="alert" className="mt-2 text-sm font-medium text-red-500">
@@ -291,8 +277,134 @@ export function MotivationPublishedList({
   );
 }
 
+/** Афоризм без пояснения; у открытки без набранного текста — заголовок. */
+function aphorismOf(post: MotivationAdminCandidateDto): string {
+  return splitQuoteAndExplanation(post.text).quote || post.title || post.slug;
+}
+
 /**
- * Правка названия и текста уже вышедшей карточки.
+ * Пять действий карточки — квадратами со значками, три и два в ряд
+ * (VED-199). Порядок прежний: посмотреть, править, скрыть, заменить
+ * картинку, удалить — опасное последним.
+ */
+function PostActions({
+  post,
+  returning,
+  editing,
+  deleting,
+  pendingAction,
+  onEdit,
+  onDelete,
+  onUploadError,
+  run,
+}: {
+  post: MotivationAdminCandidateDto;
+  /** Карточка, ради которой пришли из ленты: ссылка ведёт обратно. */
+  returning: boolean;
+  editing: boolean;
+  deleting: boolean;
+  pendingAction: string | undefined;
+  onEdit: () => void;
+  onDelete: () => void;
+  onUploadError: (message: string | null) => void;
+  run: ReturnType<typeof useAdminCommand>["run"];
+}) {
+  const hidden = post.status === "hidden";
+  /* Открывает ленту прямо на этой карточке — тем же адресом, что и переход
+     из «Студии». У карточки, ради которой пришли из ленты, та же ссылка
+     подписана возвращением: адрес совпадает с дорогой назад. */
+  const feedLabel = returning ? "Вернуться в ленту" : "Открыть в ленте";
+  const editLabel = editing ? "Не править" : "Править текст";
+  const hideLabel = hidden ? "Вернуть в ленту" : "Скрыть";
+  return (
+    <div className="mt-3 grid w-fit grid-cols-3 gap-2">
+      <Link
+        href={`/motivation?post=${encodeURIComponent(post.slug)}`}
+        aria-label={feedLabel}
+        title={feedLabel}
+        className={iconButton}
+      >
+        {returning ? (
+          <ArrowLeft aria-hidden className="size-5" />
+        ) : (
+          <ExternalLink aria-hidden className="size-5" />
+        )}
+      </Link>
+
+      <button
+        type="button"
+        onClick={onEdit}
+        aria-expanded={editing}
+        aria-label={editLabel}
+        title={editLabel}
+        className={iconButton}
+      >
+        {editing ? (
+          <X aria-hidden className="size-5" />
+        ) : (
+          <Pencil aria-hidden className="size-5" />
+        )}
+      </button>
+
+      {/* Скрыть, а не удалить: снятая с показа карточка уходит из ленты, но
+          остаётся у тех, кто уже сохранил её в избранном, — и решение можно
+          отменить. */}
+      <button
+        type="button"
+        disabled={pendingAction !== undefined}
+        onClick={() =>
+          run(post.id, "hide", {
+            path: `/admin/motivation/posts/${post.id}`,
+            method: "PATCH",
+            body: { hidden: !hidden },
+          })
+        }
+        aria-label={hideLabel}
+        title={hideLabel}
+        className={iconButton}
+      >
+        {hidden ? (
+          <Eye aria-hidden className="size-5" />
+        ) : (
+          <EyeOff aria-hidden className="size-5" />
+        )}
+      </button>
+
+      {/* Открытку редакция рисует сама — генерация нарисует не то. Замена
+          картинки со стадией карточки ничего не делает: опубликованная
+          остаётся опубликованной. */}
+      <UploadCardImage
+        postId={post.id}
+        label="Заменить картинку"
+        iconOnly
+        onError={onUploadError}
+      />
+
+      {/* Удаление в два нажатия: вопрос встаёт под карточкой во всю ширину. */}
+      <button
+        type="button"
+        disabled={pendingAction !== undefined}
+        onClick={onDelete}
+        aria-expanded={deleting}
+        aria-label="Удалить"
+        title="Удалить"
+        className={iconDangerButton}
+      >
+        <Trash2 aria-hidden className="size-5" />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Правка текста уже вышедшей карточки.
+ *
+ * Заголовка здесь нет (VED-199): читатель его не видит, а редакции он только
+ * занимал место. Сервер оставляет прежний, а собранный из цитаты — пересобирает
+ * вслед за ней.
+ *
+ * Надпись на картинке и полный текст — два поля (VED-241): длинную шлоку на
+ * кадре сокращают, не трогая окно «Читать полностью», где её дочитывают.
  *
  * Только русский: остальные языки заводит генерация, и подсовывать здесь
  * пустые поля под них значило бы предлагать перевести вручную то, что
@@ -315,7 +427,6 @@ function PublishedTextForm({
   onSaved: () => void;
   run: ReturnType<typeof useAdminCommand>["run"];
 }) {
-  const [title, setTitle] = useState(post.title);
   /* Сервер хранит цитату и пояснение одной строкой, склеенными пустой
      строкой, но править их одним полем нельзя: поле называлось «Пояснение», а
      показывало ещё и афоризм — тот же текст, что стоит в карточке выше.
@@ -325,26 +436,30 @@ function PublishedTextForm({
   const [quote, setQuote] = useState(initial.quote);
   const [explanation, setExplanation] = useState(initial.explanation);
   const text = joinQuoteAndExplanation(quote, explanation);
+  const savedImageText = post.imageText?.trim() ?? "";
+  const [imageText, setImageText] = useState(savedImageText);
   const [speaker, setSpeaker] = useState(post.attributionSpeaker ?? "");
   const [work, setWork] = useState(post.attributionWork ?? "");
   const [category, setCategory] = useState(post.category);
 
-  /* Подпись на картинке и место в произведении из формы убраны, но из
-     запроса — нет, и это не забытый код.
+  /* Надпись поверх картинки рисует лента только у обычной иллюстрации. У
+     открытки текст напечатан на самом файле, у ролика — вшит в кадр: поле
+     там ничего бы не меняло. */
+  const pictureEditable = !post.captionInImage && !post.videoUrl;
 
-     Сервер пишет подпись и атрибуцию целиком: `storyText` в схеме
-     обязателен, а `attribution` перезаписывает все три поля разом
-     (`locator?.trim() || null`). Перестань форма их слать — правка одного
-     автора молча обнуляла бы место, а вставка перевода падала бы на
-     обязательном поле. Поэтому оба уезжают обратно такими, какими пришли. */
-  const storyText = post.storyText;
+  /* Место в произведении из формы убрано, но из запроса — нет:
+     `attribution` перезаписывает все три поля разом (`locator?.trim() ||
+     null`), и правка одного автора молча обнуляла бы место. */
   const locator = post.attributionLocator ?? "";
 
   /* Сравниваем со склейкой разобранного, а не с исходной строкой: разбор
      подрезает пробелы по краям, и у поста с лишним переносом «Сохранить»
      загоралась бы сразу при открытии, ничего не тронув. */
   const savedText = joinQuoteAndExplanation(initial.quote, initial.explanation);
-  const textChanged = title !== post.title || text !== savedText;
+  const fullTextChanged = text !== savedText;
+  const imageTextChanged =
+    pictureEditable && imageText.trim() !== savedImageText;
+  const textChanged = fullTextChanged || imageTextChanged;
   const attributionChanged =
     speaker !== (post.attributionSpeaker ?? "") ||
     work !== (post.attributionWork ?? "");
@@ -353,23 +468,40 @@ function PublishedTextForm({
 
   return (
     <div className="mt-3 space-y-3 border-t border-glass-brd pt-3">
-      <label className="block">
-        <span className={labelClass}>Заголовок</span>
-        <input
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          className={`${fieldClass} mt-1`}
-        />
-      </label>
+      {pictureEditable ? (
+        <label className="block">
+          <span className={labelClass}>Текст на картинке</span>
+          <textarea
+            value={imageText}
+            rows={3}
+            placeholder="Пусто — как в полном тексте"
+            onChange={(event) => setImageText(event.target.value)}
+            className={`${fieldClass} mt-1`}
+          />
+          <span className="mt-1 block text-xs font-normal text-text-2">
+            Что стоит поверх картинки в ленте. Если пусто — там полный текст
+            афоризма.
+          </span>
+        </label>
+      ) : (
+        <p className="text-xs text-text-2">
+          {post.captionInImage
+            ? "Текст на этой картинке напечатан в самом файле — поправить его можно только заменой картинки."
+            : "Текст на ролике вшит в кадр — поправка ниже изменит только окно «Читать полностью»."}
+        </p>
+      )}
 
       <label className="block">
-        <span className={labelClass}>Цитата</span>
+        <span className={labelClass}>Полный текст</span>
         <textarea
           value={quote}
           rows={3}
           onChange={(event) => setQuote(event.target.value)}
           className={`${fieldClass} mt-1`}
         />
+        <span className="mt-1 block text-xs font-normal text-text-2">
+          Его показывает окно «Читать полностью».
+        </span>
       </label>
 
       <label className="block">
@@ -434,8 +566,19 @@ function PublishedTextForm({
               // Отправляем только то, что тронули: подпись тянет за собой
               // сброс проверки источника, и слать её «на всякий случай»
               // значило бы снимать отметку при правке одной опечатки.
+              // Заголовок и подпись для Stories не шлём вовсе — сервер
+              // оставляет их как есть.
               ...(textChanged
-                ? { translations: { ru: { title, text, storyText } } }
+                ? {
+                    translations: {
+                      ru: {
+                        text,
+                        ...(imageTextChanged
+                          ? { imageText: imageText.trim() }
+                          : {}),
+                      },
+                    },
+                  }
                 : {}),
               ...(attributionChanged
                 ? { attribution: { speaker, work, locator } }

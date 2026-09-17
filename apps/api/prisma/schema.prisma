@@ -847,6 +847,11 @@ model MotivationPostTranslation {
   title     String
   text      String
   storyText String
+  /// Текст поверх картинки в ленте (VED-241). Пусто — картинка берёт цитату
+  /// из `text`, как и раньше; «Читать полностью» всегда показывает `text`.
+  /// Не `storyText`: тот уже занят подписью, вшитой в Stories и ролик, и у
+  /// старых постов в нём то пояснение, то короткий слоган.
+  imageText String?
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 

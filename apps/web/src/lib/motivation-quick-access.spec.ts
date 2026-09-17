@@ -22,6 +22,7 @@ const post = (over: Partial<MotivationPostDto> = {}): MotivationPostDto => ({
   title: "О действии",
   text: "Тот, кто видит бездействие в действии и действие в бездействии, разумен среди людей.",
   storyText: "",
+  imageText: "",
   attributionKind: "exact_quote",
   attributionSpeaker: "Кришна",
   attributionWork: "Бхагавад-гита",

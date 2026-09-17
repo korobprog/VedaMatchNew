@@ -35,6 +35,7 @@ function reelDto(overrides: Partial<MotivationReelDto>): MotivationReelDto {
       title: "Свой рилс",
       text: "Делай что должно, и будь что будет.",
       storyText: "",
+      imageText: "",
       attributionKind: "ai_reflection",
       attributionSpeaker: null,
       attributionWork: null,
