@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
   MotivationAdminCandidateDto,
@@ -11,12 +11,13 @@ import { ImageReviewCard } from "./image-review-card";
 import { LoadFailure } from "./load-failure";
 import { QuoteReviewCard } from "./quote-review-card";
 import {
+  filterByQuery,
   selectImagePosts,
   selectSetAsidePosts,
   selectTextPosts,
 } from "./queue-selectors";
 import { useAdminCommand } from "./use-admin-command";
-import { cardClass, primaryButton } from "./ui";
+import { cardClass, fieldClass, labelClass, primaryButton } from "./ui";
 
 function StatTile({ label, value }: { label: string; value: number }) {
   return (
@@ -36,6 +37,14 @@ export function QueueBoard({
 }) {
   const router = useRouter();
   const { pending, errors, run } = useAdminCommand();
+  /**
+   * Поиск по очереди (VED-200): одно поле на всю вкладку, а не по одному на
+   * раздел — редактор ищет афоризм, а не «раздел, где он застрял». Тот же
+   * приём, что уже работает на «Опубликованных» (`published-list.tsx`):
+   * локальное состояние + `useMemo`, без похода на сервер — вся очередь и
+   * так приходит одним запросом.
+   */
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     if (
@@ -48,11 +57,30 @@ export function QueueBoard({
     return () => window.clearInterval(timer);
   }, [posts, router]);
 
+  // Селекторы и фильтр — до раннего `return` по `!posts`: иначе число
+  // вызовов хуков менялось бы между рендерами (пока загрузка не удалась —
+  // `useMemo` ниже не выполнялся бы вовсе), что React не разрешает.
+  const textPosts = useMemo(() => (posts ? selectTextPosts(posts) : []), [posts]);
+  const imagePosts = useMemo(() => (posts ? selectImagePosts(posts) : []), [posts]);
+  const setAsidePosts = useMemo(
+    () => (posts ? selectSetAsidePosts(posts) : []),
+    [posts],
+  );
+  // Фильтр накладывается поверх каждой выборки раздельно: карточка,
+  // подходящая под запрос, остаётся в своём разделе — поиск не путает
+  // «ждёт текста» с «ждёт картинки».
+  const foundTextPosts = useMemo(
+    () => filterByQuery(textPosts, query),
+    [textPosts, query],
+  );
+  const foundImagePosts = useMemo(
+    () => filterByQuery(imagePosts, query),
+    [imagePosts, query],
+  );
+  const searching = query.trim().length > 0;
+
   if (!posts) return <LoadFailure what="публикации Motivation" />;
 
-  const textPosts = selectTextPosts(posts);
-  const imagePosts = selectImagePosts(posts);
-  const setAsidePosts = selectSetAsidePosts(posts);
   const failedCount = posts.filter((post) => post.reviewStatus === "failed").length;
 
   return (
@@ -81,6 +109,21 @@ export function QueueBoard({
         )}
       </div>
 
+      {/* Один поиск на всю вкладку (VED-200), не по одному на раздел:
+          редактор ищет афоризм, а не «раздел, где он застрял». Тот же приём,
+          что и на «Опубликованных» — та же подпись, тот же плейсхолдер, тот
+          же способ фильтрации по цитате и автору. */}
+      <label className="mt-6 block max-w-md">
+        <span className={labelClass}>Найти по цитате или автору</span>
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Например: Прабхупада"
+          className={`${fieldClass} mt-1`}
+        />
+      </label>
+
       <section aria-labelledby="text-review-heading" className="mt-8">
         <h2 id="text-review-heading" className="text-xl font-semibold text-text-0">
           Цитаты и текст
@@ -88,13 +131,22 @@ export function QueueBoard({
         <p className="mt-1 text-sm text-text-2">
           Проверьте точность цитаты, источник и атрибуцию до запуска изображения.
         </p>
+        {searching && (
+          <p className="mt-1 text-sm text-text-2">
+            Найдено: {foundTextPosts.length} из {textPosts.length}
+          </p>
+        )}
         <div className="mt-4 space-y-4">
           {textPosts.length === 0 ? (
             <p className={`${cardClass} text-center text-text-2`}>
               Нет цитат, ожидающих проверки текста.
             </p>
+          ) : foundTextPosts.length === 0 ? (
+            <p className={`${cardClass} text-center text-text-2`}>
+              Ничего не нашлось. Попробуйте другое слово.
+            </p>
           ) : (
-            textPosts.map((post) => (
+            foundTextPosts.map((post) => (
               <QuoteReviewCard
                 key={post.id}
                 post={post}
@@ -115,13 +167,22 @@ export function QueueBoard({
         <p className="mt-1 text-sm text-text-2">
           Изображение появляется здесь после одобрения текста и публикуется отдельным действием.
         </p>
+        {searching && (
+          <p className="mt-1 text-sm text-text-2">
+            Найдено: {foundImagePosts.length} из {imagePosts.length}
+          </p>
+        )}
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           {imagePosts.length === 0 ? (
             <p className={`${cardClass} text-center text-text-2 lg:col-span-2`}>
               Нет изображений, ожидающих проверки.
             </p>
+          ) : foundImagePosts.length === 0 ? (
+            <p className={`${cardClass} text-center text-text-2 lg:col-span-2`}>
+              Ничего не нашлось. Попробуйте другое слово.
+            </p>
           ) : (
-            imagePosts.map((post) => (
+            foundImagePosts.map((post) => (
               <ImageReviewCard
                 key={post.id}
                 post={post}

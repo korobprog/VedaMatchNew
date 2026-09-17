@@ -71,3 +71,23 @@ export function selectSetAsidePosts(posts: MotivationAdminCandidateDto[]) {
 export function countQueue(posts: MotivationAdminCandidateDto[]) {
   return selectTextPosts(posts).length + selectImagePosts(posts).length;
 }
+
+/**
+ * Поиск по очереди (VED-200) — тот же приём, что уже работает на
+ * «Опубликованных» (`published-list.tsx`): без учёта регистра, по цитате,
+ * заголовку, автору и названию рубрики. Один и тот же фильтр накладывается
+ * поверх обеих выборок очереди («Цитаты и текст» и «Изображения») — критерий
+ * поиска не зависит от того, на какой стадии сейчас карточка.
+ */
+export function filterByQuery(
+  posts: MotivationAdminCandidateDto[],
+  query: string,
+): MotivationAdminCandidateDto[] {
+  const needle = query.trim().toLocaleLowerCase("ru-RU");
+  if (!needle) return posts;
+  return posts.filter((post) =>
+    [post.title, post.text, post.attributionSpeaker, post.categoryTitle]
+      .filter(Boolean)
+      .some((field) => field!.toLocaleLowerCase("ru-RU").includes(needle)),
+  );
+}
