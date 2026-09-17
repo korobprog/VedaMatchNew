@@ -233,3 +233,78 @@ self-managed `ConnectionService`; фоновый пуш для звонка по
 `/calls-probe`. Это инструмент команды, не часть продукта — запускать с
 разных сетей (домашний Wi-Fi, мобильный интернет) и присылать строку
 итога в отчёт.
+
+### Звонки в веб-сборке (этап 5)
+
+`react-native-webrtc`/`react-native-incall-manager` подменяются на
+`web-shims/` (`metro.config.js`) — звонок в браузере идёт на встроенном
+`RTCPeerConnection`, тот же сигналинг API (`chat/calls/*`,
+`GET /chat/stream`), что и на Android. Отличия от нативной ветки:
+
+- Смена камеры (`switchCamera`) на Android — приватный `_switchCamera()` у
+  `react-native-webrtc`; в браузере такого метода нет, поэтому на вебе
+  (`Platform.OS === 'web'`) `webrtc-session.ts` пересобирает картинку сама:
+  новый `getUserMedia({facingMode})` + `RTCRtpSender.replaceTrack` без
+  пересогласования SDP. На устройстве без второй камеры (десктоп) тихо
+  ничего не меняет — тот же исход, что и у нативной ветки без видеодорожки.
+- Аудиозвонок в браузере без единого `RTCView` — картинка не нужна, но звук
+  собеседника должен же откуда-то звучать: `remote-audio-playback.ts`
+  решает, когда экрану звонка (`app/call/[id].tsx`) нужен скрытый 1×1
+  `RTCView` только ради звука; на видеозвонке звук уже идёт вместе с видимым
+  видео, второй элемент не добавляется.
+- «Не гаснет экран на видео» — `InCallManager.setKeepScreenOn` на вебе
+  реализован через Screen Wake Lock API (`web-shims/react-native-incall-manager.ts`);
+  нет браузерной поддержки (Safari) — тихий no-op, как и раньше.
+- Кнопка выбора аудиомаршрута (наушники/Bluetooth/громкая связь) скрыта на
+  вебе целиком: управляет ей `react-native-incall-manager`, которого там нет
+  вовсе, — рабочая кнопка без эффекта хуже отсутствующей.
+- «Нет доступа к микрофону/камере» на вебе не отправляет в несуществующие
+  системные настройки (`Linking.openSettings()` в `react-native-web` не
+  реализован — бросил бы `TypeError`), а предлагает разрешить доступ в
+  браузере и обновить страницу (`call-media-error.ts`).
+- Свернули вкладку с ещё не отвеченным входящим — звонок не отклоняется
+  автоматически (было унаследовано от ветки «не Android — точно iOS», а
+  нативной iOS-сборки в этом продукте нет вовсе, только веб): решение —
+  `call-app-background-policy.ts`.
+
+Автоматическая проверка двумя браузерами — `e2e-web/calls.e2e.mjs` (не часть
+`pnpm test`/CI, отдельный ручной прогон). Нужны: собранная веб-версия,
+отданная на ДВУХ разных хостах (не портах одного — cookie сессии видны на
+любом порту `localhost`, значит два `localhost:PORT` расшарили бы её
+случайно, поэтому один инстанс — `localhost`, второй — `127.0.0.1`) и API с
+`DEV_AUTH_ENABLED=true` и обоими адресами в `WEB_ORIGIN`, плюс демо-аккаунты
+(`pnpm --filter @vedamatch/api seed:dev`, диалог Радхи и Говинды уже в сиде).
+
+```bash
+# API (пример — свободные порты, не трогать 4094-4096/8094-8096/9099 и
+# Postgres 55495, если рядом работает оркестратор):
+API_PORT=4097 \
+WEB_ORIGIN=http://localhost:8097,http://127.0.0.1:8098 \
+DATABASE_URL=postgres://…@localhost:55497/vm_calls_e2e \
+DEV_AUTH_ENABLED=true NODE_ENV=development \
+pnpm --dir apps/api exec nest start
+
+# Сборка один раз — APP_API_ORIGIN зашивается при экспорте, второй origin
+# веба (WEB_A/WEB_B) на него не влияет, достаточно раздать один и тот же
+# dist-web с двух серверов:
+APP_CONTOUR=com APP_API_ORIGIN=http://localhost:4097 \
+npx expo export --platform web --output-dir dist-web
+npx serve --single dist-web -l 8097 &
+npx serve --single dist-web -l 8098 -n 127.0.0.1 &
+
+WEB_A=http://localhost:8097 WEB_B=http://127.0.0.1:8098 \
+API_A=http://localhost:4097 API_B=http://localhost:4097 \
+node apps/mobile/e2e-web/calls.e2e.mjs
+```
+
+Сценарий: вход паролем `POST /auth/dev-login` для Радхи (A) и Говинды (B)
+через `context.request` (cookie оседает в `BrowserContext`, отдельном для
+каждого), открытие их личной беседы, A нажимает «Аудиозвонок»/«Видеозвонок»
+в шапке (`accessibilityLabel`, он же `aria-label`), B отвечает по баннеру
+входящего, обе стороны доходят до строки таймера разговора (это и есть
+`connectionState === 'connected'` — она появляется только после
+`onConnected` в `webrtc-session.ts`), у видеозвонка дополнительно проверяется
+`videoWidth > 0` удалённого `<video>`, затем A вешает трубку и обе стороны
+возвращаются в беседу. `chromium.launch` — с
+`--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`, реальная
+камера/микрофон не нужны.

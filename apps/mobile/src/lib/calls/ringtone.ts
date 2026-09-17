@@ -1,4 +1,5 @@
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
+import { Platform } from 'react-native';
 import { startRingingVibration, stopRingingVibration } from '@/lib/feedback';
 
 /**
@@ -24,6 +25,33 @@ const VOLUME: Record<RingtoneKind, number> = {
   incoming: 0.9,
   outgoing: 0.5,
 };
+
+/**
+ * Веб: политика автовоспроизведения браузера (Chrome/Safari/Firefox) может
+ * отклонить `HTMLMediaElement.play()`, если у страницы ещё не было
+ * взаимодействия пользователя, — типичный случай именно здесь: входящий
+ * звонок приходит сам, по SSE (`call-provider.tsx`), без клика прямо перед
+ * этим. `expo-audio` на вебе (`AudioPlayerWeb.play()`) вызывает
+ * `this.media.play()` и не читает и не пробрасывает его `Promise` дальше
+ * (см. `node_modules/expo-audio/build/AudioPlayer.web.js`) — синхронный
+ * `try/catch` вокруг `createAudioPlayer`/`player.play()` ниже эту ошибку
+ * поэтому не ловит вообще: она превращается в необработанный отказ промиса
+ * где-то в недрах браузера. Звонок это не ломает (баннер и вибрация всё
+ * равно доносят «вам звонят», см. шапку файла), но красный `Uncaught (in
+ * promise) DOMException` в консоли — не про реальную поломку, а про
+ * ожидаемую политику автовоспроизведения. Подавляем ТОЛЬКО эти два
+ * известных исхода `<video>/<audio>.play()` (`NotAllowedError` — политика,
+ * `AbortError` — плеер успели поставить на паузу/выгрузить раньше, чем
+ * промис успел решиться, обычное дело при быстром входящий→сброшенный),
+ * остальные необработанные отказы промисов идут в консоль как обычно —
+ * это не индульгенция на все ошибки страницы, только на эту конкретную.
+ */
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason as { name?: string } | undefined;
+    if (reason?.name === 'NotAllowedError' || reason?.name === 'AbortError') event.preventDefault();
+  });
+}
 
 /** Возвращает функцию остановки — вызывается один раз при выходе из фазы гудков. */
 export function startRingtone(kind: RingtoneKind): () => void {
