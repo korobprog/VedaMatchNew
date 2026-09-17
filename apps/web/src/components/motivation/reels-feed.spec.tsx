@@ -121,6 +121,23 @@ describe("ReelsFeed", () => {
     ).toBeInTheDocument();
   });
 
+  // VED-252, круг 2: у избранного фильтров нет — значок должен молча
+  // исчезнуть из самого ряда `Tabs()` (не только у `FeedAttributionFilter`
+  // в изоляции), оставляя ровно четыре пункта без дыры на его месте.
+  it("на вкладке «Избранное» в ряду вкладок нет значка фильтра — четыре пункта", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="saved" donation={null} />,
+    );
+
+    const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
+    const labels = [...tabs.children].map((node) => node.textContent);
+    expect(labels).toEqual(["Лента", "Открытки", "Избранное", "Мои"]);
+    expect(
+      within(tabs).queryByRole("button", { name: /Фильтр по автору и источнику/ }),
+    ).not.toBeInTheDocument();
+  });
+
   // VED-135: на пустом тёмном экране разделителя — кнопки категорий вверху.
   it("ставит кнопки категорий на разделитель и в конец ленты", () => {
     fetchOk({});

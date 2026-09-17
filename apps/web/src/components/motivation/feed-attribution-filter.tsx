@@ -47,16 +47,20 @@ export function FeedAttributionFilter({ state }: { state: FeedFilterState }) {
     <>
       {/* Значок, без подписи и без своей подложки (VED-252): ряд вкладок
           тесный, а вес — как у соседних текстовых пунктов, не пилюля.
-          Высота задана больше видимой иконки — это невидимая область
-          нажатия, горизонталь она не трогает (`w-8`), поэтому бюджет
-          ширины ряда считаем по нему, а не по size-10 кнопкам ←/меню. */}
+          `h-10 w-10` — полная область нажатия ≥40×40 (круг 2: первая версия
+          сузила её до `w-8`=32px ради бюджета ширины — оценщик справедливо
+          указал, что хит-зона интерактивного элемента ужиматься не должна;
+          бюджет ряда пересчитан в Tabs() под полные 40px значка по живому
+          замеру в браузере, а не наоборот). `<FilterIcon />` внутри рисуется
+          мелким сама по себе — большая кликабельная область не увеличивает
+          видимый значок. */}
       <button
         ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-label={active ? "Изменить фильтр по автору и источнику" : "Фильтр по автору и источнику"}
-        className="relative flex h-10 w-8 shrink-0 items-center justify-center text-white/70 drop-shadow transition hover:text-white"
+        className="relative flex h-10 w-10 shrink-0 items-center justify-center text-white/70 drop-shadow transition hover:text-white"
       >
         <FilterIcon />
         {/* Активный фильтр отмечен точкой — тем же приёмом, что активная

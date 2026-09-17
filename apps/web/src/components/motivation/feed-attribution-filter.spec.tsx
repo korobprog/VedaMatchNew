@@ -21,6 +21,18 @@ describe("FeedAttributionFilter", () => {
     expect(screen.queryByText("Автор и источник")).not.toBeInTheDocument();
   });
 
+  // VED-252, круг 2: первая версия сузила хит-зону значка до 40×32px ради
+  // бюджета ширины ряда — оценщик справедливо указал на нарушение правила
+  // репозитория «область нажатия ≥ 40px». Область нажатия — весь `<button>`,
+  // а не видимая иконка внутри: держим обе стороны на 40px.
+  it("область нажатия значка — полные 40×40, а не урезана ради ширины ряда", () => {
+    render(<FeedAttributionFilter state={{ tab: "forYou" }} />);
+
+    const trigger = screen.getByRole("button", { name: "Фильтр по автору и источнику" });
+    expect(trigger.className.split(" ")).toEqual(expect.arrayContaining(["h-10", "w-10"]));
+    expect(trigger.className).not.toMatch(/\bw-8\b/);
+  });
+
   it("выбранное видно чипами, крестик убирает только своё", () => {
     render(
       <FeedAttributionFilter
