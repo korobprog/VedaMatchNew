@@ -253,7 +253,10 @@ describe('buildStoryOverlaySvg · знак в углу, подпись рядо�
 
   const input = {
     text: 'Я больше не знаю, в чем состоит мой долг.',
-    attribution: 'Участник VedaMatch · Бхагавад-гита 2.7',
+    // Не завязано на конкретный текст фолбэка автора (VED-245) — тут только
+    // геометрия строчной раскладки, длина строки должна остаться в одну
+    // строку, как и раньше; сам фолбэк и его перенос — отдельный блок ниже.
+    attribution: 'Шри Кришна · Бхагавад-гита 2.7',
     layout: 'row' as const,
   };
 
@@ -345,6 +348,39 @@ describe('buildStoryOverlaySvg · знак в углу, подпись рядо�
     for (let i = info.channels - 1; i < data.length; i += info.channels)
       if (data[i] > 8) visible++;
     expect(visible).toBeGreaterThan(0);
+  });
+});
+
+describe('перенос длинной подписи «автор · источник» (VED-245)', () => {
+  // Новый фолбэк автора («Участник Портала Саморазвития VedaMatch») длиннее
+  // прежнего почти вдвое — проверяем ровно ту связку из примера в карточке:
+  // номер стиха не должен теряться под многоточием clampLines().
+  const attribution =
+    'Участник Портала Саморазвития VedaMatch · Бхагавад-гита 2.11';
+
+  it('около 60 символов — укладывается в лимит строк целиком, источник не обрезан', () => {
+    const wrapped = wrapText(attribution, 30, metaMaxWidth('row'));
+    const clamped = clampLines(wrapped, 2);
+
+    expect(clamped).toHaveLength(2);
+    // Многоточия нет — обрезки не было, а не просто «конец совпал с лимитом».
+    expect(clamped.some((line) => line.includes('…'))).toBe(false);
+    expect(clamped.join(' ')).toContain('Бхагавад-гита 2.11');
+  });
+
+  it('в готовом SVG вторая строка подписи — источник целиком, без обрубка', () => {
+    const svg = buildStoryOverlaySvg({
+      text: 'Я больше не знаю, в чем состоит мой долг.',
+      attribution,
+      layout: 'row',
+    });
+    // «meta» — класс строк подписи (см. buildStoryOverlaySvg); ищем текст
+    // внутри тегов, а не считаем сегменты по x/y, как в тестах выше.
+    const metaTexts = [...svg.matchAll(/class="meta">([^<]*)<\/text>/g)].map(
+      (match) => match[1],
+    );
+    expect(metaTexts.join(' ')).toContain('Бхагавад-гита 2.11');
+    expect(metaTexts.some((line) => line.includes('…'))).toBe(false);
   });
 });
 

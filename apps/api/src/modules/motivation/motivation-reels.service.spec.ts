@@ -198,6 +198,31 @@ describe('MotivationReelsService.create', () => {
     );
   });
 
+  it('без автора и без проверенной цитаты пишет фолбэк «Участник Портала Саморазвития VedaMatch» (VED-245)', async () => {
+    // Сценарий из карточки: проверенная цитата не нашлась (verification
+    // здесь по умолчанию отдаёт пустой список кандидатов), участник поле
+    // «Автор» не заполнил.
+    const noAuthorInput = {
+      source: {
+        kind: 'own' as const,
+        text: 'Делай что должно, и будь что будет.',
+      },
+      language: 'ru' as const,
+      audienceTrack: 'universal' as const,
+    };
+    const { service, tx } = build();
+
+    await service.create('user-1', regularUser, noAuthorInput);
+
+    expect(tx.motivationQuote.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          author: 'Участник Портала Саморазвития VedaMatch',
+        }),
+      }),
+    );
+  });
+
   it('rejects with the model reason when the verdict is a confident reject', async () => {
     const { service, moderation, events } = build({
       verdict: { decision: 'reject', confidence: 0.95, reason: 'Это реклама.' },
