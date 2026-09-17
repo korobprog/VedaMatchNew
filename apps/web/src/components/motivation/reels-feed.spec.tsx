@@ -771,6 +771,25 @@ describe("ReelsFeed", () => {
     expect(create[0]).toHaveAttribute("href", "/motivation/create");
   });
 
+  // VED-240: из вкладки «Открытки» ссылка «Создать» ведёт в мастер с
+  // ?tab=cards — так первым выбором там стоит «Готовая картинка с цитатой»,
+  // а не «Написать самому». На «Ленте» параметра быть не должно (проверено
+  // выше, тест не переписан специально ради этого).
+  it("на вкладке «Открытки» ссылки «Создать» несут ?tab=cards", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="cards" donation={null} />,
+    );
+
+    expect(screen.getByRole("link", { name: "Создать свой рилс" })).toHaveAttribute(
+      "href",
+      "/motivation/create?tab=cards",
+    );
+    for (const link of screen.getAllByRole("link", { name: /Создать рилс/ })) {
+      expect(link).toHaveAttribute("href", "/motivation/create?tab=cards");
+    }
+  });
+
   it("tells an empty saved tab where to go", () => {
     fetchOk({});
     render(<ReelsFeed initial={{ items: [], nextCursor: null }} tab="saved" donation={null} />);

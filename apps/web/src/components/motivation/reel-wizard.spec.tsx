@@ -187,6 +187,56 @@ describe("ReelWizard", () => {
     });
   });
 
+  // VED-240: из вкладки «Открытки» ленты нажали «Создать» — первым выбором
+  // должна стоять «Готовая картинка с цитатой», а не «Написать самому».
+  it("из «Открыток» ленты открывает мастер с активной «Готовой картинкой»", async () => {
+    routeFetch({ "/motivation/reels/quota": () => quota });
+    render(<ReelWizard prefill={{ tab: "cards" }} donation={null} />);
+
+    await screen.findByText("Сегодня: 0 из 1");
+    expect(screen.getByRole("button", { name: /Готовая картинка с цитатой/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: /Написать самому/ })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("без вкладки «Открытки» по умолчанию активно «Написать самому»", async () => {
+    routeFetch({ "/motivation/reels/quota": () => quota });
+    render(<ReelWizard prefill={{}} donation={null} />);
+
+    await screen.findByText("Сегодня: 0 из 1");
+    expect(screen.getByRole("button", { name: /Написать самому/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: /Готовая картинка с цитатой/ })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("фрагмент из книг (читалка) важнее вкладки «Открытки»", async () => {
+    // fromBook выигрывает и без VED-240: источник уже известен из читалки,
+    // а `tab=cards` в это же время быть не может (разные точки входа).
+    routeFetch({ "/motivation/reels/quota": () => quota });
+    render(
+      <ReelWizard
+        prefill={{ book: "bg", chapter: "2", text: "Ты имеешь право лишь на действие.", tab: "cards" }}
+        donation={null}
+      />,
+    );
+
+    await screen.findByText("Сегодня: 0 из 1");
+    expect(screen.getByRole("button", { name: /Взять из наших книг/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
   it("lets a person find a verse in the books without coming from the reader", async () => {
     const hit = {
       text: "Ты имеешь право лишь на действие, но не на его плоды.",
