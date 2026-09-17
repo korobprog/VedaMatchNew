@@ -221,7 +221,7 @@ export class MotivationReelsService {
     // оглавлении ленты давно нет. Неизвестный слаг — отказ словами, а не
     // английское «Unknown category» из справочника.
     const category = await this.categories
-      .resolveSlug(input.category ?? undefined)
+      .resolveSlug(input.category ?? undefined, 'art')
       .catch(() => {
         throw new BadRequestException(
           'Такой категории нет — выберите из списка',

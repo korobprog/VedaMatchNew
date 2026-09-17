@@ -842,14 +842,41 @@ export interface MotivationCategoryDto {
   sortOrder: number;
   isDefault: boolean;
   parentId: string | null;
+  /**
+   * Число публикаций. В ответе с `?style=` — только этой ленты, иначе всех.
+   */
   postCount: number;
+  /** В меню какой ленты стоит категория (VED-139). */
+  feed: MotivationCategoryFeed;
+  /** Сколько в категории афоризмов с иллюстрацией («Для вас»). */
+  artCount: number;
+  /** Сколько в категории открыток. */
+  cardsCount: number;
 }
-export interface MotivationCategoryInput { title: string; parentId?: string | null }
+
+/**
+ * Лента категории (VED-139): у «Для вас» и «Открыток» свои меню категорий.
+ * `both` — категория общая и стоит в меню той ленты, где в ней что-то есть;
+ * пустая общая видна в обоих меню, пока редакция не решит, чья она.
+ */
+export type MotivationCategoryFeed = 'both' | 'art' | 'cards';
+export const MOTIVATION_CATEGORY_FEEDS: readonly MotivationCategoryFeed[] = [
+  'both',
+  'art',
+  'cards',
+];
+
+export interface MotivationCategoryInput {
+  title: string;
+  parentId?: string | null;
+  feed?: MotivationCategoryFeed;
+}
 export interface MotivationCategoryUpdate {
   title?: string;
   sortOrder?: number;
   isDefault?: boolean;
   parentId?: string | null;
+  feed?: MotivationCategoryFeed;
 }
 
 /** Обязательны только текст и автор — остальное уточняется по желанию. */

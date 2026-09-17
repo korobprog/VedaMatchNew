@@ -21,6 +21,9 @@ function category(
     isDefault: false,
     parentId: null,
     postCount: 12,
+    feed: "both",
+    artCount: 12,
+    cardsCount: 0,
     ...over,
   };
 }
@@ -176,5 +179,32 @@ describe("MotivationCollectionGrid", () => {
     render(<MotivationCollectionGrid posts={[]} />);
 
     expect(screen.getByText("В этом разделе пока пусто.")).toBeInTheDocument();
+  });
+});
+
+describe("меню категорий «Открыток» (VED-139)", () => {
+  it("ведёт в папки и ленту открыток", async () => {
+    const user = userEvent.setup();
+    render(
+      <MotivationCollections
+        tab="cards"
+        categories={[
+          category({
+            slug: "otkrytki",
+            title: "Открытки к празднику",
+            postCount: 2,
+            feed: "cards",
+            cardsCount: 2,
+          }),
+        ]}
+      />,
+    );
+    expect(
+      screen.getByRole("link", { name: "Открытки к празднику" }),
+    ).toHaveAttribute("href", "/motivation/collections/otkrytki?tab=cards");
+    await user.click(screen.getByRole("checkbox"));
+    expect(
+      screen.getByRole("link", { name: /Смотреть выбранное/ }),
+    ).toHaveAttribute("href", "/motivation?tab=cards&category=otkrytki");
   });
 });

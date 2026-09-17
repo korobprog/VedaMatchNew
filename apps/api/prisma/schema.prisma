@@ -766,16 +766,19 @@ enum MotivationTrackStatus {
 /// категорию верхнего уровня, у которой `parentId` всегда null. Глубже нельзя —
 /// правило держит `MotivationCategoriesService`.
 model MotivationCategory {
-  id        String               @id @default(uuid())
-  slug      String               @unique
+  id        String                 @id @default(uuid())
+  slug      String                 @unique
   title     String
-  sortOrder Int                  @default(0)
-  isDefault Boolean              @default(false)
+  sortOrder Int                    @default(0)
+  isDefault Boolean                @default(false)
+  /// В меню какой ленты стоит категория (VED-139): `art` — «Для вас»,
+  /// `cards` — «Открытки», `both` — в обеих, пока в ней лежит своё.
+  feed      MotivationCategoryFeed @default(both)
   parentId  String?
-  parent    MotivationCategory?  @relation("MotivationCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children  MotivationCategory[] @relation("MotivationCategoryTree")
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
+  parent    MotivationCategory?    @relation("MotivationCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  MotivationCategory[]   @relation("MotivationCategoryTree")
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
 
   @@index([sortOrder])
   @@index([parentId])
@@ -2092,14 +2095,14 @@ model PushSubscription {
 /// доставки (FCM, позже RuStore) и сам меняет при переустановке, поэтому
 /// ключ — токен, а не пара «пользователь и устройство».
 model NotificationDevice {
-  id         String   @id @default(uuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Служба доставки: `fcm` или `rustore`.
-  provider   String
+  provider    String
   /// `android` или `ios`.
-  platform   String
-  token      String   @unique
+  platform    String
+  token       String   @unique
   /// Сборка приложения, например `ru-site`: по ней видно, откуда люди ставят.
   appVariant  String?
   /// Приложение умеет нативный экран звонка по data-пушу FCM (VED-220):
@@ -6542,4 +6545,12 @@ model TravelReview {
 
   @@index([stayId, status, createdAt(sort: Desc)])
   @@index([authorId])
+}
+
+/// Лента, к которой относится категория Вдохновения (VED-139). Открытки и
+/// афоризмы с иллюстрацией нейросети — два разных меню категорий.
+enum MotivationCategoryFeed {
+  both
+  art
+  cards
 }

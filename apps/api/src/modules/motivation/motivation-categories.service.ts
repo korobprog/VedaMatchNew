@@ -4,15 +4,22 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { MOTIVATION_CATEGORY_FEEDS } from '@vedamatch/shared';
 import type {
   AccessTokenPayload,
   MotivationCategoryDto,
+  MotivationCategoryFeed,
   MotivationCategoryInput,
   MotivationCategoryUpdate,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isAdmin } from './is-admin';
 import { READER_VISIBLE_POSTS } from './reader-visible';
+import {
+  categoriesForStyle,
+  categoryAcceptsStyle,
+  type FeedStyle,
+} from './category-feeds';
 import {
   buildMotivationCategorySlug,
   withCategorySlugSuffix,
@@ -42,6 +49,7 @@ type CategoryRow = {
   title: string;
   sortOrder: number;
   isDefault: boolean;
+  feed: MotivationCategoryFeed;
   parentId: string | null;
 };
 
@@ -69,8 +77,10 @@ export class MotivationCategoriesService {
    * честнее показывает свой состав целиком, а от захода в пустую папку
    * читателя удерживает сам список: нулевой раздел там не ссылка.
    */
-  async publicTree(): Promise<MotivationCategoryDto[]> {
-    return this.tree(READER_VISIBLE_POSTS);
+  async publicTree(style?: FeedStyle): Promise<MotivationCategoryDto[]> {
+    const tree = await this.tree(READER_VISIBLE_POSTS);
+    // С лентой — её меню (VED-139): свои категории и свои счётчики.
+    return style ? categoriesForStyle(tree, style) : tree;
   }
 
   private async tree(
@@ -80,19 +90,32 @@ export class MotivationCategoriesService {
       this.prisma.motivationCategory.findMany({
         orderBy: [{ sortOrder: 'asc' }, { title: 'asc' }],
       }),
+      // По категории и стилю: у «Для вас» и «Открыток» свои счётчики.
       this.prisma.motivationPost.groupBy({
-        by: ['category'],
+        by: ['category', 'captionInImage'],
         _count: { _all: true },
         ...(postWhere ? { where: postWhere } : {}),
       }),
     ]);
-    const countBySlug = new Map(
-      counts.map((row) => [row.category, row._count._all]),
-    );
-    const withCounts = categories.map((category) => ({
-      ...this.dto(category),
-      postCount: countBySlug.get(category.slug) ?? 0,
-    }));
+    const art = new Map<string, number>();
+    const cards = new Map<string, number>();
+    for (const row of counts) {
+      const target = row.captionInImage ? cards : art;
+      target.set(
+        row.category,
+        (target.get(row.category) ?? 0) + row._count._all,
+      );
+    }
+    const withCounts = categories.map((category) => {
+      const artCount = art.get(category.slug) ?? 0;
+      const cardsCount = cards.get(category.slug) ?? 0;
+      return {
+        ...this.dto(category),
+        postCount: artCount + cardsCount,
+        artCount,
+        cardsCount,
+      };
+    });
     return this.inTreeOrder(withCounts);
   }
 
@@ -104,6 +127,7 @@ export class MotivationCategoriesService {
     const title = input.title?.trim();
     if (!title) throw new BadRequestException('Category title is required');
     const parentId = await this.resolveParentId(input.parentId, null);
+    const feed = this.parseFeed(input.feed);
 
     const slug = await this.uniqueSlug(buildMotivationCategorySlug(title));
     const [last, total] = await Promise.all([
@@ -119,13 +143,14 @@ export class MotivationCategoriesService {
         slug,
         title,
         parentId,
+        ...(feed ? { feed } : {}),
         sortOrder: (last?.sortOrder ?? 0) + 10,
         // Первая созданная категория становится дефолтной, иначе новым постам
         // некуда попадать.
         isDefault: total === 0,
       },
     });
-    return { ...this.dto(created), postCount: 0 };
+    return { ...this.dto(created), postCount: 0, artCount: 0, cardsCount: 0 };
   }
 
   async update(
@@ -152,6 +177,7 @@ export class MotivationCategoriesService {
         ? undefined
         : await this.resolveParentId(input.parentId, id);
     if (parentId) await this.assertHasNoChildren(id);
+    const feed = this.parseFeed(input.feed);
 
     const updated = await this.prisma.$transaction(async (transaction) => {
       if (input.isDefault === true && !existing.isDefault) {
@@ -169,13 +195,11 @@ export class MotivationCategoriesService {
             : { sortOrder: input.sortOrder }),
           ...(input.isDefault === true ? { isDefault: true } : {}),
           ...(parentId === undefined ? {} : { parentId }),
+          ...(feed ? { feed } : {}),
         },
       });
     });
-    return {
-      ...this.dto(updated),
-      postCount: await this.countPosts(updated.slug),
-    };
+    return { ...this.dto(updated), ...(await this.countPosts(updated.slug)) };
   }
 
   /**
@@ -195,16 +219,28 @@ export class MotivationCategoriesService {
   }
 
   /** Слаг для новых постов; при пустом справочнике — исторический fallback. */
-  async defaultSlug(): Promise<string> {
+  async defaultSlug(style?: FeedStyle): Promise<string> {
+    // Лента задана — умолчание берём из категорий, что её принимают: иначе
+    // открытка без выбора уходила бы в категорию «Для вас» и пропадала из
+    // меню «Открыток».
+    const feedWhere = style ? { feed: { in: this.feedsFor(style) } } : {};
     const preferred = await this.prisma.motivationCategory.findFirst({
-      where: { isDefault: true },
+      where: { isDefault: true, ...feedWhere },
       select: { slug: true },
     });
     if (preferred) return preferred.slug;
-    const any = await this.prisma.motivationCategory.findFirst({
-      orderBy: { sortOrder: 'asc' },
-      select: { slug: true },
-    });
+    const any =
+      (await this.prisma.motivationCategory.findFirst({
+        where: feedWhere,
+        orderBy: { sortOrder: 'asc' },
+        select: { slug: true },
+      })) ??
+      (style
+        ? await this.prisma.motivationCategory.findFirst({
+            where: { isDefault: true },
+            select: { slug: true },
+          })
+        : null);
     return any?.slug ?? FALLBACK_CATEGORY_SLUG;
   }
 
@@ -212,14 +248,24 @@ export class MotivationCategoriesService {
    * Приводит присланный слаг к существующей категории. Неизвестный слаг —
    * ошибка, а не молчаливое создание: иначе опечатка заводит новую категорию.
    */
-  async resolveSlug(slug: string | undefined): Promise<string> {
+  async resolveSlug(
+    slug: string | undefined,
+    style?: FeedStyle,
+  ): Promise<string> {
     const trimmed = slug?.trim();
-    if (!trimmed) return this.defaultSlug();
+    if (!trimmed) return this.defaultSlug(style);
     const found = await this.prisma.motivationCategory.findUnique({
       where: { slug: trimmed },
-      select: { slug: true },
+      select: { slug: true, feed: true },
     });
     if (!found) throw new BadRequestException('Unknown category');
+    // Открытка в категории «Для вас» не нашлась бы ни в одном меню (VED-139).
+    if (style && !categoryAcceptsStyle(found.feed, style))
+      throw new BadRequestException(
+        style === 'cards'
+          ? 'Эта категория — для афоризмов с иллюстрацией, открытки туда не кладут'
+          : 'Эта категория — для открыток, выберите другую',
+      );
     return found.slug;
   }
 
@@ -272,8 +318,34 @@ export class MotivationCategoriesService {
       ]);
   }
 
-  private async countPosts(slug: string): Promise<number> {
-    return this.prisma.motivationPost.count({ where: { category: slug } });
+  private async countPosts(
+    slug: string,
+  ): Promise<
+    Pick<MotivationCategoryDto, 'postCount' | 'artCount' | 'cardsCount'>
+  > {
+    const [artCount, cardsCount] = await Promise.all([
+      this.prisma.motivationPost.count({
+        where: { category: slug, captionInImage: false },
+      }),
+      this.prisma.motivationPost.count({
+        where: { category: slug, captionInImage: true },
+      }),
+    ]);
+    return { postCount: artCount + cardsCount, artCount, cardsCount };
+  }
+
+  /** Неизвестное значение — ошибка: опечатка не должна молча стать `both`. */
+  private parseFeed(
+    feed: MotivationCategoryFeed | undefined,
+  ): MotivationCategoryFeed | undefined {
+    if (feed === undefined) return undefined;
+    if (!MOTIVATION_CATEGORY_FEEDS.includes(feed))
+      throw new BadRequestException('Unknown category feed');
+    return feed;
+  }
+
+  private feedsFor(style: FeedStyle): MotivationCategoryFeed[] {
+    return ['both', style];
   }
 
   private async uniqueSlug(base: string): Promise<string> {
@@ -288,13 +360,16 @@ export class MotivationCategoriesService {
     throw new BadRequestException('Could not derive a free category slug');
   }
 
-  private dto(category: CategoryRow): Omit<MotivationCategoryDto, 'postCount'> {
+  private dto(
+    category: CategoryRow,
+  ): Omit<MotivationCategoryDto, 'postCount' | 'artCount' | 'cardsCount'> {
     return {
       id: category.id,
       slug: category.slug,
       title: category.title,
       sortOrder: category.sortOrder,
       isDefault: category.isDefault,
+      feed: category.feed,
       parentId: category.parentId,
     };
   }

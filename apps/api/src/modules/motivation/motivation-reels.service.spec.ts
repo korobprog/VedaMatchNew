@@ -305,7 +305,7 @@ describe('MotivationReelsService.create', () => {
       category: 'filosofiya',
     });
 
-    expect(categories.resolveSlug).toHaveBeenCalledWith('filosofiya');
+    expect(categories.resolveSlug).toHaveBeenCalledWith('filosofiya', 'art');
     expect(tx.motivationPost.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ category: 'filosofiya' }),

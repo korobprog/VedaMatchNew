@@ -16,6 +16,9 @@ const categories: MotivationCategoryDto[] = [
     isDefault: true,
     parentId: null,
     postCount: 0,
+    feed: "both",
+    artCount: 0,
+    cardsCount: 0,
   },
   {
     id: "cat-2",
@@ -25,6 +28,9 @@ const categories: MotivationCategoryDto[] = [
     isDefault: false,
     parentId: "cat-1",
     postCount: 0,
+    feed: "both",
+    artCount: 0,
+    cardsCount: 0,
   },
 ];
 

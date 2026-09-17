@@ -91,8 +91,11 @@ export class MotivationController {
    */
   @Get('motivation/categories')
   @UseGuards(AuthGuard)
-  publicCategories() {
-    return this.categories.publicTree();
+  publicCategories(@Query('style') style?: string) {
+    // `?style=` — меню одной ленты (VED-139); чужое значение — общий список.
+    return this.categories.publicTree(
+      style === 'art' || style === 'cards' ? style : undefined,
+    );
   }
 
   @Get('motivation/posts/:slug') publicPost(

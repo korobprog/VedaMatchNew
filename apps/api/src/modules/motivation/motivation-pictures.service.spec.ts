@@ -102,7 +102,7 @@ describe('MotivationPicturesService.create', () => {
       author: 'Шри Кришна',
     });
 
-    expect(resolveSlug).toHaveBeenCalledWith('shastra');
+    expect(resolveSlug).toHaveBeenCalledWith('shastra', 'cards');
     const data = createdData(create);
     expect(data).toMatchObject({
       category: 'shastra',

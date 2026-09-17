@@ -69,7 +69,7 @@ describe("PictureUploadForm", () => {
     expect((calls[1][1]?.body as FormData).get("text")).toBeNull();
     expect(screen.getAllByRole("link", { name: "Открыть" })[0]).toHaveAttribute(
       "href",
-      "/motivation?post=picture-1&category=shastra",
+      "/motivation?tab=cards&category=shastra&post=picture-1",
     );
   });
 
@@ -119,5 +119,44 @@ describe("PictureUploadForm", () => {
     expect(screen.queryByRole("list", { name: "Картинки к публикации" })).toBeNull();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:preview");
     expect(apiFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("PictureUploadForm — файлы и категории открыток", () => {
+  it("берёт картинки и через файловый менеджер (VED-154)", async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    render(<PictureUploadForm categories={CATEGORIES} />);
+    expect(screen.getByRole("button", { name: "Из галереи" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Из файлов" })).toBeVisible();
+    const files = screen.getByLabelText("Картинки с афоризмами из файлов");
+    // Без accept: иначе Android снова откроет одну галерею.
+    expect(files).not.toHaveAttribute("accept");
+    await user.upload(files, [new File(["x"], "otkrytka.webp", { type: "" })]);
+    expect(screen.getByText(/otkrytka\.webp/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Опубликовать в «Каждый день»: 1" }),
+    ).toBeEnabled();
+  });
+
+  it("не предлагает категории «Для вас» (VED-139)", () => {
+    render(
+      <PictureUploadForm
+        categories={[
+          ...CATEGORIES,
+          {
+            id: "c3",
+            slug: "art-only",
+            title: "Только иллюстрации",
+            parentId: null,
+            isDefault: false,
+            feed: "art",
+          } as MotivationCategoryDto,
+        ]}
+      />,
+    );
+    expect(
+      screen.queryByRole("option", { name: "Только иллюстрации" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Шастры" })).toBeInTheDocument();
   });
 });

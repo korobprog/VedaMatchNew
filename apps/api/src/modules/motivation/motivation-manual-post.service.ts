@@ -65,7 +65,7 @@ export class MotivationManualPostService {
     const profileTypes = this.profileTypes(input.profileTypes);
     const audienceTrack = this.audienceTrack(input.audienceTrack);
     const contentDate = this.contentDate(input.contentDate);
-    const category = await this.categories.resolveSlug(input.category);
+    const category = await this.categories.resolveSlug(input.category, 'art');
 
     const work = input.work?.trim() ?? '';
     const locator = input.locator?.trim() ?? '';

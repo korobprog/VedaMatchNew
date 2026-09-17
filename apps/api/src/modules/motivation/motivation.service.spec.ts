@@ -1264,7 +1264,7 @@ describe('MotivationService.addManualQuote', () => {
       category: 'smirenie',
     });
 
-    expect(categories.resolveSlug).toHaveBeenCalledWith('smirenie');
+    expect(categories.resolveSlug).toHaveBeenCalledWith('smirenie', 'art');
     expect(
       (copy as { prepareCandidate: jest.Mock }).prepareCandidate,
     ).toHaveBeenCalledWith('quote-1', 'smirenie');
