@@ -13,7 +13,14 @@ import { MusicPlayGlyph, playButtonLabel } from "./play-glyph";
 import { MusicSleepCountdown } from "./sleep-countdown";
 import { MusicQueuePanel } from "./queue-panel";
 import { useHoldSeek } from "./use-hold-seek";
-import { ArrowRightToLine, ChevronsRight, ListEnd } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowRightToLine,
+  ArrowUpToLine,
+  ChevronsRight,
+  ListEnd,
+} from "lucide-react";
+import { LIFTED_KEY, liftButtonLabel, parseLifted, serializeLifted } from "./player-lift";
 import {
   DEFAULT_PLAYBACK_MODE,
   nextPlaybackMode,
@@ -58,6 +65,7 @@ export function MiniPlayer() {
   const pathname = usePathname();
   const [queueOpen, setQueueOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [lifted, setLifted] = useState(false);
 
   /* Читаем эффектом, а не ленивым `useState`: на сервере `localStorage` нет,
      инициализатор вернул бы «развёрнута», а на клиенте — «свёрнута», и это
@@ -72,6 +80,9 @@ export function MiniPlayer() {
       if (window.localStorage.getItem(COLLAPSED_KEY) === "1") {
         setCollapsed(true);
       }
+      if (parseLifted(window.localStorage.getItem(LIFTED_KEY))) {
+        setLifted(true);
+      }
     } catch {
       // Приватный режим и запрет хранилища — не повод не работать.
     }
@@ -83,6 +94,18 @@ export function MiniPlayer() {
       const next = !was;
       try {
         window.localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        // см. выше
+      }
+      return next;
+    });
+  };
+
+  const toggleLifted = () => {
+    setLifted((was) => {
+      const next = !was;
+      try {
+        window.localStorage.setItem(LIFTED_KEY, serializeLifted(next));
       } catch {
         // см. выше
       }
@@ -167,6 +190,9 @@ export function MiniPlayer() {
       // следовать за ней: иначе под полоской в 48 точек остаётся дыра в 150.
       // Правило — в globals.css рядом с основным.
       data-collapsed={collapsed ? "true" : "false"}
+      // Поднятая полоса (VED-194) стоит выше на `--vm-player-lift`, и отступ
+      // страницы растёт вместе с ней — правило там же, в globals.css.
+      data-lifted={lifted ? "true" : "false"}
       className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
     >
       {collapsed ? (
@@ -221,6 +247,12 @@ export function MiniPlayer() {
               <path d="M18 15l-6-6-6 6" />
             </svg>
           </button>
+
+          <LiftButton
+            lifted={lifted}
+            onToggle={toggleLifted}
+            className={`${ctrl} size-8`}
+          />
 
           <button
             type="button"
@@ -608,6 +640,15 @@ export function MiniPlayer() {
               </svg>
             </button>
 
+            {/* Между «свернуть» и «закрыть» — так в карточке VED-194, и так
+                же в свёрнутом виде: кнопка про положение полосы, а не про
+                запись, и стоит с другими такими же. */}
+            <LiftButton
+              lifted={lifted}
+              onToggle={toggleLifted}
+              className={`${ctrl} h-9 w-9 sm:h-8 sm:w-8`}
+            />
+
             <button
               type="button"
               aria-label="Закрыть плеер"
@@ -623,6 +664,32 @@ export function MiniPlayer() {
       </section>
       )}
     </div>
+  );
+}
+
+/** «Поднять/опустить плеер» (VED-194). Один компонент на оба вида полосы. */
+function LiftButton({
+  lifted,
+  onToggle,
+  className,
+}: {
+  lifted: boolean;
+  onToggle: () => void;
+  className: string;
+}) {
+  const label = liftButtonLabel(lifted);
+  const Glyph = lifted ? ArrowDownToLine : ArrowUpToLine;
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      aria-pressed={lifted}
+      onClick={onToggle}
+      className={`${className} ${lifted ? "text-violet" : "text-text-2"}`}
+    >
+      <Glyph aria-hidden className="h-4 w-4" />
+    </button>
   );
 }
 
