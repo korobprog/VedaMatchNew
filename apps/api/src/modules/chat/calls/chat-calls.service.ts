@@ -60,9 +60,13 @@ const MAX_SIGNAL_BYTES = 32 * 1024;
 /** Ключи хранения последних сигналов активного звонка (VED-261). */
 const SIGNAL_PREFIX = 'chat:call:signals:';
 const SIGNAL_SEQ_PREFIX = 'chat:call:signal-seq:';
+/** Идемпотентность повтора одного сигнала (VED-261, feedback-002). */
+const SIGNAL_IDEMPOTENCY_PREFIX = 'chat:call:signal-idem:';
 /** «50 на сторону» из карточки задачи: дольше этого сигналинг звонка не
  *  живёт, а держать больше — платить памятью за то, что клиент отбросит. */
 const MAX_SIGNALS_PER_RECIPIENT = 50;
+/** `crypto.randomUUID()` — 36 символов; с запасом на будущее, не более. */
+const MAX_CLIENT_SIGNAL_ID_LENGTH = 100;
 
 interface StoredCallSignal {
   seq: number;
@@ -126,6 +130,10 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
   /** callId → когда последний раз трогали локальные сигналы — для
    *  `pruneStaleLocalSignals` (TTL без Redis, см. класс-докстринг). */
   private readonly localSignalsTouchedAt = new Map<string, number>();
+  /** callId → уже виденные `userId:clientSignalId` (идемпотентность повтора,
+   *  только без Redis — тот же жизненный цикл, что у остальных локальных
+   *  сигналов этого звонка). */
+  private readonly localIdempotentSignals = new Map<string, Set<string>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -366,11 +374,24 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
    * они бросают `ServiceUnavailableException` (503), и клиент обязан
    * повторить `POST /signal` сам, а не получить сигнал, потерянный на
    * инстансе, который следующий `GET /signals` может даже не увидеть.
+   *
+   * Именно этот повтор и требует `clientSignalId` (VED-261, feedback-002):
+   * клиент, получивший 503 (или любую другую сетевую ошибку) уже ПОСЛЕ того,
+   * как сервер успешно выполнил `nextSignalSeq`/`storeSignal` — классический
+   * «write succeeded, response lost» — раньше получал бы второй, независимый
+   * `seq` на тот же самый offer/answer/ICE-кандидат при повторе. Дедупликация
+   * клиента (`admitCallSignal`) сравнивает только `seq` монотонно, содержимое
+   * не знает — второй экземпляр прошёл бы как «новый» сигнал и мог бы
+   * запустить незапрошенную повторную реегоциацию (лишний `answer`,
+   * `InvalidStateError` у второй стороны). `claimClientSignal` делает
+   * повторную доставку С ТЕМ ЖЕ `clientSignalId` идемпотентным no-op:
+   * ничего не выдаёт, не сохраняет и не публикует повторно.
    */
   async signal(
     userId: string,
     callId: string,
     signal: ChatCallSignal,
+    clientSignalId?: string,
   ): Promise<void> {
     if (!isSignal(signal)) throw new BadRequestException('Неверный сигнал');
     if (Buffer.byteLength(JSON.stringify(signal), 'utf8') > MAX_SIGNAL_BYTES)
@@ -378,6 +399,20 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
 
     const row = await this.requireCall(callId, userId);
     if (isFinal(row.status)) throw new ConflictException('Звонок уже завершён');
+
+    const idempotencyKey = normalizeClientSignalId(clientSignalId);
+    if (idempotencyKey) {
+      const isFirstDelivery = await this.claimClientSignal(
+        callId,
+        userId,
+        idempotencyKey,
+      );
+      // Уже обработан на предыдущей попытке — тот сигнал (offer/answer/
+      // кандидат) уже выдан, сохранён и разослан ровно один раз; здесь
+      // отвечаем 204, как и на «настоящий» успех, ничего больше не делая.
+      if (!isFirstDelivery) return;
+    }
+
     const to = row.callerId === userId ? row.calleeId : row.callerId;
     const seq = await this.nextSignalSeq(callId);
     await this.storeSignal(callId, to, { seq, fromUserId: userId, signal });
@@ -831,6 +866,56 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Идемпотентность одного клиентского сигнала (VED-261, feedback-002,
+   * блокирующий п.1): возвращает `true` РОВНО ОДИН РАЗ для пары
+   * `(callId, userId, clientSignalId)` — на первый вызов. Любой следующий
+   * вызов с теми же тремя значениями (партиальный успех — сервер уже
+   * обработал сигнал, а ответ клиенту не дошёл, и клиент честно повторил
+   * тот же `POST /signal`) возвращает `false`, и `signal()` не выдаёт новый
+   * `seq`, не сохраняет и не публикует сигнал заново.
+   *
+   * `SET key NX` — атомарная заявка: не «прочитать, потом решить», а «занять
+   * слот, и только победитель гонки продолжает». Значение под ключом не
+   * несёт смысла (не `seq` — вызывающему коду он не нужен, `POST /signal`
+   * ничего не возвращает, 204) — это чистый маркер «уже видели». TTL — тот
+   * же, что у самих сигналов: ключ переживает звонок ненадолго, отдельная
+   * очистка в `finish()` не заведена намеренно — `clientSignalId` в звонке
+   * может быть многие десятки (по одному на каждый ICE-кандидат), а не
+   * фиксированный набор из двух записей, как у `caller`/`callee` в
+   * `clearSignals` — TTL здесь честнее, чем пытаться перечислить все ключи.
+   */
+  private async claimClientSignal(
+    callId: string,
+    userId: string,
+    clientSignalId: string,
+  ): Promise<boolean> {
+    if (this.redis) {
+      try {
+        const key = `${SIGNAL_IDEMPOTENCY_PREFIX}${callId}:${userId}:${clientSignalId}`;
+        const result = await this.withRedisRetry(() =>
+          this.redis!.set(key, '1', 'PX', BUSY_TTL_ACTIVE_MS, 'NX'),
+        );
+        return result === 'OK';
+      } catch (error) {
+        this.logger.error(
+          `Идемпотентность сигнала не проверена через Redis после повторов: ${String(error)}`,
+        );
+        throw new ServiceUnavailableException(
+          'Не удалось сохранить сигнал — попробуйте ещё раз',
+        );
+      }
+    }
+    this.pruneStaleLocalSignals();
+    const seen = this.localIdempotentSignals.get(callId) ?? new Set<string>();
+    this.localIdempotentSignals.set(callId, seen);
+    const member = `${userId}:${clientSignalId}`;
+    if (seen.has(member)) return false;
+    seen.add(member);
+    this.touchLocalSignals(callId);
+    return true;
+  }
+
+  /**
    * Общий счётчик `seq` на звонок (не на получателя): порядок среди
    * сигналов ОДНОГО адресата от этого остаётся строго возрастающим — то,
    * что нужно клиенту для `after=` — а с Redis `INCR` он ещё и атомарен
@@ -949,6 +1034,7 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
     this.localSignalSeq.delete(row.id);
     this.localSignals.delete(row.id);
     this.localSignalsTouchedAt.delete(row.id);
+    this.localIdempotentSignals.delete(row.id);
     if (this.redis) {
       try {
         await this.redis.del(
@@ -985,6 +1071,7 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
         this.localSignalsTouchedAt.delete(callId);
         this.localSignalSeq.delete(callId);
         this.localSignals.delete(callId);
+        this.localIdempotentSignals.delete(callId);
       }
     }
   }
@@ -1022,4 +1109,18 @@ function isSignal(value: unknown): value is ChatCallSignal {
     return Boolean(c) && typeof c!.candidate === 'string';
   }
   return false;
+}
+
+/**
+ * `clientSignalId` необязателен и приходит от клиента как есть — не
+ * валидная/чужеродная строка молча не участвует в идемпотентности (сигнал
+ * просто обрабатывается как раньше, без дедупликации повтора), а не роняет
+ * запрос 400: клиент старой версии/без ключа не должен внезапно сломаться.
+ */
+function normalizeClientSignalId(value: unknown): string | null {
+  return typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_CLIENT_SIGNAL_ID_LENGTH
+    ? value
+    : null;
 }

@@ -3,6 +3,7 @@ import type { ChatCallKind, ChatCallSignal, ChatIceServerDto } from '@vedamatch/
 import { describeIceServerForLog, normalizeIceServers } from './ice-server-normalize';
 import { parseCandidate } from './ice-probe';
 import { relayedFromStats, type RtcStatsReport } from './relay-stats';
+import { decideSdpApply, type SignalingState } from './webrtc-signal-guard';
 
 /**
  * Обёртка над `RTCPeerConnection` для звонка один на один — перенос
@@ -20,7 +21,9 @@ import { relayedFromStats, type RtcStatsReport } from './relay-stats';
  * на самих классах и типизированы штатно, как в `ice-probe-runner.ts`.
  *
  * Не тестируется в jest-expo: склейка вокруг нативного модуля. Чистая
- * часть (разбор статистики relay) — `relay-stats.ts`, со своим тестом.
+ * часть (разбор статистики relay) — `relay-stats.ts`; таблица состояний
+ * переговоров (когда применять offer/answer, а когда это дубль/glare) —
+ * `webrtc-signal-guard.ts`, со своими тестами.
  */
 
 export interface SessionHandlers {
@@ -307,6 +310,23 @@ export class CallSession {
   async handleSignal(signal: ChatCallSignal): Promise<void> {
     if (this.closed) return;
     if (signal.kind === 'sdp') {
+      // Defence-in-depth (VED-261, feedback-002): идемпотентность на
+      // сервере уже не даёт партиальному успеху ретрая породить второй
+      // сигнал, но если дубль/поздний ответ второй стороны всё же дошёл
+      // (старый клиент без clientSignalId, ручной вызов API) — не даём
+      // `setRemoteDescription` бросить `InvalidStateError` и не запускаем
+      // незапрошенную реегоциацию поверх уже идущих переговоров (glare).
+      // Проверка — до `answerInFlight`/`setRemoteDescription`: игнорируемый
+      // сигнал не должен трогать буфер кандидатов вовсе.
+      const decision = decideSdpApply(signal.sdp.type, this.pc.signalingState as SignalingState);
+      if (decision !== 'apply') {
+        // eslint-disable-next-line no-console -- та же диагностика, что у
+        // остального сигналинга в этом файле (см. onicecandidate выше).
+        console.warn(
+          `[calls] ${signal.sdp.type} проигнорирован: signalingState=${this.pc.signalingState} (${decision})`,
+        );
+        return;
+      }
       const isOffer = signal.sdp.type === 'offer';
       if (isOffer) this.answerInFlight = true;
       await this.pc.setRemoteDescription(signal.sdp);

@@ -44,10 +44,10 @@ export function createChatCallsApi(api: ApiClient) {
     end: (callId: string, body: EndChatCallRequest = {}) =>
       api.request<ChatCallDto>(`/chat/calls/${callId}/end`, { method: 'POST', body }),
 
-    signal: (callId: string, signal: ChatCallSignal) =>
+    signal: (callId: string, signal: ChatCallSignal, clientSignalId?: string) =>
       api.request<void>(`/chat/calls/${callId}/signal`, {
         method: 'POST',
-        body: { signal },
+        body: { signal, clientSignalId },
       }),
 
     /**

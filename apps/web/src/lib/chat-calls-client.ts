@@ -81,10 +81,11 @@ export function endChatCall(
 export function sendChatCallSignal(
   callId: string,
   signal: ChatCallSignal,
+  clientSignalId?: string,
 ): Promise<void> {
   return send<void>(`/chat/calls/${callId}/signal`, {
     method: "POST",
-    body: JSON.stringify({ signal }),
+    body: JSON.stringify({ signal, clientSignalId }),
   });
 }
 

@@ -129,7 +129,7 @@ export class ChatCallsController {
     @Param('id') id: string,
     @Body() body: ChatCallSignalRequest,
   ): Promise<void> {
-    await this.calls.signal(user.sub, id, body?.signal);
+    await this.calls.signal(user.sub, id, body?.signal, body?.clientSignalId);
   }
 
   /**

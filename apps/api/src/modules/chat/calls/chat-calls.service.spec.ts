@@ -135,6 +135,54 @@ describe('ChatCallsService — сигналы активного звонка (V
     );
   });
 
+  it('повтор с тем же clientSignalId (партиальный успех) не создаёт второй сигнал (VED-261, feedback-002)', async () => {
+    const { service, events } = buildService();
+
+    await service.signal('caller', 'call-1', sdpOffer, 'client-signal-1');
+    // Ответ клиенту «потерялся» — тот же POST повторён с тем же ключом.
+    await service.signal('caller', 'call-1', sdpOffer, 'client-signal-1');
+    await service.signal('caller', 'call-1', sdpOffer, 'client-signal-1');
+
+    // Рассылка (и, следовательно, seq) — ровно один раз.
+    expect(events.publish).toHaveBeenCalledTimes(1);
+    const signals = await service.signalsSince('callee', 'call-1', 0);
+    expect(signals).toEqual([
+      { seq: 1, fromUserId: 'caller', signal: sdpOffer },
+    ]);
+  });
+
+  it('разные clientSignalId — разные сигналы, даже с одинаковым содержимым', async () => {
+    const { service } = buildService();
+
+    await service.signal('caller', 'call-1', sdpOffer, 'client-signal-1');
+    await service.signal('caller', 'call-1', sdpOffer, 'client-signal-2');
+
+    const signals = await service.signalsSince('callee', 'call-1', 0);
+    expect(signals.map((s) => s.seq)).toEqual([1, 2]);
+  });
+
+  it('без clientSignalId (старый клиент) поведение не меняется — каждый вызов выдаёт новый seq', async () => {
+    const { service } = buildService();
+
+    await service.signal('caller', 'call-1', sdpOffer);
+    await service.signal('caller', 'call-1', sdpOffer);
+
+    const signals = await service.signalsSince('callee', 'call-1', 0);
+    expect(signals.map((s) => s.seq)).toEqual([1, 2]);
+  });
+
+  it('одинаковый clientSignalId, но от разных отправителей (caller/callee) — не путается', async () => {
+    const { service } = buildService();
+
+    await service.signal('caller', 'call-1', sdpOffer, 'shared-id');
+    await service.signal('callee', 'call-1', sdpAnswer, 'shared-id');
+
+    const forCallee = await service.signalsSince('callee', 'call-1', 0);
+    const forCaller = await service.signalsSince('caller', 'call-1', 0);
+    expect(forCallee).toHaveLength(1);
+    expect(forCaller).toHaveLength(1);
+  });
+
   it('signalsSince отдаёт только сигналы получателя строго после `after`, по возрастанию', async () => {
     const { service } = buildService();
 

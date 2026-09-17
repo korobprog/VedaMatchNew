@@ -47,6 +47,7 @@ import {
   shouldCatchUpCallSignals,
   type SignalSeqState,
 } from "./call-signal-catchup";
+import { SignalSendQueue } from "./call-signal-send-queue";
 import { sendWithRetry } from "./call-signal-retry";
 import { CallSession } from "./webrtc-session";
 import { startRingtone } from "./ringtone";
@@ -112,12 +113,18 @@ export function ChatCallProvider({
   /** Наибольший применённый `seq` сигнала этого звонка (VED-261) — общий
    *  для потока и для дочитывания через `GET /chat/calls/:id/signals`. */
   const signalSeqRef = useRef<SignalSeqState>(INITIAL_SIGNAL_SEQ_STATE);
+  /** Сериализация отправки (VED-261, feedback-002): следующий сигнал
+   *  уходит на сервер только после того, как предыдущий полностью
+   *  разрешился — иначе параллельные ретраи могут доставить их не в том
+   *  порядке, в котором они были сгенерированы. */
+  const sendQueueRef = useRef(new SignalSendQueue());
 
   const closeSession = useCallback(() => {
     sessionRef.current?.close();
     sessionRef.current = null;
     queuedSignals.current = [];
     signalSeqRef.current = INITIAL_SIGNAL_SEQ_STATE;
+    sendQueueRef.current = new SignalSendQueue();
     setLocalStream(null);
     setRemoteStream(null);
   }, []);
@@ -171,12 +178,20 @@ export function ChatCallProvider({
         onSignal: (signal) => {
           const id = stateRef.current.call?.id;
           if (!id) return;
-          // VED-261: сервер отвечает 503, если сигнал не удалось надёжно
-          // сохранить (временный сбой Redis) — это явная просьба повторить,
-          // а не молчаливая потеря. `sendWithRetry` не бросает: если и три
-          // попытки не помогли, кандидат/SDP всё равно подстрахован
-          // таймаутом `connecting` и дочитыванием при следующем реконнекте.
-          void sendWithRetry(() => sendChatCallSignal(id, signal));
+          // Один ключ на сигнал, не на попытку (VED-261, feedback-002,
+          // блокирующий п.1): partial-success ретрай («сервер сохранил,
+          // ответ потерялся») с тем же clientSignalId — идемпотентный
+          // no-op на сервере, а не второй offer/answer с новым seq.
+          const clientSignalId = crypto.randomUUID();
+          // Очередь — следующий сигнал этой сессии стартует только после
+          // того, как этот полностью разрешится (успехом или исчерпанием
+          // попыток), иначе параллельные ретраи могут обогнать друг друга.
+          void sendQueueRef.current.enqueue(() =>
+            // VED-261: сервер отвечает 503, если сигнал не удалось надёжно
+            // сохранить (временный сбой Redis) — это явная просьба
+            // повторить, а не молчаливая потеря.
+            sendWithRetry(() => sendChatCallSignal(id, signal, clientSignalId)),
+          );
         },
         onRemoteStream: (stream) => setRemoteStream(stream),
         onConnected: () => dispatch({ type: "connected", at: Date.now() }),
@@ -193,7 +208,7 @@ export function ChatCallProvider({
     const session = sessionRef.current;
     if (!session) return;
     for (const signal of queuedSignals.current.splice(0))
-      await session.handleSignal(signal).catch(() => undefined);
+      await session.handleSignal(signal).catch(logHandleSignalError);
   }, []);
 
   /**
@@ -208,7 +223,7 @@ export function ChatCallProvider({
       if (!admit) return;
       signalSeqRef.current = next;
       const session = sessionRef.current;
-      if (session) await session.handleSignal(signal).catch(() => undefined);
+      if (session) await session.handleSignal(signal).catch(logHandleSignalError);
       else queuedSignals.current.push(signal);
     },
     [],
@@ -588,6 +603,21 @@ export function ChatCallProvider({
 
 function isCallEvent(event: ChatStreamEvent): event is ChatCallStreamEvent {
   return event.type.startsWith("call.");
+}
+
+/**
+ * `CallSession.handleSignal` отклоняется по двум причинам: настоящая сетевая
+ * ошибка (редко, сигнал уже применён локально до сети — тут отклонять
+ * нечему) и защитный `InvalidStateError`/наш `console.warn`-guard внутри
+ * `webrtc-session.ts` (дубль/поздний ответ второй стороны — VED-261,
+ * feedback-002). Раньше оба случая молча проглатывались
+ * (`.catch(() => undefined)`) — деградацию было не отличить от нормальной
+ * работы, кроме как по факту багрепорта. Звонок это не ломает (WebRTC-сессия
+ * просто игнорирует лишний сигнал), поэтому не пробрасываем ошибку дальше —
+ * только делаем её видимой.
+ */
+function logHandleSignalError(error: unknown): void {
+  console.warn("[calls] handleSignal завершился с ошибкой", error);
 }
 
 /** Отказ в доступе к микрофону и прочие ошибки медиа — словами. */

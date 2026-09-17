@@ -5,6 +5,7 @@ import type { ChatCallSignal } from '@vedamatch/shared';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import type { ChatConversationsService } from '../chat-conversations.service';
 import type { ChatEventsService } from '../chat-events.service';
+import { BUSY_TTL_ACTIVE_MS } from './call-state';
 import { ChatCallsService } from './chat-calls.service';
 
 /**
@@ -29,13 +30,32 @@ interface FakeMultiChain {
 
 class FakeRedis {
   status = 'ready';
+  /** Настоящее NX/GET/DEL поверх обычной карты — идемпотентность
+   *  (`claimClientSignal`) и «занятость» полагаются на реальную семантику
+   *  `SET ... NX`, а не на заглушку, всегда отвечающую «OK». */
+  private readonly store = new Map<string, string>();
   connect = jest.fn(() => Promise.resolve());
   quit = jest.fn(() => Promise.resolve());
   incr = jest.fn<Promise<number>, [string]>();
   lrange = jest.fn<Promise<string[]>, [string, number, number]>();
-  del = jest.fn(() => Promise.resolve(1));
-  get = jest.fn(() => Promise.resolve(null));
-  set = jest.fn(() => Promise.resolve('OK'));
+  del = jest.fn((...keys: string[]) => {
+    let count = 0;
+    for (const key of keys) if (this.store.delete(key)) count += 1;
+    return Promise.resolve(count);
+  });
+  get = jest.fn((key: string) => Promise.resolve(this.store.get(key) ?? null));
+  set = jest.fn(
+    (
+      key: string,
+      value: string,
+      ...rest: unknown[]
+    ): Promise<string | null> => {
+      const nx = rest.includes('NX');
+      if (nx && this.store.has(key)) return Promise.resolve(null);
+      this.store.set(key, value);
+      return Promise.resolve('OK');
+    },
+  );
   multiCalls: FakeMultiChain[] = [];
   /** По умолчанию — успех; тест может переопределить `exec` на отказ. */
   multi = jest.fn((): FakeMultiChain => {
@@ -191,6 +211,50 @@ describe('ChatCallsService — сигналы через Redis (VED-261)', () =>
     expect(signals).toEqual([
       { seq: 1, fromUserId: 'caller', signal: sdpOffer },
     ]);
+  });
+
+  it('повтор с тем же clientSignalId через Redis — идемпотентный no-op, seq не растёт (VED-261, feedback-002)', async () => {
+    const { service, redis } = buildServiceWithRedis();
+    redis.incr.mockResolvedValueOnce(1);
+
+    await service.signal('caller', 'call-1', sdpOffer, 'client-signal-1');
+    // «Партиальный успех»: сервер уже обработал, ответ клиенту потерялся —
+    // тот же ключ приходит снова.
+    await service.signal('caller', 'call-1', sdpOffer, 'client-signal-1');
+    await service.signal('caller', 'call-1', sdpOffer, 'client-signal-1');
+
+    expect(redis.set).toHaveBeenCalledWith(
+      'chat:call:signal-idem:call-1:caller:client-signal-1',
+      '1',
+      'PX',
+      BUSY_TTL_ACTIVE_MS,
+      'NX',
+    );
+    // INCR/запись/публикация — только на первую, настоящую попытку.
+    expect(redis.incr).toHaveBeenCalledTimes(1);
+    expect(redis.multiCalls).toHaveLength(1);
+  });
+
+  it('разные clientSignalId для одного звонка/отправителя — разные сигналы', async () => {
+    const { service, redis } = buildServiceWithRedis();
+    redis.incr.mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+
+    await service.signal('caller', 'call-1', sdpOffer, 'client-signal-1');
+    await service.signal('caller', 'call-1', sdpOffer, 'client-signal-2');
+
+    expect(redis.incr).toHaveBeenCalledTimes(2);
+    expect(redis.multiCalls).toHaveLength(2);
+  });
+
+  it('сбой SET на проверке идемпотентности — повтор, затем 503, до INCR дело не доходит', async () => {
+    const { service, redis } = buildServiceWithRedis();
+    redis.set.mockRejectedValue(new Error('ECONNRESET'));
+
+    await expect(
+      service.signal('caller', 'call-1', sdpOffer, 'client-signal-1'),
+    ).rejects.toThrow(ServiceUnavailableException);
+    expect(redis.set).toHaveBeenCalledTimes(2);
+    expect(redis.incr).not.toHaveBeenCalled();
   });
 
   it('INCR падает — повтор (2 попытки), затем 503, sig не сохраняется как локальный', async () => {
