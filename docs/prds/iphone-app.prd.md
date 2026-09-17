@@ -191,6 +191,14 @@ SQL-запросы не нужны.
       же, как через Google и Яндекс (`ResolveHooks.beforeCreate`)?
 - [ ] Отвязка последнего «настоящего» способа: можно ли остаться только с
       Telegram?
+- [x] **Вход виджетом на самом сайте** (не в мини-приложении) — решено
+      18.09.2026: `GET /auth/telegram/callback` +
+      `telegram-widget.js` (core.telegram.org/widgets/login), секрет подписи
+      SHA256(bot_token) — ОТЛИЧАЕТСЯ от секрета мини-приложения
+      HMAC-SHA256(bot_token, key="WebAppData"), см. `telegram-login-widget.ts`.
+      Требует одноразовой настройки в BotFather — `/setdomain` →
+      `vedamatch.com` (у бота ровно один домен для виджета; мини-приложение
+      этого не требует, у него свой адрес через `/newapp`).
 - [ ] Какие iPhone есть для замеров (SE 2020 / iPhone 11)?
 - [ ] Нужна ли аналитика экранов в веб-версии, чтобы мерить воронку.
 

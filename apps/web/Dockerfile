@@ -5,6 +5,9 @@ WORKDIR /app
 FROM base AS build
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# Имя бота для кнопки «Войти через Telegram» на /login (telegram-login-button.tsx).
+ARG NEXT_PUBLIC_TELEGRAM_BOT
+ENV NEXT_PUBLIC_TELEGRAM_BOT=$NEXT_PUBLIC_TELEGRAM_BOT
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
