@@ -47,6 +47,35 @@ describe("FeedAttributionFilter", () => {
     expect(trigger.className).toMatch(/before:content-\[['"]{2}\]/);
   });
 
+  // VED-252, круг 4: значок без подписи хорош внутри ряда вкладок, но не
+  // сам по себе — на пустой ленте (нет ряда рядом) он висел бы голой
+  // иконкой, ничего не объясняя. `variant="chip"` возвращает вид до
+  // VED-252: пилюля с рамкой/подложкой и подписью, видимой, пока фильтр
+  // не выбран.
+  it('variant="chip" — самостоятельная пилюля с подписью, не значок из ряда', () => {
+    render(<FeedAttributionFilter state={{ tab: "forYou" }} variant="chip" />);
+
+    const trigger = screen.getByRole("button", { name: "Фильтр по автору и источнику" });
+    expect(trigger).toHaveTextContent("Автор и источник");
+    expect(trigger.className).toMatch(/rounded-full/);
+    expect(trigger.className).toMatch(/\bborder\b/);
+    // Не «inline»-раскладка (узкая, под ряд вкладок, без подложки).
+    expect(trigger.className).not.toMatch(/\bw-7\b/);
+    expect(trigger.className).not.toMatch(/before:absolute/);
+  });
+
+  it('variant="chip" с активным фильтром прячет подпись — чипы и так её заменяют', () => {
+    render(
+      <FeedAttributionFilter state={{ tab: "forYou", work: "Бхагавад-гита" }} variant="chip" />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "Изменить фильтр по автору и источнику" });
+    expect(trigger).toHaveTextContent("");
+    expect(
+      screen.getByRole("link", { name: "Убрать фильтр по источнику: Бхагавад-гита" }),
+    ).toBeInTheDocument();
+  });
+
   it("выбранное видно чипами, крестик убирает только своё", () => {
     render(
       <FeedAttributionFilter

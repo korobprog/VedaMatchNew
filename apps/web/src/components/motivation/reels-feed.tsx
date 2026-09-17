@@ -448,7 +448,11 @@ export function ReelsFeed({
         {/* Вкладки и в пустой ленте: из пустых «Открыток» иначе можно было
             уйти только в «Ленту», а до «Избранного» — никак. */}
         <Tabs tab={tab} order={order} category={category} />
-        <FeedAttributionFilter state={filterState} />
+        {/* VED-252, круг 4: значок фильтра здесь — не в ряду вкладок (тот
+            `absolute`, из потока `flex-col` исключён), а отдельной строкой,
+            поэтому вариант `"chip"` — самостоятельная пилюля с подписью,
+            а не голый значок без опоры (см. JSDoc FeedAttributionFilter). */}
+        <FeedAttributionFilter state={filterState} variant="chip" />
         {categoryNav()}
         <p className="font-display text-lg">
           {tab === "saved"

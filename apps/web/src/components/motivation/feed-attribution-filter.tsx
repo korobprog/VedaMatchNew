@@ -22,14 +22,32 @@ import {
  *
  * Отдельный компонент, а не ещё одна строка в меню категорий: категории —
  * оглавление редакции, а автор и источник — свойство самого афоризма, и
- * списки у них свои. Кнопка-триггер — один значок в ряду вкладок (VED-252,
- * между «Открытки» и «Избранное»): текст «Автор и источник» под неё в
- * тесный ряд не помещался, а выбор виден и так — чипами ниже.
+ * списки у них свои.
+ *
+ * Два варианта отображения (VED-252, круг 4):
+ * - `"inline"` (по умолчанию) — один значок в ряду вкладок (между
+ *   «Открытки» и «Избранное», `Tabs()`): текст «Автор и источник» под него
+ *   в тесный ряд не помещался, а выбор виден и так — чипами ниже, точкой
+ *   на значке при активном фильтре.
+ * - `"chip"` — самостоятельная пилюля с подписью (вид до VED-252): для
+ *   мест без ряда вкладок рядом, где значку без подписи не на что
+ *   опереться визуально — например, пустое состояние ленты
+ *   (`reels-feed.tsx`, ветки «Открыток здесь пока нет» и т.п.): круг 1
+ *   переписал компонент только под «inline»-контекст, и там же
+ *   отдельно вызванная кнопка стала голой полупрозрачной иконкой без
+ *   рамки и подписи, повисшей само по себе — баг, который поймал не тест,
+ *   а второй проход оценщика по коду.
  *
  * Список грузится при открытии: он нужен одному из многих, а лента
  * открывается у всех.
  */
-export function FeedAttributionFilter({ state }: { state: FeedFilterState }) {
+export function FeedAttributionFilter({
+  state,
+  variant = "inline",
+}: {
+  state: FeedFilterState;
+  variant?: "inline" | "chip";
+}) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   // Закрытое окно возвращает фокус на кнопку — иначе клавиатура теряет место.
@@ -43,6 +61,59 @@ export function FeedAttributionFilter({ state }: { state: FeedFilterState }) {
 
   const valueChip =
     "inline-flex min-h-8 max-w-[9rem] items-center gap-1 rounded-full border border-white bg-white px-2.5 text-xs font-medium text-[#0A0614] backdrop-blur sm:max-w-[12rem]";
+  // Чипы выбранного — общие для обоих вариантов: крестик убирает только своё.
+  const valueChips = (
+    <>
+      {state.work && (
+        <Link
+          href={filterHref(state, { work: null })}
+          aria-label={`Убрать фильтр по источнику: ${state.work}`}
+          className={valueChip}
+        >
+          <span aria-hidden="true">📖</span>
+          <span className="truncate">{state.work}</span>
+          <span aria-hidden="true">✕</span>
+        </Link>
+      )}
+      {state.speaker && (
+        <Link
+          href={filterHref(state, { speaker: null })}
+          aria-label={`Убрать фильтр по автору: ${state.speaker}`}
+          className={valueChip}
+        >
+          <span aria-hidden="true">🪶</span>
+          <span className="truncate">{state.speaker}</span>
+          <span aria-hidden="true">✕</span>
+        </Link>
+      )}
+    </>
+  );
+  const dialog =
+    open && createPortal(<FilterSheet state={state} onClose={close} />, document.body);
+
+  if (variant === "chip") {
+    // Пилюля сама по себе объясняет, что это фильтр, даже без соседнего
+    // ряда вкладок: подпись видна, пока фильтр не выбран, а рамка и
+    // подложка отделяют кнопку от текста вокруг (вид, что был до VED-252).
+    return (
+      <div className="flex flex-wrap items-center justify-center gap-1.5">
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          aria-label={active ? "Изменить фильтр по автору и источнику" : "Фильтр по автору и источнику"}
+          className="inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border border-white/25 bg-black/40 px-2.5 text-xs font-medium text-white backdrop-blur transition hover:bg-black/60"
+        >
+          <FilterIcon />
+          {!active && "Автор и источник"}
+        </button>
+        {valueChips}
+        {dialog}
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Значок, без подписи и без своей подложки (VED-252): ряд вкладок
@@ -74,41 +145,18 @@ export function FeedAttributionFilter({ state }: { state: FeedFilterState }) {
       </button>
       {/* Выбранное — чипами с крестиком строкой ниже: в самом ряду вкладок
           им места нет, а прежний приём «чип убирает своё» остаётся. `w-full`
-          (не `basis-full` — в `flex-col` пустого состояния ленты «базис» это
-          высота, не ширина) переносит блок на новую строку в `Tabs()`, где
-          родитель `flex flex-wrap`, и остаётся обычной полноширинной строкой
-          там, где родитель `flex-col` (пустая лента). `order-last` держит
-          чипы после значка в обоих случаях. */}
+          переносит блок на новую строку в `Tabs()`, чей родитель — `flex
+          flex-wrap`: это единственное место, где рендерится `"inline"`
+          (см. JSDoc выше — вне ряда вкладок используется `"chip"`).
+          `order-last` держит чипы после значка. */}
       {(state.work || state.speaker) && (
         <span className="order-last flex w-full flex-wrap items-center justify-center gap-1.5 pt-1">
-          {state.work && (
-            <Link
-              href={filterHref(state, { work: null })}
-              aria-label={`Убрать фильтр по источнику: ${state.work}`}
-              className={valueChip}
-            >
-              <span aria-hidden="true">📖</span>
-              <span className="truncate">{state.work}</span>
-              <span aria-hidden="true">✕</span>
-            </Link>
-          )}
-          {state.speaker && (
-            <Link
-              href={filterHref(state, { speaker: null })}
-              aria-label={`Убрать фильтр по автору: ${state.speaker}`}
-              className={valueChip}
-            >
-              <span aria-hidden="true">🪶</span>
-              <span className="truncate">{state.speaker}</span>
-              <span aria-hidden="true">✕</span>
-            </Link>
-          )}
+          {valueChips}
         </span>
       )}
       {/* В портал: значок стоит внутри ряда вкладок со своим `z-index`, и
           окно внутри него оказывалось под нижним рядом кнопок ленты. */}
-      {open &&
-        createPortal(<FilterSheet state={state} onClose={close} />, document.body)}
+      {dialog}
     </>
   );
 }

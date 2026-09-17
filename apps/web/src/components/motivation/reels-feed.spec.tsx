@@ -546,6 +546,28 @@ describe("ReelsFeed", () => {
     ).toBeInTheDocument();
   });
 
+  // VED-252, круг 4: значок фильтра здесь — не в ряду вкладок (тот
+  // `absolute`, из потока `flex-col` исключён), а отдельной строкой; без
+  // подписи и подложки он висел бы голой полупрозрачной иконкой, ничего не
+  // объясняя (баг, который не ловил ни один из первых трёх кругов).
+  // `variant="chip"` должен вернуть самостоятельную пилюлю с подписью,
+  // видимой, пока фильтр не выбран.
+  it("на пустой ленте без активного фильтра кнопка подписана, а не голый значок", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed initial={{ items: [], nextCursor: null }} tab="cards" donation={null} />,
+    );
+
+    expect(screen.getByText("Открыток здесь пока нет")).toBeInTheDocument();
+    const trigger = screen.getByRole("button", { name: "Фильтр по автору и источнику" });
+    expect(trigger).toHaveTextContent("Автор и источник");
+    // Самостоятельная пилюля — рамка и подложка, а не «inline»-значок без
+    // подписи (`w-7`), уместный только внутри ряда вкладок.
+    expect(trigger.className).toMatch(/rounded-full/);
+    expect(trigger.className).toMatch(/\bborder\b/);
+    expect(trigger.className).not.toMatch(/\bw-7\b/);
+  });
+
   it.each([
     ["cards", "style=cards"],
     ["forYou", "style=art"],
