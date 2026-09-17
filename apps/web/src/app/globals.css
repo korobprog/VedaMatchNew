@@ -1033,13 +1033,13 @@ select option {
  * уезжал под полосу целиком.
  */
 body:has([data-music-player]) {
-  --vm-player-space: calc(144px + max(0.75rem, env(safe-area-inset-bottom)));
+  --vm-player-space: calc(144px + var(--vm-player-lift-now, 0px) + max(0.75rem, env(safe-area-inset-bottom)));
   padding-bottom: var(--vm-player-space);
 }
 
 @media (min-width: 640px) {
   body:has([data-music-player]) {
-    --vm-player-space: calc(64px + max(0.75rem, env(safe-area-inset-bottom)));
+    --vm-player-space: calc(64px + var(--vm-player-lift-now, 0px) + max(0.75rem, env(safe-area-inset-bottom)));
     padding-bottom: var(--vm-player-space);
   }
 }
@@ -1052,8 +1052,33 @@ body:has([data-music-player]) {
  * куда-нибудь выше безопасно.
  */
 body:has([data-music-player][data-collapsed="true"]) {
-  --vm-player-space: calc(48px + max(0.75rem, env(safe-area-inset-bottom)));
+  --vm-player-space: calc(48px + var(--vm-player-lift-now, 0px) + max(0.75rem, env(safe-area-inset-bottom)));
   padding-bottom: var(--vm-player-space);
+}
+
+/* Поднятая полоса (VED-194).
+ *
+ * Поднимается ровно на высоту нижнего ряда кнопок ленты «Вдохновения»
+ * (`reels-feed.tsx`: `py-2` и кружок 44 с подписью). Замерено в браузере на
+ * 375 точках: ряд 66px, полоса стоит на 12px выше края. Подъём 72px даёт
+ * над рядом ~18px зазора и запас на подписи, которые на другом шрифте
+ * телефона выходят выше. Ряд лежит у самого края экрана, без safe-area, —
+ * поэтому подъём прибавляется к обычному отступу полосы, а не заменяет его.
+ * Поменялся ряд — перемерь.
+ *
+ * Отступ страницы растёт на ту же величину: переменная подставляется в три
+ * правила выше, и поднятая полоса не закрывает последнюю строку раздела.
+ */
+:root {
+  --vm-player-lift: 72px;
+}
+
+[data-music-player][data-lifted="true"] {
+  bottom: var(--vm-player-lift);
+}
+
+body:has([data-music-player][data-lifted="true"]) {
+  --vm-player-lift-now: var(--vm-player-lift);
 }
 
 /* Safe area padding for iOS */
