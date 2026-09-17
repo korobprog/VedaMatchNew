@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-const require = createRequire('/Users/mamu/Documents/VedaMatchNew-m6/apps/web/package.json');
+const require = createRequire('/Users/mamu/Documents/VedaMatchNew-m10/apps/web/package.json');
 const { chromium } = require('@playwright/test');
 const [url, selectorText, runs = '3'] = process.argv.slice(2);
 const browser = await chromium.launch();

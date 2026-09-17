@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { overlayTopOffset } from '@/lib/calls/call-overlay-position';
 import { shouldShowReturnBanner } from '@/lib/calls/call-screen-return';
-import { useChatCalls } from '@/lib/calls/call-provider';
+import { useChatCalls } from '@/lib/calls/chat-calls-context';
 import { useElapsedLabel } from '@/lib/calls/use-elapsed-label';
 import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';

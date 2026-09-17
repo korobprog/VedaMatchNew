@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
 import { overlayTopOffset } from '@/lib/calls/call-overlay-position';
 import { companionOf } from '@/lib/calls/call-machine';
-import { useChatCalls } from '@/lib/calls/call-provider';
+import { useChatCalls } from '@/lib/calls/chat-calls-context';
 import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';

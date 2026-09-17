@@ -2,10 +2,10 @@ import type { ContactsAshram, ContactsCardDto, ContactsFormat, ContactsRequestDt
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
 import { InlineError } from '@/components/inline-error';
+import { PersonKeyboardAwareScroll as KeyboardAwareScrollView } from '@/components/keyboard-controller-web';
 import type { ContactsDetailsValue } from '@/components/people/people-details';
 import { PeopleDetails } from '@/components/people/people-details';
 import { RetryButton } from '@/components/retry-button';

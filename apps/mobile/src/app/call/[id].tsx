@@ -18,7 +18,7 @@ import {
 import { shouldEnableProximity } from '@/lib/calls/audio-session-policy';
 import { isPermissionDeniedMessage } from '@/lib/calls/call-media-error';
 import { companionOf, endedLabel, roleIn } from '@/lib/calls/call-machine';
-import { useChatCalls } from '@/lib/calls/call-provider';
+import { useChatCalls } from '@/lib/calls/chat-calls-context';
 import { backMinimizesCall } from '@/lib/calls/call-screen-return';
 import { shouldKeepScreenAwake } from '@/lib/calls/keep-awake';
 import { setCallScreenActive, setPipEligible, subscribeToPipModeChanges } from '@/lib/calls/native-call-bridge';

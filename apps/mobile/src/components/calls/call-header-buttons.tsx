@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import type { ChatConversationDetail } from '@vedamatch/shared';
 import { canStartCall, showCallButtons } from '@/lib/calls/call-permission';
-import { useChatCalls } from '@/lib/calls/call-provider';
+import { useChatCalls } from '@/lib/calls/chat-calls-context';
 import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
