@@ -2,7 +2,10 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MUSIC_ACCEPTED_MIME } from "@vedamatch/shared";
+import {
+  MUSIC_ACCEPTED_EXTENSIONS,
+  MUSIC_ACCEPTED_MIME,
+} from "@vedamatch/shared";
 import {
   addIngestArchive,
   addIngestFiles,
@@ -151,7 +154,7 @@ function FilesTab({ batchId }: { batchId: string }) {
           ref={inputRef}
           type="file"
           multiple
-          accept={MUSIC_ACCEPTED_MIME.join(",")}
+          accept={[...MUSIC_ACCEPTED_MIME, ...MUSIC_ACCEPTED_EXTENSIONS].join(",")}
           disabled={busy}
           onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
           className="w-full text-sm text-text-1 file:mr-3 file:h-9 file:rounded-lg file:border file:border-glass-brd file:bg-bg-1 file:px-3 file:text-sm file:text-text-0"

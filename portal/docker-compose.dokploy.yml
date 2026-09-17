@@ -129,6 +129,12 @@ services:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       API_INTERNAL_URL: ${API_INTERNAL_URL}
+      # Публичный адрес S3-хранилища портала — по умолчанию тот же
+      # S3_PUBLIC_URL, что у api, отдельная переменная нужна только если APK
+      # раздаются из другого места. Страница /app и секция загрузки на
+      # лендингах читают отсюда mobile/android/ru-site/latest.json (VED-176).
+      # Пусто — карточка Android честно показывает «скоро», без падения.
+      APP_DOWNLOAD_BASE_URL: ${APP_DOWNLOAD_BASE_URL:-${S3_PUBLIC_URL:-}}
     depends_on:
       api:
         condition: service_healthy
