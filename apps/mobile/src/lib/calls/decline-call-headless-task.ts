@@ -1,4 +1,4 @@
-import { declineCallInBackground } from './background-decline';
+import { declineCallInBackground } from './background-call-action';
 
 export interface DeclineCallHeadlessTaskData {
   callId?: string;

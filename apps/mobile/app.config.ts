@@ -72,11 +72,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // `native-call-bridge.ts`) — деградация до heads-up описана в
       // `docs/mobile-calls-native.md`. POST_NOTIFICATIONS уже приходит из
       // плагина `expo-notifications` ниже.
+      // FOREGROUND_SERVICE_MICROPHONE/_CAMERA — служба «Идёт звонок» на
+      // время разговора (VED-222, `docs/mobile-calls-native.md` §12):
+      // Android 14 требует объявлять каждый используемый
+      // `foregroundServiceType` отдельным разрешением, иначе
+      // `startForeground(..., type)` бросает `SecurityException` в рантайме
+      // (манифест собирает оба типа статически, `CallForegroundService`
+      // на видеозвонке передаёт оба, на аудио — только `phoneCall|microphone`).
       permissions: [
         'android.permission.MANAGE_OWN_CALLS',
         'android.permission.USE_FULL_SCREEN_INTENT',
         'android.permission.FOREGROUND_SERVICE',
         'android.permission.FOREGROUND_SERVICE_PHONE_CALL',
+        'android.permission.FOREGROUND_SERVICE_MICROPHONE',
+        'android.permission.FOREGROUND_SERVICE_CAMERA',
       ],
     },
     plugins: [

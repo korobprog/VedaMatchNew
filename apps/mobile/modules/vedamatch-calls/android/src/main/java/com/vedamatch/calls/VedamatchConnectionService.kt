@@ -8,24 +8,29 @@ import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
 
 /**
- * Self-managed `ConnectionService` (VED-221, docs/mobile-calls-native.md §3).
- * Единственная обязанность — превращать запрос Telecom в `Connection` с
- * нужными свойствами и передавать ответ/отклонение дальше в JS
- * (`VedamatchCallsModule`, события `answer`/`decline`). Экран и рингтон —
- * не здесь (`CallNotifications`, вызывается из `Connection.onShowIncomingCallUi`).
+ * Self-managed `ConnectionService` (VED-221/222, docs/mobile-calls-native.md
+ * §3/§12). Единственная обязанность — превращать запрос Telecom в
+ * `Connection` с нужными свойствами и передавать ответ/отклонение/завершение
+ * дальше в JS (`VedamatchCallsModule`, события `answer`/`decline`/`end`).
+ * Экран и рингтон — не здесь (`CallNotifications`, вызывается из
+ * `Connection.onShowIncomingCallUi`).
  */
 class VedamatchConnectionService : ConnectionService() {
+
+  private fun buildConnection(callId: String): VedamatchConnection =
+    VedamatchConnection(
+      callId = callId,
+      onAnswerCallback = { VedamatchCallsModule.sendAnswerEvent(it) },
+      onRejectCallback = { VedamatchCallsModule.sendDeclineEvent(it) },
+      onEndCallback = { VedamatchCallsModule.sendEndEvent(it) },
+    )
 
   override fun onCreateIncomingConnection(
     connectionManagerPhoneAccount: PhoneAccountHandle?,
     request: ConnectionRequest,
   ): Connection {
     val callId = request.extras?.getString(PendingCallStore.EXTRA_CALL_ID) ?: ""
-    val connection = VedamatchConnection(
-      callId = callId,
-      onAnswerCallback = { VedamatchCallsModule.sendAnswerEvent(it) },
-      onRejectCallback = { VedamatchCallsModule.sendDeclineEvent(it) },
-    )
+    val connection = buildConnection(callId)
     connection.setRinging()
     connection.connectionProperties = Connection.PROPERTY_SELF_MANAGED
     connection.audioModeIsVoip = true
@@ -43,18 +48,42 @@ class VedamatchConnectionService : ConnectionService() {
     // Telecom отказал (например, уже есть звонок на устройстве в другом
     // self-managed приложении, конфликт self-managed/managed) — молча:
     // JS всё равно узнает, что дозвон не идёт, по таймауту/`call.ended`.
+    // «Занято» при активном сотовом на НАШЕЙ стороне решается раньше, в JS
+    // (`call-busy-decision.ts`, `native-call-bridge.ts`: `showIncomingCall`
+    // вообще не зовётся, если устройство уже занято) — до этой точки такой
+    // случай не доходит.
   }
 
   override fun onCreateOutgoingConnection(
     connectionManagerPhoneAccount: PhoneAccountHandle?,
     request: ConnectionRequest,
   ): Connection {
-    // Исходящие звонки через Telecom не заводим — WebRTC-сигналинг уже
-    // работает без него (`chat-calls-client.ts`), самоуправляемый исходящий
-    // нужен только если понадобится системный экран «набор идёт» (не в
-    // рамках VED-221). `Connection` абстрактный — не создать напрямую,
-    // `createFailedConnection` штатный способ Telecom-API отдать сразу
-    // неудавшееся соединение без своего подкласса.
-    return Connection.createFailedConnection(DisconnectCause(DisconnectCause.ERROR))
+    // VED-222, п.1: система должна знать об исходящем разговоре — регистрация
+    // через `TelecomManager.placeCall` (`VedamatchCallsModule.placeOutgoingCall`)
+    // приходит сюда с тем же набором `extras`, что и входящий. WebRTC-сигналинг
+    // самого звонка (`chat-calls-client.ts`) не зависит от Telecom — это
+    // только системная интеграция (аудиомаршрутизация, Bluetooth/гарнитура,
+    // «занято», показ в Android Auto), поэтому отказ здесь (например, Telecom
+    // недоступен на конкретном OEM) не должен мешать самому дозвону — JS уже
+    // не ждёт результата этого вызова (`placeOutgoingCall`, best-effort).
+    val callId = request.extras?.getString(PendingCallStore.EXTRA_CALL_ID)
+      ?: return Connection.createFailedConnection(DisconnectCause(DisconnectCause.ERROR))
+    val connection = buildConnection(callId)
+    connection.setDialing()
+    connection.connectionProperties = Connection.PROPERTY_SELF_MANAGED
+    connection.audioModeIsVoip = true
+    request.extras?.getString(PendingCallStore.EXTRA_CALLER_NAME)?.let {
+      connection.setCallerDisplayName(it, TelecomManager.PRESENTATION_ALLOWED)
+    }
+    PendingCallStore.putConnection(callId, connection)
+    return connection
+  }
+
+  override fun onCreateOutgoingConnectionFailed(
+    connectionManagerPhoneAccount: PhoneAccountHandle?,
+    request: ConnectionRequest,
+  ) {
+    // Тот же принцип, что у `onCreateIncomingConnectionFailed`: сам дозвон
+    // идёт через WebRTC-сигналинг независимо от Telecom.
   }
 }

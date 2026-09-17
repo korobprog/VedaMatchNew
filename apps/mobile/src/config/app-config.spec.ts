@@ -48,6 +48,17 @@ describe('app.config', () => {
     );
   });
 
+  // VED-222: служба «Идёт звонок» на время разговора — Android 14 требует
+  // разрешение под каждый заявленный foregroundServiceType.
+  it('просит разрешения foreground-службы разговора (микрофон и камера)', () => {
+    expect(config.android?.permissions ?? []).toEqual(
+      expect.arrayContaining([
+        'android.permission.FOREGROUND_SERVICE_MICROPHONE',
+        'android.permission.FOREGROUND_SERVICE_CAMERA',
+      ]),
+    );
+  });
+
   // `@expo/config-plugins` выполняет несколько `withAndroidManifest`-плагинов
   // в порядке, ОБРАТНОМ их регистрации в `plugins` (`withMod`/`withBaseMod`:
   // новый мод оборачивает предыдущий и вызывается раньше него) — чтобы

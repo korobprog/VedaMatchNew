@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { AppState } from 'react-native';
+import InCallManager from 'react-native-incall-manager';
 import type { MediaStream } from 'react-native-webrtc';
 import type {
   ChatCallKind,
@@ -27,12 +28,25 @@ import { CallErrorToast } from '@/components/calls/call-error-toast';
 import { IncomingCallBanner } from '@/components/calls/incoming-call-banner';
 import { ReturnToCallBanner } from '@/components/calls/return-to-call-banner';
 import { createChatCallsApi } from './chat-calls-client';
-import { IDLE_STATE, reduceCall, roleIn, type CallState } from './call-machine';
-import { clearNativeCall, consumeLaunchCall, subscribeToNativeCallEvents } from './native-call-bridge';
+import { isAudioSessionLive } from './audio-session-policy';
+import { shouldDeclineAsBusy } from './call-busy-decision';
+import { IDLE_STATE, companionOf, reduceCall, roleIn, type CallState } from './call-machine';
+import { shouldRestartIceOnNetworkChange } from './ice-restart-policy';
+import {
+  clearNativeCall,
+  consumeLaunchCall,
+  getCallConflictState,
+  placeOutgoingCall,
+  startOngoingCall,
+  subscribeToNativeCallEvents,
+  subscribeToNetworkTransportChanges,
+} from './native-call-bridge';
 import { navigatedCallIdAfterPhase, nextNavigatedCallId, shouldAutoNavigateToCallScreen } from './call-screen-return';
 import { PendingCallAnswer } from './pending-call-answer';
 import { startRingtone } from './ringtone';
+import { shouldEndCallOnSessionChange } from './session-call-guard';
 import { CallSession } from './webrtc-session';
+import type { NetworkTransport } from '../../../modules/vedamatch-calls';
 
 /**
  * Провайдер звонков — перенос `apps/web/src/components/chat/calls/call-provider.tsx`.
@@ -87,7 +101,7 @@ const ERROR_AUTOCLEAR_MS = 5000;
 const RELAY_POLL_MS = 5000;
 
 export function CallProvider({ children }: { children: ReactNode }) {
-  const { status, api, user } = useSession();
+  const { status, api, user, registerBeforeSignOut } = useSession();
   const stream = useChatStream();
   const callsApi = useMemo(() => createChatCallsApi(api), [api]);
   const userId = user?.id ?? '';
@@ -399,6 +413,13 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const start = useCallback(
     async (conversationId: string, kind: ChatCallKind) => {
       if (stateRef.current.phase !== 'idle') return;
+      // VED-222, п.7: то же «занято», что и для входящего (`native-call-bridge.ts`,
+      // `handleIncomingCallPush`) — до getUserMedia/сети, отказ должен быть
+      // мгновенным и понятным, а не тихим зависанием на «Вызов…».
+      if (shouldDeclineAsBusy(getCallConflictState())) {
+        dispatch({ type: 'failed', error: 'Устройство сейчас занято другим звонком' });
+        return;
+      }
       try {
         // Микрофон/камера — до звонка: отказ в доступе не должен будить собеседника.
         const servers = await iceServers();
@@ -462,6 +483,50 @@ export function CallProvider({ children }: { children: ReactNode }) {
    * двойной `accept()` (см. spec `pending-call-answer.spec.ts`).
    */
   const pendingAnswer = useRef(new PendingCallAnswer()).current;
+
+  /**
+   * Выход из аккаунта во время разговора (`gan-harness/feedback/feedback-002.md`,
+   * блокирующий п.1) — `CallProvider` смонтирован выше `Stack.Protected`
+   * (`_layout.tsx`) и НЕ размонтируется при потере сессии, поэтому единственный
+   * способ закончить звонок сам, не дожидаясь, пока человек полезет в шторку
+   * уведомлений, — явно завершить его здесь. Локальная уборка (WebRTC, аудиосессия,
+   * foreground-служба, self-managed `Connection`) не требует отдельного кода:
+   * `hangUpWith('hangup')` синхронно переводит `phase` в `ended` ДО сетевого
+   * запроса (`finishLocally`+`closeSession()`), а все существующие эффекты
+   * (`audioSessionLive`, `nativeClearedFor`) уже следят именно за `phase`, не
+   * за `status` — они сработают сами. Рингтон (эффект на `state.phase`) гасится
+   * тем же переходом. `pendingAnswer.clear()` — отдельно, он не завязан на
+   * `phase` вовсе.
+   */
+  const endCallForLogout = useCallback(async () => {
+    pendingAnswer.clear();
+    await hangUpWith('hangup');
+  }, [hangUpWith, pendingAnswer]);
+
+  // Путь 1: явный `signOut()` — `session.tsx` дожидается этого колбэка (best-effort,
+  // с общим таймаутом ~2 с) ДО отзыва токенов, чтобы POST /chat/calls/:id/end
+  // ушёл с ещё живым access-токеном, а не после того, как `status` уже стал
+  // `'guest'` и токена не осталось.
+  useEffect(() => {
+    return registerBeforeSignOut(endCallForLogout);
+  }, [registerBeforeSignOut, endCallForLogout]);
+
+  // Путь 2: общий предохранитель на ЛЮБУЮ потерю сессии, не только через
+  // `signOut()` (например, `onSessionExpired` в `client.ts` зовёт `dropSession()`
+  // напрямую при 401) — токены к этому моменту уже могут быть стёрты
+  // (`dropSession()` роняет их раньше, чем `status` меняется), сетевой запрос
+  // тогда просто не пройдёт (уже проглатывается `try/catch` в `hangUpWith`),
+  // но ЛОКАЛЬНАЯ уборка (микрофон/камера, служба, `Connection`) случится в
+  // любом случае — это и есть главный приватностный риск, который решает
+  // этот путь. Чистое решение «нужно ли завершать» — `shouldEndCallOnSessionChange`
+  // (`session-call-guard.ts`, +spec), а не голая проверка `status` тут же.
+  const previousStatusRef = useRef(status);
+  useEffect(() => {
+    const previous = previousStatusRef.current;
+    previousStatusRef.current = status;
+    if (shouldEndCallOnSessionChange(previous, status, stateRef.current.phase)) void endCallForLogout();
+  }, [status, endCallForLogout]);
+
   useEffect(() => {
     const launch = consumeLaunchCall();
     if (launch?.action === 'answer') pendingAnswer.request(launch.callId);
@@ -496,24 +561,139 @@ export function CallProvider({ children }: { children: ReactNode }) {
       onDecline: (callId) => {
         if (stateRef.current.call?.id === callId) void decline();
       },
+      // VED-222: гарнитура/Bluetooth/Android Auto во время разговора или
+      // кнопка «Завершить» на постоянном уведомлении — обычный hangUp, тот
+      // же путь, что кнопка на самом экране звонка.
+      onEnd: (callId) => {
+        if (stateRef.current.call?.id === callId) void hangUp();
+      },
     });
-  }, [accept, decline, pendingAnswer, reconcile]);
+  }, [accept, decline, hangUp, pendingAnswer, reconcile]);
 
-  // Гасит уведомление/self-managed Connection, как только у звонка внутри
-  // приложения появилось «настоящее» состояние (разговор пошёл) или он
-  // закончился — нативная сторона нужна была только для дозвона, пока
-  // приложение было не видно. Аудио- и Bluetooth-интеграция самого
-  // разговора через Telecom — этап 3 (VED-222), здесь self-managed
-  // `Connection` сознательно живёт только до `active`.
+  // VED-222, п.1: система должна знать про исходящий разговор так же, как
+  // про входящий (`TelecomManager.placeCall`) — регистрируем один раз, как
+  // только у звонка появились гудки. Best-effort (см. `native-call-bridge.ts`):
+  // WebRTC-дозвон от результата не зависит.
+  const placedOutgoingFor = useRef<string | null>(null);
+  useEffect(() => {
+    const call = state.call;
+    if (!call || state.phase !== 'outgoing') return;
+    if (placedOutgoingFor.current === call.id) return;
+    placedOutgoingFor.current = call.id;
+    void placeOutgoingCall(call.id, companionOf(call, userId).name, call.kind);
+  }, [state.phase, state.call, userId]);
+
+  // VED-222, п.1: разговор пошёл — служба переднего плана с постоянным
+  // уведомлением «Идёт звонок» и (если self-managed `Connection`
+  // регистрировался — исходящий всегда, входящий из push почти всегда, см.
+  // `docs/mobile-calls-native.md` §12) перевод его в активное состояние.
+  // Один раз на звонок, независимо от того, сработает ли ниже эффект
+  // очистки при `ended` — это два независимых события жизненного цикла, не
+  // взаимоисключающие ветки одного «либо-либо», как было раньше (стадия 2:
+  // тогда единственный `nativeClearedFor` гасил self-managed `Connection`
+  // ровно в момент, когда разговор только начинался — ошибка, которую
+  // стадия 3 и должна была исправить).
+  const startedOngoingFor = useRef<string | null>(null);
+  useEffect(() => {
+    const call = state.call;
+    if (!call || state.phase !== 'active') return;
+    if (startedOngoingFor.current === call.id) return;
+    startedOngoingFor.current = call.id;
+    void startOngoingCall(call.id, companionOf(call, userId).name, call.kind);
+  }, [state.phase, state.call, userId]);
+
+  // Гасит уведомление/self-managed Connection и службу переднего плана, как
+  // только звонок внутри приложения закончился — независимо от того, дошёл
+  // ли он до `active` (исходящий, отменённый до ответа, тоже должен снять
+  // с Telecom регистрацию, сделанную выше).
   const nativeClearedFor = useRef<string | null>(null);
   useEffect(() => {
     const call = state.call;
-    if (!call) return;
-    if (state.phase !== 'active' && state.phase !== 'ended') return;
+    if (!call || state.phase !== 'ended') return;
     if (nativeClearedFor.current === call.id) return;
     nativeClearedFor.current = call.id;
     void clearNativeCall(call.id, nativeEndReason(state.phase, state.endedStatus));
   }, [state.phase, state.call, state.endedStatus]);
+
+  /**
+   * Аудиосессия (`InCallManager.start()`/`stop()`) — исправление
+   * `feedback-001.md`, блокирующий п.1: раньше жила в `useEffect`
+   * `app/call/[id].tsx` с cleanup на размонтирование экрана, а экран умеет
+   * сворачиваться по «назад» ВО ВРЕМЯ активного разговора, не завершая его
+   * (`call-screen-return.ts`, `backMinimizesCall`) — в этот момент
+   * `InCallManager.stop()` реально срабатывал и снимал аудиофокус,
+   * `MODE_IN_COMMUNICATION`, Bluetooth SCO/гарнитуру и датчик приближения,
+   * хотя разговор (служба переднего плана, self-managed `Connection`)
+   * продолжал идти. Теперь следует за фазой звонка тем же паттерном, что уже
+   * применён для `CallForegroundService`/`Connection` выше: один
+   * `start()` на весь `connecting`→`active`, один `stop()` на выходе из этого
+   * окна (`isAudioSessionLive`, `audio-session-policy.ts`, +spec). Экран
+   * звонка (`app/call/[id].tsx`) больше не вызывает `start()`/`stop()` вовсе
+   * — только маршрут (громкая/динамик/Bluetooth) и датчик приближения,
+   * которые осмысленны лишь пока сам экран виден.
+   */
+  const audioSessionLive = useRef(false);
+  useEffect(() => {
+    const call = state.call;
+    const live = call ? isAudioSessionLive(state.phase) : false;
+    if (live && !audioSessionLive.current) {
+      audioSessionLive.current = true;
+      InCallManager.start({ media: call!.kind });
+    } else if (!live && audioSessionLive.current) {
+      audioSessionLive.current = false;
+      InCallManager.stop();
+    }
+  }, [state.phase, state.call]);
+  // Поправка комментария по факту (`gan-harness/feedback/feedback-002.md`,
+  // блокирующий п.1): `CallProvider` смонтирован в `_layout.tsx` ВЫШЕ
+  // `Stack.Protected` и в реальном дереве приложения НЕ размонтируется
+  // никогда, в т.ч. при логауте — этот cleanup поэтому недостижим на
+  // практике прямо сейчас, а не страховка «на случай logout», как было
+  // написано раньше (тот сценарий закрывает не unmount, а отдельный эффект
+  // на `status`, см. `endCallForLogout`/`session-call-guard.ts` выше).
+  // Оставлен как корректный defensive cleanup на случай, если у `RootLayout`
+  // когда-нибудь появится условный размонт `CallProvider`, а не убран как
+  // мёртвый код — он не создаёт риска (просто никогда не выполняется), а
+  // без него провайдер тихо предполагал бы, что размонтирования не бывает
+  // вовсе.
+  useEffect(
+    () => () => {
+      if (audioSessionLive.current) {
+        audioSessionLive.current = false;
+        InCallManager.stop();
+      }
+    },
+    [],
+  );
+
+  // VED-222, п.6: смена сети (Wi-Fi ↔ LTE) во время разговора — перезапуск
+  // ICE немедленно, не дожидаясь таймера обрыва (`ice-restart-policy.ts`,
+  // спека там же документирует асимметрию «только звонящий»). Дебаунс
+  // (`lastIceRestartAt`, исправление `feedback-001.md` этого этапа,
+  // non-blocking п.1) — отдельно от флага «уже идёт» внутри самой сессии
+  // (`webrtc-session.ts#restartIce`): один защищает от частой смены
+  // транспорта на границе покрытия, другой — от параллельного вызова.
+  const lastTransport = useRef<NetworkTransport | null>(null);
+  const lastIceRestartAt = useRef<number | null>(null);
+  useEffect(() => {
+    if (state.phase !== 'active') {
+      lastTransport.current = null;
+      lastIceRestartAt.current = null;
+    }
+  }, [state.phase]);
+  useEffect(() => {
+    return subscribeToNetworkTransportChanges((transport) => {
+      const previous = lastTransport.current;
+      lastTransport.current = transport;
+      const now = Date.now();
+      if (
+        shouldRestartIceOnNetworkChange(stateRef.current.phase, role ?? 'callee', previous, transport, now, lastIceRestartAt.current)
+      ) {
+        lastIceRestartAt.current = now;
+        void sessionRef.current?.restartIce();
+      }
+    });
+  }, [role]);
 
   const apiValue = useMemo<ChatCallsApi>(
     () => ({
@@ -580,9 +760,20 @@ export function CallProvider({ children }: { children: ReactNode }) {
   return (
     <ChatCallsContext.Provider value={apiValue}>
       {children}
-      <IncomingCallBanner />
-      <ReturnToCallBanner />
-      <CallErrorToast />
+      {/* VED-222 (feedback-002.md, блокирующий п.1): баннеры — только для
+          вошедшего. Без этого `ReturnToCallBanner` мог бы на мгновение
+          нарисоваться поверх экрана входа (гость, `Stack.Protected` уже не
+          знает маршрут `/call/[id]`, на который она ведёт) — состояние
+          звонка к этому моменту уже сброшено эффектом на `status` выше, но
+          гейт рендера здесь — независимая, более простая для чтения защита
+          от той же ситуации, а не дубль той же логики другим способом. */}
+      {status === 'signed' ? (
+        <>
+          <IncomingCallBanner />
+          <ReturnToCallBanner />
+          <CallErrorToast />
+        </>
+      ) : null}
     </ChatCallsContext.Provider>
   );
 }

@@ -51,6 +51,31 @@ object PendingCallStore {
     connections.remove(callId)
   }
 
+  /** Единственный активный звонок, если он есть — приложение поддерживает
+   *  ровно один одновременный self-managed звонок (VED-222, §7 спеки:
+   *  «занято»/onTaskRemoved читают именно это). Возвращает первую живую
+   *  ссылку; мёртвые (`WeakReference` съедена GC) пропускает и вычищает. */
+  @Synchronized
+  fun anyConnection(): VedamatchConnection? {
+    val iterator = connections.entries.iterator()
+    while (iterator.hasNext()) {
+      val entry = iterator.next()
+      val connection = entry.value.get()
+      if (connection == null) {
+        iterator.remove()
+        continue
+      }
+      return connection
+    }
+    return null
+  }
+
+  /** Есть ли вообще зарегистрированный self-managed звонок (наш собственный,
+   *  неважно активный или ещё звонящий) — используется для «занято» при
+   *  повторном входящем (`callConflictState` в `VedamatchCallsModule`). */
+  @Synchronized
+  fun hasAnyConnection(): Boolean = anyConnection() != null
+
   @Synchronized
   fun putInfo(info: CallInfo) {
     infos[info.callId] = info

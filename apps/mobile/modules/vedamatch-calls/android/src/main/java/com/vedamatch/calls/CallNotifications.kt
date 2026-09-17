@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
@@ -25,10 +26,24 @@ import androidx.core.app.Person
  */
 object CallNotifications {
   const val CHANNEL_ID = "calls"
+  /** Отдельный канал для уведомления ИДУЩЕГО разговора (VED-222, §1) — без
+   *  звука и вибрации: `CHANNEL_ID` выше настроен звонить (рингтон,
+   *  IMPORTANCE_HIGH) и для тихого «Идёт звонок · имя · 01:23» не подходит —
+   *  единственный вызов `notify()` на разговор всё равно проиграл бы
+   *  уведомление по звуку канала один раз при показе, только чтобы тут же
+   *  умолкнуть навсегда (обновления идут через `setUsesChronometer`, без
+   *  повторных `notify()`), что не соответствует ожиданию «тихое служебное
+   *  уведомление о процессе», а не «нотификация с внимание-привлекающим
+   *  сигналом». */
+  const val ONGOING_CHANNEL_ID = "calls_ongoing"
   private const val ACTION_ANSWER = "com.vedamatch.calls.ANSWER"
   private const val ACTION_DECLINE = "com.vedamatch.calls.DECLINE"
+  private const val ACTION_END = "com.vedamatch.calls.END"
   const val EXTRA_CALL_ID = "callId"
   const val EXTRA_ACTION = "vedamatchCallAction"
+  /** Один разговор одновременно — фиксированный id вместо `notificationIdFor`,
+   *  чтобы обновление того же уведомления не плодило второе. */
+  const val ONGOING_NOTIFICATION_ID = 7719
 
   fun ensureChannel(context: Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -54,6 +69,19 @@ object CallNotifications {
           .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
           .build(),
       )
+    }
+    manager.createNotificationChannel(channel)
+  }
+
+  fun ensureOngoingChannel(context: Context) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    if (manager.getNotificationChannel(ONGOING_CHANNEL_ID) != null) return
+    val channel = NotificationChannel(ONGOING_CHANNEL_ID, "Идущий звонок", NotificationManager.IMPORTANCE_LOW).apply {
+      description = "Постоянное уведомление, пока разговор VedaMatch идёт"
+      setSound(null, null)
+      enableVibration(false)
+      lockscreenVisibility = Notification.VISIBILITY_PUBLIC
     }
     manager.createNotificationChannel(channel)
   }
@@ -124,5 +152,70 @@ object CallNotifications {
   fun cancel(context: Context, callId: String) {
     val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     manager.cancel(notificationIdFor(callId))
+  }
+
+  private fun smallIconRes(context: Context): Int =
+    context.resources.getIdentifier("notification_icon", "drawable", context.packageName)
+      .takeIf { it != 0 } ?: context.applicationInfo.icon
+
+  /** Deep link прямо на экран разговора (`vedamatch://call/<id>`,
+   *  `expo-router`, `scheme` в `app.config.ts`) — не просто запуск главной
+   *  `Activity`: нажатие на уведомление ИДУЩЕГО разговора должно вернуть
+   *  человека в сам экран звонка (VED-222, п.1 спеки: «нажатие — вернуться в
+   *  экран звонка»), а не в то место приложения, где он был до ответа —
+   *  `launchAppIntent` (используется для входящего, `show()`) этого не
+   *  делает специально: там нужен просто подъём процесса и полноэкранный
+   *  intent решает сам, `ReturnToCallBanner`/автонавигация в `call-provider.tsx`
+   *  доводят до экрана. Для уже идущего разговора кружного пути через баннер
+   *  не нужно — маршрут уже известен точно. */
+  private fun callScreenIntent(context: Context, callId: String): Intent =
+    Intent(Intent.ACTION_VIEW, Uri.parse("vedamatch://call/$callId")).apply {
+      setPackage(context.packageName)
+      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    }
+
+  /**
+   * Постоянное уведомление «Идёт звонок» (VED-222, п.1) —
+   * `CallStyle.forOngoingCall` на API 31+, обычная схема с ручным заголовком
+   * ниже. Время идёт через `setUsesChronometer`/`setWhen(startedAtMs)` —
+   * системный рендер тикает сам раз в секунду без повторных `notify()`
+   * (дешевле по батарее, чем свой `Handler`-таймер, и не рискует разойтись с
+   * `call-timer.ts` на самом экране, который считает от того же
+   * `connectedAt`). Имя и тип разговора — в заголовке/подписи, конкретный
+   * текст системный рендер `CallStyle` не даёт склеить в одну строку
+   * («Идёт звонок · имя · 01:23» из спеки — описание содержимого, не
+   * литеральный шаблон: имя, состояние «идёт разговор» и тикающее время
+   * показаны как отдельные системные поля того же уведомления, аналогично
+   * системной звонилке и WhatsApp/Telegram).
+   */
+  fun buildOngoing(context: Context, callId: String, callerName: String, kind: String, startedAtMs: Long): Notification {
+    ensureOngoingChannel(context)
+    val endPending = immutableBroadcast(context, ONGOING_NOTIFICATION_ID, actionReceiverIntent(context, callId, ACTION_END))
+    val contentPending = immutableActivity(context, ONGOING_NOTIFICATION_ID, callScreenIntent(context, callId))
+    val kindLabel = if (kind == "video") "Идёт видеозвонок" else "Идёт звонок"
+
+    val builder = NotificationCompat.Builder(context, ONGOING_CHANNEL_ID)
+      .setSmallIcon(smallIconRes(context))
+      .setCategory(NotificationCompat.CATEGORY_CALL)
+      .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+      .setOngoing(true)
+      .setAutoCancel(false)
+      .setOnlyAlertOnce(true)
+      .setUsesChronometer(true)
+      .setWhen(startedAtMs)
+      .setShowWhen(true)
+      .setContentIntent(contentPending)
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      val person = Person.Builder().setName(callerName).build()
+      builder.setStyle(NotificationCompat.CallStyle.forOngoingCall(person, endPending))
+    } else {
+      builder
+        .setContentTitle(kindLabel)
+        .setContentText(callerName)
+        .addAction(0, "Завершить", endPending)
+    }
+
+    return builder.build()
   }
 }
