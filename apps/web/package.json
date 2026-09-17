@@ -24,7 +24,8 @@
     "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "react-easy-crop": "^6.2.3"
+    "react-easy-crop": "^6.2.3",
+    "sharp": "0.35.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
@@ -42,7 +43,6 @@
     "eslint-config-next": "16.2.10",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^27.4.0",
-    "sharp": "0.35.4",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"

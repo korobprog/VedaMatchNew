@@ -6,6 +6,7 @@ import { copyText } from "@/lib/copy-text";
 import { detectDisplayMode } from "@/lib/pwa/browser";
 import {
   MESSENGER_LABELS,
+  MESSENGERS,
   isOwnFile,
   messengerAppLink,
   messengerLink,
@@ -15,8 +16,6 @@ import {
   type MessengerId,
 } from "./share-targets";
 import { shareFileName, toJpeg } from "./share-file";
-
-const MESSENGERS: MessengerId[] = ["telegram", "whatsapp", "vk"];
 
 /**
  * Экран «Поделиться»: две дороги, а не общий список кнопок.

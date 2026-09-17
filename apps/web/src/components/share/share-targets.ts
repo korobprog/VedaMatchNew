@@ -10,13 +10,22 @@
  */
 
 /** Мессенджеры, у которых есть настоящий адрес «поделиться». */
-export type MessengerId = "telegram" | "whatsapp" | "vk";
+export type MessengerId = "telegram" | "whatsapp" | "max" | "vk";
 
 export const MESSENGER_LABELS: Record<MessengerId, string> = {
   telegram: "Telegram",
   whatsapp: "WhatsApp",
+  max: "Max",
   vk: "ВКонтакте",
 };
+
+/** Порядок кнопок на экране «Поделиться». */
+export const MESSENGERS: readonly MessengerId[] = [
+  "telegram",
+  "whatsapp",
+  "max",
+  "vk",
+];
 
 /**
  * Адрес «поделиться» для мессенджера.
@@ -33,6 +42,12 @@ export function messengerLink(
 ): string {
   if (target === "telegram") {
     return `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
+  }
+  if (target === "max") {
+    // Официальный диплинк Max (dev.max.ru/help/deeplinks): открывает экран
+    // «Отправить в MAX» с готовым текстом. Отдельного поля под ссылку нет,
+    // поэтому, как у WhatsApp, она идёт последней — к ней цепляется превью.
+    return `https://max.ru/:share?text=${encodeURIComponent(`${text} ${link}`)}`;
   }
   if (target === "vk") {
     return `https://vk.com/share.php?url=${encodeURIComponent(link)}&title=${encodeURIComponent(text)}`;
@@ -76,7 +91,9 @@ export function isOwnFile(path: string | null | undefined): path is string {
  * сайт Telegram умеет только попросить открыть приложение. Собственная схема
  * отдаёт ссылку системе, и та поднимает мессенджер со списком чатов.
  *
- * `null` — у адресата такой схемы нет (ВКонтакте), остаётся сайт.
+ * `null` — у адресата такой схемы нет (ВКонтакте, Max), остаётся сайт.
+ * Max публичной схемы не описывает: ссылку max.ru телефон сам отдаёт
+ * установленному приложению.
  */
 export function messengerAppLink(
   target: MessengerId,
