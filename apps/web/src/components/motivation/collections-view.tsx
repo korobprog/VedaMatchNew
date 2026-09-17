@@ -3,6 +3,43 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { MotivationCategoryDto, MotivationPostDto } from "@vedamatch/shared";
+import {
+  collectionHref,
+  collectionsHref,
+  reelsHref,
+  type ReelsTab,
+} from "./feed-style";
+
+/**
+ * Чьё меню категорий открыто (VED-139). У «Для вас» и «Открыток» категории и
+ * счётчики свои, и переключатель стоит там же, где выбирают категорию:
+ * иначе меню открыток выглядело бы тем же списком, что и меню афоризмов.
+ * Ссылками, а не кнопками: вкладка живёт в адресе, как и у ленты.
+ */
+export function CategoryFeedSwitch({ tab }: { tab: "forYou" | "cards" }) {
+  const options: { id: "forYou" | "cards"; label: string }[] = [
+    { id: "forYou", label: "Для вас" },
+    { id: "cards", label: "Открытки" },
+  ];
+  return (
+    <nav aria-label="Категории какой ленты" className="flex flex-wrap gap-2">
+      {options.map((option) => (
+        <Link
+          key={option.id}
+          href={collectionsHref(option.id)}
+          aria-current={option.id === tab ? "page" : undefined}
+          className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+            option.id === tab
+              ? "border-text-0 bg-text-0 text-bg-0"
+              : "glass border-glass-brd text-text-1 hover:text-text-0"
+          }`}
+        >
+          {option.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
 
 /**
  * Папки готовых карточек: разделы и подразделы, за каждым — сетка картинок.
@@ -22,8 +59,11 @@ import type { MotivationCategoryDto, MotivationPostDto } from "@vedamatch/shared
  */
 export function MotivationCollections({
   categories,
+  tab = "forYou",
 }: {
   categories: MotivationCategoryDto[];
+  /** Чьё это меню: ссылки ведут в папки и ленту той же вкладки. */
+  tab?: ReelsTab;
 }) {
   const roots = categories.filter((category) => !category.parentId);
   /* Выбор нескольких папок сразу (VED-22). Раньше экран умел только «открыть
@@ -42,7 +82,9 @@ export function MotivationCollections({
   if (roots.length === 0)
     return (
       <p className="glass rounded-2xl border border-glass-brd p-4 text-sm text-text-2">
-        Разделов пока нет. Всё опубликованное — в ленте.
+        {tab === "cards"
+          ? "Категорий открыток пока нет. Все открытки — в ленте «Открытки»."
+          : "Разделов пока нет. Всё опубликованное — в ленте."}
       </p>
     );
 
@@ -82,7 +124,7 @@ export function MotivationCollections({
             <h2 className="mb-2 flex items-center gap-2 font-display text-lg font-bold text-text-0">
               {root.postCount > 0 ? (
                 <Link
-                  href={`/motivation/collections/${root.slug}`}
+                  href={collectionHref(root.slug, tab)}
                   className="hover:text-cyan"
                 >
                   {root.title}
@@ -103,7 +145,7 @@ export function MotivationCollections({
                     {child.postCount > 0 ? (
                       <span className="glass inline-flex items-center gap-1.5 rounded-full border border-glass-brd px-3 py-1.5 text-sm text-text-1">
                         <Link
-                          href={`/motivation/collections/${child.slug}`}
+                          href={collectionHref(child.slug, tab)}
                           className="hover:text-text-0"
                         >
                           {child.title}
@@ -139,7 +181,7 @@ export function MotivationCollections({
           className="fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-center gap-3 border-t border-glass-brd bg-bg-1/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur"
         >
           <Link
-            href={`/motivation?category=${picked
+            href={`/motivation?${tab === "cards" ? "tab=cards&" : ""}category=${picked
               .map((slug) => encodeURIComponent(slug))
               .join(",")}`}
             className="rounded-xl bg-magenta px-4 py-2 text-sm font-semibold text-white"
@@ -172,8 +214,14 @@ export function MotivationCollectionGrid({
   category,
   variant = "image",
   empty,
+  tab,
 }: {
   posts: MotivationPostDto[];
+  /**
+   * Во вкладку какой ленты открывать карточку (VED-139). Без значения лента
+   * сама уводит открытку в «Открытки».
+   */
+  tab?: ReelsTab;
   /**
    * Что показывать в плитке. `image` — иллюстрация, `story` — готовый
    * оформленный афоризм: та же картинка с вшитым текстом, подписью и знаком
@@ -207,9 +255,13 @@ export function MotivationCollectionGrid({
       {posts.map((post) => (
         <li key={post.id}>
           <Link
-            href={`/motivation?post=${encodeURIComponent(post.slug)}${
-              category ? `&category=${encodeURIComponent(category)}` : ""
-            }`}
+            href={
+              tab
+                ? reelsHref({ tab, post: post.slug, category })
+                : `/motivation?post=${encodeURIComponent(post.slug)}${
+                    category ? `&category=${encodeURIComponent(category)}` : ""
+                  }`
+            }
             className="group block overflow-hidden rounded-xl border border-glass-brd"
           >
             {/* Ссылка на хранилище подписана и может истечь — next/image не

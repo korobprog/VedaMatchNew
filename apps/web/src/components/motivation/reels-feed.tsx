@@ -45,6 +45,7 @@ import {
 } from "./explanation-dialog";
 import {
   categoryLink,
+  collectionsHref,
   feedCategoryButtons,
   feedStyleOf,
   reelsHref,
@@ -554,7 +555,8 @@ export function ReelsFeed({
           <RailLink
             label="Категории ленты"
             caption="Категории"
-            href="/motivation/collections"
+            // Меню той ленты, что открыта (VED-139): из «Открыток» — открытки.
+            href={collectionsHref(tab)}
           >
             <FolderIcon />
           </RailLink>

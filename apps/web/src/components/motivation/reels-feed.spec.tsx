@@ -115,9 +115,9 @@ describe("ReelsFeed", () => {
         donation={null}
         category="guru"
         categories={[
-          { id: "1", slug: "guru", title: "Гуру", sortOrder: 1, isDefault: false, parentId: null, postCount: 4 },
-          { id: "2", slug: "acharyas", title: "Ачарьи", sortOrder: 2, isDefault: false, parentId: null, postCount: 2 },
-          { id: "3", slug: "empty", title: "Пустая", sortOrder: 3, isDefault: false, parentId: null, postCount: 0 },
+          { id: "1", slug: "guru", title: "Гуру", sortOrder: 1, isDefault: false, parentId: null, postCount: 4, feed: "both" as const, artCount: 4, cardsCount: 0 },
+          { id: "2", slug: "acharyas", title: "Ачарьи", sortOrder: 2, isDefault: false, parentId: null, postCount: 2, feed: "both" as const, artCount: 2, cardsCount: 0 },
+          { id: "3", slug: "empty", title: "Пустая", sortOrder: 3, isDefault: false, parentId: null, postCount: 0, feed: "both" as const, artCount: 0, cardsCount: 0 },
         ]}
       />,
     );

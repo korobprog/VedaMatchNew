@@ -1,6 +1,14 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { categoriesAcceptingStyle } from "./feed-style";
 import Link from "next/link";
 import type {
   DonationSettingsDto,
@@ -82,7 +90,7 @@ type Step = "text" | "image" | "review";
 export function ReelWizard({
   prefill,
   donation,
-  categories = [],
+  categories: allCategories = [],
   isAdmin = false,
 }: {
   prefill: ReelWizardPrefill;
@@ -92,6 +100,12 @@ export function ReelWizard({
   /** Администратор ручается за себя сам: его афоризм публикуется без очереди. */
   isAdmin?: boolean;
 }) {
+  // Афоризм с иллюстрацией — только общие категории и категории «Для вас»
+  // (VED-139): в категорию открыток сервер его не примет.
+  const categories = useMemo(
+    () => categoriesAcceptingStyle(allCategories, "art"),
+    [allCategories],
+  );
   const fromBook = Boolean(prefill.book && prefill.chapter && prefill.text);
   const [step, setStep] = useState<Step>(prefill.reelId ? "review" : "text");
   /** `picture` — готовая картинка с цитатой: файл первым шагом (VED-97). */
@@ -383,7 +397,7 @@ export function ReelWizard({
         <div className="space-y-4">
           {sourceCards}
           <PicturePublishForm
-            categories={categories}
+            categories={allCategories}
             onPublished={() =>
               setQuota((current) =>
                 current && !current.unlimited

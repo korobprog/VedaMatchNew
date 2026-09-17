@@ -1,6 +1,13 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import type {
   MotivationCategoryDto,
@@ -14,7 +21,10 @@ import {
   pastedImageRejection,
   pickClipboardType,
   pickPastedImage,
+  REEL_IMAGE_MIME,
+  withImageTypeFromName,
 } from "./clipboard-image";
+import { categoriesAcceptingStyle } from "./feed-style";
 import {
   ReelCategorySelect,
   initialReelCategory,
@@ -39,13 +49,21 @@ const inputClass =
  * обрезается: надпись у края пропала бы первой.
  */
 export function PicturePublishForm({
-  categories,
+  categories: allCategories,
   onPublished,
 }: {
   categories: MotivationCategoryDto[];
   /** Учесть публикацию в дневном лимите, который мастер показывает сверху. */
   onPublished?: (result: MotivationPictureResult) => void;
 }) {
+  // Готовая картинка — открытка: только общие категории и категории
+  // открыток (VED-139).
+  const categories = useMemo(
+    () => categoriesAcceptingStyle(allCategories, "cards"),
+    [allCategories],
+  );
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const filesRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   const [category, setCategory] = useState(() =>
@@ -85,7 +103,7 @@ export function PicturePublishForm({
     setImageError(null);
     if (!navigator.clipboard?.read) {
       setImageError(
-        "Этот браузер не даёт читать буфер. Нажмите Ctrl+V или выберите файл — на телефоне это откроет галерею.",
+        "Этот браузер не даёт читать буфер. Нажмите Ctrl+V или выберите картинку из галереи или из файлов.",
       );
       return;
     }
@@ -169,15 +187,50 @@ export function PicturePublishForm({
   return (
     <form className="space-y-4" onSubmit={submit}>
       <div className="space-y-2">
-        <label className="block text-sm text-text-1">
+        <p className="text-sm text-text-1">
           Картинка с цитатой (JPEG, PNG или WebP)
+        </p>
+        {/* Две кнопки (VED-154): на Android поле с `accept` картинок
+            открывает только галерею, а открытки часто лежат в «Загрузках» и
+            папках мессенджеров — туда ведёт «Из файлов», поле без `accept`. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => galleryRef.current?.click()}
+            className="rounded-xl border border-glass-brd px-3 py-2 text-sm font-medium text-text-1 hover:text-text-0"
+          >
+            🖼️ Из галереи
+          </button>
+          <button
+            type="button"
+            onClick={() => filesRef.current?.click()}
+            className="rounded-xl border border-glass-brd px-3 py-2 text-sm font-medium text-text-1 hover:text-text-0"
+          >
+            📁 Из файлов
+          </button>
           <input
+            ref={galleryRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={(e) => acceptImage(e.target.files?.[0] ?? null)}
-            className={inputClass}
+            hidden
+            accept={REEL_IMAGE_MIME.join(",")}
+            aria-label="Картинка с цитатой из галереи"
+            onChange={(e) => {
+              acceptImage(e.target.files?.[0] ?? null);
+              e.target.value = "";
+            }}
           />
-        </label>
+          <input
+            ref={filesRef}
+            type="file"
+            hidden
+            aria-label="Картинка с цитатой из файлов"
+            onChange={(e) => {
+              const picked = e.target.files?.[0];
+              acceptImage(picked ? withImageTypeFromName(picked) : null);
+              e.target.value = "";
+            }}
+          />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"

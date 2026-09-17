@@ -60,7 +60,7 @@ export class MotivationCopyService {
       quote.sourceType === 'vedamatch_library'
         ? MotivationAudienceTrack.vaishnava
         : MotivationAudienceTrack.universal;
-    const categorySlug = category ?? (await this.categories.defaultSlug());
+    const categorySlug = category ?? (await this.categories.defaultSlug('art'));
 
     return this.prisma.$transaction(async (transaction) => {
       await transaction.motivationQuoteTranslation.deleteMany({

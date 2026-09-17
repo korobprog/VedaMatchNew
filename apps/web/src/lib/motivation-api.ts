@@ -54,9 +54,14 @@ async function motivationGetPublic<T>(path: string): Promise<T | null> {
 export const getMotivationStats = () =>
   motivationGet<MotivationStatsDto>("/motivation/stats");
 
-/** Разделы вдохновения для читателя: дерево категорий без пустых веток. */
-export const getMotivationCategories = () =>
-  motivationGet<MotivationCategoryDto[]>("/motivation/categories");
+/**
+ * Разделы вдохновения для читателя: дерево категорий. С `style` — меню одной
+ * ленты (VED-139): только её категории и её счётчики.
+ */
+export const getMotivationCategories = (style?: "art" | "cards") =>
+  motivationGet<MotivationCategoryDto[]>(
+    `/motivation/categories${style ? `?style=${style}` : ""}`,
+  );
 
 export const getMotivationFeed = (
   filter: "all" | "favorites" = "all",

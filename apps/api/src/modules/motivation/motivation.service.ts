@@ -1265,7 +1265,7 @@ export class MotivationService {
     const work = input.work?.trim() ?? '';
     const locator = input.locator?.trim() ?? '';
     const contextExcerpt = input.contextExcerpt?.trim() ?? '';
-    const category = await this.categories.resolveSlug(input.category);
+    const category = await this.categories.resolveSlug(input.category, 'art');
     const normalizedHash = quoteFingerprint(originalText);
     const existing = await this.prisma.motivationQuote.findUnique({
       where: { normalizedHash },

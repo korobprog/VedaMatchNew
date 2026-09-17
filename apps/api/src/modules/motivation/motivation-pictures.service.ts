@@ -127,7 +127,10 @@ export class MotivationPicturesService {
 
     // Неизвестный слаг — ошибка, а не молчаливая категория по умолчанию:
     // картинка, которую несли в «Шастры», не должна тихо осесть в другом месте.
-    const category = await this.categories.resolveSlug(input.category);
+    const category = await this.categories.resolveSlug(
+      input.category,
+      'cards',
+    );
     const categoryRow = await this.prisma.motivationCategory.findUnique({
       where: { slug: category },
       select: { title: true },

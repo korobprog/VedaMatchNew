@@ -107,8 +107,8 @@ describe("ReelWizard", () => {
     });
     const user = userEvent.setup();
     const categories = [
-      { id: "c1", slug: "filosofiya", title: "Философия", sortOrder: 0, isDefault: true, parentId: null, postCount: 5 },
-      { id: "c2", slug: "vedy", title: "Веды", sortOrder: 1, isDefault: false, parentId: null, postCount: 3 },
+      { id: "c1", slug: "filosofiya", title: "Философия", sortOrder: 0, isDefault: true, parentId: null, postCount: 5, feed: "both" as const, artCount: 5, cardsCount: 0 },
+      { id: "c2", slug: "vedy", title: "Веды", sortOrder: 1, isDefault: false, parentId: null, postCount: 3, feed: "both" as const, artCount: 3, cardsCount: 0 },
     ];
     render(<ReelWizard prefill={{}} donation={null} categories={categories} />);
 

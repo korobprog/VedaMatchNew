@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { CornerDownRight, Star } from "lucide-react";
-import type { MotivationCategoryDto } from "@vedamatch/shared";
+import type {
+  MotivationCategoryDto,
+  MotivationCategoryFeed,
+} from "@vedamatch/shared";
 import { LoadFailure } from "./load-failure";
 import { useAdminCommand } from "./use-admin-command";
 import {
@@ -13,23 +16,71 @@ import {
   secondaryButton,
 } from "./ui";
 
+/**
+ * В меню какой ленты стоит категория (VED-139). «Обе» — общая: она видна в
+ * меню той ленты, где в ней что-то есть, а пустая — в обоих.
+ */
+const FEED_OPTIONS: { value: MotivationCategoryFeed; label: string }[] = [
+  { value: "both", label: "Обе ленты" },
+  { value: "art", label: "Для вас" },
+  { value: "cards", label: "Открытки" },
+];
+
+function FeedSelect({
+  value,
+  label,
+  disabled,
+  onChange,
+}: {
+  value: MotivationCategoryFeed;
+  label: string;
+  disabled?: boolean;
+  onChange: (feed: MotivationCategoryFeed) => void;
+}) {
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      aria-label={label}
+      onChange={(event) =>
+        onChange(event.target.value as MotivationCategoryFeed)
+      }
+      className={`${fieldClass} sm:w-auto`}
+    >
+      {FEED_OPTIONS.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function AddForm({
   parentId,
   placeholder,
   pending,
+  initialFeed = "both",
   onSubmit,
 }: {
   parentId: string | null;
   placeholder: string;
   pending: boolean;
-  onSubmit: (title: string, parentId: string | null) => void;
+  /** Подкатегория по умолчанию живёт в ленте родителя. */
+  initialFeed?: MotivationCategoryFeed;
+  onSubmit: (
+    title: string,
+    parentId: string | null,
+    feed: MotivationCategoryFeed,
+  ) => void;
 }) {
   const [title, setTitle] = useState("");
+  const [feed, setFeed] = useState<MotivationCategoryFeed>(initialFeed);
 
   function submit() {
     const trimmed = title.trim();
     if (!trimmed) return;
-    onSubmit(trimmed, parentId);
+    onSubmit(trimmed, parentId, feed);
     setTitle("");
   }
 
@@ -45,6 +96,11 @@ function AddForm({
         placeholder={placeholder}
         aria-label={placeholder}
         className={fieldClass}
+      />
+      <FeedSelect
+        value={feed}
+        label={`Лента: ${placeholder}`}
+        onChange={setFeed}
       />
       <button
         type="button"
@@ -66,6 +122,7 @@ function CategoryRow({
   onRename,
   onMakeDefault,
   onRemove,
+  onFeedChange,
 }: {
   category: MotivationCategoryDto;
   isChild: boolean;
@@ -74,6 +131,7 @@ function CategoryRow({
   onRename: (title: string) => void;
   onMakeDefault: () => void;
   onRemove: () => void;
+  onFeedChange: (feed: MotivationCategoryFeed) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(category.title);
@@ -132,10 +190,17 @@ function CategoryRow({
                 )}
               </p>
               <p className="truncate text-xs text-text-2">
-                {category.slug} · публикаций: {category.postCount}
+                {category.slug} · для вас: {category.artCount ?? 0} ·
+                открыток: {category.cardsCount ?? 0}
               </p>
             </div>
-            <div className="flex w-full gap-2 sm:w-auto">
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+              <FeedSelect
+                value={category.feed ?? "both"}
+                label={`Лента категории «${category.title}»`}
+                disabled={disabled}
+                onChange={onFeedChange}
+              />
               <button
                 type="button"
                 disabled={disabled}
@@ -189,10 +254,14 @@ export function CategoryManager({
 
   // Ключ формы подкатегории отличается от id родителя: иначе ошибка добавления
   // всплыла бы на самой строке родителя, у которой свои действия.
-  const create = (title: string, parentId: string | null) =>
+  const create = (
+    title: string,
+    parentId: string | null,
+    feed: MotivationCategoryFeed,
+  ) =>
     run(parentId ? `sub:${parentId}` : "add", "add", {
       path: "/admin/motivation/categories",
-      body: { title, parentId },
+      body: { title, parentId, feed },
     });
 
   const roots = categories.filter((category) => !category.parentId);
@@ -215,6 +284,12 @@ export function CategoryManager({
           method: "PATCH" as const,
           body: { isDefault: true },
         }),
+      onFeedChange: (feed: MotivationCategoryFeed) =>
+        run(category.id, "feed", {
+          path: `/admin/motivation/categories/${category.id}`,
+          method: "PATCH" as const,
+          body: { feed },
+        }),
       onRemove: () =>
         run(category.id, "remove", {
           path: `/admin/motivation/categories/${category.id}`,
@@ -229,6 +304,11 @@ export function CategoryManager({
       <p className="mt-1 text-sm text-text-2">
         Категория по умолчанию достаётся новым цитатам. Её нельзя удалить — сначала
         назначьте основной другую. Вложенность — на один уровень.
+      </p>
+      <p className="mt-1 text-sm text-text-2">
+        У «Для вас» и «Открыток» свои меню категорий. Категория ленты стоит
+        только в её меню, даже пустая. «Обе ленты» — общая: она видна там, где
+        в ней что-то есть, а пустая — в обоих меню.
       </p>
 
       <div className="mt-4">
@@ -268,8 +348,9 @@ export function CategoryManager({
                     parentId={root.id}
                     placeholder={`Подкатегория в «${root.title}»`}
                     pending={pending[`sub:${root.id}`] === "add"}
-                    onSubmit={(title, parentId) => {
-                      void create(title, parentId);
+                    initialFeed={root.feed ?? "both"}
+                    onSubmit={(title, parentId, feed) => {
+                      void create(title, parentId, feed);
                       setOpenParent(null);
                     }}
                   />

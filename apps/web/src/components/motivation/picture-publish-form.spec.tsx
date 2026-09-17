@@ -5,8 +5,8 @@ import { PicturePublishForm } from "./picture-publish-form";
 import { ReelWizard } from "./reel-wizard";
 
 const categories = [
-  { id: "c1", slug: "filosofiya", title: "Философия", sortOrder: 0, isDefault: true, parentId: null, postCount: 5 },
-  { id: "c2", slug: "vedy", title: "Веды", sortOrder: 1, isDefault: false, parentId: null, postCount: 3 },
+  { id: "c1", slug: "filosofiya", title: "Философия", sortOrder: 0, isDefault: true, parentId: null, postCount: 5, feed: "both" as const, artCount: 5, cardsCount: 0 },
+  { id: "c2", slug: "vedy", title: "Веды", sortOrder: 1, isDefault: false, parentId: null, postCount: 3, feed: "both" as const, artCount: 3, cardsCount: 0 },
 ];
 
 const quota = { enabled: true, unlimited: false, limit: 1, used: 0, remaining: 1 };
@@ -47,7 +47,7 @@ describe("PicturePublishForm (VED-97)", () => {
     const user = userEvent.setup();
     render(<PicturePublishForm categories={categories} onPublished={onPublished} />);
 
-    await user.upload(screen.getByLabelText(/Картинка с цитатой/), picture());
+    await user.upload(screen.getByLabelText("Картинка с цитатой из галереи"), picture());
     await user.selectOptions(screen.getByLabelText(/Категория/), "vedy");
     await user.type(screen.getByLabelText(/Автор/), "Шрила Прабхупада");
     await user.type(screen.getByLabelText(/Источник/), "Бхагавад-гита");
@@ -76,12 +76,24 @@ describe("PicturePublishForm (VED-97)", () => {
     render(<PicturePublishForm categories={categories} />);
 
     await user.upload(
-      screen.getByLabelText(/Картинка с цитатой/),
+      screen.getByLabelText("Картинка с цитатой из файлов"),
       new File(["gif"], "a.gif", { type: "image/gif" }),
     );
 
     expect(screen.getByText("Подойдёт JPEG, PNG или WebP")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Опубликовать" })).toBeDisabled();
+  });
+
+  it("берёт картинку из файлового менеджера без типа (VED-154)", async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    render(<PicturePublishForm categories={categories} />);
+    const files = screen.getByLabelText("Картинка с цитатой из файлов");
+    expect(files).not.toHaveAttribute("accept");
+
+    await user.upload(files, new File(["x"], "Download.jpeg", { type: "" }));
+
+    expect(screen.getByText(/Картинка взята: Download\.jpeg/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Опубликовать" })).toBeEnabled();
   });
 });
 
@@ -94,7 +106,8 @@ describe("ReelWizard — готовая картинка первым вариа
     await user.click(screen.getByRole("button", { name: /Готовая картинка с цитатой/ }));
 
     expect(screen.getByText("Готовая картинка · один шаг")).toBeInTheDocument();
-    expect(screen.getByLabelText(/Картинка с цитатой/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Из галереи/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Из файлов/ })).toBeInTheDocument();
     expect(screen.queryByLabelText("Текст цитаты")).toBeNull();
   });
 });

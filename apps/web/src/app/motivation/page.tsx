@@ -70,8 +70,11 @@ export default async function MotivationPage({
     getMotivationStats(),
     // Фон для чтения. Пустой список — кнопки музыки в ленте не будет.
     getMotivationAudio(),
-    // Кнопки категорий на пустых экранах ленты (VED-135).
-    view === "reels" ? getMotivationCategories() : Promise.resolve(null),
+    // Кнопки категорий на пустых экранах ленты (VED-135) — из меню своей
+    // ленты (VED-139). Из избранного кнопки ведут в «Для вас».
+    view === "reels"
+      ? getMotivationCategories(style ?? "art")
+      : Promise.resolve(null),
   ]);
   if (!user) redirectToLogin("/motivation");
   // Новичок идёт в мастер: там тот же вопрос об этапе, но после имени

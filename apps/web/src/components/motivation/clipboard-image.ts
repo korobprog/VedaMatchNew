@@ -94,3 +94,35 @@ export function formatImageSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} КБ`;
   return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} МБ`;
 }
+
+/**
+ * Выбор файла через файловый менеджер (VED-154).
+ *
+ * На Android поле с `accept="image/…"` открывает только галерею («Фото /
+ * Подборки»), а открытки часто лежат в «Загрузках» или в папке мессенджера,
+ * куда галерея не заглядывает. Поле без `accept` открывает системный выбор
+ * файлов — поэтому у форм две кнопки: «Из галереи» и «Из файлов».
+ *
+ * Без `accept` проверить тип до выбора нечем — это делает
+ * `pastedImageRejection` после. Файловый менеджер иногда отдаёт файл без
+ * типа; тогда берём тип по расширению, иначе годная картинка ушла бы на
+ * сервер как `application/octet-stream` и получила бы отказ.
+ */
+const TYPE_BY_EXTENSION: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  jfif: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+};
+
+export function withImageTypeFromName(file: File): File {
+  if (file.type) return file;
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const type = TYPE_BY_EXTENSION[extension];
+  if (!type) return file;
+  return new File([file], file.name, {
+    type,
+    lastModified: file.lastModified,
+  });
+}

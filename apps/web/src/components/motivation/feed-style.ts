@@ -137,3 +137,42 @@ export function feedCategoryButtons(
       current: category.slug === current,
     }));
 }
+
+/**
+ * Меню категорий у каждой ленты своё (VED-139): у «Категорий» та же вкладка,
+ * что у ленты. Избранное без папок — из него идут в меню «Для вас».
+ */
+export function collectionsHref(tab: ReelsTab = "forYou"): string {
+  return tab === "cards"
+    ? "/motivation/collections?tab=cards"
+    : "/motivation/collections";
+}
+
+/** Папка из меню ленты: вкладка едет вместе с ней. */
+export function collectionHref(slug: string, tab: ReelsTab = "forYou"): string {
+  const base = `/motivation/collections/${encodeURIComponent(slug)}`;
+  return tab === "cards" ? `${base}?tab=cards` : base;
+}
+
+/**
+ * Категории, куда можно положить публикацию этой ленты (VED-139): общие и
+ * своей ленты. Для выбора в формах: открытку не должно быть можно отправить
+ * в категорию «Для вас» — сервер её всё равно не примет.
+ *
+ * Подкатегория, чей родитель — чужой ленты, поднимается наверх: иначе
+ * `<optgroup>` родителя не нарисуется, и её не выбрать вовсе.
+ */
+export function categoriesAcceptingStyle<
+  T extends { id: string; parentId: string | null; feed?: string },
+>(categories: readonly T[], style: FeedStyle): T[] {
+  // Старый ответ без поля — общая категория, как и все до разделения.
+  const accepts = (category: T) =>
+    !category.feed || category.feed === "both" || category.feed === style;
+  const kept = categories.filter(accepts);
+  const ids = new Set(kept.map((category) => category.id));
+  return kept.map((category) =>
+    category.parentId && !ids.has(category.parentId)
+      ? { ...category, parentId: null }
+      : category,
+  );
+}
