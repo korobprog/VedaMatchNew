@@ -250,9 +250,25 @@ export default async function MusicPage({
       <div className="min-w-0 flex-1">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-1.5">
-          <h1 className="font-display text-2xl font-bold tracking-tight text-text-0 md:text-3xl">
-            {serviceName}
-          </h1>
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <h1 className="font-display text-2xl font-bold tracking-tight text-text-0 md:text-3xl">
+              {serviceName}
+            </h1>
+            {/* Рядом с названием, а не отдельной плашкой: это ответ на «а
+                много ли тут вообще» — и спрашивают его ровно тогда, когда
+                читают заголовок (тот же приём, что в шапке «Вдохновения»,
+                motivation-top-bar.tsx). Число — как остальная витрина: с
+                учётом линии зрителя, а не по всей базе. */}
+            {catalog.totalTracks > 0 && (
+              <span
+                title={`Всего записей в каталоге: ${catalog.totalTracks}`}
+                className="font-mono text-xs font-medium text-text-2"
+              >
+                {catalog.totalTracks}{" "}
+                {plural(catalog.totalTracks, "запись", "записи", "записей")}
+              </span>
+            )}
+          </div>
           {/* Подписи может и не быть: администратор вправе оставить описание
               пустым, и пустой абзац на её месте — лишний отступ под
               заголовком. */}
