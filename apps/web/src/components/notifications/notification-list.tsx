@@ -184,7 +184,12 @@ function NotificationCard({
             От администрации
           </span>
         )}
-        <span className="mt-1 block text-sm text-text-1">{item.body}</span>
+        {/* `break-words` (VED-152): в текст попадают ссылки из комментариев
+            — «https://github.com/…/pull/324» одним словом шире карточки на
+            телефоне. Без переноса страница становилась шире экрана, Chrome
+            на Android расширял под неё видимую область, и плеер, прибитый к
+            её краям, уезжал вправо и вниз за экран. */}
+        <span className="mt-1 block break-words text-sm text-text-1">{item.body}</span>
       </span>
     </Link>
   );
