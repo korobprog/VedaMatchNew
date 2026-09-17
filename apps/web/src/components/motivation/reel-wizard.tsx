@@ -1120,14 +1120,23 @@ function ReelStatus({
   if (!reel) {
     // Спокойная строка вместо вечного «Загружаем статус…»: опрос при этом
     // продолжается сам, кнопка — только чтобы не ждать следующего тика.
+    // `role="status"` — тот же приём, что у `imageError` выше (line 650):
+    // скринридер объявит текст сам, `aria-live="polite"` у роли неявный.
     if (pollStalled)
       return (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-glass-brd bg-glass px-3 py-2 text-sm text-text-2">
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-glass-brd bg-glass px-3 py-2 text-sm text-text-2"
+        >
           <span>{POLL_STALLED_MESSAGE}</span>
           <button
             type="button"
             onClick={onRetryPoll}
-            className="btn-mint-outline rounded-lg px-3 py-1 text-xs font-medium"
+            // Область нажатия ≥40px без визуального раздувания маленькой
+            // кнопки: прозрачный `before:` расширяет хит-зону по вертикали
+            // (видимая ~24-26px + 8px сверху/снизу = ≥40px), тот же приём,
+            // что у значка фильтра в feed-attribution-filter.tsx.
+            className="btn-mint-outline relative rounded-lg px-3 py-1 text-xs font-medium before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
           >
             Обновить
           </button>
