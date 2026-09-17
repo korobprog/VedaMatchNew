@@ -25,6 +25,17 @@ const MAX_GREETING = 120;
 const MAX_LEAD_DAYS = 60;
 
 /**
+ * Дисклеймер открытки (VED-247): «Скачано с VedaMatch.ru» — потому что
+ * открытку сохраняют и пересылают отдельно от поста, и бренд на ней должен
+ * быть виден и без ссылки на VedaMatch рядом. Ту же ИИ-метку, что у сторис и
+ * роликов, не убираем — у неё юридический вес (AI Act, см. комментарий у
+ * `AI_DISCLOSURE` в `story-image.ts`), обе части идут одной строкой: строка
+ * укладывается в ширину строчной раскладки без переноса (проверено
+ * `wrapText()` на этой ширине).
+ */
+const POSTCARD_DISCLOSURE = 'Скачано с VedaMatch.ru · Создано нейросетью';
+
+/**
  * Открытки: тот же кадр поста с поздравлением сверху, плюс справочник
  * праздников, из которого мастер и лента узнают, что открытку сейчас есть
  * смысл предложить.
@@ -149,6 +160,7 @@ export class MotivationPostcardsService {
       text: post.translations[0]?.storyText || post.translations[0]?.text || '',
       attribution: attributionLine(post),
       greeting,
+      disclosure: POSTCARD_DISCLOSURE,
     });
     const url = await this.generation.uploadStory(
       `motivation/postcards/${postId}/v${Date.now()}.png`,

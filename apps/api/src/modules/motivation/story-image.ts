@@ -247,6 +247,14 @@ export type StoryOverlayInput = {
    * ролик в ленте — основное отображение, и оно меняться не должно.
    */
   layout?: StoryLayoutKind;
+  /**
+   * Строка последней строкой блока — по умолчанию `AI_DISCLOSURE`
+   * (маркировка ИИ-контента по AI Act, см. комментарий там же). Открытка
+   * (VED-247) передаёт своё: «Скачано с VedaMatch.ru» рядом с той же
+   * ИИ-меткой — маркировку не убираем, у неё юридический вес. Сторис и
+   * ролики параметр не передают, для них ничего не меняется.
+   */
+  disclosure?: string;
 };
 
 export type StoryLayoutKind = 'stacked' | 'row';
@@ -455,7 +463,7 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
   ${greetingBlock}
   ${quoteLines}
   ${attributionLine}
-  <text x="${layout.metaLeft}" y="${layout.disclosureBaseline}" class="disclosure">${escapeXml(AI_DISCLOSURE)}</text>
+  <text x="${layout.metaLeft}" y="${layout.disclosureBaseline}" class="disclosure">${escapeXml(input.disclosure ?? AI_DISCLOSURE)}</text>
 </svg>`;
 }
 
