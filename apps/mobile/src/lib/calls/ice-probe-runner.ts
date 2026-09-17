@@ -161,6 +161,17 @@ export interface AnswererProbeOptions {
    * `addTrack` на ответчике был бы не с чем сопоставлять.
    */
   addLocalTrackFirst?: boolean;
+  /**
+   * Применить кандидаты офферера к ответчику СРАЗУ после
+   * `setRemoteDescription`, ещё ДО `createAnswer`/`setLocalDescription` —
+   * воспроизводит СТАРЫЙ (до правки BUG C, VED-222) порядок
+   * `CallSession.handleSignal`: буфер `pending` сбрасывался именно в этот
+   * момент, а не после `setLocalDescription` ответа. Офферер и ответчик
+   * здесь оба на одном устройстве — не настоящая LAN другого пира, но
+   * порядок вызовов и характер адресов (быстро проверяемые, локальные)
+   * тот же самый, который и проверяется этим экспериментом.
+   */
+  applyRemoteCandidateBeforeAnswer?: boolean;
 }
 
 /**
@@ -183,10 +194,26 @@ export async function runAnswererProbe(
   options: AnswererProbeOptions = {},
 ): Promise<AnswererProbeResult> {
   const offerer = new RTCPeerConnection({});
+  const offererCandidates: string[] = [];
+  if (options.applyRemoteCandidateBeforeAnswer) {
+    offerer.onicecandidate = ((event: IceCandidateEvent) => {
+      if (event.candidate) offererCandidates.push(event.candidate.candidate);
+    }) as typeof offerer.onicecandidate;
+  }
   if (options.addLocalTrackFirst) offerer.addTransceiver('audio', { direction: 'recvonly' });
   else offerer.createDataChannel('answerer-probe');
   const offer = await offerer.createOffer();
   await offerer.setLocalDescription(offer);
+
+  if (options.applyRemoteCandidateBeforeAnswer) {
+    // Подождать хотя бы один кандидат офферера — тот же порядок, что у
+    // настоящего звонка: удалённые кандидаты уже лежат в буфере к моменту,
+    // когда обрабатывается offer. На loopback обычно доли секунды.
+    const deadline = Date.now() + 2000;
+    while (offererCandidates.length === 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  }
 
   const answerer = new RTCPeerConnection({ iceServers: normalizeIceServers(servers) });
   let localStream: MediaStream | null = null;
@@ -209,6 +236,19 @@ export async function runAnswererProbe(
     }) as typeof answerer.onicecandidate;
     answerer
       .setRemoteDescription({ type: 'offer', sdp: offer.sdp ?? '' })
+      .then(async () => {
+        // Старый (до правки BUG C) порядок `CallSession.handleSignal`:
+        // кандидаты применяются СРАЗУ после `setRemoteDescription`, ещё до
+        // `createAnswer`/`setLocalDescription` — тут и проверяется, что
+        // именно этот порядок обрывает собственный гатеринг.
+        if (options.applyRemoteCandidateBeforeAnswer) {
+          for (const candidate of offererCandidates) {
+            await answerer
+              .addIceCandidate({ candidate, sdpMid: '0', sdpMLineIndex: 0 })
+              .catch(() => undefined);
+          }
+        }
+      })
       .then(() => answerer.createAnswer())
       .then((answer) => answerer.setLocalDescription(answer))
       .catch(() => {

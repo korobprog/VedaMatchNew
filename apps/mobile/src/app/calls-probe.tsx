@@ -49,9 +49,18 @@ export default function CallsProbeScreen() {
   // проверка на прошлом круге показала, что ПРОСТАЯ проба (без трека)
   // уверенно получает host/srflx/relay, а настоящий звонок — только host,
   // и это единственная оставшаяся, ещё не проверенная разница.
+  // Третий прогон (`applyRemoteCandidateBeforeAnswer`) — воспроизводит
+  // СТАРЫЙ порядок `CallSession.handleSignal` (до правки этого круга живой
+  // проверки): кандидаты собеседника применялись сразу после
+  // `setRemoteDescription`, ещё до `createAnswer`/`setLocalDescription`.
+  // Живая проверка нашла: и без трека, и с треком до offer'а проба честно
+  // получает host/srflx/relay — единственное оставшееся отличие настоящего
+  // звонка (LAN, кандидаты сайта применяются рано) воспроизводится именно
+  // этим прогоном.
   const [answererPhase, setAnswererPhase] = useState<'idle' | 'running' | 'error'>('idle');
   const [answererResult, setAnswererResult] = useState<AnswererProbeResult | null>(null);
   const [answererWithTrackResult, setAnswererWithTrackResult] = useState<AnswererProbeResult | null>(null);
+  const [answererEarlyCandidateResult, setAnswererEarlyCandidateResult] = useState<AnswererProbeResult | null>(null);
   const [answererError, setAnswererError] = useState<string | null>(null);
 
   const runAnswerer = useCallback(async () => {
@@ -59,11 +68,18 @@ export default function CallsProbeScreen() {
     setAnswererError(null);
     setAnswererResult(null);
     setAnswererWithTrackResult(null);
+    setAnswererEarlyCandidateResult(null);
     try {
       const callsApi = createChatCallsApi(api);
       const state = await callsApi.iceServers();
       setAnswererResult(await runAnswererProbe(state.iceServers));
       setAnswererWithTrackResult(await runAnswererProbe(state.iceServers, { addLocalTrackFirst: true }));
+      setAnswererEarlyCandidateResult(
+        await runAnswererProbe(state.iceServers, {
+          addLocalTrackFirst: true,
+          applyRemoteCandidateBeforeAnswer: true,
+        }),
+      );
       setAnswererPhase('idle');
     } catch (e) {
       setAnswererError(e instanceof Error ? e.message : String(e));
@@ -197,8 +213,9 @@ export default function CallsProbeScreen() {
           <Text style={[styles.lead, { color: colors.text1 }]}>
             Проверка как у звонка: та же связка iceServers, но соединение играет роль ОТВЕЧАЮЩЕГО
             (`setRemoteDescription` → `createAnswer`), как настоящий входящий звонок — не офферера, как
-            шаги выше. Запускает два прогона подряд: без трека и с микрофоном, добавленным ДО offer'а
-            (как готовит настоящий звонок `accept()`).
+            шаги выше. Запускает три прогона подряд: без трека, с микрофоном, добавленным ДО offer'а
+            (как готовит настоящий звонок `accept()`), и с ранним кандидатом собеседника (старый
+            порядок `handleSignal` до правки этого круга живой проверки).
           </Text>
           <Pressable
             accessibilityRole="button"
@@ -232,6 +249,16 @@ export default function CallsProbeScreen() {
               С микрофоном до offer'а — типы: {answererWithTrackResult.candidateTypes.length > 0 ? answererWithTrackResult.candidateTypes.join(', ') : 'ни одного'}
               {'\n'}Сбор: {answererWithTrackResult.ms} мс
               {answererWithTrackResult.timedOut ? ' (оборвано по таймауту 8с)' : ' (дошёл до конца)'}
+            </Text>
+          ) : null}
+          {answererEarlyCandidateResult ? (
+            <Text selectable style={[styles.summary, { color: colors.text0, borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
+              С ранним кандидатом (старый порядок до правки) — типы:{' '}
+              {answererEarlyCandidateResult.candidateTypes.length > 0
+                ? answererEarlyCandidateResult.candidateTypes.join(', ')
+                : 'ни одного'}
+              {'\n'}Сбор: {answererEarlyCandidateResult.ms} мс
+              {answererEarlyCandidateResult.timedOut ? ' (оборвано по таймауту 8с)' : ' (дошёл до конца)'}
             </Text>
           ) : null}
         </View>

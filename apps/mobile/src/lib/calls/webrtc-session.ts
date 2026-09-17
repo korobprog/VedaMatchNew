@@ -62,6 +62,11 @@ export class CallSession {
   /** Счётчик реально отправленных кандидатов — только для диагностики живой
    *  проверки BUG A (VED-222), см. комментарий у `onicecandidate` ниже. */
   private sentCandidates = 0;
+  /** Между `setRemoteDescription(offer)` и `setLocalDescription(answer)` —
+   *  см. `handleSignal` (BUG C, VED-222): пока true, кандидаты собеседника
+   *  (и уже накопленные, и вновь пришедшие) не применяются сразу, а ждут в
+   *  `pending`. */
+  private answerInFlight = false;
 
   constructor(
     iceServers: ChatIceServerDto[],
@@ -238,26 +243,54 @@ export class CallSession {
     }
   }
 
-  /** Сигнал от второй стороны: offer/answer или кандидат. */
+  /**
+   * Сигнал от второй стороны: offer/answer или кандидат.
+   *
+   * BUG C (VED-222, живая проверка @7e7dac2c — детерминированный вывод):
+   * раньше буфер `pending` сбрасывался в `addIceCandidate` СРАЗУ после
+   * `setRemoteDescription`, ещё ДО `createAnswer`/`setLocalDescription` —
+   * для ответчика (наш случай при входящем) это значит, что кандидаты
+   * собеседника (обычно уже накопившиеся: сайт шлёт их пачкой следом за
+   * offer) применялись, пока `setLocalDescription` этого самого ответа ещё
+   * даже не вызывался. Когда среди них оказывался кандидат в той же
+   * локальной сети (LAN/один Wi-Fi — как раз сценарий всех живых проверок
+   * этого этапа), ICE-агент почти мгновенно находил рабочую пару и
+   * `onIceGatheringChange` уходил в `COMPLETE` за считанные миллисекунды —
+   * ОДИН host и всё, ни срцелях, ни relay даже не пытались собраться:
+   * `runAnswererProbe` в `ice-probe-runner.ts` воспроизводит именно этот
+   * порядок (`applyRemoteCandidateBeforeAnswer`) и даёт тот же паттерн
+   * («host, sent:1» и конец сбора за миллисекунды вместо честного
+   * таймаута) — то же самое видно и на реальном звонке в этой же LAN.
+   * Правка: применять буферизованные и вновь пришедшие кандидаты ТОЛЬКО
+   * ПОСЛЕ того, как наш `setLocalDescription` (ответ) уже стоит —
+   * `answerInFlight` буферизует и живые (не только исходно накопленные до
+   * `remoteSet`) кандидаты, пока это окно открыто, потому что сигналы
+   * приходят по одному событию каждый и не гарантированно ждут друг друга
+   * (`call-provider.tsx`: `void session.handleSignal(...)` без ожидания
+   * предыдущего вызова).
+   */
   async handleSignal(signal: ChatCallSignal): Promise<void> {
     if (this.closed) return;
     if (signal.kind === 'sdp') {
+      const isOffer = signal.sdp.type === 'offer';
+      if (isOffer) this.answerInFlight = true;
       await this.pc.setRemoteDescription(signal.sdp);
       this.remoteSet = true;
-      for (const candidate of this.pending.splice(0))
-        await this.pc.addIceCandidate(candidate).catch(() => undefined);
-      if (signal.sdp.type === 'offer') {
+      if (isOffer) {
         const answer = await this.pc.createAnswer();
         await this.pc.setLocalDescription(answer);
+        this.answerInFlight = false;
         this.handlers.onSignal({
           kind: 'sdp',
           sdp: { type: 'answer', sdp: answer.sdp ?? '' },
         });
       }
+      for (const candidate of this.pending.splice(0))
+        await this.pc.addIceCandidate(candidate).catch(() => undefined);
       return;
     }
     if (!signal.candidate) return; // конец сбора у собеседника
-    if (!this.remoteSet) {
+    if (!this.remoteSet || this.answerInFlight) {
       this.pending.push(signal.candidate);
       return;
     }
