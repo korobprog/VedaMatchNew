@@ -14,24 +14,33 @@
  *   наследует; повтор отзывает только своё семейство — вкладка сайта не
  *   может выкинуть приложение, и наоборот;
  * - повтор токена, отозванного ротацией только что (`revokedAt` моложе
- *   окна), — гонка двух запросов одного клиента: только 401, без отзыва;
+ *   окна), — тот же клиент: две вкладки обновились одновременно, или ответ
+ *   с новой парой потерялся в мобильной сети и клиент остался со старой
+ *   cookie. Такому повтору выдаётся ещё одна пара того же семейства — иначе
+ *   проигравшая вкладка уходила на лендинг, а телефон после обрыва через
+ *   минуту терял вход совсем. Пара выдаётся, только если у семейства ещё
+ *   есть живой токен (см. `AuthService.consumeRefreshToken`): после выхода
+ *   или отзыва семейства окно ничего не возвращает;
  * - токены, отозванные до появления семейств (`familyId = null`), отзывают
  *   лишь такие же безсемейные живые токены человека.
- *
- * Новой пары по отозванному токену не выдаётся никогда, даже в окне.
  */
 
-/** Окно, в котором повтор только что ротированного токена считается гонкой. */
-export const REFRESH_REUSE_GRACE_MS = 60_000;
+/**
+ * Окно, в котором повтор только что ротированного токена — свой клиент.
+ * Две минуты покрывают таймаут запроса на плохой мобильной связи: клиент,
+ * не дождавшийся ответа, повторяет refresh со старой cookie.
+ */
+export const REFRESH_REUSE_GRACE_MS = 120_000;
 
 export interface RevokedRefreshToken {
+  id: string;
   userId: string;
   familyId: string | null;
   revokedAt: Date | null;
 }
 
 export type RevokedRefreshVerdict =
-  | { kind: 'race' }
+  | { kind: 'reissue'; familyId: string }
   | {
       kind: 'revoke-family';
       where: { userId: string; familyId: string | null; revoked: false };
@@ -45,7 +54,9 @@ export function judgeRevokedRefresh(
   if (token.revokedAt) {
     const age = now.getTime() - token.revokedAt.getTime();
     // Отрицательный возраст — часы БД впереди часов API: отзыв тоже свежий.
-    if (age <= graceMs) return { kind: 'race' };
+    if (age <= graceMs) {
+      return { kind: 'reissue', familyId: rotationFamily(token) };
+    }
   }
   return {
     kind: 'revoke-family',
@@ -58,6 +69,9 @@ export function judgeRevokedRefresh(
  * семейств открывает своё — по собственному id; этим же id его помечают при
  * отзыве, чтобы повтор нашёл продолжение цепочки.
  */
-export function rotationFamily(token: { id: string; familyId: string | null }): string {
+export function rotationFamily(token: {
+  id: string;
+  familyId: string | null;
+}): string {
   return token.familyId ?? token.id;
 }
