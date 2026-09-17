@@ -12,6 +12,7 @@ import { SEEK_STEP_SECONDS, useMusicPlayer } from "./player-provider";
 import { MusicPlayGlyph, playButtonLabel } from "./play-glyph";
 import { MusicSleepCountdown } from "./sleep-countdown";
 import { MusicQueuePanel } from "./queue-panel";
+import { MusicLyricsButton } from "./lyrics-button";
 import { useHoldSeek } from "./use-hold-seek";
 import {
   ArrowDownToLine,
@@ -273,7 +274,12 @@ export function MiniPlayer() {
         // записи сжималось в ноль. Поэтому здесь `flex-wrap` и порядок
         // элементов задан явно, а с `sm` возвращается однострочная раскладка
         // из PortalWide.dc.html.
-        className="player-bar pointer-events-auto mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-3 py-2 sm:h-16 sm:flex-nowrap sm:gap-5 sm:px-[18px] sm:py-0"
+        //
+        // `relative` — контекст позиционирования для MusicLyricsPanel: она
+        // якорится от всей полосы, а не от узкой кнопки-триггера в середине
+        // ряда, иначе на 360-390px уезжает за левый край экрана (VED-248,
+        // круг 2).
+        className="player-bar pointer-events-auto relative mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-3 py-2 sm:h-16 sm:flex-nowrap sm:gap-5 sm:px-[18px] sm:py-0"
       >
         {/* Что играет */}
         <div className="order-1 flex min-w-0 flex-1 items-center gap-3 sm:order-none sm:w-40 sm:flex-none lg:w-56">
@@ -454,12 +460,24 @@ export function MiniPlayer() {
             onToggle={player.toggleShuffle}
             className={`${ctrl} order-7 h-9 w-9 sm:hidden`}
           />
-          <MusicPositionSlider
-            className="order-8 flex min-w-0 flex-1 items-center gap-2 sm:order-none sm:w-full sm:max-w-[340px] sm:flex-none"
-            position={positionSeconds}
-            total={total}
-            onSeek={player.seek}
-          />
+          {/* Дорожка и «Текст» — один ряд: третья строка мобильной раскладки
+              свободнее второй (там уже 326 из 327px на экране 375, см.
+              комментарий выше про перемешивание/дорожку/режим) — дорожка
+              достаточно тянется, чтобы отдать кнопке ~48px без переноса.
+              Рядом с дорожкой, а не у очереди (как в плане VED-248): очередь
+              стоит во второй строке, где места нет вовсе. */}
+          <div className="order-8 flex min-w-0 flex-1 items-center gap-1.5 sm:order-none sm:w-full sm:max-w-[380px] sm:flex-none">
+            <MusicPositionSlider
+              className="flex min-w-0 flex-1 items-center gap-2"
+              position={positionSeconds}
+              total={total}
+              onSeek={player.seek}
+            />
+            <MusicLyricsButton
+              trackId={current.id}
+              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8`}
+            />
+          </div>
           <PlayModeButton
             mode={playMode}
             onChange={player.setPlayMode}
