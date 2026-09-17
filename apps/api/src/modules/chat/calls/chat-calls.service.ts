@@ -18,6 +18,7 @@ import type {
   AdminChatCallStats,
   AdminChatCallsState,
   ChatCallDto,
+  ChatCallEndedEvent,
   ChatCallEndReason,
   ChatCallSignal,
   ChatCallStatus,
@@ -26,7 +27,7 @@ import type {
   StartChatCallRequest,
   UpdateChatCallSettingsRequest,
 } from '@vedamatch/shared';
-import { resolveDisplayName } from '@vedamatch/shared';
+import { CHAT_CALL_ENDED_EVENT, resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { denyWrite, WRITE_DENIAL_TEXT } from '../chat-access';
 import { ChatConversationsService } from '../chat-conversations.service';
@@ -38,6 +39,7 @@ import {
   BUSY_TTL_ACTIVE_MS,
   BUSY_TTL_RINGING_MS,
   RING_TIMEOUT_MS,
+  callEndedPushReason,
   isFinal,
   roleOf,
   transition,
@@ -274,6 +276,9 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
       type: 'call.accepted',
       call: dtoOut,
     });
+    // Принявшее устройство — не единственное: у вызываемого мог звонить и
+    // телефон с data-пушом. Гасим рингтон на остальных его устройствах.
+    this.notifyCallEnded(updated.calleeId, callId, 'answered_elsewhere');
     return dtoOut;
   }
 
@@ -460,6 +465,14 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
     });
     void this.recordInThread(updated);
     if (status === 'missed') this.notifyMissed(updated);
+    // Гасим рингтон на нативных устройствах обеих сторон: у вызываемого
+    // могли звонить ещё телефоны, у звонившего — отменённый вызов мог
+    // остаться на другом его устройстве.
+    const reason = callEndedPushReason(status);
+    if (reason) {
+      this.notifyCallEnded(updated.calleeId, updated.id, reason);
+      this.notifyCallEnded(updated.callerId, updated.id, reason);
+    }
     return dtoOut;
   }
 
@@ -598,9 +611,16 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
       name: 'chat.call-incoming',
       recipientId: row.calleeId,
       callerName: resolveDisplayName(row.caller),
+      callerAvatarUrl: row.caller.avatarUrl,
       callId: row.id,
       conversationId: row.conversationId,
       callKind: row.kind,
+      // RING_TIMEOUT_MS — тот же таймер, что кладёт звонок в `missed`:
+      // нативный экран вызова не должен звонить дольше, чем сервер сам
+      // считает дозвон живым.
+      expiresAt: new Date(
+        row.createdAt.getTime() + RING_TIMEOUT_MS,
+      ).toISOString(),
     };
     this.bus.emit(event.name, event);
   }
@@ -612,6 +632,25 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
       callerName: resolveDisplayName(row.caller),
       conversationId: row.conversationId,
       callKind: row.kind,
+    };
+    this.bus.emit(event.name, event);
+  }
+
+  /**
+   * Сигнал «звонок снят» — вне общего конвейера уведомлений (см.
+   * `CHAT_CALL_ENDED_EVENT` в `@vedamatch/shared`): гасит рингтон на
+   * нативных устройствах получателя, которые не участвуют в разговоре.
+   */
+  private notifyCallEnded(
+    recipientId: string,
+    callId: string,
+    reason: ChatCallEndedEvent['reason'],
+  ): void {
+    const event: ChatCallEndedEvent = {
+      name: CHAT_CALL_ENDED_EVENT,
+      recipientId,
+      callId,
+      reason,
     };
     this.bus.emit(event.name, event);
   }
