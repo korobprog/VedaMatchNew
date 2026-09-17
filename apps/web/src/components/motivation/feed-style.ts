@@ -70,16 +70,25 @@ export function reelsHref({
   order,
   category,
   post,
+  speaker,
+  work,
 }: {
   tab?: ReelsTab;
   order?: "random";
   category?: string;
   post?: string;
+  /** Фильтр по автору (VED-206). */
+  speaker?: string;
+  /** Фильтр по источнику (VED-206). */
+  work?: string;
 }): string {
   const query = new URLSearchParams();
   if (tab !== "forYou") query.set("tab", tab);
   // Избранное — одно на всех, папки у него нет.
   if (category && tab !== "saved") query.set("category", category);
+  // Фильтры — как папка: у избранного их нет.
+  if (speaker?.trim() && tab !== "saved") query.set("speaker", speaker.trim());
+  if (work?.trim() && tab !== "saved") query.set("work", work.trim());
   if (order) query.set("order", order);
   if (post) query.set("post", post);
   const suffix = query.toString();

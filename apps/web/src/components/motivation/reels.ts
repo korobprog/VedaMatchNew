@@ -1,4 +1,5 @@
 import type { MotivationPostDto } from "@vedamatch/shared";
+import { attributionFields } from "./attribution-filter";
 
 /**
  * Чистая логика ленты-рилсов, вынесенная из компонента: где ставить
@@ -46,27 +47,10 @@ type AttributionSource = Pick<
  * дефисе посреди подписи.
  */
 export function attributionParts(post: AttributionSource): string[] {
-  const work = post.attributionWork?.trim() || null;
-  const locator = stripWorkPrefix(post.attributionLocator?.trim() || null, work);
-  return [post.attributionSpeaker?.trim(), work, locator].filter(
-    (part): part is string => Boolean(part),
-  );
+  return attributionFields(post).map((field) => field.text);
 }
 
 /** Строка источника под цитатой: «Бхагавад-гита · 2.47». */
 export function attributionLine(post: AttributionSource): string {
   return attributionParts(post).join(" · ");
-}
-
-/**
- * Иногда генерация кладёт название произведения ещё раз в начало главы/стиха
- * («Бхагавад-гита как она есть 6.1» вместо «6.1») — тогда оно дублируется в
- * подписи. Сравнение без учёта регистра: разные генерации расходятся в
- * заглавных буквах чаще, чем в самом тексте.
- */
-function stripWorkPrefix(locator: string | null, work: string | null): string | null {
-  if (!locator || !work) return locator;
-  if (!locator.toLocaleLowerCase().startsWith(work.toLocaleLowerCase())) return locator;
-  const rest = locator.slice(work.length).replace(/^[·,:\s-]+/, "").trim();
-  return rest || null;
 }

@@ -297,6 +297,20 @@ export interface MotivationReelCreateResult {
 }
 
 export interface MotivationFeedResponse { items: MotivationPostDto[]; nextCursor: string | null }
+/**
+ * Пункт фильтра ленты по автору или источнику (VED-206). `label` — как
+ * показать и что отправить в `?speaker=` / `?work=`: сервер сравнивает без
+ * регистра и лишних пробелов.
+ */
+export interface MotivationAttributionOptionDto {
+  label: string;
+  count: number;
+}
+/** Авторы и источники, по которым можно отфильтровать ленту. */
+export interface MotivationFeedAttributionsDto {
+  speakers: MotivationAttributionOptionDto[];
+  works: MotivationAttributionOptionDto[];
+}
 export interface MotivationLikeResponse { likeCount: number; isLiked: boolean }
 export type MotivationPostStatus = 'draft' | 'generating' | 'published' | 'failed' | 'hidden';
 /** Сколько вдохновений в сервисе — цифра над лентой. */
