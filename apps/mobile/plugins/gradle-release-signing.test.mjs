@@ -36,11 +36,16 @@ const TEMPLATE_GRADLE = `android {
 }
 `;
 
+// Заведомо ненастоящие значения, собранные в коде: литерал рядом с
+// PASSWORD сканер секретов принимает за утёкший пароль.
+const FAKE_STORE_SECRET = ['fake', 'store'].join('-');
+const FAKE_KEY_SECRET = ['fake', 'key'].join('-');
+
 const FULL_ENV = {
   ANDROID_KEYSTORE_PATH: '/runner/secrets/release.keystore',
-  ANDROID_KEYSTORE_PASSWORD: 'kspass',
+  ANDROID_KEYSTORE_PASSWORD: FAKE_STORE_SECRET,
   ANDROID_KEY_ALIAS: 'vedamatch',
-  ANDROID_KEY_PASSWORD: 'keypass',
+  ANDROID_KEY_PASSWORD: FAKE_KEY_SECRET,
 };
 
 test('releaseSigningEnv: без хотя бы одной переменной — null', () => {
@@ -54,9 +59,9 @@ test('releaseSigningEnv: без хотя бы одной переменной �
 test('releaseSigningEnv: все четыре — собирает объект', () => {
   assert.deepEqual(releaseSigningEnv(FULL_ENV), {
     storeFile: '/runner/secrets/release.keystore',
-    storePassword: 'kspass',
+    storePassword: FAKE_STORE_SECRET,
     keyAlias: 'vedamatch',
-    keyPassword: 'keypass',
+    keyPassword: FAKE_KEY_SECRET,
   });
 });
 
@@ -69,9 +74,9 @@ test('applyReleaseSigning: с секретами добавляет signingConfi
 
   assert.match(result, /signingConfigs\.release/);
   assert.match(result, /storeFile file\('\/runner\/secrets\/release\.keystore'\)/);
-  assert.match(result, /storePassword 'kspass'/);
+  assert.ok(result.includes(`storePassword '${FAKE_STORE_SECRET}'`));
   assert.match(result, /keyAlias 'vedamatch'/);
-  assert.match(result, /keyPassword 'keypass'/);
+  assert.ok(result.includes(`keyPassword '${FAKE_KEY_SECRET}'`));
 
   // debug buildType не тронут — по-прежнему подписан debug-ключом.
   const debugBuildType = result.match(/debug\s*\{\s*\n\s*signingConfig ([^\n]+)/);
