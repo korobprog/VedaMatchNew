@@ -31,6 +31,7 @@ import { createTelegramNotificationsApi } from '@/lib/notifications/telegram-not
 import { describeTelegramNotificationsSection } from '@/lib/notifications/telegram-notifications-state';
 import { loadTelegramWebApp, telegramLaunch } from '@/lib/telegram/web-app';
 import { pressedStyle, ripple } from '@/theme/press';
+import { buildStamp, buildStampLabel } from '@/config/build-stamp';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
 import type { TelegramNotificationStatusResponse } from '@vedamatch/shared';
@@ -47,6 +48,7 @@ const IS_WEB = Platform.OS === 'web';
  */
 export default function AccountScreen() {
   const { colors } = useTheme();
+  const stamp = buildStampLabel(buildStamp());
   const insets = useSafeAreaInsets();
   const { user, api, apiOrigin, signOut } = useSession();
   const identitiesApi = useMemo(() => createIdentitiesApi(api), [api]);
@@ -342,6 +344,14 @@ export default function AccountScreen() {
         >
           <Text style={[styles.logoutText, { color: colors.text0 }]}>Выйти</Text>
         </Pressable>
+
+        {/* Видно, свежая ли открылась сборка: в мини-приложении Telegram и в
+            установленном на экран «Домой» PWA страница может прийти из кэша. */}
+        {stamp ? (
+          <Text style={[styles.stamp, { color: colors.text2 }]} accessibilityRole="text">
+            {stamp}
+          </Text>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -569,5 +579,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     overflow: 'hidden',
   },
+  stamp: { fontFamily: fonts.body, fontSize: 12, textAlign: 'center', marginTop: 12 },
   logoutText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
 });

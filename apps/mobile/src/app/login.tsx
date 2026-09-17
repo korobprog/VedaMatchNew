@@ -4,6 +4,7 @@ import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, Vi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '@/lib/auth/session';
 import type { LoginProvider } from '@/lib/auth/login-flow';
+import { buildStamp, buildStampLabel } from '@/config/build-stamp';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
@@ -19,6 +20,7 @@ export default function LoginScreen() {
   const { signIn, signInDev, loginError } = useSession();
   const [busy, setBusy] = useState<LoginProvider | 'dev' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const stamp = buildStampLabel(buildStamp());
   // Ошибка, с которой вернул маршрут auth после неудачного входа через браузер.
   const params = useLocalSearchParams<{ error?: string }>();
   useEffect(() => {
@@ -75,7 +77,13 @@ export default function LoginScreen() {
         >
           {busy === 'yandex' ? <ActivityIndicator color={colors.text0} /> : <Text style={[styles.buttonText, { color: colors.text0 }]}>Войти через Яндекс</Text>}
         </Pressable>
-        {error ? (
+        {stamp ? (
+        <Text style={[styles.stamp, { color: colors.text2 }]} accessibilityRole="text">
+          {stamp}
+        </Text>
+      ) : null}
+
+      {error ? (
           <Text accessibilityRole="alert" style={[styles.error, { color: colors.magenta }]}>
             {error}
           </Text>
@@ -135,6 +143,7 @@ const styles = StyleSheet.create({
   },
   buttonText: { fontFamily: fonts.bodyBold, fontSize: 16 },
   error: { fontFamily: fonts.bodySemiBold, fontSize: 14, lineHeight: 20 },
+  stamp: { fontFamily: fonts.body, fontSize: 12, textAlign: 'center' },
   dev: { marginTop: 'auto', gap: 10, borderTopWidth: 1, paddingTop: 16 },
   devTitle: { fontFamily: fonts.bodySemiBold, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
   input: {

@@ -182,8 +182,25 @@
     </div>
     <script>
       if ('serviceWorker' in navigator) {
+        // Новый воркер забирает управление сразу (skipWaiting + clients.claim
+        // в sw.js), и страница один раз перезагружается — иначе во встроенном
+        // браузере Telegram и в установленном PWA открывалась бы старая
+        // оболочка из кэша, пока человек не почистит кэш руками.
+        var reloading = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (reloading) return;
+          reloading = true;
+          window.location.reload();
+        });
         window.addEventListener('load', function () {
-          navigator.serviceWorker.register('/sw.js').catch(function () {});
+          navigator.serviceWorker
+            .register('/sw.js')
+            .then(function (registration) {
+              // Проверять обновление при каждом запуске: браузер сам ходит за
+              // sw.js не чаще раза в сутки.
+              registration.update().catch(function () {});
+            })
+            .catch(function () {});
         });
       }
     </script>
