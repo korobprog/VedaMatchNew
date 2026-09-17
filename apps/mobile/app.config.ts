@@ -79,6 +79,24 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // `startForeground(..., type)` бросает `SecurityException` в рантайме
       // (манифест собирает оба типа статически, `CallForegroundService`
       // на видеозвонке передаёт оба, на аудио — только `phoneCall|microphone`).
+      // ACCESS_WIFI_STATE/CHANGE_NETWORK_STATE — правка по факту живой
+      // проверки (BUG C, VED-222, Samsung Galaxy A51): ни react-native-webrtc,
+      // ни сам .aar `org.jitsi:webrtc` их не декларируют (проверено по
+      // распакованным манифестам обоих — там вообще нет <uses-permission>),
+      // до этой правки в итоговом манифесте была только ACCESS_NETWORK_STATE
+      // (от другой зависимости). Обе — «normal», Android выдаёт их
+      // автоматически без диалога, ничего общего с READ_PHONE_STATE/
+      // READ_PHONE_NUMBERS (те специально не добавлены нигде в этом файле —
+      // см. §12.15). Без ACCESS_WIFI_STATE `NetworkMonitorAutoDetect`
+      // (react-native-webrtc/libwebrtc, org.webrtc.NetworkMonitorAutoDetect)
+      // не может спросить Wi-Fi-специфичные данные о текущей сети
+      // (`WifiManagerDelegate`) при построении списка сетей для нативного
+      // ICE-гатерера; без CHANGE_NETWORK_STATE тот же монитор ловит
+      // `SecurityException` на `ConnectivityManager.requestNetwork()` для
+      // отдельного отслеживания сотовой сети (лог этого прогона: `Unable to
+      // obtain permission to request a cellular network`) — оба тихо
+      // проглатываются (try/catch), поэтому раньше не проявлялись явной
+      // ошибкой, а сбор STUN/TURN просто не происходил.
       permissions: [
         'android.permission.MANAGE_OWN_CALLS',
         'android.permission.USE_FULL_SCREEN_INTENT',
@@ -86,6 +104,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         'android.permission.FOREGROUND_SERVICE_PHONE_CALL',
         'android.permission.FOREGROUND_SERVICE_MICROPHONE',
         'android.permission.FOREGROUND_SERVICE_CAMERA',
+        'android.permission.ACCESS_WIFI_STATE',
+        'android.permission.CHANGE_NETWORK_STATE',
       ],
     },
     plugins: [

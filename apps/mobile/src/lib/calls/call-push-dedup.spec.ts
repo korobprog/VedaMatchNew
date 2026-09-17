@@ -50,4 +50,14 @@ describe('CallLifecycleTracker', () => {
     tracker.handleEnded('call-1', 100);
     expect(tracker.handleIncoming('call-1', 100 + 1000 + 1)).toBe('ring');
   });
+
+  it('isRinging — true после handleIncoming, false до него, false после handleEnded, чтение не меняет запись', () => {
+    const tracker = new CallLifecycleTracker();
+    expect(tracker.isRinging('call-1', 0)).toBe(false);
+    tracker.handleIncoming('call-1', 0);
+    expect(tracker.isRinging('call-1', 10)).toBe(true);
+    expect(tracker.isRinging('call-1', 20)).toBe(true); // повторное чтение не гасит
+    tracker.handleEnded('call-1', 30);
+    expect(tracker.isRinging('call-1', 40)).toBe(false);
+  });
 });

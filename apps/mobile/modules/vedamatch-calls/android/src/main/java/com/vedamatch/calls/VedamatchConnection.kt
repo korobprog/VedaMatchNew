@@ -2,6 +2,7 @@ package com.vedamatch.calls
 
 import android.telecom.Connection
 import android.telecom.DisconnectCause
+import android.util.Log
 
 /**
  * Один self-managed звонок в глазах Telecom. Заголовок делает минимум,
@@ -41,8 +42,12 @@ class VedamatchConnection(
    *  `feedback-001.md` уже находил у `onReject()`). */
   private val onEndCallback: (String) -> Unit,
 ) : Connection() {
+  companion object {
+    private const val TAG = "VedamatchCalls"
+  }
 
   override fun onShowIncomingCallUi() {
+    Log.i(TAG, "onShowIncomingCallUi callId=$callId")
     val context = VedamatchCallsModule.applicationContextOrNull() ?: return
     val info = PendingCallStore.infoFor(callId) ?: return
     CallNotifications.show(context, info)

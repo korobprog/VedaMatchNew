@@ -5,6 +5,7 @@ import android.app.PictureInPictureParams
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -65,10 +66,25 @@ class VedamatchCallsModule : Module() {
     private fun phoneAccountHandle(context: Context): PhoneAccountHandle =
       PhoneAccountHandle(ComponentName(context, VedamatchConnectionService::class.java), ACCOUNT_ID)
 
+    /**
+     * Регистрирует self-managed `PhoneAccount` — идемпотентно и БЕЗ
+     * предварительной проверки `getPhoneAccount()` (живой лог Samsung
+     * Galaxy A51, Android 13: `getPhoneAccount()` там бросает
+     * `SecurityException: ... READ_PHONE_NUMBERS`, хотя self-managed
+     * аккаунту (`CAPABILITY_SELF_MANAGED`) это разрешение по документации
+     * не требуется вовсе — конкретная прошивка проверяет его для ЛЮБОГО
+     * вызывающего `getPhoneAccount()`, даже за собственный аккаунт
+     * приложения). `registerPhoneAccount()` — обычный публичный API под
+     * `MANAGE_OWN_CALLS` (уже выдан по объявлению в манифесте), повторный
+     * вызов с тем же `PhoneAccountHandle` просто обновляет запись, не
+     * бросает и не требует READ_PHONE_NUMBERS — раз проверка «уже
+     * зарегистрирован ли» больше не нужна для идемпотентности, отдельный
+     * читающий вызов, добавляющий риск SecurityException на части OEM,
+     * можно просто убрать.
+     */
     private fun ensurePhoneAccount(context: Context) {
       val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
       val handle = phoneAccountHandle(context)
-      if (telecomManager.getPhoneAccount(handle) != null) return
       val account = PhoneAccount.builder(handle, "VedaMatch")
         .setCapabilities(PhoneAccount.CAPABILITY_SELF_MANAGED)
         .build()
@@ -172,6 +188,7 @@ class VedamatchCallsModule : Module() {
       // системной интеграции с ним (feedback-001.md, non-blocking п.1).
       try {
         ensurePhoneAccount(context)
+        Log.i(TAG, "showIncomingCall: PhoneAccount зарегистрирован, callId=$callId")
         val extras = android.os.Bundle().apply {
           putString(PendingCallStore.EXTRA_CALL_ID, callId)
           putString(PendingCallStore.EXTRA_CALLER_NAME, callerName)
@@ -180,11 +197,12 @@ class VedamatchCallsModule : Module() {
         }
         val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
         telecomManager.addNewIncomingCall(phoneAccountHandle(context), extras)
+        Log.i(TAG, "showIncomingCall: addNewIncomingCall отправлен, callId=$callId")
       } catch (error: Exception) {
         // Без лога на живом устройстве это будет нечем объяснить постфактум,
         // кроме «звонок почему-то не поднял self-managed соединение»
         // (feedback-002.md, non-blocking п.4).
-        Log.w(TAG, "Telecom отказал, деградация до обычного уведомления", error)
+        Log.w(TAG, "showIncomingCall: Telecom отказал, деградация до обычного уведомления, callId=$callId", error)
         CallNotifications.show(context, info)
       }
     }
@@ -241,34 +259,91 @@ class VedamatchCallsModule : Module() {
       CallNotifications.cancel(context, callId)
       PendingCallStore.connectionFor(callId)?.disconnectFromApp()
       PendingCallStore.removeInfo(callId)
+      // Правка по факту живой проверки: снимает показ-поверх-блокировки/
+      // turnScreenOn защитно — на случай, если звонок пропущен/снят ДО
+      // того, как открылся сам экран звонка (`app/call/[id].tsx`) и успел
+      // вызвать `setCallScreenActive(false)` сам. Флаги мог выставить
+      // синхронно `MainActivity.onCreate`/`onNewIntent` (§4,
+      // `plugins/with-native-calls.js`) сразу по полноэкранному `Intent`,
+      // не дожидаясь React-дерева вовсе.
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+        appContext.currentActivity?.let {
+          it.setShowWhenLocked(false)
+          it.setTurnScreenOn(false)
+        }
+      }
     }
 
     /**
      * VED-222, п.7: «занято» решает JS (`call-busy-decision.ts`) — этот
      * вызов только репортит два независимых факта, ничего не решает сам:
      * `hasOwnCall` — уже идёт свой self-managed звонок (`PendingCallStore`);
-     * `systemBusy` — Telecom считает устройство занятым чем-то ещё
-     * (сотовый разговор или другое self-managed приложение). Обёрнуто в
-     * `try/catch`: `TelecomManager.isInCall()` без `READ_PHONE_STATE` на
-     * части OEM/версий может бросить `SecurityException` — тогда считаем
-     * систему свободной (fail-open): ложное «не занято» просто покажет
-     * входящий баннер как обычно, а не потеряет звонок молча.
+     * `systemBusy` — устройство занято ЧЕМ-ТО ЕЩЁ (сотовый разговор или
+     * другое self-managed приложение).
+     *
+     * Правка по факту живой проверки (Samsung Galaxy A51, Android 13):
+     * `TelecomManager.isInCall()` требует `READ_PHONE_STATE`
+     * (`SecurityException` без него, живой лог устройства) — это разрешение
+     * сознательно не добавляется в манифест (описано в задании и
+     * `docs/mobile-calls-native.md` §12: правила Google Play для чувствительных
+     * разрешений телефонии, самоуправляемому аккаунту оно и не должно быть
+     * нужно). Замена — `AudioManager.getMode()`: `MODE_IN_CALL` система
+     * выставляет сама для НАСТОЯЩЕГО сотового разговора (телефония GSM/VoLTE),
+     * это публичный API без единого разрешения. `MODE_IN_COMMUNICATION`
+     * сознательно не считается «занято» — его ставит наш же
+     * `InCallManager.start()` на время СВОЕГО разговора (см.
+     * `audio-session-policy.ts`), и другие VoIP-приложения делают то же самое;
+     * отличить «наш разговор» от «чужого VoIP» этим полем нельзя, но наш
+     * собственный уже покрыт отдельным флагом `hasOwnCall`
+     * (`PendingCallStore.hasAnyConnection()`), а для стороннего VoIP
+     * `MODE_IN_COMMUNICATION` — это как раз не такое надёжное «занято», ради
+     * которого стоило бы рисковать ложным срабатыванием (человек мог просто
+     * недавно закончить звонок в другом приложении, не сбросившем режим).
+     *
+     * `excludeCallId` (правка по факту живой проверки, Samsung Galaxy A51) —
+     * звонок, который САМ проверяет «занято ли устройство ДРУГИМ звонком»,
+     * не должен засчитывать самого себя: `PendingCallStore.putConnection()`
+     * заносит запись про self-managed `Connection` уже в момент
+     * `onCreateIncomingConnection` (пока звонок только звонит, задолго до
+     * ответа) — плоский `hasAnyConnection()` поэтому всегда видел «свой
+     * звонок идёт» для повторно доставленного/пришедшего с гонкой push
+     * `call.incoming` ТОГО ЖЕ звонка и топил его decline'ом параллельно с
+     * тем, что человек в этот момент отвечал на него изнутри приложения
+     * (`native-call-bridge.ts#handleIncomingCallPush` передаёт сюда
+     * `push.callId`; `call-provider.tsx#start()` для НОВОГО исходящего
+     * звонка своего `callId` ещё не имеет — там аргумент пустая строка,
+     * тогда считается любой существующий `Connection`, как и раньше).
      */
-    Function("callConflictState") {
-      val hasOwnCall = PendingCallStore.hasAnyConnection()
-      val systemBusy = try {
-        val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
-        telecomManager.isInCall()
-      } catch (error: Exception) {
-        Log.w(TAG, "Не удалось спросить Telecom про занятость устройства", error)
-        false
-      }
+    Function("callConflictState") { excludeCallId: String ->
+      val hasOwnCall = if (excludeCallId.isEmpty())
+        PendingCallStore.hasAnyConnection()
+      else
+        PendingCallStore.hasOtherConnection(excludeCallId)
+      val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+      val systemBusy = audioManager.mode == AudioManager.MODE_IN_CALL
       mapOf("hasOwnCall" to hasOwnCall, "systemBusy" to systemBusy)
     }
 
     Function("getLaunchCall") {
       val launch = PendingCallStore.consumeLaunch() ?: return@Function null
-      mapOf("callId" to launch.callId, "action" to launch.action)
+      // Имя/вид/аватар — правка по факту живой проверки (Samsung Galaxy
+      // A51, BUG B этапа VED-222): `fullScreenIntent` поднимает Activity
+      // раньше, чем `reconcile()` (JS, `GET /chat/calls/active`) успевает
+      // сходить на сервер, — до этого момента показать входящий было
+      // нечем, JS видел только `callId`/`action` и ждал сеть. Эти три поля
+      // уже лежат в `PendingCallStore.infoFor()` — их положил туда же
+      // `showIncomingCall()` из пуша, которым звонок начался; `null`, если
+      // информация уже вычищена (`removeInfo`, например, второй быстрый
+      // `getLaunchCall()` подряд — тогда JS достроит карточку сам через
+      // `reconcile()`, `action`/`callId` тут не пострадали).
+      val info = PendingCallStore.infoFor(launch.callId)
+      mapOf(
+        "callId" to launch.callId,
+        "action" to launch.action,
+        "callerName" to info?.callerName,
+        "kind" to info?.kind,
+        "avatarUrl" to info?.avatarUrl,
+      )
     }
 
     Function("canUseFullScreenIntent") {
@@ -290,15 +365,25 @@ class VedamatchCallsModule : Module() {
       }
     }
 
+    /**
+     * Правка по факту живой проверки (Samsung Galaxy A51): `requestDismissKeyguard`
+     * убран — вызывался безусловно при `active = true` и принудительно снимал
+     * блокировку экрана при каждом ответе на звонок, хотя `setShowWhenLocked(true)`
+     * уже показывает разговор ПОВЕРХ блокировки без её снятия, ровно как у
+     * системной звонилки (ответить/говорить можно, не разблокируя телефон
+     * для всего остального). Сами флаги теперь дублируют то, что уже
+     * выставляет `MainActivity` синхронно в `onCreate`/`onNewIntent`
+     * (`plugins/with-native-calls.js`, §4) — этот вызов остаётся как явный
+     * путь СНЯТИЯ флагов, когда экран звонка размонтируется
+     * (`app/call/[id].tsx`), и как путь их установки для случая, когда
+     * человек открыл экран звонка НЕ через полноэкранный intent (например,
+     * ответил тапом по баннеру внутри уже открытого приложения).
+     */
     Function("setCallScreenActive") { active: Boolean ->
       val activity = appContext.currentActivity ?: return@Function
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
         activity.setShowWhenLocked(active)
         activity.setTurnScreenOn(active)
-      }
-      if (active) {
-        val keyguard = activity.getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
-        keyguard?.requestDismissKeyguard(activity, null)
       }
     }
 

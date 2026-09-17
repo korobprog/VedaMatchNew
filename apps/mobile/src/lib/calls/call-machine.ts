@@ -30,6 +30,18 @@ export type CallPhase =
 export interface CallState {
   phase: CallPhase;
   call: ChatCallDto | null;
+  /**
+   * `call` собран на телефоне из данных `PendingCallStore` (имя/аватар/вид),
+   * не с сервера (VED-222, живая проверка: экран, поднятый `fullScreenIntent`,
+   * должен показать входящий немедленно, не дожидаясь `reconcile()`/SSE —
+   * `call-provider.tsx#buildPreviewCall`). Отличает «временную карточку» от
+   * настоящей: пока флаг взведён и фаза всё ещё `incoming`, `reconcile()`
+   * вправе перезаписать `call` результатом `/chat/calls/active` (обычно —
+   * идемпотентно, тот же `id`); как только фаза уходит дальше (`accepting`
+   * и т.д.), реконсайл такую подмену больше не делает — см. guard в
+   * `call-provider.tsx`.
+   */
+  callIsPreview: boolean;
   /** Чем кончилось — для экрана «звонок завершён». */
   endedStatus: ChatCallStatus | null;
   /** Когда пошёл разговор (ms), для таймера на экране. */
@@ -44,6 +56,7 @@ export interface CallState {
 export const IDLE_STATE: CallState = {
   phase: 'idle',
   call: null,
+  callIsPreview: false,
   endedStatus: null,
   connectedAt: null,
   reconnecting: false,
@@ -59,6 +72,14 @@ export type CallAction =
   | { type: 'stream'; event: ChatCallStreamEvent; selfId: string }
   /** Восстановление после перезапуска: сервер сказал, в каком мы звонке. */
   | { type: 'restore'; call: ChatCallDto; selfId: string }
+  /**
+   * `fullScreenIntent` поднял `Activity` для ещё не отвеченного звонка —
+   * показать входящий немедленно данными из `PendingCallStore`, не дожидаясь
+   * `reconcile()` (VED-222, живая проверка BUG B). Только из простоя: если
+   * что-то уже происходит (свой исходящий, другой входящий по SSE), карточка
+   * из фонового запуска — не повод его перебивать.
+   */
+  | { type: 'preview'; call: ChatCallDto }
   /** Человек нажал «ответить» — сервер ещё не подтвердил. */
   | { type: 'accepting' }
   | { type: 'connected'; at: number }
@@ -74,6 +95,11 @@ export function reduceCall(state: CallState, action: CallAction): CallState {
   switch (action.type) {
     case 'outgoing-started':
       return { ...IDLE_STATE, phase: 'outgoing', call: action.call };
+
+    case 'preview':
+      return state.phase === 'idle'
+        ? { ...IDLE_STATE, phase: 'incoming', call: action.call, callIsPreview: true }
+        : state;
 
     case 'restore': {
       const role = action.call.caller.id === action.selfId ? 'caller' : 'callee';

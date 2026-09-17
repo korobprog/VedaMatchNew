@@ -107,10 +107,42 @@ const withNativeCalls = (config) =>
  * `enterPictureInPictureMode()` самим не нужно и вредно (может привести
  * к двойному входу). `onPictureInPictureModeChanged` сообщает JS о смене
  * режима в обе стороны — экран звонка прячет кнопки только в PiP.
+ *
+ * ## 4. Показ поверх экрана блокировки (VED-222 — правка по факту живой
+ * проверки, Samsung Galaxy A51, Android 13)
+ *
+ * Живой лог: `sysui_fullscreen_intent` сработал, система стартовала
+ * `MainActivity`, но экран не включился и keyguard остался — `Activity`
+ * тут же ушла в `onPause` (`mWakefulness=Dozing`). Причина: `setShowWhenLocked`/
+ * `setTurnScreenOn` выставлялись из JS (`setCallScreenActive`, вызывается
+ * из `app/call/[id].tsx` уже ПОСЛЕ монтирования React-дерева) — на
+ * заблокированном погашенном экране это на несколько кадров позже, чем
+ * системе нужно решение «показывать поверх блокировки или нет» при первом
+ * `onCreate`/`onResume`. Исправление — выставлять эти флаги СИНХРОННО в
+ * нативном `onCreate`/`onNewIntent`, по тому же признаку, что уже есть в
+ * стартующем `Intent` (`callId` — кладут и `CallNotifications.show()`'s
+ * `fullScreenIntent`, и `CallActionReceiver`'s intent «Ответить»): проверка
+ * не требует ничего от JS и успевает до первого кадра.
+ *
+ * Флаги не снимаются здесь же — их explicit «выключение» уже делает
+ * `setCallScreenActive(false)` (JS, `app/call/[id].tsx`, размонтирование
+ * экрана звонка) через тот же нативный модуль; `endCall` (`VedamatchCallsModule.kt`)
+ * дополнительно снимает их сам на текущей `Activity` — защита для звонка,
+ * пропущенного/снятого до того, как экран звонка вообще открылся (полноэкранный
+ * `Intent` уже поднял `Activity`, JS ещё не успел её отрисовать).
+ *
+ * `KeyguardManager.requestDismissKeyguard` сознательно убран из
+ * `setCallScreenActive` (было раньше, вызывалось безусловно при `active`) —
+ * `setShowWhenLocked(true)` уже показывает разговор ПОВЕРХ блокировки без
+ * её снятия, ровно как у системной звонилки; принудительно снимать
+ * блокировку при каждом ответе — лишнее и неожиданное для человека действие,
+ * которого спека не просит.
  */
 const MAIN_ACTIVITY_IMPORTS = `import android.app.PictureInPictureParams
+import android.content.Intent
 import android.content.res.Configuration
 import android.util.Rational
+import com.vedamatch.calls.PendingCallStore
 import com.vedamatch.calls.PipState
 import com.vedamatch.calls.VedamatchCallsModule
 `;
@@ -134,6 +166,44 @@ const MAIN_ACTIVITY_METHODS = `
     super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
     VedamatchCallsModule.sendPipModeChanged(isInPictureInPictureMode)
   }
+
+  // VED-222 (правка по факту живой проверки, см. §4 выше) — второй запуск той
+  // же Activity (singleTask): новый Intent сам по себе не проходит через
+  // onCreate, обязателен свой onNewIntent, иначе «Ответить» на уже открытое
+  // приложение не покажет разговор поверх блокировки.
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    vedamatchApplyCallWindowFlags(intent)
+  }
+
+  private fun vedamatchApplyCallWindowFlags(intent: Intent?) {
+    val callId = intent?.getStringExtra("callId")
+    if (callId.isNullOrEmpty()) return
+    // Правка по факту живой проверки (BUG B, VED-222, Samsung Galaxy A51):
+    // fullScreenIntent (CallNotifications.show(), extra vedamatchCallAction=
+    // "open") поднимает эту Activity для ЕЩЁ НЕ ОТВЕЧЕННОГО звонка, но
+    // раньше ничего не клало в PendingCallStore.pendingLaunch — JS
+    // (getLaunchCall()) видел null и ждал реконсайл по сети, пока звонок не
+    // уходил в пропущенные. «Ответить» с уведомления (CallActionReceiver)
+    // этот же pendingLaunch уже сам выставляет ДО запуска Activity (action
+    // "answer", другое значение extra) — здесь трогаем только "open", чтобы
+    // не перезаписать её работу при гонке между приёмником и Activity.
+    if (intent?.getStringExtra("vedamatchCallAction") == "open") {
+      PendingCallStore.setPendingLaunch(callId, "open")
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+      setShowWhenLocked(true)
+      setTurnScreenOn(true)
+    } else {
+      @Suppress("DEPRECATION")
+      window.addFlags(
+        android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+          android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+          android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+      )
+    }
+  }
 `;
 
 const withCallPip = (config) =>
@@ -148,6 +218,17 @@ const withCallPip = (config) =>
     if (!contents.includes('onPictureInPictureModeChanged')) {
       const lastBrace = contents.lastIndexOf('}');
       contents = `${contents.slice(0, lastBrace)}${MAIN_ACTIVITY_METHODS}${contents.slice(lastBrace)}`;
+    }
+
+    // Показ поверх блокировки уже на ПЕРВОМ старте Activity (не только на
+    // повторном через onNewIntent выше) — синхронно в onCreate, до первого
+    // кадра, а не из JS постфактум (см. §4). `super.onCreate(null)` — часть
+    // сгенерированного Expo-шаблона, единственное вхождение в файле.
+    if (!contents.includes('super.onCreate(null)\n    vedamatchApplyCallWindowFlags')) {
+      contents = contents.replace(
+        'super.onCreate(null)',
+        'super.onCreate(null)\n    vedamatchApplyCallWindowFlags(intent)',
+      );
     }
 
     config.modResults.contents = contents;

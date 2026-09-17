@@ -6,7 +6,13 @@ import Svg, { Path } from 'react-native-svg';
 import { useSession } from '@/lib/auth/session';
 import { createChatCallsApi } from '@/lib/calls/chat-calls-client';
 import { buildProbePlan, formatSummary, type ProbeStep, type StepOutcome, type StepResult } from '@/lib/calls/ice-probe';
-import { runLoopback, runStep } from '@/lib/calls/ice-probe-runner';
+import {
+  runAnswererProbe,
+  runLoopback,
+  runStep,
+  type AnswererProbeOptions,
+  type AnswererProbeResult,
+} from '@/lib/calls/ice-probe-runner';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
 
@@ -36,6 +42,61 @@ export default function CallsProbeScreen() {
   const [plan, setPlan] = useState<ProbeStep[]>([]);
   const [results, setResults] = useState<StepResult[]>([]);
   const [loopback, setLoopback] = useState<StepOutcome>('pending');
+
+  // «Проверка как у звонка» (VED-222, живая проверка BUG C) — отдельная от
+  // основного прогона выше: тот строит `RTCPeerConnection` офферером
+  // (`pc.createOffer()`), настоящий же звонок на приёме — ответчиком
+  // (`setRemoteDescription` → `createAnswer`). Пять прогонов подряд,
+  // каждый следующий сужает гипотезу дальше предыдущего живого прогона:
+  // 1 — без трека (базовый случай, уже подтверждённо получает
+  //     host/srflx/relay);
+  // 2 — с микрофоном, добавленным ДО `setRemoteDescription`, тем же
+  //     порядком, что `call-provider.tsx#accept()` готовит `CallSession`;
+  // 3 — плюс ранний РЕАЛЬНЫЙ (LAN) кандидат собеседника СРАЗУ после
+  //     `setRemoteDescription` — старый (до правки §12.20) порядок
+  //     `CallSession.handleSignal`, воспроизводит «только host»;
+  // 4 — то же самое, но кандидат заведомо НЕДОСТИЖИМЫЙ (TEST-NET,
+  //     192.0.2.1) — проверяет гипотезу «сбор останавливается при первой
+  //     writable-паре, а не из-за самого факта раннего кандидата»;
+  // 5 — ранний LAN-кандидат (как в 3) плюс `continualGatheringPolicy:
+  //     'gather_continually'` на ответчике — проверяет, спасает ли
+  //     непрерывный сбор даже при мгновенно writable-паре.
+  const RESULT_LABELS = [
+    'Без трека',
+    'С микрофоном до offer’а',
+    'Плюс ранний LAN-кандидат (старый порядок)',
+    'Ранний НЕДОСТИЖИМЫЙ кандидат',
+    'Ранний LAN-кандидат + gather_continually',
+  ] as const;
+  const [answererPhase, setAnswererPhase] = useState<'idle' | 'running' | 'error'>('idle');
+  const [answererResults, setAnswererResults] = useState<(AnswererProbeResult | null)[]>([]);
+  const [answererError, setAnswererError] = useState<string | null>(null);
+
+  const runAnswerer = useCallback(async () => {
+    setAnswererPhase('running');
+    setAnswererError(null);
+    setAnswererResults([]);
+    try {
+      const callsApi = createChatCallsApi(api);
+      const state = await callsApi.iceServers();
+      const runs: AnswererProbeOptions[] = [
+        {},
+        { addLocalTrackFirst: true },
+        { addLocalTrackFirst: true, applyRemoteCandidateBeforeAnswer: true },
+        { addLocalTrackFirst: true, applyRemoteCandidateBeforeAnswer: true, useUnreachableEarlyCandidate: true },
+        { addLocalTrackFirst: true, applyRemoteCandidateBeforeAnswer: true, continualGathering: true },
+      ];
+      const collected: (AnswererProbeResult | null)[] = [];
+      for (const runOptions of runs) {
+        collected.push(await runAnswererProbe(state.iceServers, runOptions));
+        setAnswererResults([...collected]);
+      }
+      setAnswererPhase('idle');
+    } catch (e) {
+      setAnswererError(e instanceof Error ? e.message : String(e));
+      setAnswererPhase('error');
+    }
+  }, [api]);
 
   const run = useCallback(async () => {
     setPhase('loading');
@@ -158,6 +219,49 @@ export default function CallsProbeScreen() {
             </Text>
           </View>
         ) : null}
+
+        <View style={[styles.note, { borderColor: colors.glassBorder, backgroundColor: colors.glass, gap: 10 }]}>
+          <Text style={[styles.lead, { color: colors.text1 }]}>
+            Проверка как у звонка: та же связка iceServers, но соединение играет роль ОТВЕЧАЮЩЕГО
+            (`setRemoteDescription` → `createAnswer`), как настоящий входящий звонок — не офферера, как
+            шаги выше. Пять прогонов подряд, каждый сужает гипотезу: без трека → с микрофоном до offer'а
+            → плюс ранний LAN-кандидат → ранний НЕДОСТИЖИМЫЙ кандидат → ранний LAN-кандидат с
+            `gather_continually`.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={answererPhase === 'running' ? 'Проверка идёт' : 'Запустить проверку как у звонка'}
+            disabled={answererPhase === 'running'}
+            onPress={() => void runAnswerer()}
+            style={({ pressed }) => [
+              styles.button,
+              { backgroundColor: colors.cyan },
+              (pressed || answererPhase === 'running') && { opacity: 0.7 },
+            ]}
+          >
+            {answererPhase === 'running' ? <ActivityIndicator color={colors.onAccent} /> : null}
+            <Text style={[styles.buttonText, { color: colors.onAccent }]}>
+              {answererPhase === 'running' ? 'Проверяем…' : 'Проверка как у звонка (ответчик)'}
+            </Text>
+          </Pressable>
+          {answererError ? (
+            <Text accessibilityRole="alert" style={{ color: colors.magenta, fontFamily: fonts.body, fontSize: 13 }}>
+              Не удалось: {answererError}
+            </Text>
+          ) : null}
+          {answererResults.map((result, index) =>
+            result ? (
+              <Text
+                key={RESULT_LABELS[index]}
+                selectable
+                style={[styles.summary, { color: colors.text0, borderColor: colors.glassBorder, backgroundColor: colors.glass }]}
+              >
+                {RESULT_LABELS[index]} — типы: {result.candidateTypes.length > 0 ? result.candidateTypes.join(', ') : 'ни одного'}
+                {'\n'}Сбор: {result.ms} мс{result.timedOut ? ' (оборвано по таймауту 8с)' : ' (дошёл до конца)'}
+              </Text>
+            ) : null,
+          )}
+        </View>
       </View>
     </View>
   );

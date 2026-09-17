@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import type { ChatCallKind } from '@vedamatch/shared';
 import VedamatchCalls, {
   type CallConflictState,
@@ -9,6 +9,11 @@ import VedamatchCalls, {
 import { declineCallInBackground } from './background-call-action';
 import { shouldDeclineAsBusy } from './call-busy-decision';
 import { callLifecycleTracker } from './call-push-dedup';
+import {
+  decideIncomingCallPresentation,
+  type CallDiscoverySource,
+  type IncomingCallPresentationDecision,
+} from './incoming-call-presentation';
 import { isIncomingCallExpired, type CallEndedPush, type IncomingCallPush } from './incoming-call-push';
 
 /**
@@ -53,20 +58,89 @@ function toEndReason(reason: string): EndCallReason {
  * `docs/mobile-calls-native.md` §12, известное ограничение), это
  * недостаток контракта API, не этого клиента.
  */
+interface IncomingCallInfo {
+  callId: string;
+  callerName: string;
+  kind: ChatCallKind;
+  avatarUrl?: string | null;
+}
+
+/**
+ * Единая точка входа для «показать входящий», кем бы он ни был обнаружен —
+ * пушем (фон/убитое приложение — `handleIncomingCallPush` ниже) или
+ * `call.ringing` из общего потока, пока приложение живо (`call-provider.tsx`,
+ * `showIncomingCallFromStream` ниже). VED-222, живая проверка BUG D: раньше
+ * решение «нативный экран или свой JS-баннер» зависело от ТОГО, кто узнал о
+ * звонке первым, — на заблокированном телефоне с живым процессом SSE
+ * обгонял пуш, провайдер показывал баннер+рингтон ЗА экраном блокировки, а
+ * нативный `showIncomingCall` не звался вовсе. Теперь оба пути сверяются с
+ * `decideIncomingCallPresentation` (`incoming-call-presentation.ts`) по
+ * фактическому `AppState`, а не по источнику; дедуп по `callId` —
+ * `callLifecycleTracker`, общий для обоих путей, так что параллельный вызов
+ * из push и SSE не поднимет Telecom дважды.
+ */
+async function presentIncomingCall(
+  info: IncomingCallInfo,
+  source: CallDiscoverySource,
+  nowMs: number,
+): Promise<IncomingCallPresentationDecision> {
+  const decision = decideIncomingCallPresentation({
+    appState: AppState.currentState,
+    source,
+    nativeShownFor: callLifecycleTracker.isRinging(info.callId, nowMs),
+  });
+  if (!decision.showNative) return decision;
+  if (!SUPPORTED) return decision;
+  if (callLifecycleTracker.handleIncoming(info.callId, nowMs) === 'duplicate') {
+    // Параллельный вызов (push и SSE почти одновременно) уже поднял его.
+    return { ...decision, showNative: false };
+  }
+  // `excludeCallId: info.callId` — правка по факту живой проверки (Samsung
+  // Galaxy A51): без исключения своего же звонка повторно доставленный
+  // push для звонка, на который человек в этот момент отвечает, читался
+  // как «занято своим же звонком» и топил его decline'ом параллельно с
+  // ответом изнутри приложения (`callConflictState`, `VedamatchCallsModule.kt`).
+  const conflict = VedamatchCalls.callConflictState(info.callId);
+  if (shouldDeclineAsBusy(conflict)) {
+    // eslint-disable-next-line no-console -- диагностика для живого теста
+    // (`console.warn` виден в logcat релизной сборки как `W ReactNativeJS`).
+    console.warn('[calls] decline as busy', { callId: info.callId, ...conflict });
+    void declineCallInBackground(info.callId);
+    return { ...decision, showNative: false };
+  }
+  await VedamatchCalls.showIncomingCall({
+    callId: info.callId,
+    callerName: info.callerName,
+    kind: info.kind,
+    avatarUrl: info.avatarUrl,
+  });
+  return decision;
+}
+
 export async function handleIncomingCallPush(push: IncomingCallPush, nowMs = Date.now()): Promise<void> {
   if (!SUPPORTED) return;
   if (isIncomingCallExpired(push, nowMs)) return;
-  if (callLifecycleTracker.handleIncoming(push.callId, nowMs) === 'duplicate') return;
-  if (shouldDeclineAsBusy(VedamatchCalls.callConflictState())) {
-    void declineCallInBackground(push.callId);
-    return;
-  }
-  await VedamatchCalls.showIncomingCall({
-    callId: push.callId,
-    callerName: push.callerName,
-    kind: push.kind,
-    avatarUrl: push.callerAvatarUrl,
-  });
+  await presentIncomingCall(
+    { callId: push.callId, callerName: push.callerName, kind: push.kind, avatarUrl: push.callerAvatarUrl },
+    'push',
+    nowMs,
+  );
+}
+
+/**
+ * `call.ringing` из общего потока (`chat-stream.tsx`), пока приложение
+ * живо, — `call-provider.tsx` зовёт это ДО (или вместо, если решение
+ * скажет `showInAppUi: false`) обычного `dispatch`. На платформах без
+ * нативного модуля (iOS) всегда возвращает «свой баннер» — там нет
+ * альтернативы. `avatarUrl` — по контракту `ChatUserSummary`, `undefined`
+ * трактуется как «нет фото», так же как и `null`.
+ */
+export async function showIncomingCallFromStream(
+  info: IncomingCallInfo,
+  nowMs = Date.now(),
+): Promise<IncomingCallPresentationDecision> {
+  if (!SUPPORTED) return { showNative: false, showInAppUi: true, playInAppRingtone: true };
+  return presentIncomingCall(info, 'sse', nowMs);
 }
 
 export async function handleCallEndedPush(push: CallEndedPush, nowMs = Date.now()): Promise<void> {
@@ -106,10 +180,12 @@ export async function startOngoingCall(callId: string, companionName: string, ki
 /** VED-222, п.7: сырые факты «занято ли устройство» — решение принимает
  *  `shouldDeclineAsBusy` (`call-busy-decision.ts`). На платформах без
  *  модуля — «свободно»: без него нет и self-managed интеграции, которая
- *  вообще может заметить конфликт. */
-export function getCallConflictState(): CallConflictState {
+ *  вообще может заметить конфликт. `excludeCallId` — не считать занятостью
+ *  self-managed `Connection` этого же звонка (см. `handleIncomingCallPush`
+ *  выше); для проверки перед НОВЫМ исходящим не передаётся вовсе. */
+export function getCallConflictState(excludeCallId?: string): CallConflictState {
   if (!SUPPORTED) return { hasOwnCall: false, systemBusy: false };
-  return VedamatchCalls.callConflictState();
+  return VedamatchCalls.callConflictState(excludeCallId ?? '');
 }
 
 const KNOWN_TRANSPORTS: ReadonlySet<string> = new Set(['wifi', 'cellular', 'ethernet', 'other', 'none']);

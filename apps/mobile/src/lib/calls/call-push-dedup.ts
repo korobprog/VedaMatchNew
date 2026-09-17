@@ -44,6 +44,15 @@ export class CallLifecycleTracker {
     return 'ring';
   }
 
+  /** Уже показан ли нативный входящий для этого `callId` прямо сейчас —
+   *  чтение без изменения записи (VED-222, BUG D:
+   *  `incoming-call-presentation.ts` использует это как `nativeShownFor`,
+   *  чтобы решить, показывать ли ЕЩЁ и свой баннер на переднем плане). */
+  isRinging(callId: string, nowMs: number): boolean {
+    this.sweep(nowMs);
+    return this.records.get(callId)?.state === 'ringing';
+  }
+
   /** Первый `call.ended` этого id — «погасить»; повтор — «дубликат». */
   handleEnded(callId: string, nowMs: number): CallEndedOutcome {
     this.sweep(nowMs);
