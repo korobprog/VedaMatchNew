@@ -990,15 +990,21 @@ model MotivationSourceWatch {
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid())
-  tokenHash String   @unique
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
-  revoked   Boolean  @default(false)
-  createdAt DateTime @default(now())
+  revoked   Boolean   @default(false)
+  /// Когда отозван: повтор только что ротированного токена — гонка, а не кража.
+  revokedAt DateTime?
+  /// Семейство — один вход и все его ротации. Повтор отозванного токена
+  /// отзывает только своё семейство. null — токены до появления семейств.
+  familyId  String?
+  createdAt DateTime  @default(now())
 
   @@index([userId])
+  @@index([familyId])
   // Под чистку протухших/отозванных (RefreshTokenCleanupService).
   @@index([expiresAt])
   @@index([revoked, createdAt])
