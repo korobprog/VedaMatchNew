@@ -6,7 +6,7 @@ import Svg, { Path } from 'react-native-svg';
 import { useSession } from '@/lib/auth/session';
 import { createChatCallsApi } from '@/lib/calls/chat-calls-client';
 import { buildProbePlan, formatSummary, type ProbeStep, type StepOutcome, type StepResult } from '@/lib/calls/ice-probe';
-import { runLoopback, runStep } from '@/lib/calls/ice-probe-runner';
+import { runAnswererProbe, runLoopback, runStep, type AnswererProbeResult } from '@/lib/calls/ice-probe-runner';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
 
@@ -36,6 +36,31 @@ export default function CallsProbeScreen() {
   const [plan, setPlan] = useState<ProbeStep[]>([]);
   const [results, setResults] = useState<StepResult[]>([]);
   const [loopback, setLoopback] = useState<StepOutcome>('pending');
+
+  // «Проверка как у звонка» (VED-222, живая проверка BUG C) — отдельная от
+  // основного прогона выше: тот строит `RTCPeerConnection` офферером
+  // (`pc.createOffer()`), настоящий же звонок на приёме — ответчиком
+  // (`setRemoteDescription` → `createAnswer`). Если здесь тоже только
+  // `host` — дело не в конкретном offer'е сайта, а в самой связке «роль
+  // ответчика + эти iceServers» на этом телефоне (см. `runAnswererProbe`).
+  const [answererPhase, setAnswererPhase] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [answererResult, setAnswererResult] = useState<AnswererProbeResult | null>(null);
+  const [answererError, setAnswererError] = useState<string | null>(null);
+
+  const runAnswerer = useCallback(async () => {
+    setAnswererPhase('running');
+    setAnswererError(null);
+    setAnswererResult(null);
+    try {
+      const callsApi = createChatCallsApi(api);
+      const state = await callsApi.iceServers();
+      setAnswererResult(await runAnswererProbe(state.iceServers));
+      setAnswererPhase('done');
+    } catch (e) {
+      setAnswererError(e instanceof Error ? e.message : String(e));
+      setAnswererPhase('error');
+    }
+  }, [api]);
 
   const run = useCallback(async () => {
     setPhase('loading');
@@ -158,6 +183,41 @@ export default function CallsProbeScreen() {
             </Text>
           </View>
         ) : null}
+
+        <View style={[styles.note, { borderColor: colors.glassBorder, backgroundColor: colors.glass, gap: 10 }]}>
+          <Text style={[styles.lead, { color: colors.text1 }]}>
+            Проверка как у звонка: та же связка iceServers, но соединение играет роль ОТВЕЧАЮЩЕГО
+            (`setRemoteDescription` → `createAnswer`), как настоящий входящий звонок — не офферера, как
+            шаги выше.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={answererPhase === 'running' ? 'Проверка идёт' : 'Запустить проверку как у звонка'}
+            disabled={answererPhase === 'running'}
+            onPress={() => void runAnswerer()}
+            style={({ pressed }) => [
+              styles.button,
+              { backgroundColor: colors.cyan },
+              (pressed || answererPhase === 'running') && { opacity: 0.7 },
+            ]}
+          >
+            {answererPhase === 'running' ? <ActivityIndicator color={colors.onAccent} /> : null}
+            <Text style={[styles.buttonText, { color: colors.onAccent }]}>
+              {answererPhase === 'running' ? 'Проверяем…' : 'Проверка как у звонка (ответчик)'}
+            </Text>
+          </Pressable>
+          {answererError ? (
+            <Text accessibilityRole="alert" style={{ color: colors.magenta, fontFamily: fonts.body, fontSize: 13 }}>
+              Не удалось: {answererError}
+            </Text>
+          ) : null}
+          {answererResult ? (
+            <Text selectable style={[styles.summary, { color: colors.text0, borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
+              Типы кандидатов: {answererResult.candidateTypes.length > 0 ? answererResult.candidateTypes.join(', ') : 'ни одного'}
+              {'\n'}Сбор: {answererResult.ms} мс{answererResult.timedOut ? ' (оборвано по таймауту 8с)' : ' (дошёл до конца)'}
+            </Text>
+          ) : null}
+        </View>
       </View>
     </View>
   );

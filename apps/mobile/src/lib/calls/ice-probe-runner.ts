@@ -1,6 +1,15 @@
 import { RTCPeerConnection, type RTCIceCandidate } from 'react-native-webrtc';
 import type { ChatIceServerDto } from '@vedamatch/shared';
-import { judgeStep, parseCandidate, type ParsedCandidate, type ProbeStep, type StepOutcome, type StepResult } from './ice-probe';
+import {
+  judgeStep,
+  parseCandidate,
+  type IceCandidateType,
+  type ParsedCandidate,
+  type ProbeStep,
+  type StepOutcome,
+  type StepResult,
+} from './ice-probe';
+import { normalizeIceServers } from './ice-server-normalize';
 
 /**
  * Браузерная часть зонда: реальные `RTCPeerConnection`, здесь — из
@@ -125,4 +134,66 @@ export async function runLoopback(servers: ChatIceServerDto[]): Promise<StepOutc
   a.close();
   b.close();
   return result;
+}
+
+export interface AnswererProbeResult {
+  /** Уникальные типы кандидатов, которые отдал ОТВЕТЧИК (без повторов,
+   *  без порядка). */
+  candidateTypes: IceCandidateType[];
+  /** Сколько мс от `setRemoteDescription` до конца сбора (`candidate: null`
+   *  или таймаут `GATHER_TIMEOUT_MS`). */
+  ms: number;
+  /** Сбор оборвался по таймауту (8с), не дойдя до `candidate: null`. */
+  timedOut: boolean;
+}
+
+/**
+ * «Проверка как у звонка» (VED-222, живая проверка BUG C, запрошено
+ * координатором как детерминированный эксперимент): изолирует РОЛЬ
+ * ответчика от содержимого offer'а конкретного сайта. Второе соединение
+ * здесь настроено БУКВАЛЬНО так же, как `CallSession` в `webrtc-session.ts`
+ * для входящего — те же нормализованные `iceServers`
+ * (`ice-server-normalize.ts`), без `iceTransportPolicy`/`bundlePolicy`,
+ * `onicecandidate` ставится ДО `setRemoteDescription`, дальше тот же
+ * порядок (`setRemoteDescription` → `createAnswer` → `setLocalDescription`).
+ * Первое соединение — не более чем источник реалистичного `offer` (свой
+ * `iceServers` ему не нужен, его кандидаты не проверяются): ЕСЛИ ответчик
+ * здесь тоже не наберёт srflx/relay — дело не в конкретном offer'е сайта
+ * (`a=ice-lite`/`bundle-only`/т.п.), а в самой связке «ответчик + эти
+ * `iceServers`» на этом телефоне/сборке react-native-webrtc.
+ */
+export async function runAnswererProbe(servers: ChatIceServerDto[]): Promise<AnswererProbeResult> {
+  const offerer = new RTCPeerConnection({});
+  offerer.createDataChannel('answerer-probe');
+  const offer = await offerer.createOffer();
+  await offerer.setLocalDescription(offer);
+
+  const answerer = new RTCPeerConnection({ iceServers: normalizeIceServers(servers) });
+  const collected: ParsedCandidate[] = [];
+  const started = Date.now();
+  const { timedOut } = await new Promise<{ timedOut: boolean }>((resolve) => {
+    const timer = setTimeout(() => resolve({ timedOut: true }), GATHER_TIMEOUT_MS);
+    answerer.onicecandidate = ((event: IceCandidateEvent) => {
+      if (!event.candidate) {
+        clearTimeout(timer);
+        resolve({ timedOut: false });
+        return;
+      }
+      const parsed = parseCandidate(event.candidate.candidate);
+      if (parsed) collected.push(parsed);
+    }) as typeof answerer.onicecandidate;
+    answerer
+      .setRemoteDescription({ type: 'offer', sdp: offer.sdp ?? '' })
+      .then(() => answerer.createAnswer())
+      .then((answer) => answerer.setLocalDescription(answer))
+      .catch(() => {
+        clearTimeout(timer);
+        resolve({ timedOut: true });
+      });
+  });
+
+  const ms = Date.now() - started;
+  offerer.close();
+  answerer.close();
+  return { candidateTypes: [...new Set(collected.map((c) => c.type))], ms, timedOut };
 }
