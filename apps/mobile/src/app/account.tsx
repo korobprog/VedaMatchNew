@@ -465,7 +465,15 @@ function TelegramNotificationsSection({
   return (
     <View style={styles.telegramSection}>
       <Text style={[styles.sectionTitle, { color: colors.text1 }]}>Уведомления в Telegram</Text>
-      <View style={[styles.row, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
+      {/* Кнопка с длинной подписью рядом с текстом сжимала его в узкую колонку
+          с переносами посреди слов — тогда карточка раскладывается в столбец. */}
+      <View
+        style={[
+          styles.row,
+          section.showEnableButton && !section.showToggle ? styles.rowStacked : null,
+          { borderColor: colors.glassBorder, backgroundColor: colors.glass },
+        ]}
+      >
         <View style={styles.rowText}>
           <Text style={[styles.rowLabel, { color: colors.text0 }]}>Сообщения от @vedamatch_bot</Text>
           <Text style={[styles.rowNote, { color: colors.text2 }]}>
@@ -535,6 +543,7 @@ const styles = StyleSheet.create({
     padding: 14,
     minHeight: hitTarget,
   },
+  rowStacked: { flexDirection: 'column', alignItems: 'stretch' },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
   rowLabel: { fontFamily: fonts.bodySemiBold, fontSize: 16 },
   rowState: { fontFamily: fonts.body, fontSize: 13 },
