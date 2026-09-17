@@ -10,14 +10,17 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { AppState } from 'react-native';
 import { appVariant } from '@/config/app-variant';
-import { createApiClient, type ApiClient } from '@/lib/api/client';
+import { createApiClient, type ApiClient, type SessionRefreshResult } from '@/lib/api/client';
 import { createAuthApi, type AppTokens } from './auth-api';
 import { msUntilRefresh } from './jwt-expiry';
 import { buildLoginUrl, parseAuthRedirect, APP_AUTH_REDIRECT, type LoginProvider } from './login-flow';
 import { createPkcePair } from './pkce';
-import { singleFlight } from './single-flight';
-import { clearTokens, readTokens, writeTokens, type TokenPair } from './token-store';
+import { nextRefreshBackoffMs } from './refresh-backoff';
+import { reactToTokenChange } from './session-token-reaction';
+import { tokenAuthority } from './token-authority';
+import type { TokenPair } from './token-store';
 import { unregisterDevice } from '@/lib/push/push-api';
 
 /**
@@ -45,8 +48,8 @@ export interface Session {
   apiOrigin: string;
   /** Текущий access-токен для запросов вне ApiClient (поток событий). */
   getAccessToken(): string | null;
-  /** Обновить access-токен; `null`, если сессия закончилась. */
-  refreshAccessToken(): Promise<string | null>;
+  /** Обновить access-токен — три различимых исхода, см. `SessionRefreshResult`. */
+  refreshAccessToken(): Promise<SessionRefreshResult>;
   signIn(provider: LoginProvider): Promise<void>;
   /**
    * Завершение входа по адресу возврата `vedamatch://auth?...`. Android
@@ -79,71 +82,119 @@ interface ProfileResponse {
 export function SessionProvider({ children }: { children: ReactNode }) {
   const { apiOrigin } = appVariant();
   const authApi = useMemo(() => createAuthApi(apiOrigin), [apiOrigin]);
-  const tokensRef = useRef<TokenPair | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [user, setUser] = useState<SessionUser | null>(null);
   const pendingVerifier = useRef<string | null>(null);
 
+  // Актуальный статус для колбэков вне цикла рендера (подписка на
+  // `tokenAuthority` ниже) — не значение из замыкания рендера, которое
+  // регистрировалось один раз (`gan-harness/feedback/feedback-002.md`,
+  // блокирующий п.1: `scheduleRefresh` стабилен на весь процесс →
+  // `useEffect([scheduleRefresh])` выполняется один раз при монтировании →
+  // колбэк внутри навсегда помнил бы `status`, каким он был на первом
+  // рендере). Обновляется синхронно с `setStatus` в отдельном эффекте
+  // ниже — React гарантированно прогоняет эффекты после каждого коммита.
+  const statusRef = useRef<SessionStatus>(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  // Токены и их обновление — не здесь: `tokenAuthority`
+  // (`token-authority.ts`) один на процесс, его же использует фоновое
+  // отклонение звонка (`background-decline.ts`). Раньше у `SessionProvider`
+  // была своя копия токенов и свой `singleFlight refresh`, независимый от
+  // headless-задачи — когда приложение было просто свёрнуто (не убито), обе
+  // ветки жили в одном JS-движке, но не знали друг о друге; ротация
+  // refresh-токена одной из них делала копию другой протухшей, и её
+  // следующее предъявление сервер (детектор повторного использования)
+  // читал как кражу и отзывал все сессии человека
+  // (`gan-harness/feedback/feedback-001.md`, блокирующий п.1).
+  const refresh = tokenAuthority.refresh;
+
+  // Сколько подряд проактивных refresh() отработали 'unavailable' (сеть/5xx,
+  // не явный отказ) — растущая пауза между повторами читает этот счётчик
+  // (`refresh-backoff.ts`). Без этого таймер был бы одноразовым: после
+  // первой неудачи проактивная сторона молчала бы до следующего явного
+  // триггера, которым на практике оказывался бы обычный запрос через
+  // `client.ts` — тот теперь и сам не трогает сессию на `'unavailable'`
+  // (`gan-harness/feedback/feedback-003.md`, блокирующий п.1-2), но без
+  // повторных попыток проактивная сторона так и не восстановилась бы сама.
+  const backoffAttempt = useRef(0);
+
   const dropSession = useCallback(async () => {
-    tokensRef.current = null;
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
-    await clearTokens();
+    backoffAttempt.current = 0;
+    await tokenAuthority.drop();
     setUser(null);
     setStatus('guest');
   }, []);
 
-  // Объявлено через ref, чтобы refresh и adopt могли ссылаться друг на друга
-  // без лишних зависимостей хуков.
-  const adoptRef = useRef<(tokens: TokenPair | AppTokens) => Promise<void>>(async () => undefined);
-
-  // Одно обновление на всё приложение: поток чата, запросы API и таймер
-  // приходят за токеном одновременно после сна телефона, а второй refresh с
-  // тем же одноразовым токеном сервер считает кражей и отзывает все сессии.
-  const refresh = useMemo(
-    () =>
-      singleFlight(async (): Promise<string | null> => {
-        const current = tokensRef.current;
-        if (!current) return null;
-        try {
-          const fresh = await authApi.refresh(current.refreshToken);
-          await adoptRef.current(fresh);
-          return fresh.accessToken;
-        } catch (error) {
-          // Сеть упала: токены ещё могут быть живы, сессию не трогаем.
-          if ((error as { status?: number }).status === 0) return current.accessToken;
-          // Пока ждали отказ, токены уже обновились: отказ относится к старой
-          // паре, а сессия жива.
-          if (tokensRef.current && tokensRef.current !== current) return tokensRef.current.accessToken;
-          await dropSession();
-          return null;
-        }
-      }),
-    [authApi, dropSession],
-  );
+  /** Тело и обычного проактивного обновления (по истечении access), и
+   *  повторной попытки после `'unavailable'` — один и тот же таймер
+   *  `refreshTimer`, одна и та же функция. `'refreshed'`/`'rejected'` уже
+   *  прошли через `setCached()` → `notify()` → подписку ниже, которая сама
+   *  перепланирует обычный таймер (`reschedule`/`mark-signed`) или
+   *  остановит всё (`mark-guest`) — здесь для них делать больше нечего. */
+  const runProactiveRefresh = useCallback(async () => {
+    const result = await tokenAuthority.refresh();
+    if (result.kind === 'unavailable') {
+      const delay = nextRefreshBackoffMs(backoffAttempt.current);
+      backoffAttempt.current += 1;
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+      refreshTimer.current = setTimeout(() => void runProactiveRefresh(), delay);
+    } else {
+      backoffAttempt.current = 0;
+    }
+  }, []);
 
   const scheduleRefresh = useCallback(
     (accessToken: string) => {
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
+      backoffAttempt.current = 0;
       const delay = msUntilRefresh(accessToken, Date.now());
-      refreshTimer.current = setTimeout(() => void refresh(), Math.max(delay, 5_000));
+      refreshTimer.current = setTimeout(() => void runProactiveRefresh(), Math.max(delay, 5_000));
     },
-    [refresh],
+    [runProactiveRefresh],
   );
 
-  adoptRef.current = async (tokens) => {
+  // Пока в цикле бэкоффа (`'unavailable'` уже случался и ждём следующей
+  // попытки) — возврат в передний план не должен ждать оставшуюся паузу,
+  // сеть могла уже вернуться; уход в фон, наоборот, останавливает таймер —
+  // незачем жечь батарею повторами, которых никто не увидит, следующий
+  // возврат в foreground или явный запрос попробуют снова.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active') {
+        if (backoffAttempt.current > 0) {
+          if (refreshTimer.current) clearTimeout(refreshTimer.current);
+          void runProactiveRefresh();
+        }
+      } else if (next === 'background' && backoffAttempt.current > 0 && refreshTimer.current) {
+        clearTimeout(refreshTimer.current);
+        refreshTimer.current = null;
+      }
+    });
+    return () => subscription.remove();
+  }, [runProactiveRefresh]);
+
+  const adopt = useCallback(async (tokens: TokenPair | AppTokens) => {
     const pair = { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
-    tokensRef.current = pair;
-    await writeTokens(pair);
-    scheduleRefresh(pair.accessToken);
-  };
+    // `tokenAuthority.adopt` уведомляет подписчиков синхронно (`setCached`
+    // → `notify`) — тот же `SessionProvider` подписан ниже и сам
+    // перепланирует таймер через `reactToTokenChange(...) === 'reschedule'`
+    // (или `'mark-signed'`, если раньше был гостем). Второй явный вызов
+    // `scheduleRefresh` здесь был бы избыточным дублем одной и той же
+    // работы (`feedback-002.md`, non-blocking п.2).
+    await tokenAuthority.adopt(pair);
+  }, []);
 
   const api = useMemo(
     () =>
       createApiClient({
         baseUrl: apiOrigin,
         session: {
-          getAccessToken: async () => tokensRef.current?.accessToken ?? null,
+          getAccessToken: async () => tokenAuthority.getAccessToken(),
           refresh,
         },
         onSessionExpired: () => void dropSession(),
@@ -162,24 +213,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setStatus('signed');
   }, [api]);
 
-  // Восстановление при запуске: токены из хранилища, профиль с сервера.
+  // Восстановление при запуске: токены из хранилища (через `tokenAuthority`
+  // — если фоновая задача уже что-то туда писала до первого рендера
+  // приложения, подхватится оно), профиль с сервера.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const stored = await readTokens();
+      const stored = await tokenAuthority.hydrate();
       if (cancelled) return;
       if (!stored) {
         setStatus('guest');
         return;
       }
-      tokensRef.current = stored;
       scheduleRefresh(stored.accessToken);
       try {
         await loadProfile();
       } catch {
         // Профиль не загрузился, а сессия не сброшена: сеть. Пускаем в
         // приложение с тем, что есть, профиль догрузится позже.
-        if (tokensRef.current) setStatus('signed');
+        if (tokenAuthority.peekAccessToken()) setStatus('signed');
       }
     })();
     return () => {
@@ -187,6 +239,43 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
     };
   }, [loadProfile, scheduleRefresh]);
+
+  // Токены могли обновиться не отсюда — фоновое отклонение звонка (тот же
+  // `tokenAuthority` в том же процессе). Подписка регистрируется один раз
+  // (`scheduleRefresh` стабилен на весь процесс — `refresh` не меняет
+  // идентичность), поэтому решение «что делать» читает `statusRef.current`
+  // (актуальный на момент СОБЫТИЯ, а не на момент регистрации подписки),
+  // а не сам `status` из замыкания — иначе эффект с зависимостью
+  // `[scheduleRefresh]` захватил бы `status`, какой он был при
+  // монтировании, навсегда (`feedback-002.md`, блокирующий п.1: без этого
+  // `SessionProvider` мог остаться в `'signed'` даже после того, как
+  // сессия на самом деле умерла в фоне — UI выглядел бы вошедшим, но
+  // ничего не работало бы). Никакого `eslint-disable`: все использованные
+  // здесь значения либо стабильны (`scheduleRefresh`, `tokenAuthority`),
+  // либо читаются через `ref` — оба варианта exhaustive-deps устраивают
+  // без подавления.
+  useEffect(() => {
+    return tokenAuthority.subscribe((tokens) => {
+      const reaction = reactToTokenChange(statusRef.current, Boolean(tokens));
+      switch (reaction) {
+        case 'ignore':
+          return;
+        case 'reschedule':
+          scheduleRefresh(tokens!.accessToken);
+          return;
+        case 'mark-signed':
+          scheduleRefresh(tokens!.accessToken);
+          setStatus('signed');
+          return;
+        case 'mark-guest':
+          if (refreshTimer.current) clearTimeout(refreshTimer.current);
+          backoffAttempt.current = 0;
+          setUser(null);
+          setStatus('guest');
+          return;
+      }
+    });
+  }, [scheduleRefresh]);
 
   const completeSignIn = useCallback(
     async (url: string) => {
@@ -196,10 +285,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (parsed.kind === 'invalid') return;
       pendingVerifier.current = null;
       if (parsed.kind === 'error') throw new Error(parsed.message);
-      await adoptRef.current(await authApi.exchangeCode(parsed.code, verifier));
+      await adopt(await authApi.exchangeCode(parsed.code, verifier));
       await loadProfile();
     },
-    [authApi, loadProfile],
+    [authApi, adopt, loadProfile],
   );
 
   const signIn = useCallback(
@@ -217,16 +306,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signInDev = useCallback(
     async (email: string, password: string) => {
-      await adoptRef.current(await authApi.devLogin(email, password));
+      await adopt(await authApi.devLogin(email, password));
       await loadProfile();
     },
-    [authApi, loadProfile],
+    [authApi, adopt, loadProfile],
   );
 
-  const getAccessToken = useCallback(() => tokensRef.current?.accessToken ?? null, []);
+  const getAccessToken = useCallback(() => tokenAuthority.peekAccessToken(), []);
 
   const signOut = useCallback(async () => {
-    const current = tokensRef.current;
+    const current = await tokenAuthority.hydrate();
     // Телефон снимаем до выхода: после него у запроса уже не будет токена.
     await unregisterDevice(api);
     if (current) authApi.logout(current.refreshToken).catch(() => undefined);

@@ -480,3 +480,544 @@ call.id` сам вызывает `router.push` — со сброшенной м�
   вызов в системном журнале звонков (этот журнал у приложения свой,
   вкладка «Звонки», а не системный).
 
+## 11. Этап 2 (VED-221) — входящий при свёрнутом и закрытом приложении
+
+Ветка `feat/mobile-calls-2-lockscreen`. Реализует решения §3-4 выше: свой
+Expo-модуль на self-managed `ConnectionService` и `@react-native-firebase/messaging`
+как единственный приёмник FCM.
+
+### Приём FCM — RNFB, разведённая версия API
+
+Разведка (§4) называла `@react-native-firebase/messaging@26.4.0` — на
+момент установки это оказалась версия с **уже убранной namespaced API**
+(`import messaging from '@react-native-firebase/messaging'; messaging()...`).
+Пакет экспортирует только модульный стиль: `getMessaging()`, `getToken()`,
+`onMessage()`, `onTokenRefresh()`, `getInitialNotification()`,
+`onNotificationOpenedApp()`, `setBackgroundMessageHandler()` — свободные
+функции, первым аргументом принимающие инстанс `Messaging` от
+`getMessaging()`. Это не решение этой сессии, а факт версии — код
+(`src/lib/push/push-bridge.tsx`, `src/lib/push/background-handler.ts`)
+целиком на модульном API, `messaging()` нигде не используется.
+
+### Кто что принимает: RNFB vs expo-notifications
+
+Оба остаются, но с разными обязанностями:
+
+- **Приём FCM** — только `@react-native-firebase/messaging`. Манифест
+  `expo-notifications` регистрирует свой `ExpoFirebaseMessagingService` на
+  тот же `com.google.firebase.MESSAGING_EVENT` независимо от того, вызываем
+  ли мы её приёмный путь — конфликт двух `<service>` на одно системное
+  событие Android не гарантирует победителя (риск §4). Плагин
+  `apps/mobile/plugins/with-native-calls.js` (`withAndroidManifest`,
+  выполняется после `expo-notifications` в списке `plugins` из
+  `app.config.ts`) вырезает из объединённого манифеста любой `<service>` с
+  `MESSAGING_EVENT`, чьё имя не содержит `ReactNativeFirebaseMessaging`.
+  Работает независимо от наличия `google-services.json` — RNFB подключает
+  свой сервис автолинкингом (обычная Android-библиотека в `node_modules`),
+  а не плагином конфигурации.
+- **Показ/презентация** остаётся у `expo-notifications`: канал, разрешение,
+  `Notifications.scheduleNotificationAsync` для сообщения, пришедшего на
+  переднем плане, нажатие на уведомление — тот же код, что и раньше
+  (`push-bridge.tsx`), только источник токена и данных пуша — RNFB, а не
+  собственный приёмный путь `expo-notifications`.
+- Обычные пуши чата (`buildFcmMessage`, `notification`-блок) в фоне/убитом
+  приложении система показывает сама, минуя весь наш код на Android
+  (штатное поведение FCM для сообщений с `notification`) — ни RNFB, ни
+  `expo-notifications` этот путь не трогают, и не должны: `onMessageReceived`
+  для таких сообщений в фоне не вызывается вовсе.
+
+### Точка входа — `index.js`
+
+`package.json#main` был `expo-router/entry`, стал `./index.js`. Новый файл
+регистрирует headless-задачу отклонения (`AppRegistry.registerHeadlessTask`)
+и импортирует `src/lib/push/background-handler.ts` (побочный эффект:
+`setBackgroundMessageHandler`) **до** `require('expo-router/entry')` —
+порядок обязателен, обработчик должен быть на месте раньше первого рендера
+и раньше того, как Android успеет доставить холодный пуш.
+
+### Разбор пуша и дедупликация — чистые модули
+
+- `src/lib/calls/incoming-call-push.ts` (+`spec`) — `parseCallPush` и
+  `isIncomingCallExpired`, без сети и нативных модулей, разбирает `data`
+  ровно в том формате, что шлёт `buildCallIncomingMessage`/
+  `buildCallEndedMessage` (`apps/api/.../fcm.ts`).
+- `src/lib/calls/call-push-dedup.ts` (+`spec`) — `CallLifecycleTracker`:
+  повторный `call.incoming` с тем же `callId`, пока он ещё «звонит», не
+  поднимает второй системный вызов; `call.ended` обрабатывается один раз.
+  Общий инстанс (`callLifecycleTracker`) на процесс — фоновый обработчик и
+  (потенциально) передний план сверяются с одной картой, а не с двумя.
+- `src/lib/calls/native-call-bridge.ts` — тонкая склейка: дедуп/просрочка →
+  вызов нативного модуля. Без своего `spec`: вызывает
+  `requireNativeModule('VedamatchCalls')`, которого в Jest нет (как и
+  `call-provider.tsx`, у которого тоже нет спека по той же причине) —
+  чистая часть решения уже покрыта тестами выше.
+
+**Почему звонок не поднимает системный UI, пока приложение на переднем
+плане.** `push-bridge.tsx`'s `onMessage` сознательно игнорирует
+`call.incoming`/`call.ended`: пока приложение видно, тот же самый звонок уже
+идёт через общий поток `chat-stream.tsx` → `call-provider.tsx` →
+`IncomingCallBanner` (этап 1) — FCM доставляет тот же факт вторым путём
+независимо от того, открыто ли приложение (сервер этого не знает). Показ
+системного полноэкранного вызова поверх уже видимого баннера был бы
+дублем. RNFB сам разводит это на уровне доставки: `ReactNativeFirebaseMessagingReceiver`
+проверяет `SharedUtils.isAppInForeground(context)` и уводит фон/убитое
+состояние в headless-путь (`setBackgroundMessageHandler`), а передний план —
+в `onMessage`; наш код лишь не дублирует то, что уже показывает SSE.
+
+### Свой нативный модуль — `modules/vedamatch-calls`
+
+Expo Modules API (Kotlin), локальный модуль (автолинкуется из `./modules`
+без публикации в npm, `expo-module.config.json` без `publication`).
+
+- `VedamatchCallsModule.kt` — JS-интерфейс: `showIncomingCall`, `endCall`,
+  `getLaunchCall`, `canUseFullScreenIntent`, `openFullScreenIntentSettings`,
+  `setCallScreenActive`, события `answer`/`decline`.
+  `showIncomingCall` регистрирует `PhoneAccount` (self-managed, лениво при
+  первом звонке) и зовёт `TelecomManager.addNewIncomingCall` с метаданными
+  в `extras` — единственный канал донести `callId`/имя/тип до
+  `onCreateIncomingConnection`, которую вызывает система, а не наш код.
+- `VedamatchConnectionService.kt`/`VedamatchConnection.kt` — self-managed
+  `ConnectionService`/`Connection`. `onShowIncomingCallUi` строит
+  уведомление (`CallNotifications`); `onAnswer`/`onReject` — путь ответа
+  системными средствами (гарнитура, Bluetooth, Android Auto), не наша
+  кнопка в уведомлении (та отвечает напрямую, см. ниже).
+- `CallNotifications.kt` — канал «Звонки» (`IMPORTANCE_HIGH`, вибрация,
+  системный рингтон по умолчанию — см. «Отклонение» ниже про WAV),
+  `NotificationCompat.CallStyle.forIncomingCall` на API 31+, обычные две
+  кнопки действий на более старых, `fullScreenIntent` на главную `Activity`
+  приложения (берётся через `getLaunchIntentForPackage`, не по имени класса:
+  модуль не знает `MainActivity` хоста на этапе компиляции — другой
+  Gradle-модуль).
+- `CallActionReceiver.kt` — «Ответить»/«Отклонить» из уведомления/блокировки
+  без открытия UI. «Ответить»: `connection.setActive()` + запись в
+  `PendingCallStore.setPendingLaunch(callId, "answer")` + запуск главной
+  `Activity` — `call-provider.tsx` при старте читает это через
+  `getLaunchCall()` и сам вызывает `accept()` (обычный путь принятия
+  звонка, с теми же микрофон/ICE шагами, что и нажатие в баннере — не
+  отдельная ветка). «Отклонить»: рвёт self-managed `Connection` локально и
+  **не открывает приложение** — запускает `DeclineHeadlessTaskService`.
+- `DeclineHeadlessTaskService.kt` — `HeadlessJsTaskService`, тот же
+  механизм, которым сам RNFB поднимает `setBackgroundMessageHandler` из
+  убитого приложения (`context.startService` +
+  `HeadlessJsTaskService.acquireWakeLockNow`, скопировано с
+  `ReactNativeFirebaseMessagingReceiver.java` из самого пакета) — если
+  фоновый обработчик пуша надёжен, этот путь настолько же надёжен, а не
+  отдельная гипотеза.
+- `PendingCallStore.kt` — единственное состояние в процессе, общее для
+  всех этих классов (они не имеют друг у друга прямых ссылок: Telecom и
+  `BroadcastReceiver` создают свои объекты сами). Тот же приём, что
+  `ExpoLinkingModule.initialURL` в `expo-linking`.
+
+**Решение: Headless JS задача, а не прямой HTTP из Kotlin (п.4 спеки).**
+Реализация на JS (`background-decline.ts`) переиспользует уже написанный и
+протестированный код обновления токена (`createApiClient`, `createAuthApi`,
+`singleFlight` — тот же протокол, что у `lib/auth/session.tsx`) вместо
+повторной реализации Android Keystore/refresh-логики на Kotlin. Экономия
+кода и меньше риска: `expo-secure-store` шифрует записи форматом,
+завязанным на его же Kotlin-реализацию (`SecureStoreOptions`,
+`AESEncryptor`) — читать их из стороннего Kotlin-кода означало бы
+дублировать эту логику, а не просто читать `SharedPreferences`.
+
+**Известное ограничение — рингтон.** Канал уведомлений использует
+системный рингтон по умолчанию
+(`RingtoneManager.getActualDefaultRingtoneUri`), не собственный
+`ringtone-incoming.wav`: тот — JS/Metro-ассет (`require(...)` в
+`lib/calls/ringtone.ts`), а не Android `raw`-ресурс, и по прямому URI из
+Kotlin недоступен. Брендированный рингтон на экране блокировки — доработка
+(копия WAV в `res/raw` модуля при сборке), не входит в объём этапа 2.
+
+**Жизненный цикл self-managed `Connection` ограничен дозвоном.**
+`call-provider.tsx` зовёт `clearNativeCall` (гасит уведомление и рвёт
+`Connection`), как только звонок внутри приложения доходит до `active` —
+Telecom-интеграция самого разговора (аудио-маршрутизация, Bluetooth,
+«занято» при сотовом) — это этап 3 (VED-222), здесь `Connection` живёт
+только пока идёт дозвон/показывается системный UI.
+
+### Разрешения
+
+`app.config.ts` → `android.permissions`: `MANAGE_OWN_CALLS`,
+`USE_FULL_SCREEN_INTENT`, `FOREGROUND_SERVICE`,
+`FOREGROUND_SERVICE_PHONE_CALL`. Первые два — «обычные» (Android выдаёт по
+объявлению, без диалога), `FOREGROUND_SERVICE*` объявлены про запас под
+этап 3 (фоновый сервис самого разговора), в этапе 2 не используются
+рантаймом. `POST_NOTIFICATIONS` уже приходит из плагина `expo-notifications`.
+`USE_FULL_SCREEN_INTENT` на Android 14+ может быть автоматически не выдан
+(`NotificationManager.canUseFullScreenIntent()` возвращает `false`) — тест
+на это в `app-config.spec.ts` не заменяет живую проверку (система решает
+рантаймом, не по манифесту). Деградация: кнопка «Разрешить в настройках»
+на вкладке «Звонки» (`(tabs)/calls.tsx`, `openFullScreenIntentSettings`),
+без разрешения звонок всё равно придёт — обычным heads-up уведомлением,
+не пропадает совсем.
+
+### Сборка
+
+`APP_CONTOUR=ru APP_CHANNEL=site npx expo prebuild --platform android --clean`
+проходит чисто. `./gradlew assembleRelease -x lint` дошёл до
+`BUILD SUCCESSFUL` не с первой попытки — по пути реальная сборка нашла
+шесть отдельных ошибок, ни одна из них не была видна ни `tsc`, ни `jest`
+(они не трогают Kotlin/Gradle/манифест вовсе, поэтому этот прогон и
+обязателен перед PR, а не факультативен):
+
+1. `modules/vedamatch-calls/android/build.gradle` не задавал
+   `defaultConfig.versionName` — обязателен для Android-модуля с
+   публикацией через `expo-module-gradle-plugin`, даже без реальной
+   публикации в Maven. Добавлены `versionCode`/`versionName`.
+2. Манифест приложения и библиотечный манифест `@react-native-firebase/messaging`
+   объявляют одни и те же `<meta-data>` дефолтного канала/цвета с разными
+   значениями — `processReleaseMainManifest` падал без явного
+   `tools:replace`. Решение и объяснение — в самом
+   `plugins/with-native-calls.js` и в §4 этого документа.
+3. Порядок `withAndroidManifest`-плагинов в `@expo/config-plugins`
+   компилируется в порядке, ОБРАТНОМ регистрации в `plugins`
+   (`app.config.ts`) — находка, сделанная эмпирически именно на этой
+   сборке (см. комментарий в `with-native-calls.js`). Плагин пришлось
+   переставить в начало массива, а не в конец, как подсказывала бы
+   интуиция по имени/смыслу.
+4. Убрать чужой `FirebaseMessagingService` фильтрацией `modResults` не
+   получилось в принципе: он объявлен в собственном библиотечном
+   `AndroidManifest.xml` `expo-notifications`, а не добавлен через
+   конфиг-плагин, и на этапе `expo prebuild` в файле приложения его попросту
+   нет — библиотечные манифесты сливает Android Gradle Plugin только на
+   этапе `./gradlew`. Сработал только штатный приём: добавить в манифест
+   приложения тот же узел (полное имя класса из `namespace` в
+   `expo-notifications/android/build.gradle`) с `tools:node="remove"`.
+5. `modules/vedamatch-calls/android/build.gradle` не тянул
+   `com.facebook.react:react-android` явно — `expo-modules-core` зависит от
+   неё через `implementation`, а Gradle не пробрасывает такие зависимости
+   транзитивно на compile classpath потребителя. Без неё не резолвились
+   `HeadlessJsTaskService`/`HeadlessJsTaskConfig`/`Arguments`
+   (`DeclineHeadlessTaskService.kt`).
+6. Три мелкие, но настоящие ошибки Kotlin/Telecom API, пойманные только
+   компилятором: `Connection` в `onCreateOutgoingConnection` — абстрактный
+   класс, нельзя `Connection()` напрямую (`Connection.createFailedConnection(...)`
+   вместо этого); `HeadlessJsTaskService.getTaskConfig` ждёт `Intent?`, а
+   не `Intent`; конструкторские параметры `VedamatchConnection` были
+   названы `onAnswer`/`onReject` — так же, как переопределённые методы
+   `Connection.onAnswer()`/`onReject()` в том же классе, что зажигало риск
+   неоднозначного резолва вызова — переименованы в `onAnswerCallback`/`onRejectCallback`.
+
+Финальный прогон: `BUILD SUCCESSFUL in 5m 5s`, `853 actionable tasks: 183
+executed, 670 up-to-date`. APK —
+`apps/mobile/android/app/build/outputs/apk/release/app-release.apk` (≈162 МБ,
+неотстрипанный релиз без сплита по ABI — тот же профиль, что у отладочных
+сборок предыдущих этапов, стриппинг/сплит не в объёме VED-221).
+
+Манифест проверен по факту, а не на словах:
+`aapt dump permissions app-release.apk` (build-tools 36.1.0) показывает
+все четыре разрешения (`MANAGE_OWN_CALLS`, `USE_FULL_SCREEN_INTENT`,
+`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_PHONE_CALL`) и подтверждает, что
+`SYSTEM_ALERT_WINDOW`/`READ_EXTERNAL_STORAGE`/`WRITE_EXTERNAL_STORAGE`
+по-прежнему вырезаны (`blockedPermissions`, этап 0). В
+`android/app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml`
+ровно один `FirebaseMessagingService` уровня приложения —
+`io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService`
+(`ExpoFirebaseMessagingService` отсутствует полностью); второе совпадение
+по `MESSAGING_EVENT` в файле — служебный `com.google.firebase.messaging.FirebaseMessagingService`
+самого Firebase SDK с `android:priority="-500"`, он есть в манифесте любого
+Android-приложения с Firebase и не конкурирует с приёмником приложения.
+`VedamatchConnectionService` (`android.telecom.ConnectionService`),
+`CallActionReceiver`, `DeclineHeadlessTaskService` — все три на месте с
+ожидаемыми атрибутами (`BIND_TELECOM_CONNECTION_SERVICE`,
+`exported="false"`).
+
+### Поправки по итогам оценки (feedback-001, итерация 2)
+
+Оценщик нашёл два блокирующих дефекта — оба про то, что задание прямо
+просило проверить, и ни один не был закрыт в первой итерации.
+
+**Блокирующий п.1 — гонка refresh-токена между фоновым отклонением и
+живым `SessionProvider`.** До этой правки `background-decline.ts` держал
+свою собственную in-memory копию токенов и свой `singleFlight refresh`,
+полностью независимый от `session.tsx`. Когда приложение просто свёрнуто
+(не убито), `DeclineHeadlessTaskService` выполняется в том же JS-движке,
+что и UI — оба «независимых» refresh на деле делили один процесс, не зная
+друг о друге. Ротация refresh-токена одним из них делала копию другого
+протухшей; следующее предъявление этой копии сервер (детектор повторного
+использования) читал как кражу и отзывал все сессии человека — телефон,
+с которого просто отклонили звонок из шторки, тихо разлогинивал владельца
+при следующем открытии приложения.
+
+Починено единым источником правды — `src/lib/auth/token-authority.ts`
+(+`spec`, 10 тестов, включая ровно три сценария из задания: «прочитать
+свежие → refresh → записать», «два параллельных вызова → один refresh»,
+«access, обновлённый другим участником, подхватывается без refresh»).
+Модуль — синглтон (`export const tokenAuthority`): и `session.tsx`, и
+`background-decline.ts` импортируют один и тот же модуль, получают одну и
+ту же замыкающую переменную и один и тот же `singleFlight`, а не два
+экземпляра с одинаковым кодом. `refresh()` всегда перечитывает
+`SecureStore` перед сетевым обменом (не доверяет `cached`), а при отказе
+с не изменившейся с момента чтения парой — перечитывает ещё раз на случай,
+если кто-то успел обновиться, пока шёл сетевой запрос. `background-decline.ts`
+теперь сначала пробует текущий access без сети (`getAccessToken()`), при
+401 сперва дёшево перечитывает `SecureStore` (`rereadAccessToken()` — вдруг
+кто-то уже обновился) и только если токен там тот же — идёт в сетевой
+`refresh()`. `session.tsx` лишился собственных `tokensRef`/`adoptRef`/
+`singleFlight` целиком и подписан на `tokenAuthority.subscribe(...)`,
+чтобы реагировать на изменения токенов не по своей инициативе (тот же
+фоновый путь) — но в этой итерации подписка была мёртвым кодом (stale
+closure): чинилось это в следующей итерации, см. §«Поправки по итогам
+оценки (feedback-002, итерация 3)» ниже.
+
+**Блокирующий п.2 — «Ответить» из свёрнутого (не убитого) приложения не
+принимал звонок автоматически.** `CallActionReceiver.kt` на «Ответить»
+шлёт JS-событие `answer` синхронно с запуском `Activity` — заведомо
+раньше, чем поток событий (`chat-stream.tsx`) переоткроется после
+`AppState` → `active` и `reconcile()` успеет получить сам звонок через
+`GET /chat/calls/active`. Старый обработчик `answer` требовал точного
+совпадения `phase === 'incoming'` в момент события — почти всегда
+промахивался, событие терялось безвозвратно, и человеку приходилось
+нажимать «Ответить» второй раз уже внутри приложения — при том, что
+`getLaunchCall()`-путь (по-настоящему убитое приложение) работал верно
+только потому, что срабатывал при монтировании, когда состояние ещё пусто.
+
+Починено чистым модулем `src/lib/calls/pending-call-answer.ts` (+`spec`,
+6 тестов) — `PendingCallAnswer` запоминает `callId`, для которого ответ уже
+решён, до тех пор, пока звонок с этим `callId` не появится в состоянии
+(`call.ringing` из потока или `restore` из `reconcile()`); тогда
+`call-provider.tsx` принимает его сам. Одна очередь на оба источника
+(`getLaunchCall()` при холодном старте и JS-событие `answer` для тёплого)
+— повторный `request()` тем же `callId` не создаёт второй отложенный
+ответ, поэтому одновременное срабатывание обоих путей не даёт двойной
+`accept()` (см. тест «повторный `request()` тем же `callId`…»). Если
+`answer` пришёл, а звонка в состоянии ещё нет — обработчик сразу зовёт
+`reconcile()` напрямую (не только через `AppState`/`onResync`, а
+немедленно), не дожидаясь, пока поток событий сам решит переоткрыться.
+
+**Non-blocking, закрыто тем же заходом:**
+
+- `VedamatchCallsModule.kt`, `showIncomingCall` — `ensurePhoneAccount`/
+  `TelecomManager.addNewIncomingCall` обёрнуты в `try/catch`: при отказе
+  (конфликт с другим self-managed приложением, запрет конкретного OEM,
+  `SecurityException`) звонок не теряется молча — деградация до того же
+  уведомления, что в штатном пути рисует `CallNotifications.show()` по
+  сигналу `onShowIncomingCallUi()`, просто без самого self-managed звонка
+  и системной интеграции с ним (Bluetooth/гарнитура, «занято» при
+  сотовом — недоступны в этом режиме, это ожидаемая, а не скрытая потеря
+  функциональности).
+- `VedamatchConnection.kt`, `onReject()` (путь через системные кнопки —
+  гарнитура/Bluetooth, не через `CallActionReceiver`) — добавлен
+  `PendingCallStore.removeConnection(callId)` для симметрии с
+  `onDisconnect()`/`disconnectFromApp()`. Заодно поправлен риск: `cancel(...)`
+  использовал `applicationContextOrNull() ?: return` — при отсутствии
+  контекста это молча обрывало всю функцию `onReject()`/`onAnswer()` до
+  вызова колбэка и очистки; теперь `?.let { ... }` не мешает остальному
+  телу функции выполниться в любом случае.
+
+### Регрессия обычных пушей о сообщениях (VED-171) — проверено по исходникам
+
+Отдельный запрос владельца `push-bridge.tsx`: после того как приём FCM
+целиком перешёл к RNFB (§«Кто что принимает» выше), три места, где раньше
+стоял `expo-notifications`, могли молча перестать работать. Разобрано по
+исходникам (не гипотеза):
+
+1. **Токен при свежей установке.** `push-bridge.tsx` больше не вызывает
+   `Notifications.getDevicePushTokenAsync()` вовсе — токен идёт через
+   `getToken(getMessaging())` (RNFB) с самого начала этой сессии
+   (`docs/mobile-calls-native.md`, разведка §4/§9). Вопрос «продолжит ли
+   Expo отдавать токен без своего сервиса» неактуален: старый путь не
+   используется, а не деградировал.
+2. **Ротация токена.** `Notifications.addPushTokenListener` (слушал
+   `ExpoFirebaseMessagingService.onNewToken`, который теперь вырезан) в
+   коде не осталось — `grep` по `src/` подтверждает: ни одного упоминания
+   `addPushTokenListener`/`getDevicePushTokenAsync`, кроме поясняющего
+   комментария. Ротация идёт через `onTokenRefresh(getMessaging(), ...)`
+   (RNFB) — тот же `send(token)` с `nativeCalls: true`, что и при первом
+   получении.
+3. **Тап по обычному пушу при убитом/свёрнутом приложении.** Система
+   показывает такие пуши сама (`notification`-блок, `buildFcmMessage`) —
+   ни RNFB, ни `expo-notifications` не участвуют в показе, но **обработка
+   тапа** нужна отдельно: `getInitialNotification(getMessaging())`
+   (холодный старт) и `onNotificationOpenedApp(getMessaging(), ...)`
+   (приложение было в фоне) — оба уже стояли в `push-bridge.tsx` до этого
+   feedback-захода, разбирают `RemoteMessage.data.url` тем же
+   `pushTarget()`, что и презентованные самим приложением уведомления.
+   Вынесено явным чистым модулем: `rnfbMessageUrlOf()`
+   (`src/lib/push/push-url.ts`, +`spec`) — тот же приём, что `pushUrlOf()`
+   для формы `Notifications.Notification`, только для формы RNFB
+   `RemoteMessage`; `push-bridge.tsx` зовёт его вместо инлайновой проверки
+   `typeof message.data?.url === 'string'` в двух местах.
+
+Живая проверка (VED-171 уже проходила на телефоне раньше — регрессия
+недопустима) — в чек-листе `generator-state.md`: свежая установка → токен
+долетает до сервера (`POST /notifications/devices` в логах API); тап по
+обычному пушу о сообщении при полностью убитом и при свёрнутом приложении
+→ открывает нужную беседу в обоих случаях.
+
+### Поправки по итогам оценки (feedback-002, итерация 3)
+
+Оценщик засчитал, что сама гонка refresh-токена (двойной сетевой обмен
+одним refresh-токеном → сервер отзывает все сессии) устранена корректно, но
+новый механизм «UI узнаёт о разлогине из фона сразу» оказался мёртвым кодом.
+
+**Блокирующий п.1 — stale closure в подписке `session.tsx`.**
+```ts
+useEffect(() => {
+  return tokenAuthority.subscribe((tokens) => {
+    if (tokens) scheduleRefresh(tokens.accessToken);
+    else if (status !== 'loading') { ... }
+  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [scheduleRefresh]);
+```
+`scheduleRefresh` зависит только от `refresh`, а `refresh = tokenAuthority.refresh`
+— один и тот же объект-функция синглтона на весь процесс, значит
+`scheduleRefresh` не меняет идентичность НИКОГДА между рендерами, и весь
+`useEffect` с зависимостью `[scheduleRefresh]` выполняется ровно один раз —
+при монтировании. Замыкание внутри навсегда захватывало `status` таким,
+каким он был на самом первом рендере (`'loading'`) — ветка `status !==
+'loading'` не проходила никогда. Если фоновое отклонение реально роняло
+сессию (`tokenAuthority.refresh()` → `setCached(null)`), живой
+`SessionProvider` оставался в `status: 'signed'` навсегда — приложение
+выглядело вошедшим, но ничего не работало: `api/client.ts` на 401 без
+токена не звал `onSessionExpired` (условие `response.status === 401 &&
+token` ложно при отсутствующем токене), `chat-stream.tsx` на пустом
+`getAccessToken()` просто не открывал поток без всякой ошибки.
+
+Починено переносом решения в чистую функцию `src/lib/auth/session-token-reaction.ts`
+(+`spec`, 5 тестов — ровно три сценария из задания плюс два вырожденных:
+`loading` → `ignore`, `signed`+нет токенов → `mark-guest`, `guest`+токены
+есть → `mark-signed`, `signed`+токены есть → `reschedule`, `guest`+нет
+токенов → `ignore`). Вызывающий код (`session.tsx`) больше не читает
+`status` из замыкания рендера: `statusRef` — обычный `ref`, синхронизируется
+с `status` отдельным эффектом (`useEffect(() => { statusRef.current =
+status }, [status])`), и именно `statusRef.current` (актуальный на момент
+СОБЫТИЯ подписки, а не на момент её регистрации) передаётся в
+`reactToTokenChange`. `eslint-disable` снят — все значения в замыкании
+подписки теперь либо стабильны (`scheduleRefresh`), либо читаются через
+`ref`, exhaustive-deps ничего не требует сверх `[scheduleRefresh]`.
+
+Заодно поправлен `apps/mobile/src/lib/api/client.ts`: на 401 без токена
+вовсе (не «протух», а отсутствует) теперь тоже зовётся `onSessionExpired`
+— раньше условие `response.status === 401 && token` делало это место
+немым именно в сценарии «сессия уже мертва, токена нет совсем».
+
+**Важное п.2 — `token-authority.ts` стирал токены при любом отказе
+`refresh()`, кроме сетевой недоступности (`status === 0`).** Это значило,
+что 5xx/таймаут/неопознанный ответ от `/auth/app/refresh` (временная
+недоступность сервера, не отказ конкретно этому человеку) тоже считались
+концом сессии — вероятная причина VED-234 («приложение теряет вход после
+обновления/перерыва»). В этой итерации токены перестали стираться при 5xx —
+но модуль в этот момент всё ещё возвращал СТАРЫЙ (уже отвергнутый) access
+как если бы обновление удалось; оказалось, что этого недостаточно —
+`client.ts` не различал такой ответ от настоящего успеха и слепо повторял
+запрос тем же токеном, получал второй 401 и вызывал `onSessionExpired` сам,
+сводя фикс на нет в реальной композиции с `session.tsx`. Полное решение
+этой проблемы — только в следующей итерации, см. ниже.
+
+Отдельно — `token-store.ts`: `SecureStore.getItemAsync` при отказе чтения
+(повреждённый ключ Android Keystore, смена блокировки экрана) теперь не
+пробрасывает исключение наружу необработанным (раньше `readTokens()` могло
+упасть без `try/catch`, и эффект восстановления сессии в `session.tsx`
+остался бы в `status: 'loading'` навсегда, не поймав отказ) — ловится,
+пишется `console.warn` с типом/сообщением ошибки (без значений токенов —
+их и не могло оказаться, чтение как раз не удалось) и отдаётся `null`, как
+обычное «токенов нет». Причину отличить от честного «нет входа» теперь
+можно по логу, не только по поведению.
+
+**Non-blocking, тем же заходом:** убран избыточный второй
+`scheduleRefresh(pair.accessToken)` в `adopt()` (`session.tsx`) —
+`tokenAuthority.adopt()` и так уведомляет подписчиков синхронно, тот же
+`SessionProvider` подписан ниже и сам перепланирует таймер через
+`reactToTokenChange`; `VedamatchCallsModule.kt` — пойманное исключение
+`showIncomingCall` теперь логируется (`Log.w`), а не проглатывается молча.
+
+### Поправки по итогам оценки (feedback-003, итерация 4)
+
+Оценщик воспроизвёл регрессию не гипотетически, а прогнав одноразовый
+композитный тест на реальных `createApiClient` + `createTokenAuthority`:
+при 5xx от `/auth/app/refresh` `token-authority.refresh()` возвращал СТАРЫЙ
+(уже отвергнутый секундой раньше) access-токен как единственный видимый
+снаружи результат — по сигнатуре `Promise<string | null>` непустая строка
+неотличима от «получили новый рабочий токен». `client.ts` слепо повторял
+запрос этим же токеном, получал второй 401 и трактовал это как «обновиться
+не вышло» → `onSessionExpired()` → `dropSession()` → `clearTokens()` —
+токены стирались из-за временной недоступности сервера, а не из-за
+реального конца сессии. Ровно тот путь, которым сессия обычно и
+обновляется (`session.tsx`), а не редкий фоновый случай.
+
+**Блокирующий п.1 — `refresh()` возвращает различимый результат.**
+`SessionRefreshResult` (`apps/mobile/src/lib/api/client.ts`) — три исхода:
+`{ kind: 'refreshed', accessToken }` / `{ kind: 'rejected' }` / `{ kind:
+'unavailable' }`. `token-authority.ts` возвращает их вместо голой строки:
+`'rejected'` только на явный 401/403 (или когда пары вовсе нет — спасать
+нечем); `'unavailable'` на сеть/5xx/неопознанный ответ, токены не тронуты.
+`client.ts` (`decideAfterRefresh()`, чистая функция с собственными
+`describe`-тестами в `client.spec.ts`) реагирует по-разному:
+`'refreshed'` — повтор запроса новым токеном (второй 401 после этого — уже
+настоящий конец сессии, `onSessionExpired` тоже звонит); `'rejected'` —
+`onSessionExpired` сразу; `'unavailable'` — **не** трогает сессию и **не**
+повторяет запрос тем же токеном, бросает `ApiError(status: 0, 'Нет связи с
+сервером...')`, чтобы вызывающий экран показал «повторить», а не увёл на
+логин.
+
+**Важное п.2 — повторная попытка проактивного `refresh()` при
+`'unavailable'`.** `apps/mobile/src/lib/auth/refresh-backoff.ts`
+(`nextRefreshBackoffMs`, +`spec`) — геометрическая пауза (множитель 3, от
+5 с, потолок 5 мин), чистая функция от номера попытки. `session.tsx`:
+`runProactiveRefresh()` — общее тело и обычного проактивного обновления
+(по истечении access), и повтора после `'unavailable'` — при `'unavailable'`
+сам себя перепланирует с растущей паузой; при `'refreshed'`/`'rejected'`
+ничего сверх не делает (эти два исхода уже прошли через `setCached()` →
+`notify()` → подписку, которая сама перепланирует обычный интервал или
+остановит всё). Счётчик попыток (`backoffAttempt`) сбрасывается при успехе
+(`scheduleRefresh()`), при `drop()`/выходе и при переходе `AppState` →
+`mark-guest`. `AppState` → `'active'`, пока идёт цикл бэкоффа — немедленная
+попытка без ожидания остатка паузы; `AppState` → `'background'` — таймер
+повтора останавливается (не жжёт батарею ради попыток, которых никто не
+увидит), следующий foreground или явный запрос попробуют снова.
+
+**Композитный тест — п.3 задания.** `apps/mobile/src/lib/auth/session-composite.spec.ts`:
+настоящие `createApiClient` + `createTokenAuthority`, мок только на уровне
+`token-store` (как в `token-authority.spec.ts`), никаких моков друг друга.
+Три сценария: `refresh` отвечает 502 → `onSessionExpired` не вызван, токены
+в хранилище целы, запрос падает `ApiError(status: 0)`; `refresh` отвечает
+401 → `onSessionExpired` вызван, токены стёрты; `refresh` сначала 502,
+потом 200 (второй `api.request()`, имитирует ручной повтор) → второй запрос
+проходит. Это ровно та граница, где предыдущая итерация была ошибочно
+засчитана закрытой — юнит-тесты `token-authority.spec.ts` и
+`client.spec.ts` по отдельности были и остаются зелёными, дыра была только
+в их совместной работе.
+
+**Фоновое отклонение (п.4 задания).** `background-decline.ts` уже
+полностью делегировал `refresh()` `tokenAuthority` (никогда не стирал
+токены сам) — обновлён под новый контракт: `'unavailable'`/`'rejected'`
+оба просто отдают `false`, не повторяя запрос тем же токеном. `'unavailable'`
+здесь не запускает свой бэкофф-цикл (headless-задача разовая, не живёт
+достаточно долго для таймера) — следующий вызов «Отклонить» или обычный
+запуск приложения попробуют снова сами.
+
+**Важная честная граница того, что проверено.** Композитный тест —
+по-прежнему юнит-уровень (реальные модули, но замоканы `token-store` и
+`fetch`), не интеграционный прогон на устройстве и не e2e через реальный
+`/auth/app/refresh`. Бэкофф-таймер (`runProactiveRefresh`,
+`AppState`-переключение) НЕ покрыт автоматическим тестом — `session.tsx` не
+юнит-тестируется в этом репозитории вовсе (нет
+`react-test-renderer`/`@testing-library/react-native` в зависимостях, тот
+же факт, что уже отмечался в `feedback-002.md`); проверена только чистая
+арифметика пауз (`refresh-backoff.spec.ts`) и то, что `client.ts` два раза
+подряд успешно восстанавливается после временного 502 (композитный тест,
+сценарий 3) — но НЕ то, что реальный `setTimeout`-таймер в `session.tsx`
+действительно срабатывает с нужной паузой и действительно перезапускается
+при возврате в foreground. Это разница между «арифметика верна» и
+«таймер в реальном React-дереве ведёт себя как описано» — вторую часть
+подтвердит только живой телефон или ручной интеграционный прогон, которого
+в этой итерации не было.
+
+### Что ждёт живого телефона
+
+Перечислено чек-листом в `gan-harness/generator-state.md`: показ на
+заблокированном экране, ответ из полностью убитого приложения **и отдельно
+из свёрнутого, но не убитого** (два разных сценария, feedback-001
+блокирующий п.2 — именно второй был сломан), отклонение из фона без
+открытия UI, гашение рингтона по `call.ended`/ответу на другом устройстве,
+поведение `USE_FULL_SCREEN_INTENT` на конкретном Android 14+ устройстве.
+Отдельно стоит проверить п.1 (refresh-токен): позвать «Отклонить» из
+шторки при свёрнутом приложении несколько раз подряд с разных звонков и
+убедиться, что после этого обычный вход/работа приложения не обрывается
+внезапным разлогином — синтетическая гонка (`token-authority.spec.ts`)
+проверена, но реальное поведение `SecureStore`/таймингов на живом
+Android-устройстве — нет. Ничего из этого не подделано и не имитировано в
+коде — там, где поведение зависит от системы (Doze, ограничения фона у
+конкретного вендора, реальный `TelecomManager`), оно оставлено
+непроверенным, а не описано как готовое.
+

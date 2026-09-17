@@ -9,6 +9,7 @@ import { ChatAvatar } from '@/components/chat/chat-avatar';
 import { companionOf, endedLabel, roleIn } from '@/lib/calls/call-machine';
 import { useChatCalls } from '@/lib/calls/call-provider';
 import { backMinimizesCall } from '@/lib/calls/call-screen-return';
+import { setCallScreenActive } from '@/lib/calls/native-call-bridge';
 import { useElapsedLabel } from '@/lib/calls/use-elapsed-label';
 import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
@@ -64,6 +65,16 @@ export default function CallScreen() {
     return () => calls?.reportCallScreenMounted(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calls?.reportCallScreenMounted]);
+
+  // Экран поверх блокировки и не гаснет, пока звонок открыт (VED-221, п.5):
+  // могли ответить с заблокированного экрана, разговор должен остаться
+  // виден, не требуя разблокировки. Снимается при уходе с экрана — обычный
+  // разговор в приложении не должен держать телефон поверх блокировки
+  // после того, как человек сам открыл его разблокированным.
+  useEffect(() => {
+    setCallScreenActive(true);
+    return () => setCallScreenActive(false);
+  }, []);
 
   // «Назад», пока идёт дозвон или разговор, не должно ни завершать звонок
   // молча, ни просто теряться в поведении по умолчанию модального

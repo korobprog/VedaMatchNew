@@ -28,7 +28,9 @@ import { IncomingCallBanner } from '@/components/calls/incoming-call-banner';
 import { ReturnToCallBanner } from '@/components/calls/return-to-call-banner';
 import { createChatCallsApi } from './chat-calls-client';
 import { IDLE_STATE, reduceCall, roleIn, type CallState } from './call-machine';
+import { clearNativeCall, consumeLaunchCall, subscribeToNativeCallEvents } from './native-call-bridge';
 import { navigatedCallIdAfterPhase, nextNavigatedCallId, shouldAutoNavigateToCallScreen } from './call-screen-return';
+import { PendingCallAnswer } from './pending-call-answer';
 import { startRingtone } from './ringtone';
 import { CallSession } from './webrtc-session';
 
@@ -442,6 +444,77 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const switchCamera = useCallback(() => sessionRef.current?.switchCamera(), []);
   const dismiss = useCallback(() => dispatch({ type: 'reset' }), []);
 
+  // ---------- нативный модуль звонков (VED-221) ----------
+
+  /**
+   * Отложенный ответ (`feedback-001.md`, блокирующий п.2): нажатие
+   * «Ответить» на уведомлении/блокировке при свёрнутом, но НЕ убитом,
+   * приложении шлёт JS-событие `answer` синхронно — раньше, чем поток
+   * событий переоткроется (`chat-stream.tsx`) и `reconcile()` (эффект
+   * выше) успеет узнать звонок через `/chat/calls/active`. Раньше здесь
+   * стоял точный guard `phase === 'incoming'` в момент события — тот
+   * промахивался почти всегда, событие терялось безвозвратно, и человеку
+   * приходилось нажимать «Ответить» второй раз уже внутри приложения.
+   * `PendingCallAnswer` (`pending-call-answer.ts`) запоминает `callId` до
+   * тех пор, пока звонок не появится в состоянии — из холодного старта
+   * (`getLaunchCall()`) и из события `answer`, пока JS уже жив, — единая
+   * очередь на оба пути, поэтому одновременное срабатывание обоих не даёт
+   * двойной `accept()` (см. spec `pending-call-answer.spec.ts`).
+   */
+  const pendingAnswer = useRef(new PendingCallAnswer()).current;
+  useEffect(() => {
+    const launch = consumeLaunchCall();
+    if (launch?.action === 'answer') pendingAnswer.request(launch.callId);
+  }, [pendingAnswer]);
+  // Звонок появился в состоянии (реконсайл или call.ringing из потока) —
+  // если на него есть отложенный ответ, принять его самим, без второго
+  // нажатия человеком.
+  useEffect(() => {
+    if (state.phase !== 'incoming' || !state.call) return;
+    if (!pendingAnswer.consume(state.call.id)) return;
+    void accept();
+  }, [state.phase, state.call, accept, pendingAnswer]);
+
+  // Ответ/отклонение системным путём (гарнитура, Bluetooth, Android Auto,
+  // а для убитого приложения — сюда же приходит и наша кнопка в
+  // уведомлении, `CallActionReceiver.kt` шлёт `answer` синхронно с
+  // запуском Activity), пока JS жив.
+  useEffect(() => {
+    return subscribeToNativeCallEvents({
+      onAnswer: (callId) => {
+        const current = stateRef.current;
+        if (current.call?.id === callId && current.phase === 'incoming') {
+          void accept();
+          return;
+        }
+        // Стрима с этим звонком ещё нет (типичный случай «свёрнуто, не
+        // убито» — поток закрылся в фоне) — запомнить и сразу спросить
+        // сервер, не дожидаясь обычного ресинка по AppState.
+        pendingAnswer.request(callId);
+        void reconcile();
+      },
+      onDecline: (callId) => {
+        if (stateRef.current.call?.id === callId) void decline();
+      },
+    });
+  }, [accept, decline, pendingAnswer, reconcile]);
+
+  // Гасит уведомление/self-managed Connection, как только у звонка внутри
+  // приложения появилось «настоящее» состояние (разговор пошёл) или он
+  // закончился — нативная сторона нужна была только для дозвона, пока
+  // приложение было не видно. Аудио- и Bluetooth-интеграция самого
+  // разговора через Telecom — этап 3 (VED-222), здесь self-managed
+  // `Connection` сознательно живёт только до `active`.
+  const nativeClearedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const call = state.call;
+    if (!call) return;
+    if (state.phase !== 'active' && state.phase !== 'ended') return;
+    if (nativeClearedFor.current === call.id) return;
+    nativeClearedFor.current = call.id;
+    void clearNativeCall(call.id, nativeEndReason(state.phase, state.endedStatus));
+  }, [state.phase, state.call, state.endedStatus]);
+
   const apiValue = useMemo<ChatCallsApi>(
     () => ({
       state,
@@ -516,6 +589,24 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
 function isCallEvent(event: ChatStreamEvent): event is ChatCallStreamEvent {
   return event.type.startsWith('call.');
+}
+
+/** `ChatCallStatus` сервера → причина для нативного модуля
+ *  (`EndCallReason`, `native-call-bridge.ts`) — наборы почти совпадают,
+ *  кроме `ringing`/`accepted` (звонок в этих статусах не гасят) и
+ *  `answered_elsewhere` (сервер отдельно шлёт его только data-пушем,
+ *  не в `ChatCallDto.status`, — до провайдера он этим путём не доходит). */
+function nativeEndReason(phase: CallState['phase'], status: CallState['endedStatus']): 'ended' | 'declined' | 'missed' | 'cancelled' | 'failed' {
+  if (phase === 'active') return 'ended';
+  switch (status) {
+    case 'declined':
+    case 'missed':
+    case 'cancelled':
+    case 'failed':
+      return status;
+    default:
+      return 'ended';
+  }
 }
 
 /** Отказ в доступе к микрофону/камере и прочие ошибки медиа — словами. */

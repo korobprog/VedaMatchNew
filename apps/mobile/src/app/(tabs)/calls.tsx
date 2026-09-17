@@ -1,6 +1,6 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import type { ChatCallDto } from '@vedamatch/shared';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
@@ -11,6 +11,7 @@ import { ChatListSkeleton } from '@/components/skeleton';
 import { useSession } from '@/lib/auth/session';
 import { callCompanion, callDirection, callSummaryLine, isMissedCall } from '@/lib/calls/call-history-format';
 import { createChatCallsApi } from '@/lib/calls/chat-calls-client';
+import { canUseFullScreenIntent, openFullScreenIntentSettings } from '@/lib/calls/native-call-bridge';
 import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
@@ -32,6 +33,17 @@ export default function CallsScreen() {
   const [phase, setPhase] = useState<Phase>('loading');
   const [calls, setCalls] = useState<ChatCallDto[]>([]);
   const [retrying, setRetrying] = useState(false);
+  // Android 14+ может не выдать полноэкранный intent молча (VED-221, п.7) —
+  // без него входящий на заблокированном экране падает до обычного
+  // heads-up уведомления. Перепроверяем при каждом возврате на вкладку:
+  // человек мог зайти в системные настройки прямо из баннера ниже и
+  // вернуться назад.
+  const [canFullScreen, setCanFullScreen] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS === 'android') setCanFullScreen(canUseFullScreenIntent());
+    }, []),
+  );
 
   const load = useCallback(
     async (isRetry = false) => {
@@ -65,6 +77,29 @@ export default function CallsScreen() {
       subtitle="История звонков в личных беседах."
       onTitleLongPress={() => router.push('/calls-probe')}
     >
+      {!canFullScreen ? (
+        <View style={[styles.permissionBanner, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
+          <Text style={[styles.permissionTitle, { color: colors.text0 }]}>
+            Входящие звонки не покажутся на заблокированном экране
+          </Text>
+          <Text style={[styles.permissionText, { color: colors.text1 }]}>
+            Android просит разрешить это отдельно. Без него звонок всё равно придёт — обычным уведомлением.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Разрешить звонки на экране блокировки"
+            onPress={() => {
+              confirmTap();
+              openFullScreenIntentSettings();
+            }}
+            android_ripple={ripple(colors.glassBorder)}
+            style={({ pressed }) => [styles.permissionButton, { borderColor: colors.glassBorder }, pressedStyle(pressed)]}
+          >
+            <Text style={[styles.permissionButtonText, { color: colors.text0 }]}>Разрешить в настройках</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       {phase === 'loading' ? (
         <ChatListSkeleton inset={false} />
       ) : phase === 'error' ? (
@@ -116,6 +151,18 @@ export default function CallsScreen() {
 }
 
 const styles = StyleSheet.create({
+  permissionBanner: { borderWidth: 1, borderRadius: radius.md, padding: 16, gap: 8, marginBottom: 12 },
+  permissionTitle: { fontFamily: fonts.bodyBold, fontSize: 14 },
+  permissionText: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
+  permissionButton: {
+    alignSelf: 'flex-start',
+    minHeight: hitTarget,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+  },
+  permissionButtonText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
   errorBlock: { gap: 12, alignItems: 'flex-start' },
   empty: { borderWidth: 1, borderRadius: radius.md, padding: 16, gap: 6 },
   emptyTitle: { fontFamily: fonts.bodyBold, fontSize: 15 },

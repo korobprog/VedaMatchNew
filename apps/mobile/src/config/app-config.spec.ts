@@ -35,4 +35,31 @@ describe('app.config', () => {
     const plugins = (config.plugins as PluginEntry[]).map((p) => (Array.isArray(p) ? p[0] : p));
     expect(plugins).toContain('@config-plugins/react-native-webrtc');
   });
+
+  // VED-221: входящий звонок при свёрнутом/закрытом приложении.
+  it('просит разрешения self-managed ConnectionService и полноэкранного intent', () => {
+    expect(config.android?.permissions ?? []).toEqual(
+      expect.arrayContaining([
+        'android.permission.MANAGE_OWN_CALLS',
+        'android.permission.USE_FULL_SCREEN_INTENT',
+        'android.permission.FOREGROUND_SERVICE',
+        'android.permission.FOREGROUND_SERVICE_PHONE_CALL',
+      ]),
+    );
+  });
+
+  // `@expo/config-plugins` выполняет несколько `withAndroidManifest`-плагинов
+  // в порядке, ОБРАТНОМ их регистрации в `plugins` (`withMod`/`withBaseMod`:
+  // новый мод оборачивает предыдущий и вызывается раньше него) — чтобы
+  // `with-native-calls.js` видел уже дописанные `expo-notifications`
+  // `<meta-data>` (`plugins/with-native-calls.js`, п.2), он обязан стоять
+  // РАНЬШЕ нее в массиве, а не позже.
+  it('манифест правится раньше expo-notifications в списке — значит позже по факту выполнения', () => {
+    const plugins = (config.plugins as PluginEntry[]).map((p) => (Array.isArray(p) ? p[0] : p));
+    const notificationsIndex = plugins.indexOf('expo-notifications');
+    const nativeCallsIndex = plugins.indexOf('./plugins/with-native-calls.js');
+    expect(notificationsIndex).toBeGreaterThanOrEqual(0);
+    expect(nativeCallsIndex).toBeGreaterThanOrEqual(0);
+    expect(nativeCallsIndex).toBeLessThan(notificationsIndex);
+  });
 });
