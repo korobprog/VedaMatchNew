@@ -58,8 +58,22 @@ export default async function AdminAuditPage({
     ...(targetId ? { targetId } : {}),
     ...(days ? { since: sinceFor(days) } : {}),
   };
-  const log = await getAdminAudit(query);
-  if (!log) throw new Error("Не удалось загрузить журнал");
+  // Скоуп продублирован вручную в двух местах (web `audit-scope.ts` и API
+  // `audit-action-scope.ts`), а `action` в URL можно подделать руками — если
+  // они разойдутся или кто-то откроет чужую ссылку, бэкенд ответит 403.
+  // Страница не должна падать необработанной 500: показываем понятную
+  // строку вместо списка, форма фильтра остаётся рабочей.
+  let log: Awaited<ReturnType<typeof getAdminAudit>> = null;
+  let loadError: string | null = null;
+  try {
+    log = await getAdminAudit(query);
+  } catch (error) {
+    loadError =
+      error instanceof Error && /\b403\b/.test(error.message)
+        ? "Это действие относится к другому сервису — здесь его не показать."
+        : "Не удалось загрузить журнал. Попробуйте обновить страницу.";
+  }
+  if (!log && !loadError) loadError = "Не удалось загрузить журнал.";
 
   return (
     <>
@@ -134,7 +148,11 @@ export default async function AdminAuditPage({
         </Link>
       </form>
 
-      {log.items.length === 0 ? (
+      {loadError ? (
+        <p className="glass rounded-2xl border border-glass-brd p-6 text-sm text-text-1">
+          {loadError}
+        </p>
+      ) : !log || log.items.length === 0 ? (
         <p className="glass rounded-2xl border border-glass-brd p-6 text-sm text-text-1">
           Записей нет. Журнал ведётся с момента его появления — более ранние
           действия в нём не восстановить.
