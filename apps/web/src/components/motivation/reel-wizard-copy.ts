@@ -92,6 +92,29 @@ export function shouldPoll(stage: MotivationReelStage): boolean {
 
 export const POLL_INTERVAL_MS = 3000;
 
+/**
+ * Сколько раз подряд можно молча не получить статус, прежде чем сказать об
+ * этом человеку — но только пока данных не было ВООБЩЕ ни разу (VED-204).
+ * Если хоть один успешный ответ уже пришёл, стадии на экране не устарели
+ * фатально, и лимита нет: опрос повторяется тихо, сколько бы ни падал.
+ */
+export const POLL_SILENT_FAILURE_LIMIT = 3;
+
+/**
+ * Решает, стоит ли молчать про сбой фонового опроса статуса. Молчим, пока
+ * есть хоть какие-то данные на экране (они просто устареют на несколько
+ * секунд — следующий тик их обновит) или пока не исчерпан лимит попыток для
+ * самой первой загрузки, которая ещё ни разу не удавалась.
+ */
+export function pollFailureIsSilent(hasEverLoaded: boolean, failedAttempts: number): boolean {
+  return hasEverLoaded || failedAttempts < POLL_SILENT_FAILURE_LIMIT;
+}
+
+/** Мягкая формулировка вместо «не удалось получить статус» (VED-204): опрос
+ * не остановлен, просто задерживается, и человеку не о чем тревожиться —
+ * только не о чем и молчать, если это первая загрузка и она никак не идёт. */
+export const POLL_STALLED_MESSAGE = "Проверка статуса задерживается.";
+
 export function quotaLine(quota: MotivationReelQuotaDto | null): string {
   if (!quota) return "";
   if (!quota.enabled) return "Создание своих рилсов сейчас выключено";

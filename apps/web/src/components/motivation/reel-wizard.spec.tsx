@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MotivationReelDto } from "@vedamatch/shared";
 import { ReelWizard } from "./reel-wizard";
+import { POLL_INTERVAL_MS, POLL_SILENT_FAILURE_LIMIT } from "./reel-wizard-copy";
 
 const quota = { enabled: true, unlimited: false, limit: 1, used: 0, remaining: 1 };
 
@@ -69,6 +70,16 @@ function routeFetch(routes: Record<string, (init?: RequestInit) => unknown>) {
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
+}
+
+/**
+ * Ответ сервера с ошибкой (не сетевое исключение — обычный `ok: false`), как
+ * при временном 500: `apiFetch` его не ретраит сам (ретраит только настоящий
+ * throw от `fetch`), поэтому каждый такой ответ — ровно один провал тика
+ * опроса, без скрытых повторов транспортного слоя (VED-204).
+ */
+function failedResponse(status = 500) {
+  return { ok: false, status, json: async () => ({}), text: async () => "сбой сервера" };
 }
 
 beforeEach(() => vi.restoreAllMocks());
@@ -583,4 +594,107 @@ describe("ReelWizard", () => {
     expect(await screen.findByText("Сегодня рилс уже создан")).toBeInTheDocument();
     expect(screen.queryByLabelText(/Текст цитаты/)).not.toBeInTheDocument();
   });
+
+  // VED-204: фоновый опрос статуса раньше падал навсегда на первом же сбое
+  // и вешал красную плашку «Не удалось получить статус рилса» поверх
+  // нормально идущих стадий. Таймеры настоящие (не `vi.useFakeTimers`):
+  // в этом проекте `waitFor`/`findBy*` не умеют распознавать поддельные
+  // таймеры vitest (хелпер библиотеки ищет глобальный `jest`, а не `vi`), и
+  // смешивание привело бы к зависанию опроса вместо проверки поведения.
+  it(
+    "не показывает сообщение при сбое опроса, если стадии уже известны",
+    async () => {
+      let reelCalls = 0;
+      const fetchMock = vi.fn(async (url: string) => {
+        if (url.includes("/motivation/reels/quota")) {
+          return { ok: true, status: 200, json: async () => quota, text: async () => "" };
+        }
+        if (url.includes("/motivation/reels/reel-1")) {
+          reelCalls += 1;
+          // Второй тик — единственный, что падает; и до, и после — успех.
+          if (reelCalls === 2) return failedResponse();
+          return {
+            ok: true,
+            status: 200,
+            json: async () => reelDto({ stage: "generating" }),
+            text: async () => "",
+          };
+        }
+        throw new Error(`unexpected ${url}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(<ReelWizard prefill={{ reelId: "reel-1" }} donation={null} />);
+
+      // Первый тик успешен — стадии уже на экране.
+      await screen.findByText("Готово");
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+      // Ждём, пока пройдёт и проваленный (второй), и следующий за ним
+      // успешный (третий) тик — опрос не должен был остановиться сам.
+      await waitFor(() => expect(reelCalls).toBeGreaterThanOrEqual(3), {
+        timeout: POLL_INTERVAL_MS * 4,
+      });
+
+      // Сбой прошёл незаметно: ни красной плашки, ни спокойной строки —
+      // стадии всё это время оставались теми же известными.
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(screen.queryByText(/Проверка статуса задерживается/)).not.toBeInTheDocument();
+      expect(screen.getByText("Готово")).toBeInTheDocument();
+    },
+    POLL_INTERVAL_MS * 6,
+  );
+
+  it(
+    "сообщает о задержке только когда статус ни разу не пришёл, а после первого успеха снимает сообщение",
+    async () => {
+      let reelCalls = 0;
+      const fetchMock = vi.fn(async (url: string) => {
+        if (url.includes("/motivation/reels/quota")) {
+          return { ok: true, status: 200, json: async () => quota, text: async () => "" };
+        }
+        if (url.includes("/motivation/reels/reel-1")) {
+          reelCalls += 1;
+          // Ни один из тихих попыток не проходит — все падают, пока лимит
+          // не исчерпан; дальше — первый же успех.
+          if (reelCalls <= POLL_SILENT_FAILURE_LIMIT) return failedResponse();
+          return {
+            ok: true,
+            status: 200,
+            json: async () => reelDto({ stage: "generating" }),
+            text: async () => "",
+          };
+        }
+        throw new Error(`unexpected ${url}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(<ReelWizard prefill={{ reelId: "reel-1" }} donation={null} />);
+
+      // Пока лимит тихих попыток не исчерпан — ни слова, только «Загружаем
+      // статус…»: данных ещё не было, но опрос пока не сдался.
+      expect(screen.getByText("Загружаем статус…")).toBeInTheDocument();
+      expect(screen.queryByText(/Проверка статуса задерживается/)).not.toBeInTheDocument();
+
+      // После исчерпания лимита — спокойная строка с кнопкой «Обновить», не
+      // плашка-тревога (без role="alert", без слова «не удалось»).
+      await screen.findByText(
+        "Проверка статуса задерживается.",
+        {},
+        { timeout: POLL_INTERVAL_MS * (POLL_SILENT_FAILURE_LIMIT + 3) },
+      );
+      expect(screen.getByRole("button", { name: "Обновить" })).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(screen.queryByText(/не удалось/i)).not.toBeInTheDocument();
+
+      // Опрос не остановлен и без нажатия «Обновить»: следующий тик приходит
+      // сам и снимает сообщение — состояние чистое.
+      await waitFor(
+        () => expect(screen.queryByText(/Проверка статуса задерживается/)).not.toBeInTheDocument(),
+        { timeout: POLL_INTERVAL_MS * 3 },
+      );
+      expect(screen.getByText("Готово")).toBeInTheDocument();
+    },
+    POLL_INTERVAL_MS * 10,
+  );
 });

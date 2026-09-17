@@ -43,7 +43,9 @@ import {
 import {
   MAX_TEXT,
   MIN_TEXT,
+  pollFailureIsSilent,
   POLL_INTERVAL_MS,
+  POLL_STALLED_MESSAGE,
   quotaExhausted,
   quotaLine,
   shouldPoll,
@@ -147,7 +149,13 @@ export function ReelWizard({
   const [reel, setReel] = useState<MotivationReelDto | null>(null);
   const [reelId, setReelId] = useState<string | null>(prefill.reelId ?? null);
   const [pending, setPending] = useState(false);
+  /** Настоящие сбои: отправки, апелляции, заказа видео — их прятать нельзя. */
   const [error, setError] = useState<string | null>(null);
+  /** Фоновый опрос статуса так и не получил данные ни разу и исчерпал тихие
+   * попытки (VED-204) — отдельно от `error`: это не тревога, а спокойная
+   * строка с кнопкой «Обновить», без красной плашки. */
+  const [pollStalled, setPollStalled] = useState(false);
+  const [pollRetryNonce, setPollRetryNonce] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -235,21 +243,55 @@ export function ReelWizard({
   // Опрос статуса, пока конвейер работает. Таймер, а не интервал: следующий
   // запрос уходит только после ответа на предыдущий.
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Сколько раз подряд не удалось получить статус, и приходили ли данные
+  // вообще хоть раз — по этим двум вещам решаем, молчать про сбой или нет
+  // (VED-204). Ref, а не состояние: свежее значение нужно прямо внутри
+  // замыкания `tick`, без гонки с асинхронным рендером.
+  const failedPollAttemptsRef = useRef(0);
+  const everLoadedRef = useRef(false);
   useEffect(() => {
     if (step !== "review" || !reelId) return;
     let cancelled = false;
+    // Новый запуск опроса — другой рилс — считает «данных ещё не было»
+    // заново: стадии прошлого рилса тут ни при чём. `pollStalled` не
+    // сбрасываем здесь же (синхронный setState в теле эффекта запускает
+    // лишний повторный рендер) — это делают места, которые заводят новый
+    // рилс (`submit`, `restart`) и кнопка «Обновить» (`retryPoll`).
+    failedPollAttemptsRef.current = 0;
+    everLoadedRef.current = false;
     const tick = async () => {
       try {
         const next = await loadReel(reelId);
         if (cancelled) return;
+        failedPollAttemptsRef.current = 0;
+        everLoadedRef.current = true;
+        setPollStalled(false);
         setReel(next);
+        // Успешный тик снимает и сбой публикации, если он остался от
+        // прошлой отправки: плашка не должна жить дольше своей актуальности.
+        setError(null);
         // Пока идёт сборка ролика, статус тоже опрашиваем: иначе готовое
         // видео появится только после перезагрузки страницы.
         const busyVideo = next.videoState === "queued" || next.videoState === "running";
         if (shouldPoll(next.stage) || busyVideo)
           pollRef.current = setTimeout(tick, POLL_INTERVAL_MS);
       } catch {
-        if (!cancelled) setError("Не удалось получить статус рилса");
+        if (cancelled) return;
+        failedPollAttemptsRef.current += 1;
+        // Транзитный сбой опроса — не повод тревожить: молчим и повторяем,
+        // пока есть хоть какие-то данные на экране (они просто устареют на
+        // несколько секунд) или пока не исчерпан лимит попыток для самой
+        // первой загрузки, которая ещё ни разу не удавалась.
+        if (pollFailureIsSilent(everLoadedRef.current, failedPollAttemptsRef.current)) {
+          pollRef.current = setTimeout(tick, POLL_INTERVAL_MS);
+          return;
+        }
+        // Данных не было ни разу, и тихие попытки исчерпаны — молчание
+        // дальше уже вводит в заблуждение: «Загружаем статус…» висело бы
+        // вечно. Опрос при этом не останавливаем — только сообщаем спокойно
+        // и даём кнопку, чтобы не ждать следующего тика.
+        setPollStalled(true);
+        pollRef.current = setTimeout(tick, POLL_INTERVAL_MS);
       }
     };
     void tick();
@@ -257,7 +299,13 @@ export function ReelWizard({
       cancelled = true;
       if (pollRef.current) clearTimeout(pollRef.current);
     };
-  }, [step, reelId, loadReel]);
+  }, [step, reelId, loadReel, pollRetryNonce]);
+
+  /** Кнопка «Обновить» у спокойной строки: не ждать следующего тика самой. */
+  const retryPoll = useCallback(() => {
+    setPollStalled(false);
+    setPollRetryNonce((n) => n + 1);
+  }, []);
 
   const trimmed = text.trim();
   const textError =
@@ -314,6 +362,9 @@ export function ReelWizard({
       }
       setReelId(result.id);
       setStep("review");
+      // Новый рилс — новый опрос: прошлая спокойная строка про задержку (если
+      // осталась от предыдущей отправки) сюда не относится.
+      setPollStalled(false);
       setQuota((current) =>
         current && !current.unlimited
           ? { ...current, used: current.used + 1, remaining: Math.max(0, current.remaining - 1) }
@@ -331,6 +382,7 @@ export function ReelWizard({
     setReel(null);
     setReelId(null);
     setError(null);
+    setPollStalled(false);
     setStep("text");
   }
 
@@ -726,7 +778,14 @@ export function ReelWizard({
       )}
 
       {step === "review" && reelId && (
-        <ReelStatus reel={reel} donation={donation} onRestart={restart} onUpdate={setReel} />
+        <ReelStatus
+          reel={reel}
+          donation={donation}
+          onRestart={restart}
+          onUpdate={setReel}
+          pollStalled={pollStalled}
+          onRetryPoll={retryPoll}
+        />
       )}
     </div>
   );
@@ -1043,17 +1102,39 @@ function ReelStatus({
   donation,
   onRestart,
   onUpdate,
+  pollStalled,
+  onRetryPoll,
 }: {
   reel: MotivationReelDto | null;
   donation: DonationSettingsDto | null;
   onRestart: () => void;
   onUpdate: (reel: MotivationReelDto) => void;
+  /** Опрос статуса не получил данные ни разу и исчерпал тихие попытки (VED-204). */
+  pollStalled: boolean;
+  onRetryPoll: () => void;
 }) {
   const [appeal, setAppeal] = useState("");
   const [sending, setSending] = useState(false);
   const [appealError, setAppealError] = useState<string | null>(null);
 
-  if (!reel) return <p className="text-sm text-text-2">Загружаем статус…</p>;
+  if (!reel) {
+    // Спокойная строка вместо вечного «Загружаем статус…»: опрос при этом
+    // продолжается сам, кнопка — только чтобы не ждать следующего тика.
+    if (pollStalled)
+      return (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-glass-brd bg-glass px-3 py-2 text-sm text-text-2">
+          <span>{POLL_STALLED_MESSAGE}</span>
+          <button
+            type="button"
+            onClick={onRetryPoll}
+            className="btn-mint-outline rounded-lg px-3 py-1 text-xs font-medium"
+          >
+            Обновить
+          </button>
+        </div>
+      );
+    return <p className="text-sm text-text-2">Загружаем статус…</p>;
+  }
   const items = stageItems(reel.stage);
   const { quote } = splitQuoteAndExplanation(reel.post.text);
 

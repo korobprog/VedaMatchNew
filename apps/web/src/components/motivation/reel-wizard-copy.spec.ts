@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { quotaExhausted, quotaLine, shouldPoll, stageItems, STYLE_OPTIONS } from "./reel-wizard-copy";
+import {
+  pollFailureIsSilent,
+  POLL_SILENT_FAILURE_LIMIT,
+  quotaExhausted,
+  quotaLine,
+  shouldPoll,
+  stageItems,
+  STYLE_OPTIONS,
+} from "./reel-wizard-copy";
 
 describe("stageItems", () => {
   it("marks the review stage as failed when rejected", () => {
@@ -22,6 +30,20 @@ describe("shouldPoll", () => {
     expect(shouldPoll("admin_review")).toBe(false);
     expect(shouldPoll("rejected")).toBe(false);
     expect(shouldPoll("published")).toBe(false);
+  });
+});
+
+describe("pollFailureIsSilent", () => {
+  it("молчит сколько угодно, пока хоть раз данные уже приходили", () => {
+    expect(pollFailureIsSilent(true, 0)).toBe(true);
+    expect(pollFailureIsSilent(true, 999)).toBe(true);
+  });
+
+  it("для самой первой загрузки молчит только до лимита попыток", () => {
+    for (let attempt = 0; attempt < POLL_SILENT_FAILURE_LIMIT; attempt += 1) {
+      expect(pollFailureIsSilent(false, attempt)).toBe(true);
+    }
+    expect(pollFailureIsSilent(false, POLL_SILENT_FAILURE_LIMIT)).toBe(false);
   });
 });
 
