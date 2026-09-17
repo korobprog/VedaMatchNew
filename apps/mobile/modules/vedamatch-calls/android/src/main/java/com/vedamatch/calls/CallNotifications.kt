@@ -11,6 +11,7 @@ import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 
@@ -25,6 +26,7 @@ import androidx.core.app.Person
  * действиями и `fullScreenIntent`, полноэкранный показ у обоих одинаков.
  */
 object CallNotifications {
+  private const val TAG = "VedamatchCalls"
   const val CHANNEL_ID = "calls"
   /** Отдельный канал для уведомления ИДУЩЕГО разговора (VED-222, §1) — без
    *  звука и вибрации: `CHANNEL_ID` выше настроен звонить (рингтон,
@@ -134,10 +136,27 @@ object CallNotifications {
       .setFullScreenIntent(fullScreenPending, true)
       .setContentIntent(fullScreenPending)
 
+    // `CallStyle.forIncomingCall` требует и `Person` с непустым именем, и
+    // либо активную foreground-службу, либо `setFullScreenIntent(...)` на
+    // этом же builder'е — оба условия здесь выполнены (`fullScreenPending`
+    // выше), но это системное требование Android, не наша гарантия: любое
+    // отклонение (пустое имя, будущая правка кода, уберёт fullScreenIntent
+    // по ошибке) бросает `IllegalArgumentException` внутри `builder.build()`
+    // и без try/catch уронило бы весь показ уведомления молча (исключение
+    // ловится вызывающим `showIncomingCall`, но там уже поздно — обычное
+    // уведомление ниже так и не покажется). Деградация — тот же билдер без
+    // `CallStyle`, с ручными заголовком/кнопками, как для API < 31.
+    var usedCallStyle = false
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      val person = Person.Builder().setName(info.callerName).build()
-      builder.setStyle(NotificationCompat.CallStyle.forIncomingCall(person, declinePending, answerPending))
-    } else {
+      try {
+        val person = Person.Builder().setName(info.callerName).build()
+        builder.setStyle(NotificationCompat.CallStyle.forIncomingCall(person, declinePending, answerPending))
+        usedCallStyle = true
+      } catch (error: Exception) {
+        Log.w(TAG, "show: CallStyle отказал для callId=${info.callId}, обычное уведомление", error)
+      }
+    }
+    if (!usedCallStyle) {
       builder
         .setContentTitle(title)
         .setContentText(info.callerName)
@@ -146,7 +165,12 @@ object CallNotifications {
     }
 
     val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    manager.notify(notificationId, builder.build())
+    try {
+      manager.notify(notificationId, builder.build())
+      Log.i(TAG, "show: уведомление на канале $CHANNEL_ID показано, callId=${info.callId}")
+    } catch (error: Exception) {
+      Log.w(TAG, "show: notify() отказал для callId=${info.callId}", error)
+    }
   }
 
   fun cancel(context: Context, callId: String) {

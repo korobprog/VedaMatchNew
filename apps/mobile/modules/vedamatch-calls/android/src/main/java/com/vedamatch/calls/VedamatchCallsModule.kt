@@ -5,6 +5,7 @@ import android.app.PictureInPictureParams
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -65,10 +66,25 @@ class VedamatchCallsModule : Module() {
     private fun phoneAccountHandle(context: Context): PhoneAccountHandle =
       PhoneAccountHandle(ComponentName(context, VedamatchConnectionService::class.java), ACCOUNT_ID)
 
+    /**
+     * Регистрирует self-managed `PhoneAccount` — идемпотентно и БЕЗ
+     * предварительной проверки `getPhoneAccount()` (живой лог Samsung
+     * Galaxy A51, Android 13: `getPhoneAccount()` там бросает
+     * `SecurityException: ... READ_PHONE_NUMBERS`, хотя self-managed
+     * аккаунту (`CAPABILITY_SELF_MANAGED`) это разрешение по документации
+     * не требуется вовсе — конкретная прошивка проверяет его для ЛЮБОГО
+     * вызывающего `getPhoneAccount()`, даже за собственный аккаунт
+     * приложения). `registerPhoneAccount()` — обычный публичный API под
+     * `MANAGE_OWN_CALLS` (уже выдан по объявлению в манифесте), повторный
+     * вызов с тем же `PhoneAccountHandle` просто обновляет запись, не
+     * бросает и не требует READ_PHONE_NUMBERS — раз проверка «уже
+     * зарегистрирован ли» больше не нужна для идемпотентности, отдельный
+     * читающий вызов, добавляющий риск SecurityException на части OEM,
+     * можно просто убрать.
+     */
     private fun ensurePhoneAccount(context: Context) {
       val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
       val handle = phoneAccountHandle(context)
-      if (telecomManager.getPhoneAccount(handle) != null) return
       val account = PhoneAccount.builder(handle, "VedaMatch")
         .setCapabilities(PhoneAccount.CAPABILITY_SELF_MANAGED)
         .build()
@@ -172,6 +188,7 @@ class VedamatchCallsModule : Module() {
       // системной интеграции с ним (feedback-001.md, non-blocking п.1).
       try {
         ensurePhoneAccount(context)
+        Log.i(TAG, "showIncomingCall: PhoneAccount зарегистрирован, callId=$callId")
         val extras = android.os.Bundle().apply {
           putString(PendingCallStore.EXTRA_CALL_ID, callId)
           putString(PendingCallStore.EXTRA_CALLER_NAME, callerName)
@@ -180,11 +197,12 @@ class VedamatchCallsModule : Module() {
         }
         val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
         telecomManager.addNewIncomingCall(phoneAccountHandle(context), extras)
+        Log.i(TAG, "showIncomingCall: addNewIncomingCall отправлен, callId=$callId")
       } catch (error: Exception) {
         // Без лога на живом устройстве это будет нечем объяснить постфактум,
         // кроме «звонок почему-то не поднял self-managed соединение»
         // (feedback-002.md, non-blocking п.4).
-        Log.w(TAG, "Telecom отказал, деградация до обычного уведомления", error)
+        Log.w(TAG, "showIncomingCall: Telecom отказал, деградация до обычного уведомления, callId=$callId", error)
         CallNotifications.show(context, info)
       }
     }
@@ -247,22 +265,32 @@ class VedamatchCallsModule : Module() {
      * VED-222, п.7: «занято» решает JS (`call-busy-decision.ts`) — этот
      * вызов только репортит два независимых факта, ничего не решает сам:
      * `hasOwnCall` — уже идёт свой self-managed звонок (`PendingCallStore`);
-     * `systemBusy` — Telecom считает устройство занятым чем-то ещё
-     * (сотовый разговор или другое self-managed приложение). Обёрнуто в
-     * `try/catch`: `TelecomManager.isInCall()` без `READ_PHONE_STATE` на
-     * части OEM/версий может бросить `SecurityException` — тогда считаем
-     * систему свободной (fail-open): ложное «не занято» просто покажет
-     * входящий баннер как обычно, а не потеряет звонок молча.
+     * `systemBusy` — устройство занято ЧЕМ-ТО ЕЩЁ (сотовый разговор или
+     * другое self-managed приложение).
+     *
+     * Правка по факту живой проверки (Samsung Galaxy A51, Android 13):
+     * `TelecomManager.isInCall()` требует `READ_PHONE_STATE`
+     * (`SecurityException` без него, живой лог устройства) — это разрешение
+     * сознательно не добавляется в манифест (описано в задании и
+     * `docs/mobile-calls-native.md` §12: правила Google Play для чувствительных
+     * разрешений телефонии, самоуправляемому аккаунту оно и не должно быть
+     * нужно). Замена — `AudioManager.getMode()`: `MODE_IN_CALL` система
+     * выставляет сама для НАСТОЯЩЕГО сотового разговора (телефония GSM/VoLTE),
+     * это публичный API без единого разрешения. `MODE_IN_COMMUNICATION`
+     * сознательно не считается «занято» — его ставит наш же
+     * `InCallManager.start()` на время СВОЕГО разговора (см.
+     * `audio-session-policy.ts`), и другие VoIP-приложения делают то же самое;
+     * отличить «наш разговор» от «чужого VoIP» этим полем нельзя, но наш
+     * собственный уже покрыт отдельным флагом `hasOwnCall`
+     * (`PendingCallStore.hasAnyConnection()`), а для стороннего VoIP
+     * `MODE_IN_COMMUNICATION` — это как раз не такое надёжное «занято», ради
+     * которого стоило бы рисковать ложным срабатыванием (человек мог просто
+     * недавно закончить звонок в другом приложении, не сбросившем режим).
      */
     Function("callConflictState") {
       val hasOwnCall = PendingCallStore.hasAnyConnection()
-      val systemBusy = try {
-        val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
-        telecomManager.isInCall()
-      } catch (error: Exception) {
-        Log.w(TAG, "Не удалось спросить Telecom про занятость устройства", error)
-        false
-      }
+      val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+      val systemBusy = audioManager.mode == AudioManager.MODE_IN_CALL
       mapOf("hasOwnCall" to hasOwnCall, "systemBusy" to systemBusy)
     }
 

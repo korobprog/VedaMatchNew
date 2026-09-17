@@ -1614,6 +1614,72 @@ JSX) — `IncomingCallBanner`/`ReturnToCallBanner`/`CallErrorToast` теперь
 **Не взято в этот заход** (не входило в список фидбека, оставлено как
 есть): `Person`-аватар в уведомлениях — по-прежнему не сделан, данные есть.
 
+### 12.14. Правки по факту первой живой проверки (Samsung Galaxy A51, Android 13)
+
+Первый реальный входящий звонок (приложение в фоне, экран погашен) дошёл за
+2 с (`RNFirebaseMsgReceiver`), но self-managed `Connection` не создался, а в
+шторке нашлось лишнее уведомление о звонке не на канале `calls`. Разобрано
+по логу устройства, не гипотетически:
+
+- **`TelecomManager.isInCall()`** бросал `SecurityException: ...
+  READ_PHONE_STATE` — это разрешение сознательно не добавлено (Google Play
+  требует раскрытие для чувствительных разрешений телефонии, `callConflictState`
+  и так не должен был на него полагаться). Заменено на `AudioManager.getMode()
+  == MODE_IN_CALL` — публичный API без единого разрешения; `MODE_IN_CALL`
+  ставит сама телефония для настоящего сотового разговора,
+  `MODE_IN_COMMUNICATION` (наш собственный `InCallManager.start()`, как и
+  чужой VoIP) сознательно не считается «занято» здесь — свой разговор и так
+  ловит отдельный `hasOwnCall` (`PendingCallStore.hasAnyConnection()`).
+- **`TelecomManager.getPhoneAccount()`** (внутри `ensurePhoneAccount`, вызов
+  «уже зарегистрирован ли аккаунт») бросал на этой прошивке
+  `SecurityException: ... READ_PHONE_NUMBERS` — самоуправляемому аккаунту
+  это разрешение не нужно по документации, но конкретный Samsung-образ
+  `TelecomServiceImpl` проверяет его для ЛЮБОГО вызывающего `getPhoneAccount()`.
+  Убрана сама проверка: `registerPhoneAccount()` идемпотентен, вызывается
+  безусловно, в предварительном чтении нет нужды.
+- **`onCreateIncomingConnectionFailed`** (Telecom сам отказал self-managed
+  запросу — реальный сигнал «занято», который наша JS-проверка ДО показа
+  могла не успеть поймать из-за гонки с `AudioManager.mode`) теперь не
+  молчит, а отклоняет звонок на сервере тем же headless-путём, что кнопка
+  «Отклонить» из шторки (`DeclineHeadlessTaskService`), — не ждёт
+  15-секундный таймер обрыва WebRTC.
+- **Лишнее уведомление на `expo_notifications_fallback_notification_channel`**
+  — расследовано по исходникам сервера (`apps/api/.../notifications/notifications.listener.ts`,
+  `native-push.service.ts`), не подтверждено гипотезой: `chat.call-incoming`
+  корректно ветвится по `nativeCalls` (`sendCallIncoming`), а вот
+  `chat.call-missed` — НЕТ, уходит через общий `sendToUsers(...)` ВСЕМ
+  устройствам человека, включая уже умеющие нативный звонок. Это обычный
+  пуш с блоком `notification` — при свёрнутом приложении система показывает
+  его сама, минуя весь код клиента (задокументированное поведение FCM,
+  §11); мобильный клиент физически не может перехватить этот путь. **Правка
+  сервера — вне этого worktree** (`VedaMatchNew-calls-api`), здесь только
+  зафиксирован источник и закрыто единственное окно, где клиент вообще
+  видит такой пуш сам: если он придёт, пока приложение уже в переднем
+  плане, `push-bridge.tsx#onMessage` теперь распознаёт `data.url` вида
+  `/chat/<id>?call=<callId>` (`call-push-guard.ts`, +spec) и не дублирует
+  показ. Попутно исправлен реальный, не зависящий от этого сценария баг:
+  `scheduleNotificationAsync` в том же обработчике вызывался без
+  `channelId` — любой обычный пуш, пришедший в переднем плане, уходил на
+  служебный `expo_notifications_fallback_notification_channel` вместо
+  `messages`, а не только этот один случай.
+- **Логирование.** Добавлены `Log.i`/`Log.w` на ключевые шаги
+  `showIncomingCall` (регистрация аккаунта, `addNewIncomingCall`),
+  `onCreateIncomingConnection`, `onCreateIncomingConnectionFailed`,
+  `onShowIncomingCallUi`, показ/отказ уведомления в `CallNotifications.show` —
+  только `callId`, без имени/аватара звонящего, чтобы следующий живой тест
+  было чем объяснить постфактум.
+- **`CallNotifications.show()`** — вопреки первому впечатлению от отчёта,
+  уведомление на канале `calls` в этом прогоне РЕАЛЬНО появилось (лог
+  устройства: `notification_enqueue`, `channel=calls`, `category=call`,
+  `actions=2`) и было автоматически снято ~44 с спустя при завершении
+  звонка (`notification_cancel`) — ожидаемое поведение, не дефект;
+  расхождение с отчётом объясняется тем, что `dumpsys notification`
+  снимался уже после этого штатного снятия. `CallStyle.forIncomingCall`
+  всё равно обёрнут в `try/catch` с деградацией до обычного двухкнопочного
+  уведомления и логом — на случай, если на другой прошивке требования
+  `CallStyle` (`Person` с именем + `fullScreenIntent`/foreground-служба)
+  всё же не выполнятся.
+
 ### Что ждёт живого телефона (этап 3)
 
 Ничего из перечисленного ниже не проверялось на реальном устройстве в этой

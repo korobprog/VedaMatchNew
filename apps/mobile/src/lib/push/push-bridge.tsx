@@ -14,6 +14,7 @@ import { appVariant } from '@/config/app-variant';
 import { parseCallPush } from '@/lib/calls/incoming-call-push';
 import { useSession } from '@/lib/auth/session';
 import { isConversationOpen } from './active-chat';
+import { isCallRelatedPushUrl } from './call-push-guard';
 import { registerDevice } from './push-api';
 import { pushTarget, pushUrlOf, rnfbMessageUrlOf } from './push-url';
 
@@ -130,13 +131,25 @@ export function PushBridge() {
       if (parseCallPush(data)) return;
       const notification = remoteMessage.notification;
       if (!notification) return;
+      // Правка по факту живой проверки (`call-push-guard.ts`): обычный пуш о
+      // звонке (входящем-фолбэке или пропущенном, `notification-copy.ts` на
+      // сервере — `url` вида `/chat/<id>?call=<callId>`) сервер сейчас шлёт
+      // ВСЕМ устройствам человека, включая уже умеющие нативный звонок
+      // (известное ограничение сервера, см. `docs/mobile-calls-native.md`
+      // §12 — правка не в этом клиенте). Здесь, в переднем плане, у нас есть
+      // шанс не задублировать: то же самое человек уже видит на экране
+      // звонка/во вкладке «Звонки» через `call-provider.tsx`.
+      if (isCallRelatedPushUrl(pushUrlOf({ request: { content: { data } } }))) return;
       await Notifications.scheduleNotificationAsync({
         content: {
           title: notification.title ?? 'VedaMatch',
           body: notification.body ?? '',
           data: data ?? {},
         },
-        trigger: null,
+        // Без канала уведомление уходит на служебный
+        // `expo_notifications_fallback_notification_channel` вместо
+        // `messages` — сам этот факт и вскрыла живая проверка.
+        trigger: { channelId: CHANNEL_ID },
       });
     });
   }, []);

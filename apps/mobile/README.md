@@ -155,6 +155,14 @@ self-managed `ConnectionService`; фоновый пуш для звонка по
 сотовый звонок во время разговора VedaMatch корректно завершает его.
 Подробности и решения — `docs/mobile-calls-native.md`, §12.
 
+Первая живая проверка (Samsung Galaxy A51, Android 13) нашла и починила два
+`SecurityException` от Telecom на этой прошивке (`isInCall`/`getPhoneAccount`
+требовали `READ_PHONE_STATE`/`READ_PHONE_NUMBERS`, которые в манифест
+сознательно не добавлены) и лишнее уведомление о пропущенном звонке не на
+канале `calls` — источник которого оказался на сервере (`chat.call-missed`
+не различает `nativeCalls`, правка вне этого worktree). Подробности —
+`docs/mobile-calls-native.md`, §12.14.
+
 Служебный экран «Проверка связи» (замер relay STUN/TURN на текущей сети)
 скрыт: долгое нажатие на заголовок вкладки «Звонки» открывает
 `/calls-probe`. Это инструмент команды, не часть продукта — запускать с

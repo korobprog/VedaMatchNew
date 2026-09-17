@@ -6,6 +6,7 @@ import android.telecom.ConnectionService
 import android.telecom.DisconnectCause
 import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
+import android.util.Log
 
 /**
  * Self-managed `ConnectionService` (VED-221/222, docs/mobile-calls-native.md
@@ -16,6 +17,9 @@ import android.telecom.TelecomManager
  * `Connection.onShowIncomingCallUi`).
  */
 class VedamatchConnectionService : ConnectionService() {
+  companion object {
+    private const val TAG = "VedamatchCalls"
+  }
 
   private fun buildConnection(callId: String): VedamatchConnection =
     VedamatchConnection(
@@ -30,6 +34,7 @@ class VedamatchConnectionService : ConnectionService() {
     request: ConnectionRequest,
   ): Connection {
     val callId = request.extras?.getString(PendingCallStore.EXTRA_CALL_ID) ?: ""
+    Log.i(TAG, "onCreateIncomingConnection callId=$callId")
     val connection = buildConnection(callId)
     connection.setRinging()
     connection.connectionProperties = Connection.PROPERTY_SELF_MANAGED
@@ -41,17 +46,28 @@ class VedamatchConnectionService : ConnectionService() {
     return connection
   }
 
+  /**
+   * Системный отказ «занято» (VED-222, п.7 — правка по факту живой проверки):
+   * Telecom сам решил, что этому self-managed запросу отказано — типично
+   * реальный конкурирующий звонок (сотовый или другое self-managed
+   * приложение), которого наша JS-проверка ДО показа (`call-busy-decision.ts`,
+   * `AudioManager.mode` в `VedamatchCallsModule.callConflictState`) могла не
+   * поймать: `AudioManager.MODE_IN_CALL` выставляется телефонией не мгновенно,
+   * гонка возможна. Раньше это решалось молча («JS всё равно узнает по
+   * таймауту `DISCONNECT_GRACE_MS`») — теперь явно отклоняем звонок на
+   * сервере сразу тем же headless-путём, что кнопка «Отклонить» из шторки
+   * (`DeclineHeadlessTaskService`, тот же контракт токенов
+   * `background-call-action.ts`), а не ждём таймер: `callId` берётся из тех
+   * же `extras`, что и `onCreateIncomingConnection` — Telecom передаёт их в
+   * оба колбэка одинаково.
+   */
   override fun onCreateIncomingConnectionFailed(
     connectionManagerPhoneAccount: PhoneAccountHandle?,
     request: ConnectionRequest,
   ) {
-    // Telecom отказал (например, уже есть звонок на устройстве в другом
-    // self-managed приложении, конфликт self-managed/managed) — молча:
-    // JS всё равно узнает, что дозвон не идёт, по таймауту/`call.ended`.
-    // «Занято» при активном сотовом на НАШЕЙ стороне решается раньше, в JS
-    // (`call-busy-decision.ts`, `native-call-bridge.ts`: `showIncomingCall`
-    // вообще не зовётся, если устройство уже занято) — до этой точки такой
-    // случай не доходит.
+    val callId = request.extras?.getString(PendingCallStore.EXTRA_CALL_ID)
+    Log.i(TAG, "onCreateIncomingConnectionFailed callId=$callId")
+    if (!callId.isNullOrEmpty()) DeclineHeadlessTaskService.start(applicationContext, callId)
   }
 
   override fun onCreateOutgoingConnection(
