@@ -12,6 +12,7 @@ function setup() {
       upsert: jest.fn().mockResolvedValue({}),
       deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
       findFirst: jest.fn().mockResolvedValue(null),
+      findUnique: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
     },
   };
@@ -51,6 +52,45 @@ describe('TelegramNotificationsService.setConnected', () => {
     const { service, prisma } = setup();
     await service.setConnected('u1', '777', false);
     expect(prisma.notificationDevice.upsert).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Раунд оценки вехи 4, п.7: обработчик `auth.telegram.connected` не должен
+   * молча отнимать устройство у другого аккаунта без предшествующего
+   * `disconnect()`. `auth` гарантирует, что это событие шлётся только для
+   * фактического текущего владельца идентичности (см. комментарий в
+   * сервисе) — здесь проверяется наблюдаемое поведение на случай нарушения
+   * этой гарантии: не падает, устройство переезжает, но пишется
+   * предупреждение, которое можно найти в логах.
+   */
+  it('токен уже принадлежит другому пользователю — переносит устройство и предупреждает в логе', async () => {
+    const { service, prisma } = setup();
+    prisma.notificationDevice.findUnique.mockResolvedValue({
+      userId: 'govinda',
+    });
+    const warn = jest.spyOn(service['logger'], 'warn').mockImplementation();
+
+    await service.setConnected('radha', '770402', true);
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('770402'));
+    expect(prisma.notificationDevice.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { token: '770402' },
+        create: expect.objectContaining({ userId: 'radha' }),
+      }),
+    );
+  });
+
+  it('токен свободен или уже принадлежит тому же пользователю — без предупреждения', async () => {
+    const { service, prisma } = setup();
+    const warn = jest.spyOn(service['logger'], 'warn').mockImplementation();
+
+    await service.setConnected('radha', '770402', true);
+    expect(warn).not.toHaveBeenCalled();
+
+    prisma.notificationDevice.findUnique.mockResolvedValue({ userId: 'radha' });
+    await service.setConnected('radha', '770402', true);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 

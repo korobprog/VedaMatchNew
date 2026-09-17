@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { TelegramNotificationStatusResponse } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from './notifications.service';
@@ -24,16 +24,36 @@ export interface TelegramDeviceRow {
  */
 @Injectable()
 export class TelegramNotificationsService {
+  private readonly logger = new Logger(TelegramNotificationsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
   ) {}
 
   /**
-   * Реакция на `auth.telegram.connected`. `canWrite: false` — вход или
-   * привязка состоялись, но бот писать не может: устройство не заводим
-   * (заводить нечего) и существующее не трогаем — расхождение `canWrite`
-   * между входами не повод внезапно замолчать для уже разрешившего.
+   * Реакция на `auth.telegram.connected` (и на явное `enable()`, см. ниже).
+   * `canWrite: false` — вход или привязка состоялись, но бот писать не
+   * может: устройство не заводим (заводить нечего) и существующее не
+   * трогаем — расхождение `canWrite` между входами не повод внезапно
+   * замолчать для уже разрешившего.
+   *
+   * Почему `upsert` по глобально уникальному `token` здесь безопасен, хотя
+   * формально может переписать чужой `userId`: `auth` гарантирует не больше
+   * одного владельца Telegram-id одновременно
+   * (`IdentityService.link`/`resolve`, `provider_externalId` уникален), а
+   * `AUTH_TELEGRAM_CONNECTED_EVENT` шлётся только для фактического текущего
+   * владельца идентичности — увести устройство у ещё привязанного человека
+   * этим путём невозможно (раунд оценки вехи 4, п.7: угон отсюда не
+   * воспроизвёлся — воспроизвёлся через `POST .../enable` без проверки
+   * владения, закрыто отдельно в `verifyForUser`). Сменить владельца токен
+   * может только если прежний уже отвязал Telegram (его `disconnect()` уже
+   * удалил это устройство до того, как id снова стало можно привязать) — в
+   * таком случае `existing` ниже не найдётся вовсе. Если `existing` всё же
+   * указывает на ДРУГОГО пользователя — это нарушение инварианта на стороне
+   * `auth`, а не штатный сценарий: не бросаем (человек не должен молча
+   * остаться без уведомлений из-за чужой ошибки), но логируем предупреждение
+   * — есть что расследовать.
    */
   async setConnected(
     userId: string,
@@ -41,6 +61,15 @@ export class TelegramNotificationsService {
     canWrite: boolean,
   ): Promise<void> {
     if (!canWrite) return;
+    const existing = await this.prisma.notificationDevice.findUnique({
+      where: { token: telegramUserId },
+      select: { userId: true },
+    });
+    if (existing && existing.userId !== userId) {
+      this.logger.warn(
+        `Устройство Telegram ${telegramUserId} переходит от ${existing.userId} к ${userId} без события отвязки — проверьте auth`,
+      );
+    }
     const data = {
       userId,
       provider: TELEGRAM_DEVICE_PROVIDER,

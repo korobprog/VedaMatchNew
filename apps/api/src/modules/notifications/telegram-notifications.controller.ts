@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   ForbiddenException,
   Get,
@@ -60,18 +61,35 @@ export class TelegramNotificationsController {
    * После `Telegram.WebApp.requestWriteAccess()` в мини-приложении: та же
    * подпись `initData`, что и у входа/привязки, только тут она подтверждает
    * не «кто пришёл», а «дайте боту написать этому уже вошедшему человеку».
+   *
+   * Подписи одной лишь подлинности недостаточно: `initData` подтверждает
+   * только то, что человек внутри Telegram-клиента с каким-то реальным
+   * chat_id, но НЕ то, что этот чат принадлежит текущему аккаунту портала —
+   * подпись Говинды остаётся подлинной, даже если её пришлёт Радха. Раунд
+   * оценки вехи 4 (живой стенд, п.7) воспроизвёл именно это: без проверки
+   * владения устройство 770402 переезжало на чужой аккаунт. Поэтому здесь —
+   * `verifyForUser`, а не `verify`: она же сверяет `UserIdentity` в `auth`,
+   * не отдавая её наружу.
    */
   @UseGuards(AuthGuard)
   @Post('enable')
-  enable(
+  async enable(
     @CurrentUser() user: AccessTokenPayload,
     @Body() body: EnableTelegramNotificationsRequest,
   ): Promise<TelegramNotificationStatusResponse> {
-    const verified = this.verifier.verify(body?.initData);
+    const verified = await this.verifier.verifyForUser(
+      body?.initData,
+      user.sub,
+    );
     if (!verified.ok) {
       if (verified.reason === 'not-configured') {
         throw new ServiceUnavailableException(
           'Уведомления через Telegram не настроены',
+        );
+      }
+      if (verified.reason === 'not-linked') {
+        throw new ConflictException(
+          'Сначала привяжите этот Telegram к аккаунту',
         );
       }
       throw new UnauthorizedException('Telegram не подтвердил разрешение');
