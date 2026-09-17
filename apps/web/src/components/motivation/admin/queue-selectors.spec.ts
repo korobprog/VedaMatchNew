@@ -5,6 +5,7 @@ import type {
 } from "@vedamatch/shared";
 import {
   countQueue,
+  filterByQuery,
   selectImagePosts,
   selectPublishedPosts,
   selectSetAsidePosts,
@@ -82,5 +83,63 @@ describe("queue selectors", () => {
   it("counts only what is actually waiting for the admin", () => {
     // Пять постов всего, но опубликованный и отклонённый ничего не ждут.
     expect(countQueue(posts)).toBe(3);
+  });
+});
+
+describe("filterByQuery (VED-200)", () => {
+  function candidate(
+    over: Partial<MotivationAdminCandidateDto>,
+  ): MotivationAdminCandidateDto {
+    return {
+      id: "p",
+      title: "",
+      text: "",
+      attributionSpeaker: null,
+      categoryTitle: "",
+      ...over,
+    } as MotivationAdminCandidateDto;
+  }
+
+  const gita = candidate({
+    id: "gita",
+    title: "Душа не умирает",
+    text: "Душа не умирает\n\nПояснение к стиху",
+    attributionSpeaker: "Прабхупада",
+    categoryTitle: "Философия",
+  });
+  const seva = candidate({
+    id: "seva",
+    title: "Служение",
+    text: "Служение — вечная природа",
+    attributionSpeaker: "Госвами",
+    categoryTitle: "Служение",
+  });
+
+  it("пустой запрос возвращает список без изменений", () => {
+    expect(filterByQuery([gita, seva], "")).toEqual([gita, seva]);
+    expect(filterByQuery([gita, seva], "   ")).toEqual([gita, seva]);
+  });
+
+  it("находит совпадение по цитате", () => {
+    expect(filterByQuery([gita, seva], "не умирает")).toEqual([gita]);
+  });
+
+  it("находит совпадение по автору без учёта регистра", () => {
+    expect(filterByQuery([gita, seva], "госвами")).toEqual([seva]);
+    expect(filterByQuery([gita, seva], "ПРАБХУПАДА")).toEqual([gita]);
+  });
+
+  it("находит совпадение по названию рубрики", () => {
+    expect(filterByQuery([gita, seva], "философия")).toEqual([gita]);
+  });
+
+  it("без совпадений возвращает пустой список", () => {
+    expect(filterByQuery([gita, seva], "нет такого слова")).toEqual([]);
+  });
+
+  it("не роняется на посте без автора", () => {
+    const noSpeaker = candidate({ id: "no-speaker", title: "Просто текст" });
+    expect(filterByQuery([noSpeaker], "прабхупада")).toEqual([]);
+    expect(filterByQuery([noSpeaker], "просто")).toEqual([noSpeaker]);
   });
 });
