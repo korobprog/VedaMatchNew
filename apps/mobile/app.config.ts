@@ -220,6 +220,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       backgroundColor: '#FBF9FF',
     },
     experiments: { typedRoutes: true, reactCompiler: true },
-    extra: { variant },
+    // Отметка сборки — видна на экране входа (`src/config/build-stamp.ts`):
+    // по ней сразу понятно, открылась свежая сборка или кэш мини-приложения
+    // Telegram / установленного PWA. В CI короткий sha приходит переменной,
+    // как у versionName Android.
+    extra: {
+      variant,
+      build: {
+        builtAt: new Date().toISOString().slice(0, 16),
+        // Ключа нет вовсе, если sha не пришёл: `null` Expo сериализует в
+        // пустой объект, и метка получилась бы «сборка … · [object Object]».
+        ...(process.env.APP_VERSION_SHA
+          ? { commit: process.env.APP_VERSION_SHA.slice(0, 7) }
+          : {}),
+      },
+    },
   };
 };
