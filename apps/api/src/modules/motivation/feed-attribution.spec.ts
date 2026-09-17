@@ -4,6 +4,8 @@ import {
   attributionKey,
   buildAttributionOptions,
   matchingVariants,
+  splitWorkLocator,
+  workKey,
 } from './feed-attribution';
 
 describe('attributionKey', () => {
@@ -127,5 +129,63 @@ describe('buildAttributionOptions', () => {
     expect(
       buildAttributionOptions([{ value: 'Шрила  Прабхупада', count: 1 }]),
     ).toEqual([{ label: 'Шрила Прабхупада', count: 1 }]);
+  });
+});
+
+describe('splitWorkLocator (номер стиха записан в источник)', () => {
+  it.each([
+    ['Бхагавад-гита 2.11', 'Бхагавад-гита', '2.11'],
+    ['Бхагавад-гита БГ 2.23', 'Бхагавад-гита', '2.23'],
+    ['Шримад-Бхагаватам 1.2.12', 'Шримад-Бхагаватам', '1.2.12'],
+    ['Бхагавад-гита 2.42-43', 'Бхагавад-гита', '2.42-43'],
+    ['Бхагавад-гита, 6.1.', 'Бхагавад-гита', '6.1'],
+    ['Бхагавад-гита глава 2.14', 'Бхагавад-гита', '2.14'],
+  ])('%s → %s + %s', (value, work, locator) => {
+    expect(splitWorkLocator(value)).toEqual({ work, locator });
+  });
+
+  it.each(['Бхагавад-гита', 'Псалом 23', 'Шри Ишопанишад', '2.11', ''])(
+    '%s — без номера',
+    (value) => {
+      expect(splitWorkLocator(value).locator).toBeNull();
+    },
+  );
+
+  it('ключ источника не видит номер стиха', () => {
+    expect(workKey('Бхагавад-гита 2.11')).toBe(workKey('бхагавад-гита'));
+    expect(workKey('Бхагавад-гита БГ 2.23')).toBe(workKey('Бхагавад-гита'));
+    expect(workKey('Бхагавад-гита как она есть')).not.toBe(
+      workKey('Бхагавад-гита'),
+    );
+  });
+
+  it('фильтр по «Бхагавад-гита 2.11» ищет всю книгу', () => {
+    expect(attributionFilter('Бхагавад-гита 2.11', workKey)).toBe(
+      'бхагавад-гита',
+    );
+    expect(
+      matchingVariants(
+        ['Бхагавад-гита 2.11', 'Бхагавад-гита', 'Шри Ишопанишад'],
+        'бхагавад-гита',
+        workKey,
+      ),
+    ).toEqual(['Бхагавад-гита 2.11', 'Бхагавад-гита']);
+  });
+
+  it('список источников склеивает стихи одной книги', () => {
+    expect(
+      buildAttributionOptions(
+        [
+          { value: 'Бхагавад-гита 2.11', count: 1 },
+          { value: 'Бхагавад-гита 2.12', count: 1 },
+          { value: 'Бхагавад-гита БГ 2.23', count: 1 },
+          { value: 'Путь к совершенству.', count: 3 },
+        ],
+        (value) => splitWorkLocator(value).work,
+      ),
+    ).toEqual([
+      { label: 'Бхагавад-гита', count: 3 },
+      { label: 'Путь к совершенству.', count: 3 },
+    ]);
   });
 });

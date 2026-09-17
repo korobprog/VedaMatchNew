@@ -223,3 +223,32 @@ describe('orderTieredWithinSlots', () => {
     );
   });
 });
+
+describe('sortByLocator: номер стиха записан в источник', () => {
+  it('берёт номер из источника, если локатор пуст', () => {
+    const posts = [
+      {
+        id: 'a',
+        attributionLocator: null,
+        attributionWork: 'Бхагавад-гита 2.14',
+      },
+      {
+        id: 'b',
+        attributionLocator: null,
+        attributionWork: 'Бхагавад-гита 2.7',
+      },
+      { id: 'c', attributionLocator: '2.11', attributionWork: 'Бхагавад-гита' },
+      {
+        id: 'd',
+        attributionLocator: null,
+        attributionWork: 'Бхагавад-гита 6.1',
+      },
+    ];
+    expect(sortByLocator(posts).map((post) => post.id)).toEqual([
+      'b',
+      'c',
+      'a',
+      'd',
+    ]);
+  });
+});
