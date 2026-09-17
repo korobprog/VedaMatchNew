@@ -22,19 +22,14 @@ import {
  *
  * Отдельный компонент, а не ещё одна строка в меню категорий: категории —
  * оглавление редакции, а автор и источник — свойство самого афоризма, и
- * списки у них свои. Над кадром — одна маленькая кнопка; выбранное видно
- * чипами с крестиком, чтобы из отфильтрованной ленты выйти одним нажатием.
+ * списки у них свои. Кнопка-триггер — один значок в ряду вкладок (VED-252,
+ * между «Открытки» и «Избранное»): текст «Автор и источник» под неё в
+ * тесный ряд не помещался, а выбор виден и так — чипами ниже.
  *
  * Список грузится при открытии: он нужен одному из многих, а лента
  * открывается у всех.
  */
-export function FeedAttributionFilter({
-  state,
-  className = "",
-}: {
-  state: FeedFilterState;
-  className?: string;
-}) {
+export function FeedAttributionFilter({ state }: { state: FeedFilterState }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   // Закрытое окно возвращает фокус на кнопку — иначе клавиатура теряет место.
@@ -46,51 +41,68 @@ export function FeedAttributionFilter({
   // Избранное — одно на всех, фильтров у него нет, как и папок.
   if (state.tab === "saved") return null;
 
-  const chip =
-    "inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border px-2.5 text-xs font-medium backdrop-blur";
-  const valueChip = `${chip} max-w-[9rem] border-white bg-white text-[#0A0614] sm:max-w-[12rem]`;
+  const valueChip =
+    "inline-flex min-h-8 max-w-[9rem] items-center gap-1 rounded-full border border-white bg-white px-2.5 text-xs font-medium text-[#0A0614] backdrop-blur sm:max-w-[12rem]";
   return (
-    <div className={`flex flex-wrap items-center justify-center gap-1.5 ${className}`}>
+    <>
+      {/* Значок, без подписи и без своей подложки (VED-252): ряд вкладок
+          тесный, а вес — как у соседних текстовых пунктов, не пилюля.
+          Высота задана больше видимой иконки — это невидимая область
+          нажатия, горизонталь она не трогает (`w-8`), поэтому бюджет
+          ширины ряда считаем по нему, а не по size-10 кнопкам ←/меню. */}
       <button
         ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-label={active ? "Изменить фильтр по автору и источнику" : "Фильтр по автору и источнику"}
-        className={`${chip} border-white/25 bg-black/40 text-white hover:bg-black/60`}
+        className="relative flex h-10 w-8 shrink-0 items-center justify-center text-white/70 drop-shadow transition hover:text-white"
       >
         <FilterIcon />
-        {/* С выбранным фильтром кнопка — один значок: рядом два чипа, и на
-            телефоне в 375 точек строка иначе переносилась бы на кадр. */}
-        {!active && "Автор и источник"}
+        {/* Активный фильтр отмечен точкой — тем же приёмом, что активная
+            вкладка отмечена подчёркиванием, а не текстом на значке. */}
+        {active && (
+          <span aria-hidden="true" className="absolute right-1 top-1.5 size-1.5 rounded-full bg-magenta" />
+        )}
       </button>
-      {state.work && (
-        <Link
-          href={filterHref(state, { work: null })}
-          aria-label={`Убрать фильтр по источнику: ${state.work}`}
-          className={valueChip}
-        >
-          <span aria-hidden="true">📖</span>
-          <span className="truncate">{state.work}</span>
-          <span aria-hidden="true">✕</span>
-        </Link>
+      {/* Выбранное — чипами с крестиком строкой ниже: в самом ряду вкладок
+          им места нет, а прежний приём «чип убирает своё» остаётся. `w-full`
+          (не `basis-full` — в `flex-col` пустого состояния ленты «базис» это
+          высота, не ширина) переносит блок на новую строку в `Tabs()`, где
+          родитель `flex flex-wrap`, и остаётся обычной полноширинной строкой
+          там, где родитель `flex-col` (пустая лента). `order-last` держит
+          чипы после значка в обоих случаях. */}
+      {(state.work || state.speaker) && (
+        <span className="order-last flex w-full flex-wrap items-center justify-center gap-1.5 pt-1">
+          {state.work && (
+            <Link
+              href={filterHref(state, { work: null })}
+              aria-label={`Убрать фильтр по источнику: ${state.work}`}
+              className={valueChip}
+            >
+              <span aria-hidden="true">📖</span>
+              <span className="truncate">{state.work}</span>
+              <span aria-hidden="true">✕</span>
+            </Link>
+          )}
+          {state.speaker && (
+            <Link
+              href={filterHref(state, { speaker: null })}
+              aria-label={`Убрать фильтр по автору: ${state.speaker}`}
+              className={valueChip}
+            >
+              <span aria-hidden="true">🪶</span>
+              <span className="truncate">{state.speaker}</span>
+              <span aria-hidden="true">✕</span>
+            </Link>
+          )}
+        </span>
       )}
-      {state.speaker && (
-        <Link
-          href={filterHref(state, { speaker: null })}
-          aria-label={`Убрать фильтр по автору: ${state.speaker}`}
-          className={valueChip}
-        >
-          <span aria-hidden="true">🪶</span>
-          <span className="truncate">{state.speaker}</span>
-          <span aria-hidden="true">✕</span>
-        </Link>
-      )}
-      {/* В портал: строка фильтра стоит над кадром со своим `z-index`, и
-          окно внутри неё оказывалось под нижним рядом кнопок ленты. */}
+      {/* В портал: значок стоит внутри ряда вкладок со своим `z-index`, и
+          окно внутри него оказывалось под нижним рядом кнопок ленты. */}
       {open &&
         createPortal(<FilterSheet state={state} onClose={close} />, document.body)}
-    </div>
+    </>
   );
 }
 

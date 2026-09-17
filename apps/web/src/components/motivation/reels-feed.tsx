@@ -446,7 +446,7 @@ export function ReelsFeed({
     return (
       <div className="relative flex h-full flex-col items-center justify-center gap-4 rounded-3xl bg-[#0A0614] p-8 text-center text-white">
         {/* Вкладки и в пустой ленте: из пустых «Открыток» иначе можно было
-            уйти только в «Для вас», а до «Избранного» — никак. */}
+            уйти только в «Ленту», а до «Избранного» — никак. */}
         <Tabs tab={tab} order={order} category={category} />
         <FeedAttributionFilter state={filterState} />
         {categoryNav()}
@@ -614,9 +614,9 @@ export function ReelsFeed({
           style={{ width: `${items.length ? ((activeIndex + 1) / items.length) * 100 : 0}%` }}
         />
       </div>
-      <Tabs tab={tab} order={order} category={category} />
-      {/* Фильтр по автору и источнику (VED-206) — строкой под вкладками. */}
-      <FeedAttributionFilter state={filterState} className="absolute inset-x-3 top-12 z-20" />
+      {/* Значок фильтра по автору и источнику (VED-206) — в самом ряду
+          вкладок (VED-252), а не отдельной строкой под ним. */}
+      <Tabs tab={tab} order={order} category={category} filterState={filterState} />
       {/* Звук выключен, пока его не попросили: иначе лента заговорит сама,
           стоит открыть страницу. Кнопка живёт над слайдами — как и ряд
           действий внизу, она одна на всю ленту. У немого ролика её нет вовсе:
@@ -767,10 +767,13 @@ function Tabs({
   tab,
   order,
   category,
+  filterState,
 }: {
   tab: ReelsTab;
   order?: "random";
   category?: string;
+  /** Значок фильтра встаёт между «Открытки» и «Избранное» (VED-252). */
+  filterState?: FeedFilterState;
 }) {
   const link = (key: ReelsTab | "mine", href: string, label: string) => (
     <Link
@@ -785,18 +788,27 @@ function Tabs({
     </Link>
   );
   return (
-    // Четыре вкладки на телефоне шире промежутка между кнопками «назад» и
-    // «меню»: при 14px и шаге 20 ряд занимал 29–346 точек из 375 и заходил
-    // под обе. Между кнопками и помельче — 245 точек, помещается и на 360.
+    // VED-252: кнопки ←/меню сдвинуты к краю и сузились до left-2/right-2 +
+    // size-10 (40px невидимой области нажатия) — их край теперь на 48px от
+    // края экрана (было 52px при left-3/size-10). Отступ ряда взят вплотную
+    // к этому краю: inset-x-[52px] оставляет 4px запаса. На 360px это даёт
+    // ряду 360-104=256px. Пять пунктов при gap-x-2 (4 промежутка · 8px=32px)
+    // и оценке ширины слов по ~7.5px/символ (13px, font-semibold): «Лента»
+    // ≈38, «Открытки»≈60, значок фильтра — фиксированная кнопка w-8=32,
+    // «Избранное»≈68, «Мои»≈23 — итого ≈221+32=253px, запас около 3px даже
+    // по грубой оценке. `flex-wrap` — не декорация, а страховка: если реальные
+    // шрифты шире оценки, пятый пункт уйдёт на вторую строку под рядом, а не
+    // наедет на кнопки ←/меню (они вне этого потока, абсолютны сами по себе).
     <nav
       aria-label="Вкладки ленты"
-      className="absolute inset-x-14 top-4 z-20 flex justify-center gap-3 sm:inset-x-0 sm:gap-5"
+      className="absolute inset-x-[52px] top-4 z-20 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 sm:inset-x-0 sm:gap-x-3"
     >
       {/* Две ленты разного стиля (VED-121): порядок и папка переезжают
           вместе с человеком — «Открытки» из папки «Пословицы» остаются
           пословицами. */}
-      {link("forYou", reelsHref({ order, category }), "Для вас")}
+      {link("forYou", reelsHref({ order, category }), "Лента")}
       {link("cards", reelsHref({ tab: "cards", order, category }), "Открытки")}
+      {filterState && <FeedAttributionFilter state={filterState} />}
       {link("saved", "/motivation?tab=saved", "Избранное")}
       {link("mine", "/motivation/my", "Мои")}
     </nav>

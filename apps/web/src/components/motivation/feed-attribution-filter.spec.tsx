@@ -11,6 +11,16 @@ describe("FeedAttributionFilter", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  // VED-252: значок встаёт в ряд вкладок — подписи «Автор и источник» нет
+  // ни в активном, ни в неактивном состоянии, только aria-label и точка.
+  it("без выбранного фильтра — только значок, подписи нет", () => {
+    render(<FeedAttributionFilter state={{ tab: "forYou" }} />);
+
+    const trigger = screen.getByRole("button", { name: "Фильтр по автору и источнику" });
+    expect(trigger).toHaveTextContent("");
+    expect(screen.queryByText("Автор и источник")).not.toBeInTheDocument();
+  });
+
   it("выбранное видно чипами, крестик убирает только своё", () => {
     render(
       <FeedAttributionFilter
@@ -20,7 +30,11 @@ describe("FeedAttributionFilter", () => {
     const work = screen.getByRole("link", { name: "Убрать фильтр по источнику: Бхагавад-гита" });
     const query = new URL(work.getAttribute("href")!, "https://x").searchParams;
     expect(Object.fromEntries(query)).toEqual({ tab: "cards", category: "vedy", speaker: "Кришна" });
-    expect(screen.getByRole("button", { name: "Изменить фильтр по автору и источнику" })).toBeTruthy();
+    const trigger = screen.getByRole("button", { name: "Изменить фильтр по автору и источнику" });
+    expect(trigger).toBeTruthy();
+    // Активный фильтр отмечен точкой на значке (VED-252) — тем же приёмом,
+    // что активная вкладка отмечена цветом, а не подписью на кнопке.
+    expect(trigger.querySelector(".bg-magenta")).toBeInTheDocument();
   });
 
   it("открывает список со счётчиками и отмечает выбранное", async () => {

@@ -31,12 +31,17 @@ export function ReelsChrome({
 
   return (
     <>
+      {/* VED-252: без кружка-подложки — кнопка часть фона кадра, читаемость
+          держит тот же drop-shadow, что у текста вкладок (Tabs() ниже).
+          Видимая иконка мельче (size-4), но кликабельная область — весь
+          size-10 (40×40) в невидимом hit-area, ширины ряда вкладок это не
+          трогает: кнопки стоят абсолютно, вне общего flex-потока. */}
       <Link
         href="/"
         aria-label="Назад на портал"
-        className="absolute left-3 top-3 z-50 flex size-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur transition hover:bg-black/60"
+        className="absolute left-2 top-2 z-50 flex size-10 items-center justify-center text-white drop-shadow transition hover:opacity-80"
       >
-        <ArrowLeft className="size-5" aria-hidden />
+        <ArrowLeft className="size-4" aria-hidden />
       </Link>
 
       <button
@@ -45,15 +50,15 @@ export function ReelsChrome({
         aria-expanded={open}
         aria-controls="reels-sections"
         aria-label={open ? "Закрыть разделы" : "Разделы Вдохновения"}
-        className="absolute right-3 top-3 z-50 flex size-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur transition hover:bg-black/60"
+        className="absolute right-2 top-2 z-50 flex size-10 items-center justify-center text-white drop-shadow transition hover:opacity-80"
       >
-        {open ? <X className="size-5" aria-hidden /> : <Menu className="size-5" aria-hidden />}
+        {open ? <X className="size-4" aria-hidden /> : <Menu className="size-4" aria-hidden />}
       </button>
 
       {open && (
         <div
           id="reels-sections"
-          className="absolute right-3 top-16 z-50 w-60 rounded-2xl border border-white/15 bg-black/80 p-3 backdrop-blur-lg"
+          className="absolute right-2 top-14 z-50 w-60 rounded-2xl border border-white/15 bg-black/80 p-3 backdrop-blur-lg"
         >
           <MotivationNav active="feed" isAdmin={isAdmin} compact />
 
