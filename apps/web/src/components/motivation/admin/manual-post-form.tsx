@@ -42,7 +42,9 @@ const extraLanguages: ReadonlyArray<{ value: MotivationLanguage; label: string }
   { value: "hi", label: "हिन्दी" },
 ];
 
-const emptyCopy = { title: "", explanation: "", storyText: "" };
+/* Заголовка нет (VED-199): читатель его не видит, а сервер соберёт его из
+   первых слов цитаты. */
+const emptyCopy = { explanation: "", storyText: "" };
 
 const emptyForm = {
   originalText: "",
@@ -85,7 +87,6 @@ export function ManualPostForm({
   const missing = [
     !form.originalText.trim() && "текст цитаты",
     !form.author.trim() && "автор",
-    !form.title.trim() && "заголовок",
     selected.length === 0 && "аудитория",
   ].filter((item): item is string => Boolean(item));
   const ready = missing.length === 0;
@@ -122,11 +123,12 @@ export function ManualPostForm({
     setError(undefined);
     setDone(false);
     try {
-      // Признак заполненного перевода — заголовок: пояснение необязательно.
+      // Признак заполненного перевода — пояснение: заголовка в форме нет, а
+      // без пояснения язык и так получит основной текст.
       const extras = Object.fromEntries(
         extraLanguages
           .map(({ value }) => [value, translations[value]] as const)
-          .filter(([, copy]) => copy.title.trim()),
+          .filter(([, copy]) => copy.explanation.trim()),
       );
       await apiRequest("/admin/motivation/manual-posts", "POST", {
         originalText: form.originalText.trim(),
@@ -139,7 +141,6 @@ export function ManualPostForm({
         contentDate: form.contentDate || undefined,
         category: category || undefined,
         copy: {
-          title: form.title.trim(),
           explanation: form.explanation.trim() || undefined,
           storyText: form.storyText.trim() || undefined,
         },
@@ -281,19 +282,9 @@ export function ManualPostForm({
             Нейросеть здесь не участвует — что напишете, то и увидят читатели.
           </p>
           <div className="mt-3 space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className={labelClass}>
-                <span>Заголовок</span>
-                <input
-                  type="text"
-                  aria-label="Заголовок"
-                  value={form.title}
-                  onChange={update("title")}
-                  className={`mt-2 ${fieldClass}`}
-                />
-              </label>
-              {/* Категория стоит рядом с заголовком, а не в «Кому и когда»:
-                  внизу формы её не было видно без прокрутки. */}
+            {/* Категория стоит первой в «Вашем тексте», а не в «Кому и
+                когда»: внизу формы её не было видно без прокрутки. */}
+            <div className="sm:max-w-[calc(50%-0.5rem)]">
               <CategorySelect
                 categories={categories}
                 value={category}
@@ -354,19 +345,6 @@ export function ManualPostForm({
                 {extraLanguages.map(({ value, label }) => (
                   <div key={value} className="space-y-2">
                     <p className="text-sm font-semibold text-text-1">{label}</p>
-                    <input
-                      type="text"
-                      aria-label={`Заголовок · ${label}`}
-                      value={translations[value].title}
-                      placeholder="Заголовок"
-                      onChange={(event) =>
-                        setTranslations((current) => ({
-                          ...current,
-                          [value]: { ...current[value], title: event.target.value },
-                        }))
-                      }
-                      className={fieldClass}
-                    />
                     <textarea
                       aria-label={`Пояснение · ${label}`}
                       value={translations[value].explanation}
@@ -506,10 +484,7 @@ export function ManualPostForm({
         <div className="mt-3 flex aspect-[4/3] items-center justify-center rounded-xl bg-bg-1 text-sm text-text-2">
           Здесь будет изображение
         </div>
-        <h3 className="mt-4 text-xl font-bold text-text-0">
-          {form.title || "Заголовок"}
-        </h3>
-        <p className="mt-3 whitespace-pre-line leading-7 text-text-1">
+        <p className="mt-4 whitespace-pre-line leading-7 text-text-1">
           {form.originalText || "Текст цитаты"}
         </p>
         {form.explanation && (

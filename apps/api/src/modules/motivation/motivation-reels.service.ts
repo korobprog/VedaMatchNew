@@ -999,6 +999,7 @@ export class MotivationReelsService {
         title: string;
         text: string;
         storyText: string;
+        imageText?: string | null;
       }[];
       favorites: unknown[];
       views: unknown[];
@@ -1075,6 +1076,7 @@ export class MotivationReelsService {
         title: translation?.title ?? '',
         text: translation?.text ?? '',
         storyText: translation?.storyText ?? '',
+        imageText: translation?.imageText ?? '',
         attributionKind: post.attributionKind,
         attributionSpeaker: post.attributionSpeaker,
         attributionWork: post.attributionWork,

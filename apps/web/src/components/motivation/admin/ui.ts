@@ -19,5 +19,14 @@ export const primaryButton = `${buttonBase} bg-gold text-bg-0 hover:brightness-1
 export const secondaryButton = `${buttonBase} border border-glass-brd text-text-1 hover:border-cyan/40 hover:text-text-0`;
 export const dangerButton = `${buttonBase} border border-red-400/40 text-red-500 hover:bg-red-500/10`;
 
+/**
+ * Квадратная кнопка-значок (VED-199): 44×44 — меньше палец не попадает.
+ * Подписи у неё нет, поэтому `aria-label` и `title` обязательны у каждой.
+ */
+const iconButtonBase =
+  "inline-flex size-11 shrink-0 items-center justify-center rounded-xl border transition-colors disabled:opacity-50";
+export const iconButton = `${iconButtonBase} border-glass-brd text-text-1 hover:border-cyan/40 hover:text-text-0 aria-expanded:border-magenta aria-expanded:text-text-0`;
+export const iconDangerButton = `${iconButtonBase} border-red-400/40 text-red-500 hover:bg-red-500/10 aria-expanded:bg-red-500/10`;
+
 export const badgeClass =
   "inline-flex items-center rounded-full border border-glass-brd px-2.5 py-1 text-xs font-medium text-text-1";

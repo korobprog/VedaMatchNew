@@ -22,11 +22,11 @@ import type {
 import { apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
 import {
-  LONG_IMAGE_QUOTE_CHARS,
   isLongQuote,
   isTextClamped,
   splitQuoteAndExplanation,
 } from "./quote-text";
+import { needsFullQuote, pictureTextOf } from "./picture-text";
 import {
   BACKGROUND_VOLUME,
   hasBackgroundAudio,
@@ -815,6 +815,9 @@ function ReelSlide({
   const explanation = added?.text ?? stored;
   const explanationAuthor = added?.author ?? post.explanationAuthor;
   const kind = mediaKindOf(post);
+  /* Надпись на картинке редакция правит отдельно от полного текста (VED-241):
+     пусто — на картинке та же цитата, что и в «Читать полностью». */
+  const pictureText = pictureTextOf(post.imageText, quote);
   /* Готовая открытка редакции (VED-87): цитата уже напечатана на картинке.
      Второй экземпляр поверх закрыл бы первый, а обрезка кадра под экран
      срезала бы края надписи. */
@@ -901,7 +904,7 @@ function ReelSlide({
       alive = false;
       observer.disconnect();
     };
-  }, [kind, printed, quote]);
+  }, [kind, printed, pictureText]);
 
   // Колбэк в ref: родитель пересоздаёт его каждый рендер, а наблюдатель
   // должен жить один на слайд, иначе при каждом лайке он переподписывается.
@@ -1094,7 +1097,7 @@ function ReelSlide({
             ужаты — подпись идёт сплошным текстом, «Пояснение» переехало в
             ряд ссылок, — и освободившееся место отдано самой цитате. */}
         {kind === "image" && !printed && (
-          <p ref={quoteRef} className="line-clamp-6 font-display text-[17px] font-medium leading-snug drop-shadow-md">{quote}</p>
+          <p ref={quoteRef} className="line-clamp-6 font-display text-[17px] font-medium leading-snug drop-shadow-md">{pictureText}</p>
         )}
         {/* Подпись одной строкой: кто принёс и откуда взято.
             Раньше это были три этажа — источник, ряд кнопок и отдельная
@@ -1154,9 +1157,15 @@ function ReelSlide({
           {/* Замер добавляет случаи к прикидке, а не заменяет её: цитата длиннее
               границы обрезана при любой раскладке, и кнопка нужна ей даже там,
               где замерить не вышло. У фото граница своя — под шесть строк. */}
+          {/* У фото надпись может быть поправлена отдельно от полного
+              текста (VED-241) — тогда кнопка нужна всегда: окно покажет
+              цитату целиком, а не то, что стоит на картинке. */}
           {!printed &&
-            (isLongQuote(quote, kind === "image" ? LONG_IMAGE_QUOTE_CHARS : undefined) ||
-              quoteClamped) && <FullQuoteToggle quote={quote} sourceParts={sourceParts} />}
+            (kind === "image"
+              ? needsFullQuote({ pictureText, quote, clamped: quoteClamped })
+              : isLongQuote(quote) || quoteClamped) && (
+              <FullQuoteToggle quote={quote} sourceParts={sourceParts} />
+            )}
           {/* Комментарий — слова комментатора о стихе, и живут они в
               Библиотеке. Своей копии не заводим: она разошлась бы с
               оригиналом на первой же правке книги. */}

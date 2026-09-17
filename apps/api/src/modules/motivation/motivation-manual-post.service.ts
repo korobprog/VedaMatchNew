@@ -15,9 +15,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { isAdmin } from './is-admin';
 import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationModerationService } from './motivation-moderation.service';
+import { pictureTitle } from './picture-post';
 import { quoteFingerprint } from './quote-normalizer';
 
 const LANGUAGES: readonly MotivationLanguage[] = ['ru', 'en', 'hi'];
+
+/** Разобранный текст: после `copy()` каждое поле — строка, пусть и пустая. */
+type ManualCopy = Required<MotivationManualCopy>;
 const allowedProfiles = new Set<string>(Object.values(MotivationProfileType));
 const allowedTracks = new Set<string>(Object.values(MotivationAudienceTrack));
 
@@ -52,8 +56,11 @@ export class MotivationManualPostService {
       throw new BadRequestException('Quote text and author are required');
 
     const copy = this.copy(input.copy, 'copy');
-    // Пояснение необязательно: иногда цитата говорит сама за себя.
-    if (!copy.title) throw new BadRequestException('Title is required');
+    /* Заголовка в форме больше нет (VED-199): редакции он только занимал
+       место. Нужен он по-прежнему — админка, поиск, подпись для
+       скринридера, запасной текст для «Поделиться», — поэтому собираем его
+       из первых слов цитаты, как у готовых картинок. Присланный — берём. */
+    if (!copy.title) copy.title = pictureTitle(originalText, '');
 
     const profileTypes = this.profileTypes(input.profileTypes);
     const audienceTrack = this.audienceTrack(input.audienceTrack);
@@ -183,19 +190,22 @@ export class MotivationManualPostService {
    * `dto()` при отсутствующем переводе отдаёт пустые строки, и читатель с
    * другим языком интерфейса увидел бы пустую карточку.
    *
-   * Признак заполненности — заголовок: пояснение необязательно и у основного
-   * текста.
+   * Признак заполненности — заголовок или пояснение: заголовка в форме больше
+   * нет (VED-199), и без него перевод получает заголовок основного текста.
    */
   private perLanguageCopy(
-    primary: MotivationManualCopy,
+    primary: ManualCopy,
     translations: MotivationManualPostInput['translations'],
-  ): Record<MotivationLanguage, MotivationManualCopy> {
-    const result = {} as Record<MotivationLanguage, MotivationManualCopy>;
+  ): Record<MotivationLanguage, ManualCopy> {
+    const result = {} as Record<MotivationLanguage, ManualCopy>;
     for (const language of LANGUAGES) {
       const provided = translations?.[language]
         ? this.copy(translations[language], language)
         : undefined;
-      result[language] = provided?.title ? provided : primary;
+      result[language] =
+        provided && (provided.title || provided.explanation)
+          ? { ...provided, title: provided.title || primary.title }
+          : primary;
     }
     return result;
   }
@@ -203,7 +213,7 @@ export class MotivationManualPostService {
   private copy(
     value: MotivationManualCopy | undefined,
     field: string,
-  ): MotivationManualCopy {
+  ): ManualCopy {
     if (!value || typeof value !== 'object')
       throw new BadRequestException(`Missing ${field}`);
     return {
