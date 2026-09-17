@@ -287,3 +287,65 @@ describe('AuthService: провайдер не настроен при вход�
     expect(res.redirect).not.toHaveBeenCalled();
   });
 });
+
+// Веб-версия приложения (ios.vedamatch.com): вход начат на поддомене, и после
+// колбэка человек должен вернуться туда же, а не на портал.
+describe('AuthService: возврат после входа на поддомен', () => {
+  type WithRedirect = {
+    ensureContactsProfile(userId: string): Promise<void>;
+    issueSessionAndRedirect(params: Record<string, unknown>): Promise<void>;
+  };
+
+  function setup(webOrigins: string) {
+    const { service, prisma } = makeService({});
+    const extended = prisma as unknown as Record<string, unknown>;
+    extended.loginAudit = { create: jest.fn().mockResolvedValue({}) };
+    extended.user = { findUnique: jest.fn().mockResolvedValue(activeUser) };
+    const config = (service as unknown as { config: { get: jest.Mock } })
+      .config;
+    config.get.mockImplementation((key: string, fallback?: string) =>
+      key === 'WEB_ORIGIN' ? webOrigins : fallback,
+    );
+    const subject = service as unknown as WithRedirect;
+    jest.spyOn(subject, 'ensureContactsProfile').mockResolvedValue();
+    const res = { redirect: jest.fn(), cookie: jest.fn() };
+    const req = {
+      headers: { host: 'api.vedamatch.com', 'user-agent': 'test' },
+      ip: '127.0.0.1',
+    };
+    return { subject, res, req };
+  }
+
+  const params = (returnOrigin: string | null) => ({
+    user: activeUser,
+    provider: 'google',
+    isNewAccount: false,
+    returnTo: '/chat/c1',
+    returnOrigin,
+    app: null,
+  });
+
+  it('разрешённый поддомен — туда, с тем же путём', async () => {
+    const { subject, res, req } = setup(
+      'https://vedamatch.com,https://ios.vedamatch.com',
+    );
+    await subject.issueSessionAndRedirect({
+      req,
+      res,
+      ...params('https://ios.vedamatch.com'),
+    });
+    expect(res.redirect).toHaveBeenCalledWith(
+      'https://ios.vedamatch.com/chat/c1',
+    );
+  });
+
+  it('без поддомена в WEB_ORIGIN — на портал контура', async () => {
+    const { subject, res, req } = setup('https://vedamatch.com');
+    await subject.issueSessionAndRedirect({
+      req,
+      res,
+      ...params('https://ios.vedamatch.com'),
+    });
+    expect(res.redirect).toHaveBeenCalledWith('https://vedamatch.com/chat/c1');
+  });
+});

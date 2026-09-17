@@ -84,3 +84,69 @@ export function resolveContour(input: ContourInput): Contour {
     cookieDomain: input.fallbackCookieDomain ? `.${portal}` : undefined,
   };
 }
+
+export type ReturnOriginInput = {
+  /** Что просил клиент при старте входа — ненадёжные данные. */
+  requested: unknown;
+  /** Значение `WEB_ORIGIN`. */
+  webOrigins: string | null | undefined;
+  /** Контур колбэка: его портал — ответ по умолчанию. */
+  contour: Contour;
+};
+
+/**
+ * Куда вернуть человека после входа, если он начал вход не на самом портале,
+ * а на его поддомене (`ios.vedamatch.com` — веб-версия приложения).
+ *
+ * Мало, чтобы адрес был в `WEB_ORIGIN`: этот список общий для контуров и
+ * CORS, а cookie сессии стоят только на домене контура. Поэтому адрес
+ * принимается, только если он дословно в списке, это голый origin той же
+ * схемы, и его хост — портал контура или его поддомен. Всё остальное —
+ * портал контура: открытый редирект после входа — подарок фишингу.
+ */
+export function resolveReturnOrigin(input: ReturnOriginInput): string {
+  const fallback = input.contour.webOrigin;
+  if (typeof input.requested !== 'string') return fallback;
+  const requested = input.requested.trim().replace(/\/+$/, '');
+  if (!requested || requested.length > 200) return fallback;
+
+  let url: URL;
+  let portal: URL;
+  try {
+    url = new URL(requested);
+    portal = new URL(fallback);
+  } catch {
+    return fallback;
+  }
+  // Только голый origin: путь, запрос и учётные данные в адресе — признак
+  // подделки, а не опечатки.
+  if (url.origin !== requested) return fallback;
+  if (url.protocol !== portal.protocol) return fallback;
+
+  const listed = (input.webOrigins ?? '')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/+$/, ''))
+    .includes(url.origin);
+  if (!listed) return fallback;
+
+  const host = url.hostname.toLowerCase();
+  const site = portal.hostname.toLowerCase();
+  if (host !== site && !host.endsWith(`.${site}`)) return fallback;
+  return url.origin;
+}
+
+/**
+ * Запрошенный адрес возврата — на хранение в OIDC-cookie до колбэка. Здесь
+ * только ограничение размера и мусора: настоящая проверка — на колбэке, в
+ * `resolveReturnOrigin`. `shortToken` сюда не годится: он пускает лишь
+ * `[\w-]`, и любой адрес превратился бы в `null`.
+ */
+export function returnOriginCandidate(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 200) return null;
+  // Origin — всегда видимый ASCII (IDN приходит в punycode): пробелы,
+  // переводы строк и прочее — мусор.
+  if (!/^[\x21-\x7e]+$/.test(trimmed)) return null;
+  return trimmed;
+}

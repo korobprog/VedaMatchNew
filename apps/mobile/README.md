@@ -1,4 +1,4 @@
-# VedaMatch для Android
+# VedaMatch для Android и веба
 
 Нативное приложение портала на Expo SDK 57 и React Native. В нижнем меню
 только связь: Чаты, Звонки, Люди, Общины. Остальные сервисы открываются из
@@ -32,6 +32,44 @@ access обновляется заранее через `POST /auth/app/refresh`
 `POST /auth/app/dev-login`, который на сервере включается только
 `DEV_AUTH_ENABLED=true` и в production не работает. Демо-аккаунты создаёт
 `pnpm --filter @vedamatch/api seed:dev`, пароль `vedamatch`.
+
+## Веб-версия (ios.vedamatch.com)
+
+Та же кодовая база собирается для браузера — это версия для iPhone без
+App Store (`docs/prds/iphone-app.prd.md`). Ходит только в
+`api.vedamatch.com`.
+
+```bash
+APP_CONTOUR=com pnpm --filter @vedamatch/mobile export:web   # → apps/mobile/dist-web
+pnpm --filter @vedamatch/mobile test:web-shims
+pnpm --filter @vedamatch/mobile generate:web-icons           # иконки из assets/images/icon.png
+```
+
+Чем веб отличается от Android:
+
+- **Нативные пакеты** без браузерной версии (`react-native-webrtc`,
+  `react-native-incall-manager`, `@react-native-firebase/messaging`)
+  подменяет `metro.config.js` файлами из `web-shims/`. Звонки идут на
+  встроенном WebRTC браузера.
+- **Платформенные файлы** `*.web.ts(x)` рядом с нативными: `session`,
+  `token-store`, `push-bridge`, `background-handler`.
+- **Сессия — httpOnly cookie портала**, токенов в JS нет
+  (`src/lib/auth/session.web.tsx`). Cookie стоят на `.vedamatch.com`, поэтому
+  вошедший на vedamatch.com вошёл и здесь. Вход — переход на
+  `/auth/google|yandex?returnOrigin=…`; сервер вернёт на поддомен, только если
+  он есть в `WEB_ORIGIN` и принадлежит тому же сайту (`resolveReturnOrigin`).
+- **Пушей FCM нет** — уведомления веб-версии пойдут через Telegram-бота.
+- `public/` — шаблон страницы, манифест, иконки и service worker (кэширует
+  только оболочку, ответы API — никогда).
+
+Раздача — сервис `app-web` в `portal/docker-compose.dokploy.yml`
+(`Dockerfile.web`, nginx). Домен `ios.vedamatch.com` → порт 80; поддомен
+обязан быть в `WEB_ORIGIN` API.
+
+Локально: API с `WEB_ORIGIN=…,http://localhost:8093`, сборка с
+`APP_API_ORIGIN=http://localhost:4000`, статика — `npx serve --single dist-web
+-l 8093`. Войти можно `POST /auth/dev-login` с `credentials: 'include'`
+(нужен `DEV_AUTH_ENABLED=true`): cookie на `localhost` видны на любом порту.
 
 ## Команды
 

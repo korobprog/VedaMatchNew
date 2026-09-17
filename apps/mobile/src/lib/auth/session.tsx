@@ -46,6 +46,11 @@ export interface Session {
   api: ApiClient;
   /** Адрес API варианта сборки: нужен потоку событий, который ходит мимо клиента. */
   apiOrigin: string;
+  /**
+   * Сессия в httpOnly cookie портала (веб-версия, `session.web.tsx`): токена
+   * в JS нет, и поток событий ходит с cookie, а не с заголовком.
+   */
+  cookieSession: boolean;
   /** Текущий access-токен для запросов вне ApiClient (поток событий). */
   getAccessToken(): string | null;
   /** Обновить access-токен — три различимых исхода, см. `SessionRefreshResult`. */
@@ -364,6 +369,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       user,
       api,
       apiOrigin,
+      cookieSession: false,
       getAccessToken,
       refreshAccessToken: refresh,
       signIn,

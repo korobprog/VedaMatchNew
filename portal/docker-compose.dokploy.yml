@@ -143,6 +143,23 @@ services:
     expose:
       - "3000"
 
+  # Веб-версия мобильного приложения — ios.vedamatch.com
+  # (docs/prds/iphone-app.prd.md). Статика nginx, от API не зависит: ходит в
+  # api.vedamatch.com из браузера. Домен в Dokploy: ios.vedamatch.com → 80.
+  # Адрес поддомена должен быть в WEB_ORIGIN API — иначе CORS и возврат
+  # после входа (resolveReturnOrigin) его не пустят.
+  app-web:
+    build:
+      context: ..
+      dockerfile: apps/mobile/Dockerfile.web
+      args:
+        APP_CONTOUR: com
+    restart: unless-stopped
+    networks:
+      - dokploy-network
+    expose:
+      - "80"
+
 networks:
   dokploy-network:
     external: true

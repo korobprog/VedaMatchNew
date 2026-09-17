@@ -32,7 +32,7 @@ const ChatStreamContext = createContext<ChatStreamApi | null>(null);
 const RECYCLE_MS = 10 * 60 * 1000;
 
 export function ChatStreamProvider({ children }: { children: ReactNode }) {
-  const { status, apiOrigin, getAccessToken, refreshAccessToken } = useSession();
+  const { status, apiOrigin, cookieSession, getAccessToken, refreshAccessToken } = useSession();
   const listeners = useRef(new Set<EventListener>());
   const resyncListeners = useRef(new Set<ResyncListener>());
   const apiRef = useRef<ChatStreamApi>({
@@ -78,9 +78,11 @@ export function ChatStreamProvider({ children }: { children: ReactNode }) {
       if (stopped) return;
       close();
       const token = getAccessToken();
-      if (!token) return;
+      // Веб-версия: токена в JS нет, поток идёт с cookie портала.
+      if (!token && !cookieSession) return;
       const next = new EventSource<'chat' | 'ping'>(`${apiOrigin}/chat/stream`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        withCredentials: cookieSession,
         pollingInterval: 0,
       });
       source = next;
@@ -129,7 +131,7 @@ export function ChatStreamProvider({ children }: { children: ReactNode }) {
       appState.remove();
       close();
     };
-  }, [status, apiOrigin, getAccessToken, refreshAccessToken]);
+  }, [status, apiOrigin, cookieSession, getAccessToken, refreshAccessToken]);
 
   return <ChatStreamContext.Provider value={apiRef.current}>{children}</ChatStreamContext.Provider>;
 }

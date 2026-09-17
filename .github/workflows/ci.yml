@@ -72,6 +72,16 @@ jobs:
       - name: Test mobile
         run: pnpm --filter @vedamatch/mobile test
 
+      # Веб-версия (ios.vedamatch.com) — та же кодовая база: сборка ловит
+      # нативный импорт, которому не нашлось веб-подмены.
+      - name: Build mobile web
+        env:
+          APP_CONTOUR: com
+          APP_CHANNEL: store
+        run: |
+          pnpm --filter @vedamatch/mobile test:web-shims
+          pnpm --filter @vedamatch/mobile export:web
+
   docker:
     name: docker build
     runs-on: ubuntu-latest
@@ -94,6 +104,14 @@ jobs:
           file: apps/web/Dockerfile
           push: false
           build-args: NEXT_PUBLIC_API_URL=https://api.example.invalid
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build app-web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/mobile/Dockerfile.web
+          push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
