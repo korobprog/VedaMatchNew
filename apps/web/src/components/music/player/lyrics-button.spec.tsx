@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MusicTrackLyricsDto } from "@vedamatch/shared";
@@ -54,6 +54,9 @@ describe("MusicLyricsButton", () => {
     await user.click(button);
 
     expect(button).toHaveAttribute("aria-expanded", "true");
+    // Имя кнопки меняется при открытии — тот же приём, что у соседней
+    // кнопки очереди в этом же файле (mini-player.tsx).
+    expect(button).toHaveAccessibleName("Закрыть текст");
     expect(
       screen.getByRole("dialog", { name: "Текст бхаджана" }),
     ).toBeInTheDocument();
@@ -71,7 +74,15 @@ describe("MusicLyricsButton", () => {
 
     const trigger = screen.getByRole("button", { name: "Текст бхаджана" });
     await user.click(trigger);
-    await user.click(screen.getByRole("button", { name: "Закрыть текст" }));
+    // Оба — и триггер в открытом состоянии, и своя кнопка панели — названы
+    // «Закрыть текст» (тот же приём, что у очереди: `queue-panel.tsx` и
+    // триггер очереди в `mini-player.tsx` тоже делят одно имя), поэтому
+    // кнопку панели ищем именно внутри диалога, а не по всему документу.
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Закрыть текст",
+      }),
+    );
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(trigger).toHaveAttribute("aria-expanded", "false");

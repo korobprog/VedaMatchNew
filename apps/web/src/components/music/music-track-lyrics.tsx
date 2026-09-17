@@ -14,8 +14,24 @@ import type { MusicTrackLyricsDto } from "@vedamatch/shared";
  *
  * `whitespace-pre-line`: перенос строк в бхаджане — это разметка, а не
  * оформление, и склеивать её в абзац нельзя.
+ *
+ * Компонент встречается на двух экранах разом: на странице записи и — при
+ * прослушивании этой же записи — во всплывающей панели плеера (плеер не
+ * размонтируется при переходе на страницу трека). `headingId` держит
+ * заголовок с уникальным `id` в каждом месте: одинаковый `id="music-lyrics"`
+ * в обоих экземплярах разом дал бы дублирующийся `id` в DOM и непредсказуемое
+ * поведение `aria-labelledby`. `compact` убирает верхний отступ, рассчитанный
+ * на страницу записи, — в узкой панели он лишний.
  */
-export function MusicTrackLyrics({ lyrics }: { lyrics: MusicTrackLyricsDto }) {
+export function MusicTrackLyrics({
+  lyrics,
+  headingId = "music-lyrics",
+  compact = false,
+}: {
+  lyrics: MusicTrackLyricsDto;
+  headingId?: string;
+  compact?: boolean;
+}) {
   const columns = [
     { key: "lyrics", label: "Текст", value: lyrics.lyrics },
     {
@@ -29,9 +45,9 @@ export function MusicTrackLyrics({ lyrics }: { lyrics: MusicTrackLyricsDto }) {
   if (columns.length === 0) return null;
 
   return (
-    <section className="mt-10" aria-labelledby="music-lyrics">
+    <section className={compact ? undefined : "mt-10"} aria-labelledby={headingId}>
       <h2
-        id="music-lyrics"
+        id={headingId}
         className="font-display text-base font-bold text-text-0"
       >
         Текст

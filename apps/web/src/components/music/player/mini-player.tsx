@@ -274,7 +274,12 @@ export function MiniPlayer() {
         // записи сжималось в ноль. Поэтому здесь `flex-wrap` и порядок
         // элементов задан явно, а с `sm` возвращается однострочная раскладка
         // из PortalWide.dc.html.
-        className="player-bar pointer-events-auto mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-3 py-2 sm:h-16 sm:flex-nowrap sm:gap-5 sm:px-[18px] sm:py-0"
+        //
+        // `relative` — контекст позиционирования для MusicLyricsPanel: она
+        // якорится от всей полосы, а не от узкой кнопки-триггера в середине
+        // ряда, иначе на 360-390px уезжает за левый край экрана (VED-248,
+        // круг 2).
+        className="player-bar pointer-events-auto relative mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-3 py-2 sm:h-16 sm:flex-nowrap sm:gap-5 sm:px-[18px] sm:py-0"
       >
         {/* Что играет */}
         <div className="order-1 flex min-w-0 flex-1 items-center gap-3 sm:order-none sm:w-40 sm:flex-none lg:w-56">

@@ -8,7 +8,19 @@ import { MusicTrackLyrics } from "@/components/music/music-track-lyrics";
  * Текст бхаджана текущей записи — всплывающая панель над полосой плеера, по
  * образцу `MusicQueuePanel`: тот же фокус на закрытии при открытии, тот же
  * `Escape`, та же рамка `player-bar`. Вёрстку текста не дублирует — внутри
- * тот же `MusicTrackLyrics`, что и на странице записи.
+ * тот же `MusicTrackLyrics`, что и на странице записи (со своим `headingId`,
+ * иначе в DOM задваивается `id="music-lyrics"`, когда слушаешь запись прямо
+ * на её собственной странице).
+ *
+ * Позиционируется НЕ от кнопки-триггера (она стоит в середине третьей
+ * строки полосы, см. `mini-player.tsx`), а от самой полосы плеера
+ * (`<section className="player-bar">` в `mini-player.tsx` — ближайший
+ * реально позиционированный предок благодаря `relative` на нём же): кнопка
+ * даёт лишь ~40px ширины контекста, и `right-0` от неё утаскивал панель на
+ * ~48px за левый край экрана на 360-390px (найдено ревью VED-248, круг 1).
+ * На мобильном — `inset-x-3`, симметричные отступы от краёв самой полосы
+ * (совпадает с шириной её внутреннего ряда, физически не может вылезти за
+ * экран); с `sm` — компактная ширина у правого края полосы, как и раньше.
  */
 export function MusicLyricsPanel({
   lyrics,
@@ -38,10 +50,13 @@ export function MusicLyricsPanel({
       role="dialog"
       aria-modal="true"
       aria-label="Текст бхаджана"
-      // Шире, чем у очереди: строки текста и перевода длиннее названий
-      // записей. Ширина всё равно по месту (`calc(100vw - 1.5rem)`), а не
-      // жёсткая: на 360-390px панель не должна уезжать за край экрана.
-      className="player-bar pointer-events-auto absolute bottom-full right-0 mb-2 max-h-[60vh] w-[min(26rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl p-4"
+      // Мобильный якорь — `inset-x-3` от полосы плеера (не от кнопки):
+      // 12px с обеих сторон её собственных краёв, а полоса сама никогда не
+      // выходит за экран (mini-player.tsx: `mx-auto max-w-5xl` внутри
+      // `fixed inset-x-0 px-3`) — значит и панель не может. С `sm` — обратно
+      // компактная, у правого края полосы, ширина по месту, но не шире
+      // 26rem (текст бхаджана длиннее названия записи, у очереди уже).
+      className="player-bar pointer-events-auto absolute inset-x-3 bottom-full mb-2 max-h-[60vh] overflow-y-auto rounded-2xl p-4 sm:inset-x-auto sm:right-3 sm:w-[min(26rem,calc(100vw-1.5rem))]"
     >
       <div className="flex items-center justify-end">
         <button
@@ -64,7 +79,7 @@ export function MusicLyricsPanel({
           </svg>
         </button>
       </div>
-      <MusicTrackLyrics lyrics={lyrics} />
+      <MusicTrackLyrics lyrics={lyrics} headingId="music-lyrics-player" compact />
     </div>
   );
 }

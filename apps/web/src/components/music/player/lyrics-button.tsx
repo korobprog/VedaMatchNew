@@ -44,15 +44,19 @@ export function MusicLyricsButton({
   };
 
   return (
-    <div className="relative shrink-0">
+    // Без `relative`-обёртки: панель якорится не от кнопки (она стоит в
+    // середине строки, ~40px контекста утаскивали панель за левый край
+    // экрана на 360-390px), а от самой полосы плеера — см. комментарий в
+    // lyrics-panel.tsx.
+    <>
       <button
         ref={buttonRef}
         type="button"
-        aria-label="Текст бхаджана"
+        aria-label={open ? "Закрыть текст" : "Текст бхаджана"}
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpenFor(open ? null : trackId)}
-        className={`${className} ${open ? "text-violet" : "text-text-2"}`}
+        className={`${className} shrink-0 ${open ? "text-violet" : "text-text-2"}`}
       >
         <svg
           viewBox="0 0 24 24"
@@ -69,6 +73,6 @@ export function MusicLyricsButton({
         </svg>
       </button>
       {open && lyrics && <MusicLyricsPanel lyrics={lyrics} onClose={close} />}
-    </div>
+    </>
   );
 }
