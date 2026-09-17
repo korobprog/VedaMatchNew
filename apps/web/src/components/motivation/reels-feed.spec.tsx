@@ -103,6 +103,41 @@ describe("ReelsFeed", () => {
     expect(within(feed).getByRole("region", { name: "Конец ленты" })).toBeInTheDocument();
   });
 
+  // VED-252: «Для вас» переименована в «Ленту», значок фильтра встал в тот
+  // же ряд между «Открытки» и «Избранное», подписи у него нет.
+  it("верхний ряд — пять пунктов, вкладка называется «Лента», у значка фильтра нет подписи", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="forYou" donation={null} />,
+    );
+
+    const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
+    const labels = [...tabs.children].map((node) => node.textContent);
+    expect(labels).toEqual(["Лента", "Открытки", "", "Избранное", "Мои"]);
+    expect(within(tabs).queryByText("Для вас")).not.toBeInTheDocument();
+    expect(within(tabs).queryByText("Автор и источник")).not.toBeInTheDocument();
+    expect(
+      within(tabs).getByRole("button", { name: "Фильтр по автору и источнику" }),
+    ).toBeInTheDocument();
+  });
+
+  // VED-252, круг 2: у избранного фильтров нет — значок должен молча
+  // исчезнуть из самого ряда `Tabs()` (не только у `FeedAttributionFilter`
+  // в изоляции), оставляя ровно четыре пункта без дыры на его месте.
+  it("на вкладке «Избранное» в ряду вкладок нет значка фильтра — четыре пункта", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="saved" donation={null} />,
+    );
+
+    const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
+    const labels = [...tabs.children].map((node) => node.textContent);
+    expect(labels).toEqual(["Лента", "Открытки", "Избранное", "Мои"]);
+    expect(
+      within(tabs).queryByRole("button", { name: /Фильтр по автору и источнику/ }),
+    ).not.toBeInTheDocument();
+  });
+
   // VED-135: на пустом тёмном экране разделителя — кнопки категорий вверху.
   it("ставит кнопки категорий на разделитель и в конец ленты", () => {
     fetchOk({});
@@ -493,7 +528,7 @@ describe("ReelsFeed", () => {
       "aria-current",
       "page",
     );
-    expect(within(tabs).getByRole("link", { name: "Для вас" })).toHaveAttribute(
+    expect(within(tabs).getByRole("link", { name: "Лента" })).toHaveAttribute(
       "href",
       "/motivation?category=poslovitsy&order=random",
     );
@@ -515,6 +550,48 @@ describe("ReelsFeed", () => {
       "href",
       "/motivation?tab=saved",
     );
+  });
+
+  // VED-252: пустое состояние держит Tabs()/FeedAttributionFilter в обычном
+  // потоке (flex-col), а не в абсолютном ряду — с активным фильтром чип
+  // должен просто показаться строкой, без поломки раскладки колонки.
+  it("на пустой ленте с активным фильтром чип виден и не ломает колонку", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{ items: [], nextCursor: null }}
+        tab="cards"
+        donation={null}
+        work="Бхагавад-гита"
+      />,
+    );
+
+    expect(screen.getByText("Открыток здесь пока нет")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Убрать фильтр по источнику: Бхагавад-гита" }),
+    ).toBeInTheDocument();
+  });
+
+  // VED-252, круг 4: значок фильтра здесь — не в ряду вкладок (тот
+  // `absolute`, из потока `flex-col` исключён), а отдельной строкой; без
+  // подписи и подложки он висел бы голой полупрозрачной иконкой, ничего не
+  // объясняя (баг, который не ловил ни один из первых трёх кругов).
+  // `variant="chip"` должен вернуть самостоятельную пилюлю с подписью,
+  // видимой, пока фильтр не выбран.
+  it("на пустой ленте без активного фильтра кнопка подписана, а не голый значок", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed initial={{ items: [], nextCursor: null }} tab="cards" donation={null} />,
+    );
+
+    expect(screen.getByText("Открыток здесь пока нет")).toBeInTheDocument();
+    const trigger = screen.getByRole("button", { name: "Фильтр по автору и источнику" });
+    expect(trigger).toHaveTextContent("Автор и источник");
+    // Самостоятельная пилюля — рамка и подложка, а не «inline»-значок без
+    // подписи (`w-7`), уместный только внутри ряда вкладок.
+    expect(trigger.className).toMatch(/rounded-full/);
+    expect(trigger.className).toMatch(/\bborder\b/);
+    expect(trigger.className).not.toMatch(/\bw-7\b/);
   });
 
   it.each([

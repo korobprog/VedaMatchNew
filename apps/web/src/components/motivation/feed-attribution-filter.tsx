@@ -22,18 +22,31 @@ import {
  *
  * Отдельный компонент, а не ещё одна строка в меню категорий: категории —
  * оглавление редакции, а автор и источник — свойство самого афоризма, и
- * списки у них свои. Над кадром — одна маленькая кнопка; выбранное видно
- * чипами с крестиком, чтобы из отфильтрованной ленты выйти одним нажатием.
+ * списки у них свои.
+ *
+ * Два варианта отображения (VED-252, круг 4):
+ * - `"inline"` (по умолчанию) — один значок в ряду вкладок (между
+ *   «Открытки» и «Избранное», `Tabs()`): текст «Автор и источник» под него
+ *   в тесный ряд не помещался, а выбор виден и так — чипами ниже, точкой
+ *   на значке при активном фильтре.
+ * - `"chip"` — самостоятельная пилюля с подписью (вид до VED-252): для
+ *   мест без ряда вкладок рядом, где значку без подписи не на что
+ *   опереться визуально — например, пустое состояние ленты
+ *   (`reels-feed.tsx`, ветки «Открыток здесь пока нет» и т.п.): круг 1
+ *   переписал компонент только под «inline»-контекст, и там же
+ *   отдельно вызванная кнопка стала голой полупрозрачной иконкой без
+ *   рамки и подписи, повисшей само по себе — баг, который поймал не тест,
+ *   а второй проход оценщика по коду.
  *
  * Список грузится при открытии: он нужен одному из многих, а лента
  * открывается у всех.
  */
 export function FeedAttributionFilter({
   state,
-  className = "",
+  variant = "inline",
 }: {
   state: FeedFilterState;
-  className?: string;
+  variant?: "inline" | "chip";
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -46,24 +59,11 @@ export function FeedAttributionFilter({
   // Избранное — одно на всех, фильтров у него нет, как и папок.
   if (state.tab === "saved") return null;
 
-  const chip =
-    "inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border px-2.5 text-xs font-medium backdrop-blur";
-  const valueChip = `${chip} max-w-[9rem] border-white bg-white text-[#0A0614] sm:max-w-[12rem]`;
-  return (
-    <div className={`flex flex-wrap items-center justify-center gap-1.5 ${className}`}>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-haspopup="dialog"
-        aria-label={active ? "Изменить фильтр по автору и источнику" : "Фильтр по автору и источнику"}
-        className={`${chip} border-white/25 bg-black/40 text-white hover:bg-black/60`}
-      >
-        <FilterIcon />
-        {/* С выбранным фильтром кнопка — один значок: рядом два чипа, и на
-            телефоне в 375 точек строка иначе переносилась бы на кадр. */}
-        {!active && "Автор и источник"}
-      </button>
+  const valueChip =
+    "inline-flex min-h-8 max-w-[9rem] items-center gap-1 rounded-full border border-white bg-white px-2.5 text-xs font-medium text-[#0A0614] backdrop-blur sm:max-w-[12rem]";
+  // Чипы выбранного — общие для обоих вариантов: крестик убирает только своё.
+  const valueChips = (
+    <>
       {state.work && (
         <Link
           href={filterHref(state, { work: null })}
@@ -86,11 +86,78 @@ export function FeedAttributionFilter({
           <span aria-hidden="true">✕</span>
         </Link>
       )}
-      {/* В портал: строка фильтра стоит над кадром со своим `z-index`, и
-          окно внутри неё оказывалось под нижним рядом кнопок ленты. */}
-      {open &&
-        createPortal(<FilterSheet state={state} onClose={close} />, document.body)}
-    </div>
+    </>
+  );
+  const dialog =
+    open && createPortal(<FilterSheet state={state} onClose={close} />, document.body);
+
+  if (variant === "chip") {
+    // Пилюля сама по себе объясняет, что это фильтр, даже без соседнего
+    // ряда вкладок: подпись видна, пока фильтр не выбран, а рамка и
+    // подложка отделяют кнопку от текста вокруг (вид, что был до VED-252).
+    return (
+      <div className="flex flex-wrap items-center justify-center gap-1.5">
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          aria-label={active ? "Изменить фильтр по автору и источнику" : "Фильтр по автору и источнику"}
+          className="inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border border-white/25 bg-black/40 px-2.5 text-xs font-medium text-white backdrop-blur transition hover:bg-black/60"
+        >
+          <FilterIcon />
+          {!active && "Автор и источник"}
+        </button>
+        {valueChips}
+        {dialog}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* Значок, без подписи и без своей подложки (VED-252): ряд вкладок
+          тесный, а вес — как у соседних текстовых пунктов, не пилюля.
+          Круг 3: в раскладке кнопка занимает только ширину иконки (`w-7`=
+          28px) — круг 2 держал в раскладке весь хит-бокс `w-10`=40px, и
+          при плотных промежутках «Избранное»/«Мои» читались слитно с
+          соседями. Хит-зона всё равно ≥40×40 — не сузили, а перенесли:
+          прозрачный `before:` раздвигает кликабельную область на ±6px по
+          горизонтали (`before:-inset-x-1.5`, 28+6+6=40) поверх соседних
+          промежутков, не отнимая их у текста вкладок (`before:absolute` —
+          вне потока, ширины `<nav>` не трогает). По вертикали `h-10`
+          (40px) — уже полная область без псевдоэлемента,
+          `before:inset-y-0` просто повторяет её. */}
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-label={active ? "Изменить фильтр по автору и источнику" : "Фильтр по автору и источнику"}
+        className="relative flex h-10 w-7 shrink-0 items-center justify-center text-white/70 drop-shadow transition before:absolute before:-inset-x-1.5 before:inset-y-0 before:content-[''] hover:text-white"
+      >
+        <FilterIcon />
+        {/* Активный фильтр отмечен точкой — тем же приёмом, что активная
+            вкладка отмечена подчёркиванием, а не текстом на значке. */}
+        {active && (
+          <span aria-hidden="true" className="absolute right-1 top-1.5 size-1.5 rounded-full bg-magenta" />
+        )}
+      </button>
+      {/* Выбранное — чипами с крестиком строкой ниже: в самом ряду вкладок
+          им места нет, а прежний приём «чип убирает своё» остаётся. `w-full`
+          переносит блок на новую строку в `Tabs()`, чей родитель — `flex
+          flex-wrap`: это единственное место, где рендерится `"inline"`
+          (см. JSDoc выше — вне ряда вкладок используется `"chip"`).
+          `order-last` держит чипы после значка. */}
+      {(state.work || state.speaker) && (
+        <span className="order-last flex w-full flex-wrap items-center justify-center gap-1.5 pt-1">
+          {valueChips}
+        </span>
+      )}
+      {/* В портал: значок стоит внутри ряда вкладок со своим `z-index`, и
+          окно внутри него оказывалось под нижним рядом кнопок ленты. */}
+      {dialog}
+    </>
   );
 }
 

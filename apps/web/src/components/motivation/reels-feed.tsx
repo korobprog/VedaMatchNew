@@ -446,9 +446,13 @@ export function ReelsFeed({
     return (
       <div className="relative flex h-full flex-col items-center justify-center gap-4 rounded-3xl bg-[#0A0614] p-8 text-center text-white">
         {/* Вкладки и в пустой ленте: из пустых «Открыток» иначе можно было
-            уйти только в «Для вас», а до «Избранного» — никак. */}
+            уйти только в «Ленту», а до «Избранного» — никак. */}
         <Tabs tab={tab} order={order} category={category} />
-        <FeedAttributionFilter state={filterState} />
+        {/* VED-252, круг 4: значок фильтра здесь — не в ряду вкладок (тот
+            `absolute`, из потока `flex-col` исключён), а отдельной строкой,
+            поэтому вариант `"chip"` — самостоятельная пилюля с подписью,
+            а не голый значок без опоры (см. JSDoc FeedAttributionFilter). */}
+        <FeedAttributionFilter state={filterState} variant="chip" />
         {categoryNav()}
         <p className="font-display text-lg">
           {tab === "saved"
@@ -616,9 +620,9 @@ export function ReelsFeed({
           style={{ width: `${items.length ? ((activeIndex + 1) / items.length) * 100 : 0}%` }}
         />
       </div>
-      <Tabs tab={tab} order={order} category={category} />
-      {/* Фильтр по автору и источнику (VED-206) — строкой под вкладками. */}
-      <FeedAttributionFilter state={filterState} className="absolute inset-x-3 top-12 z-20" />
+      {/* Значок фильтра по автору и источнику (VED-206) — в самом ряду
+          вкладок (VED-252), а не отдельной строкой под ним. */}
+      <Tabs tab={tab} order={order} category={category} filterState={filterState} />
       {/* Звук выключен, пока его не попросили: иначе лента заговорит сама,
           стоит открыть страницу. Кнопка живёт над слайдами — как и ряд
           действий внизу, она одна на всю ленту. У немого ролика её нет вовсе:
@@ -770,10 +774,13 @@ function Tabs({
   tab,
   order,
   category,
+  filterState,
 }: {
   tab: ReelsTab;
   order?: "random";
   category?: string;
+  /** Значок фильтра встаёт между «Открытки» и «Избранное» (VED-252). */
+  filterState?: FeedFilterState;
 }) {
   const link = (key: ReelsTab | "mine", href: string, label: string) => (
     <Link
@@ -788,18 +795,40 @@ function Tabs({
     </Link>
   );
   return (
-    // Четыре вкладки на телефоне шире промежутка между кнопками «назад» и
-    // «меню»: при 14px и шаге 20 ряд занимал 29–346 точек из 375 и заходил
-    // под обе. Между кнопками и помельче — 245 точек, помещается и на 360.
+    // VED-252, круг 3: `gap-x-1` (круг 2) визуально склеивал соседние пункты
+    // («Избранное Мои», «Лента Открытки» читались одной фразой) даже на
+    // 412px, где по краям оставался пустой запас — узкий промежуток был
+    // хуже, чем узкий ряд. Заменил на `gap-x-2` (8px) + `min-[390px]:gap-x-3`
+    // (12px, обычные телефоны шире 390px) — карточка просила «немного»
+    // уменьшить (было 12px), а не свести к минимуму.
+    //
+    // Бюджет по-прежнему считаю от живого замера в браузере (круг 2,
+    // 360×780, коммит 778cca75): коридор между кнопками ←/меню — 264px
+    // (x 48–312, `inset-x-12` берёт ряд вплотную к нему). Раскладочная
+    // ширина значка фильтра в круге 3 — не хит-зона, а видимая иконка с
+    // небольшим полем (`w-7`=28px в `FeedAttributionFilter`; хит-зона
+    // 40×40 держится отдельно, прозрачным `before:`, вне потока — см.
+    // комментарий там же). Ширина текстовых пунктов из замера круга 2 не
+    // изменилась: «Лента» 39, «Открытки» 62, «Избранное» 71, «Мои» 27 —
+    // сумма 199 + 28 (значок) = 227px.
+    //   360–389px (`gap-x-2`, 4×8=32): 227+32=259 ≤ 264, запас 5px.
+    //   390px+ (`min-[390px]:gap-x-3`, 4×12=48): при 390px доступно
+    //   390−96=294, 227+48=275 ≤ 294, запас 19px; при 412px доступно
+    //   412−96=316, запас 41px.
+    // `top-2` — тот же отступ, что у ←/меню (`ReelsChrome`, `left-2 top-2`),
+    // ряд `items-center` по высоте самого высокого пункта (значок, `h-10`) —
+    // так центр ряда совпадает с центром кнопок по краям.
+    // `flex-wrap` — страховка на экранах у́же 360px, не расчёт на неё здесь.
     <nav
       aria-label="Вкладки ленты"
-      className="absolute inset-x-14 top-4 z-20 flex justify-center gap-3 sm:inset-x-0 sm:gap-5"
+      className="absolute inset-x-12 top-2 z-20 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 min-[390px]:gap-x-3 sm:inset-x-0"
     >
       {/* Две ленты разного стиля (VED-121): порядок и папка переезжают
           вместе с человеком — «Открытки» из папки «Пословицы» остаются
           пословицами. */}
-      {link("forYou", reelsHref({ order, category }), "Для вас")}
+      {link("forYou", reelsHref({ order, category }), "Лента")}
       {link("cards", reelsHref({ tab: "cards", order, category }), "Открытки")}
+      {filterState && <FeedAttributionFilter state={filterState} />}
       {link("saved", "/motivation?tab=saved", "Избранное")}
       {link("mine", "/motivation/my", "Мои")}
     </nav>
