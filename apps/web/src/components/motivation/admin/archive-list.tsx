@@ -99,7 +99,7 @@ export function ArchiveList({
                 <DeletePostButton
                   postId={post.id}
                   title={post.title || post.slug}
-                  isPublished={post.status === "published"}
+                  status={post.status}
                   pendingAction={pending[post.id]}
                   run={run}
                 />

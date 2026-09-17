@@ -83,9 +83,10 @@ export function MotivationPublishedList({
     Record<string, string | null>
   >({});
   /**
-   * Карточки, которые только что скрыли этим же сеансом (VED-251): под ними
-   * на секунду появляется подсказка, что делать дальше. Ключ убирается сам
-   * при возврате в ленту — обратное действие в подсказке уже не нуждается.
+   * Карточки, которые скрыли этим же сеансом (VED-251): под ними висит
+   * подсказка, что делать дальше, — без таймера, до следующего действия над
+   * карточкой. Ключ убирается сам при возврате в ленту — обратное действие
+   * в подсказке уже не нуждается.
    */
   const [hideNotice, setHideNotice] = useState<Record<string, boolean>>({});
 
@@ -117,6 +118,10 @@ export function MotivationPublishedList({
         .some((field) => field!.toLocaleLowerCase("ru-RU").includes(needle)),
     );
   }, [posts, query]);
+
+  /** Для счётчика над списком: сколько из показанного реально в ленте. */
+  const hiddenCount = posts?.filter((post) => post.status === "hidden").length ?? 0;
+  const publishedCount = (posts?.length ?? 0) - hiddenCount;
 
   if (!posts) return <LoadFailure what="опубликованные вдохновения" />;
 
@@ -158,7 +163,13 @@ export function MotivationPublishedList({
       <p className="mt-3 text-sm text-text-2">
         {query.trim()
           ? `Найдено: ${found.length} из ${posts.length}`
-          : `Опубликовано: ${posts.length}`}
+          : // `posts` — это `published` и `hidden` вместе (VED-251), и
+            // «Опубликовано: N» врало бы, если часть N на деле скрыта из
+            // ленты. Хвост «· Скрыто: M» показываем только когда скрытые
+            // действительно есть — не загромождать подпись нулём.
+            hiddenCount > 0
+            ? `Опубликовано: ${publishedCount} · Скрыто: ${hiddenCount}`
+            : `Опубликовано: ${publishedCount}`}
       </p>
 
       {/* Пришли из ленты, а карточки здесь нет — значит, её успели удалить.
@@ -270,7 +281,7 @@ export function MotivationPublishedList({
                 <div className="mt-3">
                   <DeletePostConfirm
                     postId={post.id}
-                    isPublished={post.status === "published"}
+                    status={post.status}
                     pendingAction={pending[post.id]}
                     run={run}
                     onCancel={() => setDeleting(null)}
@@ -352,24 +363,48 @@ function PostActions({
   const hidden = post.status === "hidden";
   /* Открывает ленту прямо на этой карточке — тем же адресом, что и переход
      из «Студии». У карточки, ради которой пришли из ленты, та же ссылка
-     подписана возвращением: адрес совпадает с дорогой назад. */
-  const feedLabel = returning ? "Вернуться в ленту" : "Открыть в ленте";
+     подписана возвращением: адрес совпадает с дорогой назад.
+     У скрытой карточки ссылка вела бы в тупик: публичная лента ищет пост по
+     slug только среди `status: 'published'` (motivation.service.ts, метод
+     ленты) — для скрытого `?post=slug` молча ничего не подсветит. Вместо
+     ссылки — неактивная кнопка на том же месте сетки (та же клетка, тот же
+     размер), с подсказкой, что сначала нужно вернуть в ленту. */
+  const feedLabel = hidden
+    ? "Скрыто — сначала верните в ленту"
+    : returning
+      ? "Вернуться в ленту"
+      : "Открыть в ленте";
   const editLabel = editing ? "Не править" : "Править текст";
   const hideLabel = hidden ? "Вернуть в ленту" : "Скрыть из ленты";
   return (
     <div className="mt-3 grid w-fit grid-cols-3 gap-2">
-      <Link
-        href={`/motivation?post=${encodeURIComponent(post.slug)}`}
-        aria-label={feedLabel}
-        title={feedLabel}
-        className={iconButton}
-      >
-        {returning ? (
-          <ArrowLeft aria-hidden className="size-5" />
-        ) : (
+      {hidden ? (
+        <button
+          type="button"
+          // `disabled` вместо `aria-disabled`, чтобы клик по кнопке нигде
+          // не путался с настоящей навигацией — на скрытом посте у неё нет
+          // рабочего адреса вовсе.
+          disabled
+          aria-label={feedLabel}
+          title={feedLabel}
+          className={iconButton}
+        >
           <ExternalLink aria-hidden className="size-5" />
-        )}
-      </Link>
+        </button>
+      ) : (
+        <Link
+          href={`/motivation?post=${encodeURIComponent(post.slug)}`}
+          aria-label={feedLabel}
+          title={feedLabel}
+          className={iconButton}
+        >
+          {returning ? (
+            <ArrowLeft aria-hidden className="size-5" />
+          ) : (
+            <ExternalLink aria-hidden className="size-5" />
+          )}
+        </Link>
+      )}
 
       <button
         type="button"

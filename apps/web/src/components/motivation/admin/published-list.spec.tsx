@@ -133,6 +133,19 @@ describe("MotivationPublishedList", () => {
     ).toHaveAttribute("href", "/motivation?post=gita-2-13");
   });
 
+  // VED-251, круг 2: публичная лента ищет пост по слагу только среди
+  // `status: 'published'` — у скрытого `?post=slug` вёл бы в тупик.
+  it("у скрытого поста «Открыть в ленте» — неактивная кнопка, а не ссылка в тупик", () => {
+    render(<MotivationPublishedList posts={[post({ status: "hidden" })]} />);
+
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+
+    const disabledButton = screen.getByRole("button", {
+      name: /Скрыто — сначала верните в ленту/,
+    });
+    expect(disabledButton).toBeDisabled();
+  });
+
   it("спрашивает про удаление под карточкой и удаляет после подтверждения", async () => {
     const user = userEvent.setup();
     const fetchMock = stubFetch();
@@ -167,6 +180,25 @@ describe("MotivationPublishedList", () => {
     render(<MotivationPublishedList posts={[post({ status: "hidden" })]} />);
 
     expect(screen.getByText("Скрыто из ленты")).toBeInTheDocument();
+  });
+
+  // VED-251, круг 2: `posts` — это published+hidden вместе, и «Опубликовано:
+  // N» без разбивки враньём засчитывало бы скрытые за показанные в ленте.
+  it("считает опубликованное и скрытое раздельно в счётчике", () => {
+    render(
+      <MotivationPublishedList
+        posts={[post(), post({ id: "post-2", status: "hidden" })]}
+      />,
+    );
+
+    expect(screen.getByText("Опубликовано: 1 · Скрыто: 1")).toBeInTheDocument();
+  });
+
+  it("без скрытых счётчик — как раньше, без хвоста", () => {
+    render(<MotivationPublishedList posts={[post()]} />);
+
+    expect(screen.getByText("Опубликовано: 1")).toBeInTheDocument();
+    expect(screen.queryByText(/Скрыто/)).not.toBeInTheDocument();
   });
 
   // VED-251: карточка больше не пропадает из «Опубликованных» — «Скрыть»
