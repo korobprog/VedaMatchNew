@@ -34,3 +34,45 @@ describe("вид доски на устройстве", () => {
     expect(readWorkGroupMode("b1")).toBe("none");
   });
 });
+
+describe("миграция старого ключа vedamatch:work-grouped: (VED-51 → VED-160)", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("старое «1» читается как priority и переносится в новый ключ", () => {
+    window.localStorage.setItem("vedamatch:work-grouped:b1", "1");
+
+    expect(readWorkGroupMode("b1")).toBe("priority");
+    // Перенесено: новый ключ теперь хранит значение сам, старый убран.
+    expect(window.localStorage.getItem("vedamatch:work-view:b1")).toBe(
+      "priority",
+    );
+    expect(
+      window.localStorage.getItem("vedamatch:work-grouped:b1"),
+    ).toBeNull();
+
+    // Повторное чтение не зависит от старого ключа — он уже удалён.
+    expect(readWorkGroupMode("b1")).toBe("priority");
+  });
+
+  it("новый ключ перекрывает старый, если оба почему-то есть", () => {
+    window.localStorage.setItem("vedamatch:work-grouped:b1", "1");
+    window.localStorage.setItem("vedamatch:work-view:b1", "date");
+
+    expect(readWorkGroupMode("b1")).toBe("date");
+  });
+
+  it("битое значение старого ключа не мигрирует и не роняет чтение", () => {
+    window.localStorage.setItem("vedamatch:work-grouped:b1", "true");
+
+    expect(readWorkGroupMode("b1")).toBe("none");
+    expect(window.localStorage.getItem("vedamatch:work-view:b1")).toBeNull();
+  });
+
+  it("старый ключ чужой доски не переносится под текущую", () => {
+    window.localStorage.setItem("vedamatch:work-grouped:b2", "1");
+
+    expect(readWorkGroupMode("b1")).toBe("none");
+  });
+});
