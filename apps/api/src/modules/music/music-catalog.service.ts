@@ -79,23 +79,30 @@ export class MusicCatalogService {
    */
   async showcase(viewerId: string | null = null): Promise<MusicCatalogDto> {
     const lineage = await this.viewerLineage(viewerId, null);
-    const [categories, fresh, artists, systemPlaylists] = await Promise.all([
-      this.listCategories(),
-      this.prisma.musicTrack.findMany({
-        where: { status: 'published', ...lineageCondition(lineage) },
-        include: TRACK_CARD_INCLUDE,
-        orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
-        take: SHOWCASE_FRESH,
-      }),
-      this.listShowcaseArtists(),
-      this.listSystemPlaylists(),
-    ]);
+    const [categories, fresh, artists, systemPlaylists, totalTracks] =
+      await Promise.all([
+        this.listCategories(),
+        this.prisma.musicTrack.findMany({
+          where: { status: 'published', ...lineageCondition(lineage) },
+          include: TRACK_CARD_INCLUDE,
+          orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
+          take: SHOWCASE_FRESH,
+        }),
+        this.listShowcaseArtists(),
+        this.listSystemPlaylists(),
+        // Тот же фильтр, что у «нового»: число отвечает на «сколько я
+        // реально вижу», а не «сколько есть в базе вообще».
+        this.prisma.musicTrack.count({
+          where: { status: 'published', ...lineageCondition(lineage) },
+        }),
+      ]);
 
     return {
       categories,
       fresh: fresh.map((row) => toMusicTrackDto(row, this.publicBaseUrl)),
       artists,
       systemPlaylists,
+      totalTracks,
     };
   }
 

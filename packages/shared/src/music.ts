@@ -223,6 +223,13 @@ export interface MusicCatalogDto {
   fresh: MusicTrackDto[];
   artists: MusicArtistDto[];
   systemPlaylists: MusicPlaylistCardDto[];
+  /**
+   * Сколько всего опубликованных записей видит зритель (с учётом его линии,
+   * как и остальная витрина) — ответ на «а много ли тут вообще». Не сумма
+   * `trackCount` категорий: запись может быть в нескольких категориях или
+   * ни в одной.
+   */
+  totalTracks: number;
 }
 
 /** Как сортировать выдачу треков. */
