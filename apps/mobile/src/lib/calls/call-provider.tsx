@@ -1,16 +1,6 @@
 import { randomUUID } from 'expo-crypto';
 import { router } from 'expo-router';
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { AppState, Platform } from 'react-native';
 import InCallManager from 'react-native-incall-manager';
 import type { MediaStream } from 'react-native-webrtc';
@@ -32,6 +22,7 @@ import { createChatCallsApi } from './chat-calls-client';
 import { isAudioSessionLive } from './audio-session-policy';
 import { decideBackgroundIncomingAction } from './call-app-background-policy';
 import { shouldDeclineAsBusy } from './call-busy-decision';
+import { ChatCallsContext, type ChatCallsApi } from './chat-calls-context';
 import { describeMediaError } from './call-media-error';
 import { buildLaunchPreviewCall } from './call-launch-preview';
 import { CONNECTING_TIMEOUT_MS, decideConnectingTimeout } from './call-connect-timeout';
@@ -73,39 +64,13 @@ import type { LaunchCall, NetworkTransport } from '../../../modules/vedamatch-ca
  * `CallSession` (WebRTC и медиа). Экран звонка (`app/call/[id].tsx`) и
  * баннер входящего (`components/calls/incoming-call-banner.tsx`) читают
  * состояние отсюда, а не хранят своё.
+ *
+ * `ChatCallsApi`, `ChatCallsContext` и `useChatCalls` — в `chat-calls-
+ * context.ts`, не здесь: этот файл тянет WebRTC-сессию, `expo-audio` и
+ * `react-native-incall-manager`, а хук нужен местам, которым весь этот вес
+ * ни к чему (кнопка звонка в шапке чата, баннеры, экран звонка) — импорт
+ * оттуда не тянет за собой ничего из этого файла.
  */
-
-export interface ChatCallsApi {
-  state: CallState;
-  selfId: string;
-  localStream: MediaStream | null;
-  remoteStream: MediaStream | null;
-  /** Пошёл ли разговор через TURN — обновляется, пока `phase === 'active'`. */
-  relayed: boolean | null;
-  /**
-   * Открыт ли сейчас полноэкранный `app/call/[id].tsx`. Системное «назад»
-   * снимает этот экран (feedback-001.md, блокирующий пункт 1), но не
-   * завершает звонок — `screenVisible` даёт `ReturnToCallBanner` понять,
-   * что показать плашку «вернуться» (`call-screen-return.ts`).
-   */
-  screenVisible: boolean;
-  /** Экран звонка вызывает при монтировании/размонтировании. */
-  reportCallScreenMounted: (visible: boolean) => void;
-  start: (conversationId: string, kind: ChatCallKind) => Promise<void>;
-  accept: () => Promise<void>;
-  decline: () => Promise<void>;
-  hangUp: () => Promise<void>;
-  toggleMute: () => void;
-  toggleCamera: () => void;
-  switchCamera: () => void;
-  dismiss: () => void;
-}
-
-const ChatCallsContext = createContext<ChatCallsApi | null>(null);
-
-export function useChatCalls(): ChatCallsApi | null {
-  return useContext(ChatCallsContext);
-}
 
 /** Сколько экран «звонок завершён» висит сам, прежде чем уйти. */
 const ENDED_AUTOCLOSE_MS = 3000;

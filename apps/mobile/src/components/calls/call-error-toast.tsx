@@ -2,7 +2,7 @@ import { usePathname } from 'expo-router';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { overlayBottomOffset } from '@/lib/calls/call-overlay-position';
-import { useChatCalls } from '@/lib/calls/call-provider';
+import { useChatCalls } from '@/lib/calls/chat-calls-context';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
