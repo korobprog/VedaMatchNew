@@ -31,6 +31,7 @@ export function LandingPage({
   totalCities,
   totalCommunities,
   appManifest,
+  showTelegram = false,
 }: {
   returnTo?: string;
   plan?: PricingPlan;
@@ -38,6 +39,8 @@ export function LandingPage({
   totalCities?: number;
   totalCommunities?: number;
   appManifest?: AppManifest | null;
+  /** Хост запроса — контур `vedamatch.com` (см. `app-download-contour.ts`). */
+  showTelegram?: boolean;
 }) {
   const t = useTranslations("Landing");
   return (
@@ -284,7 +287,7 @@ export function LandingPage({
       {/* Установка приложения — рядом с подвалом, после тарифа и до него:
           решение «поставить на телефон» приходит уже после того, как гость
           увидел сервисы и цену, а не раньше. */}
-      <AppDownloadSection manifest={appManifest ?? null} />
+      <AppDownloadSection manifest={appManifest ?? null} showTelegram={showTelegram} />
 
       <Footer />
       <InstallBanner />

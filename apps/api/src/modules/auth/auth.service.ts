@@ -49,6 +49,7 @@ import { assertAccountActive } from '../users/account-status';
 import { isAuthProvider } from './identity-link';
 import { IdentityService, type IdentitySummary } from './identity.service';
 import { JwtSignService } from './jwt.service';
+import { resolveLoginClient, type LoginClient } from './login-client';
 import { verifyPassword } from './password';
 import { toRole } from './role';
 import {
@@ -644,7 +645,33 @@ export class AuthService implements OnModuleInit {
       app,
     } = params;
 
-    await this.completeLogin({ req, user, provider, isNewAccount, ref, fp });
+    // Контур и итоговый адрес возврата нужны и для метки источника входа
+    // (`resolveLoginClient`), и для самого редиректа ниже — считаем один
+    // раз, до записи в журнал, чтобы `LoginAudit.client` не разъезжался с
+    // тем, куда человек реально попадёт.
+    const contour = this.contour(req.headers.host);
+    const resolvedOrigin = resolveReturnOrigin({
+      requested: returnOrigin,
+      webOrigins: this.config.get<string>('WEB_ORIGIN'),
+      contour,
+    });
+    const client: LoginClient = app
+      ? resolveLoginClient({ kind: 'app' })
+      : resolveLoginClient({
+          kind: 'oauth',
+          resolvedOrigin,
+          contourWebOrigin: contour.webOrigin,
+        });
+
+    await this.completeLogin({
+      req,
+      user,
+      provider,
+      isNewAccount,
+      ref,
+      fp,
+      client,
+    });
 
     // Приложению — одноразовый код, а не cookie: токены оно заберёт само,
     // предъявив PKCE-верификатор (см. exchangeAppLoginCode).
@@ -654,7 +681,6 @@ export class AuthService implements OnModuleInit {
       return;
     }
 
-    const contour = this.contour(req.headers.host);
     await this.issueTokens(
       user.id,
       user.email,
@@ -662,12 +688,7 @@ export class AuthService implements OnModuleInit {
       res,
       req.headers.host,
     );
-    const origin = resolveReturnOrigin({
-      requested: returnOrigin,
-      webOrigins: this.config.get<string>('WEB_ORIGIN'),
-      contour,
-    });
-    res.redirect(`${origin}${safeReturnTo(returnTo)}`);
+    res.redirect(`${resolvedOrigin}${safeReturnTo(returnTo)}`);
   }
 
   /**
@@ -681,8 +702,10 @@ export class AuthService implements OnModuleInit {
     isNewAccount: boolean;
     ref?: string | null;
     fp?: string | null;
+    /** Источник входа для воронки метрик — см. `login-client.ts`. */
+    client: LoginClient;
   }) {
-    const { req, user, provider, isNewAccount, ref, fp } = params;
+    const { req, user, provider, isNewAccount, ref, fp, client } = params;
     await assertAccountActive(this.prisma, user);
     await this.ensureContactsProfile(user.id);
 
@@ -690,6 +713,7 @@ export class AuthService implements OnModuleInit {
       data: {
         userId: user.id,
         provider,
+        client,
         ip: req.ip,
         userAgent: req.headers['user-agent'] ?? null,
       },
@@ -894,6 +918,7 @@ export class AuthService implements OnModuleInit {
       isNewAccount: created,
       ref: shortToken(body?.ref),
       fp: shortToken(body?.fp),
+      client: resolveLoginClient({ kind: 'telegram' }),
     });
     await this.issueTokens(
       user.id,

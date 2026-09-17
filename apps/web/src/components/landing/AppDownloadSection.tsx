@@ -6,10 +6,12 @@ import {
   CheckCircle2,
   ChevronDown,
   Download,
+  ExternalLink,
   FolderDown,
   LogIn,
   Plus,
   RefreshCcw,
+  Send,
   Share,
   ShieldAlert,
   Smartphone,
@@ -38,9 +40,16 @@ import { cn } from "@/lib/utils";
 export function AppDownloadSection({
   manifest,
   variant = "embed",
+  showTelegram = false,
 }: {
   manifest: AppManifest | null;
   variant?: "embed" | "full";
+  /**
+   * Хост запроса — контур `vedamatch.com`: там включён вход через Telegram,
+   * и кнопка «Открыть в Telegram» имеет смысл. На `vedamatch.ru` пропуск не
+   * передаётся (или передаётся `false`) — кнопки не будет вовсе.
+   */
+  showTelegram?: boolean;
 }) {
   const [device, setDevice] = useState<DownloadDevice | null>(null);
   const [androidStepsOpen, setAndroidStepsOpen] = useState(false);
@@ -116,6 +125,16 @@ export function AppDownloadSection({
             onToggleSteps={() => setIosStepsOpen((v) => !v)}
           />
         </div>
+
+        {/* Веб-версия приложения (ios.vedamatch.com) — не PWA сайта из
+            карточки выше, а сама Expo-сборка в браузере: звонки, лента и
+            уведомления как в нативном приложении, без App Store. Гостю с
+            iPhone/iPad показываем сразу; на полной странице `/app` — всем,
+            даже с десктопа, чтобы ссылку можно было переслать себе на
+            телефон. */}
+        {(device === "ios" || variant === "full") && (
+          <IPhoneAppBlock showTelegram={showTelegram} />
+        )}
 
         {variant === "full" && device === "desktop" && (
           <div className="mt-12 flex flex-col items-center gap-3 text-center">
@@ -350,5 +369,47 @@ function IosCard({
           не рендерится вовсе — компонент сам решает по режиму установки. */}
       <InstallButton className="mt-4" />
     </CardShell>
+  );
+}
+
+function IPhoneAppBlock({ showTelegram }: { showTelegram: boolean }) {
+  return (
+    <div className="mt-6 rounded-2xl border border-glass-brd glass p-6 md:p-8">
+      <h3 className="font-display text-xl font-bold text-text-0">
+        VedaMatch для iPhone
+      </h3>
+      <p className="mt-2 max-w-2xl text-sm text-text-1">
+        Полная веб-версия приложения — та же лента, звонки и уведомления, что
+        в мобильном приложении, прямо в Safari, без App Store. Откройте её и
+        добавьте на экран «Домой»: «Поделиться» → «На экран „Домой“» — дальше
+        запускается одним нажатием, как обычное приложение.
+      </p>
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+        <a
+          href="https://ios.vedamatch.com"
+          className={cn(
+            "flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 py-3",
+            "bg-gradient-to-r from-magenta to-[#B23EFF] text-base font-semibold text-white",
+            "transition-transform duration-300 hover:-translate-y-0.5",
+          )}
+        >
+          <ExternalLink className="h-5 w-5" aria-hidden="true" />
+          Открыть веб-версию
+        </a>
+        {showTelegram && (
+          <a
+            href="https://t.me/vedamatch_bot"
+            className={cn(
+              "flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 py-3",
+              "border border-glass-brd text-base font-semibold text-text-0",
+              "transition-colors duration-300 hover:border-cyan/50",
+            )}
+          >
+            <Send className="h-5 w-5" aria-hidden="true" />
+            Открыть в Telegram
+          </a>
+        )}
+      </div>
+    </div>
   );
 }

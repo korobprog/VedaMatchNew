@@ -74,12 +74,13 @@ function setup(options: { token?: string; enabled?: boolean } = {}) {
     ip: '10.0.0.1',
   };
   const res = { cookie: jest.fn() };
-  return { service, identities, providers, events, req, res };
+  return { service, prisma, identities, providers, events, req, res };
 }
 
 describe('AuthService.loginWithTelegramWebApp', () => {
   it('подлинные данные — аккаунт telegram и cookie сессии на домене контура', async () => {
-    const { service, identities, providers, events, req, res } = setup();
+    const { service, prisma, identities, providers, events, req, res } =
+      setup();
 
     await expect(
       service.loginWithTelegramWebApp(
@@ -92,6 +93,15 @@ describe('AuthService.loginWithTelegramWebApp', () => {
     expect(providers.assertEnabled).toHaveBeenCalledWith(
       'telegram',
       'api.vedamatch.com',
+    );
+    // Источник входа для воронки метрик (веха 7) — мини-приложение Telegram.
+    expect(prisma.loginAudit.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: 'telegram',
+          client: 'telegram',
+        }),
+      }),
     );
     expect(identities.resolve).toHaveBeenCalledWith(
       expect.objectContaining({

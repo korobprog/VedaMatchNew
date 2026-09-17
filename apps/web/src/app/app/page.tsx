@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { AppDownloadSection } from "@/components/landing/AppDownloadSection";
 import { getAppManifest } from "@/lib/app-download-api";
+import { isComContourHost } from "@/lib/app-download-contour";
 import { Navbar } from "@/components/landing/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { BackgroundOrbs } from "@/components/landing/Orb";
@@ -19,7 +21,10 @@ export const metadata: Metadata = {
 };
 
 export default async function AppDownloadPage() {
-  const appManifest = await getAppManifest().catch(() => null);
+  const [appManifest, host] = await Promise.all([
+    getAppManifest().catch(() => null),
+    headers().then((h) => h.get("host")),
+  ]);
 
   return (
     <div className="hex-cursor relative min-h-dvh bg-bg-0">
@@ -28,7 +33,11 @@ export default async function AppDownloadPage() {
       <NoiseOverlay />
       <Navbar returnTo="/" />
       <main className="pt-24">
-        <AppDownloadSection manifest={appManifest} variant="full" />
+        <AppDownloadSection
+          manifest={appManifest}
+          variant="full"
+          showTelegram={isComContourHost(host)}
+        />
       </main>
       <Footer />
     </div>

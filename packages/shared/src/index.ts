@@ -658,6 +658,50 @@ export interface AdminQueueCounter {
 }
 
 /**
+ * Источник входа для воронки метрик (веха 7 «Запуск», PRD «VedaMatch для
+ * iPhone»): куда постучался человек, чтобы завести сессию. Пишется в
+ * `LoginAudit.client` рядом с `provider` (google/yandex/telegram/…) —
+ * `provider` называет способ входа, `client` называет площадку.
+ */
+export type LoginClient = 'site' | 'web-app' | 'telegram' | 'android';
+
+/** Полный список источников входа в фиксированном порядке для таблиц и графиков. */
+export const LOGIN_CLIENTS: readonly LoginClient[] = [
+  'site',
+  'web-app',
+  'telegram',
+  'android',
+];
+
+/** Входы и уникальные люди по источнику за период. */
+export interface LoginClientCounter {
+  client: LoginClient;
+  logins: number;
+  users: number;
+}
+
+/**
+ * Возврат за 7 дней по источнику: среди тех, чей первый вход через этот
+ * канал (в окне последних 30 дней) случился минимум 7 дней назад — сколько
+ * вернулось (вошли ещё раз, любым способом) через 7 и более дней после того
+ * первого входа. `returnRate` — доля 0..1; `null`, если делить не на что
+ * (`cohortSize === 0`).
+ */
+export interface LoginClientReturn {
+  client: LoginClient;
+  cohortSize: number;
+  returnedCount: number;
+  returnRate: number | null;
+}
+
+/** Воронка входа по источнику — раздел `AdminPortalStats.logins`. */
+export interface AdminLoginStats {
+  last7Days: LoginClientCounter[];
+  last30Days: LoginClientCounter[];
+  return7Day: LoginClientReturn[];
+}
+
+/**
  * Портальная сводка для главной админки. Сервисные счётчики сюда не попадают:
  * их отдают сами сервисы, портал в чужие таблицы не ходит.
  */
@@ -672,6 +716,7 @@ export interface AdminPortalStats {
     paidSubscriptions: number;
   };
   queues: AdminQueueCounter[];
+  logins: AdminLoginStats;
 }
 
 // ===== Каталог сервисов портала (админка) =====

@@ -19,6 +19,9 @@ vi.mock("next/headers", () => ({
     get: (name: string) =>
       cookieJar.has(name) ? { name, value: cookieJar.get(name) } : undefined,
   }),
+  // Контур гостя (site vs web-app) для AppDownloadSection на лендинге —
+  // тестам ниже это безразлично, поэтому хост всегда пустой.
+  headers: async () => ({ get: () => null }),
 }));
 
 // Редактор кнопок зовёт роутер, а смонтированного роутера в тесте нет.
