@@ -5,10 +5,10 @@ import { canAdminService } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
 import { getMusicArtist } from "@/lib/music-api";
 import { MusicArtistAdminRename } from "@/components/music/artist-admin-rename";
+import { MusicArtistTracks } from "@/components/music/music-artist-tracks";
 import { MusicCover } from "@/components/music/music-cover";
 import { MusicPlayAllButton } from "@/components/music/player/play-all-button";
 import { MusicPlayModeButtons } from "@/components/music/player/play-mode-buttons";
-import { MusicTrackRow } from "@/components/music/music-track-row";
 import { plural } from "@/lib/plural";
 
 const KIND_LABELS: Record<string, string> = {
@@ -178,13 +178,7 @@ export default async function MusicArtistPage({
             Опубликованных записей пока нет.
           </p>
         ) : (
-          <ul className="mt-3 flex flex-col">
-            {tracks.map((track) => (
-              <li key={track.id}>
-                <MusicTrackRow track={track} queue={queue} />
-              </li>
-            ))}
-          </ul>
+          <MusicArtistTracks tracks={tracks} />
         )}
       </section>
     </main>
