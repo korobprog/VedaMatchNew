@@ -27,7 +27,11 @@ import { clearTokens, readTokens, writeTokens, type TokenPair } from './token-st
  */
 
 export interface TokenAuthorityDeps {
-  authApi?: AuthApi;
+  /** Только `refresh` и правда нужен здесь — более узкий тип, чем полный
+   *  `AuthApi`, чтобы добавление новых методов входа (см. `loginWithTelegram`)
+   *  не требовало трогать заглушки в тестах, которые обновление токена не
+   *  проверяют. */
+  authApi?: Pick<AuthApi, 'refresh'>;
 }
 
 export interface TokenAuthority {

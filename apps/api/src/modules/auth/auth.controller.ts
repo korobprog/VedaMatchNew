@@ -136,13 +136,19 @@ export class AuthController {
     return this.auth.devLogin(body, req, res);
   }
 
-  // Мини-приложение @vedamatch_bot: подписанные данные запуска → cookie
-  // сессии. Троттлинг как у входа по паролю: подпись не подобрать, но
-  // перебирать её незачем разрешать.
+  // Мини-приложение @vedamatch_bot: подписанные данные запуска → сессия.
+  // По умолчанию (нет `mode`) — cookie, как раньше (телефоны, top-level
+  // WebView). `mode: 'token'` — пара токенов в теле ответа вместо cookie:
+  // Telegram Desktop и web.telegram.org открывают мини-приложение в
+  // `<iframe>` на чужом происхождении, где cookie портала третьесторонняя.
+  // Троттлинг как у входа по паролю: подпись не подобрать, но перебирать
+  // её незачем разрешать. Ответ не кэшируется — как и у токенов приложения.
   @Post('telegram/webapp')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Header('Cache-Control', 'no-store')
   telegramWebApp(
-    @Body() body: { initData?: unknown; ref?: unknown; fp?: unknown },
+    @Body()
+    body: { initData?: unknown; ref?: unknown; fp?: unknown; mode?: unknown },
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {

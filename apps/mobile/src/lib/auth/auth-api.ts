@@ -82,6 +82,16 @@ export function createAuthApi(apiOrigin: string, fetchImpl: typeof fetch = fetch
       tokens(post(fetchImpl, apiOrigin, '/auth/app/dev-login', { email, password })),
     logout: (refreshToken: string) =>
       post(fetchImpl, apiOrigin, '/auth/app/logout', { refreshToken }).then(() => undefined),
+    /**
+     * Вход мини-приложения Telegram в режиме токенов (`mode: 'token'`) — та же
+     * проверка данных запуска, что и у cookie-режима (`createCookieAuthApi.
+     * telegramLogin`), но ответ — пара токенов в теле, без единой cookie.
+     * Только для веб-версии, открытой внутри Telegram Desktop/web.telegram.org:
+     * там мини-приложение живёт в `<iframe>` на чужом происхождении, и cookie
+     * портала как третьесторонняя браузером режется (см. `session.web.tsx`).
+     */
+    loginWithTelegram: (initData: string) =>
+      tokens(post(fetchImpl, apiOrigin, '/auth/telegram/webapp', { initData, mode: 'token' })),
   };
 }
 
