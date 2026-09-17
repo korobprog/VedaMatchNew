@@ -11,6 +11,7 @@ import {
   MotivationPostStatus,
   MotivationProfileType,
   MotivationVideoStatus,
+  Prisma,
   SpiritualStage,
 } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
@@ -28,6 +29,7 @@ import type {
   MotivationAdminUpdate,
   MotivationAuthorWatchDto,
   MotivationAuthorWatchInput,
+  MotivationFeedAttributionsDto,
   MotivationFeedTier,
   MotivationLanguage,
   MotivationLikeResponse,
@@ -62,11 +64,23 @@ import {
 } from './motivation-feed';
 import { rankFeed, shuffleFeed } from './feed-ranking';
 import { feedCategories, feedCategoryWhere } from './feed-categories';
+import {
+  attributionFilter,
+  attributionKey,
+  buildAttributionOptions,
+  matchingVariants,
+} from './feed-attribution';
+import { orderTieredWithinSlots, sortByLocator } from './locator-order';
 import { attributionLine } from './postcard-events';
 import { adminAiVerdictOf, adminAppealOf } from './moderation-audit';
 import { MotivationSettingsService } from './motivation-settings.service';
 
 /** Причины жалоб: список закрытый, свободный текст — только в комментарии. */
+/**
+ * Сколько стихов одного источника сортируем разом. Узкая выборка — id и
+ * локатор, — так что это килобайты, а не мегабайты; дальше книга не растёт.
+ */
+const VERSE_ORDER_LIMIT = 5000;
 const REPORT_REASONS = new Set(['spam', 'offensive', 'wrong_source', 'other']);
 import { MotivationAuthorSearchService } from './motivation-author-search.service';
 import {
@@ -231,6 +245,12 @@ export class MotivationService {
        * Без значения — обе вместе, как в избранном и в списке.
        */
       style?: 'art' | 'cards';
+      /**
+       * Фильтр по автору и источнику (VED-206): «только Бхагавад-гита».
+       * Сравнение без регистра и лишних пробелов — см. `feed-attribution`.
+       */
+      speaker?: string;
+      work?: string;
     },
   ) {
     const user = await this.prisma.user.findUnique({
@@ -250,7 +270,13 @@ export class MotivationService {
     /* Папок может быть несколько: «?category=vedy,praktika» (VED-22).
        Пустой список значит «папки не выбраны» — лента личная. */
     const categories = feedCategories(query.category);
-    const ranked = !query.favorites && categories.length === 0;
+    /* Автор и источник — такая же явная просьба, как папка: «покажи Гиту».
+       Ни ярусов, ни подбора под путь тут нет — иначе фильтр показал бы
+       треть книги и в перемешанном виде. */
+    const speakerKey = attributionFilter(query.speaker),
+      workKey = attributionFilter(query.work);
+    const ranked =
+      !query.favorites && categories.length === 0 && !speakerKey && !workKey;
     // Сессия листания: первая страница фиксирует момент и прошлый визит и
     // уносит их в курсор; дальше ленту считаем по ним, иначе просмотры,
     // сделанные при листании, сдвинули бы порядок между страницами.
@@ -293,7 +319,12 @@ export class MotivationService {
     // ним написано «9»: счётчик считает всё опубликованное, а выдача отдавала
     // выборку под профиль. Оглавление обещает содержимое папки — папка его и
     // отдаёт целиком.
-    const personalized = categories.length === 0;
+    const personalized = categories.length === 0 && !speakerKey && !workKey;
+    const attributionWhere = await this.attributionWhere(speakerKey, workKey);
+    /* Источник выбран — лента идёт строго по порядку стихов (VED-125):
+       2.13, 2.14, 3.1. Случайный порядок — явная просьба «вперемешку», её
+       фильтр не отменяет. */
+    const verseOrder = Boolean(workKey) && !query.shuffle;
     const where = {
       ...(personalized
         ? {
@@ -345,8 +376,11 @@ export class MotivationService {
       ],
       // Опубликованное уже во время листания не втискивается в середину
       // сессии: оно придёт «свежим» при следующем открытии ленты.
-      ...(ranked ? { publishedAt: { lte: since } } : {}),
+      // В ленте источника тоже: позиция в курсоре считается по порядку
+      // стихов, и новый стих посреди книги сдвинул бы следующую страницу.
+      ...(ranked || verseOrder ? { publishedAt: { lte: since } } : {}),
       ...(feedCategoryWhere(categories) ?? {}),
+      ...attributionWhere,
       ...(query.imageSource ? { imageSource: query.imageSource } : {}),
       ...(query.style ? { captionInImage: query.style === 'cards' } : {}),
       ...(query.favorites ? { favorites: { some: { userId } } } : {}),
@@ -375,12 +409,19 @@ export class MotivationService {
     // Один запрос на оба трека: доля вайшнавских публикаций из ленты убрана,
     // и делить выборку больше незачем — что показывать, решают отмеченные
     // направления.
-    const posts = await this.prisma.motivationPost.findMany({
-      where,
-      include,
-      orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
-      take: 400,
-    });
+    /* В ленте источника книга может быть длиннее 400 последних публикаций,
+       а порядок стихов нужен по всей книге. Поэтому сначала — узкая выборка
+       id и локаторов по всему источнику, сортировка в памяти, и только
+       страница грузится целиком. Числового ключа в базе не заводим: локатор
+       пишут пять путей публикации, и каждый пришлось бы учить его считать. */
+    const posts = verseOrder
+      ? []
+      : await this.prisma.motivationPost.findMany({
+          where,
+          include,
+          orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
+          take: 400,
+        });
     // Названия категорий одним запросом: на посте лежит только slug, а в
     // ленте чип должен читаться словами.
     const categoryTitles = new Map(
@@ -403,21 +444,48 @@ export class MotivationService {
       ? (cursor.shuffleSeed ?? randomBytes(8).toString('hex'))
       : undefined;
     type Loaded = (typeof posts)[number];
+    const sourceOf = (post: Loaded) =>
+      attributionKey(post.attributionWork) || null;
     const order = (
       posts: Loaded[],
     ): { post: Loaded; tier?: MotivationFeedTier }[] =>
       shuffleSeed
         ? shuffleFeed(posts, shuffleSeed)
-        : ranked
-          ? rankFeed(
-              posts.map((post) => ({
-                ...post,
-                viewedAt: post.views[0]?.viewedAt ?? null,
-              })),
-              session,
-            )
-          : posts.map((post) => ({ post }));
-    const page = feedPage(order(posts), cursor, limit);
+        : // Стихи одной книги — по порядку, но на тех местах, которые выбрала
+          // лента (VED-125): ярусы и подбор остаются как были.
+          orderTieredWithinSlots<Loaded, MotivationFeedTier>(
+            ranked
+              ? rankFeed(
+                  posts.map((post) => ({
+                    ...post,
+                    viewedAt: post.views[0]?.viewedAt ?? null,
+                  })),
+                  session,
+                )
+              : posts.map((post) => ({ post })),
+            sourceOf,
+          );
+    let page: {
+      items: { post: Loaded; tier?: MotivationFeedTier }[];
+      cursor: ReturnType<typeof feedPage>['cursor'];
+    };
+    if (verseOrder) {
+      const slice = await this.verseOrderSlice(where, cursor, limit);
+      const loaded = slice.ids.length
+        ? await this.prisma.motivationPost.findMany({
+            where: { id: { in: slice.ids } },
+            include,
+          })
+        : [];
+      const byId = new Map(loaded.map((post) => [post.id, post]));
+      page = {
+        items: slice.ids.flatMap((id) => {
+          const post = byId.get(id);
+          return post ? [{ post }] : [];
+        }),
+        cursor: slice.cursor,
+      };
+    } else page = feedPage(order(posts), cursor, limit);
     // Закреплённый пост берём тем же запросом, что и ленту: у публичного DTO
     // нет ни автора, ни отметок зрителя, и слайд выходил бы обеднённым.
     const pinned =
@@ -448,6 +516,112 @@ export class MotivationService {
             })
           : null,
     };
+  }
+
+  /**
+   * Страница ленты одного источника в порядке стихов: id постов страницы.
+   * Позиция в курсоре — место в отсортированной книге, поэтому курсор тот
+   * же, что у остальных лент.
+   */
+  private async verseOrderSlice(
+    where: Prisma.MotivationPostWhereInput,
+    cursor: ReturnType<typeof decodeMotivationCursor>,
+    limit: number,
+  ) {
+    const light = await this.prisma.motivationPost.findMany({
+      where,
+      select: { id: true, attributionLocator: true },
+      orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
+      take: VERSE_ORDER_LIMIT,
+    });
+    const slice = feedPage(sortByLocator(light), cursor, limit);
+    return { ids: slice.items.map((post) => post.id), cursor: slice.cursor };
+  }
+
+  /**
+   * Условие отбора по автору и источнику. В базе одна книга записана
+   * по-разному, поэтому сначала находим все её написания, а отбираем по
+   * точному списку — так работает индекс, и регистр не мешает.
+   */
+  private async attributionWhere(
+    speakerKey: string | null,
+    workKey: string | null,
+  ): Promise<{
+    attributionSpeaker?: { in: string[] };
+    attributionWork?: { in: string[] };
+  }> {
+    const status = MotivationPostStatus.published;
+    const speakers = speakerKey
+      ? matchingVariants(
+          (
+            await this.prisma.motivationPost.findMany({
+              where: { status, attributionSpeaker: { not: null } },
+              select: { attributionSpeaker: true },
+              distinct: ['attributionSpeaker'],
+            })
+          ).map((row) => row.attributionSpeaker),
+          speakerKey,
+        )
+      : null;
+    const works = workKey
+      ? matchingVariants(
+          (
+            await this.prisma.motivationPost.findMany({
+              where: { status, attributionWork: { not: null } },
+              select: { attributionWork: true },
+              distinct: ['attributionWork'],
+            })
+          ).map((row) => row.attributionWork),
+          workKey,
+        )
+      : null;
+    return {
+      ...(speakers ? { attributionSpeaker: { in: speakers } } : {}),
+      ...(works ? { attributionWork: { in: works } } : {}),
+    };
+  }
+
+  /**
+   * Авторы и источники для фильтра ленты (VED-206) — со счётчиками, только
+   * из того, что читатель может увидеть. Папка и вкладка сужают оба списка;
+   * выбранный автор сужает источники, выбранный источник — авторов: иначе
+   * пункт «Упанишады · 12» при выбранном Прабхупаде вёл бы в пустую ленту.
+   */
+  async feedAttributions(query: {
+    category?: string;
+    style?: 'art' | 'cards';
+    speaker?: string;
+    work?: string;
+  }): Promise<MotivationFeedAttributionsDto> {
+    const speakerKey = attributionFilter(query.speaker),
+      workKey = attributionFilter(query.work);
+    const base = {
+      ...READER_VISIBLE_POSTS,
+      ...(feedCategoryWhere(feedCategories(query.category)) ?? {}),
+      ...(query.style ? { captionInImage: query.style === 'cards' } : {}),
+    };
+    const [bySpeaker, byWork] = await Promise.all([
+      this.attributionWhere(null, workKey),
+      this.attributionWhere(speakerKey, null),
+    ]);
+    const count = async (
+      field: 'attributionSpeaker' | 'attributionWork',
+      narrow: Prisma.MotivationPostWhereInput,
+    ) =>
+      buildAttributionOptions(
+        (
+          await this.prisma.motivationPost.groupBy({
+            by: [field],
+            where: { ...base, ...narrow, [field]: { not: null } },
+            _count: { _all: true },
+          })
+        ).map((row) => ({ value: row[field], count: row._count._all })),
+      );
+    const [speakers, works] = await Promise.all([
+      count('attributionSpeaker', bySpeaker),
+      count('attributionWork', byWork),
+    ]);
+    return { speakers, works };
   }
 
   /**

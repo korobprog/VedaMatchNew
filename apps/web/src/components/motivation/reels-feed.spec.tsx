@@ -216,6 +216,45 @@ describe("ReelsFeed", () => {
     ]);
   });
 
+  // VED-206: автор и книга в подписи включают фильтр, стих ведёт в источник.
+  it("делает автора и книгу в подписи кнопками фильтра, а стих — ссылкой на источник", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{
+          items: [
+            post("a", { attributionSourceUrl: "https://vedabase.io/ru/library/bg/2/47/" }),
+            post("b", { attributionLocator: null, attributionSourceUrl: "https://t.me/x/1" }),
+          ],
+          nextCursor: null,
+        }}
+        tab="cards"
+        category="vedy"
+        donation={null}
+      />,
+    );
+
+    const [first, second] = within(screen.getByRole("feed", { name: "Лента вдохновения" })).getAllByRole(
+      "article",
+    );
+    const work = within(captionOf(first)).getByRole("link", { name: "Только источник: Бхагавад-гита" });
+    expect(Object.fromEntries(new URL(work.getAttribute("href")!, "https://x").searchParams)).toEqual({
+      tab: "cards",
+      category: "vedy",
+      work: "Бхагавад-гита",
+    });
+    expect(within(captionOf(first)).getByRole("link", { name: "Только автор: Кришна" })).toBeInTheDocument();
+    expect(within(captionOf(first)).getByRole("link", { name: "2.47" })).toHaveAttribute(
+      "href",
+      "https://vedabase.io/ru/library/bg/2/47/",
+    );
+    // Нет номера стиха — первоисточник не теряется, он за значком в конце.
+    expect(within(captionOf(second)).getByRole("link", { name: /Первоисточник/ })).toHaveAttribute(
+      "href",
+      "https://t.me/x/1",
+    );
+  });
+
   // VED-124: обычная картинка 2:3 растягивалась на весь экран 9:19,5 и теряла
   // треть ширины — у фигур по краям пропадали головы.
   it("обычную картинку показывает целиком, на размытой подложке", () => {

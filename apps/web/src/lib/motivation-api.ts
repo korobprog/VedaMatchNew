@@ -75,8 +75,12 @@ export const getMotivationFeed = (
    * `cards` — готовые открытки. Без значения — обе вместе.
    */
   style?: "art" | "cards",
+  /** Фильтр по автору и источнику (VED-206). */
+  attribution?: { speaker?: string; work?: string },
 ) => {
   const query = new URLSearchParams();
+  if (attribution?.speaker) query.set("speaker", attribution.speaker);
+  if (attribution?.work) query.set("work", attribution.work);
   if (filter === "favorites") query.set("filter", "favorites");
   if (post) query.set("post", post);
   if (order) query.set("order", order);

@@ -114,8 +114,13 @@ export class MotivationController {
     @Query('order') order?: string,
     @Query('imageSource') imageSource?: string,
     @Query('style') style?: string,
+    @Query('speaker') speaker?: string,
+    @Query('work') work?: string,
   ) {
     return this.service.feed(user.sub, {
+      // Автор и источник (VED-206). Разбор и нормализацию делает сервис.
+      speaker,
+      work,
       cursor,
       favorites: filter === 'favorites',
       category,
@@ -135,6 +140,26 @@ export class MotivationController {
       limit: limit ? Number(limit) : undefined,
     });
   }
+  /**
+   * Авторы и источники для фильтра ленты (VED-206). Те же `category` и
+   * `style`, что у ленты: список обещает ровно то, что лента покажет.
+   */
+  @Get('motivation/feed/attributions')
+  @UseGuards(AuthGuard)
+  feedAttributions(
+    @Query('category') category?: string,
+    @Query('style') style?: string,
+    @Query('speaker') speaker?: string,
+    @Query('work') work?: string,
+  ) {
+    return this.service.feedAttributions({
+      category,
+      style: style === 'art' || style === 'cards' ? style : undefined,
+      speaker,
+      work,
+    });
+  }
+
   @Get('motivation/preferences')
   @UseGuards(AuthGuard)
   preference(@CurrentUser() user: AccessTokenPayload) {

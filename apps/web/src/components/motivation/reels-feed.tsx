@@ -51,6 +51,13 @@ import {
   type ReelsTab,
 } from "./feed-style";
 import { ReportDialog } from "./report-dialog";
+import {
+  attributionFields,
+  filterHref,
+  type AttributionFieldKind,
+  type FeedFilterState,
+} from "./attribution-filter";
+import { FeedAttributionFilter } from "./feed-attribution-filter";
 import { SourceLink } from "./source-link";
 import {
   attributionLine,
@@ -148,8 +155,16 @@ export function ReelsFeed({
   isAdmin = false,
   audio = [],
   categories = [],
+  speaker,
+  work,
 }: {
   initial: MotivationFeedResponse;
+  /**
+   * Фильтр по автору и источнику (VED-206). Уезжает и в подгрузку, как
+   * папка: иначе вторая страница Гиты пришла бы из всей ленты.
+   */
+  speaker?: string;
+  work?: string;
   /** Папки для кнопок на пустых экранах ленты (VED-135). */
   categories?: MotivationCategoryDto[];
   tab: ReelsTab;
@@ -227,6 +242,8 @@ export function ReelsFeed({
       if (tab === "saved") query.set("filter", "favorites");
       if (order) query.set("order", order);
       if (category) query.set("category", category);
+      if (speaker) query.set("speaker", speaker);
+      if (work) query.set("work", work);
       // Без стиля вторая страница «Открыток» приехала бы вперемешку с
       // нейрокартинками — ровно то, от чего вкладки и разделили (VED-121).
       const style = feedStyleOf(tab);
@@ -244,7 +261,7 @@ export function ReelsFeed({
     } finally {
       setPending(false);
     }
-  }, [cursor, pending, tab, order, category]);
+  }, [cursor, pending, tab, order, category, speaker, work]);
 
   // Подгрузка запускается из обработчика активации слайда, а не из эффекта:
   // так setState не каскадирует, а момент тот же — человек долистал до конца.
@@ -412,6 +429,7 @@ export function ReelsFeed({
 
 
   const slides = buildSlides(items, dividerAt, Boolean(cursor));
+  const filterState: FeedFilterState = { tab, order, category, speaker, work };
   const categoryNav = (className?: string) => (
     <FeedCategoryNav
       tab={tab}
@@ -429,6 +447,7 @@ export function ReelsFeed({
         {/* Вкладки и в пустой ленте: из пустых «Открыток» иначе можно было
             уйти только в «Для вас», а до «Избранного» — никак. */}
         <Tabs tab={tab} order={order} category={category} />
+        <FeedAttributionFilter state={filterState} />
         {categoryNav()}
         <p className="font-display text-lg">
           {tab === "saved"
@@ -594,6 +613,8 @@ export function ReelsFeed({
         />
       </div>
       <Tabs tab={tab} order={order} category={category} />
+      {/* Фильтр по автору и источнику (VED-206) — строкой под вкладками. */}
+      <FeedAttributionFilter state={filterState} className="absolute inset-x-3 top-12 z-20" />
       {/* Звук выключен, пока его не попросили: иначе лента заговорит сама,
           стоит открыть страницу. Кнопка живёт над слайдами — как и ряд
           действий внизу, она одна на всю ленту. У немого ролика её нет вовсе:
@@ -603,7 +624,7 @@ export function ReelsFeed({
           type="button"
           onClick={() => setSoundOn((value) => !value)}
           aria-pressed={soundOn}
-          className="absolute right-3 top-16 z-30 rounded-full border border-white/25 bg-black/40 px-3 py-1.5 text-xs font-medium text-white backdrop-blur"
+          className="absolute right-3 top-[5.5rem] z-30 rounded-full border border-white/25 bg-black/40 px-3 py-1.5 text-xs font-medium text-white backdrop-blur"
         >
           {soundOn ? "🔊 Звук включён" : "🔇 Включить звук"}
         </button>
@@ -618,7 +639,7 @@ export function ReelsFeed({
           onClick={() => setMusicOn((value) => !value)}
           aria-pressed={musicOn}
           aria-label={musicOn ? "Выключить музыку" : "Включить музыку"}
-          className={`absolute left-3 top-16 z-30 rounded-full border px-3 py-1.5 text-xs font-medium backdrop-blur ${
+          className={`absolute left-3 top-[5.5rem] z-30 rounded-full border px-3 py-1.5 text-xs font-medium backdrop-blur ${
             musicOn
               ? "border-mint-edge bg-mint text-on-mint"
               : "border-white/25 bg-black/40 text-white"
@@ -695,6 +716,7 @@ export function ReelsFeed({
               active={slide.index === activeIndex}
               soundOn={soundOn}
               textHidden={textHidden}
+              filterState={filterState}
               onActive={() => activate(slide.index)}
             />
           );
@@ -785,6 +807,7 @@ function ReelSlide({
   active,
   soundOn,
   textHidden = false,
+  filterState,
   onActive,
 }: {
   post: MotivationPostDto;
@@ -793,6 +816,8 @@ function ReelSlide({
   soundOn: boolean;
   /** Текст убран — остаётся одно изображение. */
   textHidden?: boolean;
+  /** Лента, в которой стоит слайд: автор и книга в подписи сужают её. */
+  filterState?: FeedFilterState;
   onActive: () => void;
 }) {
   const ref = useRef<HTMLElement>(null);
@@ -820,6 +845,7 @@ function ReelSlide({
      срезала бы края надписи. */
   const printed = kind === "image" && post.captionInImage;
   const sourceParts = attributionParts(post);
+  const sourceFields = attributionFields(post);
   const hasCategory = Boolean(categoryLink(post));
   const explanationToggle = explanation && (
     <button
@@ -1122,9 +1148,10 @@ function ReelSlide({
               <>
                 {" "}
                 <SourceFields
-                  parts={sourceParts}
+                  fields={sourceFields}
                   href={post.attributionSourceUrl}
                   separatedAfter={hasCategory}
+                  filterState={filterState}
                   icon
                 />
               </>
@@ -1316,33 +1343,82 @@ function CaptionField({ separated, children }: { separated: boolean; children: R
 }
 
 /**
- * Автор, книга и стих — отдельными графами. Ссылка на источник одна на всю
- * группу: три ссылки подряд на один адрес скринридер зачитывал бы трижды.
+ * Автор, книга и стих — отдельными графами.
+ *
+ * Автор и книга — кнопки фильтра (VED-206): нажал «Бхагавад-гита» — лента
+ * осталась с одной Гитой. Ссылка на первоисточник — на номере стиха: он и
+ * есть адрес в книге. Нет номера — первоисточник открывает значок «↗» в
+ * конце, иначе он потерялся бы вовсе. Без ленты вокруг (окно «Цитата
+ * целиком») графы остаются текстом, а ссылка на первоисточник, если она
+ * есть, одна на всю группу: несколько ссылок подряд на один адрес скринридер
+ * зачитывал бы по разу.
  * Подчёркивание — на тексте графы: `inline-block` его от ссылки не наследует.
  */
 function SourceFields({
-  parts,
+  fields,
   href,
   separatedAfter,
+  filterState,
   icon,
 }: {
-  parts: string[];
+  fields: { kind: AttributionFieldKind; text: string }[];
   href: string | null;
   separatedAfter: boolean;
+  filterState?: FeedFilterState;
   icon: boolean;
 }) {
-  const fields = parts.map((part, index) => (
-    <Fragment key={index}>
-      {index > 0 && " "}
-      <CaptionField separated={index < parts.length - 1 || separatedAfter}>
+  const hasLocator = fields.some((field) => field.kind === "locator");
+  const splitLinks = Boolean(filterState);
+  const orphanSource = splitLinks && href && !hasLocator;
+  const nodes = fields.map((field, index) => {
+    const last = index === fields.length - 1;
+    const text = (
+      <>
         {icon && index === 0 && <span aria-hidden="true">📖 </span>}
-        <span className={href ? "underline decoration-dotted underline-offset-4" : undefined}>
-          {part}
+        <span className={href || splitLinks ? "underline decoration-dotted underline-offset-4" : undefined}>
+          {field.text}
         </span>
-      </CaptionField>
-    </Fragment>
-  ));
-  return href ? <SourceLink href={href}>{fields}</SourceLink> : <>{fields}</>;
+      </>
+    );
+    let content = text;
+    if (filterState && field.kind !== "locator") {
+      const change = field.kind === "work" ? { work: field.text } : { speaker: field.text };
+      content = (
+        <Link
+          href={filterHref(filterState, change)}
+          aria-label={`${field.kind === "work" ? "Только источник" : "Только автор"}: ${field.text}`}
+        >
+          {text}
+        </Link>
+      );
+    } else if (splitLinks && href && field.kind === "locator") {
+      content = <SourceLink href={href}>{text}</SourceLink>;
+    }
+    return (
+      <Fragment key={index}>
+        {index > 0 && " "}
+        <CaptionField separated={!last || separatedAfter || Boolean(orphanSource)}>{content}</CaptionField>
+      </Fragment>
+    );
+  });
+  if (!splitLinks)
+    return href ? <SourceLink href={href}>{nodes}</SourceLink> : <>{nodes}</>;
+  return (
+    <>
+      {nodes}
+      {orphanSource && (
+        <>
+          {" "}
+          <CaptionField separated={separatedAfter}>
+            <SourceLink href={href}>
+              <span className="sr-only">Первоисточник</span>
+              <span aria-hidden="true">↗</span>
+            </SourceLink>
+          </CaptionField>
+        </>
+      )}
+    </>
+  );
 }
 
 /**
@@ -1370,7 +1446,12 @@ function FullQuoteToggle({ quote, sourceParts }: { quote: string; sourceParts: s
           <p className="whitespace-pre-line">{quote}</p>
           {sourceParts.length > 0 && (
             <p className="mt-3 text-xs text-white/70">
-              <SourceFields parts={sourceParts} href={null} separatedAfter={false} icon={false} />
+              <SourceFields
+                fields={sourceParts.map((text) => ({ kind: "locator" as const, text }))}
+                href={null}
+                separatedAfter={false}
+                icon={false}
+              />
             </p>
           )}
         </CenteredSheet>
