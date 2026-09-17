@@ -15,6 +15,21 @@ export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 /** Канал уведомлений Android, его же создаёт приложение. */
 export const ANDROID_CHANNEL_ID = 'messages';
 
+/** Тип в `data` FCM-сообщения — им приложение различает пуши между собой. */
+export const CALL_PUSH_TYPE_INCOMING = 'call.incoming';
+export const CALL_PUSH_TYPE_ENDED = 'call.ended';
+
+/**
+ * Дозвон живёт `RING_TIMEOUT_MS` (`chat/calls/call-state.ts`) — те же 45 с
+ * здесь, чтобы FCM не держал устаревший пуш дольше, чем сервер сам считает
+ * звонок живым. Число, а не импорт: `chat/calls` не тянет `notifications` и
+ * наоборот (контракт модулей), совпадение проверяет `fcm.spec.ts`.
+ */
+export const CALL_INCOMING_TTL_SECONDS = 45;
+/** «Звонок снят» актуален секунды: устройство либо ловит его сразу, либо
+ *  рингтон погаснет само по истечении TTL входящего пуша. */
+export const CALL_ENDED_TTL_SECONDS = 30;
+
 export interface ServiceAccount {
   projectId: string;
   clientEmail: string;
@@ -96,6 +111,76 @@ export function buildFcmMessage(token: string, payload: PushPayload) {
       android: {
         priority: 'high',
         notification: { channel_id: ANDROID_CHANNEL_ID, tag: payload.tag },
+      },
+    },
+  };
+}
+
+/** Нагрузка data-only пуша входящего звонка — все значения станут строками
+ *  в `data` FCM-сообщения, других требований у HTTP v1 к `data` нет. */
+export interface CallIncomingPushData {
+  callId: string;
+  conversationId: string;
+  kind: 'audio' | 'video';
+  callerName: string;
+  /** `null`/отсутствие аватара не кладём ключом в `data` вовсе — ключа с
+   *  пустой строкой приложению разбирать сложнее, чем его отсутствия. */
+  callerAvatarUrl: string | null;
+  /** ISO-момент истечения дозвона. */
+  expiresAt: string;
+}
+
+export interface CallEndedPushData {
+  callId: string;
+  reason: string;
+}
+
+/**
+ * Data-only сообщение входящего звонка: без блока `notification` — экран
+ * вызова и рингтон рисует само приложение (`@react-native-firebase/messaging`
+ * `setBackgroundMessageHandler`), системный баннер ему бы только мешал.
+ * `android.priority = high` и `ttl` — буквальные требования VED-220.
+ */
+export function buildCallIncomingMessage(
+  token: string,
+  data: CallIncomingPushData,
+) {
+  return {
+    message: {
+      token,
+      data: {
+        type: CALL_PUSH_TYPE_INCOMING,
+        callId: data.callId,
+        conversationId: data.conversationId,
+        kind: data.kind,
+        callerName: data.callerName,
+        ...(data.callerAvatarUrl
+          ? { callerAvatarUrl: data.callerAvatarUrl }
+          : {}),
+        expiresAt: data.expiresAt,
+      },
+      android: {
+        priority: 'high',
+        ttl: `${CALL_INCOMING_TTL_SECONDS}s`,
+      },
+    },
+  };
+}
+
+/** Data-only сигнал «звонок снят»: гасит рингтон на устройствах, которые не
+ *  участвуют в разговоре. Тоже без `notification` — показывать тут нечего. */
+export function buildCallEndedMessage(token: string, data: CallEndedPushData) {
+  return {
+    message: {
+      token,
+      data: {
+        type: CALL_PUSH_TYPE_ENDED,
+        callId: data.callId,
+        reason: data.reason,
+      },
+      android: {
+        priority: 'high',
+        ttl: `${CALL_ENDED_TTL_SECONDS}s`,
       },
     },
   };

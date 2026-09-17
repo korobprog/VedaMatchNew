@@ -33,6 +33,12 @@ const publicPrefixes = [
 // гард и гость получает HTML лендинга вместо скрипта — с падением
 // «Unexpected token '<'». Ровно так и потерялся pwa-install-prompt.js.
 // Список сверяется с диском в proxy.spec.ts.
+// Публичные страницы с точным адресом, не префиксом: префикс «/app»
+// открыл бы гостю и любой будущий маршрут вида /apps или /app-… .
+// Страница загрузки приложения (VED-176): короткая ссылка vedamatch.ru/app,
+// её пересылают отдельно от лендинга.
+const publicPages = new Set(["/app"]);
+
 const publicFiles = new Set([
   "/gitabase",
   "/sw.js",
@@ -88,6 +94,7 @@ export function proxy(req: NextRequest) {
   const isPublic =
     req.nextUrl.pathname === "/" ||
     publicFiles.has(req.nextUrl.pathname) ||
+    publicPages.has(req.nextUrl.pathname) ||
     publicPrefixes.some((prefix) => req.nextUrl.pathname.startsWith(prefix));
 
   if (!hasAccess && !isPublic && !hasSessionMarker) {

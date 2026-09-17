@@ -71,6 +71,7 @@ import { getActivityFeedServer } from "@/lib/activity-server-api";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { LandingPage } from "@/components/landing";
+import { getAppManifest } from "@/lib/app-download-api";
 import { SessionRestore } from "@/components/session-restore";
 import { needsSessionRestore } from "@/lib/session-marker";
 import { InstallBanner } from "@/components/pwa/install-banner";
@@ -148,6 +149,9 @@ export default async function Home({
     if (!user && (await needsSessionRestore())) {
       return <SessionRestore returnTo={returnTo} />;
     }
+    // Манифест приложения — только для гостя: карточка загрузки есть лишь
+    // на лендинге, портал вошедшего её не показывает.
+    const appManifest = await getAppManifest().catch(() => null);
     return (
       <LandingPage
         returnTo={returnTo}
@@ -155,6 +159,7 @@ export default async function Home({
         totalMembers={communityStats?.totalMembers}
         totalCities={communityStats?.totalCities}
         totalCommunities={communityStats?.totalCommunities}
+        appManifest={appManifest}
       />
     );
   }

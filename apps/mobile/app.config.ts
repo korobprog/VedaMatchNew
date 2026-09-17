@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs';
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 import { resolveVariant } from './src/config/variant.ts';
+import { resolveVersionCode, resolveVersionName } from './src/config/app-version.ts';
+import { version as packageVersion } from './package.json';
 
 /**
  * Одна кодовая база, четыре сборки: контур `APP_CONTOUR` (ru, com) на канал
@@ -19,7 +21,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ...config,
     name: 'VedaMatch',
     slug: 'vedamatch',
-    version: '0.1.0',
+    // versionName человека: номер пакета (+короткий sha в сборках CI).
+    // versionCode системы самообновления — ниже, в android.versionCode.
+    version: resolveVersionName(packageVersion, process.env),
     orientation: 'portrait',
     // Иконка, слои adaptive-иконки, силуэт уведомлений и знак сплэша ниже —
     // все перегенерируются одним скриптом из фирменных исходников бренд-кита
@@ -32,7 +36,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     android: {
       package: 'com.vedamatch.app',
       ...(withFirebase ? { googleServicesFile } : {}),
-      versionCode: 1,
+      // Обязан расти от сборки к сборке — иначе самообновление с сайта
+      // (channel=site) сочтёт новый файл не новее уже установленного.
+      // Источник роста и подробности — src/config/app-version.ts.
+      versionCode: resolveVersionCode(process.env),
       adaptiveIcon: {
         // theme/tokens.ts: light.bg0 — фон под фирменным знаком, одинаков в
         // обеих темах интерфейса (это подложка самой иконки, а не
@@ -133,6 +140,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           enableBackgroundPlayback: false,
         },
       ],
+      // Релизная подпись из секретов CI (VED-176). Без всех четырёх
+      // ANDROID_KEYSTORE_* остаётся отладочная подпись шаблона, как раньше —
+      // см. apps/mobile/plugins/with-release-signing.js. Строкой, а не
+      // импортом функции: ExpoConfig.plugins типизирован только под путь к
+      // модулю (@expo/config-types), Expo резолвит и вызывает его сам.
+      './plugins/with-release-signing.js',
     ],
     experiments: { typedRoutes: true, reactCompiler: true },
     extra: { variant },

@@ -1,4 +1,8 @@
-import type { ChatCallEndReason, ChatCallStatus } from '@vedamatch/shared';
+import type {
+  ChatCallEndedPushReason,
+  ChatCallEndReason,
+  ChatCallStatus,
+} from '@vedamatch/shared';
 
 /**
  * Переходы состояний звонка. Отдельным чистым модулем: правил немного, но
@@ -83,6 +87,29 @@ export function roleOf(
   if (call.callerId === userId) return 'caller';
   if (call.calleeId === userId) return 'callee';
   return null;
+}
+
+/**
+ * Финальный статус → причина data-пуша «звонок снят» (VED-220), которым
+ * гасится рингтон на нативных устройствах, не участвующих в разговоре.
+ * `null` для нефинальных статусов: `ringing` и `accepted` не гасят рингтон
+ * этим путём — на `accepted` отдельный повод, «ответили на другом
+ * устройстве», собирается в сервисе, а не здесь (не статус, а переход).
+ */
+const CALL_ENDED_PUSH_REASON: Partial<
+  Record<ChatCallStatus, ChatCallEndedPushReason>
+> = {
+  declined: 'declined',
+  missed: 'missed',
+  cancelled: 'cancelled',
+  ended: 'ended',
+  failed: 'failed',
+};
+
+export function callEndedPushReason(
+  status: ChatCallStatus,
+): ChatCallEndedPushReason | null {
+  return CALL_ENDED_PUSH_REASON[status] ?? null;
 }
 
 /** Сколько дозваниваемся, прежде чем записать пропущенный. */

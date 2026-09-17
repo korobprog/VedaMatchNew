@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { ArrowRight, Play } from "lucide-react";
 import type { PricingPlan } from "@vedamatch/shared";
+import type { AppManifest } from "@/lib/app-download";
+import { AppDownloadSection } from "./AppDownloadSection";
 import { Navbar } from "./Navbar";
 import { BackgroundOrbs } from "./Orb";
 import { HexScales } from "./HexScales";
@@ -28,12 +30,14 @@ export function LandingPage({
   totalMembers,
   totalCities,
   totalCommunities,
+  appManifest,
 }: {
   returnTo?: string;
   plan?: PricingPlan;
   totalMembers?: number;
   totalCities?: number;
   totalCommunities?: number;
+  appManifest?: AppManifest | null;
 }) {
   const t = useTranslations("Landing");
   return (
@@ -276,6 +280,11 @@ export function LandingPage({
           </motion.div>
         </div>
       </section>
+
+      {/* Установка приложения — рядом с подвалом, после тарифа и до него:
+          решение «поставить на телефон» приходит уже после того, как гость
+          увидел сервисы и цену, а не раньше. */}
+      <AppDownloadSection manifest={appManifest ?? null} />
 
       <Footer />
       <InstallBanner />

@@ -990,15 +990,21 @@ model MotivationSourceWatch {
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid())
-  tokenHash String   @unique
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
-  revoked   Boolean  @default(false)
-  createdAt DateTime @default(now())
+  revoked   Boolean   @default(false)
+  /// Когда отозван: повтор только что ротированного токена — гонка, а не кража.
+  revokedAt DateTime?
+  /// Семейство — один вход и все его ротации. Повтор отозванного токена
+  /// отзывает только своё семейство. null — токены до появления семейств.
+  familyId  String?
+  createdAt DateTime  @default(now())
 
   @@index([userId])
+  @@index([familyId])
   // Под чистку протухших/отозванных (RefreshTokenCleanupService).
   @@index([expiresAt])
   @@index([revoked, createdAt])
@@ -2090,9 +2096,13 @@ model NotificationDevice {
   platform   String
   token      String   @unique
   /// Сборка приложения, например `ru-site`: по ней видно, откуда люди ставят.
-  appVariant String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  appVariant  String?
+  /// Приложение умеет нативный экран звонка по data-пушу FCM (VED-220):
+  /// такому устройству входящий звонок шлётся data-only, а не обычным
+  /// пушем с уведомлением — иначе звонок звонил бы дважды.
+  nativeCalls Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([userId])
 }

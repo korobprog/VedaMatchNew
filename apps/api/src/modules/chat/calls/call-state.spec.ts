@@ -1,4 +1,4 @@
-import { isFinal, roleOf, transition } from './call-state';
+import { callEndedPushReason, isFinal, roleOf, transition } from './call-state';
 
 describe('transition', () => {
   it('принять может только вызываемый и только во время дозвона', () => {
@@ -50,6 +50,21 @@ describe('transition', () => {
     }
     expect(isFinal('ringing')).toBe(false);
     expect(isFinal('accepted')).toBe(false);
+  });
+});
+
+describe('callEndedPushReason', () => {
+  it('каждый финальный статус даёт свою причину data-пуша', () => {
+    expect(callEndedPushReason('declined')).toBe('declined');
+    expect(callEndedPushReason('missed')).toBe('missed');
+    expect(callEndedPushReason('cancelled')).toBe('cancelled');
+    expect(callEndedPushReason('ended')).toBe('ended');
+    expect(callEndedPushReason('failed')).toBe('failed');
+  });
+
+  it('нефинальные статусы не дают причины — гасить рингтон нечем', () => {
+    expect(callEndedPushReason('ringing')).toBeNull();
+    expect(callEndedPushReason('accepted')).toBeNull();
   });
 });
 

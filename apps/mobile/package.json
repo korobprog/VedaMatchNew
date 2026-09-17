@@ -54,7 +54,10 @@
     "lint": "tsc --noEmit",
     "test": "jest",
     "test:brand-geometry": "node --test scripts/brand-geometry.test.mjs",
+    "test:gradle-release-signing": "node --test plugins/gradle-release-signing.test.mjs",
+    "test:app-manifest": "node --test scripts/app-manifest.test.mjs",
     "generate:brand-assets": "node scripts/generate-brand-assets.mjs",
+    "generate:app-manifest": "node scripts/app-manifest.mjs",
     "export:android": "expo export --platform android --output-dir dist"
   },
   "private": true,
