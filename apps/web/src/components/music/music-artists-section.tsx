@@ -54,11 +54,18 @@ export function MusicArtistsSection({
   return (
     <>
       <div className="mt-2 flex justify-end">
+        {/* Высота `h-9` — как у переключателя «Записей» ниже
+            (`music-track-list.tsx`): две однотипные кнопки на одной
+            странице обязаны выглядеть одного роста. Область нажатия при
+            этом не меньше прежней: прозрачный `before:` раздвигает её на
+            ±2px по вертикали (`before:-inset-y-0.5`, 36+2+2=40) — тот же
+            приём, что `feed-attribution-filter.tsx` использует по
+            горизонтали. */}
         <button
           type="button"
           onClick={toggle}
           aria-pressed={list}
-          className="flex h-10 min-w-10 items-center gap-2 rounded-xl border border-glass-brd px-3 text-xs font-semibold text-text-1 transition-colors hover:text-text-0"
+          className="relative flex h-9 min-w-10 items-center gap-2 rounded-xl border border-glass-brd px-3 text-xs font-semibold text-text-1 transition-colors before:absolute before:-inset-y-0.5 before:inset-x-0 before:content-[''] hover:text-text-0"
         >
           {list ? <GridIcon /> : <ListIcon />}
           {list ? "Плиткой" : "Списком"}
@@ -94,9 +101,11 @@ function MusicArtistRow({ artist }: { artist: MusicArtistDto }) {
   return (
     <Link
       href={`/music/artists/${artist.slug}`}
-      className="flex min-h-10 items-center gap-3 rounded-xl py-1.5 pl-2 pr-3 transition-colors hover:bg-glass"
+      className="flex min-h-10 items-center gap-3 rounded-xl py-2 pl-2 pr-3 transition-colors hover:bg-glass"
     >
-      <span className="size-9 shrink-0 overflow-hidden rounded-full">
+      {/* Тот же размер обложки, что в `MusicTrackRow` (`h-10 w-10`) — та же
+          плотность строки у обоих списков на одной странице. */}
+      <span className="size-10 shrink-0 overflow-hidden rounded-full">
         <MusicCover
           url={artist.coverUrl}
           seed={artist.id}
