@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ADMIN_AUDIT_ACTIONS } from "@vedamatch/shared";
-import type { AdminAuditAction, AdminAuditQuery } from "@vedamatch/shared";
-import { formatDate } from "@/lib/admin-labels";
+import type {
+  AdminAuditAction,
+  AdminAuditQuery,
+  AdminServiceSlug,
+} from "@vedamatch/shared";
+import { adminServiceLabels, formatDate } from "@/lib/admin-labels";
 import { getAdminAudit } from "@/lib/api";
 import {
   auditActionLabels,
   auditTargetHref,
   describeAuditDetails,
 } from "@/lib/audit-labels";
+import { actionsForServices } from "@/lib/audit-scope";
 import { requireUser } from "@/lib/require-user";
 
 export const metadata = {
@@ -30,7 +34,17 @@ export default async function AdminAuditPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await requireUser();
-  if (user.role !== "admin") redirect("/");
+  // service-admin без единого сервиса технически не должен существовать, но
+  // если такая учётка попала на страницу — журнал ему нечего показывать.
+  const isFullAdmin = user.role === "admin";
+  const services = isFullAdmin ? null : (user.adminServices ?? []);
+  if (!isFullAdmin && (services?.length ?? 0) === 0) redirect("/");
+
+  // VED-42: service-admin видит журнал, но не весь — только события своих
+  // сервисов. Бэкенд фильтрует принудительно (это и есть граница доступа),
+  // список здесь нужен только для честного выпадающего меню: не предлагать
+  // действие, которое сервер всё равно не отдаст.
+  const visibleActions = actionsForServices(services);
 
   const raw = await searchParams;
   const action = single(raw.action);
@@ -40,7 +54,7 @@ export default async function AdminAuditPage({
 
   const query: AdminAuditQuery = {
     page,
-    ...(isKnownAction(action) ? { action } : {}),
+    ...(isKnownAction(action, visibleActions) ? { action } : {}),
     ...(targetId ? { targetId } : {}),
     ...(days ? { since: sinceFor(days) } : {}),
   };
@@ -52,11 +66,20 @@ export default async function AdminAuditPage({
       <h1 className="font-display text-2xl font-bold text-text-0 sm:text-3xl">
         Журнал действий
       </h1>
-      <p className="mb-6 mt-1 text-sm text-text-1">
+      <p className={`mt-1 text-sm text-text-1 ${isFullAdmin ? "mb-6" : "mb-1"}`}>
         Что администрация делала с чужими данными и настройками платформы.
         Модерация Motivation ведёт свой журнал — он привязан к посту и виден в
         карточке.
       </p>
+      {!isFullAdmin && (
+        <p className="mb-6 text-sm text-text-2">
+          Показаны только события ваших сервисов:{" "}
+          {(services ?? [])
+            .map((slug) => adminServiceLabels[slug as AdminServiceSlug] ?? slug)
+            .join(", ")}
+          . Остальной портал в этом списке не виден.
+        </p>
+      )}
 
       <form className="mb-6 flex flex-wrap items-end gap-3">
         <label className="text-sm font-medium text-text-1">
@@ -67,7 +90,7 @@ export default async function AdminAuditPage({
             className="mt-1 block w-64 max-w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
           >
             <option value="">Любое</option>
-            {ADMIN_AUDIT_ACTIONS.map((item) => (
+            {visibleActions.map((item) => (
               <option key={item} value={item}>
                 {auditActionLabels[item]}
               </option>
@@ -206,10 +229,19 @@ function single(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function isKnownAction(value: string | undefined): value is AdminAuditAction {
+/**
+ * Действие из query валидно, только если оно вообще существует и входит в
+ * список, видимый этому администратору — иначе строка молча уходит на
+ * бэкенд, который её отклонит 403 вместо тихого игнора (для service-admin,
+ * полный admin по-прежнему видит любое известное действие).
+ */
+function isKnownAction(
+  value: string | undefined,
+  visibleActions: readonly AdminAuditAction[],
+): value is AdminAuditAction {
   return (
     value !== undefined &&
-    (ADMIN_AUDIT_ACTIONS as readonly string[]).includes(value)
+    (visibleActions as readonly string[]).includes(value)
   );
 }
 

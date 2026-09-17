@@ -10,6 +10,7 @@ import {
   MAX_IMAGES_PER_NOTICE,
   PORTAL_ACTIVITY_EVENTS,
   NOTICES_PER_DAY,
+  resolveDisplayName,
   type AdminAuditEvent,
   type CreateNoticeRequest,
   type NoticeDto,
@@ -690,13 +691,21 @@ export class NoticesService {
     await this.recountRubric(notice.rubricId);
 
     if (notice.authorId !== userId) {
+      // Журнал самодостаточен: имя автора кладём в details сразу, а не
+      // оставляем сырой userId — иначе строку «кто, чьё, заголовок» читающий
+      // не соберёт без похода в карточку пользователя (VED-42, отзыв
+      // тестировщика — запись должна быть понятной, а не только существовать).
+      const author = await this.prisma.user.findUnique({
+        where: { id: notice.authorId },
+        select: { name: true, spiritualName: true },
+      });
       const event: AdminAuditEvent = {
         actorId: userId,
         action: 'notices.notice-deleted',
         targetType: 'notice',
         targetId: id,
         details: {
-          authorId: notice.authorId,
+          authorName: author ? resolveDisplayName(author) : notice.authorId,
           title: notice.titleRu ?? notice.titleEn ?? '',
         },
       };

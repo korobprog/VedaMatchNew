@@ -24,6 +24,26 @@ describe("canOpenAdminSection", () => {
     expect(canOpenAdminSection(user, "market")).toBe(true);
     expect(canOpenAdminSection(user, "motivation")).toBe(false);
   });
+
+  // VED-42: журнал действий — особый scope "staff", открыт любому
+  // администратору с хотя бы одним сервисом, не только полному admin.
+  // Содержимое внутри уже отфильтровано бэкендом по его сервисам.
+  it("журнал действий открыт админу сервиса, а не только порталу", () => {
+    expect(canOpenAdminSection({ role: "admin" }, "staff")).toBe(true);
+    expect(
+      canOpenAdminSection(
+        { role: "service-admin", adminServices: ["notices"] },
+        "staff",
+      ),
+    ).toBe(true);
+  });
+
+  it("журнал действий недоступен пользователю без единого сервиса", () => {
+    expect(
+      canOpenAdminSection({ role: "service-admin", adminServices: [] }, "staff"),
+    ).toBe(false);
+    expect(canOpenAdminSection({ role: "user" }, "staff")).toBe(false);
+  });
 });
 
 describe("visibleAdminNav", () => {
@@ -35,14 +55,18 @@ describe("visibleAdminNav", () => {
     );
   });
 
-  it("админу сервиса оставляет только его сервис и убирает пустые группы", () => {
+  it("админу сервиса оставляет только его сервис, убирает пустые группы, но оставляет журнал", () => {
     const groups = visibleAdminNav({
       role: "service-admin",
       adminServices: ["market"],
     });
 
-    expect(groups.map((group) => group.title)).toEqual(["Сервисы"]);
+    // «Платформа» остаётся в списке групп из-за пункта «Журнал действий»
+    // (scope "staff"), но остальные её пункты (Рассылки, Каталог сервисов и
+    // т.д.) по-прежнему видны только полному admin — их тут быть не должно.
+    expect(groups.map((group) => group.title)).toEqual(["Сервисы", "Платформа"]);
     expect(groups[0].items.map((item) => item.href)).toEqual(["/admin/market"]);
+    expect(groups[1].items.map((item) => item.href)).toEqual(["/admin/audit"]);
   });
 
   it("обычному пользователю не оставляет ничего", () => {
@@ -117,6 +141,6 @@ describe("раздел «Вакансии»", () => {
       visibleAdminNav(user)
         .flatMap((group) => group.items)
         .map((item) => item.href),
-    ).toEqual(["/admin/vacancies"]);
+    ).toEqual(["/admin/vacancies", "/admin/audit"]);
   });
 });

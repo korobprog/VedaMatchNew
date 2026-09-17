@@ -115,4 +115,29 @@ describe('buildWhere', () => {
   it('мусор вместо даты не ломает выборку', () => {
     expect(buildWhere({ since: 'вчера' })).toEqual({});
   });
+
+  // VED-42: service-admin видит журнал, но только события своих сервисов.
+  it('без выбранного действия ограничивает по списку scopeActions', () => {
+    expect(
+      buildWhere({}, ['notices.report-resolved', 'notices.notice-deleted']),
+    ).toEqual({
+      action: { in: ['notices.report-resolved', 'notices.notice-deleted'] },
+    });
+  });
+
+  it('пустой scopeActions даёт заведомо пустую выборку, а не снятие фильтра', () => {
+    expect(buildWhere({}, [])).toEqual({ action: { in: [] } });
+  });
+
+  it('конкретное action в запросе перекрывает scopeActions (контроллер уже проверил право)', () => {
+    expect(
+      buildWhere({ action: 'notices.notice-deleted' }, [
+        'notices.notice-deleted',
+      ]),
+    ).toEqual({ action: 'notices.notice-deleted' });
+  });
+
+  it('admin (без scopeActions) не ограничивается вовсе', () => {
+    expect(buildWhere({})).toEqual({});
+  });
 });

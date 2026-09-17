@@ -134,6 +134,12 @@ describe('NoticesService.remove', () => {
       noticeImage: {
         findMany: jest.fn().mockResolvedValue([{ storageKey: 'k1' }]),
       },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          name: 'Александр',
+          spiritualName: 'Ачьюта дас',
+        }),
+      },
     };
     const images = { removeMany: jest.fn().mockResolvedValue(undefined) };
     const bus = { emit: jest.fn() };
@@ -184,7 +190,24 @@ describe('NoticesService.remove', () => {
       action: 'notices.notice-deleted',
       targetType: 'notice',
       targetId: 'n1',
-      details: { authorId: 'author', title: 'Отдам книги' },
+      // Духовное имя перекрывает мирское (resolveDisplayName) — в журнале
+      // должно читаться то же имя, что видно во всём остальном портале.
+      details: { authorName: 'Ачьюта дас', title: 'Отдам книги' },
+    });
+  });
+
+  it('если автора уже нет в базе, запись всё равно уходит — с сырым id как запасным вариантом', async () => {
+    const { prisma, bus, service } = removeSetup();
+    prisma.user.findUnique.mockResolvedValueOnce(null);
+
+    await service.remove('admin', true, 'n1');
+
+    expect(bus.emit).toHaveBeenCalledWith('admin.action', {
+      actorId: 'admin',
+      action: 'notices.notice-deleted',
+      targetType: 'notice',
+      targetId: 'n1',
+      details: { authorName: 'author', title: 'Отдам книги' },
     });
   });
 });

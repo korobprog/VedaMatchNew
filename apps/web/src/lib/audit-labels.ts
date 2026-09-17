@@ -80,6 +80,7 @@ const DETAIL_LABELS: Record<string, string> = {
   hidden: "скрыт",
   verified: "проверено",
   important: "важное",
+  authorName: "автор",
 };
 
 /** Подробности одной строкой; пустые значения выбрасываются. */

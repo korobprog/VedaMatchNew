@@ -54,6 +54,14 @@ describe("describeAuditDetails", () => {
   it("пустые подробности дают пустую строку", () => {
     expect(describeAuditDetails({})).toBe("");
   });
+
+  // VED-42: удаление чужого объявления показывает читаемое имя автора,
+  // а не сырой userId.
+  it("показывает автора по имени, а не по id", () => {
+    expect(
+      describeAuditDetails({ authorName: "Радха Дэви", title: "Отдам книги" }),
+    ).toBe("автор: Радха Дэви · заголовок: Отдам книги");
+  });
 });
 
 describe("auditTargetHref", () => {

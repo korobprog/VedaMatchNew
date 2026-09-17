@@ -72,6 +72,7 @@ const DETAIL_LABELS: Record<string, string> = {
   note: 'заметка',
   paidUntil: 'оплачено до',
   until: 'до',
+  authorName: 'автор',
 };
 
 export function describeAuditAction(action: AdminAuditAction): string {
