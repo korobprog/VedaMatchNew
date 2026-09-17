@@ -8,10 +8,17 @@ interface Props {
   title: string;
   subtitle?: string;
   children?: ReactNode;
+  /**
+   * Скрытый вход в служебный экран (например, «Проверка связи» —
+   * apps/mobile/src/app/calls-probe.tsx): долгое нажатие на заголовок
+   * вкладки, без визуальной подсказки — это инструмент команды, не
+   * продуктовая функция.
+   */
+  onTitleLongPress?: () => void;
 }
 
 /** Каркас экрана вкладки: заголовок Unbounded и прокручиваемое тело. */
-export function Screen({ title, subtitle, children }: Props) {
+export function Screen({ title, subtitle, children, onTitleLongPress }: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -21,7 +28,11 @@ export function Screen({ title, subtitle, children }: Props) {
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 20 }]}
     >
       <View style={styles.header}>
-        <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
+        <Text
+          accessibilityRole="header"
+          onLongPress={onTitleLongPress}
+          style={[styles.title, { color: colors.text0 }]}
+        >
           {title}
         </Text>
         {subtitle ? <Text style={[styles.subtitle, { color: colors.text1 }]}>{subtitle}</Text> : null}
