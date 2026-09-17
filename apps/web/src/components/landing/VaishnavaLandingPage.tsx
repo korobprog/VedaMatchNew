@@ -28,6 +28,8 @@ import type {
   PricingPlan,
 } from "@vedamatch/shared";
 import { LINEAGES, LINEAGE_GROUP_LABELS } from "@vedamatch/shared";
+import type { AppManifest } from "@/lib/app-download";
+import { AppDownloadSection } from "./AppDownloadSection";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { useServiceNames } from "@/components/service-catalog-provider";
 import { MemberCounter } from "@/components/member-counter";
@@ -172,6 +174,7 @@ export function VaishnavaLandingPage({
   totalCities,
   totalCommunities,
   communities = [],
+  appManifest,
 }: {
   plan?: PricingPlan;
   totalMembers?: number;
@@ -179,6 +182,7 @@ export function VaishnavaLandingPage({
   totalCommunities?: number;
   /** Общины для карты; пусто — секции карты не будет. */
   communities?: ChatMapCommunity[];
+  appManifest?: AppManifest | null;
 }) {
   const t = useTranslations("Vaishnava");
   const tNav = useTranslations("Landing.nav");
@@ -716,6 +720,8 @@ export function VaishnavaLandingPage({
           </motion.div>
         </div>
       </section>
+
+      <AppDownloadSection manifest={appManifest ?? null} />
 
       <Footer />
       <InstallBanner />

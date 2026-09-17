@@ -1,0 +1,9 @@
+version: 2
+secret:
+  # Тест config-плагина подписи Android: в его первой версии стояли
+  # заведомо тестовые строки 'kspass' и 'keypass' рядом с именами
+  # ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_PASSWORD, и сканер принял их за
+  # утёкший пароль (PR #354). Настоящий ключ подписи живёт вне репозитория,
+  # в секретах GitHub. Исключение — только этот файл.
+  ignored_paths:
+    - apps/mobile/plugins/gradle-release-signing.test.mjs

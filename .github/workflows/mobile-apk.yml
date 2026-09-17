@@ -1,9 +1,10 @@
 name: Mobile APK
 
-# Ручная сборка APK для проверки на телефоне. Подпись пока отладочная, как у
-# release-сборки из `expo prebuild`: такой APK ставится на телефон, но не
-# годится для магазинов и не обновит сборку с другим ключом. Релизный ключ
-# появится в фазе 7 и будет браться из секретов репозитория.
+# Сборка APK для проверки на телефоне и — при publish=true и channel=site —
+# публичной раздачи с сайта (VED-176). Без секретов ANDROID_KEYSTORE_*
+# подпись отладочная, как у `expo prebuild` по умолчанию: такой APK ставится
+# на телефон, но не годится для магазинов и не обновит сборку с другим
+# ключом. Секреты и локальный путь к ключу — apps/mobile/README.md.
 
 on:
   workflow_dispatch:
@@ -18,6 +19,10 @@ on:
         type: choice
         options: [site, store]
         default: site
+      publish:
+        description: Опубликовать APK и latest.json в S3 (только channel=site)
+        type: boolean
+        default: false
 
 concurrency:
   group: mobile-apk-${{ github.ref }}-${{ inputs.contour }}-${{ inputs.channel }}
@@ -31,6 +36,12 @@ jobs:
     env:
       APP_CONTOUR: ${{ inputs.contour }}
       APP_CHANNEL: ${{ inputs.channel }}
+      # run_number растёт на каждый запуск воркфлоу (включая ручные) — этого
+      # достаточно для монотонности, требуемой самообновлением с сайта.
+      # Смещение — чтобы не начинать снова с единицы поверх версий, уже
+      # выпущенных этим способом; см. apps/mobile/src/config/app-version.ts.
+      APP_VERSION_CODE: ${{ 1000 + github.run_number }}
+      APP_VERSION_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -57,6 +68,8 @@ jobs:
         run: |
           pnpm --filter @vedamatch/mobile lint
           pnpm --filter @vedamatch/mobile test
+          pnpm --filter @vedamatch/mobile test:gradle-release-signing
+          pnpm --filter @vedamatch/mobile test:app-manifest
 
       # Настройки Firebase для пушей FCM лежат в секрете репозитория, а не в
       # коде. Без секрета APK собирается, только пуши в нём не работают.
@@ -71,6 +84,31 @@ jobs:
             echo "::warning::Секрет GOOGLE_SERVICES_JSON не задан: APK без пушей FCM"
           fi
 
+      # Ключ хранится вне репозитория (README: /Users/mamu/secrets локально).
+      # Без секрета шаг только предупреждает — plugins/with-release-signing.js
+      # без всех четырёх ANDROID_KEYSTORE_* оставляет отладочную подпись.
+      - name: Android release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::Секрет ANDROID_KEYSTORE_BASE64 не задан: APK будет с отладочной подписью"
+            exit 0
+          fi
+          KEYSTORE_PATH="$RUNNER_TEMP/release.keystore.jks"
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          {
+            echo "ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH"
+            # Через env шага, а не подстановкой в текст команды: спецсимволы
+            # в пароле не ломают скрипт.
+            echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "ANDROID_KEY_ALIAS=$KEY_ALIAS"
+            echo "ANDROID_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
       - name: Prebuild Android project
         working-directory: apps/mobile
         run: npx expo prebuild --platform android --clean --no-install
@@ -79,8 +117,69 @@ jobs:
         working-directory: apps/mobile/android
         run: ./gradlew assembleRelease --no-daemon
 
+      - name: Найти собранный APK
+        id: apk
+        working-directory: apps/mobile
+        run: |
+          APK_PATH=$(find android/app/build/outputs/apk/release -name '*.apk' | head -n1)
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::APK не найден в outputs/apk/release"
+            exit 1
+          fi
+          echo "path=$APK_PATH" >> "$GITHUB_OUTPUT"
+
       - uses: actions/upload-artifact@v4
         with:
           name: vedamatch-${{ inputs.contour }}-${{ inputs.channel }}-${{ github.sha }}
-          path: apps/mobile/android/app/build/outputs/apk/release/*.apk
+          path: apps/mobile/${{ steps.apk.outputs.path }}
           retention-days: 14
+
+      # Публикация раздачи с сайта. Только channel=site (store не умеет
+      # самообновляться и его версии живут в консоли магазина), только по
+      # явному входному параметру `publish` и только когда секреты S3 заданы —
+      # без любого из трёх условий шаг просто предупреждает и не публикует.
+      - name: Публикация в S3
+        if: inputs.channel == 'site' && inputs.publish
+        working-directory: apps/mobile
+        env:
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          S3_REGION: ${{ secrets.S3_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          S3_PUBLIC_URL: ${{ secrets.S3_PUBLIC_URL }}
+        run: |
+          if [ -z "$S3_ENDPOINT" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$S3_BUCKET_NAME" ] || [ -z "$S3_PUBLIC_URL" ]; then
+            echo "::warning::Секреты S3 не заданы целиком: публикация пропущена, в артефактах запуска остался только APK"
+            exit 0
+          fi
+
+          APK_PATH="${{ steps.apk.outputs.path }}"
+          # Та же формула, что resolveVersionName в src/config/app-version.ts:
+          # номер пакета плюс первые семь символов sha сборки.
+          VERSION_NAME="$(node -p "require('./package.json').version")+${GITHUB_SHA:0:7}"
+
+          KEY_PREFIX="mobile/android/${{ inputs.contour }}-${{ inputs.channel }}"
+          APK_KEY="$KEY_PREFIX/vedamatch-$VERSION_NAME-$APP_VERSION_CODE.apk"
+          MANIFEST_KEY="$KEY_PREFIX/latest.json"
+          PUBLIC_APK_URL="${S3_PUBLIC_URL%/}/$APK_KEY"
+
+          node scripts/app-manifest.mjs \
+            --apk "$APK_PATH" \
+            --version-name "$VERSION_NAME" \
+            --version-code "$APP_VERSION_CODE" \
+            --url "$PUBLIC_APK_URL" \
+            --commit "$GITHUB_SHA" \
+            --out dist/latest.json
+
+          aws s3 cp "$APK_PATH" "s3://$S3_BUCKET_NAME/$APK_KEY" \
+            --endpoint-url "$S3_ENDPOINT" \
+            --acl public-read \
+            --content-type application/vnd.android.package-archive
+          aws s3 cp dist/latest.json "s3://$S3_BUCKET_NAME/$MANIFEST_KEY" \
+            --endpoint-url "$S3_ENDPOINT" \
+            --acl public-read \
+            --content-type application/json \
+            --cache-control "no-cache"
+
+          echo "Опубликовано: ${S3_PUBLIC_URL%/}/$MANIFEST_KEY"
