@@ -174,7 +174,7 @@ export function QuoteReviewCard({
         <DeletePostButton
           postId={post.id}
           title={post.title || post.slug}
-          isPublished={post.status === "published"}
+          status={post.status}
           pendingAction={pendingAction}
           run={run}
         />

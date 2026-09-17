@@ -35,7 +35,10 @@ import {
 } from "./ui";
 
 /**
- * Опубликованное: то, что люди уже читают в ленте.
+ * Опубликованное: то, что люди уже читают в ленте, плюс то, что читали до
+ * недавнего «Скрыть» (`selectPublishedPosts`, VED-251) — скрытая карточка
+ * помечена бейджем «Скрыто из ленты» и той же кнопкой-переключателем, не
+ * покидая список.
  *
  * Раньше этого раздела не было вовсе — опубликованное лежало свёрнутым
  * списком в самом низу очереди, вперемешку с отклонённым и скрытым, и найти
@@ -79,6 +82,13 @@ export function MotivationPublishedList({
   const [uploadErrors, setUploadErrors] = useState<
     Record<string, string | null>
   >({});
+  /**
+   * Карточки, которые скрыли этим же сеансом (VED-251): под ними висит
+   * подсказка, что делать дальше, — без таймера, до следующего действия над
+   * карточкой. Ключ убирается сам при возврате в ленту — обратное действие
+   * в подсказке уже не нуждается.
+   */
+  const [hideNotice, setHideNotice] = useState<Record<string, boolean>>({});
 
   /**
    * Пришли из ленты — подводим к той самой карточке.
@@ -108,6 +118,10 @@ export function MotivationPublishedList({
         .some((field) => field!.toLocaleLowerCase("ru-RU").includes(needle)),
     );
   }, [posts, query]);
+
+  /** Для счётчика над списком: сколько из показанного реально в ленте. */
+  const hiddenCount = posts?.filter((post) => post.status === "hidden").length ?? 0;
+  const publishedCount = (posts?.length ?? 0) - hiddenCount;
 
   if (!posts) return <LoadFailure what="опубликованные вдохновения" />;
 
@@ -149,17 +163,25 @@ export function MotivationPublishedList({
       <p className="mt-3 text-sm text-text-2">
         {query.trim()
           ? `Найдено: ${found.length} из ${posts.length}`
-          : `Опубликовано: ${posts.length}`}
+          : // `posts` — это `published` и `hidden` вместе (VED-251), и
+            // «Опубликовано: N» врало бы, если часть N на деле скрыта из
+            // ленты. Хвост «· Скрыто: M» показываем только когда скрытые
+            // действительно есть — не загромождать подпись нулём.
+            hiddenCount > 0
+            ? `Опубликовано: ${publishedCount} · Скрыто: ${hiddenCount}`
+            : `Опубликовано: ${publishedCount}`}
       </p>
 
-      {/* Пришли из ленты, а карточки здесь нет — значит, её успели снять с
-          показа. Молча показывать начало списка нельзя: человек решит, что
-          «Править» открыло не тот афоризм. */}
+      {/* Пришли из ленты, а карточки здесь нет — значит, её успели удалить.
+          Скрытая (VED-251) сюда бы уже попала: этот же список показывает и
+          опубликованное, и снятое с показа (см. selectPublishedPosts), так
+          что «не нашлась» теперь однозначно значит «удалена». Молча
+          показывать начало списка нельзя: человек решит, что «Править»
+          открыло не тот афоризм. */}
       {openSlug && !openId && (
         <p role="status" className={`${cardClass} mt-4 text-sm text-text-1`}>
           Карточка, с которой вы пришли из ленты, среди опубликованного не
-          нашлась — её сняли с показа или удалили. Скрытое лежит во вкладке
-          «Заготовки».
+          нашлась — похоже, её удалили.
         </p>
       )}
 
@@ -231,8 +253,27 @@ export function MotivationPublishedList({
                         [post.id]: message,
                       }))
                     }
+                    onHideToggle={(nextHidden) =>
+                      setHideNotice((current) => {
+                        // Возврат в ленту снимает подсказку: она была про то,
+                        // как отменить именно скрытие.
+                        if (!nextHidden) {
+                          if (!current[post.id]) return current;
+                          const next = { ...current };
+                          delete next[post.id];
+                          return next;
+                        }
+                        return { ...current, [post.id]: true };
+                      })
+                    }
                     run={run}
                   />
+
+                  {hideNotice[post.id] && (
+                    <p role="status" className="mt-2 text-sm text-text-1">
+                      Скрыто из ленты. Вернуть можно этой же кнопкой.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -240,7 +281,7 @@ export function MotivationPublishedList({
                 <div className="mt-3">
                   <DeletePostConfirm
                     postId={post.id}
-                    isPublished={post.status === "published"}
+                    status={post.status}
                     pendingAction={pending[post.id]}
                     run={run}
                     onCancel={() => setDeleting(null)}
@@ -286,6 +327,13 @@ function aphorismOf(post: MotivationAdminCandidateDto): string {
  * Пять действий карточки — квадратами со значками, три и два в ряд
  * (VED-199). Порядок прежний: посмотреть, править, скрыть, заменить
  * картинку, удалить — опасное последним.
+ *
+ * Во втором ряду перед «Заменить картинку» — пустая клетка-распорка
+ * (VED-251): без неё картинка вставала прямо под первой кнопкой ряда, а
+ * у подсвеченной карточки та кнопка — «Вернуться в ленту» со стрелкой «←».
+ * На телефоне это две соседние по вертикали цели, и палец легко промахивался
+ * с одной на другую. Распорка сдвигает картинку в среднюю колонку, под
+ * «Править текст», — действия больше не стоят друг под другом.
  */
 function PostActions({
   post,
@@ -296,6 +344,7 @@ function PostActions({
   onEdit,
   onDelete,
   onUploadError,
+  onHideToggle,
   run,
 }: {
   post: MotivationAdminCandidateDto;
@@ -307,29 +356,55 @@ function PostActions({
   onEdit: () => void;
   onDelete: () => void;
   onUploadError: (message: string | null) => void;
+  /** `true` — карточку только что скрыли, `false` — вернули в ленту. */
+  onHideToggle: (nextHidden: boolean) => void;
   run: ReturnType<typeof useAdminCommand>["run"];
 }) {
   const hidden = post.status === "hidden";
   /* Открывает ленту прямо на этой карточке — тем же адресом, что и переход
      из «Студии». У карточки, ради которой пришли из ленты, та же ссылка
-     подписана возвращением: адрес совпадает с дорогой назад. */
-  const feedLabel = returning ? "Вернуться в ленту" : "Открыть в ленте";
+     подписана возвращением: адрес совпадает с дорогой назад.
+     У скрытой карточки ссылка вела бы в тупик: публичная лента ищет пост по
+     slug только среди `status: 'published'` (motivation.service.ts, метод
+     ленты) — для скрытого `?post=slug` молча ничего не подсветит. Вместо
+     ссылки — неактивная кнопка на том же месте сетки (та же клетка, тот же
+     размер), с подсказкой, что сначала нужно вернуть в ленту. */
+  const feedLabel = hidden
+    ? "Скрыто — сначала верните в ленту"
+    : returning
+      ? "Вернуться в ленту"
+      : "Открыть в ленте";
   const editLabel = editing ? "Не править" : "Править текст";
-  const hideLabel = hidden ? "Вернуть в ленту" : "Скрыть";
+  const hideLabel = hidden ? "Вернуть в ленту" : "Скрыть из ленты";
   return (
     <div className="mt-3 grid w-fit grid-cols-3 gap-2">
-      <Link
-        href={`/motivation?post=${encodeURIComponent(post.slug)}`}
-        aria-label={feedLabel}
-        title={feedLabel}
-        className={iconButton}
-      >
-        {returning ? (
-          <ArrowLeft aria-hidden className="size-5" />
-        ) : (
+      {hidden ? (
+        <button
+          type="button"
+          // `disabled` вместо `aria-disabled`, чтобы клик по кнопке нигде
+          // не путался с настоящей навигацией — на скрытом посте у неё нет
+          // рабочего адреса вовсе.
+          disabled
+          aria-label={feedLabel}
+          title={feedLabel}
+          className={iconButton}
+        >
           <ExternalLink aria-hidden className="size-5" />
-        )}
-      </Link>
+        </button>
+      ) : (
+        <Link
+          href={`/motivation?post=${encodeURIComponent(post.slug)}`}
+          aria-label={feedLabel}
+          title={feedLabel}
+          className={iconButton}
+        >
+          {returning ? (
+            <ArrowLeft aria-hidden className="size-5" />
+          ) : (
+            <ExternalLink aria-hidden className="size-5" />
+          )}
+        </Link>
+      )}
 
       <button
         type="button"
@@ -348,17 +423,21 @@ function PostActions({
 
       {/* Скрыть, а не удалить: снятая с показа карточка уходит из ленты, но
           остаётся у тех, кто уже сохранил её в избранном, — и решение можно
-          отменить. */}
+          отменить той же кнопкой. Карточка при этом остаётся здесь же, в
+          «Опубликованных» (VED-251) — раньше она в ту же секунду пропадала
+          из списка и находилась только в «Заготовках», без кнопки возврата. */}
       <button
         type="button"
         disabled={pendingAction !== undefined}
-        onClick={() =>
-          run(post.id, "hide", {
+        onClick={async () => {
+          const nextHidden = !hidden;
+          const ok = await run(post.id, "hide", {
             path: `/admin/motivation/posts/${post.id}`,
             method: "PATCH",
-            body: { hidden: !hidden },
-          })
-        }
+            body: { hidden: nextHidden },
+          });
+          if (ok) onHideToggle(nextHidden);
+        }}
         aria-label={hideLabel}
         title={hideLabel}
         className={iconButton}
@@ -369,6 +448,10 @@ function PostActions({
           <EyeOff aria-hidden className="size-5" />
         )}
       </button>
+
+      {/* Пустая распорка: сдвигает «Заменить картинку» из-под первой кнопки
+          ряда на клетку правее (см. комментарий над компонентом). */}
+      <span aria-hidden className="size-11" />
 
       {/* Открытку редакция рисует сама — генерация нарисует не то. Замена
           картинки со стадией карточки ничего не делает: опубликованная

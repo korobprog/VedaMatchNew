@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
+import type { MotivationPostStatus } from "@vedamatch/shared";
 import type { RunCommand } from "./use-admin-command";
 import { dangerButton, secondaryButton } from "./ui";
 
@@ -13,13 +14,14 @@ import { dangerButton, secondaryButton } from "./ui";
 export function DeletePostButton({
   postId,
   title,
-  isPublished,
+  status,
   pendingAction,
   run,
 }: {
   postId: string;
   title: string;
-  isPublished: boolean;
+  /** Статус поста — от него зависит, о чём предупредить перед удалением. */
+  status: MotivationPostStatus;
   pendingAction: string | undefined;
   run: RunCommand;
 }) {
@@ -43,7 +45,7 @@ export function DeletePostButton({
   return (
     <DeletePostConfirm
       postId={postId}
-      isPublished={isPublished}
+      status={status}
       pendingAction={pendingAction}
       run={run}
       onCancel={() => setArmed(false)}
@@ -59,23 +61,37 @@ export function DeletePostButton({
  */
 export function DeletePostConfirm({
   postId,
-  isPublished,
+  status,
   pendingAction,
   run,
   onCancel,
 }: {
   postId: string;
-  isPublished: boolean;
+  status: MotivationPostStatus;
   pendingAction: string | undefined;
   run: RunCommand;
   onCancel: () => void;
 }) {
   const disabled = pendingAction !== undefined;
+  /* Раньше был один флаг `isPublished`: пост со статусом `hidden` считался
+     «не опубликован», и удаление скрытой (после публикации) карточки
+     проходило без единого слова про избранное — хотя скрыть и удалить не
+     одно и то же, и люди, сохранившие карточку, теряют её так же безвозвратно
+     (VED-251, разбор оценщика). `inFeed` — предупреждение про ленту: у
+     скрытого поста его уже нет в ленте, врать об этом не нужно.
+     `everFavorited` — предупреждение про избранное: доступно и
+     опубликованному, и скрытому, — скрытие не отменяет того, что пост уже
+     был `published` и его успели сохранить, пока он был на виду. */
+  const inFeed = status === "published";
+  const everFavorited = status === "published" || status === "hidden";
   return (
     <div className="w-full rounded-xl border border-red-400/40 bg-red-500/10 p-3">
       <p className="text-sm text-text-0">
         Удалить вдохновение вместе с цитатой?
-        {isPublished && " Она пропадёт из ленты и из избранного у пользователей."}
+        {inFeed && " Она пропадёт из ленты и из избранного у пользователей."}
+        {!inFeed &&
+          everFavorited &&
+          " Она уже скрыта из ленты, но пропадёт из избранного у тех, кто успел её сохранить."}
         {" "}
         Отменить нельзя.
       </p>
