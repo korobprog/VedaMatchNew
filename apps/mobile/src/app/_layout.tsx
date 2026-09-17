@@ -65,8 +65,29 @@ function RootStack() {
 }
 
 export default function RootLayout() {
+  // Этот файл остаётся БЕЗЫМЕННЫМ `_layout.tsx` (не `_layout.native.tsx`) не
+  // просто по соглашению: `expo-router` требует ровно так — платформенный
+  // файл-«близнец» (`_layout.web.tsx`) обязан иметь безымянный fallback без
+  // расширения-платформы, без него сборка веба падает в рантайме с ошибкой
+  // «does not have a fallback sibling file without a platform extension»
+  // (проверено на практике при попытке переименовать в `.native.tsx`).
+  //
+  // Из-за этого правила `require.context` маршрутизатора всё равно включает
+  // код ЭТОГО файла (со всеми шестью начертаниями `@expo-google-fonts`) в
+  // веб-сборку отдельным чанком, хотя веб его не использует и ни разу не
+  // запрашивает по сети (специфичность файла без платформенного расширения
+  // ниже, чем у `_layout.web.tsx` — см. `getFileMeta` в `expo-router/build/
+  // getRoutesCore.js`): чанк лежит в `dist-web` мёртвым грузом, но не
+  // качается. `scripts/patch-web-preloads.mjs` вдобавок явно не предзагружает
+  // именно этот чанк (`isDeadNativeLayoutChunk` в `web-preload-chunks.mjs`
+  // отличает его по строке `expo-google-fonts` в содержимом), чтобы не
+  // отбирать полосу у нужных файлов на медленной сети.
+  //
   // Шрифты вшиты в сборку пакетами @expo-google-fonts: на телефоне без сети
-  // заголовки не должны откатываться на системный шрифт.
+  // заголовки не должны откатываться на системный шрифт. Веб-сборка эту
+  // ветку не использует вовсе — см. `_layout.web.tsx` и `public/index.html`:
+  // там имена начертаний объявлены как `@font-face` с `font-display: swap`,
+  // ждать `useFonts` незачем.
   const [loaded, error] = useFonts({
     Unbounded_500Medium,
     Unbounded_700Bold,

@@ -118,7 +118,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // списке, а не последним, как было бы естественно ожидать по имени
       // файла.
       './plugins/with-native-calls.js',
-      'expo-router',
+      // asyncRoutes.web: тяжёлые экраны веб-сборки (звонок, люди, общины,
+      // calls-probe, аккаунт) грузятся отдельными чанками по переходу, а не
+      // одним бандлом на входе (веха 6 «Скорость», gan-harness/spec.md).
+      // Android не трогает: `default: 'development'` — в production-сборке
+      // на нативе остаётся один бандл, как раньше (`production` для
+      // asyncRoutes всё равно поддержан только на вебе).
+      ['expo-router', { asyncRoutes: { web: true, default: 'development' } }],
       'expo-secure-store',
       'expo-font',
       'expo-image',
