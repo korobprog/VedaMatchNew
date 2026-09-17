@@ -327,16 +327,19 @@ DATABASE_URL=postgres://…@localhost:55497/vm_calls_e2e \
 DEV_AUTH_ENABLED=true NODE_ENV=development \
 pnpm --dir apps/api exec nest start
 
-# Сборка один раз — APP_API_ORIGIN зашивается при экспорте, второй origin
-# веба (WEB_A/WEB_B) на него не влияет, достаточно раздать один и тот же
-# dist-web с двух серверов:
+# Две сборки: у каждой свой адрес API на том же хосте, что и её страница.
+# Cookie сессии ставятся на хост API; страница на 127.0.0.1 не увидит
+# маркер входа, поставленный на localhost, и останется гостем.
+# --clear обязателен: Metro не учитывает APP_API_ORIGIN в ключе кэша.
 APP_CONTOUR=com APP_API_ORIGIN=http://localhost:4097 \
-npx expo export --platform web --output-dir dist-web
-npx serve --single dist-web -l 8097 &
-npx serve --single dist-web -l 8098 -n 127.0.0.1 &
+npx expo export --platform web --output-dir dist-web --clear
+APP_CONTOUR=com APP_API_ORIGIN=http://127.0.0.1:4097 \
+npx expo export --platform web --output-dir dist-web-b --clear
+npx serve --single dist-web -l tcp://localhost:8097 &
+npx serve --single dist-web-b -l tcp://127.0.0.1:8098 &
 
 WEB_A=http://localhost:8097 WEB_B=http://127.0.0.1:8098 \
-API_A=http://localhost:4097 API_B=http://localhost:4097 \
+API_A=http://localhost:4097 API_B=http://127.0.0.1:4097 \
 node apps/mobile/e2e-web/calls.e2e.mjs
 ```
 
