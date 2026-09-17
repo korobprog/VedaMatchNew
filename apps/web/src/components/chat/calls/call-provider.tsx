@@ -47,6 +47,7 @@ import {
   shouldCatchUpCallSignals,
   type SignalSeqState,
 } from "./call-signal-catchup";
+import { sendWithRetry } from "./call-signal-retry";
 import { CallSession } from "./webrtc-session";
 import { startRingtone } from "./ringtone";
 import { CallOverlay } from "./call-overlay";
@@ -170,9 +171,12 @@ export function ChatCallProvider({
         onSignal: (signal) => {
           const id = stateRef.current.call?.id;
           if (!id) return;
-          void sendChatCallSignal(id, signal).catch(() => {
-            // Потерянный кандидат не смертелен; потерянный SDP добьёт таймер обрыва.
-          });
+          // VED-261: сервер отвечает 503, если сигнал не удалось надёжно
+          // сохранить (временный сбой Redis) — это явная просьба повторить,
+          // а не молчаливая потеря. `sendWithRetry` не бросает: если и три
+          // попытки не помогли, кандидат/SDP всё равно подстрахован
+          // таймаутом `connecting` и дочитыванием при следующем реконнекте.
+          void sendWithRetry(() => sendChatCallSignal(id, signal));
         },
         onRemoteStream: (stream) => setRemoteStream(stream),
         onConnected: () => dispatch({ type: "connected", at: Date.now() }),

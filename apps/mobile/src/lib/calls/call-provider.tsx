@@ -39,6 +39,7 @@ import {
   shouldCatchUpCallSignals,
   type SignalSeqState,
 } from './call-signal-catchup';
+import { sendWithRetry } from './call-signal-retry';
 import { shouldRestartIceOnNetworkChange } from './ice-restart-policy';
 import {
   clearNativeCall,
@@ -229,9 +230,12 @@ export function CallProvider({ children }: { children: ReactNode }) {
         onSignal: (signal) => {
           const id = stateRef.current.call?.id;
           if (!id) return;
-          void callsApi.signal(id, signal).catch(() => {
-            // Потерянный кандидат не смертелен; потерянный SDP добьёт таймер обрыва.
-          });
+          // VED-261: сервер отвечает 503, если сигнал не удалось надёжно
+          // сохранить (временный сбой Redis) — это явная просьба повторить,
+          // а не молчаливая потеря. `sendWithRetry` не бросает: если и три
+          // попытки не помогли, кандидат/SDP всё равно подстрахован
+          // таймаутом `connecting` и дочитыванием при следующем ресинке.
+          void sendWithRetry(() => callsApi.signal(id, signal));
         },
         onRemoteStream: (remote) => setRemoteStream(remote),
         onConnected: () => dispatch({ type: 'connected', at: Date.now() }),

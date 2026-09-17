@@ -5,6 +5,7 @@ import type { ChatCallSignal } from '@vedamatch/shared';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import type { ChatConversationsService } from '../chat-conversations.service';
 import type { ChatEventsService } from '../chat-events.service';
+import { BUSY_TTL_ACTIVE_MS } from './call-state';
 import { ChatCallsService } from './chat-calls.service';
 
 /**
@@ -189,6 +190,32 @@ describe('ChatCallsService — сигналы активного звонка (V
     await service.end('caller', 'call-1', { reason: 'hangup' });
 
     expect(await service.signalsSince('callee', 'call-1', 0)).toHaveLength(0);
+  });
+
+  it('локальный режим (без Redis): сигналы протухают по TTL, если finish() не вызвался', async () => {
+    const service = buildService().service;
+    const start = new Date('2026-09-17T10:00:00.000Z').getTime();
+    jest.spyOn(Date, 'now').mockReturnValue(start);
+
+    await service.signal('caller', 'call-1', sdpOffer);
+    expect(await service.signalsSince('callee', 'call-1', 0)).toHaveLength(1);
+
+    // Ещё в пределах TTL — сигнал жив.
+    jest.spyOn(Date, 'now').mockReturnValue(start + BUSY_TTL_ACTIVE_MS - 1);
+    expect(await service.signalsSince('callee', 'call-1', 0)).toHaveLength(1);
+
+    // TTL истёк — следующее локальное обращение (к ЛЮБОМУ звонку) его чистит.
+    jest.spyOn(Date, 'now').mockReturnValue(start + BUSY_TTL_ACTIVE_MS + 1);
+    expect(await service.signalsSince('callee', 'call-1', 0)).toHaveLength(0);
+
+    // И seq для этого звонка начинается заново, а не продолжает старый счёт.
+    await service.signal('caller', 'call-1', sdpOffer);
+    const signalsAfterPrune = await service.signalsSince('callee', 'call-1', 0);
+    expect(signalsAfterPrune).toEqual([
+      { seq: 1, fromUserId: 'caller', signal: sdpOffer },
+    ]);
+
+    jest.restoreAllMocks();
   });
 
   it('signal() в уже завершённом звонке — отказ, сигнал не сохраняется', async () => {
