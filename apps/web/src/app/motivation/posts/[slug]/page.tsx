@@ -46,7 +46,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
               type: OG_IMAGE_TYPE,
               width: OG_IMAGE_WIDTH,
               height: OG_IMAGE_HEIGHT,
-              alt: post.title,
+              alt: shareTitle,
             },
           ]
         : [],
