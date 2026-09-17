@@ -14,6 +14,10 @@ import { PRIORITY_TITLE } from "./task-priority";
  * Поэтому же группировка живёт на устройстве, как свёрнутые колонки
  * (см. column-collapse.ts): это привычка смотреть, а не общее решение о
  * доске — включив её у себя, человек не перестраивает раздел соседу.
+ *
+ * Хранение выбранного вида (эта группировка или «По дате», VED-160) — в
+ * общем `task-view-mode.ts`: это один и тот же выбор «как разложить
+ * карточки», не два независимых переключателя.
  */
 
 /** Сверху то, что горит. Список закрытый — он же задаёт порядок групп. */
@@ -47,29 +51,4 @@ export function groupTasksByPriority<T extends { priority: WorkTaskPriority }>(
     title: PRIORITY_TITLE[priority],
     tasks: tasks.filter((task) => task.priority === priority),
   })).filter((group) => group.tasks.length > 0);
-}
-
-export const PRIORITY_GROUPING_STORAGE_PREFIX = "vedamatch:work-grouped:";
-
-export function priorityGroupingKey(boardId: string): string {
-  return `${PRIORITY_GROUPING_STORAGE_PREFIX}${boardId}`;
-}
-
-/** Ключ — на доску: у среды их несколько, и вид одной ничего не говорит о соседней. */
-export function readPriorityGrouping(boardId: string): boolean {
-  try {
-    return window.localStorage.getItem(priorityGroupingKey(boardId)) === "1";
-  } catch {
-    // Приватный режим: группировка живёт до перезагрузки.
-    return false;
-  }
-}
-
-export function writePriorityGrouping(boardId: string, on: boolean): void {
-  try {
-    if (on) window.localStorage.setItem(priorityGroupingKey(boardId), "1");
-    else window.localStorage.removeItem(priorityGroupingKey(boardId));
-  } catch {
-    // То же самое: не смогли запомнить — доска от этого не ломается.
-  }
 }
