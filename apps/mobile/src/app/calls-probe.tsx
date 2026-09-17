@@ -43,19 +43,28 @@ export default function CallsProbeScreen() {
   // (`setRemoteDescription` → `createAnswer`). Если здесь тоже только
   // `host` — дело не в конкретном offer'е сайта, а в самой связке «роль
   // ответчика + эти iceServers» на этом телефоне (см. `runAnswererProbe`).
-  const [answererPhase, setAnswererPhase] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  // Второй прогон (`addLocalTrackFirst`) — с микрофоном, добавленным ДО
+  // `setRemoteDescription`, той же последовательностью, что
+  // `call-provider.tsx#accept()` готовит настоящий `CallSession`: живая
+  // проверка на прошлом круге показала, что ПРОСТАЯ проба (без трека)
+  // уверенно получает host/srflx/relay, а настоящий звонок — только host,
+  // и это единственная оставшаяся, ещё не проверенная разница.
+  const [answererPhase, setAnswererPhase] = useState<'idle' | 'running' | 'error'>('idle');
   const [answererResult, setAnswererResult] = useState<AnswererProbeResult | null>(null);
+  const [answererWithTrackResult, setAnswererWithTrackResult] = useState<AnswererProbeResult | null>(null);
   const [answererError, setAnswererError] = useState<string | null>(null);
 
   const runAnswerer = useCallback(async () => {
     setAnswererPhase('running');
     setAnswererError(null);
     setAnswererResult(null);
+    setAnswererWithTrackResult(null);
     try {
       const callsApi = createChatCallsApi(api);
       const state = await callsApi.iceServers();
       setAnswererResult(await runAnswererProbe(state.iceServers));
-      setAnswererPhase('done');
+      setAnswererWithTrackResult(await runAnswererProbe(state.iceServers, { addLocalTrackFirst: true }));
+      setAnswererPhase('idle');
     } catch (e) {
       setAnswererError(e instanceof Error ? e.message : String(e));
       setAnswererPhase('error');
@@ -188,7 +197,8 @@ export default function CallsProbeScreen() {
           <Text style={[styles.lead, { color: colors.text1 }]}>
             Проверка как у звонка: та же связка iceServers, но соединение играет роль ОТВЕЧАЮЩЕГО
             (`setRemoteDescription` → `createAnswer`), как настоящий входящий звонок — не офферера, как
-            шаги выше.
+            шаги выше. Запускает два прогона подряд: без трека и с микрофоном, добавленным ДО offer'а
+            (как готовит настоящий звонок `accept()`).
           </Text>
           <Pressable
             accessibilityRole="button"
@@ -213,8 +223,15 @@ export default function CallsProbeScreen() {
           ) : null}
           {answererResult ? (
             <Text selectable style={[styles.summary, { color: colors.text0, borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
-              Типы кандидатов: {answererResult.candidateTypes.length > 0 ? answererResult.candidateTypes.join(', ') : 'ни одного'}
+              Без трека — типы: {answererResult.candidateTypes.length > 0 ? answererResult.candidateTypes.join(', ') : 'ни одного'}
               {'\n'}Сбор: {answererResult.ms} мс{answererResult.timedOut ? ' (оборвано по таймауту 8с)' : ' (дошёл до конца)'}
+            </Text>
+          ) : null}
+          {answererWithTrackResult ? (
+            <Text selectable style={[styles.summary, { color: colors.text0, borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
+              С микрофоном до offer'а — типы: {answererWithTrackResult.candidateTypes.length > 0 ? answererWithTrackResult.candidateTypes.join(', ') : 'ни одного'}
+              {'\n'}Сбор: {answererWithTrackResult.ms} мс
+              {answererWithTrackResult.timedOut ? ' (оборвано по таймауту 8с)' : ' (дошёл до конца)'}
             </Text>
           ) : null}
         </View>

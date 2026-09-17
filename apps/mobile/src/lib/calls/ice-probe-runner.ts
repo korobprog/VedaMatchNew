@@ -1,4 +1,4 @@
-import { RTCPeerConnection, type RTCIceCandidate } from 'react-native-webrtc';
+import { mediaDevices, RTCPeerConnection, type MediaStream, type RTCIceCandidate } from 'react-native-webrtc';
 import type { ChatIceServerDto } from '@vedamatch/shared';
 import {
   judgeStep,
@@ -147,6 +147,22 @@ export interface AnswererProbeResult {
   timedOut: boolean;
 }
 
+export interface AnswererProbeOptions {
+  /**
+   * Захватить микрофон и вызвать `addTrack()` на ответчике ДО
+   * `setRemoteDescription` — ровно так, как `call-provider.tsx#accept()`
+   * готовит `CallSession` (`session.startLocalMedia()` идёт раньше, чем
+   * приходит offer, ради задержки ответа). Живая проверка BUG C (VED-222):
+   * это единственная РЕАЛЬНАЯ, ещё не проверенная разница между этой пробой
+   * (без трека — уже подтверждённо получает host/srflx/relay) и настоящим
+   * звонком — с этим флагом офферер получает `m=audio` через
+   * `addTransceiver('audio', {direction:'recvonly'})` (без реального
+   * трека — только чтобы в offer было что реконцилировать), иначе
+   * `addTrack` на ответчике был бы не с чем сопоставлять.
+   */
+  addLocalTrackFirst?: boolean;
+}
+
 /**
  * «Проверка как у звонка» (VED-222, живая проверка BUG C, запрошено
  * координатором как детерминированный эксперимент): изолирует РОЛЬ
@@ -162,13 +178,22 @@ export interface AnswererProbeResult {
  * (`a=ice-lite`/`bundle-only`/т.п.), а в самой связке «ответчик + эти
  * `iceServers`» на этом телефоне/сборке react-native-webrtc.
  */
-export async function runAnswererProbe(servers: ChatIceServerDto[]): Promise<AnswererProbeResult> {
+export async function runAnswererProbe(
+  servers: ChatIceServerDto[],
+  options: AnswererProbeOptions = {},
+): Promise<AnswererProbeResult> {
   const offerer = new RTCPeerConnection({});
-  offerer.createDataChannel('answerer-probe');
+  if (options.addLocalTrackFirst) offerer.addTransceiver('audio', { direction: 'recvonly' });
+  else offerer.createDataChannel('answerer-probe');
   const offer = await offerer.createOffer();
   await offerer.setLocalDescription(offer);
 
   const answerer = new RTCPeerConnection({ iceServers: normalizeIceServers(servers) });
+  let localStream: MediaStream | null = null;
+  if (options.addLocalTrackFirst) {
+    localStream = await mediaDevices.getUserMedia({ audio: true });
+    for (const track of localStream.getTracks()) answerer.addTrack(track, localStream);
+  }
   const collected: ParsedCandidate[] = [];
   const started = Date.now();
   const { timedOut } = await new Promise<{ timedOut: boolean }>((resolve) => {
@@ -195,5 +220,6 @@ export async function runAnswererProbe(servers: ChatIceServerDto[]): Promise<Ans
   const ms = Date.now() - started;
   offerer.close();
   answerer.close();
+  for (const track of localStream?.getTracks() ?? []) track.stop();
   return { candidateTypes: [...new Set(collected.map((c) => c.type))], ms, timedOut };
 }

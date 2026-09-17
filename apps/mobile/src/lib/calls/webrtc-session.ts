@@ -97,7 +97,31 @@ export class CallSession {
       iceTransportPolicy: 'не переопределён (умолчание платформы)',
       bundlePolicy: 'не переопределён (умолчание платформы)',
     });
-    this.pc = new RTCPeerConnection({ iceServers: normalized });
+    // Явный объект конфигурации — только эти два ключа, ничего больше не
+    // просачивается сюда случайно из будущих правок. Глубокая копия через
+    // JSON (не просто `{...config}`) — по прямой просьбе координатора
+    // (живая проверка BUG C): `normalized` собран `normalizeIceServers`
+    // заново (не кусок React-стейта/`iceRef`), но JSON-круг гарантирует
+    // простые объекты/массивы без Proxy/заморозки/лишних прототипов,
+    // какими бы они ни оказались, — так конструктор `RTCPeerConnection`
+    // точно получает то же самое, что видно в логе ниже, а не что-то, что
+    // могло не пережить сериализацию через нативный мост незамеченным.
+    const config: { iceServers: ReturnType<typeof normalizeIceServers> } = { iceServers: normalized };
+    const clonedConfig = JSON.parse(JSON.stringify(config)) as typeof config;
+    // eslint-disable-next-line no-console -- диагностика живой проверки
+    // BUG C: дословно то, что уходит в `new RTCPeerConnection(...)`, без
+    // username/credential — `react-native-webrtc` не даёт прочитать назад,
+    // что реально дошло до натива (`getConfiguration()` в его
+    // `RTCPeerConnection` не реализован, проверено по исходнику пакета), это
+    // ближайшая замена: если натив получит не то же самое, что здесь
+    // залогировано, значит потерялось именно на мосте, не в этом коде.
+    console.warn(
+      '[calls] RTCPeerConnection: дословная конфигурация (без секретов)',
+      JSON.stringify(clonedConfig, (key, value) =>
+        key === 'username' || key === 'credential' ? '<redacted>' : value,
+      ),
+    );
+    this.pc = new RTCPeerConnection(clonedConfig);
 
     this.pc.onicecandidate = ((event: IceCandidateEvent) => {
       const c = event.candidate;
