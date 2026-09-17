@@ -10,11 +10,18 @@ export type AdminCommand = {
   body?: unknown;
 };
 
+/**
+ * Возвращает, удалась ли команда: `true` на успех, `false` на ошибку.
+ * Ошибку `run` и так кладёт в `errors[key]` для отрисовки под карточкой —
+ * булев результат нужен только тем вызовам, что показывают своё отдельное
+ * сообщение об успехе (например, статус после «Скрыть») и не должны
+ * показывать его, если запрос на самом деле провалился.
+ */
 export type RunCommand = (
   key: string,
   action: string,
   command: AdminCommand,
-) => Promise<void>;
+) => Promise<boolean>;
 
 /**
  * Общее состояние админских действий: какая команда сейчас выполняется и какая
@@ -34,10 +41,12 @@ export function useAdminCommand() {
       return next;
     });
 
+    let ok = true;
     try {
       await apiRequest(command.path, command.method ?? "POST", command.body);
       router.refresh();
     } catch (requestError) {
+      ok = false;
       setErrors((current) => ({
         ...current,
         [key]:
@@ -52,6 +61,7 @@ export function useAdminCommand() {
         return next;
       });
     }
+    return ok;
   };
 
   return { pending, errors, run, refresh: () => router.refresh() };

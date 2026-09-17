@@ -52,13 +52,31 @@ describe("queue selectors", () => {
     expect(selectSetAsidePosts(posts).map((item) => item.id)).toEqual(["e"]);
   });
 
-  it("скрытая карточка уходит из опубликованного, хотя стадию прошла", () => {
-    // `reviewStatus` у неё так и остаётся `published`, но из ленты она ушла,
-    // и держать её среди опубликованного значило бы врать разделом.
+  it("скрытая после публикации карточка остаётся среди опубликованного (VED-251)", () => {
+    // `reviewStatus` у неё так и остаётся `published`: скрытие — обратимая
+    // отметка поверх уже вышедшей карточки, а не отдельная судьба. Прятать
+    // её в «Отложенные» значило бы, что «Скрыть» выглядит как «удалить».
     const hidden = post("h", "published", "2026-08-16T00:00:00.000Z", "hidden");
 
-    expect(selectPublishedPosts([hidden])).toEqual([]);
-    expect(selectSetAsidePosts([hidden]).map((item) => item.id)).toEqual(["h"]);
+    expect(selectPublishedPosts([hidden]).map((item) => item.id)).toEqual(["h"]);
+    expect(selectSetAsidePosts([hidden])).toEqual([]);
+  });
+
+  it("в смешанном списке скрытое и отклонённое не путаются местами", () => {
+    const hidden = post("h", "published", "2026-08-16T00:00:00.000Z", "hidden");
+    const rejected = post("e2", "rejected", null, "draft");
+    const mixed = [...posts, hidden, rejected];
+
+    // Скрытое — в «Опубликованных» вместе с обычным `published`-постом.
+    expect(selectPublishedPosts(mixed).map((item) => item.id)).toEqual([
+      "d",
+      "h",
+    ]);
+    // «Отложенные» — только по-настоящему отклонённое генерацией.
+    expect(selectSetAsidePosts(mixed).map((item) => item.id)).toEqual([
+      "e",
+      "e2",
+    ]);
   });
 
   it("counts only what is actually waiting for the admin", () => {

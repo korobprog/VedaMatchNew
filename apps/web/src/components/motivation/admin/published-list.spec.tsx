@@ -39,6 +39,10 @@ function stubFetch() {
     ok: true,
     status: 200,
     json: () => Promise.resolve({}),
+    // apiRequest читает тело через text(), даже когда оно пустое —
+    // без этого метода на моке успешный ответ падал бы с TypeError,
+    // и run() тихо принимал бы это за ошибку сети (VED-251).
+    text: () => Promise.resolve(""),
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -107,7 +111,7 @@ describe("MotivationPublishedList", () => {
     for (const name of [
       "Открыть в ленте",
       "Править текст",
-      "Скрыть",
+      "Скрыть из ленты",
       "Заменить картинку",
       "Удалить",
     ]) {
@@ -163,6 +167,49 @@ describe("MotivationPublishedList", () => {
     render(<MotivationPublishedList posts={[post({ status: "hidden" })]} />);
 
     expect(screen.getByText("Скрыто из ленты")).toBeInTheDocument();
+  });
+
+  // VED-251: карточка больше не пропадает из «Опубликованных» — «Скрыть»
+  // теперь работает как переключатель на месте, и сообщение объясняет это.
+  it("после «Скрыть» показывает статус, что вернуть можно этой же кнопкой", async () => {
+    const user = userEvent.setup();
+    stubFetch();
+    const { rerender } = render(<MotivationPublishedList posts={[post()]} />);
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Скрыть/ }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Скрыто из ленты. Вернуть можно этой же кнопкой.",
+      ),
+    );
+
+    // Карточка остаётся на месте (canonical дом — «Опубликованные», не
+    // «Заготовки»), и то же нажатие в обратную сторону снимает подсказку.
+    rerender(<MotivationPublishedList posts={[post({ status: "hidden" })]} />);
+    await user.click(screen.getByRole("button", { name: /Вернуть в ленту/ }));
+
+    await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+  });
+
+  it("не показывает статус «Скрыто», если запрос провалился", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve("Сервер недоступен"),
+      }),
+    );
+    render(<MotivationPublishedList posts={[post()]} />);
+
+    await user.click(screen.getByRole("button", { name: /Скрыть/ }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("правит текст и отправляет только русский перевод", async () => {
