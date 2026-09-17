@@ -1,4 +1,4 @@
-import { NativeModule, requireNativeModule } from 'expo-modules-core';
+import { NativeModule, requireOptionalNativeModule } from 'expo-modules-core';
 
 /**
  * JS-обёртка нативного модуля `VedamatchCalls` (Kotlin,
@@ -135,5 +135,10 @@ declare class VedamatchCallsNativeModule extends NativeModule<VedamatchCallsEven
   setPipEligible(eligible: boolean): void;
 }
 
-const VedamatchCalls = requireNativeModule<VedamatchCallsNativeModule>('VedamatchCalls');
+// Вне Android модуля нет: `requireOptionalNativeModule` отдаёт `null` вместо
+// исключения при импорте. Каждый вызов в `native-call-bridge.ts` и так закрыт
+// проверкой `Platform.OS`, поэтому до `null` дело не доходит.
+const VedamatchCalls = requireOptionalNativeModule<VedamatchCallsNativeModule>(
+  'VedamatchCalls',
+) as VedamatchCallsNativeModule;
 export default VedamatchCalls;
