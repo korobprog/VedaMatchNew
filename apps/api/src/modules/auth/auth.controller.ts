@@ -156,6 +156,29 @@ export class AuthController {
   }
 
   /**
+   * Вход через «Telegram Login Widget» — кнопка на самом сайте (не
+   * мини-приложение, см. `telegram-login-widget.ts`). Виджет сам ведёт сюда
+   * браузер (`data-auth-url`), дописывая свои поля к тому, что мы положили
+   * в адрес при рендере кнопки. GET и редирект в конце — так работает режим
+   * виджета без встроенного колбэка на JS.
+   */
+  @Get('telegram/callback')
+  telegramCallback(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Query('returnTo') returnTo?: string,
+    @Query('returnOrigin') returnOrigin?: string,
+  ) {
+    return this.auth.handleTelegramWidgetCallback(
+      req,
+      res,
+      req.query as Record<string, unknown>,
+      returnTo,
+      returnOrigin,
+    );
+  }
+
+  /**
    * Привязка Telegram живой сессией (экран «Аккаунт»): для веб-версии,
    * открытой внутри Telegram, когда человек уже вошёл другим способом.
    */
