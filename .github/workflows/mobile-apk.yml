@@ -36,14 +36,17 @@ jobs:
     env:
       APP_CONTOUR: ${{ inputs.contour }}
       APP_CHANNEL: ${{ inputs.channel }}
+      APP_VERSION_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
       # run_number растёт на каждый запуск воркфлоу (включая ручные) — этого
       # достаточно для монотонности, требуемой самообновлением с сайта.
       # Смещение — чтобы не начинать снова с единицы поверх версий, уже
       # выпущенных этим способом; см. apps/mobile/src/config/app-version.ts.
-      APP_VERSION_CODE: ${{ 1000 + github.run_number }}
-      APP_VERSION_SHA: ${{ github.sha }}
-    steps:
-      - uses: actions/checkout@v4
+      # Считается в шаге: выражения GitHub `${{ }}` не умеют арифметику.
+      - name: Version code
+        run: echo "APP_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
 
       - uses: pnpm/action-setup@v4
         with:
