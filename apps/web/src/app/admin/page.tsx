@@ -89,6 +89,11 @@ export default async function AdminHomePage() {
               Входы по источникам
             </h2>
             <LoginFunnelTable logins={stats.logins} />
+            <p className="mt-2 text-xs text-text-2">
+              «Возврат 7 дн» — доля людей, впервые вошедших через источник за 30
+              дней не позже недели назад и вошедших снова через неделю и позже —
+              любым способом.
+            </p>
           </section>
         </>
       )}
