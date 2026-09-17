@@ -256,6 +256,32 @@ describe("ReelsFeed", () => {
     );
   });
 
+  // VED-249: постоянная пунктирная линия под каждой графой источника мешала
+  // читать подпись — подчёркивание остаётся только при наведении мышью.
+  it("не подчёркивает графы источника в состоянии покоя, только при наведении", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a", { attributionSourceUrl: "https://vedabase.io/ru/library/bg/2/47/" })], nextCursor: null }}
+        tab="cards"
+        category="vedy"
+        donation={null}
+      />,
+    );
+
+    const caption = captionOf(
+      within(screen.getByRole("feed", { name: "Лента вдохновения" })).getAllByRole("article")[0],
+    );
+    const work = within(caption).getByRole("link", { name: "Только источник: Бхагавад-гита" });
+    const locator = within(caption).getByRole("link", { name: "2.47" });
+    for (const link of [work, locator]) {
+      const textSpan = link.querySelector("span");
+      expect(textSpan?.className.split(" ")).not.toContain("underline");
+      expect(textSpan?.className.split(" ")).not.toContain("decoration-dotted");
+      expect(textSpan?.className.split(" ")).toContain("hover:underline");
+    }
+  });
+
   // VED-124: обычная картинка 2:3 растягивалась на весь экран 9:19,5 и теряла
   // треть ширины — у фигур по краям пропадали головы.
   it("обычную картинку показывает целиком, на размытой подложке", () => {

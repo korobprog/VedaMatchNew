@@ -1386,7 +1386,9 @@ function SourceFields({
     const text = (
       <>
         {icon && index === 0 && <span aria-hidden="true">📖 </span>}
-        <span className={href || splitLinks ? "underline decoration-dotted underline-offset-4" : undefined}>
+        {/* Постоянное подчёркивание убрано (VED-249) — кликабельность видна
+            по наведению и фокус-обводке, а не по линии в состоянии покоя. */}
+        <span className={href || splitLinks ? "hover:underline underline-offset-4" : undefined}>
           {field.text}
         </span>
       </>
