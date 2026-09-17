@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import InCallManager from 'react-native-incall-manager';
 import type { MediaStream } from 'react-native-webrtc';
 import type {
@@ -38,6 +38,7 @@ import {
   consumeLaunchCall,
   getCallConflictState,
   placeOutgoingCall,
+  showIncomingCallFromStream,
   startOngoingCall,
   subscribeToNativeCallEvents,
   subscribeToNetworkTransportChanges,
@@ -252,6 +253,32 @@ export function CallProvider({ children }: { children: ReactNode }) {
         else queuedSignals.current.push(event.signal);
         return;
       }
+      // BUG D (VED-222, живая проверка): настоящий чужой входящий, узнанный
+      // по SSE, пока приложение не на переднем плане (заблокировано/в фоне)
+      // — нативный путь (`Connection` + полноэкранный intent) вместо
+      // JS-баннера/рингтона, которых за блокировкой никто не видел и не
+      // слышал (`decideIncomingCallPresentation`,
+      // `incoming-call-presentation.ts`); только Android — на iOS нет
+      // альтернативы нативному пути вовсе, там `dispatch` идёт как раньше.
+      // Только из простоя (не мешаем уже идущему разговору) — дедуп по
+      // `callId` внутри `showIncomingCallFromStream` (`callLifecycleTracker`,
+      // общий с пуш-путём) защищает от повторного вызова на каждый ре-рендер
+      // потока.
+      if (
+        Platform.OS === 'android' &&
+        event.type === 'call.ringing' &&
+        stateRef.current.phase === 'idle' &&
+        event.call.callee.id === userId &&
+        AppState.currentState !== 'active'
+      ) {
+        void showIncomingCallFromStream({
+          callId: event.call.id,
+          callerName: event.call.caller.name,
+          kind: event.call.kind,
+          avatarUrl: event.call.caller.avatarUrl,
+        });
+        return;
+      }
       dispatch({ type: 'stream', event, selfId: userId });
       // Финал с сервера: медиа закрываем сразу, не дожидаясь перерисовки.
       if (event.type === 'call.ended' && event.call.id === stateRef.current.call?.id)
@@ -307,9 +334,18 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   const role = roleIn(state, userId);
 
-  // Гудки: входящему и исходящему, пока не ответили.
+  // Гудки: входящему и исходящему, пока не ответили. Входящему — только на
+  // переднем плане (VED-222, живая проверка BUG D): за экраном блокировки
+  // свой рингтон никто не слышит как настоящий звонок, только держит
+  // wake lock (лог — ExoPlayer 44 с) и не мешает звонку уйти в пропущенные,
+  // пока телефон должен звонить нативно (`decideIncomingCallPresentation`,
+  // `incoming-call-presentation.ts`, `showInAppUi`/`playInAppRingtone`).
+  // Исходящему гудок не трогаем — это наш собственный звонок, слышать его
+  // в фоне ожидаемо (как обычный звонок из системной звонилки).
   useEffect(() => {
-    if (state.phase === 'incoming' || state.phase === 'outgoing') {
+    const shouldRing =
+      state.phase === 'outgoing' || (state.phase === 'incoming' && AppState.currentState === 'active');
+    if (shouldRing) {
       stopRingtone.current?.();
       stopRingtone.current = startRingtone(state.phase === 'incoming' ? 'incoming' : 'outgoing');
       return () => {
@@ -411,15 +447,35 @@ export function CallProvider({ children }: { children: ReactNode }) {
   // таймера сервера (по аналогии с `pagehide` на сайте). Поток событий уже
   // закрылся сам (`chat-stream.tsx`) — вернувшись, `reconcile()` выше
   // подхватит любой пропущенный финал со стороны собеседника.
+  //
+  // Входящий (ещё не отвеченный), пока НА ПЕРЕДНЕМ ПЛАНЕ шёл JS-баннер, а
+  // человек в момент звонка свернул/заблокировал телефон, — раньше decline
+  // безусловно. С self-managed `Connection` (Android) это больше не
+  // единственный выход: баннер станет не виден, но нативный путь способен
+  // показать входящий поверх блокировки (VED-222, живая проверка BUG D) —
+  // поднимаем его тем же `showIncomingCallFromStream`, что и обнаружение по
+  // SSE в фоне выше (дедуп по `callId` не даст поднять второй раз, если
+  // нативный уже как-то шёл). На iOS альтернативы нет — decline как раньше.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       if (next !== 'background') return;
       const current = stateRef.current;
       if (!current.call || current.phase === 'idle' || current.phase === 'ended') return;
-      if (current.phase === 'incoming') void callsApi.decline(current.call.id).catch(() => undefined);
+      if (current.phase !== 'incoming') return;
+      if (Platform.OS === 'android') {
+        const from = companionOf(current.call, userId);
+        void showIncomingCallFromStream({
+          callId: current.call.id,
+          callerName: from.name,
+          kind: current.call.kind,
+          avatarUrl: from.avatarUrl,
+        });
+        return;
+      }
+      void callsApi.decline(current.call.id).catch(() => undefined);
     });
     return () => sub.remove();
-  }, [callsApi]);
+  }, [callsApi, userId]);
 
   // Синхронизация выключателей с дорожками.
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { mediaDevices, MediaStream, RTCPeerConnection } from 'react-native-webrtc';
 import type { ChatCallKind, ChatCallSignal, ChatIceServerDto } from '@vedamatch/shared';
+import { describeIceServerForLog, normalizeIceServers } from './ice-server-normalize';
 import { parseCandidate } from './ice-probe';
 import { relayedFromStats, type RtcStatsReport } from './relay-stats';
 
@@ -67,23 +68,36 @@ export class CallSession {
     private readonly role: 'caller' | 'callee',
     private readonly handlers: SessionHandlers,
   ) {
-    // `iceCandidatePoolSize` НЕ ставим (было `2` — живая проверка на Samsung
-    // A51, BUG A этапа VED-222): react-native-webrtc/libwebrtc на Android
-    // начинают пре-гатеринг пула сразу в конструкторе, до первого
-    // `setLocalDescription`, — на созвон уходило только ~500-600мс между
-    // `ctor` и первым `setLocalDescription` (лог: `ctor +4m` до этого — то
-    // время простоя приложения, не гатеринга; сам пул успевал собрать не
-    // больше пары host-кандидатов до того, как первый `setLocalDescription`
-    // его выгребал). На STUN/TURN за такое время рассчитывать нельзя —
-    // `onIceGatheringChange` уходил в `COMPLETE` через десятки миллисекунд,
-    // сдав ровно один кандидат за раунд, и на трёх раундах переговоров
-    // подряд (первый offer сайта + два его же ICE-restart, пока звонок не
-    // соединился) ни разу не набрал relay/srflx. `ice-probe-runner.ts`
-    // (этап 0), который на ЭТОМ ЖЕ телефоне уверенно получал relay, пул НЕ
-    // использует вовсе — гатеринг у него честно стартует с
-    // `setLocalDescription` и получает полные `GATHER_TIMEOUT_MS` (8с), а
-    // не остаток от предварительного пула.
-    this.pc = new RTCPeerConnection({ iceServers });
+    // `iceCandidatePoolSize` НЕ ставим (было `2`, убрано на прошлом круге
+    // живой проверки — react-native-webrtc/libwebrtc на Android пре-гатерит
+    // пул сразу в конструкторе, до первого `setLocalDescription`, и не
+    // успевает STUN/TURN за отведённые ~500-600мс). Само по себе это
+    // соединило звонок (следующая живая проверка подтвердила), но кандидаты
+    // ВСЁ РАВНО оставались только `host` — настоящая причина глубже, в
+    // формате `iceServers` (BUG C, следующий круг живой проверки): сервер
+    // (`GET /chat/calls/ice-servers`) кладёт TURN тремя URL-схемами
+    // транспорта в ОДИН объект `urls` — валидно по спецификации, но
+    // react-native-webrtc/libwebrtc на этом же телефоне не собирал по нему
+    // ни srflx, ни relay. `ice-probe-runner.ts` (этап 0), который на ЭТОМ ЖЕ
+    // телефоне уверенно получал relay, всегда строил `RTCIceServer` с ОДНИМ
+    // URL на запись (`ice-probe.ts#buildProbePlan`) — `normalizeIceServers`
+    // (`ice-server-normalize.ts`, свой спек) делает то же самое для обычного
+    // звонка: разворачивает многосхемную запись в плоский список по одному
+    // URL на `RTCIceServer`, сохраняя `username`/`credential` только у
+    // `turn:`/`turns:`.
+    const normalized = normalizeIceServers(iceServers);
+    // eslint-disable-next-line no-console -- диагностика живой проверки
+    // BUG C (VED-222): реально переданная конфигурация без секретов — число
+    // серверов, схема/транспорт/факт учётки на каждый; `iceTransportPolicy`/
+    // `bundlePolicy` ниже не переопределяются (умолчания платформы —
+    // `RTCConfiguration` их и так не получает).
+    console.warn('[calls] RTCPeerConnection: конфигурация iceServers', {
+      count: normalized.length,
+      servers: normalized.map(describeIceServerForLog),
+      iceTransportPolicy: 'не переопределён (умолчание платформы)',
+      bundlePolicy: 'не переопределён (умолчание платформы)',
+    });
+    this.pc = new RTCPeerConnection({ iceServers: normalized });
 
     this.pc.onicecandidate = ((event: IceCandidateEvent) => {
       const c = event.candidate;

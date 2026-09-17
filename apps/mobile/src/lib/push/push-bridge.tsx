@@ -11,6 +11,7 @@ import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { appVariant } from '@/config/app-variant';
+import { handleIncomingCallPush } from '@/lib/calls/native-call-bridge';
 import { parseCallPush } from '@/lib/calls/incoming-call-push';
 import { useSession } from '@/lib/auth/session';
 import { isConversationOpen } from './active-chat';
@@ -111,24 +112,33 @@ export function PushBridge() {
     };
   }, [signed, api]);
 
-  // Пуш пришёл, пока приложение в переднем плане: RNFB не показывает
-  // уведомление сам — здесь показываем сообщение через expo-notifications
-  // (тем же каналом/обработчиком, что и раньше). Звонки этот путь
-  // сознательно не трогает: пока приложение в переднем плане, входящий уже
-  // идёт через общий поток `chat-stream.tsx` → `call-provider.tsx`
-  // (`IncomingCallBanner`, этап 1) — тот же самый звонок, вызванный вторым
-  // путём отсюда, показал бы системный полноэкранный вызов поверх уже
-  // видимого баннера. FCM в переднем плане и так дублирует то, что уже
-  // идёт по SSE: сервер шлёт data-пуш независимо от того, открыто ли
-  // приложение, он ему не виден. Полноэкранный вызов для свёрнутого/убитого
-  // приложения поднимает `background-handler.ts` — Android направляет туда
-  // ровно те состояния, где SSE недоступен (`SharedUtils.isAppInForeground`
-  // в самом RNFB).
+  // Пуш пришёл, пока RNFB считает приложение передним планом: не показываем
+  // обычное уведомление сам — здесь показываем сообщение через
+  // expo-notifications (тем же каналом/обработчиком, что и раньше). Звонки
+  // раньше этот путь пропускал целиком (считалось, что входящий и так идёт
+  // через общий поток `chat-stream.tsx` → `call-provider.tsx`,
+  // `IncomingCallBanner`) — живая проверка (VED-222, BUG D) нашла в этом
+  // дыру: RNFB классифицирует «передний план» по важности процесса
+  // (`SharedUtils.isAppInForeground`), а не по тому, разблокирован ли
+  // экран, — на заблокированном телефоне с живым процессом `onMessage`
+  // срабатывает именно здесь, а не в `background-handler.ts`, и пуш о
+  // звонке тихо терялся: JS-баннер за блокировкой никто не видел и не
+  // слышал, нативный `showIncomingCall` не звался вовсе. Теперь пуш о
+  // звонке идёт через `handleIncomingCallPush` — она сама сверяется с
+  // фактическим `AppState` (`decideIncomingCallPresentation`,
+  // `incoming-call-presentation.ts`) и решает, нужен ли нативный экран; на
+  // ДЕЙСТВИТЕЛЬНО переднем плане это по-прежнему no-op (дедуп по `callId`,
+  // `callLifecycleTracker` общий с `call-provider.tsx#showIncomingCallFromStream`)
+  // — SSE и так уже показал баннер, как раньше.
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     return onMessage(getMessaging(), async (remoteMessage) => {
       const data = remoteMessage.data as Record<string, unknown> | undefined;
-      if (parseCallPush(data)) return;
+      const callPush = parseCallPush(data);
+      if (callPush) {
+        if (callPush.type === 'call.incoming') await handleIncomingCallPush(callPush);
+        return;
+      }
       const notification = remoteMessage.notification;
       if (!notification) return;
       // Правка по факту живой проверки (`call-push-guard.ts`): обычный пуш о
