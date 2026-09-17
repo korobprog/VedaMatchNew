@@ -1,8 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MotivationReelDto } from "@vedamatch/shared";
 import { ReelWizard } from "./reel-wizard";
+import { POLL_INTERVAL_MS, POLL_SILENT_FAILURE_LIMIT } from "./reel-wizard-copy";
 
 const quota = { enabled: true, unlimited: false, limit: 1, used: 0, remaining: 1 };
 
@@ -69,6 +70,31 @@ function routeFetch(routes: Record<string, (init?: RequestInit) => unknown>) {
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
+}
+
+/**
+ * Ответ сервера с ошибкой (не сетевое исключение — обычный `ok: false`), как
+ * при временном 500: `apiFetch` его не ретраит сам (ретраит только настоящий
+ * throw от `fetch`), поэтому каждый такой ответ — ровно один провал тика
+ * опроса, без скрытых повторов транспортного слоя (VED-204).
+ */
+function failedResponse(status = 500) {
+  return { ok: false, status, json: async () => ({}), text: async () => "сбой сервера" };
+}
+
+/**
+ * Продвинуть поддельные таймеры на `ms` и дождаться всех цепочек промисов,
+ * которые за это время успели запуститься (тик опроса статуса — несколько
+ * вложенных `await`). Приём — из `session-guard.spec.tsx` (`passDelay`):
+ * `act` оборачивает продвижение, чтобы React успел закоммитить состояние.
+ * `waitFor`/`findBy*` тут не годятся — их внутренний поллинг ищет
+ * глобальный `jest`, а не `vi`, и с поддельными таймерами vitest не видит
+ * их как «поддельные» (в `vitest.setup.ts` алиаса `jest = vi` нет).
+ */
+async function advancePoll(ms = POLL_INTERVAL_MS) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
 }
 
 beforeEach(() => vi.restoreAllMocks());
@@ -589,5 +615,118 @@ describe("ReelWizard", () => {
 
     expect(await screen.findByText("Сегодня рилс уже создан")).toBeInTheDocument();
     expect(screen.queryByLabelText(/Текст цитаты/)).not.toBeInTheDocument();
+  });
+
+  // VED-204: фоновый опрос статуса раньше падал навсегда на первом же сбое
+  // и вешал красную плашку «Не удалось получить статус рилса» поверх
+  // нормально идущих стадий. Поддельные таймеры + `advancePoll` (круг 2
+  // оценки: реальные секунды ожидания были медленными и хрупкими под
+  // нагрузкой CI) — приём из `session-guard.spec.tsx`.
+  it("не показывает сообщение при сбое опроса, если стадии уже известны", async () => {
+    vi.useFakeTimers();
+    try {
+      let reelCalls = 0;
+      const fetchMock = vi.fn(async (url: string) => {
+        if (url.includes("/motivation/reels/quota")) {
+          return { ok: true, status: 200, json: async () => quota, text: async () => "" };
+        }
+        if (url.includes("/motivation/reels/reel-1")) {
+          reelCalls += 1;
+          // Второй тик — единственный, что падает; и до, и после — успех.
+          if (reelCalls === 2) return failedResponse();
+          return {
+            ok: true,
+            status: 200,
+            json: async () => reelDto({ stage: "generating" }),
+            text: async () => "",
+          };
+        }
+        throw new Error(`unexpected ${url}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(<ReelWizard prefill={{ reelId: "reel-1" }} donation={null} />);
+
+      // Первый тик (без ожидания таймера) — успешен, стадии уже на экране.
+      await advancePoll(0);
+      expect(screen.getByText("Готово")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+      // Второй тик — падает. Стадии уже известны, поэтому молчим полностью.
+      await advancePoll();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(screen.queryByText(/Проверка статуса задерживается/)).not.toBeInTheDocument();
+      expect(screen.getByText("Готово")).toBeInTheDocument();
+
+      // Третий тик — снова успешен: опрос не остановился сам.
+      await advancePoll();
+      expect(reelCalls).toBe(3);
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(screen.queryByText(/Проверка статуса задерживается/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("сообщает о задержке только когда статус ни разу не пришёл, а после первого успеха снимает сообщение", async () => {
+    vi.useFakeTimers();
+    try {
+      let reelCalls = 0;
+      const fetchMock = vi.fn(async (url: string) => {
+        if (url.includes("/motivation/reels/quota")) {
+          return { ok: true, status: 200, json: async () => quota, text: async () => "" };
+        }
+        if (url.includes("/motivation/reels/reel-1")) {
+          reelCalls += 1;
+          // Ни одна из тихих попыток не проходит — все падают, пока лимит
+          // не исчерпан; дальше — первый же успех.
+          if (reelCalls <= POLL_SILENT_FAILURE_LIMIT) return failedResponse();
+          return {
+            ok: true,
+            status: 200,
+            json: async () => reelDto({ stage: "generating" }),
+            text: async () => "",
+          };
+        }
+        throw new Error(`unexpected ${url}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(<ReelWizard prefill={{ reelId: "reel-1" }} donation={null} />);
+
+      // Первая (из POLL_SILENT_FAILURE_LIMIT) тихая попытка — молчим,
+      // только штатное «Загружаем статус…»: данных ещё не было, но опрос
+      // пока не сдался.
+      await advancePoll(0);
+      expect(screen.getByText("Загружаем статус…")).toBeInTheDocument();
+      expect(screen.queryByText(/Проверка статуса задерживается/)).not.toBeInTheDocument();
+
+      // Оставшиеся тихие попытки — до предпоследней включительно всё ещё
+      // молчим.
+      for (let attempt = 2; attempt < POLL_SILENT_FAILURE_LIMIT; attempt += 1) {
+        await advancePoll();
+        expect(screen.queryByText(/Проверка статуса задерживается/)).not.toBeInTheDocument();
+      }
+
+      // Последняя тихая попытка исчерпывает лимит — появляется спокойная
+      // строка с кнопкой «Обновить»: роль "status" (не "alert"), без слова
+      // «не удалось». Без `name` в матчере: у роли "status" имя вычисляется
+      // только из `aria-label`/`aria-labelledby` (name from author), не из
+      // содержимого — текст проверяем отдельно через `getByText`.
+      await advancePoll();
+      expect(screen.getByRole("status")).toBeInTheDocument();
+      expect(screen.getByText("Проверка статуса задерживается.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Обновить" })).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(screen.queryByText(/не удалось/i)).not.toBeInTheDocument();
+
+      // Опрос не остановлен и без нажатия «Обновить»: следующий тик приходит
+      // сам и снимает сообщение — состояние чистое.
+      await advancePoll();
+      expect(screen.queryByText(/Проверка статуса задерживается/)).not.toBeInTheDocument();
+      expect(screen.getByText("Готово")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
