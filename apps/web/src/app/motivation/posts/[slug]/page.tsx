@@ -3,6 +3,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { categoryLink } from "@/components/motivation/feed-style";
 import { getPublicMotivationPost } from "@/lib/motivation-api";
+import {
+  OG_IMAGE_HEIGHT,
+  OG_IMAGE_TYPE,
+  OG_IMAGE_WIDTH,
+  ogImagePath,
+  ogImageSource,
+} from "@/lib/motivation-og-image";
 
 /** Цитата и пояснение склеены пустой строкой — см. motivation-copy.service. */
 const SEPARATOR = "\n\n";
@@ -11,6 +18,9 @@ const SEPARATOR = "\n\n";
  * Карточка ссылки в мессенджерах. У рилса с роликом отдаём и видео: без
  * `og:video` Telegram и WhatsApp показывают только неподвижный кадр, а ссылка
  * на рилс должна разворачиваться в рилс.
+ *
+ * Картинка превью — не сам сторис-кадр, а его лёгкая JPEG-копия со своего
+ * домена (VED-201): PNG на 5 МБ разворачивал только Max.
  */
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -18,7 +28,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!post) return { title: "VedaMatch Inspiration" };
   // Описание — цитата без пояснения: пояснение в карточку всё равно не влезет.
   const description = post.text.split(SEPARATOR)[0].slice(0, 300);
-  const poster = post.storyImageUrl || post.imageUrl;
+  const poster = ogImageSource(post) ? ogImagePath(slug) : null;
   return {
     title: `${post.title} — Inspiration`,
     description,
@@ -26,7 +36,17 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       type: post.videoUrl ? "video.other" : "article",
       title: post.title,
       description,
-      images: poster ? [{ url: poster, width: 1080, height: 1920 }] : [],
+      images: poster
+        ? [
+            {
+              url: poster,
+              type: OG_IMAGE_TYPE,
+              width: OG_IMAGE_WIDTH,
+              height: OG_IMAGE_HEIGHT,
+              alt: post.title,
+            },
+          ]
+        : [],
       ...(post.videoUrl
         ? { videos: [{ url: post.videoUrl, type: "video/mp4", width: 1080, height: 1920 }] }
         : {}),
