@@ -15,6 +15,8 @@
  * 2, стих 13» в другой конец списка от соседнего «2.14».
  */
 
+import { splitWorkLocator } from './feed-attribution';
+
 /**
  * Части «Чайтанья-чаритамриты» идут в порядке книги, а не алфавита: по
  * алфавиту «Антья» встала бы перед «Мадхьей».
@@ -88,16 +90,34 @@ export function compareLocators(
 }
 
 /**
+ * Номер стиха поста: поле локатора, а если оно пустое — номер, записанный в
+ * конец источника («Бхагавад-гита 2.11»).
+ */
+export function effectiveLocator(post: {
+  attributionLocator: string | null;
+  attributionWork?: string | null;
+}): string | null {
+  return (
+    post.attributionLocator?.trim() ||
+    splitWorkLocator(post.attributionWork).locator
+  );
+}
+
+/**
  * Посты одного источника по порядку стихов. Равные локаторы остаются в
  * исходном порядке (сортировка стабильная), дальше решает `id` — порядок
  * обязан совпадать между страницами.
  */
 export function sortByLocator<
-  T extends { id: string; attributionLocator: string | null },
+  T extends {
+    id: string;
+    attributionLocator: string | null;
+    attributionWork?: string | null;
+  },
 >(posts: readonly T[]): T[] {
   const keyed = posts.map((post) => ({
     post,
-    key: locatorKey(post.attributionLocator),
+    key: locatorKey(effectiveLocator(post)),
   }));
   keyed.sort(
     (a, b) =>
@@ -120,7 +140,11 @@ export function sortByLocator<
  * без источника не трогаются.
  */
 export function orderWithinSlots<
-  T extends { id: string; attributionLocator: string | null },
+  T extends {
+    id: string;
+    attributionLocator: string | null;
+    attributionWork?: string | null;
+  },
 >(items: readonly T[], sourceOf: (item: T) => string | null): T[] {
   const groups = new Map<string, number[]>();
   items.forEach((item, index) => {
@@ -145,7 +169,11 @@ export function orderWithinSlots<
  * «свежее», и подпись яруса на слайде соврала бы.
  */
 export function orderTieredWithinSlots<
-  T extends { id: string; attributionLocator: string | null },
+  T extends {
+    id: string;
+    attributionLocator: string | null;
+    attributionWork?: string | null;
+  },
   Tier,
 >(
   items: readonly { post: T; tier?: Tier }[],

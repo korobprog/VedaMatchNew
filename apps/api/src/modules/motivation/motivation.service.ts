@@ -69,6 +69,8 @@ import {
   attributionKey,
   buildAttributionOptions,
   matchingVariants,
+  splitWorkLocator,
+  workKey as sourceKey,
 } from './feed-attribution';
 import { orderTieredWithinSlots, sortByLocator } from './locator-order';
 import { attributionLine } from './postcard-events';
@@ -157,7 +159,7 @@ export class MotivationService {
     // из-за ползунка, о котором никто не помнил. Колонка осталась в базе с
     // прежними значениями, поэтому старый клиент ничего не ломает.
     const percent = Number.isInteger(input.vaishnavaPercent)
-      ? (input.vaishnavaPercent as number)
+      ? input.vaishnavaPercent
       : undefined;
     if (
       (percent !== undefined && (percent < 0 || percent > 100)) ||
@@ -275,7 +277,7 @@ export class MotivationService {
        Ни ярусов, ни подбора под путь тут нет — иначе фильтр показал бы
        треть книги и в перемешанном виде. */
     const speakerKey = attributionFilter(query.speaker),
-      workKey = attributionFilter(query.work);
+      workKey = attributionFilter(query.work, sourceKey);
     const ranked =
       !query.favorites && categories.length === 0 && !speakerKey && !workKey;
     // Сессия листания: первая страница фиксирует момент и прошлый визит и
@@ -445,8 +447,7 @@ export class MotivationService {
       ? (cursor.shuffleSeed ?? randomBytes(8).toString('hex'))
       : undefined;
     type Loaded = (typeof posts)[number];
-    const sourceOf = (post: Loaded) =>
-      attributionKey(post.attributionWork) || null;
+    const sourceOf = (post: Loaded) => sourceKey(post.attributionWork) || null;
     const order = (
       posts: Loaded[],
     ): { post: Loaded; tier?: MotivationFeedTier }[] =>
@@ -531,7 +532,7 @@ export class MotivationService {
   ) {
     const light = await this.prisma.motivationPost.findMany({
       where,
-      select: { id: true, attributionLocator: true },
+      select: { id: true, attributionLocator: true, attributionWork: true },
       orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
       take: VERSE_ORDER_LIMIT,
     });
@@ -574,6 +575,7 @@ export class MotivationService {
             })
           ).map((row) => row.attributionWork),
           workKey,
+          sourceKey,
         )
       : null;
     return {
@@ -595,7 +597,7 @@ export class MotivationService {
     work?: string;
   }): Promise<MotivationFeedAttributionsDto> {
     const speakerKey = attributionFilter(query.speaker),
-      workKey = attributionFilter(query.work);
+      workKey = attributionFilter(query.work, sourceKey);
     const base = {
       ...READER_VISIBLE_POSTS,
       ...(feedCategoryWhere(feedCategories(query.category)) ?? {}),
@@ -617,6 +619,11 @@ export class MotivationService {
             _count: { _all: true },
           })
         ).map((row) => ({ value: row[field], count: row._count._all })),
+        // Номер стиха в источнике — не новая книга: «Бхагавад-гита 2.11» и
+        // «Бхагавад-гита 2.12» в списке одна строка.
+        field === 'attributionWork'
+          ? (value) => splitWorkLocator(value).work
+          : undefined,
       );
     const [speakers, works] = await Promise.all([
       count('attributionSpeaker', bySpeaker),
