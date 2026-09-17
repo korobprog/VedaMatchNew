@@ -24,6 +24,7 @@ const defaults: NotificationPreferencesDto = {
   work: true,
   travel: true,
   announcements: true,
+  telegram: true,
 };
 
 /**
@@ -174,6 +175,7 @@ export class NotificationsService {
       work: row.work,
       travel: row.travel,
       announcements: row.announcements,
+      telegram: row.telegram,
     };
   }
 
@@ -195,6 +197,7 @@ export class NotificationsService {
       work: patch.work ?? current.work,
       travel: patch.travel ?? current.travel,
       announcements: patch.announcements ?? current.announcements,
+      telegram: patch.telegram ?? current.telegram,
     };
     await this.prisma.notificationPreference.upsert({
       where: { userId },

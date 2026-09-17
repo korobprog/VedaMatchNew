@@ -1,6 +1,8 @@
 import { readTelegramLaunch, TELEGRAM_WEB_APP_SCRIPT, type TelegramLaunch } from './launch';
-// Тип — из нативного двойника: в браузере `./web-app` разрешается в этот же
-// файл, но импорт только типа сборка вырезает.
+// Тип — из нативного двойника (`web-app.ts`): в браузере `./web-app`
+// разрешается в этот же файл, но импорт только типа сборка вырезает. Оба
+// файла держат один и тот же интерфейс `TelegramWebApp`, включая
+// `requestWriteAccess` — иначе типы двух платформ разъедутся молча.
 import type { TelegramWebApp } from './web-app';
 
 /**

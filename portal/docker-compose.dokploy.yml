@@ -50,6 +50,12 @@ services:
       # Бот @vedamatch_bot: ключ проверки подписи мини-приложения
       # (POST /auth/telegram/webapp). Пусто — вход через Telegram отвечает 503.
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      # Веха 4, «Уведомления через Telegram-бота» (TelegramSenderService):
+      # адрес Bot API и адрес мини-приложения для кнопки «Открыть» в
+      # сообщении бота. Дефолты совпадают со значениями в коде — переменные
+      # нужны только для переопределения (свой прокси к Bot API, другой домен).
+      TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-https://api.telegram.org}
+      TELEGRAM_WEBAPP_URL: ${TELEGRAM_WEBAPP_URL:-https://ios.vedamatch.com}
       JWT_PRIVATE_KEY_BASE64: ${JWT_PRIVATE_KEY_BASE64}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL}
       REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS}

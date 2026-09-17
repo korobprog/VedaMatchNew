@@ -16,8 +16,12 @@ import type { Request, Response } from 'express';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import * as oidc from 'openid-client';
 import {
+  AUTH_TELEGRAM_CONNECTED_EVENT,
+  AUTH_TELEGRAM_DISCONNECTED_EVENT,
   USER_REGISTERED_EVENT,
   resolveDisplayName,
+  type AuthTelegramConnectedEvent,
+  type AuthTelegramDisconnectedEvent,
   type Role,
   type UserRegisteredEvent,
 } from '@vedamatch/shared';
@@ -811,6 +815,16 @@ export class AuthService implements OnModuleInit {
       throw new BadRequestException('Неизвестный способ входа');
     }
     await this.identities.unlink(userId, provider);
+    if (provider === 'telegram') {
+      // «Уведомления» гасят устройство `provider: 'telegram'` по этому
+      // событию — сами они `UserIdentity` не читают (контракт сервисных
+      // модулей), поэтому факт отвязки сообщает `auth`.
+      const event: AuthTelegramDisconnectedEvent = {
+        name: AUTH_TELEGRAM_DISCONNECTED_EVENT,
+        userId,
+      };
+      this.events.emit(event.name, event);
+    }
     return { ok: true };
   }
 
@@ -839,6 +853,7 @@ export class AuthService implements OnModuleInit {
       throw new UnauthorizedException('Telegram не подтвердил вход');
     }
     await this.identities.link(userId, 'telegram', String(verified.user.id));
+    this.announceTelegramConnected(userId, verified.user);
     return { ok: true };
   }
 
@@ -887,7 +902,27 @@ export class AuthService implements OnModuleInit {
       res,
       req.headers.host,
     );
+    this.announceTelegramConnected(user.id, verified.user);
     return { ok: true };
+  }
+
+  /**
+   * Факт «есть живая связка с Telegram» — для «Уведомлений»: заводят или
+   * обновляют устройство `provider: 'telegram'`, не читая `UserIdentity`.
+   * Шлётся и при входе через мини-приложение, и при привязке живой сессией:
+   * оба пути одинаково подтверждают подписью бота владение чатом с ним.
+   */
+  private announceTelegramConnected(
+    userId: string,
+    telegramUser: { id: number; allowsWriteToPm?: boolean },
+  ): void {
+    const event: AuthTelegramConnectedEvent = {
+      name: AUTH_TELEGRAM_CONNECTED_EVENT,
+      userId,
+      telegramUserId: String(telegramUser.id),
+      canWrite: telegramUser.allowsWriteToPm === true,
+    };
+    this.events.emit(event.name, event);
   }
 
   private async createAppLoginCode(

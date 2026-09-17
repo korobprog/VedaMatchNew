@@ -571,6 +571,14 @@ export interface NotificationPreferencesDto
    *  из админки: выключение гасит пуш, а важная рассылка всё равно появится
    *  в колокольчике — см. `important` у рассылки. */
   announcements: boolean;
+  /**
+   * Сообщения от `@vedamatch_bot` — общий выключатель поверх категорий выше:
+   * `chat` включён, а `telegram` выключен — пуш в браузер и колокольчик идут
+   * как обычно, а бот молчит. Не влияет на то, заведено ли устройство
+   * `provider: 'telegram'` — оно живёт, пока Telegram не отвязан
+   * (`auth.telegram.disconnected`) или пока бота не заблокировали.
+   */
+  telegram: boolean;
 }
 
 export type UpdateNotificationPreferencesRequest =
@@ -649,6 +657,36 @@ export interface NotificationDeviceTestResult {
 
 export interface VapidKeyResponse {
   publicKey: string;
+}
+
+// ===== Уведомления через Telegram-бота =====
+
+/** Экран «Аккаунт»: привязан ли Telegram, и включена ли доставка бота. */
+export interface TelegramNotificationStatusResponse {
+  /** Есть живое устройство `provider: 'telegram'` — бот может написать. */
+  connected: boolean;
+  /** Тумблер `NotificationPreference.telegram`. */
+  enabled: boolean;
+}
+
+export interface UpdateTelegramNotificationStatusRequest {
+  enabled: boolean;
+}
+
+/** После `WebApp.requestWriteAccess()` — подтверждение подписью бота. */
+export interface EnableTelegramNotificationsRequest {
+  initData: string;
+}
+
+/** Админский эндпоинт `GET /notifications/telegram/status`: проверка с
+ *  прода, что сервер вообще достаёт до Telegram. */
+export interface TelegramBotStatusResponse {
+  /** Задан ли `TELEGRAM_BOT_TOKEN`. */
+  configured: boolean;
+  /** Ответил ли Bot API на `getMe`. */
+  reachable: boolean;
+  /** `username` бота из `getMe`; `null`, если не настроен или недоступен. */
+  username: string | null;
 }
 
 // ===== Рассылки администрации =====

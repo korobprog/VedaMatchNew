@@ -160,6 +160,24 @@ describe('verifyTelegramInitData', () => {
     });
   });
 
+  it('allows_write_to_pm долетает булевым, а мусор в нём игнорируется', () => {
+    const withPermission = JSON.stringify({
+      ...USER,
+      allows_write_to_pm: true,
+    });
+    const result = verify(sign(fields({ user: withPermission })));
+    expect(result.ok && result.user.allowsWriteToPm).toBe(true);
+
+    const withGarbage = JSON.stringify({
+      ...USER,
+      allows_write_to_pm: 'yes',
+    });
+    const garbageResult = verify(sign(fields({ user: withGarbage })));
+    expect(garbageResult.ok && garbageResult.user.allowsWriteToPm).toBe(
+      undefined,
+    );
+  });
+
   it('повтор поля — отказ, а не выбор одного из значений', () => {
     const raw = `${sign(fields())}&user=${encodeURIComponent(JSON.stringify({ ...USER, id: 1 }))}`;
     expect(verify(raw)).toEqual({ ok: false, reason: 'malformed' });

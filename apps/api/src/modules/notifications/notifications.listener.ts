@@ -1,11 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import type {
+  AuthTelegramConnectedEvent,
+  AuthTelegramDisconnectedEvent,
   ChatCallEndedEvent,
   NotificationEvent,
   UserRegisteredEvent,
 } from '@vedamatch/shared';
 import {
+  AUTH_TELEGRAM_CONNECTED_EVENT,
+  AUTH_TELEGRAM_DISCONNECTED_EVENT,
   CHAT_CALL_ENDED_EVENT,
   USER_REGISTERED_EVENT,
   resolveDisplayName,
@@ -15,6 +19,9 @@ import { buildNotification, notificationEventNames } from './notification-copy';
 import { NativePushService } from './native-push.service';
 import { NotificationsService } from './notifications.service';
 import { PushSenderService } from './push-sender.service';
+import { buildTelegramNotificationText } from './telegram-copy';
+import { TelegramNotificationsService } from './telegram-notifications.service';
+import { TelegramSenderService } from './telegram-sender.service';
 
 @Injectable()
 export class NotificationsListener {
@@ -25,7 +32,38 @@ export class NotificationsListener {
     private readonly sender: PushSenderService,
     private readonly prisma: PrismaService,
     private readonly nativePush: NativePushService,
+    private readonly telegramNotifications: TelegramNotificationsService,
+    private readonly telegramSender: TelegramSenderService,
   ) {}
+
+  /**
+   * Заведена или подтверждена связка с Telegram (вход через мини-приложение
+   * или привязка живой сессией, см. `AuthService`). `UserIdentity` здесь не
+   * читаем — событие самодостаточно, только заводит устройство доставки.
+   */
+  @OnEvent(AUTH_TELEGRAM_CONNECTED_EVENT)
+  onTelegramConnected(event: AuthTelegramConnectedEvent): void {
+    void this.telegramNotifications
+      .setConnected(event.userId, event.telegramUserId, event.canWrite)
+      .catch((error) =>
+        this.logger.warn(
+          `Устройство Telegram не заведено для ${event.userId}: ${String(error)}`,
+        ),
+      );
+  }
+
+  /** Telegram отвязан (`DELETE /auth/identities/telegram`) — боту больше
+   *  некому писать, устройство гасится. */
+  @OnEvent(AUTH_TELEGRAM_DISCONNECTED_EVENT)
+  onTelegramDisconnected(event: AuthTelegramDisconnectedEvent): void {
+    void this.telegramNotifications
+      .disconnect(event.userId)
+      .catch((error) =>
+        this.logger.warn(
+          `Устройство Telegram не отвязано для ${event.userId}: ${String(error)}`,
+        ),
+      );
+  }
 
   /**
    * Приветствие новому участнику. Слушаем событие регистрации, а не ждём от
@@ -289,7 +327,17 @@ export class NotificationsListener {
       const subscriptions = await this.notifications.listSubscriptions(
         event.recipientId,
       );
-      if (subscriptions.length === 0 && native.devices === 0) {
+      // Тумблер `telegram` — канал доставки, а не категория: категория уже
+      // проверена выше и решает про колокольчик, браузер и телефон разом,
+      // а этот тумблер выключает только бота, не трогая остальное.
+      const telegramDevices = preferences.telegram
+        ? await this.telegramNotifications.listDevices(event.recipientId)
+        : [];
+      if (
+        subscriptions.length === 0 &&
+        native.devices === 0 &&
+        telegramDevices.length === 0
+      ) {
         this.logger.log(
           `${event.name} для ${event.recipientId} пропущено: нет подписок`,
         );
@@ -304,8 +352,27 @@ export class NotificationsListener {
           await this.notifications.deleteSubscription(subscription.endpoint);
         }
       }
+
+      if (telegramDevices.length > 0) {
+        const text = buildTelegramNotificationText(content, event);
+        for (const device of telegramDevices) {
+          const failure = await this.telegramSender.sendMessage({
+            chatId: device.token,
+            title: text.title,
+            body: text.body,
+            notificationUrl: content.url,
+          });
+          if (failure === null) delivered += 1;
+          if (failure === 'gone') {
+            await this.telegramNotifications.deleteDevice(device.token);
+          }
+        }
+      }
+
       this.logger.log(
-        `${event.name} для ${event.recipientId}: доставлено ${delivered} из ${subscriptions.length + native.devices}`,
+        `${event.name} для ${event.recipientId}: доставлено ${delivered} из ${
+          subscriptions.length + native.devices + telegramDevices.length
+        }`,
       );
     } catch (error) {
       // Вместе с именем — поля нагрузки: у безымянного события (издатель забыл

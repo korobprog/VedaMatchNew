@@ -173,6 +173,7 @@ describe('NotificationsService.getPreferences', () => {
       travel: true,
       work: true,
       announcements: true,
+      telegram: true,
     });
   });
 
@@ -215,6 +216,7 @@ describe('NotificationsService.updatePreferences', () => {
       travel: true,
       work: true,
       announcements: true,
+      telegram: true,
     });
   });
 });

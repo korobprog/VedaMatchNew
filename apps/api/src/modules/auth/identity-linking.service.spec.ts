@@ -65,15 +65,16 @@ function setup(overrides: { identities?: Record<string, unknown> } = {}) {
   const providers = {
     assertEnabled: jest.fn().mockResolvedValue(undefined),
   };
+  const events = { emit: jest.fn() };
   const service = new AuthService(
     config as never,
     prisma as never,
     jwt as never,
-    { emit: jest.fn() } as never,
+    events as never,
     identities as never,
     providers as never,
   );
-  return { service, jwt, identities, providers, config };
+  return { service, jwt, identities, providers, events, config };
 }
 
 describe('AuthService.listIdentities', () => {
@@ -105,17 +106,31 @@ describe('AuthService.unlinkIdentity', () => {
   });
 
   it('известный провайдер — отвязка через IdentityService', async () => {
-    const { service, identities } = setup();
+    const { service, identities, events } = setup();
     await expect(service.unlinkIdentity('u1', 'google')).resolves.toEqual({
       ok: true,
     });
     expect(identities.unlink).toHaveBeenCalledWith('u1', 'google');
+    // Отвязка не-Telegram способа «Уведомления» не касается — событие не летит.
+    expect(events.emit).not.toHaveBeenCalled();
+  });
+
+  it('отвязка Telegram — «Уведомления» узнают гасить устройство', async () => {
+    const { service, identities, events } = setup();
+    await expect(service.unlinkIdentity('u1', 'telegram')).resolves.toEqual({
+      ok: true,
+    });
+    expect(identities.unlink).toHaveBeenCalledWith('u1', 'telegram');
+    expect(events.emit).toHaveBeenCalledWith('auth.telegram.disconnected', {
+      name: 'auth.telegram.disconnected',
+      userId: 'u1',
+    });
   });
 });
 
 describe('AuthService.linkTelegram', () => {
   it('подлинные данные — привязка идентичности к текущему пользователю', async () => {
-    const { service, identities, providers } = setup();
+    const { service, identities, providers, events } = setup();
     const req = { hostname: 'ios.vedamatch.com' };
 
     await expect(
@@ -131,6 +146,10 @@ describe('AuthService.linkTelegram', () => {
       'ios.vedamatch.com',
     );
     expect(identities.link).toHaveBeenCalledWith('u1', 'telegram', '42');
+    expect(events.emit).toHaveBeenCalledWith(
+      'auth.telegram.connected',
+      expect.objectContaining({ userId: 'u1', telegramUserId: '42' }),
+    );
   });
 
   it('чужая подпись — 401, идентичность не трогается', async () => {
