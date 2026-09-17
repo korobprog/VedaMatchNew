@@ -1,6 +1,7 @@
 import { ForbiddenException } from '@nestjs/common';
 import type { AccessTokenPayload } from '@vedamatch/shared';
 import { MotivationPostcardsService } from './motivation-postcards.service';
+import * as storyImage from './story-image';
 
 const admin: AccessTokenPayload = {
   sub: 'admin-1',
@@ -173,6 +174,27 @@ describe('MotivationPostcardsService.build', () => {
     await expect(
       service.build('user-1', regularUser, 'post-1'),
     ).resolves.toMatchObject({ url: 'https://cdn/postcard.png' });
+  });
+
+  it('передаёт в composeStoryImage свою строку дисклеймера вместо ИИ-метки (VED-247)', async () => {
+    // Открытку сохраняют и пересылают отдельно от поста, поэтому снизу
+    // добавляется «Скачано с VedaMatch.ru» — ИИ-метку при этом не убираем
+    // (юридический вес), обе части идут одной строкой через composeStoryImage.
+    stubImageDownload();
+    const composeSpy = jest.spyOn(storyImage, 'composeStoryImage');
+    const { service, prisma } = build();
+    prisma.motivationPost.findUnique.mockResolvedValue(publishedOwnPost);
+    prisma.motivationEvent.findMany.mockResolvedValue([eventToday()]);
+
+    await service.build('user-1', regularUser, 'post-1');
+
+    expect(composeSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        disclosure: 'Скачано с VedaMatch.ru · Создано нейросетью',
+      }),
+    );
+    composeSpy.mockRestore();
   });
 
   it("refuses to build a postcard from someone else's reel for a regular user", async () => {

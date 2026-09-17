@@ -169,6 +169,35 @@ describe('buildStoryOverlaySvg', () => {
     expect(baseline('disclosure')).toBeLessThan(STORY_HEIGHT);
   });
 
+  it('без disclosure остаётся прежняя ИИ-метка — сторис и ролики не меняются (VED-247)', () => {
+    const svg = buildStoryOverlaySvg({ text: 'Цитата' });
+    expect(svg).toContain(AI_DISCLOSURE);
+  });
+
+  it('переданный disclosure заменяет ИИ-метку в кадре — так открытка добавляет «Скачано с VedaMatch.ru» (VED-247)', () => {
+    const svg = buildStoryOverlaySvg({
+      text: 'Цитата',
+      disclosure: 'Скачано с VedaMatch.ru · Создано нейросетью',
+    });
+    expect(svg).toContain('Скачано с VedaMatch.ru · Создано нейросетью');
+    // Прежний текст не остаётся рядом вторым куском — строка одна, заменена
+    // целиком, а не дополнена.
+    expect(svg).not.toContain(AI_DISCLOSURE);
+  });
+
+  it('renderStoryOverlay рисует другие пиксели под disclosure — параметр реально доходит до кадра', async () => {
+    // renderStoryOverlay прокидывает input в buildStoryOverlaySvg целиком, но
+    // это деталь реализации; проверяем результат — готовый слой с disclosure
+    // визуально отличается от слоя без него, а не только текст SVG.
+    const input = { text: 'Цитата' };
+    const withoutOverride = await renderStoryOverlay(input);
+    const withOverride = await renderStoryOverlay({
+      ...input,
+      disclosure: 'Скачано с VedaMatch.ru · Создано нейросетью',
+    });
+    expect(Buffer.compare(withoutOverride, withOverride)).not.toBe(0);
+  });
+
   it('рисует знак в готовом слое подписи', async () => {
     // Знак вшит в код строкой, а не читается файлом: проверяем, что он
     // действительно попадает на пиксели, а не теряется по дороге.
