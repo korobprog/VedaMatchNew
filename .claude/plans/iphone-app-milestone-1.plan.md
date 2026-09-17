@@ -1,128 +1,147 @@
-# План: VedaMatch для iPhone — веха 1 «Аккаунт Apple и первая сборка»
+# План: VedaMatch для iPhone — веха 1 «Веб-версия на ios.vedamatch.com»
 
 **Исходный PRD**: [docs/prds/iphone-app.prd.md](../../docs/prds/iphone-app.prd.md)
-**Выбранная веха**: 1 — аккаунт разработчика активен; приложение запускается на
-iPhone владельца, список чатов открывается против прод-API
-**Сложность**: средняя (кода немного, основное время уходит на Apple и первую сборку)
+**Выбранная веха**: 1 — участник с iPhone открывает `ios.vedamatch.com`, входит
+через Google или Яндекс, видит свои чаты и пишет; сессия общая с
+`vedamatch.com`; версия ставится на экран «Домой»
+**Сложность**: средняя
+**Разведка**: ветка `spike/mobile-web` — сборка работает, план доводит её до
+продакшена
 
 ## Кратко
 
-`apps/mobile` сегодня собирается только под Android: в `app.config.ts` нет
-блока `ios`, скрипт `prebuild` жёстко задаёт `--platform android`, а два
-модуля бросают исключение при импорте на iOS, поэтому приложение упадёт
-раньше первого экрана. Веха 1 — минимум, при котором та же кодовая база
-запускается на iPhone: вход, вкладки, список чатов. Пуши (веха 3) и
-системный экран звонка (веха 4) здесь **сознательно выключены** на iOS
-проверкой платформы, как сейчас сделано для Android-only мостов.
-
-Первую сборку на свой iPhone можно поставить **до оплаты** аккаунта —
-бесплатной командой Personal Team в Xcode (подпись на 7 дней, без пушей и
-TestFlight). Оплаченный аккаунт нужен для закрытия вехи, но не блокирует код.
+Разведка доказала, что `apps/mobile` собирается для браузера и работает. До
+продакшена не хватает трёх вещей: **входа без токенов в JS** (сессия —
+httpOnly cookie на `.vedamatch.com`, её `AuthGuard` уже принимает),
+**возврата после входа на поддомен** и **раздачи сборки** на
+`ios.vedamatch.com` как устанавливаемого PWA. Плюс замер скорости против PWA
+сайта — он решает, стоит ли вкладываться в вехи 2–7.
 
 ## Что уже есть и на что опираемся
 
 | Факт | Где |
 |---|---|
-| Xcode 26.2 и CocoaPods стоят на iMac, EAS CLI нет | `xcodebuild -version`, `which pod` |
-| Сервер уже знает `platform = 'ios'` у устройства пушей | `apps/api/prisma/schema.prisma` → `NotificationDevice.platform` |
-| Вход через системный браузер + PKCE на `vedamatch://auth` не зависит от платформы | `apps/api/src/modules/auth/app-login.ts:18`, `apps/mobile/src/lib/auth/login-flow.ts` |
-| Тексты разрешений камеры/микрофона/фото для Info.plist уже заданы плагинами | `app.config.ts` → `expo-image-picker`, `@config-plugins/react-native-webrtc` |
-| Адрес API в dev берётся из адреса Metro — на iPhone по Wi-Fi тоже сработает | `src/config/dev-origin.ts` |
+| `AuthGuard` принимает access-токен из `Authorization` **или** cookie `access_token` | `apps/api/src/modules/auth/auth.guard.ts:37-40` |
+| Cookie входа ставятся на домен контура (`.vedamatch.com`), `SameSite=Lax`, refresh — `path=/auth` | `auth.service.ts` → `issueTokens`, `contour.ts` |
+| CORS с `credentials: true` по списку `WEB_ORIGIN` | `apps/api/src/main.ts:7-43`, `portal/docker-compose.dokploy.yml:34` |
+| Возврат после входа — только путь на `contour.webOrigin` | `auth.service.ts:75` (`safeReturnTo`), `:565` |
+| Клиент приложения умеет «один refresh на все 401» через `SessionPort` | `apps/mobile/src/lib/api/client.ts` |
+| Веб-подмены нативных пакетов | `spike/mobile-web`: `metro.config.js`, `web-shims/`, `*.web.ts(x)` |
 
 ## Образцы для повторения
 
 | Категория | Источник | Образец |
 |---|---|---|
-| Платформенная развилка | `apps/mobile/src/lib/calls/native-call-bridge.ts:29` | `const SUPPORTED = Platform.OS === 'android'` на уровне модуля, вызовы под проверкой, не try/catch |
-| Условный нативный конфиг | `apps/mobile/app.config.ts:17-18,182` | `existsSync(file)` → плагин и путь к файлу подключаются только при наличии файла |
-| Чистая логика конфига | `apps/mobile/src/config/app-version.ts` | формулы сборки — чистые функции со своим `*.spec.ts` |
-| Тесты конфига | `apps/mobile/src/config/app-config.spec.ts` | `appConfig({ config: {} })` и проверки полей/плагинов, `describe/it` на русском |
-| Секреты вне репозитория | `apps/mobile/README.md` «Релизная подпись», `.gitignore` (`*.p8`, `*.p12`, `*.mobileprovision`) | ключи в `/Users/mamu/secrets`, в git — никогда |
-| Обработка ошибок | `apps/mobile/src/lib/push/push-bridge.tsx` | нет Firebase — молча без пушей, чаты работают |
+| Платформенная развилка | `apps/mobile/src/lib/calls/native-call-bridge.ts:29` | `SUPPORTED = Platform.OS === ...`, вызовы под проверкой |
+| Платформенные файлы | `spike/mobile-web`: `push-bridge.web.tsx`, `background-handler.web.ts` | `*.web.ts(x)` рядом с нативным, тот же экспорт |
+| Защита возврата | `auth.service.ts:75` `safeReturnTo` | чистая функция + spec, всё сомнительное → безопасное значение |
+| Поддомен | `apps/web/src/proxy.ts` (vaishnava, PR #150) | правило по префиксу хоста |
+| Выбор контура по хосту | `auth/contour.ts` | хост сверяется со списком `WEB_ORIGIN` |
+| Тесты | `apps/api/src/modules/auth/*.spec.ts`, `apps/mobile/src/**/*.spec.ts` | jest рядом с кодом, `describe/it` по-русски |
 
 ## Файлы
 
 | Файл | Действие | Зачем |
 |---|---|---|
-| `apps/mobile/app.config.ts` | UPDATE | блок `ios`: `bundleIdentifier`, `buildNumber`, `supportsTablet: false`, `infoPlist.ITSAppUsesNonExemptEncryption: false` |
-| `apps/mobile/src/config/app-version.ts` (+spec) | UPDATE | `resolveBuildNumber(env)` — строка для iOS из того же счётчика, что `versionCode` |
-| `apps/mobile/src/config/app-config.spec.ts` | UPDATE | тесты iOS-блока: bundle id, iPad выключен, шифрование объявлено |
-| `apps/mobile/modules/vedamatch-calls/index.ts` | UPDATE | `requireOptionalNativeModule` вместо `requireNativeModule` — импорт на iOS не бросает |
-| `apps/mobile/src/lib/calls/native-call-bridge.ts` | UPDATE | учесть `null`-модуль (проверка `SUPPORTED` остаётся главной) |
-| `apps/mobile/src/lib/push/background-handler.ts` | UPDATE | регистрировать обработчик FCM только на Android |
-| `apps/mobile/package.json` | UPDATE | скрипты `prebuild:ios`, `ios`; исключить RNFirebase из автолинковки iOS до вехи 3 |
-| `apps/mobile/README.md` | UPDATE | раздел «iPhone»: сборка на iMac, Personal Team, подпись, что не работает до вех 3–4 |
-| `apps/mobile/src/lib/auth/*` | проверить | `openAuthSessionAsync` на iOS: закрытие листа, отмена |
-| `docs/prds/iphone-app.prd.md` | CREATE | PRD в репозитории, веха 1 → `in-progress` |
+| `apps/mobile/metro.config.js`, `web-shims/*`, `*.web.ts(x)`, `index.js`, `modules/vedamatch-calls/index.ts` | CREATE/UPDATE | перенос из разведки |
+| `apps/mobile/src/lib/auth/token-store.web.ts` | UPDATE | токены в JS не хранятся — только маркер сессии |
+| `apps/mobile/src/lib/auth/session.web.tsx` (или адаптер `SessionPort`) | CREATE | cookie-режим: `credentials: 'include'`, refresh — `POST /auth/refresh`, выход — `POST /auth/logout` |
+| `apps/mobile/src/lib/api/client.ts` | UPDATE | опция `credentials`, без `Authorization`, когда токена нет |
+| `apps/mobile/src/lib/chat/chat-stream.tsx` | UPDATE | поток событий на вебе с cookie (`withCredentials`) |
+| `apps/mobile/src/lib/auth/login-flow.web.ts` | CREATE | вход — переход на `/auth/google` / `/auth/yandex` с возвратом на поддомен |
+| `apps/api/src/modules/auth/auth.service.ts`, `contour.ts` (+spec) | UPDATE | разрешённый возврат на другой origin из `WEB_ORIGIN` того же контура (`returnOrigin`) |
+| `apps/mobile/public/manifest.webmanifest`, иконки, service worker | CREATE | установка на экран «Домой» |
+| `apps/mobile/app.config.ts` | UPDATE | блок `web`: название, цвета темы, `output: 'single'` |
+| `apps/mobile/Dockerfile.web` (или стадия в существующем) | CREATE | статика + отдача `index.html` на любой путь |
+| `.github/workflows/ci.yml` | UPDATE | `expo export --platform web` как проверка сборки |
+| `apps/mobile/README.md` | UPDATE | раздел «Веб-версия» |
 
 ## Задачи
 
-### Задача 0: аккаунт Apple (владелец, вне кода, стартует сразу)
-- **Действие**: закрыть открытый вопрос PRD «физлицо или юрлицо», оформить
-  Apple Developer Program ($99), завести App ID `com.vedamatch.app`
-  (Push Notifications и Sign in with Apple — сразу, пригодятся в вехах 2–3).
-- **Проверка**: в App Store Connect аккаунт «Active»; команда видна в Xcode → Settings → Accounts.
-- **Параллельно**: задачи 1–5 не ждут аккаунта — подпись Personal Team.
+### Задача 1: перенести разведку и закрыть её долги
+- **Действие**: перенести подмены из `spike/mobile-web`; тест на `metro.config.js`
+  (на вебе подменяются ровно три пакета, на Android — ничего); скрипт
+  `export:web` в `package.json`.
+- **Проверка**: `pnpm --filter @vedamatch/mobile lint && pnpm --filter @vedamatch/mobile test`;
+  `APP_CONTOUR=com pnpm --filter @vedamatch/mobile export:web` без ошибок.
 
-### Задача 1: iOS-блок конфигурации
-- **Действие**: добавить `ios` в `app.config.ts`; `bundleIdentifier: 'com.vedamatch.app'` (как Android-пакет и Firebase);
-  `buildNumber` из новой `resolveBuildNumber`; `supportsTablet: false` (PRD: iPad вне границ);
-  `ITSAppUsesNonExemptEncryption: false` (только HTTPS — без вопроса об экспорте на каждую сборку).
-- **Образец**: `android`-блок и `resolveVersionCode`.
-- **Проверка**: `pnpm --filter @vedamatch/mobile test -- app-config app-version`.
+### Задача 2: сессия на cookie
+- **Действие**: на вебе `SessionPort` не хранит токены: запросы с
+  `credentials: 'include'`, при 401 — `POST /auth/refresh` (cookie
+  `refresh_token` на `path=/auth` уходит сама), признак «вошёл» — ответ
+  `GET /users/me`. Выход — `POST /auth/logout`.
+- **Образец**: `SessionPort`/`RefreshDecision` в `client.ts` — логика «один
+  refresh на все 401» не меняется, меняется источник токена.
+- **Проверка**: spec адаптера (401 → refresh → повтор; refresh 401 → выход;
+  5xx → «недоступно», сессия цела); вход на `vedamatch.com` делает
+  вошедшим и `ios.vedamatch.com`.
 
-### Задача 2: импорт без падения на iOS
-- **Действие**: `vedamatch-calls` отдаёт `requireOptionalNativeModule(...)`;
-  `background-handler.ts` вызывает `setBackgroundMessageHandler(getMessaging(), …)` только при `Platform.OS === 'android'`.
-- **Образец**: `SUPPORTED` в `native-call-bridge.ts`, `audio-route-bridge.ts:15`.
-- **Проверка**: `pnpm --filter @vedamatch/mobile lint && pnpm --filter @vedamatch/mobile test`; на симуляторе приложение доходит до экрана входа.
+### Задача 3: возврат после входа на поддомен
+- **Действие**: `/auth/google` и `/auth/yandex` принимают `returnOrigin`;
+  сервер принимает его, только если origin входит в `WEB_ORIGIN` **того же
+  контура**, иначе — `contour.webOrigin`. На проде `WEB_ORIGIN` дополняется
+  `https://ios.vedamatch.com`.
+- **Образец**: `safeReturnTo` и выбор контура по хосту.
+- **Проверка**: spec — чужой домен, `http:` на проде, origin другого контура,
+  путь в origin, пустое значение → основной портал; разрешённый → поддомен.
 
-### Задача 3: Firebase не мешает сборке iOS
-- **Действие**: до вехи 3 исключить `@react-native-firebase/*` из автолинковки iOS
-  (`expo.autolinking.ios.exclude` в `package.json`) — RNFB на iOS требует
-  `useFrameworks: 'static'` и `GoogleService-Info.plist`, это работа вехи 3.
-  Все обращения к RNFB уже под проверкой Android (задача 2 закрывает последнее).
-- **Проверка**: `expo prebuild --platform ios --clean` и `pod install` без ошибок; Android-сборка не меняется (`prebuild` + workflow **Mobile APK**).
+### Задача 4: поток событий чата на вебе
+- **Действие**: убедиться, что SSE `chat-stream.tsx` на вебе идёт с cookie
+  (`EventSource` c `withCredentials` или `react-native-sse` с
+  `withCredentials`); переподключение после истечения access.
+- **Проверка**: два браузера — сообщение из одного появляется в другом без
+  перезагрузки; после 15 минут простоя поток восстанавливается.
 
-### Задача 4: первая сборка на симуляторе
-- **Действие**: скрипты `prebuild:ios` / `ios` (`expo run:ios`); dev client на симуляторе против локального API (`APP_API_ORIGIN=http://localhost:4000`) и против прода.
-- **Проверка**: вход по dev-логину (`seed:dev`), вкладки Чаты/Звонки/Люди/Общины/Сервисы открываются, список чатов грузится; в журнале Metro нет красных ошибок.
+### Задача 5: устанавливаемая версия
+- **Действие**: манифест (`name`, `short_name`, `display: standalone`,
+  `start_url: /`, цвета из `theme/tokens.ts`), иконки из бренд-кита
+  (`generate:brand-assets`), `apple-touch-icon`, service worker кэширует
+  оболочку (JS, шрифты), но не ответы API.
+- **Проверка**: Lighthouse «Installable»; на iPhone «Поделиться → На экран
+  Домой» открывает версию без адресной строки.
 
-### Задача 5: сборка на iPhone владельца против прод-API
-- **Действие**: `expo run:ios --device --configuration Release` с `APP_CONTOUR=ru`, подпись командой (Personal Team → после оплаты — команда аккаунта).
-- **Проверка (приёмка вехи)**: на реальном iPhone вход через Google или Яндекс в системном браузере, возврат в приложение, список чатов из api.vedamatch.ru, открытие переписки и отправка сообщения; вход переживает перезапуск приложения.
-- **Записать**: модель iPhone и версия iOS, что сломано визуально (безопасные зоны, клавиатура, жесты) — это вход в веху 2.
+### Задача 6: раздача на ios.vedamatch.com
+- **Действие**: образ со статикой (`expo export` → nginx/serve, любой путь →
+  `index.html`, длинный кэш для `/_expo/static`); сервис в Dokploy с
+  доменом `ios.vedamatch.com`; `WEB_ORIGIN` API дополнен поддоменом.
+  Домен в Dokploy заводит владелец.
+- **Проверка**: `curl -I https://ios.vedamatch.com/chat/x` → 200 и HTML;
+  CORS-запрос с поддомена к `api.vedamatch.com` проходит с cookie.
 
-### Задача 6: документация
-- **Действие**: раздел «iPhone» в `apps/mobile/README.md`; строка вехи 1 в PRD → `complete` после приёмки.
-- **Проверка**: README понятен человеку без контекста беседы.
+### Задача 7: замер против PWA сайта (решение по вехам 2–7)
+- **Действие**: на одном iPhone (SE 2020 или iPhone 11), 4G, по 5 холодных и
+  повторных запусков: `ios.vedamatch.com` против PWA `vedamatch.com` — до
+  списка чатов и до открытой переписки. Если веб-версия не быстрее — деление
+  JS по вкладкам до перехода к вехе 2.
+- **Проверка**: таблица замеров в `docs/` и строка в PRD.
 
 ## Проверка
 
 ```bash
 pnpm --filter @vedamatch/mobile lint
 pnpm --filter @vedamatch/mobile test
-pnpm --filter @vedamatch/mobile test:app-manifest
-cd apps/mobile && APP_CONTOUR=ru npx expo prebuild --platform ios --clean
-cd apps/mobile && npx expo run:ios
-cd apps/mobile && APP_CONTOUR=ru npx expo run:ios --device --configuration Release
+pnpm --filter @vedamatch/api test -- auth
+APP_CONTOUR=com pnpm --filter @vedamatch/mobile export:web
 ```
+
+Ручная приёмка на iPhone: вход через Google → список чатов → переписка →
+отправка → сообщение от второго участника приходит само → «На экран Домой» →
+повторный запуск без входа.
 
 ## Риски
 
 | Риск | Вероятность | Смягчение |
 |---|---|---|
-| Оплата аккаунта Apple из России не проходит | средняя | Personal Team для работы над кодом; решение по лицу — до задачи 5 |
-| Нативные пакеты не собираются под iOS с RN 0.86 new arch (`react-native-webrtc`, `react-native-incall-manager`) | средняя | задачи 3–4 первыми; при отказе — исключить пакет из автолинковки iOS, звонки всё равно в вехе 4 |
-| Скрытые Android-only импорты, кроме найденных двух | средняя | прогон на симуляторе ловит их при старте; правка по образцу `SUPPORTED` |
-| Исключение RNFB ломает Android | низкая | исключение только для `ios`; сборка APK в CI после мержа |
-| Personal Team: подпись живёт 7 дней | высокая | только для разработки; к приёмке — оплаченный аккаунт |
-| `openAuthSessionAsync` на iOS ведёт себя иначе (лист, cookies) | низкая | ручная проверка отмены и повторного входа в задаче 5 |
+| Safari ITP режет cookie между `ios.` и `api.` | низкая | один сайт `vedamatch.com`, `SameSite=Lax` — это не сторонние cookie; проверка в задаче 6 на реальном iPhone |
+| Открытый редирект через `returnOrigin` | средняя | только точное совпадение со списком `WEB_ORIGIN` контура, spec на отказы |
+| PWA на экране «Домой» в iOS — отдельное хранилище cookie от Safari | средняя | вход внутри установленной версии всё равно работает; проверить и описать в README |
+| Веб-версия не быстрее PWA сайта | средняя | задача 7 до вех 2–7; деление JS |
+| Правки в общем коде ломают Android | низкая | только `*.web.ts(x)` и подмены по платформе; тесты и сборка APK в CI |
 
 ## Приёмка
 
-- [ ] Аккаунт Apple Developer активен
 - [ ] Все задачи выполнены, Android-сборка не изменилась
 - [ ] Проверка проходит
-- [ ] На iPhone владельца список чатов открывается против api.vedamatch.ru
+- [ ] На iPhone вход, чаты и отправка работают на `ios.vedamatch.com`
+- [ ] Замер против PWA сайта записан
 - [ ] Образцы повторены, не изобретены заново
