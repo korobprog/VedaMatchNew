@@ -131,7 +131,10 @@ export function QueueBoard({
         <p className="mt-1 text-sm text-text-2">
           Проверьте точность цитаты, источник и атрибуцию до запуска изображения.
         </p>
-        {searching && (
+        {/* Счётчик только когда в разделе вообще есть записи: пустой раздел
+            и так объясняет себя строкой «Нет цитат…» ниже, а «Найдено: 0 из
+            0» рядом с ней — лишний шум про то же самое. */}
+        {searching && textPosts.length > 0 && (
           <p className="mt-1 text-sm text-text-2">
             Найдено: {foundTextPosts.length} из {textPosts.length}
           </p>
@@ -167,7 +170,7 @@ export function QueueBoard({
         <p className="mt-1 text-sm text-text-2">
           Изображение появляется здесь после одобрения текста и публикуется отдельным действием.
         </p>
-        {searching && (
+        {searching && imagePosts.length > 0 && (
           <p className="mt-1 text-sm text-text-2">
             Найдено: {foundImagePosts.length} из {imagePosts.length}
           </p>

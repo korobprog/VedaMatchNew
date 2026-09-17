@@ -135,6 +135,23 @@ describe("QueueBoard — поиск в очереди (VED-200)", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("у пустого раздела не показывает «Найдено: 0 из 0» рядом с пустым состоянием", async () => {
+    // Только текстовая карточка — раздел «Изображения» пуст ещё до поиска.
+    const user = userEvent.setup();
+    render(<QueueBoard posts={[textPost]} categories={[]} />);
+
+    await user.type(screen.getByRole("searchbox"), "душа");
+
+    // У пустого раздела остаётся только обычное пустое состояние — без
+    // «Найдено: 0 из 0» рядом с ним (VED-200, замечание оценщика).
+    expect(
+      screen.getByText("Нет изображений, ожидающих проверки."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Найдено: 0 из 0$/)).not.toBeInTheDocument();
+    // У непустого раздела счётчик по-прежнему есть.
+    expect(screen.getByText("Найдено: 1 из 1")).toBeInTheDocument();
+  });
+
   it("не теряет фокус поля поиска при обновлении списков", async () => {
     const user = userEvent.setup();
     render(<QueueBoard posts={[textPost, imagePost]} categories={[]} />);
