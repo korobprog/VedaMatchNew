@@ -43,6 +43,7 @@ import {
   type Contour,
 } from './contour';
 import { verifyTelegramInitData } from './telegram-init-data';
+import { verifyTelegramWidget } from './telegram-login-widget';
 import { parseTelegramWebAppMode } from './telegram-webapp-mode';
 import { mapTelegramProfile } from './telegram.provider';
 import { readRegistrationMode } from '../billing/billing-mode';
@@ -945,6 +946,76 @@ export class AuthService implements OnModuleInit {
       req.headers.host,
     );
     return { ok: true };
+  }
+
+  /**
+   * Вход через «Telegram Login Widget» — кнопка на самом сайте
+   * (`vedamatch.com`/`vedamatch.ru`), не мини-приложение. Виджет сам ведёт
+   * браузер на `data-auth-url` (см. `telegram-login-card.tsx` на вебе),
+   * дописывая свои поля к тому, что мы уже положили в адрес (`returnTo`,
+   * `returnOrigin`) — отсюда и разбор `query` целиком, а не тела запроса.
+   *
+   * Подпись проверяется другим секретом, чем у мини-приложения — см.
+   * комментарий в `telegram-login-widget.ts`. Дальше путь тот же, что у
+   * OAuth-колбэков: способ включён для домена → аккаунт по «telegram + id»
+   * → закрытая регистрация → cookie сессии → редирект на портал.
+   */
+  async handleTelegramWidgetCallback(
+    req: Request,
+    res: Response,
+    query: Record<string, unknown>,
+    returnTo?: string,
+    returnOrigin?: string,
+  ): Promise<void> {
+    await this.providers.assertEnabled('telegram', req.hostname);
+    const contour = this.contour(req.headers.host);
+    const verified = verifyTelegramWidget({
+      query,
+      botToken: this.config.get<string>('TELEGRAM_BOT_TOKEN'),
+      nowSec: Math.floor(Date.now() / 1000),
+    });
+    if (!verified.ok) {
+      if (verified.reason === 'not-configured') {
+        throw new ServiceUnavailableException(
+          'Вход через Telegram не настроен',
+        );
+      }
+      throw new UnauthorizedException('Telegram не подтвердил вход');
+    }
+
+    const { user, created } = await this.identities.resolve(
+      { ...mapTelegramProfile(verified.user), requestIp: req.ip ?? null },
+      { beforeCreate: () => this.assertRegistrationOpen() },
+    );
+
+    const resolvedOrigin = resolveReturnOrigin({
+      requested: returnOrigin,
+      webOrigins: this.config.get<string>('WEB_ORIGIN'),
+      contour,
+    });
+    const client = resolveLoginClient({
+      kind: 'oauth',
+      resolvedOrigin,
+      contourWebOrigin: contour.webOrigin,
+    });
+
+    await this.completeLogin({
+      req,
+      user,
+      provider: 'telegram',
+      isNewAccount: created,
+      client,
+    });
+    this.announceTelegramConnected(user.id, { id: verified.user.id });
+
+    await this.issueTokens(
+      user.id,
+      user.email,
+      toRole(user.role),
+      res,
+      req.headers.host,
+    );
+    res.redirect(`${resolvedOrigin}${safeReturnTo(returnTo)}`);
   }
 
   /**

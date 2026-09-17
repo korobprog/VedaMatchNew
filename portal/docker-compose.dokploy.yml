@@ -47,8 +47,15 @@ services:
       YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
       VK_CLIENT_ID: ${VK_CLIENT_ID:-}
       VK_CLIENT_SECRET: ${VK_CLIENT_SECRET:-}
-      # Бот @vedamatch_bot: ключ проверки подписи мини-приложения
-      # (POST /auth/telegram/webapp). Пусто — вход через Telegram отвечает 503.
+      # Бот @vedamatch_bot: ключ проверки подписи и мини-приложения
+      # (POST /auth/telegram/webapp), и виджета входа на самом сайте
+      # (GET /auth/telegram/callback, apps/api/src/modules/auth/
+      # telegram-login-widget.ts) — секреты у них разные, но токен один.
+      # Пусто — оба способа отвечают 503.
+      #
+      # Виджет на сайте (data-auth-url) требует ОДНОКРАТНОЙ настройки в
+      # BotFather: /setdomain → vedamatch.com. Домен у бота ровно один —
+      # мини-приложение (TELEGRAM_WEBAPP_URL ниже) этой настройки не требует.
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       # Веха 4, «Уведомления через Telegram-бота» (TelegramSenderService):
       # адрес Bot API и адрес мини-приложения для кнопки «Открыть» в
@@ -133,6 +140,11 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        # Имя бота для кнопки «Войти через Telegram» на странице /login
+        # (telegram-login-button.tsx). NEXT_PUBLIC_* вшивается в бандл на
+        # сборке — как и NEXT_PUBLIC_API_URL, поэтому передаётся build-арг,
+        # а не только рантайм-переменная. Дефолт в коде — vedamatch_bot.
+        NEXT_PUBLIC_TELEGRAM_BOT: ${NEXT_PUBLIC_TELEGRAM_BOT:-vedamatch_bot}
     restart: unless-stopped
     environment:
       NODE_ENV: production

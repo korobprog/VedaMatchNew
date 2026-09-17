@@ -6,6 +6,7 @@ import type { MouseEvent, ReactElement } from "react";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { DevLoginForm } from "@/components/dev-login-form";
+import { TelegramLoginButton } from "@/components/telegram-login-button";
 import { apiBase } from "@/lib/api-base";
 
 const API_URL = apiBase();
@@ -20,7 +21,14 @@ function readCookie(name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-export type AuthProviderId = "google" | "yandex" | "vk" | "email";
+export type AuthProviderId = "google" | "yandex" | "vk" | "email" | "telegram";
+
+/**
+ * Способы входа обычной кнопкой-ссылкой на `/auth/<провайдер>`. Telegram
+ * рисуется отдельно (`TelegramLoginButton`) — это не ссылка, а сторонний
+ * виджет со своим `<iframe>`, у него нет ни `path`, ни своего значка здесь.
+ */
+type LinkProviderId = Exclude<AuthProviderId, "telegram">;
 
 const GoogleMark = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -68,7 +76,7 @@ const MailMark = () => (
  * требовало бы пересборки фронта.
  */
 const PROVIDERS: Record<
-  AuthProviderId,
+  LinkProviderId,
   { label: string; path: string; Mark: () => ReactElement }
 > = {
   google: { label: "Войти через Google", path: "/auth/google", Mark: GoogleMark },
@@ -162,6 +170,9 @@ export function LoginCard({
         ) : (
           <div className="flex flex-col gap-3">
             {providers.map((id) => {
+              if (id === "telegram") {
+                return <TelegramLoginButton key={id} returnTo={returnTo} />;
+              }
               const { label, path, Mark } = PROVIDERS[id];
               return (
                 <a

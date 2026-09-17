@@ -74,11 +74,13 @@ import { dueFromInput, endOfDayInput } from "./task-due";
 import { findTaskByKey, parseFocusKey } from "./task-focus";
 import { descriptionHasWholeText, splitTaskDraft } from "./task-title";
 import { PRIORITY_TITLE, priorityMark } from "./task-priority";
+import { groupTasksByPriority } from "./task-grouping";
+import { groupTasksByDueDate } from "./task-due-grouping";
 import {
-  groupTasksByPriority,
-  readPriorityGrouping,
-  writePriorityGrouping,
-} from "./task-grouping";
+  readWorkGroupMode,
+  writeWorkGroupMode,
+  type WorkGroupMode,
+} from "./task-view-mode";
 
 /** Сколько точек палец должен пройти, чтобы это считалось переносом, а не касанием. */
 const DRAG_THRESHOLD = 6;
@@ -122,10 +124,12 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   // Свёрнутые колонки. Складываются только на телефоне: шире sm колонки стоят
   // в ряд, там прятать нечего.
   const [collapsed, setCollapsed] = useState<string[]>([]);
-  /* Группировка карточек по важности внутри раздела (VED-51). Это вид, а не
-     порядок: позиции не трогаются, и выключенная группировка возвращает
+  /* Вид раздела: обычный список, «По важности» (VED-51) или «По дате»
+     (VED-160). Один переключатель на оба режима, а не два флага, — они
+     несовместимы: непонятно, что рисовать, если включены разом. Это вид, а
+     не порядок: позиции карточек не трогаются, и режим «none» возвращает
      раздел таким, каким его выстроили руками. */
-  const [grouped, setGrouped] = useState(false);
+  const [groupMode, setGroupMode] = useState<WorkGroupMode>("none");
   /* Поиск по задачам (VED-76). `matches` — что нашёл сервер по последнему
      запросу; `null` — поиска нет, доска целиком. */
   const [query, setQuery] = useState("");
@@ -189,8 +193,8 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             ? wasCollapsed.filter((id) => id !== focused.columnId)
             : wasCollapsed,
         );
-        setGrouped(
-          loaded.board ? readPriorityGrouping(loaded.board.id) : false,
+        setGroupMode(
+          loaded.board ? readWorkGroupMode(loaded.board.id) : "none",
         );
         if (focused) setOpenTaskId(focused.taskId);
         setError(null);
@@ -460,12 +464,15 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     writeCollapsedColumns(board.id, next);
   }
 
-  /** Собрать карточки по важности (VED-51). Вид запоминается на устройстве. */
-  function toggleGrouping() {
+  /** Переключить вид раздела (VED-51, VED-160). Нажатие на активный режим
+      возвращает обычный список, нажатие на другой — переключает режим
+      целиком: оба разом не горят, второй виток отменяет первый. Вид
+      запоминается на устройстве. */
+  function toggleGroupMode(mode: WorkGroupMode) {
     if (!board) return;
-    const next = !grouped;
-    setGrouped(next);
-    writePriorityGrouping(board.id, next);
+    const next = groupMode === mode ? "none" : mode;
+    setGroupMode(next);
+    writeWorkGroupMode(board.id, next);
   }
 
   function moveBeside(task: WorkTaskCardDto, direction: -1 | 1) {
@@ -493,6 +500,12 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   /** Что станет названием, а что описанием, — считаем на каждом нажатии
       клавиши: подсказка под полем должна показывать правду, а не обещание. */
   const draftSplit = splitTaskDraft(draft);
+
+  /* «Сегодня» для группировки по дате (VED-160) — момент рендера, местное
+     время браузера: границы дня у человека в Красноярске и на сервере в
+     Амстердаме разные, поэтому не Date.now() внутри чистой функции, а один
+     снимок времени на весь проход по колонкам. */
+  const now = new Date();
 
   const searchActive = matches !== null && isTaskQuery(query);
   const shownColumns = searchActive
@@ -565,25 +578,43 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               {allFolded ? "Развернуть все" : "Свернуть все"}
             </button>
           )}
-          {/* Группировка по важности (VED-51). Один выключатель, а не пара
-              кнопок: вторая всегда была бы бесполезной. Нажатое состояние
-              видно не только рамкой — его называет `aria-pressed`. */}
+          {/* Группировка по важности (VED-51) и по дате (VED-160). Одна пара
+              кнопок на один режим: включив одну, вторая гаснет — вместе они
+              не имеют смысла. Нажатое состояние видно не только рамкой — его
+              называет `aria-pressed`. */}
           <button
             type="button"
-            aria-pressed={grouped}
-            onClick={toggleGrouping}
+            aria-pressed={groupMode === "priority"}
+            onClick={() => toggleGroupMode("priority")}
             title={
-              grouped
+              groupMode === "priority"
                 ? "Карточки собраны по важности; перетаскивание пока выключено"
                 : "Собрать карточки раздела по важности: горящее сверху"
             }
             className={`rounded-xl border px-2.5 py-2 text-xs font-semibold ${
-              grouped
+              groupMode === "priority"
                 ? "border-cyan text-text-0"
                 : "border-glass-brd text-text-1 hover:text-text-0"
             }`}
           >
             По важности
+          </button>
+          <button
+            type="button"
+            aria-pressed={groupMode === "date"}
+            onClick={() => toggleGroupMode("date")}
+            title={
+              groupMode === "date"
+                ? "Карточки собраны по сроку; перетаскивание пока выключено"
+                : "Собрать карточки раздела по сроку: просроченное и без срока — по краям"
+            }
+            className={`rounded-xl border px-2.5 py-2 text-xs font-semibold ${
+              groupMode === "date"
+                ? "border-cyan text-text-0"
+                : "border-glass-brd text-text-1 hover:text-text-0"
+            }`}
+          >
+            По дате
           </button>
           <button
             type="button"
@@ -640,10 +671,17 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
 
       {/* Сказать про выключенное перетаскивание словами: иначе карточка,
           которая перестала браться пальцем, читается как поломка. */}
-      {grouped && (
+      {groupMode === "priority" && (
         <p className="mb-3 text-xs text-text-2">
           Карточки собраны по важности. Перетаскивание пока выключено — порядок
           внутри раздела задаёт важность; перенести карточку в соседний раздел
+          можно стрелками на ней.
+        </p>
+      )}
+      {groupMode === "date" && (
+        <p className="mb-3 text-xs text-text-2">
+          Карточки собраны по сроку. Перетаскивание пока выключено — порядок
+          внутри раздела задаёт срок; перенести карточку в соседний раздел
           можно стрелками на ней.
         </p>
       )}
@@ -686,7 +724,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               // Место вставки считается по порядку видимых карточек: во время
               // поиска видны не все, а в группах порядок другой — и там, и там
               // карточка легла бы не туда. Кнопки переноса работают всегда.
-              draggable={!searchActive && !grouped}
+              draggable={!searchActive && groupMode === "none"}
               onOpen={() => setOpenTaskId(task.id)}
               onHandleDown={(event) => onHandleDown(event, task.id)}
               onHandleMove={onHandleMove}
@@ -1015,11 +1053,12 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   ))}
 
                 {/* Сгруппированный раздел — тот же список, разложенный по
-                    важности: горящее сверху, пустые группы не занимают строку.
-                    Подпись группы — заголовок третьего уровня под названием
-                    раздела: скринридер должен слышать вложенность, а не
-                    ровный ряд карточек. */}
-                {grouped ? (
+                    важности или по сроку: горящее/просроченное сверху,
+                    пустые группы не занимают строку. Подпись группы —
+                    заголовок третьего уровня под названием раздела:
+                    скринридер должен слышать вложенность, а не ровный ряд
+                    карточек. */}
+                {groupMode === "priority" ? (
                   <div className="flex min-h-[40px] flex-col gap-3">
                     {groupTasksByPriority(column.tasks).map((group) => {
                       const mark = priorityMark(group.priority);
@@ -1045,6 +1084,33 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                         </div>
                       );
                     })}
+                  </div>
+                ) : groupMode === "date" ? (
+                  <div className="flex min-h-[40px] flex-col gap-3">
+                    {groupTasksByDueDate(column.tasks, now).map((group) => (
+                      <div key={group.bucket}>
+                        <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-text-2">
+                          {group.bucket === "overdue" && (
+                            <span
+                              aria-hidden
+                              className="size-1.5 rounded-full bg-magenta"
+                            />
+                          )}
+                          {group.bucket !== "none" && (
+                            <CalendarClock aria-hidden className="size-3.5" />
+                          )}
+                          {group.title}
+                          <span className="font-normal">
+                            {group.tasks.length}
+                          </span>
+                        </h3>
+                        <ul className="flex flex-col gap-2">
+                          {group.tasks.map((task) => (
+                            <li key={task.id}>{renderCard(task)}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <ul className="flex min-h-[40px] flex-col gap-2">

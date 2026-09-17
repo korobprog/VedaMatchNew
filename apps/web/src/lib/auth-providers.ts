@@ -10,7 +10,7 @@ const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
  */
 const FALLBACK: readonly AuthProviderId[] = ["google"];
 
-const KNOWN: readonly string[] = ["google", "yandex", "vk", "email"];
+const KNOWN: readonly string[] = ["google", "yandex", "vk", "email", "telegram"];
 
 /**
  * Включённые способы входа с сервера, в заданном админом порядке.
