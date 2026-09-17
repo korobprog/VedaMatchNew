@@ -53,11 +53,13 @@ pnpm --filter @vedamatch/mobile generate:web-icons           # иконки из
   встроенном WebRTC браузера.
 - **Платформенные файлы** `*.web.ts(x)` рядом с нативными: `session`,
   `token-store`, `push-bridge`, `background-handler`.
-- **Сессия — httpOnly cookie портала**, токенов в JS нет
-  (`src/lib/auth/session.web.tsx`). Cookie стоят на `.vedamatch.com`, поэтому
-  вошедший на vedamatch.com вошёл и здесь. Вход — переход на
-  `/auth/google|yandex?returnOrigin=…`; сервер вернёт на поддомен, только если
-  он есть в `WEB_ORIGIN` и принадлежит тому же сайту (`resolveReturnOrigin`).
+- **Сессия — httpOnly cookie портала** в обычном браузере, токенов в JS нет
+  (`src/lib/auth/session.web.tsx`, `CookieSessionProvider`). Cookie стоят на
+  `.vedamatch.com`, поэтому вошедший на vedamatch.com вошёл и здесь. Вход —
+  переход на `/auth/google|yandex?returnOrigin=…`; сервер вернёт на
+  поддомен, только если он есть в `WEB_ORIGIN` и принадлежит тому же сайту
+  (`resolveReturnOrigin`). Внутри Telegram — другая сессия, токенами, см.
+  ниже.
 - **Пушей FCM нет** — уведомления веб-версии пойдут через Telegram-бота.
 - `public/` — шаблон страницы, манифест, иконки, самохостящиеся woff2-шрифты
   (`public/fonts/`) и service worker (кэширует только оболочку, ответы API —
@@ -113,12 +115,28 @@ dist-web`; методология и числа «до» — `gan-harness/perf-b
 только тогда подключается `telegram-web-app.js`
 (`src/lib/telegram/web-app.web.ts`).
 
-- **Вход без экрана входа:** если сессии ещё нет, `session.web.tsx`
-  отправляет подписанные данные на `POST /auth/telegram/webapp`. Сервер
-  проверяет подпись ключом бота (`TELEGRAM_BOT_TOKEN`,
-  `apps/api/src/modules/auth/telegram-init-data.ts`) и ставит обычную cookie
-  сессии. Уже вошли (например, через Google прямо в Telegram) — сессия не
-  трогается, второго аккаунта не будет.
+- **Сессия — токены, не cookie.** Telegram Desktop и web.telegram.org
+  открывают мини-приложение в `<iframe>` на чужом происхождении — cookie
+  портала там третьесторонняя, и браузер её режет: человек видел экран входа
+  вместо своих чатов, хотя был вошёл на портале. Поэтому внутри Telegram
+  (top-level на телефоне — тоже, решение одно и то же независимо от того,
+  iframe это или нет: `resolveWebSessionStrategy` в
+  `telegram-web-session-strategy.ts`) `session.web.tsx` монтирует
+  `TelegramTokenSessionProvider`: `POST /auth/telegram/webapp` с
+  `mode: 'token'` возвращает пару токенов в теле (тот же путь, что у
+  Android — `token-authority.ts`, `POST /auth/app/refresh|logout`), без
+  единой `Set-Cookie`. Токены живут только в памяти вкладки (модульная
+  переменная в замыкании `token-authority.ts`, поверх `token-store.web.ts`,
+  который на диск/`localStorage`/`sessionStorage` ничего не пишет —
+  мини-приложение выполняет чужой код с telegram.org, и постоянное
+  хранилище было бы читаемо им, XSS). Перезагрузка страницы стирает токены,
+  но Telegram при каждом открытии заново передаёт свежие данные запуска в
+  адресе — повторный вход происходит автоматически.
+- Сервер проверяет подпись `initData` ключом бота (`TELEGRAM_BOT_TOKEN`,
+  `apps/api/src/modules/auth/telegram-init-data.ts`) одинаково в обоих
+  режимах (`mode`/без него — `telegram-webapp-mode.ts`); отличается только
+  ответ (cookie или токены в теле).
+- Вне Telegram (обычный браузер) — `CookieSessionProvider`, без изменений.
 - **Аккаунт из Telegram** получает служебную почту
   `tg-<id>@users.vedamatch.invalid` — Telegram почту не сообщает.
 - **Оболочка** (`telegram-shell.web.tsx`): `ready()`, `expand()`, цвета шапки,
@@ -131,6 +149,43 @@ dist-web`; методология и числа «до» — `gan-harness/perf-b
 `http://localhost:8093/#tgWebAppData=<данные, подписанные этим токеном по
 формуле из telegram-init-data.ts>&tgWebAppVersion=8.0` — страницу, а не
 только фрагмент, нужно загрузить заново.
+
+### Telegram: вход внутри iframe (Desktop/web.telegram.org)
+
+Автоматическая проверка — `e2e-web/telegram-frame.e2e.mjs` (не часть
+`pnpm test`/CI, отдельный ручной прогон, как `calls.e2e.mjs` выше). Строит
+свою крошечную HTML-страницу («Telegram Desktop»: `<iframe>` на чужом
+происхождении относительно `WEB_ORIGIN` мини-приложения), подписывает
+`initData` тестовым токеном бота и ждёт внутри iframe список чатов
+(вкладка «Чаты») — а затем проверяет, что в браузере не появилось ни одной
+cookie портала (`access_token`/`refresh_token`/`vm_session`): вход держится
+только на токенах.
+
+```bash
+# API (свободные порты — пример; не занимать чужие):
+API_PORT=4101 \
+WEB_ORIGIN=http://localhost:8101,http://localhost:8102 \
+DATABASE_URL=postgres://…@localhost:55501/vedamatch \
+TELEGRAM_BOT_TOKEN=123456:LOCAL-test-token-000000000000000000 \
+NODE_ENV=development \
+pnpm --dir apps/api exec nest start
+
+# Сборка веб-версии, указывающая на этот API. --clear обязателен: Metro не
+# учитывает APP_API_ORIGIN в ключе кэша.
+APP_CONTOUR=com APP_API_ORIGIN=http://localhost:4101 \
+npx expo export --platform web --output-dir dist-web --clear
+npx serve --single dist-web -l tcp://localhost:8101 &
+
+WEB_ORIGIN=http://localhost:8101 \
+TELEGRAM_BOT_TOKEN=123456:LOCAL-test-token-000000000000000000 \
+node apps/mobile/e2e-web/telegram-frame.e2e.mjs
+```
+
+Скрипт сам поднимает и закрывает хост-страницу «Telegram Desktop» (порт
+`FRAME_PORT`, по умолчанию 8102 — обязан отличаться от порта `WEB_ORIGIN`,
+иначе iframe не третьесторонний и проверка ничего не доказывает); второй
+адрес в `WEB_ORIGIN` API (8102) на будущее, если проверка вырастет до
+настоящего блока третьесторонних cookie контекстом Playwright.
 
 Раздача — сервис `app-web` в `portal/docker-compose.dokploy.yml`
 (`Dockerfile.web`, nginx). Домен `ios.vedamatch.com` → порт 80; поддомен

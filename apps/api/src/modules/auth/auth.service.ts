@@ -43,6 +43,7 @@ import {
   type Contour,
 } from './contour';
 import { verifyTelegramInitData } from './telegram-init-data';
+import { parseTelegramWebAppMode } from './telegram-webapp-mode';
 import { mapTelegramProfile } from './telegram.provider';
 import { readRegistrationMode } from '../billing/billing-mode';
 import { assertAccountActive } from '../users/account-status';
@@ -885,13 +886,23 @@ export class AuthService implements OnModuleInit {
    * Вход из мини-приложения Telegram (`@vedamatch_bot` → ios.vedamatch.com).
    * Подпись данных запуска проверяется у себя ключом бота; дальше — тот же
    * путь, что у OAuth: способ включён для домена, аккаунт по паре
-   * «telegram + id», закрытая регистрация, общие проверки и cookie сессии.
+   * «telegram + id», закрытая регистрация, общие проверки.
+   *
+   * Ответ зависит от `mode` (см. `telegram-webapp-mode.ts`):
+   * - по умолчанию (нет `mode`) — cookie-сессия, как раньше; телефоны
+   *   открывают мини-приложение top-level, и cookie там первосторонняя;
+   * - `mode: 'token'` — пара токенов в теле ответа, без cookie. Нужен
+   *   Telegram Desktop и web.telegram.org: там мини-приложение живёт в
+   *   `<iframe>` на чужом происхождении, и cookie портала как
+   *   третьесторонняя браузером режется — тот же путь токенов, что у
+   *   мобильного приложения (`exchangeAppLoginCode`).
    */
   async loginWithTelegramWebApp(
-    body: { initData?: unknown; ref?: unknown; fp?: unknown },
+    body: { initData?: unknown; ref?: unknown; fp?: unknown; mode?: unknown },
     req: Request,
     res: Response,
-  ) {
+  ): Promise<{ ok: true } | AppTokenResponse> {
+    const mode = parseTelegramWebAppMode(body?.mode);
     await this.providers.assertEnabled('telegram', req.hostname);
     const verified = verifyTelegramInitData({
       raw: body?.initData,
@@ -920,6 +931,12 @@ export class AuthService implements OnModuleInit {
       fp: shortToken(body?.fp),
       client: resolveLoginClient({ kind: 'telegram' }),
     });
+    this.announceTelegramConnected(user.id, verified.user);
+
+    if (mode === 'token') {
+      return this.appTokens(user);
+    }
+
     await this.issueTokens(
       user.id,
       user.email,
@@ -927,7 +944,6 @@ export class AuthService implements OnModuleInit {
       res,
       req.headers.host,
     );
-    this.announceTelegramConnected(user.id, verified.user);
     return { ok: true };
   }
 
