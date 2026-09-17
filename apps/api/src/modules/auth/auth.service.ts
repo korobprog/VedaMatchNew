@@ -1,6 +1,7 @@
 import {
   BadGatewayException,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   HttpException,
   Injectable,
@@ -41,7 +42,8 @@ import { verifyTelegramInitData } from './telegram-init-data';
 import { mapTelegramProfile } from './telegram.provider';
 import { readRegistrationMode } from '../billing/billing-mode';
 import { assertAccountActive } from '../users/account-status';
-import { IdentityService } from './identity.service';
+import { isAuthProvider } from './identity-link';
+import { IdentityService, type IdentitySummary } from './identity.service';
 import { JwtSignService } from './jwt.service';
 import { verifyPassword } from './password';
 import { toRole } from './role';
@@ -165,6 +167,7 @@ export class AuthService implements OnModuleInit {
   }
 
   async startGoogleLogin(
+    req: Request,
     res: Response,
     returnTo?: string,
     referralCode?: string,
@@ -172,6 +175,7 @@ export class AuthService implements OnModuleInit {
     host?: string | null,
     app?: AppLoginRequest | null,
     returnOrigin?: string,
+    link?: boolean,
   ) {
     // На старте входа человек уже в браузере, и ошибке JSON-ом там делать
     // нечего: любой отказ, включая «провайдер не настроен», уезжает в
@@ -180,6 +184,20 @@ export class AuthService implements OnModuleInit {
     const google = await this.startForApp(app, res, () => this.requireGoogle());
     if (!google) return;
     const contour = this.contour(host);
+
+    // Привязка (не вход) требует живой сессии уже на старте: без неё Google
+    // привязался бы к кому попало вместо человека, который жмёт «Привязать»
+    // на экране «Аккаунт». Отказ — редирект назад с `?linkError=session`, а
+    // не голая ошибка: разговор начала навигация браузера.
+    let linkUserId: string | null = null;
+    if (link) {
+      linkUserId = await this.readSessionUserId(req);
+      if (!linkUserId) {
+        this.redirectLinkError(res, contour, returnTo, returnOrigin, 'session');
+        return;
+      }
+    }
+
     const codeVerifier = oidc.randomPKCECodeVerifier();
     const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
     const state = oidc.randomState();
@@ -202,6 +220,10 @@ export class AuthService implements OnModuleInit {
       // Вход из приложения: куда вернуть код и PKCE challenge приложения.
       // Challenge Google — отдельный, он проверяется на обмене кода Google.
       app: app ?? null,
+      // Привязка живой сессией: id перепроверяется на колбэке заново, а не
+      // просто читается отсюда — cookie может подменить кто угодно до
+      // возврата от Google.
+      link: linkUserId,
     };
     res.cookie(OIDC_COOKIE, JSON.stringify(oidcPayload), {
       httpOnly: true,
@@ -230,17 +252,27 @@ export class AuthService implements OnModuleInit {
     if (!raw) {
       throw new BadRequestException('OAuth-сессия не найдена или истекла');
     }
-    const { codeVerifier, state, nonce, returnTo, returnOrigin, ref, fp, app } =
-      JSON.parse(raw) as {
-        codeVerifier: string;
-        state: string;
-        nonce: string;
-        returnTo?: string;
-        returnOrigin?: string | null;
-        ref?: string | null;
-        fp?: string | null;
-        app?: AppLoginRequest | null;
-      };
+    const {
+      codeVerifier,
+      state,
+      nonce,
+      returnTo,
+      returnOrigin,
+      ref,
+      fp,
+      app,
+      link,
+    } = JSON.parse(raw) as {
+      codeVerifier: string;
+      state: string;
+      nonce: string;
+      returnTo?: string;
+      returnOrigin?: string | null;
+      ref?: string | null;
+      fp?: string | null;
+      app?: AppLoginRequest | null;
+      link?: string | null;
+    };
 
     return this.withAppErrors(app, res, async () => {
       const currentUrl = new URL(`${contour.apiOrigin}${req.originalUrl}`);
@@ -259,6 +291,31 @@ export class AuthService implements OnModuleInit {
       if (claims.email_verified !== true) {
         throw new UnauthorizedException('Google не подтвердил email');
       }
+
+      res.clearCookie(OIDC_COOKIE, {
+        path: '/auth',
+        domain: contour.cookieDomain,
+      });
+
+      // Привязка способа входа живой сессией — не вход: аккаунт не ищется
+      // и не заводится по email/sub, а Google-идентичность прикрепляется к
+      // уже вошедшему человеку. Сессия перепроверяется здесь заново (а не
+      // читается из cookie старта): подмена `oidc_flow` до колбэка не
+      // должна привязать провайдера мимо владельца сессии.
+      if (link) {
+        await this.finishLinking({
+          req,
+          res,
+          contour,
+          expectedUserId: link,
+          provider: 'google',
+          externalId: claims.sub,
+          returnTo,
+          returnOrigin,
+        });
+        return;
+      }
+
       const email = claims.email as string;
       const avatarUrl = (claims.picture as string) ?? null;
 
@@ -281,10 +338,6 @@ export class AuthService implements OnModuleInit {
             data: { email, avatarUrl },
           });
 
-      res.clearCookie(OIDC_COOKIE, {
-        path: '/auth',
-        domain: contour.cookieDomain,
-      });
       await this.issueSessionAndRedirect({
         req,
         res,
@@ -317,6 +370,7 @@ export class AuthService implements OnModuleInit {
     deviceId?: string,
     app?: AppLoginRequest | null,
     returnOrigin?: string,
+    link?: boolean,
   ) {
     // Проверка здесь, а не только при выдаче списка кнопок: спрятанная
     // кнопка не делает способ недоступным, а важно, что вход невозможен.
@@ -327,6 +381,17 @@ export class AuthService implements OnModuleInit {
     if (!yandex) return;
     const contour = this.contour(req.headers.host);
     const { clientId } = yandex;
+
+    // См. комментарий у startGoogleLogin: привязка требует живой сессии уже
+    // на старте, иначе провайдер привязался бы к чужому браузеру.
+    let linkUserId: string | null = null;
+    if (link) {
+      linkUserId = await this.readSessionUserId(req);
+      if (!linkUserId) {
+        this.redirectLinkError(res, contour, returnTo, returnOrigin, 'session');
+        return;
+      }
+    }
 
     const verifier = randomBytes(32).toString('base64url');
     const challenge = createHash('sha256').update(verifier).digest('base64url');
@@ -345,6 +410,7 @@ export class AuthService implements OnModuleInit {
         ref: shortToken(referralCode),
         fp: shortToken(deviceId),
         app: app ?? null,
+        link: linkUserId,
       }),
       {
         httpOnly: true,
@@ -394,6 +460,7 @@ export class AuthService implements OnModuleInit {
       ref?: string | null;
       fp?: string | null;
       app?: AppLoginRequest | null;
+      link?: string | null;
     };
     try {
       flow = JSON.parse(raw);
@@ -440,11 +507,27 @@ export class AuthService implements OnModuleInit {
         throw new BadGatewayException('Яндекс не отдал профиль');
       }
 
+      const profile = mapYandexProfile(await infoRes.json());
+
+      // Привязка живой сессией — см. подробный комментарий в
+      // handleGoogleCallback: аккаунт не ищется по email/id, идентичность
+      // прикрепляется к перепроверенному владельцу сессии.
+      if (flow.link) {
+        await this.finishLinking({
+          req,
+          res,
+          contour,
+          expectedUserId: flow.link,
+          provider: 'yandex',
+          externalId: profile.externalId,
+          returnTo: flow.returnTo,
+          returnOrigin: flow.returnOrigin,
+        });
+        return;
+      }
+
       const { user, created } = await this.identities.resolve(
-        {
-          ...mapYandexProfile(await infoRes.json()),
-          requestIp: req.ip ?? null,
-        },
+        { ...profile, requestIp: req.ip ?? null },
         { beforeCreate: () => this.assertRegistrationOpen() },
       );
 
@@ -611,6 +694,152 @@ export class AuthService implements OnModuleInit {
     if (isNewAccount) {
       this.announceRegistration(user.id, user.email, req, ref, fp);
     }
+  }
+
+  /**
+   * Владелец сессии из `access_token` cookie — для привязки способа входа,
+   * где логика ровно та же, что у AuthGuard (тот же `JwtSignService`), но
+   * гостя пускать некуда: возврат `null`, решение принимает вызывающий.
+   *
+   * Refresh здесь намеренно не делается: `access_token` живёт 15 минут
+   * (`ACCESS_TOKEN_TTL`), и человек, долго читавший экран «Аккаунт» перед
+   * нажатием «Привязать», рискует получить `linkError=session`, хотя
+   * `refresh_token` ещё жив. Это не дыра безопасности (человек просто
+   * повторит попытку), а UX-шероховатость — закрыта на клиенте:
+   * веб-версия перед переходом на `/auth/<provider>?link=1` сама дёргает
+   * лёгкий запрос через `ApiClient` (`account.tsx`, `startLink`), и его
+   * встроенный 401→refresh обновляет cookie ДО перехода сюда.
+   */
+  private async readSessionUserId(req: Request): Promise<string | null> {
+    const token = (req.cookies as Record<string, string> | undefined)?.[
+      ACCESS_COOKIE
+    ];
+    if (!token) return null;
+    try {
+      return (await this.jwt.verifyAccessToken(token)).sub;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Отказ в привязке — редирект на экран «Аккаунт», а не JSON-ошибка:
+   * разговор начала навигация браузера (`window.location.assign`), и
+   * человек должен увидеть понятный текст на своём экране, а не голый ответ
+   * сервера.
+   */
+  private redirectLinkError(
+    res: Response,
+    contour: Contour,
+    returnTo: string | undefined,
+    returnOrigin: string | null | undefined,
+    code: string,
+  ): void {
+    const origin = resolveReturnOrigin({
+      requested: returnOrigin,
+      webOrigins: this.config.get<string>('WEB_ORIGIN'),
+      contour,
+    });
+    res.redirect(`${origin}${safeReturnTo(returnTo)}?linkError=${code}`);
+  }
+
+  /**
+   * Общий хвост колбэка привязки Google/Яндекс: сессия перепроверяется
+   * заново (см. комментарий у `handleGoogleCallback`), идентичность
+   * прикрепляется через `IdentityService.link`, отказ конфликтом уезжает
+   * понятным текстом, а не 409 в браузер.
+   */
+  private async finishLinking(params: {
+    req: Request;
+    res: Response;
+    contour: Contour;
+    expectedUserId: string;
+    provider: 'google' | 'yandex';
+    externalId: string;
+    returnTo?: string;
+    returnOrigin?: string | null;
+  }): Promise<void> {
+    const {
+      req,
+      res,
+      contour,
+      expectedUserId,
+      provider,
+      externalId,
+      returnTo,
+      returnOrigin,
+    } = params;
+    const currentUserId = await this.readSessionUserId(req);
+    if (!currentUserId || currentUserId !== expectedUserId) {
+      this.redirectLinkError(res, contour, returnTo, returnOrigin, 'session');
+      return;
+    }
+    try {
+      await this.identities.link(currentUserId, provider, externalId);
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        this.redirectLinkError(
+          res,
+          contour,
+          returnTo,
+          returnOrigin,
+          'conflict',
+        );
+        return;
+      }
+      throw error;
+    }
+    const origin = resolveReturnOrigin({
+      requested: returnOrigin,
+      webOrigins: this.config.get<string>('WEB_ORIGIN'),
+      contour,
+    });
+    res.redirect(`${origin}${safeReturnTo(returnTo)}?linked=${provider}`);
+  }
+
+  /** Список способов входа для экрана «Аккаунт». */
+  async listIdentities(userId: string): Promise<IdentitySummary[]> {
+    return this.identities.listIdentities(userId);
+  }
+
+  /** Отвязка способа входа; провайдер из URL проверяется здесь же. */
+  async unlinkIdentity(
+    userId: string,
+    provider: string,
+  ): Promise<{ ok: true }> {
+    if (!isAuthProvider(provider)) {
+      throw new BadRequestException('Неизвестный способ входа');
+    }
+    await this.identities.unlink(userId, provider);
+    return { ok: true };
+  }
+
+  /**
+   * Привязка Telegram живой сессией (не вход): для случая, когда веб-версия
+   * открыта внутри Telegram, а человек уже вошёл через Google/Яндекс и хочет
+   * добавить Telegram как запасной способ.
+   */
+  async linkTelegram(
+    userId: string,
+    body: { initData?: unknown },
+    req: Request,
+  ): Promise<{ ok: true }> {
+    await this.providers.assertEnabled('telegram', req.hostname);
+    const verified = verifyTelegramInitData({
+      raw: body?.initData,
+      botToken: this.config.get<string>('TELEGRAM_BOT_TOKEN'),
+      nowSec: Math.floor(Date.now() / 1000),
+    });
+    if (!verified.ok) {
+      if (verified.reason === 'not-configured') {
+        throw new ServiceUnavailableException(
+          'Вход через Telegram не настроен',
+        );
+      }
+      throw new UnauthorizedException('Telegram не подтвердил вход');
+    }
+    await this.identities.link(userId, 'telegram', String(verified.user.id));
+    return { ok: true };
   }
 
   /**

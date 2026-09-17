@@ -257,8 +257,10 @@ describe('AuthService: провайдер не настроен при вход�
 
   it('Google без ключей возвращает ошибку в приложение, а не JSON в браузер', async () => {
     const { service } = makeService({});
+    const req = { cookies: {} };
     const res = { redirect: jest.fn(), cookie: jest.fn() };
     await service.startGoogleLogin(
+      req as never,
       res as never,
       undefined,
       undefined,
@@ -273,9 +275,11 @@ describe('AuthService: провайдер не настроен при вход�
 
   it('вход с сайта без ключей по-прежнему отвечает 503', async () => {
     const { service } = makeService({});
+    const req = { cookies: {} };
     const res = { redirect: jest.fn(), cookie: jest.fn() };
     await expect(
       service.startGoogleLogin(
+        req as never,
         res as never,
         undefined,
         undefined,

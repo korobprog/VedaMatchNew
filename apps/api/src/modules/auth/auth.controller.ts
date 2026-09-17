@@ -2,8 +2,10 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Header,
+  Param,
   Post,
   Query,
   Req,
@@ -13,6 +15,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type { AccessTokenPayload } from '@vedamatch/shared';
+import { isTelegramPlaceholderEmail } from './telegram.provider';
 import {
   AppLoginRequestError,
   parseAppLoginRequest,
@@ -66,11 +69,14 @@ export class AuthController {
     @Query('app_redirect') appRedirect?: string,
     @Query('app_challenge') appChallenge?: string,
     @Query('returnOrigin') returnOrigin?: string,
+    // Привязка Google живой сессией (экран «Аккаунт»), не вход: `link=1`.
+    @Query('link') link?: string,
   ) {
     const app = appLogin(appRedirect, appChallenge);
     // Хост запроса определяет контур: на нём собирается redirect_uri и домен
     // cookie, иначе вход, начатый на .com, уезжает в российский портал.
     return this.auth.startGoogleLogin(
+      req,
       res,
       returnTo,
       ref,
@@ -78,6 +84,7 @@ export class AuthController {
       req.headers.host,
       app,
       returnOrigin,
+      link === '1',
     );
   }
 
@@ -98,6 +105,7 @@ export class AuthController {
     @Query('app_redirect') appRedirect?: string,
     @Query('app_challenge') appChallenge?: string,
     @Query('returnOrigin') returnOrigin?: string,
+    @Query('link') link?: string,
   ) {
     const app = appLogin(appRedirect, appChallenge);
     return this.auth.startYandexLogin(
@@ -108,6 +116,7 @@ export class AuthController {
       fp,
       app,
       returnOrigin,
+      link === '1',
     );
   }
 
@@ -138,6 +147,45 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     return this.auth.loginWithTelegramWebApp(body, req, res);
+  }
+
+  /**
+   * Привязка Telegram живой сессией (экран «Аккаунт»): для веб-версии,
+   * открытой внутри Telegram, когда человек уже вошёл другим способом.
+   */
+  @Post('telegram/link')
+  @UseGuards(AuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  telegramLink(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: { initData?: unknown },
+    @Req() req: Request,
+  ) {
+    return this.auth.linkTelegram(user.sub, body, req);
+  }
+
+  /**
+   * Экран «Аккаунт и способы входа»: список привязанных способов и признак
+   * служебной почты Telegram (`isTelegramPlaceholderEmail`) — подсказка
+   * привязать Google/Яндекс, чтобы не потерять доступ.
+   */
+  @Get('identities')
+  @UseGuards(AuthGuard)
+  async identities(@CurrentUser() user: AccessTokenPayload) {
+    return {
+      identities: await this.auth.listIdentities(user.sub),
+      placeholderEmail: isTelegramPlaceholderEmail(user.email),
+    };
+  }
+
+  @Delete('identities/:provider')
+  @UseGuards(AuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  unlinkIdentity(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('provider') provider: string,
+  ) {
+    return this.auth.unlinkIdentity(user.sub, provider);
   }
 
   @Get('dev-accounts')
