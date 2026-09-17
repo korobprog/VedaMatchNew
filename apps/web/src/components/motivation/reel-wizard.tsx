@@ -444,7 +444,7 @@ export function ReelWizard({
             />
           )}
           <label className="block text-sm text-text-1">
-            Текст цитаты
+            <span className="font-semibold">Текст цитаты</span>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -460,7 +460,7 @@ export function ReelWizard({
             </span>
           </label>
           <label className="block text-sm text-text-1">
-            Ваша мысль под цитатой (необязательно)
+            <span className="font-semibold">Ваша мысль под цитатой (необязательно)</span>
             <textarea
               value={explanation}
               onChange={(e) => setExplanation(e.target.value)}
@@ -475,11 +475,14 @@ export function ReelWizard({
               фрагмента, и здесь он только назван, чтобы человек видел, чем
               подпишется. Для своих слов — два необязательных поля: кто
               сказал и откуда взято (VED-99). Раньше это было одно поле, и
-              «Марк Аврелий, Размышления» приходилось втискивать в «Автора». */}
-          <fieldset className="space-y-2 rounded-2xl border border-glass-brd p-3">
-            <legend className="px-1 text-sm font-medium text-text-1">
-              Источник / автор
-            </legend>
+              «Марк Аврелий, Размышления» приходилось втискивать в «Автора».
+              Видимого заголовка группы нет (VED-203: путал с ошибкой) —
+              `aria-label` на fieldset даёт скринридеру то же имя без лишней
+              строки на экране. */}
+          <fieldset
+            className="space-y-2 rounded-2xl border border-glass-brd p-3"
+            aria-label="Источник и автор"
+          >
             {sourceKind === "vedabase" ? (
               <p className="text-sm text-text-1">
                 {book
@@ -488,7 +491,7 @@ export function ReelWizard({
               </p>
             ) : (
               <label className="block text-sm text-text-1">
-                Автор (необязательно)
+                <span className="font-semibold">Автор (необязательно)</span>
                 <input
                   value={author}
                   onChange={(e) => setAuthor(e.target.value)}
@@ -504,7 +507,7 @@ export function ReelWizard({
             )}
             {sourceKind === "own" && (
               <label className="block text-sm text-text-1">
-                Источник (необязательно)
+                <span className="font-semibold">Источник (необязательно)</span>
                 <input
                   value={work}
                   onChange={(e) => setWork(e.target.value)}
