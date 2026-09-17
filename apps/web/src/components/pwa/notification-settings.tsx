@@ -34,6 +34,9 @@ const categories = [
   // ответ хозяина по ночлегу на своём пути.
   { key: "travel", label: "Заявки на ночлег в «Путешествиях»" },
   { key: "announcements", label: "Новости VedaMatch" },
+  // Не категория, а канал: всё включённое выше дублируется сообщением от
+  // @vedamatch_bot тем, кто вошёл через Telegram и разрешил боту писать.
+  { key: "telegram", label: "Дублировать в Telegram (@vedamatch_bot)" },
 ] as const;
 
 /**
