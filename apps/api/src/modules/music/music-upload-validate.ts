@@ -1,4 +1,4 @@
-import { MUSIC_ACCEPTED_MIME } from '@vedamatch/shared';
+import { MUSIC_ACCEPTED_MIME, normalizeMusicMime } from '@vedamatch/shared';
 import type { MusicUploadRightsBasis } from '@vedamatch/shared';
 
 /**
@@ -49,6 +49,8 @@ export type MusicUploadRejection =
 
 export interface MusicUploadRequestFacts {
   mime: string;
+  /** Имя файла — по расширению решается тип, если браузер его не узнал. */
+  fileName?: string | null;
   sizeBytes: number;
   rightsBasis: MusicUploadRightsBasis | null | undefined;
   /** Сколько байт этот человек уже занимает опубликованным и ждущим. */
@@ -65,8 +67,9 @@ export function validateMusicUploadRequest(
   facts: MusicUploadRequestFacts,
   limits: MusicUploadLimits = MUSIC_UPLOAD_DEFAULT_LIMITS,
 ): MusicUploadRejection | null {
-  // `audio/mpeg; codecs=...` браузеры присылают наравне с голым типом.
-  const mime = facts.mime?.split(';')[0]?.trim().toLowerCase() ?? '';
+  // `audio/mpeg; codecs=...` и `audio/x-m4a` браузеры присылают наравне с
+  // каноническим типом.
+  const mime = normalizeMusicMime(facts.mime, facts.fileName);
   if (!ACCEPTED.has(mime)) return 'mime_not_accepted';
 
   if (!Number.isFinite(facts.sizeBytes) || facts.sizeBytes <= 0) {
@@ -159,6 +162,7 @@ export const MUSIC_INGEST_DEFAULT_BATCH_QUOTA_BYTES = 20 * 1024 * 1024 * 1024;
 
 export interface MusicIngestRequestFacts {
   mime: string;
+  fileName?: string | null;
   sizeBytes: number;
   /** Сколько байт уже занято позициями этой партии. */
   batchUsedBytes: number;
@@ -184,7 +188,7 @@ export function validateMusicIngestRequest(
   facts: MusicIngestRequestFacts,
   limits: MusicIngestLimits = MUSIC_INGEST_DEFAULT_LIMITS,
 ): MusicUploadRejection | null {
-  const mime = facts.mime?.split(';')[0]?.trim().toLowerCase() ?? '';
+  const mime = normalizeMusicMime(facts.mime, facts.fileName);
   if (!ACCEPTED.has(mime)) return 'mime_not_accepted';
 
   if (!Number.isFinite(facts.sizeBytes) || facts.sizeBytes <= 0) {

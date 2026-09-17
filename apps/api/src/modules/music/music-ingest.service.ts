@@ -23,7 +23,11 @@ import type {
   PublishMusicIngestBatchRequest,
   UpdateMusicIngestBatchRequest,
 } from '@vedamatch/shared';
-import { isLineageId, toLineageId } from '@vedamatch/shared';
+import {
+  isLineageId,
+  normalizeMusicMime,
+  toLineageId,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { planIngestPlaylist } from './ingest-playlist';
 import {
@@ -413,7 +417,7 @@ export class MusicIngestService {
     let position = batch.items.length;
 
     for (const file of body?.files ?? []) {
-      const mime = file.mime?.split(';')[0]?.trim().toLowerCase() ?? '';
+      const mime = normalizeMusicMime(file.mime, file.fileName);
       const rejection = validateMusicIngestRequest(
         { mime, sizeBytes: file.sizeBytes, batchUsedBytes: used },
         this.limits,

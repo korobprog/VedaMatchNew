@@ -259,6 +259,26 @@ describe("ReelsFeed", () => {
     expect(query.get("file")).toBe("/m/a/story");
   });
 
+  it("открытка без набранного текста делится заголовком, а не пустотой (VED-205)", () => {
+    // Экран /share без text уводит на главную — у открытки текст на картинке.
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{
+          items: [post("card", { captionInImage: true, text: "", title: "Картинка из раздела «Каждый день»" })],
+          nextCursor: null,
+        }}
+        tab="cards"
+        donation={null}
+      />,
+    );
+
+    const href = screen.getByRole("link", { name: "Поделиться афоризмом" }).getAttribute("href") ?? "";
+    const query = new URLSearchParams(href.slice(href.indexOf("?") + 1));
+    expect(query.get("text")).toBe("Картинка из раздела «Каждый день»");
+    expect(query.get("title")).toBe("Картинка из раздела «Каждый день»");
+  });
+
   it("нижний ряд слушается раскладки с устройства", () => {
     fetchOk({});
     // Своя раскладка: сначала «Поделиться», потом «Нравится»,
