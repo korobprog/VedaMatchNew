@@ -5,10 +5,8 @@ import { canAdminService } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
 import { getMusicArtist } from "@/lib/music-api";
 import { MusicArtistAdminRename } from "@/components/music/artist-admin-rename";
+import { MusicArtistPlayback } from "@/components/music/music-artist-playback";
 import { MusicCover } from "@/components/music/music-cover";
-import { MusicPlayAllButton } from "@/components/music/player/play-all-button";
-import { MusicPlayModeButtons } from "@/components/music/player/play-mode-buttons";
-import { MusicTrackRow } from "@/components/music/music-track-row";
 import { plural } from "@/lib/plural";
 
 const KIND_LABELS: Record<string, string> = {
@@ -52,8 +50,6 @@ export default async function MusicArtistPage({
         "music",
       )
     : false;
-  // Очередь — записи исполнителя: см. комментарий на странице альбома.
-  const queue = tracks.map((track) => track.id);
   const kind = KIND_LABELS[artist.kind] ?? "";
 
   return (
@@ -91,102 +87,61 @@ export default async function MusicArtistPage({
         </div>
       </header>
 
-      {/* Кнопки порядка (VED-33): «Слушать» рядом — про «включи и не думай»,
-          а эти про выбор: одна запись, весь список до конца, вперемешку. */}
-      <div className="mt-5 flex flex-wrap items-center gap-2">
-        <MusicPlayAllButton queue={queue} />
-        <MusicPlayModeButtons queue={queue} />
-        {isMusicEditor && (
-          <Link
-            href={`/music/uploads?artist=${encodeURIComponent(artist.slug)}`}
-            className="btn-mint flex h-10 items-center gap-2 rounded-xl px-3.5 text-sm font-bold"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M12 16V4" />
-              <path d="M8 8l4-4 4 4" />
-              <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-            </svg>
-            Загрузить треки
-          </Link>
-        )}
-      </div>
-
-      {artist.bio && (
-        <p className="mt-6 max-w-2xl text-sm leading-relaxed text-text-1">
-          {artist.bio}
-        </p>
-      )}
-
-      {albums.length > 0 && (
-        <section className="mt-8" aria-labelledby="artist-albums">
-          <h2
-            id="artist-albums"
-            className="font-display text-base font-bold text-text-0"
-          >
-            Программы и альбомы
-          </h2>
-          <ul className="mt-3 grid gap-3 sm:grid-cols-2">
-            {albums.map((album) => (
-              <li key={album.id}>
-                <Link
-                  href={`/music/albums/${album.slug}`}
-                  className="glass flex items-center gap-3 rounded-2xl p-2.5 transition-colors hover:border-cyan/40"
-                >
-                  <span className="h-12 w-12 shrink-0 overflow-hidden rounded-xl">
-                    <MusicCover
-                      url={album.coverUrl}
-                      seed={album.id}
-                      alt={`Обложка: ${album.title}`}
-                      rounded="rounded-xl"
-                    />
-                  </span>
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate text-sm font-semibold text-text-0">
-                      {album.title}
-                    </span>
-                    <span className="text-xs text-text-2">
-                      {[album.year, `${album.trackCount} ${plural(album.trackCount, "запись", "записи", "записей")}`]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <section className="mt-8" aria-labelledby="artist-tracks">
-        <h2
-          id="artist-tracks"
-          className="font-display text-base font-bold text-text-0"
-        >
-          Записи
-        </h2>
-        {tracks.length === 0 ? (
-          <p className="mt-3 text-sm text-text-1">
-            Опубликованных записей пока нет.
+      {/* Состояние сортировки (VED-159) нужно и кнопкам «Слушать»/
+          «Перемешать» выше, и секции «Записи» ниже — оба места внутри
+          одного клиентского компонента, био и альбомы передаются как
+          дети, чтобы сохранить порядок разметки. */}
+      <MusicArtistPlayback
+        tracks={tracks}
+        isMusicEditor={isMusicEditor}
+        uploadHref={`/music/uploads?artist=${encodeURIComponent(artist.slug)}`}
+      >
+        {artist.bio && (
+          <p className="mt-6 max-w-2xl text-sm leading-relaxed text-text-1">
+            {artist.bio}
           </p>
-        ) : (
-          <ul className="mt-3 flex flex-col">
-            {tracks.map((track) => (
-              <li key={track.id}>
-                <MusicTrackRow track={track} queue={queue} />
-              </li>
-            ))}
-          </ul>
         )}
-      </section>
+
+        {albums.length > 0 && (
+          <section className="mt-8" aria-labelledby="artist-albums">
+            <h2
+              id="artist-albums"
+              className="font-display text-base font-bold text-text-0"
+            >
+              Программы и альбомы
+            </h2>
+            <ul className="mt-3 grid gap-3 sm:grid-cols-2">
+              {albums.map((album) => (
+                <li key={album.id}>
+                  <Link
+                    href={`/music/albums/${album.slug}`}
+                    className="glass flex items-center gap-3 rounded-2xl p-2.5 transition-colors hover:border-cyan/40"
+                  >
+                    <span className="h-12 w-12 shrink-0 overflow-hidden rounded-xl">
+                      <MusicCover
+                        url={album.coverUrl}
+                        seed={album.id}
+                        alt={`Обложка: ${album.title}`}
+                        rounded="rounded-xl"
+                      />
+                    </span>
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate text-sm font-semibold text-text-0">
+                        {album.title}
+                      </span>
+                      <span className="text-xs text-text-2">
+                        {[album.year, `${album.trackCount} ${plural(album.trackCount, "запись", "записи", "записей")}`]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </MusicArtistPlayback>
     </main>
   );
 }
