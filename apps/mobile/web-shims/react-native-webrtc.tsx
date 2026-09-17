@@ -30,6 +30,22 @@ interface RTCViewProps {
   style?: unknown;
 }
 
+/**
+ * `muted` намеренно не самостоятельный проп: реальный `RTCView` из
+ * `react-native-webrtc` (`RTCVideoViewProps` в его типах) его не знает, а
+ * компилятор везде в приложении (`tsc --noEmit`, что на вебе, что на
+ * Android — `web-shims` подменяет модуль только в бандле Metro, не в
+ * разрешении типов) проверяет JSX против ЭТИХ типов, а не против того, что
+ * реально выполняется в браузере. Добавить `muted` как обычный проп значило
+ * бы либо сломать типы на обеих платформах, либо развести экран звонка на
+ * `*.web.tsx`-копию ради одного атрибута. Вместо этого — тот же приём, что
+ * был исходно: звук отключаем ровно тогда же, когда включаем зеркало
+ * (`mirror`), потому что в этом приложении это один и тот же случай —
+ * локальный предпросмотр собственной камеры (`app/call/[id].tsx`): его
+ * единственного зеркалят, и только его звук не должен идти в динамик поверх
+ * настоящего разговора. Удалённое видео `mirror` не передаёт — значит и
+ * `muted` там всегда `false`, звук собеседника слышен.
+ */
 export function RTCView({ streamURL, objectFit = 'cover', mirror }: RTCViewProps) {
   const ref = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
@@ -39,7 +55,7 @@ export function RTCView({ streamURL, objectFit = 'cover', mirror }: RTCViewProps
     ref,
     autoPlay: true,
     playsInline: true,
-    muted: mirror,
+    muted: Boolean(mirror),
     style: {
       width: '100%',
       height: '100%',

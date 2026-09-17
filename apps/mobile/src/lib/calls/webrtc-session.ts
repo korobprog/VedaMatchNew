@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { mediaDevices, MediaStream, RTCPeerConnection } from 'react-native-webrtc';
 import type { ChatCallKind, ChatCallSignal, ChatIceServerDto } from '@vedamatch/shared';
 import { describeIceServerForLog, normalizeIceServers } from './ice-server-normalize';
@@ -360,14 +361,70 @@ export class CallSession {
     for (const track of this.local?.getVideoTracks() ?? []) track.enabled = !off;
   }
 
+  /** Web: `getUserMedia({facingMode})` + `replaceTrack` идут параллельно —
+   *  второе нажатие до завершения первого переключения должно ждать, а не
+   *  начинать второй запрос камеры поверх незавершённого. */
+  private switchingCameraOnWeb = false;
+  /** Web: какая камера выбрана последней (react-native-webrtc сам не хранит
+   *  такого состояния наружу — оно и не нужно там, `_switchCamera` работает
+   *  без него; здесь заводим своё, раз уж нам нужно решать, к чему
+   *  переключаться). */
+  private facingModeOnWeb: 'user' | 'environment' = 'user';
+
   /**
-   * Смена фронтальной/тыльной камеры без пересборки соединения — приватный
-   * API react-native-webrtc (`_switchCamera`, тот же приём использует
-   * эталонное приложение AppRTCMobile). Молча ничего не делает без
-   * видеодорожки (аудиозвонок, камера выключена собеседником).
+   * Смена фронтальной/тыльной камеры без пересборки соединения.
+   *
+   * На Android/iOS-нативе — приватный API `react-native-webrtc`
+   * (`_switchCamera`, тот же приём использует эталонное приложение
+   * AppRTCMobile), молча ничего не делает без видеодорожки (аудиозвонок,
+   * камера выключена собеседником).
+   *
+   * В браузере такого метода на `MediaStreamTrack` нет вовсе — переключение
+   * камеры собирается вручную: новый `getUserMedia` с противоположным
+   * `facingMode`, `RTCRtpSender.replaceTrack` (без пересогласования SDP,
+   * собеседник не должен ничего заметить, кроме смены картинки), затем
+   * старую дорожку сначала убрать из локального потока и только потом
+   * остановить (в этом порядке — иначе `RTCView` на мгновение остался бы
+   * без единственной видеодорожки в `MediaStream`). Не у всех устройств
+   * (десктоп, ноутбук без задней камеры) есть вторая камера — отказ
+   * `getUserMedia` тут не звонок ломает, а просто ничего не меняет, как и
+   * нативная ветка без видеодорожки.
    */
   switchCamera(): void {
-    for (const track of this.local?.getVideoTracks() ?? []) track._switchCamera();
+    if (Platform.OS !== 'web') {
+      for (const track of this.local?.getVideoTracks() ?? []) track._switchCamera();
+      return;
+    }
+    void this.switchCameraOnWeb();
+  }
+
+  private async switchCameraOnWeb(): Promise<void> {
+    if (this.switchingCameraOnWeb || this.closed) return;
+    const oldTrack = this.local?.getVideoTracks()[0];
+    if (!oldTrack) return;
+    this.switchingCameraOnWeb = true;
+    try {
+      const nextFacingMode = this.facingModeOnWeb === 'user' ? 'environment' : 'user';
+      const probeStream = await mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: nextFacingMode },
+      });
+      const [newTrack] = probeStream.getVideoTracks();
+      if (!newTrack) return;
+      const sender = this.pc.getSenders().find((candidate) => candidate.track?.kind === 'video');
+      if (sender) await sender.replaceTrack(newTrack);
+      if (this.local) {
+        this.local.removeTrack(oldTrack);
+        this.local.addTrack(newTrack);
+      }
+      oldTrack.stop();
+      this.facingModeOnWeb = nextFacingMode;
+    } catch {
+      // Второй камеры нет или в доступе отказано — остаёмся на текущей,
+      // тот же исход, что и у нативной ветки без видеодорожки.
+    } finally {
+      this.switchingCameraOnWeb = false;
+    }
   }
 
   /** Пошёл ли трафик через TURN — разбор в `relay-stats.ts`. */
