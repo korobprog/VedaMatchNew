@@ -37,6 +37,8 @@ import {
   returnOriginCandidate,
   type Contour,
 } from './contour';
+import { verifyTelegramInitData } from './telegram-init-data';
+import { mapTelegramProfile } from './telegram.provider';
 import { readRegistrationMode } from '../billing/billing-mode';
 import { assertAccountActive } from '../users/account-status';
 import { IdentityService } from './identity.service';
@@ -555,21 +557,7 @@ export class AuthService implements OnModuleInit {
       app,
     } = params;
 
-    await assertAccountActive(this.prisma, user);
-    await this.ensureContactsProfile(user.id);
-
-    await this.prisma.loginAudit.create({
-      data: {
-        userId: user.id,
-        provider,
-        ip: req.ip,
-        userAgent: req.headers['user-agent'] ?? null,
-      },
-    });
-
-    if (isNewAccount) {
-      this.announceRegistration(user.id, user.email, req, ref, fp);
-    }
+    await this.completeLogin({ req, user, provider, isNewAccount, ref, fp });
 
     // Приложению — одноразовый код, а не cookie: токены оно заберёт само,
     // предъявив PKCE-верификатор (см. exchangeAppLoginCode).
@@ -593,6 +581,84 @@ export class AuthService implements OnModuleInit {
       contour,
     });
     res.redirect(`${origin}${safeReturnTo(returnTo)}`);
+  }
+
+  /**
+   * Проверки и учёт, одинаковые для любого входа, куда бы потом ни ушёл
+   * ответ — редиректом (OAuth) или JSON-ом (мини-приложение Telegram).
+   */
+  private async completeLogin(params: {
+    req: Request;
+    user: User;
+    provider: string;
+    isNewAccount: boolean;
+    ref?: string | null;
+    fp?: string | null;
+  }) {
+    const { req, user, provider, isNewAccount, ref, fp } = params;
+    await assertAccountActive(this.prisma, user);
+    await this.ensureContactsProfile(user.id);
+
+    await this.prisma.loginAudit.create({
+      data: {
+        userId: user.id,
+        provider,
+        ip: req.ip,
+        userAgent: req.headers['user-agent'] ?? null,
+      },
+    });
+
+    if (isNewAccount) {
+      this.announceRegistration(user.id, user.email, req, ref, fp);
+    }
+  }
+
+  /**
+   * Вход из мини-приложения Telegram (`@vedamatch_bot` → ios.vedamatch.com).
+   * Подпись данных запуска проверяется у себя ключом бота; дальше — тот же
+   * путь, что у OAuth: способ включён для домена, аккаунт по паре
+   * «telegram + id», закрытая регистрация, общие проверки и cookie сессии.
+   */
+  async loginWithTelegramWebApp(
+    body: { initData?: unknown; ref?: unknown; fp?: unknown },
+    req: Request,
+    res: Response,
+  ) {
+    await this.providers.assertEnabled('telegram', req.hostname);
+    const verified = verifyTelegramInitData({
+      raw: body?.initData,
+      botToken: this.config.get<string>('TELEGRAM_BOT_TOKEN'),
+      nowSec: Math.floor(Date.now() / 1000),
+    });
+    if (!verified.ok) {
+      if (verified.reason === 'not-configured') {
+        throw new ServiceUnavailableException(
+          'Вход через Telegram не настроен',
+        );
+      }
+      throw new UnauthorizedException('Telegram не подтвердил вход');
+    }
+
+    const { user, created } = await this.identities.resolve(
+      { ...mapTelegramProfile(verified.user), requestIp: req.ip ?? null },
+      { beforeCreate: () => this.assertRegistrationOpen() },
+    );
+    await this.completeLogin({
+      req,
+      user,
+      provider: 'telegram',
+      isNewAccount: created,
+      ref: shortToken(body?.ref),
+      fp: shortToken(body?.fp),
+    });
+    await this.issueTokens(
+      user.id,
+      user.email,
+      toRole(user.role),
+      res,
+      req.headers.host,
+    );
+    return { ok: true };
   }
 
   private async createAppLoginCode(

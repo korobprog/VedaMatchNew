@@ -72,6 +72,16 @@ export function createCookieAuthApi(apiOrigin: string, fetchImpl: typeof fetch =
     async logout(): Promise<void> {
       await post('/auth/logout').catch(() => undefined);
     },
+    /** Мини-приложение Telegram: подписанные данные запуска → cookie сессии. */
+    async telegramLogin(initData: string): Promise<void> {
+      let response: Response;
+      try {
+        response = await post('/auth/telegram/webapp', { initData });
+      } catch {
+        throw new Error('Нет связи с сервером. Проверьте интернет.');
+      }
+      if (!response.ok) throw new Error(await messageOf(response));
+    },
     async devLogin(email: string, password: string): Promise<void> {
       const response = await post('/auth/dev-login', { email, password });
       if (!response.ok) throw new Error(await messageOf(response));

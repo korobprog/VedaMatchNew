@@ -1051,6 +1051,8 @@ enum AuthProvider {
   vk
   yandex
   email
+  /// Мини-приложение @vedamatch_bot и вход через Telegram (контур com).
+  telegram
 }
 
 /// Способ входа, привязанный к аккаунту. Пара «провайдер + внешний

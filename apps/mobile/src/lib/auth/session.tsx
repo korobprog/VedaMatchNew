@@ -51,6 +51,11 @@ export interface Session {
    * в JS нет, и поток событий ходит с cookie, а не с заголовком.
    */
   cookieSession: boolean;
+  /**
+   * Почему не удался вход без экрана входа (мини-приложение Telegram) —
+   * экран входа показывает это вместо молчаливой пустой формы.
+   */
+  loginError: string | null;
   /** Текущий access-токен для запросов вне ApiClient (поток событий). */
   getAccessToken(): string | null;
   /** Обновить access-токен — три различимых исхода, см. `SessionRefreshResult`. */
@@ -370,6 +375,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       api,
       apiOrigin,
       cookieSession: false,
+      loginError: null,
       getAccessToken,
       refreshAccessToken: refresh,
       signIn,

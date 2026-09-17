@@ -16,6 +16,7 @@ import { SessionProvider, useSession } from '@/lib/auth/session';
 import { CallProvider } from '@/lib/calls/call-provider';
 import { ChatStreamProvider } from '@/lib/chat/chat-stream';
 import { PushBridge } from '@/lib/push/push-bridge';
+import { TelegramShell } from '@/lib/telegram/telegram-shell';
 import { ThemeProvider, useTheme } from '@/theme/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -37,6 +38,7 @@ function RootStack() {
     <>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <PushBridge />
+      <TelegramShell />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg0 } }}>
         <Stack.Protected guard={status === 'guest'}>
           <Stack.Screen name="login" />
