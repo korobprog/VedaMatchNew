@@ -1,4 +1,5 @@
 import {
+  accountEmailLabel,
   buildLinkUrl,
   buildProviderRows,
   linkErrorMessage,
@@ -14,8 +15,8 @@ describe('providerLabel', () => {
     expect(providerLabel('telegram')).toBe('Telegram');
   });
 
-  it('незнакомое значение возвращает как есть', () => {
-    expect(providerLabel('apple')).toBe('apple');
+  it('незнакомое значение — русский общий текст, а не сырая строка сервера', () => {
+    expect(providerLabel('apple')).toBe('Неизвестный способ входа');
   });
 });
 
@@ -58,6 +59,10 @@ describe('linkSuccessMessage', () => {
   it('называет провайдера в сообщении', () => {
     expect(linkSuccessMessage('yandex')).toBe('Яндекс привязан к аккаунту.');
   });
+
+  it('незнакомый провайдер — тоже по-русски', () => {
+    expect(linkSuccessMessage('apple')).toBe('Неизвестный способ входа привязан к аккаунту.');
+  });
 });
 
 describe('buildLinkUrl', () => {
@@ -74,6 +79,26 @@ describe('buildLinkUrl', () => {
   it('лишний слэш на конце адреса API не портит путь', () => {
     const url = buildLinkUrl('https://api.vedamatch.com/', 'yandex', 'https://ios.vedamatch.com');
     expect(new URL(url).pathname).toBe('/auth/yandex');
+  });
+});
+
+describe('accountEmailLabel', () => {
+  it('служебная почта Telegram не показывается — только факт её отсутствия', () => {
+    expect(accountEmailLabel('tg-42@users.vedamatch.invalid', true)).toBe('Почта не указана');
+  });
+
+  it('настоящая почта показывается как есть', () => {
+    expect(accountEmailLabel('ivan@example.com', false)).toBe('ivan@example.com');
+  });
+
+  it('почты нет и она не служебная — тоже null, а не пустая строка', () => {
+    expect(accountEmailLabel(null, false)).toBeNull();
+    expect(accountEmailLabel('', false)).toBeNull();
+    expect(accountEmailLabel(undefined, false)).toBeNull();
+  });
+
+  it('placeholderEmail побеждает, даже если адрес почему-то не передали', () => {
+    expect(accountEmailLabel(null, true)).toBe('Почта не указана');
   });
 });
 

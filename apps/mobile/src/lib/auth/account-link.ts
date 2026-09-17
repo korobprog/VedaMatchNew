@@ -42,9 +42,14 @@ const PROVIDER_LABELS: Record<string, string> = {
   email: 'Почта и пароль',
 };
 
-/** Название способа входа для интерфейса; незнакомое значение — как есть. */
+/**
+ * Название способа входа для интерфейса. Сервер сейчас шлёт в `?linked=`
+ * только `google`/`yandex`/`telegram`, но правило «тексты на русском»
+ * действует и на гипотетическое будущее значение — сырую строку из чужого
+ * ответа наружу не отдаём.
+ */
 export function providerLabel(provider: string): string {
-  return PROVIDER_LABELS[provider] ?? provider;
+  return PROVIDER_LABELS[provider] ?? 'Неизвестный способ входа';
 }
 
 export type LinkQueryResult =
@@ -82,6 +87,22 @@ export function linkErrorMessage(code: string): string {
 /** Текст успеха привязки по `?linked=`. */
 export function linkSuccessMessage(provider: string): string {
   return `${providerLabel(provider)} привязан к аккаунту.`;
+}
+
+/**
+ * Адрес для профиля экрана «Аккаунт». Служебный адрес Telegram
+ * (`tg-<id>@users.vedamatch.invalid`, `isTelegramPlaceholderEmail` на
+ * сервере) человеку не нужен и не должен утекать в интерфейс — вместо него
+ * показывается факт, что почты нет. `placeholderEmail` приходит с сервера
+ * (`GET /auth/identities`) — экран не гадает по виду адреса сам, чтобы
+ * правило не разъехалось с серверным при следующей правке зоны `.invalid`.
+ */
+export function accountEmailLabel(
+  email: string | null | undefined,
+  placeholderEmail: boolean,
+): string | null {
+  if (placeholderEmail) return 'Почта не указана';
+  return email && email.trim() ? email : null;
 }
 
 /**

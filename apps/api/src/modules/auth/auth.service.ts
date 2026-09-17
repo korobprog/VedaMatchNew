@@ -700,6 +700,15 @@ export class AuthService implements OnModuleInit {
    * Владелец сессии из `access_token` cookie — для привязки способа входа,
    * где логика ровно та же, что у AuthGuard (тот же `JwtSignService`), но
    * гостя пускать некуда: возврат `null`, решение принимает вызывающий.
+   *
+   * Refresh здесь намеренно не делается: `access_token` живёт 15 минут
+   * (`ACCESS_TOKEN_TTL`), и человек, долго читавший экран «Аккаунт» перед
+   * нажатием «Привязать», рискует получить `linkError=session`, хотя
+   * `refresh_token` ещё жив. Это не дыра безопасности (человек просто
+   * повторит попытку), а UX-шероховатость — закрыта на клиенте:
+   * веб-версия перед переходом на `/auth/<provider>?link=1` сама дёргает
+   * лёгкий запрос через `ApiClient` (`account.tsx`, `startLink`), и его
+   * встроенный 401→refresh обновляет cookie ДО перехода сюда.
    */
   private async readSessionUserId(req: Request): Promise<string | null> {
     const token = (req.cookies as Record<string, string> | undefined)?.[

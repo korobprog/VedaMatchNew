@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { InlineError } from '@/components/inline-error';
 import { RetryButton } from '@/components/retry-button';
 import {
+  accountEmailLabel,
   buildLinkUrl,
   buildProviderRows,
   linkErrorMessage,
@@ -86,11 +87,26 @@ export default function AccountScreen() {
   }, [load]);
 
   const startLink = useCallback(
-    (provider: 'google' | 'yandex') => {
+    async (provider: 'google' | 'yandex') => {
       if (!IS_WEB || typeof window === 'undefined') return;
+      setBusyProvider(provider);
+      try {
+        // Access-токен живёт 15 минут (см. CLAUDE.md); человек мог долго
+        // читать этот экран перед нажатием «Привязать». Лёгкий запрос перед
+        // переходом заставляет `ApiClient` самому обновить cookie на 401
+        // (`session.refresh()`), пока сервер ещё не проверил её на старте
+        // привязки (`GET /auth/<provider>?link=1`, раунд оценки вехи 3, п.3) —
+        // без этого истёкший токен привёл бы к `?linkError=session` даже с
+        // живым `refresh_token`.
+        await api.request('/users/me');
+      } catch {
+        // Не получилось (сеть, сессия правда мертва) — переход всё равно
+        // случится, а сервер вернёт понятный `?linkError=session`, если
+        // окажется, что сессии больше нет.
+      }
       window.location.assign(buildLinkUrl(apiOrigin, provider, window.location.origin, '/account'));
     },
-    [apiOrigin],
+    [api, apiOrigin],
   );
 
   const linkTelegram = useCallback(async () => {
@@ -162,6 +178,9 @@ export default function AccountScreen() {
   }
 
   const rows = buildProviderRows(data.identities);
+  // Служебный адрес Telegram (`tg-<id>@users.vedamatch.invalid`) человеку
+  // не показываем — только факт, что почты нет (раунд оценки вехи 3, п.5).
+  const emailLabel = accountEmailLabel(user?.email, data.placeholderEmail);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
@@ -171,9 +190,12 @@ export default function AccountScreen() {
           <Text numberOfLines={1} style={[styles.profileName, { color: colors.text0 }]}>
             {user?.name ?? 'Аккаунт'}
           </Text>
-          {user?.email ? (
-            <Text numberOfLines={1} style={[styles.profileEmail, { color: colors.text1 }]}>
-              {user.email}
+          {emailLabel ? (
+            <Text
+              numberOfLines={1}
+              style={[styles.profileEmail, { color: data.placeholderEmail ? colors.text2 : colors.text1 }]}
+            >
+              {emailLabel}
             </Text>
           ) : null}
         </View>
@@ -213,7 +235,11 @@ export default function AccountScreen() {
               key={row.provider}
               row={row}
               busy={busyProvider === row.provider}
-              onLink={row.provider === 'telegram' ? linkTelegram : () => startLink(row.provider as 'google' | 'yandex')}
+              onLink={linkActionFor(row.provider, {
+                google: () => void startLink('google'),
+                yandex: () => void startLink('yandex'),
+                telegram: () => void linkTelegram(),
+              })}
               onUnlink={() => unlink(row.provider)}
             />
           ))}
@@ -230,6 +256,32 @@ export default function AccountScreen() {
       </ScrollView>
     </View>
   );
+}
+
+/**
+ * Обработчик «Привязать» для строки провайдера. Раньше выбирался через
+ * `row.provider === 'telegram' ? linkTelegram : () => startLink(row.provider
+ * as 'google' | 'yandex')` — `as` без проверки в рантайме молча соврал бы,
+ * добавь `ACCOUNT_PROVIDERS` четвёртого провайдера (раунд оценки вехи 3,
+ * п.6). Switch без `default` и присваивание `never` в конце делают то же
+ * самое компромисс-стойкой ошибкой компиляции, а не тихим багом в рантайме.
+ */
+function linkActionFor(
+  provider: AccountProvider,
+  handlers: { google(): void; yandex(): void; telegram(): void },
+): () => void {
+  switch (provider) {
+    case 'google':
+      return handlers.google;
+    case 'yandex':
+      return handlers.yandex;
+    case 'telegram':
+      return handlers.telegram;
+    default: {
+      const exhaustive: never = provider;
+      throw new Error(`Неизвестный способ входа: ${String(exhaustive)}`);
+    }
+  }
 }
 
 interface ProviderRowProps {

@@ -198,28 +198,54 @@ export class IdentityService {
    * Отвязка способа входа. Последний способ отвязать нельзя — аккаунт стал
    * бы недоступен никаким входом. `googleId` — устаревшая колонка `User`,
    * оставшаяся от входа до `UserIdentity`: гасится вместе с идентичностью,
-   * иначе она продолжала бы молча пускать через старый путь.
+   * иначе она продолжала бы молча пускать через старый путь. У `yandex` и
+   * `telegram` аналогичных колонок нет и не появится — вход по ним всегда
+   * шёл только через `UserIdentity`, гасить для них нечего.
+   *
+   * Без блокировки строки `User` на время решения два параллельных
+   * `DELETE /auth/identities/<provider>` для РАЗНЫХ провайдеров одного
+   * аккаунта (например, `google` и `telegram` — двойной клик по двум
+   * кнопкам, вкладка и повтор, скрипт) читают один и тот же `rows.length`
+   * ДО того, как первый успеет закоммититься: оба проходят guard
+   * `canUnlink`, оба удаляют — аккаунт остаётся без единого способа входа
+   * (раунд оценки вехи 3, блокирующий п.1). `SELECT ... FOR UPDATE` внутри
+   * транзакции — тот же приём, что `lockOwner` в
+   * `modules/users/user-gallery.service.ts` (не импортируется оттуда: общие
+   * хелперы дублируются внутри модуля, см. CLAUDE.md) — сериализует ЛЮБЫЕ
+   * параллельные отвязки этого пользователя: вторая транзакция ждёт первую
+   * на `FOR UPDATE` и перечитывает уже актуальное состояние после её
+   * коммита, а не устаревший снимок.
    */
   async unlink(userId: string, provider: AuthProvider): Promise<void> {
-    const rows = await this.prisma.userIdentity.findMany({
-      where: { userId },
-      select: { id: true, provider: true },
-    });
-    if (!canUnlink(rows.length)) {
-      throw new ConflictException(
-        'Это последний способ входа — отвязать его нельзя, иначе аккаунт станет недоступен. Сначала привяжите другой.',
-      );
-    }
-    const target = rows.find((row) => row.provider === provider);
-    if (!target) {
-      throw new NotFoundException('Этот способ входа не привязан к аккаунту.');
-    }
-    await this.prisma.userIdentity.delete({ where: { id: target.id } });
-    if (provider === 'google') {
-      await this.prisma.user.updateMany({
-        where: { id: userId, googleId: { not: null } },
-        data: { googleId: null },
+    await this.prisma.$transaction(async (tx) => {
+      const owner = await tx.$queryRaw<{ id: string }[]>`
+        SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE
+      `;
+      if (owner.length === 0) {
+        throw new NotFoundException('Пользователь не найден');
+      }
+      const rows = await tx.userIdentity.findMany({
+        where: { userId },
+        select: { id: true, provider: true },
       });
-    }
+      if (!canUnlink(rows.length)) {
+        throw new ConflictException(
+          'Это последний способ входа — отвязать его нельзя, иначе аккаунт станет недоступен. Сначала привяжите другой.',
+        );
+      }
+      const target = rows.find((row) => row.provider === provider);
+      if (!target) {
+        throw new NotFoundException(
+          'Этот способ входа не привязан к аккаунту.',
+        );
+      }
+      await tx.userIdentity.delete({ where: { id: target.id } });
+      if (provider === 'google') {
+        await tx.user.updateMany({
+          where: { id: userId, googleId: { not: null } },
+          data: { googleId: null },
+        });
+      }
+    });
   }
 }

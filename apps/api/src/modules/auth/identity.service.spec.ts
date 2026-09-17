@@ -18,7 +18,7 @@ const profile = {
 };
 
 function prismaMock(overrides: Record<string, unknown> = {}) {
-  return {
+  const merged = {
     userIdentity: {
       findUnique: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
@@ -32,6 +32,24 @@ function prismaMock(overrides: Record<string, unknown> = {}) {
       updateMany: jest.fn(),
     },
     ...overrides,
+  } as {
+    userIdentity: Record<string, jest.Mock>;
+    user: Record<string, jest.Mock>;
+  };
+
+  return {
+    ...merged,
+    // `unlink()` теперь работает внутри `$transaction` с блокировкой строки
+    // `User` (`SELECT ... FOR UPDATE`) — колбэку достаются те же
+    // `userIdentity`/`user`, что видит остальной тест через `overrides`, а
+    // `$queryRaw` по умолчанию находит пользователя.
+    $transaction: jest.fn((callback: (tx: unknown) => unknown) =>
+      callback({
+        $queryRaw: jest.fn().mockResolvedValue([{ id: 'u1' }]),
+        userIdentity: merged.userIdentity,
+        user: merged.user,
+      }),
+    ),
   } as never;
 }
 
@@ -159,6 +177,19 @@ describe('IdentityService', () => {
 
       expect(list.every((row) => row.canUnlink)).toBe(true);
     });
+
+    // Раунд оценки вехи 3, п.2: если гонка на отвязке (до фикса) когда-то
+    // успела оставить аккаунт без единой идентичности, `GET /auth/identities`
+    // не должен падать 500 — пустой список валиден, а не крах.
+    it('пустой список (гипотетически уже испорченный аккаунт) — не падает', async () => {
+      const prisma = prismaMock({
+        userIdentity: { findMany: jest.fn().mockResolvedValue([]) },
+      });
+
+      await expect(
+        new IdentityService(prisma, personal()).listIdentities('u1'),
+      ).resolves.toEqual([]);
+    });
   });
 
   describe('link', () => {
@@ -282,6 +313,83 @@ describe('IdentityService', () => {
       await expect(
         new IdentityService(prisma, personal()).unlink('u1', 'yandex'),
       ).rejects.toThrow(/не привязан/);
+    });
+  });
+
+  describe('unlink — гонка параллельных отвязок (раунд оценки вехи 3, блокирующий п.1)', () => {
+    /**
+     * Эмулирует блокировку строки `User` внутри `$transaction`
+     * (`SELECT ... FOR UPDATE`): вторая транзакция того же пользователя не
+     * начинает колбэк, пока не завершилась («не закоммитилась») первая —
+     * ровно то, что даёт реальный Postgres блокировкой строки. Общее
+     * состояние — один и тот же массив идентичностей, который читают и
+     * мутируют оба вызова через `tx`.
+     */
+    function racyPrisma(initial: { id: string; provider: string }[]) {
+      let queue: Promise<unknown> = Promise.resolve();
+      const state = { identities: [...initial] };
+      const updateManyUser = jest.fn().mockResolvedValue({ count: 0 });
+
+      const prisma = {
+        $transaction: jest.fn((callback: (tx: unknown) => Promise<unknown>) => {
+          const run = queue.then(() =>
+            callback({
+              $queryRaw: jest.fn().mockResolvedValue([{ id: 'u1' }]),
+              userIdentity: {
+                findMany: jest
+                  .fn()
+                  .mockImplementation(() =>
+                    Promise.resolve([...state.identities]),
+                  ),
+                delete: jest
+                  .fn()
+                  .mockImplementation(
+                    ({ where: { id } }: { where: { id: string } }) => {
+                      state.identities = state.identities.filter(
+                        (row) => row.id !== id,
+                      );
+                      return Promise.resolve({});
+                    },
+                  ),
+              },
+              user: { updateMany: updateManyUser },
+            }),
+          );
+          // Следующая транзакция ждёт эту — успешную или упавшую, как ждала
+          // бы снятия блокировки реальным Postgres.
+          queue = run.catch(() => undefined);
+          return run;
+        }),
+      };
+      return { prisma, state };
+    }
+
+    it('два параллельных DELETE разных провайдеров: проходит ровно один, второй видит актуальное состояние', async () => {
+      const { prisma, state } = racyPrisma([
+        { id: 'i-google', provider: 'google' },
+        { id: 'i-telegram', provider: 'telegram' },
+      ]);
+      const service = new IdentityService(prisma as never, personal());
+
+      // Тот же порядок вызовов, что и у Promise.all в контроллере: оба
+      // unlink() стартуют синхронно, до первого await внутри них —
+      // service.unlink('u1', 'google') первым достигает $transaction.
+      const results = await Promise.allSettled([
+        service.unlink('u1', 'google'),
+        service.unlink('u1', 'telegram'),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === 'fulfilled');
+      const rejected = results.filter((r) => r.status === 'rejected');
+      // Старый баг: оба читали rows.length=2 до коммита первого и оба
+      // проходили guard — оба разрешались успехом, 0 идентичностей.
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason).toMatchObject({
+        message: expect.stringContaining('последний способ входа'),
+      });
+      // Аккаунт не остаётся без единого способа входа.
+      expect(state.identities).toHaveLength(1);
     });
   });
 });
