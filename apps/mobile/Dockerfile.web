@@ -1,0 +1,27 @@
+# Веб-версия приложения — ios.vedamatch.com.
+#
+# Та же кодовая база, что у Android-сборки: `expo export --platform web`
+# собирает одностраничное приложение, nginx отдаёт статику. Контур зашит:
+# веб-версия ходит только в api.vedamatch.com (docs/prds/iphone-app.prd.md).
+FROM node:24-alpine AS build
+RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
+WORKDIR /app
+ARG APP_CONTOUR=com
+ENV APP_CONTOUR=$APP_CONTOUR \
+    APP_CHANNEL=store \
+    EXPO_NO_TELEMETRY=1 \
+    CI=1
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY apps/mobile/package.json apps/mobile/
+COPY packages/shared/package.json packages/shared/
+RUN pnpm install --frozen-lockfile --filter @vedamatch/mobile... --filter vedamatch
+COPY packages/shared packages/shared
+RUN pnpm --filter @vedamatch/shared build
+COPY apps/mobile apps/mobile
+RUN pnpm --filter @vedamatch/mobile export:web
+
+FROM nginx:1.29-alpine AS runtime
+COPY apps/mobile/nginx.web.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/apps/mobile/dist-web /usr/share/nginx/html
+EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD wget -qO- http://127.0.0.1/ >/dev/null || exit 1

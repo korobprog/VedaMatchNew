@@ -65,6 +65,7 @@ export class AuthController {
     @Query('fp') fp?: string,
     @Query('app_redirect') appRedirect?: string,
     @Query('app_challenge') appChallenge?: string,
+    @Query('returnOrigin') returnOrigin?: string,
   ) {
     const app = appLogin(appRedirect, appChallenge);
     // Хост запроса определяет контур: на нём собирается redirect_uri и домен
@@ -76,6 +77,7 @@ export class AuthController {
       fp,
       req.headers.host,
       app,
+      returnOrigin,
     );
   }
 
@@ -95,9 +97,18 @@ export class AuthController {
     @Query('fp') fp?: string,
     @Query('app_redirect') appRedirect?: string,
     @Query('app_challenge') appChallenge?: string,
+    @Query('returnOrigin') returnOrigin?: string,
   ) {
     const app = appLogin(appRedirect, appChallenge);
-    return this.auth.startYandexLogin(req, res, returnTo, ref, fp, app);
+    return this.auth.startYandexLogin(
+      req,
+      res,
+      returnTo,
+      ref,
+      fp,
+      app,
+      returnOrigin,
+    );
   }
 
   @Get('yandex/callback')

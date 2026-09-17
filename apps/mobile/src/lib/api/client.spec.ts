@@ -188,3 +188,58 @@ describe('createApiClient', () => {
     await expect(api.request('/chat/c1/read', { method: 'POST' })).resolves.toBeNull();
   });
 });
+
+// Веб-версия (ios.vedamatch.com): сессия — httpOnly cookie на домене
+// портала, токена в JS нет вовсе. Его отсутствие не значит «не вошёл».
+describe('createApiClient — сессия в cookie', () => {
+  it('шлёт cookie и не ставит Authorization', async () => {
+    const fetchImpl = jest.fn(async () => json(200, { ok: true }));
+    const { session } = sessionWith(null, { kind: 'unavailable' });
+    const api = createApiClient({ baseUrl: 'https://api', session, fetchImpl, cookieSession: true });
+
+    await api.request('/users/me');
+
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.credentials).toBe('include');
+    expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
+  });
+
+  it('без токена на 401 обновляет cookie и повторяет запрос', async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(json(401, {}))
+      .mockResolvedValueOnce(json(200, { id: 'u1' }));
+    // Обновлённая cookie приходит сама, токена в ответе нет — пустая строка.
+    const { session, refresh } = sessionWith(null, { kind: 'refreshed', accessToken: '' });
+    const onSessionExpired = jest.fn();
+    const api = createApiClient({ baseUrl: 'https://api', session, fetchImpl, onSessionExpired, cookieSession: true });
+
+    await expect(api.request('/users/me')).resolves.toEqual({ id: 'u1' });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(onSessionExpired).not.toHaveBeenCalled();
+    const [, retry] = fetchImpl.mock.calls[1] as [string, RequestInit];
+    expect(retry.credentials).toBe('include');
+    expect((retry.headers as Record<string, string>).Authorization).toBeUndefined();
+  });
+
+  it('отказ обновления — конец сессии', async () => {
+    const fetchImpl = jest.fn(async () => json(401, {}));
+    const { session } = sessionWith(null, { kind: 'rejected' });
+    const onSessionExpired = jest.fn();
+    const api = createApiClient({ baseUrl: 'https://api', session, fetchImpl, onSessionExpired, cookieSession: true });
+
+    await expect(api.request('/users/me')).rejects.toMatchObject({ status: 401 });
+    expect(onSessionExpired).toHaveBeenCalledTimes(1);
+  });
+
+  it('без cookie-режима запросы идут без cookie', async () => {
+    const fetchImpl = jest.fn(async () => json(200, {}));
+    const { session } = sessionWith('a', { kind: 'unavailable' });
+    const api = createApiClient({ baseUrl: 'https://api', session, fetchImpl });
+
+    await api.request('/x');
+
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.credentials).toBeUndefined();
+  });
+});

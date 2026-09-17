@@ -62,6 +62,12 @@ export interface ApiClientOptions {
   session: SessionPort;
   fetchImpl?: typeof fetch;
   onSessionExpired?: () => void;
+  /**
+   * Сессия — httpOnly cookie портала, а не токен в памяти (веб-версия на
+   * поддомене). Запросы идут с cookie, отсутствие токена не значит «не
+   * вошёл», и 401 без токена тоже ведёт в `session.refresh()`.
+   */
+  cookieSession?: boolean;
 }
 
 export interface RequestOptions {
@@ -121,7 +127,13 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       body = JSON.stringify(init.body);
     }
     const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
-    return fetchImpl(url, { method: init.method ?? 'GET', headers, body, signal: init.signal });
+    return fetchImpl(url, {
+      method: init.method ?? 'GET',
+      headers,
+      body,
+      signal: init.signal,
+      ...(options.cookieSession ? { credentials: 'include' as const } : {}),
+    });
   }
 
   async function request<T>(path: string, init: RequestOptions = {}): Promise<T> {
@@ -129,7 +141,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     let response = await send(path, init, token);
 
     if (response.status === 401) {
-      if (!token) {
+      if (!token && !options.cookieSession) {
         // Запрос ушёл вовсе без токена (сессия уже мертва по мнению
         // клиента) и сервер это подтвердил — сообщить об этом надо всё
         // равно: молчание здесь раньше означало «запрос просто падает

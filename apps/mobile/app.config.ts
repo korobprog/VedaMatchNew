@@ -187,6 +187,18 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // модулю (@expo/config-types), Expo резолвит и вызывает его сам.
       './plugins/with-release-signing.js',
     ],
+    // Веб-версия (ios.vedamatch.com): одностраничная сборка `expo export
+    // --platform web`. Шаблон страницы, манифест, иконки и service worker —
+    // в `public/`; подмены нативных пакетов — `metro.config.js`.
+    web: {
+      bundler: 'metro',
+      output: 'single',
+      name: 'VedaMatch',
+      shortName: 'VedaMatch',
+      lang: 'ru',
+      themeColor: '#FBF9FF',
+      backgroundColor: '#FBF9FF',
+    },
     experiments: { typedRoutes: true, reactCompiler: true },
     extra: { variant },
   };

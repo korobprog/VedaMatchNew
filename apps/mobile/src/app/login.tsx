@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '@/lib/auth/session';
 import type { LoginProvider } from '@/lib/auth/login-flow';
@@ -49,7 +49,9 @@ export default function LoginScreen() {
           Войти в свой аккаунт
         </Text>
         <Text style={[styles.hint, { color: colors.text1 }]}>
-          Тот же аккаунт, что и на сайте. Откроется браузер, после входа вы вернётесь сюда.
+          {Platform.OS === 'web'
+            ? 'Тот же аккаунт, что и на сайте VedaMatch. Вошли там — войдёте и здесь.'
+            : 'Тот же аккаунт, что и на сайте. Откроется браузер, после входа вы вернётесь сюда.'}
         </Text>
       </View>
 

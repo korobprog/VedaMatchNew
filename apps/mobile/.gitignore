@@ -51,5 +51,5 @@ modules/*/android/.cxx/
 # Firebase config is copied in from outside the repo
 google-services.json
 
-# Веб-сборка (разведка ios.vedamatch.com)
+# Веб-сборка ios.vedamatch.com (pnpm export:web)
 dist-web/

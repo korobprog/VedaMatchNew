@@ -31,7 +31,12 @@ import {
 import { judgeRevokedRefresh, rotationFamily } from './refresh-reuse';
 import { appReturnPage, type AppReturnOutcome } from './app-return-page';
 import { AuthProvidersService } from './auth-providers.service';
-import { resolveContour, type Contour } from './contour';
+import {
+  resolveContour,
+  resolveReturnOrigin,
+  returnOriginCandidate,
+  type Contour,
+} from './contour';
 import { readRegistrationMode } from '../billing/billing-mode';
 import { assertAccountActive } from '../users/account-status';
 import { IdentityService } from './identity.service';
@@ -164,6 +169,7 @@ export class AuthService implements OnModuleInit {
     deviceId?: string,
     host?: string | null,
     app?: AppLoginRequest | null,
+    returnOrigin?: string,
   ) {
     // На старте входа человек уже в браузере, и ошибке JSON-ом там делать
     // нечего: любой отказ, включая «провайдер не настроен», уезжает в
@@ -188,6 +194,9 @@ export class AuthService implements OnModuleInit {
       // callback'а их больше негде сохранить, а Google-редирект их бы потерял.
       ref: shortToken(referralCode),
       fp: shortToken(deviceId),
+      // Вход начат на поддомене портала (веб-версия приложения): проверяется
+      // на колбэке, в контуре, который выдаёт cookie (resolveReturnOrigin).
+      returnOrigin: returnOriginCandidate(returnOrigin),
       // Вход из приложения: куда вернуть код и PKCE challenge приложения.
       // Challenge Google — отдельный, он проверяется на обмене кода Google.
       app: app ?? null,
@@ -219,17 +228,17 @@ export class AuthService implements OnModuleInit {
     if (!raw) {
       throw new BadRequestException('OAuth-сессия не найдена или истекла');
     }
-    const { codeVerifier, state, nonce, returnTo, ref, fp, app } = JSON.parse(
-      raw,
-    ) as {
-      codeVerifier: string;
-      state: string;
-      nonce: string;
-      returnTo?: string;
-      ref?: string | null;
-      fp?: string | null;
-      app?: AppLoginRequest | null;
-    };
+    const { codeVerifier, state, nonce, returnTo, returnOrigin, ref, fp, app } =
+      JSON.parse(raw) as {
+        codeVerifier: string;
+        state: string;
+        nonce: string;
+        returnTo?: string;
+        returnOrigin?: string | null;
+        ref?: string | null;
+        fp?: string | null;
+        app?: AppLoginRequest | null;
+      };
 
     return this.withAppErrors(app, res, async () => {
       const currentUrl = new URL(`${contour.apiOrigin}${req.originalUrl}`);
@@ -281,6 +290,7 @@ export class AuthService implements OnModuleInit {
         provider: 'google',
         isNewAccount,
         returnTo,
+        returnOrigin,
         ref,
         fp,
         app,
@@ -304,6 +314,7 @@ export class AuthService implements OnModuleInit {
     referralCode?: string,
     deviceId?: string,
     app?: AppLoginRequest | null,
+    returnOrigin?: string,
   ) {
     // Проверка здесь, а не только при выдаче списка кнопок: спрятанная
     // кнопка не делает способ недоступным, а важно, что вход невозможен.
@@ -328,6 +339,7 @@ export class AuthService implements OnModuleInit {
         verifier,
         state,
         returnTo: safeReturnTo(returnTo),
+        returnOrigin: returnOriginCandidate(returnOrigin),
         ref: shortToken(referralCode),
         fp: shortToken(deviceId),
         app: app ?? null,
@@ -376,6 +388,7 @@ export class AuthService implements OnModuleInit {
       verifier: string;
       state: string;
       returnTo?: string;
+      returnOrigin?: string | null;
       ref?: string | null;
       fp?: string | null;
       app?: AppLoginRequest | null;
@@ -440,6 +453,7 @@ export class AuthService implements OnModuleInit {
         provider: 'yandex',
         isNewAccount: created,
         returnTo: flow.returnTo,
+        returnOrigin: flow.returnOrigin,
         ref: flow.ref,
         fp: flow.fp,
         app: flow.app,
@@ -523,12 +537,23 @@ export class AuthService implements OnModuleInit {
     provider: string;
     isNewAccount: boolean;
     returnTo?: string;
+    returnOrigin?: string | null;
     ref?: string | null;
     fp?: string | null;
     app?: AppLoginRequest | null;
   }) {
-    const { req, res, user, provider, isNewAccount, returnTo, ref, fp, app } =
-      params;
+    const {
+      req,
+      res,
+      user,
+      provider,
+      isNewAccount,
+      returnTo,
+      returnOrigin,
+      ref,
+      fp,
+      app,
+    } = params;
 
     await assertAccountActive(this.prisma, user);
     await this.ensureContactsProfile(user.id);
@@ -562,7 +587,12 @@ export class AuthService implements OnModuleInit {
       res,
       req.headers.host,
     );
-    res.redirect(`${contour.webOrigin}${safeReturnTo(returnTo)}`);
+    const origin = resolveReturnOrigin({
+      requested: returnOrigin,
+      webOrigins: this.config.get<string>('WEB_ORIGIN'),
+      contour,
+    });
+    res.redirect(`${origin}${safeReturnTo(returnTo)}`);
   }
 
   private async createAppLoginCode(
