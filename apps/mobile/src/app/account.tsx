@@ -2,7 +2,6 @@ import { Stack } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -12,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { InlineError } from '@/components/inline-error';
 import { RetryButton } from '@/components/retry-button';
 import {
@@ -81,6 +81,7 @@ export default function AccountScreen() {
   const [deletionLoadError, setDeletionLoadError] = useState<string | null>(null);
   const [deletionActionError, setDeletionActionError] = useState<string | null>(null);
   const [deletionBusy, setDeletionBusy] = useState(false);
+  const [deletionConfirmVisible, setDeletionConfirmVisible] = useState(false);
   const deletionRequest = useRef(0);
 
   const load = useCallback(async () => {
@@ -140,23 +141,13 @@ export default function AccountScreen() {
     setDeletionActionError(null);
     try {
       setDeletionStatus(await deletionApi.request());
+      setDeletionConfirmVisible(false);
     } catch (e) {
       setDeletionActionError(describeIdentitiesError(e));
     } finally {
       setDeletionBusy(false);
     }
   }, [deletionApi]);
-
-  const confirmAccountDeletion = useCallback(() => {
-    Alert.alert(
-      'Удалить аккаунт?',
-      'Профиль скроется от других участников. Удаление станет окончательным через 14 дней — до этого момента его можно отменить здесь же.',
-      [
-        { text: 'Отмена', style: 'cancel' },
-        { text: 'Удалить', style: 'destructive', onPress: () => void requestAccountDeletion() },
-      ],
-    );
-  }, [requestAccountDeletion]);
 
   const cancelAccountDeletion = useCallback(async () => {
     setDeletionBusy(true);
@@ -416,8 +407,19 @@ export default function AccountScreen() {
           loadError={deletionLoadError}
           actionError={deletionActionError}
           busy={deletionBusy}
-          onRequest={confirmAccountDeletion}
+          onRequest={() => setDeletionConfirmVisible(true)}
           onCancel={() => void cancelAccountDeletion()}
+        />
+
+        <ConfirmDialog
+          visible={deletionConfirmVisible}
+          title="Удалить аккаунт?"
+          message="Профиль скроется от других участников. Удаление станет окончательным через 14 дней — до этого момента его можно отменить здесь же."
+          confirmLabel="Удалить"
+          destructive
+          busy={deletionBusy}
+          onConfirm={() => void requestAccountDeletion()}
+          onCancel={() => setDeletionConfirmVisible(false)}
         />
 
         {/* Видно, свежая ли открылась сборка: в мини-приложении Telegram и в
@@ -612,9 +614,9 @@ interface DeletionSectionProps {
 /**
  * «Удаление аккаунта» — самый низ экрана, отдельно от остальных настроек.
  * Зеркалит веб (`delete-account-section.tsx`): без запроса — объяснение и
- * кнопка с подтверждением в диалоге (`Alert.alert`, `style: 'destructive'`,
- * тот же приём, что у «Вступить в группу?» в `communities/[id].tsx`); с
- * запросом — дата, до которой ещё можно отменить.
+ * кнопка, открывающая `ConfirmDialog` (не `Alert.alert` — тот на вебе и в
+ * Telegram Mini App не срабатывает, см. комментарий в `confirm-dialog.tsx`);
+ * с запросом — дата, до которой ещё можно отменить.
  */
 function DeletionSection({ status, loadError, actionError, busy, onRequest, onCancel }: DeletionSectionProps) {
   const { colors } = useTheme();
