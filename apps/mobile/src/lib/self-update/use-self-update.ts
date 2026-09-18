@@ -2,6 +2,7 @@ import Constants from 'expo-constants';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { appVariant } from '@/config/app-variant';
 import {
+  cleanUpInstalledApks,
   deleteDownloadedApk,
   downloadedApkSize,
   sha256OfDownloadedApk,
@@ -111,6 +112,11 @@ export function useSelfUpdate() {
   useEffect(() => {
     if (autoCheckDoneThisLaunch || !selfUpdate) return;
     autoCheckDoneThisLaunch = true;
+    // Скачанный APK, который уже установлен (или устарел), — убрать из кэша:
+    // установка перезапускает процесс, раньше этого момента удалить некому.
+    cleanUpInstalledApks(parseInstalledVersionCode(Constants.expoConfig?.android?.versionCode)).catch(
+      () => undefined,
+    );
     // Ошибки тихой проверки не показываются: человек ничего не нажимал.
     runCheck(false).catch(() => undefined);
   }, [runCheck, selfUpdate]);
@@ -154,7 +160,7 @@ export function useSelfUpdate() {
       // Закачка может закончиться (или упасть) раньше, чем вернётся хэндл, —
       // тогда хранить его незачем.
       let settled = false;
-      const handle = await startApkDownload(manifest.url, {
+      const handle = await startApkDownload(manifest.url, manifest.versionCode, {
         onProgress: (bytesWritten, totalBytes) => dispatch({ type: 'progress', bytesWritten, totalBytes }),
         onComplete: (localUri) => {
           // Закачка закончилась — её хэндл больше не нужен; отмену фазы

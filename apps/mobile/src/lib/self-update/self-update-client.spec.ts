@@ -1,4 +1,4 @@
-import { classifyManifestResponse, fetchAppManifest, manifestUrl } from './self-update-client';
+import { classifyManifestResponse, fetchAppManifest, MANIFEST_TIMEOUT_MS, manifestUrl } from './self-update-client';
 
 const S3 = 'https://s3.example.com/bucket-id';
 
@@ -135,5 +135,48 @@ describe('fetchAppManifest', () => {
     await expect(
       fetchAppManifest(variant, fakeFetch(404, 'NoSuchKey') as unknown as typeof fetch),
     ).resolves.toEqual({ kind: 'not-found' });
+  });
+
+  describe('таймаут', () => {
+    /** fetch, который отвечает только на abort — как повисшее соединение. */
+    function hangingFetch() {
+      return jest.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new Error('Aborted')));
+          }),
+      );
+    }
+
+    afterEach(() => jest.useRealTimers());
+
+    it('по умолчанию ждёт 15 секунд', () => {
+      expect(MANIFEST_TIMEOUT_MS).toBe(15_000);
+    });
+
+    it('повисший запрос прерывается по таймауту и даёт network', async () => {
+      jest.useFakeTimers();
+      const fetchImpl = hangingFetch();
+      const run = fetchAppManifest(variant, fetchImpl as unknown as typeof fetch);
+      let settled = false;
+      void run.then(() => {
+        settled = true;
+      });
+      await jest.advanceTimersByTimeAsync(MANIFEST_TIMEOUT_MS - 1);
+      expect(settled).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      await expect(run).resolves.toEqual({ kind: 'network' });
+      const init = fetchImpl.mock.calls[0][1] as RequestInit;
+      expect(init.signal?.aborted).toBe(true);
+    });
+
+    it('быстрый ответ не прерывается и таймер не остаётся висеть', async () => {
+      jest.useFakeTimers();
+      const fetchImpl = fakeFetch(200, JSON.stringify(validManifest));
+      await expect(fetchAppManifest(variant, fetchImpl as unknown as typeof fetch, 50)).resolves.toMatchObject({
+        kind: 'ok',
+      });
+      expect(jest.getTimerCount()).toBe(0);
+    });
   });
 });

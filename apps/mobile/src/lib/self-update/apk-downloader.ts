@@ -1,7 +1,11 @@
 import { File, FileMode } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
+import VedamatchFileHash from '../../../modules/vedamatch-file-hash';
 import { decodeBase64ToBytes } from './binary-utils';
-import { DEFAULT_HASH_CHUNK_BYTES, sha256InChunks } from './chunked-hash';
+import { cachedApkFileName, isOwnCachedApk, shouldDeleteCachedApk } from './cached-apk';
+import { DEFAULT_HASH_CHUNK_BYTES, HashCancelledError, sha256InChunks } from './chunked-hash';
+import { chooseHashPath, nativeHashFailureAction } from './hash-path';
 
 /**
  * Скачивание и хеширование APK на диск (VED-176) — сетевой и файловый слой,
@@ -10,10 +14,40 @@ import { DEFAULT_HASH_CHUNK_BYTES, sha256InChunks } from './chunked-hash';
  * покрывает. Логика решений (что показать, когда отменить) — в
  * `download-progress-state.ts`, эта обёртка только исполняет её результат.
  */
-const APK_FILE_NAME = 'vedamatch-update.apk';
+function localApkUri(versionCode: number): string {
+  return `${FileSystem.cacheDirectory}${cachedApkFileName(versionCode)}`;
+}
 
-function localApkUri(): string {
-  return `${FileSystem.cacheDirectory}${APK_FILE_NAME}`;
+async function cachedFileNames(): Promise<string[]> {
+  if (!FileSystem.cacheDirectory) return [];
+  try {
+    return await FileSystem.readDirectoryAsync(FileSystem.cacheDirectory);
+  } catch {
+    return [];
+  }
+}
+
+async function deleteCachedFiles(predicate: (fileName: string) => boolean): Promise<void> {
+  const names = (await cachedFileNames()).filter(predicate);
+  await Promise.all(
+    names.map((name) =>
+      FileSystem.deleteAsync(`${FileSystem.cacheDirectory}${name}`, { idempotent: true }).catch(() => undefined),
+    ),
+  );
+}
+
+/**
+ * При запуске: удалить скачанные APK, которые уже поставлены или устарели
+ * (`cached-apk.ts: shouldDeleteCachedApk`). Установка перезапускает процесс,
+ * так что это единственный момент, когда файл после обновления можно убрать.
+ */
+export async function cleanUpInstalledApks(installedVersionCode: number | null): Promise<void> {
+  await deleteCachedFiles((fileName) => shouldDeleteCachedApk({ fileName, installedVersionCode }));
+}
+
+/** Все наши APK в кэше — перед новой закачкой, при отмене и при несовпадении хеша. */
+export async function deleteDownloadedApk(): Promise<void> {
+  await deleteCachedFiles(isOwnCachedApk);
 }
 
 export interface DownloadHandle {
@@ -32,13 +66,18 @@ export interface DownloadCallbacks {
  * вызывающий хук (`use-self-update.ts`) хранит его в ref, чтобы кнопка
  * «Отмена» останавливала именно эту закачку, а не создавала новую.
  */
-export async function startApkDownload(url: string, callbacks: DownloadCallbacks): Promise<DownloadHandle> {
+export async function startApkDownload(
+  url: string,
+  versionCode: number,
+  callbacks: DownloadCallbacks,
+): Promise<DownloadHandle> {
   // Повторная попытка после обрыва/ошибки не должна дописывать старый битый
-  // файл — начинаем с нуля.
-  await FileSystem.deleteAsync(localApkUri(), { idempotent: true });
+  // файл, а файлы прошлых версий занимают по 155 МБ — начинаем с пустого кэша.
+  await deleteDownloadedApk();
 
   let cancelledByUser = false;
-  const resumable = FileSystem.createDownloadResumable(url, localApkUri(), {}, (data) => {
+  const target = localApkUri(versionCode);
+  const resumable = FileSystem.createDownloadResumable(url, target, {}, (data) => {
     callbacks.onProgress(data.totalBytesWritten, data.totalBytesExpectedToWrite);
   });
 
@@ -64,7 +103,7 @@ export async function startApkDownload(url: string, callbacks: DownloadCallbacks
     async cancelAsync() {
       cancelledByUser = true;
       await resumable.cancelAsync().catch(() => undefined);
-      await FileSystem.deleteAsync(localApkUri(), { idempotent: true });
+      await FileSystem.deleteAsync(target, { idempotent: true });
       callbacks.onCancelled();
     },
   };
@@ -142,13 +181,53 @@ export interface HashOptions {
 }
 
 /**
- * SHA-256 скачанного файла по кускам в 1 МиБ (`chunked-hash.ts`): в памяти
- * одновременно только текущий кусок, между кусками поток отдаётся
- * интерфейсу (прогресс «Проверяем файл… N %», кнопка «Отмена»). Итерация 1
- * читала весь APK одной base64-строкой (~217 МБ) и декодировала её
- * синхронно — сотни мегабайт и секунды замершего интерфейса.
+ * SHA-256 скачанного файла. Основной путь — нативный модуль
+ * `VedamatchFileHash` (`MessageDigest`, потоковое чтение буфером 1 МиБ в
+ * фоновом потоке): на A51 ожидается 1–3 с на 155 МБ. Запасной — JS-хешер по
+ * кускам (`chunked-hash.ts`), ~1 МБ/с на Hermes (раунд 002: ~2,5 мин), когда
+ * модуля нет или он упал не из-за отмены. Выбор — `hash-path.ts`.
+ * Отмена в обоих путях — `HashCancelledError`.
  */
 export async function sha256OfDownloadedApk(localUri: string, options: HashOptions): Promise<string> {
+  const path = chooseHashPath({ platformOS: Platform.OS, nativeModuleAvailable: VedamatchFileHash != null });
+  if (path === 'native' && VedamatchFileHash) {
+    try {
+      return await sha256Native(VedamatchFileHash, localUri, options);
+    } catch (error) {
+      if (nativeHashFailureAction(error) === 'cancelled' || options.isCancelled()) throw new HashCancelledError();
+      // Не отмена — считаем тем же файлом через JS: медленно, но проверка не теряется.
+    }
+  }
+  return sha256InJs(localUri, options);
+}
+
+type NativeFileHash = NonNullable<typeof VedamatchFileHash>;
+
+let nativeJobCounter = 0;
+
+async function sha256Native(module: NativeFileHash, localUri: string, options: HashOptions): Promise<string> {
+  nativeJobCounter += 1;
+  const jobId = `apk-${Date.now()}-${nativeJobCounter}`;
+  const subscription = module.addListener('progress', (event) => {
+    if (event.jobId !== jobId) return;
+    const total = event.totalBytes > 0 ? event.totalBytes : options.expectedBytes;
+    options.onProgress(event.bytesHashed, total);
+  });
+  // Флаг отмены живёт в JS — опрашиваем его и передаём модулю.
+  const cancelPoll = setInterval(() => {
+    if (options.isCancelled()) module.cancel(jobId);
+  }, 200);
+  try {
+    options.onProgress(0, options.expectedBytes);
+    return await module.sha256File(localUri, jobId);
+  } finally {
+    clearInterval(cancelPoll);
+    subscription.remove();
+  }
+}
+
+/** Запасной путь: JS-хешер по кускам в 1 МиБ, в памяти один кусок. */
+async function sha256InJs(localUri: string, options: HashOptions): Promise<string> {
   const reader = await openApk(localUri);
   try {
     return await sha256InChunks({
@@ -161,10 +240,6 @@ export async function sha256OfDownloadedApk(localUri: string, options: HashOptio
   } finally {
     reader.close();
   }
-}
-
-export async function deleteDownloadedApk(): Promise<void> {
-  await FileSystem.deleteAsync(localApkUri(), { idempotent: true });
 }
 
 /** `content://` через `FileProvider` — обязателен для установки на Android 8+. */

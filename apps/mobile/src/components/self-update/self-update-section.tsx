@@ -38,7 +38,11 @@ export function SelfUpdateSection() {
     <View style={styles.wrap}>
       <Pressable
         accessibilityRole="button"
-        accessibilityState={{ busy, disabled: busy }}
+        // Явная подпись: без неё Android после первой проверки собирал
+        // content-desc из состояния и читал строку как «занято» даже при
+        // busy=false (раунд 002, замечание 3).
+        accessibilityLabel="Проверить обновление"
+        accessibilityState={busy ? { busy: true, disabled: true } : { busy: false, disabled: false }}
         disabled={busy}
         onPress={onPressRow}
         android_ripple={ripple(colors.glassBorder)}

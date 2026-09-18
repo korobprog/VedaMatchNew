@@ -65,21 +65,31 @@ export function classifyManifestResponse(status: number, bodyText: string): Mani
   return manifest ? { kind: 'ok', manifest } : { kind: 'malformed' };
 }
 
+/** Сколько ждать ответа хранилища, прежде чем сказать «нет связи» (раунд 002, замечание 6). */
+export const MANIFEST_TIMEOUT_MS = 15_000;
+
 export async function fetchAppManifest(
   variant: ManifestUrlVariant,
   fetchImpl: typeof fetch = fetch,
+  timeoutMs: number = MANIFEST_TIMEOUT_MS,
 ): Promise<ManifestFetchResult> {
   const url = manifestUrl(variant);
   if (!url) return { kind: 'not-configured' };
 
+  // Повисшее соединение не должно крутить индикатор вечно: по таймауту
+  // запрос прерывается и это та же ветка «нет связи», что и обрыв.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let status: number;
   let bodyText: string;
   try {
-    const response = await fetchImpl(url, { headers: { Accept: 'application/json' } });
+    const response = await fetchImpl(url, { headers: { Accept: 'application/json' }, signal: controller.signal });
     status = response.status;
     bodyText = await response.text();
   } catch {
     return { kind: 'network' };
+  } finally {
+    clearTimeout(timer);
   }
   return classifyManifestResponse(status, bodyText);
 }

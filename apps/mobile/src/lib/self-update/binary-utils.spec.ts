@@ -55,7 +55,10 @@ describe('decodeBase64ToBytes', () => {
 
   it('символ вне ASCII и URL-safe алфавит не принимаются', () => {
     expect(() => decodeBase64ToBytes('Zm9vЖ')).toThrow('недопустимый символ base64');
-    expect(() => decodeBase64ToBytes('Zm9v-_')).toThrow('недопустимый символ base64');
+    // Каждый символ URL-safe алфавита — отдельно: в паре '-_' мутант,
+    // принимающий '-', выживал за счёт '_' (раунд 002, замечание 6).
+    expect(() => decodeBase64ToBytes('Zm9-')).toThrow('недопустимый символ base64 "-"');
+    expect(() => decodeBase64ToBytes('Zm9_')).toThrow('недопустимый символ base64 "_"');
   });
 
   it('данные после "=" — ошибка, а не молчаливая склейка двух кусков', () => {
